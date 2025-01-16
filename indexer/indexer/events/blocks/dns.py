@@ -11,23 +11,23 @@ from indexer.events import context
 
 zero_key = b'\x00' * 32
 
-class DeleteDnsRecordBlock(Block):
+class DnsDeleteRecordBlock(Block):
     def __init__(self, data):
-        super().__init__('delete_dns', [], data)
+        super().__init__('dns_delete', [], data)
 
     def __repr__(self):
         return f"DELETE_DNS {self.event_nodes[0].message.transaction.hash}"
 
 class DnsRenewBlock(Block):
     def __init__(self, data):
-        super().__init__('renew_dns', [], data)
+        super().__init__('dns_renew', [], data)
 
     def __repr__(self):
         return f"DNS_RENEW {self.event_nodes[0].message.transaction.hash}"
 
-class ChangeDnsRecordBlock(Block):
+class DnsChangeRecordBlock(Block):
     def __init__(self, data):
-        super().__init__('change_dns', [], data)
+        super().__init__('dns_change', [], data)
 
     def __repr__(self):
         return f"CHANGE_DNS {self.event_nodes[0].message.transaction.hash}"
@@ -49,7 +49,7 @@ class ChangeDnsRecordMatcher(BlockMatcher):
         nft_item = await context.interface_repository.get().get_nft_item(block.event_nodes[0].message.destination)
 
         if change_dns_message.has_value:
-            new_block = ChangeDnsRecordBlock({
+            new_block = DnsChangeRecordBlock({
                 'source': AccountId(sender) if sender is not None else None,
                 'destination': AccountId(block.event_nodes[0].message.destination),
                 'key': change_dns_message.key,
@@ -62,7 +62,7 @@ class ChangeDnsRecordMatcher(BlockMatcher):
                     'destination': AccountId(block.event_nodes[0].message.destination),
                 })
             else:
-                new_block = DeleteDnsRecordBlock({
+                new_block = DnsDeleteRecordBlock({
                     'source': AccountId(sender) if sender is not None else None,
                     'destination': AccountId(block.event_nodes[0].message.destination),
                     'key': change_dns_message.key,
