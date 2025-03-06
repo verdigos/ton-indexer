@@ -433,7 +433,7 @@ async def start_emulated_traces_processing():
                 for account, values in index.items():
                     await redis.client.zadd(f"_aai:{account}", dict(values))
                 for r in referenced_accounts:
-                    await redis.client.publish('referenced_accounts', f"{r}/{trace_id}")
+                    await redis.client.publish('referenced_accounts', f"{r};{trace_id}")
             except Exception as e:
                 logger.error(f"Failed to process emulated trace {trace_id}: {e}")
                 logger.exception(e, exc_info=True)
