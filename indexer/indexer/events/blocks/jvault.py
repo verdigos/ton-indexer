@@ -93,6 +93,11 @@ referral_subchain = RecursiveMatcher(repeating_matcher=ContractMatcher(opcode=JV
                                         optional=True)
 referral_chain = RecursiveMatcher(repeating_matcher=referral_subchain, exit_matcher=None, optional=True)
 
+referral_subchain = RecursiveMatcher(repeating_matcher=ContractMatcher(opcode=JVaultRequestUpdateReferrer.opcode, include_excess=True),
+                                        exit_matcher=ContractMatcher(opcode=JVaultUpdateReferrer.opcode, include_excess=True),
+                                        optional=True)
+referral_chain = RecursiveMatcher(repeating_matcher=referral_subchain, exit_matcher=None, optional=True)
+
 update_with_exceses = labeled(
     "update_rewards_on_stake_wallet",
     ContractMatcher(
