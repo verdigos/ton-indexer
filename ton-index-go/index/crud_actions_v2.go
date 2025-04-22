@@ -168,7 +168,7 @@ func buildActionsQueryV2(act_req ActionRequest, utime_req UtimeRequest, lt_req L
 		(A.jvault_stake_data).minted_stake_jettons,
 		(A.jvault_stake_data).stake_wallet`
 	clmn_query := clmn_query_default
-	from_query := `actions as A`
+	from_query := `actions_versioning as A`
 	filter_list := []string{}
 	filter_query := ``
 	orderby_query := ``
@@ -224,7 +224,7 @@ func buildActionsQueryV2(act_req ActionRequest, utime_req UtimeRequest, lt_req L
 		filter_str := fmt.Sprintf("AA.account = '%s'::tonaddr", *v)
 		filter_list = append(filter_list, filter_str)
 
-		from_query = `action_accounts as AA join actions as A on A.trace_id = AA.trace_id and A.action_id = AA.action_id`
+		from_query = `action_accounts_versioning as AA join actions_versioning as A on A.trace_id = AA.trace_id and A.action_id = AA.action_id`
 		if order_by_now {
 			clmn_query = `distinct on (AA.trace_end_utime, AA.trace_id, AA.action_end_utime, AA.action_id) ` + clmn_query_default
 		} else {
@@ -236,7 +236,7 @@ func buildActionsQueryV2(act_req ActionRequest, utime_req UtimeRequest, lt_req L
 		if len(filter_str) > 0 {
 			filter_list = append(filter_list, filter_str)
 		}
-		from_query = `actions as A join transactions as T on A.trace_id = T.trace_id and A.tx_hashes @> array[T.hash::tonhash]`
+		from_query = `actions_versioning as A join transactions as T on A.trace_id = T.trace_id and A.tx_hashes @> array[T.hash::tonhash]`
 		if order_by_now {
 			clmn_query = `distinct on (A.trace_end_utime, A.trace_id, A.end_utime, A.action_id) ` + clmn_query_default
 		} else {
@@ -247,7 +247,7 @@ func buildActionsQueryV2(act_req ActionRequest, utime_req UtimeRequest, lt_req L
 		filter_str := fmt.Sprintf("(%s or %s)", filterByArray("M.msg_hash", v), filterByArray("M.msg_hash_norm", v))
 		filter_list = append(filter_list, filter_str)
 
-		from_query = `actions as A join messages as M on A.trace_id = M.trace_id and array[M.tx_hash::tonhash] @> A.tx_hashes`
+		from_query = `actions_versioning as A join messages as M on A.trace_id = M.trace_id and array[M.tx_hash::tonhash] @> A.tx_hashes`
 		if order_by_now {
 			clmn_query = `distinct on (A.trace_end_utime, A.trace_id, A.end_utime, A.action_id) ` + clmn_query_default
 		} else {
@@ -269,11 +269,11 @@ func buildActionsQueryV2(act_req ActionRequest, utime_req UtimeRequest, lt_req L
 	if v := act_req.McSeqno; v != nil {
 		filter_list = append(filter_list, `E.state = 'complete'`)
 		filter_list = append(filter_list, fmt.Sprintf("E.mc_seqno_end = %d", *v))
-		from_query = `actions as A join traces as E on A.trace_id = E.trace_id`
+		from_query = `actions_versioning as A join traces as E on A.trace_id = E.trace_id`
 		clmn_query = clmn_query_default
 	}
 	if v := act_req.ActionId; v != nil {
-		from_query = `actions as A`
+		from_query = `actions_versioning as A`
 		filter_str := filterByArray("A.action_id", v)
 		if len(filter_str) > 0 {
 			filter_list = []string{filter_str}
@@ -281,13 +281,13 @@ func buildActionsQueryV2(act_req ActionRequest, utime_req UtimeRequest, lt_req L
 		clmn_query = clmn_query_default
 	}
 	if v := act_req.TraceId; v != nil {
-		from_query = `actions as A`
+		from_query = `actions_versioning as A`
 		filter_str := filterByArray("A.trace_id", v)
 		if len(filter_str) > 0 {
 			filter_list = []string{filter_str}
 		}
 	}
-	if strings.Contains(from_query, "action_accounts") {
+	if strings.Contains(from_query, "action_accounts_versioning") {
 		if order_by_now {
 			orderby_query = fmt.Sprintf(" order by AA.trace_end_utime %s, AA.trace_id %s, AA.action_end_utime %s, AA.action_id %s",
 				sort_order, sort_order, sort_order, sort_order)
