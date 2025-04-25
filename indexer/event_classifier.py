@@ -332,6 +332,7 @@ class EventClassifierWorker(mp.Process):
                                     inserted_action_accounts.add(account_concat_key)
                             session.add_all(action.get_action_accounts())
 
+
                         if state == 'ok':
                             ok_traces.append(trace_id)
                         else:
