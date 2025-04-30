@@ -733,6 +733,13 @@ func ParseRawAction(raw *RawAction) (*Action, error) {
 			NftCollection: raw.Asset,
 			NftItemIndex:  raw.NFTTransferNFTItemIndex,
 		}
+	case "nft_discovery":
+		act.Details = ActionDetailsNftDiscovery{
+			Source:        raw.Source,
+			NftItem:       raw.AssetSecondary,
+			NftCollection: raw.Asset,
+			NftItemIndex:  raw.NFTTransferNFTItemIndex,
+		}
 	default:
 		details := map[string]string{}
 		details["error"] = fmt.Sprintf("unsupported action type: '%s'", act.Type)

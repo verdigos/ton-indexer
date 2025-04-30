@@ -1157,3 +1157,10 @@ type ActionDetailsNftDiscovery struct {
 	NftCollection *AccountAddress `json:"nft_collection"`
 	NftItemIndex  *string         `json:"nft_item_index"`
 }
+
+type ActionDetailsNftDiscovery struct {
+	Source        *AccountAddress `json:"source"`
+	NftItem       *AccountAddress `json:"nft_item"`
+	NftCollection *AccountAddress `json:"nft_collection"`
+	NftItemIndex  *string         `json:"nft_item_index"`
+}
