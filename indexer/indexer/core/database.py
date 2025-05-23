@@ -337,7 +337,15 @@ class Action(Base):
         Column("vault_excesses", ARRAY(CompositeType("liquidity_vault_excess_details", [
             Column("asset", String),
             Column("amount", Numeric),
-        ])))
+        ]))),
+        # new fields for tonco (concentrated liquidity):
+        Column("tick_lower", Numeric),
+        Column("tick_upper", Numeric),
+        Column("nft_index", Numeric),
+        Column("nft_address", String),
+        Column("is_complete", Boolean),
+        Column("position_amount_1", Numeric),
+        Column("position_amount_2", Numeric)
     ]))
     dex_withdraw_liquidity_data = Column(CompositeType("dex_withdraw_liquidity_details", [
         Column("dex", String),
