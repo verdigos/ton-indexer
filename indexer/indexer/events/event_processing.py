@@ -20,7 +20,7 @@ from indexer.events.blocks.jvault import JVaultStakeBlockMatcher, JVaultUnstakeB
     JVaultUnstakeRequestBlockMatcher
 from indexer.events.blocks.liquidity import DedustDepositBlockMatcher, DedustDepositFirstAssetBlockMatcher, \
     DedustWithdrawBlockMatcher, \
-    post_process_dedust_liquidity, StonfiV2ProvideLiquidityMatcher, StonfiV2WithdrawLiquidityMatcher, ToncoDepositLiquidityMatcher, ToncoWithdrawLiquidityMatcher
+    post_process_dedust_liquidity, StonfiV2ProvideLiquidityMatcher, StonfiV2WithdrawLiquidityMatcher, ToncoDepositLiquidityMatcher, ToncoWithdrawLiquidityMatcher, ToncoDeployPoolBlockMatcher
 from indexer.events.blocks.messages import TonTransferMessage
 from indexer.events.blocks.messages.externals import WalletV3ExternalMessage, WalletV4ExternalMessage, \
     WalletV5R1ExternalMessage, extract_payload_from_wallet_message
@@ -32,7 +32,7 @@ from indexer.events.blocks.staking import TONStakersDepositMatcher, TONStakersWi
     TONStakersDelayedWithdrawalMatcher, NominatorPoolDepositMatcher, NominatorPoolWithdrawRequestMatcher, \
     NominatorPoolWithdrawMatcher
 from indexer.events.blocks.subscriptions import SubscriptionBlockMatcher, UnsubscribeBlockMatcher
-from indexer.events.blocks.swaps import DedustSwapBlockMatcher, StonfiSwapBlockMatcher, StonfiV2SwapBlockMatcher, ToncoDeployPoolBlockMatcher, ToncoSwapBlockMatcher
+from indexer.events.blocks.swaps import DedustSwapBlockMatcher, StonfiSwapBlockMatcher, StonfiV2SwapBlockMatcher, ToncoSwapBlockMatcher
 from indexer.events.blocks.utils import NoMessageBodyException
 from indexer.events.blocks.utils import to_tree, EventNode
 from indexer.events.blocks.vesting import VestingSendMessageBlockMatcher, VestingAddWhiteListBlockMatcher
