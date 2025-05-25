@@ -6,7 +6,6 @@ from loguru import logger
 from dataclasses import dataclass
 
 from loguru import logger
-from pytoniq_core import Cell, begin_cell
 
 from indexer.events import context
 from indexer.events.blocks.basic_blocks import CallContractBlock
