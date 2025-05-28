@@ -2,33 +2,23 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from time import sleep
-from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
+from time import sleep
+from typing import Any, Dict, List, Optional
 
+from sqlalchemy import (BigInteger, Boolean, Column, Enum, ForeignKey, Index,
+                        Integer, Numeric, String, create_engine)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy_utils import create_database, database_exists, CompositeType
-
-from sqlalchemy import Column, String, Integer, BigInteger, Boolean, Index, Enum, Numeric
-from sqlalchemy.schema import ForeignKeyConstraint
-from sqlalchemy import ForeignKey
-from sqlalchemy.orm import relationship
-
-from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.dialects.postgresql import JSONB
-
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
 from sqlalchemy.future import select
-
+from sqlalchemy.orm import Session, relationship, sessionmaker
+from sqlalchemy.schema import ForeignKeyConstraint
+from sqlalchemy_utils import CompositeType, create_database, database_exists
 
 from indexer.core.settings import Settings
 
-
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('actions-indexer')
 
 MASTERCHAIN_INDEX = -1
 MASTERCHAIN_SHARD = -9223372036854775808
@@ -269,6 +259,11 @@ class Action(Base):
         Column("response_destination", String),
         Column("nft_item_index", Numeric),
     ]))
+    nft_discovery_data = Column(CompositeType("nft_discovery_details", [
+        Column("collection_address", Boolean),
+        Column("query_id", Numeric),
+        Column("nft_item_index", Numeric),
+    ]))
     jetton_swap_data = Column(CompositeType("jetton_swap_details", [
         Column("dex", String),
         Column("sender", String),
@@ -293,7 +288,9 @@ class Action(Base):
             Column("amount_in", Numeric),
             Column("asset_out", String),
             Column("amount_out", Numeric),
-        ])))]))
+        ]))),
+        Column("min_out_amount", Numeric)
+    ]))
     change_dns_record_data = Column(CompositeType("change_dns_record_details", [
         Column("key", String),
         Column("value_schema", String),
@@ -340,7 +337,15 @@ class Action(Base):
         Column("vault_excesses", ARRAY(CompositeType("liquidity_vault_excess_details", [
             Column("asset", String),
             Column("amount", Numeric),
-        ])))
+        ]))),
+        # new fields for tonco (concentrated liquidity):
+        Column("tick_lower", Numeric),
+        Column("tick_upper", Numeric),
+        Column("nft_index", Numeric),
+        Column("nft_address", String),
+        Column("is_complete", Boolean),
+        Column("position_amount_1", Numeric),
+        Column("position_amount_2", Numeric)
     ]))
     dex_withdraw_liquidity_data = Column(CompositeType("dex_withdraw_liquidity_details", [
         Column("dex", String),
@@ -354,7 +359,12 @@ class Action(Base):
         Column('dex_jetton_wallet_2', String),
         Column("lp_tokens_burnt", Numeric),
         Column('dex_wallet_1', String),
-        Column('dex_wallet_2', String)
+        Column('dex_wallet_2', String),
+        # new fields for tonco (concentrated liquidity):
+        Column('burned_nft_index', Numeric),
+        Column('burned_nft_address', String),
+        Column('tick_lower', Numeric),
+        Column('tick_upper', Numeric)
     ]))
     jvault_claim_data = Column(CompositeType("jvault_claim_details", [
         Column("claimed_jettons", ARRAY(String())),
@@ -394,11 +404,60 @@ class Action(Base):
         Column("query_id", Numeric),
         Column("accounts_added", ARRAY(String()))
     ]))
+    jvault_claim_data = Column(CompositeType("jvault_claim_details", [
+        Column("claimed_jettons", ARRAY(String())),
+        Column("claimed_amounts", ARRAY(Numeric()))
+    ]))
+    jvault_stake_data = Column(CompositeType("jvault_stake_details", [
+        Column("period", Numeric),
+        Column("minted_stake_jettons", Numeric)
+    ]))
+    multisig_create_order_data = Column(CompositeType("multisig_create_order_details", [
+        Column("query_id", Numeric),
+        Column("order_seqno", Numeric),
+        Column("is_created_by_signer", Boolean),
+        Column("is_signed_by_creator", Boolean),
+        Column("creator_index", Numeric),
+        Column("expiration_date", Numeric),
+        Column("order_boc", String),
+    ]))
+    multisig_approve_data = Column(CompositeType("multisig_approve_details", [
+        Column("signer_index", Numeric),
+        Column("exit_code", Numeric),
+    ]))
+    multisig_execute_data = Column(CompositeType("multisig_execute_details", [
+        Column("query_id", Numeric),
+        Column("order_seqno", Numeric),
+        Column("expiration_date", Numeric),
+        Column("approvals_num", Numeric),
+        Column("signers_hash", String),
+        Column("order_boc", String),
+    ]))
+    vesting_send_message_data = Column(CompositeType("vesting_send_message_details", [
+        Column("query_id", Numeric),
+        Column("message_boc", String),
+    ]))
+    vesting_add_whitelist_data = Column(CompositeType("vesting_add_whitelist_details", [
+        Column("query_id", Numeric),
+        Column("accounts_added", ARRAY(String()))
+    ]))
     staking_data = Column(CompositeType("staking_details", [
         Column("provider", String),
         Column("ts_nft", String),
         Column("tokens_burnt", Numeric),
         Column("tokens_minted", Numeric),
+    ]))
+    tonco_deploy_pool_data = Column(CompositeType("tonco_deploy_pool_details", [
+        Column("jetton0_router_wallet", String),
+        Column("jetton1_router_wallet", String),
+        Column("jetton0_minter", String),
+        Column("jetton1_minter", String),
+        Column("tick_spacing", Integer),
+        Column("initial_price_x96", Numeric),
+        Column("protocol_fee", Integer),
+        Column("lp_fee_base", Integer),
+        Column("lp_fee_current", Integer),
+        Column("pool_active", Boolean),
     ]))
     trace_end_lt: int = Column(Numeric)
     trace_end_utime: int = Column(Numeric)
