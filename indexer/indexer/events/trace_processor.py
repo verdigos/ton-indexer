@@ -50,13 +50,15 @@ class TraceProcessor:
             )
 
         except Exception as e:
-            logger.error(f"Failed to process trace {trace.trace_id}: {e}")
-            logger.exception(e)
+            logger.error("Marking trace as failed " + trace.trace_id + " - " + str(e))
+            logger.exception(e, exc_info=True)
 
             # Try to create unknown action as fallback
             try:
                 fallback_actions = await try_classify_basic_actions(trace)
-            except:
+            except Exception as ex:
+                logger.error(f"Failed to classify basic actions for trace {trace.trace_id}: {ex}")
+                logger.exception(ex)
                 fallback_actions = []
 
             return TraceProcessingResult(
