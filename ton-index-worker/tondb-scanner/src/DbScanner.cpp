@@ -9,13 +9,13 @@ using namespace ton::validator;
 class GetBlockDataState: public td::actor::Actor {
 private:
   td::actor::ActorId<ton::validator::RootDb> db_;
-  td::Promise<BlockDataState> promise_;
+  td::Promise<schema::BlockDataState> promise_;
   ConstBlockHandle handle_;
 
   td::Ref<BlockData> block_data_;
   td::Ref<vm::Cell> block_state_root_;
 public:
-  GetBlockDataState(td::actor::ActorId<ton::validator::RootDb> db, ConstBlockHandle handle, td::Promise<BlockDataState> promise) :
+  GetBlockDataState(td::actor::ActorId<ton::validator::RootDb> db, ConstBlockHandle handle, td::Promise<schema::BlockDataState> promise) :
     db_(db),
     handle_(handle),
     promise_(std::move(promise)) {
@@ -71,7 +71,7 @@ class IndexQuery: public td::actor::Actor {
 private:
   const int mc_seqno_;
   td::actor::ActorId<ton::validator::RootDb> db_;
-  td::Promise<MasterchainBlockDataState> promise_;
+  td::Promise<DataContainerPtr> promise_;
   td::Timer timer_{true};
 
   td::Ref<BlockData> mc_block_data_;
@@ -86,13 +86,14 @@ private:
   std::set<ton::BlockIdExt> current_shard_blk_ids_;
   std::unordered_set<ConstBlockHandle> shard_block_handles_;
 
-  MasterchainBlockDataState result_;
+  DataContainerPtr result_;
 
 public:
-  IndexQuery(int mc_seqno, td::actor::ActorId<ton::validator::RootDb> db, td::Promise<MasterchainBlockDataState> promise) : 
+  IndexQuery(int mc_seqno, td::actor::ActorId<ton::validator::RootDb> db, td::Promise<DataContainerPtr> promise) :
     db_(db), 
     mc_seqno_(mc_seqno),
-    promise_(std::move(promise)) {
+    promise_(std::move(promise)),
+    result_(std::make_shared<DataContainer>(mc_seqno_)) {
   }
 
   void start_up() override {
@@ -151,8 +152,8 @@ public:
       return;
     }
 
-    result_.shard_blocks_.push_back({mc_block_data_, mc_block_state_, mc_block_handle_});
-    result_.shard_blocks_diff_.push_back({mc_block_data_, mc_block_state_, mc_block_handle_});
+    result_->mc_block_.shard_blocks_.push_back({mc_block_data_, mc_block_state_, mc_block_handle_});
+    result_->mc_block_.shard_blocks_diff_.push_back({mc_block_data_, mc_block_state_, mc_block_handle_});
 
     fetch_shard_blocks();
   }
@@ -252,7 +253,7 @@ public:
     ig.add_promise(std::move(P));
 
     for (auto& handle: shard_block_handles_) {
-      auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), handle, promise = ig.get_promise()](td::Result<BlockDataState> R) mutable {
+      auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), handle, promise = ig.get_promise()](td::Result<schema::BlockDataState> R) mutable {
         if (R.is_error()) {
           promise.set_error(R.move_as_error_prefix(PSTRING() << handle->id().to_str() << ": "));
         } else {
@@ -263,12 +264,12 @@ public:
     }
   }
 
-  void got_shard_block(BlockDataState block_data_state, ConstBlockHandle handle, td::Promise<td::Unit> promise) {
+  void got_shard_block(schema::BlockDataState block_data_state, ConstBlockHandle handle, td::Promise<td::Unit> promise) {
     if (current_shard_blk_ids_.count(block_data_state.block_data->block_id()) > 0) {
-      result_.shard_blocks_.push_back(block_data_state);
+      result_->mc_block_.shard_blocks_.push_back(block_data_state);
     }
     if (handle->masterchain_ref_block() == mc_seqno_) {
-      result_.shard_blocks_diff_.push_back(block_data_state);
+      result_->mc_block_.shard_blocks_diff_.push_back(block_data_state);
     }
     promise.set_result(td::Unit());
   }
@@ -295,6 +296,14 @@ void DbScanner::start_up() {
         ton::BlockIdExt{ton::masterchainId, ton::shardIdAll, 0, ton::RootHash::zero(), ton::FileHash::zero()},
         ton::BlockIdExt{ton::masterchainId, ton::shardIdAll, 0, ton::RootHash::zero(), ton::FileHash::zero()});
   opts.write().set_max_open_archive_files(500);
+
+  if (auto val = opts->get_celldb_cache_size(); val) {
+    LOG(ERROR) << "Current cache: " << val.value();
+  } else {
+    LOG(ERROR) << "Cache not set";
+  }
+  opts.write().set_celldb_cache_size(16ull * 1024 * 1024 * 1024);
+
   if (mode_ == dbs_secondary) {
     CHECK(secondary_working_dir_.has_value());
     opts.write().set_secondary_working_dir(secondary_working_dir_.value());
@@ -358,7 +367,7 @@ void DbScanner::catch_up_with_primary(td::Promise<td::Unit> promise) {
   td::actor::send_closure(db_, &RootDb::try_catch_up_with_primary, std::move(R));
 }
 
-void DbScanner::fetch_seqno(std::uint32_t mc_seqno, td::Promise<MasterchainBlockDataState> promise) {
+void DbScanner::fetch_seqno(std::uint32_t mc_seqno, td::Promise<DataContainerPtr> promise) {
   td::actor::create_actor<IndexQuery>("indexquery", mc_seqno, db_.get(), std::move(promise)).release();
 }
 

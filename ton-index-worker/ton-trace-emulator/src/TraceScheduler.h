@@ -40,7 +40,7 @@ class TraceEmulatorScheduler : public td::actor::Actor {
     td::Timestamp next_statistics_flush_;
 
     std::unordered_set<ton::BlockSeqno> seqnos_to_fetch_;
-    std::map<ton::BlockSeqno, MasterchainBlockDataState> blocks_to_emulate_;
+    std::map<ton::BlockSeqno, schema::MasterchainBlockDataState> blocks_to_emulate_;
     std::deque<ton::BlockIdExt> signed_block_queue_;
     std::unordered_set<ton::BlockIdExt, BlockIdExtHasher> signed_blocks_inflight_;
     std::unordered_map<ton::BlockIdExt, BlockDataState, BlockIdExtHasher> signed_block_storage_;
@@ -62,7 +62,7 @@ class TraceEmulatorScheduler : public td::actor::Actor {
     void got_last_mc_seqno(ton::BlockSeqno last_known_seqno);
     void fetch_seqnos();
     void fetch_error(std::uint32_t seqno, td::Status error);
-    void seqno_fetched(std::uint32_t seqno, MasterchainBlockDataState mc_data_state);
+    void seqno_fetched(std::uint32_t seqno, schema::MasterchainBlockDataState mc_data_state);
     void emulate_blocks();
     void enqueue_signed_block(ton::BlockIdExt block_id);
     void signed_block_fetched(ton::BlockIdExt block_id, BlockDataState block_data_state);

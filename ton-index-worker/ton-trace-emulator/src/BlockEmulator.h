@@ -45,7 +45,7 @@ struct ShardStateSnapshot {
 
 class McBlockEmulator: public td::actor::Actor {
 private:
-    MasterchainBlockDataState mc_data_state_;
+    schema::MasterchainBlockDataState mc_data_state_;
     std::function<void(Trace, td::Promise<td::Unit>, MeasurementPtr)> trace_processor_;
     td::Promise<> promise_;
     size_t blocks_left_to_parse_;
@@ -80,7 +80,7 @@ private:
     void trace_finished(td::Bits256 trace_root_tx_hash, MeasurementPtr measurement);
 
 public:
-    McBlockEmulator(MasterchainBlockDataState mc_data_state, std::function<void(Trace, td::Promise<td::Unit>, MeasurementPtr)> trace_processor, td::Promise<> promise);
+    McBlockEmulator(schema::MasterchainBlockDataState mc_data_state, std::function<void(Trace, td::Promise<td::Unit>, MeasurementPtr)> trace_processor, td::Promise<> promise);
 
     virtual void start_up() override;
 };
