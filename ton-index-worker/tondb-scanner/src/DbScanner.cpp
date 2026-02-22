@@ -334,7 +334,7 @@ void DbScanner::iterate_temp_block_handles(std::function<void(const ton::validat
   td::actor::send_closure(db_, &RootDb::iterate_temp_block_handles, std::move(f));
 }
 
-void DbScanner::fetch_block_by_id(ton::BlockIdExt block_id, td::Promise<BlockDataState> promise) {
+void DbScanner::fetch_block_by_id(ton::BlockIdExt block_id, td::Promise<schema::BlockDataState> promise) {
   auto P = td::PromiseCreator::lambda(
       [SelfId = actor_id(this), this, promise = std::move(promise)](td::Result<ton::validator::BlockHandle> R) mutable {
         if (R.is_error()) {

@@ -56,6 +56,7 @@ private:
   std::string insert_multisig_contracts(pqxx::work &txn);
   std::string insert_multisig_orders(pqxx::work &txn);
   std::string insert_vesting(pqxx::work &txn);
+  std::string insert_telemint(pqxx::work &txn);
   std::string insert_dedust_pools(pqxx::work &txn);
   std::string insert_stonfi_pools_v2(pqxx::work &txn);
   std::string insert_contract_methods(pqxx::work &txn);
@@ -1247,9 +1248,9 @@ std::string InsertBatchPostgres::insert_nft_items(pqxx::work &txn) {
       }
     }
     // Build V4 sale lookup: (sale_address, nft_address) -> nft_owner_address
-    for (const auto& sale_v4 : task.parsed_block_->get_accounts_v2<GetGemsNftFixPriceSaleV4Data>()) {
-      if (sale_v4.nft_owner_address) {
-        sale_real_owners[{sale_v4.address.addr, sale_v4.nft_address.addr}] = sale_v4.nft_owner_address.value();
+    for (const auto& sale_v4 : task.parsed_block_->get_accounts_v2<schema::GetGemsNftFixPriceSaleV4Data>()) {
+      if (std::holds_alternative<schema::AddressStd>(sale_v4.nft_owner_address)) {
+        sale_real_owners[{sale_v4.address, sale_v4.nft_address}] = sale_v4.nft_owner_address;
       }
     }
     // Build auction lookup: (auction_address, nft_addr) -> nft_owner
@@ -1349,16 +1350,16 @@ std::string InsertBatchPostgres::insert_nft_items(pqxx::work &txn) {
 std::string InsertBatchPostgres::insert_getgems_nft_sales(pqxx::work &txn) {
   // Unified structure to hold both V3 and V4 sales
   struct UnifiedSaleData {
-    block::StdAddress address;
+    schema::AccountAddress address;
     bool is_complete;
     uint32_t created_at;
-    block::StdAddress marketplace_address;
-    block::StdAddress nft_address;
-    std::optional<block::StdAddress> nft_owner_address;
+    schema::AccountAddress marketplace_address;
+    schema::AccountAddress nft_address;
+    schema::AccountAddress nft_owner_address;
     td::RefInt256 full_price;
-    block::StdAddress marketplace_fee_address;
+    schema::AccountAddress marketplace_fee_address;
     td::RefInt256 marketplace_fee;
-    block::StdAddress royalty_address;
+    schema::AccountAddress royalty_address;
     td::RefInt256 royalty_amount;
     std::optional<uint32_t> sold_at;
     std::optional<uint64_t> sold_query_id;
@@ -1402,7 +1403,7 @@ std::string InsertBatchPostgres::insert_getgems_nft_sales(pqxx::work &txn) {
   // Collect V4 sales
   for (auto i = insert_tasks_.rbegin(); i != insert_tasks_.rend(); ++i) {
     const auto& task = *i;
-    for (const auto& nft_sale_v4 : task.parsed_block_->get_accounts_v2<GetGemsNftFixPriceSaleV4Data>()) {
+    for (const auto& nft_sale_v4 : task.parsed_block_->get_accounts_v2<schema::GetGemsNftFixPriceSaleV4Data>()) {
       if (nft_sales.find(nft_sale_v4.address) == nft_sales.end() ||
           nft_sales[nft_sale_v4.address].last_transaction_lt < nft_sale_v4.last_transaction_lt) {
         UnifiedSaleData unified;
@@ -1536,11 +1537,11 @@ std::string InsertBatchPostgres::insert_vesting(pqxx::work &txn) {
 }
 
 std::string InsertBatchPostgres::insert_telemint(pqxx::work &txn) {
-    std::unordered_map<block::StdAddress, TelemintData> telemint_nfts;
-    std::unordered_map<block::StdAddress, NFTItemDataV2> nft_items;
+    std::unordered_map<schema::AccountAddress, schema::TelemintData> telemint_nfts;
+    std::unordered_map<schema::AccountAddress, schema::NFTItemDataV2> nft_items;
     for (auto i = insert_tasks_.rbegin(); i != insert_tasks_.rend(); ++i) {
       const auto& task = *i;
-      for (const auto& nft_item : task.parsed_block_->get_accounts_v2<NFTItemDataV2>()) {
+      for (const auto& nft_item : task.parsed_block_->get_accounts_v2<schema::NFTItemDataV2>()) {
         if (nft_items.find(nft_item.address) == nft_items.end()) {
           nft_items[nft_item.address] = nft_item;
         } else {
@@ -1552,7 +1553,7 @@ std::string InsertBatchPostgres::insert_telemint(pqxx::work &txn) {
     }
     for (auto i = insert_tasks_.rbegin(); i != insert_tasks_.rend(); ++i) {
         const auto& task = *i;
-        for (const auto& telemint : task.parsed_block_->get_accounts_v2<TelemintData>()) {
+        for (const auto& telemint : task.parsed_block_->get_accounts_v2<schema::TelemintData>()) {
             // Skip telemint if it wasn't detected as nft
             if (nft_items.find(telemint.address) == nft_items.end()) {
               continue;
