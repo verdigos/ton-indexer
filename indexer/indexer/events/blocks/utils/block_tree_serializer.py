@@ -732,6 +732,7 @@ def _fill_jvault_stake(block: JVaultStakeBlock, action: Action):
     action.jvault_stake_data = {
         "period": block.data.period,
         "stake_wallet": _addr(block.data.stake_wallet),
+        "minted_stake_jettons": _value(block.data.received_amount),
     }
 
 

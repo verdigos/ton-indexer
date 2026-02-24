@@ -28,7 +28,7 @@ from indexer.events.blocks.messages.jvault import (
     JVaultUpdateRewards,
     JVaultUnstakeRequest,
 )
-from indexer.events.blocks.utils import AccountId, Asset
+from indexer.events.blocks.utils import AccountId, Asset, Amount
 from indexer.events.blocks.utils.block_utils import get_labeled
 
 
@@ -76,6 +76,7 @@ class JVaultStakeData:
     staking_pool: AccountId
     staked_amount: int
     period: int
+    received_amount: Amount
 
 
 class JVaultStakeBlock(Block):
@@ -164,7 +165,8 @@ class JVaultStakeBlockMatcher(BlockMatcher):
         request_update_from_pool = get_labeled("request_update_rewards_from_pool", other_blocks)
         stake_wallet = receive_block.get_message().destination
         staking_pool = receive_block.get_message().source
-
+        receive_stake_jetton_msg = JVaultReceiveJettons(receive_block.get_body())
+        received_amount = Amount(receive_stake_jetton_msg.received_jettons)
         if cancellation:
             failed = True
         elif request_update_from_pool:
@@ -173,7 +175,8 @@ class JVaultStakeBlockMatcher(BlockMatcher):
             return []
         data = JVaultStakeData(sender=AccountId(sender), stake_wallet=AccountId(stake_wallet),
                                sender_wallet=AccountId(sender_wallet), asset=block.data["asset"],
-                               staking_pool=AccountId(staking_pool), staked_amount=staked_amount, period=period)
+                               staking_pool=AccountId(staking_pool), staked_amount=staked_amount, period=period,
+                               received_amount=received_amount)
         new_block = JVaultStakeBlock(
             data=data
         )
