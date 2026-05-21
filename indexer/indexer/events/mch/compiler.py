@@ -57,6 +57,61 @@ _GENERATED_SUBCLASSES: "weakref.WeakKeyDictionary[Registries, dict[tuple[str, ty
 )
 
 
+class _MchRecursiveMatcher(RecursiveMatcher):
+    """RecursiveMatcher specialization that records per-iteration consumed blocks.
+
+    Used by the synthesized walker to populate `list[T]` captures inside
+    recursive rule bodies. Each iteration's consumed blocks land in
+    `self._mch_iter_blocks` in iteration order BEFORE the engine's `set()`
+    dedup step destroys order in the outer `blocks` list.
+
+    Non-reentrant: `_mch_iter_blocks` is reset at the start of every
+    `process_child_matcher` call. The engine matches sequentially.
+    """
+
+    def __init__(self, repeating_matcher, exit_matcher, optional, has_pure_exit):
+        super().__init__(repeating_matcher, exit_matcher, optional)
+        self._mch_has_pure_exit = has_pure_exit
+        self._mch_iter_blocks: list[list] = []
+
+    async def process_child_matcher(self, block, blocks, child_matched):
+        self._mch_iter_blocks = []
+        current_blocks = [block]
+        blocks_to_add = []
+        finished = False
+        while True:
+            block_for_check = current_blocks[:]
+            current_blocks = []
+            iter_consumed: list = []
+            for c in block_for_check:
+                if self._mch_has_pure_exit and self.exit_matcher is not None:
+                    r = await self.exit_matcher.try_build(c)
+                    if r is not None:
+                        blocks_to_add.extend(r)
+                        finished = True
+                if finished:
+                    break
+                r = await self.repeating_matcher.try_build(c)
+                if r is not None:
+                    iter_consumed.extend(r)
+                    blocks_to_add.extend(r)
+                    for b in r:
+                        current_blocks.extend(b.next_blocks)
+                    break
+            if iter_consumed:
+                self._mch_iter_blocks.append(iter_consumed)
+            if finished:
+                break
+            if len(current_blocks) == 0:
+                child_matched = False
+                break
+
+        if len(blocks_to_add) > 0:
+            blocks.extend(set(blocks_to_add))
+            child_matched = True
+        return child_matched
+
+
 def compile_(
     resolved: ResolvedFile,
     registries: Registries,
@@ -87,7 +142,9 @@ def compile_(
 def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     decl = rm.decl
 
-    _check_no_multi_hop_parent(decl.pattern, decl.span, ctx)
+    _check_no_capture_after_recursion(decl.pattern, decl.span, ctx)
+    if ctx.bag.has_errors:
+        raise CompileError(ctx.bag)
 
     if decl.produces not in ctx.registries.block_types:
         ctx.bag.error(
@@ -193,9 +250,14 @@ def _make_subclass(name: str, base: type, rm: ResolvedMatcher, ctx: CompileCtx) 
         opcodes=_merged_opcodes(ctx),
     )
     capture_names = tuple(rm.captures.keys())
+    capture_infos = rm.captures  # dict[str, CaptureInfo] — bound in closure scope
 
     async def build_block(self, block, other_blocks):  # type: ignore[override]
-        kwargs = _extract_captures(self, block, other_blocks, type(self)._mch_capture_names)
+        kwargs = _extract_captures(
+            self, block, other_blocks,
+            type(self)._mch_capture_names,
+            capture_infos,
+        )
         m = type(self)._mch_match_cls(**kwargs)
         builder = registries.builders.get(builder_name)
         if builder is None:
@@ -270,6 +332,7 @@ def _extract_captures(
     anchor_block: Any,
     other_blocks: list[Any],
     capture_names: tuple[str, ...],
+    capture_infos: dict[str, CaptureInfo],
 ) -> dict[str, Any]:
     """Walk the lowered matcher tree against the consumed-blocks list and bind captures.
 
@@ -278,21 +341,18 @@ def _extract_captures(
     child_matcher's blocks first, then children_matchers in list order, then
     parent_matcher's blocks — each contribution itself recursively expanded.
 
-    This walker mirrors that traversal. For each sub-matcher visited, it:
-      - checks `test_self` against the cursor block;
-      - if the matcher owns a capture (tagged at lowering time as
-        `_mch_capture_name`), binds the cursor block to that capture;
-      - advances the cursor and recurses into the sub-matcher's own children.
-
-    Captures whose owning sub-matcher is never reached (e.g. an optional branch
-    that didn't fire, or a position inside a RecursiveMatcher whose contents
-    are opaque in v0) stay None. List bindings inside recursive rules are
-    Phase 3's responsibility; here they remain None.
+    This walker mirrors that traversal. list_binding captures (those defined
+    inside a recursive rule body) are initialized to [] and populated via
+    per-iteration walks against `_MchRecursiveMatcher._mch_iter_blocks`.
+    Scalar captures bind via the Phase 1/2 positional walker.
     """
     all_blocks = [anchor_block] + list(other_blocks)
     cursor = [0]
-    captures: dict[str, Any] = {name: None for name in capture_names}
-    _walk_matcher(root, all_blocks, cursor, captures)
+    captures: dict[str, Any] = {
+        name: ([] if capture_infos[name].list_binding else None)
+        for name in capture_names
+    }
+    _walk_matcher(root, all_blocks, cursor, captures, capture_infos, in_recursion=False)
     return captures
 
 
@@ -301,15 +361,37 @@ def _walk_matcher(
     all_blocks: list[Any],
     cursor: list[int],
     captures: dict[str, Any],
+    capture_infos: dict[str, CaptureInfo],
+    in_recursion: bool,
 ) -> None:
+    """Positional walker. `in_recursion=True` when called for a per-iteration walk
+    inside a recursive rule body — disables the list-binding overwrite guard
+    because the per-iter capture dict is scalar-style (list assembly happens in
+    the outer caller's _MchRecursiveMatcher branch)."""
     if cursor[0] >= len(all_blocks):
         return
 
-    # RecursiveMatcher is opaque in Phase 1: its iterations may add blocks in
-    # non-deterministic order (the engine uses `set()` to dedupe), so we can't
-    # reliably map positions to captures here. Consume the rest of the buffer
-    # so any siblings appearing after the recursion don't bind erroneously.
+    if isinstance(m, _MchRecursiveMatcher):
+        # Per-iteration extraction via the matcher's recorded iteration blocks.
+        for iter_blocks in m._mch_iter_blocks:
+            if not iter_blocks:
+                continue
+            iter_cursor = [0]
+            iter_captures: dict[str, Any] = {name: None for name in captures.keys()}
+            _walk_matcher(
+                m.repeating_matcher, list(iter_blocks), iter_cursor,
+                iter_captures, capture_infos, in_recursion=True,
+            )
+            for name, info in capture_infos.items():
+                if info.list_binding:
+                    captures[name].append(iter_captures.get(name))
+        # set() in engine destroys positional alignment for outside-recursion
+        # captures appearing AFTER the recursion (out of scope, see spec §6).
+        cursor[0] = len(all_blocks)
+        return
+
     if isinstance(m, RecursiveMatcher):
+        # Non-_Mch RecursiveMatcher (defensive — shouldn't occur post-Phase 3).
         cursor[0] = len(all_blocks)
         return
 
@@ -317,7 +399,7 @@ def _walk_matcher(
         block = all_blocks[cursor[0]]
         for sub in m.matchers:
             if sub.test_self(block):
-                _walk_matcher(sub, all_blocks, cursor, captures)
+                _walk_matcher(sub, all_blocks, cursor, captures, capture_infos, in_recursion)
                 return
         return
 
@@ -328,16 +410,23 @@ def _walk_matcher(
 
     cap = getattr(m, "_mch_capture_name", None)
     if cap is not None and cap in captures:
-        captures[cap] = block
+        info = capture_infos.get(cap)
+        # CORRECTNESS GUARD: at the OUTER walk (in_recursion=False), do NOT
+        # overwrite a list_binding capture — the list is populated only via
+        # the _MchRecursiveMatcher branch above. Inside a per-iter walk
+        # (in_recursion=True), the iter_captures dict is scalar-style; bind
+        # unconditionally so per-iter values get collected.
+        if in_recursion or (info is None or not info.list_binding):
+            captures[cap] = block
     cursor[0] += 1
 
     if m.child_matcher is not None:
-        _walk_matcher(m.child_matcher, all_blocks, cursor, captures)
+        _walk_matcher(m.child_matcher, all_blocks, cursor, captures, capture_infos, in_recursion)
     if m.children_matchers:
         for cm in m.children_matchers:
-            _walk_matcher(cm, all_blocks, cursor, captures)
+            _walk_matcher(cm, all_blocks, cursor, captures, capture_infos, in_recursion)
     if m.parent_matcher is not None:
-        _walk_matcher(m.parent_matcher, all_blocks, cursor, captures)
+        _walk_matcher(m.parent_matcher, all_blocks, cursor, captures, capture_infos, in_recursion)
 
 
 def _lower_relative_to_anchor(
@@ -433,51 +522,57 @@ def _lower_parent_chain_from(
     anchor: ast_.Node,
     ctx: CompileCtx,
 ) -> BlockMatcher | None:
-    if isinstance(parent, ast_.Sequence):
-        if parent.head is anchor:
-            # Anchor is the head; if the first tail edge is PARENT, that atom is
-            # the parent of the anchor (e.g. `op A @a <- op B @b`).
-            if parent.tail and parent.tail[0][0] is ast_.Edge.PARENT:
-                return _lower_atom(parent.tail[0][1], ctx)
-            return None
-        for i, (edge, atom) in enumerate(parent.tail):
-            if atom is anchor and edge is ast_.Edge.PARENT:
-                previous = parent.head if i == 0 else parent.tail[i - 1][1]
-                return _lower_atom(previous, ctx)
-    return None
-
-
-def _check_no_multi_hop_parent(pattern: ast_.PatternExpr, decl_span: Span, ctx: CompileCtx) -> None:
-    """Reject patterns with two or more consecutive PARENT edges.
-
-    v0 only supports a single PARENT edge per position; multi-hop chains
-    (`X <- Y <- Z`) would be silently truncated by the lowering, so we surface
-    them as C006 instead.
+    """Lower consecutive PARENT edges from the anchor outward into a chain of
+    parent_matchers. Handles anchor-is-head and both anchor-in-tail variants.
     """
-    def walk(p: ast_.PatternExpr) -> None:
-        if isinstance(p, ast_.Sequence):
-            prev_was_parent = False
-            for edge, atom in p.tail:
-                if edge is ast_.Edge.PARENT and prev_was_parent:
-                    ctx.bag.error(
-                        "C006_MULTI_HOP_PARENT_UNSUPPORTED",
-                        "multi-hop parent chain (consecutive `<-` edges) is not supported in v0",
-                        decl_span,
-                    )
-                    raise CompileError(ctx.bag)
-                prev_was_parent = (edge is ast_.Edge.PARENT)
-                walk(atom)
-            walk(p.head)
-        elif isinstance(p, ast_.Maybe):
-            walk(p.inner)
-        elif isinstance(p, ast_.Alternative):
-            for b in p.branches:
-                walk(b)
-        elif isinstance(p, ast_.ChildrenBlock):
-            for it in p.items:
-                walk(it)
+    if not isinstance(parent, ast_.Sequence):
+        return None
 
-    walk(pattern)
+    prepend_previous = False
+    start_idx = 0
+
+    if parent.head is anchor:
+        if not parent.tail or parent.tail[0][0] is not ast_.Edge.PARENT:
+            return None
+        start_idx = 0
+    else:
+        anchor_idx = next(
+            (i for i, (_e, a) in enumerate(parent.tail) if a is anchor),
+            None,
+        )
+        if anchor_idx is None:
+            return None
+        edge_at_anchor, _ = parent.tail[anchor_idx]
+        if edge_at_anchor is ast_.Edge.PARENT:
+            # Variant B.1: anchor's incoming edge is PARENT; the "previous" atom
+            # acts as the first parent link.
+            prepend_previous = True
+            start_idx = anchor_idx + 1
+        else:
+            # Variant B.2: anchor's incoming edge is CHILD; walk forward through
+            # consecutive PARENT edges.
+            start_idx = anchor_idx + 1
+
+    parent_atoms: list[ast_.PatternExpr] = []
+    if prepend_previous:
+        anchor_idx = next(i for i, (_e, a) in enumerate(parent.tail) if a is anchor)
+        previous_atom = parent.head if anchor_idx == 0 else parent.tail[anchor_idx - 1][1]
+        parent_atoms.append(previous_atom)
+    for edge, atom in parent.tail[start_idx:]:
+        if edge is not ast_.Edge.PARENT:
+            break
+        parent_atoms.append(atom)
+
+    if not parent_atoms:
+        return None
+
+    first = _lower_atom(parent_atoms[0], ctx)
+    current = first
+    for atom in parent_atoms[1:]:
+        nxt = _lower_atom(atom, ctx)
+        _attach_as_parent(current, nxt)
+        current = nxt
+    return first
 
 
 def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> BlockMatcher:
@@ -570,23 +665,125 @@ def _attach_as_child(host: BlockMatcher, child: BlockMatcher) -> None:
         _attach_as_child(host.child_matcher, child)
 
 
+def _attach_as_parent(host: BlockMatcher, parent: BlockMatcher) -> None:
+    if host.parent_matcher is None:
+        host.parent_matcher = parent
+    else:
+        _attach_as_parent(host.parent_matcher, parent)
+
+
+def _check_no_capture_after_recursion(
+    pattern: ast_.PatternExpr,
+    decl_span: Span,
+    ctx: CompileCtx,
+) -> None:
+    """Reject captures placed AFTER a direct-recursive rule reference in the
+    same sequence — the walker cannot reach them due to engine `set()` dedup."""
+
+    def is_direct_recursive_ref(p: ast_.PatternExpr) -> bool:
+        if isinstance(p, ast_.RuleRef):
+            return ctx.resolved.rule_recursion.get(p.name) is RecursionClass.DIRECT_RECURSIVE
+        if isinstance(p, ast_.Maybe):
+            return is_direct_recursive_ref(p.inner)
+        return False
+
+    def contains_capture(p: ast_.PatternExpr) -> bool:
+        if isinstance(p, ast_.Node):
+            return p.capture is not None
+        if isinstance(p, ast_.Maybe):
+            return contains_capture(p.inner)
+        if isinstance(p, ast_.Sequence):
+            if contains_capture(p.head):
+                return True
+            return any(contains_capture(a) for _e, a in p.tail)
+        if isinstance(p, ast_.Alternative):
+            return any(contains_capture(b) for b in p.branches)
+        if isinstance(p, ast_.ChildrenBlock):
+            return any(contains_capture(it) for it in p.items)
+        if isinstance(p, ast_.RuleRef):
+            target = next((r for r in ctx.resolved.raw.rules if r.name == p.name), None)
+            return target is not None and contains_capture(target.pattern)
+        return False
+
+    def walk(p: ast_.PatternExpr) -> None:
+        if isinstance(p, ast_.Sequence):
+            recursion_seen = False
+            atoms = [(None, p.head)] + list(p.tail)
+            for _edge, atom in atoms:
+                if recursion_seen and contains_capture(atom):
+                    ctx.bag.error(
+                        "C007_CAPTURE_AFTER_RECURSION",
+                        "captures placed after a recursive-rule reference in the "
+                        "same sequence are not bound at runtime; restructure the pattern",
+                        atom.span if hasattr(atom, "span") else decl_span,
+                    )
+                if is_direct_recursive_ref(atom):
+                    recursion_seen = True
+                walk(atom)
+        elif isinstance(p, ast_.Maybe):
+            walk(p.inner)
+        elif isinstance(p, ast_.Alternative):
+            for b in p.branches:
+                walk(b)
+        elif isinstance(p, ast_.ChildrenBlock):
+            for it in p.items:
+                walk(it)
+
+    walk(pattern)
+
+
+def _strip_trailing_self_ref(branch: ast_.PatternExpr, rule_name: str) -> ast_.PatternExpr | None:
+    """Strip trailing `maybe $rule_name` from a step branch.
+
+    Returns the stripped pattern, or None if the branch is just `maybe $rule_name`
+    alone (the branch carries no actual content and should be discarded).
+    """
+    if isinstance(branch, ast_.Maybe) and isinstance(branch.inner, ast_.RuleRef) and branch.inner.name == rule_name:
+        return None
+    if isinstance(branch, ast_.Sequence):
+        if branch.tail:
+            last_edge, last_atom = branch.tail[-1]
+            if (
+                isinstance(last_atom, ast_.Maybe)
+                and isinstance(last_atom.inner, ast_.RuleRef)
+                and last_atom.inner.name == rule_name
+            ):
+                new_tail = branch.tail[:-1]
+                if not new_tail:
+                    return branch.head
+                return ast_.Sequence(head=branch.head, tail=new_tail, span=branch.span)
+    return branch
+
+
 def _lower_recursive_rule(name: str, ctx: CompileCtx) -> BlockMatcher:
     """Lower a recursive rule via the configured RecursionStrategy.
 
-    v0 strategy: decompose the rule body into a "step" (non-recursive branches)
-    and an "exit" (the branch(es) reachable when the recursion terminates) and
-    emit RecursiveMatcher(step, exit).
+    Phase 3 change: strip trailing `maybe $self` from step branches; pass
+    `exit_matcher=None` when there are no pure-exit branches (to avoid the v0
+    'always-one-iteration' bug where an `exit_matcher=always_true` short-circuits
+    the loop). Use `_MchRecursiveMatcher` to record per-iteration consumed blocks
+    for list-capture extraction.
     """
     target = next(r for r in ctx.resolved.raw.rules if r.name == name)
     pattern = target.pattern
 
     step_branches, exit_branches = _split_recursion_branches(pattern, name)
+    has_pure_exit = bool(exit_branches)
 
-    # Mark this rule as being lowered so that self-refs inside step/exit branches
-    # are treated as a permissive sentinel rather than triggering infinite recursion.
-    ctx.lowering_recursive.add(name)
-    try:
-        # Lower step.
+    # Strip trailing self-refs from step branches.
+    stripped_step_branches: list[ast_.PatternExpr] = []
+    for b in step_branches:
+        s = _strip_trailing_self_ref(b, name)
+        if s is not None:
+            stripped_step_branches.append(s)
+
+    if not stripped_step_branches:
+        # Fallback: stripping discarded every step branch (e.g. a rule shape like
+        # `op A -> ( maybe $self | op B )` where _split_recursion_branches sees
+        # only the Alternative branches and the `maybe $self` is the entire step).
+        # Preserve v0 behavior by keeping the original branches; the permissive
+        # sentinel will fire on the self-ref. The recursion will be bounded by
+        # the engine's per-iteration block exhaustion rather than the strip.
         if not step_branches:
             ctx.bag.error(
                 "C001_RECURSION_SHAPE_UNSUPPORTED",
@@ -594,23 +791,31 @@ def _lower_recursive_rule(name: str, ctx: CompileCtx) -> BlockMatcher:
                 target.span,
             )
             raise CompileError(ctx.bag)
-        if len(step_branches) == 1:
-            step = _lower_atom(step_branches[0], ctx)
-        else:
-            step = OrMatcher([_lower_atom(b, ctx) for b in step_branches])
+        stripped_step_branches = list(step_branches)
 
-        # Lower exit. If no exit branches were found (rule body only had recursive refs),
-        # use a permissive matcher.
-        if not exit_branches:
-            exit_m: BlockMatcher = GenericMatcher(test_self_func=lambda _b: True)
-        elif len(exit_branches) == 1:
-            exit_m = _lower_atom(exit_branches[0], ctx)
+    ctx.lowering_recursive.add(name)
+    try:
+        if len(stripped_step_branches) == 1:
+            step = _lower_atom(stripped_step_branches[0], ctx)
         else:
-            exit_m = OrMatcher([_lower_atom(b, ctx) for b in exit_branches])
+            step = OrMatcher([_lower_atom(b, ctx) for b in stripped_step_branches])
+
+        if has_pure_exit:
+            if len(exit_branches) == 1:
+                exit_m: BlockMatcher | None = _lower_atom(exit_branches[0], ctx)
+            else:
+                exit_m = OrMatcher([_lower_atom(b, ctx) for b in exit_branches])
+        else:
+            exit_m = None
     finally:
         ctx.lowering_recursive.discard(name)
 
-    return RecursiveMatcher(repeating_matcher=step, exit_matcher=exit_m, optional=True)
+    return _MchRecursiveMatcher(
+        repeating_matcher=step,
+        exit_matcher=exit_m,
+        optional=True,
+        has_pure_exit=has_pure_exit,
+    )
 
 
 def _split_recursion_branches(

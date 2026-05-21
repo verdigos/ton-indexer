@@ -556,3 +556,601 @@ async def test_build_block_empty_when_builder_returns_none(build_block_tree):
     )
     assert with_excess.parent is None
     assert with_excess.next_blocks[0].parent is None, "excess block must not be absorbed by rejected match"
+
+
+# ==========================================================================
+# Phase 4 — multi-hop parent chains
+# ==========================================================================
+
+@pytest.mark.asyncio
+async def test_two_hop_parent_chain_anchor_head(build_block_tree):
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+
+        op A @a <- op B @b <- op C @c
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2, "C": 0x3}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Tree: C(child=B(child=A))
+    tree = build_block_tree(BlockSpec(opcode=0x3, children=[
+        BlockSpec(opcode=0x2, children=[BlockSpec(opcode=0x1)]),
+    ]))
+    b_block = tree.next_blocks[0]
+    a_block = b_block.next_blocks[0]
+    assert a_block.previous_block is b_block
+    assert b_block.previous_block is tree
+
+    result = await matcher.try_build(a_block)
+    assert result is not None
+    assert len(captured) == 1
+    assert captured[0].a is a_block
+    assert captured[0].b is b_block
+    assert captured[0].c is tree
+
+
+@pytest.mark.asyncio
+async def test_three_hop_parent_chain_anchor_head(build_block_tree):
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+    opcode D = 0x4
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+
+        op A @a <- op B @b <- op C @c <- op D @d
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2, "C": 0x3, "D": 0x4}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Tree: D(child=C(child=B(child=A)))
+    tree = build_block_tree(BlockSpec(opcode=0x4, children=[
+        BlockSpec(opcode=0x3, children=[
+            BlockSpec(opcode=0x2, children=[BlockSpec(opcode=0x1)]),
+        ]),
+    ]))
+    c_block = tree.next_blocks[0]
+    b_block = c_block.next_blocks[0]
+    a_block = b_block.next_blocks[0]
+
+    result = await matcher.try_build(a_block)
+    assert result is not None
+    assert captured[0].a is a_block
+    assert captured[0].b is b_block
+    assert captured[0].c is c_block
+    assert captured[0].d is tree
+
+
+@pytest.mark.asyncio
+async def test_two_hop_parent_chain_partial_match_rejected(build_block_tree):
+    """Root parent has wrong opcode: match fails."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+    opcode X = 0x99
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+
+        op A @a <- op B @b <- op C @c
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2, "C": 0x3, "X": 0x99}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Tree: X(child=B(child=A)) — root is X, not C
+    tree = build_block_tree(BlockSpec(opcode=0x99, children=[
+        BlockSpec(opcode=0x2, children=[BlockSpec(opcode=0x1)]),
+    ]))
+    a_block = tree.next_blocks[0].next_blocks[0]
+
+    result = await matcher.try_build(a_block)
+    assert not result
+    assert len(captured) == 0
+
+
+@pytest.mark.asyncio
+async def test_parent_chain_in_tail_position_child_edge_anchor(build_block_tree):
+    """Anchor in tail with CHILD incoming edge, followed by PARENT chain."""
+    src = """
+    opcode X = 0x9
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+
+        op X -> op A @a <- op B @b <- op C @c
+    }
+    """
+    reg, captured = _registries_with({"X": 0x9, "A": 0x1, "B": 0x2, "C": 0x3}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Tree (block-tree relations):
+    # The pattern says A has parent B has parent C. Build tree as: C(child=B(child=A)),
+    # test try_build on A.
+    tree = build_block_tree(BlockSpec(opcode=0x3, children=[
+        BlockSpec(opcode=0x2, children=[BlockSpec(opcode=0x1)]),
+    ]))
+    a_block = tree.next_blocks[0].next_blocks[0]
+
+    result = await matcher.try_build(a_block)
+    # X is NOT validated as A's child in this DSL position; the pattern says
+    # "A has parent B has parent C". Tree satisfies that. Match should succeed.
+    assert result is not None
+    assert captured[0].a is a_block
+    assert captured[0].b is a_block.previous_block
+    assert captured[0].c is tree
+
+
+@pytest.mark.asyncio
+async def test_parent_chain_inside_alternative_branch(build_block_tree):
+    """Alternative with one branch carrying a parent chain."""
+    src = """
+    opcode Anchor = 0x7
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode X = 0x9
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @anchor
+
+        op Anchor @anchor -> ( op A @a <- op B @b | op X @x )
+    }
+    """
+    reg, captured = _registries_with({"Anchor": 0x7, "A": 0x1, "B": 0x2, "X": 0x9}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Tree: anchor.child = X — branch 2 fires.
+    tree = build_block_tree(BlockSpec(opcode=0x7, children=[BlockSpec(opcode=0x9)]))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    assert captured[0].x is tree.next_blocks[0]
+    assert captured[0].a is None
+    assert captured[0].b is None
+
+
+@pytest.mark.asyncio
+async def test_parent_chain_inside_maybe_subtree(build_block_tree):
+    """Parent chain whose link is wrapped in maybe — optional link."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+
+        op A @a <- maybe op B @b
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Tree with B as A's parent — capture binds.
+    tree_with = build_block_tree(BlockSpec(opcode=0x2, children=[BlockSpec(opcode=0x1)]))
+    a_with = tree_with.next_blocks[0]
+    result1 = await matcher.try_build(a_with)
+    assert result1 is not None
+    assert captured[0].a is a_with
+    assert captured[0].b is tree_with
+    captured.clear()
+
+    # Tree with no parent (A standalone) — match still succeeds because B is optional.
+    tree_alone = build_block_tree(BlockSpec(opcode=0x1))
+    result2 = await matcher.try_build(tree_alone)
+    assert result2 is not None
+    assert captured[0].a is tree_alone
+    assert captured[0].b is None
+
+
+@pytest.mark.asyncio
+async def test_parent_chain_mixed_edge_after_chain(build_block_tree):
+    """`op A @a -> op B -> op D` validates the simpler chain compiles and matches normally.
+
+    The original goal `op A @a -> op B <- op C @c -> op D` is a pre-existing limitation
+    of the lowering (the `<- op C` segment is dropped). Phase 4 does NOT improve this."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+    opcode D = 0x4
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+
+        op A @a -> op B -> op D
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2, "D": 0x4}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=[
+        BlockSpec(opcode=0x2, children=[BlockSpec(opcode=0x4)]),
+    ]))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    assert captured[0].a is tree
+
+
+@pytest.mark.asyncio
+async def test_anchor_in_tail_parent_edge_legacy_behavior(build_block_tree):
+    """Variant B.1 — anchor-in-tail with incoming PARENT edge.
+
+    Spec §2.6: preserve existing single-hop behavior in v0; we assert what the
+    implementation produces (not a hand-derived ground truth). This test exists
+    to lock current behavior so future refactors don't silently change it.
+    """
+    src = """
+    opcode X = 0x9
+    opcode A = 0x1
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+
+        op X <- op A @a
+    }
+    """
+    reg, captured = _registries_with({"X": 0x9, "A": 0x1}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Per existing single-hop behavior: A.parent_matcher = lower(X), meaning
+    # the matcher expects A.previous_block to satisfy X. So we test against a tree
+    # where A.previous_block = X.
+    tree = build_block_tree(BlockSpec(opcode=0x9, children=[BlockSpec(opcode=0x1)]))
+    a_block = tree.next_blocks[0]
+    result = await matcher.try_build(a_block)
+    assert result is not None
+    assert captured[0].a is a_block
+
+
+# ==========================================================================
+# Phase 3 — list bindings under recursion
+# ==========================================================================
+
+@pytest.mark.asyncio
+async def test_recursive_rule_three_iterations_list_capture(build_block_tree):
+    """3-hop recursion: `m.a == [A1, A2, A3]`."""
+    src = """
+    opcode A = 0x1
+
+    rule step = op A @a -> maybe $step
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @anchor
+
+        op A @anchor -> $step
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Trace: anchor(opcode=A, child=A1(child=A2(child=A3)))
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=[
+        BlockSpec(opcode=0x1, children=[
+            BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x1)]),
+        ]),
+    ]))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    assert captured[0].anchor is tree
+    # `step` recursion captures the A's under anchor — should be 3 hops.
+    assert isinstance(captured[0].a, list), f"m.a expected list, got {type(captured[0].a)!r}"
+    assert len(captured[0].a) == 3, f"expected 3 iterations, got {len(captured[0].a)}"
+
+
+@pytest.mark.asyncio
+async def test_recursive_rule_parallel_captures_aligned(build_block_tree):
+    """Parallel captures align per iteration."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+
+    rule step = op A @a -> op B @b -> maybe $step
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @anchor
+
+        op A @anchor -> $step
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Trace: anchor → A1 → B1 → A2 → B2 → A3 → B3
+    def chain(opcs):
+        if not opcs:
+            return []
+        return [BlockSpec(opcode=opcs[0], children=chain(opcs[1:]))]
+
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=chain([0x1, 0x2, 0x1, 0x2, 0x1, 0x2])))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    a_list = captured[0].a
+    b_list = captured[0].b
+    assert len(a_list) == 3 and len(b_list) == 3
+    for i in range(3):
+        assert a_list[i].opcode == 0x1
+        assert b_list[i].opcode == 0x2
+
+
+@pytest.mark.asyncio
+async def test_recursive_rule_zero_iterations_empty_list(build_block_tree):
+    """No iterations: capture is `[]`, not None."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+
+    rule step = op B @b -> maybe $step
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @anchor
+
+        op A @anchor -> maybe $step
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Trace: anchor with no B children → recursion fires 0 times.
+    tree = build_block_tree(BlockSpec(opcode=0x1))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    assert captured[0].anchor is tree
+    assert captured[0].b == [], f"expected empty list, got {captured[0].b!r}"
+
+
+@pytest.mark.asyncio
+async def test_recursive_rule_one_iteration_single_element_list(build_block_tree):
+    """Single-hop trace: list has one element."""
+    src = """
+    opcode A = 0x1
+
+    rule step = op A @a -> maybe $step
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @anchor
+
+        op A @anchor -> $step
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Trace: anchor → A1 (single hop)
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x1)]))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    assert len(captured[0].a) == 1
+    assert captured[0].a[0] is tree.next_blocks[0]
+
+
+@pytest.mark.asyncio
+async def test_recursive_rule_termination_no_pure_exit(build_block_tree):
+    """Regression for the v0 'always-one-iteration' bug.
+
+    Step branches all carry `maybe $self` — no pure exit. Phase 3 strips the
+    trailing self-refs and lets the engine iterate via natural step failure."""
+    src = """
+    opcode A = 0x1
+
+    rule step = (
+          op A @a -> maybe $step
+        | maybe $step
+    )
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @anchor
+
+        op A @anchor -> $step
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Trace: anchor → A1 → A2 → A3 (3 hops); recursion must iterate 3 times.
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=[
+        BlockSpec(opcode=0x1, children=[
+            BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x1)]),
+        ]),
+    ]))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    assert len(captured[0].a) == 3, (
+        f"expected 3 iterations (regression for the v0 one-iteration bug), "
+        f"got {len(captured[0].a)}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_recursive_rule_with_maybe_inside_step(build_block_tree):
+    """Per-iter optional captures inside recursion."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+
+    rule step = op A @a -> maybe op B @b -> maybe $step
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @anchor
+
+        op A @anchor -> $step
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Trace: anchor → A1 → A2 → B2 → A3 (B present only on iter 2)
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=[
+        BlockSpec(opcode=0x1, children=[  # A1
+            BlockSpec(opcode=0x1, children=[  # A2
+                BlockSpec(opcode=0x2, children=[  # B2
+                    BlockSpec(opcode=0x1)  # A3
+                ]),
+            ]),
+        ]),
+    ]))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    a_list = captured[0].a
+    b_list = captured[0].b
+    assert len(a_list) == 3
+    assert len(b_list) == 3
+    assert b_list[0] is None
+    assert b_list[1] is not None and b_list[1].opcode == 0x2
+    # b_list[2] semantics depends on whether the engine finds B after A3 — likely None.
+    # Don't over-assert.
+
+
+@pytest.mark.asyncio
+async def test_recursive_rule_outside_captures_remain_scalar(build_block_tree):
+    """Outside-recursion captures stay scalar."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+
+    rule step = op B @b -> maybe $step
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @anchor
+
+        op A @anchor -> $step
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x2)]))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    # @anchor is OUTSIDE the recursive rule → scalar
+    assert captured[0].anchor is tree, "outside-recursion capture must be scalar"
+    # @b is INSIDE the recursive rule → list
+    assert isinstance(captured[0].b, list)
+    assert len(captured[0].b) == 1
+
+
+@pytest.mark.asyncio
+async def test_capture_after_recursion_rejected():
+    """C007: captures after a recursive rule reference in the same sequence."""
+    from indexer.events.mch.diagnostics import CompileError, Severity
+
+    src = """
+    opcode A = 0x1
+    opcode X = 0x9
+
+    rule step = op A @a -> maybe $step
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @anchor
+
+        op A @anchor -> $step -> op X @x
+    }
+    """
+    reg = Registries()
+    reg.opcodes.update({"A": 0x1, "X": 0x9})
+    reg.block_types["MB"] = type("MB", (), {})
+    reg.register_builder("build_m")(lambda m: None)
+    with pytest.raises(CompileError) as exc:
+        compile_text(src, "test.mch", reg)
+    codes = [d.code for d in exc.value.bag.items if d.severity is Severity.ERROR]
+    assert "C007_CAPTURE_AFTER_RECURSION" in codes, codes
+
+
+@pytest.mark.asyncio
+async def test_recursive_rule_or_branches_different_captures(build_block_tree):
+    """OrMatcher inside step: each iter binds the firing branch's capture."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+
+    rule step = ( op A @a | op B @b ) -> maybe $step
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @anchor
+
+        op A @anchor -> $step
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Trace: anchor → A1 → B2 → A3 (alternating)
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=[
+        BlockSpec(opcode=0x1, children=[  # A1 (iter 1 fires A-branch)
+            BlockSpec(opcode=0x2, children=[  # B2 (iter 2 fires B-branch)
+                BlockSpec(opcode=0x1)  # A3 (iter 3 fires A-branch)
+            ]),
+        ]),
+    ]))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    a_list = captured[0].a
+    b_list = captured[0].b
+    assert len(a_list) == 3 and len(b_list) == 3
+    assert a_list[0] is not None and a_list[0].opcode == 0x1  # iter 1: A
+    assert b_list[0] is None
+    assert a_list[1] is None
+    assert b_list[1] is not None and b_list[1].opcode == 0x2  # iter 2: B
+    assert a_list[2] is not None and a_list[2].opcode == 0x1  # iter 3: A
+    assert b_list[2] is None

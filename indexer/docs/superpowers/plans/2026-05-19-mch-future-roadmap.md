@@ -87,6 +87,8 @@ That contract — return all consumed blocks so downstream serialization knows w
 
 ## Phase 3 — List bindings under recursion
 
+**Status:** Done (2026-05-21). The walker now reads `_MchRecursiveMatcher._mch_iter_blocks` (per-iteration consumed blocks recorded BEFORE the engine's `set()` dedup) and populates `list_binding` captures via per-iter walks. `_lower_recursive_rule` strips trailing `maybe $self` from step branches and passes `exit_matcher=None` when no pure-exit branches exist — fixes the latent v0 "always-one-iteration" bug. New `C007_CAPTURE_AFTER_RECURSION` diagnostic rejects patterns that would silently lose captures placed after a recursive-rule reference. See `docs/superpowers/specs/2026-05-21-mch-phase-3-4-design.md`.
+
 **Gap.** Spec §7.2 says captures inside a self-referential rule expose as `list[T]`, parallel-aligned across peer captures. Codegen already emits the type. The runtime extractor doesn't populate the list — it just runs the single-block search.
 
 **Why it matters.** The `stonfi_v2_swap` example in `docs/mch-spec.md` §14.2 explicitly relies on this:
@@ -113,6 +115,8 @@ Without proper list bindings, builders can't introspect intermediate swap hops �
 ---
 
 ## Phase 4 — Multi-hop parent chains
+
+**Status:** Done (2026-05-21). `_lower_parent_chain_from` rewrites to walk consecutive PARENT edges from the anchor outward, building a `parent_matcher.parent_matcher.…` chain. Handles anchor-is-head and both anchor-in-tail variants (B.1 anchor-edge=PARENT and B.2 anchor-edge=CHILD). `_check_no_multi_hop_parent` and the `C006_MULTI_HOP_PARENT_UNSUPPORTED` diagnostic removed. Walker recursion into `parent_matcher` unchanged from Phase 1/2 — handles multi-hop naturally. See `docs/superpowers/specs/2026-05-21-mch-phase-3-4-design.md`.
 
 **Gap.** `_lower_parent_chain_from` lowers only the immediate predecessor of the anchor and emits `C006_MULTI_HOP_PARENT_UNSUPPORTED` for any pattern with two consecutive `<-` edges. Production has matchers like NFT auction flows that walk upward two or three levels.
 
@@ -294,10 +298,10 @@ Skip anything that uses cross-trace stitching (Dedust deposit/withdraw, etc.) �
 ## Recommended execution order and dependencies
 
 ```
-Phase 1 (position-id extraction)
-  └─ Phase 2 (build_block output)
-       └─ Phase 3 (list bindings)
-       └─ Phase 4 (multi-hop parent)
+✅ Phase 1 (position-id extraction)
+  └─ ✅ Phase 2 (build_block output)
+       └─ ✅ Phase 3 (list bindings)
+       └─ ✅ Phase 4 (multi-hop parent)
        └─ Phase 5 (children-block semantics)
             └─ Phase 7 (ExclusiveOr heuristic)
             └─ Phase 11 (corpus parity)
@@ -308,7 +312,7 @@ Phase 8 (multi-file)   — independent; do anytime before Phase 11
 Phase 9 (codegen QoL)  — independent; do anytime
 ```
 
-**Critical path** to "fully capable" + production wiring: ~~1 → 2~~ (done 2026-05-21) → 4 → 5 → 11 → 10.
+**Critical path** to "fully capable" + production wiring: ~~1 → 2 → 4~~ → 5 → 11 → 10. Phases 1–4 done 2026-05-21 (Phase 3 also done same day, independent of critical path).
 **Phases that can run in parallel** with the critical path: 3, 6, 7, 8, 9.
 
 If forced to pick a minimum viable next step, **Phase 1 is the single highest-value change** — it removes the R009 restriction that prevents writing realistic swap-chain patterns. Phase 2 cleans up the build_block contract so DSL matchers don't quietly produce wrong output downstream.
@@ -333,6 +337,6 @@ The compiler is "fully capable" when:
 3. At least one matcher (jetton_transfer) is shipped under the production feature flag and passes the full `tests/test_actions.py` suite with the flag enabled.
 4. Codegen produces precisely-typed Match dataclasses (no `Block` fallback when the host registry knows the class).
 5. Multi-file specs work; opcode/predicate/rule namespaces are pooled across `.mch` files in a directory.
-6. The R009 / C005 / C006 / C001 diagnostics are either resolved (~~R009~~ confirmed never implemented; C006 once Phase 4 lands) or remain as documented unsupported features (C005 for indirect recursion, C001 for unsupported recursion shapes).
+6. The R009 / C005 / C006 / C007 / C001 diagnostics are either resolved (~~R009~~ confirmed never implemented; ~~C006~~ resolved 2026-05-21; C007 added 2026-05-21 to reject captures after recursion) or remain as documented unsupported features (C005 for indirect recursion, C001 for unsupported recursion shapes).
 
 When all six are true, the compiler can replace any non-stitch hand-written matcher one-by-one without regression.

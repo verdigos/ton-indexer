@@ -233,13 +233,13 @@ def test_recursive_rule_lowers_to_recursive_matcher():
     assert found, "expected RecursiveMatcher in the child chain"
 
 
-def test_multi_hop_parent_chain_rejected():
-    from indexer.events.mch.diagnostics import CompileError, Severity
+def test_multi_hop_parent_chain_lowers_to_chain():
+    """Phase 4: `op A @a <- op B <- op C` lowers to a chain of parent_matchers.
+    Previously rejected via C006; now compiles cleanly."""
     src = """
     opcode A = 0x1
     opcode B = 0x2
     opcode C = 0x3
-    opcode D = 0x4
 
     matcher m {
         produces MB
@@ -249,13 +249,18 @@ def test_multi_hop_parent_chain_rejected():
         op A @a <- op B @b <- op C @c
     }
     """
-    reg = _registries_with_opcodes(A=0x1, B=0x2, C=0x3, D=0x4)
+    reg = _registries_with_opcodes(A=0x1, B=0x2, C=0x3)
     _with_block_type(reg, "MB")
     _with_builder(reg, "build_m")
-    with pytest.raises(CompileError) as exc:
-        compile_text(src, "test.mch", reg)
-    codes = [d.code for d in exc.value.bag.items if d.severity is Severity.ERROR]
-    assert "C006_MULTI_HOP_PARENT_UNSUPPORTED" in codes, codes
+    compiled = compile_text(src, "test.mch", reg)
+    m = compiled[0].matcher
+    assert m.parent_matcher is not None, "anchor must have parent_matcher set"
+    assert m.parent_matcher.parent_matcher is not None, "multi-hop chain must form"
+    # Leaf opcode should be C (0x3).
+    leaf = m.parent_matcher.parent_matcher
+    assert getattr(leaf, "opcode", None) == 0x3, (
+        f"leaf parent_matcher opcode = {getattr(leaf, 'opcode', None)!r}, expected 0x3"
+    )
 
 
 def test_indirect_recursion_rejected():
