@@ -111,3 +111,9 @@ def test_unterminated_string():
     with pytest.raises(LexerError) as exc:
         list(tokenize('"unterminated', "f.mch"))
     assert exc.value.code == "L003_UNTERMINATED_STRING"
+
+
+def test_caret_token():
+    toks = list(tokenize("^", "<test>"))
+    assert toks[0].kind is TokenKind.CARET
+    assert toks[0].text == "^"

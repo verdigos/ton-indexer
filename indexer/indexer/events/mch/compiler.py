@@ -8,6 +8,7 @@ from indexer.events.blocks.basic_matchers import (
     BlockMatcher,
     BlockTypeMatcher,
     ContractMatcher,
+    ExclusiveOrMatcher,
     GenericMatcher,
     OrMatcher,
     RecursiveMatcher,
@@ -143,6 +144,7 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     decl = rm.decl
 
     _check_no_capture_after_recursion(decl.pattern, decl.span, ctx)
+    _check_no_bare_children_block(decl.pattern, ctx)
     if ctx.bag.has_errors:
         raise CompileError(ctx.bag)
 
@@ -487,30 +489,68 @@ def _lower_child_chain_from(
     ctx: CompileCtx,
 ) -> tuple[BlockMatcher | None, list[BlockMatcher] | None]:
     if isinstance(parent, ast_.Sequence):
+        # Collect CHILD-edged atoms in the anchor's downstream slice. Stop at
+        # the first PARENT-edged atom — atoms appearing after a PARENT edge
+        # belong to the parent chain (`_lower_parent_chain_from` consumes them).
+        # This implements Q5: in `op A <- op B -> {C; D}`, {C; D} routes to B's
+        # parent chain, NOT to anchor A's children_matchers.
         downstream_atoms: list[ast_.PatternExpr] = []
         if parent.head is anchor:
-            downstream_atoms = [atom for edge, atom in parent.tail
-                                if edge is ast_.Edge.CHILD]
+            tail_slice = parent.tail
         else:
+            if isinstance(parent.head, ast_.ChildrenBlock):
+                ctx.bag.error(
+                    "C008_CHILDREN_BLOCK_BARE",
+                    "children block '{...}' cannot appear as the first element of a sequence; "
+                    "it must follow a node (e.g. 'op A -> {op B; op C}')",
+                    parent.head.span,
+                )
+                raise CompileError(ctx.bag)
             anchor_idx = None
             for i, (_e, atom) in enumerate(parent.tail):
                 if atom is anchor:
                     anchor_idx = i
                     break
-            if anchor_idx is not None:
-                downstream_atoms = [atom for edge, atom in parent.tail[anchor_idx + 1:]
-                                    if edge is ast_.Edge.CHILD]
+            if anchor_idx is None:
+                return None, None
+            tail_slice = parent.tail[anchor_idx + 1:]
+        for edge, atom in tail_slice:
+            if edge is ast_.Edge.PARENT:
+                break
+            downstream_atoms.append(atom)
         if not downstream_atoms:
             return None, None
         first = downstream_atoms[0]
-        if isinstance(first, ast_.ChildrenBlock):
-            children_ms = [_lower_atom(it, ctx) for it in first.items]
-            rest = downstream_atoms[1:]
+        if isinstance(first, ast_.ChildrenBlock) or (
+            isinstance(first, ast_.Maybe) and isinstance(first.inner, ast_.ChildrenBlock)
+        ):
+            # Anchor-adjacent ChildrenBlock fast path. Greedily consume any
+            # consecutive bare/maybe ChildrenBlocks so back-to-back `{B;C} {D;E}`
+            # all attach to the anchor's children_matchers in source order.
+            children_ms: list[BlockMatcher] = []
+            rest_idx = 0
+            while rest_idx < len(downstream_atoms):
+                atom = downstream_atoms[rest_idx]
+                if isinstance(atom, ast_.ChildrenBlock):
+                    children_ms.extend(_lower_atom(it, ctx) for it in atom.items)
+                    rest_idx += 1
+                    continue
+                if isinstance(atom, ast_.Maybe) and isinstance(atom.inner, ast_.ChildrenBlock):
+                    for it in atom.inner.items:
+                        lowered_it = _lower_atom(it, ctx)
+                        lowered_it.optional = True
+                        children_ms.append(lowered_it)
+                    rest_idx += 1
+                    continue
+                break
+            rest = downstream_atoms[rest_idx:]
             if rest:
-                child = _chain(_lower_atom(a, ctx) for a in rest)
+                pairs = [(ast_.Edge.CHILD, a) for a in rest]
+                child = _lower_chain_with_children_attach(pairs, ctx)
                 return child, children_ms
             return None, children_ms
-        child = _chain(_lower_atom(a, ctx) for a in downstream_atoms)
+        pairs = [(ast_.Edge.CHILD, a) for a in downstream_atoms]
+        child = _lower_chain_with_children_attach(pairs, ctx)
         return child, None
 
     return None, None
@@ -558,40 +598,216 @@ def _lower_parent_chain_from(
         anchor_idx = next(i for i, (_e, a) in enumerate(parent.tail) if a is anchor)
         previous_atom = parent.head if anchor_idx == 0 else parent.tail[anchor_idx - 1][1]
         parent_atoms.append(previous_atom)
+    consumed_idx = start_idx
     for edge, atom in parent.tail[start_idx:]:
         if edge is not ast_.Edge.PARENT:
             break
         parent_atoms.append(atom)
+        consumed_idx += 1
 
     if not parent_atoms:
         return None
 
-    first = _lower_atom(parent_atoms[0], ctx)
-    current = first
-    for atom in parent_atoms[1:]:
-        nxt = _lower_atom(atom, ctx)
-        _attach_as_parent(current, nxt)
-        current = nxt
-    return first
+    # Lower the parent chain itself.
+    pairs = [(ast_.Edge.PARENT, a) for a in parent_atoms]
+    head_parent = _lower_chain_with_children_attach(pairs, ctx)
+
+    # Q5: any CHILD-edged ChildrenBlocks following the parent chain attach to
+    # the LAST parent matcher (the outermost parent in the chain). They are NOT
+    # consumed as anchor.children_matchers (excluded by _lower_child_chain_from).
+    last_parent: BlockMatcher | None = head_parent
+    if last_parent is not None:
+        # Walk to the deepest parent_matcher.
+        while last_parent.parent_matcher is not None:
+            last_parent = last_parent.parent_matcher
+    for edge, atom in parent.tail[consumed_idx:]:
+        if edge is not ast_.Edge.CHILD:
+            break
+        if isinstance(atom, ast_.ChildrenBlock):
+            cb_items = atom.items
+            optional_items = False
+        elif isinstance(atom, ast_.Maybe) and isinstance(atom.inner, ast_.ChildrenBlock):
+            cb_items = atom.inner.items
+            optional_items = True
+        else:
+            # Non-CB CHILD atom after parent chain — out of scope in v0.
+            break
+        if last_parent is None:
+            break
+        if last_parent.children_matchers is None:
+            last_parent.children_matchers = []
+        for it in cb_items:
+            lowered_it = _lower_atom(it, ctx)
+            if optional_items:
+                lowered_it.optional = True
+            last_parent.children_matchers.append(lowered_it)
+
+    return head_parent
+
+
+def _lower_chain_with_children_attach(
+    pairs: list[tuple[ast_.Edge, ast_.PatternExpr]],
+    ctx: CompileCtx,
+) -> BlockMatcher | None:
+    """Walk an ordered list of `(edge, atom)` pairs and build a chained matcher.
+
+    ChildrenBlock atoms attach their items to the immediately-preceding matcher's
+    `children_matchers`. `Maybe(ChildrenBlock)` does the same with per-item
+    `optional=True`. Bare ChildrenBlock at the head (no left sibling) emits
+    `C008_CHILDREN_BLOCK_BARE`. Non-CB atoms chain via `_attach_as_child` (CHILD
+    edge) or `_attach_as_parent` (PARENT edge).
+    """
+    head_matcher: BlockMatcher | None = None
+    previous_lowered: BlockMatcher | None = None
+
+    for edge, atom in pairs:
+        # Detect bare or maybe-wrapped ChildrenBlock attach-to-left.
+        cb_items: list[ast_.PatternExpr] | None = None
+        optional_items = False
+        if isinstance(atom, ast_.ChildrenBlock):
+            cb_items = list(atom.items)
+        elif isinstance(atom, ast_.Maybe) and isinstance(atom.inner, ast_.ChildrenBlock):
+            cb_items = list(atom.inner.items)
+            optional_items = True
+
+        if cb_items is not None:
+            if previous_lowered is None:
+                # Bare ChildrenBlock with no left sibling.
+                span = atom.span if isinstance(atom, ast_.ChildrenBlock) else atom.inner.span
+                ctx.bag.error(
+                    "C008_CHILDREN_BLOCK_BARE",
+                    "children block '{...}' must follow a node in a sequence "
+                    "(e.g. 'op A -> {op B; op C}'); bare children blocks are not allowed",
+                    span,
+                )
+                raise CompileError(ctx.bag)
+            if previous_lowered.children_matchers is None:
+                previous_lowered.children_matchers = []
+            for item in cb_items:
+                lowered_item = _lower_atom(item, ctx)
+                if optional_items:
+                    lowered_item.optional = True
+                previous_lowered.children_matchers.append(lowered_item)
+            # Do NOT update previous_lowered — a CB is a constraint on the
+            # preceding matcher, not a chain link.
+            continue
+
+        lowered = _lower_atom(atom, ctx)
+        if head_matcher is None:
+            head_matcher = lowered
+        else:
+            if edge is ast_.Edge.PARENT:
+                _attach_as_parent(previous_lowered, lowered)
+            else:
+                _attach_as_child(previous_lowered, lowered)
+        previous_lowered = lowered
+
+    return head_matcher
+
+
+def _branches_eligible_for_exclusive_heuristic(
+    branches: tuple[ast_.PatternExpr, ...],
+    ctx: CompileCtx,
+) -> bool:
+    """Return True iff all branches are bare concrete Nodes with distinct resolved heads and no predicates."""
+    seen_opcodes: set[int] = set()
+    seen_btypes: set[str] = set()
+    for b in branches:
+        if not isinstance(b, ast_.Node):
+            return False
+        head = b.head
+        if not isinstance(head, (ast_.OpHead, ast_.BTypeHead)):
+            return False
+        if b.where_predicate is not None:
+            return False
+        if isinstance(head, ast_.OpHead):
+            ref = head.ref
+            opcode_int = ref if isinstance(ref, int) else (
+                ctx.resolved.opcodes.get(ref) or ctx.registries.opcodes.get(ref)
+            )
+            if opcode_int is None:
+                return False
+            if opcode_int in seen_opcodes:
+                return False
+            seen_opcodes.add(opcode_int)
+        elif isinstance(head, ast_.BTypeHead):
+            if head.name in seen_btypes:
+                return False
+            seen_btypes.add(head.name)
+    return True
+
+
+def _check_redundant_exclusive_heads(p: ast_.Alternative, ctx: CompileCtx) -> None:
+    """Emit W202 if two branches share the same concrete head (non-blocking warning)."""
+    seen: dict[object, object] = {}
+    for b in p.branches:
+        if not isinstance(b, ast_.Node):
+            continue
+        head = b.head
+        if isinstance(head, ast_.OpHead):
+            ref = head.ref
+            opcode_int = ref if isinstance(ref, int) else (
+                ctx.resolved.opcodes.get(ref) or ctx.registries.opcodes.get(ref)
+            )
+            key = ("op", opcode_int)
+        elif isinstance(head, ast_.BTypeHead):
+            key = ("btype", head.name)
+        else:
+            continue
+        if key in seen:
+            ctx.bag.warning(
+                "W202_EXCLUSIVE_OR_REDUNDANT_HEADS",
+                f"two branches of this exclusive alternative share the same head "
+                f"({'opcode' if key[0] == 'op' else 'btype'} {key[1]!r}); "
+                f"ExclusiveOrMatcher's sum-check will never return True for this head",
+                b.span,
+            )
+        else:
+            seen[key] = b.span
 
 
 def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> BlockMatcher:
     if isinstance(p, ast_.Node):
         return _lower_node(p, ctx)
     if isinstance(p, ast_.Maybe):
+        # Bare `maybe {...}` (Maybe wrapping a ChildrenBlock with no chain
+        # context) is rejected. In-chain `op A -> maybe {B; C}` is handled by
+        # `_lower_chain_with_children_attach` BEFORE reaching here.
+        if isinstance(p.inner, ast_.ChildrenBlock):
+            ctx.bag.error(
+                "C008_CHILDREN_BLOCK_BARE",
+                "'maybe {...}' must follow a node in a sequence "
+                "(e.g. 'op A -> maybe {op B; op C}'); bare maybe-children blocks are not allowed",
+                p.inner.span,
+            )
+            raise CompileError(ctx.bag)
         inner = _lower_atom(p.inner, ctx)
         inner.optional = True
         return inner
     if isinstance(p, ast_.Alternative):
-        return OrMatcher([_lower_atom(b, ctx) for b in p.branches])
+        lowered_branches = [_lower_atom(b, ctx) for b in p.branches]
+        if p.exclusive:
+            _check_redundant_exclusive_heads(p, ctx)
+            return ExclusiveOrMatcher(lowered_branches)
+        if _branches_eligible_for_exclusive_heuristic(p.branches, ctx):
+            return ExclusiveOrMatcher(lowered_branches)
+        return OrMatcher(lowered_branches)
     if isinstance(p, ast_.Sequence):
-        first = _lower_atom(p.head, ctx)
-        for _edge, atom in p.tail:
-            inner = _lower_atom(atom, ctx)
-            _attach_as_child(first, inner)
-        return first
+        pairs: list[tuple[ast_.Edge, ast_.PatternExpr]] = [(ast_.Edge.CHILD, p.head)]
+        pairs.extend(p.tail)
+        result = _lower_chain_with_children_attach(pairs, ctx)
+        if result is None:
+            # Defensive — should not occur in well-formed AST.
+            raise AssertionError("Sequence lowered to None")
+        return result
     if isinstance(p, ast_.ChildrenBlock):
-        return OrMatcher([_lower_atom(it, ctx) for it in p.items])
+        ctx.bag.error(
+            "C008_CHILDREN_BLOCK_BARE",
+            "children block '{...}' cannot appear as a standalone expression; "
+            "it must follow a node in a sequence (e.g. 'op A -> {op B; op C}')",
+            p.span,
+        )
+        raise CompileError(ctx.bag)
     if isinstance(p, ast_.RuleRef):
         target = next((r for r in ctx.resolved.raw.rules if r.name == p.name), None)
         if target is None:
@@ -730,6 +946,92 @@ def _check_no_capture_after_recursion(
                 walk(it)
 
     walk(pattern)
+
+
+def _check_no_bare_children_block(
+    pattern: ast_.PatternExpr,
+    ctx: CompileCtx,
+) -> None:
+    """Reject ChildrenBlock atoms that lack a left sibling in their enclosing chain.
+
+    A ChildrenBlock (`{A; B}`) or `maybe {A; B}` must follow a node atom in a
+    Sequence's tail. Bare positions emit `C008_CHILDREN_BLOCK_BARE`:
+
+    - Sequence head (`{A; B} -> X`).
+    - Alternative branch (`(op A | {B; C})`).
+    - Maybe inner that itself is at a bare position (`maybe {A; B}` standalone).
+    - Standalone pattern (`{A; B}` as the whole matcher pattern).
+
+    Inside a sequence tail with a preceding atom, ChildrenBlock is well-formed
+    and the lowering path attaches its items to the left sibling.
+    """
+
+    def is_cb_or_maybe_cb(p: ast_.PatternExpr) -> tuple[bool, ast_.Span]:
+        if isinstance(p, ast_.ChildrenBlock):
+            return True, p.span
+        if isinstance(p, ast_.Maybe) and isinstance(p.inner, ast_.ChildrenBlock):
+            return True, p.inner.span
+        return False, p.span if hasattr(p, "span") else None  # type: ignore[return-value]
+
+    def emit_c008(span: ast_.Span) -> None:
+        ctx.bag.error(
+            "C008_CHILDREN_BLOCK_BARE",
+            "children block '{...}' must follow a node in a sequence "
+            "(e.g. 'op A -> {op B; op C}'); bare children blocks are not allowed",
+            span,
+        )
+
+    def walk(p: ast_.PatternExpr, in_chain_left: bool) -> None:
+        """`in_chain_left` is True when this atom has a non-CB left sibling in its
+        enclosing Sequence tail (i.e. it's a valid attach-to-left position).
+        """
+        is_cb, span = is_cb_or_maybe_cb(p)
+        if is_cb and not in_chain_left:
+            emit_c008(span)
+        if isinstance(p, ast_.Sequence):
+            # Head has no left sibling; if it's a CB, that's bare.
+            walk(p.head, in_chain_left=False)
+            previous_was_atom = not is_cb_or_maybe_cb(p.head)[0]
+            for _edge, atom in p.tail:
+                walk(atom, in_chain_left=previous_was_atom)
+                # CBs don't update "left sibling" — next atom still chains off
+                # the same preceding node.
+                if not is_cb_or_maybe_cb(atom)[0]:
+                    previous_was_atom = True
+        elif isinstance(p, ast_.Maybe):
+            # Maybe wraps a non-CB inner: recurse with no chain context for inner.
+            if not isinstance(p.inner, ast_.ChildrenBlock):
+                walk(p.inner, in_chain_left=False)
+        elif isinstance(p, ast_.Alternative):
+            for b in p.branches:
+                walk(b, in_chain_left=False)
+        elif isinstance(p, ast_.ChildrenBlock):
+            for it in p.items:
+                walk(it, in_chain_left=False)
+        elif isinstance(p, ast_.RuleRef):
+            # Check the rule body once at its definition site, with no chain
+            # context — its body must be self-contained or referenced from a
+            # Sequence (in which case body's own bareness is independent).
+            target = next((r for r in ctx.resolved.raw.rules if r.name == p.name), None)
+            if target is not None and not _seen_rule(p.name, ctx):
+                _mark_rule_seen(p.name, ctx)
+                walk(target.pattern, in_chain_left=False)
+
+    walk(pattern, in_chain_left=False)
+
+
+_RULE_VALIDATED_KEY = "__mch_rule_validated__"
+
+
+def _seen_rule(name: str, ctx: CompileCtx) -> bool:
+    seen: set[str] = getattr(ctx, _RULE_VALIDATED_KEY, set())
+    return name in seen
+
+
+def _mark_rule_seen(name: str, ctx: CompileCtx) -> None:
+    seen: set[str] = getattr(ctx, _RULE_VALIDATED_KEY, set())
+    seen.add(name)
+    setattr(ctx, _RULE_VALIDATED_KEY, seen)
 
 
 def _strip_trailing_self_ref(branch: ast_.PatternExpr, rule_name: str) -> ast_.PatternExpr | None:

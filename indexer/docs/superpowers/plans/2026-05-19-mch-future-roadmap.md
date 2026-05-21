@@ -137,6 +137,8 @@ Without proper list bindings, builders can't introspect intermediate swap hops �
 
 ## Phase 5 — `ChildrenBlock` in non-anchor positions
 
+**Status:** ✅ Done (2026-05-21). `_lower_chain_with_children_attach` helper added to `compiler.py`; `_lower_atom(Sequence)` rewritten to use it; `_lower_atom(ChildrenBlock)` and `_lower_atom(Maybe(ChildrenBlock))` emit `C008_CHILDREN_BLOCK_BARE` when bare; `_lower_child_chain_from` updated to use helper for mid-chain and rest-of-chain atoms; `_lower_parent_chain_from` updated to attach trailing ChildrenBlocks to the outermost parent matcher. 12 new behavioral tests. `basic_matchers.py` untouched.
+
 **Gap.** Reviewer issue #13: `_lower_atom` lowers a `ChildrenBlock` to `OrMatcher`, which means "match any one". The DSL intent for `{ A; B }` is "match all of these as parallel children". The wrong semantics only manifest when a children block appears outside the anchor's direct child slot (e.g. inside a rule body or alternative branch).
 
 **Why it matters.** Several production matchers use children blocks at arbitrary depths (dedust deposit, jvault). The compiler currently produces silently-wrong matchers for such patterns.
@@ -180,6 +182,8 @@ Without proper list bindings, builders can't introspect intermediate swap hops �
 ---
 
 ## Phase 7 — `ExclusiveOrMatcher` heuristic
+
+**Status:** ✅ Done (2026-05-21). `CARET = "^"` token added to `tokens.py` and `lexer.py`. `Alternative.exclusive: bool` field added to `ast_.py`. Parser updated: `_parse_pattern_expr` peek-and-remember separator, P010 on mix. Compiler updated: `_branches_eligible_for_exclusive_heuristic` + `_check_redundant_exclusive_heads` (W202) helpers; `_lower_atom(Alternative)` dispatches to `ExclusiveOrMatcher` for explicit `^` or heuristic-eligible `|`. 16 new tests (lexer, parser, structural, behavioral). `basic_matchers.py` untouched.
 
 **Gap.** Alternatives always lower to `OrMatcher`. The spec mentions `ExclusiveOrMatcher` as a possible optimization "if all branches' anchors are concrete and mutually exclusive". v0 punts.
 
@@ -302,8 +306,8 @@ Skip anything that uses cross-trace stitching (Dedust deposit/withdraw, etc.) �
   └─ ✅ Phase 2 (build_block output)
        └─ ✅ Phase 3 (list bindings)
        └─ ✅ Phase 4 (multi-hop parent)
-       └─ Phase 5 (children-block semantics)
-            └─ Phase 7 (ExclusiveOr heuristic)
+       └─ ✅ Phase 5 (children-block semantics)
+            └─ ✅ Phase 7 (ExclusiveOr heuristic + `^` syntax)
             └─ Phase 11 (corpus parity)
                  └─ Phase 10 (production wiring)
 
@@ -312,8 +316,8 @@ Phase 8 (multi-file)   — independent; do anytime before Phase 11
 Phase 9 (codegen QoL)  — independent; do anytime
 ```
 
-**Critical path** to "fully capable" + production wiring: ~~1 → 2 → 4~~ → 5 → 11 → 10. Phases 1–4 done 2026-05-21 (Phase 3 also done same day, independent of critical path).
-**Phases that can run in parallel** with the critical path: 3, 6, 7, 8, 9.
+**Critical path** to "fully capable" + production wiring: ~~1 → 2 → 4 → 5 → 7~~ → 11 → 10. Phases 1–5 + 7 done 2026-05-21.
+**Phases that can run in parallel** with the critical path: 6, 8, 9.
 
 If forced to pick a minimum viable next step, **Phase 1 is the single highest-value change** — it removes the R009 restriction that prevents writing realistic swap-chain patterns. Phase 2 cleans up the build_block contract so DSL matchers don't quietly produce wrong output downstream.
 

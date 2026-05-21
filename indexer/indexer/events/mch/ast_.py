@@ -86,6 +86,7 @@ class Sequence(PatternExpr):
 class Alternative(PatternExpr):
     branches: tuple[PatternExpr, ...]
     span: Span
+    exclusive: bool = False
 
 
 @dataclass(frozen=True)

@@ -289,3 +289,198 @@ def test_indirect_recursion_rejected():
         compile_text(src, "test.mch", reg)
     codes = [d.code for d in exc.value.bag.items if d.severity is Severity.ERROR]
     assert "C005_INDIRECT_RECURSION_UNSUPPORTED" in codes, codes
+
+
+# ==========================================================================
+# Phase 7 — XOR separator structural tests
+# ==========================================================================
+
+def test_caret_separator_lowers_to_exclusive_or():
+    """op X @x -> (op A ^ op B): child_matcher is ExclusiveOrMatcher."""
+    from indexer.events.blocks.basic_matchers import ExclusiveOrMatcher
+    src = """
+    opcode X = 0x9
+    opcode A = 0x1
+    opcode B = 0x2
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @x
+
+        op X @x -> (op A ^ op B)
+    }
+    """
+    reg = _registries_with_opcodes(X=0x9, A=0x1, B=0x2)
+    _with_block_type(reg, "MB")
+    _with_builder(reg, "build_m")
+    compiled = compile_text(src, "test.mch", reg)
+    child = compiled[0].matcher.child_matcher
+    assert isinstance(child, ExclusiveOrMatcher), f"expected ExclusiveOrMatcher, got {type(child).__name__}"
+
+
+def test_pipe_concrete_distinct_lowers_to_exclusive_or():
+    """op X @x -> (op A | op B): heuristic fires → child_matcher is ExclusiveOrMatcher."""
+    from indexer.events.blocks.basic_matchers import ExclusiveOrMatcher
+    src = """
+    opcode X = 0x9
+    opcode A = 0x1
+    opcode B = 0x2
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @x
+
+        op X @x -> (op A | op B)
+    }
+    """
+    reg = _registries_with_opcodes(X=0x9, A=0x1, B=0x2)
+    _with_block_type(reg, "MB")
+    _with_builder(reg, "build_m")
+    compiled = compile_text(src, "test.mch", reg)
+    child = compiled[0].matcher.child_matcher
+    assert isinstance(child, ExclusiveOrMatcher), f"expected ExclusiveOrMatcher, got {type(child).__name__}"
+
+
+def test_pipe_with_predicate_lowers_to_or():
+    """op X @x -> (op A | op A where p): heuristic blocked by predicate → child_matcher is plain OrMatcher."""
+    from indexer.events.blocks.basic_matchers import ExclusiveOrMatcher
+    src = """
+    opcode X = 0x9
+    opcode A = 0x1
+    predicate p
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @x
+
+        op X @x -> (op A | op A where p)
+    }
+    """
+    reg = _registries_with_opcodes(X=0x9, A=0x1)
+    reg.predicates["p"] = lambda b: True
+    _with_block_type(reg, "MB")
+    _with_builder(reg, "build_m")
+    compiled = compile_text(src, "test.mch", reg)
+    child = compiled[0].matcher.child_matcher
+    assert isinstance(child, OrMatcher) and not isinstance(child, ExclusiveOrMatcher), (
+        f"expected plain OrMatcher, got {type(child).__name__}"
+    )
+
+
+def test_pipe_nested_lowers_to_or():
+    """op X @x -> (op A | (op B -> op C)): heuristic blocked by Sequence → child_matcher is plain OrMatcher."""
+    from indexer.events.blocks.basic_matchers import ExclusiveOrMatcher
+    src = """
+    opcode X = 0x9
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @x
+
+        op X @x -> (op A | (op B -> op C))
+    }
+    """
+    reg = _registries_with_opcodes(X=0x9, A=0x1, B=0x2, C=0x3)
+    _with_block_type(reg, "MB")
+    _with_builder(reg, "build_m")
+    compiled = compile_text(src, "test.mch", reg)
+    child = compiled[0].matcher.child_matcher
+    assert isinstance(child, OrMatcher) and not isinstance(child, ExclusiveOrMatcher)
+
+
+def test_caret_with_predicate_still_exclusive_or():
+    """op X @x -> (op A ^ op A where p): explicit ^ → child_matcher is ExclusiveOrMatcher."""
+    from indexer.events.blocks.basic_matchers import ExclusiveOrMatcher
+    src = """
+    opcode X = 0x9
+    opcode A = 0x1
+    predicate p
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @x
+
+        op X @x -> (op A ^ op A where p)
+    }
+    """
+    reg = _registries_with_opcodes(X=0x9, A=0x1)
+    reg.predicates["p"] = lambda b: True
+    _with_block_type(reg, "MB")
+    _with_builder(reg, "build_m")
+    compiled = compile_text(src, "test.mch", reg)
+    child = compiled[0].matcher.child_matcher
+    assert isinstance(child, ExclusiveOrMatcher)
+
+
+def test_nested_caret_outer_pipe_inner():
+    """op X @x -> (op A ^ (op B | op C where p)): outer is ExclusiveOrMatcher; inner is plain OrMatcher (predicate blocks heuristic)."""
+    from indexer.events.blocks.basic_matchers import ExclusiveOrMatcher
+    src = """
+    opcode X = 0x9
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+    predicate p
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @x
+
+        op X @x -> (op A ^ (op B | op C where p))
+    }
+    """
+    reg = _registries_with_opcodes(X=0x9, A=0x1, B=0x2, C=0x3)
+    reg.predicates["p"] = lambda b: True
+    _with_block_type(reg, "MB")
+    _with_builder(reg, "build_m")
+    compiled = compile_text(src, "test.mch", reg)
+    child = compiled[0].matcher.child_matcher
+    assert isinstance(child, ExclusiveOrMatcher), f"outer child must be ExclusiveOrMatcher, got {type(child).__name__}"
+    inner = child.matchers[1]  # (op B | op C where p) branch — predicate blocks heuristic
+    assert isinstance(inner, OrMatcher) and not isinstance(inner, ExclusiveOrMatcher), (
+        f"inner must be plain OrMatcher, got {type(inner).__name__}"
+    )
+
+
+def test_caret_redundant_heads_warns(monkeypatch):
+    """op X @x -> (op A ^ op A): W202 emitted; child_matcher is ExclusiveOrMatcher."""
+    from indexer.events.blocks.basic_matchers import ExclusiveOrMatcher
+    from indexer.events.mch import diagnostics as diag_module
+    warnings_captured = []
+
+    original_warning = diag_module.DiagnosticBag.warning
+    def _patched_warning(self, code, message, span, suggestion=None):
+        warnings_captured.append(code)
+        return original_warning(self, code, message, span, suggestion)
+    monkeypatch.setattr(diag_module.DiagnosticBag, "warning", _patched_warning)
+
+    src = """
+    opcode X = 0x9
+    opcode A = 0x1
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @x
+
+        op X @x -> (op A ^ op A)
+    }
+    """
+    reg = _registries_with_opcodes(X=0x9, A=0x1)
+    _with_block_type(reg, "MB")
+    _with_builder(reg, "build_m")
+    compiled = compile_text(src, "test.mch", reg)
+    assert "W202_EXCLUSIVE_OR_REDUNDANT_HEADS" in warnings_captured, (
+        f"expected W202 warning, got: {warnings_captured}"
+    )
+    child = compiled[0].matcher.child_matcher
+    assert isinstance(child, ExclusiveOrMatcher)

@@ -261,3 +261,53 @@ def test_missing_closing_brace_in_matcher():
         op Foo @x
     """
     _parse_expect_error(src, "P001_UNEXPECTED_TOKEN")
+
+
+# ==========================================================================
+# Phase 7 — CARET separator
+# ==========================================================================
+
+def _parse_matcher_pattern(src: str) -> ast_.PatternExpr:
+    """Parse src wrapped in a matcher decl, return the matcher's pattern."""
+    full = (
+        "opcode A = 0x1\nopcode B = 0x2\nopcode C = 0x3\n"
+        "matcher m {\n  produces MB\n  build b\n  entry @a\n"
+        + src + "\n}"
+    )
+    f = _parse(full)
+    return f.matchers[0].pattern
+
+
+def test_pipe_builds_non_exclusive_alternative():
+    node = _parse_matcher_pattern("(op A | op B)")
+    assert isinstance(node, ast_.Alternative)
+    assert node.exclusive is False
+
+
+def test_caret_separator_sets_exclusive_true():
+    node = _parse_matcher_pattern("(op A ^ op B)")
+    assert isinstance(node, ast_.Alternative)
+    assert node.exclusive is True
+    assert len(node.branches) == 2
+
+
+def test_caret_three_branches():
+    node = _parse_matcher_pattern("(op A ^ op B ^ op C)")
+    assert isinstance(node, ast_.Alternative)
+    assert node.exclusive is True
+    assert len(node.branches) == 3
+
+
+def test_mixed_separator_emits_p010():
+    src = (
+        "opcode A = 0x1\nopcode B = 0x2\nopcode C = 0x3\n"
+        "matcher m {\n  produces MB\n  build b\n  entry @a\n"
+        "(op A ^ op B | op C)\n}"
+    )
+    _parse_expect_error(src, "P010_ALTERNATIVE_SEPARATOR_MIX")
+
+
+def test_caret_spanning_newlines():
+    node = _parse_matcher_pattern("(\n  op A\n  ^\n  op B\n)")
+    assert isinstance(node, ast_.Alternative)
+    assert node.exclusive is True

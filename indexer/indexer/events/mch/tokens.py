@@ -45,6 +45,7 @@ class TokenKind(Enum):
     ARROW_R = "->"
     ARROW_L = "<-"
     PIPE = "|"
+    CARET = "^"
     AT = "@"
     DOLLAR = "$"
     LBRACE = "{"

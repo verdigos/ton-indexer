@@ -280,23 +280,47 @@ def _parse_capture_path(s: _ParserState) -> ast_.CapturePath:
 
 
 def _parse_pattern_expr(s: _ParserState) -> ast_.PatternExpr:
-    """pattern_expr := sequence ('|' sequence)*"""
+    """pattern_expr := sequence (('|' | '^') sequence)*
+
+    The separator kind is decided by the first separator seen.
+    Mixing '|' and '^' at the same nesting level emits P010.
+    """
     s.skip_newlines()
     branches = [_parse_sequence(s)]
+    separator_kind: TokenKind | None = None
+
     while True:
         # Alternatives may span newlines for readability.
         save_i = s.i
         s.skip_newlines()
-        if not s.at(TokenKind.PIPE):
+        if s.at(TokenKind.PIPE) or s.at(TokenKind.CARET):
+            current_sep = s.tokens[s.i].kind
+            if separator_kind is None:
+                separator_kind = current_sep
+            elif current_sep is not separator_kind:
+                offending_tok = s.tokens[s.i]
+                s.bag.error(
+                    "P010_ALTERNATIVE_SEPARATOR_MIX",
+                    "cannot mix '|' and '^' at the same nesting level; "
+                    "use parentheses to nest alternatives",
+                    offending_tok.span,
+                )
+                raise CompileError(s.bag)
+            s.i += 1  # consume separator
+            s.skip_newlines()
+            branches.append(_parse_sequence(s))
+        else:
             s.i = save_i
             break
-        s.i += 1  # consume PIPE
-        s.skip_newlines()
-        branches.append(_parse_sequence(s))
+
     if len(branches) == 1:
         return branches[0]
     span = _join(branches[0].span, branches[-1].span)
-    return ast_.Alternative(branches=tuple(branches), span=span)
+    return ast_.Alternative(
+        branches=tuple(branches),
+        span=span,
+        exclusive=(separator_kind is TokenKind.CARET),
+    )
 
 
 def _parse_sequence(s: _ParserState) -> ast_.PatternExpr:
@@ -340,9 +364,9 @@ def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
         inner = _parse_pattern_expr(s)
         s.skip_newlines()
         end = s.eat(TokenKind.RPAREN).span
-        # Strip parentheses; carry through the span.
+        # Strip parentheses; carry through the span and exclusive flag.
         if isinstance(inner, ast_.Alternative):
-            return ast_.Alternative(branches=inner.branches, span=_join(t.span, end))
+            return ast_.Alternative(branches=inner.branches, span=_join(t.span, end), exclusive=inner.exclusive)
         if isinstance(inner, ast_.Sequence):
             return ast_.Sequence(head=inner.head, tail=inner.tail, span=_join(t.span, end))
         # Atomic — span unchanged.

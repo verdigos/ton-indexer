@@ -1154,3 +1154,398 @@ async def test_recursive_rule_or_branches_different_captures(build_block_tree):
     assert b_list[1] is not None and b_list[1].opcode == 0x2  # iter 2: B
     assert a_list[2] is not None and a_list[2].opcode == 0x1  # iter 3: A
     assert b_list[2] is None
+
+
+# ==========================================================================
+# Phase 7 — XOR separator behavioral tests
+# ==========================================================================
+
+@pytest.mark.asyncio
+async def test_exclusive_or_behavioral_double_match_rejects(build_block_tree):
+    """ExclusiveOrMatcher.test_self returns False when both branches match one block."""
+    from indexer.events.blocks.basic_matchers import ContractMatcher, ExclusiveOrMatcher
+
+    # Two branches with same opcode — both test_self return True on the same block.
+    xor = ExclusiveOrMatcher([ContractMatcher(0x1), ContractMatcher(0x1)])
+    block = build_block_tree(BlockSpec(opcode=0x1))
+    # sum == 2 → test_self must return False (exclusive-or semantics).
+    assert xor.test_self(block) is False
+
+
+@pytest.mark.asyncio
+async def test_caret_inside_recursive_rule(build_block_tree):
+    """rule r = (op A @a ^ maybe $r) lowers cleanly (Phase 3 regression guard)."""
+    from indexer.events.blocks.basic_matchers import ExclusiveOrMatcher
+    src = """
+    opcode A = 0x1
+
+    rule r = (op A @a ^ maybe $r)
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @anchor
+
+        op A @anchor -> $r
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    assert compiled, "compilation must succeed"
+
+
+@pytest.mark.asyncio
+async def test_exclusive_or_fires_correct_branch(build_block_tree):
+    """ExclusiveOrMatcher child routes to correct branch when exactly one matches."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+
+        op A @a -> (op B @b ^ op C @c)
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2, "C": 0x3}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # B child fires → @b bound, @c is None.
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x2)]))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    assert captured[0].a is tree
+    assert captured[0].b is tree.next_blocks[0]
+    assert captured[0].c is None
+
+
+# ==========================================================================
+# Phase 5 — ChildrenBlock attach-to-left
+# ==========================================================================
+
+@pytest.mark.asyncio
+async def test_children_block_after_anchor_unchanged(build_block_tree):
+    """Regression: op A @a -> {op B; op C} (anchor-direct fast path)."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+        op A @a -> {op B @b; op C @c}
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2, "C": 0x3}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=[
+        BlockSpec(opcode=0x2),
+        BlockSpec(opcode=0x3),
+    ]))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    assert captured[0].a is tree
+    assert captured[0].b is not None
+    assert captured[0].c is not None
+
+
+@pytest.mark.asyncio
+async def test_children_block_mid_chain_binds_to_left(build_block_tree):
+    """op A -> op X -> {op B; op C}: X gets children_matchers=[B, C]."""
+    src = """
+    opcode A = 0x1
+    opcode X = 0x9
+    opcode B = 0x2
+    opcode C = 0x3
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+        op A @a -> op X @x -> {op B @b; op C @c}
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "X": 0x9, "B": 0x2, "C": 0x3}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=[
+        BlockSpec(opcode=0x9, children=[
+            BlockSpec(opcode=0x2),
+            BlockSpec(opcode=0x3),
+        ]),
+    ]))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    assert captured[0].a is tree
+    assert captured[0].x is tree.next_blocks[0]
+    assert captured[0].b is not None
+    assert captured[0].c is not None
+
+
+@pytest.mark.asyncio
+async def test_children_block_mid_chain_continues_after(build_block_tree):
+    """op A -> {op B; op C} -> op D: A has children_matchers=[B, C] AND child_matcher=D."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+    opcode D = 0x4
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+        op A @a -> {op B @b; op C @c} -> op D @d
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2, "C": 0x3, "D": 0x4}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=[
+        BlockSpec(opcode=0x2),
+        BlockSpec(opcode=0x3),
+        BlockSpec(opcode=0x4),
+    ]))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    assert captured[0].b is not None
+    assert captured[0].c is not None
+    assert captured[0].d is not None
+
+
+def test_children_block_inside_alternative_branch_rejected():
+    """(op A | {op B; op C}) → C008 compile error."""
+    from indexer.events.mch.diagnostics import CompileError
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+        op A @a -> (op A | {op B; op C})
+    }
+    """
+    reg, _ = _registries_with({"A": 0x1, "B": 0x2, "C": 0x3}, "build_m", "MB")
+    with pytest.raises(CompileError) as exc:
+        compile_text(src, "test.mch", reg)
+    codes = [d.code for d in exc.value.bag.items]
+    assert "C008_CHILDREN_BLOCK_BARE" in codes, codes
+
+
+def test_children_block_inside_bare_maybe_rejected():
+    """maybe {op B; op C} as standalone → C008 compile error."""
+    from indexer.events.mch.diagnostics import CompileError
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+
+    rule r = maybe {op B; op C}
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+        op A @a -> $r
+    }
+    """
+    reg, _ = _registries_with({"A": 0x1, "B": 0x2, "C": 0x3}, "build_m", "MB")
+    with pytest.raises(CompileError) as exc:
+        compile_text(src, "test.mch", reg)
+    codes = [d.code for d in exc.value.bag.items]
+    assert "C008_CHILDREN_BLOCK_BARE" in codes, codes
+
+
+@pytest.mark.asyncio
+async def test_maybe_wrapped_children_block_in_chain_attaches_optional(build_block_tree):
+    """op A -> maybe {op B; op C}: items attach as optional children of A."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+        op A @a -> maybe {op B @b; op C @c}
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2, "C": 0x3}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    tree_empty = build_block_tree(BlockSpec(opcode=0x1))
+    result = await matcher.try_build(tree_empty)
+    assert result is not None
+
+    tree_full = build_block_tree(BlockSpec(opcode=0x1, children=[
+        BlockSpec(opcode=0x2),
+        BlockSpec(opcode=0x3),
+    ]))
+    result = await matcher.try_build(tree_full)
+    assert result is not None
+
+
+def test_children_block_as_sequence_head_rejected():
+    """{op B; op C} -> op A as head of sequence → C008."""
+    from indexer.events.mch.diagnostics import CompileError
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+        {op B; op C} -> op A @a
+    }
+    """
+    reg, _ = _registries_with({"A": 0x1, "B": 0x2, "C": 0x3}, "build_m", "MB")
+    with pytest.raises(CompileError) as exc:
+        compile_text(src, "test.mch", reg)
+    codes = [d.code for d in exc.value.bag.items]
+    assert "C008_CHILDREN_BLOCK_BARE" in codes, codes
+
+
+def test_children_block_rule_body_root_rejected():
+    """rule r = {op A; op B} referenced from chain → C008."""
+    from indexer.events.mch.diagnostics import CompileError
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode X = 0x9
+
+    rule r = {op A; op B}
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @x
+        op X @x -> $r
+    }
+    """
+    reg, _ = _registries_with({"A": 0x1, "B": 0x2, "X": 0x9}, "build_m", "MB")
+    with pytest.raises(CompileError) as exc:
+        compile_text(src, "test.mch", reg)
+    codes = [d.code for d in exc.value.bag.items]
+    assert "C008_CHILDREN_BLOCK_BARE" in codes, codes
+
+
+@pytest.mark.asyncio
+async def test_children_block_after_parent_edge(build_block_tree):
+    """op A @a <- op B @b -> {op C; op D}: B has children_matchers=[C, D]."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+    opcode D = 0x4
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+        op A @a <- op B @b -> {op C @c; op D @d}
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2, "C": 0x3, "D": 0x4}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+    tree = build_block_tree(BlockSpec(opcode=0x2, children=[
+        BlockSpec(opcode=0x1),
+        BlockSpec(opcode=0x3),
+        BlockSpec(opcode=0x4),
+    ]))
+    a_block = next(b for b in tree.next_blocks if b.opcode == 0x1)
+    result = await matcher.try_build(a_block)
+    assert result is not None
+    assert captured[0].b is tree
+    assert captured[0].c is not None
+    assert captured[0].d is not None
+
+
+@pytest.mark.asyncio
+async def test_two_back_to_back_children_blocks(build_block_tree):
+    """op A -> {op B; op C} -> {op D; op E}: A has children_matchers=[B, C, D, E]."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+    opcode D = 0x4
+    opcode E = 0x5
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+        op A @a -> {op B @b; op C @c} -> {op D @d; op E @e}
+    }
+    """
+    reg, captured = _registries_with(
+        {"A": 0x1, "B": 0x2, "C": 0x3, "D": 0x4, "E": 0x5}, "build_m", "MB"
+    )
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=[
+        BlockSpec(opcode=0x2),
+        BlockSpec(opcode=0x3),
+        BlockSpec(opcode=0x4),
+        BlockSpec(opcode=0x5),
+    ]))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    assert captured[0].b is not None
+    assert captured[0].c is not None
+    assert captured[0].d is not None
+    assert captured[0].e is not None
+
+
+@pytest.mark.asyncio
+async def test_anchor_adjacent_plus_mid_chain_children_blocks(build_block_tree):
+    """op A -> {B;C} -> op X -> {D;E}: A gets [B,C] children; X gets [D,E] children."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+    opcode X = 0x9
+    opcode D = 0x4
+    opcode E = 0x5
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+        op A @a -> {op B @b; op C @c} -> op X @x -> {op D @d; op E @e}
+    }
+    """
+    reg, captured = _registries_with(
+        {"A": 0x1, "B": 0x2, "C": 0x3, "X": 0x9, "D": 0x4, "E": 0x5}, "build_m", "MB"
+    )
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=[
+        BlockSpec(opcode=0x2),
+        BlockSpec(opcode=0x3),
+        BlockSpec(opcode=0x9, children=[
+            BlockSpec(opcode=0x4),
+            BlockSpec(opcode=0x5),
+        ]),
+    ]))
+    result = await matcher.try_build(tree)
+    assert result is not None
+    assert captured[0].b is not None
+    assert captured[0].c is not None
+    assert captured[0].x is tree.next_blocks[2]
+    assert captured[0].d is not None
+    assert captured[0].e is not None
