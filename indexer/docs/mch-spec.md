@@ -52,7 +52,8 @@ Standard double-quoted strings with backslash escapes. Reserved for future use; 
 |---|---|
 | `->` | child edge ("then") |
 | `<-` | parent edge ("before") |
-| `\|` | alternative |
+| `\|` | alternative (or) |
+| `^` | exclusive alternative (xor) — see §6.6 |
 | `@` | capture prefix |
 | `$` | rule reference prefix |
 | `{` `}` | block (children set or declaration body) |
@@ -121,6 +122,7 @@ stitch_directive  ::= "partial" IDENT
                     | "merge"   IDENT
 
 pattern_expr      ::= sequence ("|" sequence)*
+                    | sequence ("^" sequence)*    (* exclusive alternative — exactly one branch matches; mixing | and ^ at the same nesting level is a parser error P010 *)
 sequence          ::= atom (edge atom)*
 edge              ::= "->" | "<-"
 
@@ -236,7 +238,7 @@ A node tests a single block.
 - The `stitch.key` expression (§9.2)
 
 **Capture name conflicts:**
-- A capture name may appear more than once only if (a) all occurrences are inside alternative branches `( A | B | … )` that are mutually exclusive at match time, or (b) all occurrences are inside a recursive rule, in which case the capture binds to a list (§7.2).
+- A capture name may appear more than once only if (a) all occurrences are inside alternative branches that are mutually exclusive at match time — either an XOR alternative `( A ^ B ^ … )` or an OR alternative `( A | B | … )` whose branches happen to be exclusive — in which case only the winning branch's capture binds and the losers leave the field at default (`None` for scalars, `[]` for list bindings), or (b) all occurrences are inside a recursive rule, in which case the capture binds to a list (§7.2).
 - Defining the same capture name in incompatible positions is a compile-time error.
 
 ### 6.3 Modifiers
@@ -258,24 +260,54 @@ Mixing directions in a single chain (`A -> B <- C`) is permitted but generally a
 
 `A -> { item1; item2; item3 }` declares an ordered children set on `A`. Each item is a `pattern_expr`.
 
+**Attach-to-left semantics.** A children block always binds to the **immediately preceding lowered matcher** in its containing sequence. Equivalent rules in the lowered tree:
+
+- `op A -> {B; C}` — A has `children_matchers=[B, C]`.
+- `op A -> op X -> {B; C}` — X has `children_matchers=[B, C]` (mid-chain CB; X is the left sibling).
+- `op A -> {B; C} -> op D` — A has BOTH `children_matchers=[B, C]` AND `child_matcher=D`. A children block does NOT advance the chain cursor.
+- `op A -> {B; C} -> {D; E}` — A has `children_matchers=[B, C, D, E]` in source order (back-to-back CBs flatten).
+- `op A <- op B -> {C; D}` — A's parent is B; B has `children_matchers=[C, D]` (CB after a PARENT edge attaches to the parent matcher, NOT the anchor).
+- `op A -> maybe {B; C}` — A has `children_matchers=[B(optional=True), C(optional=True)]`. Each item independently optional.
+
+**Bare children blocks are rejected** with `C008_CHILDREN_BLOCK_BARE`:
+
+- `{B; C}` as a Sequence head (no left sibling).
+- `{B; C}` inside an Alternative branch (no sequence context).
+- `maybe {B; C}` standalone (no left sibling).
+- `rule r = {A; B}` referenced as a bare RuleRef — RuleRef expansion does not inherit attach-to-left context (v0 limitation; inline the CB at the use site).
+
 **Matching algorithm** (preserves current `children_matchers` semantics):
 
-1. Take `A.next_blocks` as the working set.
+1. Take the left-sibling matcher's `next_blocks` as the working set.
 2. For each item in declaration order:
    a. Find any remaining block that matches the item (first match wins).
    b. If found, consume it from the working set; move to next item.
-   c. If not found and the item is `maybe`-wrapped, skip; otherwise the children block fails.
+   c. If the item is `optional=True` (from `maybe {...}`) and no match found, skip.
 3. All required items must match for the children block to succeed.
 
 Items are separated by `;` or newlines; either or both are acceptable. Empty items are not allowed.
 
 ### 6.6 Alternatives
 
-`A | B | C` — match any one. The first that succeeds is chosen. Alternatives may appear at any position where an atom is expected; grouping with `( … )` is required when alternatives appear inside a chain or children block:
+Two separator forms:
+
+- `A | B | C` — **or-alternative**. Match any one; first that succeeds is chosen. Lowers to `OrMatcher` by default. **Heuristic exclusive-or upgrade**: if every branch is a bare concrete node (`op X` or `btype Y`, no `where` clause) and all heads are pairwise distinct, the compiler lowers to `ExclusiveOrMatcher` automatically — behaviorally equivalent (at most one branch can match) but engine-faster.
+- `A ^ B ^ C` — **exclusive-or alternative (XOR)**. Always lowers to `ExclusiveOrMatcher`. `test_self` requires exactly one branch to match (sum == 1). Used when the author wants compiler-verified exclusivity. If two branches share the same concrete head, `W202_EXCLUSIVE_OR_REDUNDANT_HEADS` warns.
+
+**Mixing `|` and `^` at the same nesting level is forbidden** — emits `P010_ALTERNATIVE_SEPARATOR_MIX`. Use parentheses to nest:
+
+```
+(op A ^ (op B | op C))    # outer XOR, inner OR — legal (different nesting levels)
+(op A | op B ^ op C)      # ERROR: P010 — mixed | and ^
+```
+
+Alternatives may appear at any position where an atom is expected; grouping with `( … )` is required when alternatives appear inside a chain or children block:
 
 ```
 A -> ( B | C ) -> D
 ```
+
+**Same-name captures across XOR branches** (e.g. `(op A @x ^ op B @x)`) — only the winning branch's capture binds; losing branches leave `@x` at default (`None` for scalars, `[]` for list bindings under recursion). No diagnostic.
 
 ### 6.7 Rule references
 
@@ -487,15 +519,23 @@ The implementation must include a cross-language fidelity test harness that runs
 - A `stitch.key` capture is not defined in both `partial` and `final` matchers.
 - A `stitch.ttl` is non-positive or exceeds `7d`.
 - A capture name is defined multiple times in incompatible positions (§6.2).
-- A matcher's `produces` type is not in the block-type registry.
-- A matcher's `build` function is not in the builder registry.
+- A matcher's `produces` type is not in the block-type registry (`C003_UNKNOWN_BLOCK_TYPE`).
+- A matcher's `build` function is not in the builder registry (`C002_UNKNOWN_BUILDER`).
 - A stitch's `merge` function is not in the merger registry.
 - A children block contains an empty item.
+- A children block appears without a left sibling — Sequence head, bare in Alternative, bare `maybe {...}`, or rule body root referenced standalone (`C008_CHILDREN_BLOCK_BARE`).
 - A cycle exists in rule references with no `maybe`-wrapped termination — the recursion is unbounded.
+- Indirect (mutual) recursion in rule references (`C005_INDIRECT_RECURSION_UNSUPPORTED`).
+- Unsupported recursion shape — e.g. a recursive rule whose step branch has no concrete head (`C001_RECURSION_SHAPE_UNSUPPORTED`).
+- A capture is bound at a position after a recursive rule reference, which would silently lose values (`C007_CAPTURE_AFTER_RECURSION`).
+- Mixing `|` and `^` separators at the same nesting level (`P010_ALTERNATIVE_SEPARATOR_MIX`).
+- Matcher lacks the required `entry @CAPTURE` directive and no selectivity stats are available (`R008_ENTRY_REQUIRED`).
 
 ### 12.2 Warnings (non-fatal, emitted to stderr)
 
-- Selectivity stats missing for some anchor candidates.
+- Selectivity stats missing for some anchor candidates (`W201_NO_SELECTIVITY_STATS`).
+- Two branches of an explicit exclusive alternative (`^`) share the same concrete head — sum-check guarantees the alternative never matches that head (`W202_EXCLUSIVE_OR_REDUNDANT_HEADS`). Non-blocking; lowering still produces `ExclusiveOrMatcher`.
+- Stitch declaration deferred — parser accepts, compiler skips (`W900_STITCH_DEFERRED`).
 - A rule is declared but never referenced.
 - A capture is declared but unused by the builder (when the compiler can introspect the builder signature).
 - An opcode constant is declared but never referenced.
