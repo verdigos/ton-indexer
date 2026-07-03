@@ -1,174 +1,214 @@
+"""T16 — field-level parity between StonfiV2SwapBlockMatcher and
+specs/stonfi_v2_swap.mch.
+
+Same assertion depth as T13/T15: btype, deep `data` equality, failed/broken
+flags, value_flow, consumed event-node set. Count parity alone is not
+acceptance. The `pton_self_transfer` predicate is the real payload-validating
+implementation (shared with the legacy matcher), not a stub.
+
+Fixtures (YAML corpus grep for `dex: stonfi_v2` + legacy-matcher scan over all
+147 traces in tests/traces):
+- vdNpUDA43aIw6QlbcKMgi7q4S0MnJAVTfXVRqbAt5Tw=  single-hop jetton -> jetton
+    (YAML "Stonfi v2 Jetton -> Jetton").
+- CD5IIyWGj3nbuAyIEgmeMGJ28UdC4lMHqRRYcxdLraE=  second single-hop
+    jetton -> jetton.
+- 00BTqIs6w2qgKXyjfUIwS1WMPbYzWvOn0P16eku_O-4=  2-hop multirouter
+    jetton -> jetton (YAML "Stonfi v2 Jetton -> Jetton multirouter") —
+    exercises the recursion via the plain jetton_transfer hop branch.
+- TAi-sZDDdv1zFm6RQMu0UmQdYq9_MuNvFBSfSWiqgL4=  2-hop jetton -> TON -> jetton
+    (YAML "Stonfi Jetton -> Ton -> Jetton") — exercises the intermediate-pton
+    branch: `where no_internal_transfer` + `pred pton_self_transfer` for real.
+- C7bHOfSrBJPLHXMZkVnIQladzgYZHIlKOiJRvbxRRuI=  single-hop TON-in inside a
+    multi-dex trace — exercises the `op JettonNotify <- op PTonTransfer`
+    in-transfer arm.
+- cq7UujFWNfSnpHdRKseD41yHqj4Yx3SCWsnkw8IRPoU=  two independent stonfi_v2
+    swaps (one TON-in, one jetton-in) in one trace.
+
+Corpus gaps (no recording per task rules): no failed swap (pay_to exit code
+!= 0xc64370e5 — destination_asset fallback paths unexercised), no terminal
+TON/pton out-transfer (additional_blocks_to_include path), no broken flag
+(wallet lookup miss mid-sequence).
+"""
 from __future__ import annotations
+
+from pathlib import Path
 
 import pytest
 
+from indexer.events.blocks.basic_blocks import CallContractBlock
 from indexer.events.blocks.basic_matchers import BlockMatcher
 from indexer.events.blocks.core import Block
 from indexer.events.blocks.jettons import (
     JettonTransferBlockMatcher,
     PTonTransferMatcher,
 )
-from indexer.events.blocks.swaps import (
-    JettonSwapBlock,
-    StonfiV2SwapBlockMatcher,
-)
-from indexer.events.blocks.messages import (
-    JettonInternalTransfer,
-    JettonNotify,
-    PTonTransfer,
-)
+from indexer.events.blocks.messages import PTonTransfer
+from indexer.events.blocks.swaps import JettonSwapBlock, StonfiV2SwapBlockMatcher
 from indexer.events.blocks.utils.tree_utils import to_tree
 from indexer.events.event_processing import init_block
-from indexer.events.mch import compile_text
-from indexer.events.mch.registry import Registries
+from indexer.events.mch import compile_file
+from indexer.events.mch.builders import stonfi_v2_registries
+import indexer.events.mch.specs as specs_pkg
 
+STONFI_V2_MCH = Path(specs_pkg.__file__).parent / "stonfi_v2_swap.mch"
 
-# Mirror of `tests/mch/integration/test_jetton_transfer.py`. This test exercises
-# the compiler's RECURSION lowering path: `next_hops` is a recursive rule
-# referencing itself, which lowers to a `RecursiveMatcher`.
-#
-# Note: the hand-written `StonfiV2SwapBlockMatcher` is structurally far richer
-# than what we can express in v0 (e.g. it threads `peer_swap`/`payout` labels,
-# does pton validation in a custom GenericMatcher, etc.). Our DSL pattern is a
-# necessary simplification - the goal is to verify that the recursion lowering
-# fires at least as often as the hand-written matcher on a known-good trace.
-
-STONFI_V2_SWAP_MCH = """
-opcode StonfiV2Swap           = 0x6664de2a
-opcode StonfiV2PayTo          = 0x657b54f5
-opcode JettonNotify           = 0x7362d09c
-opcode PTonTransfer           = 0x01f3835d
-opcode JettonInternalTransfer = 0x178d4519
-
-predicate pton_self_transfer
-
-rule next_hops = (
-      op JettonInternalTransfer where pton_self_transfer -> op JettonNotify -> maybe $next_hops
-    | btype jetton_transfer -> maybe $next_hops
-    | maybe $next_hops
-)
-
-matcher stonfi_v2_swap_dsl {
-    produces JettonSwapBlock
-    build    build_stonfi_v2_swap_dsl
-    entry    @swap
-
-    op StonfiV2Swap @swap
-      -> op StonfiV2PayTo @payout
-      -> $next_hops
-}
-"""
-
-
-def _make_registries(captured_anchors: list | None = None) -> Registries:
-    reg = Registries()
-    reg.opcodes.update({
-        "StonfiV2Swap":           0x6664de2a,
-        "StonfiV2PayTo":          0x657b54f5,
-        "JettonNotify":           JettonNotify.opcode,
-        "PTonTransfer":           PTonTransfer.opcode,
-        "JettonInternalTransfer": JettonInternalTransfer.opcode,
-    })
-    reg.block_types["JettonSwapBlock"] = JettonSwapBlock
-
-    # Stub pton_self_transfer — for the test we allow any internal transfer.
-    @reg.register_predicate("pton_self_transfer")
-    def pton_self_transfer(block) -> bool:
-        return True
-
-    @reg.register_builder("build_stonfi_v2_swap_dsl")
-    async def build_stonfi_v2_swap_dsl(m):
-        # Phase 1 capture extraction: m.swap and m.payout are outside the recursive
-        # rule and must bind. Captures inside `next_hops` (none today) would be None
-        # under Phase 1 — that's Phase 3's job.
-        assert m.swap is not None, "anchor capture must be populated"
-        assert getattr(m.swap, "opcode", None) == 0x6664de2a
-        assert m.payout is not None, "payout capture must be populated"
-        assert getattr(m.payout, "opcode", None) == 0x657b54f5
-        if captured_anchors is not None:
-            captured_anchors.append(m.swap)
-        return JettonSwapBlock({})
-
-    return reg
-
-
-def _build_block_tree(trace) -> Block:
-    """Replicate event_processing's prelude: tree of EventNodes -> tree of Blocks."""
-    node = to_tree(trace.transactions)
-    root = Block("root", [])
-    root.connect(init_block(node))
-    return root
-
-
-# Prerequisite matchers that must run before any DEX swap matcher. In the
-# production `matchers` list (event_processing.py) these run earlier so that
-# downstream swap matchers can pattern-match on `btype == 'jetton_transfer'`
-# and on PTon-transfer-shaped blocks. We must mirror that ordering here for
-# both the DSL and the hand-written matcher to have a fair shot.
 _PREREQUISITES: list[BlockMatcher] = [
     JettonTransferBlockMatcher(),
     PTonTransferMatcher(),
 ]
 
 
-async def _apply_matchers(root: Block, matchers: list[BlockMatcher]) -> None:
-    """Mirror event_processing.process_event_async's matcher loop."""
-    for m in matchers:
-        for b in root.bfs_iter():
-            if b.parent is None:
-                await m.try_build(b)
+def _compile_dsl_matcher() -> BlockMatcher:
+    compiled = compile_file(STONFI_V2_MCH, stonfi_v2_registries())
+    by_name = {cm.name: cm.matcher for cm in compiled}
+    return by_name["stonfi_v2_swap"]
+
+
+def _build_block_tree(trace) -> Block:
+    node = to_tree(trace.transactions)
+    root = Block("root", [])
+    root.connect(init_block(node))
+    return root
 
 
 async def _run_matcher(matcher: BlockMatcher, trace) -> list:
-    """Build the block tree, run prerequisites, then collect this matcher's results.
-
-    We can't simply count blocks of the produced type after `try_build` because
-    `try_build` mutates the tree in-place (sets parent links, absorbs children).
-    Instead we collect the result blocks returned by `try_build` calls on the
-    root-level blocks - this is what `process_event_async` ultimately uses to
-    serialise actions.
-    """
     root = _build_block_tree(trace)
-    await _apply_matchers(root, _PREREQUISITES)
-
+    for pre in _PREREQUISITES:
+        for b in root.bfs_iter():
+            if b.parent is None:
+                await pre.try_build(b)
     matches: list = []
     for b in root.bfs_iter():
         if b.btype == "root":
             continue
         if b.parent is not None:
-            # Already absorbed by an earlier matcher in this loop.
             continue
         result = await matcher.try_build(b)
         if result is not None:
             matches.extend(result)
-    return matches
+    return [b for b in matches
+            if isinstance(b, JettonSwapBlock) and b.data.get("dex") == "stonfi_v2"]
+
+
+def _values_equal(a, b) -> bool:
+    if a is None and b is None:
+        return True
+    if type(a) is not type(b):
+        return False
+    return bool(a == b)
+
+
+def _node_hashes(block: Block) -> list[str]:
+    return sorted(n.message.tx_hash for n in block.event_nodes)
+
+
+def _sort_key(block: Block):
+    return (block.min_lt, tuple(_node_hashes(block)))
+
+
+def _assert_field_parity(dsl_blocks: list[Block], hw_blocks: list[Block]) -> None:
+    assert len(hw_blocks) > 0, "legacy matcher produced no stonfi_v2 blocks - bad fixture"
+    assert len(dsl_blocks) == len(hw_blocks), (
+        f"count mismatch: dsl={len(dsl_blocks)} legacy={len(hw_blocks)}"
+    )
+    for d, h in zip(sorted(dsl_blocks, key=_sort_key), sorted(hw_blocks, key=_sort_key)):
+        assert d.btype == h.btype == "jetton_swap"
+        assert d.failed == h.failed, f"failed flag: dsl={d.failed} legacy={h.failed}"
+        assert d.broken == h.broken, f"broken flag: dsl={d.broken} legacy={h.broken}"
+
+        assert set(d.data.keys()) == set(h.data.keys()), (
+            f"data keys: dsl={sorted(d.data)} legacy={sorted(h.data)}"
+        )
+        for key in sorted(h.data):
+            dv, hv = d.data[key], h.data[key]
+            assert _values_equal(dv, hv), (
+                f"data[{key!r}]: dsl={dv!r} ({type(dv).__name__}) "
+                f"legacy={hv!r} ({type(hv).__name__})"
+            )
+
+        assert d.value_flow.to_dict() == h.value_flow.to_dict(), (
+            f"value_flow: dsl={d.value_flow.to_dict()} legacy={h.value_flow.to_dict()}"
+        )
+        assert _node_hashes(d) == _node_hashes(h), (
+            f"consumed event nodes: dsl={_node_hashes(d)} legacy={_node_hashes(h)}"
+        )
+
+
+async def _run_parity(trace) -> tuple[list, list]:
+    hw_blocks = await _run_matcher(StonfiV2SwapBlockMatcher(), trace)
+    dsl_blocks = await _run_matcher(_compile_dsl_matcher(), trace)
+    _assert_field_parity(dsl_blocks, hw_blocks)
+    return dsl_blocks, hw_blocks
 
 
 @pytest.mark.asyncio
 @pytest.mark.trace_file("vdNpUDA43aIw6QlbcKMgi7q4S0MnJAVTfXVRqbAt5Tw=.lz4")
-async def test_dsl_matches_hand_written_stonfi_v2_swap(trace_data):
+async def test_stonfi_v2_parity_single_hop(trace_data):
+    """Single-hop jetton -> jetton (peer_swaps stays [])."""
     trace, _ = trace_data
+    _, hw = await _run_parity(trace)
+    assert hw[0].data["peer_swaps"] == []
 
-    captured_anchors: list = []
-    reg = _make_registries(captured_anchors)
-    compiled = compile_text(STONFI_V2_SWAP_MCH, "stonfi_v2_swap.mch", reg)
-    dsl_matcher = compiled[0].matcher
 
-    dsl_results = await _run_matcher(dsl_matcher, trace)
-    hw_results = await _run_matcher(StonfiV2SwapBlockMatcher(), trace)
+@pytest.mark.asyncio
+@pytest.mark.trace_file("CD5IIyWGj3nbuAyIEgmeMGJ28UdC4lMHqRRYcxdLraE=.lz4")
+async def test_stonfi_v2_parity_single_hop_2(trace_data):
+    """Second single-hop jetton -> jetton fixture."""
+    trace, _ = trace_data
+    await _run_parity(trace)
 
-    dsl_swaps = [b for b in dsl_results if isinstance(b, JettonSwapBlock)]
-    hw_swaps = [b for b in hw_results if isinstance(b, JettonSwapBlock)]
 
-    print(f"\n[stonfi-v2-swap] DSL={len(dsl_swaps)} HW={len(hw_swaps)}")
-    assert len(hw_swaps) > 0, "hand-written stonfi v2 matcher found no swaps - bad fixture"
-    assert len(dsl_swaps) == len(hw_swaps), (
-        f"DSL matched {len(dsl_swaps)} swaps, hand-written matched {len(hw_swaps)}"
+@pytest.mark.asyncio
+@pytest.mark.trace_file("00BTqIs6w2qgKXyjfUIwS1WMPbYzWvOn0P16eku_O-4=.lz4")
+async def test_stonfi_v2_parity_multihop(trace_data):
+    """2-hop multirouter swap: recursion via the plain jetton_transfer branch
+    (roadmap acceptance: multi-hop fixture)."""
+    trace, _ = trace_data
+    _, hw = await _run_parity(trace)
+    assert len(hw[0].data["peer_swaps"]) == 2, (
+        "fixture no longer exercises the intended hop count"
     )
 
-    # Phase 2 absorption check.
-    assert len(captured_anchors) >= 1
-    for anchor in captured_anchors:
-        assert anchor.parent is not None, (
-            "Phase 2: merge_blocks must wire anchor.parent to the produced block"
-        )
+
+@pytest.mark.asyncio
+@pytest.mark.trace_file("TAi-sZDDdv1zFm6RQMu0UmQdYq9_MuNvFBSfSWiqgL4=.lz4")
+async def test_stonfi_v2_parity_multihop_intermediate_pton(trace_data):
+    """2-hop jetton -> TON -> jetton: the hop between routers goes through a
+    pton transfer, so the real `pton_self_transfer` predicate must accept the
+    intermediate transfer call for the DSL pattern to reach hop 2."""
+    trace, _ = trace_data
+    dsl, hw = await _run_parity(trace)
+    assert len(hw[0].data["peer_swaps"]) == 2
+    assert hw[0].data["peer_swaps"][0]["out"]["asset"].is_ton, (
+        "fixture no longer has a TON mid-hop"
+    )
+    # The validated pton transfer call must be consumed by the DSL pattern
+    # (legacy consumes it through its GenericMatcher chain).
+    assert any(isinstance(c, CallContractBlock) and c.opcode == PTonTransfer.opcode
+               for c in dsl[0].children_blocks), (
+        "intermediate pton transfer call not absorbed by the DSL match"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.trace_file("C7bHOfSrBJPLHXMZkVnIQladzgYZHIlKOiJRvbxRRuI=.lz4")
+async def test_stonfi_v2_parity_ton_in(trace_data):
+    """TON-in swap: `op JettonNotify <- op PTonTransfer` in-transfer arm,
+    inside a multi-dex trace (the dedust legs stay unconsumed)."""
+    trace, _ = trace_data
+    _, hw = await _run_parity(trace)
+    assert hw[0].data["dex_incoming_transfer"]["asset"].is_ton, (
+        "fixture no longer has a TON-in leg"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.trace_file("cq7UujFWNfSnpHdRKseD41yHqj4Yx3SCWsnkw8IRPoU=.lz4")
+async def test_stonfi_v2_parity_two_swaps_in_one_trace(trace_data):
+    """Two independent stonfi_v2 swaps (one TON-in, one jetton-in) in a single
+    trace — both matched, pairwise field-equal."""
+    trace, _ = trace_data
+    _, hw = await _run_parity(trace)
+    assert len(hw) == 2
+    in_kinds = sorted(b.data["dex_incoming_transfer"]["asset"].is_ton for b in hw)
+    assert in_kinds == [False, True], "fixture no longer covers both in-arms"

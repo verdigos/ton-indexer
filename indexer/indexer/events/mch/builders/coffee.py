@@ -3,9 +3,10 @@
 The legacy build (blocks/swaps.py build_coffee_swap_core) needs the incoming
 transfer, the CoffeePayoutInternal and the outgoing transfer, plus the full
 consumed set for find_call_contracts. The legacy matcher extracts the three
-via labels; the mch engine has no labels and captures bind only on the
-zero-hop path (see roadmap T15 notes), so this builder derives them
-structurally from `Match._mch_consumed`:
+via labels; the mch engine has no labels, and this builder (which predates
+the T18 capture fixes — exit-branch and post-recursion captures bind since
+then, spec §7.2) derives them structurally from `Match._mch_consumed`, which
+it needs anyway for the core's scan:
 
 - in_transfer: the anchor's previous_block (the anchor's parent alternative is
   required, so the block is always consumed when the match succeeds);

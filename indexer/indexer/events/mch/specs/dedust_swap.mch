@@ -5,13 +5,13 @@
 # chain sees raw DedustSwapPeer/DedustSwapExternal opcodes (never
 # SingleLevelWrapper blocks).
 #
-# Capture caveats (see roadmap T15 notes):
-# - captures in $peer_chain are list bindings (§7.2); the exit payout chain is
-#   left uncaptured because exit-branch captures never bind at runtime;
-# - @payout/@out_jetton/@out_ton/@notification/@in_transfer/@swap_request bind
-#   reliably only on the single-hop path — after a recursion the walker cannot
-#   bind later siblings. The builder therefore works off the consumed set
-#   (Match._mch_consumed), like the legacy build_block works off other_blocks.
+# Capture notes (T15 gaps resolved by T18, spec §7.2):
+# - captures in $peer_chain are list bindings; since T18 exit-branch captures
+#   bind once on termination and post-recursion captures (@notification,
+#   @in_transfer/@swap_request) bind on multi-hop too. The exit payout chain
+#   is left uncaptured for historical fidelity; the builder still works off
+#   the consumed set (Match._mch_consumed), like the legacy build_block works
+#   off other_blocks — the simplest faithful input for its scan logic.
 
 opcode DedustSwapExternal     = 0x61ee542d
 opcode DedustSwapPeer         = 0x72aca8aa

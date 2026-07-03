@@ -65,19 +65,41 @@ class _MchRecursiveMatcher(RecursiveMatcher):
     Used by the synthesized walker to populate `list[T]` captures inside
     recursive rule bodies. Each iteration's consumed blocks land in
     `self._mch_iter_blocks` in iteration order BEFORE the engine's `set()`
-    dedup step destroys order in the outer `blocks` list.
+    dedup step destroys order in the outer `blocks` list. The exit branch's
+    consumed blocks (never part of an iteration) land in `_mch_exit_blocks`,
+    the entry block in `_mch_entry_block` (only on success — the walker uses
+    it to tell "participated in this match" from stale/absent), and the exact
+    length of the last successful `try_build` result in `_mch_result_len`
+    (lets the walker skip the recursion's set-shuffled slice precisely and
+    keep binding captures positioned after it, spec §7.2).
 
-    Non-reentrant: `_mch_iter_blocks` is reset at the start of every
-    `process_child_matcher` call. The engine matches sequentially.
+    Non-reentrant: state is reset at the start of every
+    `process_child_matcher` call. The engine matches sequentially; a probe
+    whose `test_self` fails never reaches `process_child_matcher`, so it
+    cannot clobber a previous success (same discipline as pre-T18).
     """
 
-    def __init__(self, repeating_matcher, exit_matcher, optional, has_pure_exit):
+    def __init__(self, repeating_matcher, exit_matcher, optional, has_pure_exit,
+                 step_capture_names=frozenset(), exit_capture_names=frozenset()):
         super().__init__(repeating_matcher, exit_matcher, optional)
         self._mch_has_pure_exit = has_pure_exit
+        self._mch_step_capture_names = step_capture_names
+        self._mch_exit_capture_names = exit_capture_names
         self._mch_iter_blocks: list[list] = []
+        self._mch_exit_blocks: list = []
+        self._mch_entry_block = None
+        self._mch_result_len = 0
+
+    async def try_build(self, block):
+        result = await super().try_build(block)
+        if result is not None:
+            self._mch_result_len = len(result)
+        return result
 
     async def process_child_matcher(self, block, blocks, child_matched):
         self._mch_iter_blocks = []
+        self._mch_exit_blocks = []
+        self._mch_entry_block = None
         current_blocks = [block]
         blocks_to_add = []
         finished = False
@@ -90,6 +112,7 @@ class _MchRecursiveMatcher(RecursiveMatcher):
                     r = await self.exit_matcher.try_build(c)
                     if r is not None:
                         blocks_to_add.extend(r)
+                        self._mch_exit_blocks = list(r)
                         finished = True
                 if finished:
                     break
@@ -111,6 +134,7 @@ class _MchRecursiveMatcher(RecursiveMatcher):
         if len(blocks_to_add) > 0:
             blocks.extend(set(blocks_to_add))
             child_matched = True
+            self._mch_entry_block = block
         return child_matched
 
 
@@ -280,13 +304,21 @@ def _make_subclass(name: str, base: type, rm: ResolvedMatcher, ctx: CompileCtx) 
             capture_infos,
         )
         m = type(self)._mch_match_cls(**kwargs)
-        # Well-known Match attribute (spec §10.7/§11 host contract, T15): the full
-        # consumed block set, anchor first, in engine traversal order. Builders whose
-        # legacy counterparts scan `other_blocks` freely (e.g. dedust swap's
-        # find_messages/find_call_contracts) need it — captures alone cannot express
-        # blocks matched by a recursion's exit branch. Purely additive: builders that
-        # ignore it are unaffected.
-        m._mch_consumed = [block] + list(other_blocks)
+        # Well-known Match attribute (spec §10.7/§11.1 host contract, T15/T18): the
+        # full consumed block set, anchor first, in engine traversal order,
+        # de-duplicated (first occurrence wins — the engine's RecursiveMatcher
+        # reports a recursion's entry block twice, `[block] + blocks` with the
+        # entry already in `blocks`). Builders whose legacy counterparts scan
+        # `other_blocks` freely (e.g. dedust swap's find_messages/
+        # find_call_contracts) need it. Purely additive: builders that ignore
+        # it are unaffected.
+        consumed: list = []
+        seen_ids: set[int] = set()
+        for b in [block] + list(other_blocks):
+            if id(b) not in seen_ids:
+                seen_ids.add(id(b))
+                consumed.append(b)
+        m._mch_consumed = consumed
         builder = registries.builders.get(builder_name)
         if builder is None:
             raise RuntimeError(f"builder {builder_name!r} is not registered at run time")
@@ -400,7 +432,22 @@ def _walk_matcher(
         return
 
     if isinstance(m, _MchRecursiveMatcher):
+        if in_recursion:
+            # Nested recursion (a recursive rule inside another's step body):
+            # per-iter capture dicts are scalar-style, list assembly cannot
+            # nest. Out of scope; consume the remaining per-iter blocks.
+            cursor[0] = len(all_blocks)
+            return
+        # Participation check: the recorded entry block must lie ahead of the
+        # cursor in THIS match's consumed list. Otherwise the recursion did not
+        # take part (optional and absent, or the state is stale from another
+        # probe/trace) — bind nothing and leave the cursor for the next sibling.
+        entry = m._mch_entry_block
+        if entry is None or not any(b is entry for b in all_blocks[cursor[0]:]):
+            return
         # Per-iteration extraction via the matcher's recorded iteration blocks.
+        # Only captures owned by this rule's STEP branches get the one-element-
+        # per-unrolling padding (spec §7.2 gap alignment).
         for iter_blocks in m._mch_iter_blocks:
             if not iter_blocks:
                 continue
@@ -411,11 +458,31 @@ def _walk_matcher(
                 iter_captures, capture_infos, in_recursion=True,
             )
             for name, info in capture_infos.items():
-                if info.list_binding:
+                if info.list_binding and name in m._mch_step_capture_names:
                     captures[name].append(iter_captures.get(name))
-        # set() in engine destroys positional alignment for outside-recursion
-        # captures appearing AFTER the recursion (out of scope, see spec §6).
-        cursor[0] = len(all_blocks)
+        # Exit-branch captures bind at most once — on the terminating match of
+        # the pure exit (spec §7.2). No per-unrolling padding.
+        if m.exit_matcher is not None and m._mch_exit_blocks:
+            exit_captures: dict[str, Any] = {name: None for name in captures.keys()}
+            _walk_matcher(
+                m.exit_matcher, list(m._mch_exit_blocks), [0],
+                exit_captures, capture_infos, in_recursion=True,
+            )
+            for name, info in capture_infos.items():
+                if info.list_binding and name in m._mch_exit_capture_names:
+                    captures[name].append(exit_captures.get(name))
+        # Skip exactly the recursion's contribution (its try_build result was
+        # extended verbatim into the outer blocks list) so captures positioned
+        # AFTER it in traversal order — later children-set items, the parent
+        # chain — keep binding. The slice's internal order is set-shuffled,
+        # but its length is exact. If the entry is not at the cursor (cursor
+        # misalignment from an earlier optional mis-skip, or several sibling
+        # contributions of the same instance), fall back to consuming the rest
+        # — the pre-T18 conservative behavior.
+        if all_blocks[cursor[0]] is entry and m._mch_result_len > 0:
+            cursor[0] += m._mch_result_len
+        else:
+            cursor[0] = len(all_blocks)
         return
 
     if isinstance(m, RecursiveMatcher):
@@ -1216,7 +1283,37 @@ def _lower_recursive_rule(name: str, ctx: CompileCtx) -> BlockMatcher:
         exit_matcher=exit_m,
         optional=True,
         has_pure_exit=has_pure_exit,
+        step_capture_names=_collect_capture_names(step),
+        exit_capture_names=_collect_capture_names(exit_m),
     )
+
+
+def _collect_capture_names(m: BlockMatcher | None) -> frozenset[str]:
+    """All `_mch_capture_name` tags reachable in a lowered matcher subtree.
+
+    Used to attribute a recursive rule's captures to its step vs exit branches
+    so the walker pads exactly the right lists (spec §7.2 alignment rule)."""
+    names: set[str] = set()
+
+    def rec(x: BlockMatcher | None) -> None:
+        if x is None:
+            return
+        cap = getattr(x, "_mch_capture_name", None)
+        if cap is not None:
+            names.add(cap)
+        rec(getattr(x, "child_matcher", None))
+        rec(getattr(x, "parent_matcher", None))
+        for cm in getattr(x, "children_matchers", None) or []:
+            rec(cm)
+        if isinstance(x, OrMatcher):
+            for sub in x.matchers:
+                rec(sub)
+        if isinstance(x, RecursiveMatcher):
+            rec(x.repeating_matcher)
+            rec(x.exit_matcher)
+
+    rec(m)
+    return frozenset(names)
 
 
 def _split_recursion_branches(

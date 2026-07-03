@@ -12,7 +12,7 @@
 - **Inline field predicates `[M4]`** promoted from future-extensions (§6.8).
 - **Anchor opcode-sets `[M2]`** (§8.3): `entry` may reference a capture on an XOR alternative of concrete heads (needed for matchers like jetton_mint that anchor on two opcodes).
 - **`produces` union `[M2]` and `produces switch` `[M4]`** (§8.1): one matcher may produce different block types depending on parsed body content (needed for DNS).
-- **Recursion capture semantics fixed** (§7.2): v0.1's §14.2 example contradicted §7.2. New rule: captures inside a recursive rule bind per-unrolling lists; parallel alignment is guaranteed only for captures on the unconditional step path.
+- **Recursion capture semantics fixed** (§7.2): v0.1's §14.2 example contradicted §7.2. New rule (final form settled by T18): captures inside a recursive rule bind per-unrolling lists; step-branch captures are gap-aligned (one element per unrolling, `None` where the capture's branch lost), exit-branch captures bind once on termination via the exit, and captures positioned after the recursion in traversal order bind as ordinary scalars.
 - **Determinism, ordering, and build-rejection semantics pinned** (§10.5–10.7). These were parity holes: registration order, children-candidate ordering, and builder-rejection behavior are now normative.
 - **Compilation artifact strategy `[M5]`** (§11.4): one frontend, a language-neutral IR, thin per-host interpreters — instead of two independent parser+compiler stacks.
 
@@ -414,15 +414,17 @@ The code generator emits a typed Match dataclass per matcher with one field per 
 
 ### 7.2 List bindings under recursion `[M2]`
 
-When a capture appears inside a rule that self-references, every successful unrolling produces at most one binding for it. The Match dataclass exposes the capture as `list[T]` in trace order.
+When a capture appears inside a rule that self-references, the Match dataclass exposes it as `list[T]`. Elements are appended in unrolling order: each unrolling descends one step deeper along the chain, so lists follow the trace outward from the entry block (ascending `min_lt` of the step's head block on real traces). "The terminal element" is `list[-1]`.
 
-**Alignment rule (replaces v0.1 §7.2/§14.2, which contradicted each other):**
+**Alignment rule (T18; replaces the v0.2 "shorter list" wording, which itself replaced v0.1 §7.2/§14.2):**
 
-- A capture on the **unconditional step path** of the rule (matched by every unrolling) produces exactly one element per unrolling. All such captures are parallel-aligned lists of equal length.
-- A capture inside an **alternative branch** of the rule binds only on unrollings where that branch won. Its list may therefore be shorter than the step-path lists, and no alignment with them is guaranteed.
-- Builders that need "the terminal element" take `list[-1]`; the engine appends in trace order (ascending `min_lt` of the unrolling's anchor node).
+The rule's top-level alternative splits into **step branches** (those containing the `$self` reference) and **exit branches** (those without it, §10.3).
 
-Example: `rule swap_step = op SWAP @swap -> op PAY_TO @payout -> ( … @out_transfer … | $swap_step )` matched against a three-hop chain produces `swap` and `payout` as length-3 parallel lists, and `out_transfer` with one element per unrolling whose winning branch contained it.
+- A capture inside a **step branch** produces **exactly one element per unrolling** — all of a rule's step captures are parallel-aligned lists of equal length. When an unrolling did not bind the capture (its alternative branch lost, or its `maybe` subtree was absent), that unrolling's element is `None`. Lists are never silently shorter: gaps are explicit `None`s, preserving per-unrolling correlation.
+- A capture inside an **exit branch** binds **at most once**: when the recursion terminates through the pure exit, one element is appended — the bound block, or `None` if the capture's sub-branch within the exit lost. Exit captures receive no per-unrolling padding; if the recursion ends by frontier exhaustion instead (step path dead-ends without the exit firing) or never runs, they stay `[]`. A name captured in both a step and an exit branch (mutually exclusive positions, §6.2) accumulates its step elements first, then the exit element — `list[-1]` is still the terminal binding.
+- A capture positioned **after** the recursion in matcher traversal order — a later item of the same children set, or the parent chain — is an ordinary scalar/`Optional` binding (§7.1/§7.3) and binds normally whether the recursion ran zero, one, or many unrollings. Only chaining further *sequence* atoms after a `$rule` in the same chain is rejected (`C007_CAPTURE_AFTER_RECURSION`, §10.3): the engine structurally ignores such atoms, so captures there would always lie.
+
+Example: `rule swap_step = ( op SWAP @swap -> op PAY_TO @payout -> maybe op NOTIFY @note -> maybe $swap_step ^ op PAY_OUT @out ... )` matched against a three-hop chain produces `swap`, `payout` and `note` as length-3 parallel lists (`note` holding `None` for hops without a notification), and `out` as a one-element list bound on the terminating payout.
 
 ### 7.3 Optional bindings
 
@@ -621,7 +623,7 @@ Automatic anchor selection from corpus selectivity statistics (v0.1 §10.2) is d
 
 A self-referential `$rule_name` compiles to a back-edge in the matcher's structural graph. The engine walks this graph with depth bounded by the trace size (always finite). No fixpoint computation is required.
 
-A `maybe $rule` is the natural termination case for unbounded recursion — the engine treats it as the "stop here" branch. A cycle with no `maybe`-wrapped termination is an error. Indirect (mutual) recursion is rejected (`C005_INDIRECT_RECURSION_UNSUPPORTED`). A recursive rule whose step branch has no concrete head is rejected (`C001_RECURSION_SHAPE_UNSUPPORTED`). A capture positioned after a recursive rule reference is rejected (`C007_CAPTURE_AFTER_RECURSION`).
+A `maybe $rule` is the natural termination case for unbounded recursion — the engine treats it as the "stop here" branch. A cycle with no `maybe`-wrapped termination is an error. Indirect (mutual) recursion is rejected (`C005_INDIRECT_RECURSION_UNSUPPORTED`). A recursive rule whose step branch has no concrete head is rejected (`C001_RECURSION_SHAPE_UNSUPPORTED`). A capture on a sequence atom chained after a recursive rule reference in the same chain is rejected (`C007_CAPTURE_AFTER_RECURSION`) — the engine structurally ignores such atoms; captures in *other* positions after the recursion (later children-set items, the parent chain) are legal and bind normally (§7.2).
 
 ### 10.4 Backtracking semantics
 
@@ -670,7 +672,7 @@ The compiler validates at load time that every reference resolves; otherwise the
   def pton_self_transfer(block: Block) -> bool: ...
   ```
 - Registration is via the `Registries` object (`register_builder("name")`, `register_predicate("name")` decorators/methods).
-- `[M2, T15]` The runtime Match carries a well-known attribute `_mch_consumed`: the full consumed block set (anchor first, engine traversal order). Builders whose logic scans the consumed set (legacy `build_block(block, other_blocks)` bodies doing `find_messages`/`find_call_contracts`) use it; captures cannot name blocks matched by a recursion's exit branch. Purely additive — builders that ignore it are unaffected.
+- `[M2, T15/T18]` The runtime Match carries a well-known attribute `_mch_consumed`: the full consumed block set — anchor first, engine traversal order, **de-duplicated** (order-preserving, first occurrence wins; the raw engine list reports a recursion's entry block twice, and the synthesized `build_block` strips repeats before handing the list to the builder). Builders whose logic scans the consumed set (legacy `build_block(block, other_blocks)` bodies doing `find_messages`/`find_call_contracts`) use it; since T18 exit-branch and post-recursion captures bind too (§7.2), so the consumed set is an escape hatch rather than the only access path. Purely additive — builders that ignore it are unaffected.
 - Post-process passes (e.g. `post_process_dedust_liquidity`) stay plain host functions outside the registry system (§5.5).
 - Generated Match dataclasses are emitted by codegen next to the spec compiler's output module; the runtime Match object and the emitted dataclass must agree (single source of truth for field names and types).
 
@@ -730,7 +732,7 @@ Milestone tags mark when a rule becomes active (untagged = M1, active now).
 - A cycle exists in rule references with no `maybe`-wrapped termination.
 - Indirect (mutual) recursion (`C005_INDIRECT_RECURSION_UNSUPPORTED`).
 - Unsupported recursion shape (`C001_RECURSION_SHAPE_UNSUPPORTED`).
-- A capture bound after a recursive rule reference (`C007_CAPTURE_AFTER_RECURSION`).
+- A capture on a sequence atom chained after a recursive rule reference in the same chain (`C007_CAPTURE_AFTER_RECURSION`); later children-set items and parent-chain captures are legal (§7.2/§10.3).
 - Mixing `|` and `^` at the same nesting level (`P010_ALTERNATIVE_SEPARATOR_MIX`).
 - Matcher lacks `entry` (`R008_ENTRY_REQUIRED`).
 - `stitch` keyword encountered (`P011_STITCH_REMOVED` — hint: paired results are merged by host post-process code).
@@ -803,6 +805,8 @@ class JettonTransferMatch:
 
 ### 14.2 Stonfi V2 swap (recursion + bidirectional + predicate — M2)
 
+> **Known-idealized (T16, 2026-07-03).** This example does not lower as written: `entry @swap` sits inside the recursive rule (R007 — list binding), and the `$in_transfer -> $swap_step` head shape puts atoms upstream of the anchor, which the current compiler silently drops. The normative, parity-proven pattern is `indexer/events/mch/specs/stonfi_v2_swap.mch` (first hop re-anchored into the matcher pattern, hops 2..n via `rule swap_hop`; data checks as registered host predicates until M4 inline predicates). This example is kept as the *intent* sketch; reconcile it when M4 lands. See roadmap T16 notes for the full deviation list.
+
 ```
 opcode StonfiV2Swap           = 0x6664de2a
 opcode StonfiV2PayTo          = 0x657b54f5
@@ -844,11 +848,13 @@ class StonfiV2SwapMatch:
     in_transfer:  Block                    # JettonTransferBlock | CallContractBlock
     swap:         list[CallContractBlock]  # one per hop (unconditional step path)
     payout:       list[CallContractBlock]  # parallel to swap
-    out_transfer: list[Block]              # one per hop whose winning branch bound it;
+    out_transfer: list[Block]              # parallel to swap: the hop's transfer, or
+                                           # None for hops whose winning branch bound
+                                           # none (§7.2 gap alignment);
                                            # terminal transfer = out_transfer[-1]
 ```
 
-(§7.2: `swap`/`payout` are parallel-aligned; `out_transfer` is branch-dependent and may be shorter.)
+(§7.2: `swap`/`payout`/`out_transfer` are parallel-aligned, one element per hop; `out_transfer` carries explicit `None`s for hops where the bare-`$swap_step` branch won.)
 
 ### 14.3 Dedust deposit (two matchers + host-side merge — M2)
 

@@ -1,16 +1,56 @@
-# Stonfi V2 swap matcher (spec §14.2 adapted: anchor moved to non-recursive prefix)
-opcode StonfiV2Swap           = 0x6664de2a
-opcode StonfiV2PayTo          = 0x657b54f5
-opcode JettonNotify           = 0x7362d09c
-opcode PTonTransfer           = 0x01f3835d
-opcode JettonInternalTransfer = 0x178d4519
+# Stonfi V2 swap (T16) — full port of blocks/swaps.py StonfiV2SwapBlockMatcher.
+#
+# Deviations from spec §14.2 (see docs/mch-roadmap.md T16 notes):
+# - anchor moved out of the recursive rule (entry cannot be a list binding);
+#   the first hop's swap/payout/out-alternative live in the matcher pattern,
+#   hops 2..n repeat via $swap_hop;
+# - the anchor's child chain is wrapped in a one-item children set so the
+#   parent edge stays attached to the anchor (§6.5 CB exemption; a bare
+#   `-> ... <-` chain is C009);
+# - §14.2's idealized `op JettonInternalTransfer` out-arm is really
+#   `btype jetton_transfer` + two host predicates: `no_internal_transfer`
+#   (M4 inline-predicate candidate: `.has_internal_transfer == false`) and
+#   the payload-validating `pton_self_transfer` on a bare `pred` node
+#   (legacy GenericMatcher has no opcode constraint);
+# - `^` is used where legacy has ordered OrMatcher because same-name captures
+#   require declared exclusivity (R005); hop branches actually overlap by
+#   prefix — behavior stays first-match-in-order (recursion destructures the
+#   alternative; ExclusiveOr elsewhere is try_build-inert);
+# - terminal-pton branch carries `{ maybe op PTonTransfer }` so the pattern
+#   consumes the pton call the legacy build added via
+#   additional_blocks_to_include.
+#
+# Captures are kept for pattern fidelity but the builder works off the
+# consumed set (Match._mch_consumed). It predates the T18 capture fixes
+# (post-recursion captures such as the parent arm bind since then, spec §7.2)
+# and stays consumed-set-driven: the legacy scan logic needs the full set
+# anyway (same situation as dedust_swap.mch).
+
+opcode StonfiV2Swap  = 0x6664de2a
+opcode StonfiV2PayTo = 0x657b54f5
+opcode JettonNotify  = 0x7362d09c
+opcode PTonTransfer  = 0x01f3835d
 
 predicate pton_self_transfer
+predicate no_internal_transfer
 
-rule next_hops = (
-      op JettonInternalTransfer where pton_self_transfer -> op JettonNotify -> maybe $next_hops
-    | btype jetton_transfer -> maybe $next_hops
-    | maybe $next_hops
+# One router hop per unrolling: swap request + payment, then continuation via
+# a validated intermediate pton chain, a plain jetton transfer, or directly.
+rule swap_hop = (
+    op StonfiV2Swap @peer_swap
+      -> op StonfiV2PayTo @peer_payout
+      -> btype jetton_transfer @peer_out where no_internal_transfer
+      -> pred pton_self_transfer
+      -> op JettonNotify
+      -> maybe $swap_hop
+  ^ op StonfiV2Swap @peer_swap
+      -> op StonfiV2PayTo @peer_payout
+      -> btype jetton_transfer @peer_out
+      -> { maybe op PTonTransfer }
+      -> maybe $swap_hop
+  ^ op StonfiV2Swap @peer_swap
+      -> op StonfiV2PayTo @peer_payout
+      -> maybe $swap_hop
 )
 
 matcher stonfi_v2_swap {
@@ -19,6 +59,15 @@ matcher stonfi_v2_swap {
     entry    @swap
 
     op StonfiV2Swap @swap
-      -> op StonfiV2PayTo @payout
-      -> $next_hops
+      -> { op StonfiV2PayTo @payout
+             -> ( btype jetton_transfer @out_transfer where no_internal_transfer
+                    -> pred pton_self_transfer
+                    -> op JettonNotify
+                    -> maybe $swap_hop
+                ^ btype jetton_transfer @out_transfer
+                    -> { maybe op PTonTransfer }
+                    -> maybe $swap_hop
+                ^ $swap_hop ) }
+      <- ( btype jetton_transfer @in_transfer
+         ^ op JettonNotify <- op PTonTransfer @in_transfer )
 }

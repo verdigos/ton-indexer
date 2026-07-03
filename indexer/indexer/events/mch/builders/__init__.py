@@ -15,6 +15,10 @@ from indexer.events.mch.builders.dedust import (
 )
 from indexer.events.mch.builders.dns import dns_registries, register_dns
 from indexer.events.mch.builders.jettons import jetton_registries, register_jettons
+from indexer.events.mch.builders.stonfi import (
+    register_stonfi_v2,
+    stonfi_v2_registries,
+)
 
 __all__ = [
     "coffee_registries",
@@ -27,4 +31,6 @@ __all__ = [
     "register_dedust_withdraw",
     "register_dns",
     "register_jettons",
+    "register_stonfi_v2",
+    "stonfi_v2_registries",
 ]
