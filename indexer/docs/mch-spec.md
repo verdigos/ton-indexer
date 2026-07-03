@@ -311,7 +311,7 @@ Edge chains are left-associative: `A -> B -> C` parses as `(A -> B) -> C` and me
 
 Multi-hop parent chains (`A <- B <- C`) are supported `[M2]`.
 
-Mixing directions in a single chain (`A -> B <- C`) is permitted but generally avoided — `A -> B <- C` means "B has child A and B has parent C". Lowering must stop child-chain collection at the first parent edge; a parent edge whose left side is the anchor lowers to the anchor's `parent_matcher`.
+Mixing directions in a single chain is constrained. Child-chain collection stops at the first parent edge. A parent edge whose left side is the anchor (`A <- B`, and multi-hop `A <- B <- C`) lowers to the anchor's `parent_matcher` chain. A parent edge whose left side is a **non-anchor** node reached through a preceding child edge (`A -> B <- C`, where `<- C` would attach to `B` — itself a child of `A`) is rejected with `C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED`: its only faithful lowering sets `B.parent_matcher = C`, and at runtime that tests `B.previous_block` (which is the anchor `A`) against opcode `C`, so it can never match. Split the pattern or re-anchor.
 
 ### 6.5 Children sets `[M2 for non-anchor positions]`
 
@@ -722,6 +722,7 @@ Milestone tags mark when a rule becomes active (untagged = M1, active now).
 - A matcher's `build` function is not in the builder registry (`C002_UNKNOWN_BUILDER`).
 - A children block contains an empty item (`P002`).
 - A children block appears without a left sibling (`C008_CHILDREN_BLOCK_BARE`).
+- A parent edge follows a child edge in the same chain, i.e. the parent edge's left side is a non-anchor node reached through a child edge (`A -> B <- C`) (`C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED`).
 - A cycle exists in rule references with no `maybe`-wrapped termination.
 - Indirect (mutual) recursion (`C005_INDIRECT_RECURSION_UNSUPPORTED`).
 - Unsupported recursion shape (`C001_RECURSION_SHAPE_UNSUPPORTED`).

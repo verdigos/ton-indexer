@@ -1551,6 +1551,89 @@ async def test_anchor_adjacent_plus_mid_chain_children_blocks(build_block_tree):
     assert captured[0].e is not None
 
 
+# ==========================================================================
+# T10 — Opcode-set anchors (spec §8.3 M2)
+# ==========================================================================
+
+@pytest.mark.asyncio
+async def test_opcode_set_anchor_fires_on_both_opcodes(build_block_tree):
+    """`entry @m` on `(op A @m ^ op B @m) -> maybe op N @n` fires whichever
+    concrete head the root block carries; @m binds the anchor block each time
+    and @n stays optional."""
+    src = """
+    opcode JettonMint = 0x1
+    opcode MinterJettonMint = 0x2
+    opcode JettonNotify = 0x3
+
+    matcher jetton_mint {
+        produces MB
+        build    build_jetton_mint
+        entry    @m
+
+        (op JettonMint @m ^ op MinterJettonMint @m) -> maybe op JettonNotify @n
+    }
+    """
+    reg, captured = _registries_with(
+        {"JettonMint": 0x1, "MinterJettonMint": 0x2, "JettonNotify": 0x3},
+        "build_jetton_mint", "MB",
+    )
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Root with the first opcode, notify child present.
+    tree_a = build_block_tree(BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x3)]))
+    assert await matcher.try_build(tree_a) is not None
+    assert len(captured) == 1
+    assert captured[0].m is tree_a
+    assert captured[0].n is tree_a.next_blocks[0]
+
+    # Root with the second opcode, no notify.
+    captured.clear()
+    tree_b = build_block_tree(BlockSpec(opcode=0x2))
+    assert await matcher.try_build(tree_b) is not None
+    assert len(captured) == 1
+    assert captured[0].m is tree_b
+    assert captured[0].n is None
+
+    # Root with a foreign opcode: no match, builder never called.
+    captured.clear()
+    tree_x = build_block_tree(BlockSpec(opcode=0x99))
+    assert not await matcher.try_build(tree_x)
+    assert len(captured) == 0
+
+
+@pytest.mark.asyncio
+async def test_opcode_set_anchor_with_required_child_chain(build_block_tree):
+    """Chain edge off the anchor group is required: match fails without it on
+    either anchor opcode."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @x
+
+        (op A @x ^ op B @x) -> op C @c
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2, "C": 0x3}, "build_m", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    tree_a = build_block_tree(BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x3)]))
+    assert await matcher.try_build(tree_a) is not None
+    assert captured[0].x is tree_a
+    assert captured[0].c is tree_a.next_blocks[0]
+
+    captured.clear()
+    tree_b_bare = build_block_tree(BlockSpec(opcode=0x2))
+    assert not await matcher.try_build(tree_b_bare)
+    assert len(captured) == 0
+
+
 @pytest.mark.asyncio
 async def test_same_name_capture_across_xor_binds_winning_branch(build_block_tree):
     """Spec §6.2(a) / T02: `op R @r -> (op A @x ^ op B @x)` — @x binds whichever

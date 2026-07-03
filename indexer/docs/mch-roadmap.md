@@ -70,21 +70,21 @@ Accept: stitch declaration in a spec file produces P011 with correct span; no st
 Goal of the milestone: every structural shape used by the production matchers in `blocks/jettons.py`, `blocks/dns.py`, `blocks/swaps.py`, `blocks/liquidity.py` is expressible and proven by a ported `.mch` file with field-level parity tests.
 
 ### T10 — Opcode-set anchors
-Status: todo
+Status: done (2026-07-03 — resolver validates `entry` on exclusive-alternative groups (one bare concrete-head branch per occurrence, full coverage) into `ResolvedMatcher.anchor_group`; compiler lowers the group as the anchor atom with a GenericMatcher set-membership `test_self` (opcode-set OR btype-set); maybe/recursive/non-exclusive/nested/partial-coverage/where-on-branch → R007. 168 tests green.)
 Spec: §8.3 (M2 clause)
 Needs: T02
 Goal: allow `entry @m` where `@m` is bound on every branch of an XOR of concrete heads: `(op JettonMint @m ^ op MinterJettonMint @m)`. Anchor lowers to an opcode-set membership `test_self`.
 Accept: behavioral test with a two-opcode anchor fires on both opcodes; `R007` still rejects anchors in non-exclusive alternatives.
 
 ### T11 — `produces` union
-Status: todo
+Status: done (2026-07-03 — parser accepts `IDENT ("|" IDENT)*`; AST field is now `tuple[str, ...]` with a `produces_primary` accessor; resolver validates every union member against `block_types` (C003 per unknown name); compiler adapted to `produces_primary`. 152 tests green (148 baseline + 4 new; 8 pre-existing resolver tests updated to register their dummy block type, since produces validation moved from compile-time-only to resolve-time).
 Spec: §8.1
 Needs: —
 Goal: `produces A | B | C` — validate every name against the block-type registry; builder may return any of them.
 Accept: parser + resolver tests; DNS-shaped matcher compiles.
 
 ### T12 — Mixed-direction chain conformance
-Status: todo
+Status: done (2026-07-03 — 6 structural tests pin shapes 1-5 (all already-correct per §6.4/§6.5); shape 6 `op A -> op B <- op C` redefined from silent-drop to compile-time rejection C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED; §6.4 sentence + §12.1 reconciled. mch suite 158 green.)
 Spec: §6.4, §6.5 (CB-after-parent-edge)
 Needs: T01
 Goal: structural tests pinning the tricky lowerings: `op A <- op B` (anchor-headed parent edge → `parent_matcher`), `op A -> op B <- op C`, `op A <- op B -> {C; D}` (CB attaches to parent matcher). Fix lowering where tests reveal drift from spec.

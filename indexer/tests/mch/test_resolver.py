@@ -32,6 +32,12 @@ def test_resolve_opcode_value_matches_host():
     assert rf.opcodes["JettonTransfer"] == 0x0f8a7ea5
 
 
+def _fb_registries() -> Registries:
+    reg = Registries()
+    reg.block_types["FB"] = object
+    return reg
+
+
 def test_resolve_matcher_captures_inferred():
     src = """
     opcode Foo = 0x1
@@ -44,7 +50,7 @@ def test_resolve_matcher_captures_inferred():
         op Foo @a -> op Bar @b
     }
     """
-    rf = _resolve(src)
+    rf = _resolve(src, _fb_registries())
     m = rf.matchers[0]
     assert set(m.captures.keys()) == {"a", "b"}
     ci_a = m.captures["a"]
@@ -64,7 +70,7 @@ def test_resolve_maybe_marks_capture_optional():
         op Foo @a -> maybe op Bar @b
     }
     """
-    rf = _resolve(src)
+    rf = _resolve(src, _fb_registries())
     m = rf.matchers[0]
     assert m.captures["a"].optional is False
     assert m.captures["b"].optional is True
@@ -81,7 +87,7 @@ def test_resolve_anchor_resolved():
         op Foo @a
     }
     """
-    rf = _resolve(src)
+    rf = _resolve(src, _fb_registries())
     assert rf.matchers[0].anchor_capture == "a"
     # And the anchor head IS the OpHead for Foo:
     anchor_node = rf.matchers[0].anchor_node
@@ -213,6 +219,12 @@ def test_entry_inside_maybe_rejected():
     )
 
 
+def _m_registries() -> Registries:
+    reg = Registries()
+    reg.block_types["M"] = object
+    return reg
+
+
 def test_distinct_opcodes_with_different_captures_allowed():
     rf = _resolve(
         """
@@ -225,7 +237,8 @@ def test_distinct_opcodes_with_different_captures_allowed():
 
             op A @x -> op B @y
         }
-        """
+        """,
+        _m_registries(),
     )
     assert set(rf.matchers[0].captures.keys()) == {"x", "y"}
 
@@ -245,7 +258,8 @@ def test_same_name_captures_across_xor_branches_allowed():
 
             op R @r -> (op A @x ^ op B @x)
         }
-        """
+        """,
+        _m_registries(),
     )
     caps = rf.matchers[0].captures
     assert set(caps.keys()) == {"r", "x"}
@@ -269,7 +283,8 @@ def test_same_name_captures_across_eligible_or_allowed():
 
             op R @r -> (op A @x | op B @x)
         }
-        """
+        """,
+        _m_registries(),
     )
     caps = rf.matchers[0].captures
     assert set(caps.keys()) == {"r", "x"}
@@ -291,7 +306,8 @@ def test_same_name_captures_partial_branch_coverage_is_optional():
 
             op R @r -> (op A @x ^ op B @x ^ op C)
         }
-        """
+        """,
+        _m_registries(),
     )
     assert rf.matchers[0].captures["x"].optional is True
 
@@ -317,10 +333,10 @@ def test_same_name_captures_across_non_exclusive_or_rejected():
     )
 
 
-def test_entry_on_multi_position_capture_rejected():
-    # Anchoring on a capture defined in several XOR branches is an opcode-set
-    # anchor — not supported until spec §8.3 [M2] (roadmap T10).
-    _resolve_expect_error(
+def test_entry_on_xor_group_accepted_as_opcode_set_anchor():
+    # Spec §8.3 [M2] (T10): entry on a capture bound on every branch of an XOR
+    # of bare concrete heads is an opcode-set anchor.
+    rf = _resolve(
         """
         opcode A = 0x1
         opcode B = 0x2
@@ -332,8 +348,184 @@ def test_entry_on_multi_position_capture_rejected():
             (op A @x ^ op B @x)
         }
         """,
+        _m_registries(),
+    )
+    rm = rf.matchers[0]
+    assert rm.anchor_capture == "x"
+    assert rm.anchor_group is not None
+    assert len(rm.anchor_group.branches) == 2
+    assert rm.captures["x"].optional is False
+
+
+def test_entry_on_heuristic_exclusive_or_group_accepted():
+    # `|` alternative of distinct bare concrete heads meets the ExclusiveOr
+    # upgrade heuristic — also a legal opcode-set anchor.
+    rf = _resolve(
+        """
+        opcode A = 0x1
+        opcode B = 0x2
+        matcher m {
+            produces M
+            build    build_m
+            entry    @x
+
+            (op A @x | op B @x)
+        }
+        """,
+        _m_registries(),
+    )
+    assert rf.matchers[0].anchor_group is not None
+
+
+def test_entry_on_non_exclusive_or_alternative_rejected():
+    # Branch 2 is a chain, so the `|` alternative is not provably exclusive —
+    # its captures can never anchor.
+    _resolve_expect_error(
+        """
+        opcode A = 0x1
+        opcode B = 0x2
+        opcode C = 0x3
+        matcher m {
+            produces M
+            build    build_m
+            entry    @x
+
+            (op A @x | (op B -> op C))
+        }
+        """,
         "R007_ENTRY_VIOLATES_8_3",
     )
+
+
+def test_entry_on_maybe_wrapped_xor_group_rejected():
+    _resolve_expect_error(
+        """
+        opcode A = 0x1
+        opcode B = 0x2
+        matcher m {
+            produces M
+            build    build_m
+            entry    @x
+
+            maybe (op A @x ^ op B @x)
+        }
+        """,
+        "R007_ENTRY_VIOLATES_8_3",
+    )
+
+
+def test_entry_capture_missing_from_one_xor_branch_rejected():
+    # @x covers only 2 of 3 branches: the C branch could win without binding
+    # the anchor, so the group cannot anchor.
+    _resolve_expect_error(
+        """
+        opcode A = 0x1
+        opcode B = 0x2
+        opcode C = 0x3
+        matcher m {
+            produces M
+            build    build_m
+            entry    @x
+
+            (op A @x ^ op B @x ^ op C)
+        }
+        """,
+        "R007_ENTRY_VIOLATES_8_3",
+    )
+
+
+def test_entry_on_xor_branch_with_where_clause_rejected():
+    # `where` on an opcode-set anchor branch is rejected cleanly rather than
+    # silently dropped (there is no single anchor node to wrap test_self on).
+    reg = _m_registries()
+    reg.predicates["p"] = lambda b: True
+    _resolve_expect_error(
+        """
+        opcode A = 0x1
+        opcode B = 0x2
+        matcher m {
+            produces M
+            build    build_m
+            entry    @x
+
+            (op A @x ^ op B @x where p)
+        }
+        """,
+        "R007_ENTRY_VIOLATES_8_3",
+        registries=reg,
+    )
+
+
+def test_entry_on_xor_branch_with_chain_rejected():
+    # A branch that is a chain (not a bare node) cannot participate in an
+    # opcode-set anchor even under explicit `^`.
+    _resolve_expect_error(
+        """
+        opcode A = 0x1
+        opcode B = 0x2
+        opcode C = 0x3
+        matcher m {
+            produces M
+            build    build_m
+            entry    @x
+
+            (op A @x ^ (op B @x -> op C))
+        }
+        """,
+        "R007_ENTRY_VIOLATES_8_3",
+    )
+
+
+def test_produces_union_unknown_name_rejected():
+    # spec §8.1 M2: every name in a `produces` union is validated against the
+    # host block-type registry, not just the first.
+    reg = Registries()
+    reg.block_types["change_dns"] = object
+    reg.block_types["renew_dns"] = object
+    # delete_dns intentionally left unregistered.
+    _resolve_expect_error(
+        """
+        opcode ChangeDnsRecord = 0x1
+        matcher change_dns_record {
+            produces change_dns | renew_dns | delete_dns
+            build    build_dns
+            entry    @msg
+
+            op ChangeDnsRecord @msg
+        }
+        """,
+        "C003_UNKNOWN_BLOCK_TYPE",
+        registries=reg,
+    )
+
+
+def test_produces_union_dns_shaped_matcher_compiles_through_facade():
+    # spec §8.1 / §14.5 (pattern part): one anchor opcode, three possible
+    # produced types, all registered — compiles end to end through resolve + compile.
+    from indexer.events.mch import compile_text
+
+    reg = Registries()
+    reg.block_types["change_dns"] = object
+    reg.block_types["renew_dns"] = object
+    reg.block_types["delete_dns"] = object
+
+    @reg.register_builder("build_dns")
+    async def _b(m):  # noqa: ARG001
+        return None
+
+    src = """
+    opcode ChangeDnsRecord = 0x1
+    matcher change_dns_record {
+        produces change_dns | renew_dns | delete_dns
+        build    build_dns
+        entry    @msg
+
+        op ChangeDnsRecord @msg
+    }
+    """
+    compiled = compile_text(src, "dns.mch", reg)
+    assert len(compiled) == 1
+    assert compiled[0].produces_cls_name == "change_dns"
 
 
 def test_duplicate_opcode_captures_now_allowed():
@@ -350,6 +542,7 @@ def test_duplicate_opcode_captures_now_allowed():
 
             op A @first -> op A @second
         }
-        """
+        """,
+        _m_registries(),
     )
     assert set(rf.matchers[0].captures.keys()) == {"first", "second"}

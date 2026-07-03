@@ -53,7 +53,8 @@ def test_parse_matcher_declaration_minimal():
     assert len(f.matchers) == 1
     m = f.matchers[0]
     assert m.name == "m"
-    assert m.produces == "FooBlock"
+    assert m.produces == ("FooBlock",)
+    assert m.produces_primary == "FooBlock"
     assert m.build == "build_foo"
     assert m.entry == "x"
     assert m.include_excess is True   # default
@@ -311,3 +312,38 @@ def test_caret_spanning_newlines():
     node = _parse_matcher_pattern("(\n  op A\n  ^\n  op B\n)")
     assert isinstance(node, ast_.Alternative)
     assert node.exclusive is True
+
+
+# ==========================================================================
+# T11 — `produces` union (spec §8.1)
+# ==========================================================================
+
+def test_produces_single_name_still_works():
+    src = """
+    opcode Foo = 0x1
+    matcher m {
+        produces FooBlock
+        build    build_foo
+        entry    @x
+
+        op Foo @x
+    }
+    """
+    f = _parse(src)
+    assert f.matchers[0].produces == ("FooBlock",)
+
+
+def test_produces_union_of_three_parses_into_tuple():
+    src = """
+    opcode Foo = 0x1
+    matcher m {
+        produces change_dns | renew_dns | delete_dns
+        build    build_foo
+        entry    @x
+
+        op Foo @x
+    }
+    """
+    f = _parse(src)
+    assert f.matchers[0].produces == ("change_dns", "renew_dns", "delete_dns")
+    assert f.matchers[0].produces_primary == "change_dns"

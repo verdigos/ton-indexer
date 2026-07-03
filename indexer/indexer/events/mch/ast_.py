@@ -112,13 +112,21 @@ class RuleDecl:
 @dataclass(frozen=True)
 class MatcherDecl:
     name: str
-    produces: str
+    produces: tuple[str, ...]
     build: str
     entry: str | None
     include_excess: bool
     include_bounces: bool
     pattern: PatternExpr
     span: Span
+
+    @property
+    def produces_primary(self) -> str:
+        """First declared `produces` name. Convenience accessor for code that
+        needs a single type (e.g. `CompiledMatcher.produces_cls_name`); the
+        union (spec §8.1 M2) is documentation + registry validation, and
+        selecting among the declared types at build time is the builder's job."""
+        return self.produces[0]
 
 
 @dataclass(frozen=True)

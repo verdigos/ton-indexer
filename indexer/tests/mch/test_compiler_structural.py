@@ -484,3 +484,236 @@ def test_caret_redundant_heads_warns(monkeypatch):
     )
     child = compiled[0].matcher.child_matcher
     assert isinstance(child, ExclusiveOrMatcher)
+
+
+# ==========================================================================
+# T12 — Mixed-direction chain conformance (spec §6.4, §6.5)
+#
+# Each test pins the EXACT child_matcher / parent_matcher / children_matchers
+# wiring the compiler must produce for a tricky chain lowering.
+# ==========================================================================
+
+
+def _compile_one(src: str, **opcodes: int):
+    reg = _registries_with_opcodes(**opcodes)
+    _with_block_type(reg, "MB")
+    _with_builder(reg, "build_m")
+    return compile_text(src, "test.mch", reg)[0].matcher
+
+
+def test_t12_shape1_anchor_headed_parent_edge():
+    """`op A @a <- op B @b` (entry @a) — B becomes A's parent_matcher; nothing else."""
+    m = _compile_one(
+        """
+        opcode A = 0x1
+        opcode B = 0x2
+        matcher m {
+            produces MB
+            build    build_m
+            entry    @a
+            op A @a <- op B @b
+        }
+        """,
+        A=0x1, B=0x2,
+    )
+    assert isinstance(m, ContractMatcher) and m.opcode == 0x1
+    assert m.child_matcher is None
+    assert m.children_matchers is None
+    assert isinstance(m.parent_matcher, ContractMatcher)
+    assert m.parent_matcher.opcode == 0x2
+    assert m.parent_matcher.parent_matcher is None
+
+
+def test_t12_shape2_multihop_parent_chain():
+    """`op A <- op B <- op C` — A.parent=B, B.parent=C (multi-hop; Phase 4)."""
+    m = _compile_one(
+        """
+        opcode A = 0x1
+        opcode B = 0x2
+        opcode C = 0x3
+        matcher m {
+            produces MB
+            build    build_m
+            entry    @a
+            op A @a <- op B @b <- op C @c
+        }
+        """,
+        A=0x1, B=0x2, C=0x3,
+    )
+    assert m.child_matcher is None
+    assert m.children_matchers is None
+    b = m.parent_matcher
+    assert isinstance(b, ContractMatcher) and b.opcode == 0x2
+    c = b.parent_matcher
+    assert isinstance(c, ContractMatcher) and c.opcode == 0x3
+    assert c.parent_matcher is None
+
+
+def test_t12_shape3_children_after_parent_edge_attach_to_parent():
+    """`op A <- op B -> {C; D}` — CB attaches to B (the parent matcher), NOT to
+    anchor A (spec §6.5 attach-to-left after a parent edge)."""
+    m = _compile_one(
+        """
+        opcode A = 0x1
+        opcode B = 0x2
+        opcode C = 0x3
+        opcode D = 0x4
+        matcher m {
+            produces MB
+            build    build_m
+            entry    @a
+            op A @a <- op B @b -> {op C @c; op D @d}
+        }
+        """,
+        A=0x1, B=0x2, C=0x3, D=0x4,
+    )
+    # Anchor A owns neither child nor children — the CB routed to B.
+    assert m.child_matcher is None
+    assert m.children_matchers is None, "children block must NOT attach to anchor A"
+    b = m.parent_matcher
+    assert isinstance(b, ContractMatcher) and b.opcode == 0x2
+    assert b.parent_matcher is None
+    assert b.children_matchers is not None
+    assert [cm.opcode for cm in b.children_matchers] == [0x3, 0x4]
+
+
+def test_t12_shape4_mid_chain_children_attach_to_left():
+    """`op A -> op B -> {C; D}` — mid-chain CB attaches to B (Phase 5)."""
+    m = _compile_one(
+        """
+        opcode A = 0x1
+        opcode B = 0x2
+        opcode C = 0x3
+        opcode D = 0x4
+        matcher m {
+            produces MB
+            build    build_m
+            entry    @a
+            op A @a -> op B @b -> {op C @c; op D @d}
+        }
+        """,
+        A=0x1, B=0x2, C=0x3, D=0x4,
+    )
+    assert m.parent_matcher is None
+    assert m.children_matchers is None, "children block must attach to B, not anchor A"
+    b = m.child_matcher
+    assert isinstance(b, ContractMatcher) and b.opcode == 0x2
+    assert b.children_matchers is not None
+    assert [cm.opcode for cm in b.children_matchers] == [0x3, 0x4]
+
+
+def test_t12_shape5_children_block_does_not_advance_cursor():
+    """`op A -> {B; C} -> op D` — A has BOTH children_matchers=[B, C] AND
+    child_matcher=D. A children block does not advance the chain cursor."""
+    m = _compile_one(
+        """
+        opcode A = 0x1
+        opcode B = 0x2
+        opcode C = 0x3
+        opcode D = 0x4
+        matcher m {
+            produces MB
+            build    build_m
+            entry    @a
+            op A @a -> {op B @b; op C @c} -> op D @d
+        }
+        """,
+        A=0x1, B=0x2, C=0x3, D=0x4,
+    )
+    assert m.parent_matcher is None
+    assert m.children_matchers is not None
+    assert [cm.opcode for cm in m.children_matchers] == [0x2, 0x3]
+    assert isinstance(m.child_matcher, ContractMatcher)
+    assert m.child_matcher.opcode == 0x4
+    # D advances the chain but the CB did not — D has no further child.
+    assert m.child_matcher.child_matcher is None
+
+
+# ==========================================================================
+# T10 — Opcode-set anchors (spec §8.3 M2)
+# ==========================================================================
+
+
+def test_t10_opcode_set_anchor_membership_test_and_chain_wiring(build_block_tree):
+    """jetton_mint shape: `(op A @m ^ op B @m) -> maybe op N @n` — the compiled
+    matcher's test_self is set membership over both anchor opcodes, and the
+    chain edge off the group wires as the anchor's child_matcher."""
+    from tests.mch.conftest import BlockSpec
+
+    m = _compile_one(
+        """
+        opcode JettonMint = 0x1
+        opcode MinterJettonMint = 0x2
+        opcode JettonNotify = 0x3
+        matcher jetton_mint {
+            produces MB
+            build    build_m
+            entry    @m
+            (op JettonMint @m ^ op MinterJettonMint @m) -> maybe op JettonNotify @n
+        }
+        """,
+        JettonMint=0x1, MinterJettonMint=0x2, JettonNotify=0x3,
+    )
+    assert isinstance(m, GenericMatcher)
+    assert type(m).__name__ == "_MCH_jetton_mint"
+    # Set membership: fires for both anchor opcodes, not for a third.
+    assert m.test_self(build_block_tree(BlockSpec(opcode=0x1))) is True
+    assert m.test_self(build_block_tree(BlockSpec(opcode=0x2))) is True
+    assert m.test_self(build_block_tree(BlockSpec(opcode=0x99))) is False
+    # A non-CallContractBlock never satisfies an opcode-only set.
+    assert m.test_self(build_block_tree(BlockSpec(btype="jetton_transfer"))) is False
+    # Chain wiring off the group: single optional child, no parent/children.
+    assert isinstance(m.child_matcher, ContractMatcher)
+    assert m.child_matcher.opcode == 0x3
+    assert m.child_matcher.optional is True
+    assert m.parent_matcher is None
+    assert m.children_matchers is None
+
+
+def test_t10_mixed_op_and_btype_set_anchor(build_block_tree):
+    """Branches mixing op and btype heads: membership is opcode-set OR btype-set."""
+    from tests.mch.conftest import BlockSpec
+
+    m = _compile_one(
+        """
+        opcode A = 0x1
+        matcher m {
+            produces MB
+            build    build_m
+            entry    @x
+            (op A @x ^ btype jetton_transfer @x)
+        }
+        """,
+        A=0x1,
+    )
+    assert m.test_self(build_block_tree(BlockSpec(opcode=0x1))) is True
+    assert m.test_self(build_block_tree(BlockSpec(btype="jetton_transfer"))) is True
+    assert m.test_self(build_block_tree(BlockSpec(opcode=0x99))) is False
+    assert m.test_self(build_block_tree(BlockSpec(btype="other"))) is False
+
+
+def test_t12_shape6_child_then_parent_chain_rejected():
+    """`op A -> op B <- op C` — degenerate: B matched as A's child has
+    previous_block==A, so a parent_matcher C on B would test the anchor block and
+    never match. Rejected at compile time with C009 (spec §6.4) rather than
+    silently dropping the `<- op C` segment."""
+    from indexer.events.mch.diagnostics import CompileError, Severity
+
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+        op A @a -> op B @b <- op C @c
+    }
+    """
+    reg = _registries_with_opcodes(A=0x1, B=0x2, C=0x3)
+    _with_block_type(reg, "MB")
+    _with_builder(reg, "build_m")
+    with pytest.raises(CompileError) as exc:
+        compile_text(src, "test.mch", reg)
+    codes = [d.code for d in exc.value.bag.items if d.severity is Severity.ERROR]
+    assert "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED" in codes, codes

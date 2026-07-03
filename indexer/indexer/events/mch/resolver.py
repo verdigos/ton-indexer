@@ -33,6 +33,9 @@ class _CaptureOccurrence:
     under_recursive: bool
     # One entry per enclosing EXCLUSIVE alternative: (alt_id, branch_idx, branch_count).
     branch_path: tuple[tuple[int, int, int], ...]
+    # True when any enclosing alternative is NOT exclusive (plain `|` failing the
+    # ExclusiveOr-upgrade heuristic). Such positions can never anchor (spec §8.3).
+    under_nonexclusive_alt: bool = False
 
 
 def _alternative_is_exclusive(
@@ -107,12 +110,77 @@ def _merged_optional(occs: list[_CaptureOccurrence]) -> bool:
     return True
 
 
+def _validate_group_anchor(
+    occs: list[_CaptureOccurrence],
+    alt_nodes: dict[int, ast_.Alternative],
+) -> tuple[ast_.Alternative | None, str]:
+    """Validate an `entry` capture that touches alternative branches (spec §8.3 M2).
+
+    Legal only as an opcode-set anchor: every occurrence is itself a branch of
+    one exclusive alternative, one per branch, all branches covered, each branch
+    a bare concrete `op`/`btype` node without `where`. Returns (group, "") on
+    success or (None, reason) for the R007 message.
+    """
+    if any(o.under_recursive for o in occs):
+        return None, "is inside a recursive rule"
+    if any(o.under_maybe for o in occs):
+        return None, "is inside a `maybe`-wrapped subtree"
+    if any(o.under_nonexclusive_alt for o in occs):
+        return None, (
+            "sits in a non-exclusive alternative branch; an opcode-set anchor "
+            "requires an exclusive alternative (`^`, or `|` of distinct bare "
+            "concrete heads) (spec §8.3 M2)"
+        )
+    if any(len(o.branch_path) != 1 for o in occs):
+        return None, (
+            "must sit directly on the branches of a single exclusive "
+            "alternative, not nested in or outside one (spec §8.3 M2)"
+        )
+    alt_id = occs[0].branch_path[0][0]
+    if any(o.branch_path[0][0] != alt_id for o in occs):
+        return None, (
+            "occurrences span different alternatives; an opcode-set anchor "
+            "requires a single exclusive alternative (spec §8.3 M2)"
+        )
+    alt = alt_nodes[alt_id]
+    idxs = {o.branch_path[0][1] for o in occs}
+    if len(occs) != len(alt.branches) or idxs != set(range(len(alt.branches))):
+        return None, (
+            "must be bound on every branch of the exclusive alternative "
+            "(spec §8.3 M2)"
+        )
+    by_idx = {o.branch_path[0][1]: o for o in occs}
+    for idx, branch in enumerate(alt.branches):
+        occ = by_idx[idx]
+        if branch is not occ.node:
+            return None, (
+                "requires every branch of the exclusive alternative to be a "
+                "bare node carrying the capture (no chains or nesting) "
+                "(spec §8.3 M2)"
+            )
+        if not isinstance(occ.node.head, (ast_.OpHead, ast_.BTypeHead)):
+            return None, (
+                "requires concrete `op`/`btype` heads on every branch of the "
+                "exclusive alternative (spec §8.3 M2)"
+            )
+        if occ.node.where_predicate is not None:
+            return None, (
+                "does not support a `where` clause on opcode-set anchor "
+                "branches; split the matcher or check in the builder"
+            )
+    return alt, ""
+
+
 @dataclass
 class ResolvedMatcher:
     decl: ast_.MatcherDecl
     captures: dict[str, CaptureInfo]
     anchor_capture: str
     anchor_node: ast_.Node
+    # Opcode-set anchor (spec §8.3 M2): when `entry` names a capture bound on
+    # every branch of one exclusive alternative of bare concrete heads, this is
+    # that Alternative; `anchor_node` then holds a representative branch node.
+    anchor_group: ast_.Alternative | None = None
 
 
 @dataclass
@@ -130,6 +198,7 @@ def resolve(file: ast_.File, registries: Registries) -> ResolvedFile:
 
     opcodes: dict[str, int] = _resolve_opcodes(file, registries, bag)
     _check_predicates(file, registries, bag)
+    _check_produces_union(file, registries, bag)
     _check_rule_patterns(file, opcodes, registries, bag)
     rule_recursion: dict[str, RecursionClass] = _classify_rules(file, bag)
     resolved_matchers: list[ResolvedMatcher] = []
@@ -185,6 +254,19 @@ def _check_predicates(file: ast_.File, registries: Registries, bag: DiagnosticBa
                 f"predicate {p.name!r} is not registered in the host",
                 p.span,
             )
+
+
+def _check_produces_union(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> None:
+    """Validate every name in a matcher's `produces` union (spec §8.1 M2) against
+    the host's block-type registry. A single-name `produces` is a 1-element union."""
+    for m in file.matchers:
+        for name in m.produces:
+            if name not in registries.block_types:
+                bag.error(
+                    "C003_UNKNOWN_BLOCK_TYPE",
+                    f"matcher {m.name!r}: produces type {name!r} is not registered",
+                    m.span,
+                )
 
 
 def _classify_rules(file: ast_.File, bag: DiagnosticBag) -> dict[str, RecursionClass]:
@@ -332,12 +414,14 @@ def _resolve_matcher(
     # mutually exclusive alternative branches is legal (spec §6.2).
     occurrences: dict[str, list[_CaptureOccurrence]] = {}
     alt_ids: dict[int, int] = {}  # id(Alternative) -> stable sequential id
+    alt_nodes: dict[int, ast_.Alternative] = {}  # stable id -> Alternative node
 
     def visit(
         p: ast_.PatternExpr,
         under_maybe: bool,
         under_recursive: bool,
         branch_path: tuple[tuple[int, int, int], ...],
+        under_nonexclusive_alt: bool = False,
     ) -> None:
         if isinstance(p, ast_.Node):
             head = p.head
@@ -360,26 +444,29 @@ def _resolve_matcher(
                     under_maybe=under_maybe,
                     under_recursive=under_recursive,
                     branch_path=branch_path,
+                    under_nonexclusive_alt=under_nonexclusive_alt,
                 ))
         elif isinstance(p, ast_.Maybe):
-            visit(p.inner, True, under_recursive, branch_path)
+            visit(p.inner, True, under_recursive, branch_path, under_nonexclusive_alt)
         elif isinstance(p, ast_.Sequence):
-            visit(p.head, under_maybe, under_recursive, branch_path)
+            visit(p.head, under_maybe, under_recursive, branch_path, under_nonexclusive_alt)
             for _e, atom in p.tail:
-                visit(atom, under_maybe, under_recursive, branch_path)
+                visit(atom, under_maybe, under_recursive, branch_path, under_nonexclusive_alt)
         elif isinstance(p, ast_.Alternative):
             exclusive = _alternative_is_exclusive(p, opcodes, registries)
             if exclusive:
                 alt_id = alt_ids.setdefault(id(p), len(alt_ids))
+                alt_nodes[alt_id] = p
             for idx, b in enumerate(p.branches):
                 if exclusive:
                     visit(b, under_maybe, under_recursive,
-                          branch_path + ((alt_id, idx, len(p.branches)),))
+                          branch_path + ((alt_id, idx, len(p.branches)),),
+                          under_nonexclusive_alt)
                 else:
-                    visit(b, under_maybe, under_recursive, branch_path)
+                    visit(b, under_maybe, under_recursive, branch_path, True)
         elif isinstance(p, ast_.ChildrenBlock):
             for it in p.items:
-                visit(it, under_maybe, under_recursive, branch_path)
+                visit(it, under_maybe, under_recursive, branch_path, under_nonexclusive_alt)
         elif isinstance(p, ast_.RuleRef):
             # Recurse into the rule body. If we're entering a recursive rule, set
             # under_recursive=True for the duration of the walk. Stop following
@@ -390,9 +477,11 @@ def _resolve_matcher(
             if target is not None and not under_recursive:
                 target_class = rule_recursion.get(target.name, RecursionClass.NONE)
                 if target_class is RecursionClass.NONE:
-                    visit(target.pattern, under_maybe, under_recursive=False, branch_path=branch_path)
+                    visit(target.pattern, under_maybe, under_recursive=False,
+                          branch_path=branch_path, under_nonexclusive_alt=under_nonexclusive_alt)
                 else:
-                    visit(target.pattern, under_maybe, under_recursive=True, branch_path=branch_path)
+                    visit(target.pattern, under_maybe, under_recursive=True,
+                          branch_path=branch_path, under_nonexclusive_alt=under_nonexclusive_alt)
 
     visit(m.pattern, under_maybe=False, under_recursive=False, branch_path=())
 
@@ -445,6 +534,7 @@ def _resolve_matcher(
             )
 
     # Anchor.
+    anchor_group: ast_.Alternative | None = None
     if m.entry is None:
         bag.error(
             "R008_ENTRY_REQUIRED",
@@ -464,31 +554,36 @@ def _resolve_matcher(
             anchor_node = m.pattern  # type: ignore[assignment]
         else:
             ci = captures[m.entry]
-            if len(occurrences.get(m.entry, [])) > 1:
-                bag.error(
-                    "R007_ENTRY_VIOLATES_8_3",
-                    f"matcher {m.name!r}: entry @{m.entry} is defined in multiple pattern "
-                    f"positions; opcode-set anchors are not supported yet (spec §8.3 M2)",
-                    m.span,
-                )
-            if ci.optional:
-                bag.error(
-                    "R007_ENTRY_VIOLATES_8_3",
-                    f"matcher {m.name!r}: entry @{m.entry} is inside a `maybe`-wrapped subtree",
-                    m.span,
-                )
-            if ci.list_binding:
-                bag.error(
-                    "R007_ENTRY_VIOLATES_8_3",
-                    f"matcher {m.name!r}: entry @{m.entry} is inside a recursive rule",
-                    m.span,
-                )
-            if not isinstance(ci.head, (ast_.OpHead, ast_.BTypeHead)):
-                bag.error(
-                    "R007_ENTRY_VIOLATES_8_3",
-                    f"matcher {m.name!r}: entry @{m.entry} must reference an `op` or `btype` node",
-                    m.span,
-                )
+            occs = occurrences.get(m.entry, [])
+            if len(occs) > 1 or any(o.branch_path or o.under_nonexclusive_alt for o in occs):
+                # Multi-position or alternative-resident entry: legal only as an
+                # opcode-set anchor over one exclusive alternative (spec §8.3 M2).
+                anchor_group, reason = _validate_group_anchor(occs, alt_nodes)
+                if anchor_group is None:
+                    bag.error(
+                        "R007_ENTRY_VIOLATES_8_3",
+                        f"matcher {m.name!r}: entry @{m.entry} {reason}",
+                        m.span,
+                    )
+            else:
+                if ci.optional:
+                    bag.error(
+                        "R007_ENTRY_VIOLATES_8_3",
+                        f"matcher {m.name!r}: entry @{m.entry} is inside a `maybe`-wrapped subtree",
+                        m.span,
+                    )
+                if ci.list_binding:
+                    bag.error(
+                        "R007_ENTRY_VIOLATES_8_3",
+                        f"matcher {m.name!r}: entry @{m.entry} is inside a recursive rule",
+                        m.span,
+                    )
+                if not isinstance(ci.head, (ast_.OpHead, ast_.BTypeHead)):
+                    bag.error(
+                        "R007_ENTRY_VIOLATES_8_3",
+                        f"matcher {m.name!r}: entry @{m.entry} must reference an `op` or `btype` node",
+                        m.span,
+                    )
             anchor_node = ci.source
 
     return ResolvedMatcher(
@@ -496,6 +591,7 @@ def _resolve_matcher(
         captures=captures,
         anchor_capture=anchor_capture,
         anchor_node=anchor_node,
+        anchor_group=anchor_group,
     )
 
 

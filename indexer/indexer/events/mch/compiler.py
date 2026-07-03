@@ -4,6 +4,7 @@ import weakref
 from dataclasses import dataclass
 from typing import Any
 
+from indexer.events.blocks.basic_blocks import CallContractBlock
 from indexer.events.blocks.basic_matchers import (
     BlockMatcher,
     BlockTypeMatcher,
@@ -148,10 +149,10 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     if ctx.bag.has_errors:
         raise CompileError(ctx.bag)
 
-    if decl.produces not in ctx.registries.block_types:
+    if decl.produces_primary not in ctx.registries.block_types:
         ctx.bag.error(
             "C003_UNKNOWN_BLOCK_TYPE",
-            f"matcher {decl.name!r}: produces type {decl.produces!r} is not registered",
+            f"matcher {decl.name!r}: produces type {decl.produces_primary!r} is not registered",
             decl.span,
         )
     if decl.build not in ctx.registries.builders:
@@ -161,15 +162,33 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
             decl.span,
         )
 
-    # Lower the pattern relative to the anchor.
-    parent_m, child_m, children_ms = _lower_relative_to_anchor(decl.pattern, rm.anchor_node, ctx)
+    # Lower the pattern relative to the anchor atom. For opcode-set anchors
+    # (spec §8.3 M2) the whole exclusive alternative group IS the anchor atom,
+    # so chain edges around it wire exactly as around a single anchor node.
+    anchor_atom: ast_.PatternExpr = (
+        rm.anchor_group if rm.anchor_group is not None else rm.anchor_node
+    )
+    parent_m, child_m, children_ms = _lower_relative_to_anchor(decl.pattern, anchor_atom, ctx)
 
     # Build the synthetic subclass based on the anchor head.
     head = rm.anchor_node.head
-    if isinstance(head, ast_.OpHead):
+    if rm.anchor_group is not None:
+        # Opcode-set anchor: test_self is a set-membership check over the group's
+        # branch heads, mirroring hand-written matchers like JettonMintBlockMatcher
+        # (`opcode in [JettonMint.opcode, MinterJettonMint.opcode]`, jettons.py).
+        if rm.anchor_group.exclusive:
+            _check_redundant_exclusive_heads(rm.anchor_group, ctx)
+        opcode_set, btype_set = _anchor_group_head_sets(rm.anchor_group, ctx)
+        base = GenericMatcher
+        init_kwargs: dict[str, Any] = dict(
+            test_self_func=_make_head_set_test(opcode_set, btype_set),
+            child_matcher=child_m,
+            parent_matcher=parent_m,
+        )
+    elif isinstance(head, ast_.OpHead):
         opcode = head.ref if isinstance(head.ref, int) else ctx.resolved.opcodes.get(head.ref) or ctx.registries.opcodes.get(head.ref)
         base = ContractMatcher
-        init_kwargs: dict[str, Any] = dict(
+        init_kwargs = dict(
             opcode=opcode,
             child_matcher=child_m,
             parent_matcher=parent_m,
@@ -219,7 +238,7 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         matcher=instance,
         match_cls=subclass._mch_match_cls,
         build_fn_name=decl.build,
-        produces_cls_name=decl.produces,
+        produces_cls_name=decl.produces_primary,
         source_span=decl.span,
     )
 
@@ -433,10 +452,14 @@ def _walk_matcher(
 
 def _lower_relative_to_anchor(
     pattern: ast_.PatternExpr,
-    anchor: ast_.Node,
+    anchor: ast_.PatternExpr,
     ctx: CompileCtx,
 ) -> tuple[BlockMatcher | None, BlockMatcher | None, list[BlockMatcher] | None]:
-    """Walk the pattern to figure out (parent_matcher, child_matcher, children_matchers)."""
+    """Walk the pattern to figure out (parent_matcher, child_matcher, children_matchers).
+
+    `anchor` is compared by identity: a single anchor Node, or the whole
+    exclusive Alternative for opcode-set anchors (spec §8.3 M2).
+    """
     parents = _find_anchor_path(pattern, anchor)
     if parents is None:
         return None, None, None
@@ -450,7 +473,7 @@ def _lower_relative_to_anchor(
     return parent_chain, child_chain, children_ms
 
 
-def _find_anchor_path(pattern: ast_.PatternExpr, anchor: ast_.Node) -> list[ast_.PatternExpr] | None:
+def _find_anchor_path(pattern: ast_.PatternExpr, anchor: ast_.PatternExpr) -> list[ast_.PatternExpr] | None:
     if pattern is anchor:
         return None
 
@@ -485,7 +508,7 @@ def _find_anchor_path(pattern: ast_.PatternExpr, anchor: ast_.Node) -> list[ast_
 def _lower_child_chain_from(
     parent: ast_.PatternExpr,
     pattern: ast_.PatternExpr,
-    anchor: ast_.Node,
+    anchor: ast_.PatternExpr,
     ctx: CompileCtx,
 ) -> tuple[BlockMatcher | None, list[BlockMatcher] | None]:
     if isinstance(parent, ast_.Sequence):
@@ -516,6 +539,21 @@ def _lower_child_chain_from(
             tail_slice = parent.tail[anchor_idx + 1:]
         for edge, atom in tail_slice:
             if edge is ast_.Edge.PARENT:
+                if downstream_atoms:
+                    # `op A -> op B <- op C`: the parent edge's left side is a
+                    # non-anchor node (B) reached through a preceding child edge.
+                    # Its only faithful lowering sets B.parent_matcher = C, which
+                    # at runtime tests B.previous_block (== the anchor A) against
+                    # opcode C and can never be satisfied. Reject rather than
+                    # silently drop the `<- C` segment (spec §6.4).
+                    ctx.bag.error(
+                        "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
+                        "a parent edge ('<-') following a child edge in the same "
+                        "chain is unsupported: the parent would test the anchor "
+                        "block and can never match; split the pattern or re-anchor",
+                        atom.span,
+                    )
+                    raise CompileError(ctx.bag)
                 break
             downstream_atoms.append(atom)
         if not downstream_atoms:
@@ -559,7 +597,7 @@ def _lower_child_chain_from(
 def _lower_parent_chain_from(
     parent: ast_.PatternExpr,
     pattern: ast_.PatternExpr,
-    anchor: ast_.Node,
+    anchor: ast_.PatternExpr,
     ctx: CompileCtx,
 ) -> BlockMatcher | None:
     """Lower consecutive PARENT edges from the anchor outward into a chain of
@@ -764,6 +802,38 @@ def _check_redundant_exclusive_heads(p: ast_.Alternative, ctx: CompileCtx) -> No
             )
         else:
             seen[key] = b.span
+
+
+def _anchor_group_head_sets(
+    group: ast_.Alternative,
+    ctx: CompileCtx,
+) -> tuple[frozenset[int], frozenset[str]]:
+    """Collect the branch heads of an opcode-set anchor group (spec §8.3 M2).
+
+    The resolver guarantees every branch is a bare Node with a concrete
+    `op`/`btype` head and no `where` clause.
+    """
+    opcode_set: set[int] = set()
+    btype_set: set[str] = set()
+    for b in group.branches:
+        head = b.head
+        if isinstance(head, ast_.OpHead):
+            opcode = head.ref if isinstance(head.ref, int) else (
+                ctx.resolved.opcodes.get(head.ref) or ctx.registries.opcodes.get(head.ref)
+            )
+            opcode_set.add(opcode)
+        else:
+            btype_set.add(head.name)
+    return frozenset(opcode_set), frozenset(btype_set)
+
+
+def _make_head_set_test(opcode_set: frozenset[int], btype_set: frozenset[str]):
+    """Membership `test_self` for an opcode/btype-set anchor."""
+    def test(block) -> bool:
+        if isinstance(block, CallContractBlock) and block.opcode in opcode_set:
+            return True
+        return block.btype in btype_set
+    return test
 
 
 def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> BlockMatcher:

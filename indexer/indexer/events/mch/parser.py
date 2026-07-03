@@ -136,7 +136,7 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
     s.eat(TokenKind.LBRACE)
     s.skip_newlines()
 
-    produces: str | None = None
+    produces: tuple[str, ...] | None = None
     build:    str | None = None
     entry:    str | None = None
     include_excess  = True
@@ -147,7 +147,11 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
         t = s.peek()
         if t.kind is TokenKind.KW_PRODUCES:
             s.i += 1
-            produces = s.eat(TokenKind.IDENT).text
+            names = [s.eat(TokenKind.IDENT).text]
+            while s.at(TokenKind.PIPE):
+                s.i += 1
+                names.append(s.eat(TokenKind.IDENT).text)
+            produces = tuple(names)
         elif t.kind is TokenKind.KW_BUILD:
             s.i += 1
             build = s.eat(TokenKind.IDENT).text
