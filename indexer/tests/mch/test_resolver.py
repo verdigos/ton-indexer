@@ -230,6 +230,112 @@ def test_distinct_opcodes_with_different_captures_allowed():
     assert set(rf.matchers[0].captures.keys()) == {"x", "y"}
 
 
+def test_same_name_captures_across_xor_branches_allowed():
+    # Spec §6.2(a): the same capture name is legal across branches of an
+    # exclusive alternative; only the winning branch binds.
+    rf = _resolve(
+        """
+        opcode R = 0x1
+        opcode A = 0x2
+        opcode B = 0x3
+        matcher m {
+            produces M
+            build    build_m
+            entry    @r
+
+            op R @r -> (op A @x ^ op B @x)
+        }
+        """
+    )
+    caps = rf.matchers[0].captures
+    assert set(caps.keys()) == {"r", "x"}
+    # x appears in every branch of the XOR: it always binds.
+    assert caps["x"].optional is False
+    assert caps["x"].list_binding is False
+
+
+def test_same_name_captures_across_eligible_or_allowed():
+    # `|` alternative whose branches are bare concrete nodes with distinct heads
+    # is exclusive by the upgrade heuristic — same-name captures allowed.
+    rf = _resolve(
+        """
+        opcode R = 0x1
+        opcode A = 0x2
+        opcode B = 0x3
+        matcher m {
+            produces M
+            build    build_m
+            entry    @r
+
+            op R @r -> (op A @x | op B @x)
+        }
+        """
+    )
+    caps = rf.matchers[0].captures
+    assert set(caps.keys()) == {"r", "x"}
+    assert caps["x"].optional is False
+
+
+def test_same_name_captures_partial_branch_coverage_is_optional():
+    # x on 2 of 3 XOR branches: the third branch can win without binding x.
+    rf = _resolve(
+        """
+        opcode R = 0x1
+        opcode A = 0x2
+        opcode B = 0x3
+        opcode C = 0x4
+        matcher m {
+            produces M
+            build    build_m
+            entry    @r
+
+            op R @r -> (op A @x ^ op B @x ^ op C)
+        }
+        """
+    )
+    assert rf.matchers[0].captures["x"].optional is True
+
+
+def test_same_name_captures_across_non_exclusive_or_rejected():
+    # First branch is a chain, not a bare node — the OR is not provably
+    # exclusive, so the duplicate name is still an error.
+    _resolve_expect_error(
+        """
+        opcode R = 0x1
+        opcode A = 0x2
+        opcode B = 0x3
+        opcode C = 0x4
+        matcher m {
+            produces M
+            build    build_m
+            entry    @r
+
+            op R @r -> (op A @x -> op C | op B @x)
+        }
+        """,
+        "R005_DUP_CAPTURE",
+    )
+
+
+def test_entry_on_multi_position_capture_rejected():
+    # Anchoring on a capture defined in several XOR branches is an opcode-set
+    # anchor — not supported until spec §8.3 [M2] (roadmap T10).
+    _resolve_expect_error(
+        """
+        opcode A = 0x1
+        opcode B = 0x2
+        matcher m {
+            produces M
+            build    build_m
+            entry    @x
+
+            (op A @x ^ op B @x)
+        }
+        """,
+        "R007_ENTRY_VIOLATES_8_3",
+    )
+
+
 def test_duplicate_opcode_captures_now_allowed():
     # Phase 1 (position-id capture extraction): two captures on the same opcode
     # are no longer rejected. The walker tells them apart by their position in

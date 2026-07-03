@@ -25,6 +25,89 @@ class CaptureInfo:
 
 
 @dataclass
+class _CaptureOccurrence:
+    """One @name position in a matcher pattern, with enough context to decide
+    whether several positions sharing a name are mutually exclusive (spec §6.2)."""
+    node: ast_.Node
+    under_maybe: bool
+    under_recursive: bool
+    # One entry per enclosing EXCLUSIVE alternative: (alt_id, branch_idx, branch_count).
+    branch_path: tuple[tuple[int, int, int], ...]
+
+
+def _alternative_is_exclusive(
+    alt: ast_.Alternative,
+    opcodes: dict[str, int],
+    registries: Registries,
+) -> bool:
+    """True when at most one branch can match a given block.
+
+    Explicit `^` alternatives are exclusive by declaration. `|` alternatives are
+    exclusive when they meet the compiler's ExclusiveOrMatcher upgrade heuristic:
+    every branch is a bare concrete node (`op`/`btype`), no `where` clause, and
+    all resolved heads are pairwise distinct.
+    """
+    if alt.exclusive:
+        return True
+    seen_ops: set[int] = set()
+    seen_btypes: set[str] = set()
+    for b in alt.branches:
+        if not isinstance(b, ast_.Node) or b.where_predicate is not None:
+            return False
+        head = b.head
+        if isinstance(head, ast_.OpHead):
+            ref = head.ref
+            op = ref if isinstance(ref, int) else (
+                opcodes.get(ref) if opcodes.get(ref) is not None else registries.opcodes.get(ref)
+            )
+            if op is None or op in seen_ops:
+                return False
+            seen_ops.add(op)
+        elif isinstance(head, ast_.BTypeHead):
+            if head.name in seen_btypes:
+                return False
+            seen_btypes.add(head.name)
+        else:
+            return False
+    return True
+
+
+def _occurrences_mutually_exclusive(a: _CaptureOccurrence, b: _CaptureOccurrence) -> bool:
+    """True if a and b sit in different branches of some common exclusive alternative."""
+    b_by_alt = {alt_id: idx for alt_id, idx, _n in b.branch_path}
+    for alt_id, idx, _n in a.branch_path:
+        if alt_id in b_by_alt and b_by_alt[alt_id] != idx:
+            return True
+    return False
+
+
+def _merged_optional(occs: list[_CaptureOccurrence]) -> bool:
+    """Optionality of a capture defined in several mutually exclusive positions.
+
+    The capture always binds (optional=False) only when no occurrence is under
+    `maybe` and some exclusive alternative common to ALL occurrences is fully
+    covered — one occurrence in each of its branches. Otherwise a branch without
+    the capture can win and the field stays at its default.
+    """
+    if any(o.under_maybe for o in occs):
+        return True
+    common_alts = set.intersection(
+        *[{alt_id for alt_id, _i, _n in o.branch_path} for o in occs]
+    )
+    for alt_id in common_alts:
+        idxs: list[int] = []
+        branch_count = 0
+        for o in occs:
+            for a_id, idx, n in o.branch_path:
+                if a_id == alt_id:
+                    idxs.append(idx)
+                    branch_count = n
+        if len(idxs) == len(set(idxs)) == branch_count:
+            return False
+    return True
+
+
+@dataclass
 class ResolvedMatcher:
     decl: ast_.MatcherDecl
     captures: dict[str, CaptureInfo]
@@ -244,10 +327,18 @@ def _resolve_matcher(
     bag: DiagnosticBag,
     rule_recursion: dict[str, RecursionClass],
 ) -> ResolvedMatcher:
-    # Walk the pattern; bind captures with their flags; validate op/predicate refs.
-    captures: dict[str, CaptureInfo] = {}
+    # Walk the pattern; collect capture occurrences; validate op/predicate refs.
+    # Occurrences are merged into CaptureInfo afterwards so that the same name in
+    # mutually exclusive alternative branches is legal (spec §6.2).
+    occurrences: dict[str, list[_CaptureOccurrence]] = {}
+    alt_ids: dict[int, int] = {}  # id(Alternative) -> stable sequential id
 
-    def visit(p: ast_.PatternExpr, under_maybe: bool, under_recursive: bool) -> None:
+    def visit(
+        p: ast_.PatternExpr,
+        under_maybe: bool,
+        under_recursive: bool,
+        branch_path: tuple[tuple[int, int, int], ...],
+    ) -> None:
         if isinstance(p, ast_.Node):
             head = p.head
             if isinstance(head, ast_.OpHead) and isinstance(head.ref, str):
@@ -264,32 +355,31 @@ def _resolve_matcher(
                     p.span,
                 )
             if p.capture is not None:
-                if p.capture in captures:
-                    bag.error(
-                        "R005_DUP_CAPTURE",
-                        f"capture {p.capture!r} defined more than once in matcher {m.name!r}",
-                        p.span,
-                    )
-                else:
-                    captures[p.capture] = CaptureInfo(
-                        name=p.capture,
-                        head=head,
-                        optional=under_maybe,
-                        list_binding=under_recursive,
-                        source=p,
-                    )
+                occurrences.setdefault(p.capture, []).append(_CaptureOccurrence(
+                    node=p,
+                    under_maybe=under_maybe,
+                    under_recursive=under_recursive,
+                    branch_path=branch_path,
+                ))
         elif isinstance(p, ast_.Maybe):
-            visit(p.inner, True, under_recursive)
+            visit(p.inner, True, under_recursive, branch_path)
         elif isinstance(p, ast_.Sequence):
-            visit(p.head, under_maybe, under_recursive)
+            visit(p.head, under_maybe, under_recursive, branch_path)
             for _e, atom in p.tail:
-                visit(atom, under_maybe, under_recursive)
+                visit(atom, under_maybe, under_recursive, branch_path)
         elif isinstance(p, ast_.Alternative):
-            for b in p.branches:
-                visit(b, under_maybe, under_recursive)
+            exclusive = _alternative_is_exclusive(p, opcodes, registries)
+            if exclusive:
+                alt_id = alt_ids.setdefault(id(p), len(alt_ids))
+            for idx, b in enumerate(p.branches):
+                if exclusive:
+                    visit(b, under_maybe, under_recursive,
+                          branch_path + ((alt_id, idx, len(p.branches)),))
+                else:
+                    visit(b, under_maybe, under_recursive, branch_path)
         elif isinstance(p, ast_.ChildrenBlock):
             for it in p.items:
-                visit(it, under_maybe, under_recursive)
+                visit(it, under_maybe, under_recursive, branch_path)
         elif isinstance(p, ast_.RuleRef):
             # Recurse into the rule body. If we're entering a recursive rule, set
             # under_recursive=True for the duration of the walk. Stop following
@@ -300,11 +390,59 @@ def _resolve_matcher(
             if target is not None and not under_recursive:
                 target_class = rule_recursion.get(target.name, RecursionClass.NONE)
                 if target_class is RecursionClass.NONE:
-                    visit(target.pattern, under_maybe, under_recursive=False)
+                    visit(target.pattern, under_maybe, under_recursive=False, branch_path=branch_path)
                 else:
-                    visit(target.pattern, under_maybe, under_recursive=True)
+                    visit(target.pattern, under_maybe, under_recursive=True, branch_path=branch_path)
 
-    visit(m.pattern, under_maybe=False, under_recursive=False)
+    visit(m.pattern, under_maybe=False, under_recursive=False, branch_path=())
+
+    captures: dict[str, CaptureInfo] = {}
+    for cap_name, occs in occurrences.items():
+        if len(occs) > 1:
+            # Legal only when every pair of occurrences is separated by an
+            # exclusive alternative AND all agree on recursion context.
+            same_recursion = all(o.under_recursive == occs[0].under_recursive for o in occs)
+            offending: ast_.Node | None = None if same_recursion else occs[1].node
+            if offending is None:
+                for i in range(len(occs)):
+                    for j in range(i + 1, len(occs)):
+                        if not _occurrences_mutually_exclusive(occs[i], occs[j]):
+                            offending = occs[j].node
+                            break
+                    if offending is not None:
+                        break
+            if offending is not None:
+                bag.error(
+                    "R005_DUP_CAPTURE",
+                    f"capture {cap_name!r} defined more than once in matcher {m.name!r} "
+                    f"(occurrences are not in mutually exclusive alternative branches)",
+                    offending.span,
+                )
+                first = occs[0]
+                captures[cap_name] = CaptureInfo(
+                    name=cap_name,
+                    head=first.node.head,
+                    optional=first.under_maybe,
+                    list_binding=first.under_recursive,
+                    source=first.node,
+                )
+                continue
+            captures[cap_name] = CaptureInfo(
+                name=cap_name,
+                head=occs[0].node.head,
+                optional=_merged_optional(occs),
+                list_binding=occs[0].under_recursive,
+                source=occs[0].node,
+            )
+        else:
+            o = occs[0]
+            captures[cap_name] = CaptureInfo(
+                name=cap_name,
+                head=o.node.head,
+                optional=o.under_maybe,
+                list_binding=o.under_recursive,
+                source=o.node,
+            )
 
     # Anchor.
     if m.entry is None:
@@ -326,6 +464,13 @@ def _resolve_matcher(
             anchor_node = m.pattern  # type: ignore[assignment]
         else:
             ci = captures[m.entry]
+            if len(occurrences.get(m.entry, [])) > 1:
+                bag.error(
+                    "R007_ENTRY_VIOLATES_8_3",
+                    f"matcher {m.name!r}: entry @{m.entry} is defined in multiple pattern "
+                    f"positions; opcode-set anchors are not supported yet (spec §8.3 M2)",
+                    m.span,
+                )
             if ci.optional:
                 bag.error(
                     "R007_ENTRY_VIOLATES_8_3",
