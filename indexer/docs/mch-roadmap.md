@@ -91,25 +91,30 @@ Goal: structural tests pinning the tricky lowerings: `op A <- op B` (anchor-head
 Accept: each shape has a structural test asserting the exact `child_matcher`/`parent_matcher`/`children_matchers` wiring.
 
 ### T13 — Port jetton family to `.mch`
-Status: todo
+Status: done (2026-07-03 — specs/jettons.mch (transfer/burn/mint incl. two-opcode anchor); build cores extracted in blocks/jettons.py (`build_jetton_{transfer,burn,mint}_core`), shared by legacy matchers and mch builders in mch/builders/jettons.py; 6 field-level parity tests on real fixtures (both mint anchor opcodes + failed path) in tests/mch/integration/test_jettons_family.py; mch suite 174 green, test_actions corpus 123 green. T03 dependency waived by user — builders consume the untyped runtime Match.)
 Spec: §14.1, §5.4
 Needs: T03, T10
 Goal: write `specs/jettons.mch` covering `jetton_transfer`, `jetton_burn`, `jetton_mint` (two-opcode anchor), with external builders that reuse the existing build logic from `blocks/jettons.py` (refactor bodies into shared functions callable from both the legacy matcher and the mch builder — do not duplicate logic). PTon transfer stays hand-written for now (its disambiguation is build-side; becomes declarative in M4).
 Accept: integration tests run DSL and legacy matchers on real trace fixtures and assert **field-level equality** of resulting block `data` (not count parity).
 
 ### T14 — Port DNS to `.mch`
-Status: todo
+Status: done (2026-07-03 — specs/dns.mch (`produces change_dns | renew_dns | delete_dns` union, anchor `op ChangeDnsRecord @msg -> maybe op 0xffffffff`); shared build core `build_change_dns_core` extracted in blocks/dns.py (dns.py:36), 3-way content dispatch, called by both legacy matcher and mch builder in mch/builders/dns.py; excess/bounce left at defaults (true) + explicit optional bounce child — mirrors legacy consumed set exactly. NOTE: corpus has ZERO DNS fixtures (all 147 traces scanned, opcode 0x4eb1f0f9 absent; no YAML case), so parity is proven on synthetic-but-faithful trees built via the real Transaction/Message -> to_tree -> init_block path (5 field-level parity tests: change/renew/delete + bounce-consumed + failed-flag). mch suite 179 green (174 + 5), test_actions 123 green.)
 Spec: §8.1, §14.5 (pattern part only — build stays host-side until M4)
 Needs: T11
 Goal: `specs/dns.mch` with `produces change_dns | renew_dns | delete_dns` and an external builder reusing `ChangeDnsRecordMatcher` logic.
 Accept: field-level parity integration test on a dns trace fixture.
 
 ### T15 — Port dedust swap to `.mch`
-Status: todo
+Status: done (2026-07-03 — specs/dedust_swap.mch; lowered tree mirrors legacy exactly (anchor children_matchers=[Or([direct payout chain, recursion]), maybe notification], parent Or of jetton_transfer/DedustSwap, recursion step = Or of peer/external each with optional-notification children set, exit = payout chain). Shared core `build_dedust_swap_core` extracted in blocks/swaps.py (helpers moved to module level as `_parse_dedust_steps`/`_get_dedust_jetton_swap_sequence`); legacy `build_block` is now a thin wrapper — test_actions corpus 123 green. mch builder in mch/builders/dedust.py. 4 parity tests in tests/mch/integration/test_dedust_swap.py: 2 multi-hop (recursion), 1 single-hop TON-in (`op DedustSwap` parent arm), 1 both-reject-on-build-error (§10.7); corpus has no jetton-in single-hop and no failed-swap trace. mch suite 186 green (179 + 7). Two additive compiler changes, see notes below.)
 Spec: §6.5, §6.7, §7.2, §14.2-style recursion
 Needs: T01, T12
 Goal: `specs/dedust_swap.mch` reproducing `DedustSwapBlockMatcher` (recursive peer chain with exit matcher, children sets, OR parent). External builder reuses existing `build_block` logic via shared function.
 Accept: field-level parity on at least 2 fixtures (single-hop, multi-hop). Document any pattern-inexpressible aspect as a spec issue in this file.
+
+T15 notes (spec issues found and how they were resolved):
+- **Anchor with both a children set and a parent edge** (`op A -> {…} <- P`) was mis-rejected with C009, making the dedust anchor shape inexpressible; per §6.5 a children block does not advance the chain cursor, so the parent edge still belongs to the anchor. Fixed in the compiler (`_lower_child_chain_from` exempts CB-only prefixes from C009; `_lower_parent_chain_from` skips leading CB atoms) — additive: a previously compile-erroring shape became supported, no accepted pattern changes lowering. Structural test shape 7 + behavioral test added; spec §6.4/§6.5/§12.1 updated.
+- **Builders need the full consumed set** (host-contract, §10.7/§11): the legacy dedust build scans `other_blocks` freely (`find_messages`, `find_call_contracts`, `in include` membership); captures cannot reconstruct it because blocks matched by a recursion's **exit branch** have no bindings (the `_MchRecursiveMatcher` walker records only repeating-step iterations), and captures positioned after the recursion in traversal order (the anchor's own `maybe notification` item, the parent) are unbound in the multi-hop case (engine `set()` dedup destroys positional order). Resolved additively: the synthesized `build_block` sets `Match._mch_consumed = [anchor] + other_blocks`; documented in spec §11.1; behavioral test added. DSL captures in dedust_swap.mch are kept for pattern fidelity but the builder works exclusively off the consumed set.
+- **§7.2 alignment gaps for T18**: (a) exit-branch captures never bind (spec reading suggests they should bind once); (b) list captures under `maybe` inside the step path append `None` for absent per-iteration elements (parallel-aligned with gaps) rather than producing a shorter list as §7.2's branch-dependent wording implies; (c) captures after a recursion in the same children set / parent position silently stay `None` (only same-sequence positions are guarded by C007). Worth folding into the T18 conformance suite.
 
 ### T16 — Port stonfi_v2 swap end-to-end
 Status: todo
@@ -119,18 +124,42 @@ Goal: upgrade the existing stonfi_v2 integration test from simplified pattern + 
 Accept: field-level parity incl. multi-hop fixture; predicate no longer stubbed.
 
 ### T17 — Port dedust_withdraw + one of tonco/coffee
-Status: todo
+Status: done (2026-07-03 — specs/dedust_withdraw.mch + specs/coffee_swap.mch; coffee chosen (tonco inexpressible, filed as T28). Shared cores extracted: `build_dedust_withdraw_core` (liquidity.py) + `build_coffee_swap_core` (swaps.py), legacy matchers now thin wrappers. Withdraw builder is fully capture-driven (first port with no `_mch_consumed`); coffee builder derives labeled-equivalents structurally from the consumed set. 7 parity tests (3 withdraw synthetic + 4 coffee recorded). mch suite 193 green (186 + 7), test_actions 123 green.)
 Spec: §6.5, §6.6
 Needs: T15
 Goal: breadth validation on two more protocols (`DedustWithdrawBlockMatcher`, then `ToncoSwapBlockMatcher` or `CoffeeSwapBlockMatcher` — pick whichever exposes a new shape).
 Accept: field-level parity tests; new spec issues (if any) filed as tasks.
 
+T17 notes:
+- **Identical-heads children set is deterministic** (withdraw): two children items sharing head `op DedustPayoutFromPool` consume first-match-wins in candidate order (§6.5 algorithm), and the positional capture walker assigns `@payout_1`/`@payout_2` in exactly the legacy `labeled('payout_1'/'payout_2')` order — pinned by parity fixtures with both payout orders (jetton-first and TON-first). No spec issue; no `_mch_consumed` needed since the pattern has no recursion.
+- **Tonco is inexpressible with the current recursion strategy** — filed as T28. Coffee justification: recursion step is a two-node chain (swap → success event per unrolling), same-name `@in_transfer` capture across XOR parent branches (first port to exercise T02), and a 3-way mixed op/btype exit alternative — all new vs jettons/dns/dedust_swap.
+- **Corpus gap**: no trace contains both JettonBurn and DedustPayoutFromPool (checked all 147 raw opcode sets + legacy matcher run: 0 hits), and no YAML dedust withdraw case exists — withdraw parity uses T14-style synthetic-but-faithful trees (real Transaction/Message → to_tree → init_block, prerequisite jetton matchers replayed). Coffee gaps: no failed-swap fixture (swap_internal without success event) and no CoffeePayout-vs-CoffeeNotification terminal distinction in the corpus; covered fixtures: 2-hop recursion, single-hop TON-out, native-TON-in (`op CoffeeSwapNative` arm), coffee leg inside a multi-dex trace.
+- **Walk-compare extended** (dev_utils/mch_walk_compare.py, +5 scenarios): withdraw/coffee show zero consumption differences (L_only=M_only=0, same blocks, same order) but pairwise `replace` steps at every legacy `labeled()` site — `LabeledBlockConstructorMatcher` flattens its wrapped alternative into a single lambda `test_self` and emits transient LabelBlocks, while mch probes per-branch. Walk-level identity is structurally unattainable for label-using legacy matchers; relevant to T19's conventions (ratio is meaningless there — use L_only/M_only).
+- No compiler/resolver changes were needed.
+
+### T28 — Tonco swap port (needs cyclic-descent recursion strategy)
+Status: todo
+Spec: §10.3, §16
+Needs: T17
+Context (T17 finding): `ToncoSwapBlockMatcher` recursion is a **cyclic child-matcher graph** (`swap.child = payout; payout.child = Or([...intermediate chains ending in the same swap matcher..., optional finals])`) — plain recursive descent where the Or tries hop-continuation branches BEFORE the optional final-transfer branches. `_MchRecursiveMatcher` (the only strategy, §10.3) walks a frontier trying the exit FIRST per block; tonco's step and exit branches both start `swap -> payout`, so the exit would fire prematurely on every multi-hop chain (hop 2 of a 3-hop swap matches the exit since its distinguishing children are behind `maybe`). Faithful porting needs either (a) a second recursion strategy lowering self-refs at chain ends to a cyclic matcher graph (RecursionStrategy protocol already exists in recursion.py for this), or (b) negative lookahead in the language (§16 territory). Also needed: `maybe`-branch semantics inside alternatives (legacy uses optional=True branches inside OrMatcher, which OrMatcher.try_build ignores — quirk to pin before porting).
+Goal: pick (a) or (b), implement minimally, port tonco with field-level parity incl. the failed-swap target-extraction path (corpus has a failed tonco fixture: `Tonco swap TON -> USDT failed`).
+Accept: parity tests incl. multi-hop + failed swap; walk-compare scenario added.
+
 ### T18 — §7.2 alignment-rule conformance suite
 Status: todo
 Spec: §7.2
 Needs: T01
-Goal: behavioral tests for list captures: unconditional step path parallel-aligned; branch-dependent captures shorter lists; `maybe $rule` absent ⇒ `[]`; trace-order (`min_lt`) element ordering; `out_transfer[-1]`-style terminal access.
+Goal: behavioral tests for list captures: unconditional step path parallel-aligned; branch-dependent captures shorter lists; `maybe $rule` absent ⇒ `[]`; trace-order (`min_lt`) element ordering; `out_transfer[-1]`-style terminal access. Include the three T15-found gaps (see T15 notes: exit-branch captures never bind; gap-aligned `None`s vs "shorter list" wording; post-recursion captures silently `None`) — resolve each by fixing engine OR amending §7.2, per case.
 Accept: suite passes; any engine fix needed is included.
+
+### T19 — Walk-parity follow-ups (from walk-compare, 2026-07-03)
+Status: todo
+Spec: §6.6 (engine contract note), §10.5
+Needs: T15
+Context: `dev_utils/mch_walk_compare.py` proved jettons/dns walks identical to legacy (11 fixtures, ratio 1.000) and dedust divergent only by behaviorally-inert OR→XOR class swaps. Two follow-ups:
+1. Conformance test placing an exclusive alternative where `test_self` IS consulted directly (recursion step head; nested inside another alternative) — the only placements where OR vs XOR becomes observable. Pin behavior structurally + behaviorally.
+2. Perf: generated `build_block` re-walks the lowered tree to bind captures after matching (`_extract_captures`→`_walk_matcher`, re-calling `test_self` per consumed block — measured 6–25 redundant probes per successful match). Bind captures during the matching walk instead; re-run mch_walk_compare after to confirm walk parity holds and extraction-phase probes are gone.
+Accept: both tests green; zero extraction-phase test_self events in walk-compare output; both suites green.
 
 ---
 
@@ -150,6 +179,7 @@ Status: todo
 Spec: §10.5
 Needs: —
 Goal: pin candidate order (ascending `min_lt`, tie by stable `next_blocks` order) wherever the engine picks among blocks: `process_child_matcher`, `process_children_matchers`, recursion frontier. Verify against the existing YAML corpus that no production classification changes (run `tests/test_actions.py` before/after; investigate every diff).
+Primary known hazard (walk-compare, 2026-07-03): `set()` usage in `RecursiveMatcher.process_child_matcher` (basic_matchers.py:233) and in mch's recursive subclass reorders consumed blocks across runs and propagates to sibling visitation — affects legacy and mch equally; target it first.
 Accept: engine change + unit tests; full corpus diff is empty or every diff is explained and approved.
 
 ### T22 — Build-rejection contract

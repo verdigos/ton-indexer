@@ -570,6 +570,79 @@ def combine_deposits(first_deposit, final_deposit):
     return result
 
 
+async def build_dedust_withdraw_core(block: Block, payouts: list[Block | None]) -> Block | None:
+    """Shared build core for dedust dex_withdraw_liquidity. Returns None to
+    reject the match. `block` is the JettonBurn anchor; `payouts` are the two
+    payout terminal blocks (a DedustPayout call or a jetton_transfer block), in
+    children-set consumption order (payout_1 first). Does NOT merge consumed
+    blocks — the caller is responsible for merge_blocks."""
+    sender = block.get_message().source
+    sender_wallet = block.get_message().destination
+    burn_data = JettonBurn(block.get_body())
+
+    burn_notify_call = block.next_blocks[0]
+    pool = burn_notify_call.get_message().destination
+
+    lp_wallet_info = await context.interface_repository.get().get_jetton_wallet(sender_wallet.upper())
+    if not lp_wallet_info: return None
+
+    lp_asset = Asset(is_ton=False, jetton_address=lp_wallet_info.jetton)
+
+    assets = []
+    amounts = []
+    dex_wallets = []
+    dex_vaults = []
+    user_wallets = []
+    for payout in payouts:
+        call_from_vault = payout
+        payout_request = payout.previous_block if payout else None
+
+        if not payout_request:
+            continue
+
+        if isinstance(call_from_vault, CallContractBlock) and call_from_vault.opcode == DedustPayout.opcode:
+            asset = Asset(is_ton=True, jetton_address=None)
+            dex_wallets.append(None)
+            user_wallets.append(None)
+            dex_vaults.append(AccountId(call_from_vault.get_message().source))
+        elif isinstance(call_from_vault, JettonTransferBlock):
+            dex_wallet = call_from_vault.data['sender_wallet']
+            dex_wallets.append(dex_wallet)
+            asset = call_from_vault.data['asset']
+            user_wallets.append(call_from_vault.data['receiver_wallet'])
+            dex_vaults.append(call_from_vault.data['sender'])
+
+        else:
+            # unexpected opcode
+            return None
+
+        payout_data = DedustPayoutFromPool(payout_request.get_body())
+        amounts.append(payout_data.amount)
+        assets.append(asset)
+
+    new_block = Block('dex_withdraw_liquidity', [])
+    new_block.data = {
+        'dex': 'dedust',
+        'sender': AccountId(sender),
+        'sender_wallet': AccountId(sender_wallet),
+        'pool': AccountId(pool),
+        'asset': lp_asset,
+        'lp_tokens_burnt': Amount(burn_data.amount),
+        'is_refund': False,
+        'amount1_out': Amount(amounts[0]),
+        'asset1_out': assets[0],
+        'dex_wallet_1': dex_vaults[0],
+        'dex_jetton_wallet_1': dex_wallets[0],
+        'wallet1': user_wallets[0],
+        'amount2_out': Amount(amounts[1]),
+        'asset2_out': assets[1],
+        'dex_wallet_2': dex_vaults[1],
+        'dex_jetton_wallet_2': dex_wallets[1],
+        'wallet2': user_wallets[1]
+    }
+    return new_block
+
+
 class DedustWithdrawBlockMatcher(BlockMatcher):
     def __init__(self):
         # start at JettonBurn
@@ -612,75 +685,14 @@ class DedustWithdrawBlockMatcher(BlockMatcher):
         )
 
     async def build_block(self, block: Block, other_blocks: list[Block]) -> list[Block]:
-        sender = block.get_message().source
-        sender_wallet = block.get_message().destination
-        burn_data = JettonBurn(block.get_body())
-
-        burn_notify_call = block.next_blocks[0]
-        pool = burn_notify_call.get_message().destination
-
-        lp_wallet_info = await context.interface_repository.get().get_jetton_wallet(sender_wallet.upper())
-        if not lp_wallet_info: return []
-
-        lp_asset = Asset(is_ton=False, jetton_address=lp_wallet_info.jetton)
-
         payouts = [
             get_labeled('payout_1', other_blocks, Block),
             get_labeled('payout_2', other_blocks, Block)
         ]
-        assets = []
-        amounts = []
-        dex_wallets = []
-        dex_vaults = []
-        user_wallets = []
-        for payout in payouts:
-            call_from_vault = payout
-            payout_request = payout.previous_block if payout else None
-
-            if not payout_request:
-                continue
-
-            if isinstance(call_from_vault, CallContractBlock) and call_from_vault.opcode == DedustPayout.opcode:
-                asset = Asset(is_ton=True, jetton_address=None)
-                dex_wallets.append(None)
-                user_wallets.append(None)
-                dex_vaults.append(AccountId(call_from_vault.get_message().source))
-            elif isinstance(call_from_vault, JettonTransferBlock):
-                dex_wallet = call_from_vault.data['sender_wallet']
-                dex_wallets.append(dex_wallet)
-                asset = call_from_vault.data['asset']
-                user_wallets.append(call_from_vault.data['receiver_wallet'])
-                dex_vaults.append(call_from_vault.data['sender'])
-
-            else:
-                # unexpected opcode
-                return []
-
-            payout_data = DedustPayoutFromPool(payout_request.get_body())
-            amounts.append(payout_data.amount)
-            assets.append(asset)
-
-        new_block = Block('dex_withdraw_liquidity', [])
+        new_block = await build_dedust_withdraw_core(block, payouts)
+        if new_block is None:
+            return []
         new_block.merge_blocks([block] + other_blocks)
-        new_block.data = {
-            'dex': 'dedust',
-            'sender': AccountId(sender),
-            'sender_wallet': AccountId(sender_wallet),
-            'pool': AccountId(pool),
-            'asset': lp_asset,
-            'lp_tokens_burnt': Amount(burn_data.amount),
-            'is_refund': False,
-            'amount1_out': Amount(amounts[0]),
-            'asset1_out': assets[0],
-            'dex_wallet_1': dex_vaults[0],
-            'dex_jetton_wallet_1': dex_wallets[0],
-            'wallet1': user_wallets[0],
-            'amount2_out': Amount(amounts[1]),
-            'asset2_out': assets[1],
-            'dex_wallet_2': dex_vaults[1],
-            'dex_jetton_wallet_2': dex_wallets[1],
-            'wallet2': user_wallets[1]
-        }
         return [new_block]
 
 

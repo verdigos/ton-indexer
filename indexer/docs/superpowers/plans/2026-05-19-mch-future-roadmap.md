@@ -1,5 +1,7 @@
 # `.mch` DSL — Roadmap to a Fully Capable Compiler
 
+> **SUPERSEDED (2026-07-03):** replaced by `docs/mch-roadmap.md` (task list, spec v0.2 milestones M1–M5). Phases 1–5 and 7 below are implemented (commits 5ddd0f2a, 4d727265); Phases 6, 8–11 are folded into the new task list. Kept for historical context only.
+
 **Status:** Roadmap (not a step-by-step implementation plan).
 **Scope:** Everything needed to make the Python compiler able to express every existing hand-written matcher under `indexer/events/blocks/` — EXCEPT the stitch / cross-trace mechanics, which are explicitly out of scope per user instruction.
 

@@ -280,6 +280,13 @@ def _make_subclass(name: str, base: type, rm: ResolvedMatcher, ctx: CompileCtx) 
             capture_infos,
         )
         m = type(self)._mch_match_cls(**kwargs)
+        # Well-known Match attribute (spec §10.7/§11 host contract, T15): the full
+        # consumed block set, anchor first, in engine traversal order. Builders whose
+        # legacy counterparts scan `other_blocks` freely (e.g. dedust swap's
+        # find_messages/find_call_contracts) need it — captures alone cannot express
+        # blocks matched by a recursion's exit branch. Purely additive: builders that
+        # ignore it are unaffected.
+        m._mch_consumed = [block] + list(other_blocks)
         builder = registries.builders.get(builder_name)
         if builder is None:
             raise RuntimeError(f"builder {builder_name!r} is not registered at run time")
@@ -505,6 +512,14 @@ def _find_anchor_path(pattern: ast_.PatternExpr, anchor: ast_.PatternExpr) -> li
     return search(pattern, [])
 
 
+def _is_cb_atom(a: ast_.PatternExpr) -> bool:
+    """True for a ChildrenBlock or `maybe {...}` atom — the two forms that attach
+    to the preceding matcher without advancing the chain cursor (spec §6.5)."""
+    return isinstance(a, ast_.ChildrenBlock) or (
+        isinstance(a, ast_.Maybe) and isinstance(a.inner, ast_.ChildrenBlock)
+    )
+
+
 def _lower_child_chain_from(
     parent: ast_.PatternExpr,
     pattern: ast_.PatternExpr,
@@ -539,13 +554,17 @@ def _lower_child_chain_from(
             tail_slice = parent.tail[anchor_idx + 1:]
         for edge, atom in tail_slice:
             if edge is ast_.Edge.PARENT:
-                if downstream_atoms:
+                if downstream_atoms and not all(_is_cb_atom(a) for a in downstream_atoms):
                     # `op A -> op B <- op C`: the parent edge's left side is a
                     # non-anchor node (B) reached through a preceding child edge.
                     # Its only faithful lowering sets B.parent_matcher = C, which
                     # at runtime tests B.previous_block (== the anchor A) against
                     # opcode C and can never be satisfied. Reject rather than
                     # silently drop the `<- C` segment (spec §6.4).
+                    # Exception (T15): if everything before the parent edge is
+                    # ChildrenBlocks, the chain cursor never left the anchor
+                    # (spec §6.5) — `op A -> {B; C} <- op P` is A with both
+                    # children_matchers and parent_matcher.
                     ctx.bag.error(
                         "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
                         "a parent edge ('<-') following a child edge in the same "
@@ -610,9 +629,19 @@ def _lower_parent_chain_from(
     start_idx = 0
 
     if parent.head is anchor:
-        if not parent.tail or parent.tail[0][0] is not ast_.Edge.PARENT:
+        # Skip anchor-attached ChildrenBlocks — they do not advance the chain
+        # cursor (spec §6.5), so a parent edge after them still belongs to the
+        # anchor: `op A -> {B; C} <- op P` (T15).
+        idx = 0
+        while (
+            idx < len(parent.tail)
+            and parent.tail[idx][0] is ast_.Edge.CHILD
+            and _is_cb_atom(parent.tail[idx][1])
+        ):
+            idx += 1
+        if idx >= len(parent.tail) or parent.tail[idx][0] is not ast_.Edge.PARENT:
             return None
-        start_idx = 0
+        start_idx = idx
     else:
         anchor_idx = next(
             (i for i, (_e, a) in enumerate(parent.tail) if a is anchor),

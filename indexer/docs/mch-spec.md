@@ -311,7 +311,7 @@ Edge chains are left-associative: `A -> B -> C` parses as `(A -> B) -> C` and me
 
 Multi-hop parent chains (`A <- B <- C`) are supported `[M2]`.
 
-Mixing directions in a single chain is constrained. Child-chain collection stops at the first parent edge. A parent edge whose left side is the anchor (`A <- B`, and multi-hop `A <- B <- C`) lowers to the anchor's `parent_matcher` chain. A parent edge whose left side is a **non-anchor** node reached through a preceding child edge (`A -> B <- C`, where `<- C` would attach to `B` — itself a child of `A`) is rejected with `C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED`: its only faithful lowering sets `B.parent_matcher = C`, and at runtime that tests `B.previous_block` (which is the anchor `A`) against opcode `C`, so it can never match. Split the pattern or re-anchor.
+Mixing directions in a single chain is constrained. Child-chain collection stops at the first parent edge. A parent edge whose left side is the anchor (`A <- B`, and multi-hop `A <- B <- C`) lowers to the anchor's `parent_matcher` chain. A parent edge whose left side is a **non-anchor** node reached through a preceding child edge (`A -> B <- C`, where `<- C` would attach to `B` — itself a child of `A`) is rejected with `C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED`: its only faithful lowering sets `B.parent_matcher = C`, and at runtime that tests `B.previous_block` (which is the anchor `A`) against opcode `C`, so it can never match. Split the pattern or re-anchor. Children blocks do not advance the chain cursor (§6.5), so a parent edge preceded only by children blocks (`A -> {B; C} <- D`) still belongs to the anchor and is legal `[M2, T15]`.
 
 ### 6.5 Children sets `[M2 for non-anchor positions]`
 
@@ -322,6 +322,7 @@ Mixing directions in a single chain is constrained. Child-chain collection stops
 - `op A -> {B; C}` — A has `children_matchers=[B, C]`.
 - `op A -> op X -> {B; C}` — X has `children_matchers=[B, C]` (mid-chain CB; X is the left sibling).
 - `op A -> {B; C} -> op D` — A has BOTH `children_matchers=[B, C]` AND `child_matcher=D`. A children block does NOT advance the chain cursor.
+- `op A -> {B; C} <- op D` — A has BOTH `children_matchers=[B, C]` AND `parent_matcher=D` `[M2, T15]`. Because the CB did not advance the cursor, the parent edge still belongs to A; this is NOT the C009 shape (the dedust-swap anchor uses it).
 - `op A -> {B; C} -> {D; E}` — A has `children_matchers=[B, C, D, E]` in source order (back-to-back CBs flatten).
 - `op A <- op B -> {C; D}` — A's parent is B; B has `children_matchers=[C, D]` (CB after a PARENT edge attaches to the parent matcher, NOT the anchor).
 - `op A -> maybe {B; C}` — A has `children_matchers=[B(optional=True), C(optional=True)]`. Each item independently optional.
@@ -365,6 +366,8 @@ A -> ( B | C ) -> D
 ```
 
 **Same-name captures across XOR branches** (e.g. `(op A @x ^ op B @x)`) — only the winning branch's capture binds; losing branches leave `@x` at default (`None` for scalars, `[]` for list bindings under recursion). No diagnostic.
+
+**Engine contract (normative, parity-critical):** `ExclusiveOrMatcher` overrides only `test_self` (sum == 1); `try_build` is inherited from `OrMatcher` (first-match-wins, branch order preserved, `test_self` not consulted). The heuristic `|`→XOR upgrade is behaviorally inert precisely because of this split — walk-level comparison (2026-07-03) confirmed identical try_build sequences under both classes. Any host implementation must replicate exactly this: the exclusivity check lives in `test_self` only, and becomes observable solely where an alternative's `test_self` is consulted directly (e.g. as a recursion step head or nested inside another alternative's probe). A conformance test must pin that placement (roadmap T19).
 
 ### 6.7 Rule references
 
@@ -667,6 +670,7 @@ The compiler validates at load time that every reference resolves; otherwise the
   def pton_self_transfer(block: Block) -> bool: ...
   ```
 - Registration is via the `Registries` object (`register_builder("name")`, `register_predicate("name")` decorators/methods).
+- `[M2, T15]` The runtime Match carries a well-known attribute `_mch_consumed`: the full consumed block set (anchor first, engine traversal order). Builders whose logic scans the consumed set (legacy `build_block(block, other_blocks)` bodies doing `find_messages`/`find_call_contracts`) use it; captures cannot name blocks matched by a recursion's exit branch. Purely additive — builders that ignore it are unaffected.
 - Post-process passes (e.g. `post_process_dedust_liquidity`) stay plain host functions outside the registry system (§5.5).
 - Generated Match dataclasses are emitted by codegen next to the spec compiler's output module; the runtime Match object and the emitted dataclass must agree (single source of truth for field names and types).
 
@@ -722,7 +726,7 @@ Milestone tags mark when a rule becomes active (untagged = M1, active now).
 - A matcher's `build` function is not in the builder registry (`C002_UNKNOWN_BUILDER`).
 - A children block contains an empty item (`P002`).
 - A children block appears without a left sibling (`C008_CHILDREN_BLOCK_BARE`).
-- A parent edge follows a child edge in the same chain, i.e. the parent edge's left side is a non-anchor node reached through a child edge (`A -> B <- C`) (`C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED`).
+- A parent edge follows a chain-advancing (non-children-block) child-edge atom in the same chain, i.e. the parent edge's left side is a non-anchor node reached through a child edge (`A -> B <- C`) (`C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED`). `A -> {B; C} <- D` is legal — children blocks do not advance the cursor (§6.4/§6.5).
 - A cycle exists in rule references with no `maybe`-wrapped termination.
 - Indirect (mutual) recursion (`C005_INDIRECT_RECURSION_UNSUPPORTED`).
 - Unsupported recursion shape (`C001_RECURSION_SHAPE_UNSUPPORTED`).

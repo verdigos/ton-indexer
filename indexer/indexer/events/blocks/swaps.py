@@ -502,186 +502,205 @@ class DedustSwapBlockMatcher(BlockMatcher):
     def test_self(self, block: Block):
         return isinstance(block, CallContractBlock) and block.opcode == DedustSwapExternal.opcode
 
-
-    # Parse SwapStep
-    def _parse_steps(self, slice: Slice):
-        steps = []
-        current_slice = slice.copy()
-        while True:
-            pool = AccountId(current_slice.load_address()).as_str()
-            current_slice.load_bit()
-            current_slice.load_coins()
-            next_step = current_slice.load_maybe_ref()
-            steps.append(pool)
-            if next_step is not None:
-                current_slice = next_step.to_slice()
-            else:
-                return steps
-
-    # Find desired asset swap sequence
-    async def _get_jetton_swap_sequence(self, steps, incoming_asset: Asset) -> list[Asset]:
-        prev_step = incoming_asset
-        seq = [prev_step]
-        for step in steps:
-            pool_info = await context.interface_repository.get().get_dedust_pool(step)
-            for asset in pool_info.assets:
-                if asset['is_ton'] and prev_step.is_ton:
-                    continue
-                if not prev_step.is_ton and asset['address'] == prev_step.jetton_address.as_str():
-                    continue
-                prev_step = Asset(asset['is_ton'], asset['address'] if not asset['is_ton'] else None)
-                seq.append(prev_step)
-                break
-        return seq
-
-
     async def build_block(self, block: Block, other_blocks: list[Block]) -> list[Block]:
-        new_block = JettonSwapBlock({})
-        include = [block]
-        for b in other_blocks:
-            if isinstance(b, SingleLevelWrapper):
-                include.extend(b.children_blocks)
-            else:
-                include.append(b)
-
-        # Fill actual successful swaps
-        messages = find_messages(include, DedustSwapNotification)
-        messages.sort(key=lambda x: x[0].min_lt)
-        peer_swaps = []
-        for _, message in messages:
-            data = {
-                'in': {
-                    'amount': Amount(message.amount_in),
-                    'asset': Asset(is_ton=message.asset_in.is_ton,
-                                   jetton_address=message.asset_in.jetton_address),
-                },
-                'out': {
-                    'amount': Amount(message.amount_out),
-                    'asset': Asset(is_ton=message.asset_out.is_ton,
-                                   jetton_address=message.asset_out.jetton_address),
-                }
-            }
-            peer_swaps.append(data)
-
-        # Gather actual values from incoming transfer
-        sender_jetton_transfer_block = None
-        if (block.previous_block is not None and block.previous_block.btype == 'jetton_transfer'
-                and block.previous_block in other_blocks):
-            sender_jetton_transfer_block = block.previous_block
-        sender = None
-        sender_wallet = None
-        dex_incoming_jetton_wallet = None
-        dex_incoming_wallet = None
-        amount_in = None
-        asset_in = None
-        swap_steps_slice = None
-        if sender_jetton_transfer_block is not None:
-            dex_incoming_jetton_wallet = sender_jetton_transfer_block.data['receiver_wallet']
-            dex_incoming_wallet = sender_jetton_transfer_block.data['receiver']
-            sender_wallet = sender_jetton_transfer_block.data['sender_wallet']
-            sender = sender_jetton_transfer_block.data['sender']
-            asset_in = sender_jetton_transfer_block.data['asset']
-            if int(sender_jetton_transfer_block.data['payload_opcode'], 0) != DedustSwapPayload.opcode:
-                return []
-            amount_in = sender_jetton_transfer_block.data['amount']
-            swap_steps_slice = Slice.one_from_boc(sender_jetton_transfer_block.data['forward_payload'])
-            swap_steps_slice.skip_bits(32) # sum type
-        else:
-            swap_requests = find_call_contracts(other_blocks, DedustSwap.opcode)
-            if len(swap_requests) > 0:
-                sender = AccountId(swap_requests[0].get_message().source)
-                dex_incoming_wallet = AccountId(swap_requests[0].get_message().destination)
-                s = swap_requests[0].get_body()
-                s.load_uint(32 + 64)
-                amount_in = s.load_coins()
-                swap_steps_slice = s
-                asset_in = Asset(is_ton=True)
-
-        # Gather actual values from payout
-        payout_from_pool = find_call_contracts(other_blocks, DedustPayoutFromPool.opcode)
-        assert len(payout_from_pool) == 1, "Expected one payout from pool"
-        receiver = sender
-        receiver_wallet = None
-        dex_outgoing_jetton_wallet = None
-        dex_outgoing_wallet = None
-        actual_amount_out = DedustPayoutFromPool(payout_from_pool[0].get_body()).amount
-        actual_asset_out = None
-        for payout_block in payout_from_pool[0].next_blocks:
-            if payout_block in include:
-                if isinstance(payout_block, JettonTransferBlock):
-                    payout = payout_block
-                    receiver_wallet = payout.data['receiver_wallet']
-                    receiver = payout.data['receiver']
-                    dex_outgoing_wallet = payout.data['sender']
-                    dex_outgoing_jetton_wallet = payout.data['sender_wallet']
-                    actual_asset_out = payout.data['asset']
-                    actual_amount_out = payout.data['amount']
-                elif isinstance(payout_block, CallContractBlock) and payout_block.opcode == DedustPayout.opcode:
-                    payout = payout_block
-                    dex_outgoing_wallet = AccountId(payout.get_message().source)
-                    receiver = AccountId(payout.get_message().destination)
-                    actual_asset_out = Asset(is_ton=True)
-
-        # Find desired out asset
-        steps = self._parse_steps(swap_steps_slice)
-        swap_sequence = await self._get_jetton_swap_sequence(steps, Asset(is_ton=True) if asset_in is None else asset_in)
-        asset_out = swap_sequence[-1]
-
-        # Fill peer swaps with actual values if there is no any successful swap
-        if len(peer_swaps) == 0:
-            peer_swaps.append({
-                'in': {
-                    'amount': Amount(amount_in),
-                    'asset': asset_in
-                },
-                'out': {
-                    'amount': Amount(actual_amount_out),
-                    'asset': actual_asset_out
-                }
-            })
-
-        # Check that every "swap request" has a corresponding swap notification, else mark as failed
-        failed = False
-        for b in [block] + other_blocks:
-            if isinstance(b, CallContractBlock) and b.opcode in (DedustSwapExternal.opcode, DedustSwapPeer.opcode):
-                has_swap_notification = False
-                for n in b.next_blocks:
-                    if n in include and isinstance(n, CallContractBlock) and n.opcode == DedustSwapNotification.opcode:
-                        has_swap_notification = True
-                        break
-                if not has_swap_notification:
-                    failed = True
-                    break
-
-        data = {
-            'dex': 'dedust',
-            'sender': sender,
-            'dex_incoming_transfer': {
-                'asset': peer_swaps[0]['in']['asset'],
-                'amount': peer_swaps[0]['in']['amount'],
-                'source': sender,
-                'source_jetton_wallet': sender_wallet,
-                'destination': dex_incoming_wallet,
-                'destination_jetton_wallet': dex_incoming_jetton_wallet,
-            },
-            'dex_outgoing_transfer': {
-                'asset': peer_swaps[-1]['out']['asset'],
-                'amount': peer_swaps[-1]['out']['amount'],
-                'source': dex_outgoing_wallet,
-                'source_jetton_wallet': dex_outgoing_jetton_wallet,
-                'destination': receiver,
-                'destination_jetton_wallet': receiver_wallet,
-            },
-            'in': peer_swaps[0]['in'],
-            'out': peer_swaps[-1]['out'],
-            'peer_swaps': peer_swaps if len(peer_swaps) > 1 else [],
-            'source_asset': asset_in,
-            'destination_asset': asset_out,
-        }
-        new_block.merge_blocks(include)
-        new_block.data = data
-        new_block.failed = failed
+        new_block = await build_dedust_swap_core(block, other_blocks)
+        if new_block is None:
+            return []
+        new_block.merge_blocks(_unwrap_dedust_include(block, other_blocks))
         return [new_block]
+
+
+def _unwrap_dedust_include(block: Block, other_blocks: list[Block]) -> list[Block]:
+    include = [block]
+    for b in other_blocks:
+        if isinstance(b, SingleLevelWrapper):
+            include.extend(b.children_blocks)
+        else:
+            include.append(b)
+    return include
+
+
+# Parse SwapStep
+def _parse_dedust_steps(slice: Slice):
+    steps = []
+    current_slice = slice.copy()
+    while True:
+        pool = AccountId(current_slice.load_address()).as_str()
+        current_slice.load_bit()
+        current_slice.load_coins()
+        next_step = current_slice.load_maybe_ref()
+        steps.append(pool)
+        if next_step is not None:
+            current_slice = next_step.to_slice()
+        else:
+            return steps
+
+
+# Find desired asset swap sequence
+async def _get_dedust_jetton_swap_sequence(steps, incoming_asset: Asset) -> list[Asset]:
+    prev_step = incoming_asset
+    seq = [prev_step]
+    for step in steps:
+        pool_info = await context.interface_repository.get().get_dedust_pool(step)
+        for asset in pool_info.assets:
+            if asset['is_ton'] and prev_step.is_ton:
+                continue
+            if not prev_step.is_ton and asset['address'] == prev_step.jetton_address.as_str():
+                continue
+            prev_step = Asset(asset['is_ton'], asset['address'] if not asset['is_ton'] else None)
+            seq.append(prev_step)
+            break
+    return seq
+
+
+async def build_dedust_swap_core(block: Block, other_blocks: list[Block]) -> JettonSwapBlock | None:
+    """Shared build core for dedust jetton_swap. Returns None to reject the match.
+
+    Scans the full consumed set (`other_blocks`), so both callers must provide
+    it: the legacy matcher passes the engine's other_blocks; the mch builder
+    passes the consumed set exposed on the Match. Does NOT merge consumed
+    blocks — the caller is responsible for merge_blocks.
+    """
+    new_block = JettonSwapBlock({})
+    include = _unwrap_dedust_include(block, other_blocks)
+
+    # Fill actual successful swaps
+    messages = find_messages(include, DedustSwapNotification)
+    messages.sort(key=lambda x: x[0].min_lt)
+    peer_swaps = []
+    for _, message in messages:
+        data = {
+            'in': {
+                'amount': Amount(message.amount_in),
+                'asset': Asset(is_ton=message.asset_in.is_ton,
+                               jetton_address=message.asset_in.jetton_address),
+            },
+            'out': {
+                'amount': Amount(message.amount_out),
+                'asset': Asset(is_ton=message.asset_out.is_ton,
+                               jetton_address=message.asset_out.jetton_address),
+            }
+        }
+        peer_swaps.append(data)
+
+    # Gather actual values from incoming transfer
+    sender_jetton_transfer_block = None
+    if (block.previous_block is not None and block.previous_block.btype == 'jetton_transfer'
+            and block.previous_block in other_blocks):
+        sender_jetton_transfer_block = block.previous_block
+    sender = None
+    sender_wallet = None
+    dex_incoming_jetton_wallet = None
+    dex_incoming_wallet = None
+    amount_in = None
+    asset_in = None
+    swap_steps_slice = None
+    if sender_jetton_transfer_block is not None:
+        dex_incoming_jetton_wallet = sender_jetton_transfer_block.data['receiver_wallet']
+        dex_incoming_wallet = sender_jetton_transfer_block.data['receiver']
+        sender_wallet = sender_jetton_transfer_block.data['sender_wallet']
+        sender = sender_jetton_transfer_block.data['sender']
+        asset_in = sender_jetton_transfer_block.data['asset']
+        if int(sender_jetton_transfer_block.data['payload_opcode'], 0) != DedustSwapPayload.opcode:
+            return None
+        amount_in = sender_jetton_transfer_block.data['amount']
+        swap_steps_slice = Slice.one_from_boc(sender_jetton_transfer_block.data['forward_payload'])
+        swap_steps_slice.skip_bits(32) # sum type
+    else:
+        swap_requests = find_call_contracts(other_blocks, DedustSwap.opcode)
+        if len(swap_requests) > 0:
+            sender = AccountId(swap_requests[0].get_message().source)
+            dex_incoming_wallet = AccountId(swap_requests[0].get_message().destination)
+            s = swap_requests[0].get_body()
+            s.load_uint(32 + 64)
+            amount_in = s.load_coins()
+            swap_steps_slice = s
+            asset_in = Asset(is_ton=True)
+
+    # Gather actual values from payout
+    payout_from_pool = find_call_contracts(other_blocks, DedustPayoutFromPool.opcode)
+    assert len(payout_from_pool) == 1, "Expected one payout from pool"
+    receiver = sender
+    receiver_wallet = None
+    dex_outgoing_jetton_wallet = None
+    dex_outgoing_wallet = None
+    actual_amount_out = DedustPayoutFromPool(payout_from_pool[0].get_body()).amount
+    actual_asset_out = None
+    for payout_block in payout_from_pool[0].next_blocks:
+        if payout_block in include:
+            if isinstance(payout_block, JettonTransferBlock):
+                payout = payout_block
+                receiver_wallet = payout.data['receiver_wallet']
+                receiver = payout.data['receiver']
+                dex_outgoing_wallet = payout.data['sender']
+                dex_outgoing_jetton_wallet = payout.data['sender_wallet']
+                actual_asset_out = payout.data['asset']
+                actual_amount_out = payout.data['amount']
+            elif isinstance(payout_block, CallContractBlock) and payout_block.opcode == DedustPayout.opcode:
+                payout = payout_block
+                dex_outgoing_wallet = AccountId(payout.get_message().source)
+                receiver = AccountId(payout.get_message().destination)
+                actual_asset_out = Asset(is_ton=True)
+
+    # Find desired out asset
+    steps = _parse_dedust_steps(swap_steps_slice)
+    swap_sequence = await _get_dedust_jetton_swap_sequence(steps, Asset(is_ton=True) if asset_in is None else asset_in)
+    asset_out = swap_sequence[-1]
+
+    # Fill peer swaps with actual values if there is no any successful swap
+    if len(peer_swaps) == 0:
+        peer_swaps.append({
+            'in': {
+                'amount': Amount(amount_in),
+                'asset': asset_in
+            },
+            'out': {
+                'amount': Amount(actual_amount_out),
+                'asset': actual_asset_out
+            }
+        })
+
+    # Check that every "swap request" has a corresponding swap notification, else mark as failed
+    failed = False
+    for b in [block] + other_blocks:
+        if isinstance(b, CallContractBlock) and b.opcode in (DedustSwapExternal.opcode, DedustSwapPeer.opcode):
+            has_swap_notification = False
+            for n in b.next_blocks:
+                if n in include and isinstance(n, CallContractBlock) and n.opcode == DedustSwapNotification.opcode:
+                    has_swap_notification = True
+                    break
+            if not has_swap_notification:
+                failed = True
+                break
+
+    data = {
+        'dex': 'dedust',
+        'sender': sender,
+        'dex_incoming_transfer': {
+            'asset': peer_swaps[0]['in']['asset'],
+            'amount': peer_swaps[0]['in']['amount'],
+            'source': sender,
+            'source_jetton_wallet': sender_wallet,
+            'destination': dex_incoming_wallet,
+            'destination_jetton_wallet': dex_incoming_jetton_wallet,
+        },
+        'dex_outgoing_transfer': {
+            'asset': peer_swaps[-1]['out']['asset'],
+            'amount': peer_swaps[-1]['out']['amount'],
+            'source': dex_outgoing_wallet,
+            'source_jetton_wallet': dex_outgoing_jetton_wallet,
+            'destination': receiver,
+            'destination_jetton_wallet': receiver_wallet,
+        },
+        'in': peer_swaps[0]['in'],
+        'out': peer_swaps[-1]['out'],
+        'peer_swaps': peer_swaps if len(peer_swaps) > 1 else [],
+        'source_asset': asset_in,
+        'destination_asset': asset_out,
+    }
+    new_block.data = data
+    new_block.failed = failed
+    return new_block
 
 
 class ToncoSwapBlockMatcher(BlockMatcher):
@@ -1228,6 +1247,157 @@ class ToncoSwapBlockMatcher(BlockMatcher):
         return [new_block]
 
 
+async def build_coffee_swap_core(
+    block: Block,
+    other_blocks: list[Block],
+    in_transfer_block: Block | None,
+    payout_block: Block | None,
+    out_transfer_block: Block | None,
+) -> JettonSwapBlock | None:
+    """Shared build core for coffee jetton_swap. Returns None to reject the
+    match. `block` is the anchor CoffeeSwapInternal; the three named blocks are
+    the incoming transfer, the CoffeePayoutInternal and the outgoing transfer
+    (legacy callers extract them via labels, the mch builder derives them from
+    the consumed set). Does NOT merge consumed blocks — the caller is
+    responsible for merge_blocks."""
+    if not all((in_transfer_block, payout_block, out_transfer_block)):
+        return None
+
+    # 2. find all swap steps and their corresponding success events
+    swap_internal_blocks = find_call_contracts(
+        other_blocks, CoffeeSwapInternal.opcode
+    )
+    if isinstance(block, CallContractBlock):
+        swap_internal_blocks.append(block)
+
+    ok = True
+    peer_swaps = []
+
+    # sort swaps by lt to process them in order
+    sorted_swap_blocks = sorted(set(swap_internal_blocks), key=lambda b: b.min_lt)
+
+    for swap_block in sorted_swap_blocks:
+        # each swap_internal MUST be followed by a success_event
+        event_block = find_call_contract(swap_block.next_blocks, CoffeeSwapSuccessfulEvent.opcode)
+
+        if not event_block:
+            ok = False
+            continue  # if one hop fails, the whole swap is considered failed
+
+        event_msg = CoffeeSwapSuccessfulEvent(event_block.get_body())
+
+        peer_swaps.append(
+            {
+                "in": {
+                    "asset": event_msg.input,
+                    "amount": Amount(event_msg.input_amount or 0),
+                },
+                "out": {
+                    "asset": None,  # we will determine this from the next hop or final payout
+                    "amount": Amount(event_msg.output_amount or 0),
+                },
+            }
+        )
+
+    if not peer_swaps:
+        return None
+
+    # 3. parse incoming transfer
+    in_transfer_data = {}
+    sender = None
+    if isinstance(in_transfer_block, JettonTransferBlock):
+        sender = in_transfer_block.data["sender"]
+        in_transfer_data = {
+            "asset": in_transfer_block.data["asset"],
+            "amount": in_transfer_block.data["amount"],
+            "source": in_transfer_block.data["sender"],
+            "source_jetton_wallet": in_transfer_block.data["sender_wallet"],
+            "destination": in_transfer_block.data["receiver"],
+            "destination_jetton_wallet": in_transfer_block.data[
+                "receiver_wallet"
+            ],
+        }
+    elif (
+        isinstance(in_transfer_block, CallContractBlock)
+        and in_transfer_block.opcode == CoffeeSwapNative.opcode
+    ):
+        msg = CoffeeSwapNative(in_transfer_block.get_body())
+        sender = AccountId(in_transfer_block.get_message().source)
+        in_transfer_data = {
+            "asset": Asset(is_ton=True),
+            "amount": Amount(msg.amount or 0),
+            "source": sender,
+            "source_jetton_wallet": None,
+            "destination": AccountId(in_transfer_block.get_message().destination),
+            "destination_jetton_wallet": None,
+        }
+
+    # 4. parse outgoing transfer
+    out_transfer_data = {}
+    if isinstance(out_transfer_block, JettonTransferBlock):
+        out_transfer_data = {
+            "asset": out_transfer_block.data["asset"],
+            "amount": out_transfer_block.data["amount"],
+            "source": out_transfer_block.data["sender"],
+            "source_jetton_wallet": out_transfer_block.data["sender_wallet"],
+            "destination": out_transfer_block.data["receiver"],
+            "destination_jetton_wallet": out_transfer_block.data.get(
+                "receiver_wallet"
+            ),
+        }
+    elif (
+        isinstance(out_transfer_block, CallContractBlock)
+        and out_transfer_block.opcode == CoffeePayout.opcode
+        and payout_block
+    ):
+        payout_internal_msg = CoffeePayoutInternal(payout_block.get_body())
+        out_transfer_data = {
+            "asset": Asset(is_ton=True),
+            "amount": Amount(payout_internal_msg.amount or 0),
+            "source": AccountId(payout_block.get_message().source),
+            "source_jetton_wallet": None,
+            "destination": AccountId(payout_internal_msg.recipient),
+            "destination_jetton_wallet": None,
+        }
+    elif (
+        isinstance(out_transfer_block, CallContractBlock)
+        and out_transfer_block.opcode == CoffeeNotification.opcode
+    ):
+        message = out_transfer_block.get_message()
+        out_transfer_data = {
+            "asset": Asset(is_ton=True),
+            "amount": Amount(message.value or 0),
+            "source": AccountId(message.source),
+            "source_jetton_wallet": None,
+            "destination": AccountId(message.destination),
+            "destination_jetton_wallet": None,
+        }
+
+    # fill in the missing 'out' asset info for peer_swaps
+    for i in range(len(peer_swaps) - 1):
+        peer_swaps[i]["out"]["asset"] = peer_swaps[i + 1]["in"]["asset"]
+
+    if out_transfer_data:
+        peer_swaps[-1]["out"]["asset"] = out_transfer_data.get("asset")
+
+    # 5. create the final swap block
+    final_data = {
+        "dex": "coffee",
+        "sender": sender,
+        "source_asset": in_transfer_data.get("asset"),
+        "destination_asset": out_transfer_data.get("asset"),
+        "dex_incoming_transfer": in_transfer_data,
+        "dex_outgoing_transfer": out_transfer_data,
+        "peer_swaps": peer_swaps if len(peer_swaps) > 1 else [],
+        "referral_amount": None,
+        "referral_address": None,
+    }
+
+    new_block = JettonSwapBlock(final_data)
+    new_block.failed = not ok
+    return new_block
+
+
 class CoffeeSwapBlockMatcher(BlockMatcher):
     def __init__(self):
         # 1. incoming transfer: either a jetton transfer or a native swap call
@@ -1307,141 +1477,10 @@ class CoffeeSwapBlockMatcher(BlockMatcher):
         payout_block = get_labeled("payout", other_blocks)
         out_transfer_block = get_labeled("out_transfer", other_blocks)
 
-        if not all((in_transfer_block, payout_block, out_transfer_block)):
-            return []
-
-        # 2. find all swap steps and their corresponding success events
-        swap_internal_blocks = find_call_contracts(
-            other_blocks, CoffeeSwapInternal.opcode
+        new_block = await build_coffee_swap_core(
+            block, other_blocks, in_transfer_block, payout_block, out_transfer_block
         )
-        if isinstance(block, CallContractBlock):
-            swap_internal_blocks.append(block)
-
-        ok = True
-        peer_swaps = []
-
-        # sort swaps by lt to process them in order
-        sorted_swap_blocks = sorted(set(swap_internal_blocks), key=lambda b: b.min_lt)
-
-        for swap_block in sorted_swap_blocks:
-            # each swap_internal MUST be followed by a success_event
-            event_block = find_call_contract(swap_block.next_blocks, CoffeeSwapSuccessfulEvent.opcode)
-
-            if not event_block:
-                ok = False
-                continue  # if one hop fails, the whole swap is considered failed
-
-            event_msg = CoffeeSwapSuccessfulEvent(event_block.get_body())
-
-            peer_swaps.append(
-                {
-                    "in": {
-                        "asset": event_msg.input,
-                        "amount": Amount(event_msg.input_amount or 0),
-                    },
-                    "out": {
-                        "asset": None,  # we will determine this from the next hop or final payout
-                        "amount": Amount(event_msg.output_amount or 0),
-                    },
-                }
-            )
-
-        if not peer_swaps:
+        if new_block is None:
             return []
-
-        # 3. parse incoming transfer
-        in_transfer_data = {}
-        sender = None
-        if isinstance(in_transfer_block, JettonTransferBlock):
-            sender = in_transfer_block.data["sender"]
-            in_transfer_data = {
-                "asset": in_transfer_block.data["asset"],
-                "amount": in_transfer_block.data["amount"],
-                "source": in_transfer_block.data["sender"],
-                "source_jetton_wallet": in_transfer_block.data["sender_wallet"],
-                "destination": in_transfer_block.data["receiver"],
-                "destination_jetton_wallet": in_transfer_block.data[
-                    "receiver_wallet"
-                ],
-            }
-        elif (
-            isinstance(in_transfer_block, CallContractBlock)
-            and in_transfer_block.opcode == CoffeeSwapNative.opcode
-        ):
-            msg = CoffeeSwapNative(in_transfer_block.get_body())
-            sender = AccountId(in_transfer_block.get_message().source)
-            in_transfer_data = {
-                "asset": Asset(is_ton=True),
-                "amount": Amount(msg.amount or 0),
-                "source": sender,
-                "source_jetton_wallet": None,
-                "destination": AccountId(in_transfer_block.get_message().destination),
-                "destination_jetton_wallet": None,
-            }
-
-        # 4. parse outgoing transfer
-        out_transfer_data = {}
-        if isinstance(out_transfer_block, JettonTransferBlock):
-            out_transfer_data = {
-                "asset": out_transfer_block.data["asset"],
-                "amount": out_transfer_block.data["amount"],
-                "source": out_transfer_block.data["sender"],
-                "source_jetton_wallet": out_transfer_block.data["sender_wallet"],
-                "destination": out_transfer_block.data["receiver"],
-                "destination_jetton_wallet": out_transfer_block.data.get(
-                    "receiver_wallet"
-                ),
-            }
-        elif (
-            isinstance(out_transfer_block, CallContractBlock)
-            and out_transfer_block.opcode == CoffeePayout.opcode
-            and payout_block
-        ):
-            payout_internal_msg = CoffeePayoutInternal(payout_block.get_body())
-            out_transfer_data = {
-                "asset": Asset(is_ton=True),
-                "amount": Amount(payout_internal_msg.amount or 0),
-                "source": AccountId(payout_block.get_message().source),
-                "source_jetton_wallet": None,
-                "destination": AccountId(payout_internal_msg.recipient),
-                "destination_jetton_wallet": None,
-            }
-        elif (
-            isinstance(out_transfer_block, CallContractBlock)
-            and out_transfer_block.opcode == CoffeeNotification.opcode
-        ):
-            message = out_transfer_block.get_message()
-            out_transfer_data = {
-                "asset": Asset(is_ton=True),
-                "amount": Amount(message.value or 0),
-                "source": AccountId(message.source),
-                "source_jetton_wallet": None,
-                "destination": AccountId(message.destination),
-                "destination_jetton_wallet": None,
-            }
-
-        # fill in the missing 'out' asset info for peer_swaps
-        for i in range(len(peer_swaps) - 1):
-            peer_swaps[i]["out"]["asset"] = peer_swaps[i + 1]["in"]["asset"]
-
-        if out_transfer_data:
-            peer_swaps[-1]["out"]["asset"] = out_transfer_data.get("asset")
-
-        # 5. create the final swap block
-        final_data = {
-            "dex": "coffee",
-            "sender": sender,
-            "source_asset": in_transfer_data.get("asset"),
-            "destination_asset": out_transfer_data.get("asset"),
-            "dex_incoming_transfer": in_transfer_data,
-            "dex_outgoing_transfer": out_transfer_data,
-            "peer_swaps": peer_swaps if len(peer_swaps) > 1 else [],
-            "referral_amount": None,
-            "referral_address": None,
-        }
-
-        new_block = JettonSwapBlock(final_data)
         new_block.merge_blocks([block] + other_blocks)
-        new_block.failed = not ok
-
         return [new_block]

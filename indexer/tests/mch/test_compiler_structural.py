@@ -717,3 +717,32 @@ def test_t12_shape6_child_then_parent_chain_rejected():
         compile_text(src, "test.mch", reg)
     codes = [d.code for d in exc.value.bag.items if d.severity is Severity.ERROR]
     assert "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED" in codes, codes
+
+
+def test_t15_shape7_children_block_then_parent_edge():
+    """`op A -> {B; maybe C} <- op P` — a ChildrenBlock does not advance the
+    chain cursor (spec §6.5), so the parent edge after it still belongs to the
+    anchor: A gets BOTH children_matchers=[B, C(optional)] AND parent_matcher=P.
+    This is the dedust-swap shape (T15); previously mis-rejected with C009."""
+    m = _compile_one(
+        """
+        opcode A = 0x1
+        opcode B = 0x2
+        opcode C = 0x3
+        opcode P = 0x4
+        matcher m {
+            produces MB
+            build    build_m
+            entry    @a
+            op A @a -> {op B @b; maybe op C @c} <- op P @p
+        }
+        """,
+        A=0x1, B=0x2, C=0x3, P=0x4,
+    )
+    assert m.child_matcher is None
+    assert m.children_matchers is not None
+    assert [cm.opcode for cm in m.children_matchers] == [0x2, 0x3]
+    assert [cm.optional for cm in m.children_matchers] == [False, True]
+    p = m.parent_matcher
+    assert isinstance(p, ContractMatcher) and p.opcode == 0x4
+    assert p.children_matchers is None, "parent must not inherit the anchor's CB"

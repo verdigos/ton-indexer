@@ -1669,3 +1669,81 @@ async def test_same_name_capture_across_xor_binds_winning_branch(build_block_tre
     assert await matcher.try_build(tree_b) is not None
     assert captured[0].r is tree_b
     assert captured[0].x is tree_b.next_blocks[0]
+
+
+# ==========================================================================
+# T15 — Match._mch_consumed (well-known consumed-set attribute) and the
+# children-set-then-parent-edge shape
+# ==========================================================================
+
+@pytest.mark.asyncio
+async def test_match_exposes_consumed_set(build_block_tree):
+    """The synthesized build_block sets `m._mch_consumed` = [anchor] +
+    other_blocks. Builders whose legacy counterparts scan other_blocks freely
+    (dedust swap) reconstruct their input from it; captures alone cannot name
+    blocks matched by a recursion's exit branch."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+
+    matcher consumed_attr {
+        produces MB
+        build    build_consumed_attr
+        entry    @a
+
+        op A @a -> op B @b
+    }
+    """
+    reg, captured = _registries_with({"A": 0x1, "B": 0x2}, "build_consumed_attr", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    tree = build_block_tree(BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x2)]))
+    assert await matcher.try_build(tree) is not None
+    m = captured[0]
+    assert m._mch_consumed[0] is tree, "anchor must be first"
+    assert set(m._mch_consumed) == {tree, tree.next_blocks[0]}
+
+
+@pytest.mark.asyncio
+async def test_children_block_then_parent_edge_matches_and_consumes(build_block_tree):
+    """Shape 7 (T15): `op A -> {B; maybe C} <- op P` — children set on the
+    anchor AND a parent matcher, both matched and consumed."""
+    src = """
+    opcode A = 0x1
+    opcode B = 0x2
+    opcode C = 0x3
+    opcode P = 0x4
+
+    matcher cb_then_parent {
+        produces MB
+        build    build_cb_then_parent
+        entry    @a
+
+        op A @a -> {op B @b; maybe op C @c} <- op P @p
+    }
+    """
+    reg, captured = _registries_with(
+        {"A": 0x1, "B": 0x2, "C": 0x3, "P": 0x4}, "build_cb_then_parent", "MB"
+    )
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # P -> A -> {B, C}: anchor is A (mid-tree); its parent P must match too.
+    parent = build_block_tree(BlockSpec(opcode=0x4, children=[
+        BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x2), BlockSpec(opcode=0x3)]),
+    ]))
+    anchor = parent.next_blocks[0]
+    assert await matcher.try_build(anchor) is not None
+    m = captured[0]
+    assert m.a is anchor
+    assert m.b is anchor.next_blocks[0]
+    assert m.c is anchor.next_blocks[1]
+    assert m.p is parent
+    assert set(m._mch_consumed) == {anchor, anchor.next_blocks[0], anchor.next_blocks[1], parent}
+
+    # Without the parent, the match must fail.
+    captured.clear()
+    orphan = build_block_tree(BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x2)]))
+    assert not await matcher.try_build(orphan)
+    assert len(captured) == 0
