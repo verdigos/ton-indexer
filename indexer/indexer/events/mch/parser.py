@@ -7,6 +7,34 @@ from indexer.events.mch.diagnostics import CompileError, DiagnosticBag, Span
 from indexer.events.mch.tokens import Token, TokenKind
 
 
+# The M4 build/expression keywords, accepted as plain identifiers in name
+# positions (capture names, let/parse targets). Spec §3.5 reserves these words,
+# but pre-M4 specs use some as capture names (e.g. `@out` in coffee_swap.mch),
+# so name positions stay permissive. Structural keywords (op/btype/maybe/…) are
+# deliberately NOT softened.
+_SOFT_KEYWORDS: frozenset[TokenKind] = frozenset({
+    TokenKind.KW_PARSE, TokenKind.KW_AS, TokenKind.KW_LET, TokenKind.KW_OUT,
+    TokenKind.KW_REJECT, TokenKind.KW_FAILED, TokenKind.KW_BROKEN,
+    TokenKind.KW_WHEN, TokenKind.KW_LOOKUP, TokenKind.KW_NOT,
+    TokenKind.KW_AND, TokenKind.KW_OR, TokenKind.KW_NULL,
+})
+
+_CMP_OPS: dict[TokenKind, str] = {
+    TokenKind.EQEQ: "==",
+    TokenKind.NEQ: "!=",
+    TokenKind.LT: "<",
+    TokenKind.LE: "<=",
+    TokenKind.GT: ">",
+    TokenKind.GE: ">=",
+}
+
+# Build statements start with one of these keywords (§9).
+_BUILD_STMT_HEADS: frozenset[TokenKind] = frozenset({
+    TokenKind.KW_PARSE, TokenKind.KW_LET, TokenKind.KW_REJECT,
+    TokenKind.KW_FAILED, TokenKind.KW_BROKEN, TokenKind.KW_OUT,
+})
+
+
 class _ParserState:
     def __init__(self, tokens: list[Token], path: str, bag: DiagnosticBag):
         # Drop NEWLINE tokens except where they matter (children blocks).
@@ -46,6 +74,19 @@ class _ParserState:
     def skip_newlines(self) -> None:
         while self.at(TokenKind.NEWLINE):
             self.i += 1
+
+    def eat_name(self) -> Token:
+        """Eat an identifier, accepting M4 soft keywords as plain names."""
+        t = self.peek()
+        if t.kind is TokenKind.IDENT or t.kind in _SOFT_KEYWORDS:
+            self.i += 1
+            return t
+        self.bag.error(
+            "P001_UNEXPECTED_TOKEN",
+            f"expected identifier, found {t.kind.name} ({t.text!r})",
+            t.span,
+        )
+        raise CompileError(self.bag)
 
 
 def parse(tokens: Iterable[Token], path: str) -> ast_.File:
@@ -158,7 +199,7 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
         elif t.kind is TokenKind.KW_ENTRY:
             s.i += 1
             s.eat(TokenKind.AT)
-            entry = s.eat(TokenKind.IDENT).text
+            entry = s.eat_name().text
         elif t.kind is TokenKind.KW_INCLUDE_EXCESS:
             s.i += 1
             include_excess = _parse_bool_literal(s)
@@ -170,6 +211,7 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
         s.skip_newlines()
 
     pattern = _parse_pattern_expr(s)
+    build_stmts = _parse_build_stmts(s)
     s.skip_newlines()
     end = s.eat(TokenKind.RBRACE).span
 
@@ -190,6 +232,7 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
         include_bounces=include_bounces,
         pattern=pattern,
         span=_join(start, end),
+        build_stmts=build_stmts,
     )
 
 
@@ -426,22 +469,33 @@ def _parse_node(s: _ParserState) -> ast_.Node:
     capture: str | None = None
     if s.at(TokenKind.AT):
         s.i += 1
-        cap_tok = s.eat(TokenKind.IDENT)
+        cap_tok = s.eat_name()
         capture = cap_tok.text
         head_start_span = _join(head_start_span, cap_tok.span)
 
     where_predicate: str | None = None
+    where_expr: ast_.Expr | None = None
     if s.at(TokenKind.KW_WHERE):
         s.i += 1
-        pred_tok = s.eat(TokenKind.IDENT)
-        where_predicate = pred_tok.text
-        head_start_span = _join(head_start_span, pred_tok.span)
+        if s.at(TokenKind.LPAREN):
+            # Inline `where (expr)` form (M4).
+            s.i += 1
+            s.skip_newlines()
+            where_expr = _parse_expr(s)
+            s.skip_newlines()
+            rp = s.eat(TokenKind.RPAREN)
+            head_start_span = _join(head_start_span, rp.span)
+        else:
+            pred_tok = s.eat(TokenKind.IDENT)
+            where_predicate = pred_tok.text
+            head_start_span = _join(head_start_span, pred_tok.span)
 
     return ast_.Node(
         head=head,
         capture=capture,
         where_predicate=where_predicate,
         span=head_start_span,
+        where_expr=where_expr,
     )
 
 
@@ -464,6 +518,248 @@ def _parse_children_block(s: _ParserState) -> ast_.ChildrenBlock:
         s.bag.error("P002_EMPTY_CHILDREN_ITEM", "children block must contain at least one item", _join(start, end))
         raise CompileError(s.bag)
     return ast_.ChildrenBlock(items=tuple(items), span=_join(start, end))
+
+
+# ==========================================================================
+# Build statements (M4 §9)
+# ==========================================================================
+
+
+def _parse_build_stmts(s: _ParserState) -> tuple[ast_.BuildStmt, ...]:
+    """Zero or more build statements after the pattern, newline/`;`-separated."""
+    stmts: list[ast_.BuildStmt] = []
+    while True:
+        while s.at(TokenKind.NEWLINE) or s.at(TokenKind.SEMI):
+            s.i += 1
+        t = s.peek()
+        if t.kind not in _BUILD_STMT_HEADS:
+            break
+        if t.kind is TokenKind.KW_PARSE:
+            stmts.append(_parse_parse_stmt(s))
+        elif t.kind is TokenKind.KW_LET:
+            stmts.append(_parse_let_stmt(s))
+        elif t.kind is TokenKind.KW_REJECT:
+            stmts.append(_parse_guard_stmt(s, TokenKind.KW_REJECT, ast_.RejectStmt))
+        elif t.kind is TokenKind.KW_FAILED:
+            stmts.append(_parse_guard_stmt(s, TokenKind.KW_FAILED, ast_.FailedStmt))
+        elif t.kind is TokenKind.KW_BROKEN:
+            stmts.append(_parse_guard_stmt(s, TokenKind.KW_BROKEN, ast_.BrokenStmt))
+        elif t.kind is TokenKind.KW_OUT:
+            stmts.append(_parse_out_stmt(s))
+    return tuple(stmts)
+
+
+def _parse_parse_stmt(s: _ParserState) -> ast_.ParseStmt:
+    start = s.eat(TokenKind.KW_PARSE).span
+    cap = s.eat_name()
+    s.eat(TokenKind.KW_AS)
+    msg = s.eat(TokenKind.IDENT)
+    return ast_.ParseStmt(capture=cap.text, msg_type=msg.text, span=_join(start, msg.span))
+
+
+def _parse_let_stmt(s: _ParserState) -> ast_.LetStmt:
+    start = s.eat(TokenKind.KW_LET).span
+    name = s.eat_name()
+    s.eat(TokenKind.EQ)
+    value = _parse_expr(s)
+    return ast_.LetStmt(name=name.text, value=value, span=_join(start, value.span))
+
+
+def _parse_guard_stmt(s: _ParserState, kw: TokenKind, cls) -> ast_.BuildStmt:
+    """`reject|failed|broken when expr`."""
+    start = s.eat(kw).span
+    s.eat(TokenKind.KW_WHEN)
+    cond = _parse_expr(s)
+    return cls(condition=cond, span=_join(start, cond.span))
+
+
+def _parse_out_stmt(s: _ParserState) -> ast_.OutStmt:
+    start = s.eat(TokenKind.KW_OUT).span
+    s.eat(TokenKind.LBRACE)
+    fields: list[ast_.OutField] = []
+    while True:
+        # Field separators: newline, ';' or ',' (children-block convention + `,`).
+        while s.at(TokenKind.NEWLINE) or s.at(TokenKind.SEMI) or s.at(TokenKind.COMMA):
+            s.i += 1
+        if s.at(TokenKind.RBRACE):
+            break
+        if s.at(TokenKind.EOF):
+            s.bag.error("P001_UNEXPECTED_TOKEN", "unterminated out block", start)
+            raise CompileError(s.bag)
+        fname = s.eat_name()
+        s.eat(TokenKind.COLON)
+        s.skip_newlines()
+        value = _parse_expr(s)
+        fields.append(ast_.OutField(name=fname.text, value=value, span=_join(fname.span, value.span)))
+    end = s.eat(TokenKind.RBRACE).span
+    if not fields:
+        s.bag.error("P002_EMPTY_CHILDREN_ITEM", "out block must contain at least one field", _join(start, end))
+        raise CompileError(s.bag)
+    return ast_.OutStmt(fields=tuple(fields), span=_join(start, end))
+
+
+# ==========================================================================
+# Expression language (M4 §9.6)
+# ==========================================================================
+#
+# Precedence, low -> high:
+#   or -> and -> not(prefix) -> comparison(non-assoc) -> ??(coalesce)
+#      -> unary '-' -> postfix(.field / call) -> primary
+
+
+def _parse_expr(s: _ParserState) -> ast_.Expr:
+    return _parse_or(s)
+
+
+def _parse_or(s: _ParserState) -> ast_.Expr:
+    left = _parse_and(s)
+    while s.at(TokenKind.KW_OR):
+        s.i += 1
+        right = _parse_and(s)
+        left = ast_.BinaryOp(op="or", left=left, right=right, span=_join(left.span, right.span))
+    return left
+
+
+def _parse_and(s: _ParserState) -> ast_.Expr:
+    left = _parse_not(s)
+    while s.at(TokenKind.KW_AND):
+        s.i += 1
+        right = _parse_not(s)
+        left = ast_.BinaryOp(op="and", left=left, right=right, span=_join(left.span, right.span))
+    return left
+
+
+def _parse_not(s: _ParserState) -> ast_.Expr:
+    if s.at(TokenKind.KW_NOT):
+        tok = s.peek()
+        s.i += 1
+        operand = _parse_not(s)
+        return ast_.UnaryOp(op="not", operand=operand, span=_join(tok.span, operand.span))
+    return _parse_cmp(s)
+
+
+def _parse_cmp(s: _ParserState) -> ast_.Expr:
+    left = _parse_coalesce(s)
+    op = _CMP_OPS.get(s.peek().kind)
+    if op is not None:
+        s.i += 1
+        right = _parse_coalesce(s)  # non-associative: exactly one comparison
+        return ast_.BinaryOp(op=op, left=left, right=right, span=_join(left.span, right.span))
+    return left
+
+
+def _parse_coalesce(s: _ParserState) -> ast_.Expr:
+    left = _parse_unary(s)
+    while s.at(TokenKind.COALESCE):
+        s.i += 1
+        right = _parse_unary(s)
+        left = ast_.BinaryOp(op="??", left=left, right=right, span=_join(left.span, right.span))
+    return left
+
+
+def _parse_unary(s: _ParserState) -> ast_.Expr:
+    if s.at(TokenKind.MINUS):
+        tok = s.peek()
+        s.i += 1
+        operand = _parse_unary(s)
+        return ast_.UnaryOp(op="-", operand=operand, span=_join(tok.span, operand.span))
+    return _parse_postfix(s)
+
+
+def _parse_postfix(s: _ParserState) -> ast_.Expr:
+    e = _parse_primary(s)
+    while True:
+        if s.at(TokenKind.DOT):
+            s.i += 1
+            name = s.eat_name()
+            e = ast_.FieldAccess(target=e, field=name.text, span=_join(e.span, name.span))
+        elif s.at(TokenKind.LPAREN):
+            s.i += 1
+            args, end = _parse_arg_list(s)
+            e = ast_.Call(callee=e, args=args, span=_join(e.span, end))
+        else:
+            break
+    return e
+
+
+def _parse_arg_list(s: _ParserState) -> tuple[tuple[ast_.Expr, ...], Span]:
+    """Parse `expr (, expr)*` up to and including the closing ')'."""
+    s.skip_newlines()
+    args: list[ast_.Expr] = []
+    if not s.at(TokenKind.RPAREN):
+        args.append(_parse_expr(s))
+        while s.at(TokenKind.COMMA):
+            s.i += 1
+            s.skip_newlines()
+            args.append(_parse_expr(s))
+    s.skip_newlines()
+    end = s.eat(TokenKind.RPAREN).span
+    return tuple(args), end
+
+
+def _parse_primary(s: _ParserState) -> ast_.Expr:
+    t = s.peek()
+    if t.kind is TokenKind.HEX:
+        s.i += 1
+        return ast_.IntLit(value=int(t.text, 16), span=t.span)
+    if t.kind is TokenKind.DEC:
+        s.i += 1
+        return ast_.IntLit(value=int(t.text, 10), span=t.span)
+    if t.kind is TokenKind.STRING:
+        s.i += 1
+        return ast_.StrLit(value=_decode_string(t.text), span=t.span)
+    if t.kind is TokenKind.KW_TRUE:
+        s.i += 1
+        return ast_.BoolLit(value=True, span=t.span)
+    if t.kind is TokenKind.KW_FALSE:
+        s.i += 1
+        return ast_.BoolLit(value=False, span=t.span)
+    if t.kind is TokenKind.KW_NULL:
+        s.i += 1
+        return ast_.NullLit(span=t.span)
+    if t.kind is TokenKind.KW_LOOKUP:
+        return _parse_lookup(s)
+    if t.kind is TokenKind.DOT:
+        # Leading-dot field access: current block's data field (inline where).
+        s.i += 1
+        name = s.eat_name()
+        return ast_.FieldRef(field=name.text, span=_join(t.span, name.span))
+    if t.kind is TokenKind.LPAREN:
+        s.i += 1
+        s.skip_newlines()
+        inner = _parse_expr(s)
+        s.skip_newlines()
+        s.eat(TokenKind.RPAREN)
+        return inner
+    if t.kind is TokenKind.IDENT:
+        s.i += 1
+        return ast_.NameRef(name=t.text, span=t.span)
+    s.bag.error("P001_UNEXPECTED_TOKEN", f"expected expression, found {t.kind.name} ({t.text!r})", t.span)
+    raise CompileError(s.bag)
+
+
+def _parse_lookup(s: _ParserState) -> ast_.LookupExpr:
+    start = s.eat(TokenKind.KW_LOOKUP).span
+    kind = s.eat(TokenKind.IDENT)
+    s.eat(TokenKind.LPAREN)
+    args, end = _parse_arg_list(s)
+    return ast_.LookupExpr(kind=kind.text, args=args, span=_join(start, end))
+
+
+def _decode_string(text: str) -> str:
+    """Strip surrounding quotes and unescape `\\"` / `\\\\` from a STRING token."""
+    body = text[1:-1] if len(text) >= 2 else text
+    out: list[str] = []
+    i = 0
+    while i < len(body):
+        ch = body[i]
+        if ch == "\\" and i + 1 < len(body):
+            out.append(body[i + 1])
+            i += 2
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
 
 
 def _join(a: Span, b: Span) -> Span:

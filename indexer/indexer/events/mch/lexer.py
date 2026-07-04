@@ -15,9 +15,10 @@ _SINGLE_CHAR: dict[str, TokenKind] = {
     "}": TokenKind.RBRACE,
     "(": TokenKind.LPAREN,
     ")": TokenKind.RPAREN,
-    "=": TokenKind.EQ,
     ".": TokenKind.DOT,
     ";": TokenKind.SEMI,
+    ",": TokenKind.COMMA,
+    ":": TokenKind.COLON,
 }
 
 _DURATION_UNITS = set("smhd")
@@ -92,16 +93,10 @@ def tokenize(text: str, path: str) -> Iterator[Token]:
             cur.advance()
             continue
 
-        # Two-char operators -> and <-.
-        if ch == "-" and cur.peek(1) == ">":
-            start_i, start_line, start_col = cur.i, cur.line, cur.col
-            cur.advance(); cur.advance()
-            yield Token(TokenKind.ARROW_R, "->", cur.span_from(start_i, start_line, start_col))
-            continue
-        if ch == "<" and cur.peek(1) == "-":
-            start_i, start_line, start_col = cur.i, cur.line, cur.col
-            cur.advance(); cur.advance()
-            yield Token(TokenKind.ARROW_L, "<-", cur.span_from(start_i, start_line, start_col))
+        # Operators sharing a lead char with a longer form. Longest match wins;
+        # `->`/`<-` (edges) stay distinct from `-` (minus) and `<`/`<=` (compare).
+        if ch in "-<>=!?":
+            yield _read_operator(cur)
             continue
 
         # Single-char punctuation.
@@ -135,6 +130,45 @@ def tokenize(text: str, path: str) -> Iterator[Token]:
         )
 
     yield Token(TokenKind.EOF, "", cur.span_from(cur.i, cur.line, cur.col))
+
+
+# Two-char operators keyed by (lead, follow); the follow char must match exactly.
+_TWO_CHAR_OPS: dict[tuple[str, str], TokenKind] = {
+    ("-", ">"): TokenKind.ARROW_R,
+    ("<", "-"): TokenKind.ARROW_L,
+    ("<", "="): TokenKind.LE,
+    (">", "="): TokenKind.GE,
+    ("=", "="): TokenKind.EQEQ,
+    ("!", "="): TokenKind.NEQ,
+    ("?", "?"): TokenKind.COALESCE,
+}
+# Single-char fallbacks; a leading char with no two-char match and no entry here
+# is a lexer error (bare `!`, bare `?`).
+_ONE_CHAR_OPS: dict[str, TokenKind] = {
+    "-": TokenKind.MINUS,
+    "<": TokenKind.LT,
+    ">": TokenKind.GT,
+    "=": TokenKind.EQ,
+}
+
+
+def _read_operator(cur: _Cursor) -> Token:
+    start_i, start_line, start_col = cur.i, cur.line, cur.col
+    lead = cur.peek()
+    two = _TWO_CHAR_OPS.get((lead, cur.peek(1)))
+    if two is not None:
+        cur.advance(); cur.advance()
+        return Token(two, lead + cur.text[start_i + 1], cur.span_from(start_i, start_line, start_col))
+    one = _ONE_CHAR_OPS.get(lead)
+    if one is not None:
+        cur.advance()
+        return Token(one, lead, cur.span_from(start_i, start_line, start_col))
+    cur.advance()
+    raise LexerError(
+        "L002_UNKNOWN_CHAR",
+        f"unexpected character {lead!r}",
+        cur.span_from(start_i, start_line, start_col),
+    )
 
 
 def _read_number(cur: _Cursor) -> Token:

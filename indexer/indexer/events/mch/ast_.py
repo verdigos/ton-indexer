@@ -12,6 +12,91 @@ class Edge(Enum):
     PARENT = "<-"
 
 
+# ---------------------------------------------------------------------------
+# Expression language (M4 §9.6). Parsed and carried through the frontend; the
+# v0 compiler ignores these nodes entirely (no evaluation, no lowering).
+# ---------------------------------------------------------------------------
+
+
+class Expr:
+    pass
+
+
+@dataclass(frozen=True)
+class IntLit(Expr):
+    value: int
+    span: Span
+
+
+@dataclass(frozen=True)
+class StrLit(Expr):
+    value: str  # decoded string contents (without surrounding quotes)
+    span: Span
+
+
+@dataclass(frozen=True)
+class BoolLit(Expr):
+    value: bool
+    span: Span
+
+
+@dataclass(frozen=True)
+class NullLit(Expr):
+    span: Span
+
+
+@dataclass(frozen=True)
+class NameRef(Expr):
+    """A bare identifier used as a value: a capture name or a `let` name."""
+    name: str
+    span: Span
+
+
+@dataclass(frozen=True)
+class FieldRef(Expr):
+    """Leading-dot field access `.field` — the current block's data field
+    (valid only as a primary inside an inline `where (expr)` clause)."""
+    field: str
+    span: Span
+
+
+@dataclass(frozen=True)
+class FieldAccess(Expr):
+    target: Expr
+    field: str
+    span: Span
+
+
+@dataclass(frozen=True)
+class Call(Expr):
+    callee: Expr
+    args: tuple[Expr, ...]
+    span: Span
+
+
+@dataclass(frozen=True)
+class LookupExpr(Expr):
+    """`lookup KIND(args)` — interface-repository query (§9.2)."""
+    kind: str
+    args: tuple[Expr, ...]
+    span: Span
+
+
+@dataclass(frozen=True)
+class UnaryOp(Expr):
+    op: str  # "not" | "-"
+    operand: Expr
+    span: Span
+
+
+@dataclass(frozen=True)
+class BinaryOp(Expr):
+    op: str  # "or" "and" "==" "!=" "<" "<=" ">" ">=" "??"
+    left: Expr
+    right: Expr
+    span: Span
+
+
 class NodeHead:
     pass
 
@@ -50,6 +135,9 @@ class Node(PatternExpr):
     capture: str | None
     where_predicate: str | None
     span: Span
+    # Inline `where (expr)` form (§4 M4). Mutually exclusive with the named
+    # `where_predicate` form; the compiler ignores it in v0.
+    where_expr: Expr | None = None
 
 
 @dataclass(frozen=True)
@@ -109,6 +197,66 @@ class RuleDecl:
     span: Span
 
 
+# ---------------------------------------------------------------------------
+# Build statements (M4 §9). Appear in a matcher body after the pattern.
+# ---------------------------------------------------------------------------
+
+
+class BuildStmt:
+    pass
+
+
+@dataclass(frozen=True)
+class ParseStmt(BuildStmt):
+    """`parse CAPTURE as MessageType`."""
+    capture: str
+    msg_type: str
+    span: Span
+
+
+@dataclass(frozen=True)
+class LetStmt(BuildStmt):
+    """`let NAME = expr`."""
+    name: str
+    value: Expr
+    span: Span
+
+
+@dataclass(frozen=True)
+class RejectStmt(BuildStmt):
+    """`reject when expr`."""
+    condition: Expr
+    span: Span
+
+
+@dataclass(frozen=True)
+class FailedStmt(BuildStmt):
+    """`failed when expr`."""
+    condition: Expr
+    span: Span
+
+
+@dataclass(frozen=True)
+class BrokenStmt(BuildStmt):
+    """`broken when expr`."""
+    condition: Expr
+    span: Span
+
+
+@dataclass(frozen=True)
+class OutField:
+    name: str
+    value: Expr
+    span: Span
+
+
+@dataclass(frozen=True)
+class OutStmt(BuildStmt):
+    """`out { field: expr <sep> ... }`."""
+    fields: tuple[OutField, ...]
+    span: Span
+
+
 @dataclass(frozen=True)
 class MatcherDecl:
     name: str
@@ -119,6 +267,8 @@ class MatcherDecl:
     include_bounces: bool
     pattern: PatternExpr
     span: Span
+    # M4 build statements, in source order. Empty for M1-M3 matchers.
+    build_stmts: tuple[BuildStmt, ...] = ()
 
     @property
     def produces_primary(self) -> str:

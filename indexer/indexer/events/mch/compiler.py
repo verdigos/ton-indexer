@@ -257,6 +257,20 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     if rm.anchor_capture:
         instance._mch_capture_name = rm.anchor_capture  # type: ignore[attr-defined]
 
+    # IR emission metadata (read only by mch/ir_emit.py; no runtime behavior).
+    # Lowering erases these into closures/synthesized classes, so stamp them on
+    # the instance where the emitter's object-graph walk can recover them.
+    instance._ir_produces = tuple(decl.produces)  # type: ignore[attr-defined]
+    instance._ir_captures = tuple(  # type: ignore[attr-defined]
+        (cname, "many" if ci.list_binding else ("opt" if ci.optional else "one"))
+        for cname, ci in rm.captures.items()
+    )
+    if anchor_pred_name is not None:
+        instance._ir_where = anchor_pred_name  # type: ignore[attr-defined]
+    if rm.anchor_group is not None:
+        instance._ir_anchor_opcodes = tuple(sorted(opcode_set))  # type: ignore[attr-defined]
+        instance._ir_anchor_btypes = tuple(sorted(btype_set))  # type: ignore[attr-defined]
+
     return CompiledMatcher(
         name=decl.name,
         matcher=instance,
@@ -1010,6 +1024,7 @@ def _lower_node(n: ast_.Node, ctx: CompileCtx) -> BlockMatcher:
     elif isinstance(head, ast_.PredHead):
         pred = ctx.registries.predicates[head.name]
         m = GenericMatcher(test_self_func=pred)
+        m._ir_pred = head.name  # type: ignore[attr-defined]
     elif isinstance(head, ast_.AnyHead):
         m = GenericMatcher(test_self_func=lambda _b: True)
     else:
@@ -1020,6 +1035,7 @@ def _lower_node(n: ast_.Node, ctx: CompileCtx) -> BlockMatcher:
         def combined(block, _orig=original_test, _p=pred):
             return _orig(block) and _p(block)
         m.test_self = combined  # type: ignore[assignment]
+        m._ir_where = n.where_predicate  # type: ignore[attr-defined]
     if n.capture is not None:
         # Tag the lowered matcher with its capture name. The synthesized
         # build_block walks the matcher tree and binds captures positionally

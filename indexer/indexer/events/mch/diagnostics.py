@@ -9,6 +9,14 @@ class Severity(Enum):
     WARNING = "warning"
 
 
+# Diagnostic codes are plain strings passed at each call site (R0xx resolver,
+# P0xx parser, L0xx lexer, C0xx/B0xx compiler). New codes introduced for the M4
+# build language are named here so there is one discoverable record of them.
+R010_UNRESOLVED_REFERENCE = "R010_UNRESOLVED_REFERENCE"
+"""A bare identifier in a build-statement expression does not resolve to a
+pattern capture or a previously declared `let` name (§9)."""
+
+
 @dataclass(frozen=True)
 class Span:
     path: str

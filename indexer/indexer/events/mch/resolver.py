@@ -181,6 +181,8 @@ class ResolvedMatcher:
     # every branch of one exclusive alternative of bare concrete heads, this is
     # that Alternative; `anchor_node` then holds a representative branch node.
     anchor_group: ast_.Alternative | None = None
+    # M4 build statements, carried through unchanged; the v0 compiler ignores them.
+    build_stmts: tuple[ast_.BuildStmt, ...] = ()
 
 
 @dataclass
@@ -586,13 +588,69 @@ def _resolve_matcher(
                     )
             anchor_node = ci.source
 
+    _check_build_stmts(m, captures, bag)
+
     return ResolvedMatcher(
         decl=m,
         captures=captures,
         anchor_capture=anchor_capture,
         anchor_node=anchor_node,
         anchor_group=anchor_group,
+        build_stmts=m.build_stmts,
     )
+
+
+def _check_build_stmts(
+    m: ast_.MatcherDecl,
+    captures: dict[str, CaptureInfo],
+    bag: DiagnosticBag,
+) -> None:
+    """Minimal M4 validation: every bare value reference in a build-statement
+    expression must resolve to a pattern capture or a `let` declared earlier.
+    Function/builtin callees and `lookup` kinds are intentionally unvalidated."""
+    available: set[str] = set(captures.keys())
+    for stmt in m.build_stmts:
+        if isinstance(stmt, ast_.LetStmt):
+            _check_expr_refs(stmt.value, available, bag)
+            available.add(stmt.name)
+        elif isinstance(stmt, (ast_.RejectStmt, ast_.FailedStmt, ast_.BrokenStmt)):
+            _check_expr_refs(stmt.condition, available, bag)
+        elif isinstance(stmt, ast_.OutStmt):
+            for f in stmt.fields:
+                _check_expr_refs(f.value, available, bag)
+        # ParseStmt: capture target left unvalidated in this POC.
+
+
+def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag) -> None:
+    """Report each value-position NameRef not in `available`. A bare NameRef used
+    as a call callee is a function/builtin name and is skipped."""
+    def value(e: ast_.Expr) -> None:
+        if isinstance(e, ast_.NameRef):
+            if e.name not in available:
+                bag.error(
+                    "R010_UNRESOLVED_REFERENCE",
+                    f"reference {e.name!r} does not resolve to a capture or a "
+                    f"previously declared `let`",
+                    e.span,
+                )
+        elif isinstance(e, ast_.FieldAccess):
+            value(e.target)
+        elif isinstance(e, ast_.Call):
+            if not isinstance(e.callee, ast_.NameRef):
+                value(e.callee)
+            for a in e.args:
+                value(a)
+        elif isinstance(e, ast_.LookupExpr):
+            for a in e.args:
+                value(a)
+        elif isinstance(e, ast_.UnaryOp):
+            value(e.operand)
+        elif isinstance(e, ast_.BinaryOp):
+            value(e.left)
+            value(e.right)
+        # FieldRef / literals: nothing to resolve.
+
+    value(expr)
 
 
 def _is_recursive_set(file: ast_.File) -> set[str]:

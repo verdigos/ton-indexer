@@ -32,15 +32,30 @@ class TokenKind(Enum):
     KW_ENTRY = "entry"
     KW_INCLUDE_EXCESS = "include_excess"
     KW_INCLUDE_BOUNCES = "include_bounces"
+    # build-language keywords (M4 §9) — parsed here, ignored by the compiler
+    KW_PARSE = "parse"
+    KW_AS = "as"
+    KW_LET = "let"
+    KW_OUT = "out"
+    KW_REJECT = "reject"
+    KW_FAILED = "failed"
+    KW_BROKEN = "broken"
+    KW_WHEN = "when"
+    KW_LOOKUP = "lookup"
+    # expression operator keywords
+    KW_NOT = "not"
+    KW_AND = "and"
+    KW_OR = "or"
     # stitch keywords (accepted in v0; compiler emits W900_STITCH_DEFERRED)
     KW_PARTIAL = "partial"
     KW_FINAL = "final"
     KW_KEY = "key"
     KW_TTL = "ttl"
     KW_MERGE = "merge"
-    # boolean literals
+    # boolean / null literals
     KW_TRUE = "true"
     KW_FALSE = "false"
+    KW_NULL = "null"
     # punctuation
     ARROW_R = "->"
     ARROW_L = "<-"
@@ -55,6 +70,17 @@ class TokenKind(Enum):
     EQ = "="
     DOT = "."
     SEMI = ";"
+    COMMA = ","
+    COLON = ":"
+    # expression operators (M4 §9.6)
+    EQEQ = "=="
+    NEQ = "!="
+    LT = "<"
+    LE = "<="
+    GT = ">"
+    GE = ">="
+    COALESCE = "??"
+    MINUS = "-"
     # control
     NEWLINE = "NEWLINE"
     EOF = "EOF"
