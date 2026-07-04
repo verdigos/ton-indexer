@@ -296,6 +296,76 @@ class NftDiscoveryBlockMatcher(BlockMatcher):
 
 
 
+async def build_telegram_nft_purchase_core(
+        block: CallContractBlock,
+        prev_block: Block | None,
+        payouts: list[Block]) -> tuple[NftTransferBlock | None, list[Block]]:
+    """Shared field build for a telegram (fragment) NFT purchase.
+
+    Pure function of the anchor `block` (the NftOwnershipAssigned call), its
+    `prev_block` (the payment ton_transfer / external call that funded the
+    purchase, or None) and the AuctionFillUp `payouts` found under that parent.
+    The legacy TelegramNftPurchaseBlockMatcher derives prev_block/payouts by
+    walking the tree; the mch builder gets them from pattern captures.
+
+    Returns `(new_block, extra_include)` — the produced NftTransferBlock (data
+    set, NOT merged) plus the blocks beyond the anchor that this build absorbs
+    (sorted payouts + the payment), or `(None, [])` to reject. Merging is the
+    caller's job (legacy wrapper / mch synthesized wrapper), mirroring
+    build_jetton_transfer_core.
+    """
+    new_block = NftTransferBlock()
+    data = dict()
+    data['is_purchase'] = False
+    message = block.get_message()
+    nft_ownership_message = NftOwnershipAssigned(Slice.one_from_boc(message.message_content.body))
+    data['new_owner'] = AccountId(message.destination)
+    prev_owner = AccountId(nft_ownership_message.prev_owner) if nft_ownership_message.prev_owner is not None else None
+    data['prev_owner'] = prev_owner
+    data['query_id'] = nft_ownership_message.query_id
+    data['forward_amount'] = None
+    data['response_destination'] = None
+    data['custom_payload'] = None
+    data['forward_payload'] = None
+    data['nft'] = await _get_nft_data(AccountId(block.get_message().source))
+    if not data['nft']['exists']:
+        return None, []
+    extra: list[Block] = []
+    payload = nft_ownership_message.nft_payload
+    if payload is not None:
+        data['forward_payload'] = base64.b64encode(payload.raw).decode('utf-8')
+    if payload is not None and isinstance(payload.value, TeleitemBidInfo):
+        data['is_purchase'] = True
+        data['price'] = Amount(payload.value.bid)
+        data['marketplace'] = 'fragment'
+        data['real_prev_owner'] = None
+        is_mint = False
+        if isinstance(prev_block, CallContractBlock) and prev_block.opcode == 0x299a3e15: # telemint (currently not supported)
+            is_mint = True
+        elif isinstance(prev_block, NftMintBlock):
+            is_mint = True
+        if is_mint:
+            data['is_purchase'] = False
+        if (isinstance(prev_block, TonTransferBlock) or
+                (isinstance(prev_block, CallContractBlock) and prev_block.get_message().source is None)):
+            payouts = list(payouts)
+            payouts.sort(key=lambda p: p.get_message().created_lt)
+            # Sending fee is always first fill up message for teleitems
+            if len(payouts) > 1:
+                data['royalty_amount'] = Amount(payouts[0].get_message().value)
+                data['payout_amount'] = Amount(payouts[1].get_message().value)
+                data['royalty_address'] = AccountId(payouts[0].get_message().destination)
+                data['payout_address'] = AccountId(payouts[1].get_message().destination)
+            elif len(payouts) == 1:
+                data['payout_address'] = AccountId(payouts[0].get_message().destination)
+                data['payout_amount'] = Amount(payouts[0].get_message().value)
+            extra.extend(payouts)
+            extra.append(prev_block)
+
+    new_block.data = data
+    return new_block, extra
+
+
 class TelegramNftPurchaseBlockMatcher(BlockMatcher):
     def __init__(self):
         super().__init__(child_matcher=None,
@@ -307,60 +377,15 @@ class TelegramNftPurchaseBlockMatcher(BlockMatcher):
 
     async def build_block(self, block: Block, other_blocks: list['Block']):
         assert isinstance(block, CallContractBlock)
-        new_block = NftTransferBlock()
-        include = [block]
-        data = dict()
-        data['is_purchase'] = False
-        message = block.get_message()
-        nft_ownership_message = NftOwnershipAssigned(Slice.one_from_boc(message.message_content.body))
-        data['new_owner'] = AccountId(message.destination)
-        prev_owner = AccountId(nft_ownership_message.prev_owner) if nft_ownership_message.prev_owner is not None else None
-        data['prev_owner'] = prev_owner
-        data['query_id'] = nft_ownership_message.query_id
-        data['forward_amount'] = None
-        data['response_destination'] = None
-        data['custom_payload'] = None
-        data['forward_payload'] = None
-        data['nft'] = await _get_nft_data(AccountId(block.get_message().source))
-        if not data['nft']['exists']:
+        prev_block = block.previous_block
+        payouts: list[Block] = []
+        if (isinstance(prev_block, TonTransferBlock) or
+                (isinstance(prev_block, CallContractBlock) and prev_block.get_message().source is None)):
+            payouts = find_call_contracts(prev_block.next_blocks, AuctionFillUp.opcode)
+        new_block, extra = await build_telegram_nft_purchase_core(block, prev_block, payouts)
+        if new_block is None:
             return []
-        payload = nft_ownership_message.nft_payload
-        if payload is not None:
-            data['forward_payload'] = base64.b64encode(payload.raw).decode('utf-8')
-        if payload is not None and isinstance(payload.value, TeleitemBidInfo):
-            data['is_purchase'] = True
-            data['price'] = Amount(payload.value.bid)
-            data['marketplace'] = 'fragment'
-            data['real_prev_owner'] = None
-            prev_block = block.previous_block
-            is_mint = False
-            if isinstance(prev_block, CallContractBlock) and prev_block.opcode == 0x299a3e15: # telemint (currently not supported)
-                is_mint = True
-            elif isinstance(prev_block, NftMintBlock):
-                is_mint = True
-            if is_mint:
-                data['is_purchase'] = False
-            if (isinstance(prev_block, TonTransferBlock) or
-                    (isinstance(prev_block, CallContractBlock) and prev_block.get_message().source is None)):
-                payouts = find_call_contracts(prev_block.next_blocks, AuctionFillUp.opcode)
-                payouts.sort(key=lambda p: p.get_message().created_lt)
-                # Sending fee is always first fill up message for teleitems
-                if len(payouts) > 1:
-                    data['royalty_amount'] = Amount(payouts[0].get_message().value)
-                    data['payout_amount'] = Amount(payouts[1].get_message().value)
-                    data['royalty_address'] = AccountId(payouts[0].get_message().destination)
-                    data['payout_address'] = AccountId(payouts[1].get_message().destination)
-                elif len(payouts) == 1:
-                    data['payout_address'] = AccountId(payouts[0].get_message().destination)
-                    data['payout_amount'] = Amount(payouts[0].get_message().value)
-                include.extend(payouts)
-                include.append(prev_block)
-
-        include.extend(other_blocks)
-        new_block.merge_blocks(include)
-        new_block.data = data
-        if not data['nft']['exists']:
-            new_block.broken = True
+        new_block.merge_blocks([block] + extra + other_blocks)
         return [new_block]
 
 

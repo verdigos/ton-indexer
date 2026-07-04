@@ -831,6 +831,100 @@ class StonfiV2ProvideLiquidityMatcher(BlockMatcher):
         return [new_block]
 
 
+async def build_stonfi_v2_withdraw_core(
+    payouts: list[Block],
+    burn: Block | None,
+    refund_op: Block | None,
+) -> tuple[Block, list[Block]] | None:
+    """Shared build core for stonfi_v2 dex_withdraw_liquidity. Returns the new
+    (unmerged) block plus the extra pTON-transfer blocks discovered under the
+    payout jetton_transfers (the caller must merge them together with the
+    payouts / matched blocks). Returns None to reject the match.
+
+    `payouts` are the pool pay-to blocks (op 0x657b54f5) in consumption order
+    (payout_1 first); each carries a jetton_transfer child whose optional
+    PTonTransfer grandchild marks a TON payout. Withdraw meta comes from `burn`
+    (a JettonBurnBlock, normal withdraw) xor `refund_op` (the 0x0f98e2b8 refund
+    call, whose parent's source is the sender)."""
+    additional_blocks = []
+    amount1 = None
+    amount2 = None
+    asset1 = None
+    asset2 = None
+    dex_sender1 = None
+    dex_sender2 = None
+    dex_sender1_jetton_wallet = None
+    dex_sender2_jetton_wallet = None
+    wallet1 = None
+    wallet2 = None
+    for payout in payouts:
+        jetton_transfers = [x for x in payout.next_blocks if isinstance(x, JettonTransferBlock)]
+        if len(jetton_transfers) > 0:
+            transfer = jetton_transfers[0]
+            pton_transfer = next((x for x in transfer.next_blocks if isinstance(x, CallContractBlock)
+                                  and x.opcode == PTonTransfer.opcode), None)
+            if pton_transfer is not None:
+                pton_msg = PTonTransfer(pton_transfer.get_body())
+                amount = Amount(pton_msg.ton_amount or 0)
+                additional_blocks.append(pton_transfer)
+                asset = Asset(is_ton=True, jetton_address=None)
+            else:
+                amount = transfer.data['amount']
+                asset = transfer.data['asset']
+
+            if amount1 is None:
+                amount1 = amount
+                asset1 = asset
+                wallet1 = transfer.data['receiver_wallet']
+                dex_sender1 = transfer.data['sender']
+                dex_sender1_jetton_wallet = transfer.data['sender_wallet']
+            else:
+                amount2 = amount
+                asset2 = asset
+                wallet2 = transfer.data['receiver_wallet']
+                dex_sender2 = transfer.data['sender']
+                dex_sender2_jetton_wallet = transfer.data['sender_wallet']
+    sender = None
+    sender_wallet = None
+    asset = None
+    burned_lps = None
+    is_withdraw_refunded_liquidity = False
+
+    if refund_op is not None:
+        is_withdraw_refunded_liquidity = True
+        sender = AccountId(refund_op.previous_block.event_nodes[0].message.source)
+    if burn is not None:
+        if isinstance(burn, JettonBurnBlock):
+            sender = burn.data['owner']
+            sender_wallet = burn.data['jetton_wallet']
+            burned_lps = burn.data['amount']
+            asset = burn.data['asset']
+        else:
+            return None
+
+    new_block = Block('dex_withdraw_liquidity', [])
+    new_block.data = {
+        'dex': 'stonfi_v2',
+        'sender': sender,
+        'sender_wallet': sender_wallet,
+        'pool': AccountId(payouts[0].event_nodes[0].message.source),
+        'asset': asset,
+        'lp_tokens_burnt': burned_lps,
+        'is_refund': is_withdraw_refunded_liquidity,
+        'amount1_out': amount1,
+        'asset1_out': asset1,
+        'dex_wallet_1': dex_sender1,
+        'dex_jetton_wallet_1': dex_sender1_jetton_wallet,
+        'wallet1': wallet1,
+        'amount2_out': amount2,
+        'asset2_out': asset2,
+        'dex_wallet_2': dex_sender2,
+        'dex_jetton_wallet_2': dex_sender2_jetton_wallet,
+        'wallet2': wallet2
+    }
+    return new_block, additional_blocks
+
+
 class StonfiV2WithdrawLiquidityMatcher(BlockMatcher):
     def __init__(self):
         withdraw_refunded_liquidity = labeled('withdraw_refunded_liquidity', ContractMatcher(
@@ -848,17 +942,7 @@ class StonfiV2WithdrawLiquidityMatcher(BlockMatcher):
 
     async def build_block(self, block: Block, other_blocks: list[Block]) -> list[Block]:
         payouts = [block]
-        additional_blocks = []
-        amount1 = None
-        amount2 = None
-        asset1 = None
-        asset2 = None
-        dex_sender1 = None
-        dex_sender2 = None
-        dex_sender1_jetton_wallet = None
-        dex_sender2_jetton_wallet = None
-        wallet1 = None
-        wallet2 = None
+        sibling_jetton_transfers = []
         for b in block.previous_block.next_blocks:
             if b == block or b in other_blocks:
                 continue
@@ -866,76 +950,22 @@ class StonfiV2WithdrawLiquidityMatcher(BlockMatcher):
                 jetton_transfers = [x for x in b.next_blocks if isinstance(x, JettonTransferBlock)]
                 if len(jetton_transfers) > 0:
                     payouts.append(b)
-                    additional_blocks.extend(jetton_transfers)
-        for payout in payouts:
-            jetton_transfers = [x for x in payout.next_blocks if isinstance(x, JettonTransferBlock)]
-            if len(jetton_transfers) > 0:
-                transfer = jetton_transfers[0]
-                pton_transfer = next((x for x in transfer.next_blocks if isinstance(x, CallContractBlock)
-                                      and x.opcode == PTonTransfer.opcode), None)
-                if pton_transfer is not None:
-                    pton_msg = PTonTransfer(pton_transfer.get_body())
-                    amount = Amount(pton_msg.ton_amount or 0)
-                    additional_blocks.append(pton_transfer)
-                    asset = Asset(is_ton=True, jetton_address=None)
-                else:
-                    amount = transfer.data['amount']
-                    asset = transfer.data['asset']
+                    sibling_jetton_transfers.extend(jetton_transfers)
 
-                if amount1 is None:
-                    amount1 = amount
-                    asset1 = asset
-                    wallet1 = transfer.data['receiver_wallet']
-                    dex_sender1 = transfer.data['sender']
-                    dex_sender1_jetton_wallet = transfer.data['sender_wallet']
-                else:
-                    amount2 = amount
-                    asset2 = asset
-                    wallet2 = transfer.data['receiver_wallet']
-                    dex_sender2 = transfer.data['sender']
-                    dex_sender2_jetton_wallet = transfer.data['sender_wallet']
-        sender = None
-        sender_wallet = None
-        asset = None
-        burned_lps = None
-        is_withdraw_refunded_liquidity = False
-
+        burn = None
+        refund_op = None
         for b in other_blocks:
             if isinstance(b, LabelBlock):
                 if b.label == 'withdraw_refunded_liquidity':
-                    is_withdraw_refunded_liquidity = True
-                    sender = AccountId(b.block.previous_block.event_nodes[0].message.source)
+                    refund_op = b.block
                 if b.label == 'withdraw_liquidity':
                     burn = b.block.previous_block
-                    if isinstance(burn, JettonBurnBlock):
-                        sender = burn.data['owner']
-                        sender_wallet = burn.data['jetton_wallet']
-                        burned_lps = burn.data['amount']
-                        asset = burn.data['asset']
-                    else:
-                        return []
-        new_block = Block('dex_withdraw_liquidity', [])
-        new_block.merge_blocks(payouts + other_blocks + additional_blocks)
 
-        new_block.data = {
-            'dex': 'stonfi_v2',
-            'sender': sender,
-            'sender_wallet': sender_wallet,
-            'pool': AccountId(block.event_nodes[0].message.source),
-            'asset': asset,
-            'lp_tokens_burnt': burned_lps,
-            'is_refund': is_withdraw_refunded_liquidity,
-            'amount1_out': amount1,
-            'asset1_out': asset1,
-            'dex_wallet_1': dex_sender1,
-            'dex_jetton_wallet_1': dex_sender1_jetton_wallet,
-            'wallet1': wallet1,
-            'amount2_out': amount2,
-            'asset2_out': asset2,
-            'dex_wallet_2': dex_sender2,
-            'dex_jetton_wallet_2': dex_sender2_jetton_wallet,
-            'wallet2': wallet2
-        }
+        result = await build_stonfi_v2_withdraw_core(payouts, burn, refund_op)
+        if result is None:
+            return []
+        new_block, pton_blocks = result
+        new_block.merge_blocks(payouts + other_blocks + sibling_jetton_transfers + pton_blocks)
         return [new_block]
 
 

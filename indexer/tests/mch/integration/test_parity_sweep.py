@@ -51,6 +51,7 @@ from indexer.events import context
 from indexer.events.blocks.basic_matchers import BlockMatcher
 from indexer.events.blocks.core import Block
 from indexer.events.blocks.jettons import (
+    JettonBurnBlockMatcher,
     JettonMintBlockMatcher,
     JettonTransferBlockMatcher,
     PTonTransferMatcher,
@@ -76,7 +77,12 @@ from indexer.events.mch.builders.coffee import coffee_liquidity_registries
 from indexer.events.mch.builders.dedust import dedust_deposit_registries
 from indexer.events.mch.builders.ethena import ethena_registries
 from indexer.events.mch.builders.evaa import evaa_registries
+from indexer.events.mch.builders.jvault import jvault_registries
 from indexer.events.mch.builders.layerzero import layerzero_receive_registries
+from indexer.events.mch.builders.nominator import nominator_registries
+from indexer.events.mch.builders.stonfi_liquidity import stonfi_liquidity_registries
+from indexer.events.mch.builders.telegram_nft import telegram_nft_registries
+from indexer.events.mch.builders.tgbtc import tgbtc_registries
 from indexer.events.mch.builders.tonco import tonco_liquidity_registries
 from indexer.events.mch.builders.tonstakers import tonstakers_registries
 from indexer.events.mch.builders.vesting import vesting_registries
@@ -128,6 +134,16 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple]] = [
     ("specs/dedust_deposit.mch", _SPECS_DIR / "dedust_deposit.mch", dedust_deposit_registries, _PREREQ_SWAP),
     ("specs/tonco_liquidity.mch", _SPECS_DIR / "tonco_liquidity.mch", tonco_liquidity_registries, (NftMintBlockMatcher,) + _PREREQ_SWAP),
     ("specs/coffee_liquidity.mch", _SPECS_DIR / "coffee_liquidity.mch", coffee_liquidity_registries, ()),
+    # R02 remake — jvault family (stake btype-anchored, the other three op-anchored).
+    ("specs/jvault.mch", _SPECS_DIR / "jvault.mch", jvault_registries, _PREREQ_SWAP),
+    # Remake wave 1 (2026-07-04): R01/R03/R04/R05.
+    ("specs/telegram_nft.mch", _SPECS_DIR / "telegram_nft.mch", telegram_nft_registries, ()),
+    ("specs/tgbtc.mch", _SPECS_DIR / "tgbtc.mch", tgbtc_registries, (JettonMintBlockMatcher,)),
+    # stonfi_v2_withdraw is btype-anchored (jetton_burn) — run-on-all row, rejects everywhere off-protocol.
+    ("specs/stonfi_v2_withdraw.mch", _SPECS_DIR / "stonfi_v2_withdraw.mch", stonfi_liquidity_registries,
+     (JettonTransferBlockMatcher, PTonTransferMatcher, JettonBurnBlockMatcher)),
+    # nominator withdraw is btype-anchored (ton_transfer) — run-on-all row.
+    ("specs/nominator.mch", _SPECS_DIR / "nominator.mch", nominator_registries, ()),
 ]
 
 

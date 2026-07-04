@@ -196,7 +196,7 @@ Acceptance convention for every R-task below (in addition to per-task Accept):
 Suggested execution order: R01→R05 (pure remakes, no new features) → R06 `shape` (unlocks R07/R08) → R09/R10 (anchor features) → R11 (=T28) → R12 (after M4 T33).
 
 ### R01 — Remake: telegram NFT purchase
-Status: todo
+Status: done (2026-07-04 — specs/telegram_nft.mch: legacy imperative prev-walk → declarative `op NftOwnershipAssigned <- btype ton_transfer -> {AuctionFillUp; maybe AuctionFillUp}` (T12 shape); `build_telegram_nft_purchase_core` shared; 3-way parity on Fragment fixture incl. topology; corpus mini-sweep 0 diffs. SCOPE FLAG for T26: mch pattern covers ton_transfer-funded purchases only — telemint-mint parent variant + non-purchase orphan NftOwnershipAssigned stay legacy-only until extra XOR parent alternatives + a fallback matcher are added.)
 Tier: opus
 Needs: —
 Legacy: `TelegramNftPurchaseBlockMatcher` (`blocks/nft.py:299`).
@@ -205,7 +205,7 @@ Goal: re-derive the trace shape from the legacy matcher + fixture, express direc
 Accept: field + topology parity on the Fragment fixture; remake gate above.
 
 ### R02 — Remake: jvault family
-Status: todo
+Status: done (2026-07-04 — specs/jvault.mch all 4 matchers + shared `$jvault_referrals`; legacy NESTED referral recursion flattened to a single recursion level (finding confirmed: real shape is flat); 4 `build_jvault_*_core` extracted, legacy = thin wrappers; 3-way parity on all 11 jvault.yaml fixtures incl. consumed-set/topology/value_flow; sweep row added; no engine changes.)
 Tier: opus
 Needs: —
 Legacy: `JVaultStakeBlockMatcher` / `JVaultUnstakeBlockMatcher` / `JVaultClaimBlockMatcher` / `JVaultUnstakeRequestBlockMatcher` (`blocks/jvault.py:104/207/317/396`).
@@ -214,7 +214,7 @@ Goal: legacy nests recursion where the real shape is flat — port-wave finding:
 Accept: parity on every jvault YAML case; remake gate.
 
 ### R03 — Remake: tgBTC mint
-Status: todo
+Status: done (2026-07-04 — specs/tgbtc.mch: re-anchored at head 0x3F781D24 (legacy anchored tail + scanned up); variable-length trunk via `any`-headed recursion `rule mint_chain = (any @mid -> maybe $mint_chain ^ op Tail -> {SuccessLog; btype jetton_mint})` — reusable linear-chain idiom; `build_tgbtc_mint_core` shared; 3-way parity on all 4 tgbtc.yaml mint fixtures. FINDING → spec §11.1 note: ContractDeploy side-effect blocks live in `children_blocks` (patterns can't consume them) — builders must sweep them from the consumed set to hold topology parity. Documented deviation: legacy also collects non-path ancestor siblings; all corpus mints are linear so consumed sets identical — a mid-chain fork would diverge (no such trace).)
 Tier: opus
 Needs: —
 Legacy: `TgBTCMintBlockMatcher` (`blocks/tgbtc.py:54`).
@@ -223,7 +223,7 @@ Goal: re-anchor at the distinctive head `0x3F781D24` with child recursion for th
 Accept: parity on all 4 mint cases incl. very-long chains; remake gate.
 
 ### R04 — Remake: stonfi_v2 withdraw liquidity
-Status: todo
+Status: done (2026-07-04 — specs/stonfi_v2_withdraw.mch: sibling scan killed via `{payout_1; payout_2}` children set (dedust_withdraw family). Legacy's no-shared-head OrMatcher parent (normal vs refund) SPLIT into two mutually-exclusive matchers: `stonfi_v2_withdraw` (btype jetton_burn anchor) + `stonfi_v2_withdraw_refund` (op 0x0f98e2b8 anchor, `<-` refund-request parent) — R09 multi-kind anchors would re-unify them. `build_stonfi_v2_withdraw_core` shared; synthetic 3-way parity: jetton-first, ton-first, refund, reject. Edge flag: remake requires exactly 2 payouts (protocol-faithful); legacy tolerated 1.)
 Tier: opus
 Needs: —
 Legacy: `StonfiV2WithdrawLiquidityMatcher` (`blocks/liquidity.py:834`).
@@ -232,7 +232,7 @@ Goal: legacy does an imperative sibling scan; remake sketch: `anchor <- ( router
 Accept: synthetic-tree parity covering both payout kinds (jetton / TON) and both orders; remake gate.
 
 ### R05 — Remake: nominator pool withdraw
-Status: todo
+Status: done (2026-07-04 — specs/nominator.mch: legacy anchors the ProcessWithdrawRequests call and fans out N blocks from one match leaving the call unconsumed — unsupported by mch build path (1 builder call → 1 block; sharing the call across produced blocks would corrupt parent/compact_connections). Re-anchored per payout: `btype ton_transfer @payout where nominator_pool_withdraw_parent` — predicate inspects `.previous_block` WITHOUT capturing it, so the call stays unconsumed exactly like legacy; engine's per-block loop reproduces N-payout granularity for any N. `build_nominator_pool_withdraw_core` shared; synthetic 3-way parity ×4 (single, two payouts = granularity pin, interface reject, aborted-tx). Legacy quirk reproduced not fixed: `.failed` never set on this block type.)
 Tier: sonnet
 Needs: —
 Legacy: `NominatorPoolWithdrawMatcher` (`blocks/staking.py:407`).

@@ -403,6 +403,30 @@ class NominatorPoolWithdrawRequestMatcher(BlockMatcher):
         new_block.merge_blocks([block] + other_blocks + extra_blocks)
         return [new_block]
 
+async def build_nominator_pool_withdraw_core(transfer_block: Block) -> Block | None:
+    """Shared build core for one nominator-pool withdraw payout.
+
+    `transfer_block` is a TonTransferBlock whose `previous_block` is the
+    NominatorPoolProcessWithdrawRequests call. Rejects (returns None) unless
+    the call target is a NominatorPool contract. Does NOT merge — callers
+    (the legacy matcher's thin wrapper, the mch builder) merge
+    `[transfer_block]` only; the call itself is deliberately left unconsumed
+    (see NominatorPoolWithdrawMatcher / specs/nominator.mch: it stays its own
+    block, matched elsewhere as a plain call_contract)."""
+    anchor_msg = transfer_block.previous_block.get_message()
+    pool_addr = anchor_msg.destination
+    interfaces = await context.interface_repository.get().get_interfaces(pool_addr)
+    if "NominatorPool" not in interfaces:
+        return None
+    return NominatorPoolWithdrawRequestBlock(
+        data=NominatorPoolWithdrawRequestData(
+            source=AccountId(transfer_block.event_nodes[0].message.destination),
+            pool=AccountId(pool_addr),
+            payout_amount=Amount(transfer_block.value)
+        )
+    )
+
+
 # Withdrawal initiated by owner
 class NominatorPoolWithdrawMatcher(BlockMatcher):
     def __init__(self):
@@ -412,24 +436,13 @@ class NominatorPoolWithdrawMatcher(BlockMatcher):
         return isinstance(block, CallContractBlock) and block.opcode == NominatorPoolProcessWithdrawRequests.opcode
 
     async def build_block(self, block: Block, other_blocks: list[Block]) -> list[Block]:
-        msg = block.get_message()
-        pool_addr = msg.destination
-        interfaces = await context.interface_repository.get().get_interfaces(pool_addr)
-        if "NominatorPool" not in interfaces:
-            return []
-
         new_blocks = []
         for transfer_block in block.next_blocks:
             if isinstance(transfer_block, TonTransferBlock):
-                new_block = NominatorPoolWithdrawRequestBlock(
-                    data=NominatorPoolWithdrawRequestData(
-                        source=AccountId(transfer_block.event_nodes[0].message.destination),
-                        pool=AccountId(pool_addr),
-                        payout_amount=Amount(transfer_block.value)
-                    )
-                )
-                new_block.merge_blocks([transfer_block])
-                new_blocks.append(new_block)
+                new_block = await build_nominator_pool_withdraw_core(transfer_block)
+                if new_block is not None:
+                    new_block.merge_blocks([transfer_block])
+                    new_blocks.append(new_block)
         return new_blocks
     
 @dataclass
