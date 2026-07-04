@@ -24,7 +24,11 @@ from indexer.events.blocks.messages import (
     JettonTransfer,
 )
 from indexer.events.blocks.messages.jettons import MinterJettonMint
-from indexer.events.mch.registry import Registries
+from indexer.events.mch.registry import (
+    Registries,
+    default_lookups,
+    default_message_types,
+)
 
 OPCODES = {
     "JettonTransfer":         JettonTransfer.opcode,
@@ -66,3 +70,20 @@ def register_jettons(reg: Registries) -> Registries:
 def jetton_registries() -> Registries:
     """Fresh Registries ready to compile specs/jettons.mch."""
     return register_jettons(Registries())
+
+
+def jetton_decl_registries() -> Registries:
+    """Fresh Registries for the fully-declarative spec (specs_decl/jettons.mch).
+
+    Unlike jetton_registries(), the declarative matchers have no `build`
+    directive: their build statements are evaluated by the runtime, so they need
+    message parsers (for `parse`) and interface lookups (for `lookup
+    jetton_wallet`) but no registered builders. Opcodes and produced block types
+    are the same as the builder spec.
+    """
+    reg = Registries()
+    reg.opcodes.update(OPCODES)
+    reg.block_types.update(BLOCK_TYPES)
+    reg.message_types.update(default_message_types())
+    reg.lookups.update(default_lookups())
+    return reg

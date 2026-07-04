@@ -17,6 +17,7 @@ _SOFT_KEYWORDS: frozenset[TokenKind] = frozenset({
     TokenKind.KW_REJECT, TokenKind.KW_FAILED, TokenKind.KW_BROKEN,
     TokenKind.KW_WHEN, TokenKind.KW_LOOKUP, TokenKind.KW_NOT,
     TokenKind.KW_AND, TokenKind.KW_OR, TokenKind.KW_NULL,
+    TokenKind.KW_FLOW, TokenKind.KW_IF, TokenKind.KW_ELSE,
 })
 
 _CMP_OPS: dict[TokenKind, str] = {
@@ -32,6 +33,7 @@ _CMP_OPS: dict[TokenKind, str] = {
 _BUILD_STMT_HEADS: frozenset[TokenKind] = frozenset({
     TokenKind.KW_PARSE, TokenKind.KW_LET, TokenKind.KW_REJECT,
     TokenKind.KW_FAILED, TokenKind.KW_BROKEN, TokenKind.KW_OUT,
+    TokenKind.KW_FLOW,
 })
 
 
@@ -84,6 +86,20 @@ class _ParserState:
         self.bag.error(
             "P001_UNEXPECTED_TOKEN",
             f"expected identifier, found {t.kind.name} ({t.text!r})",
+            t.span,
+        )
+        raise CompileError(self.bag)
+
+    def eat_field_name(self) -> Token:
+        """Eat a field name after '.'. The position is unambiguous, so ANY
+        keyword is acceptable here (e.g. `x.btype`, `x.failed`)."""
+        t = self.peek()
+        if t.kind is TokenKind.IDENT or t.kind.name.startswith("KW_"):
+            self.i += 1
+            return t
+        self.bag.error(
+            "P001_UNEXPECTED_TOKEN",
+            f"expected field name, found {t.kind.name} ({t.text!r})",
             t.span,
         )
         raise CompileError(self.bag)
@@ -215,10 +231,13 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
     s.skip_newlines()
     end = s.eat(TokenKind.RBRACE).span
 
-    if produces is None or build is None:
+    # `build` is optional when build statements are present (declarative form,
+    # §9.5); the resolver enforces the finer rules (out required, no mixing).
+    if produces is None or (build is None and not build_stmts):
         s.bag.error(
             "P001_UNEXPECTED_TOKEN",
-            f"matcher {name_tok.text!r} missing required directive (produces and/or build)",
+            f"matcher {name_tok.text!r} missing required directive "
+            f"(produces, and either build or build statements)",
             _join(start, end),
         )
         raise CompileError(s.bag)
@@ -546,6 +565,8 @@ def _parse_build_stmts(s: _ParserState) -> tuple[ast_.BuildStmt, ...]:
             stmts.append(_parse_guard_stmt(s, TokenKind.KW_BROKEN, ast_.BrokenStmt))
         elif t.kind is TokenKind.KW_OUT:
             stmts.append(_parse_out_stmt(s))
+        elif t.kind is TokenKind.KW_FLOW:
+            stmts.append(_parse_flow_stmt(s))
     return tuple(stmts)
 
 
@@ -554,7 +575,23 @@ def _parse_parse_stmt(s: _ParserState) -> ast_.ParseStmt:
     cap = s.eat_name()
     s.eat(TokenKind.KW_AS)
     msg = s.eat(TokenKind.IDENT)
-    return ast_.ParseStmt(capture=cap.text, msg_type=msg.text, span=_join(start, msg.span))
+    types = [msg.text]
+    end_span = msg.span
+    while s.at(TokenKind.PIPE):
+        s.i += 1
+        alt = s.eat(TokenKind.IDENT)
+        types.append(alt.text)
+        end_span = alt.span
+    return ast_.ParseStmt(capture=cap.text, msg_types=tuple(types), span=_join(start, end_span))
+
+
+def _parse_flow_stmt(s: _ParserState) -> ast_.FlowStmt:
+    """`flow KIND(expr, ...)` — kind/arity validated by the resolver (R018)."""
+    start = s.eat(TokenKind.KW_FLOW).span
+    kind = s.eat(TokenKind.IDENT)
+    s.eat(TokenKind.LPAREN)
+    args, end = _parse_arg_list(s)
+    return ast_.FlowStmt(kind=kind.text, args=args, span=_join(start, end))
 
 
 def _parse_let_stmt(s: _ParserState) -> ast_.LetStmt:
@@ -603,12 +640,26 @@ def _parse_out_stmt(s: _ParserState) -> ast_.OutStmt:
 # ==========================================================================
 #
 # Precedence, low -> high:
-#   or -> and -> not(prefix) -> comparison(non-assoc) -> ??(coalesce)
+#   ternary ('A if C else B', right-assoc) -> or -> and -> not(prefix)
+#      -> comparison(non-assoc) -> ??(coalesce)
 #      -> unary '-' -> postfix(.field / call) -> primary
 
 
 def _parse_expr(s: _ParserState) -> ast_.Expr:
-    return _parse_or(s)
+    return _parse_ternary(s)
+
+
+def _parse_ternary(s: _ParserState) -> ast_.Expr:
+    """`then if cond else orelse` (Python-style). Right-associative: the else
+    branch may itself be a ternary."""
+    then = _parse_or(s)
+    if not s.at(TokenKind.KW_IF):
+        return then
+    s.i += 1
+    cond = _parse_or(s)
+    s.eat(TokenKind.KW_ELSE)
+    orelse = _parse_ternary(s)
+    return ast_.Ternary(cond=cond, then=then, orelse=orelse, span=_join(then.span, orelse.span))
 
 
 def _parse_or(s: _ParserState) -> ast_.Expr:
@@ -671,7 +722,7 @@ def _parse_postfix(s: _ParserState) -> ast_.Expr:
     while True:
         if s.at(TokenKind.DOT):
             s.i += 1
-            name = s.eat_name()
+            name = s.eat_field_name()
             e = ast_.FieldAccess(target=e, field=name.text, span=_join(e.span, name.span))
         elif s.at(TokenKind.LPAREN):
             s.i += 1
@@ -722,7 +773,7 @@ def _parse_primary(s: _ParserState) -> ast_.Expr:
     if t.kind is TokenKind.DOT:
         # Leading-dot field access: current block's data field (inline where).
         s.i += 1
-        name = s.eat_name()
+        name = s.eat_field_name()
         return ast_.FieldRef(field=name.text, span=_join(t.span, name.span))
     if t.kind is TokenKind.LPAREN:
         s.i += 1

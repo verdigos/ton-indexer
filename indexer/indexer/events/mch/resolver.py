@@ -588,7 +588,7 @@ def _resolve_matcher(
                     )
             anchor_node = ci.source
 
-    _check_build_stmts(m, captures, bag)
+    _check_build_stmts(m, captures, registries, bag)
 
     return ResolvedMatcher(
         decl=m,
@@ -600,25 +600,115 @@ def _resolve_matcher(
     )
 
 
+# Required argument counts for `flow KIND(...)` (§9.8).
+_FLOW_ARITIES: dict[str, int] = {"jetton": 3, "ton": 2, "fees": 2}
+
+# Env names the synthesized declarative build path always binds (compiler
+# `build_block`: `consumed` = deduped consumed-block list, `anchor` = anchor
+# block). They resolve like captures in build expressions, and `let` may not
+# shadow them.
+WELL_KNOWN_ENV: frozenset[str] = frozenset({"consumed", "anchor"})
+
+
 def _check_build_stmts(
     m: ast_.MatcherDecl,
     captures: dict[str, CaptureInfo],
+    registries: Registries,
     bag: DiagnosticBag,
 ) -> None:
-    """Minimal M4 validation: every bare value reference in a build-statement
-    expression must resolve to a pattern capture or a `let` declared earlier.
-    Function/builtin callees and `lookup` kinds are intentionally unvalidated."""
-    available: set[str] = set(captures.keys())
+    """M4 build-statement validation.
+
+    - Every bare value reference must resolve to a pattern capture or a `let`
+      declared earlier (R010). Builtin callees are intentionally unvalidated.
+    - `parse` targets must be captures (R011) and name registered message
+      types (R012).
+    - `let` names must not collide with captures or earlier lets (R013).
+    - `out` fields must be unique (R014); at most one `out` block (R017) —
+      it may sit anywhere among the statements, evaluation stays source-order.
+    - Exactly one of `build` directive / build statements (R015); declarative
+      matchers must have an `out` (R016).
+    - `flow` kind and arity must match §9.8 (R018).
+    """
+    if m.build is not None and m.build_stmts:
+        bag.error(
+            "R015_BUILD_AMBIGUOUS",
+            f"matcher {m.name!r} declares both a `build` directive and build "
+            f"statements; use a registered builder or a declarative build, not both",
+            m.span,
+        )
+    has_out = any(isinstance(s, ast_.OutStmt) for s in m.build_stmts)
+    if m.build is None and m.build_stmts and not has_out:
+        bag.error(
+            "R016_BUILD_NO_OUT",
+            f"matcher {m.name!r} has build statements but no `out` block; "
+            f"nothing to produce",
+            m.span,
+        )
+
+    # Well-known env names (`consumed`, `anchor`) are always bound by the
+    # synthesized build path — legal references, and `let` may not shadow them.
+    available: set[str] = set(captures.keys()) | set(WELL_KNOWN_ENV)
+    out_seen = False
     for stmt in m.build_stmts:
-        if isinstance(stmt, ast_.LetStmt):
+        if isinstance(stmt, ast_.ParseStmt):
+            if stmt.capture not in captures:
+                bag.error(
+                    "R011_PARSE_TARGET_NOT_CAPTURE",
+                    f"parse target {stmt.capture!r} is not a pattern capture",
+                    stmt.span,
+                )
+            for t in stmt.msg_types:
+                if t not in registries.message_types:
+                    bag.error(
+                        "R012_UNKNOWN_MESSAGE_TYPE",
+                        f"message type {t!r} is not registered in the host",
+                        stmt.span,
+                    )
+        elif isinstance(stmt, ast_.LetStmt):
             _check_expr_refs(stmt.value, available, bag)
+            if stmt.name in available:
+                bag.error(
+                    "R013_DUP_LET",
+                    f"`let {stmt.name}` collides with a capture or an earlier `let`",
+                    stmt.span,
+                )
             available.add(stmt.name)
         elif isinstance(stmt, (ast_.RejectStmt, ast_.FailedStmt, ast_.BrokenStmt)):
             _check_expr_refs(stmt.condition, available, bag)
+        elif isinstance(stmt, ast_.FlowStmt):
+            arity = _FLOW_ARITIES.get(stmt.kind)
+            if arity is None:
+                bag.error(
+                    "R018_BAD_FLOW",
+                    f"unknown flow kind {stmt.kind!r}; expected jetton, ton, or fees",
+                    stmt.span,
+                )
+            elif len(stmt.args) != arity:
+                bag.error(
+                    "R018_BAD_FLOW",
+                    f"flow {stmt.kind} takes {arity} arguments, got {len(stmt.args)}",
+                    stmt.span,
+                )
+            for a in stmt.args:
+                _check_expr_refs(a, available, bag)
         elif isinstance(stmt, ast_.OutStmt):
+            if out_seen:
+                bag.error(
+                    "R017_MULTIPLE_OUT",
+                    f"matcher {m.name!r} has more than one `out` block",
+                    stmt.span,
+                )
+            out_seen = True
+            seen_fields: set[str] = set()
             for f in stmt.fields:
+                if f.name in seen_fields:
+                    bag.error(
+                        "R014_DUP_OUT_FIELD",
+                        f"out field {f.name!r} appears more than once",
+                        f.span,
+                    )
+                seen_fields.add(f.name)
                 _check_expr_refs(f.value, available, bag)
-        # ParseStmt: capture target left unvalidated in this POC.
 
 
 def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag) -> None:
@@ -648,6 +738,10 @@ def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag) -
         elif isinstance(e, ast_.BinaryOp):
             value(e.left)
             value(e.right)
+        elif isinstance(e, ast_.Ternary):
+            value(e.cond)
+            value(e.then)
+            value(e.orelse)
         # FieldRef / literals: nothing to resolve.
 
     value(expr)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import weakref
 from dataclasses import dataclass
 from typing import Any
@@ -14,7 +15,10 @@ from indexer.events.blocks.basic_matchers import (
     OrMatcher,
     RecursiveMatcher,
 )
+from indexer.events.blocks.core import Block
 from indexer.events.mch import ast_
+from indexer.events.mch.btypes import produces_btype
+from indexer.events.mch.eval import BuildProgram, EvalError, apply_flows
 from indexer.events.mch.diagnostics import CompileError, DiagnosticBag, Span
 from indexer.events.mch.recursion import RecursionStrategy, RecursiveMatcherStrategy
 from indexer.events.mch.registry import Registries
@@ -25,15 +29,21 @@ from indexer.events.mch.resolver import (
     ResolvedMatcher,
 )
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class CompiledMatcher:
     name: str
     matcher: BlockMatcher
     match_cls: type
-    build_fn_name: str
+    # None for declarative matchers (build statements instead of a registered builder).
+    build_fn_name: str | None
     produces_cls_name: str
     source_span: Span
+    # Build statements (M4), source order; empty tuple for builder-based matchers.
+    # Carried for IR emission — the runtime reads its own compiled program instead.
+    build_stmts: tuple = ()
 
 
 @dataclass
@@ -179,7 +189,7 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
             f"matcher {decl.name!r}: produces type {decl.produces_primary!r} is not registered",
             decl.span,
         )
-    if decl.build not in ctx.registries.builders:
+    if decl.build is not None and decl.build not in ctx.registries.builders:
         ctx.bag.error(
             "C002_UNKNOWN_BUILDER",
             f"matcher {decl.name!r}: builder {decl.build!r} is not registered",
@@ -267,6 +277,8 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     )
     if anchor_pred_name is not None:
         instance._ir_where = anchor_pred_name  # type: ignore[attr-defined]
+    if rm.anchor_node.where_expr is not None:
+        instance._ir_where_expr = rm.anchor_node.where_expr  # type: ignore[attr-defined]
     if rm.anchor_group is not None:
         instance._ir_anchor_opcodes = tuple(sorted(opcode_set))  # type: ignore[attr-defined]
         instance._ir_anchor_btypes = tuple(sorted(btype_set))  # type: ignore[attr-defined]
@@ -278,6 +290,7 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         build_fn_name=decl.build,
         produces_cls_name=decl.produces_primary,
         source_span=decl.span,
+        build_stmts=tuple(decl.build_stmts),
     )
 
 
@@ -311,6 +324,50 @@ def _make_subclass(name: str, base: type, rm: ResolvedMatcher, ctx: CompileCtx) 
     capture_names = tuple(rm.captures.keys())
     capture_infos = rm.captures  # dict[str, CaptureInfo] — bound in closure scope
 
+    if builder_name is None:
+        # Declarative build path (§9): no registered builder — the build
+        # statements are evaluated against the capture environment and the
+        # produced block is a generic Block carrying the resulting data dict.
+        program = BuildProgram(rm.decl.build_stmts, registries)
+        produced_btype = produces_btype(rm.decl.produces_primary)
+
+        async def build_block(self, block, other_blocks):  # type: ignore[override]
+            env = _extract_captures(
+                self, block, other_blocks,
+                type(self)._mch_capture_names,
+                capture_infos,
+            )
+            # Well-known env names (same content as the registered-builder
+            # path's Match._mch_consumed). setdefault: a capture of the same
+            # name shadows them.
+            env.setdefault("consumed", _dedup_consumed(block, other_blocks))
+            env.setdefault("anchor", block)
+            try:
+                outcome = await program.run(env)
+            except EvalError as e:
+                # Spec §10.7: an expression runtime error is a rejection,
+                # reported through diagnostics — never aborts trace processing.
+                logger.warning(
+                    "mch matcher %r: build evaluation failed (%s); rejecting match",
+                    name, e,
+                )
+                outcome = None
+            if outcome is None:
+                self._mch_last_rejected = True
+                return []
+            self._mch_last_rejected = False
+            produced = Block(produced_btype, [], outcome.data)
+            produced.failed = outcome.failed
+            produced.broken = outcome.broken
+            # Same consumption contract as the registered-builder path below:
+            # merge wires absorbed blocks' parent linkage; return the new block only.
+            produced.merge_blocks([block] + other_blocks)
+            apply_flows(produced, outcome.flows)
+            return [produced]
+
+        return _finalize_subclass(name, base, rm, by_key, cache_key, match_cls,
+                                  capture_names, build_block)
+
     async def build_block(self, block, other_blocks):  # type: ignore[override]
         kwargs = _extract_captures(
             self, block, other_blocks,
@@ -326,13 +383,7 @@ def _make_subclass(name: str, base: type, rm: ResolvedMatcher, ctx: CompileCtx) 
         # `other_blocks` freely (e.g. dedust swap's find_messages/
         # find_call_contracts) need it. Purely additive: builders that ignore
         # it are unaffected.
-        consumed: list = []
-        seen_ids: set[int] = set()
-        for b in [block] + list(other_blocks):
-            if id(b) not in seen_ids:
-                seen_ids.add(id(b))
-                consumed.append(b)
-        m._mch_consumed = consumed
+        m._mch_consumed = _dedup_consumed(block, other_blocks)
         builder = registries.builders.get(builder_name)
         if builder is None:
             raise RuntimeError(f"builder {builder_name!r} is not registered at run time")
@@ -349,6 +400,36 @@ def _make_subclass(name: str, base: type, rm: ResolvedMatcher, ctx: CompileCtx) 
         # composers' other_blocks with already-absorbed children.
         produced.merge_blocks([block] + other_blocks)
         return [produced]
+
+    return _finalize_subclass(name, base, rm, by_key, cache_key, match_cls,
+                              capture_names, build_block)
+
+
+def _dedup_consumed(block, other_blocks) -> list:
+    """The full consumed block set, anchor first, engine traversal order,
+    de-duplicated by identity (first occurrence wins — the engine's
+    RecursiveMatcher reports a recursion's entry block twice)."""
+    consumed: list = []
+    seen_ids: set[int] = set()
+    for b in [block] + list(other_blocks):
+        if id(b) not in seen_ids:
+            seen_ids.add(id(b))
+            consumed.append(b)
+    return consumed
+
+
+def _finalize_subclass(
+    name: str,
+    base: type,
+    rm: ResolvedMatcher,
+    by_key: dict,
+    cache_key: tuple,
+    match_cls: type,
+    capture_names: tuple[str, ...],
+    build_block,
+) -> type:
+    """Assemble and cache the `_MCH_<name>` subclass around a build_block body
+    (shared by the registered-builder and declarative build paths)."""
 
     async def try_build(self, block):  # type: ignore[override]
         self._mch_last_rejected = False
@@ -1036,6 +1117,10 @@ def _lower_node(n: ast_.Node, ctx: CompileCtx) -> BlockMatcher:
             return _orig(block) and _p(block)
         m.test_self = combined  # type: ignore[assignment]
         m._ir_where = n.where_predicate  # type: ignore[attr-defined]
+    if n.where_expr is not None:
+        # Inline `where (expr)` — not evaluated at match time in v0 (no engine
+        # expression-predicate path yet); stamped for IR emission only.
+        m._ir_where_expr = n.where_expr  # type: ignore[attr-defined]
     if n.capture is not None:
         # Tag the lowered matcher with its capture name. The synthesized
         # build_block walks the matcher tree and binds captures positionally

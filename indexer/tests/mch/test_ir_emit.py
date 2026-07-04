@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from indexer.events.mch.ir_emit import emit_dir, render_json
+from indexer.events.mch.compile import compile_text
+from indexer.events.mch.ir_emit import build_stub_registries, emit_dir, emit_ir, render_json
+from indexer.events.mch.lexer import tokenize
+from indexer.events.mch.parser import parse
 
 SPECS_DIR = (
     Path(__file__).resolve().parents[2] / "indexer" / "events" / "mch" / "specs"
@@ -99,3 +102,111 @@ def test_dedust_swap_recursive_step_exit():
     exit_node = nodes[rec["exit"]]
     assert exit_node["kind"] == "contract"
     assert exit_node["opcode"] == 0xAD4EB6F5
+
+
+# ---------------------------------------------------------------------------
+# Expressions & build programs (M4 §9) — inline matcher, not part of specs/
+# (which currently declares no build programs).
+# ---------------------------------------------------------------------------
+
+_BUILD_PROGRAM_SRC = """\
+opcode TestBuildOp  = 0x1001
+opcode TestBuildOp2 = 0x1002
+
+matcher test_build_program {
+    produces test_build_out
+    entry    @a
+
+    op TestBuildOp @a -> op TestBuildOp2 @b where (.value > 0)
+
+    parse a as TestMsg
+    let w = lookup jetton_wallet(a.msg.destination)
+    reject when w == null
+    out {
+        sender: a.msg.source if a.msg.source != null else b.msg.source
+        amount: amount(a.msg.value)
+    }
+    flow ton(a.msg.source, a.msg.value)
+}
+"""
+
+
+def _emit_build_program() -> dict:
+    path = "test_build_program.mch"
+    file_ast = parse(list(tokenize(_BUILD_PROGRAM_SRC, path)), path)
+    registries = build_stub_registries([file_ast])
+    compiled = compile_text(_BUILD_PROGRAM_SRC, path, registries)
+    build_stmts = [m.build_stmts for m in file_ast.matchers]
+    return emit_ir(compiled, [path], build_stmts)
+
+
+def test_build_program_encoding():
+    artifact = _emit_build_program()
+    matcher = artifact["matchers"][0]
+    nodes = artifact["nodes"]
+
+    # Node-level `where_expr` on the non-anchor node (`b`), alongside the
+    # existing named-predicate `where` field (mutually exclusive per node).
+    anchor = nodes[matcher["root"]]
+    assert anchor == {"kind": "contract", "opcode": 0x1001, "capture": "a", "child": 1}
+    assert nodes[1] == {
+        "kind": "contract",
+        "opcode": 0x1002,
+        "capture": "b",
+        "where_expr": {
+            "k": "bin", "op": ">",
+            "l": {"k": "dotfield", "name": "value"},
+            "r": {"k": "int", "v": 0},
+        },
+    }
+
+    def attr(base: dict, *names: str) -> dict:
+        e = base
+        for n in names:
+            e = {"k": "attr", "of": e, "name": n}
+        return e
+
+    a_msg_source = attr({"k": "name", "id": "a"}, "msg", "source")
+    a_msg_value = attr({"k": "name", "id": "a"}, "msg", "value")
+    a_msg_destination = attr({"k": "name", "id": "a"}, "msg", "destination")
+    b_msg_source = attr({"k": "name", "id": "b"}, "msg", "source")
+
+    assert matcher["build_program"] == [
+        {"s": "parse", "target": "a", "types": ["TestMsg"]},
+        {
+            "s": "let", "name": "w",
+            "expr": {"k": "lookup", "name": "jetton_wallet", "args": [a_msg_destination]},
+        },
+        {
+            "s": "reject",
+            "when": {"k": "bin", "op": "==", "l": {"k": "name", "id": "w"}, "r": {"k": "null"}},
+        },
+        {
+            "s": "out",
+            "fields": [
+                {
+                    "name": "sender",
+                    "expr": {
+                        "k": "ternary",
+                        "cond": {"k": "bin", "op": "!=", "l": a_msg_source, "r": {"k": "null"}},
+                        "then": a_msg_source,
+                        "else": b_msg_source,
+                    },
+                },
+                {
+                    "name": "amount",
+                    "expr": {"k": "call", "fn": "amount", "args": [a_msg_value]},
+                },
+            ],
+        },
+        {"s": "flow", "kind": "ton", "args": [a_msg_source, a_msg_value]},
+    ]
+    # Declarative matcher (build statements, no registered builder): "builder"
+    # is omitted entirely, not emitted as null (container rule).
+    assert "builder" not in matcher
+
+
+def test_build_program_deterministic():
+    first = render_json(_emit_build_program())
+    second = render_json(_emit_build_program())
+    assert first.encode("utf-8") == second.encode("utf-8")

@@ -42,6 +42,9 @@ class TokenKind(Enum):
     KW_BROKEN = "broken"
     KW_WHEN = "when"
     KW_LOOKUP = "lookup"
+    KW_FLOW = "flow"
+    KW_IF = "if"
+    KW_ELSE = "else"
     # expression operator keywords
     KW_NOT = "not"
     KW_AND = "and"

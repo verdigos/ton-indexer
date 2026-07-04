@@ -32,6 +32,7 @@ from indexer.events.blocks.basic_matchers import (
     RecursiveMatcher,
 )
 from indexer.events.mch import ast_
+from indexer.events.mch.btypes import produces_btype
 from indexer.events.mch.compile import compile_file
 from indexer.events.mch.compiler import CompiledMatcher
 from indexer.events.mch.lexer import tokenize
@@ -39,7 +40,6 @@ from indexer.events.mch.parser import parse
 from indexer.events.mch.registry import Registries
 
 IR_VERSION = "0.1-poc"
-
 
 def _unsigned32(opcode: int) -> int:
     """Canonical unsigned 32-bit opcode (schema rule: hosts compare unsigned)."""
@@ -72,6 +72,13 @@ def _collect_predicate_names(p: ast_.PatternExpr, out: set[str]) -> None:
     # RuleRef: rule bodies are scanned via File.rules directly.
 
 
+class _StubMessage:
+    """Message-type stand-in for compile-time validation (never parsed here)."""
+
+    def __init__(self, _slice):
+        pass
+
+
 def build_stub_registries(files: list[ast_.File]) -> Registries:
     """Permissive Registries covering every name the given files reference."""
     reg = Registries()
@@ -85,10 +92,14 @@ def build_stub_registries(files: list[ast_.File]) -> Registries:
             _collect_predicate_names(m.pattern, predicate_names)
             for produced in m.produces:
                 reg.block_types.setdefault(produced, object)
-            if m.build not in reg.builders:
+            if m.build is not None and m.build not in reg.builders:
                 async def _stub_builder(match, _name=m.build):
                     return None
                 reg.builders[m.build] = _stub_builder
+            for stmt in m.build_stmts:
+                if isinstance(stmt, ast_.ParseStmt):
+                    for t in stmt.msg_types:
+                        reg.message_types.setdefault(t, _StubMessage)
     for name in sorted(predicate_names):
         reg.predicates[name] = lambda _block: True
     return reg
@@ -149,6 +160,9 @@ def _emit_node(m: BlockMatcher, nodes: list[dict], memo: dict[int, int]) -> int:
     where = getattr(m, "_ir_where", None)
     if where is not None:
         rec["where"] = where
+    where_expr = getattr(m, "_ir_where_expr", None)
+    if where_expr is not None:
+        rec["where_expr"] = _emit_expr(where_expr)
     if m.child_matcher is not None:
         rec["child"] = _emit_node(m.child_matcher, nodes, memo)
     if m.children_matchers:
@@ -177,30 +191,100 @@ def _anchor_record(root: BlockMatcher) -> dict:
     raise ValueError(f"unsupported anchor root type {type(root).__name__}")
 
 
-# `produces` in .mch names either a host block CLASS or a bare btype string
-# (spec §8.1). The IR schema requires btype strings, so class names are
-# normalized here. POC: static map; M5 resolves via the real block-type
-# registry (class -> instance btype) at emit time.
-_CLASS_TO_BTYPE = {
-    "JettonTransferBlock": "jetton_transfer",
-    "JettonBurnBlock": "jetton_burn",
-    "JettonMintBlock": "jetton_mint",
-    "JettonSwapBlock": "jetton_swap",
-}
+# The IR schema requires btype strings; class names are normalized via the
+# shared map in btypes.py (also used by the declarative build path).
+_produces_btype = produces_btype
 
 
-def _produces_btype(name: str) -> str:
-    return _CLASS_TO_BTYPE.get(name, name)
+# ---------------------------------------------------------------------------
+# Expressions & build programs (M4 §9). See docs/mch-ir-poc.md.
+# ---------------------------------------------------------------------------
 
 
-def emit_ir(compiled: list[CompiledMatcher], source_files: list[str]) -> dict:
-    """Build the top-level artifact dict, keys in schema order."""
+def _emit_expr(e: ast_.Expr) -> dict:
+    if isinstance(e, ast_.IntLit):
+        return {"k": "int", "v": e.value}
+    if isinstance(e, ast_.StrLit):
+        return {"k": "str", "v": e.value}
+    if isinstance(e, ast_.BoolLit):
+        return {"k": "bool", "v": e.value}
+    if isinstance(e, ast_.NullLit):
+        return {"k": "null"}
+    if isinstance(e, ast_.NameRef):
+        return {"k": "name", "id": e.name}
+    if isinstance(e, ast_.FieldRef):
+        return {"k": "dotfield", "name": e.field}
+    if isinstance(e, ast_.FieldAccess):
+        return {"k": "attr", "of": _emit_expr(e.target), "name": e.field}
+    if isinstance(e, ast_.Call):
+        # eval.py's evaluator only ever calls a bare builtin name ("only
+        # builtin names are callable"); a non-name callee can be *parsed*
+        # (postfix chaining is generic in the grammar) but can never evaluate,
+        # so it has no faithful IR encoding here.
+        if not isinstance(e.callee, ast_.NameRef):
+            raise ValueError(
+                f"IR emission: Call callee must be a bare name (got "
+                f"{type(e.callee).__name__}); non-name callees never evaluate "
+                f"(see eval.py Evaluator._eval_call) and are not representable "
+                f"in IR {IR_VERSION}"
+            )
+        return {"k": "call", "fn": e.callee.name, "args": [_emit_expr(a) for a in e.args]}
+    if isinstance(e, ast_.LookupExpr):
+        return {"k": "lookup", "name": e.kind, "args": [_emit_expr(a) for a in e.args]}
+    if isinstance(e, ast_.UnaryOp):
+        return {"k": "unary", "op": e.op, "x": _emit_expr(e.operand)}
+    if isinstance(e, ast_.BinaryOp):
+        return {"k": "bin", "op": e.op, "l": _emit_expr(e.left), "r": _emit_expr(e.right)}
+    if isinstance(e, ast_.Ternary):
+        return {
+            "k": "ternary",
+            "cond": _emit_expr(e.cond),
+            "then": _emit_expr(e.then),
+            "else": _emit_expr(e.orelse),
+        }
+    raise ValueError(f"unsupported expression node {type(e).__name__} in IR emission")
+
+
+def _emit_stmt(stmt: ast_.BuildStmt) -> dict:
+    if isinstance(stmt, ast_.ParseStmt):
+        return {"s": "parse", "target": stmt.capture, "types": list(stmt.msg_types)}
+    if isinstance(stmt, ast_.LetStmt):
+        return {"s": "let", "name": stmt.name, "expr": _emit_expr(stmt.value)}
+    if isinstance(stmt, ast_.RejectStmt):
+        return {"s": "reject", "when": _emit_expr(stmt.condition)}
+    if isinstance(stmt, ast_.FailedStmt):
+        return {"s": "failed", "when": _emit_expr(stmt.condition)}
+    if isinstance(stmt, ast_.BrokenStmt):
+        return {"s": "broken", "when": _emit_expr(stmt.condition)}
+    if isinstance(stmt, ast_.FlowStmt):
+        return {"s": "flow", "kind": stmt.kind, "args": [_emit_expr(a) for a in stmt.args]}
+    if isinstance(stmt, ast_.OutStmt):
+        return {
+            "s": "out",
+            "fields": [{"name": f.name, "expr": _emit_expr(f.value)} for f in stmt.fields],
+        }
+    raise ValueError(f"unsupported build statement {type(stmt).__name__} in IR emission")
+
+
+def emit_ir(
+    compiled: list[CompiledMatcher],
+    source_files: list[str],
+    build_stmts: list[tuple[ast_.BuildStmt, ...]] | None = None,
+) -> dict:
+    """Build the top-level artifact dict, keys in schema order.
+
+    Build statements come from `CompiledMatcher.build_stmts`; the optional
+    `build_stmts` parameter (parallel to `compiled`) overrides them and is kept
+    for callers that pre-extracted statements from parsed `ast_.File`s.
+    """
+    if build_stmts is None:
+        build_stmts = [cm.build_stmts for cm in compiled]
     matchers_out: list[dict] = []
     nodes: list[dict] = []
-    for cm in compiled:
+    for cm, stmts in zip(compiled, build_stmts):
         memo: dict[int, int] = {}
         root_id = _emit_node(cm.matcher, nodes, memo)
-        matchers_out.append({
+        rec: dict = {
             "name": cm.name,
             "anchor": _anchor_record(cm.matcher),
             "root": root_id,
@@ -211,8 +295,15 @@ def emit_ir(compiled: list[CompiledMatcher], source_files: list[str]) -> dict:
             ],
             "include_excess": bool(cm.matcher.include_excess),
             "include_bounces": bool(cm.matcher.include_bounces),
-            "builder": cm.build_fn_name,
-        })
+        }
+        # Declarative matchers (build statements, no registered builder) have
+        # no builder name; per the container rule (no nulls for absent
+        # fields), omit rather than emit "builder": null.
+        if cm.build_fn_name is not None:
+            rec["builder"] = cm.build_fn_name
+        if stmts:
+            rec["build_program"] = [_emit_stmt(s) for s in stmts]
+        matchers_out.append(rec)
     return {
         "mch_ir_version": IR_VERSION,
         "frontend": {"generator": "mch-python", "source_files": source_files},

@@ -16,6 +16,34 @@ R010_UNRESOLVED_REFERENCE = "R010_UNRESOLVED_REFERENCE"
 """A bare identifier in a build-statement expression does not resolve to a
 pattern capture or a previously declared `let` name (§9)."""
 
+R011_PARSE_TARGET_NOT_CAPTURE = "R011_PARSE_TARGET_NOT_CAPTURE"
+"""The target of a `parse X as T` statement is not a pattern capture (§9.1)."""
+
+R012_UNKNOWN_MESSAGE_TYPE = "R012_UNKNOWN_MESSAGE_TYPE"
+"""A message type named in `parse … as T` is not present in the host's
+message-type registry (§9.1)."""
+
+R013_DUP_LET = "R013_DUP_LET"
+"""A `let` name collides with a pattern capture or an earlier `let` (§9.2)."""
+
+R014_DUP_OUT_FIELD = "R014_DUP_OUT_FIELD"
+"""The same field name appears more than once in an `out` block (§9.5)."""
+
+R015_BUILD_AMBIGUOUS = "R015_BUILD_AMBIGUOUS"
+"""A matcher declares both a `build` directive (registered builder) and build
+statements — ambiguous; use exactly one form (§9)."""
+
+R016_BUILD_NO_OUT = "R016_BUILD_NO_OUT"
+"""A declarative matcher (no `build` directive) has build statements but no
+`out` block — nothing to produce (§9.5)."""
+
+R017_MULTIPLE_OUT = "R017_MULTIPLE_OUT"
+"""More than one `out` block in a matcher body; exactly one is allowed (§9.5)."""
+
+R018_BAD_FLOW = "R018_BAD_FLOW"
+"""A `flow` statement names an unknown kind or has the wrong number of
+arguments — must be jetton(3), ton(2), or fees(2) (§9.8)."""
+
 
 @dataclass(frozen=True)
 class Span:

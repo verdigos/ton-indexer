@@ -227,6 +227,69 @@ def test_where_expr_on_node():
     assert node.where_expr.left.field == "amount"
 
 
+def test_lex_flow_if_else_keywords():
+    assert _kinds("flow if else") == [
+        TokenKind.KW_FLOW, TokenKind.KW_IF, TokenKind.KW_ELSE,
+    ]
+
+
+def test_ternary_parses_and_is_lowest_precedence():
+    # a ?? 1 if c else 2  ==  (a ?? 1) if c else 2
+    e = _expr("a ?? 1 if c else 2")
+    assert isinstance(e, ast_.Ternary)
+    assert isinstance(e.then, ast_.BinaryOp) and e.then.op == "??"
+    assert isinstance(e.cond, ast_.NameRef) and e.cond.name == "c"
+    assert isinstance(e.orelse, ast_.IntLit) and e.orelse.value == 2
+
+
+def test_ternary_right_associative():
+    # 1 if a else 2 if b else 3  ==  1 if a else (2 if b else 3)
+    e = _expr("1 if a else 2 if b else 3")
+    assert isinstance(e, ast_.Ternary)
+    assert isinstance(e.orelse, ast_.Ternary)
+    assert e.orelse.cond.name == "b"
+
+
+def test_flow_stmt_parses():
+    m = _matcher(
+        "op Foo @x\n"
+        "flow jetton(a, b, c)\n"
+        "flow ton(a, b)\n"
+        "flow fees(a, b)"
+    )
+    kinds = [(s.kind, len(s.args)) for s in m.build_stmts]
+    assert all(isinstance(s, ast_.FlowStmt) for s in m.build_stmts)
+    assert kinds == [("jetton", 3), ("ton", 2), ("fees", 2)]
+
+
+def test_parse_stmt_alternatives():
+    m = _matcher("op Foo @x\nparse x as TypeA | TypeB | TypeC")
+    ps = m.build_stmts[0]
+    assert isinstance(ps, ast_.ParseStmt)
+    assert ps.msg_types == ("TypeA", "TypeB", "TypeC")
+    assert ps.msg_type == "TypeA"  # first-type convenience accessor
+
+
+def test_build_directive_optional_with_out():
+    src = (
+        "opcode Foo = 0x1\n"
+        "matcher m {\n  produces FB\n  entry @x\n\n"
+        "  op Foo @x\n  out { v: 1 }\n}"
+    )
+    m = _parse(src).matchers[0]
+    assert m.build is None
+    assert isinstance(m.build_stmts[0], ast_.OutStmt)
+
+
+def test_build_directive_required_without_stmts():
+    src = (
+        "opcode Foo = 0x1\n"
+        "matcher m {\n  produces FB\n  entry @x\n\n  op Foo @x\n}"
+    )
+    with pytest.raises(CompileError):
+        _parse(src)
+
+
 def test_where_named_predicate_still_parses():
     src = (
         "opcode Foo = 0x1\npredicate p\n"
@@ -243,23 +306,27 @@ def test_where_named_predicate_still_parses():
 # ==========================================================================
 
 def test_resolver_carries_build_stmts():
+    # Declarative form: build statements instead of a `build` directive
+    # (mixing both is R015; statements without `out` are R016).
     rf = _resolve(
         "opcode Foo = 0x1\n"
-        "matcher m {\n  produces FB\n  build b\n  entry @x\n\n"
-        "  op Foo @x\n  let a = x.body\n}"
+        "matcher m {\n  produces FB\n  entry @x\n\n"
+        "  op Foo @x\n  let a = x.failed\n  out { v: a }\n}"
     )
-    assert len(rf.matchers[0].build_stmts) == 1
+    assert len(rf.matchers[0].build_stmts) == 2
     assert isinstance(rf.matchers[0].build_stmts[0], ast_.LetStmt)
+    assert isinstance(rf.matchers[0].build_stmts[1], ast_.OutStmt)
+    assert rf.matchers[0].decl.build is None
 
 
 def test_resolver_known_capture_ref_passes():
-    # x is a capture; jetton(...) callee is a builtin (unvalidated).
+    # x is a capture; account(...) callee is a builtin (unvalidated).
     rf = _resolve(
         "opcode Foo = 0x1\n"
-        "matcher m {\n  produces FB\n  build b\n  entry @x\n\n"
+        "matcher m {\n  produces FB\n  entry @x\n\n"
         "  op Foo @x\n"
         "  let amt = x.body.amount\n"
-        "  out { amount: amt, asset: jetton(x) }\n}"
+        "  out { amount: amt, src: account(x) }\n}"
     )
     assert rf.matchers[0].build_stmts  # resolved without error
 
@@ -278,9 +345,9 @@ def test_resolver_unknown_ref_emits_r010():
 def test_resolver_let_name_visible_to_later_stmt():
     rf = _resolve(
         "opcode Foo = 0x1\n"
-        "matcher m {\n  produces FB\n  build b\n  entry @x\n\n"
+        "matcher m {\n  produces FB\n  entry @x\n\n"
         "  op Foo @x\n"
-        "  let a = x.body\n"
+        "  let a = x.failed\n"
         "  out { v: a }\n}"
     )
     assert len(rf.matchers[0].build_stmts) == 2

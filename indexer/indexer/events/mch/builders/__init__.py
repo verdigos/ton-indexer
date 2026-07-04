@@ -8,13 +8,19 @@ from __future__ import annotations
 
 from indexer.events.mch.builders.coffee import coffee_registries, register_coffee
 from indexer.events.mch.builders.dedust import (
+    dedust_hybrid_registries,
     dedust_registries,
     dedust_withdraw_registries,
     register_dedust,
+    register_dedust_hybrid,
     register_dedust_withdraw,
 )
 from indexer.events.mch.builders.dns import dns_registries, register_dns
-from indexer.events.mch.builders.jettons import jetton_registries, register_jettons
+from indexer.events.mch.builders.jettons import (
+    jetton_decl_registries,
+    jetton_registries,
+    register_jettons,
+)
 from indexer.events.mch.builders.stonfi import (
     register_stonfi_v2,
     stonfi_v2_registries,
@@ -22,12 +28,15 @@ from indexer.events.mch.builders.stonfi import (
 
 __all__ = [
     "coffee_registries",
+    "dedust_hybrid_registries",
     "dedust_registries",
     "dedust_withdraw_registries",
     "dns_registries",
+    "jetton_decl_registries",
     "jetton_registries",
     "register_coffee",
     "register_dedust",
+    "register_dedust_hybrid",
     "register_dedust_withdraw",
     "register_dns",
     "register_jettons",

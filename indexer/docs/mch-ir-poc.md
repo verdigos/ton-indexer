@@ -45,12 +45,13 @@ Serialize the *lowered* matcher graph (what the Python mch compiler builds from 
 - `root` — node id of the anchor node itself (its `child` / `parent` / `children` edges hang the rest of the pattern).
 - `produces` — btype strings (union per T11; first = primary).
 - `captures` — informational in POC (Go ignores). `card` ∈ `"one" | "opt" | "many"`.
-- `builder` — host registry name. Go POC: ignored (build = stub creating primary-btype block + merge of consumed set).
+- `builder` — host registry name. Go POC: ignored (build = stub creating primary-btype block + merge of consumed set). **Omitted** for declarative matchers (build statements, no registered builder — see "Expressions & build programs" below); never emitted as `null`.
 - `include_excess` / `include_bounces` — engine auto-append flags (excess opcode `0xd53276db`, bounce `0xffffffff`), default true.
+- `build_program` — array, matcher's build statements in source order. **Omitted** when the matcher has no build statements. See "Expressions & build programs" below.
 
 ## Node records
 
-Flat tagged records. Common optional fields on every kind: `optional` (bool, default false), `capture` (string, informational), `where` (predicate name, string), `child` (node id), `parent` (node id), `children` (array of node ids — ordered children-set items; item-level optionality lives on the referenced node's own `optional` flag).
+Flat tagged records. Common optional fields on every kind: `optional` (bool, default false), `capture` (string, informational), `where` (predicate name, string), `where_expr` (inline `where (expr)` clause — an expression node, see "Expressions & build programs" below; mutually exclusive with `where`), `child` (node id), `parent` (node id), `children` (array of node ids — ordered children-set items; item-level optionality lives on the referenced node's own `optional` flag).
 
 Kinds:
 
@@ -80,6 +81,57 @@ Go engine must match the Python engine (`indexer/events/blocks/basic_matchers.py
 
 `where` / `pred` reference host-registered predicate names. Go POC: registry `map[string]func(*Block) bool`; unknown name → register always-true stub and print a warning to stderr once per name. (Real impl will hard-fail; POC must stay runnable for specs whose predicates aren't ported.)
 
+## Expressions & build programs
+
+M4 build statements (spec §9) and expressions (spec §9.6), inlined as trees (not a pooled/deduplicated bytecode form — see "Out of scope" below).
+
+### Expressions
+
+Tagged by `"k"`:
+
+```json
+{ "k": "int",  "v": 42 }
+{ "k": "str",  "v": "abc" }
+{ "k": "bool", "v": true }
+{ "k": "null" }
+{ "k": "name",     "id": "transfer" }
+{ "k": "dotfield", "name": "value" }
+{ "k": "attr",   "of": <expr>, "name": "msg" }
+{ "k": "call",   "fn": "account", "args": [<expr>, ...] }
+{ "k": "lookup", "name": "jetton_wallet", "args": [<expr>, ...] }
+{ "k": "unary",  "op": "not" | "-", "x": <expr> }
+{ "k": "bin",    "op": "and" | "or" | "==" | "!=" | "<" | "<=" | ">" | ">=" | "??", "l": <expr>, "r": <expr> }
+{ "k": "ternary", "cond": <expr>, "then": <expr>, "else": <expr> }
+```
+
+- `name` — a bare identifier value: a pattern capture or a `let` binding.
+- `dotfield` — leading-dot field access (`.field`); valid only inside a node's inline `where (expr)` clause (the current block's data field).
+- `attr` — `<expr>.field` (message/body/capture-object accessor chains, e.g. `a.msg.source`).
+- `call.fn` — always a bare builtin name (`account`, `amount`, `asset`, `ton_asset`, `b64`). The grammar technically allows postfix-chaining a call off any expression (e.g. `x.y(...)`), but the evaluator (`eval.py Evaluator._eval_call`) only ever invokes a bare builtin name — a non-name callee never evaluates and has no IR encoding (the Python emitter raises rather than silently drop it).
+- `lookup.name` — interface-repository lookup kind (`jetton_wallet`, `nft_item`, ...).
+
+### Build statements
+
+New matcher-record key `build_program` (array, source order; omitted when the matcher declares none). Tagged by `"s"`:
+
+```json
+{ "s": "parse",  "target": "transfer", "types": ["JettonTransfer", "..."] }
+{ "s": "let",    "name": "w", "expr": <expr> }
+{ "s": "reject", "when": <expr> }
+{ "s": "failed", "when": <expr> }
+{ "s": "broken", "when": <expr> }
+{ "s": "flow",   "kind": "jetton" | "ton" | "fees", "args": [<expr>, ...] }
+{ "s": "out",    "fields": [ {"name": "sender", "expr": <expr>}, ... ] }
+```
+
+`out.fields` is in source order.
+
+### Node-level `where_expr`
+
+`Node.where_expr` (inline `where (expr)`, mutually exclusive with the named `where` predicate form) → node record key `"where_expr": <expr>`. **Not emitted for a matcher's own anchor node** in this POC — the anchor is lowered through a separate code path that doesn't currently carry `where_expr` through; no current spec (real or test) exercises this combination.
+
+Go POC: ignores `build_program` and `where_expr` entirely (unknown-field-tolerant parser); these fields are frontend-only in 0.1-poc.
+
 ## Emitter interpretation notes (binding for loaders)
 
 1. **Opcode-set anchors** (e.g. `jetton_mint`): the root node is emitted as kind `"any"`; the membership test lives ONLY in the matcher record's `anchor`. Loaders MUST apply the anchor test as the root's effective `test_self` (or as a candidate prefilter) — both readings are equivalent because the root node itself is permissive.
@@ -88,7 +140,7 @@ Go engine must match the Python engine (`indexer/events/blocks/basic_matchers.py
 
 ## Out of scope for 0.1-poc
 
-Expression bytecode (`exprs` pool), build statements, typed capture extraction, value flow, priority directive, diagnostics. Schema reserves nothing — final M5 IR is a superset redesign; this artifact is disposable.
+Expression *bytecode* — a shared, deduplicated `exprs` pool addressed by index (final M5 IR); this POC inlines expression trees per-occurrence instead, with no dedup. Also out of scope: typed capture extraction, value flow, priority directive, diagnostics, anchor-node `where_expr` (see above). Schema reserves nothing — final M5 IR is a superset redesign; this artifact is disposable.
 
 ## Acceptance
 

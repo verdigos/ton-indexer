@@ -97,6 +97,15 @@ class BinaryOp(Expr):
     span: Span
 
 
+@dataclass(frozen=True)
+class Ternary(Expr):
+    """Python-style conditional: `then if cond else orelse`."""
+    cond: Expr
+    then: Expr
+    orelse: Expr
+    span: Span
+
+
 class NodeHead:
     pass
 
@@ -208,10 +217,19 @@ class BuildStmt:
 
 @dataclass(frozen=True)
 class ParseStmt(BuildStmt):
-    """`parse CAPTURE as MessageType`."""
+    """`parse CAPTURE as MessageType (| MessageType)*`.
+
+    Alternatives are tried in source order; the first type whose constructor
+    parses the body wins (soft — all failing yields a null body).
+    """
     capture: str
-    msg_type: str
+    msg_types: tuple[str, ...]
     span: Span
+
+    @property
+    def msg_type(self) -> str:
+        """First (or only) declared message type. Kept for single-type callers."""
+        return self.msg_types[0]
 
 
 @dataclass(frozen=True)
@@ -244,6 +262,16 @@ class BrokenStmt(BuildStmt):
 
 
 @dataclass(frozen=True)
+class FlowStmt(BuildStmt):
+    """`flow jetton(owner, master, amount)` | `flow ton(account, amount)` |
+    `flow fees(account, amount)` — value-flow effects on the produced block
+    (Block.value_flow add_jetton/add_ton/add_fees, spec §9.8)."""
+    kind: str
+    args: tuple[Expr, ...]
+    span: Span
+
+
+@dataclass(frozen=True)
 class OutField:
     name: str
     value: Expr
@@ -261,7 +289,9 @@ class OutStmt(BuildStmt):
 class MatcherDecl:
     name: str
     produces: tuple[str, ...]
-    build: str
+    # None when the matcher is declarative (build statements with an `out`
+    # block instead of a registered-builder reference, §9.5).
+    build: str | None
     entry: str | None
     include_excess: bool
     include_bounces: bool
