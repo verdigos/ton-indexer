@@ -201,6 +201,7 @@ def resolve(file: ast_.File, registries: Registries) -> ResolvedFile:
     opcodes: dict[str, int] = _resolve_opcodes(file, registries, bag)
     _check_predicates(file, registries, bag)
     _check_produces_union(file, registries, bag)
+    _check_shapers(file, registries, bag)
     _check_rule_patterns(file, opcodes, registries, bag)
     rule_recursion: dict[str, RecursionClass] = _classify_rules(file, bag)
     resolved_matchers: list[ResolvedMatcher] = []
@@ -271,6 +272,18 @@ def _check_produces_union(file: ast_.File, registries: Registries, bag: Diagnost
                 )
 
 
+def _check_shapers(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> None:
+    """Validate every `shape` directive (§8.7) against the host's shaper registry
+    (same early-check pattern as `_check_produces_union`; the compiler re-checks)."""
+    for m in file.matchers:
+        if m.shape is not None and m.shape not in registries.shapers:
+            bag.error(
+                "C011_UNKNOWN_SHAPER",
+                f"matcher {m.name!r}: shaper {m.shape!r} is not registered in the host",
+                m.span,
+            )
+
+
 def _classify_rules(file: ast_.File, bag: DiagnosticBag) -> dict[str, RecursionClass]:
     # Build the rule reference graph; classify cycles.
     name_to_rule = {r.name: r for r in file.rules}
@@ -312,9 +325,13 @@ def _classify_rules(file: ast_.File, bag: DiagnosticBag) -> dict[str, RecursionC
         collect_refs(r.pattern, refs, under_maybe=False)
         direct_self = any(name == r.name for name, _ in refs)
         if direct_self:
-            # Must have at least one maybe-guarded $self for the recursion to terminate.
+            # Frontier strategy: must have at least one maybe-guarded $self for
+            # the recursion to terminate. Cyclic strategy (§10.3, [M2R,
+            # R11/T28]): termination is a non-recursive alternative branch —
+            # `maybe $self` is in fact FORBIDDEN there (C012); descent is
+            # bounded by trace depth, so R006 does not apply.
             terminating = any(name == r.name and inside_maybe for name, inside_maybe in refs)
-            if not terminating:
+            if not terminating and r.strategy != "cyclic":
                 bag.error(
                     "R006_UNBOUNDED_RECURSION",
                     f"rule {r.name!r} is directly self-recursive without a `maybe $rule` termination",

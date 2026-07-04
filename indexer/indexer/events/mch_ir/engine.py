@@ -82,6 +82,10 @@ def build_matchers(art: Artifact, registries: Registries) -> list["IrMatcher"]:
             raise IrLoadError(
                 f"matcher {m['name']!r}: builder {m['builder']!r} is not registered"
             )
+        if "shape" in m and m["shape"] not in registries.shapers:
+            raise IrLoadError(
+                f"matcher {m['name']!r}: shaper {m['shape']!r} is not registered"
+            )
         for stmt in m.get("build_program") or ():
             if stmt.get("s") == "parse":
                 for t in stmt["types"]:
@@ -116,7 +120,7 @@ class CompiledNode:
 
     __slots__ = ("kind", "opcode", "btype", "pred", "where", "where_expr",
                  "slot", "optional", "child", "children", "parent",
-                 "branches", "step", "exit", "exclusive")
+                 "branches", "step", "exit", "exclusive", "strategy")
 
     def __init__(self, rec: dict, remap: dict[int, int], slots: dict[str, int],
                  registries: Registries):
@@ -138,6 +142,10 @@ class CompiledNode:
         self.step: int = remap[rec["step"]] if "step" in rec else -1
         self.exit: int = remap[rec["exit"]] if "exit" in rec else -1
         self.exclusive: bool = bool(rec.get("exclusive", False))
+        # Recursion strategy (§10.3, [M2R, R11/T28]): "frontier" (default) or
+        # "cyclic" — the step subgraph is a rule body with back-edges to its
+        # own root; matching is plain recursive descent (see _match_recursive).
+        self.strategy: str = rec.get("strategy", "frontier")
 
 
 class _MatchContext:
@@ -192,7 +200,8 @@ class IrMatcher:
     __slots__ = ("name", "produces", "_registries", "_anchor_opcodes",
                  "_anchor_btypes", "_nodes", "_root", "_slots", "_cards",
                  "_step_slots", "_exit_slots", "_owned_slots", "_builder_name",
-                 "_program", "_include_excess", "_include_bounces")
+                 "_program", "_include_excess", "_include_bounces",
+                 "_shaper_name")
 
     def __init__(self, record: dict, pool: list[dict], registries: Registries):
         self.name: str = record["name"]
@@ -247,6 +256,18 @@ class IrMatcher:
                         f"matcher {self.name!r}: nested recursion is not supported "
                         f"(recursive node reachable from another's step subgraph)"
                     )
+            if node.strategy == "cyclic":
+                # Cyclic descent (§10.3): the body pushes no iteration frames,
+                # so slots inside it could never assemble — the compiler
+                # rejects them (C012); reject handwritten artifacts too.
+                if any(self._nodes[r].slot >= 0 for r in reach):
+                    raise IrLoadError(
+                        f"matcher {self.name!r}: captures inside a cyclic "
+                        f"recursion body are not supported"
+                    )
+                step_slots[nid] = frozenset()
+                exit_slots[nid] = frozenset()
+                continue
             step_slots[nid] = frozenset(
                 self._nodes[r].slot for r in reach if self._nodes[r].slot >= 0
             )
@@ -270,6 +291,9 @@ class IrMatcher:
         )
         self._include_excess: bool = record.get("include_excess", True)
         self._include_bounces: bool = record.get("include_bounces", True)
+        # `shape` directive (§8.7): validated against registries at load
+        # (build_matchers); resolved lazily like builders for symmetry.
+        self._shaper_name: str | None = record.get("shape")
 
     def _reachable(self, start: int) -> list[int]:
         """Local node ids reachable from `start` over every edge kind
@@ -451,12 +475,22 @@ class IrMatcher:
         """§4.6 frontier walk, T18 semantics: exit tried FIRST per candidate,
         one step per round, the stepped blocks' next_blocks (in consumption
         order) become the new frontier. Entry gate = the STEP node's head test
-        (legacy RecursiveMatcher.test_self) plus the node's own where clauses."""
-        if not self._test_head(node.step, entry):
-            return False
+        (legacy RecursiveMatcher.test_self) plus the node's own where clauses.
+
+        §4.6b cyclic strategy ([M2R, R11/T28]): no frontier and no frames —
+        `step` is the rule-body root whose subgraph contains back-edges to
+        itself; one full _match_node descent through the cycle IS the
+        recursion, bounded by trace depth (child edges always move down the
+        tree). Same-prefix step/final branches disambiguate by ordered
+        alternatives looking down the actual chain — the shape the frontier
+        walk's exit-first order cannot express."""
         if node.where is not None and not node.where(entry):
             return False
         if node.where_expr is not None and not eval_where_expr(node.where_expr, entry):
+            return False
+        if node.strategy == "cyclic":
+            return self._match_node(node.step, entry, ctx)
+        if not self._test_head(node.step, entry):
             return False
         outer_frame = ctx.frame
         try:
@@ -529,6 +563,20 @@ class IrMatcher:
             env[name] = items
         return env
 
+    def _apply_shape(self, produced: Block, match_obj) -> None:
+        """§8.7 `shape` hook: LAST build step, after merge (and flows on
+        declarative matchers) — same point as the compiled path, so topology
+        parity holds. Shapers are sync `(produced_block, match) -> None` and
+        may mutate only the produced block's region."""
+        if self._shaper_name is None:
+            return
+        shaper = self._registries.shapers.get(self._shaper_name)
+        if shaper is None:
+            raise RuntimeError(
+                f"shaper {self._shaper_name!r} is not registered at run time"
+            )
+        shaper(produced, match_obj)
+
     async def _build(self, anchor: Block, captures: dict,
                      consumed: list[Block]) -> Block | None:
         """Build phase (§6). Returns the produced block, or None for a clean
@@ -545,6 +593,7 @@ class IrMatcher:
             if produced is None:
                 return None
             produced.merge_blocks(consumed)
+            self._apply_shape(produced, match)
             return produced
 
         if self._program is not None:
@@ -569,10 +618,12 @@ class IrMatcher:
             produced.broken = outcome.broken
             produced.merge_blocks(consumed)
             apply_flows(produced, outcome.flows)
+            self._apply_shape(produced, SimpleNamespace(**env))
             return produced
 
         # Neither builder nor build program (never emitted by the current
         # frontend): Go-POC stub build over the consumed set.
         produced = Block(self.produces[0], [], None)
         produced.merge_blocks(consumed)
+        self._apply_shape(produced, SimpleNamespace(**captures))
         return produced

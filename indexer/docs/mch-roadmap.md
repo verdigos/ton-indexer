@@ -150,7 +150,7 @@ T17 notes:
 - No compiler/resolver changes were needed.
 
 ### T28 — Tonco swap port (needs cyclic-descent recursion strategy)
-Status: todo
+Status: done (2026-07-04, via R11 — option (a) cyclic RecursionStrategy: contextual modifier `rule NAME cyclic` (no new keyword), C012_CYCLIC_RULE_SHAPE (no captures in body, self-ref chain-tail only, no `maybe $self`, no cross-recursive refs), R006 exempted for cyclic; IR `{"kind":"recursive","strategy":"cyclic"}` with in-body self-refs as plain back-edge node refs, loader rejects unknown strategy / cyclic+exit / capture slots in body; both engines walk identically (compiled `_MchCyclicRefMatcher`, IR single `_match_node(step)` descent). Tonco ported: specs/tonco_swap.mch + builders/tonco_swap.py + `build_tonco_swap_core` extraction; 3-way parity ×4 fixtures (single-hop, 2-hop premature-exit killer, failed target-extraction, notify<-pton in-arm); maybe-inside-OrMatcher quirk pinned by tests on both engines (losing optional branch ≠ success); walk-compare +3 scenarios, L_only=M_only=0; spec §5.3/§7.2/§10.3 + engine-v2 §4.6b + IR doc updated. mch 1451 green, test_actions 123.)
 Spec: §10.3, §16
 Needs: T17
 Context (T17 finding): `ToncoSwapBlockMatcher` recursion is a **cyclic child-matcher graph** (`swap.child = payout; payout.child = Or([...intermediate chains ending in the same swap matcher..., optional finals])`) — plain recursive descent where the Or tries hop-continuation branches BEFORE the optional final-transfer branches. `_MchRecursiveMatcher` (the only strategy, §10.3) walks a frontier trying the exit FIRST per block; tonco's step and exit branches both start `swap -> payout`, so the exit would fire prematurely on every multi-hop chain (hop 2 of a 3-hop swap matches the exit since its distinguishing children are behind `maybe`). Faithful porting needs either (a) a second recursion strategy lowering self-refs at chain ends to a cyclic matcher graph (RecursionStrategy protocol already exists in recursion.py for this), or (b) negative lookahead in the language (§16 territory). Also needed: `maybe`-branch semantics inside alternatives (legacy uses optional=True branches inside OrMatcher, which OrMatcher.try_build ignores — quirk to pin before porting).
@@ -241,7 +241,7 @@ Goal: legacy re-anchors awkwardly; remake with a direct anchor per the port-wave
 Accept: synthetic parity or explicit blocked status with findings; remake gate.
 
 ### R06 — `shape` directive (post-build tree surgery in host fn)
-Status: todo
+Status: done (2026-07-04 — `shape IDENT` directive; 6th registry `shapers` (`register_shaper`); sync `(produced_block, match) -> None` invoked as LAST build step post-merge on BOTH engines (compiled synthesized build_blocks + mch_ir all three build paths); C011_UNKNOWN_SHAPER (resolve + defensive compile), P011_DUPLICATE_DIRECTIVE; IR matcher-record `"shape"` key (omitted when absent), loader type check + build_matchers hard-fail on missing shaper; spec §8.7 region contract + §11.1 row, IR doc + engine-v2 doc updated; 18 new tests (11 mch + 7 mch_ir) incl. EmptyBlock insert_between topology parity compiled==IR. FINDING: legacy surgery code lifts verbatim into shapers — pre- vs post-merge insertion equivalent, verified.)
 Tier: fable
 Needs: —
 Spec: add §8.7 (directive), §11.1 (registry + contract), IR doc key.
@@ -289,7 +289,7 @@ Goal: allow `entry` on a `pred`-headed node. No opcode prefilter possible → en
 Accept: either working pred-anchor with measured overhead + behavioral test, or a documented rejection with numbers.
 
 ### R11 — Tonco swap (= T28, step-first recursion strategy)
-Status: todo
+Status: done (2026-07-04 — see T28 status in M2; cyclic-descent strategy chosen over negative lookahead; sweep row added, pre-validated 0 divergences on 4 anchor-candidate fixtures.)
 Tier: fable
 Needs: —
 Pointer task: execute **T28** (see M2 above — cyclic child-graph recursion; strategy (a) cyclic descent vs (b) negative lookahead decision lives there). Listed here because it is part of the remake wave's feature batch. Update T28's own status when done.
@@ -329,7 +329,8 @@ Status: todo
 Spec: §10.7
 Needs: —
 Goal: tests pinning: builder returns `[]` ⇒ no consumption, next matcher in order gets its attempt; builder raises ⇒ same + diagnostic logged; trace processing never aborts.
-Accept: behavioral tests with two matchers sharing an anchor where the first rejects.
+AMENDMENT (R11 finding, 2026-07-04): pre-existing engine asymmetry on rejection — compiled path's base `try_build` auto-appends the ANCHOR's excess/bounce children to the result even when the builder rejected (`[]`), while the v2 IR engine returns a clean `[]`. Observable only when a structural match rejects at build AND the anchor has excess/bounce children; no corpus fixture trips it today, but any future sweep row could. Pin one behavior (clean rejection preferred) and align both engines here.
+Accept: behavioral tests with two matchers sharing an anchor where the first rejects; rejection excess/bounce asymmetry resolved + tested.
 
 ### T24 — Port dedust deposit liquidity (host-side merge)
 Status: todo

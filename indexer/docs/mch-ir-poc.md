@@ -48,6 +48,7 @@ Serialize the *lowered* matcher graph (what the Python mch compiler builds from 
 - `builder` — host registry name. Go POC: ignored (build = stub creating primary-btype block + merge of consumed set). **Omitted** for declarative matchers (build statements, no registered builder — see "Expressions & build programs" below); never emitted as `null`.
 - `include_excess` / `include_bounces` — engine auto-append flags (excess opcode `0xd53276db`, bounce `0xffffffff`), default true.
 - `build_program` — array, matcher's build statements in source order. **Omitted** when the matcher has no build statements. See "Expressions & build programs" below.
+- `shape` — host shaper-registry name from the `shape IDENT` directive (spec §8.7). **Omitted** when absent (container rule: never `null`). Loaders hard-fail (`IrLoadError`) when the named shaper is missing from the host registries; the engine invokes it synchronously as the last build step, after the produced block's merge (and flows): `shaper(produced_block, match) -> None`.
 
 ## Node records
 
@@ -67,6 +68,7 @@ Kinds:
 - `contract.opcode` — signed or unsigned int accepted; hosts MUST compare on the unsigned 32-bit value (Python stores opcodes as signed int32 in DB — emitter emits the canonical **unsigned** value; loader normalizes its message opcodes the same way).
 - `or.exclusive` — engine contract per spec §6.6: exclusivity affects `test_self` ONLY (sum of branch test_self == 1); `try_build` behaves exactly like `or` (first branch that fully builds wins).
 - `recursive` — frontier walk per spec §10.3 / T18 semantics: at each frontier block, test `exit` first; if exit builds, recursion terminates successfully; else try `step`; step's built blocks' `next_blocks` become the new frontier. `optional` recursion = zero iterations allowed.
+- `recursive.strategy` `[M2R, R11/T28]` — optional string; omitted = the frontier walk above. `"cyclic"` = cyclic descent (spec §10.3): `step` is the rule-body root whose subgraph carries plain back-edges to itself (in-body self-references emit as node id refs, never as nodes of their own); matching the recursive node is ONE full match of `step` against the entry block — the graph cycle IS the recursion, bounded by trace depth. Loaders MUST reject `"cyclic"` combined with `exit`, any other strategy string, and any capture slot reachable inside the cyclic body (no iteration frames exist, so it could never assemble).
 - Cycles are legal (e.g. a step node graph that references back). Loaders must build via two passes (allocate all nodes, then wire edges by id).
 
 ## Walk semantics (normative for POC)
@@ -136,7 +138,7 @@ Go POC: ignores `build_program` and `where_expr` entirely (unknown-field-toleran
 
 1. **Opcode-set anchors** (e.g. `jetton_mint`): the root node is emitted as kind `"any"`; the membership test lives ONLY in the matcher record's `anchor`. Loaders MUST apply the anchor test as the root's effective `test_self` (or as a candidate prefilter) — both readings are equivalent because the root node itself is permissive.
 2. **Duplicate matcher names** can occur across spec files (currently `jetton_transfer` in both `jetton_transfer.mch` and `jettons.mch`, identical patterns). `-matchers` name selection must tolerate duplicates (run each occurrence in registration order; re-runs are naturally idempotent since absorbed blocks don't re-match).
-3. **`recursive` nodes never contain back-reference cycles in practice** (Python lowering expands each rule-ref site fresh and strips the trailing `maybe $self`); a matcher may therefore contain several independent `recursive` nodes. `exit` MAY be absent (step-only recursion) — loaders must treat missing `exit` as "no exit matcher" (frontier walk terminates when the frontier empties). All emitted `recursive` nodes currently carry `optional: true`.
+3. **FRONTIER `recursive` nodes never contain back-reference cycles in practice** (Python lowering expands each rule-ref site fresh and strips the trailing `maybe $self`); a matcher may therefore contain several independent `recursive` nodes. `exit` MAY be absent (step-only recursion) — loaders must treat missing `exit` as "no exit matcher" (frontier walk terminates when the frontier empties). All emitted frontier `recursive` nodes currently carry `optional: true`. `[M2R, R11/T28]` CYCLIC `recursive` nodes are the opposite on both counts: their `step` subgraph always cycles back to its own root, never carries an `exit`, and outer reference sites are mandatory unless the spec wraps them in `maybe` — several cyclic nodes may SHARE one body subgraph (one per reference site, e.g. `specs/tonco_swap.mch` emits two over the same `step`).
 
 ## Out of scope for 0.1-poc
 

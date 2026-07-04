@@ -204,6 +204,12 @@ class RuleDecl:
     name: str
     pattern: PatternExpr
     span: Span
+    # Recursion strategy for a self-referential rule (spec §10.3): "frontier"
+    # (default, T18 frontier walk) or "cyclic" (cyclic descent — self-refs at
+    # chain ends lower to back-edges in the matcher graph). Parsed from the
+    # contextual modifier `rule NAME cyclic = …`; ignored for non-recursive
+    # rules.
+    strategy: str = "frontier"
 
 
 # ---------------------------------------------------------------------------
@@ -299,6 +305,10 @@ class MatcherDecl:
     span: Span
     # M4 build statements, in source order. Empty for M1-M3 matchers.
     build_stmts: tuple[BuildStmt, ...] = ()
+    # `shape IDENT` directive (M2R R06, §8.7): registered shaper invoked by the
+    # engine after merge, for post-build tree surgery on the produced block's
+    # region. None when absent.
+    shape: str | None = None
 
     @property
     def produces_primary(self) -> str:

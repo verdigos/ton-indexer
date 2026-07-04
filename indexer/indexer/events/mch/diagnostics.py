@@ -44,6 +44,20 @@ R018_BAD_FLOW = "R018_BAD_FLOW"
 """A `flow` statement names an unknown kind or has the wrong number of
 arguments — must be jetton(3), ton(2), or fees(2) (§9.8)."""
 
+P011_DUPLICATE_DIRECTIVE = "P011_DUPLICATE_DIRECTIVE"
+"""A matcher declares the same at-most-once directive more than once
+(currently: `shape`, §8.7)."""
+
+C011_UNKNOWN_SHAPER = "C011_UNKNOWN_SHAPER"
+"""The `shape` directive names a shaper that is not present in the host's
+shaper registry (§8.7, §11.1)."""
+
+C012_CYCLIC_RULE_SHAPE = "C012_CYCLIC_RULE_SHAPE"
+"""A `rule NAME cyclic = …` body violates the cyclic-descent shape rules
+(§10.3, [M2R, R11/T28]): captures inside the body, a self-reference that is
+not the last atom of its chain, a `maybe`-wrapped self-reference, or a
+reference to another recursive rule."""
+
 
 @dataclass(frozen=True)
 class Span:

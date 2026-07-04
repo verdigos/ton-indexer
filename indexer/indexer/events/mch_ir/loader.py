@@ -129,6 +129,9 @@ def _check_matcher(m: Any, n_nodes: int) -> None:
     if "builder" in m and not isinstance(m["builder"], str):
         raise IrLoadError(f"{where}: builder must be a string")
 
+    if "shape" in m and not isinstance(m["shape"], str):
+        raise IrLoadError(f"{where}: shape must be a string")
+
     program = m.get("build_program")
     if program is not None:
         if not isinstance(program, list):
@@ -240,6 +243,18 @@ def _check_node(i: int, node: Any, n_nodes: int) -> None:
             raise IrLoadError(f"{where}: recursive requires step")
         check_ref("step")
         check_ref("exit")
+        # Recursion strategy (spec §10.3, [M2R, R11/T28]): omitted = frontier
+        # walk. "cyclic" = cyclic descent — `step` is the rule-body root whose
+        # subgraph may contain back-edges to itself; an exit cannot exist
+        # (termination is a non-recursive alternative branch inside the body).
+        if "strategy" in node:
+            if node["strategy"] != "cyclic":
+                raise IrLoadError(
+                    f"{where}: unknown recursion strategy {node['strategy']!r} "
+                    f"(omit for frontier, or use \"cyclic\")"
+                )
+            if "exit" in node:
+                raise IrLoadError(f"{where}: cyclic recursion cannot carry an exit")
     for key in ("child", "parent"):
         check_ref(key)
     for c in node.get("children", []):

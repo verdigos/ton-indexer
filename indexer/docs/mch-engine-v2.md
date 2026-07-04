@@ -44,6 +44,8 @@ CompiledNode:
     edges:       child: int|-1, children: [int], parent: int|-1,
                  branches: [int], step: int|-1, exit: int|-1
     exclusive:   bool                          # or-nodes only
+    strategy:    frontier | cyclic             # recursive nodes only, default
+                                               # frontier ([M2R, R11/T28], §4.6b)
 
 CompiledMatcher:
     name, produces
@@ -199,6 +201,18 @@ Nested recursion (a recursive node reachable inside another's step): out of scop
 
 **Executable spec**: `tests/mch/test_recursion_captures.py` (11 cases) defines binding results — step captures gap-aligned per iteration (unbound in an iteration → `None` appended for that iteration), exit captures bind at most once, post-recursion captures keep binding. v2 must reproduce them through the IR path.
 
+### 4.6b `recursive` node, `strategy: "cyclic"` `[M2R, R11/T28]`
+
+Cyclic descent (spec §10.3): no frontier, no frames, no exit. `step` is the rule-body root whose subgraph carries back-edges to its own root (in-body self-references are plain node refs — the graph cycle IS the recursion, bounded by trace depth since child edges always move down the tree):
+
+```
+match_recursive_cyclic(node, entry, ctx):
+    # node-level where clauses first, as in 4.6
+    return match_node(node.step, entry, ctx)
+```
+
+`ctx.frame` is untouched — the body pushes no iteration frames, which is exactly why capture slots reachable inside a cyclic body are rejected at LOAD time (`IrLoadError`; the frontend already rejects them as `C012`). Builders for matchers using cyclic rules are consumed-set driven (`Match._mch_consumed`). Several cyclic recursive nodes may share one body subgraph (one node per reference site; per-site `optional` lives on the recursive node). Existence proof + executable spec: `specs/tonco_swap.mch` (mandatory hop continuation with hop/final branches sharing a prefix — the shape 4.6's exit-first order would terminate at hop 2), `tests/mch/test_cyclic_recursion.py`, `tests/mch/integration/test_tonco_swap.py`.
+
 ### 4.7 Parent edge
 
 Single candidate: `block.previous_block`. `None` → edge fails unless the parent node is optional. Full subtree match with rollback.
@@ -220,6 +234,7 @@ Identical contract to v1 `IrRootMatcher.build_block`, minus the instance flag:
 - **build_program**: env = captures + well-known `consumed` / `anchor` (capture names shadow). `EvalError` → log warning, reject. `reject when` fired → reject.
 - **neither**: stub block of `produces[0]` over consumed set (Go parity).
 - Accept: `Block(produces_primary, [], data)`, set failed/broken, `merge_blocks(ctx.consumed)`, `apply_flows`.
+- **`shape` hook** `[M2R, R06]`: when the matcher record carries `"shape"`, invoke the registered shaper `shaper(produced_block, match) -> None` (sync) as the LAST build step — after `merge_blocks` and `apply_flows`, on every build path. The compiled path calls its shaper at the identical point, so post-surgery block topology is parity-guaranteed. Unknown shaper name → `IrLoadError` at load (`build_matchers`). Region contract: spec §8.7.
 
 Rejection propagates as `try_build -> []`.
 
@@ -241,7 +256,7 @@ Green before merge, in this order:
    - R3 rollback: or-branch that partially consumes then fails → context restored exactly (bindings, consumed, visited).
    - R4 child-edge multi-match: two matching children both consumed; scalar capture = first.
    - R5 children-set: declaration-order/first-match-wins/working-set-removal; required-unmatched fails; optional tail passes; overlap with child edge dedups.
-   - R6 recursion: frontier semantics incl. exit-first-per-candidate, one-step-per-round, gap-aligned step captures, exit bind-once, post-recursion binding — port the 11 `test_recursion_captures.py` cases through IR.
+   - R6 recursion: frontier semantics incl. exit-first-per-candidate, one-step-per-round, gap-aligned step captures, exit bind-once, post-recursion binding — port the 11 `test_recursion_captures.py` cases through IR. Cyclic strategy (§4.6b): back-edge descent, load-time rejection of exit/captures-in-body — `test_cyclic_recursion.py` cases through IR.
    - R7 rejection: builder-None and `reject when` → `[]`, no aux blocks attached, matcher reusable afterwards.
    - R8 excess/bounce: nested absorption into consumed vs root-level append-to-result; `include_*: false` respected at root.
    - R9 exclusive-or: count gate applies ONLY where head tests are consulted (recursion entry / nested head counts — 0 and 2 matching heads fail there); as an edge target the gate is inert and behavior is identical to plain or (first-full-build-wins). See §4.4 amendment.

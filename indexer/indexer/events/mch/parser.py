@@ -18,6 +18,7 @@ _SOFT_KEYWORDS: frozenset[TokenKind] = frozenset({
     TokenKind.KW_WHEN, TokenKind.KW_LOOKUP, TokenKind.KW_NOT,
     TokenKind.KW_AND, TokenKind.KW_OR, TokenKind.KW_NULL,
     TokenKind.KW_FLOW, TokenKind.KW_IF, TokenKind.KW_ELSE,
+    TokenKind.KW_SHAPE,
 })
 
 _CMP_OPS: dict[TokenKind, str] = {
@@ -181,10 +182,17 @@ def _parse_predicate_decl(s: _ParserState) -> ast_.PredicateDecl:
 def _parse_rule_decl(s: _ParserState) -> ast_.RuleDecl:
     start = s.eat(TokenKind.KW_RULE).span
     name_tok = s.eat(TokenKind.IDENT)
+    # Contextual modifier (not a reserved word): `rule NAME cyclic = …` selects
+    # the cyclic-descent recursion strategy (spec §10.3, [M2R, R11/T28]).
+    strategy = "frontier"
+    if s.at(TokenKind.IDENT) and s.peek().text == "cyclic":
+        s.eat(TokenKind.IDENT)
+        strategy = "cyclic"
     s.eat(TokenKind.EQ)
     s.skip_newlines()
     pattern = _parse_pattern_expr(s)
-    return ast_.RuleDecl(name=name_tok.text, pattern=pattern, span=_join(start, pattern.span))
+    return ast_.RuleDecl(name=name_tok.text, pattern=pattern,
+                         span=_join(start, pattern.span), strategy=strategy)
 
 
 def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
@@ -196,6 +204,7 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
     produces: tuple[str, ...] | None = None
     build:    str | None = None
     entry:    str | None = None
+    shape:    str | None = None
     include_excess  = True
     include_bounces = True
 
@@ -216,6 +225,16 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
             s.i += 1
             s.eat(TokenKind.AT)
             entry = s.eat_name().text
+        elif t.kind is TokenKind.KW_SHAPE:
+            if shape is not None:
+                s.bag.error(
+                    "P011_DUPLICATE_DIRECTIVE",
+                    f"matcher {name_tok.text!r} declares more than one `shape` directive",
+                    t.span,
+                )
+                raise CompileError(s.bag)
+            s.i += 1
+            shape = s.eat(TokenKind.IDENT).text
         elif t.kind is TokenKind.KW_INCLUDE_EXCESS:
             s.i += 1
             include_excess = _parse_bool_literal(s)
@@ -252,6 +271,7 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
         pattern=pattern,
         span=_join(start, end),
         build_stmts=build_stmts,
+        shape=shape,
     )
 
 

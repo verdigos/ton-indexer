@@ -24,6 +24,10 @@ class Registries:
     # builtins/lookups, null arguments are passed through (an absent optional
     # capture is a legitimate input to imperative host logic).
     fns:           dict[str, Callable[..., Awaitable[Any]]]          = field(default_factory=dict)
+    # shapers: post-build tree surgery hooks (`shape IDENT`, spec §8.7) — SYNC
+    # callables `(produced_block, match) -> None` invoked by the engine after
+    # the produced block's merge. May mutate only the produced block's region.
+    shapers:       dict[str, Callable[..., Any]]                     = field(default_factory=dict)
 
     def register_predicate(self, name: str) -> Callable[[F], F]:
         def deco(fn: F) -> F:
@@ -62,6 +66,14 @@ class Registries:
             if name in self.fns:
                 raise KeyError(f"fn {name!r} already registered")
             self.fns[name] = fn  # type: ignore[assignment]
+            return fn
+        return deco
+
+    def register_shaper(self, name: str) -> Callable[[F], F]:
+        def deco(fn: F) -> F:
+            if name in self.shapers:
+                raise KeyError(f"shaper {name!r} already registered")
+            self.shapers[name] = fn  # type: ignore[assignment]
             return fn
         return deco
 

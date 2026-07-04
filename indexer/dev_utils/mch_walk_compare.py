@@ -112,7 +112,9 @@ from indexer.events.blocks.liquidity import DedustWithdrawBlockMatcher  # noqa: 
 from indexer.events.blocks.swaps import (  # noqa: E402
     CoffeeSwapBlockMatcher,
     DedustSwapBlockMatcher,
+    ToncoSwapBlockMatcher,
 )
+from indexer.events.mch.builders.tonco_swap import tonco_swap_registries  # noqa: E402
 
 from tests.utils.trace_deserializer import load_trace_from_file  # noqa: E402
 from tests.utils.repository import TestInterfaceRepository  # noqa: E402
@@ -319,6 +321,22 @@ def _build_scenarios() -> list[Scenario]:
             coffee_registries, dedust_prereqs,
         )
         scen.append(Scenario(name, "coffee_swap", ["jetton_transfer", "pton_transfer"], ml, mm))
+
+    # ---- tonco (R11/T28, cyclic recursion strategy; jetton/pton prereqs) - #
+    # NOTE: legacy tonco is label-heavy (LabeledBlockConstructorMatcher flattens
+    # into lambda test_selfs), so walk-level identity is structurally
+    # unattainable (T17/T19 note) — use L_only/M_only, not the ratio.
+    tonco_cases = [
+        ("tonco_single_hop", "g1JLQayzzERU9tojKPorN9Asd-MCF_0omnRkwOd_Olo="),
+        ("tonco_multihop", "CjtIXjqazbSFrtPqqMMFBgMG6-huwp5CfNtXpQAf8xY="),
+        ("tonco_failed_swap", "02TsVcC_MOggAZvHHBITbHCvzAt_hCq5WVAiKcZFMno="),
+    ]
+    for name, tid in tonco_cases:
+        ml, mm = _trace_scenario_factories(
+            tid, ToncoSwapBlockMatcher, "tonco_swap", "tonco_swap.mch",
+            tonco_swap_registries, dedust_prereqs,
+        )
+        scen.append(Scenario(name, "tonco_swap", ["jetton_transfer", "pton_transfer"], ml, mm))
 
     return scen
 

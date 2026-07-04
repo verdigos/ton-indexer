@@ -243,6 +243,14 @@ Defines a named sub-pattern. Rules may be referenced as `$IDENT` from anywhere i
 rule deposit_leg = ( op DedustDepositTONToVault @deposit | ... )
 ```
 
+`[M2R, R11/T28]` A self-referential rule selects its recursion strategy with the contextual modifier `cyclic` between the name and `=` (§10.3):
+
+```
+rule tonco_hop cyclic = ( op Swap -> op PayTo -> ( … -> $tonco_hop | …final… ) )
+```
+
+Without the modifier the default frontier strategy applies. The modifier on a non-recursive rule is ignored.
+
 ### 5.4 `matcher IDENT { ... }`
 
 Defines a matcher. The body contains zero or more directives, exactly one `pattern_expr`, and `[M4]` zero or more build statements.
@@ -426,6 +434,8 @@ The rule's top-level alternative splits into **step branches** (those containing
 
 Example: `rule swap_step = ( op SWAP @swap -> op PAY_TO @payout -> maybe op NOTIFY @note -> maybe $swap_step ^ op PAY_OUT @out ... )` matched against a three-hop chain produces `swap`, `payout` and `note` as length-3 parallel lists (`note` holding `None` for hops without a notification), and `out` as a one-element list bound on the terminating payout.
 
+`[M2R, R11/T28]` This section applies to the frontier strategy only. Captures cannot appear inside a `cyclic` rule body at all (`C012`, §10.3) — matchers using cyclic rules drive their builders from `Match._mch_consumed`.
+
 ### 7.3 Optional bindings
 
 Captures inside a `maybe`-wrapped subtree bind as `Optional[T]`. If the subtree did not match, the capture is `None`.
@@ -477,6 +487,30 @@ Default: `true`. Controls whether bounce messages (opcode `0xffffffff`) emitted 
 Registration-order weight. Lower runs earlier. Matchers with equal priority are ordered by (file name, source position) — fully deterministic across hosts. Default priority is `100`.
 
 Matcher order is semantics, not configuration: earlier matchers consume blocks first (the jetton_transfer → fallback_jetton_transfer relationship depends on it). v0.1 left ordering "host-specific", which is a parity hole; from M3 the order is derived entirely from the `.mch` namespace and is part of the compiled artifact.
+
+### 8.7 `shape IDENT` `[M2R, R06]`
+
+Post-build tree surgery in a registered host function. Optional; at most one per matcher (a duplicate is a parse error, `P011`). The named shaper must exist in the host's shaper registry (§11.1), otherwise the load fails (`C011_UNKNOWN_SHAPER`).
+
+```
+matcher getgems_nft_purchase {
+    produces NftPurchaseBlock
+    build    build_getgems_nft_purchase
+    shape    getgems_proxy_insert
+    entry    @t
+    ...
+}
+```
+
+The engine invokes the shaper as the **last step of the build phase** — after the produced block's merge (and, on declarative matchers, after flow effects) — on both the compiled path and the IR engine at the same point, so block-topology parity holds by construction. Shapers are synchronous:
+
+```
+shaper(produced_block, match) -> None
+```
+
+`match` is the same match environment the build phase received (the typed Match for builder matchers; the capture env including the well-known `consumed`/`anchor` names for declarative matchers).
+
+**Region contract (normative).** A shaper may mutate only the *produced block's region*: the produced block's own `next_blocks` / `children_blocks` and the blocks it consumed (e.g. inserting an `EmptyBlock` proxy between two consumed blocks via `insert_between`). It must never mutate upstream siblings or any block outside the region, and it must not un-consume matched blocks. `merge_blocks` is already licensed build-phase tree mutation; `shape` is the same class of mutation, kept host-side but *declared* in the spec so both engines can run it at the identical point. Motivating legacy sites: `GetgemsNftPurchaseBlockMatcher` (`blocks/nft.py`) and `StonfiV2ProvideLiquidityMatcher` (`blocks/liquidity.py`), both `EmptyBlock()` + `insert_between` proxy insertion.
 
 ## 9. Build statements `[M4]`
 
@@ -621,9 +655,13 @@ Automatic anchor selection from corpus selectivity statistics (v0.1 §10.2) is d
 
 ### 10.3 Recursion resolution
 
-A self-referential `$rule_name` compiles to a back-edge in the matcher's structural graph. The engine walks this graph with depth bounded by the trace size (always finite). No fixpoint computation is required.
+`[M2R, R11/T28]` A self-referential rule compiles under one of two **recursion strategies**, selected per rule (§5.3). Indirect (mutual) recursion is rejected (`C005_INDIRECT_RECURSION_UNSUPPORTED`) under both.
 
-A `maybe $rule` is the natural termination case for unbounded recursion — the engine treats it as the "stop here" branch. A cycle with no `maybe`-wrapped termination is an error. Indirect (mutual) recursion is rejected (`C005_INDIRECT_RECURSION_UNSUPPORTED`). A recursive rule whose step branch has no concrete head is rejected (`C001_RECURSION_SHAPE_UNSUPPORTED`). A capture on a sequence atom chained after a recursive rule reference in the same chain is rejected (`C007_CAPTURE_AFTER_RECURSION`) — the engine structurally ignores such atoms; captures in *other* positions after the recursion (later children-set items, the parent chain) are legal and bind normally (§7.2).
+**Frontier strategy (default).** The rule's top-level alternative splits into step branches (containing `$self`) and exit branches (without it); trailing `maybe $self` is stripped from step branches and the engine runs the T18 frontier walk: at each frontier block the exit is tried FIRST, then one step per round; the stepped blocks' children become the new frontier. A `maybe $rule` is the natural termination case — a cycle with no `maybe`-wrapped termination is an error (`R006_UNBOUNDED_RECURSION`). A recursive rule whose step branch has no concrete head is rejected (`C001_RECURSION_SHAPE_UNSUPPORTED`). A capture on a sequence atom chained after a recursive rule reference in the same chain is rejected (`C007_CAPTURE_AFTER_RECURSION`) — the engine structurally ignores such atoms; captures in *other* positions after the recursion (later children-set items, the parent chain) are legal and bind normally (§7.2).
+
+**Cyclic strategy (`rule NAME cyclic = …`).** The rule body lowers ONCE to a matcher subgraph whose in-body self-references (which must be the last atom of their chain) become true back-edges to the body root; matching is plain recursive descent through the cycle, bounded by trace depth. There is no step/exit split and no frontier: a branch whose self-reference is *mandatory* only matches when the chain actually continues — this expresses "hop continuation is mandatory" patterns whose continuation and final branches share a prefix, which the frontier walk's exit-first order would terminate prematurely (the T28 tonco shape). Termination is a non-recursive alternative branch inside the body (`R006` does not apply; `maybe $self` inside the body is in fact rejected — an IR back-edge carries no per-site optionality). Shape violations are `C012_CYCLIC_RULE_SHAPE`: captures anywhere in the body (they can never bind — builders must be consumed-set driven via `Match._mch_consumed`), a self-reference that is not its chain's last atom, a `maybe`-wrapped in-body self-reference, or a reference to another recursive rule. Outer references (`$rule` outside the body) may be plain or `maybe`-wrapped; each reference site is independent. In the IR a cyclic rule reference is `{"kind": "recursive", "strategy": "cyclic", "step": <body root>}` with no `exit`, and in-body self-references are plain node back-edges — cycles in the node graph are legal exactly there.
+
+Conformance: `tests/mch/test_cyclic_recursion.py`; first production use: `specs/tonco_swap.mch`.
 
 ### 10.4 Backtracking semantics
 
@@ -658,6 +696,7 @@ A host language provides these registries, populated at startup:
 | Message types | identifier from `parse … as IDENT` | body parser class | M4 |
 | Lookups | identifier from `lookup IDENT(…)` | interface-repository accessor | M4 |
 | Functions | identifier from `fn IDENT(…)` | pure callable | M4 |
+| Shapers | identifier from `matcher.shape` | sync callable `(produced_block, match) → None` (§8.7) | M2R, R06 |
 
 The compiler validates at load time that every reference resolves; otherwise the load fails with a precise error citing the unresolved name and its source location.
 
@@ -674,6 +713,7 @@ The compiler validates at load time that every reference resolves; otherwise the
 - Registration is via the `Registries` object (`register_builder("name")`, `register_predicate("name")` decorators/methods).
 - `[M2, T15/T18]` The runtime Match carries a well-known attribute `_mch_consumed`: the full consumed block set — anchor first, engine traversal order, **de-duplicated** (order-preserving, first occurrence wins; the raw engine list reports a recursion's entry block twice, and the synthesized `build_block` strips repeats before handing the list to the builder). Builders whose logic scans the consumed set (legacy `build_block(block, other_blocks)` bodies doing `find_messages`/`find_call_contracts`) use it; since T18 exit-branch and post-recursion captures bind too (§7.2), so the consumed set is an escape hatch rather than the only access path. Purely additive — builders that ignore it are unaffected.
 - Post-process passes (e.g. `post_process_dedust_liquidity`) stay plain host functions outside the registry system (§5.5).
+- `[M2R, R06]` Shapers register via `register_shaper("name")` and are plain **sync** functions `def shaper(produced_block, match) -> None`. Both engines invoke them at the end of the build phase, after merge; the region contract is §8.7. Unknown shaper name = `C011_UNKNOWN_SHAPER` at resolve/compile time (compiled path) or `IrLoadError` at load time (`mch_ir`).
 - `[M2R, R03]` **ContractDeploy side-effect blocks.** `CallContractBlock.__init__` auto-attaches a `ContractDeploy` block to the call's `children_blocks` (NOT `next_blocks`) when its transaction deploys the account. The engine matches over `next_blocks` only, so no pattern can consume such a block. Builders whose legacy counterpart merges deploy blocks as direct children (topology parity) must sweep them from the consumed set's `children_blocks` and merge them before returning; the engine's own merge composes cleanly after. `unwind_deployments` surfaces them as separate `contract_deploy` actions either way. Recurs for any matched chain containing a deploying transaction.
 - Generated Match dataclasses are emitted by codegen next to the spec compiler's output module; the runtime Match object and the emitted dataclass must agree (single source of truth for field names and types).
 

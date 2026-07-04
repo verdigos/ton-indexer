@@ -84,6 +84,7 @@ from indexer.events.mch.builders.stonfi_liquidity import stonfi_liquidity_regist
 from indexer.events.mch.builders.telegram_nft import telegram_nft_registries
 from indexer.events.mch.builders.tgbtc import tgbtc_registries
 from indexer.events.mch.builders.tonco import tonco_liquidity_registries
+from indexer.events.mch.builders.tonco_swap import tonco_swap_registries
 from indexer.events.mch.builders.tonstakers import tonstakers_registries
 from indexer.events.mch.builders.vesting import vesting_registries
 from indexer.events.mch.ir_emit import emit_ir
@@ -144,6 +145,8 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple]] = [
      (JettonTransferBlockMatcher, PTonTransferMatcher, JettonBurnBlockMatcher)),
     # nominator withdraw is btype-anchored (ton_transfer) — run-on-all row.
     ("specs/nominator.mch", _SPECS_DIR / "nominator.mch", nominator_registries, ()),
+    # Remake wave 2 (2026-07-04): R11/T28 cyclic recursion.
+    ("specs/tonco_swap.mch", _SPECS_DIR / "tonco_swap.mch", tonco_swap_registries, _PREREQ_SWAP),
 ]
 
 

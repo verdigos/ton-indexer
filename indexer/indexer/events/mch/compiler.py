@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import weakref
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 from indexer.events.blocks.basic_blocks import CallContractBlock
@@ -44,6 +45,8 @@ class CompiledMatcher:
     # Build statements (M4), source order; empty tuple for builder-based matchers.
     # Carried for IR emission — the runtime reads its own compiled program instead.
     build_stmts: tuple = ()
+    # `shape` directive (§8.7): registered shaper name, None when absent.
+    shape_fn_name: str | None = None
 
 
 @dataclass
@@ -148,6 +151,51 @@ class _MchRecursiveMatcher(RecursiveMatcher):
         return child_matched
 
 
+class _MchCyclicRefMatcher(BlockMatcher):
+    """Reference site of a cyclic-strategy recursive rule (spec §10.3 cyclic
+    descent, [M2R, R11/T28]).
+
+    The rule body lowers ONCE per compile to a shared matcher graph whose
+    in-body self-references point straight back to the body root — a true
+    back-edge, exactly the legacy hand-built cycle (e.g. ToncoSwapBlockMatcher's
+    `peer_swap.child = payout; payout.child = Or([... -> peer_swap, finals])`).
+    Matching is plain recursive descent through that cycle, bounded by trace
+    depth; there is no frontier walk and no step/exit split, so "hop
+    continuation is mandatory" branches disambiguate from same-prefix final
+    branches by looking down the actual chain — the shape the frontier
+    strategy's exit-first order cannot express.
+
+    Instances are per-reference-site and delegate to the shared body root:
+    in-body sites carry `_mch_cyclic_inner=True` (IR: emitted as a plain
+    back-edge to the body root's node id), outer sites emit as a
+    `{"kind": "recursive", "strategy": "cyclic"}` node. On success the entry
+    block and exact result length are recorded so the capture walker can skip
+    this reference's set-shuffled consumed slice precisely (same discipline as
+    `_MchRecursiveMatcher`). Captures inside cyclic rule bodies are rejected at
+    compile time (C012) — builders for cyclic-rule matchers are consumed-set
+    driven via `Match._mch_consumed`.
+    """
+
+    def __init__(self, target: BlockMatcher | None = None):
+        super().__init__()
+        self._mch_cyclic_target = target
+        self._mch_cyclic_inner = False
+        self._mch_entry_block = None
+        self._mch_result_len = 0
+
+    def test_self(self, block):
+        return self._mch_cyclic_target.test_self(block)
+
+    async def try_build(self, block):
+        # Pure delegation: the body root's try_build already handles children,
+        # parents and aux auto-appends; re-wrapping would double-append.
+        result = await self._mch_cyclic_target.try_build(block)
+        if result is not None:
+            self._mch_entry_block = block
+            self._mch_result_len = len(result)
+        return result
+
+
 def compile_(
     resolved: ResolvedFile,
     registries: Registries,
@@ -193,6 +241,12 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         ctx.bag.error(
             "C002_UNKNOWN_BUILDER",
             f"matcher {decl.name!r}: builder {decl.build!r} is not registered",
+            decl.span,
+        )
+    if decl.shape is not None and decl.shape not in ctx.registries.shapers:
+        ctx.bag.error(
+            "C011_UNKNOWN_SHAPER",
+            f"matcher {decl.name!r}: shaper {decl.shape!r} is not registered",
             decl.span,
         )
 
@@ -291,6 +345,7 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         produces_cls_name=decl.produces_primary,
         source_span=decl.span,
         build_stmts=tuple(decl.build_stmts),
+        shape_fn_name=decl.shape,
     )
 
 
@@ -314,6 +369,7 @@ def _make_subclass(name: str, base: type, rm: ResolvedMatcher, ctx: CompileCtx) 
         return cached
 
     builder_name = rm.decl.build
+    shape_name = rm.decl.shape
     registries = ctx.registries
     match_cls = _make_match_dataclass(
         name,
@@ -363,6 +419,8 @@ def _make_subclass(name: str, base: type, rm: ResolvedMatcher, ctx: CompileCtx) 
             # merge wires absorbed blocks' parent linkage; return the new block only.
             produced.merge_blocks([block] + other_blocks)
             apply_flows(produced, outcome.flows)
+            # §8.7 shape hook: last build step, after merge and flows.
+            _apply_shape(registries, shape_name, produced, SimpleNamespace(**env))
             return [produced]
 
         return _finalize_subclass(name, base, rm, by_key, cache_key, match_cls,
@@ -399,10 +457,26 @@ def _make_subclass(name: str, base: type, rm: ResolvedMatcher, ctx: CompileCtx) 
         # block.parent. Returning the consumed-blocks list would pollute upstream
         # composers' other_blocks with already-absorbed children.
         produced.merge_blocks([block] + other_blocks)
+        # §8.7 shape hook: post-merge tree surgery on the produced block's region.
+        _apply_shape(registries, shape_name, produced, m)
         return [produced]
 
     return _finalize_subclass(name, base, rm, by_key, cache_key, match_cls,
                               capture_names, build_block)
+
+
+def _apply_shape(registries: Registries, shape_name: str | None, produced, match_obj) -> None:
+    """§8.7 `shape` hook: invoke the declared shaper on the produced block, as
+    the LAST build step (after merge, and after flows on declarative matchers).
+    Both engines call it at the same point so topology parity holds. Shapers
+    are sync `(produced_block, match) -> None`; the contract restricts mutation
+    to the produced block's own region."""
+    if shape_name is None:
+        return
+    shaper = registries.shapers.get(shape_name)
+    if shaper is None:
+        raise RuntimeError(f"shaper {shape_name!r} is not registered at run time")
+    shaper(produced, match_obj)
 
 
 def _dedup_consumed(block, other_blocks) -> list:
@@ -548,6 +622,30 @@ def _walk_matcher(
         # No block left to match. Success iff the matcher was optional (nothing
         # required at this position); a required matcher with no block fails.
         return bool(getattr(m, "optional", False))
+
+    if isinstance(m, _MchCyclicRefMatcher):
+        # Cyclic-descent rule reference (§10.3 cyclic strategy). Captures inside
+        # cyclic bodies are compile-rejected (C012), so nothing binds here — the
+        # walker only needs cursor honesty: skip exactly the reference's consumed
+        # slice so captures positioned AFTER it (later children-set items, the
+        # parent chain) keep binding. Unlike the recursion branch below, a
+        # mandatory reference that did not participate FAILS the walk — this
+        # keeps Or-branch trials from committing a hop branch when the engine
+        # actually matched a final branch.
+        if in_recursion:
+            cursor[0] = len(all_blocks)
+            return True
+        entry = m._mch_entry_block
+        if entry is None or not any(b is entry for b in all_blocks[cursor[0]:]):
+            return bool(getattr(m, "optional", False))
+        if all_blocks[cursor[0]] is entry and m._mch_result_len > 0:
+            cursor[0] += m._mch_result_len
+        else:
+            # Misaligned (stale success from a failed sibling attempt, or an
+            # earlier optional mis-skip): consume the rest — the pre-T18
+            # conservative fallback, affects capture completeness only.
+            cursor[0] = len(all_blocks)
+        return True
 
     if isinstance(m, _MchRecursiveMatcher):
         if in_recursion:
@@ -1116,6 +1214,16 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> BlockMatcher:
         target = next((r for r in ctx.resolved.raw.rules if r.name == p.name), None)
         if target is None:
             raise CompileError(ctx.bag)
+        # Self-reference inside the body of a CYCLIC rule being lowered: a true
+        # back-edge — a per-site delegating reference whose target (the shared
+        # body root) is patched in by _lower_cyclic_rule once the body finishes
+        # lowering.
+        cyclic_pending = getattr(ctx, _CYCLIC_PENDING_KEY, None)
+        if cyclic_pending is not None and p.name in cyclic_pending:
+            ref = _MchCyclicRefMatcher()
+            ref._mch_cyclic_inner = True
+            cyclic_pending[p.name].append(ref)
+            return ref
         # Self-reference inside the body of a recursive rule we're already lowering:
         # the RecursiveMatcher handles the repetition, so we represent the self-ref
         # as a permissive sentinel.
@@ -1131,6 +1239,8 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> BlockMatcher:
             )
             raise CompileError(ctx.bag)
         if rec_class is RecursionClass.DIRECT_RECURSIVE:
+            if target.strategy == "cyclic":
+                return _lower_cyclic_rule(p.name, ctx)
             return _lower_recursive_rule(p.name, ctx)
         return _lower_atom(target.pattern, ctx)
     raise AssertionError(f"unhandled pattern node: {type(p).__name__}")
@@ -1367,6 +1477,122 @@ def _strip_trailing_self_ref(branch: ast_.PatternExpr, rule_name: str) -> ast_.P
     return branch
 
 
+# Dynamic CompileCtx attributes for the cyclic strategy (same pattern as
+# _RULE_VALIDATED_KEY — avoids touching the CompileCtx definition):
+# pending back-references collected while a cyclic body is being lowered, and
+# the per-compile cache of lowered body roots (shared across reference sites).
+_CYCLIC_PENDING_KEY = "_mch_cyclic_pending"   # dict[str, list[_MchCyclicRefMatcher]]
+_CYCLIC_ROOTS_KEY = "_mch_cyclic_roots"       # dict[str, BlockMatcher]
+
+
+def _check_cyclic_rule_body(target: ast_.RuleDecl, ctx: CompileCtx) -> None:
+    """C012 shape rules for `rule NAME cyclic = …` bodies (spec §10.3):
+    no captures (they can never bind — the walker does not descend into the
+    back-edge cycle), self-references only as the last atom of their chain
+    (anything chained after one is structurally ignored by the engine), and no
+    references to other recursive rules (nested recursion, out of scope exactly
+    as for the frontier strategy)."""
+    name = target.name
+
+    def is_self_ref(a: ast_.PatternExpr) -> bool:
+        if isinstance(a, ast_.Maybe):
+            return is_self_ref(a.inner)
+        return isinstance(a, ast_.RuleRef) and a.name == name
+
+    def err(msg: str, span: ast_.Span) -> None:
+        ctx.bag.error("C012_CYCLIC_RULE_SHAPE", f"rule {name!r}: {msg}", span)
+        raise CompileError(ctx.bag)
+
+    def walk(p: ast_.PatternExpr) -> None:
+        if isinstance(p, ast_.Node):
+            if p.capture is not None:
+                err(
+                    f"capture @{p.capture} inside a cyclic rule body never binds; "
+                    f"drive the builder from Match._mch_consumed",
+                    p.span,
+                )
+        elif isinstance(p, ast_.Sequence):
+            atoms = [p.head] + [a for _e, a in p.tail]
+            for i, atom in enumerate(atoms):
+                if is_self_ref(atom) and i != len(atoms) - 1:
+                    err(
+                        "a self-reference must be the last atom of its chain "
+                        "(atoms after it would be structurally ignored)",
+                        atom.span,
+                    )
+                walk(atom)
+        elif isinstance(p, ast_.Alternative):
+            for b in p.branches:
+                walk(b)
+        elif isinstance(p, ast_.ChildrenBlock):
+            for it in p.items:
+                walk(it)
+        elif isinstance(p, ast_.Maybe):
+            if is_self_ref(p.inner):
+                err(
+                    "`maybe` on a self-reference inside a cyclic body is not "
+                    "supported (an IR back-edge carries no per-site optionality); "
+                    "add a non-recursive alternative branch instead",
+                    p.span,
+                )
+            walk(p.inner)
+        elif isinstance(p, ast_.RuleRef):
+            if p.name == name:
+                return
+            rc = ctx.resolved.rule_recursion.get(p.name)
+            if rc in (RecursionClass.DIRECT_RECURSIVE, RecursionClass.INDIRECT_RECURSIVE):
+                err(
+                    f"reference to recursive rule {p.name!r} inside a cyclic "
+                    f"rule body is not supported (nested recursion)",
+                    p.span,
+                )
+            other = next((r for r in ctx.resolved.raw.rules if r.name == p.name), None)
+            if other is not None:
+                walk(other.pattern)  # non-recursive rules inline; hold them to the same rules
+
+    walk(target.pattern)
+
+
+def _lower_cyclic_rule(name: str, ctx: CompileCtx) -> BlockMatcher:
+    """Lower a reference to a `rule NAME cyclic = …` rule (spec §10.3 cyclic
+    descent, [M2R, R11/T28]).
+
+    The body lowers once per compile into a shared matcher graph; in-body
+    self-references become back-edges to the body root (patched here after the
+    body finishes lowering — the exact legacy hand-built cycle, e.g.
+    ToncoSwapBlockMatcher). Every reference site, this outer one included, gets
+    its own `_MchCyclicRefMatcher` delegating to the shared root, so per-site
+    `optional` flags and the capture walker's slice bookkeeping stay per-site.
+    """
+    target = next(r for r in ctx.resolved.raw.rules if r.name == name)
+    roots: dict[str, BlockMatcher] = getattr(ctx, _CYCLIC_ROOTS_KEY, None) or {}
+    if not hasattr(ctx, _CYCLIC_ROOTS_KEY):
+        setattr(ctx, _CYCLIC_ROOTS_KEY, roots)
+    root = roots.get(name)
+    if root is None:
+        _check_cyclic_rule_body(target, ctx)
+        pending: dict = getattr(ctx, _CYCLIC_PENDING_KEY, None)
+        if pending is None:
+            pending = {}
+            setattr(ctx, _CYCLIC_PENDING_KEY, pending)
+        pending[name] = []
+        try:
+            root = _lower_atom(target.pattern, ctx)
+        finally:
+            back_refs = pending.pop(name)
+        if isinstance(root, _MchCyclicRefMatcher):
+            ctx.bag.error(
+                "C012_CYCLIC_RULE_SHAPE",
+                f"rule {name!r}: body reduces to a bare self-reference",
+                target.span,
+            )
+            raise CompileError(ctx.bag)
+        for ref in back_refs:
+            ref._mch_cyclic_target = root
+        roots[name] = root
+    return _MchCyclicRefMatcher(root)
+
+
 def _lower_recursive_rule(name: str, ctx: CompileCtx) -> BlockMatcher:
     """Lower a recursive rule via the configured RecursionStrategy.
 
@@ -1438,9 +1664,15 @@ def _collect_capture_names(m: BlockMatcher | None) -> frozenset[str]:
     Used to attribute a recursive rule's captures to its step vs exit branches
     so the walker pads exactly the right lists (spec §7.2 alignment rule)."""
     names: set[str] = set()
+    seen: set[int] = set()
 
     def rec(x: BlockMatcher | None) -> None:
-        if x is None:
+        if x is None or id(x) in seen:
+            return
+        seen.add(id(x))
+        if isinstance(x, _MchCyclicRefMatcher):
+            # Cyclic rule bodies carry no captures (C012); do not descend into
+            # the back-edge cycle.
             return
         cap = getattr(x, "_mch_capture_name", None)
         if cap is not None:

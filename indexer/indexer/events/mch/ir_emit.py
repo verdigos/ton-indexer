@@ -96,6 +96,8 @@ def build_stub_registries(files: list[ast_.File]) -> Registries:
                 async def _stub_builder(match, _name=m.build):
                     return None
                 reg.builders[m.build] = _stub_builder
+            if m.shape is not None and m.shape not in reg.shapers:
+                reg.shapers[m.shape] = lambda produced, match: None
             for stmt in m.build_stmts:
                 if isinstance(stmt, ast_.ParseStmt):
                     for t in stmt.msg_types:
@@ -119,12 +121,28 @@ def _emit_node(m: BlockMatcher, nodes: list[dict], memo: dict[int, int]) -> int:
     existing = memo.get(id(m))
     if existing is not None:
         return existing
+
+    # Cyclic-strategy rule references (§10.3 cyclic descent, [M2R, R11/T28]).
+    # An in-body self-reference is a true back-edge: no node of its own, it
+    # resolves to the shared body root's id (the memo guarantees the cycle
+    # terminates). An outer reference emits a `recursive` node with
+    # `strategy: "cyclic"` and the body root as `step` (never an `exit`).
+    cyclic_target = getattr(m, "_mch_cyclic_target", None)
+    if cyclic_target is not None and getattr(m, "_mch_cyclic_inner", False):
+        target_id = _emit_node(cyclic_target, nodes, memo)
+        memo[id(m)] = target_id
+        return target_id
+
     node_id = len(nodes)
     memo[id(m)] = node_id
     rec: dict = {}
     nodes.append(rec)
 
-    if isinstance(m, RecursiveMatcher):
+    if cyclic_target is not None:
+        rec["kind"] = "recursive"
+        rec["strategy"] = "cyclic"
+        rec["step"] = _emit_node(cyclic_target, nodes, memo)
+    elif isinstance(m, RecursiveMatcher):
         rec["kind"] = "recursive"
         rec["step"] = _emit_node(m.repeating_matcher, nodes, memo)
         if m.exit_matcher is not None:
@@ -303,6 +321,10 @@ def emit_ir(
             rec["builder"] = cm.build_fn_name
         if stmts:
             rec["build_program"] = [_emit_stmt(s) for s in stmts]
+        # `shape` directive (§8.7): registered shaper name; container rule —
+        # omit when absent, never emit null.
+        if cm.shape_fn_name is not None:
+            rec["shape"] = cm.shape_fn_name
         matchers_out.append(rec)
     return {
         "mch_ir_version": IR_VERSION,

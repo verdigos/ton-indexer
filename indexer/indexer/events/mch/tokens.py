@@ -32,6 +32,7 @@ class TokenKind(Enum):
     KW_ENTRY = "entry"
     KW_INCLUDE_EXCESS = "include_excess"
     KW_INCLUDE_BOUNCES = "include_bounces"
+    KW_SHAPE = "shape"
     # build-language keywords (M4 §9) — parsed here, ignored by the compiler
     KW_PARSE = "parse"
     KW_AS = "as"
