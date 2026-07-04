@@ -528,7 +528,8 @@ async def test_optional_recursion_absent_binds_empty_lists():
 
 
 # ==========================================================================
-# Node-level where_expr (IR engine evaluates it; the compiled path's v0 gap)
+# Node-level where_expr (T33: BOTH paths evaluate it at match time via the
+# shared sync evaluator, mch/expr_eval.py)
 # ==========================================================================
 
 @pytest.mark.asyncio
@@ -543,19 +544,87 @@ async def test_where_expr_gates_child_match():
         out { v: 1 }
     }
     """
-    ir_m = _ir_matcher(src)
+    for m in (_ir_matcher(src), _compiled_matcher(src)):
+        anchor, bar = _foo_bar_tree()
+        bar.data = {"value": 10}
+        (produced,) = await m.try_build(anchor)
+        assert produced.data == {"v": 1}
 
-    anchor, bar = _foo_bar_tree()
-    bar.data = {"value": 10}
-    (produced,) = await ir_m.try_build(anchor)
-    assert produced.data == {"v": 1}
+        anchor2, bar2 = _foo_bar_tree()
+        bar2.data = {"value": 3}
+        assert await m.try_build(anchor2) is None
+        assert anchor2.parent is None
 
-    # NOTE: the compiled Python path does not evaluate where_expr in v0 and
-    # would match here; the IR engine implements the schema semantics.
-    anchor2, bar2 = _foo_bar_tree()
-    bar2.data = {"value": 3}
-    assert await ir_m.try_build(anchor2) is None
-    assert anchor2.parent is None
+
+_WHERE_DATA_SRC = """
+matcher jt_no_internal {
+    produces FB
+    entry    @x
+
+    op Foo @x -> btype jetton_transfer @t where (.has_internal_transfer == false)
+
+    out { v: 1 }
+}
+"""
+
+
+def _jt_tree(data):
+    """anchor Foo -> jetton_transfer-typed block carrying `data`."""
+    anchor = _FakeCC(OP_FOO, lt=10)
+    jt = Block("jetton_transfer", [_FakeNode(_FakeMsg(0, None, 20))], data)
+    _link(anchor, jt)
+    return anchor
+
+
+@pytest.mark.asyncio
+async def test_where_expr_data_check_replaces_generic_matcher():
+    """T33 Accept: a GenericMatcher-style `.has_internal_transfer == false`
+    data check expressed inline, identical on the compiled and IR paths —
+    including the missing-field => False and data=None => False rules."""
+    reg = _registries()
+    reg.block_types["jetton_transfer"] = object
+    ir_m = _ir_matcher(_WHERE_DATA_SRC, reg)
+    c_m = _compiled_matcher(_WHERE_DATA_SRC, reg)
+
+    for m in (ir_m, c_m):
+        (produced,) = await m.try_build(_jt_tree({"has_internal_transfer": False}))
+        assert produced.data == {"v": 1}
+        # True fails the == false test.
+        assert await m.try_build(_jt_tree({"has_internal_transfer": True})) is None
+        # Missing field and absent data evaluate to False, never an error.
+        assert await m.try_build(_jt_tree({})) is None
+        assert await m.try_build(_jt_tree(None)) is None
+
+
+@pytest.mark.asyncio
+async def test_where_expr_on_anchor_node():
+    """T33 anchor decision: anchor-node where_expr is supported on both paths
+    (emitted on the root node record; composed onto compiled test_self)."""
+    src = """
+    matcher wa {
+        produces FB
+        entry    @x
+
+        op Foo @x where (.kind == "swap") -> op Bar @y
+
+        out { v: 1 }
+    }
+    """
+    for m in (_ir_matcher(src), _compiled_matcher(src)):
+        anchor, _bar = _foo_bar_tree()
+        anchor.data = {"kind": "swap"}
+        (produced,) = await m.try_build(anchor)
+        assert produced.data == {"v": 1}
+
+        anchor2, _bar2 = _foo_bar_tree()
+        anchor2.data = {"kind": "transfer"}
+        assert await m.try_build(anchor2) is None
+        # data=None dotfield => null => == fails; no error, just no match.
+        # (IrMatcher.test_self checks only the anchor record — where clauses
+        # are re-checked inside try_build — so parity is asserted there.)
+        anchor3, _bar3 = _foo_bar_tree()
+        anchor3.data = None
+        assert await m.try_build(anchor3) is None
 
 
 # ==========================================================================

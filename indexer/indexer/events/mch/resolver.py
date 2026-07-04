@@ -55,7 +55,8 @@ def _alternative_is_exclusive(
     seen_ops: set[int] = set()
     seen_btypes: set[str] = set()
     for b in alt.branches:
-        if not isinstance(b, ast_.Node) or b.where_predicate is not None:
+        if not isinstance(b, ast_.Node) or b.where_predicate is not None \
+                or b.where_expr is not None:
             return False
         head = b.head
         if isinstance(head, ast_.OpHead):

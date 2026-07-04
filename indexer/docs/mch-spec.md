@@ -397,13 +397,15 @@ op JettonInternalTransfer @out where pton_self_transfer
 
 A node may carry at most one `where` clause. Predicates declared with `predicate FN` (§5.2) are the only valid host references.
 
-**Inline field predicates `[M4]`:**
+**Inline field predicates `[M4]` — implemented on both paths `[M2R, T33]`:**
 
 ```
-btype jetton_transfer @t where .has_internal_transfer == false
+btype jetton_transfer @t where (.has_internal_transfer == false)
 ```
 
-`where .field == literal` / `where .field != literal` tests a field of the candidate block's `data` against a literal. Missing field evaluates the test to false (never an error at match time). This removes the need to register a host predicate for every trivial data check — each host predicate is a dual-implementation parity liability, so cheap checks belong in the language. Only equality/inequality against literals; anything richer is a host predicate.
+`where (.field == literal)` / `where (.field != literal)` tests a field of the candidate block's `data` against a literal (the expression form is always parenthesized, distinguishing it from the named-predicate form). Missing field evaluates the test to false (never an error at match time). This removes the need to register a host predicate for every trivial data check — each host predicate is a dual-implementation parity liability, so cheap checks belong in the language. Only equality/inequality against literals; anything richer is a host predicate.
+
+`[M2R, T33]` Both engines evaluate the clause at match time through one shared sync evaluator (`mch/expr_eval.py`): the compiled path composes it onto `test_self` over the compile-time IR encoding of the expression, the IR engine evaluates the artifact's `where_expr` node field — same bytes, same evaluator, no drift. Anchor nodes carry it like any other node. Async constructs (lookups, host fns) inside the clause are compile-time errors (C013) and IR-load-time errors; opcode-set anchor branches accept only the named-predicate form (C013).
 
 ## 7. Capture semantics
 

@@ -35,11 +35,10 @@ from indexer.events.mch import ast_
 from indexer.events.mch.btypes import produces_btype
 from indexer.events.mch.compile import compile_file
 from indexer.events.mch.compiler import CompiledMatcher
+from indexer.events.mch.expr_ir import IR_VERSION, emit_expr as _emit_expr
 from indexer.events.mch.lexer import tokenize
 from indexer.events.mch.parser import parse
 from indexer.events.mch.registry import Registries
-
-IR_VERSION = "0.1-poc"
 
 def _unsigned32(opcode: int) -> int:
     """Canonical unsigned 32-bit opcode (schema rule: hosts compare unsigned)."""
@@ -234,48 +233,8 @@ _produces_btype = produces_btype
 # ---------------------------------------------------------------------------
 
 
-def _emit_expr(e: ast_.Expr) -> dict:
-    if isinstance(e, ast_.IntLit):
-        return {"k": "int", "v": e.value}
-    if isinstance(e, ast_.StrLit):
-        return {"k": "str", "v": e.value}
-    if isinstance(e, ast_.BoolLit):
-        return {"k": "bool", "v": e.value}
-    if isinstance(e, ast_.NullLit):
-        return {"k": "null"}
-    if isinstance(e, ast_.NameRef):
-        return {"k": "name", "id": e.name}
-    if isinstance(e, ast_.FieldRef):
-        return {"k": "dotfield", "name": e.field}
-    if isinstance(e, ast_.FieldAccess):
-        return {"k": "attr", "of": _emit_expr(e.target), "name": e.field}
-    if isinstance(e, ast_.Call):
-        # eval.py's evaluator only ever calls a bare builtin name ("only
-        # builtin names are callable"); a non-name callee can be *parsed*
-        # (postfix chaining is generic in the grammar) but can never evaluate,
-        # so it has no faithful IR encoding here.
-        if not isinstance(e.callee, ast_.NameRef):
-            raise ValueError(
-                f"IR emission: Call callee must be a bare name (got "
-                f"{type(e.callee).__name__}); non-name callees never evaluate "
-                f"(see eval.py Evaluator._eval_call) and are not representable "
-                f"in IR {IR_VERSION}"
-            )
-        return {"k": "call", "fn": e.callee.name, "args": [_emit_expr(a) for a in e.args]}
-    if isinstance(e, ast_.LookupExpr):
-        return {"k": "lookup", "name": e.kind, "args": [_emit_expr(a) for a in e.args]}
-    if isinstance(e, ast_.UnaryOp):
-        return {"k": "unary", "op": e.op, "x": _emit_expr(e.operand)}
-    if isinstance(e, ast_.BinaryOp):
-        return {"k": "bin", "op": e.op, "l": _emit_expr(e.left), "r": _emit_expr(e.right)}
-    if isinstance(e, ast_.Ternary):
-        return {
-            "k": "ternary",
-            "cond": _emit_expr(e.cond),
-            "then": _emit_expr(e.then),
-            "else": _emit_expr(e.orelse),
-        }
-    raise ValueError(f"unsupported expression node {type(e).__name__} in IR emission")
+# _emit_expr = expr_ir.emit_expr (moved there in T33 so the compiler can share
+# the encoding; ir_emit imports the compiler, so the reverse import is barred).
 
 
 def _emit_stmt(stmt: ast_.BuildStmt) -> dict:

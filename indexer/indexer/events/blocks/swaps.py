@@ -78,12 +78,21 @@ class JettonSwapBlock(Block):
         return f"jetton_swap {self.data}"
 
 
-async def _get_block_data(block, other_blocks):
-    swap_call_block = next(x for x in other_blocks if isinstance(x, CallContractBlock) and
-                           x.opcode == StonfiSwapMessage.opcode)
+async def build_stonfi_v1_swap_core(block, swap_call_block, payment_requests_messages):
+    """Shared stonfi v1 swap data builder ([M2R, R12]).
+
+    Consumption-neutral extraction of the legacy `_get_block_data` logic: the
+    computation is unchanged, but instead of removing the `ok_ref` referral
+    subtree from the consumed set in-place, the referral payment-request
+    blocks are RETURNED as `(data, referral_request_blocks)`. The legacy
+    wrapper reproduces the original surgery from them; the mch pattern never
+    consumes the referral branch in the first place (its payment-request node
+    is gated on the sender-related exit codes), so its builder just drops
+    them. `payment_requests_messages` must be the payment requests the legacy
+    chain would consume — the swap call's children that have a
+    jetton_transfer child — in tree order.
+    """
     swap_message = StonfiSwapMessage(swap_call_block.get_body())
-    payment_requests_messages = [(StonfiPaymentRequest(x.get_body()), x) for x in
-                                 find_call_contracts(other_blocks, StonfiPaymentRequest.opcode)]
     assert len(payment_requests_messages) > 0
     if len(payment_requests_messages) > 2:
         print("Multiple payment requests found ", swap_call_block.event_nodes[0].message.trace_id)
@@ -95,6 +104,7 @@ async def _get_block_data(block, other_blocks):
     outgoing_jetton_transfer = None
     in_jetton_transfer = swap_call_block.previous_block
     success_swap = False
+    referral_request_blocks = []
     # Find payment request and outgoing jetton transfer
     for payment_request, payment_request_block in payment_requests_messages:
         if payment_request.amount0_out > 0:
@@ -120,9 +130,7 @@ async def _get_block_data(block, other_blocks):
         elif payment_request.exit_code == stonfi_swap_ok_ref_exit_code:
             ref_amt = amount
             ref_addr = addr
-            for b in payment_request_block.bfs_iter():
-                if b in other_blocks:
-                    other_blocks.remove(b)
+            referral_request_blocks.append(payment_request_block)
 
     actual_out_addr = out_addr
     if isinstance(block, JettonTransferBlock) and block.jetton_transfer_message.stonfi_swap_body is not None:
@@ -183,7 +191,24 @@ async def _get_block_data(block, other_blocks):
         'referral_address': AccountId(ref_addr) if ref_addr is not None else None,
         'peer_swaps': [],
         'success': success_swap
-    }
+    }, referral_request_blocks
+
+
+async def _get_block_data(block, other_blocks):
+    swap_call_block = next(x for x in other_blocks if isinstance(x, CallContractBlock) and
+                           x.opcode == StonfiSwapMessage.opcode)
+    payment_requests_messages = [(StonfiPaymentRequest(x.get_body()), x) for x in
+                                 find_call_contracts(other_blocks, StonfiPaymentRequest.opcode)]
+    data, referral_request_blocks = await build_stonfi_v1_swap_core(
+        block, swap_call_block, payment_requests_messages)
+    # Original consumption surgery, reproduced from the core's return value:
+    # the ok_ref referral subtree is un-consumed so it classifies on its own
+    # (the fixture expects a separate top-level jetton_transfer action).
+    for payment_request_block in referral_request_blocks:
+        for b in payment_request_block.bfs_iter():
+            if b in other_blocks:
+                other_blocks.remove(b)
+    return data
 
 
 class StonfiSwapBlockMatcher(BlockMatcher):

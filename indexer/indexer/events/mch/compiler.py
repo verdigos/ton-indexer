@@ -21,6 +21,8 @@ from indexer.events.mch import ast_
 from indexer.events.mch.btypes import produces_btype
 from indexer.events.mch.eval import BuildProgram, EvalError, apply_flows
 from indexer.events.mch.diagnostics import CompileError, DiagnosticBag, Span
+from indexer.events.mch.expr_eval import BUILTINS as _EXPR_BUILTINS, eval_where_expr
+from indexer.events.mch.expr_ir import emit_expr
 from indexer.events.mch.recursion import RecursionStrategy, RecursiveMatcherStrategy
 from indexer.events.mch.registry import Registries
 from indexer.events.mch.resolver import (
@@ -356,8 +358,25 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     )
     if anchor_pred_name is not None:
         instance._ir_where = anchor_pred_name  # type: ignore[attr-defined]
+    # Anchor-node inline `where (expr)` (T33 decision: supported on BOTH paths).
+    # Composed onto test_self exactly like a nested node's, and stamped for IR
+    # emission — the emitter's root-node record carries it, and the IR engine
+    # already evaluates the root's where_expr in _test_head.
     if rm.anchor_group is None and rm.anchor_node.where_expr is not None:
-        instance._ir_where_expr = rm.anchor_node.where_expr  # type: ignore[attr-defined]
+        _compose_where_expr(instance, rm.anchor_node.where_expr, rm.anchor_node.span, ctx)
+    if rm.anchor_group is not None:
+        # Group-anchor branches carry only named `where` predicates in the IR
+        # anchor record ([M2R, R09]); an inline expr there would be silently
+        # dropped on both paths — reject instead (spec §6.8 no-silent-drop).
+        for b in rm.anchor_group.branches:
+            if isinstance(b, ast_.Node) and b.where_expr is not None:
+                ctx.bag.error(
+                    "C013_WHERE_EXPR_NOT_SYNC",
+                    f"matcher {decl.name!r}: inline `where (expr)` is not "
+                    f"supported on opcode-set anchor branches; use a named "
+                    f"`where <predicate>` (spec §8.3 / [M2R, R09])",
+                    b.span,
+                )
     if rm.anchor_group is None and isinstance(rm.anchor_node.head, ast_.PredHead):
         # Predicate anchor ([M2R, R10]): IR anchor record kind "pred".
         instance._ir_anchor_pred = rm.anchor_node.head.name  # type: ignore[attr-defined]
@@ -1126,7 +1145,7 @@ def _branches_eligible_for_exclusive_heuristic(
         head = b.head
         if not isinstance(head, (ast_.OpHead, ast_.BTypeHead)):
             return False
-        if b.where_predicate is not None:
+        if b.where_predicate is not None or b.where_expr is not None:
             return False
         if isinstance(head, ast_.OpHead):
             ref = head.ref
@@ -1333,6 +1352,62 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> BlockMatcher:
     raise AssertionError(f"unhandled pattern node: {type(p).__name__}")
 
 
+def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
+    """Compile-time mirror of the IR loader's _check_where_expr_sync (T33).
+
+    An inline `where (expr)` composes onto the engine's synchronous test_self,
+    so async constructs (lookups, host fns) are compile errors here — the IR
+    loader rejects the same artifacts, keeping both paths failing at the same
+    stage instead of the compiled path silently never matching. Returns True
+    when the expression is sync-evaluable."""
+    if isinstance(e, ast_.LookupExpr):
+        ctx.bag.error(
+            "C013_WHERE_EXPR_NOT_SYNC",
+            "`where (expr)` cannot contain lookups (test_self is sync)",
+            span,
+        )
+        return False
+    if isinstance(e, ast_.Call):
+        callee = e.callee
+        if not isinstance(callee, ast_.NameRef) or callee.name not in _EXPR_BUILTINS:
+            shown = callee.name if isinstance(callee, ast_.NameRef) else type(callee).__name__
+            ctx.bag.error(
+                "C013_WHERE_EXPR_NOT_SYNC",
+                f"`where (expr)` can only call builtins, not host fn {shown!r}",
+                span,
+            )
+            return False
+        return all(_check_where_expr_sync(a, span, ctx) for a in e.args)
+    if isinstance(e, ast_.FieldAccess):
+        return _check_where_expr_sync(e.target, span, ctx)
+    if isinstance(e, ast_.UnaryOp):
+        return _check_where_expr_sync(e.operand, span, ctx)
+    if isinstance(e, ast_.BinaryOp):
+        return (_check_where_expr_sync(e.left, span, ctx)
+                and _check_where_expr_sync(e.right, span, ctx))
+    if isinstance(e, ast_.Ternary):
+        return (_check_where_expr_sync(e.cond, span, ctx)
+                and _check_where_expr_sync(e.then, span, ctx)
+                and _check_where_expr_sync(e.orelse, span, ctx))
+    return True
+
+
+def _compose_where_expr(m: BlockMatcher, expr: ast_.Expr, span: Span,
+                        ctx: CompileCtx) -> None:
+    """Inline `where (expr)` (spec §6.8 M4, T33): compile the ast expression to
+    its IR encoding and AND it onto test_self via the shared sync evaluator —
+    the same bytes and the same evaluator the IR engine uses (expr_eval.py),
+    so the two paths cannot drift. Missing field / eval fault => False."""
+    if not _check_where_expr_sync(expr, span, ctx):
+        return
+    ir_expr = emit_expr(expr)
+    original_test = m.test_self
+    def _test_with_where_expr(block, _orig=original_test, _e=ir_expr):
+        return _orig(block) and eval_where_expr(_e, block)
+    m.test_self = _test_with_where_expr  # type: ignore[method-assign]
+    m._ir_where_expr = expr  # type: ignore[attr-defined]
+
+
 def _lower_node(n: ast_.Node, ctx: CompileCtx) -> BlockMatcher:
     head = n.head
     if isinstance(head, ast_.OpHead):
@@ -1358,9 +1433,9 @@ def _lower_node(n: ast_.Node, ctx: CompileCtx) -> BlockMatcher:
         m.test_self = combined  # type: ignore[assignment]
         m._ir_where = n.where_predicate  # type: ignore[attr-defined]
     if n.where_expr is not None:
-        # Inline `where (expr)` — not evaluated at match time in v0 (no engine
-        # expression-predicate path yet); stamped for IR emission only.
-        m._ir_where_expr = n.where_expr  # type: ignore[attr-defined]
+        # Inline `where (expr)` (T33): evaluated at match time, composed onto
+        # test_self; the same call also stamps _ir_where_expr for IR emission.
+        _compose_where_expr(m, n.where_expr, n.span, ctx)
     if n.capture is not None:
         # Tag the lowered matcher with its capture name. The synthesized
         # build_block walks the matcher tree and binds captures positionally

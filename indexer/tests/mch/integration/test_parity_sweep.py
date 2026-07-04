@@ -83,6 +83,7 @@ from indexer.events.mch.builders.getgems import getgems_registries
 from indexer.events.mch.builders.nominator import nominator_registries
 from indexer.events.mch.builders.stonfi_liquidity import stonfi_liquidity_registries
 from indexer.events.mch.builders.stonfi_provide import stonfi_provide_registries
+from indexer.events.mch.builders.stonfi_v1 import stonfi_v1_registries
 from indexer.events.mch.builders.telegram_nft import telegram_nft_registries
 from indexer.events.mch.builders.tgbtc import tgbtc_registries
 from indexer.events.mch.builders.tonco import tonco_liquidity_registries
@@ -154,6 +155,8 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple]] = [
     ("specs/getgems.mch", _SPECS_DIR / "getgems.mch", getgems_registries, (NftTransferBlockMatcher,)),
     ("specs/stonfi_v2_provide.mch", _SPECS_DIR / "stonfi_v2_provide.mch", stonfi_provide_registries,
      (JettonTransferBlockMatcher, PTonTransferMatcher)),
+    # Remake wave 4 (2026-07-04): R12 stonfi v1 (consumption surgery killed at match time).
+    ("specs/stonfi_v1_swap.mch", _SPECS_DIR / "stonfi_v1_swap.mch", stonfi_v1_registries, _PREREQ_SWAP),
 ]
 
 

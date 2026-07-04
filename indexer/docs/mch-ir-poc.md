@@ -132,7 +132,7 @@ New matcher-record key `build_program` (array, source order; omitted when the ma
 
 ### Node-level `where_expr`
 
-`Node.where_expr` (inline `where (expr)`, mutually exclusive with the named `where` predicate form) → node record key `"where_expr": <expr>`. **Not emitted for a matcher's own anchor node** in this POC — the anchor is lowered through a separate code path that doesn't currently carry `where_expr` through; no current spec (real or test) exercises this combination.
+`Node.where_expr` (inline `where (expr)`, mutually exclusive with the named `where` predicate form) → node record key `"where_expr": <expr>`. Emitted for **every** node incl. a matcher's own anchor node `[T33]`: the anchor's expr rides on the root node record (the matcher-level `anchor` record never carries it), and engines evaluate it as part of the root's head test at match time. Both hosts share one sync evaluator (`mch/expr_eval.py`): dotfield reads the candidate block's `data`, missing field / `data=None` / any eval fault ⇒ the node test fails (False, never an error); lookups and host fns inside a where_expr are rejected before run time (IR loader + compiler C013).
 
 Go POC: ignores `build_program` and `where_expr` entirely (unknown-field-tolerant parser); these fields are frontend-only in 0.1-poc.
 
@@ -144,7 +144,7 @@ Go POC: ignores `build_program` and `where_expr` entirely (unknown-field-toleran
 
 ## Out of scope for 0.1-poc
 
-Expression *bytecode* — a shared, deduplicated `exprs` pool addressed by index (final M5 IR); this POC inlines expression trees per-occurrence instead, with no dedup. Also out of scope: typed capture extraction, value flow, priority directive, diagnostics, anchor-node `where_expr` (see above). Schema reserves nothing — final M5 IR is a superset redesign; this artifact is disposable.
+Expression *bytecode* — a shared, deduplicated `exprs` pool addressed by index (final M5 IR); this POC inlines expression trees per-occurrence instead, with no dedup. Also out of scope: typed capture extraction, value flow, priority directive, diagnostics. Schema reserves nothing — final M5 IR is a superset redesign; this artifact is disposable.
 
 ## Acceptance
 

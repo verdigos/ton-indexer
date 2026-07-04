@@ -295,7 +295,7 @@ Needs: —
 Pointer task: execute **T28** (see M2 above — cyclic child-graph recursion; strategy (a) cyclic descent vs (b) negative lookahead decision lives there). Listed here because it is part of the remake wave's feature batch. Update T28's own status when done.
 
 ### R12 — Remake: stonfi v1 swap
-Status: todo
+Status: done (2026-07-04 — specs/stonfi_v1_swap.mch: consumption surgery FULLY eliminated — host predicate `stonfi_v1_sender_payment` parses payment-request exit code at match time (ok/no_liq/reserve_err pass; ok_ref referral request fails the gate → its subtree never consumed, matching legacy's bfs-removal end state with zero surgery). NOTE: T33 inline predicates turned out inapplicable here (exit code needs BODY parsing; inline `.field` sees only block.data) — plain host `where` predicate did it. `build_stonfi_v1_swap_core` consumption-neutral (returns data + referral blocks); legacy `_get_block_data` = thin wrapper reproducing exact bfs-removal; mch builder reconstructs request list from the tree (R05 inspect-without-consume precedent) and drops referral blocks. 3-way parity on ALL 6 stonfi-swaps.yaml fixtures incl. referral (with explicit ref-subtree-not-consumed assert) + failed + receiver≠sender. No residual deviations.)
 Tier: fable
 Needs: T33 (M4 inline field predicates); revisit `omit` (§9.9/T36) if predicates alone don't kill the surgery
 Legacy: `StonfiSwapBlockMatcher` (`blocks/swaps.py:189`) — build-side consumption surgery: for `ok_ref` exit codes the referral subtree is bfs-removed from `other_blocks` (build edits the consumed set).
@@ -388,7 +388,7 @@ Goal: evaluate expressions per design note; engine executes collect → batched 
 Accept: behavioral tests incl. null propagation, `??`, list combinators, batched-lookup call-count assertion.
 
 ### T33 — Inline field predicates
-Status: todo
+Status: done (2026-07-04, via remake wave 4 — compiled path now evaluates node `where_expr` identically to the IR engine: shared sync evaluator extracted to frontend leaf `mch/expr_eval.py` (mch_ir/expr.py re-exports, import boundary intact), expr→IR encoding to `mch/expr_ir.py` (ir_emit aliases it); compiler composes eval over the compile-time IR encoding — same bytes + same evaluator as the IR engine, drift impossible. Anchor-node where_expr SUPPORTED both paths (ir-poc doc was stale, fixed). New C013_WHERE_EXPR_NOT_SYNC: lookup/host-fn inside where_expr or where_expr on an opcode-set anchor branch = compile error (no silent drops). Behavioral `.has_internal_transfer == false` test compiled==IR incl. missing-field/None-data; exclusive-upgrade heuristics treat where_expr like where. Spec §6.8 tagged; example syntax corrected to parenthesized form.)
 Spec: §6.8 (M4 clause)
 Needs: T31
 Goal: `where .field == literal` / `!=` on any node; missing field ⇒ false; match-time (sync, no lookups).

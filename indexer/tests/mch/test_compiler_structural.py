@@ -933,3 +933,60 @@ def test_t04_upstream_atoms_before_anchor_rejected():
     assert "Up" in src[diag.span.start_off:diag.span.end_off], (
         src[diag.span.start_off:diag.span.end_off]
     )
+
+
+# ==========================================================================
+# T33 — inline `where (expr)` sync gate (C013)
+# ==========================================================================
+
+def _c013_codes(src: str) -> list[str]:
+    from indexer.events.mch.diagnostics import CompileError, Severity
+    reg = _registries_with_opcodes(A=0x1, B=0x2)
+    _with_block_type(reg, "MB")
+    _with_builder(reg, "build_m")
+    with pytest.raises(CompileError) as exc:
+        compile_text(src, "test.mch", reg)
+    return [d.code for d in exc.value.bag.items if d.severity is Severity.ERROR]
+
+
+def test_where_expr_lookup_is_a_compile_error():
+    """Mirror of the IR loader gate: where_expr composes onto sync test_self,
+    so a lookup inside it must fail at compile time, not silently never-match."""
+    src = """
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+
+        op A @a -> op B @b where (lookup jetton_wallet(.owner) == null)
+    }
+    """
+    assert "C013_WHERE_EXPR_NOT_SYNC" in _c013_codes(src)
+
+
+def test_where_expr_host_fn_call_is_a_compile_error():
+    src = """
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+
+        op A @a -> op B @b where (my_host_fn(.owner) == 1)
+    }
+    """
+    assert "C013_WHERE_EXPR_NOT_SYNC" in _c013_codes(src)
+
+
+def test_where_expr_on_group_anchor_branch_is_a_compile_error():
+    """Group-anchor branches carry only named `where` predicates in the IR
+    anchor record; an inline expr there would be silently dropped — reject."""
+    src = """
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @a
+
+        (op A @a where (.x == 1) ^ op B @a)
+    }
+    """
+    assert "C013_WHERE_EXPR_NOT_SYNC" in _c013_codes(src)
