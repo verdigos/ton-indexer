@@ -114,12 +114,15 @@ def _validate_group_anchor(
     occs: list[_CaptureOccurrence],
     alt_nodes: dict[int, ast_.Alternative],
 ) -> tuple[ast_.Alternative | None, str]:
-    """Validate an `entry` capture that touches alternative branches (spec §8.3 M2).
+    """Validate an `entry` capture that touches alternative branches (spec §8.3
+    M2 / [M2R, R09]).
 
-    Legal only as an opcode-set anchor: every occurrence is itself a branch of
-    one exclusive alternative, one per branch, all branches covered, each branch
-    a bare concrete `op`/`btype` node without `where`. Returns (group, "") on
-    success or (None, reason) for the R007 message.
+    Legal as a set-membership anchor: every occurrence is itself a branch of one
+    exclusive alternative, one per branch, all branches covered, each branch a
+    bare concrete `op`/`btype` node. Heads may mix `op` and `btype` (union
+    membership) and each branch MAY carry a `where <pred>` clause ([M2R, R09] —
+    membership is tested first, then the matching branch's predicate). Returns
+    (group, "") on success or (None, reason) for the R007 message.
     """
     if any(o.under_recursive for o in occs):
         return None, "is inside a recursive rule"
@@ -163,11 +166,9 @@ def _validate_group_anchor(
                 "requires concrete `op`/`btype` heads on every branch of the "
                 "exclusive alternative (spec §8.3 M2)"
             )
-        if occ.node.where_predicate is not None:
-            return None, (
-                "does not support a `where` clause on opcode-set anchor "
-                "branches; split the matcher or check in the builder"
-            )
+        # A branch `where` clause is legal ([M2R, R09]): the anchor test checks
+        # union membership first, then the matching branch's predicate. Predicate
+        # existence is validated by the pattern walk (R003).
     return alt, ""
 
 
@@ -597,12 +598,16 @@ def _resolve_matcher(
                         f"matcher {m.name!r}: entry @{m.entry} is inside a recursive rule",
                         m.span,
                     )
-                if not isinstance(ci.head, (ast_.OpHead, ast_.BTypeHead)):
+                if not isinstance(ci.head, (ast_.OpHead, ast_.BTypeHead, ast_.PredHead)):
                     bag.error(
                         "R007_ENTRY_VIOLATES_8_3",
-                        f"matcher {m.name!r}: entry @{m.entry} must reference an `op` or `btype` node",
+                        f"matcher {m.name!r}: entry @{m.entry} must reference an "
+                        f"`op`, `btype`, or `pred` node",
                         m.span,
                     )
+                # A `pred`-headed anchor ([M2R, R10]) has no opcode/btype
+                # prefilter: the engine full-scans `test_self` (the predicate) on
+                # every candidate block. Legal, measured-acceptable (see R10).
             anchor_node = ci.source
 
     _check_build_stmts(m, captures, registries, bag)

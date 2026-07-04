@@ -729,6 +729,217 @@ class DedustWithdrawBlockMatcher(BlockMatcher):
         return [new_block]
 
 
+class StonfiV2DepositLiquidity(Block):
+    """Stonfi v2 provide-liquidity leg that carries the pool callback
+    (cb_add_liquidity -> LP mint or refund). Same btype as the legacy
+    matcher's output; the class tag exists for
+    post_process_stonfi_v2_liquidity dispatch (R08)."""
+
+    def __init__(self, data):
+        super().__init__("dex_deposit_liquidity", [], data)
+
+
+class StonfiV2DepositLiquidityPartial(Block):
+    """Stonfi v2 provide-liquidity leg without the pool callback — the
+    deposit that waits for its pair. Same btype as the legacy matcher's
+    output; class tag for post_process_stonfi_v2_liquidity dispatch (R08)."""
+
+    def __init__(self, data):
+        super().__init__("dex_deposit_liquidity", [], data)
+
+
+def build_stonfi_v2_provide_core(
+    block: Block,
+    in_transfer: Block | None,
+    lp_token_transfer: Block | None,
+) -> dict:
+    """Shared single-leg data build for stonfi_v2 dex_deposit_liquidity.
+    `block` is the provide-liquidity (0x37c096df) anchor, `in_transfer` the
+    incoming transfer (a JettonTransferBlock, or the raw pTON 0x01f3835d call
+    for a TON leg), `lp_token_transfer` the LP-mint JettonInternalTransfer
+    call if the leg carried the pool callback."""
+    lp_tokens_minted = None
+    if lp_token_transfer:
+        msg = JettonInternalTransfer(lp_token_transfer.get_body())
+        lp_tokens_minted = Amount(msg.amount)
+
+    if isinstance(in_transfer, JettonTransferBlock):
+        asset = in_transfer.data['asset']
+    else:
+        asset = Asset(is_ton=True, jetton_address=None)
+    provide_liquidity_msg = StonfiV2ProvideLiquidity(block.get_body())
+    amount = provide_liquidity_msg.amount1 if provide_liquidity_msg.amount1 and provide_liquidity_msg.amount1 > 0 else provide_liquidity_msg.amount2
+    return {
+        'dex': 'stonfi_v2',
+        'amount_1': Amount(amount),
+        'asset_1': asset,
+        'sender': AccountId(provide_liquidity_msg.from_user),
+        'sender_wallet_1': (in_transfer.data['sender_wallet']
+                            if isinstance(in_transfer, JettonTransferBlock) else None),
+        'amount_2': None,
+        'asset_2': None,
+        'sender_wallet_2': None,
+        'pool': AccountId(block.event_nodes[0].message.destination),
+        'lp_tokens_minted': lp_tokens_minted
+    }
+
+
+_STONFI_V2_DEPOSIT_CLASSES = (StonfiV2DepositLiquidity, StonfiV2DepositLiquidityPartial)
+
+
+def _stonfi_v2_provide_fire_order(block: Block) -> tuple[int, int]:
+    """Legacy fire order for a produced provide-liquidity block: the legacy
+    matcher is a single BFS pass, so the leg whose 0x37c096df anchor sits
+    shallower in the tree fired first. Internal previous_block pointers are
+    preserved by merge_blocks, so the anchor's depth is still the match-time
+    depth. Same-depth ties are set-order nondeterministic in the legacy
+    pipeline (compact_connections rebuilds sibling lists as list(set(...)));
+    min_lt is the deterministic stand-in."""
+    anchor = next(b for b in block.children_blocks
+                  if isinstance(b, CallContractBlock)
+                  and b.opcode == StonfiV2ProvideLiquidity.opcode)
+    depth = 0
+    cur = anchor
+    while cur.previous_block is not None:
+        cur = cur.previous_block
+        depth += 1
+    return depth, block.min_lt
+
+
+def _stonfi_v2_leg_head(block: Block, proxied: Block) -> Block:
+    """The consumed in-leg head (pTON call or jetton_transfer block) — the
+    unique child of the produced block whose previous_block is still the
+    shared parent. This is the block the legacy matcher labels 'in_transfer'
+    for the proxy insertion."""
+    return next(c for c in block.children_blocks if c.previous_block is proxied)
+
+
+def _stonfi_v2_merge_paired(final: Block, partial: Block) -> None:
+    """Replays the legacy pairing branch on already-built blocks: EmptyBlock
+    proxy insertion between the shared parent and [partial, in_transfer]
+    (liquidity.py legacy surgery), then absorption of the partial exactly as
+    the legacy single merge_blocks call would have produced it."""
+    proxied = partial.previous_block
+    in_transfer = _stonfi_v2_leg_head(final, proxied)
+    proxy = EmptyBlock()
+
+    # proxied.insert_between([partial, in_transfer], proxy), replayed against
+    # the current tree (in_transfer already sits inside `final`).
+    for child in proxied.children_blocks:
+        for nb in (partial, in_transfer):
+            if nb in child.next_blocks:
+                child.next_blocks.remove(nb)
+                child.next_blocks.append(proxy)
+    proxied.next_blocks = [n for n in proxied.next_blocks
+                           if n is not partial and n is not in_transfer]
+    for nb in (partial, in_transfer):
+        for child in nb.children_blocks:
+            if child.previous_block is nb:
+                child.previous_block = proxy
+    proxied.connect(proxy)
+    proxy.connect(partial)
+    proxy.connect(in_transfer)
+
+    # Absorption: in legacy both the partial (`another_deposit`) and the proxy
+    # are part of the one merge_blocks call; the proxy is the earliest common
+    # block, so the merged block's initiating_event_node is the proxy's (None).
+    final.children_blocks.append(partial)
+    final.children_blocks.append(proxy)
+    partial.parent = final
+    proxy.parent = final
+    final.event_nodes.extend(partial.event_nodes)
+    final.value_flow.merge(partial.value_flow)
+    final.contract_deployments = final.contract_deployments.union(partial.contract_deployments)
+    for nb in list(partial.next_blocks):
+        nb.previous_block = final
+        final.next_blocks.append(nb)
+    final.previous_block = proxied
+    final.initiating_event_node = proxy.initiating_event_node
+    final.calculate_min_max_lt()
+    proxied.compact_connections()
+
+    final.data['amount_2'] = partial.data['amount_1']
+    final.data['asset_2'] = partial.data['asset_1']
+    final.data['sender_wallet_2'] = partial.data['sender_wallet_1']
+    if final.data['lp_tokens_minted'] is None:
+        final.data['lp_tokens_minted'] = partial.data['lp_tokens_minted']
+
+
+def _stonfi_v2_absorb_unpaired(final: Block, partial: Block) -> None:
+    """Legacy condition-fail branch: the sibling walk matched (so the sibling
+    deposit AND the shared parent block are in other_blocks) but the
+    sender/pool/lp condition failed — no proxy, no data update, yet the legacy
+    merge_blocks still absorbs both. The earliest common block becomes the
+    shared parent, so the merged block takes its previous_block and
+    initiating_event_node."""
+    proxied = partial.previous_block
+    final.children_blocks.append(partial)
+    final.children_blocks.append(proxied)
+    partial.parent = final
+    proxied.parent = final
+    final.event_nodes.extend(partial.event_nodes)
+    final.event_nodes.extend(proxied.event_nodes)
+    final.value_flow.merge(partial.value_flow)
+    final.value_flow.merge(proxied.value_flow)
+    final.contract_deployments = final.contract_deployments.union(partial.contract_deployments)
+    for nb in list(proxied.next_blocks):
+        if nb is final or nb is partial:
+            continue
+        final.next_blocks.append(nb)
+        nb.previous_block = final
+        final.contract_deployments = final.contract_deployments.union(nb.contract_deployments)
+    for nb in list(partial.next_blocks):
+        final.next_blocks.append(nb)
+        nb.previous_block = final
+    # At legacy match time the shared parent's next list still holds the raw
+    # in-leg head (the absorbing block does not exist yet), and nothing
+    # compacts the absorbed parent afterwards — restore that state.
+    head = _stonfi_v2_leg_head(final, proxied)
+    proxied.next_blocks = [head if nb is final else nb for nb in proxied.next_blocks]
+    final.previous_block = proxied.previous_block
+    final.initiating_event_node = proxied.initiating_event_node
+    final.calculate_min_max_lt()
+    if proxied.previous_block is not None:
+        proxied.previous_block.compact_connections()
+
+
+async def post_process_stonfi_v2_liquidity(blocks: list[Block]) -> list[Block]:
+    """Host-side pairing pass for the R08 stonfi_v2 provide-liquidity remake
+    (spec §5.5: merging stays host-side). The mch matchers emit one
+    class-tagged block per deposit leg; this pass replays the legacy
+    cross-branch pairing: a later-fired leg absorbs an earlier sibling leg
+    (same previous_block) — with the EmptyBlock proxy insertion and data
+    merge when the legacy sender/pool/lp condition holds, or the legacy
+    condition-fail absorption (sibling + shared parent, no data update)
+    when it does not. Deviation from legacy, documented: legacy would merge
+    ALL matched sibling deposits at once (3+ legs under one parent); this
+    pass pairs one candidate per block, latest-fired first.
+
+    NOT registered in event_processing yet — production wiring is T26."""
+    deposits = [b for b in blocks if isinstance(b, _STONFI_V2_DEPOSIT_CLASSES)]
+    if len(deposits) < 2:
+        return blocks
+
+    deposits.sort(key=_stonfi_v2_provide_fire_order)
+    alive: list[Block] = []
+    for b in deposits:
+        candidates = [a for a in alive
+                      if a.previous_block is not None
+                      and a.previous_block is b.previous_block]
+        if candidates:
+            a = candidates[-1]
+            if a.data['sender'] == b.data['sender'] and \
+                    a.data['pool'] == b.data['pool'] and \
+                    a.data['lp_tokens_minted'] != b.data['lp_tokens_minted']:
+                _stonfi_v2_merge_paired(b, a)
+            else:
+                _stonfi_v2_absorb_unpaired(b, a)
+            blocks.remove(a)
+            alive.remove(a)
+        alive.append(b)
+    return blocks
+
+
 class StonfiV2ProvideLiquidityMatcher(BlockMatcher):
     def __init__(self):
         another_deposit = labeled('deposit_part',
@@ -781,34 +992,9 @@ class StonfiV2ProvideLiquidityMatcher(BlockMatcher):
                     lp_token_transfer = b.block
                 if b.label == 'deposit_part':
                     another_deposit = b.block
-        lp_tokens_minted = None
-
-        if lp_token_transfer:
-            msg = JettonInternalTransfer(lp_token_transfer.get_body())
-            lp_tokens_minted = Amount(msg.amount)
-
         new_block = Block('dex_deposit_liquidity', [])
-
-        asset = None
-        if isinstance(in_transfer, JettonTransferBlock):
-            asset = in_transfer.data['asset']
-        else:
-            asset = Asset(is_ton=True, jetton_address=None)
-        provide_liquidity_msg = StonfiV2ProvideLiquidity(block.get_body())
-        amount = provide_liquidity_msg.amount1 if provide_liquidity_msg.amount1 and provide_liquidity_msg.amount1 > 0 else provide_liquidity_msg.amount2
-        new_block.data = {
-            'dex': 'stonfi_v2',
-            'amount_1': Amount(amount),
-            'asset_1': asset,
-            'sender': AccountId(provide_liquidity_msg.from_user),
-            'sender_wallet_1': (in_transfer.data['sender_wallet']
-                              if isinstance(in_transfer, JettonTransferBlock) else None),
-            'amount_2': None,
-            'asset_2': None,
-            'sender_wallet_2': None,
-            'pool': AccountId(block.event_nodes[0].message.destination),
-            'lp_tokens_minted': lp_tokens_minted
-        }
+        new_block.data = build_stonfi_v2_provide_core(block, in_transfer, lp_token_transfer)
+        lp_tokens_minted = new_block.data['lp_tokens_minted']
 
         if another_deposit:
             if another_deposit.data['sender'] == new_block.data['sender'] and \

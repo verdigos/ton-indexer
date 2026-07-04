@@ -191,16 +191,31 @@ def _emit_node(m: BlockMatcher, nodes: list[dict], memo: dict[int, int]) -> int:
 
 
 def _anchor_record(root: BlockMatcher) -> dict:
+    # Mixed-kind or per-branch-`where` anchor group ([M2R, R09]): a `mixed`
+    # record carrying one branch object per alternative branch, each `{op}` or
+    # `{btype}` with an optional `where` predicate name. Membership is the union
+    # of all branch heads; the matching branch's `where` (if any) is tested
+    # after membership. Pure single-kind no-`where` groups keep the T10
+    # opcode_set/btype forms below (compiler stamps exactly one representation).
+    # Predicate anchor ([M2R, R10]): no opcode/btype prefilter; the anchor test
+    # is the named predicate, full-scanned by the engine.
+    anchor_pred = getattr(root, "_ir_anchor_pred", None)
+    if anchor_pred is not None:
+        return {"kind": "pred", "pred": anchor_pred}
+    anchor_branches = getattr(root, "_ir_anchor_branches", None)
+    if anchor_branches is not None:
+        out_branches: list[dict] = []
+        for kind, value, where_name in anchor_branches:
+            rec = {"op": _unsigned32(value)} if kind == "op" else {"btype": value}
+            if where_name is not None:
+                rec["where"] = where_name
+            out_branches.append(rec)
+        return {"kind": "mixed", "branches": out_branches}
     anchor_opcodes = getattr(root, "_ir_anchor_opcodes", None)
     anchor_btypes = getattr(root, "_ir_anchor_btypes", None)
-    if anchor_opcodes or anchor_btypes:
-        if anchor_opcodes and anchor_btypes:
-            raise ValueError(
-                "mixed opcode/btype anchor group is not representable in IR "
-                f"{IR_VERSION} (anchor.kind is opcode_set XOR btype)"
-            )
-        if anchor_opcodes:
-            return {"kind": "opcode_set", "values": [_unsigned32(o) for o in anchor_opcodes]}
+    if anchor_opcodes:
+        return {"kind": "opcode_set", "values": [_unsigned32(o) for o in anchor_opcodes]}
+    if anchor_btypes:
         return {"kind": "btype", "values": list(anchor_btypes)}
     if isinstance(root, ContractMatcher):
         return {"kind": "opcode_set", "values": [_unsigned32(root.opcode)]}

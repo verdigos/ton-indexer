@@ -17,7 +17,7 @@ from indexer.events.mch_ir.expr import BUILTINS
 IR_VERSION = "0.1-poc"
 
 NODE_KINDS = frozenset({"contract", "block_type", "pred", "any", "or", "recursive"})
-ANCHOR_KINDS = frozenset({"opcode_set", "btype"})
+ANCHOR_KINDS = frozenset({"opcode_set", "btype", "mixed", "pred"})
 CAPTURE_CARDS = frozenset({"one", "opt", "many"})
 EXPR_KINDS = frozenset({
     "int", "str", "bool", "null", "name", "dotfield", "attr", "call",
@@ -102,12 +102,38 @@ def _check_matcher(m: Any, n_nodes: int) -> None:
     anchor = m.get("anchor")
     if not isinstance(anchor, dict) or anchor.get("kind") not in ANCHOR_KINDS:
         raise IrLoadError(f"{where}: anchor kind must be one of {sorted(ANCHOR_KINDS)}")
-    values = anchor.get("values")
-    if not isinstance(values, list) or not values:
-        raise IrLoadError(f"{where}: anchor values must be a non-empty array")
-    want = int if anchor["kind"] == "opcode_set" else str
-    if not all(isinstance(v, want) for v in values):
-        raise IrLoadError(f"{where}: anchor {anchor['kind']} values must be {want.__name__}s")
+    if anchor["kind"] == "pred":
+        # [M2R, R10] predicate anchor: no prefilter, full-scan test_self.
+        if not isinstance(anchor.get("pred"), str):
+            raise IrLoadError(f"{where}: pred anchor needs a 'pred' predicate name")
+    elif anchor["kind"] == "mixed":
+        # [M2R, R09] union-membership group: one branch object per alternative
+        # branch, each `{op:int}` or `{btype:str}` with an optional `where` name.
+        branches = anchor.get("branches")
+        if not isinstance(branches, list) or not branches:
+            raise IrLoadError(f"{where}: mixed anchor needs a non-empty 'branches' array")
+        for br in branches:
+            if not isinstance(br, dict):
+                raise IrLoadError(f"{where}: bad mixed anchor branch {br!r}")
+            has_op = "op" in br
+            has_btype = "btype" in br
+            if has_op == has_btype:
+                raise IrLoadError(
+                    f"{where}: mixed anchor branch needs exactly one of 'op'/'btype': {br!r}"
+                )
+            if has_op and not isinstance(br["op"], int):
+                raise IrLoadError(f"{where}: mixed anchor branch 'op' must be an int: {br!r}")
+            if has_btype and not isinstance(br["btype"], str):
+                raise IrLoadError(f"{where}: mixed anchor branch 'btype' must be a str: {br!r}")
+            if "where" in br and not isinstance(br["where"], str):
+                raise IrLoadError(f"{where}: mixed anchor branch 'where' must be a predicate name: {br!r}")
+    else:
+        values = anchor.get("values")
+        if not isinstance(values, list) or not values:
+            raise IrLoadError(f"{where}: anchor values must be a non-empty array")
+        want = int if anchor["kind"] == "opcode_set" else str
+        if not all(isinstance(v, want) for v in values):
+            raise IrLoadError(f"{where}: anchor {anchor['kind']} values must be {want.__name__}s")
 
     root = m.get("root")
     if not isinstance(root, int) or not 0 <= root < n_nodes:

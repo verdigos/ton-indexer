@@ -56,7 +56,7 @@ from indexer.events.blocks.jettons import (
     JettonTransferBlockMatcher,
     PTonTransferMatcher,
 )
-from indexer.events.blocks.nft import NftMintBlockMatcher
+from indexer.events.blocks.nft import NftMintBlockMatcher, NftTransferBlockMatcher
 from indexer.events.blocks.utils.tree_utils import to_tree
 from indexer.events.event_processing import init_block
 import indexer.events.mch as mch
@@ -79,8 +79,10 @@ from indexer.events.mch.builders.ethena import ethena_registries
 from indexer.events.mch.builders.evaa import evaa_registries
 from indexer.events.mch.builders.jvault import jvault_registries
 from indexer.events.mch.builders.layerzero import layerzero_receive_registries
+from indexer.events.mch.builders.getgems import getgems_registries
 from indexer.events.mch.builders.nominator import nominator_registries
 from indexer.events.mch.builders.stonfi_liquidity import stonfi_liquidity_registries
+from indexer.events.mch.builders.stonfi_provide import stonfi_provide_registries
 from indexer.events.mch.builders.telegram_nft import telegram_nft_registries
 from indexer.events.mch.builders.tgbtc import tgbtc_registries
 from indexer.events.mch.builders.tonco import tonco_liquidity_registries
@@ -147,6 +149,11 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple]] = [
     ("specs/nominator.mch", _SPECS_DIR / "nominator.mch", nominator_registries, ()),
     # Remake wave 2 (2026-07-04): R11/T28 cyclic recursion.
     ("specs/tonco_swap.mch", _SPECS_DIR / "tonco_swap.mch", tonco_swap_registries, _PREREQ_SWAP),
+    # Remake wave 3 (2026-07-04): R07 getgems (btype-anchored — run-on-all), R08 provide legs
+    # (host pairing pass out of sweep scope).
+    ("specs/getgems.mch", _SPECS_DIR / "getgems.mch", getgems_registries, (NftTransferBlockMatcher,)),
+    ("specs/stonfi_v2_provide.mch", _SPECS_DIR / "stonfi_v2_provide.mch", stonfi_provide_registries,
+     (JettonTransferBlockMatcher, PTonTransferMatcher)),
 ]
 
 

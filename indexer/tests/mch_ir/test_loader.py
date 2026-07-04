@@ -54,6 +54,8 @@ def _stub_registries(artifact) -> Registries:
             async def _stub(match):
                 return None
             reg.builders.setdefault(m["builder"], _stub)
+        if "shape" in m:
+            reg.shapers.setdefault(m["shape"], lambda _produced, _match: None)
     return reg
 
 
@@ -152,6 +154,53 @@ def test_bad_matcher_records():
     doc["matchers"][0]["captures"] = [{"name": "x", "card": "some"}]
     with pytest.raises(IrLoadError, match="capture"):
         load_artifact(doc)
+
+
+def test_mixed_anchor_schema():
+    # [M2R, R09] valid mixed anchor with a per-branch where loads.
+    doc = _min_doc()
+    doc["matchers"][0]["anchor"] = {
+        "kind": "mixed",
+        "branches": [{"op": 1}, {"btype": "jetton_transfer", "where": "p"}],
+    }
+    doc["nodes"] = [{"kind": "any", "capture": "x"}]
+    art = load_artifact(doc)
+    assert art.matchers[0]["anchor"]["kind"] == "mixed"
+
+    # Empty branches array.
+    doc = _min_doc(); doc["matchers"][0]["anchor"] = {"kind": "mixed", "branches": []}
+    with pytest.raises(IrLoadError, match="non-empty 'branches'"):
+        load_artifact(doc)
+
+    # Branch carries neither op nor btype.
+    doc = _min_doc(); doc["matchers"][0]["anchor"] = {"kind": "mixed", "branches": [{"where": "p"}]}
+    with pytest.raises(IrLoadError, match="exactly one of 'op'/'btype'"):
+        load_artifact(doc)
+
+    # Branch carries both op and btype.
+    doc = _min_doc()
+    doc["matchers"][0]["anchor"] = {"kind": "mixed", "branches": [{"op": 1, "btype": "x"}]}
+    with pytest.raises(IrLoadError, match="exactly one of 'op'/'btype'"):
+        load_artifact(doc)
+
+    # Wrong op type.
+    doc = _min_doc(); doc["matchers"][0]["anchor"] = {"kind": "mixed", "branches": [{"op": "1"}]}
+    with pytest.raises(IrLoadError, match="'op' must be an int"):
+        load_artifact(doc)
+
+
+def test_mixed_anchor_branch_predicate_must_be_registered():
+    # build_matchers rejects an anchor-branch where predicate absent from the
+    # host registries (same discipline as node-level where predicates).
+    doc = _min_doc()
+    doc["matchers"][0]["anchor"] = {
+        "kind": "mixed",
+        "branches": [{"op": 1}, {"op": 2, "where": "unregistered_pred"}],
+    }
+    doc["nodes"] = [{"kind": "any", "capture": "x"}]
+    art = load_artifact(doc)
+    with pytest.raises(IrLoadError, match="anchor branch predicate"):
+        build_matchers(art, Registries())
 
 
 def test_shared_root_is_rejected():

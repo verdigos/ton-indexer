@@ -190,6 +190,46 @@ class NftPurchaseBlock(Block):
     def __init__(self, data: NftPurchaseData):
         super().__init__("nft_purchase", [], data)
 
+def build_getgems_nft_purchase_core(
+        block: Block, ton_transfer: 'TonTransferBlock | None') -> NftPurchaseBlock | None:
+    """Shared field build for a getgems NFT purchase.
+
+    Pure function of the anchor `block` (the already-produced getgems
+    `nft_transfer` block) and the `ton_transfer` payout to the seller (the
+    ton_transfer whose destination is `real_prev_owner`). Returns the produced
+    NftPurchaseBlock with data set but NOT merged, or None to reject — mirroring
+    build_telegram_nft_purchase_core. The legacy matcher derives `ton_transfer`
+    by scanning candidate siblings/children; the mch builder gets it from a
+    pattern capture. Consumption/merge and the finish/stop proxy insertion are
+    the caller's job (legacy wrapper / mch synthesized wrapper + shaper).
+    """
+    if block.data.get('real_prev_owner') is None:
+        return None
+    if ton_transfer is None:  # Ton transfer to seller not found
+        return None
+    data = NftPurchaseData(
+        nft_address=block.data['nft']['address'],
+        collection_address=block.data['nft']['collection']['address'] if block.data['nft']['collection'] else None,
+        nft_index=block.data['nft']['index'],
+        prev_owner=block.data['prev_owner'],
+        new_owner=block.data['new_owner'],
+        query_id=block.data['query_id'],
+        forward_amount=block.data['forward_amount'],
+        response_destination=block.data['response_destination'],
+        custom_payload=block.data['custom_payload'],
+        forward_payload=block.data['forward_payload'],
+        payout_amount=Amount(ton_transfer.value),
+        payout_comment_encrypted=ton_transfer.encrypted,
+        payout_comment_encoded=ton_transfer.comment_encoded,
+        payout_comment=ton_transfer.comment,
+        price=block.data['price'],
+        real_prev_owner=block.data['real_prev_owner'],
+        marketplace=block.data['marketplace'],
+        marketplace_address=block.data['marketplace_address'],
+    )
+    return NftPurchaseBlock(data)
+
+
 class GetgemsNftPurchaseBlockMatcher(BlockMatcher):
     def __init__(self):
         super().__init__()
@@ -217,35 +257,15 @@ class GetgemsNftPurchaseBlockMatcher(BlockMatcher):
                 include.append(n)
                 break
 
-        if ton_transfer is None: # Ton transfer to seller not found
+        new_block = build_getgems_nft_purchase_core(block, ton_transfer)
+        if new_block is None:
             return []
-        data = NftPurchaseData(
-            nft_address=block.data['nft']['address'],
-            collection_address=block.data['nft']['collection']['address'] if block.data['nft']['collection'] else None,
-            nft_index = block.data['nft']['index'],
-            prev_owner=block.data['prev_owner'],
-            new_owner=block.data['new_owner'],
-            query_id=block.data['query_id'],
-            forward_amount=block.data['forward_amount'],
-            response_destination=block.data['response_destination'],
-            custom_payload=block.data['custom_payload'],
-            forward_payload=block.data['forward_payload'],
-            payout_amount=Amount(ton_transfer.value),
-            payout_comment_encrypted=ton_transfer.encrypted,
-            payout_comment_encoded=ton_transfer.comment_encoded,
-            payout_comment=ton_transfer.comment,
-            price=block.data['price'],
-            real_prev_owner=block.data['real_prev_owner'],
-            marketplace=block.data['marketplace'],
-            marketplace_address=block.data['marketplace_address'],
-        )
 
         if need_proxy:
             proxy = EmptyBlock()
             block.previous_block.insert_between([block, ton_transfer], proxy)
             include.append(proxy)
 
-        new_block = NftPurchaseBlock(data)
         new_block.merge_blocks(include)
         return [new_block]
 

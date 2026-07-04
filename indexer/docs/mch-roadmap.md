@@ -254,7 +254,7 @@ Goal:
 Accept: synthetic test — shaper inserts EmptyBlock via `insert_between`, three-way topology parity asserted; spec + `docs/mch-ir-poc.md` updated; both suites green.
 
 ### R07 — Remake: getgems NFT purchase
-Status: todo
+Status: done (2026-07-04 — specs/getgems.mch: `btype nft_transfer` anchor (pred getgems_purchase = legacy test_self); seller payout via `-> maybe btype ton_transfer where getgems_seller_payout` (child shape, non-finish/stop). finish/stop sale branch is genuinely inexpressible structurally (legacy consumes a sibling reachable only through an UNCONSUMED finish parent) — carried by `shape getgems_proxy_insert`: verbatim EmptyBlock insert_between + absorbs the unconsumed sibling (merge_blocks+compact). `build_getgems_nft_purchase_core` shared, legacy = thin wrapper. 3-way parity incl. proxy topology on all 3 nft.yaml getgems fixtures + 2 synthetic finish/stop trees. First production `shape` user; tests/mch_ir/test_loader.py `_stub_registries` now stubs shapers (any future shape-spec needs a stub there).)
 Tier: opus
 Needs: R06
 Legacy: `GetgemsNftPurchaseBlockMatcher` (`blocks/nft.py:193`; surgery at nft.py:244).
@@ -263,7 +263,7 @@ Goal: pattern remade declaratively; the EmptyBlock proxy insertion moves into a 
 Accept: parity on all 3 getgems cases incl. inserted-proxy topology; remake gate.
 
 ### R08 — Remake: stonfi_v2 provide liquidity (partial/final realignment)
-Status: todo
+Status: done (2026-07-04 — specs/stonfi_v2_provide.mch: in-matcher GenericMatcher pairing killed; final/partial op-anchored split on 0x37c096df (cb_add_liquidity subtree = discriminator; partial builder carries downgrade guard), class-tagged blocks StonfiV2DepositLiquidity[Partial] (btype dex_deposit_liquidity, same as legacy); NEW host pass `post_process_stonfi_v2_liquidity` in blocks/liquidity.py replays legacy pairing incl. EmptyBlock proxy AND the legacy condition-fail branch (sibling+shared-parent absorption — arguably a legacy bug, reproduced for parity, flagged for future intentional fix). `shape` NOT used — surgery is pairing-time (only the pass knows the partner), legacy-placement clause. `build_stonfi_v2_provide_core` shared, legacy = thin wrapper. Synthetic 3-way parity ×6 incl. proxy topology + condition-fail. Legacy same-depth pairing direction is genuinely nondeterministic (set order) — amounts asserted swap-tolerant. T26 MUST register the pass (after matcher pass, like dedust) + both matchers after jetton/pton matchers. Deviation: 3+ sibling legs pair one-per-block vs legacy all-in-one (no corpus evidence).)
 Tier: fable
 Needs: R06
 Legacy: `StonfiV2ProvideLiquidityMatcher` (`blocks/liquidity.py:732`; surgery at liquidity.py:817; cross-branch `deposit_part` pairing via GenericMatcher over prior mch-produced blocks).
@@ -272,7 +272,7 @@ Goal: architecture realignment (class C): split into partial/final matchers dedu
 Accept: synthetic parity: both-branch trace (post-process merges), single-branch trace (partial survives); topology incl. proxy block identical; remake gate.
 
 ### R09 — Multi-kind anchors
-Status: todo
+Status: done (2026-07-04 — compiled path already unioned op∪btype since T10; R09 added: IR `{"kind":"mixed","branches":[{op|btype, where?}]}` anchor record (was hard-rejected at emit), per-branch `where` under `^` (resolver+compiler `_make_head_set_test_with_where`, fall-through on same-head pred-fail — documented §8.3), loader/engine mixed support, BUGFIX: representative anchor-node `where` no longer gates the whole matcher for group anchors. Survey of unblocked legacy matchers: Evaa supply/withdraw/liquidate, CoffeeMevProtect hold-funds/failed-swap, MultisigApprove (6 mixed) + Cocoon worker-payout/client-refund (opcode-sets, T10-ready). Single-kind emission byte-unchanged.)
 Tier: opus
 Needs: —
 Spec: §8.3 (extend the T10 M2 clause).
@@ -280,7 +280,7 @@ Goal: `entry @m` on an XOR whose branches mix `op` and `btype` heads, each branc
 Accept: behavioral tests (fires on both kinds; where-gated branch); R007 still rejects non-exclusive/maybe placements; survey list recorded.
 
 ### R10 — `pred` anchors
-Status: todo
+Status: done (2026-07-04 — SHIPPED. `entry` on pred-headed node; no prefilter → full-scan test_self. Measured on full 147-trace/1477-block corpus: 58.9 vs 54.6 ns/block (+4.3 ns, 1.08×) — negligible, engine already runs one test_self per (block, matcher) pair regardless of anchor kind. IR `{"kind":"pred","pred":name}` + loader/engine support + load-time pred check; spec §8.3 + IR doc carry the numbers. NftMint port itself = future task.)
 Tier: opus
 Needs: —
 Spec: §8.3.

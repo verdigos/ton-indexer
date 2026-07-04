@@ -692,6 +692,77 @@ def test_t10_mixed_op_and_btype_set_anchor(build_block_tree):
     assert m.test_self(build_block_tree(BlockSpec(btype="other"))) is False
 
 
+# ==========================================================================
+# R09 — Multi-kind anchors + per-branch `where` (spec §8.3 [M2R, R09])
+# ==========================================================================
+
+
+def _compile_one_with_pred(src: str, pred, pred_name: str = "has_child", **opcodes: int):
+    reg = _registries_with_opcodes(**opcodes)
+    _with_block_type(reg, "MB")
+    _with_builder(reg, "build_m")
+    reg.predicates[pred_name] = pred
+    return compile_text(src, "test.mch", reg)[0].matcher
+
+
+def test_r09_per_branch_where_gates_membership(build_block_tree):
+    """`(op A @x ^ op B @x where has_child)` — membership over {A, B}, but the
+    B branch only anchors when its `where` predicate passes. A has no where."""
+    from tests.mch.conftest import BlockSpec
+
+    m = _compile_one_with_pred(
+        """
+        opcode A = 0x1
+        opcode B = 0x2
+        matcher m {
+            produces MB
+            build    build_m
+            entry    @x
+            (op A @x ^ op B @x where has_child)
+        }
+        """,
+        pred=lambda b: bool(getattr(b, "next_blocks", None)),
+        A=0x1, B=0x2,
+    )
+    # A branch: no where, always fires on membership.
+    assert m.test_self(build_block_tree(BlockSpec(opcode=0x1))) is True
+    # B branch with a child: where passes -> fires.
+    assert m.test_self(
+        build_block_tree(BlockSpec(opcode=0x2, children=[BlockSpec(opcode=0x9)]))
+    ) is True
+    # B branch without a child: head matches but where fails -> no anchor.
+    assert m.test_self(build_block_tree(BlockSpec(opcode=0x2))) is False
+    # Off-membership opcode never fires.
+    assert m.test_self(build_block_tree(BlockSpec(opcode=0x99))) is False
+
+
+def test_r09_mixed_op_btype_with_where(build_block_tree):
+    """`(op A @x where has_child ^ btype jetton_transfer @x)` — mixed kinds AND a
+    per-branch where: union membership {op A, btype jetton_transfer}, the op
+    branch gated by `has_child`, the btype branch ungated."""
+    from tests.mch.conftest import BlockSpec
+
+    m = _compile_one_with_pred(
+        """
+        opcode A = 0x1
+        matcher m {
+            produces MB
+            build    build_m
+            entry    @x
+            (op A @x where has_child ^ btype jetton_transfer @x)
+        }
+        """,
+        pred=lambda b: bool(getattr(b, "next_blocks", None)),
+        A=0x1,
+    )
+    assert m.test_self(
+        build_block_tree(BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x9)]))
+    ) is True
+    assert m.test_self(build_block_tree(BlockSpec(opcode=0x1))) is False  # where fails
+    assert m.test_self(build_block_tree(BlockSpec(btype="jetton_transfer"))) is True
+    assert m.test_self(build_block_tree(BlockSpec(btype="other"))) is False
+
+
 def test_t12_shape6_child_then_parent_chain_rejected():
     """`op A -> op B <- op C` — degenerate: B matched as A's child has
     previous_block==A, so a parent_matcher C on B would test the anchor block and

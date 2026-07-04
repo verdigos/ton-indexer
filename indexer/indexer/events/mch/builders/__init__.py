@@ -29,6 +29,10 @@ from indexer.events.mch.builders.stonfi_liquidity import (
     register_stonfi_liquidity,
     stonfi_liquidity_registries,
 )
+from indexer.events.mch.builders.stonfi_provide import (
+    register_stonfi_provide,
+    stonfi_provide_registries,
+)
 
 __all__ = [
     "coffee_registries",
@@ -45,7 +49,9 @@ __all__ = [
     "register_dns",
     "register_jettons",
     "register_stonfi_liquidity",
+    "register_stonfi_provide",
     "register_stonfi_v2",
     "stonfi_liquidity_registries",
+    "stonfi_provide_registries",
     "stonfi_v2_registries",
 ]

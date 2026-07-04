@@ -41,7 +41,9 @@ Serialize the *lowered* matcher graph (what the Python mch compiler builds from 
 }
 ```
 
-- `anchor.kind` ∈ `"opcode_set"` (values = ints) | `"btype"` (values = btype strings). Anchor test: block is CallContract with opcode ∈ values, or block.btype ∈ values. Multi-value = T10 anchor groups.
+- `anchor.kind` ∈ `"opcode_set"` (values = ints) | `"btype"` (values = btype strings) | `"mixed"` `[M2R, R09]` | `"pred"` `[M2R, R10]`. Anchor test: block is CallContract with opcode ∈ values, or block.btype ∈ values. Multi-value = T10 anchor groups.
+- `"pred"` anchor (predicate anchor, [M2R, R10]) carries `{"kind": "pred", "pred": <predicate-name>}` instead of `values`. No opcode/btype prefilter — the engine's anchor `test_self` is the named predicate, full-scanned over every candidate block. The root node stays permissive (`"any"`); the predicate lives entirely in the anchor record. Loader hard-fails if the predicate name is absent from the host registries (same discipline as node-level `pred`/`where`).
+- `"mixed"` anchor (multi-kind and/or per-branch `where`, [M2R, R09]) carries `branches` instead of `values`: an ordered array of `{"op": <int>}` / `{"btype": <str>}` objects, each with an optional `"where": <predicate-name>`. The anchor test is union membership over all branch heads, then the matching branch's `where` (if present); tried in array order, a head match whose predicate fails falls through to a later branch with the same head. A pure single-kind group with no branch `where` still emits `"opcode_set"` / `"btype"` (the frontend never emits a `mixed` record it could express with the older kinds). The root node stays permissive (`"any"`) — the membership+where test lives entirely in the anchor record.
 - `root` — node id of the anchor node itself (its `child` / `parent` / `children` edges hang the rest of the pattern).
 - `produces` — btype strings (union per T11; first = primary).
 - `captures` — informational in POC (Go ignores). `card` ∈ `"one" | "opt" | "many"`.

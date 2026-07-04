@@ -434,12 +434,13 @@ def test_entry_capture_missing_from_one_xor_branch_rejected():
     )
 
 
-def test_entry_on_xor_branch_with_where_clause_rejected():
-    # `where` on an opcode-set anchor branch is rejected cleanly rather than
-    # silently dropped (there is no single anchor node to wrap test_self on).
+def test_entry_on_xor_branch_with_where_clause_accepted():
+    # [M2R, R09]: a branch `where` clause is legal on a set-membership anchor
+    # (was rejected under T10). Membership is tested first, then the matching
+    # branch's predicate.
     reg = _m_registries()
     reg.predicates["p"] = lambda b: True
-    _resolve_expect_error(
+    rf = _resolve(
         """
         opcode A = 0x1
         opcode B = 0x2
@@ -451,9 +452,55 @@ def test_entry_on_xor_branch_with_where_clause_rejected():
             (op A @x ^ op B @x where p)
         }
         """,
-        "R007_ENTRY_VIOLATES_8_3",
-        registries=reg,
+        reg,
     )
+    rm = rf.matchers[0]
+    assert rm.anchor_group is not None
+    assert len(rm.anchor_group.branches) == 2
+    # The where-carrying branch preserves its predicate for the anchor test.
+    assert rm.anchor_group.branches[1].where_predicate == "p"
+
+
+def test_entry_on_mixed_op_btype_xor_with_where_accepted():
+    # [M2R, R09]: mixed op/btype heads AND a branch `where`, together.
+    reg = _m_registries()
+    reg.predicates["p"] = lambda b: True
+    rf = _resolve(
+        """
+        opcode A = 0x1
+        matcher m {
+            produces M
+            build    build_m
+            entry    @x
+
+            (op A @x where p ^ btype jetton_transfer @x)
+        }
+        """,
+        reg,
+    )
+    assert rf.matchers[0].anchor_group is not None
+
+
+def test_entry_on_pred_headed_node_accepted():
+    # [M2R, R10]: `entry` may reference a `pred`-headed node (no opcode/btype
+    # prefilter; the engine full-scans test_self). Was rejected under M2.
+    reg = _m_registries()
+    reg.predicates["is_special"] = lambda b: True
+    rf = _resolve(
+        """
+        matcher m {
+            produces M
+            build    build_m
+            entry    @x
+
+            pred is_special @x
+        }
+        """,
+        reg,
+    )
+    rm = rf.matchers[0]
+    assert rm.anchor_capture == "x"
+    assert rm.anchor_group is None
 
 
 def test_entry_on_xor_branch_with_chain_rejected():

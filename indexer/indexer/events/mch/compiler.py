@@ -261,15 +261,24 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     # Build the synthetic subclass based on the anchor head.
     head = rm.anchor_node.head
     if rm.anchor_group is not None:
-        # Opcode-set anchor: test_self is a set-membership check over the group's
+        # Set-membership anchor: test_self is a membership check over the group's
         # branch heads, mirroring hand-written matchers like JettonMintBlockMatcher
         # (`opcode in [JettonMint.opcode, MinterJettonMint.opcode]`, jettons.py).
+        # Heads may mix op/btype (union) and each branch may carry a `where`
+        # predicate ([M2R, R09]): membership first, then the matching branch's
+        # predicate.
         if rm.anchor_group.exclusive:
             _check_redundant_exclusive_heads(rm.anchor_group, ctx)
         opcode_set, btype_set = _anchor_group_head_sets(rm.anchor_group, ctx)
+        branch_descs = _anchor_group_branch_descs(rm.anchor_group, ctx)
+        any_where = any(w is not None for _k, _v, w in branch_descs)
         base = GenericMatcher
         init_kwargs: dict[str, Any] = dict(
-            test_self_func=_make_head_set_test(opcode_set, btype_set),
+            test_self_func=(
+                _make_head_set_test_with_where(branch_descs, ctx.registries)
+                if any_where
+                else _make_head_set_test(opcode_set, btype_set)
+            ),
             child_matcher=child_m,
             parent_matcher=parent_m,
         )
@@ -292,6 +301,18 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         )
         # BlockTypeMatcher doesn't accept children_matchers in its __init__; if present,
         # wrap by assigning after construction.
+    elif isinstance(head, ast_.PredHead):
+        # Predicate anchor ([M2R, R10]): no opcode/btype prefilter — `test_self`
+        # IS the predicate, full-scanned over every candidate block. The IR
+        # anchor record carries the predicate name (kind "pred"); the root node
+        # stays permissive, mirroring the set-membership anchor lowering.
+        anchor_pred_fn = ctx.registries.predicates[head.name]
+        base = GenericMatcher
+        init_kwargs = dict(
+            test_self_func=anchor_pred_fn,
+            child_matcher=child_m,
+            parent_matcher=parent_m,
+        )
     else:
         # Resolver should have rejected this; defensive guard.
         ctx.bag.error(
@@ -309,8 +330,12 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     # include_bounces lives on the base; ensure flag is propagated.
     instance.include_bounces = decl.include_bounces
     instance.include_excess = decl.include_excess
-    # Apply where-predicate on the anchor node, if any.
-    anchor_pred_name = rm.anchor_node.where_predicate
+    # Apply where-predicate on the anchor node, if any. For a set-membership
+    # group anchor ([M2R, R09]) the per-branch `where` is already folded into
+    # the group's membership test (and the IR `mixed` record); `anchor_node` is
+    # only a representative branch, so its `where` must NOT be re-applied to the
+    # whole matcher.
+    anchor_pred_name = None if rm.anchor_group is not None else rm.anchor_node.where_predicate
     if anchor_pred_name is not None:
         anchor_pred = ctx.registries.predicates[anchor_pred_name]
         original_test = instance.test_self
@@ -331,11 +356,24 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     )
     if anchor_pred_name is not None:
         instance._ir_where = anchor_pred_name  # type: ignore[attr-defined]
-    if rm.anchor_node.where_expr is not None:
+    if rm.anchor_group is None and rm.anchor_node.where_expr is not None:
         instance._ir_where_expr = rm.anchor_node.where_expr  # type: ignore[attr-defined]
+    if rm.anchor_group is None and isinstance(rm.anchor_node.head, ast_.PredHead):
+        # Predicate anchor ([M2R, R10]): IR anchor record kind "pred".
+        instance._ir_anchor_pred = rm.anchor_node.head.name  # type: ignore[attr-defined]
     if rm.anchor_group is not None:
-        instance._ir_anchor_opcodes = tuple(sorted(opcode_set))  # type: ignore[attr-defined]
-        instance._ir_anchor_btypes = tuple(sorted(btype_set))  # type: ignore[attr-defined]
+        # IR anchor emission ([M2R, R09]): a pure single-kind group with no
+        # branch `where` keeps the T10 `opcode_set`/`btype` forms unchanged;
+        # a mixed-kind group or any branch `where` emits the `mixed` branch form
+        # (see ir_emit._anchor_record). Stamp exactly one representation.
+        kinds = {k for k, _v, _w in branch_descs}
+        if len(kinds) == 1 and not any_where:
+            if kinds == {"op"}:
+                instance._ir_anchor_opcodes = tuple(sorted(opcode_set))  # type: ignore[attr-defined]
+            else:
+                instance._ir_anchor_btypes = tuple(sorted(btype_set))  # type: ignore[attr-defined]
+        else:
+            instance._ir_anchor_branches = tuple(branch_descs)  # type: ignore[attr-defined]
 
     return CompiledMatcher(
         name=decl.name,
@@ -1159,12 +1197,61 @@ def _anchor_group_head_sets(
     return frozenset(opcode_set), frozenset(btype_set)
 
 
+def _anchor_group_branch_descs(
+    group: ast_.Alternative,
+    ctx: CompileCtx,
+) -> list[tuple[str, Any, str | None]]:
+    """Per-branch descriptors of a set-membership anchor group, source order
+    ([M2R, R09]). Each is `(kind, value, where_name)` where kind is `"op"`
+    (value = resolved opcode int) or `"btype"` (value = btype name), and
+    where_name is the branch's `where` predicate name or None. The resolver
+    guarantees every branch is a bare concrete `op`/`btype` node."""
+    descs: list[tuple[str, Any, str | None]] = []
+    for b in group.branches:
+        head = b.head
+        if isinstance(head, ast_.OpHead):
+            opcode = head.ref if isinstance(head.ref, int) else (
+                ctx.resolved.opcodes.get(head.ref) or ctx.registries.opcodes.get(head.ref)
+            )
+            descs.append(("op", opcode, b.where_predicate))
+        else:
+            descs.append(("btype", head.name, b.where_predicate))
+    return descs
+
+
 def _make_head_set_test(opcode_set: frozenset[int], btype_set: frozenset[str]):
     """Membership `test_self` for an opcode/btype-set anchor."""
     def test(block) -> bool:
         if isinstance(block, CallContractBlock) and block.opcode in opcode_set:
             return True
         return block.btype in btype_set
+    return test
+
+
+def _make_head_set_test_with_where(
+    branch_descs: list[tuple[str, Any, str | None]],
+    registries: Registries,
+):
+    """Membership `test_self` with per-branch `where` predicates ([M2R, R09]).
+
+    A block matches iff some branch's head matches AND that branch's `where`
+    predicate (if any) passes — union membership evaluated first, then the
+    branch predicate. Branches are tried in source order; a head match whose
+    predicate fails falls through to any later branch sharing the head."""
+    compiled: list[tuple[str, Any, Any]] = [
+        (kind, value, registries.predicates[w] if w is not None else None)
+        for kind, value, w in branch_descs
+    ]
+
+    def test(block) -> bool:
+        for kind, value, pred in compiled:
+            if kind == "op":
+                head_ok = isinstance(block, CallContractBlock) and block.opcode == value
+            else:
+                head_ok = block.btype == value
+            if head_ok and (pred is None or pred(block)):
+                return True
+        return False
     return test
 
 

@@ -78,6 +78,19 @@ def build_matchers(art: Artifact, registries: Registries) -> list["IrMatcher"]:
         if "where" in node and node["where"] not in registries.predicates:
             raise IrLoadError(f"node {i}: predicate {node['where']!r} is not registered")
     for m in art.matchers:
+        anchor = m["anchor"]
+        if anchor.get("kind") == "pred" and anchor["pred"] not in registries.predicates:
+            raise IrLoadError(
+                f"matcher {m['name']!r}: anchor predicate {anchor['pred']!r} "
+                f"is not registered"
+            )
+        if anchor.get("kind") == "mixed":
+            for br in anchor["branches"]:
+                if "where" in br and br["where"] not in registries.predicates:
+                    raise IrLoadError(
+                        f"matcher {m['name']!r}: anchor branch predicate "
+                        f"{br['where']!r} is not registered"
+                    )
         if "builder" in m and m["builder"] not in registries.builders:
             raise IrLoadError(
                 f"matcher {m['name']!r}: builder {m['builder']!r} is not registered"
@@ -198,10 +211,10 @@ class IrMatcher:
     Immutable after load — reentrancy by construction."""
 
     __slots__ = ("name", "produces", "_registries", "_anchor_opcodes",
-                 "_anchor_btypes", "_nodes", "_root", "_slots", "_cards",
-                 "_step_slots", "_exit_slots", "_owned_slots", "_builder_name",
-                 "_program", "_include_excess", "_include_bounces",
-                 "_shaper_name")
+                 "_anchor_btypes", "_anchor_branches", "_anchor_pred",
+                 "_nodes", "_root", "_slots", "_cards", "_step_slots",
+                 "_exit_slots", "_owned_slots", "_builder_name", "_program",
+                 "_include_excess", "_include_bounces", "_shaper_name")
 
     def __init__(self, record: dict, pool: list[dict], registries: Registries):
         self.name: str = record["name"]
@@ -209,7 +222,28 @@ class IrMatcher:
         self._registries = registries
 
         anchor = record["anchor"]
-        if anchor["kind"] == "opcode_set":
+        # Mixed-kind / per-branch-`where` anchor group ([M2R, R09]): union
+        # membership over branch heads, then the matching branch's predicate.
+        # Resolved to (kind, value, pred_callable_or_None) tuples, source order.
+        self._anchor_branches: list[tuple[str, object, object]] | None = None
+        # Predicate anchor ([M2R, R10]): no prefilter — test_self runs the pred.
+        self._anchor_pred = None
+        if anchor["kind"] == "pred":
+            self._anchor_opcodes = None
+            self._anchor_btypes = None
+            self._anchor_pred = registries.predicates[anchor["pred"]]
+        elif anchor["kind"] == "mixed":
+            self._anchor_opcodes = None
+            self._anchor_btypes = None
+            self._anchor_branches = [
+                (
+                    "op" if "op" in br else "btype",
+                    (br["op"] & 0xFFFFFFFF) if "op" in br else br["btype"],
+                    registries.predicates[br["where"]] if "where" in br else None,
+                )
+                for br in anchor["branches"]
+            ]
+        elif anchor["kind"] == "opcode_set":
             self._anchor_opcodes = frozenset(op & 0xFFFFFFFF for op in anchor["values"])
             self._anchor_btypes = None
         else:
@@ -315,6 +349,20 @@ class IrMatcher:
     def test_self(self, block: Block) -> bool:
         """Anchor test only (spec §4.1 step 1); node-level where clauses are
         re-checked inside try_build's walk."""
+        if self._anchor_pred is not None:
+            # [M2R, R10]: full-scan predicate anchor, no prefilter.
+            return bool(self._anchor_pred(block))
+        if self._anchor_branches is not None:
+            # [M2R, R09]: union membership, then the matching branch's `where`.
+            for kind, value, pred in self._anchor_branches:
+                if kind == "op":
+                    ok = block.btype == "call_contract" \
+                        and getattr(block, "opcode", None) == value
+                else:
+                    ok = block.btype == value
+                if ok and (pred is None or pred(block)):
+                    return True
+            return False
         if self._anchor_opcodes is not None:
             return block.btype == "call_contract" \
                 and getattr(block, "opcode", None) in self._anchor_opcodes
