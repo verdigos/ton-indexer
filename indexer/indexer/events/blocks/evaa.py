@@ -50,9 +50,11 @@ logger.debug('Loading evaa.py')
 
 TON_ASSET_ID = 0x1A4219FE5E60D63AF2A3CC7DCE6FEC69B45C6B5718497A6148E7C232AC87BD8A
 
+EVAA_ACTION_COMMENTS = ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."]
+
 evaa_action_comment_matcher = GenericMatcher(
     lambda block: isinstance(block, TonTransferBlock)
-    and block.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."],
+    and block.comment in EVAA_ACTION_COMMENTS,
     optional=True,
 )
 
@@ -337,6 +339,117 @@ class EvaaWithdrawBlock(Block):
         return f"evaa_withdraw {self.data}"
 
 
+async def build_evaa_withdraw_core(
+    block: Block,
+    withdraw_user_block: CallContractBlock | None,
+    withdraw_collateralized_success: CallContractBlock | None,
+    ton_payout: CallContractBlock | None,
+    jetton_payout: JettonTransferBlock | None,
+    withdraw_collateralized_fail: CallContractBlock | None,
+    fail_on_user: CallContractBlock | None,
+) -> EvaaWithdrawBlock | None:
+    """Shared build core for evaa_withdraw.
+
+    `block` is the withdraw_master call; the remaining arguments are the
+    outcome blocks of the matched subtree (at most one outcome group is
+    non-None). The legacy matcher derives them from LabelBlocks, the mch
+    builder from captures. Returns None to reject the match. Does NOT merge
+    consumed blocks — callers merge.
+    """
+    msg = block.get_message()
+    owner = AccountId(msg.source)
+
+    withdraw_master_body = block.get_body()
+    master = AccountId(block.get_message().destination)
+    withdraw_master_data = EvaaWithdrawMaster(withdraw_master_body)
+    asset_id = withdraw_master_data.asset_id
+    desired_amount = withdraw_master_data.amount
+    recipient = AccountId(withdraw_master_data.recipient_address)
+
+    is_ton = asset_id == TON_ASSET_ID
+    recipient_jetton_wallet = None
+    master_jetton_wallet = None
+
+    if not withdraw_user_block:
+        return None
+    owner_contract = AccountId(withdraw_user_block.get_message().destination)
+
+    amount = desired_amount
+    if withdraw_collateralized_success:
+        collateralized_data = EvaaWithdrawCollateralized(
+            withdraw_collateralized_success.get_body()
+        )
+        amount = collateralized_data.withdraw_amount_current
+
+        if is_ton:
+            asset = Asset(is_ton=True)
+            if not ton_payout:
+                return None
+        else:
+            if not jetton_payout:
+                return None
+            asset = jetton_payout.data["asset"]
+            recipient_jetton_wallet = AccountId(
+                jetton_payout.data["receiver_wallet"]
+            )
+            master_jetton_wallet = AccountId(jetton_payout.data["sender_wallet"])
+
+            in_transfer_value = jetton_payout.data["amount"].value
+            if desired_amount != in_transfer_value:
+                logger.warning(f"amount mismatch: {desired_amount} != {in_transfer_value}")
+                desired_amount = in_transfer_value
+
+        return EvaaWithdrawBlock(
+            data=EvaaWithdrawData(
+                owner=owner,
+                owner_contract=owner_contract,
+                recipient=recipient,
+                asset_id=asset_id,
+                amount=amount,
+                is_success=True,
+                is_ton=is_ton,
+                recipient_jetton_wallet=recipient_jetton_wallet,
+                master_jetton_wallet=master_jetton_wallet,
+                master=master,
+                asset=asset,
+            )
+        )
+
+    if withdraw_collateralized_fail:
+        return EvaaWithdrawBlock(
+            data=EvaaWithdrawData(
+                owner=owner,
+                owner_contract=owner_contract,
+                recipient=recipient,
+                asset_id=asset_id,
+                amount=desired_amount,
+                is_success=False,
+                is_ton=is_ton,
+                fail_reason="withdraw_no_funds_excess",
+                master=master
+            )
+        )
+
+    if fail_on_user:
+        error_data = EvaaWithdrawFailExcess(fail_on_user.get_body())
+
+        return EvaaWithdrawBlock(
+            data=EvaaWithdrawData(
+                owner=owner,
+                owner_contract=owner_contract,
+                recipient=recipient,
+                asset_id=asset_id,
+                amount=desired_amount,
+                is_success=False,
+                is_ton=is_ton,
+                fail_reason=error_data.reason,
+                master=master
+            )
+        )
+
+    return None
+
+
 class EvaaWithdrawBlockMatcher(BlockMatcher):
     def __init__(self):
         # for successful jetton withdrawals
@@ -448,121 +561,19 @@ class EvaaWithdrawBlockMatcher(BlockMatcher):
         )
 
     async def build_block(self, block: Block, other_blocks: list[Block]) -> list[Block]:
-        msg = block.get_message()
-        owner = AccountId(msg.source)
-
-        withdraw_master_body = block.get_body()
-        master = AccountId(block.get_message().destination)
-        withdraw_master_data = EvaaWithdrawMaster(withdraw_master_body)
-        asset_id = withdraw_master_data.asset_id
-        desired_amount = withdraw_master_data.amount
-        recipient = AccountId(withdraw_master_data.recipient_address)
-
-        is_ton = asset_id == TON_ASSET_ID
-        recipient_jetton_wallet = None
-        master_jetton_wallet = None
-
-        withdraw_user_block = get_labeled(
-            "withdraw_on_user", other_blocks, CallContractBlock
+        new_block = await build_evaa_withdraw_core(
+            block,
+            get_labeled("withdraw_on_user", other_blocks, CallContractBlock),
+            get_labeled("withdraw_collateralized_success", other_blocks, CallContractBlock),
+            get_labeled("ton_payout", other_blocks, CallContractBlock),
+            get_labeled("jetton_payout", other_blocks, JettonTransferBlock),
+            get_labeled("withdraw_collateralized_fail", other_blocks, CallContractBlock),
+            get_labeled("withdraw_fail_on_user_excesses", other_blocks, CallContractBlock),
         )
-        if not withdraw_user_block:
+        if new_block is None:
             return []
-        owner_contract = AccountId(withdraw_user_block.get_message().destination)
-
-        withdraw_collateralized_success = get_labeled(
-            "withdraw_collateralized_success", other_blocks, CallContractBlock
-        )
-        amount = desired_amount
-        if withdraw_collateralized_success:
-            collateralized_data = EvaaWithdrawCollateralized(
-                withdraw_collateralized_success.get_body()
-            )
-            amount = collateralized_data.withdraw_amount_current
-
-            if is_ton:
-                asset = Asset(is_ton=True)
-                ton_payout = get_labeled("ton_payout", other_blocks, CallContractBlock)
-                if not ton_payout:
-                    return []
-            else:
-                jetton_payout = get_labeled(
-                    "jetton_payout", other_blocks, JettonTransferBlock
-                )
-                if not jetton_payout:
-                    return []
-                asset = jetton_payout.data["asset"]
-                recipient_jetton_wallet = AccountId(
-                    jetton_payout.data["receiver_wallet"]
-                )
-                master_jetton_wallet = AccountId(jetton_payout.data["sender_wallet"])
-
-                in_transfer_value = jetton_payout.data["amount"].value
-                if desired_amount != in_transfer_value:
-                    logger.warning(f"amount mismatch: {desired_amount} != {in_transfer_value}")
-                    desired_amount = in_transfer_value
-
-            new_block = EvaaWithdrawBlock(
-                data=EvaaWithdrawData(
-                    owner=owner,
-                    owner_contract=owner_contract,
-                    recipient=recipient,
-                    asset_id=asset_id,
-                    amount=amount,
-                    is_success=True,
-                    is_ton=is_ton,
-                    recipient_jetton_wallet=recipient_jetton_wallet,
-                    master_jetton_wallet=master_jetton_wallet,
-                    master=master,
-                    asset=asset,
-                )
-            )
-
-            new_block.merge_blocks([block] + other_blocks)
-            return [new_block]
-
-        withdraw_collateralized_fail = get_labeled(
-            "withdraw_collateralized_fail", other_blocks, CallContractBlock
-        )
-        if withdraw_collateralized_fail:
-            new_block = EvaaWithdrawBlock(
-                data=EvaaWithdrawData(
-                    owner=owner,
-                    owner_contract=owner_contract,
-                    recipient=recipient,
-                    asset_id=asset_id,
-                    amount=desired_amount,
-                    is_success=False,
-                    is_ton=is_ton,
-                    fail_reason="withdraw_no_funds_excess",
-                    master=master
-                )
-            )
-            new_block.merge_blocks([block] + other_blocks)
-            return [new_block]
-
-        fail_on_user = get_labeled(
-            "withdraw_fail_on_user_excesses", other_blocks, CallContractBlock
-        )
-        if fail_on_user:
-            error_data = EvaaWithdrawFailExcess(fail_on_user.get_body())
-
-            new_block = EvaaWithdrawBlock(
-                data=EvaaWithdrawData(
-                    owner=owner,
-                    owner_contract=owner_contract,
-                    recipient=recipient,
-                    asset_id=asset_id,
-                    amount=desired_amount,
-                    is_success=False,
-                    is_ton=is_ton,
-                    fail_reason=error_data.reason,
-                    master=master
-                )
-            )
-            new_block.merge_blocks([block] + other_blocks)
-            return [new_block]
-
-        return []
+        new_block.merge_blocks([block] + other_blocks)
+        return [new_block]
 
 
 # ------------------------- Liquidate -------------------------

@@ -20,7 +20,13 @@ Returns None to reject the match (spec §10.7).
 from __future__ import annotations
 
 from indexer.events.blocks.basic_blocks import CallContractBlock
+from indexer.events.blocks.liquidity import (
+    CoffeeCreateVaultBlock,
+    build_coffee_create_vault_core,
+)
 from indexer.events.blocks.messages.coffee import (
+    CoffeeCreateVault,
+    CoffeeDeploy,
     CoffeeNotification,
     CoffeePayout,
     CoffeePayoutInternal,
@@ -95,3 +101,41 @@ def register_coffee(reg: Registries) -> Registries:
 def coffee_registries() -> Registries:
     """Fresh Registries ready to compile specs/coffee_swap.mch."""
     return register_coffee(Registries())
+
+
+# --- coffee liquidity/vault (specs/coffee_liquidity.mch) ---------------------
+
+LIQUIDITY_OPCODES = {
+    "CoffeeCreateVault":    CoffeeCreateVault.opcode,
+    "CoffeeDeploy":         CoffeeDeploy.opcode,
+    # TEP-89 jetton-wallet discovery pair — raw literals in the legacy matcher.
+    "ProvideWalletAddress": 0x2C76B973,
+    "TakeWalletAddress":    0xD1735400,
+}
+
+LIQUIDITY_BLOCK_TYPES = {
+    "CoffeeCreateVaultBlock": CoffeeCreateVaultBlock,
+}
+
+
+def register_coffee_liquidity(reg: Registries) -> Registries:
+    """Register everything specs/coffee_liquidity.mch needs into `reg`."""
+    reg.opcodes.update(LIQUIDITY_OPCODES)
+    reg.block_types.update(LIQUIDITY_BLOCK_TYPES)
+
+    @reg.register_builder("build_coffee_create_vault")
+    async def build_coffee_create_vault(m):
+        consumed = m._mch_consumed
+        block = consumed[0]
+        deploy = next((b for b in consumed[1:]
+                       if isinstance(b, CallContractBlock)
+                       and b.opcode == CoffeeDeploy.opcode
+                       and b.previous_block is block), None)
+        return await build_coffee_create_vault_core(block, deploy)
+
+    return reg
+
+
+def coffee_liquidity_registries() -> Registries:
+    """Fresh Registries ready to compile specs/coffee_liquidity.mch."""
+    return register_coffee_liquidity(Registries())

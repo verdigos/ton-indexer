@@ -175,6 +175,65 @@ class TONStakersDepositMatcher(BlockMatcher):
         return [new_block]
 
 
+def build_tonstakers_withdraw_core(
+    block: Block,
+    request: Block | None,
+    immediate_withdrawal: Block | None,
+    delayed_withdrawal: Block | None,
+) -> Block:
+    """Shared build core for tonstakers_withdraw. Produces a
+    TONStakersWithdrawBlock (immediate withdrawal) or a
+    TONStakersWithdrawRequestBlock (delayed withdrawal via minted NFT) — the
+    produces-union of specs/tonstakers.mch. Does NOT merge consumed blocks.
+
+    The delayed branch reads the NftMint off `delayed_withdrawal.next_blocks`
+    (it is produced by NftMintBlockMatcher, which runs first) rather than as a
+    consumed pattern node: the legacy matcher leaves that NftMint as its own
+    sibling block (a separate nft_mint action), so capturing it here would
+    consume it and diverge from the legacy consumed set.
+    """
+    msg = block.get_message()
+
+    burn_request_data = JettonBurn(block.get_body())
+
+    failed = block.failed
+    asset = Asset(False, request.get_message().source)
+
+    if immediate_withdrawal is not None:
+        value = immediate_withdrawal.get_message().value - immediate_withdrawal.previous_block.get_message().value
+        new_block = TONStakersWithdrawBlock(
+            data=TONStakersWithdrawData(
+                stake_holder=AccountId(msg.source),
+                burnt_nft=None,
+                pool=AccountId(request.get_message().destination),
+                tokens_burnt=Amount(burn_request_data.amount),
+                amount=Amount(value),
+                asset=asset
+            )
+        )
+    else:
+        nft_mint_block = next((b for b in delayed_withdrawal.next_blocks if isinstance(b, NftMintBlock)), None)
+        if nft_mint_block is None:
+            nft_mint_block = find_call_contract(delayed_withdrawal.next_blocks, TONStakersInitNFT.opcode)
+        minted_nft = None
+        if nft_mint_block is not None:
+            minted_nft = AccountId(nft_mint_block.event_nodes[0].message.destination)
+        else:
+            failed = True
+        new_block = TONStakersWithdrawRequestBlock(
+            data=TONStakersWithdrawRequestData(
+                source=AccountId(msg.source),
+                tsTON_wallet=AccountId(msg.destination),
+                pool=AccountId(request.get_message().destination),
+                tokens_burnt=Amount(burn_request_data.amount),
+                minted_nft=minted_nft,
+                asset=asset
+            )
+        )
+    new_block.failed = failed
+    return new_block
+
+
 class TONStakersWithdrawMatcher(BlockMatcher):
     def __init__(self):
 
@@ -197,48 +256,13 @@ class TONStakersWithdrawMatcher(BlockMatcher):
         )
 
     async def build_block(self, block: Block, other_blocks: list[Block]) -> list[Block]:
-        msg = block.get_message()
-
-        burn_request_data = JettonBurn(block.get_body())
-
         immediate_withdrawal = get_labeled('immediate_withdrawal', other_blocks, CallContractBlock)
         delayed_withdrawal = get_labeled('delayed_withdrawal', other_blocks, CallContractBlock)
         request = get_labeled('request', other_blocks, CallContractBlock)
-        failed = block.failed
-        asset = Asset(False, request.get_message().source)
 
-        if immediate_withdrawal is not None:
-            value = immediate_withdrawal.get_message().value - immediate_withdrawal.previous_block.get_message().value
-            new_block = TONStakersWithdrawBlock(
-                data=TONStakersWithdrawData(
-                    stake_holder=AccountId(msg.source),
-                    burnt_nft=None,
-                    pool=AccountId(request.get_message().destination),
-                    tokens_burnt=Amount(burn_request_data.amount),
-                    amount=Amount(value),
-                    asset=asset
-                )
-            )
-        else:
-            nft_mint_block = next((b for b in delayed_withdrawal.next_blocks if isinstance(b, NftMintBlock)), None)
-            if nft_mint_block is None:
-                nft_mint_block = find_call_contract(delayed_withdrawal.next_blocks, TONStakersInitNFT.opcode)
-            minted_nft = None
-            if nft_mint_block is not None:
-                minted_nft = AccountId(nft_mint_block.event_nodes[0].message.destination)
-            else:
-                failed = True
-            new_block = TONStakersWithdrawRequestBlock(
-                data=TONStakersWithdrawRequestData(
-                    source=AccountId(msg.source),
-                    tsTON_wallet=AccountId(msg.destination),
-                    pool=AccountId(request.get_message().destination),
-                    tokens_burnt=Amount(burn_request_data.amount),
-                    minted_nft=minted_nft,
-                    asset=asset
-                )
-            )
-        new_block.failed = failed
+        new_block = build_tonstakers_withdraw_core(
+            block, request, immediate_withdrawal, delayed_withdrawal
+        )
         new_block.merge_blocks([block] + other_blocks)
         return [new_block]
 

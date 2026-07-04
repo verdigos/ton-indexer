@@ -746,3 +746,119 @@ def test_t15_shape7_children_block_then_parent_edge():
     p = m.parent_matcher
     assert isinstance(p, ContractMatcher) and p.opcode == 0x4
     assert p.children_matchers is None, "parent must not inherit the anchor's CB"
+
+
+# ==========================================================================
+# T04 — silent-drop lowering fixes (spec §6.4/§6.5, §12.1)
+# ==========================================================================
+
+
+def test_t04_flat_parent_chain_children_then_parent_edge():
+    """`@a <- op X -> {op D} <- op Y` (flat): the trailing `<- Y` parent edge
+    after a children block is no longer dropped. X gets BOTH children_matchers=[D]
+    AND parent_matcher=Y — lowering identical to the grouped form
+    `<- ( op X -> {op D} <- op Y )` (T04 Bug 1)."""
+    flat = _compile_one(
+        """
+        opcode A = 0x1
+        opcode X = 0x2
+        opcode D = 0x3
+        opcode Y = 0x4
+        matcher m {
+            produces MB
+            build    build_m
+            entry    @a
+            op A @a <- op X @x -> {op D @d} <- op Y @y
+        }
+        """,
+        A=0x1, X=0x2, D=0x3, Y=0x4,
+    )
+    grouped = _compile_one(
+        """
+        opcode A = 0x1
+        opcode X = 0x2
+        opcode D = 0x3
+        opcode Y = 0x4
+        matcher m {
+            produces MB
+            build    build_m
+            entry    @a
+            op A @a <- ( op X @x -> {op D @d} <- op Y @y )
+        }
+        """,
+        A=0x1, X=0x2, D=0x3, Y=0x4,
+    )
+    for label, m in (("flat", flat), ("grouped", grouped)):
+        assert m.child_matcher is None, label
+        assert m.children_matchers is None, label
+        x = m.parent_matcher
+        assert isinstance(x, ContractMatcher) and x.opcode == 0x2, label
+        assert x.children_matchers is not None, label
+        assert [cm.opcode for cm in x.children_matchers] == [0x3], label
+        y = x.parent_matcher
+        assert isinstance(y, ContractMatcher) and y.opcode == 0x4, label
+        assert y.parent_matcher is None, label
+        assert y.children_matchers is None, label
+
+
+def test_t04_flat_multi_hop_children_then_parent_edge():
+    """Dedust-deposit-final shape: `@a -> {op K} <- op T <- op X -> {op D} <- op Y`
+    — the second hop's `<- Y` after its children block is preserved through a
+    multi-hop parent chain (regression pin for the flat un-grouped spec)."""
+    m = _compile_one(
+        """
+        opcode A = 0x1
+        opcode K = 0x5
+        opcode T = 0x6
+        opcode X = 0x2
+        opcode D = 0x3
+        opcode Y = 0x4
+        matcher m {
+            produces MB
+            build    build_m
+            entry    @a
+            op A @a -> {op K @k} <- op T @t <- op X @x -> {op D @d} <- op Y @y
+        }
+        """,
+        A=0x1, K=0x5, T=0x6, X=0x2, D=0x3, Y=0x4,
+    )
+    assert [cm.opcode for cm in m.children_matchers] == [0x5]
+    t = m.parent_matcher
+    assert isinstance(t, ContractMatcher) and t.opcode == 0x6
+    x = t.parent_matcher
+    assert isinstance(x, ContractMatcher) and x.opcode == 0x2
+    assert [cm.opcode for cm in x.children_matchers] == [0x3]
+    y = x.parent_matcher
+    assert isinstance(y, ContractMatcher) and y.opcode == 0x4
+    assert y.parent_matcher is None
+
+
+def test_t04_upstream_atoms_before_anchor_rejected():
+    """`op Up @up -> op Anchor @anchor` with entry @anchor — the upstream `op Up`
+    (the anchor's parent) would be silently dropped; the compiler now rejects it
+    with C010 rather than misbehaving (T04 Bug 2 / T16 `$rule -> anchor…`)."""
+    from indexer.events.mch.diagnostics import CompileError, Severity
+
+    src = """
+    opcode Up     = 0x1
+    opcode Anchor = 0x2
+    matcher m {
+        produces MB
+        build    build_m
+        entry    @anchor
+        op Up @up -> op Anchor @anchor
+    }
+    """
+    reg = _registries_with_opcodes(Up=0x1, Anchor=0x2)
+    _with_block_type(reg, "MB")
+    _with_builder(reg, "build_m")
+    with pytest.raises(CompileError) as exc:
+        compile_text(src, "test.mch", reg)
+    errors = [d for d in exc.value.bag.items if d.severity is Severity.ERROR]
+    codes = [d.code for d in errors]
+    assert "C010_UPSTREAM_ATOMS_UNSUPPORTED" in codes, codes
+    # Span points at the dropped upstream atom (`op Up`), not the anchor.
+    diag = next(d for d in errors if d.code == "C010_UPSTREAM_ATOMS_UNSUPPORTED")
+    assert "Up" in src[diag.span.start_off:diag.span.end_off], (
+        src[diag.span.start_off:diag.span.end_off]
+    )

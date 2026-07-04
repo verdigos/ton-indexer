@@ -668,9 +668,13 @@ async def test_two_hop_parent_chain_partial_match_rejected(build_block_tree):
     assert len(captured) == 0
 
 
-@pytest.mark.asyncio
-async def test_parent_chain_in_tail_position_child_edge_anchor(build_block_tree):
-    """Anchor in tail with CHILD incoming edge, followed by PARENT chain."""
+def test_parent_chain_in_tail_position_child_edge_anchor():
+    """Anchor in tail with CHILD incoming edge (`op X -> op A @a <- …`): the
+    upstream `op X` (the anchor's parent) is not lowered. Previously silently
+    dropped (X unvalidated, match succeeded); T04 Bug 2 now rejects the shape
+    with C010 instead of misbehaving."""
+    from indexer.events.mch.diagnostics import CompileError, Severity
+
     src = """
     opcode X = 0x9
     opcode A = 0x1
@@ -685,25 +689,11 @@ async def test_parent_chain_in_tail_position_child_edge_anchor(build_block_tree)
         op X -> op A @a <- op B @b <- op C @c
     }
     """
-    reg, captured = _registries_with({"X": 0x9, "A": 0x1, "B": 0x2, "C": 0x3}, "build_m", "MB")
-    compiled = compile_text(src, "test.mch", reg)
-    matcher = compiled[0].matcher
-
-    # Tree (block-tree relations):
-    # The pattern says A has parent B has parent C. Build tree as: C(child=B(child=A)),
-    # test try_build on A.
-    tree = build_block_tree(BlockSpec(opcode=0x3, children=[
-        BlockSpec(opcode=0x2, children=[BlockSpec(opcode=0x1)]),
-    ]))
-    a_block = tree.next_blocks[0].next_blocks[0]
-
-    result = await matcher.try_build(a_block)
-    # X is NOT validated as A's child in this DSL position; the pattern says
-    # "A has parent B has parent C". Tree satisfies that. Match should succeed.
-    assert result is not None
-    assert captured[0].a is a_block
-    assert captured[0].b is a_block.previous_block
-    assert captured[0].c is tree
+    reg, _captured = _registries_with({"X": 0x9, "A": 0x1, "B": 0x2, "C": 0x3}, "build_m", "MB")
+    with pytest.raises(CompileError) as exc:
+        compile_text(src, "test.mch", reg)
+    codes = [d.code for d in exc.value.bag.items if d.severity is Severity.ERROR]
+    assert "C010_UPSTREAM_ATOMS_UNSUPPORTED" in codes, codes
 
 
 @pytest.mark.asyncio
@@ -1747,3 +1737,132 @@ async def test_children_block_then_parent_edge_matches_and_consumes(build_block_
     orphan = build_block_tree(BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x2)]))
     assert not await matcher.try_build(orphan)
     assert len(captured) == 0
+
+
+# ==========================================================================
+# Same-head XOR capture disambiguation — compiled path aligned with the v2
+# IR engine _match_or (mch_ir/engine.py): each branch's FULL positional walk
+# is attempted against the remaining consumed slice, first fully-matching
+# branch wins. Head-test-only selection bound the wrong branch's captures
+# when two branches shared a concrete head (evaa: two `op 0x211` arms).
+# ==========================================================================
+
+# IR engine gate (same convention as tests/mch/integration/test_evaa_withdraw.py).
+try:
+    from indexer.events import mch_ir as _mch_ir
+
+    _HAVE_IR = hasattr(_mch_ir, "load_artifact") and hasattr(_mch_ir, "build_matchers")
+except Exception:  # pragma: no cover - import error path
+    _mch_ir = None
+    _HAVE_IR = False
+
+
+def _ir_match_from(src: str, opcodes: dict, builder_name: str, produces: str):
+    """Compile src, emit IR, load through mch_ir with a fresh capturing builder.
+    Returns (ir_matcher, captured_list) or (None, None) when IR is unavailable."""
+    from indexer.events.mch.ir_emit import emit_ir
+
+    reg, captured = _registries_with(opcodes, builder_name, produces)
+    compiled = compile_text(src, "test.mch", reg)
+    artifact = emit_ir(compiled, ["test.mch"])
+    if not _HAVE_IR:
+        return None, None
+    art = _mch_ir.load_artifact(artifact)
+    ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, reg)}
+    return ir_by_name[compiled[0].name], captured
+
+
+@pytest.mark.asyncio
+async def test_same_head_xor_second_branch_binds_its_capture(build_block_tree):
+    """Acceptance: `(op A -> op B @x ^ op A -> op C @y)` — the two branches share
+    the head `op A`; a trace shaped for the SECOND branch must bind @y, not @x.
+
+    Pre-fix, head-test-only selection committed to the first branch on the
+    shared head, failed to match its `op B` child, and bound neither @x nor @y
+    (never reached the second branch). Both compiled and IR paths must agree."""
+    src = """
+    opcode R = 0x1
+    opcode A = 0x2
+    opcode B = 0x3
+    opcode C = 0x4
+
+    matcher same_head_xor {
+        produces MB
+        build    build_same_head_xor
+        entry    @r
+
+        op R @r -> ( op A -> op B @x ^ op A -> op C @y )
+    }
+    """
+    opcodes = {"R": 0x1, "A": 0x2, "B": 0x3, "C": 0x4}
+    reg, captured = _registries_with(opcodes, "build_same_head_xor", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Trace shaped for the SECOND branch: R -> A -> C.
+    tree_c = build_block_tree(BlockSpec(opcode=0x1, children=[
+        BlockSpec(opcode=0x2, children=[BlockSpec(opcode=0x4)]),
+    ]))
+    assert await matcher.try_build(tree_c) is not None
+    a_block = tree_c.next_blocks[0]
+    c_block = a_block.next_blocks[0]
+    assert captured[0].y is c_block, "second-branch capture @y must bind"
+    assert captured[0].x is None, "first-branch capture @x must stay unbound"
+
+    # Trace shaped for the FIRST branch: R -> A -> B (order still respected).
+    captured.clear()
+    tree_b = build_block_tree(BlockSpec(opcode=0x1, children=[
+        BlockSpec(opcode=0x2, children=[BlockSpec(opcode=0x3)]),
+    ]))
+    assert await matcher.try_build(tree_b) is not None
+    assert captured[0].x is tree_b.next_blocks[0].next_blocks[0]
+    assert captured[0].y is None
+
+    # IR path binds identically (already correct pre-fix; proves alignment).
+    ir_matcher, ir_captured = _ir_match_from(src, opcodes, "build_same_head_xor", "MB")
+    if ir_matcher is not None:
+        await ir_matcher.try_build(tree_c)
+        assert ir_captured[0].y is c_block
+        assert ir_captured[0].x is None
+
+
+@pytest.mark.asyncio
+async def test_same_head_xor_shared_head_capture_binds_winning_branch(build_block_tree):
+    """Stronger misbinding proof: captures on the SHARED head itself —
+    `( op A @x -> op B ^ op A @y -> op C )`. Pre-fix, the first branch's head
+    test matched and bound @x on a SECOND-branch (op A -> op C) trace; the fix
+    rolls that back and binds @y. Both compiled and IR paths must agree."""
+    src = """
+    opcode R = 0x1
+    opcode A = 0x2
+    opcode B = 0x3
+    opcode C = 0x4
+
+    matcher shared_head_xor {
+        produces MB
+        build    build_shared_head_xor
+        entry    @r
+
+        op R @r -> ( op A @x -> op B ^ op A @y -> op C )
+    }
+    """
+    opcodes = {"R": 0x1, "A": 0x2, "B": 0x3, "C": 0x4}
+    reg, captured = _registries_with(opcodes, "build_shared_head_xor", "MB")
+    compiled = compile_text(src, "test.mch", reg)
+    matcher = compiled[0].matcher
+
+    # Trace shaped for the SECOND branch: R -> A -> C. @y must win; @x must not
+    # be left bound to the shared A block.
+    tree_c = build_block_tree(BlockSpec(opcode=0x1, children=[
+        BlockSpec(opcode=0x2, children=[BlockSpec(opcode=0x4)]),
+    ]))
+    a_block = tree_c.next_blocks[0]
+    assert await matcher.try_build(tree_c) is not None
+    assert captured[0].y is a_block, "winning (second) branch binds @y on the shared head"
+    assert captured[0].x is None, "losing (first) branch's @x must be rolled back"
+
+    ir_matcher, ir_captured = _ir_match_from(src, opcodes, "build_shared_head_xor", "MB")
+    if ir_matcher is not None:
+        await ir_matcher.try_build(tree_c)
+        assert ir_captured[0].y is a_block
+        assert ir_captured[0].x is None

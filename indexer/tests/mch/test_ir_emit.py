@@ -25,7 +25,9 @@ def test_emit_specs_dir_deterministic():
     artifact = _emit()
     assert artifact["mch_ir_version"] == "0.1-poc"
     assert artifact["frontend"]["generator"] == "mch-python"
-    assert len(artifact["frontend"]["source_files"]) == 7
+    # Every .mch in the specs dir is represented (count-agnostic: the spec set
+    # grows as matchers are ported).
+    assert len(artifact["frontend"]["source_files"]) == len(list(SPECS_DIR.glob("*.mch")))
     assert artifact["registration_order"] == list(range(len(artifact["matchers"])))
     # Every node reference must be a valid index into the flat nodes array.
     n = len(artifact["nodes"])

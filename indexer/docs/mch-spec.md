@@ -729,6 +729,7 @@ Milestone tags mark when a rule becomes active (untagged = M1, active now).
 - A children block contains an empty item (`P002`).
 - A children block appears without a left sibling (`C008_CHILDREN_BLOCK_BARE`).
 - A parent edge follows a chain-advancing (non-children-block) child-edge atom in the same chain, i.e. the parent edge's left side is a non-anchor node reached through a child edge (`A -> B <- C`) (`C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED`). `A -> {B; C} <- D` is legal — children blocks do not advance the cursor (§6.4/§6.5).
+- An atom sits **upstream** of the anchor in the anchor's enclosing sequence, reached by a child edge into the anchor (`… -> op Anchor`, e.g. the `$rule -> anchor…` head shape) (`C010_UPSTREAM_ATOMS_UNSUPPORTED`). Only downstream (child/children) and parent-chain atoms are lowered relative to the anchor; upstream atoms would be silently dropped. Re-anchor the pattern so the anchor is the chain head, or restructure. (A flat `… <- op X -> {CB} <- Y` parent chain is **not** this case — the trailing parent edge after a children block lowers correctly, §6.5.)
 - A cycle exists in rule references with no `maybe`-wrapped termination.
 - Indirect (mutual) recursion (`C005_INDIRECT_RECURSION_UNSUPPORTED`).
 - Unsupported recursion shape (`C001_RECURSION_SHAPE_UNSUPPORTED`).
@@ -857,6 +858,8 @@ class StonfiV2SwapMatch:
 (§7.2: `swap`/`payout`/`out_transfer` are parallel-aligned, one element per hop; `out_transfer` carries explicit `None`s for hops where the bare-`$swap_step` branch won.)
 
 ### 14.3 Dedust deposit (two matchers + host-side merge — M2)
+
+> **Known-idealized (port wave, 2026-07-04).** This example does not match the deployed protocol as written: several opcode constants are wrong (real `DedustDepositLiquidityToPool = 0xB56B9598`, `DedustReturnExcessFromVault = 0x6B0B787F`, …) and the rejection/destroy subtree shapes differ. Additionally, the parity-proven port registers AFTER the jetton_transfer matcher (the legacy pair runs before it), so deposit legs and vault excesses match as prebuilt `btype jetton_transfer` with a raw notify-chain fallback arm. The normative pattern is `indexer/events/mch/specs/dedust_deposit.mch`. Kept as the intent sketch, like §14.2.
 
 Deposit requires two assets sent to a deposit contract along two branches of the same trace. The DSL declares two matchers; when both fire within one trace, the host post-process pass (`post_process_dedust_liquidity`, keyed on `deposit_contract`) merges the partial block into the final one — see §5.5. There is no cross-trace pairing.
 

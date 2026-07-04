@@ -106,15 +106,25 @@ class DedustDepositLiquidityPartial(Block):
         return f"dedust_deposit_liquidity_partial {self.data}"
 
 
-async def _get_provision_data(
-    block: Block | CallContractBlock, other_blocks: list[Block | CallContractBlock]
+async def build_dedust_deposit_liquidity_core(
+    block: Block | CallContractBlock,
+    deposit: CallContractBlock,
+    transfer_lp_call: CallContractBlock | None,
+    reject: CallContractBlock | None,
+    jetton_transfer_calls: list[CallContractBlock],
+    ton_excesses: list[CallContractBlock],
+    jetton_excesses: list[JettonTransferBlock],
 ) -> dict:
+    """Shared build core for the dedust final-deposit data. `block` is the
+    DedustDepositLiquidityToPool anchor; the remaining arguments are the label
+    roles of the legacy matcher, passed explicitly (the mch builder derives
+    them structurally instead). `jetton_transfer_calls` are the raw
+    JettonTransfer-opcode call candidates for the user's deposit transfers.
+    Raises to reject the match. Does NOT merge consumed blocks."""
     deposit_info = DedustDepositLiquidityToPool(block.get_body())
     sender = AccountId(deposit_info.owner_addr)
     deposit_contract = block.get_message().source
 
-    transfer_lp_call = get_labeled('lp_transfer', other_blocks, CallContractBlock)
-    reject = get_labeled('rejection', other_blocks, CallContractBlock)
     if transfer_lp_call:
         transfer_lp_call = JettonInternalTransfer(transfer_lp_call.get_body())
 
@@ -132,12 +142,8 @@ async def _get_provision_data(
     # there are 0-2 deposit jetton transfers (from user)
     # (well, may be more in trace, but we gonna use them only to find jwallets)
     jetton_deposits: list[CallContractBlock] = []
-    for b in other_blocks:
-        if (
-            isinstance(b, CallContractBlock)
-            and b.opcode == JettonTransfer.opcode
-            and b.get_message().source.upper() == sender.as_str()
-        ):
+    for b in jetton_transfer_calls:
+        if b.get_message().source.upper() == sender.as_str():
             jetton_deposits.append(b)
 
     # if jetton_deposits is empty -
@@ -154,7 +160,6 @@ async def _get_provision_data(
         a1_jetton_master = str(deposit_info.asset1.jetton_address).upper()
 
 
-    deposit = get_labeled('deposit', other_blocks, CallContractBlock)
     if deposit.opcode == DedustDepositTONToVault.opcode:
         actual_asset = Asset(is_ton=True, jetton_address=None)
         body = DedustDepositTONToVault(deposit.get_body())
@@ -180,11 +185,11 @@ async def _get_provision_data(
             user_jetton_wallet_0 = jwallet_str
 
     excesses = []
-    for ton_excess in get_multiple_labeled('ton_excess', other_blocks, CallContractBlock):
+    for ton_excess in ton_excesses:
         if ton_excess and ton_excess.get_message().destination == sender.as_str():
             excesses.append((Asset(is_ton=True, jetton_address=None), Amount(ton_excess.get_message().value)))
 
-    for jetton_excess in get_multiple_labeled('jetton_excess', other_blocks, JettonTransferBlock):
+    for jetton_excess in jetton_excesses:
         if jetton_excess.data['receiver'] == sender.as_str():
             excesses.append((jetton_excess.data['asset'],
                              jetton_excess.data['amount']))
@@ -211,19 +216,32 @@ async def _get_provision_data(
     return data
 
 
-async def _get_deposit_one_data(
-    block: Block | CallContractBlock, all_blocks: list[Block | CallContractBlock]
+async def _get_provision_data(
+    block: Block | CallContractBlock, other_blocks: list[Block | CallContractBlock]
 ) -> dict:
-    # its either TON deposit to vault or jetton transfer request to wallet
-    # block:
-    # user -> vault -> factory *-> deposit
-    # or
-    # user -> wallet -> wallet -> vault -> factory *-> deposit
-    vault_call = block.previous_block.previous_block  # :
-    # user *-> vault -> factory -> deposit
-    # or
-    # user -> wallet -> wallet -*> vault -> factory -> deposit
+    return await build_dedust_deposit_liquidity_core(
+        block,
+        get_labeled('deposit', other_blocks, CallContractBlock),
+        get_labeled('lp_transfer', other_blocks, CallContractBlock),
+        get_labeled('rejection', other_blocks, CallContractBlock),
+        [b for b in other_blocks
+         if isinstance(b, CallContractBlock) and b.opcode == JettonTransfer.opcode],
+        get_multiple_labeled('ton_excess', other_blocks, CallContractBlock),
+        get_multiple_labeled('jetton_excess', other_blocks, JettonTransferBlock),
+    )
 
+
+async def build_dedust_deposit_partial_core(
+    block: Block | CallContractBlock,
+    vault_call: Block | CallContractBlock,
+    all_blocks: list[Block | CallContractBlock],
+) -> dict:
+    """Shared build core for the dedust first-asset (partial) deposit data.
+    `block` is the DedustTopUpLiquidityDepositContract anchor; `vault_call` is
+    the deposit-leg head (legacy: block.previous_block.previous_block — the
+    DedustDepositTONToVault call or the raw JettonNotify call). Raises to
+    reject the match, including the final-deposit-opcodes-after-topup guard.
+    Does NOT merge consumed blocks."""
     deposit_contract_address = block.get_message().destination
     actual_asset = Asset(is_ton=True, jetton_address=None)
     actual_amount = None
@@ -292,6 +310,21 @@ async def _get_deposit_one_data(
         "target_amount_2": Amount(asset1_amount or 0),
     }
     return data
+
+
+async def _get_deposit_one_data(
+    block: Block | CallContractBlock, all_blocks: list[Block | CallContractBlock]
+) -> dict:
+    # its either TON deposit to vault or jetton transfer request to wallet
+    # block:
+    # user -> vault -> factory *-> deposit
+    # or
+    # user -> wallet -> wallet -> vault -> factory *-> deposit
+    vault_call = block.previous_block.previous_block  # :
+    # user *-> vault -> factory -> deposit
+    # or
+    # user -> wallet -> wallet -*> vault -> factory -> deposit
+    return await build_dedust_deposit_partial_core(block, vault_call, all_blocks)
 
 
 class DedustDepositBlockMatcher(BlockMatcher):
@@ -1003,192 +1036,212 @@ class ToncoDepositLiquidityMatcher(BlockMatcher):
 
     async def build_block(self, block: Block, other_blocks: list[Block]) -> list[Block]:
         additional_blocks = []
-
-        add_liquidity_msg = ToncoAccountV3AddLiquidity(block.get_body())
-        is_first_asset_deposited = add_liquidity_msg.new_amount0 > 0  # to order assets
-
-        # find NFT position init call
-        position_init_msg = None
-        lp_tokens_minted = None
-        nft_index = None
-        nft_address = None
-        is_complete = False
-        position_init_call = get_labeled("nft_mint", other_blocks)
-        if position_init_call:
-            position_init_msg = ToncoPositionNftV3PositionInit(
-                position_init_call.get_body()
-            )
-            lp_tokens_minted = Amount(position_init_msg.liquidity)
-            nft_index = position_init_msg.nft_index
-            nft_address = AccountId(position_init_call.get_message().destination)
-            is_complete = True
-
-        # find the input transfer (jetton or PTon)
-        input_transfer = get_labeled("ton_input", other_blocks) or get_labeled(
-            "jetton_input", other_blocks
-        )
-
-        if not input_transfer:
-            logger.error(f"Input transfer not found for {block.get_message().source}")
-            return []
-
-        # extract data from JettonNotify - the universal approach
-        jetton_notify_block = None
-
-        if input_transfer.btype == "jetton_transfer":
-            # jetton transfer -> find JettonNotify in its children
-            jetton_notify_block = find_call_contract(
-                input_transfer.children_blocks, JettonNotify.opcode
-            )
-        else:
-            # PTonTransfer case - it should be the notify itself
-            if (
-                isinstance(input_transfer, CallContractBlock)
-                and input_transfer.opcode == JettonNotify.opcode
-            ):
-                jetton_notify_block = input_transfer
-
         addition = get_labeled("ton_input_addition", other_blocks)
         if addition:
             additional_blocks.append(addition)
-
-        if not jetton_notify_block:
-            logger.error(
-                f"JettonNotify not found in input transfer chain {block.get_message().tx_hash}"
-            )  # TODO
-            return []
-
-        try:
-            jetton_notify = JettonNotify(jetton_notify_block.get_body())
-
-            sent_amount = Amount(jetton_notify.jetton_amount or 0)
-            sender = AccountId(jetton_notify.from_user)
-
-            if not jetton_notify.forward_payload_cell:
-                logger.error(
-                    f"No forward payload in JettonNotify for {block.get_message().source}"
-                )
-                return []
-
-            payload_slice = jetton_notify.forward_payload_cell.to_slice()
-            if (
-                payload_slice.preload_uint(32)
-                != ToncoPoolV3FundAccountPayload.payload_opcode
-            ):
-                logger.error(
-                    f"Invalid payload opcode in JettonNotify for {block.get_message().source}"
-                )
-                return []
-
-            payload_data = ToncoPoolV3FundAccountPayload(payload_slice)
-            other_jetton_wallet_str = payload_data.get_other_jetton_wallet()
-
-            # determine sender jetton wallet
-            sender_wallet = None
-            if input_transfer.btype == "jetton_transfer":
-                sender_wallet = input_transfer.data.get("sender_wallet")
-
-            router_wallet_str = jetton_notify_block.get_message().source
-
-        except Exception as e:
-            logger.error(f"Failed to parse JettonNotify message: {e}")
-            return []
-
-        first_asset = None
-        try:
-            jetton_wallet = await context.interface_repository.get().get_jetton_wallet(
-                router_wallet_str
-            )
-            if jetton_wallet is not None:
-                if jetton_wallet.jetton in PTonTransferMatcher.pton_masters:
-                    first_asset = Asset(is_ton=True, jetton_address=None)
-                else:
-                    first_asset = Asset(
-                        is_ton=False, jetton_address=jetton_wallet.jetton
-                    )
-            else:
-                logger.warning(
-                    f"Jetton wallet not found for router_wallet_str={router_wallet_str}"
-                )
-                first_asset = Asset(is_ton=True, jetton_address=None)
-        except Exception as e:
-            logger.warning(f"Failed to determine first asset: {e}")
-            return []
-
-        second_asset = None
-        try:
-            jetton_wallet = await context.interface_repository.get().get_jetton_wallet(
-                other_jetton_wallet_str
-            )
-            if jetton_wallet is not None:
-                if jetton_wallet.jetton in PTonTransferMatcher.pton_masters:
-                    second_asset = Asset(is_ton=True, jetton_address=None)
-                else:
-                    second_asset = Asset(
-                        is_ton=False, jetton_address=jetton_wallet.jetton
-                    )
-        except Exception as e:
-            logger.warning(f"Error determining second asset for liquidity: {e}")
-            return []
-
-        if is_first_asset_deposited:
-            amount_1 = sent_amount
-            asset_1 = first_asset
-            amount_2 = None
-            asset_2 = second_asset
-            sender_wallet_1 = sender_wallet
-            sender_wallet_2 = None
-        else:
-            amount_1 = None
-            asset_1 = second_asset
-            amount_2 = sent_amount
-            asset_2 = first_asset
-            sender_wallet_1 = None
-            sender_wallet_2 = sender_wallet
-
-        # extract excesses
-        excesses = []
-        for i in range(2):
-            excess_transfer = get_labeled(f"excess_transfer_{i}", other_blocks)
-            if excess_transfer:
-                if isinstance(excess_transfer, JettonTransferBlock):
-                    pton_transfer = find_call_contract(
-                        excess_transfer.next_blocks, PTonTransfer.opcode
-                    )
-                    if pton_transfer is not None:
-                        pton_msg = PTonTransfer(pton_transfer.get_body())
-                        excess_amount = Amount(pton_msg.ton_amount or 0)
-                        excess_asset = Asset(is_ton=True, jetton_address=None)
-                    else:
-                        excess_amount = excess_transfer.data["amount"]
-                        excess_asset = excess_transfer.data["asset"]
-                else:
-                    continue
-                excesses.append((excess_asset, excess_amount))
-
-        data = ToncoDepositLiquidityData(
-            sender=sender,
-            pool=AccountId(block.get_message().source),
-            account_contract=AccountId(block.get_message().destination),
-            position_amount_1=Amount(add_liquidity_msg.new_enough0 or 0),
-            position_amount_2=Amount(add_liquidity_msg.new_enough1 or 0),
-            lp_tokens_minted=lp_tokens_minted,
-            tick_lower=add_liquidity_msg.tick_lower,
-            tick_upper=add_liquidity_msg.tick_upper,
-            nft_index=nft_index,
-            nft_address=nft_address,
-            amount_1=amount_1,
-            asset_1=asset_1,
-            sender_wallet_1=sender_wallet_1,
-            amount_2=amount_2,
-            asset_2=asset_2,
-            sender_wallet_2=sender_wallet_2,
-            excesses=excesses,
+        position_init_call = get_labeled("nft_mint", other_blocks)
+        input_transfer = get_labeled("ton_input", other_blocks) or get_labeled(
+            "jetton_input", other_blocks
         )
-
-        new_block = ToncoDepositLiquidityBlock(data)
+        excess_transfers = [
+            get_labeled(f"excess_transfer_{i}", other_blocks) for i in range(2)
+        ]
+        blocks = await build_tonco_deposit_liquidity_core(
+            block, position_init_call, input_transfer, excess_transfers
+        )
+        if len(blocks) == 0:
+            return []
+        new_block = blocks[0]
         new_block.merge_blocks([block] + other_blocks + additional_blocks)
         return [new_block]
+
+
+async def build_tonco_deposit_liquidity_core(
+    block: Block | CallContractBlock,
+    position_init_call: Block | None,
+    input_transfer: Block | None,
+    excess_transfers: list[Block | None],
+) -> list[Block]:
+    """Shared build core for tonco_deposit_liquidity. `block` is the
+    ToncoAccountV3AddLiquidity anchor; `position_init_call` the matched
+    nft_mint block, `input_transfer` the input jetton_transfer block or the
+    raw JettonNotify call (pton arm), `excess_transfers` the up-to-two
+    refund transfer blocks in match order (None gaps allowed). Returns []
+    to reject the match. Does NOT merge consumed blocks."""
+    add_liquidity_msg = ToncoAccountV3AddLiquidity(block.get_body())
+    is_first_asset_deposited = add_liquidity_msg.new_amount0 > 0  # to order assets
+
+    # find NFT position init call
+    position_init_msg = None
+    lp_tokens_minted = None
+    nft_index = None
+    nft_address = None
+    is_complete = False
+    if position_init_call:
+        position_init_msg = ToncoPositionNftV3PositionInit(
+            position_init_call.get_body()
+        )
+        lp_tokens_minted = Amount(position_init_msg.liquidity)
+        nft_index = position_init_msg.nft_index
+        nft_address = AccountId(position_init_call.get_message().destination)
+        is_complete = True
+
+    # find the input transfer (jetton or PTon)
+    if not input_transfer:
+        logger.error(f"Input transfer not found for {block.get_message().source}")
+        return []
+
+    # extract data from JettonNotify - the universal approach
+    jetton_notify_block = None
+
+    if input_transfer.btype == "jetton_transfer":
+        # jetton transfer -> find JettonNotify in its children
+        jetton_notify_block = find_call_contract(
+            input_transfer.children_blocks, JettonNotify.opcode
+        )
+    else:
+        # PTonTransfer case - it should be the notify itself
+        if (
+            isinstance(input_transfer, CallContractBlock)
+            and input_transfer.opcode == JettonNotify.opcode
+        ):
+            jetton_notify_block = input_transfer
+
+    if not jetton_notify_block:
+        logger.error(
+            f"JettonNotify not found in input transfer chain {block.get_message().tx_hash}"
+        )  # TODO
+        return []
+
+    try:
+        jetton_notify = JettonNotify(jetton_notify_block.get_body())
+
+        sent_amount = Amount(jetton_notify.jetton_amount or 0)
+        sender = AccountId(jetton_notify.from_user)
+
+        if not jetton_notify.forward_payload_cell:
+            logger.error(
+                f"No forward payload in JettonNotify for {block.get_message().source}"
+            )
+            return []
+
+        payload_slice = jetton_notify.forward_payload_cell.to_slice()
+        if (
+            payload_slice.preload_uint(32)
+            != ToncoPoolV3FundAccountPayload.payload_opcode
+        ):
+            logger.error(
+                f"Invalid payload opcode in JettonNotify for {block.get_message().source}"
+            )
+            return []
+
+        payload_data = ToncoPoolV3FundAccountPayload(payload_slice)
+        other_jetton_wallet_str = payload_data.get_other_jetton_wallet()
+
+        # determine sender jetton wallet
+        sender_wallet = None
+        if input_transfer.btype == "jetton_transfer":
+            sender_wallet = input_transfer.data.get("sender_wallet")
+
+        router_wallet_str = jetton_notify_block.get_message().source
+
+    except Exception as e:
+        logger.error(f"Failed to parse JettonNotify message: {e}")
+        return []
+
+    first_asset = None
+    try:
+        jetton_wallet = await context.interface_repository.get().get_jetton_wallet(
+            router_wallet_str
+        )
+        if jetton_wallet is not None:
+            if jetton_wallet.jetton in PTonTransferMatcher.pton_masters:
+                first_asset = Asset(is_ton=True, jetton_address=None)
+            else:
+                first_asset = Asset(
+                    is_ton=False, jetton_address=jetton_wallet.jetton
+                )
+        else:
+            logger.warning(
+                f"Jetton wallet not found for router_wallet_str={router_wallet_str}"
+            )
+            first_asset = Asset(is_ton=True, jetton_address=None)
+    except Exception as e:
+        logger.warning(f"Failed to determine first asset: {e}")
+        return []
+
+    second_asset = None
+    try:
+        jetton_wallet = await context.interface_repository.get().get_jetton_wallet(
+            other_jetton_wallet_str
+        )
+        if jetton_wallet is not None:
+            if jetton_wallet.jetton in PTonTransferMatcher.pton_masters:
+                second_asset = Asset(is_ton=True, jetton_address=None)
+            else:
+                second_asset = Asset(
+                    is_ton=False, jetton_address=jetton_wallet.jetton
+                )
+    except Exception as e:
+        logger.warning(f"Error determining second asset for liquidity: {e}")
+        return []
+
+    if is_first_asset_deposited:
+        amount_1 = sent_amount
+        asset_1 = first_asset
+        amount_2 = None
+        asset_2 = second_asset
+        sender_wallet_1 = sender_wallet
+        sender_wallet_2 = None
+    else:
+        amount_1 = None
+        asset_1 = second_asset
+        amount_2 = sent_amount
+        asset_2 = first_asset
+        sender_wallet_1 = None
+        sender_wallet_2 = sender_wallet
+
+    # extract excesses
+    excesses = []
+    for excess_transfer in excess_transfers:
+        if excess_transfer:
+            if isinstance(excess_transfer, JettonTransferBlock):
+                pton_transfer = find_call_contract(
+                    excess_transfer.next_blocks, PTonTransfer.opcode
+                )
+                if pton_transfer is not None:
+                    pton_msg = PTonTransfer(pton_transfer.get_body())
+                    excess_amount = Amount(pton_msg.ton_amount or 0)
+                    excess_asset = Asset(is_ton=True, jetton_address=None)
+                else:
+                    excess_amount = excess_transfer.data["amount"]
+                    excess_asset = excess_transfer.data["asset"]
+            else:
+                continue
+            excesses.append((excess_asset, excess_amount))
+
+    data = ToncoDepositLiquidityData(
+        sender=sender,
+        pool=AccountId(block.get_message().source),
+        account_contract=AccountId(block.get_message().destination),
+        position_amount_1=Amount(add_liquidity_msg.new_enough0 or 0),
+        position_amount_2=Amount(add_liquidity_msg.new_enough1 or 0),
+        lp_tokens_minted=lp_tokens_minted,
+        tick_lower=add_liquidity_msg.tick_lower,
+        tick_upper=add_liquidity_msg.tick_upper,
+        nft_index=nft_index,
+        nft_address=nft_address,
+        amount_1=amount_1,
+        asset_1=asset_1,
+        sender_wallet_1=sender_wallet_1,
+        amount_2=amount_2,
+        asset_2=asset_2,
+        sender_wallet_2=sender_wallet_2,
+        excesses=excesses,
+    )
+
+    new_block = ToncoDepositLiquidityBlock(data)
+    return [new_block]
 
 
 TONCO_ROUTER_WTTON_WALLET_ADDR = (
@@ -2000,6 +2053,25 @@ class CoffeeCreateVaultBlock(Block):
         return f"CoffeeCreateVaultBlock(data={self.data})"
 
 
+async def build_coffee_create_vault_core(
+    block: Block | CallContractBlock,
+    deploy_block: CallContractBlock | None,
+) -> CoffeeCreateVaultBlock | None:
+    """Shared build core for coffee_create_vault. `block` is the
+    CoffeeCreateVault anchor; `deploy_block` the CoffeeDeploy call. Returns
+    None to reject the match. Does NOT merge consumed blocks."""
+    deploy_data = CoffeeCreateVault(block.get_body())
+    if not deploy_block:
+        return None
+    data = CoffeeCreateVaultData(
+        sender=AccountId(block.get_message().source),
+        vault=AccountId(deploy_block.get_message().destination),
+        asset=deploy_data.asset,
+        amount=Amount(block.get_message().value)
+    )
+    return CoffeeCreateVaultBlock(data)
+
+
 class CoffeeCreateVaultMatcher(BlockMatcher):
     def __init__(self):
         super().__init__(
@@ -2024,17 +2096,10 @@ class CoffeeCreateVaultMatcher(BlockMatcher):
         )
 
     async def build_block(self, block: Block, other_blocks: list[Block]) -> list[Block]:
-        deploy_data = CoffeeCreateVault(block.get_body())
         deploy_block = get_labeled("deploy", other_blocks, CallContractBlock)
-        if not deploy_block:
+        new_block = await build_coffee_create_vault_core(block, deploy_block)
+        if new_block is None:
             return []
-        data = CoffeeCreateVaultData(
-            sender=AccountId(block.get_message().source),
-            vault=AccountId(deploy_block.get_message().destination),
-            asset=deploy_data.asset,
-            amount=Amount(block.get_message().value)
-        )
-        new_block = CoffeeCreateVaultBlock(data)
         new_block.merge_blocks([block] + other_blocks)
         return [new_block]
 

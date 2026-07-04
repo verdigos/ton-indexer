@@ -65,8 +65,10 @@ def test_load_specs_artifact_from_dict_and_file(tmp_path):
     doc = emit_dir(SPECS_DIR)
     art = load_artifact(doc)
     assert art.version == "0.1-poc"
-    assert len(art.matchers) == 9
-    assert art.registration_order == list(range(9))
+    # The original builder-based spec set has 9 matchers; the count grows as more
+    # protocols are ported, so assert the structural invariant, not a magic count.
+    assert len(art.matchers) >= 9
+    assert art.registration_order == list(range(len(art.matchers)))
 
     path = tmp_path / "mch-ir.json"
     path.write_text(render_json(doc), encoding="utf-8")

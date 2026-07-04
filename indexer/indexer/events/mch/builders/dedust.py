@@ -26,7 +26,13 @@ from pytoniq_core import Slice
 from indexer.events.blocks.basic_blocks import CallContractBlock
 from indexer.events.blocks.core import Block
 from indexer.events.blocks.jettons import JettonTransferBlock
-from indexer.events.blocks.liquidity import build_dedust_withdraw_core
+from indexer.events.blocks.liquidity import (
+    DedustDepositLiquidity,
+    DedustDepositLiquidityPartial,
+    build_dedust_deposit_liquidity_core,
+    build_dedust_deposit_partial_core,
+    build_dedust_withdraw_core,
+)
 from indexer.events.blocks.messages import (
     DedustPayout,
     DedustPayoutFromPool,
@@ -38,6 +44,18 @@ from indexer.events.blocks.messages import (
 from indexer.events.blocks.messages.jettons import (
     JettonBurn,
     JettonBurnNotification,
+    JettonInternalTransfer,
+    JettonNotify,
+    JettonTransfer,
+)
+from indexer.events.blocks.messages.liquidity import (
+    DedustAskLiquidityFactory,
+    DedustDeployDepositContract,
+    DedustDepositLiquidityToPool,
+    DedustDepositTONToVault,
+    DedustDestroyLiquidityDepositContract,
+    DedustReturnExcessFromVault,
+    DedustTopUpLiquidityDepositContract,
 )
 from indexer.events.blocks.messages.swaps import DedustSwapPayload
 from indexer.events.blocks.swaps import (
@@ -49,6 +67,7 @@ from indexer.events.blocks.swaps import (
 )
 from indexer.events.blocks.utils import AccountId, Amount, Asset
 from indexer.events.blocks.utils.block_utils import (
+    find_call_contract,
     find_call_contracts,
     find_messages,
 )
@@ -275,3 +294,127 @@ def register_dedust_withdraw(reg: Registries) -> Registries:
 def dedust_withdraw_registries() -> Registries:
     """Fresh Registries ready to compile specs/dedust_withdraw.mch."""
     return register_dedust_withdraw(Registries())
+
+
+# --- dedust liquidity deposit (specs/dedust_deposit.mch) ---------------------
+#
+# Legacy pair (DedustDepositBlockMatcher / DedustDepositFirstAssetBlockMatcher)
+# runs BEFORE JettonTransferBlockMatcher and works off LabelBlocks; the mch
+# matchers run after it, so the deposit leg and the vault excess payouts arrive
+# as prebuilt jetton_transfer blocks. The builders reconstruct the label roles
+# structurally from `Match._mch_consumed` + tree navigation (the tree is intact
+# until the engine merges) and delegate to the shared cores in
+# blocks/liquidity.py. Returns None to reject the match (spec §10.7) — this is
+# also how the partial matcher's legacy guard (raise when final-deposit opcodes
+# follow the topup) surfaces here.
+
+# Pool -> deposit-contract rejection; raw literal in the legacy matcher, no
+# message class exists.
+DEDUST_REJECTION_OPCODE = 0xE1A36CD4
+
+DEPOSIT_OPCODES = {
+    "JettonTransfer":         JettonTransfer.opcode,
+    "JettonInternalTransfer": JettonInternalTransfer.opcode,
+    "JettonNotify":           JettonNotify.opcode,
+    "DedustDepositTONToVault":               DedustDepositTONToVault.opcode,
+    "DedustAskLiquidityFactory":             DedustAskLiquidityFactory.opcode,
+    "DedustDeployDepositContract":           DedustDeployDepositContract.opcode,
+    "DedustTopUpLiquidityDepositContract":   DedustTopUpLiquidityDepositContract.opcode,
+    "DedustDepositLiquidityToPool":          DedustDepositLiquidityToPool.opcode,
+    "DedustDestroyLiquidityDepositContract": DedustDestroyLiquidityDepositContract.opcode,
+    "DedustReturnExcessFromVault":           DedustReturnExcessFromVault.opcode,
+    "DedustPayout":                          DedustPayout.opcode,
+    "DedustRejection":                       DEDUST_REJECTION_OPCODE,
+}
+
+DEPOSIT_BLOCK_TYPES = {
+    "DedustDepositLiquidity":        DedustDepositLiquidity,
+    "DedustDepositLiquidityPartial": DedustDepositLiquidityPartial,
+}
+
+
+def _dedust_deposit_leg(leg: Block) -> tuple[Block | None, list | None]:
+    """Resolve the deposit-leg head (the ask factory call's parent) into the
+    raw vault-facing call the cores expect plus the raw user JettonTransfer
+    candidates for the jetton-deposit scan. Returns (deposit, jt_calls);
+    jt_calls is None when the candidates must come from the consumed set
+    (TON leg / raw-chain fallback arm)."""
+    if isinstance(leg, CallContractBlock) and leg.opcode == DedustDepositTONToVault.opcode:
+        return leg, []
+    if leg.btype == "jetton_transfer":
+        deposit = find_call_contract(leg.children_blocks, JettonNotify.opcode)
+        jt_calls = [b for b in leg.children_blocks
+                    if isinstance(b, CallContractBlock)
+                    and b.opcode == JettonTransfer.opcode]
+        return deposit, jt_calls
+    return leg, None
+
+
+def register_dedust_deposit(reg: Registries) -> Registries:
+    """Register everything specs/dedust_deposit.mch needs into `reg`."""
+    reg.opcodes.update(DEPOSIT_OPCODES)
+    reg.block_types.update(DEPOSIT_BLOCK_TYPES)
+
+    @reg.register_builder("build_dedust_deposit_final")
+    async def build_dedust_deposit_final(m):
+        consumed = m._mch_consumed
+        block = consumed[0]
+        try:
+            # anchor <- topup <- ask <- deposit leg
+            leg = block.previous_block.previous_block.previous_block
+            deposit, jt_calls = _dedust_deposit_leg(leg)
+            if jt_calls is None:
+                jt_calls = [b for b in consumed
+                            if isinstance(b, CallContractBlock)
+                            and b.opcode == JettonTransfer.opcode]
+            lp_transfer = next((b for b in consumed[1:]
+                                if isinstance(b, CallContractBlock)
+                                and b.opcode == JettonInternalTransfer.opcode
+                                and b.previous_block is block), None)
+            rejection = next((b for b in consumed[1:]
+                              if isinstance(b, CallContractBlock)
+                              and b.opcode == DEDUST_REJECTION_OPCODE
+                              and b.previous_block is block), None)
+            returns = [b for b in consumed
+                       if isinstance(b, CallContractBlock)
+                       and b.opcode == DedustReturnExcessFromVault.opcode]
+            ton_excesses = [b for b in consumed
+                            if isinstance(b, CallContractBlock)
+                            and b.opcode == DedustPayout.opcode
+                            and b.previous_block in returns]
+            jetton_excesses = [b for b in consumed
+                               if isinstance(b, JettonTransferBlock)
+                               and b.previous_block in returns]
+            data = await build_dedust_deposit_liquidity_core(
+                block, deposit, lp_transfer, rejection, jt_calls,
+                ton_excesses, jetton_excesses)
+        except Exception:
+            return None
+        new_block = DedustDepositLiquidity({})
+        new_block.data = data
+        new_block.data["dex"] = "dedust"
+        new_block.failed = not data.get("success", True)
+        return new_block
+
+    @reg.register_builder("build_dedust_deposit_partial")
+    async def build_dedust_deposit_partial(m):
+        consumed = m._mch_consumed
+        block = consumed[0]
+        try:
+            # anchor (topup) <- ask <- deposit leg
+            leg = block.previous_block.previous_block
+            deposit, _ = _dedust_deposit_leg(leg)
+            data = await build_dedust_deposit_partial_core(block, deposit, consumed)
+        except Exception:
+            return None
+        new_block = DedustDepositLiquidityPartial({})
+        new_block.data = data
+        new_block.data["dex"] = "dedust"
+        return new_block
+
+    return reg
+
+
+def dedust_deposit_registries() -> Registries:
+    """Fresh Registries ready to compile specs/dedust_deposit.mch."""
+    return register_dedust_deposit(Registries())

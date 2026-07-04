@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCH IR Engine v2 — Purpose-Built Walker</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --ground:#0b0f17;
+    --ground-2:#0e1420;
+    --panel:#131926;
+    --panel-2:#172032;
+    --line:#223044;
+    --line-soft:#1a2333;
+    --text:#d7dee9;
+    --muted:#7d8aa0;
+    --muted-2:#57647c;
+    --teal:#5ad1c8;
+    --teal-dim:#2f6f6b;
+    --amber:#e8b064;
+    --violet:#b58cff;
+    --green:#8fd98a;
+    --red:#e8776f;
+    --blue:#79a8ff;
+    /* syntax */
+    --sx-k:#b58cff;
+    --sx-s:#9fdb8f;
+    --sx-c:#66738a;
+    --sx-num:#e8a765;
+    --sx-cap:#e8b064;
+    --sx-ref:#5ad1c8;
+    --sx-op:#7fb7c1;
+    --sx-jkey:#79a8ff;
+    --sx-lit:#e8a765;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", "Roboto", "Helvetica Neue", sans-serif;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%}
+  body{
+    background:
+      radial-gradient(1200px 700px at 78% -10%, rgba(90,209,200,.06), transparent 60%),
+      radial-gradient(900px 600px at 10% 110%, rgba(181,140,255,.05), transparent 60%),
+      var(--ground);
+    color:var(--text);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+  }
+
+  /* ---------- rails ---------- */
+  .rail{position:fixed;left:0;right:0;z-index:40;display:flex;align-items:center;gap:16px;
+        font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--muted);
+        padding:0 22px;height:40px;pointer-events:none}
+  .rail.top{top:0;border-bottom:1px solid var(--line-soft);
+            background:linear-gradient(var(--ground-2),rgba(14,20,32,.4))}
+  .rail.bot{bottom:0;border-top:1px solid var(--line-soft);
+            background:linear-gradient(rgba(14,20,32,.4),var(--ground-2))}
+  .rail .brand{color:var(--text)}
+  .rail .brand b{color:var(--teal);font-weight:600}
+  .rail .spacer{flex:1}
+  .rail .dot{width:7px;height:7px;border-radius:50%;background:var(--red);opacity:.5;box-shadow:12px 0 0 rgba(232,176,100,.5),24px 0 0 rgba(143,217,138,.5)}
+  .rail .sect{color:var(--amber)}
+  .rail.bot .src{color:var(--muted-2);max-width:52vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rail .count{color:var(--text);font-variant-numeric:tabular-nums}
+  .rail .count .cur{color:var(--teal)}
+  #ticks{display:flex;gap:4px;pointer-events:auto}
+  #ticks i{width:14px;height:3px;background:var(--line);border-radius:2px;transition:background .3s,width .3s;cursor:pointer}
+  #ticks i.on{background:var(--teal);width:22px}
+  #ticks i.seen{background:var(--teal-dim)}
+
+  /* progress */
+  #prog{position:fixed;top:0;left:0;height:2px;background:linear-gradient(90deg,var(--teal),var(--amber));z-index:60;width:0;transition:width .35s ease}
+
+  /* ---------- deck ---------- */
+  #deck{position:relative;height:100vh;width:100vw;overflow:hidden}
+  .slide{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;
+         padding:64px 40px 60px;opacity:0;visibility:hidden;transform:translateY(10px);
+         transition:opacity .34s ease, transform .34s ease}
+  .slide.active{opacity:1;visibility:visible;transform:none;z-index:2}
+  .wrap{max-width:1120px;margin:0 auto;min-height:100%;
+        display:flex;flex-direction:column;justify-content:center;gap:18px}
+  .slide.tight .wrap{justify-content:flex-start;padding-top:8px}
+
+  /* index rail motif on the left of content */
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;
+          color:var(--teal);display:flex;align-items:center;gap:10px}
+  .kicker::before{content:"";width:26px;height:1px;background:var(--teal);opacity:.6}
+  .kicker .idx{color:var(--muted-2)}
+
+  h1{font-family:var(--mono);font-weight:600;font-size:clamp(30px,5vw,52px);line-height:1.05;
+     margin:0;letter-spacing:-.01em;text-wrap:balance;color:#eef2f8}
+  h2{font-family:var(--mono);font-weight:600;font-size:clamp(22px,3.2vw,34px);line-height:1.12;
+     margin:0;letter-spacing:-.01em;text-wrap:balance;color:#eef2f8}
+  h2 .em{color:var(--teal)}
+  h3{font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:.02em;margin:0 0 6px;color:var(--amber)}
+  p{margin:0;max-width:70ch}
+  .lead{font-size:clamp(16px,1.5vw,19px);color:var(--text)}
+  .muted{color:var(--muted)}
+  .small{font-size:13.5px}
+  strong{color:#eef2f8;font-weight:600}
+  em.k{font-style:normal;color:var(--teal)}
+  em.a{font-style:normal;color:var(--amber)}
+  code.inl{font-family:var(--mono);font-size:.86em;background:var(--panel-2);
+           border:1px solid var(--line-soft);border-radius:5px;padding:1px 6px;color:#cdd6e4}
+  .teal{color:var(--teal)} .amber{color:var(--amber)} .violet{color:var(--violet)}
+  .green{color:var(--green)} .red{color:var(--red)}
+
+  .grid{display:grid;gap:16px}
+  .cols-2{grid-template-columns:1fr 1fr}
+  .cols-5-7{grid-template-columns:5fr 7fr}
+  .cols-7-5{grid-template-columns:7fr 5fr}
+  @media (max-width:900px){.cols-2,.cols-5-7,.cols-7-5{grid-template-columns:1fr}}
+
+  .card{background:linear-gradient(var(--panel),var(--panel-2));border:1px solid var(--line);
+        border-radius:12px;padding:16px 18px}
+  .card h3{margin-top:0}
+  .stack{display:flex;flex-direction:column;gap:12px}
+  ul.clean{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+  ul.clean li{position:relative;padding-left:18px;color:var(--text)}
+  ul.clean li::before{content:"▸";position:absolute;left:0;color:var(--teal);font-size:.8em;top:.15em}
+  ul.clean li b{color:#eef2f8}
+
+  /* code figure */
+  figure.code{margin:0;background:#0a0e16;border:1px solid var(--line);border-radius:11px;
+              overflow:hidden;display:flex;flex-direction:column;min-height:0}
+  figure.code figcaption{font-family:var(--mono);font-size:11.5px;letter-spacing:.03em;
+              color:var(--muted);padding:8px 14px;border-bottom:1px solid var(--line-soft);
+              background:var(--ground-2);display:flex;align-items:center;gap:8px}
+  figure.code figcaption .tag{color:var(--teal)}
+  figure.code figcaption .flag{margin-left:auto;color:var(--amber);text-transform:uppercase;font-size:10px;letter-spacing:.1em}
+  pre.code-pre{margin:0;padding:14px 16px;overflow:auto;font-family:var(--mono);
+               font-size:12.5px;line-height:1.62;color:#c6d0e0;tab-size:2}
+  pre.code-pre.sm{font-size:11.5px;line-height:1.55}
+  .code-pre .k{color:var(--sx-k)} .code-pre .s{color:var(--sx-s)} .code-pre .c{color:var(--sx-c);font-style:italic}
+  .code-pre .num{color:var(--sx-num)} .code-pre .cap{color:var(--sx-cap)} .code-pre .ref{color:var(--sx-ref)}
+  .code-pre .op{color:var(--sx-op)} .code-pre .jkey{color:var(--sx-jkey)} .code-pre .lit{color:var(--sx-lit)}
+  .code-pre .dec{color:var(--sx-op)}
+  .code-pre::-webkit-scrollbar,.slide::-webkit-scrollbar{width:10px;height:10px}
+  .code-pre::-webkit-scrollbar-thumb,.slide::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px}
+  .code-pre::-webkit-scrollbar-track,.slide::-webkit-scrollbar-track{background:transparent}
+
+  /* tables */
+  table{border-collapse:collapse;width:100%;font-size:13.5px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  thead th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+           color:var(--muted);border-bottom:1px solid var(--line)}
+  td.mono,th.mono{font-family:var(--mono);font-size:12px}
+  tbody tr:hover{background:rgba(90,209,200,.03)}
+  .tnum{font-variant-numeric:tabular-nums}
+
+  .pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;
+        letter-spacing:.05em;padding:3px 9px;border-radius:999px;border:1px solid var(--line);
+        color:var(--muted);background:var(--panel)}
+  .pill.ok{color:var(--green);border-color:rgba(143,217,138,.35);background:rgba(143,217,138,.06)}
+  .pill.warn{color:var(--amber);border-color:rgba(232,176,100,.35);background:rgba(232,176,100,.06)}
+  .pill.tl{color:var(--teal);border-color:rgba(90,209,200,.35);background:rgba(90,209,200,.06)}
+  .pillrow{display:flex;flex-wrap:wrap;gap:8px}
+
+  .note{border-left:2px solid var(--amber);padding:4px 0 4px 14px;color:var(--muted);font-size:14px}
+  .note b{color:var(--amber)}
+  .note.tl{border-color:var(--teal)} .note.tl b{color:var(--teal)}
+  .note.rd{border-color:var(--red)} .note.rd b{color:var(--red)}
+
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-family:var(--mono);font-size:12.5px}
+  .kv dt{color:var(--muted)} .kv dd{margin:0;color:var(--text)}
+
+  /* metric tiles */
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media (max-width:900px){.metrics{grid-template-columns:repeat(2,1fr)}}
+  .metric{background:linear-gradient(var(--panel),var(--panel-2));border:1px solid var(--line);
+          border-radius:12px;padding:14px 16px}
+  .metric .n{font-family:var(--mono);font-size:30px;font-weight:600;color:#eef2f8;font-variant-numeric:tabular-nums;line-height:1}
+  .metric .n .u{font-size:15px;color:var(--teal)}
+  .metric .l{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:8px}
+
+  /* svg */
+  svg.diagram{width:100%;height:auto;display:block}
+  .diagram .box{fill:var(--panel);stroke:var(--line)}
+  .diagram .box.accent{stroke:var(--teal)}
+  .diagram .box.amber{stroke:var(--amber)}
+  .diagram .lbl{fill:#dbe3ef;font-family:var(--mono);font-size:12px}
+  .diagram .lbl.sm{font-size:10.5px;fill:var(--muted)}
+  .diagram .lbl.teal{fill:var(--teal)} .diagram .lbl.amber{fill:var(--amber)}
+  .diagram .edge{stroke:var(--muted-2);stroke-width:1.5;fill:none}
+  .diagram .edge.teal{stroke:var(--teal)} .diagram .edge.amber{stroke:var(--amber);stroke-dasharray:4 3}
+  .diagram .cap{fill:var(--amber);font-family:var(--mono);font-size:10px}
+
+  /* hero */
+  .hero-mark{font-family:var(--mono);font-size:13px;letter-spacing:.2em;color:var(--teal);text-transform:uppercase}
+  .hero-sub{font-family:var(--mono);color:var(--muted);font-size:14px}
+  .hero-meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+  .titlebar{display:flex;gap:7px;margin-bottom:26px}
+  .titlebar i{width:11px;height:11px;border-radius:50%;display:block}
+  .titlebar i:nth-child(1){background:#e8776f}.titlebar i:nth-child(2){background:#e8b064}.titlebar i:nth-child(3){background:#8fd98a}
+
+  /* overview overlay */
+  #ov{position:fixed;inset:0;z-index:80;background:rgba(6,9,15,.9);backdrop-filter:blur(6px);
+      display:none;padding:56px 40px;overflow-y:auto}
+  #ov.show{display:block}
+  #ov h4{font-family:var(--mono);color:var(--teal);letter-spacing:.1em;text-transform:uppercase;font-size:12px;margin:0 0 20px;max-width:1120px;margin-inline:auto}
+  .ovgrid{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  @media (max-width:900px){.ovgrid{grid-template-columns:1fr}}
+  .ovitem{display:flex;gap:12px;align-items:baseline;padding:11px 14px;border:1px solid var(--line);
+          border-radius:9px;background:var(--panel);cursor:pointer;font-size:14px;transition:border-color .15s,background .15s}
+  .ovitem:hover{border-color:var(--teal);background:var(--panel-2)}
+  .ovitem .n{font-family:var(--mono);color:var(--muted);font-size:12px;min-width:20px;text-align:right}
+  .ovitem.cur{border-color:var(--teal)}
+  .ovitem.cur .n{color:var(--teal)}
+
+  .help{position:fixed;right:16px;bottom:48px;z-index:50;font-family:var(--mono);font-size:11px;
+        color:var(--muted-2);pointer-events:none;text-align:right;line-height:1.7}
+  kbd{font-family:var(--mono);font-size:10.5px;border:1px solid var(--line);border-bottom-width:2px;
+      border-radius:4px;padding:0 5px;color:var(--muted);background:var(--panel)}
+
+  @media (prefers-reduced-motion:reduce){
+    .slide{transition:none} #prog{transition:none}
+  }
+
+  /* print: one slide per page */
+  @media print{
+    html,body{height:auto;overflow:visible;background:#fff;color:#111}
+    .rail,#prog,.help,#ov{display:none!important}
+    #deck{position:static;height:auto;overflow:visible}
+    .slide{position:static;opacity:1;visibility:visible;transform:none;height:auto;min-height:auto;
+           page-break-after:always;border-bottom:1px solid #ccc;padding:24px}
+    .wrap{justify-content:flex-start}
+    figure.code,.card,.metric{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+
+<div id="prog"></div>
+<div class="rail top">
+  <span class="dot"></span>
+  <span class="brand"><b>mch_ir</b> // engine.v2</span>
+  <span class="spacer"></span>
+  <span class="sect" id="sectlbl">Purpose-built IR walker</span>
+</div>
+<div class="rail bot">
+  <span class="src" id="srclbl">docs/mch-engine-v2.md</span>
+  <span class="spacer"></span>
+  <span id="ticks"></span>
+  <span class="spacer"></span>
+  <span class="count"><span class="cur" id="cnum">01</span> / <span id="ctot">24</span></span>
+</div>
+
+<div class="help">
+  <div><kbd>←</kbd> <kbd>→</kbd> <kbd>space</kbd> navigate</div>
+  <div><kbd>o</kbd> overview &nbsp; <kbd>home</kbd>/<kbd>end</kbd> jump</div>
+</div>
+
+<div id="ov"></div>
+
+<main id="deck">
+
+  <!-- 1 — TITLE -->
+  <section class="slide" data-title="Title" data-sect="Overview" data-src="branch mch-engine-v2 · HEAD 5fd4c32d">
+    <div class="wrap">
+      <div class="titlebar"><i></i><i></i><i></i></div>
+      <div class="hero-mark">TON event classifier · matcher DSL</div>
+      <h1>MCH IR Engine v2<br><span class="teal">the purpose-built walker</span></h1>
+      <p class="lead" style="margin-top:8px">One <code class="inl">.mch</code> pattern language, compiled once to a language-neutral JSON IR, then interpreted directly by a hand-written abstract machine that binds captures <em class="a">during</em> the walk — no legacy primitives, no post-hoc reconstruction, built as the line-for-line blueprint for the C++ port.</p>
+      <div class="hero-meta">
+        <span class="pill tl">branch mch-engine-v2</span>
+        <span class="pill">engine.py · 578 lines</span>
+        <span class="pill ok">844 passed · 1 skipped</span>
+        <span class="pill ok">278 parity pairs · 0 divergences</span>
+      </div>
+      <p class="small muted" style="margin-top:14px">A deep technical walkthrough. Every number, opcode and code excerpt on the following slides is taken from the repository at HEAD <code class="inl">5fd4c32d</code> — verified by reading the source or running the suites.</p>
+    </div>
+  </section>
+
+  <!-- 2 — CONTEXT -->
+  <section class="slide" data-title="The problem" data-sect="Context" data-src="indexer/events/event_processing.py · indexer/events/mch/">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">01</span> Context</div>
+      <h2>92 hand-written matchers. <span class="em">One</span> language should feed <span class="em">every</span> host.</h2>
+      <div class="grid cols-2" style="margin-top:6px">
+        <div class="stack">
+          <p>The classifier reads a blockchain trace — a tree of <code class="inl">Block</code> objects — and collapses protocol-specific shapes into typed actions. Today that logic lives in <strong>92 registered <code class="inl">BlockMatcher</code> instances</strong> across ~23 protocol modules, all imperative Python.</p>
+          <p>The <code class="inl">.mch</code> DSL (spec v0.2) replaces those subclasses with declarative spec files. <strong>Behaviour parity across host languages is the load-bearing invariant:</strong> the same source must match identically in Python (prod), C++ (prod, future) and Go (POC).</p>
+          <p class="muted small">M5 achieves parity structurally — one frontend compiles <code class="inl">.mch</code> to a neutral IR that every engine consumes, instead of N independent parser+compiler stacks that drift.</p>
+        </div>
+        <div class="stack">
+          <div class="card">
+            <h3>Ported so far</h3>
+            <div class="kv">
+              <dt>specs/</dt><dd>7 files · jettons, dns, dedust swap/withdraw, coffee, stonfi_v2</dd>
+              <dt>specs_decl/</dt><dd>2 files · fully declarative jettons + hybrid dedust</dd>
+              <dt>matchers</dt><dd>13 (across both dirs)</dd>
+            </div>
+          </div>
+          <div class="note tl"><b>The tension:</b> reusing legacy engine primitives to run the IR was fast to build but structurally wrong — it discards exactly the information the C++ port needs. v2 is the corrective rewrite.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 — PIPELINE -->
+  <section class="slide" data-title="Pipeline" data-sect="Context" data-src="indexer/events/mch/ · indexer/events/mch_ir/">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">02</span> One frontend, thin per-host interpreters</div>
+      <h2>The compilation pipeline</h2>
+      <svg class="diagram" viewBox="0 0 1080 300" role="img" aria-label="Pipeline from .mch specs through the Python frontend to mch-ir.json and per-host engines">
+        <defs>
+          <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="#7fb7c1"/></marker>
+        </defs>
+        <!-- specs -->
+        <rect class="box amber" x="16" y="112" width="150" height="76" rx="9"/>
+        <text class="lbl amber" x="91" y="142" text-anchor="middle">.mch specs</text>
+        <text class="lbl sm" x="91" y="162" text-anchor="middle">7 + 2 files</text>
+        <line class="edge teal" x1="166" y1="150" x2="214" y2="150" marker-end="url(#ah)"/>
+        <!-- frontend -->
+        <rect class="box accent" x="216" y="86" width="230" height="128" rx="9"/>
+        <text class="lbl teal" x="331" y="112" text-anchor="middle" style="font-size:11px;letter-spacing:.1em">PYTHON FRONTEND</text>
+        <text class="lbl sm" x="331" y="136" text-anchor="middle">lex → parse → resolve</text>
+        <text class="lbl sm" x="331" y="154" text-anchor="middle">→ compile → lower</text>
+        <text class="lbl sm" x="331" y="182" text-anchor="middle" style="fill:#7fb7c1">ir_emit.py</text>
+        <line class="edge teal" x1="446" y1="150" x2="494" y2="150" marker-end="url(#ah)"/>
+        <!-- ir -->
+        <rect class="box" x="496" y="98" width="176" height="104" rx="9" style="stroke:var(--violet)"/>
+        <text class="lbl" x="584" y="126" text-anchor="middle" style="fill:var(--violet)">mch-ir.json</text>
+        <text class="lbl sm" x="584" y="148" text-anchor="middle">language-neutral</text>
+        <text class="lbl sm" x="584" y="166" text-anchor="middle">matchers[] · nodes[]</text>
+        <text class="lbl sm" x="584" y="184" text-anchor="middle" style="fill:var(--muted-2)">v0.1-poc</text>
+        <!-- fan out -->
+        <path class="edge" d="M672,140 C712,120 720,64 764,64" marker-end="url(#ah)"/>
+        <path class="edge teal" d="M672,150 C716,150 720,150 764,150" marker-end="url(#ah)"/>
+        <path class="edge" d="M672,160 C712,180 720,236 764,236" marker-end="url(#ah)"/>
+        <!-- hosts -->
+        <rect class="box" x="766" y="38" width="298" height="52" rx="9"/>
+        <text class="lbl" x="784" y="60" style="fill:var(--muted)">Python · compiled path (legacy engine)</text>
+        <text class="lbl sm" x="784" y="76" style="fill:var(--muted-2)">test_ir_engine_parity round-trips against this</text>
+        <rect class="box accent" x="766" y="124" width="298" height="52" rx="9"/>
+        <text class="lbl teal" x="784" y="146">Python · mch_ir engine v2  ◄ this deck</text>
+        <text class="lbl sm" x="784" y="162">interprets the node graph directly</text>
+        <rect class="box" x="766" y="210" width="298" height="52" rx="9"/>
+        <text class="lbl" x="784" y="232" style="fill:var(--muted)">Go POC · C++ (future)</text>
+        <text class="lbl sm" x="784" y="248" style="fill:var(--muted-2)">load artifact → native primitives</text>
+      </svg>
+      <p class="small muted">The IR is <strong>disposable</strong> (schema note): <code class="inl">v0.1-poc</code> is the binding contract between the Python emitter and any loader — no <code class="inl">.mch</code> parsing ever happens outside Python. Re-emitting the same specs is byte-identical (verified).</p>
+    </div>
+  </section>
+
+  <!-- 4 — SIDE BY SIDE -->
+  <section class="slide tight" data-title=".mch ↔ IR" data-sect="Schema" data-src="specs_decl/jettons.mch  ·  emitted mch-ir.json (root 20)">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">03</span> One source, two artifacts</div>
+      <h2><code class="inl" style="font-size:.7em">jetton_transfer</code> — the <span class="em">.mch</span> pattern and its emitted <span class="em">IR</span></h2>
+      <div class="grid cols-2" style="align-items:start">
+        <figure class="code" data-lang="mch">
+          <figcaption><span class="tag">.mch</span> specs_decl/jettons.mch <span class="flag">source</span></figcaption>
+<script type="text/plain">matcher jetton_transfer {
+    produces JettonTransferBlock
+    entry    @transfer
+
+    op JettonTransfer @transfer
+      -> op JettonInternalTransfer @internal
+      -> maybe op JettonNotify @notify
+
+    parse transfer as JettonTransfer
+    parse internal  as JettonInternalTransfer
+    let wallet = lookup jetton_wallet(internal.msg.destination)
+    reject when wallet == null
+    # ... 18-field out { } elided (slide 08)
+}</script>
+        </figure>
+        <figure class="code" data-lang="json">
+          <figcaption><span class="tag">IR</span> mch-ir.json — matcher record + nodes 20–22 <span class="flag">emitted</span></figcaption>
+<script type="text/plain">{ "name": "jetton_transfer",
+  "anchor": { "kind": "opcode_set", "values": [260734629] },
+  "root": 20,
+  "produces": ["jetton_transfer"],
+  "captures": [ {"name":"transfer","card":"one"},
+                {"name":"internal","card":"one"},
+                {"name":"notify","card":"opt"} ],
+  "include_excess": true, "include_bounces": true,
+  "build_program": [ /* parse · let · reject · out */ ] }
+
+// nodes[] (flat, index-addressed)
+{ "kind":"contract", "opcode":260734629, "capture":"transfer", "child":21 }
+{ "kind":"contract", "opcode":395134233, "capture":"internal", "child":22 }
+{ "kind":"contract", "opcode":1935855772, "optional":true, "capture":"notify" }</script>
+        </figure>
+      </div>
+      <p class="small muted"><code class="inl">260734629 = 0x0f8a7ea5</code> (JettonTransfer) · <code class="inl">395134233 = 0x178d4519</code> (InternalTransfer) · <code class="inl">1935855772 = 0x7362d09c</code> (Notify). Opcodes are emitted as the canonical <strong>unsigned 32-bit</strong> value; hosts compare unsigned. The child chain <code class="inl">-&gt;</code> becomes <code class="inl">"child"</code> index edges; <code class="inl">maybe</code> becomes <code class="inl">"optional": true</code> on the target node.</p>
+    </div>
+  </section>
+
+  <!-- 5 — MATCHER RECORD -->
+  <section class="slide" data-title="Matcher record" data-sect="Schema" data-src="docs/mch-ir-poc.md · indexer/events/mch/ir_emit.py">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">04</span> IR schema tour · matcher record</div>
+      <h2>The anchor is where a candidate <span class="em">earns</span> a walk</h2>
+      <div class="grid cols-7-5" style="align-items:start">
+        <div class="stack">
+          <table>
+            <thead><tr><th>key</th><th>meaning</th></tr></thead>
+            <tbody>
+              <tr><td class="mono teal">anchor</td><td><code class="inl">opcode_set</code> (ints) or <code class="inl">btype</code> (strings). Prefilter + <code class="inl">test_self</code>: a CallContract whose unsigned opcode ∈ values, or <code class="inl">block.btype</code> ∈ values. Multi-value = anchor groups (jetton_mint anchors on two).</td></tr>
+              <tr><td class="mono teal">root</td><td>node id of the anchor node itself; its edges hang the rest of the pattern.</td></tr>
+              <tr><td class="mono teal">produces</td><td>btype union; first entry is the produced block's primary type.</td></tr>
+              <tr><td class="mono teal">captures</td><td>name → cardinality <code class="inl">one</code> / <code class="inl">opt</code> / <code class="inl">many</code>. Resolved to integer <strong>slot ids</strong> at load; the walker never sees names.</td></tr>
+              <tr><td class="mono teal">include_excess<br>include_bounces</td><td>root-level auto-append flags (excess <code class="inl">0xd53276db</code>, bounce <code class="inl">0xffffffff</code>), default true.</td></tr>
+              <tr><td class="mono teal">builder <span class="muted">|</span><br>build_program</td><td>mutually exclusive. A registered host builder <em>or</em> an inline declarative program. Omitted (never <code class="inl">null</code>) when the other is used.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="stack">
+          <div class="card">
+            <h3>No nulls, canonical order</h3>
+            <ul class="clean small">
+              <li>Absent fields are <b>omitted</b>, never emitted as <code class="inl">null</code>.</li>
+              <li>Object keys in schema order, arrays in emission order — so two emits are byte-identical.</li>
+              <li>All indices are 0-based ints into the top-level <code class="inl">nodes</code> array.</li>
+            </ul>
+          </div>
+          <div class="note"><b>captures are informational to the Go POC</b> but load-bearing in v2 Python: the card table drives scalar-vs-list assembly (slide 17).</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 — NODE ARRAY -->
+  <section class="slide" data-title="Node array" data-sect="Schema" data-src="docs/mch-ir-poc.md — Node records">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">05</span> IR schema tour · the node graph</div>
+      <h2>A <span class="em">flat</span> node array wired by <span class="em">index edges</span></h2>
+      <div class="grid cols-2" style="align-items:start">
+        <div class="stack">
+          <p class="small">Six node kinds. Edges are node ids, not nesting — <code class="inl">child</code>, <code class="inl">parent</code>, <code class="inl">children[]</code>, plus <code class="inl">branches[]</code> (or) and <code class="inl">step</code>/<code class="inl">exit</code> (recursive). <strong>Cycles are legal</strong>, so loaders wire in two passes: allocate every node, then resolve edges by id.</p>
+          <figure class="code" data-lang="json">
+            <figcaption><span class="tag">IR</span> the six node kinds</figcaption>
+<script type="text/plain">{ "kind":"contract",   "opcode":260734629 }
+{ "kind":"block_type", "btype":"jetton_transfer" }
+{ "kind":"pred",       "pred":"pton_self_transfer" }
+{ "kind":"any" }
+{ "kind":"or",         "branches":[4,5], "exclusive":false }
+{ "kind":"recursive",  "step":7, "exit":9, "optional":true }</script>
+          </figure>
+          <p class="small muted">Common optional fields on any kind: <code class="inl">optional</code>, <code class="inl">capture</code>, <code class="inl">where</code> (named predicate) or <code class="inl">where_expr</code> (inline sync expression — mutually exclusive).</p>
+        </div>
+        <div class="stack">
+          <figure class="code" data-lang="json">
+            <figcaption><span class="tag">IR</span> dedust_swap_hybrid — the recursive peer-chain (nodes 6–11)</figcaption>
+<script type="text/plain">{ "kind":"recursive", "step":7, "exit":12, "optional":true }
+{ "kind":"or", "branches":[8,10], "exclusive":false }
+{ "kind":"contract", "opcode":1923917994,        // DedustSwapPeer
+  "capture":"peer", "children":[9] }
+{ "kind":"contract", "opcode":2623606243,        // Notification
+  "optional":true, "capture":"peer_notification" }
+{ "kind":"contract", "opcode":1643009069,        // DedustSwapExternal
+  "capture":"peer", "children":[11] }
+{ "kind":"contract", "opcode":2623606243,
+  "optional":true, "capture":"peer_notification" }</script>
+          </figure>
+          <div class="note tl"><b>Same-name captures, two branches.</b> <code class="inl">peer</code> (card <code class="inl">many</code>) is captured on both node 8 and node 10 — one pool hop per unrolling, whichever branch wins that round. This is why cardinality lives in the record, not the node.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 — EXPRESSIONS & PROGRAMS -->
+  <section class="slide" data-title="Expr & programs" data-sect="Schema" data-src="docs/mch-ir-poc.md — Expressions & build programs">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">06</span> IR schema tour · expressions & build programs</div>
+      <h2>Two tiny tagged languages: <span class="em">k</span> for expressions, <span class="em">s</span> for statements</h2>
+      <div class="grid cols-2" style="align-items:start">
+        <figure class="code" data-lang="json">
+          <figcaption><span class="tag">expr</span> k-tagged trees — inlined per occurrence</figcaption>
+<script type="text/plain">{ "k":"int",    "v":42 }
+{ "k":"str",    "v":"dedust" }
+{ "k":"bool",   "v":true }         { "k":"null" }
+{ "k":"name",   "id":"transfer" }  // capture or let
+{ "k":"dotfield","name":"value" }  // .field (where only)
+{ "k":"attr",   "of":<expr>, "name":"msg" }
+{ "k":"call",   "fn":"account", "args":[<expr>] }
+{ "k":"lookup", "name":"jetton_wallet", "args":[<expr>] }
+{ "k":"unary",  "op":"not"|"-", "x":<expr> }
+{ "k":"bin",    "op":"and|or|==|!=|<|<=|>|>=|??", ... }
+{ "k":"ternary","cond":<e>, "then":<e>, "else":<e> }</script>
+        </figure>
+        <figure class="code" data-lang="json">
+          <figcaption><span class="tag">stmt</span> s-tagged build program — source order</figcaption>
+<script type="text/plain">{ "s":"parse",  "target":"transfer", "types":["JettonTransfer"] }
+{ "s":"let",    "name":"w", "expr":<expr> }
+{ "s":"reject", "when":<expr> }   // → match rejection ([])
+{ "s":"failed", "when":<expr> }   // accumulate with or
+{ "s":"broken", "when":<expr> }
+{ "s":"flow",   "kind":"jetton|ton|fees", "args":[<expr>] }
+{ "s":"out",    "fields":[ {"name":"sender","expr":<e>} ] }</script>
+        </figure>
+      </div>
+      <div class="grid cols-2" style="margin-top:2px">
+        <div class="note"><b>parse is soft, first-success-wins.</b> <code class="inl">types</code> are tried in order; a body that fails to parse simply tries the next alternative and <code class="inl">.body</code> null-propagates.</div>
+        <div class="note tl"><b>where_expr is sync-only.</b> It composes onto <code class="inl">test_self</code>, so lookups and host fns are rejected at <em>load</em> time — no I/O can hide inside a candidate test.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 — DECLARATIVE JETTONS -->
+  <section class="slide tight" data-title="100% declarative" data-sect="Build language" data-src="specs_decl/jettons.mch — jetton_transfer out { }">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">07</span> Build language · the fully declarative case</div>
+      <h2>An 18-field <code class="inl" style="font-size:.7em">out</code> block — <span class="em">zero</span> host code</h2>
+      <div class="grid cols-7-5" style="align-items:start">
+        <figure class="code" data-lang="mch">
+          <figcaption><span class="tag">.mch</span> specs_decl/jettons.mch — build, field-for-field with legacy <code class="inl">build_jetton_transfer_core</code></figcaption>
+<script type="text/plain">parse transfer as JettonTransfer
+parse internal  as JettonInternalTransfer
+let wallet   = lookup jetton_wallet(internal.msg.destination)
+reject when wallet == null
+let mismatch = account(wallet.owner) != account(transfer.body.destination)
+let amt      = internal.body.amount ?? transfer.body.amount
+let fwd      = internal.body.forward_ton_amount ?? transfer.body.forward_amount
+failed when transfer.failed or internal.failed
+out {
+    has_internal_transfer: true
+    sender:          account(transfer.msg.source)
+    receiver:        account(wallet.owner) if mismatch
+                     else account(transfer.body.destination)
+    forward_amount:  amount(fwd)
+    asset:           asset(wallet.jetton)
+    amount:          amount(amt)
+    # ... 12 more fields
+}</script>
+        </figure>
+        <div class="stack">
+          <div class="card">
+            <h3>What the language expresses natively</h3>
+            <ul class="clean small">
+              <li><b>lookup</b> — async interface-repo query (<code class="inl">jetton_wallet</code>), null-propagating.</li>
+              <li><b>??</b> — soft fallback from the internal body to the transfer body.</li>
+              <li><b>ternary</b> — <code class="inl">A if cond else B</code> receiver resolution.</li>
+              <li><b>reject / failed when</b> — the match's reject + failed wiring.</li>
+              <li><b>flow</b> (jetton_burn) — <code class="inl">value_flow</code> debit with a negative amount.</li>
+            </ul>
+          </div>
+          <div class="note"><b>Honest boundary, noted in the spec:</b> legacy marks the <em>consumed</em> anchor <code class="inl">broken</code> on an owner/receiver mismatch; the build language can only flag the <em>produced</em> block. It doesn't affect produced-block parity (legacy leaves that flag False) — and the comment says so in the source.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 — HYBRID DEDUST -->
+  <section class="slide tight" data-title="Escape hatch" data-sect="Build language" data-src="specs_decl/dedust_swap_hybrid.mch">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">08</span> Build language · the escape hatch</div>
+      <h2>When declarative isn't enough: <span class="em">host-fn</span> residue</h2>
+      <div class="grid cols-2" style="align-items:start">
+        <figure class="code" data-lang="mch">
+          <figcaption><span class="tag">.mch</span> specs_decl/dedust_swap_hybrid.mch — pattern + hybrid build</figcaption>
+<script type="text/plain">rule peer_chain = (
+    op DedustSwapPeer @peer
+      -> { maybe op DedustSwapNotification @peer_notification }
+      -> maybe $peer_chain
+  ^ op DedustSwapExternal @peer
+      -> { maybe op DedustSwapNotification @peer_notification }
+      -> maybe $peer_chain
+  ^ op DedustPayoutFromPool -> ( op DedustPayout | btype jetton_transfer )
+)
+
+matcher dedust_swap_hybrid {
+    produces JettonSwapBlock
+    entry    @ext
+    # ... pattern elided ...
+
+    let legs = dedust_swap_legs(consumed, in_transfer, swap_request)
+    reject when legs == null
+    failed when dedust_swap_failed(consumed)
+    out {
+        dex:          "dedust"
+        sender:       account(swap_request.msg.source)
+                      if in_transfer == null else legs.sender
+        peer_swaps:   legs.peer_swaps
+        # ... 7 more, all reading off `legs`
+    }
+}</script>
+        </figure>
+        <div class="stack">
+          <div class="card">
+            <h3>The declarative / imperative split</h3>
+            <ul class="clean small">
+              <li><b class="green">declarative</b> — <code class="inl">dex</code> literal; the TON-in branch <code class="inl">sender</code>/<code class="inl">source_asset</code> off the raw call; the reject/failed <em>decisions</em>.</li>
+              <li><b class="amber">host fn</b> <code class="inl">dedust_swap_legs</code> — peer-swap list assembly (lt-sort over the consumed set), jetton-branch in-leg, payout resolution, destination-asset pool-hop loop, nested leg dicts.</li>
+              <li><b class="amber">host fn</b> <code class="inl">dedust_swap_failed</code> — notification-coverage scan.</li>
+            </ul>
+          </div>
+          <div class="note rd"><b>Why the residue can't be language:</b> no record literals (must build nested dicts), no list quantifiers (notification scan), and composed blocks have no reliable <code class="inl">.msg</code> — their event-node order is set-shuffled by <code class="inl">merge_blocks</code>. The escape hatch exists precisely for this.</div>
+          <p class="small muted">Both files above round-trip in the parity sweep with <strong>zero divergences</strong> against their compiled counterparts.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 — V1 TAX -->
+  <section class="slide" data-title="v1 tax" data-sect="Why v2" data-src="docs/mch-engine-v2.md §1 — Motivation">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">09</span> Why a rewrite</div>
+      <h2>The v1 tax: <span class="em">~250 lines</span> to rebuild what the walk already knew</h2>
+      <p class="small muted" style="max-width:88ch">v1 (461 lines) reused <code class="inl">blocks/basic_matchers.py</code> as its execution core. <code class="inl">try_build</code> returned a flat consumed-blocks list with no captures, no iteration structure, no rejection channel, and nondeterministic <code class="inl">set()</code> ordering — so most of the file existed only to reconstruct information the walk had already computed and thrown away.</p>
+      <table style="margin-top:8px">
+        <thead><tr><th>v1 artifact</th><th>why it existed</th><th>v2 replacement</th></tr></thead>
+        <tbody>
+          <tr><td class="mono red">_walk positional re-trace <span class="muted">(~120 lines)</span></td><td>captures not bound during matching</td><td class="teal">bind slots during the walk</td></tr>
+          <tr><td class="mono red">_IrRecursiveMatcher journal subclass</td><td>iteration grouping lost</td><td class="teal">iteration frames in MatchContext</td></tr>
+          <tr><td class="mono red">_mch_entry_block / _mch_result_len cursor math</td><td>can't tell recursion's slice of the consumed list</td><td class="teal">consumed recorded per-frame</td></tr>
+          <tr><td class="mono red">_compose_test monkeypatching</td><td>fixed <code class="inl">test_self</code> on engine classes</td><td class="teal">node carries predicate / expr slots</td></tr>
+          <tr><td class="mono red">IrRootMatcher._rejected instance flag</td><td>no rejection channel in the return path</td><td class="teal">rejection is a return value</td></tr>
+          <tr><td class="mono red">_dedup_consumed</td><td>engine reports recursion entry twice</td><td class="teal">visited-set prevents double-consume</td></tr>
+        </tbody>
+      </table>
+      <p class="note rd" style="margin-top:12px"><b>v2 interprets the IR node graph directly.</b> No <code class="inl">basic_matchers</code> import. All per-attempt state lives in a <code class="inl">MatchContext</code>; matcher objects are immutable after load. The walker <em>is</em> the C++ blueprint — slots are ints, edges are node indices, one async boundary.</p>
+    </div>
+  </section>
+
+  <!-- 11 — DATA MODEL -->
+  <section class="slide tight" data-title="Data model" data-sect="Architecture" data-src="indexer/events/mch_ir/engine.py — CompiledNode / IrMatcher / _MatchContext">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">10</span> v2 architecture · immutable load, mutable context</div>
+      <h2>Two immutable classes, one per-attempt <span class="em">stack object</span></h2>
+      <div class="grid cols-2" style="align-items:start">
+        <figure class="code" data-lang="py">
+          <figcaption><span class="tag">py</span> load-time · immutable, zero match state</figcaption>
+<script type="text/plain">class CompiledNode:
+    __slots__ = ("kind","opcode","btype","pred","where",
+        "where_expr","slot","optional","child","children",
+        "parent","branches","step","exit","exclusive")
+    # predicate refs → callables; capture name → slot id;
+    # edges → local node ids (-1 = absent). Cycles legal.
+
+class IrMatcher:
+    __slots__ = ("name","produces","_anchor_opcodes",
+        "_anchor_btypes","_nodes","_root","_slots","_cards",
+        "_step_slots","_exit_slots","_owned_slots",
+        "_builder_name","_program", ...)
+    # slot ids + recursion capture ownership resolved
+    # ONCE at load. Reentrant by construction.</script>
+        </figure>
+        <figure class="code" data-lang="py">
+          <figcaption><span class="tag">py</span> match-time · one per try_build (a C++ stack object)</figcaption>
+<script type="text/plain">class _MatchContext:
+    __slots__ = ("bindings","consumed","visited","frames","frame")
+
+    def mark(self):                      # savepoint
+        return (len(self.bindings), len(self.consumed),
+                len(self.frames))
+
+    def rollback(self, mark):
+        nb, nc, nf = mark
+        del self.bindings[nb:]
+        for b in self.consumed[nc:]:
+            self.visited.discard(id(b))  # restore visited
+        del self.consumed[nc:]
+        del self.frames[nf:]
+
+    def consume(self, block):            # identity-deduped
+        if id(block) not in self.visited:
+            self.visited.add(id(block))
+            self.consumed.append(block)</script>
+        </figure>
+      </div>
+      <div class="pillrow" style="margin-top:2px">
+        <span class="pill tl">bindings: (slot, frame, block) — append-only</span>
+        <span class="pill tl">consumed: traversal order, id-deduped</span>
+        <span class="pill tl">visited: id() guard, never iterated</span>
+        <span class="pill tl">frame: None | (nid, iter) | (nid, EXIT)</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 — THE WALK -->
+  <section class="slide tight" data-title="The walk" data-sect="Walk semantics" data-src="engine.py — _match_node (§4.1)">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">11</span> Walk algorithm · <code class="inl" style="font-size:.75em">match_node</code></div>
+      <h2>Test → bind → edges, in a <span class="em">fixed order</span></h2>
+      <div class="grid cols-7-5" style="align-items:start">
+        <figure class="code" data-lang="py">
+          <figcaption><span class="tag">py</span> engine.py:360 — the core recursion</figcaption>
+<script type="text/plain">def _match_node(self, nid, block, ctx, absorb=True) -> bool:
+    node = self._nodes[nid]
+    kind = node.kind
+    if kind == "or":          return self._match_or(node, block, ctx)
+    if kind == "recursive":   return self._match_recursive(nid, node, block, ctx)
+
+    if not self._test_head(nid, block):        # kind + where + where_expr
+        return False
+    ctx.consume(block)
+    if node.slot >= 0:
+        ctx.bind(node.slot, block)             # bind DURING the walk
+
+    if not self._match_child_edge(node, block, ctx):    return False
+    if not self._match_children_set(node, block, ctx):  return False
+    if not self._match_parent_edge(node, block, ctx):   return False
+
+    if absorb:
+        _absorb_aux(block, ctx)                # nested excess/bounce
+    return True</script>
+        </figure>
+        <div class="stack">
+          <div class="card">
+            <h3>Failure discipline</h3>
+            <p class="small">A failed sub-attempt may leave the context <strong>dirty</strong>. Only the <em>caller's</em> rollback cleans it — every edge helper marks before an attempt and rolls back on failure. The walk phase is fully <strong>synchronous</strong>: <code class="inl">test_self</code> and the entire match are pure; the single async boundary is the build phase (lookups / builders).</p>
+          </div>
+          <svg class="diagram" viewBox="0 0 360 210" role="img" aria-label="Walk over the jetton_transfer tree">
+            <defs><marker id="ah2" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="#7fb7c1"/></marker></defs>
+            <rect class="box accent" x="108" y="10" width="150" height="40" rx="8"/>
+            <text class="lbl teal" x="183" y="28" text-anchor="middle">transfer ·anchor</text>
+            <text class="lbl sm" x="183" y="43" text-anchor="middle">0x0f8a7ea5</text>
+            <line class="edge teal" x1="183" y1="50" x2="183" y2="78" marker-end="url(#ah2)"/>
+            <text class="cap" x="196" y="70">child</text>
+            <rect class="box" x="108" y="80" width="150" height="40" rx="8"/>
+            <text class="lbl" x="183" y="98" text-anchor="middle">internal</text>
+            <text class="lbl sm" x="183" y="113" text-anchor="middle">0x178d4519</text>
+            <line class="edge teal" x1="183" y1="120" x2="183" y2="148" marker-end="url(#ah2)"/>
+            <text class="cap" x="196" y="140">child</text>
+            <rect class="box amber" x="108" y="150" width="150" height="40" rx="8"/>
+            <text class="lbl amber" x="183" y="168" text-anchor="middle">notify ·opt</text>
+            <text class="lbl sm" x="183" y="183" text-anchor="middle">0x7362d09c</text>
+            <text class="lbl sm" x="10" y="30">consume →</text>
+            <text class="lbl sm" x="10" y="100" style="fill:var(--muted-2)">bind slots</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 — CHILD EDGE -->
+  <section class="slide tight" data-title="Child edge" data-sect="Walk semantics" data-src="engine.py — _match_child_edge (§4.2)">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">12</span> Walk deep-dive · child edge</div>
+      <h2>Multi-match <span class="em">accumulation</span> — not first-win</h2>
+      <div class="grid cols-7-5" style="align-items:start">
+        <figure class="code" data-lang="py">
+          <figcaption><span class="tag">py</span> engine.py:385 — every next_block is tried</figcaption>
+<script type="text/plain">def _match_child_edge(self, node, block, ctx) -> bool:
+    if node.child < 0:
+        return True
+    matched_any = False
+    for cand in block.next_blocks:          # list order, no sorting
+        mark = ctx.mark()
+        if self._match_node(node.child, cand, ctx):
+            matched_any = True              # accumulate ALL full matches
+        else:
+            ctx.rollback(mark)
+    return matched_any or self._nodes[node.child].optional</script>
+        </figure>
+        <div class="stack">
+          <p>The legacy engine tried the child matcher on <strong>every</strong> child and consumed <em>all</em> full matches. Two matching children → both consumed. A scalar (<code class="inl">one</code>/<code class="inl">opt</code>) capture keeps the <strong>first</strong> binding.</p>
+          <div class="note tl"><b>Pinned by R4</b> <code class="inl">test_r4_child_edge_consumes_all_matches_scalar_takes_first</code>: two <code class="inl">Bar</code> children under one <code class="inl">Foo</code> → <code class="inl">m.y is bar1</code>, and <code class="inl">_mch_consumed == [foo, bar1, bar2]</code>.</div>
+          <p class="small muted">Easy to get wrong: the obvious "break on first match" would silently drop the second child from <code class="inl">consumed</code> and break <code class="inl">merge_blocks</code>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14 — CHILDREN SET -->
+  <section class="slide tight" data-title="Children set" data-sect="Walk semantics" data-src="engine.py — _match_children_set (§4.3)">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">13</span> Walk deep-dive · children set</div>
+      <h2>Declaration order · first-match-wins · <span class="em">consuming</span> working set</h2>
+      <div class="grid cols-7-5" style="align-items:start">
+        <figure class="code" data-lang="py">
+          <figcaption><span class="tag">py</span> engine.py:400</figcaption>
+<script type="text/plain">def _match_children_set(self, node, block, ctx) -> bool:
+    if not node.children:
+        return True
+    working = list(block.next_blocks)       # independent copy
+    for item_id in node.children:           # declaration order
+        matched = False
+        for cand in working:                # list order
+            mark = ctx.mark()
+            if self._match_node(item_id, cand, ctx):
+                working.remove(cand)        # consume from working set
+                matched = True
+                break                       # first match wins
+            ctx.rollback(mark)
+        if not matched and not self._nodes[item_id].optional:
+            return False                    # required item unmatched
+    return True</script>
+        </figure>
+        <div class="stack">
+          <p>Each declared item takes the first candidate that matches and <strong>removes it</strong> from an independent working copy of <code class="inl">next_blocks</code>. Required items that find nothing fail the node; optional tails pass.</p>
+          <div class="note tl"><b>Overlap with the child edge is legal.</b> The two edges scan independent copies, so the same block can satisfy both — <code class="inl">ctx.consume</code>'s identity dedup absorbs the double-count (legacy dedups via <code class="inl">merge_blocks(set(...))</code>).</div>
+          <p class="small muted">R5 covers all four traps: order, working-set removal, required-unmatched failure, optional tail — plus a hand-crafted child+children overlap artifact the frontend can't emit.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 — OR + ROLLBACK -->
+  <section class="slide tight" data-title="or + rollback" data-sect="Walk semantics" data-src="engine.py — _match_or (§4.4)">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">14</span> Walk deep-dive · alternation</div>
+      <h2><code class="inl" style="font-size:.7em">or</code> = first full subtree that builds, with <span class="em">savepoints</span></h2>
+      <div class="grid cols-2" style="align-items:start">
+        <figure class="code" data-lang="py">
+          <figcaption><span class="tag">py</span> engine.py:434</figcaption>
+<script type="text/plain">def _match_or(self, node, block, ctx) -> bool:
+    for bid in node.branches:            # declaration order
+        mark = ctx.mark()
+        if self._match_node(bid, block, ctx):
+            return True                  # first FULL subtree wins
+        ctx.rollback(mark)               # undo partial consumption
+    return False</script>
+        </figure>
+        <div class="stack">
+          <p>A branch may partially consume — bind captures, pull in children — and <em>then</em> fail deeper. <code class="inl">rollback(mark)</code> truncates <code class="inl">bindings</code>, <code class="inl">consumed</code> and <code class="inl">frames</code> and rebuilds the <code class="inl">visited</code> tail, so the next branch starts from a pristine context.</p>
+          <div class="note tl"><b>Pinned by R3.</b> Branch 1 <code class="inl">(Bar → Baz → Qux)</code> consumes Bar+Baz then fails on a missing Qux; branch 2 <code class="inl">(Bar)</code> wins. Result: losing bindings are <code class="inl">None</code>, <code class="inl">_mch_consumed == [foo, bar]</code>, and the rolled-back <code class="inl">baz</code> is never absorbed (<code class="inl">baz.parent is None</code>).</div>
+        </div>
+      </div>
+      <div class="note"><b>exclusive:</b> the <code class="inl">exclusive</code> flag never appears here — it lives only in the head test (slide 20). As an edge target, an exclusive-or behaves exactly like a plain one.</div>
+    </div>
+  </section>
+
+  <!-- 16 — RECURSION FRONTIER -->
+  <section class="slide tight" data-title="Recursion" data-sect="Walk semantics" data-src="engine.py — _match_recursive (§4.6, T18)">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">15</span> Walk deep-dive · recursion frontier</div>
+      <h2>Exit tried <span class="em">first</span> per candidate · <span class="em">one step</span> per round</h2>
+      <div class="grid cols-7-5" style="align-items:start">
+        <figure class="code" data-lang="py">
+          <figcaption><span class="tag">py</span> engine.py:449 — trimmed</figcaption>
+<script type="text/plain">def _match_recursive(self, nid, node, entry, ctx) -> bool:
+    if not self._test_head(node.step, entry):   # entry gate = STEP head
+        return False
+    frontier = [entry]; iter_index = 0
+    while True:
+        stepped = False
+        for cand in frontier:                   # list order
+            if node.exit >= 0:
+                mark = ctx.mark(); ctx.frame = (nid, _EXIT)
+                if self._match_node(node.exit, cand, ctx):
+                    return True                 # terminated via exit
+                ctx.rollback(mark)
+            mark = ctx.mark(); ctx.frame = (nid, iter_index)
+            if self._match_node(node.step, cand, ctx):
+                stepped = True
+                step_consumed = ctx.consumed[mark[1]:]
+                frontier = [nb for b in step_consumed
+                               for nb in b.next_blocks]   # new frontier
+                break                           # one step per round
+            ctx.rollback(mark)
+        if not stepped:
+            return iter_index > 0               # exhaustion rule ↓
+        iter_index += 1</script>
+        </figure>
+        <div class="stack">
+          <svg class="diagram" viewBox="0 0 330 250" role="img" aria-label="Recursion frontier rounds">
+            <defs><marker id="ah3" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="#7fb7c1"/></marker></defs>
+            <text class="lbl sm teal" x="8" y="16">iter 0</text>
+            <rect class="box accent" x="60" y="4" width="120" height="30" rx="7"/>
+            <text class="lbl" x="120" y="24" text-anchor="middle">step ·s1</text>
+            <line class="edge teal" x1="120" y1="34" x2="120" y2="56" marker-end="url(#ah3)"/>
+            <text class="lbl sm teal" x="8" y="76">iter 1</text>
+            <rect class="box amber" x="56" y="58" width="70" height="30" rx="7"/>
+            <text class="lbl amber" x="91" y="78" text-anchor="middle">note ·opt</text>
+            <rect class="box accent" x="126" y="58" width="120" height="30" rx="7"/>
+            <text class="lbl" x="186" y="78" text-anchor="middle">step ·s2</text>
+            <line class="edge teal" x1="186" y1="88" x2="186" y2="110" marker-end="url(#ah3)"/>
+            <text class="lbl sm teal" x="8" y="130">iter 2</text>
+            <rect class="box accent" x="126" y="112" width="120" height="30" rx="7"/>
+            <text class="lbl" x="186" y="132" text-anchor="middle">step ·s3</text>
+            <line class="edge amber" x1="186" y1="142" x2="186" y2="164" marker-end="url(#ah3)"/>
+            <text class="lbl sm amber" x="8" y="184">exit</text>
+            <rect class="box" x="126" y="166" width="120" height="30" rx="7" style="stroke:var(--green)"/>
+            <text class="lbl" x="186" y="186" text-anchor="middle" style="fill:var(--green)">exit ·e</text>
+            <line class="edge" x1="186" y1="196" x2="186" y2="216" marker-end="url(#ah3)"/>
+            <rect class="box" x="126" y="218" width="120" height="28" rx="7" style="stroke:var(--green)"/>
+            <text class="lbl" x="186" y="237" text-anchor="middle" style="fill:var(--green)">exit_child</text>
+          </svg>
+          <p class="small muted">The blocks consumed by a winning step, in consumption order, become the next round's frontier. Each round tries <code class="inl">exit</code> before <code class="inl">step</code> on every candidate.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 17 — RECURSION CAPTURES -->
+  <section class="slide" data-title="Gap alignment" data-sect="Walk semantics" data-src="engine.py — _assemble_captures (§5) · tests/mch/test_recursion_captures.py">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">16</span> Walk deep-dive · recursion captures (T18)</div>
+      <h2>List captures are <span class="em">gap-aligned</span> per iteration frame</h2>
+      <div class="grid cols-2" style="align-items:start">
+        <figure class="code" data-lang="py">
+          <figcaption><span class="tag">py</span> engine.py:496 — _assemble_captures, the many/step arm</figcaption>
+<script type="text/plain">items = []
+for entry in ctx.frames:
+    if entry[0] == "step":
+        _tag, rid, idx, consumed_any = entry
+        if consumed_any and slot in self._step_slots[rid]:
+            items.append(first_framed.get((slot, (rid, idx))))  # gap-align
+    else:                              # exit frame: bind-once
+        rid = entry[1]
+        if slot in self._exit_slots[rid]:
+            items.append(first_framed.get((slot, (rid, _EXIT))))
+env[name] = items</script>
+        </figure>
+        <div class="stack">
+          <figure class="code" data-lang="py">
+            <figcaption><span class="tag">test</span> three-hop tree — the observable result (R6)</figcaption>
+<script type="text/plain">m.s      == [step1, step2, step3]   # one per iteration
+m.note   == [None,  note2, None ]   # gap-aligned, len == len(m.s)
+m.exit_a == [exit_]                 # exit branch: bind-once
+m.tail   is tail                    # post-recursion scalar
+m.parent is parent                 #   binds as an ordinary capture</script>
+          </figure>
+          <ul class="clean small">
+            <li><b>step</b> captures — one element per iteration; the branch that lost this round contributes <code class="inl">None</code>.</li>
+            <li><b>exit</b> captures — appended once, after the step elements.</li>
+            <li><b>post-recursion</b> captures — plain scalars, bind normally.</li>
+          </ul>
+          <p class="small muted">Ownership (<code class="inl">step</code> / <code class="inl">exit</code> / <code class="inl">plain</code>) per slot is computed <strong>at load</strong> by reachability over the step / exit subgraphs — the v1 <code class="inl">_reachable_captures</code>, now precomputed.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 18 — EXCESS / BOUNCE -->
+  <section class="slide tight" data-title="Excess / bounce" data-sect="Walk semantics" data-src="engine.py — _absorb_aux / try_build (§4.5)">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">17</span> Walk deep-dive · aux absorption</div>
+      <h2>Two levels of excess/bounce — <span class="em">merged</span> vs <span class="em">appended</span></h2>
+      <div class="grid cols-2" style="align-items:start">
+        <div class="card">
+          <h3 class="teal">Per matched node — nested</h3>
+          <p class="small">After any node's edges succeed, it consumes every <code class="inl">next_block</code> that is a CallContract with opcode <code class="inl">0xd53276db</code> (excess) or <code class="inl">0xffffffff</code> (bounce). These go into <code class="inl">consumed</code> and get <strong>merged</strong> into the produced block. Nested nodes behave as if both flags are always true — v1 built nested matchers with default flags; IR nodes carry none.</p>
+        </div>
+        <div class="card">
+          <h3 class="amber">Root matcher record — appended</h3>
+          <p class="small">The anchor block's own aux siblings are governed by <code class="inl">include_excess</code> / <code class="inl">include_bounces</code> and appended to the <strong>result list</strong> after a successful build — never merged, never before the build (a rejection must not have to strip them).</p>
+        </div>
+      </div>
+      <figure class="code" data-lang="py">
+        <figcaption><span class="tag">py</span> engine.py — nested absorb (into consumed) vs root append (to result)</figcaption>
+<script type="text/plain">def _absorb_aux(block, ctx):                     # NESTED → consumed → merged
+    for nb in block.next_blocks:
+        if nb.btype == "call_contract" and getattr(nb,"opcode",None) in _AUX_OPCODES:
+            ctx.consume(nb)
+
+# ...in try_build, AFTER a successful build:      ROOT → appended to result list
+result = [produced]
+for nb in block.next_blocks:
+    op = getattr(nb, "opcode", None)
+    if (op == _EXCESS_OPCODE and self._include_excess) \
+            or (op == _BOUNCE_OPCODE and self._include_bounces):
+        result.append(nb)                        # returned alongside, NOT merged</script>
+      </figure>
+      <p class="small muted">R8 asserts the subtle inherited difference: nested aux land in <code class="inl">_mch_consumed</code> and get <code class="inl">.parent</code> set to the produced block; root aux stay parent-less and are returned as separate list elements. <code class="inl">include_*: false</code> is respected at root only.</p>
+    </div>
+  </section>
+
+  <!-- 19 — REJECTION -->
+  <section class="slide tight" data-title="Rejection" data-sect="Walk semantics" data-src="engine.py — try_build / _build (§6)">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">18</span> Walk deep-dive · the rejection channel</div>
+      <h2><code class="inl" style="font-size:.7em">None</code> is a mismatch. <code class="inl" style="font-size:.7em">[ ]</code> is a <span class="em">clean reject</span>.</h2>
+      <div class="grid cols-7-5" style="align-items:start">
+        <figure class="code" data-lang="py">
+          <figcaption><span class="tag">py</span> engine.py:299 — try_build return contract</figcaption>
+<script type="text/plain">async def try_build(self, block):
+    if not self.test_self(block):
+        return None                    # anchor test miss  → structural mismatch
+    ctx = _MatchContext()
+    if not self._match_node(self._root, block, ctx, absorb=False):
+        return None                    # pattern miss      → structural mismatch
+    captures = self._assemble_captures(ctx)
+    produced = await self._build(block, captures, ctx.consumed)
+    if produced is None:
+        return []                      # builder / reject when / EvalError
+    result = [produced]
+    # ... root-level excess/bounce append ...
+    return result                      # [produced, *auto_appended]</script>
+        </figure>
+        <div class="stack">
+          <div class="kv card" style="font-size:12px">
+            <dt class="red">None</dt><dd>structural mismatch — anchor or pattern didn't match</dd>
+            <dt class="amber">[ ]</dt><dd>clean rejection — pattern matched, build declined</dd>
+            <dt class="green">[b, …]</dt><dd>accept — produced block + auto-appended aux</dd>
+          </div>
+          <p class="small">A <code class="inl">reject when</code> firing, a host builder returning <code class="inl">None</code>, or an <code class="inl">EvalError</code> in a build expression all collapse to <code class="inl">[]</code> — logged, never aborting trace processing. No aux blocks are attached to a rejection, and the matcher is immediately reusable.</p>
+          <div class="note tl"><b>R7</b> proves a rejected matcher is reusable and can still succeed on the next block once its state flips.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 20 — SEMANTIC ARCHAEOLOGY -->
+  <section class="slide" data-title="Archaeology" data-sect="Semantics" data-src="engine.py module docstring · tests/mch_ir/test_walker.py">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">19</span> Semantic archaeology</div>
+      <h2>Rewriting against parity <span class="em">extracts</span> undocumented behaviour</h2>
+      <p class="small muted" style="max-width:90ch">Two legacy behaviours contradicted the draft spec. The rewrite pinned each with a test and wrote it into the engine docstring — turning tribal knowledge into a written contract the C++ port must satisfy.</p>
+      <div class="grid cols-2" style="margin-top:6px;align-items:start">
+        <div class="card">
+          <h3 class="amber">① Frontier exhaustion ignores a declared exit</h3>
+          <p class="small">Spec §4.6 said exhaustion should <em>fail</em> when an exit is declared. The legacy <code class="inl">RecursiveMatcher</code> succeeds whenever <strong>≥1 step landed</strong>, regardless of exit presence — a declared exit that never fires just leaves its captures empty.</p>
+          <p class="small muted" style="margin-top:8px">v2 follows legacy: <code class="inl">return iter_index &gt; 0</code>.</p>
+          <p class="pill warn" style="margin-top:8px">test_frontier_exhaustion_leaves_exit_captures_empty</p>
+        </div>
+        <div class="card">
+          <h3 class="amber">② ExclusiveOr's test_self is never consulted by try_build</h3>
+          <p class="small"><code class="inl">ExclusiveOrMatcher</code> overrides only <code class="inl">test_self</code>, which <code class="inl">OrMatcher.try_build</code> never calls. So the exclusivity count gate is <strong>inert as an edge target</strong> and only bites where head tests are consulted — recursion entry and nested head counts.</p>
+          <p class="small muted" style="margin-top:8px"><code class="inl">specs/stonfi_v2_swap.mch</code> depends on this: its hop branches overlap by prefix and must resolve first-match-in-order.</p>
+          <p class="pill warn" style="margin-top:8px">test_r9_exclusive_gate_applies_at_recursion_head_test</p>
+        </div>
+      </div>
+      <p class="note" style="margin-top:12px"><b>The doc even records the correction:</b> the original §4.4 draft gated <code class="inl">match_node</code> on the count unconditionally — that mispinned legacy, and the amendment note in the spec says so.</p>
+    </div>
+  </section>
+
+  <!-- 21 — DETERMINISM -->
+  <section class="slide" data-title="Determinism" data-sect="Semantics" data-src="engine.py §7 · tests/mch_ir/test_walker.py R1/R2">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">20</span> Determinism &amp; concurrency</div>
+      <h2>No <code class="inl" style="font-size:.7em">set()</code> iteration. Immutable matchers. <span class="em">Reentrant.</span></h2>
+      <div class="grid cols-2" style="align-items:start">
+        <div class="stack">
+          <ul class="clean">
+            <li><b>List-order everywhere</b> — candidates, frontiers, branches, children iterate in existing list order. v2 introduces no reordering and never iterates a <code class="inl">set()</code>. (Global <code class="inl">(min_lt, index)</code> ordering is deferred — parity with the compiled path first.)</li>
+            <li><b>Traversal-order consumed</b> — <code class="inl">ctx.consumed</code> is identity-deduped at consume time; <code class="inl">_mch_consumed</code> is that list verbatim, anchor first.</li>
+            <li><b>Two runs, identical output</b> — same bindings, same consumed list. Asserted, not assumed.</li>
+            <li><b>Reentrant by construction</b> — matcher objects carry zero mutable state after load; every attempt gets its own context (a C++ stack object). Traces can run concurrently.</li>
+          </ul>
+        </div>
+        <figure class="code" data-lang="py">
+          <figcaption><span class="tag">test</span> R1 — immutability is asserted structurally</figcaption>
+<script type="text/plain">matcher, captured = _rec_matcher(_REC_SRC_MAYBE)
+assert not hasattr(matcher, "__dict__"), \
+    "matcher must carry no mutable attrs"
+snapshot = _slot_snapshot(matcher)
+
+await matcher.try_build(anchor1)      # 2-hop recursion
+await matcher.try_build(anchor2)      # recursion absent
+
+assert _slot_snapshot(matcher) == snapshot, \
+    "try_build rebound a matcher attr"   # no state bleed</script>
+        </figure>
+      </div>
+      <div class="note tl"><b>Parity comparisons account for legacy's shuffle:</b> the sweep compares <code class="inl">consumed</code> as multisets (sorted tx hashes) and captures field-by-field — the legacy <code class="inl">set()</code> ordering makes its list order meaningless, so v2's determinism is a strict improvement that still round-trips.</div>
+    </div>
+  </section>
+
+  <!-- 22 — EVIDENCE -->
+  <section class="slide" data-title="Evidence" data-sect="Evidence" data-src="tests/mch/integration/test_parity_sweep.py · pytest run at HEAD 5fd4c32d">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">21</span> Evidence · what actually ran</div>
+      <h2>13 matchers × 147 traces → <span class="em">278 pairs · 0 divergences</span></h2>
+      <div class="metrics">
+        <div class="metric"><div class="n">278</div><div class="l">parity pairs (compiled ↔ IR)</div></div>
+        <div class="metric"><div class="n">252</div><div class="l">fired on both paths</div></div>
+        <div class="metric"><div class="n">26</div><div class="l">rejected identically</div></div>
+        <div class="metric"><div class="n green">0</div><div class="l">field-level divergences</div></div>
+      </div>
+      <div class="grid cols-2" style="margin-top:4px;align-items:start">
+        <div class="stack">
+          <table>
+            <thead><tr><th>suite</th><th class="tnum">result</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">tests/mch_ir/ <span class="muted">(incl. 30 walker tests)</span></td><td class="mono green tnum">98 passed</td></tr>
+              <tr><td class="mono">test_ir_engine_parity <span class="muted">(round-trip)</span></td><td class="mono green tnum">19 passed · unmodified</td></tr>
+              <tr><td class="mono">test_parity_sweep <span class="muted">(this sweep)</span></td><td class="mono green tnum">280 passed · 1 skip</td></tr>
+              <tr><td class="mono">tests/mch/ <span class="muted">(full DSL suite)</span></td><td class="mono green tnum">623 passed · 1 skip</td></tr>
+              <tr><td class="mono">tests/test_actions.py <span class="muted">(legacy, untouched)</span></td><td class="mono green tnum">123 passed</td></tr>
+              <tr style="border-top:1px solid var(--line)"><td class="mono teal">aggregate</td><td class="mono teal tnum">844 passed · 1 skipped</td></tr>
+            </tbody>
+          </table>
+          <p class="small muted">Sweep wall-clock ≈ 2.45s. The one skip is <code class="inl">change_dns</code> — its anchor opcodes are absent from the 147-trace corpus, so there's no round-trip pair (surfaced as an <em>explicit</em> skip, covered by a synthetic-trace test).</p>
+        </div>
+        <div class="stack">
+          <div class="card">
+            <h3>The bar for "identical"</h3>
+            <ul class="clean small">
+              <li><b>btype</b>, and every <code class="inl">data</code> key by value <em>and exact type</em>.</li>
+              <li><b>failed</b> / <b>broken</b> flags.</li>
+              <li><b>value_flow.to_dict()</b> — jetton/ton/fees legs.</li>
+              <li><b>consumed</b> event-node multiset (sorted tx hashes, order-independent).</li>
+            </ul>
+          </div>
+          <div class="note tl"><b>Sound fixture prefilter:</b> a pair is generated only when the matcher's anchor opcode set intersects the trace's message opcodes (normalized unsigned). An over-approximation — it may keep a non-firing pair (still a valid "reject identically" check) but never drops one that would fire.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 23 — C++ / ROADMAP -->
+  <section class="slide" data-title="Portability" data-sect="Forward" data-src="docs/mch-engine-v2.md §9 · docs/mch-ir-poc.md — Acceptance">
+    <div class="wrap">
+      <div class="kicker"><span class="idx">22</span> C++ portability &amp; roadmap</div>
+      <h2>The walker is a <span class="em">line-for-line</span> C++ blueprint</h2>
+      <div class="grid cols-2" style="align-items:start">
+        <div class="stack">
+          <div class="card">
+            <h3>Designed to translate literally</h3>
+            <ul class="clean small">
+              <li>Slots are <b>ints</b>, edges are <b>node indices</b>, frames are tuples — no name lookups on the hot path.</li>
+              <li>The entire match phase is <b>synchronous and pure</b>; the single async boundary is the build phase (lookups / builders).</li>
+              <li><code class="inl">_MatchContext</code> = a stack object; <code class="inl">CompiledNode</code>/<code class="inl">IrMatcher</code> immutable → the C++ engine can run traces concurrently.</li>
+            </ul>
+          </div>
+          <div class="note tl"><b>Go POC already proved the structural half:</b> loads the same artifact and reports A/B-identical "Fired matchers" on three validated fixtures (<code class="inl">KYQfjYD1…</code>, <code class="inl">C7bHOfSr…</code>, <code class="inl">c8jOrHqy…</code>).</div>
+        </div>
+        <div class="stack">
+          <h3 style="color:var(--amber)">Follow-ups (deliberately out of this change)</h3>
+          <ul class="clean small">
+            <li><b>JSON-Schema loader validation</b> — structural checks beyond the hand-rolled loader.</li>
+            <li><b>Single sync evaluator + 3-phase batched lookups</b> — collapse the async boundary into one batched round.</li>
+            <li><b>Retire the compiled path</b> — frontend emits IR only; one engine per host.</li>
+            <li><b>T21 global ordering</b> — candidates by <code class="inl">(min_lt, index)</code>.</li>
+            <li><b>The C++ port</b> — translate <code class="inl">CompiledNode</code> / <code class="inl">_MatchContext</code> / <code class="inl">match_node</code> directly.</li>
+          </ul>
+          <div class="note"><b>Scope discipline:</b> the doc lists each of these as explicitly <em>not bundled</em> — v2 replaces only <code class="inl">engine.py</code>'s internals behind a pinned public API.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 24 — CLOSING -->
+  <section class="slide" data-title="Recap" data-sect="Forward" data-src="branch mch-engine-v2 · HEAD 5fd4c32d">
+    <div class="wrap">
+      <div class="hero-mark">Recap</div>
+      <h1>A written abstract machine,<br><span class="teal">extracted from a parity suite</span></h1>
+      <div class="grid cols-2" style="margin-top:10px;align-items:start">
+        <ul class="clean">
+          <li>One <code class="inl">.mch</code> source → one neutral IR → thin per-host interpreters.</li>
+          <li>v2 interprets the node graph directly and binds captures during the walk — the ~250 lines of v1 reconstruction are gone.</li>
+          <li>Undocumented legacy semantics are now pinned by adversarial tests and written into the engine spec.</li>
+          <li>Immutable matchers + per-attempt context make it deterministic and reentrant — ready for concurrent C++.</li>
+        </ul>
+        <div class="stack">
+          <div class="metric"><div class="n green">844<span class="u"> passed</span></div><div class="l">across mch_ir + mch + test_actions (1 skipped)</div></div>
+          <div class="metric"><div class="n">0<span class="u"> divergences</span></div><div class="l">278 compiled ↔ IR parity pairs</div></div>
+        </div>
+      </div>
+      <div class="pillrow" style="margin-top:8px">
+        <span class="pill">docs/mch-engine-v2.md — normative machine spec</span>
+        <span class="pill">docs/mch-ir-poc.md — IR schema contract</span>
+        <span class="pill">indexer/events/mch_ir/engine.py — 578 lines</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- syntax highlighters (single-pass, HTML-safe) ----------
+  function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+  var WORD=/[A-Za-z0-9_]/;
+
+  var MCH_KW=new Set(["matcher","rule","opcode","predicate","produces","entry","build",
+    "op","btype","pred","any","maybe","where","include_excess","include_bounces","priority",
+    "parse","as","let","out","reject","failed","broken","when","switch","else","fn","flow",
+    "omit","lookup","true","false","null","and","or","not","if"]);
+  function hlMch(src){
+    var i=0,n=src.length,out="";
+    while(i<n){
+      var c=src[i];
+      if(c==="#"){var j=i;while(j<n&&src[j]!=="\n")j++;out+='<span class="c">'+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(c==='"'){var j=i+1;while(j<n&&src[j]!=='"'){if(src[j]==="\\")j++;j++;}j++;out+='<span class="s">'+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(c==="@"){var j=i+1;while(j<n&&WORD.test(src[j]))j++;out+='<span class="cap">'+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(c==="$"){var j=i+1;while(j<n&&WORD.test(src[j]))j++;out+='<span class="ref">'+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(c>="0"&&c<="9"){var j=i;while(j<n&&/[0-9a-fA-FxX]/.test(src[j]))j++;out+='<span class="num">'+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(/[A-Za-z_]/.test(c)){var j=i;while(j<n&&WORD.test(src[j]))j++;var w=src.slice(i,j);out+=MCH_KW.has(w)?'<span class="k">'+esc(w)+"</span>":esc(w);i=j;continue;}
+      if("-<>^|=?!:.".indexOf(c)>=0){var j=i;while(j<n&&"-<>^|=?!:.&".indexOf(src[j])>=0)j++;out+='<span class="op">'+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      out+=esc(c);i++;
+    }
+    return out;
+  }
+
+  function hlJson(src){
+    var i=0,n=src.length,out="";
+    while(i<n){
+      var c=src[i];
+      // // line comment (used for annotations in our JSON excerpts)
+      if(c==="/"&&src[i+1]==="/"){var j=i;while(j<n&&src[j]!=="\n")j++;out+='<span class="c">'+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(c==="/"&&src[i+1]==="*"){var j=i+2;while(j<n&&!(src[j]==="*"&&src[j+1]==="/"))j++;j+=2;out+='<span class="c">'+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(c==='"'){
+        var j=i+1;while(j<n&&src[j]!=='"'){if(src[j]==="\\")j++;j++;}j++;
+        var str=src.slice(i,j),k=j;while(k<n&&/\s/.test(src[k]))k++;
+        out+='<span class="'+(src[k]===":"?"jkey":"s")+'">'+esc(str)+"</span>";i=j;continue;
+      }
+      if((c>="0"&&c<="9")||(c==="-"&&/[0-9]/.test(src[i+1]||""))){var j=i+1;while(j<n&&/[0-9eE+\-.]/.test(src[j]))j++;out+='<span class="num">'+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(/[a-z]/.test(c)){var j=i;while(j<n&&/[a-z]/.test(src[j]))j++;var w=src.slice(i,j);out+=(w==="true"||w==="false"||w==="null")?'<span class="lit">'+w+"</span>":esc(w);i=j;continue;}
+      out+=esc(c);i++;
+    }
+    return out;
+  }
+
+  var PY_KW=new Set(["def","class","return","if","elif","else","for","while","in","is","not",
+    "and","or","import","from","async","await","with","as","try","except","finally","raise",
+    "yield","lambda","pass","continue","break","global","nonlocal","del","assert","match","case"]);
+  var PY_LIT=new Set(["None","True","False","self"]);
+  function hlPy(src){
+    var i=0,n=src.length,out="";
+    while(i<n){
+      var c=src[i];
+      if(c==="#"){var j=i;while(j<n&&src[j]!=="\n")j++;out+='<span class="c">'+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(c==='"'||c==="'"){
+        var q=c,triple=(src[i+1]===q&&src[i+2]===q),j;
+        if(triple){j=i+3;while(j<n&&!(src[j]===q&&src[j+1]===q&&src[j+2]===q))j++;j+=3;}
+        else{j=i+1;while(j<n&&src[j]!==q&&src[j]!=="\n"){if(src[j]==="\\")j++;j++;}j++;}
+        out+='<span class="s">'+esc(src.slice(i,j))+"</span>";i=j;continue;
+      }
+      if(c==="@"){var j=i+1;while(j<n&&(WORD.test(src[j])||src[j]==="."))j++;out+='<span class="dec">'+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(c>="0"&&c<="9"){var j=i;while(j<n&&/[0-9a-fA-FxX_.]/.test(src[j]))j++;out+='<span class="num">'+esc(src.slice(i,j))+"</span>";i=j;continue;}
+      if(/[A-Za-z_]/.test(c)){var j=i;while(j<n&&WORD.test(src[j]))j++;var w=src.slice(i,j);
+        out+=PY_KW.has(w)?'<span class="k">'+esc(w)+"</span>":PY_LIT.has(w)?'<span class="num">'+esc(w)+"</span>":esc(w);i=j;continue;}
+      out+=esc(c);i++;
+    }
+    return out;
+  }
+
+  var HL={mch:hlMch,json:hlJson,py:hlPy};
+  document.querySelectorAll("figure.code").forEach(function(fig){
+    var sc=fig.querySelector("script"); if(!sc)return;
+    var raw=sc.textContent.replace(/^\n/,"").replace(/[ \t\r\n]+$/,"");
+    var fn=HL[fig.dataset.lang]||esc;
+    var pre=document.createElement("pre");
+    pre.className="code-pre"+(raw.split("\n").length>18?" sm":"");
+    pre.innerHTML=fn(raw);
+    sc.replaceWith(pre);
+  });
+
+  // ---------- deck navigation ----------
+  var slides=[].slice.call(document.querySelectorAll(".slide"));
+  var N=slides.length, cur=0;
+  var cnum=document.getElementById("cnum"), ctot=document.getElementById("ctot");
+  var sect=document.getElementById("sectlbl"), src=document.getElementById("srclbl");
+  var prog=document.getElementById("prog"), ticks=document.getElementById("ticks");
+  ctot.textContent=String(N).padStart(2,"0");
+
+  slides.forEach(function(s,idx){
+    var t=document.createElement("i"); t.title=s.dataset.title||("Slide "+(idx+1));
+    t.addEventListener("click",function(){go(idx);});
+    ticks.appendChild(t);
+  });
+  var tickEls=[].slice.call(ticks.children);
+
+  function pad(x){return String(x+1).padStart(2,"0");}
+  function render(){
+    slides.forEach(function(s,idx){s.classList.toggle("active",idx===cur);});
+    cnum.textContent=pad(cur);
+    sect.textContent=slides[cur].dataset.sect||"";
+    src.textContent=slides[cur].dataset.src||"";
+    prog.style.width=((cur)/(N-1)*100)+"%";
+    tickEls.forEach(function(t,idx){t.classList.toggle("on",idx===cur);t.classList.toggle("seen",idx<cur);});
+    if(ovOpen)buildOv();
+    try{location.hash=String(cur+1);}catch(e){}
+  }
+  function go(i){cur=Math.max(0,Math.min(N-1,i));slides[cur].scrollTop=0;render();}
+  function next(){if(cur<N-1)go(cur+1);}
+  function prev(){if(cur>0)go(cur-1);}
+
+  // ---------- overview overlay ----------
+  var ov=document.getElementById("ov"), ovOpen=false;
+  function buildOv(){
+    var html='<h4>Overview — '+N+' slides &nbsp;·&nbsp; press o or esc to close</h4><div class="ovgrid">';
+    slides.forEach(function(s,idx){
+      html+='<div class="ovitem'+(idx===cur?" cur":"")+'" data-i="'+idx+'"><span class="n">'+pad(idx)+'</span><span>'+(s.dataset.title||"")+'</span></div>';
+    });
+    ov.innerHTML=html+"</div>";
+    ov.querySelectorAll(".ovitem").forEach(function(el){
+      el.addEventListener("click",function(){toggleOv(false);go(+el.dataset.i);});
+    });
+  }
+  function toggleOv(force){
+    ovOpen=(typeof force==="boolean")?force:!ovOpen;
+    if(ovOpen)buildOv();
+    ov.classList.toggle("show",ovOpen);
+  }
+
+  // ---------- keys ----------
+  document.addEventListener("keydown",function(e){
+    if(e.metaKey||e.ctrlKey||e.altKey)return;
+    var k=e.key;
+    if(k==="o"||k==="O"){e.preventDefault();toggleOv();return;}
+    if(ovOpen){if(k==="Escape"){toggleOv(false);}return;}
+    if(k==="ArrowRight"||k===" "||k==="PageDown"||k==="Spacebar"){e.preventDefault();next();}
+    else if(k==="ArrowLeft"||k==="PageUp"){e.preventDefault();prev();}
+    else if(k==="Home"){e.preventDefault();go(0);}
+    else if(k==="End"){e.preventDefault();go(N-1);}
+    else if(k==="Escape"){toggleOv(true);}
+  });
+
+  // click counter to open overview
+  document.querySelector(".rail.bot .count").style.pointerEvents="auto";
+  document.querySelector(".rail.bot .count").style.cursor="pointer";
+  document.querySelector(".rail.bot .count").addEventListener("click",function(){toggleOv();});
+
+  // deep link (#n) — respond to load AND live hash changes (back/forward too)
+  window.addEventListener("hashchange",function(){
+    var t=parseInt((location.hash||"").slice(1),10);
+    if(t>=1&&t<=N&&t-1!==cur)go(t-1);
+  });
+  var h=parseInt((location.hash||"").slice(1),10);
+  if(h>=1&&h<=N)cur=h-1;
+  render();
+})();
+</script>
+</body>
+</html>

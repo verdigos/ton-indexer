@@ -511,6 +511,19 @@ def _extract_captures(
     return captures
 
 
+def _snapshot_captures(captures: dict[str, Any]) -> dict[str, Any]:
+    """Savepoint for an Or-branch trial. list_binding captures are copied so a
+    rolled-back branch cannot leave partial appends behind; scalars copy by
+    reference (blocks are immutable identities here)."""
+    return {k: (list(v) if isinstance(v, list) else v) for k, v in captures.items()}
+
+
+def _restore_captures(captures: dict[str, Any], snap: dict[str, Any]) -> None:
+    """Restore a captures dict in place from a `_snapshot_captures` savepoint."""
+    for k, v in snap.items():
+        captures[k] = list(v) if isinstance(v, list) else v
+
+
 def _walk_matcher(
     m: BlockMatcher,
     all_blocks: list[Any],
@@ -518,13 +531,23 @@ def _walk_matcher(
     captures: dict[str, Any],
     capture_infos: dict[str, CaptureInfo],
     in_recursion: bool,
-) -> None:
+) -> bool:
     """Positional walker. `in_recursion=True` when called for a per-iteration walk
     inside a recursive rule body — disables the list-binding overwrite guard
     because the per-iter capture dict is scalar-style (list assembly happens in
-    the outer caller's _MchRecursiveMatcher branch)."""
+    the outer caller's _MchRecursiveMatcher branch).
+
+    Returns True when this subtree matched consistently at the cursor (required
+    nodes found their blocks; optional nodes matched or were legitimately
+    absent), False when a REQUIRED node mismatched the block at the cursor. The
+    return value is load-bearing only inside the Or-branch trial below — every
+    other caller runs against the exact consumed-block list the engine already
+    produced, so the walk it commits never fails; the bool is ignored there and
+    the cursor/binding side effects are unchanged."""
     if cursor[0] >= len(all_blocks):
-        return
+        # No block left to match. Success iff the matcher was optional (nothing
+        # required at this position); a required matcher with no block fails.
+        return bool(getattr(m, "optional", False))
 
     if isinstance(m, _MchRecursiveMatcher):
         if in_recursion:
@@ -532,14 +555,14 @@ def _walk_matcher(
             # per-iter capture dicts are scalar-style, list assembly cannot
             # nest. Out of scope; consume the remaining per-iter blocks.
             cursor[0] = len(all_blocks)
-            return
+            return True
         # Participation check: the recorded entry block must lie ahead of the
         # cursor in THIS match's consumed list. Otherwise the recursion did not
         # take part (optional and absent, or the state is stale from another
         # probe/trace) — bind nothing and leave the cursor for the next sibling.
         entry = m._mch_entry_block
         if entry is None or not any(b is entry for b in all_blocks[cursor[0]:]):
-            return
+            return True
         # Per-iteration extraction via the matcher's recorded iteration blocks.
         # Only captures owned by this rule's STEP branches get the one-element-
         # per-unrolling padding (spec §7.2 gap alignment).
@@ -578,25 +601,48 @@ def _walk_matcher(
             cursor[0] += m._mch_result_len
         else:
             cursor[0] = len(all_blocks)
-        return
+        return True
 
     if isinstance(m, RecursiveMatcher):
         # Non-_Mch RecursiveMatcher (defensive — shouldn't occur post-Phase 3).
         cursor[0] = len(all_blocks)
-        return
+        return True
 
     if isinstance(m, OrMatcher):
+        # Align with the v2 IR engine's _match_or (mch_ir/engine.py): try each
+        # branch's FULL positional walk against the remaining consumed slice;
+        # the first branch that fully matches wins, rolling the cursor and
+        # captures back between attempts. This disambiguates same-head XOR
+        # branches (e.g. evaa's two `op EvaaWithdrawCollateralized` arms) that
+        # head-test identically — the previous head-test-only selection always
+        # picked the first head match and bound the wrong branch's captures on
+        # traces shaped for a later branch (@coll_ok on FAIL traces).
+        start = cursor[0]
+        snap = _snapshot_captures(captures)
+        for sub in m.matchers:
+            if _walk_matcher(sub, all_blocks, cursor, captures, capture_infos, in_recursion):
+                return True
+            cursor[0] = start
+            _restore_captures(captures, snap)
+        # No branch fully re-traced. Fall back to the first head-matching
+        # branch, committed the legacy way (walk it, keep whatever it binds).
+        # This never regresses below the pre-alignment behavior when the
+        # positional heuristic cannot fully re-trace even the winning branch's
+        # subtree; it only strengthens the multi-branch same-head case above.
         block = all_blocks[cursor[0]]
         for sub in m.matchers:
             if sub.test_self(block):
                 _walk_matcher(sub, all_blocks, cursor, captures, capture_infos, in_recursion)
-                return
-        return
+                return True
+        return bool(getattr(m, "optional", False))
 
     block = all_blocks[cursor[0]]
     if not m.test_self(block):
-        # This position was optional and the engine skipped it; cursor stays.
-        return
+        # Head mismatch at this position. If the matcher is optional the engine
+        # legitimately skipped it (cursor stays, success); otherwise this is a
+        # structural mismatch — observable only during an Or-branch trial, since
+        # the committed walk always runs against blocks the engine consumed.
+        return bool(getattr(m, "optional", False))
 
     cap = getattr(m, "_mch_capture_name", None)
     if cap is not None and cap in captures:
@@ -610,13 +656,18 @@ def _walk_matcher(
             captures[cap] = block
     cursor[0] += 1
 
+    ok = True
     if m.child_matcher is not None:
-        _walk_matcher(m.child_matcher, all_blocks, cursor, captures, capture_infos, in_recursion)
+        r = _walk_matcher(m.child_matcher, all_blocks, cursor, captures, capture_infos, in_recursion)
+        ok = ok and r
     if m.children_matchers:
         for cm in m.children_matchers:
-            _walk_matcher(cm, all_blocks, cursor, captures, capture_infos, in_recursion)
+            r = _walk_matcher(cm, all_blocks, cursor, captures, capture_infos, in_recursion)
+            ok = ok and r
     if m.parent_matcher is not None:
-        _walk_matcher(m.parent_matcher, all_blocks, cursor, captures, capture_infos, in_recursion)
+        r = _walk_matcher(m.parent_matcher, all_blocks, cursor, captures, capture_infos, in_recursion)
+        ok = ok and r
+    return ok
 
 
 def _lower_relative_to_anchor(
@@ -818,60 +869,52 @@ def _lower_parent_chain_from(
             prepend_previous = True
             start_idx = anchor_idx + 1
         else:
-            # Variant B.2: anchor's incoming edge is CHILD; walk forward through
-            # consecutive PARENT edges.
-            start_idx = anchor_idx + 1
+            # Variant B.2: anchor's incoming edge is CHILD, i.e. an atom upstream
+            # of the anchor (`… -> op Anchor`) is the anchor's parent. Lowering
+            # only walks downstream from the anchor, so every upstream atom would
+            # be silently dropped (T04/T16 `$rule -> anchor…` finding). Reject
+            # rather than misbehave; re-anchor or restructure the pattern.
+            upstream_atom = (
+                parent.head if anchor_idx == 0 else parent.tail[anchor_idx - 1][1]
+            )
+            ctx.bag.error(
+                "C010_UPSTREAM_ATOMS_UNSUPPORTED",
+                "upstream atoms before the anchor are not lowered; re-anchor the "
+                "pattern or restructure — see specs/stonfi_v2_swap.mch",
+                upstream_atom.span if hasattr(upstream_atom, "span") else anchor.span,
+            )
+            raise CompileError(ctx.bag)
 
-    parent_atoms: list[ast_.PatternExpr] = []
+    # Build the parent chain as a single interleaved walk from the anchor's first
+    # parent link outward. PARENT edges extend the chain; CHILD-edged children
+    # blocks attach to the current chain tail (they do not advance the cursor,
+    # spec §6.5), so a `<- op X -> {CB} <- Y` shape wires X with BOTH
+    # children_matchers and parent_matcher — identical to the grouped form
+    # `<- ( op X -> {CB} <- Y )`. A CHILD edge with a non-CB atom (a child branch
+    # off a parent node) is out of scope in v0 and stops the walk.
+    chain_pairs: list[tuple[ast_.Edge, ast_.PatternExpr]] = []
     if prepend_previous:
         anchor_idx = next(i for i, (_e, a) in enumerate(parent.tail) if a is anchor)
         previous_atom = parent.head if anchor_idx == 0 else parent.tail[anchor_idx - 1][1]
-        parent_atoms.append(previous_atom)
-    consumed_idx = start_idx
-    for edge, atom in parent.tail[start_idx:]:
-        if edge is not ast_.Edge.PARENT:
-            break
-        parent_atoms.append(atom)
-        consumed_idx += 1
+        chain_pairs.append((ast_.Edge.PARENT, previous_atom))
 
-    if not parent_atoms:
+    saw_parent_link = prepend_previous
+    for edge, atom in parent.tail[start_idx:]:
+        if edge is ast_.Edge.PARENT:
+            chain_pairs.append((ast_.Edge.PARENT, atom))
+            saw_parent_link = True
+        elif edge is ast_.Edge.CHILD and saw_parent_link and _is_cb_atom(atom):
+            # Children block attaching to the current chain tail.
+            chain_pairs.append((ast_.Edge.CHILD, atom))
+        else:
+            # A non-PARENT edge before any parent link, or a non-CB child branch
+            # off a parent node: out of scope in v0. Stop consuming.
+            break
+
+    if not saw_parent_link:
         return None
 
-    # Lower the parent chain itself.
-    pairs = [(ast_.Edge.PARENT, a) for a in parent_atoms]
-    head_parent = _lower_chain_with_children_attach(pairs, ctx)
-
-    # Q5: any CHILD-edged ChildrenBlocks following the parent chain attach to
-    # the LAST parent matcher (the outermost parent in the chain). They are NOT
-    # consumed as anchor.children_matchers (excluded by _lower_child_chain_from).
-    last_parent: BlockMatcher | None = head_parent
-    if last_parent is not None:
-        # Walk to the deepest parent_matcher.
-        while last_parent.parent_matcher is not None:
-            last_parent = last_parent.parent_matcher
-    for edge, atom in parent.tail[consumed_idx:]:
-        if edge is not ast_.Edge.CHILD:
-            break
-        if isinstance(atom, ast_.ChildrenBlock):
-            cb_items = atom.items
-            optional_items = False
-        elif isinstance(atom, ast_.Maybe) and isinstance(atom.inner, ast_.ChildrenBlock):
-            cb_items = atom.inner.items
-            optional_items = True
-        else:
-            # Non-CB CHILD atom after parent chain — out of scope in v0.
-            break
-        if last_parent is None:
-            break
-        if last_parent.children_matchers is None:
-            last_parent.children_matchers = []
-        for it in cb_items:
-            lowered_it = _lower_atom(it, ctx)
-            if optional_items:
-                lowered_it.optional = True
-            last_parent.children_matchers.append(lowered_it)
-
-    return head_parent
+    return _lower_chain_with_children_attach(chain_pairs, ctx)
 
 
 def _lower_chain_with_children_attach(

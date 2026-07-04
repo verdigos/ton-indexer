@@ -12,6 +12,16 @@ CLASS_TO_BTYPE: dict[str, str] = {
     "JettonBurnBlock": "jetton_burn",
     "JettonMintBlock": "jetton_mint",
     "JettonSwapBlock": "jetton_swap",
+    "LayerZeroReceiveBlock": "layerzero_receive",
+    "EvaaWithdrawBlock": "evaa_withdraw",
+    "TONStakersWithdrawBlock": "tonstakers_withdraw",
+    "TONStakersWithdrawRequestBlock": "tonstakers_withdraw_request",
+    "EthenaDepositBlock": "ethena_deposit",
+    "VestingSendMessageBlock": "vesting_send_message",
+    "ToncoDepositLiquidityBlock": "tonco_deposit_liquidity",
+    "CoffeeCreateVaultBlock": "coffee_create_vault",
+    "DedustDepositLiquidity": "dedust_deposit_liquidity",
+    "DedustDepositLiquidityPartial": "dedust_deposit_liquidity_partial",
 }
 
 

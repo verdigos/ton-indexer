@@ -50,11 +50,12 @@ Goal:
 Accept: test compiles a matcher with scalar + optional + list + btype captures and asserts runtime Match fields and emitted dataclass fields identical in name/order/type; multi-matcher file emission test; unsafe-name `ValueError` test; `emit()` reachable through a documented entry point that exists.
 
 ### T04 — Diagnostics test coverage
-Status: todo
+Status: in-progress — both silent-drop cases resolved (2026-07-04). Bug 1 (flat `… <- op X -> {CB} <- Y`) is now LOWERED correctly: `_lower_parent_chain_from` walks the tail as a single interleaved chain, so a children block no longer terminates parent-chain collection; X gets BOTH children_matchers and parent_matcher, identical to the grouped form. dedust_deposit.mch un-grouped (both matchers), 8 fixtures green. Bug 2 (upstream atoms before the anchor, `$rule -> anchor…` / B.2 CHILD-incoming) now ERRORS with `C010_UPSTREAM_ATOMS_UNSUPPORTED` (was silent drop). Structural + diagnostic tests in tests/mch/test_compiler_structural.py; the B.2 behavioral test in test_compiler_behavioral.py flipped from expecting silent success to asserting C010. Remaining T04 goal (zero-coverage tests for the other codes below) still todo.
 Spec: §12
 Needs: —
-Goal: add tests for diagnostic codes that have zero coverage: `C001_RECURSION_SHAPE_UNSUPPORTED`, `C002_UNKNOWN_BUILDER`, `C003_UNKNOWN_BLOCK_TYPE`, `W900` (stitch deferral; superseded by T05's P011), lexer STRING content path, and the three untested `R007` entry-constraint branches (undefined capture; inside recursive rule; non-op/btype head). Also ADD a new diagnostic (T16 finding): atoms upstream of the anchor in a sequence head (`$rule -> anchor…` shape) are currently SILENTLY DROPPED by `_lower_parent_chain_from` — emit a compile error (or implement upstream-head parent lowering) instead of silent misbehavior.
-Accept: each listed code has at least one asserting test; the silent-drop shape errors or lowers correctly.
+Goal: add tests for diagnostic codes that have zero coverage: `C001_RECURSION_SHAPE_UNSUPPORTED`, `C002_UNKNOWN_BUILDER`, `C003_UNKNOWN_BLOCK_TYPE`, `W900` (stitch deferral; superseded by T05's P011), lexer STRING content path, and the three untested `R007` entry-constraint branches (undefined capture; inside recursive rule; non-op/btype head). ~~Also ADD a new diagnostic (T16 finding): atoms upstream of the anchor in a sequence head (`$rule -> anchor…` shape) are currently SILENTLY DROPPED by `_lower_parent_chain_from`~~ — DONE: emits `C010_UPSTREAM_ATOMS_UNSUPPORTED`.
+~~SECOND silent-drop case (port wave 2026-07-04, dedust_deposit): in a flat parent chain `… <- op X -> { CB } <- Y`, the trailing `<- Y` parent edge after a children block is silently dropped~~ — DONE: the flat form now lowers identically to the grouped form; the dedust_deposit.mch workaround grouping is removed.
+Accept: each listed code has at least one asserting test; both silent-drop shapes error or lower correctly (both silent-drop shapes: DONE).
 
 ### T05 — Remove `stitch`, reserve keywords, add migration error
 Status: todo
@@ -176,6 +177,131 @@ Context: `dev_utils/mch_walk_compare.py` proved jettons/dns walks identical to l
 1. Conformance test placing an exclusive alternative where `test_self` IS consulted directly (recursion step head; nested inside another alternative) — the only placements where OR vs XOR becomes observable. Pin behavior structurally + behaviorally.
 2. Perf: generated `build_block` re-walks the lowered tree to bind captures after matching (`_extract_captures`→`_walk_matcher`, re-calling `test_self` per consumed block — measured 6–25 redundant probes per successful match). Bind captures during the matching walk instead; re-run mch_walk_compare after to confirm walk parity holds and extraction-phase probes are gone.
 Accept: both tests green; zero extraction-phase test_self events in walk-compare output; both suites green.
+
+---
+
+## M2R — Remake wave (inexpressible legacy matchers)
+
+Origin: the 2026-07-04 port wave + follow-up taxonomy classified every matcher the port wave could not express. Verdict (user, 2026-07-04): most are *workarounds around legacy-engine limits*, not domain requirements — remake them in the mch paradigm instead of porting the hacks.
+
+**Remake gate (binding, user decision 2026-07-04):** the internal pattern/walk may differ freely from legacy, but OUTPUT must be identical — produced block btype, `data` (field-level), `failed`/`broken`, `value_flow`, consumed event-node set, **and block topology** (`children_blocks`/`next_blocks` exactly as `serialize_blocks` sees them) — the action hierarchy derives from topology, so block parity is not optional.
+
+Acceptance convention for every R-task below (in addition to per-task Accept):
+1. Three-way parity: legacy == compiled path == v2 IR engine, on every fixture.
+2. `tests/test_actions.py` (123) green, `tests/mch` + `tests/mch_ir` green.
+3. Sweep row added to `tests/mch/integration/test_parity_sweep.py`.
+4. No-fixture protocols use T14-style synthetic-but-faithful trees (real `Transaction/Message → to_tree → init_block`); recording new traces is out of scope (user-side, live DB).
+5. T13 convention where legacy logic is reused (`build_*_core` extraction, legacy matcher becomes thin wrapper); a remake MAY instead write a fresh builder when the legacy build is part of the hack — but then field-parity fixtures carry the whole burden, so cover every legacy branch.
+
+Suggested execution order: R01→R05 (pure remakes, no new features) → R06 `shape` (unlocks R07/R08) → R09/R10 (anchor features) → R11 (=T28) → R12 (after M4 T33).
+
+### R01 — Remake: telegram NFT purchase
+Status: todo
+Tier: opus
+Needs: —
+Legacy: `TelegramNftPurchaseBlockMatcher` (`blocks/nft.py:299`).
+Fixtures: `nft.yaml` "Fragment purchase" ✓.
+Goal: re-derive the trace shape from the legacy matcher + fixture, express directly in `.mch` (expected: plain anchor + children/parent edges; the legacy contortion is a workaround, drop it). Builder reuses legacy field logic via core extraction.
+Accept: field + topology parity on the Fragment fixture; remake gate above.
+
+### R02 — Remake: jvault family
+Status: todo
+Tier: opus
+Needs: —
+Legacy: `JVaultStakeBlockMatcher` / `JVaultUnstakeBlockMatcher` / `JVaultClaimBlockMatcher` / `JVaultUnstakeRequestBlockMatcher` (`blocks/jvault.py:104/207/317/396`).
+Fixtures: `jvault.yaml` ✓.
+Goal: legacy nests recursion where the real shape is flat — port-wave finding: nested recursion flattens to plain children sets + at most one recursion level. One `specs/jvault.mch` for all four matchers.
+Accept: parity on every jvault YAML case; remake gate.
+
+### R03 — Remake: tgBTC mint
+Status: todo
+Tier: opus
+Needs: —
+Legacy: `TgBTCMintBlockMatcher` (`blocks/tgbtc.py:54`).
+Fixtures: `tgbtc.yaml` — 4 mint cases ✓ (incl. two "very long" chains). NOTE: `tgbtc.yaml` currently carries unrelated working-tree edits — do not include them in any MCH commit.
+Goal: re-anchor at the distinctive head `0x3F781D24` with child recursion for the long chain (port-wave sketch); legacy anchors elsewhere and scans. Validate sketch against legacy source before writing the spec.
+Accept: parity on all 4 mint cases incl. very-long chains; remake gate.
+
+### R04 — Remake: stonfi_v2 withdraw liquidity
+Status: todo
+Tier: opus
+Needs: —
+Legacy: `StonfiV2WithdrawLiquidityMatcher` (`blocks/liquidity.py:834`).
+Fixtures: NONE in corpus (no stonfi_v2 liquidity YAML) → synthetic trees per convention #4.
+Goal: legacy does an imperative sibling scan; remake sketch: `anchor <- ( router -> {payout_1; payout_2} )` — burn anchored, both payouts as a children set on the parent router (same shape family as dedust_withdraw, T17). Validate sketch against legacy.
+Accept: synthetic-tree parity covering both payout kinds (jetton / TON) and both orders; remake gate.
+
+### R05 — Remake: nominator pool withdraw
+Status: todo
+Tier: sonnet
+Needs: —
+Legacy: `NominatorPoolWithdrawMatcher` (`blocks/staking.py:407`).
+Fixtures: NONE (no nominator YAML) → synthetic trees; if the shape can't be faithfully synthesized (text-comment-triggered flows), set `blocked(fixtures)` and stop.
+Goal: legacy re-anchors awkwardly; remake with a direct anchor per the port-wave note ("re-anchor per payout"). Verify output granularity stays identical to legacy (same number of produced blocks per trace).
+Accept: synthetic parity or explicit blocked status with findings; remake gate.
+
+### R06 — `shape` directive (post-build tree surgery in host fn)
+Status: todo
+Tier: fable
+Needs: —
+Spec: add §8.7 (directive), §11.1 (registry + contract), IR doc key.
+Context: exactly two legacy matchers mutate the tree beyond `merge_blocks`: `nft.py:244` and `liquidity.py:817` — both `EmptyBlock()` + `insert_between` proxy insertion. `merge_blocks` is already licensed build-phase tree mutation; this is the same class, so it stays host-side but declared.
+Goal:
+1. Matcher directive `shape <fn>`; 6th registry `shapers`; fn signature `(produced_block, match) -> None`, invoked by the engine AFTER `merge_blocks`, both paths (compiled + `mch_ir`).
+2. Contract (spec text): shaper may mutate only the produced block's region — its `next_blocks`/`children_blocks`/consumed set; never upstream siblings outside the region.
+3. IR matcher-record key `"shape": "<fn>"`; loader hard-fails on missing shaper (mch_ir convention); emitter round-trip test.
+4. Diagnostics: unknown shaper at compile/resolve = error (C-code); directive without registry entry = same.
+Accept: synthetic test — shaper inserts EmptyBlock via `insert_between`, three-way topology parity asserted; spec + `docs/mch-ir-poc.md` updated; both suites green.
+
+### R07 — Remake: getgems NFT purchase
+Status: todo
+Tier: opus
+Needs: R06
+Legacy: `GetgemsNftPurchaseBlockMatcher` (`blocks/nft.py:193`; surgery at nft.py:244).
+Fixtures: `nft.yaml` — "Getgems purchase", "Getgems auction purchase" ×2 ✓.
+Goal: pattern remade declaratively; the EmptyBlock proxy insertion moves into a registered `shape` fn (verbatim legacy surgery). Builder via core extraction.
+Accept: parity on all 3 getgems cases incl. inserted-proxy topology; remake gate.
+
+### R08 — Remake: stonfi_v2 provide liquidity (partial/final realignment)
+Status: todo
+Tier: fable
+Needs: R06
+Legacy: `StonfiV2ProvideLiquidityMatcher` (`blocks/liquidity.py:732`; surgery at liquidity.py:817; cross-branch `deposit_part` pairing via GenericMatcher over prior mch-produced blocks).
+Fixtures: NONE → synthetic trees.
+Goal: architecture realignment (class C): split into partial/final matchers dedust-style; pairing/merging stays a host post-process pass (mirror `post_process_dedust_liquidity` — merging is host-side per spec §5.5, hard domain rule); EmptyBlock surgery via `shape`. This intentionally does NOT reproduce the legacy matcher's internal structure — only its outputs.
+Accept: synthetic parity: both-branch trace (post-process merges), single-branch trace (partial survives); topology incl. proxy block identical; remake gate.
+
+### R09 — Multi-kind anchors
+Status: todo
+Tier: opus
+Needs: —
+Spec: §8.3 (extend the T10 M2 clause).
+Goal: `entry @m` on an XOR whose branches mix `op` and `btype` heads, each branch optionally carrying `where`. Anchor lowers to union set-membership (opcode-set ∪ btype-set) + per-branch `where` after membership. Relax the corresponding R007 arms. Survey `event_processing.py` matchers whose `test_self` is `opcode == X or btype == Y`-shaped and list them in this task's done-note (port-wave estimate: ~7 unblocked).
+Accept: behavioral tests (fires on both kinds; where-gated branch); R007 still rejects non-exclusive/maybe placements; survey list recorded.
+
+### R10 — `pred` anchors
+Status: todo
+Tier: opus
+Needs: —
+Spec: §8.3.
+Legacy driver: `NftMintBlockMatcher` (`blocks/nft.py:367`) anchors on a predicate (deployment-count style test), no concrete head.
+Goal: allow `entry` on a `pred`-headed node. No opcode prefilter possible → engine falls back to full-scan test_self; measure cost on the corpus and record it. If cost is unacceptable, alternative is explicit: leave pred-anchored matchers hand-written and close this task with that finding — do not force it.
+Accept: either working pred-anchor with measured overhead + behavioral test, or a documented rejection with numbers.
+
+### R11 — Tonco swap (= T28, step-first recursion strategy)
+Status: todo
+Tier: fable
+Needs: —
+Pointer task: execute **T28** (see M2 above — cyclic child-graph recursion; strategy (a) cyclic descent vs (b) negative lookahead decision lives there). Listed here because it is part of the remake wave's feature batch. Update T28's own status when done.
+
+### R12 — Remake: stonfi v1 swap
+Status: todo
+Tier: fable
+Needs: T33 (M4 inline field predicates); revisit `omit` (§9.9/T36) if predicates alone don't kill the surgery
+Legacy: `StonfiSwapBlockMatcher` (`blocks/swaps.py:189`) — build-side consumption surgery: for `ok_ref` exit codes the referral subtree is bfs-removed from `other_blocks` (build edits the consumed set).
+Fixtures: `stonfi-swaps.yaml` ✓ rich — referral payout, failed, receiver≠sender.
+Goal: with inline field predicates the referral/out disambiguation moves to match time and the consumption surgery disappears; whatever remains imperative goes into a declared `fn`. Last remake — deliberately after M4 lands T33.
+Accept: parity on every stonfi-swaps YAML case incl. referral split + failed; remake gate.
 
 ---
 
@@ -335,3 +461,19 @@ Accept: demonstrated reload with a matcher edit on the dev deployment.
 ## Feature matrix (maintained by T01)
 
 _(appended by T01 — current implementation status vs spec v0.2)_
+
+---
+
+## Port wave 2026-07-04 (branch mch-engine-v2) — broader e2e of the v2 IR engine
+
+Eight matchers ported in one wave (3 complex / 2 medium / 3 easy), each with the T13 convention (`build_*_core` extraction, `.mch` spec, mch builder, field-level parity) PLUS a three-way gate: legacy == compiled == IR-engine on every fixture. Sweep harness (`test_parity_sweep.py`) extended to all new specs: 19 specs, 462 sweep pairs green ×3 runs. Suites: tests/mch + tests/mch_ir = 927 passed / 1 skipped; tests/test_actions.py = 123.
+
+Ported: `dedust_deposit` final+partial (specs/dedust_deposit.mch; post-process merge parity proven — isinstance dispatch works on mch-produced blocks), `evaa_withdraw` (specs/evaa.mch, 4 host preds for EVAA header-skip + service comments), `layerzero_receive` (specs/layerzero.mch; legacy dup label → distinct captures `@execute`/`@oapp_callback`, outer block is the bound one), `tonstakers_withdraw` (specs/tonstakers.mch; first produces-union e2e), `tonco_deposit_liquidity` (specs/tonco_liquidity.mch), `ethena_deposit` (specs/ethena.mch; first btype-anchored spec through the full IR chain), `vesting_send_message` (specs/vesting.mch), `coffee_create_vault` (specs/coffee_liquidity.mch).
+
+Findings folded into tasks/spec:
+- NEW T04 silent-drop case: trailing parent edge after a children block in a flat chain (`<- op X -> {CB} <- Y`) — see T04.
+- COMPILED-PATH capture defect (evaa): post-hoc extraction resolved alternatives by first head-test match, so same-head XOR branches misbound (`@coll_ok` bound on fail traces). FIXED (2026-07-04): the compiled walker's Or/XOR handling (`_walk_matcher` in mch/compiler.py) is aligned with the v2 IR engine's `_match_or` — each branch's FULL positional walk is attempted against the remaining consumed slice under a cursor+captures savepoint, rolled back on failure, and the first fully-matching branch wins (with a legacy first-head-match fallback if none fully re-traces, so it never regresses below prior behavior). On the evaa fail fixtures the compiled Match now binds the FAIL-branch captures (`@coll_fail` / `@fail_excess`), matching the IR engine — proven by `tests/mch/integration/test_evaa_withdraw.py::test_evaa_*_binds_*` and the synthetic `tests/mch/test_compiler_behavioral.py::test_same_head_xor_*`. The consumed-set-driven builders (evaa / stonfi_v2 / dedust_swap) are kept as-is; capture-driven building on the compiled path is now available for same-head XOR shapes.
+- Spec §14.3 marked known-idealized (wrong opcodes, wrong reject/destroy shapes, registration-order inversion); normative = specs/dedust_deposit.mch.
+- TONStakersWithdraw delayed-arm NftMint deliberately NOT captured: capturing would consume it and diverge the consumed set (it stays its own nft_mint action); core reads it via `next_blocks` — faithful maximum.
+- Sweep comparator: `block.data` may be a dataclass (port-wave blocks) — compared via shallow `vars()`; list fields compared as multisets because legacy `compact_connections()` set() rebuild makes order unstable across independently built trees (T21).
+- Registration-order inversion (dedust_deposit): legacy pair runs BEFORE jetton_transfer matcher, mch port runs AFTER — deposit legs match prebuilt `btype jetton_transfer` with raw notify-chain fallback arm; consumed sets identical on all 8 fixtures.
