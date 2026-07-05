@@ -32,7 +32,7 @@ A single `.mch` file is the source of truth for all host languages. **Behaviour 
 | **M2 — Pattern completeness** | XOR `^`, attach-to-left children blocks, multi-hop parent chains, list bindings, opcode-set anchors, `produces` union, same-name captures across exclusive branches | jetton_mint, stonfi_v2_swap, dedust_swap, dedust_withdraw, tonco, coffee |
 | **M3 — Integration** | `priority`, determinism pins, build-rejection contract, production wiring behind feature flag, corpus parity harness | dedust_deposit_liquidity (host post-process merge), production rollout |
 | **M4 — Build language** | `parse`, `let`/`lookup`, `out`, `reject/failed/broken when`, inline field predicates, `produces switch`, `flow`, `fn` | build bodies become declarative; host fns only for corner cases |
-| **M5 — IR & C++** | Neutral IR artifact, Python engine consumes IR, C++ engine consumes IR, cross-language fidelity harness, hot reload | C++ indexer runs the same matchers |
+| **M5 — IR & C++** | Neutral IR artifact, Python engine consumes IR, C++ engine consumes IR, cross-language fidelity harness | C++ indexer runs the same matchers |
 
 Status tracking and the ordered task list live in `docs/mch-roadmap.md`.
 
@@ -752,7 +752,7 @@ Each engine (Python, C++) ships only a thin loader + interpreter for this IR. Co
 
 - Parity surface shrinks from "two compilers agree on a grammar" to "two small VMs agree on an instruction set" — testable with golden vectors.
 - Diagnostics (§13) are implemented once.
-- The C++ worker can **hot-reload** matcher changes as a data artifact without rebuilding the binary (builds happen only on the remote Linux server; this materially shortens the iteration loop).
+- The C++ worker loads the artifact once at startup (or embeds it at build time). Hot reload is explicitly out of scope — no reload, versioning, or invalidation machinery (user decision 2026-07-05).
 - Golden IR fixtures make compiler regressions diffable.
 
 Until M5, the Python compiler may keep lowering directly to engine objects; the IR is introduced as the artifact boundary when the C++ engine work starts. Design decisions from M4 onward (especially the expression language) must stay IR-friendly.

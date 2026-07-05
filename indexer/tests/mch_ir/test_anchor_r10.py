@@ -3,8 +3,8 @@
 A `pred`-headed `entry` compiles to an anchor with NO opcode/btype prefilter:
 `test_self` is the predicate itself, full-scanned over every candidate block.
 The spec is frontend-compiled, emitted (asserting the `pred` anchor record),
-loaded and wired; the IR matcher's behavior is compared against the compiled
-matcher (compiled == IR) on synthetic blocks.
+loaded and wired; the IR matcher's behavior is then exercised on synthetic
+blocks.
 """
 from __future__ import annotations
 
@@ -63,39 +63,36 @@ def _both(reg):
     compiled = compile_text(_PRED_SRC, "test.mch", reg)
     artifact = emit_ir(compiled, ["test.mch"])
     ir = build_matchers(load_artifact(artifact), reg)[0]
-    return compiled[0].matcher, ir, artifact
+    return ir, artifact
 
 
-def test_r10_pred_anchor_emits_pred_record_and_matches_both_engines():
+def test_r10_pred_anchor_emits_pred_record_and_matches():
     reg, _ = _registries()
-    compiled, ir, artifact = _both(reg)
+    ir, artifact = _both(reg)
 
     # No prefilter kind — the anchor record names the predicate.
     assert artifact["matchers"][0]["anchor"] == {"kind": "pred", "pred": "is_marked"}
 
     # Full-scan test_self: fires on ANY block the predicate accepts, regardless
-    # of opcode/btype; compiled and IR agree.
+    # of opcode/btype.
     cases = [
         _cc(0x1, marked=True),
         _cc(0x1, marked=False),
         _bt("jetton_transfer", marked=True),
         _bt("anything", marked=False),
     ]
-    for blk in cases:
-        assert compiled.test_self(blk) == ir.test_self(blk), blk
     assert [ir.test_self(b) for b in cases] == [True, False, True, False]
 
 
 @pytest.mark.asyncio
-async def test_r10_pred_anchor_gates_try_build_both_engines():
-    # The pred anchor gates try_build identically on both engines: an unmarked
-    # block is a structural mismatch (test_self False) and never reaches the
-    # build phase. (The build phase itself is unchanged by R10 and is exercised
-    # with full fake event-node fixtures in test_engine.py.)
+async def test_r10_pred_anchor_gates_try_build():
+    # The pred anchor gates try_build: an unmarked block is a structural mismatch
+    # (test_self False) and never reaches the build phase. (The build phase itself
+    # is unchanged by R10 and is exercised with full fake event-node fixtures in
+    # test_engine.py.)
     reg, seen = _registries()
-    compiled, ir, _ = _both(reg)
+    ir, _ = _both(reg)
 
     unmarked = _cc(0x1, marked=False)
-    assert await compiled.try_build(unmarked) is None
     assert await ir.try_build(unmarked) is None
     assert seen == []  # builder never invoked

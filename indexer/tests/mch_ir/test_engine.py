@@ -131,10 +131,6 @@ def _ir_matcher(src: str, reg: Registries | None = None):
     return build_matchers(art, reg)[0]
 
 
-def _compiled_matcher(src: str, reg: Registries | None = None):
-    return compile_text(src, "test.mch", reg or _registries())[0].matcher
-
-
 def _foo_bar_tree(amount: int = 777, bar_failed: bool = False):
     anchor = _FakeCC(OP_FOO, body=_body(amount), lt=10)
     bar = _FakeCC(OP_BAR, lt=20, failed=bar_failed)
@@ -186,14 +182,6 @@ async def test_declarative_matcher_matches_compiled_output():
     # Consumption: both pattern blocks absorbed into the produced block.
     assert anchor.parent is produced
     assert bar.parent is produced
-
-    # Field-level parity with the compiled matcher on an identical fresh tree.
-    anchor2, _ = _foo_bar_tree(amount=777)
-    (hw,) = await _compiled_matcher(_HAPPY_SRC).try_build(anchor2)
-    assert produced.btype == hw.btype
-    assert produced.data == hw.data
-    assert produced.failed == hw.failed and produced.broken == hw.broken
-    assert produced.value_flow.to_dict() == hw.value_flow.to_dict()
 
 
 @pytest.mark.asyncio
@@ -495,18 +483,12 @@ async def test_recursion_list_captures_bind_per_iteration():
     assert seen["fin_lts"] == [40]       # exit binds once, on termination
     assert seen["consumed_lts"] == [10, 20, 30, 40]
 
-    # Parity: the compiled matcher binds the same shapes on an identical tree.
-    seen_hw: dict = {}
-    hw = _compiled_matcher(_REC_SRC, _rec_registries(seen_hw))
-    await hw.try_build(_hop_tree())
-    assert seen_hw == seen
-
 
 @pytest.mark.asyncio
 async def test_optional_recursion_absent_binds_empty_lists():
     # The recursion's test_self is the STEP test, so an exit-only child means
     # the optional recursion does not participate at all: both lists stay
-    # empty and only the anchor is consumed (same as the compiled matcher).
+    # empty and only the anchor is consumed.
     def tree():
         foo = _FakeCC(OP_FOO, lt=10)
         end = _FakeCC(OP_END, lt=20)
@@ -520,11 +502,6 @@ async def test_optional_recursion_absent_binds_empty_lists():
     assert seen["hop_lts"] == []
     assert seen["fin_lts"] == []
     assert seen["consumed_lts"] == [10]
-
-    seen_hw: dict = {}
-    hw = _compiled_matcher(_REC_SRC, _rec_registries(seen_hw))
-    await hw.try_build(tree())
-    assert seen_hw == seen
 
 
 # ==========================================================================
@@ -544,16 +521,16 @@ async def test_where_expr_gates_child_match():
         out { v: 1 }
     }
     """
-    for m in (_ir_matcher(src), _compiled_matcher(src)):
-        anchor, bar = _foo_bar_tree()
-        bar.data = {"value": 10}
-        (produced,) = await m.try_build(anchor)
-        assert produced.data == {"v": 1}
+    m = _ir_matcher(src)
+    anchor, bar = _foo_bar_tree()
+    bar.data = {"value": 10}
+    (produced,) = await m.try_build(anchor)
+    assert produced.data == {"v": 1}
 
-        anchor2, bar2 = _foo_bar_tree()
-        bar2.data = {"value": 3}
-        assert await m.try_build(anchor2) is None
-        assert anchor2.parent is None
+    anchor2, bar2 = _foo_bar_tree()
+    bar2.data = {"value": 3}
+    assert await m.try_build(anchor2) is None
+    assert anchor2.parent is None
 
 
 _WHERE_DATA_SRC = """
@@ -579,27 +556,25 @@ def _jt_tree(data):
 @pytest.mark.asyncio
 async def test_where_expr_data_check_replaces_generic_matcher():
     """T33 Accept: a GenericMatcher-style `.has_internal_transfer == false`
-    data check expressed inline, identical on the compiled and IR paths —
-    including the missing-field => False and data=None => False rules."""
+    data check expressed inline — including the missing-field => False and
+    data=None => False rules."""
     reg = _registries()
     reg.block_types["jetton_transfer"] = object
-    ir_m = _ir_matcher(_WHERE_DATA_SRC, reg)
-    c_m = _compiled_matcher(_WHERE_DATA_SRC, reg)
+    m = _ir_matcher(_WHERE_DATA_SRC, reg)
 
-    for m in (ir_m, c_m):
-        (produced,) = await m.try_build(_jt_tree({"has_internal_transfer": False}))
-        assert produced.data == {"v": 1}
-        # True fails the == false test.
-        assert await m.try_build(_jt_tree({"has_internal_transfer": True})) is None
-        # Missing field and absent data evaluate to False, never an error.
-        assert await m.try_build(_jt_tree({})) is None
-        assert await m.try_build(_jt_tree(None)) is None
+    (produced,) = await m.try_build(_jt_tree({"has_internal_transfer": False}))
+    assert produced.data == {"v": 1}
+    # True fails the == false test.
+    assert await m.try_build(_jt_tree({"has_internal_transfer": True})) is None
+    # Missing field and absent data evaluate to False, never an error.
+    assert await m.try_build(_jt_tree({})) is None
+    assert await m.try_build(_jt_tree(None)) is None
 
 
 @pytest.mark.asyncio
 async def test_where_expr_on_anchor_node():
-    """T33 anchor decision: anchor-node where_expr is supported on both paths
-    (emitted on the root node record; composed onto compiled test_self)."""
+    """T33 anchor decision: anchor-node where_expr rides on the root node record
+    and the IR engine evaluates it as part of the root's head test."""
     src = """
     matcher wa {
         produces FB
@@ -610,21 +585,21 @@ async def test_where_expr_on_anchor_node():
         out { v: 1 }
     }
     """
-    for m in (_ir_matcher(src), _compiled_matcher(src)):
-        anchor, _bar = _foo_bar_tree()
-        anchor.data = {"kind": "swap"}
-        (produced,) = await m.try_build(anchor)
-        assert produced.data == {"v": 1}
+    m = _ir_matcher(src)
+    anchor, _bar = _foo_bar_tree()
+    anchor.data = {"kind": "swap"}
+    (produced,) = await m.try_build(anchor)
+    assert produced.data == {"v": 1}
 
-        anchor2, _bar2 = _foo_bar_tree()
-        anchor2.data = {"kind": "transfer"}
-        assert await m.try_build(anchor2) is None
-        # data=None dotfield => null => == fails; no error, just no match.
-        # (IrMatcher.test_self checks only the anchor record — where clauses
-        # are re-checked inside try_build — so parity is asserted there.)
-        anchor3, _bar3 = _foo_bar_tree()
-        anchor3.data = None
-        assert await m.try_build(anchor3) is None
+    anchor2, _bar2 = _foo_bar_tree()
+    anchor2.data = {"kind": "transfer"}
+    assert await m.try_build(anchor2) is None
+    # data=None dotfield => null => == fails; no error, just no match.
+    # (IrMatcher.test_self checks only the anchor record — where clauses are
+    # re-checked inside try_build.)
+    anchor3, _bar3 = _foo_bar_tree()
+    anchor3.data = None
+    assert await m.try_build(anchor3) is None
 
 
 # ==========================================================================

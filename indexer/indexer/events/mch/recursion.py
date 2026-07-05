@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol
-
-if TYPE_CHECKING:
-    from indexer.events.blocks.basic_matchers import BlockMatcher
-    from indexer.events.mch.resolver import ResolvedMatcher
+from typing import Any, Protocol
 
 
 class RecursionStrategy(Protocol):
-    """Lowers a recursive rule reference to an engine matcher.
+    """Lowers a recursive rule reference to a lowered IR node.
 
     v0 default implementation lives at the bottom of this module.
     Future swap-in: BoundedUnrollingStrategy, SubclassPerRuleStrategy.
@@ -18,15 +14,15 @@ class RecursionStrategy(Protocol):
         self,
         rule_name: str,
         ctx: Any,                  # CompileCtx, typed at the call site
-    ) -> "BlockMatcher":
+    ) -> Any:                      # compiler.LNode, typed at the call site
         ...
 
 
 class RecursiveMatcherStrategy:
-    """v0: lowers a recursive rule reference to a RecursiveMatcher instance.
+    """v0: lowers a recursive rule reference to a frontier `recursive` IR node.
 
-    Implementation lives in compiler.py for now (it needs the compiler's lowering helpers).
-    This class is a placeholder that the compiler instantiates and uses; the actual
-    behavior is invoked through compiler.CompileCtx.
+    Implementation lives in compiler.py (it needs the compiler's lowering
+    helpers). This class is a placeholder that the compiler instantiates; the
+    actual behavior is invoked through compiler.CompileCtx.
     """
     pass

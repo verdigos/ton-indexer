@@ -2,8 +2,7 @@
 
 Each spec is frontend-compiled, emitted to IR (asserting the `mixed` anchor
 record), loaded, and wired by mch_ir. The IR matcher's anchor `test_self` is
-compared against the compiled matcher's `test_self` on the same synthetic blocks
-(compiled == IR); a where-gated branch must reject on both engines.
+then exercised on synthetic blocks; a where-gated branch must reject.
 """
 from __future__ import annotations
 
@@ -44,12 +43,12 @@ def _registries(**opcodes: int) -> Registries:
 
 
 def _both(src: str, reg: Registries):
-    """(compiled_matcher, ir_matcher, ir_artifact) from one spec + registries."""
+    """(ir_matcher, ir_artifact) from one spec + registries."""
     compiled = compile_text(src, "test.mch", reg)
     artifact = emit_ir(compiled, ["test.mch"])
     art = load_artifact(artifact)
     ir = build_matchers(art, reg)[0]
-    return compiled[0].matcher, ir, artifact
+    return ir, artifact
 
 
 _PER_BRANCH_WHERE_SRC = """
@@ -76,7 +75,7 @@ matcher m {
 
 def test_r09_per_branch_where_emits_mixed_and_matches_both_engines():
     reg = _registries(A=0x1, B=0x2)
-    compiled, ir, artifact = _both(_PER_BRANCH_WHERE_SRC, reg)
+    ir, artifact = _both(_PER_BRANCH_WHERE_SRC, reg)
 
     # Emitted anchor is the `mixed` branch form; the where-carrying branch keeps
     # its predicate name.
@@ -92,14 +91,12 @@ def test_r09_per_branch_where_emits_mixed_and_matches_both_engines():
         _cc(0x99),                # off-membership -> False
         _bt("jetton_transfer"),   # wrong kind entirely -> False
     ]
-    for blk in cases:
-        assert compiled.test_self(blk) == ir.test_self(blk), blk
     assert [ir.test_self(b) for b in cases] == [True, True, False, False, False]
 
 
 def test_r09_mixed_op_btype_with_where_both_engines():
     reg = _registries(A=0x1)
-    compiled, ir, artifact = _both(_MIXED_WHERE_SRC, reg)
+    ir, artifact = _both(_MIXED_WHERE_SRC, reg)
 
     assert artifact["matchers"][0]["anchor"] == {
         "kind": "mixed",
@@ -113,8 +110,6 @@ def test_r09_mixed_op_btype_with_where_both_engines():
         _bt("other"),             # wrong btype -> False
         _cc(0x99),                # off-membership -> False
     ]
-    for blk in cases:
-        assert compiled.test_self(blk) == ir.test_self(blk), blk
     assert [ir.test_self(b) for b in cases] == [True, False, True, False, False]
 
 
@@ -122,7 +117,7 @@ def test_r09_pure_single_kind_group_unchanged():
     """A pure single-kind XOR with no branch `where` still emits the T10
     `opcode_set` form (regression guard for 'keep old kinds unchanged')."""
     reg = _registries(A=0x1, B=0x2)
-    _, _, artifact = _both(
+    _, artifact = _both(
         """
         opcode A = 0x1
         opcode B = 0x2

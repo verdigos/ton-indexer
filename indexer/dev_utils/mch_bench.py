@@ -1,11 +1,15 @@
-"""T29 stage-1 item 2 — benchmark the three MCH matcher runtimes.
+"""T29 — benchmark the MCH matcher runtimes.
 
 For every spec row in the parity sweep's `_SPEC_TABLE` and every corpus fixture
 that row's opcode anchors could fire on, time the *matcher pass + build* for:
 
     legacy    - the hand-written BlockMatcher(s) in indexer/events/blocks/*.py
-    compiled  - compile_file(spec, registries)                 (frontend)
     ir        - compile_file -> emit_ir -> load_artifact -> build_matchers
+
+The compiled frontend leg was deleted in T29 stage 2 (the frontend now lowers
+straight to IR node records — there is no runnable compiled matcher); the
+benchmark is legacy-vs-IR only. `mch_bench_results.md` retains the historical
+three-runtime table with a note marking its `compiled` column pre-stage-2.
 
 Methodology
 -----------
@@ -13,7 +17,8 @@ Methodology
   prelude are REUSED verbatim from tests/mch/integration/test_parity_sweep.py
   (imported directly: `_SPEC_TABLE`, `_MATCHERS`, `_TRACE_CACHE`,
   `_build_block_tree`, `compile_file`, `emit_ir`, `_mch_ir`). No plumbing is
-  reinvented.
+  reinvented. `compile_file` is still called once per row to produce the IR
+  emit source; its `CompiledMatcher.root` graph is not run directly.
 * Matching mutates the block tree, so a FRESH tree is built for every timed run
   and never reused. Tree construction and the prereq passes are OUTSIDE the
   timed region (they are identical across the three modes, so they cancel).
@@ -174,7 +179,7 @@ async def main() -> None:
     skipped: list[tuple[str, str]] = []
 
     # Aggregate ns accumulators (sum of per-trace medians across the corpus).
-    agg = {"legacy": 0, "compiled": 0, "ir": 0}
+    agg = {"legacy": 0, "ir": 0}
 
     for spec_key, path, factory, prereqs in sweep._SPEC_TABLE:
         if spec_key not in LEGACY_FOR:
@@ -185,10 +190,10 @@ async def main() -> None:
             skipped.append((spec_key, "no candidate fixture (anchor absent from corpus)"))
             continue
 
-        # Build the three matcher sets ONCE, outside timing.
+        # Build the matcher sets ONCE, outside timing. `compiled` is the IR emit
+        # source only (its node graph is not run — no compiled runtime exists).
         try:
             compiled = sweep.compile_file(path, factory())
-            compiled_matchers = [cm.matcher for cm in compiled]
             artifact = sweep.emit_ir(compiled, [path.name])
             art = sweep._mch_ir.load_artifact(artifact)
             ir_matchers = list(sweep._mch_ir.build_matchers(art, factory()))
@@ -198,13 +203,12 @@ async def main() -> None:
             skipped.append((spec_key, f"build error {type(ex).__name__}: {ex}"))
             continue
 
-        per = {"legacy": [], "compiled": [], "ir": []}
+        per = {"legacy": [], "ir": []}
         for fn in fixtures:
             trace, interfaces, _ops = sweep._TRACE_CACHE[fn]
             context.interface_repository.set(TestInterfaceRepository(interfaces))
             try:
                 per["legacy"].append(await _median_ns(legacy_matchers, prereq_instances, trace))
-                per["compiled"].append(await _median_ns(compiled_matchers, prereq_instances, trace))
                 per["ir"].append(await _median_ns(ir_matchers, prereq_instances, trace))
             except Exception as ex:
                 skipped.append((f"{spec_key}::{fn}", f"run error {type(ex).__name__}: {ex}"))
@@ -222,19 +226,16 @@ async def main() -> None:
             agg[k] += sum(per[k])
 
         leg_med = statistics.median(per["legacy"]) / 1000.0
-        cmp_med = statistics.median(per["compiled"]) / 1000.0
         ir_med = statistics.median(per["ir"]) / 1000.0
         rows.append({
             "matcher": spec_key,
             "n": len(per["ir"]),
             "legacy_us": leg_med,
-            "compiled_us": cmp_med,
             "ir_us": ir_med,
             "ir_ratio": (ir_med / leg_med) if leg_med else float("nan"),
-            "cmp_ratio": (cmp_med / leg_med) if leg_med else float("nan"),
         })
         print(f"  done {spec_key:34s} n={len(per['ir']):3d}  "
-              f"legacy={leg_med:8.1f}us compiled={cmp_med:8.1f}us ir={ir_med:8.1f}us  "
+              f"legacy={leg_med:8.1f}us ir={ir_med:8.1f}us  "
               f"ir/legacy={rows[-1]['ir_ratio']:.2f}")
 
     _emit(rows, skipped, agg)
@@ -242,30 +243,26 @@ async def main() -> None:
 
 def _emit(rows: list[dict], skipped: list, agg: dict) -> None:
     overall_ir = (agg["ir"] / agg["legacy"]) if agg["legacy"] else float("nan")
-    overall_cmp = (agg["compiled"] / agg["legacy"]) if agg["legacy"] else float("nan")
 
-    hdr = f"{'matcher':34s} {'n':>4s} {'legacy us':>11s} {'compiled us':>12s} {'ir us':>10s} {'ir/leg':>7s} {'cmp/leg':>8s}"
+    hdr = f"{'matcher':34s} {'n':>4s} {'legacy us':>11s} {'ir us':>10s} {'ir/leg':>7s}"
     sep = "-" * len(hdr)
     lines = [hdr, sep]
     for r in sorted(rows, key=lambda x: x["ir_ratio"], reverse=True):
         lines.append(
             f"{r['matcher']:34s} {r['n']:>4d} {r['legacy_us']:>11.1f} "
-            f"{r['compiled_us']:>12.1f} {r['ir_us']:>10.1f} "
-            f"{r['ir_ratio']:>7.2f} {r['cmp_ratio']:>8.2f}"
+            f"{r['ir_us']:>10.1f} {r['ir_ratio']:>7.2f}"
         )
     lines.append(sep)
     lines.append(
         f"{'AGGREGATE (sum-of-medians)':34s} {'':>4s} "
-        f"{agg['legacy']/1000.0:>11.1f} {agg['compiled']/1000.0:>12.1f} "
-        f"{agg['ir']/1000.0:>10.1f} {overall_ir:>7.2f} {overall_cmp:>8.2f}"
+        f"{agg['legacy']/1000.0:>11.1f} {agg['ir']/1000.0:>10.1f} {overall_ir:>7.2f}"
     )
     table = "\n".join(lines)
 
     gate = "PASS" if overall_ir <= 1.5 else "FAIL"
     verdict = (
         f"Gate: IR engine within ~1.5x of legacy per-trace match time.\n"
-        f"Overall IR/legacy = {overall_ir:.2f}x  ->  {gate}\n"
-        f"Overall compiled/legacy = {overall_cmp:.2f}x"
+        f"Overall IR/legacy = {overall_ir:.2f}x  ->  {gate}"
     )
 
     print("\n" + table + "\n\n" + verdict)
@@ -275,34 +272,32 @@ def _emit(rows: list[dict], skipped: list, agg: dict) -> None:
             print(f"  {k}: {why}")
 
     md = [
-        "# MCH matcher runtime benchmark (T29 stage 1, item 2)",
+        "# MCH matcher runtime benchmark (T29)",
         "",
         f"Generated by `dev_utils/mch_bench.py` on {time.strftime('%Y-%m-%d')}.",
         "",
-        "Three runtimes timed over the parity-sweep spec table x the "
-        "`tests/traces/` corpus: legacy hand-written matchers, the mch compiled "
-        "path, and the v2 IR engine. Fresh block tree per timed run; tree build "
-        "and prereq passes excluded from the timed region; 2 warmup + 5 timed "
-        "runs per (row, trace, mode), median of the 5. Times are median "
-        "microseconds per trace across each row's candidate fixtures.",
+        "Two runtimes timed over the parity-sweep spec table x the "
+        "`tests/traces/` corpus: legacy hand-written matchers and the v2 IR "
+        "engine. (The compiled frontend leg was deleted in T29 stage 2.) Fresh "
+        "block tree per timed run; tree build and prereq passes excluded from "
+        "the timed region; 2 warmup + 5 timed runs per (row, trace, mode), "
+        "median of the 5. Times are median microseconds per trace across each "
+        "row's candidate fixtures.",
         "",
-        "| matcher | n_traces | legacy us | compiled us | IR us | IR/legacy | compiled/legacy |",
-        "|---|--:|--:|--:|--:|--:|--:|",
+        "| matcher | n_traces | legacy us | IR us | IR/legacy |",
+        "|---|--:|--:|--:|--:|",
     ]
     for r in sorted(rows, key=lambda x: x["ir_ratio"], reverse=True):
         md.append(
             f"| {r['matcher']} | {r['n']} | {r['legacy_us']:.1f} | "
-            f"{r['compiled_us']:.1f} | {r['ir_us']:.1f} | {r['ir_ratio']:.2f} | "
-            f"{r['cmp_ratio']:.2f} |"
+            f"{r['ir_us']:.1f} | {r['ir_ratio']:.2f} |"
         )
     md.append(
         f"| **AGGREGATE (sum-of-medians)** | | {agg['legacy']/1000.0:.1f} | "
-        f"{agg['compiled']/1000.0:.1f} | {agg['ir']/1000.0:.1f} | "
-        f"**{overall_ir:.2f}** | {overall_cmp:.2f} |"
+        f"{agg['ir']/1000.0:.1f} | **{overall_ir:.2f}** |"
     )
     md += ["", "## Gate verdict", "",
-           f"- Overall IR/legacy = **{overall_ir:.2f}x** -> **{gate}** (gate: <= ~1.5x).",
-           f"- Overall compiled/legacy = {overall_cmp:.2f}x."]
+           f"- Overall IR/legacy = **{overall_ir:.2f}x** -> **{gate}** (gate: <= ~1.5x)."]
     if skipped:
         md += ["", "## Skipped rows", ""]
         for k, why in skipped:

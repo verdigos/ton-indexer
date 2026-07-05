@@ -1,11 +1,10 @@
-"""MCH IR emitter (POC) — serializes lowered matcher graphs per docs/mch-ir-poc.md.
+"""MCH IR emitter (POC) — serializes lowered node graphs per docs/mch-ir-poc.md.
 
-Walks the instantiated engine-object graph produced by the compiler (approach:
-the compiler stamps lightweight ``_ir_*`` attributes at its lowering sites, so
-the emitted IR is faithful to the actual lowering by construction). Node ids
-are per-matcher DFS pre-order from the anchor node; the recursion order at each
-node is: or-branches / recursive step then exit, then child, then children set
-items, then parent. Two runs over the same specs yield byte-identical output.
+Walks the ``LNode`` graph the compiler lowers each ``.mch`` matcher into (plain
+records, no engine primitives). Node ids are per-matcher DFS pre-order from the
+anchor node; the recursion order at each node is: or-branches / recursive step
+then exit, then child, then children set items, then parent. Two runs over the
+same specs yield byte-identical output.
 
 CLI::
 
@@ -22,19 +21,10 @@ import argparse
 import json
 from pathlib import Path
 
-from indexer.events.blocks.basic_matchers import (
-    BlockMatcher,
-    BlockTypeMatcher,
-    ContractMatcher,
-    ExclusiveOrMatcher,
-    GenericMatcher,
-    OrMatcher,
-    RecursiveMatcher,
-)
 from indexer.events.mch import ast_
 from indexer.events.mch.btypes import produces_btype
 from indexer.events.mch.compile import compile_file
-from indexer.events.mch.compiler import CompiledMatcher
+from indexer.events.mch.compiler import CompiledMatcher, LNode
 from indexer.events.mch.expr_ir import IR_VERSION, emit_expr as _emit_expr
 from indexer.events.mch.lexer import tokenize
 from indexer.events.mch.parser import parse
@@ -111,116 +101,107 @@ def build_stub_registries(files: list[ast_.File]) -> Registries:
 # ---------------------------------------------------------------------------
 
 
-def _emit_node(m: BlockMatcher, nodes: list[dict], memo: dict[int, int]) -> int:
-    """Append `m`'s node record (and its subtree) to `nodes`; return its id.
+def _emit_node(n: LNode, nodes: list[dict], memo: dict[int, int]) -> int:
+    """Append `n`'s node record (and its subtree) to `nodes`; return its id.
 
     Already-seen objects return their existing id (back-reference), which both
     handles shared sub-objects and guarantees termination on cyclic graphs.
     """
-    existing = memo.get(id(m))
+    existing = memo.get(id(n))
     if existing is not None:
         return existing
 
-    # Cyclic-strategy rule references (§10.3 cyclic descent, [M2R, R11/T28]).
-    # An in-body self-reference is a true back-edge: no node of its own, it
-    # resolves to the shared body root's id (the memo guarantees the cycle
-    # terminates). An outer reference emits a `recursive` node with
-    # `strategy: "cyclic"` and the body root as `step` (never an `exit`).
-    cyclic_target = getattr(m, "_mch_cyclic_target", None)
-    if cyclic_target is not None and getattr(m, "_mch_cyclic_inner", False):
-        target_id = _emit_node(cyclic_target, nodes, memo)
-        memo[id(m)] = target_id
+    # Cyclic-strategy in-body self-reference (§10.3 cyclic descent, [M2R,
+    # R11/T28]): a true back-edge — no node of its own, it resolves to the shared
+    # body root's id (the memo guarantees the cycle terminates).
+    if n.kind == "cyclic_ref":
+        target_id = _emit_node(n.target, nodes, memo)
+        memo[id(n)] = target_id
         return target_id
 
     node_id = len(nodes)
-    memo[id(m)] = node_id
+    memo[id(n)] = node_id
     rec: dict = {}
     nodes.append(rec)
 
-    if cyclic_target is not None:
+    if n.kind == "recursive" and n.strategy == "cyclic":
+        # Outer cyclic reference: a `recursive` node with `strategy: "cyclic"`
+        # and the body root as `step` (never an `exit`).
         rec["kind"] = "recursive"
         rec["strategy"] = "cyclic"
-        rec["step"] = _emit_node(cyclic_target, nodes, memo)
-    elif isinstance(m, RecursiveMatcher):
+        rec["step"] = _emit_node(n.step, nodes, memo)
+    elif n.kind == "recursive":
         rec["kind"] = "recursive"
-        rec["step"] = _emit_node(m.repeating_matcher, nodes, memo)
-        if m.exit_matcher is not None:
-            rec["exit"] = _emit_node(m.exit_matcher, nodes, memo)
-    elif isinstance(m, OrMatcher):
+        rec["step"] = _emit_node(n.step, nodes, memo)
+        if n.exit_ is not None:
+            rec["exit"] = _emit_node(n.exit_, nodes, memo)
+    elif n.kind == "or":
         rec["kind"] = "or"
-        rec["branches"] = [_emit_node(b, nodes, memo) for b in m.matchers]
-        rec["exclusive"] = isinstance(m, ExclusiveOrMatcher)
-    elif isinstance(m, ContractMatcher):
+        rec["branches"] = [_emit_node(b, nodes, memo) for b in n.branches]
+        rec["exclusive"] = n.exclusive
+    elif n.kind == "contract":
         rec["kind"] = "contract"
-        rec["opcode"] = _unsigned32(m.opcode)
-    elif isinstance(m, BlockTypeMatcher):
+        rec["opcode"] = _unsigned32(n.opcode)
+    elif n.kind == "block_type":
         rec["kind"] = "block_type"
-        rec["btype"] = m.block_type
-    elif isinstance(m, GenericMatcher):
-        pred_name = getattr(m, "_ir_pred", None)
-        if pred_name is not None:
-            rec["kind"] = "pred"
-            rec["pred"] = pred_name
-        else:
-            # Permissive matchers: `any` heads, recursion sentinels, and
-            # opcode-set anchor roots (whose test lives in the matcher record's
-            # anchor, see _anchor_record).
-            rec["kind"] = "any"
+        rec["btype"] = n.btype
+    elif n.kind == "pred":
+        rec["kind"] = "pred"
+        rec["pred"] = n.pred
+    elif n.kind == "any":
+        # Permissive nodes: `any` heads, recursion sentinels, and opcode-set /
+        # predicate anchor roots (whose test lives in the matcher record's
+        # anchor, see _anchor_record).
+        rec["kind"] = "any"
     else:
-        raise ValueError(f"unsupported matcher type {type(m).__name__} in IR emission")
+        raise ValueError(f"unsupported node kind {n.kind!r} in IR emission")
 
-    if m.optional:
+    if n.optional:
         rec["optional"] = True
-    capture = getattr(m, "_mch_capture_name", None)
-    if capture is not None:
-        rec["capture"] = capture
-    where = getattr(m, "_ir_where", None)
-    if where is not None:
-        rec["where"] = where
-    where_expr = getattr(m, "_ir_where_expr", None)
-    if where_expr is not None:
-        rec["where_expr"] = _emit_expr(where_expr)
-    if m.child_matcher is not None:
-        rec["child"] = _emit_node(m.child_matcher, nodes, memo)
-    if m.children_matchers:
-        rec["children"] = [_emit_node(c, nodes, memo) for c in m.children_matchers]
-    if m.parent_matcher is not None:
-        rec["parent"] = _emit_node(m.parent_matcher, nodes, memo)
+    if n.capture is not None:
+        rec["capture"] = n.capture
+    if n.where is not None:
+        rec["where"] = n.where
+    if n.where_expr is not None:
+        rec["where_expr"] = _emit_expr(n.where_expr)
+    if n.child is not None:
+        rec["child"] = _emit_node(n.child, nodes, memo)
+    if n.children:
+        rec["children"] = [_emit_node(c, nodes, memo) for c in n.children]
+    if n.parent is not None:
+        rec["parent"] = _emit_node(n.parent, nodes, memo)
     return node_id
 
 
-def _anchor_record(root: BlockMatcher) -> dict:
+def _anchor_record(cm: CompiledMatcher) -> dict:
+    # Predicate anchor ([M2R, R10]): no opcode/btype prefilter; the anchor test
+    # is the named predicate, full-scanned by the engine.
     # Mixed-kind or per-branch-`where` anchor group ([M2R, R09]): a `mixed`
     # record carrying one branch object per alternative branch, each `{op}` or
     # `{btype}` with an optional `where` predicate name. Membership is the union
     # of all branch heads; the matching branch's `where` (if any) is tested
     # after membership. Pure single-kind no-`where` groups keep the T10
-    # opcode_set/btype forms below (compiler stamps exactly one representation).
-    # Predicate anchor ([M2R, R10]): no opcode/btype prefilter; the anchor test
-    # is the named predicate, full-scanned by the engine.
-    anchor_pred = getattr(root, "_ir_anchor_pred", None)
-    if anchor_pred is not None:
-        return {"kind": "pred", "pred": anchor_pred}
-    anchor_branches = getattr(root, "_ir_anchor_branches", None)
-    if anchor_branches is not None:
+    # opcode_set/btype forms (compiler records exactly one representation).
+    if cm.anchor_pred is not None:
+        return {"kind": "pred", "pred": cm.anchor_pred}
+    if cm.anchor_branches is not None:
         out_branches: list[dict] = []
-        for kind, value, where_name in anchor_branches:
+        for kind, value, where_name in cm.anchor_branches:
             rec = {"op": _unsigned32(value)} if kind == "op" else {"btype": value}
             if where_name is not None:
                 rec["where"] = where_name
             out_branches.append(rec)
         return {"kind": "mixed", "branches": out_branches}
-    anchor_opcodes = getattr(root, "_ir_anchor_opcodes", None)
-    anchor_btypes = getattr(root, "_ir_anchor_btypes", None)
-    if anchor_opcodes:
-        return {"kind": "opcode_set", "values": [_unsigned32(o) for o in anchor_opcodes]}
-    if anchor_btypes:
-        return {"kind": "btype", "values": list(anchor_btypes)}
-    if isinstance(root, ContractMatcher):
+    if cm.anchor_opcodes:
+        return {"kind": "opcode_set", "values": [_unsigned32(o) for o in cm.anchor_opcodes]}
+    if cm.anchor_btypes:
+        return {"kind": "btype", "values": list(cm.anchor_btypes)}
+    root = cm.root
+    if root.kind == "contract":
         return {"kind": "opcode_set", "values": [_unsigned32(root.opcode)]}
-    if isinstance(root, BlockTypeMatcher):
-        return {"kind": "btype", "values": [root.block_type]}
-    raise ValueError(f"unsupported anchor root type {type(root).__name__}")
+    if root.kind == "block_type":
+        return {"kind": "btype", "values": [root.btype]}
+    raise ValueError(f"unsupported anchor root kind {root.kind!r}")
 
 
 # The IR schema requires btype strings; class names are normalized via the
@@ -275,18 +256,18 @@ def emit_ir(
     nodes: list[dict] = []
     for cm, stmts in zip(compiled, build_stmts):
         memo: dict[int, int] = {}
-        root_id = _emit_node(cm.matcher, nodes, memo)
+        root_id = _emit_node(cm.root, nodes, memo)
         rec: dict = {
             "name": cm.name,
-            "anchor": _anchor_record(cm.matcher),
+            "anchor": _anchor_record(cm),
             "root": root_id,
-            "produces": [_produces_btype(p) for p in cm.matcher._ir_produces],
+            "produces": [_produces_btype(p) for p in cm.produces],
             "captures": [
                 {"name": cap_name, "card": card}
-                for cap_name, card in cm.matcher._ir_captures
+                for cap_name, card in cm.captures
             ],
-            "include_excess": bool(cm.matcher.include_excess),
-            "include_bounces": bool(cm.matcher.include_bounces),
+            "include_excess": bool(cm.include_excess),
+            "include_bounces": bool(cm.include_bounces),
         }
         # Declarative matchers (build statements, no registered builder) have
         # no builder name; per the container rule (no nulls for absent

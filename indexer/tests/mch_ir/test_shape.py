@@ -188,38 +188,30 @@ async def test_ir_engine_invokes_shaper_post_merge():
 
 
 @pytest.mark.asyncio
-async def test_shaped_topology_identical_on_both_paths():
+async def test_shaped_topology_places_proxy_in_produced_region():
     reg, _ = _registries()
     compiled = compile_text(SRC_SHAPED, "test.mch", reg)
     ir_matcher = build_matchers(load_artifact(emit_ir(compiled, ["test.mch"])), reg)[0]
 
-    a1, _b1 = _ab_tree()
-    compiled_result = await compiled[0].matcher.try_build(a1)
-    a2, _b2 = _ab_tree()
-    ir_result = await ir_matcher.try_build(a2)
+    a, _b = _ab_tree()
+    ir_result = await ir_matcher.try_build(a)
 
-    assert compiled_result and ir_result
-    assert _topo_sig(compiled_result[0]) == _topo_sig(ir_result[0])
-    # The proxy shows up in the signature on both paths.
-    assert any(isinstance(cb, EmptyBlock) for cb in compiled_result[0].children_blocks)
+    assert ir_result
+    # The shaper's proxy shows up in the produced block's region.
     assert any(isinstance(cb, EmptyBlock) for cb in ir_result[0].children_blocks)
 
 
 @pytest.mark.asyncio
-async def test_matcher_without_shape_unaffected_on_both_paths():
+async def test_matcher_without_shape_leaves_tree_unaffected():
     reg, calls = _registries()
     compiled = compile_text(SRC_PLAIN, "test.mch", reg)
     art = emit_ir(compiled, ["test.mch"])
     assert "shape" not in art["matchers"][0]
     ir_matcher = build_matchers(load_artifact(art), reg)[0]
 
-    a1, b1 = _ab_tree()
-    compiled_result = await compiled[0].matcher.try_build(a1)
-    a2, b2 = _ab_tree()
-    ir_result = await ir_matcher.try_build(a2)
+    a, b = _ab_tree()
+    ir_result = await ir_matcher.try_build(a)
 
-    assert compiled_result and ir_result
+    assert ir_result
     assert calls == []
-    assert a1.next_blocks == [b1]
-    assert a2.next_blocks == [b2]
-    assert _topo_sig(compiled_result[0]) == _topo_sig(ir_result[0])
+    assert a.next_blocks == [b]
