@@ -84,6 +84,8 @@ class CompiledMatcher:
     build_stmts: tuple = ()
     # `shape` directive (§8.7): registered shaper name, None when absent.
     shape_fn_name: str | None = None
+    # `priority` directive (§8.6): registration-order weight, default 100.
+    priority: int = 100
     # Anchor record representation ([M2R, R09/R10] + T10 groups). Exactly one of
     # these is set for a group/predicate anchor; a plain single op/btype anchor
     # leaves them all None and the emitter reads the root node's kind.
@@ -276,6 +278,7 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         include_bounces=bool(decl.include_bounces),
         build_stmts=tuple(decl.build_stmts),
         shape_fn_name=decl.shape,
+        priority=decl.priority,
         anchor_pred=anchor_pred,
         anchor_branches=anchor_branches,
         anchor_opcodes=anchor_opcodes,

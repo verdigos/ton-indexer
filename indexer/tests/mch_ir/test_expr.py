@@ -503,3 +503,19 @@ async def test_combinators_over_list_literal():
     assert await _eval("sum([1, 2, 3])") == 6
     assert await _eval("len([1, 2, 3])") == 3
     assert await _eval("first([9, 8])") == 9
+
+
+# ==========================================================================
+# msg.exit_code envelope accessor (spec §9.6, G9 rider)
+# ==========================================================================
+
+@pytest.mark.asyncio
+async def test_exit_code_envelope_accessor():
+    # Defined envelope field: the transaction's compute-phase exit code.
+    msg = SimpleNamespace(transaction=SimpleNamespace(compute_exit_code=0xABCD))
+    assert await _eval("m.exit_code", env={"m": msg}) == 0xABCD
+    # Transaction present but no exit code recorded -> null.
+    assert await _eval("m.exit_code", env={"m": SimpleNamespace(transaction=SimpleNamespace())}) is None
+    # Not a message envelope (no transaction) -> fault (rejection).
+    with pytest.raises(EvalError):
+        await _eval("m.exit_code", env={"m": SimpleNamespace()})

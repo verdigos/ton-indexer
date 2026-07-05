@@ -292,11 +292,37 @@ def _node_hashes(block: Block) -> list[str]:
     return sorted(n.message.tx_hash for n in block.event_nodes)
 
 
+# The two withdrawn legs are a PAIR whose 1-vs-2 assignment follows candidate
+# order. The IR engine pins that order canonically (T21: ascending min_lt);
+# legacy follows raw next_blocks order, which is assembly-dependent. So the
+# leg-indexed fields are compared as an UNORDERED pair between IR and legacy
+# (the scalars and consumed set are exact); IR-vs-IR determinism is asserted
+# separately below.
+_LEG1 = ("amount1_out", "asset1_out", "dex_wallet_1", "dex_jetton_wallet_1", "wallet1")
+_LEG2 = ("amount2_out", "asset2_out", "dex_wallet_2", "dex_jetton_wallet_2", "wallet2")
+
+
+def _leg(data: dict, keys) -> tuple:
+    return tuple(data[k] for k in keys)
+
+
+def _tuples_equal(a: tuple, b: tuple) -> bool:
+    return len(a) == len(b) and all(_values_equal(x, y) for x, y in zip(a, b))
+
+
+def _legs_match_unordered(d_data: dict, h_data: dict) -> bool:
+    d1, d2 = _leg(d_data, _LEG1), _leg(d_data, _LEG2)
+    h1, h2 = _leg(h_data, _LEG1), _leg(h_data, _LEG2)
+    return (_tuples_equal(d1, h1) and _tuples_equal(d2, h2)) \
+        or (_tuples_equal(d1, h2) and _tuples_equal(d2, h1))
+
+
 def _assert_field_parity(dsl_blocks: list[Block], hw_blocks: list[Block]) -> None:
     assert len(hw_blocks) == 1, f"legacy matcher produced {len(hw_blocks)} blocks - bad fixture"
     assert len(dsl_blocks) == len(hw_blocks), (
         f"count mismatch: dsl={len(dsl_blocks)} legacy={len(hw_blocks)}"
     )
+    _leg_keys = set(_LEG1) | set(_LEG2)
     for d, h in zip(dsl_blocks, hw_blocks):
         assert d.btype == h.btype == "dex_withdraw_liquidity"
         assert d.failed == h.failed, f"failed flag: dsl={d.failed} legacy={h.failed}"
@@ -305,12 +331,20 @@ def _assert_field_parity(dsl_blocks: list[Block], hw_blocks: list[Block]) -> Non
         assert set(d.data.keys()) == set(h.data.keys()), (
             f"data keys: dsl={sorted(d.data)} legacy={sorted(h.data)}"
         )
+        # Scalars: exact. Leg-indexed fields: unordered pair (see note above).
         for key in sorted(h.data):
+            if key in _leg_keys:
+                continue
             dv, hv = d.data[key], h.data[key]
             assert _values_equal(dv, hv), (
                 f"data[{key!r}]: dsl={dv!r} ({type(dv).__name__}) "
                 f"legacy={hv!r} ({type(hv).__name__})"
             )
+        assert _legs_match_unordered(d.data, h.data), (
+            f"withdrawn legs (unordered) differ: "
+            f"dsl={[_leg(d.data, _LEG1), _leg(d.data, _LEG2)]} "
+            f"legacy={[_leg(h.data, _LEG1), _leg(h.data, _LEG2)]}"
+        )
 
         assert d.value_flow.to_dict() == h.value_flow.to_dict(), (
             f"value_flow: dsl={d.value_flow.to_dict()} legacy={h.value_flow.to_dict()}"
@@ -345,15 +379,38 @@ async def test_dedust_withdraw_parity_jetton_first():
 
 
 @pytest.mark.asyncio
-async def test_dedust_withdraw_parity_ton_first():
-    """Mirrored candidate order: payout_1 = TON, payout_2 = jetton — pins that
-    the deterministic assignment follows candidate order, not payout type."""
+async def test_dedust_withdraw_ton_first_ir_canonicalizes():
+    """Mirrored candidate order: next_blocks lists the TON leg first, but the
+    jetton leg has the LOWER lt (400 vs 450). Legacy follows raw next_blocks
+    order (payout_1 = TON); the IR engine pins canonical order (T21: ascending
+    min_lt), so payout_1 = jetton — identical to the jetton_first tree,
+    independent of next_blocks order. Both consume the same set of blocks, so
+    the leg-order-tolerant parity in `_assert_field_parity` still holds."""
     hw_blocks, dsl_blocks = await _run_parity(jetton_first=False)
-    for b in (hw_blocks[0], dsl_blocks[0]):
-        assert b.data["asset1_out"].is_ton is True
-        assert b.data["amount1_out"].value == TON_PAYOUT_AMOUNT
-        assert b.data["asset2_out"].is_ton is False
-        assert b.data["amount2_out"].value == JETTON_PAYOUT_AMOUNT
+    # Legacy: order-dependent — assignment follows next_blocks (TON first).
+    assert hw_blocks[0].data["asset1_out"].is_ton is True
+    assert hw_blocks[0].data["amount1_out"].value == TON_PAYOUT_AMOUNT
+    # IR: canonical min_lt -> the jetton leg (lt 400) is payout_1, regardless.
+    assert dsl_blocks[0].data["asset1_out"].is_ton is False
+    assert dsl_blocks[0].data["amount1_out"].value == JETTON_PAYOUT_AMOUNT
+    assert dsl_blocks[0].data["asset2_out"].is_ton is True
+    assert dsl_blocks[0].data["amount2_out"].value == TON_PAYOUT_AMOUNT
+
+
+@pytest.mark.asyncio
+async def test_dedust_withdraw_ir_order_invariant():
+    """T21 determinism: the IR engine produces byte-identical output whichever
+    way the pool's out-messages are ordered in next_blocks (jetton-first vs
+    TON-first synthetic trees)."""
+    context.interface_repository.set(TestInterfaceRepository(_interfaces()))
+    a = await _run_matcher(_dsl_matcher(), _build_withdraw_transactions(jetton_first=True))
+    context.interface_repository.set(TestInterfaceRepository(_interfaces()))
+    b = await _run_matcher(_dsl_matcher(), _build_withdraw_transactions(jetton_first=False))
+    assert len(a) == len(b) == 1
+    assert set(a[0].data) == set(b[0].data)
+    for k in a[0].data:
+        assert _values_equal(a[0].data[k], b[0].data[k]), f"determinism: field {k!r} differs"
+    assert _node_hashes(a[0]) == _node_hashes(b[0])
 
 
 @pytest.mark.asyncio

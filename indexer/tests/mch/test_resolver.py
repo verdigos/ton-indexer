@@ -25,6 +25,45 @@ def test_resolve_opcode_declaration():
     assert rf.opcodes["JettonTransfer"] == 0x0f8a7ea5
 
 
+# --- priority directive (§8.6, T20) ----------------------------------------
+
+def _two_matchers(p_a: str, p_c: str) -> str:
+    return (
+        "opcode Foo = 0xF00\n"
+        f"matcher a {{ produces FB\n build b\n entry @x\n{p_a} op Foo @x }}\n"
+        f"matcher c {{ produces FB\n build d\n entry @y\n{p_c} op Foo @y }}\n"
+    )
+
+
+def _warn_codes(src: str) -> list[str]:
+    return [d.code for d in _resolve(src, _fb_registries()).diagnostics.items]
+
+
+def test_priority_default_is_100():
+    rf = _resolve("opcode Foo = 0xF00\nmatcher a { produces FB\n build b\n entry @x\n op Foo @x }",
+                  _fb_registries())
+    assert rf.raw.matchers[0].priority == 100
+
+
+def test_priority_parsed_value():
+    rf = _resolve("opcode Foo = 0xF00\nmatcher a { produces FB\n build b\n entry @x\n priority 42\n op Foo @x }",
+                  _fb_registries())
+    assert rf.raw.matchers[0].priority == 42
+
+
+def test_priority_duplicate_nondefault_warns():
+    assert "W010_DUPLICATE_PRIORITY" in _warn_codes(_two_matchers("priority 50\n", "priority 50\n"))
+
+
+def test_priority_distinct_no_warning():
+    assert "W010_DUPLICATE_PRIORITY" not in _warn_codes(_two_matchers("priority 50\n", "priority 60\n"))
+
+
+def test_priority_default_pair_no_warning():
+    # Two default-priority matchers are the norm and must NOT warn.
+    assert "W010_DUPLICATE_PRIORITY" not in _warn_codes(_two_matchers("", ""))
+
+
 def test_resolve_opcode_value_matches_host():
     reg = Registries()
     reg.opcodes["JettonTransfer"] = 0x0f8a7ea5

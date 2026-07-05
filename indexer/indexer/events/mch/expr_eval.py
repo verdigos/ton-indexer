@@ -285,6 +285,17 @@ def _access(obj: Any, field: str, bodies: dict[int, Any]) -> Any:
         if field in obj:
             return obj[field]
         raise EvalError(f"data has no field {field!r}")
+    if field == "exit_code":
+        # `CAPTURE.msg.exit_code` (§9.6): a defined envelope field — the
+        # compute-phase exit code of the message's transaction (null if absent).
+        # Scoped to the message envelope: `exit_code` is only valid on an object
+        # that carries a transaction, never a generic accessor.
+        tx = getattr(obj, "transaction", None)
+        if tx is None:
+            raise EvalError(
+                "`exit_code` is only valid on a message envelope (CAPTURE.msg.exit_code)"
+            )
+        return getattr(tx, "compute_exit_code", None)
     try:
         return getattr(obj, field)
     except AttributeError:

@@ -492,6 +492,8 @@ Registration-order weight. Lower runs earlier. Matchers with equal priority are 
 
 Matcher order is semantics, not configuration: earlier matchers consume blocks first (the jetton_transfer → fallback_jetton_transfer relationship depends on it). v0.1 left ordering "host-specific", which is a parity hole; from M3 the order is derived entirely from the `.mch` namespace and is part of the compiled artifact.
 
+Implementation notes: `build_matchers` returns the matchers stable-sorted by ascending `priority` (the artifact's `registration_order` is already file+source order, so a stable sort gives the `(priority, file name, source position)` total order). The IR matcher record carries a `"priority"` key **only when non-default** — an absent key means `100` — so specs that never set priority emit byte-identical artifacts. Declaring the same non-default priority on two matchers in a file warns (`W010_DUPLICATE_PRIORITY`): their order then depends on source position, usually not intended. Redeclaring `priority` on one matcher is an error (`P011`).
+
 ### 8.7 `shape IDENT` `[M2R, R06]`
 
 Post-build tree surgery in a registered host function. Optional; at most one per matcher (a duplicate is a parse error, `P011`). The named shaper must exist in the host's shaper registry (§11.1), otherwise the load fails (`C011_UNKNOWN_SHAPER`).
@@ -604,7 +606,9 @@ Plain (non-`?`) fields always emit their key. C++: skip the map insert when the 
 
 ### 9.6 Expression language
 
-Deliberately small, **pure and total**. Features: capture/local references, field access (`x.y`), the implicit accessors `CAPTURE.msg` (message envelope: `source`, `destination`, `value`, `opcode`), `CAPTURE.body` (parsed body after `parse`), and `CAPTURE.data` (a composed block's produced data), literals, comparisons, `and`/`or`/`not`, `?? ` default, `x if cond else y`, and a fixed builtin set:
+Deliberately small, **pure and total**. Features: capture/local references, field access (`x.y`), the implicit accessors `CAPTURE.msg` (message envelope: `source`, `destination`, `value`, `opcode`, `exit_code`), `CAPTURE.body` (parsed body after `parse`), and `CAPTURE.data` (a composed block's produced data), literals, comparisons, `and`/`or`/`not`, `?? ` default, `x if cond else y`, and a fixed builtin set:
+
+`CAPTURE.msg.exit_code` is a **defined** envelope field: the compute-phase exit code of the message's transaction (null when the transaction records none). It is the only non-topology way to reach transaction state and exists specifically so success/rejection can gate on the exit code without a host `fn`; it is spec'd here rather than reached by generic attribute chaining (the C++ envelope has a fixed field set).
 
 - `CAPTURE.data.<field>` — reads a field of a captured block's produced `data` (the block a *prior* matcher built, e.g. `transfer.data.sender` where `transfer` is a composed `jetton_transfer`). Access is a plain map lookup; a missing field rejects the match (mirrors the host's `data[key]` KeyError). Host semantics: dict lookup first, attribute fallback (dataclass interop during the migration); the C++ engine's block data is a `map<string, Value>`, so the accessor is a pure map lookup there.
 - Constructors: `asset(master)`, `ton_asset()`, `account(addr)`, `amount(x)` — the `Asset`/`AccountId`/`Amount` value objects. `account(null)` short-circuits to null (a *missing* address); `addr_none()` builds the distinct **addr_none** `AccountId` (present but empty — repr `addr_none`, `as_str()` → null). A field that must carry a present-but-empty address uses `account(x) ?? addr_none()`, mirroring the host's `AccountId(None)`.
@@ -1082,6 +1086,15 @@ matcher change_dns_record {
 - Predicates (and `[M4]` fns) declared next
 - Shared rules before the matchers that use them
 - Matchers ordered most-specific first for readability; actual order is governed by `priority` (§8.6)
+
+## 15b. Deliberately excluded from the language (design decisions)
+
+Recorded so a future reader does not re-litigate these. Each was demanded by a real matcher and resolved WITHOUT a language feature:
+
+- **String / byte manipulation (slice, `lower`, `hex`, endian conversion) — CUT.** Address-tail comparisons (layerzero `dst_oapp`) use `account(a) == account(b)` (the constructor normalizes); protocol-specific byte formatting (tgbtc `bitcoin_txid` little-endian hex) stays a host `fn`. No general string ops in the expression language.
+- **Block topology / aggregate navigation (`previous_block`, `next_blocks`, `event_nodes`, `.value`) — NOT a language feature.** Reach a neighbouring block by capturing it in the PATTERN and reading its envelope / `.data`; aggregate a value with `sum(...)` over a captured list. Transaction state is reachable only through the defined `msg.exit_code` envelope field (§9.6), never generic attribute chaining.
+- **Multi-return lookups / set-membership — CUT.** A lookup is single-shape (name + key → record | null). Return several values as ONE record and read its fields (`r.staking_pool`); test membership with a targeted nullable lookup + `reject when x == null` (e.g. `lookup nominator_pool(addr)`), not an `in` operator. These are host-registration patterns, not language gaps.
+- **`omit` (consumption surgery) — DROPPED** (§9.9): match-time predicate gating replaces it.
 
 ## 16. Future extensions (non-normative)
 

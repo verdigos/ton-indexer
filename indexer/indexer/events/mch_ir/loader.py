@@ -158,6 +158,11 @@ def _check_matcher(m: Any, n_nodes: int) -> None:
     if "shape" in m and not isinstance(m["shape"], str):
         raise IrLoadError(f"{where}: shape must be a string")
 
+    # `priority` (§8.6): optional; absent defaults to 100. bool is an int
+    # subclass, so reject it explicitly.
+    if "priority" in m and (isinstance(m["priority"], bool) or not isinstance(m["priority"], int)):
+        raise IrLoadError(f"{where}: priority must be an integer")
+
     program = m.get("build_program")
     if program is not None:
         if not isinstance(program, list):

@@ -29,6 +29,7 @@ class TokenKind(Enum):
     KW_WHERE = "where"
     KW_PRODUCES = "produces"
     KW_SWITCH = "switch"
+    KW_PRIORITY = "priority"
     KW_BUILD = "build"
     KW_ENTRY = "entry"
     KW_INCLUDE_EXCESS = "include_excess"

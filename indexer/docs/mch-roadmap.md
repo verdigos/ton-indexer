@@ -310,14 +310,14 @@ Accept: parity on every stonfi-swaps YAML case incl. referral split + failed; re
 Note: partial/final result merging (dedust deposit) is deliberately **not** a DSL feature — it stays host-side post-process code in both Python and C++ (spec §5.5). T24 only proves mch-produced blocks flow through the existing pass.
 
 ### T20 — `priority` directive + deterministic registration order
-Status: todo
+Status: done (2026-07-05 — `priority DEC` directive (KW_PRIORITY) parses in the matcher-directive block; default 100; redeclaration is P011. Carried on MatcherDecl/CompiledMatcher; emitted to the IR matcher record ONLY when non-default (absent ⇒ 100) so existing artifacts stay byte-identical (verified: emit diff over all 24 specs empty). `build_matchers` returns matchers stable-sorted by ascending priority — `registration_order` is already file+source order, so the stable sort yields the full (priority, file name, source position) order. Resolver warns W010_DUPLICATE_PRIORITY on two matchers sharing a non-default priority (default-100 pairs never warn). Loader validates the key is an int. Tests: ordering + default tie-break (test_engine.py), default/parse/duplicate/distinct warning (test_resolver.py).)
 Spec: §8.6, §10.6
 Needs: T01
 Goal: parse/resolve `priority DEC` (default 100); compiled namespace yields matchers sorted by (priority, file name, source position). Expose ordered list for engine registration.
 Accept: tests for ordering incl. tie-breaks; duplicate-priority warning emitted.
 
 ### T21 — Canonical candidate ordering in the engine
-Status: todo
+Status: done (2026-07-05 — pinned at WALK TIME in mch_ir/engine.py via a single `_canonical(blocks)` helper (`sorted(blocks, key=min_lt)`, stable ⇒ ties keep next_blocks order) applied at every sibling-choice point: child edge, children set, recursion frontier, and nested + root excess/bounce absorption. Or-branches already iterate spec-declared order. So IR output is identical regardless of the tree's underlying next_blocks assembly order — not merely reproducible for one order. HARD CONSTRAINT honored: blocks/core.py, basic_matchers.py, event_processing.py untouched; legacy stays nondeterministic (accepted), the `basic_matchers.py:233` note below is stale (compiled path deleted, T29). Consequence: consumed/leg order is now deterministic; the two `*_withdraw` `ton_first` per-spec tests were adversarial (jetton leg lt < TON leg but listed TON-first in next_blocks) — legacy follows next_blocks, IR canonicalizes to lt order, so those tests became leg-order-tolerant IR-vs-legacy parity + explicit IR order-invariance (determinism) tests. tests/test_actions.py unchanged before/after (legacy path untouched); full mch+mch_ir sweep green (multiset comparisons still hold).)
 Spec: §10.5
 Needs: —
 Goal: pin candidate order (ascending `min_lt`, tie by stable `next_blocks` order) wherever the engine picks among blocks: `process_child_matcher`, `process_children_matchers`, recursion frontier. Verify against the existing YAML corpus that no production classification changes (run `tests/test_actions.py` before/after; investigate every diff).

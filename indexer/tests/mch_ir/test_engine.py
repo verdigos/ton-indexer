@@ -209,6 +209,54 @@ def _switch_registries() -> Registries:
     return reg
 
 
+def _ir_matchers_all(src: str, reg: Registries | None = None):
+    reg = reg or _registries()
+    compiled = compile_text(src, "test.mch", reg)
+    art = load_artifact(emit_ir(compiled, ["test.mch"]))
+    return build_matchers(art, reg)
+
+
+def test_priority_orders_matchers_ascending():
+    """build_matchers returns matchers by ascending priority (§8.6): the lower
+    number runs earlier, regardless of source order."""
+    src = """
+opcode Foo = 0xF00
+opcode Bar = 0xBA7
+matcher low_prio {
+    produces FB
+    entry @x
+    priority 200
+    op Foo @x
+    out { v: 1 }
+}
+matcher high_prio {
+    produces FB
+    entry @y
+    priority 50
+    op Bar @y
+    out { v: 2 }
+}
+"""
+    assert [m.name for m in _ir_matchers_all(src)] == ["high_prio", "low_prio"]
+
+
+def test_priority_tie_keeps_source_order():
+    """Equal (default) priority -> source position tie-break (stable)."""
+    src = """
+opcode Foo = 0xF00
+opcode Bar = 0xBA7
+matcher first  { produces FB
+    entry @x
+    op Foo @x
+    out { v: 1 } }
+matcher second { produces FB
+    entry @y
+    op Bar @y
+    out { v: 2 } }
+"""
+    assert [m.name for m in _ir_matchers_all(src)] == ["first", "second"]
+
+
 @pytest.mark.asyncio
 async def test_produces_switch_dispatches_btype_and_optional_key():
     reg = _switch_registries()

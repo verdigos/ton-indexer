@@ -22,9 +22,14 @@ state lives in a _MatchContext; matcher objects are immutable after load and
 therefore reentrant. Failure discipline: a failed sub-attempt may leave the
 context dirty — only the caller's rollback cleans it (§4.1).
 
-Determinism: candidates, branches and children are iterated in existing list
-order; `ctx.consumed` is traversal order, identity-deduped at consume time.
-No set() is ever iterated (§7).
+Determinism (spec §10.5, T21): every point that chooses among sibling
+candidates (child edge, children set, recursion frontier, aux/excess/bounce
+absorption) iterates in CANONICAL order — ascending `min_lt`, ties broken by
+existing relative order (stable sort) — via `_canonical`. So the produced and
+consumed output is identical regardless of the tree's underlying next_blocks
+assembly order, not merely reproducible for one given order. Or-branches iterate
+in spec-declared order (already canonical). `ctx.consumed` is traversal order,
+identity-deduped at consume time. No set() is ever iterated (§7).
 
 Known deliberate deviations from the spec doc (legacy parity wins, per the
 parity suite):
@@ -109,7 +114,15 @@ def build_matchers(art: Artifact, registries: Registries) -> list["IrMatcher"]:
                         )
 
     compiled = [IrMatcher(record, art.nodes, registries) for record in art.matchers]
-    return [compiled[mi] for mi in art.registration_order]
+    # Priority order (§8.6/§10.6): ascending priority (default 100), ties broken
+    # by (file name, source position). `registration_order` is already source
+    # order (emit concatenates files in name order, matchers in source position),
+    # so a STABLE sort by priority yields exactly that tie-break.
+    order = sorted(
+        art.registration_order,
+        key=lambda mi: art.matchers[mi].get("priority", 100),
+    )
+    return [compiled[mi] for mi in order]
 
 
 def _edge_refs(rec: dict):
@@ -196,10 +209,23 @@ class _MatchContext:
         self.bindings.append((slot, self.frame, block))
 
 
+def _canonical(blocks) -> list[Block]:
+    """Canonical candidate order (spec §10.5, T21 determinism).
+
+    Ascending `min_lt`, ties broken by the blocks' existing relative order
+    (Python sort is stable). Every point where the walk chooses among sibling
+    candidates iterates through this, so the produced/consumed output is
+    identical regardless of the tree's underlying next_blocks assembly order —
+    the property the C++ engine must also hold. `min_lt` is a plain int on every
+    Block (0 for the synthetic root), so the key is total and never faults.
+    """
+    return sorted(blocks, key=lambda b: b.min_lt)
+
+
 def _absorb_aux(block: Block, ctx: _MatchContext) -> None:
     """§4.5 nested absorption: a matched node always consumes its excess/bounce
     children (legacy nested matchers carry default-true include flags)."""
-    for nb in block.next_blocks:
+    for nb in _canonical(block.next_blocks):
         if nb.btype == "call_contract" and getattr(nb, "opcode", None) in _AUX_OPCODES:
             ctx.consume(nb)
 
@@ -390,7 +416,7 @@ class IrMatcher:
         if produced is None:
             return []  # clean rejection: no aux blocks to strip
         result = [produced]
-        for nb in block.next_blocks:
+        for nb in _canonical(block.next_blocks):
             if nb.btype != "call_contract":
                 continue
             op = getattr(nb, "opcode", None)
@@ -462,7 +488,7 @@ class IrMatcher:
         if node.child < 0:
             return True
         matched_any = False
-        for cand in block.next_blocks:
+        for cand in _canonical(block.next_blocks):
             mark = ctx.mark()
             if self._match_node(node.child, cand, ctx):
                 matched_any = True
@@ -477,7 +503,7 @@ class IrMatcher:
         (overlap with the child edge dedups through ctx.consume)."""
         if not node.children:
             return True
-        working = list(block.next_blocks)
+        working = _canonical(block.next_blocks)
         for item_id in node.children:
             matched = False
             for cand in working:
@@ -561,7 +587,9 @@ class IrMatcher:
                         stepped = True
                         step_consumed = ctx.consumed[mark[1]:]
                         ctx.frames.append(("step", nid, iter_index, bool(step_consumed)))
-                        frontier = [nb for b in step_consumed for nb in b.next_blocks]
+                        frontier = _canonical(
+                            [nb for b in step_consumed for nb in b.next_blocks]
+                        )
                         break
                     ctx.rollback(mark)
                 if not stepped:

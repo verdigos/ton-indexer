@@ -351,12 +351,37 @@ def _node_hashes(block: Block) -> list[str]:
     return sorted(n.message.tx_hash for n in block.event_nodes)
 
 
+# The two withdrawn legs form a PAIR whose 1-vs-2 index follows candidate order.
+# The IR engine pins that order canonically (T21: ascending min_lt); legacy
+# follows raw next_blocks order (assembly-dependent). So leg-indexed fields are
+# compared as an UNORDERED pair between IR and legacy; scalars and the consumed
+# set stay exact. IR-vs-IR order-invariance is asserted separately below.
+_LEG1 = ("amount1_out", "asset1_out", "dex_wallet_1", "dex_jetton_wallet_1", "wallet1")
+_LEG2 = ("amount2_out", "asset2_out", "dex_wallet_2", "dex_jetton_wallet_2", "wallet2")
+
+
+def _leg(data: dict, keys) -> tuple:
+    return tuple(data[k] for k in keys)
+
+
+def _tuples_equal(a: tuple, b: tuple) -> bool:
+    return len(a) == len(b) and all(_values_equal(x, y) for x, y in zip(a, b))
+
+
+def _legs_match_unordered(a_data: dict, e_data: dict) -> bool:
+    a1, a2 = _leg(a_data, _LEG1), _leg(a_data, _LEG2)
+    e1, e2 = _leg(e_data, _LEG1), _leg(e_data, _LEG2)
+    return (_tuples_equal(a1, e1) and _tuples_equal(a2, e2)) \
+        or (_tuples_equal(a1, e2) and _tuples_equal(a2, e1))
+
+
 def _assert_field_parity(actual: list[Block], expected: list[Block],
                          actual_tag: str, expected_tag: str) -> None:
     assert len(expected) == 1, f"{expected_tag} produced {len(expected)} blocks - bad fixture"
     assert len(actual) == len(expected), (
         f"count mismatch: {actual_tag}={len(actual)} {expected_tag}={len(expected)}"
     )
+    _leg_keys = set(_LEG1) | set(_LEG2)
     for a, e in zip(actual, expected):
         assert a.btype == e.btype == "dex_withdraw_liquidity"
         assert a.failed == e.failed, f"failed flag: {actual_tag}={a.failed} {expected_tag}={e.failed}"
@@ -366,11 +391,18 @@ def _assert_field_parity(actual: list[Block], expected: list[Block],
             f"data keys: {actual_tag}={sorted(a.data)} {expected_tag}={sorted(e.data)}"
         )
         for key in sorted(e.data):
+            if key in _leg_keys:
+                continue
             av, ev = a.data[key], e.data[key]
             assert _values_equal(av, ev), (
                 f"data[{key!r}]: {actual_tag}={av!r} ({type(av).__name__}) "
                 f"{expected_tag}={ev!r} ({type(ev).__name__})"
             )
+        assert _legs_match_unordered(a.data, e.data), (
+            f"withdrawn legs (unordered) differ: "
+            f"{actual_tag}={[_leg(a.data, _LEG1), _leg(a.data, _LEG2)]} "
+            f"{expected_tag}={[_leg(e.data, _LEG1), _leg(e.data, _LEG2)]}"
+        )
 
         assert a.value_flow.to_dict() == e.value_flow.to_dict(), (
             f"value_flow: {actual_tag}={a.value_flow.to_dict()} {expected_tag}={e.value_flow.to_dict()}"
@@ -422,13 +454,36 @@ async def test_stonfi_v2_withdraw_parity_jetton_first():
 
 @pytest.mark.asyncio
 async def test_stonfi_v2_withdraw_parity_ton_first():
-    """Mirrored candidate order → payout_1 = TON, payout_2 = jetton."""
+    """Mirrored candidate order: next_blocks lists the TON leg first, but the
+    jetton leg has the lower lt. Legacy follows raw next_blocks order (payout_1
+    = TON); the IR engine canonicalizes (T21, min_lt) to jetton-first. Both
+    consume the same set of blocks, so the leg-order-tolerant parity holds; the
+    legacy assignment is asserted here (the IR's is pinned by the determinism
+    test below)."""
     hw = await _run_parity(lambda: _build_withdraw_transactions(jetton_first=False))
     b = hw[0]
     assert b.data["asset1_out"].is_ton is True
     assert b.data["amount1_out"].value == TON_PAYOUT_AMOUNT
     assert b.data["asset2_out"].is_ton is False
     assert b.data["amount2_out"].value == JETTON_PAYOUT_AMOUNT
+
+
+@pytest.mark.asyncio
+async def test_stonfi_v2_withdraw_ir_order_invariant():
+    """T21 determinism: the IR engine produces identical output whichever way
+    the pool's out-messages are ordered in next_blocks."""
+    ir_matchers = _ir_matchers()
+    if ir_matchers is None:
+        pytest.skip(_SKIP_REASON)
+    context.interface_repository.set(TestInterfaceRepository(_interfaces()))
+    a = await _run_matchers(ir_matchers, _build_withdraw_transactions(jetton_first=True))
+    context.interface_repository.set(TestInterfaceRepository(_interfaces()))
+    b = await _run_matchers(ir_matchers, _build_withdraw_transactions(jetton_first=False))
+    assert len(a) == len(b) == 1
+    assert set(a[0].data) == set(b[0].data)
+    for k in a[0].data:
+        assert _values_equal(a[0].data[k], b[0].data[k]), f"determinism: field {k!r} differs"
+    assert _node_hashes(a[0]) == _node_hashes(b[0])
 
 
 @pytest.mark.asyncio

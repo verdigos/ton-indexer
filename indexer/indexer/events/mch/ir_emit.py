@@ -290,6 +290,10 @@ def emit_ir(
             "include_excess": bool(cm.include_excess),
             "include_bounces": bool(cm.include_bounces),
         }
+        # `priority` (§8.6): emitted only when non-default (100), keeping existing
+        # artifacts byte-identical. The loader defaults an absent key to 100.
+        if cm.priority != 100:
+            rec["priority"] = cm.priority
         # Declarative matchers (build statements, no registered builder) have
         # no builder name; per the container rule (no nulls for absent
         # fields), omit rather than emit "builder": null.
