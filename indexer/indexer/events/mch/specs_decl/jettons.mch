@@ -50,7 +50,7 @@ matcher jetton_transfer {
         sender_wallet:          account(transfer.msg.destination)
         receiver:               account(wallet.owner) if mismatch else account(transfer.body.destination)
         receiver_wallet:        account(internal.msg.destination)
-        response_address:       account(transfer.body.response)
+        response_address:       account(transfer.body.response) ?? addr_none()
         forward_amount:         amount(fwd)
         desired_forward_amount: amount(transfer.body.forward_amount)
         query_id:               transfer.body.query_id

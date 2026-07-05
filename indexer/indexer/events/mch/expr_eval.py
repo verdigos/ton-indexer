@@ -29,6 +29,8 @@ from __future__ import annotations
 import base64
 from typing import Any
 
+from pytoniq_core import Cell
+
 from indexer.events.blocks.core import Block
 from indexer.events.blocks.utils import AccountId, Amount, Asset
 
@@ -59,7 +61,21 @@ def _builtin_ton_asset() -> Asset:
     return Asset(is_ton=True)
 
 
+def _builtin_addr_none() -> AccountId:
+    # The addr_none AccountId — distinct from a null (missing) address. Mirrors
+    # the host's `AccountId(None)`: repr "addr_none", as_str() -> None. Needed
+    # because `account(null)` short-circuits to null; a field that must carry a
+    # present-but-empty address (e.g. a jetton transfer's absent response) uses
+    # `account(x) ?? addr_none()`. C++-portable: a compile-time constant value.
+    return AccountId(None)
+
+
 def _builtin_b64(x: Any) -> str:
+    # BOC-encode a raw Cell before base64 (mirrors host `cell.to_boc()`); a
+    # field already carrying boc bytes (parsers that pre-encode payloads) passes
+    # straight through. C++-portable: cell serialization is a host primitive.
+    if isinstance(x, Cell):
+        x = x.to_boc()
     return base64.b64encode(x).decode("utf-8")
 
 
@@ -68,6 +84,7 @@ BUILTINS: dict[str, tuple[Any, int]] = {
     "amount":    (_builtin_amount, 1),
     "asset":     (_builtin_asset, 1),
     "ton_asset": (_builtin_ton_asset, 0),
+    "addr_none": (_builtin_addr_none, 0),
     "b64":       (_builtin_b64, 1),
 }
 

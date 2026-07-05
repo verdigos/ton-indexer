@@ -1,17 +1,15 @@
-"""mch builder for the vesting send-message matcher (specs/vesting.mch).
+"""mch registration for the vesting send-message matcher (specs/vesting.mch).
 
-Thin adapter: extracts the anchor block from the runtime Match and delegates to
-the shared build core in blocks/vesting.py — the same function the legacy
-VestingSendMessageBlockMatcher calls. The synthesized wrapper merges the
-consumed blocks (request + response).
+specs/vesting.mch is FULLY DECLARATIVE (build statements + `out {...}`, no
+registered builder): the runtime evaluates it, so this module registers the
+message parser (for `parse`) plus the opcodes and produced block type. The
+legacy VestingSendMessageBlockMatcher and its build_vesting_send_message_core
+(blocks/vesting.py) are unchanged and remain the parity reference.
 """
 from __future__ import annotations
 
 from indexer.events.blocks.messages.vesting import VestingSendMessage
-from indexer.events.blocks.vesting import (
-    VestingSendMessageBlock,
-    build_vesting_send_message_core,
-)
+from indexer.events.blocks.vesting import VestingSendMessageBlock
 from indexer.events.mch.registry import Registries
 
 OPCODES = {
@@ -23,15 +21,16 @@ BLOCK_TYPES = {
     "VestingSendMessageBlock": VestingSendMessageBlock,
 }
 
+MESSAGE_TYPES = {
+    "VestingSendMessage": VestingSendMessage,
+}
+
 
 def register_vesting(reg: Registries) -> Registries:
     """Register everything specs/vesting.mch needs into `reg`."""
     reg.opcodes.update(OPCODES)
     reg.block_types.update(BLOCK_TYPES)
-
-    @reg.register_builder("build_vesting_send_message")
-    async def build_vesting_send_message(m):
-        return build_vesting_send_message_core(m.send)
+    reg.message_types.update(MESSAGE_TYPES)
 
     return reg
 

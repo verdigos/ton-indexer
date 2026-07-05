@@ -595,7 +595,8 @@ Branches are tested in order; first true branch wins. `else` is required unless 
 
 Deliberately small, **pure and total**. Features: capture/local references, field access (`x.y`), the implicit accessors `CAPTURE.msg` (message envelope: `source`, `destination`, `value`, `opcode`) and `CAPTURE.body` (parsed body after `parse`), literals, comparisons, `and`/`or`/`not`, `?? ` default, `x if cond else y`, and a fixed builtin set:
 
-- Constructors: `jetton(master)`, `ton()`, `account(addr)`, `amount(x)` — the `Asset`/`AccountId`/`Amount` value objects.
+- Constructors: `asset(master)`, `ton_asset()`, `account(addr)`, `amount(x)` — the `Asset`/`AccountId`/`Amount` value objects. `account(null)` short-circuits to null (a *missing* address); `addr_none()` builds the distinct **addr_none** `AccountId` (present but empty — repr `addr_none`, `as_str()` → null). A field that must carry a present-but-empty address uses `account(x) ?? addr_none()`, mirroring the host's `AccountId(None)`.
+- Encoding: `b64(x)` base64-encodes `x`; a raw `Cell` is BOC-encoded first (mirrors `cell.to_boc()`), so a field carrying either boc bytes or a parsed Cell serialises identically.
 - List combinators over list captures: `first(xs)`, `last(xs)`, `sum(xs)`, `len(xs)`, `zip(xs, ys)`, `map(xs, field)` (field projection only, no lambdas).
 - Declared host functions: `fn` names, called like builtins.
 

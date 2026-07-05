@@ -192,11 +192,13 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     ("specs/dns.mch", _SPECS_DIR / "dns.mch", dns_registries, (), (ChangeDnsRecordMatcher,)),
     ("specs/stonfi_v2_swap.mch", _SPECS_DIR / "stonfi_v2_swap.mch", stonfi_v2_registries,
      _PREREQ_SWAP, (StonfiV2SwapBlockMatcher,)),
-    # specs_decl/jettons.mch is a fully declarative POC spec, NOT a legacy-faithful
-    # reproduction: it emits `response_address=None` where the legacy build core
-    # emits `addr_none`. It was only ever validated as a compiled-vs-IR round trip;
-    # under T29 that round trip becomes a conformance snapshot in
-    # test_ir_engine_parity.py, so it is intentionally out of the legacy-vs-IR sweep.
+    # specs_decl/jettons.mch is the fully declarative jetton family. It is now
+    # legacy-faithful across the corpus: the `addr_none()` builtin (G1) lets its
+    # transfer emit an addr_none response_address exactly like the legacy build
+    # core (previously it emitted None here — the sole divergence that kept it out
+    # of this sweep). It runs alongside the builder spec (specs/jettons.mch) as an
+    # independent legacy-vs-IR check on the declarative path.
+    ("specs_decl/jettons.mch", _DECL_DIR / "jettons.mch", jetton_decl_registries, (), _JETTON_LEGACY),
     ("specs_decl/dedust_swap_hybrid.mch", _DECL_DIR / "dedust_swap_hybrid.mch", dedust_hybrid_registries,
      _PREREQ_SWAP, (DedustSwapBlockMatcher,)),
     # Port wave (2026-07-04). Prereqs mirror each spec's own integration test.

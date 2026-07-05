@@ -2,8 +2,10 @@
 checks in build_matchers (mch_ir/engine.py).
 
 The happy path loads the real artifact emitted from indexer/events/mch/specs/
-(9 builder-based matchers) and wires it against stub registries assembled from
-the artifact's own referenced names.
+(builder-based matchers plus the declarative vesting matcher) and wires it
+against stub registries assembled from the artifact's own referenced names
+(builders, shapers, predicates, and the message types / lookup kinds that
+declarative build programs reference).
 """
 from __future__ import annotations
 
@@ -41,6 +43,18 @@ def _min_doc(**over) -> dict:
     return doc
 
 
+def _collect_lookup_names(expr, out: set) -> None:
+    """Walk an IR expression tree collecting every `lookup` kind name."""
+    if isinstance(expr, dict):
+        if expr.get("k") == "lookup":
+            out.add(expr["name"])
+        for v in expr.values():
+            _collect_lookup_names(v, out)
+    elif isinstance(expr, list):
+        for v in expr:
+            _collect_lookup_names(v, out)
+
+
 def _stub_registries(artifact) -> Registries:
     """Permissive registries covering every name the artifact references."""
     reg = Registries()
@@ -49,6 +63,7 @@ def _stub_registries(artifact) -> Registries:
             reg.predicates.setdefault(node["pred"], lambda _b: True)
         if "where" in node:
             reg.predicates.setdefault(node["where"], lambda _b: True)
+    lookup_names: set = set()
     for m in artifact.matchers:
         if "builder" in m:
             async def _stub(match):
@@ -56,6 +71,19 @@ def _stub_registries(artifact) -> Registries:
             reg.builders.setdefault(m["builder"], _stub)
         if "shape" in m:
             reg.shapers.setdefault(m["shape"], lambda _produced, _match: None)
+        # Declarative matchers reference message types (via `parse`) and lookup
+        # kinds (via `lookup ...` in expressions); the loader/engine validate
+        # these names, so the permissive stub must cover them too.
+        for stmt in m.get("build_program", []):
+            if stmt.get("s") == "parse":
+                for t in stmt.get("types", []):
+                    reg.message_types.setdefault(t, object)
+            _collect_lookup_names(stmt, lookup_names)
+
+    async def _stub_lookup(*_args):
+        return None
+    for name in lookup_names:
+        reg.lookups.setdefault(name, _stub_lookup)
     return reg
 
 
