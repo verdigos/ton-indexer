@@ -412,7 +412,7 @@ Goal: `where .field == literal` / `!=` on any node; missing field ⇒ false; mat
 Accept: behavioral test replacing a `GenericMatcher`-style data check (stonfi_v2 `has_internal_transfer` case).
 
 ### T34 — `produces switch` + declarative DNS port
-Status: todo
+Status: done (2026-07-05 — `produces switch { when EXPR => BTYPE out {…} … else => BTYPE out {…} }` now parses (KW_SWITCH + `=>` FATARROW), resolves (R017 out/switch-exclusive, R019 else-order/uniqueness, R020 branch btype ∈ produces, R021 else-required), emits (`{"s":"switch","branches":[…]}`, additive), and EXECUTES: `BuildProgram._eval_switch` picks the first true (or `else`) branch, setting both the produced btype and its `out`; `engine.py` uses `outcome.btype or produces[0]`. Optional keys `name?: expr` omit a null-valued key (§9.5) — reproduces DNS's conditional `collection_address`. `specs/dns.mch` is now FULLY declarative (zero host build code): `parse` + `lookup nft_item` (raw, un-normalized, mirroring legacy) + `failed when` + a 3-way `produces switch`; the zero-key test is `b64(key) == "<b64 of 32 zeros>"`. `mch/builders/dns.py` drops the builder, registers the message type + raw lookup. All 5 test_dns synthetic parity tests green; builder deleted for the mch path.)
 Spec: §9.5, §14.5
 Needs: T32
 Goal: runtime dispatch; port DNS fully declaratively (no host builder); retire T14's external builder for the mch path.

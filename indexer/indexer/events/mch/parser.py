@@ -34,7 +34,7 @@ _CMP_OPS: dict[TokenKind, str] = {
 _BUILD_STMT_HEADS: frozenset[TokenKind] = frozenset({
     TokenKind.KW_PARSE, TokenKind.KW_LET, TokenKind.KW_REJECT,
     TokenKind.KW_FAILED, TokenKind.KW_BROKEN, TokenKind.KW_OUT,
-    TokenKind.KW_FLOW,
+    TokenKind.KW_FLOW, TokenKind.KW_PRODUCES,
 })
 
 
@@ -587,6 +587,8 @@ def _parse_build_stmts(s: _ParserState) -> tuple[ast_.BuildStmt, ...]:
             stmts.append(_parse_out_stmt(s))
         elif t.kind is TokenKind.KW_FLOW:
             stmts.append(_parse_flow_stmt(s))
+        elif t.kind is TokenKind.KW_PRODUCES:
+            stmts.append(_parse_switch_stmt(s))
     return tuple(stmts)
 
 
@@ -643,16 +645,63 @@ def _parse_out_stmt(s: _ParserState) -> ast_.OutStmt:
         if s.at(TokenKind.EOF):
             s.bag.error("P001_UNEXPECTED_TOKEN", "unterminated out block", start)
             raise CompileError(s.bag)
-        fname = s.eat_name()
+        fname = s.eat_field_name()
+        optional = False
+        if s.at(TokenKind.QUESTION):
+            s.i += 1
+            optional = True
         s.eat(TokenKind.COLON)
         s.skip_newlines()
         value = _parse_expr(s)
-        fields.append(ast_.OutField(name=fname.text, value=value, span=_join(fname.span, value.span)))
+        fields.append(ast_.OutField(
+            name=fname.text, value=value, optional=optional,
+            span=_join(fname.span, value.span),
+        ))
     end = s.eat(TokenKind.RBRACE).span
     if not fields:
         s.bag.error("P002_EMPTY_CHILDREN_ITEM", "out block must contain at least one field", _join(start, end))
         raise CompileError(s.bag)
     return ast_.OutStmt(fields=tuple(fields), span=_join(start, end))
+
+
+def _parse_switch_stmt(s: _ParserState) -> ast_.SwitchStmt:
+    """`produces switch { when EXPR => BTYPE out {…} … else => BTYPE out {…} }`."""
+    start = s.eat(TokenKind.KW_PRODUCES).span
+    s.eat(TokenKind.KW_SWITCH)
+    s.eat(TokenKind.LBRACE)
+    branches: list[ast_.SwitchBranch] = []
+    while True:
+        while s.at(TokenKind.NEWLINE) or s.at(TokenKind.SEMI):
+            s.i += 1
+        if s.at(TokenKind.RBRACE):
+            break
+        if s.at(TokenKind.EOF):
+            s.bag.error("P001_UNEXPECTED_TOKEN", "unterminated produces switch", start)
+            raise CompileError(s.bag)
+        b_start = s.peek().span
+        if s.at(TokenKind.KW_WHEN):
+            s.i += 1
+            cond: ast_.Expr | None = _parse_expr(s)
+        elif s.at(TokenKind.KW_ELSE):
+            s.i += 1
+            cond = None
+        else:
+            t = s.peek()
+            s.bag.error("P001_UNEXPECTED_TOKEN",
+                        f"produces switch: expected `when` or `else`, found {t.kind.name}", t.span)
+            raise CompileError(s.bag)
+        s.eat(TokenKind.FATARROW)
+        btype = s.eat(TokenKind.IDENT)
+        out = _parse_out_stmt(s)
+        branches.append(ast_.SwitchBranch(
+            condition=cond, btype=btype.text, out=out,
+            span=_join(b_start, out.span),
+        ))
+    end = s.eat(TokenKind.RBRACE).span
+    if not branches:
+        s.bag.error("P002_EMPTY_CHILDREN_ITEM", "produces switch must have at least one branch", _join(start, end))
+        raise CompileError(s.bag)
+    return ast_.SwitchStmt(branches=tuple(branches), span=_join(start, end))
 
 
 # ==========================================================================
@@ -802,6 +851,10 @@ def _parse_primary(s: _ParserState) -> ast_.Expr:
         s.skip_newlines()
         s.eat(TokenKind.RPAREN)
         return inner
+    if t.kind is TokenKind.LBRACKET:
+        return _parse_list_lit(s)
+    if t.kind is TokenKind.LBRACE:
+        return _parse_record_lit(s)
     if t.kind is TokenKind.IDENT:
         s.i += 1
         return ast_.NameRef(name=t.text, span=t.span)
@@ -815,6 +868,49 @@ def _parse_lookup(s: _ParserState) -> ast_.LookupExpr:
     s.eat(TokenKind.LPAREN)
     args, end = _parse_arg_list(s)
     return ast_.LookupExpr(kind=kind.text, args=args, span=_join(start, end))
+
+
+def _parse_list_lit(s: _ParserState) -> ast_.ListLit:
+    """`[expr, ...]` — list literal (§9.6 G4). Trailing comma + newlines OK."""
+    start = s.eat(TokenKind.LBRACKET).span
+    elements: list[ast_.Expr] = []
+    s.skip_newlines()
+    if not s.at(TokenKind.RBRACKET):
+        elements.append(_parse_expr(s))
+        while True:
+            s.skip_newlines()
+            if not s.at(TokenKind.COMMA):
+                break
+            s.i += 1
+            s.skip_newlines()
+            if s.at(TokenKind.RBRACKET):
+                break  # trailing comma
+            elements.append(_parse_expr(s))
+    s.skip_newlines()
+    end = s.eat(TokenKind.RBRACKET).span
+    return ast_.ListLit(elements=tuple(elements), span=_join(start, end))
+
+
+def _parse_record_lit(s: _ParserState) -> ast_.RecordLit:
+    """`{name: expr, ...}` — record literal (§9.6 G4). Fields separated by
+    comma/newline/`;` (same convention as `out { }`)."""
+    start = s.eat(TokenKind.LBRACE).span
+    fields: list[ast_.RecordField] = []
+    while True:
+        while s.at(TokenKind.NEWLINE) or s.at(TokenKind.SEMI) or s.at(TokenKind.COMMA):
+            s.i += 1
+        if s.at(TokenKind.RBRACE):
+            break
+        if s.at(TokenKind.EOF):
+            s.bag.error("P001_UNEXPECTED_TOKEN", "unterminated record literal", start)
+            raise CompileError(s.bag)
+        fname = s.eat_field_name()
+        s.eat(TokenKind.COLON)
+        s.skip_newlines()
+        value = _parse_expr(s)
+        fields.append(ast_.RecordField(name=fname.text, value=value, span=_join(fname.span, value.span)))
+    end = s.eat(TokenKind.RBRACE).span
+    return ast_.RecordLit(fields=tuple(fields), span=_join(start, end))
 
 
 def _decode_string(text: str) -> str:

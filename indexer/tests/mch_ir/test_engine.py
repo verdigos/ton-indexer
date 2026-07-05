@@ -184,6 +184,56 @@ async def test_declarative_matcher_matches_compiled_output():
     assert bar.parent is produced
 
 
+_SWITCH_SRC = """
+matcher decl_switch {
+    produces small | big | huge
+    entry    @x
+
+    op Foo @x
+
+    parse x as FakeTransfer
+    let amt = x.body.amount
+    produces switch {
+        when amt > 1000 => huge  out { amount: amount(amt), tag: "H" }
+        when amt > 100  => big   out { amount: amount(amt), note?: null }
+        else            => small out { amount: amount(amt) }
+    }
+}
+"""
+
+
+def _switch_registries() -> Registries:
+    reg = _registries()
+    for bt in ("small", "big", "huge"):
+        reg.block_types[bt] = object
+    return reg
+
+
+@pytest.mark.asyncio
+async def test_produces_switch_dispatches_btype_and_optional_key():
+    reg = _switch_registries()
+    ir_m = _ir_matcher(_SWITCH_SRC, reg)
+
+    # amt > 1000 -> huge branch, with the `tag` field.
+    anchor = _FakeCC(OP_FOO, body=_body(5000), lt=10)
+    (produced,) = await ir_m.try_build(anchor)
+    assert produced.btype == "huge"
+    assert produced.data == {"amount": Amount(5000), "tag": "H"}
+
+    # 100 < amt <= 1000 -> big branch; `note?: null` is omitted (optional key).
+    anchor = _FakeCC(OP_FOO, body=_body(500), lt=10)
+    (produced,) = await ir_m.try_build(anchor)
+    assert produced.btype == "big"
+    assert produced.data == {"amount": Amount(500)}
+    assert "note" not in produced.data
+
+    # else -> small branch.
+    anchor = _FakeCC(OP_FOO, body=_body(50), lt=10)
+    (produced,) = await ir_m.try_build(anchor)
+    assert produced.btype == "small"
+    assert produced.data == {"amount": Amount(50)}
+
+
 @pytest.mark.asyncio
 async def test_failed_and_broken_flags():
     ir_m = _ir_matcher(_HAPPY_SRC)

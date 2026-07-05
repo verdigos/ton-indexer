@@ -79,6 +79,79 @@ def _builtin_b64(x: Any) -> str:
     return base64.b64encode(x).decode("utf-8")
 
 
+# ---------------------------------------------------------------------------
+# List combinators (spec §9.6). Operate on list captures / list literals. Edge
+# semantics are fixed and total (no host-specific behaviour):
+#   - a null list argument never reaches these (the call evaluator returns null
+#     first), so every argument here is a real list;
+#   - first/last on an empty list -> null; sum/len on empty -> 0 / 0;
+#   - sum coerces each element to an integer (Amount -> .value, int -> itself,
+#     anything else -> fault) and is integer-valued;
+#   - zip truncates to the shorter input (pairs are 2-element lists);
+#   - map projects one field per element (dict key lookup, attribute fallback) —
+#     no lambdas. Each combinator is a one-line loop in C++ (vector/map ops).
+# ---------------------------------------------------------------------------
+
+
+def _require_list(name: str, xs: Any) -> list:
+    if not isinstance(xs, list):
+        raise EvalError(f"{name} expects a list, got {type(xs).__name__}")
+    return xs
+
+
+def _as_amount_int(x: Any) -> int:
+    if isinstance(x, Amount):
+        return x.value
+    if isinstance(x, bool):  # guard: bool is an int subclass, reject it
+        raise EvalError("sum: bool is not summable")
+    if isinstance(x, int):
+        return x
+    raise EvalError(f"sum: element is not an integer or Amount ({type(x).__name__})")
+
+
+def _project(x: Any, field: Any) -> Any:
+    if not isinstance(field, str):
+        raise EvalError(f"map field must be a string, got {type(field).__name__}")
+    if x is None:
+        return None
+    if isinstance(x, dict):
+        if field in x:
+            return x[field]
+        raise EvalError(f"map: element has no field {field!r}")
+    try:
+        return getattr(x, field)
+    except AttributeError:
+        raise EvalError(f"map: {type(x).__name__} has no field {field!r}") from None
+
+
+def _builtin_first(xs: Any) -> Any:
+    xs = _require_list("first", xs)
+    return xs[0] if xs else None
+
+
+def _builtin_last(xs: Any) -> Any:
+    xs = _require_list("last", xs)
+    return xs[-1] if xs else None
+
+
+def _builtin_len(xs: Any) -> int:
+    return len(_require_list("len", xs))
+
+
+def _builtin_sum(xs: Any) -> int:
+    return sum(_as_amount_int(x) for x in _require_list("sum", xs))
+
+
+def _builtin_zip(xs: Any, ys: Any) -> list:
+    xs = _require_list("zip", xs)
+    ys = _require_list("zip", ys)
+    return [[a, b] for a, b in zip(xs, ys)]
+
+
+def _builtin_map(xs: Any, field: Any) -> list:
+    return [_project(x, field) for x in _require_list("map", xs)]
+
+
 BUILTINS: dict[str, tuple[Any, int]] = {
     "account":   (_builtin_account, 1),
     "amount":    (_builtin_amount, 1),
@@ -86,6 +159,12 @@ BUILTINS: dict[str, tuple[Any, int]] = {
     "ton_asset": (_builtin_ton_asset, 0),
     "addr_none": (_builtin_addr_none, 0),
     "b64":       (_builtin_b64, 1),
+    "first":     (_builtin_first, 1),
+    "last":      (_builtin_last, 1),
+    "len":       (_builtin_len, 1),
+    "sum":       (_builtin_sum, 1),
+    "zip":       (_builtin_zip, 2),
+    "map":       (_builtin_map, 2),
 }
 
 
@@ -270,6 +349,10 @@ def _sync_eval(e: dict, block: Block) -> Any:
         if _require_bool(_sync_eval(e["cond"], block)):
             return _sync_eval(e["then"], block)
         return _sync_eval(e["else"], block)
+    if k == "list":
+        return [_sync_eval(it, block) for it in e["items"]]
+    if k == "record":
+        return {f["name"]: _sync_eval(f["expr"], block) for f in e["fields"]}
     if k == "lookup":
         raise EvalError("lookup is not evaluable in a `where` clause")
     raise EvalError(f"unsupported expression kind {k!r}")

@@ -56,4 +56,10 @@ def emit_expr(e: ast_.Expr) -> dict:
             "then": emit_expr(e.then),
             "else": emit_expr(e.orelse),
         }
+    if isinstance(e, ast_.ListLit):
+        return {"k": "list", "items": [emit_expr(x) for x in e.elements]}
+    if isinstance(e, ast_.RecordLit):
+        return {"k": "record", "fields": [
+            {"name": f.name, "expr": emit_expr(f.value)} for f in e.fields
+        ]}
     raise ValueError(f"unsupported expression node {type(e).__name__} in IR emission")

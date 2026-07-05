@@ -232,11 +232,32 @@ def _emit_stmt(stmt: ast_.BuildStmt) -> dict:
     if isinstance(stmt, ast_.FlowStmt):
         return {"s": "flow", "kind": stmt.kind, "args": [_emit_expr(a) for a in stmt.args]}
     if isinstance(stmt, ast_.OutStmt):
-        return {
-            "s": "out",
-            "fields": [{"name": f.name, "expr": _emit_expr(f.value)} for f in stmt.fields],
-        }
+        return {"s": "out", "fields": _emit_out_fields(stmt.fields)}
+    if isinstance(stmt, ast_.SwitchStmt):
+        return {"s": "switch", "branches": [_emit_switch_branch(b) for b in stmt.branches]}
     raise ValueError(f"unsupported build statement {type(stmt).__name__} in IR emission")
+
+
+def _emit_out_fields(fields) -> list[dict]:
+    out = []
+    for f in fields:
+        rec = {"name": f.name, "expr": _emit_expr(f.value)}
+        # `optional` is emitted only when set, keeping existing artifacts
+        # byte-identical (additive-only IR change).
+        if f.optional:
+            rec["optional"] = True
+        out.append(rec)
+    return out
+
+
+def _emit_switch_branch(b: ast_.SwitchBranch) -> dict:
+    # Normalize the branch btype the same way `produces` names are (class ->
+    # btype string), so a branch may name either form.
+    rec: dict = {"btype": _produces_btype(b.btype), "fields": _emit_out_fields(b.out.fields)}
+    # The `else` arm (condition is None) omits `when`.
+    if b.condition is not None:
+        rec["when"] = _emit_expr(b.condition)
+    return rec
 
 
 def emit_ir(

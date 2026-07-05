@@ -21,11 +21,11 @@ ANCHOR_KINDS = frozenset({"opcode_set", "btype", "mixed", "pred"})
 CAPTURE_CARDS = frozenset({"one", "opt", "many"})
 EXPR_KINDS = frozenset({
     "int", "str", "bool", "null", "name", "dotfield", "attr", "call",
-    "lookup", "unary", "bin", "ternary",
+    "lookup", "unary", "bin", "ternary", "list", "record",
 })
 UNARY_OPS = frozenset({"not", "-"})
 BIN_OPS = frozenset({"and", "or", "==", "!=", "<", "<=", ">", ">=", "??"})
-STMT_TAGS = frozenset({"parse", "let", "reject", "failed", "broken", "flow", "out"})
+STMT_TAGS = frozenset({"parse", "let", "reject", "failed", "broken", "flow", "out", "switch"})
 FLOW_ARITY = {"jetton": 3, "ton": 2, "fees": 2}
 
 
@@ -189,13 +189,28 @@ def _check_stmt(where: str, stmt: Any) -> None:
         for a in args:
             _check_expr(where, a)
     elif s == "out":
-        fields = stmt.get("fields")
-        if not isinstance(fields, list):
-            raise IrLoadError(f"{where}: out statement needs a fields array")
-        for f in fields:
-            if not isinstance(f, dict) or not isinstance(f.get("name"), str):
-                raise IrLoadError(f"{where}: bad out field {f!r}")
-            _check_expr(where, f.get("expr"))
+        _check_out_fields(where, stmt.get("fields"))
+    elif s == "switch":
+        branches = stmt.get("branches")
+        if not isinstance(branches, list) or not branches:
+            raise IrLoadError(f"{where}: switch statement needs a non-empty branches array")
+        for b in branches:
+            if not isinstance(b, dict) or not isinstance(b.get("btype"), str):
+                raise IrLoadError(f"{where}: switch branch needs a string 'btype'")
+            if "when" in b:  # absent => the else arm
+                _check_expr(where, b["when"])
+            _check_out_fields(where, b.get("fields"))
+
+
+def _check_out_fields(where: str, fields: Any) -> None:
+    if not isinstance(fields, list):
+        raise IrLoadError(f"{where}: out fields must be an array")
+    for f in fields:
+        if not isinstance(f, dict) or not isinstance(f.get("name"), str):
+            raise IrLoadError(f"{where}: bad out field {f!r}")
+        if "optional" in f and not isinstance(f["optional"], bool):
+            raise IrLoadError(f"{where}: out field 'optional' must be a bool")
+        _check_expr(where, f.get("expr"))
 
 
 def _check_expr(where: str, e: Any) -> None:
@@ -237,6 +252,20 @@ def _check_expr(where: str, e: Any) -> None:
         _check_expr(where, e.get("cond"))
         _check_expr(where, e.get("then"))
         _check_expr(where, e.get("else"))
+    elif k == "list":
+        items = e.get("items")
+        if not isinstance(items, list):
+            raise IrLoadError(f"{where}: list node needs an 'items' array")
+        for it in items:
+            _check_expr(where, it)
+    elif k == "record":
+        fields = e.get("fields")
+        if not isinstance(fields, list):
+            raise IrLoadError(f"{where}: record node needs a 'fields' array")
+        for f in fields:
+            if not isinstance(f, dict) or not isinstance(f.get("name"), str):
+                raise IrLoadError(f"{where}: record field needs a string 'name'")
+            _check_expr(where, f.get("expr"))
 
 
 def _check_node(i: int, node: Any, n_nodes: int) -> None:
@@ -315,3 +344,7 @@ def _check_where_expr_sync(where: str, e: dict) -> None:
             _check_where_expr_sync(where, e[key])
     for a in e.get("args", []):
         _check_where_expr_sync(where, a)
+    for it in e.get("items", []):
+        _check_where_expr_sync(where, it)
+    for f in e.get("fields", []):
+        _check_where_expr_sync(where, f["expr"])

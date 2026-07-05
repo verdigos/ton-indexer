@@ -406,3 +406,100 @@ def test_apply_flows_records_effects_and_skips_null_legs():
     assert flow.ton == 5
     assert flow.fees == 2
     assert flow.jettons[master] == 10
+
+
+# ==========================================================================
+# List combinators (spec §9.6) — edge semantics
+# ==========================================================================
+
+@pytest.mark.asyncio
+async def test_first_last():
+    assert await _eval("first(xs)", env={"xs": [1, 2, 3]}) == 1
+    assert await _eval("last(xs)", env={"xs": [1, 2, 3]}) == 3
+    # Empty list -> null; a null list argument -> null (call short-circuit).
+    assert await _eval("first(xs)", env={"xs": []}) is None
+    assert await _eval("last(xs)", env={"xs": []}) is None
+    assert await _eval("first(xs)", env={"xs": None}) is None
+
+
+@pytest.mark.asyncio
+async def test_len():
+    assert await _eval("len(xs)", env={"xs": [1, 2, 3]}) == 3
+    assert await _eval("len(xs)", env={"xs": []}) == 0
+    assert await _eval("len(xs)", env={"xs": None}) is None  # null propagation
+
+
+@pytest.mark.asyncio
+async def test_sum():
+    assert await _eval("sum(xs)", env={"xs": [1, 2, 3]}) == 6
+    assert await _eval("sum(xs)", env={"xs": []}) == 0  # empty -> 0
+    # Amount elements are coerced to their integer value.
+    assert await _eval("sum(xs)", env={"xs": [Amount(10), Amount(5)]}) == 15
+    # A non-numeric element is a fault (match rejection).
+    with pytest.raises(EvalError):
+        await _eval("sum(xs)", env={"xs": [1, "x"]})
+
+
+@pytest.mark.asyncio
+async def test_zip_truncates_to_shorter():
+    assert await _eval("zip(xs, ys)", env={"xs": [1, 2, 3], "ys": [10, 20]}) == [[1, 10], [2, 20]]
+    assert await _eval("zip(xs, ys)", env={"xs": [], "ys": [1]}) == []
+
+
+@pytest.mark.asyncio
+async def test_map_field_projection():
+    dicts = [{"amount": 1}, {"amount": 2}]
+    assert await _eval('map(xs, "amount")', env={"xs": dicts}) == [1, 2]
+    objs = [SimpleNamespace(k=7), SimpleNamespace(k=8)]
+    assert await _eval('map(xs, "k")', env={"xs": objs}) == [7, 8]
+    assert await _eval('map(xs, "amount")', env={"xs": []}) == []
+    # A missing field on an element is a fault.
+    with pytest.raises(EvalError):
+        await _eval('map(xs, "missing")', env={"xs": dicts})
+
+
+@pytest.mark.asyncio
+async def test_combinators_composed():
+    # sum of a projected field over a list of records.
+    dicts = [{"amount": 3}, {"amount": 4}, {"amount": 5}]
+    assert await _eval('sum(map(xs, "amount"))', env={"xs": dicts}) == 12
+    assert await _eval('len(map(xs, "amount"))', env={"xs": dicts}) == 3
+
+
+@pytest.mark.asyncio
+async def test_combinator_requires_list():
+    with pytest.raises(EvalError):
+        await _eval("len(x)", env={"x": 5})
+
+
+# ==========================================================================
+# List / record literals (spec §9.6 G4)
+# ==========================================================================
+
+@pytest.mark.asyncio
+async def test_list_literal():
+    assert await _eval("[1, 2, 3]") == [1, 2, 3]
+    assert await _eval("[]") == []
+    assert await _eval("[a, b]", env={"a": 7, "b": 8}) == [7, 8]
+    # trailing comma / newlines tolerated
+    assert await _eval("[1, 2,]") == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_record_literal():
+    assert await _eval("{a: 1, b: 2}") == {"a": 1, "b": 2}
+    assert await _eval("{}") == {}
+    assert await _eval("{x: a, y: a}", env={"a": 5}) == {"x": 5, "y": 5}
+
+
+@pytest.mark.asyncio
+async def test_nested_literals():
+    got = await _eval('{legs: [1, 2], meta: {n: 3}}')
+    assert got == {"legs": [1, 2], "meta": {"n": 3}}
+
+
+@pytest.mark.asyncio
+async def test_combinators_over_list_literal():
+    assert await _eval("sum([1, 2, 3])") == 6
+    assert await _eval("len([1, 2, 3])") == 3
+    assert await _eval("first([9, 8])") == 9

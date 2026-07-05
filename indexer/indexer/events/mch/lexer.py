@@ -13,6 +13,8 @@ _SINGLE_CHAR: dict[str, TokenKind] = {
     "$": TokenKind.DOLLAR,
     "{": TokenKind.LBRACE,
     "}": TokenKind.RBRACE,
+    "[": TokenKind.LBRACKET,
+    "]": TokenKind.RBRACKET,
     "(": TokenKind.LPAREN,
     ")": TokenKind.RPAREN,
     ".": TokenKind.DOT,
@@ -139,6 +141,7 @@ _TWO_CHAR_OPS: dict[tuple[str, str], TokenKind] = {
     ("<", "="): TokenKind.LE,
     (">", "="): TokenKind.GE,
     ("=", "="): TokenKind.EQEQ,
+    ("=", ">"): TokenKind.FATARROW,
     ("!", "="): TokenKind.NEQ,
     ("?", "?"): TokenKind.COALESCE,
 }
@@ -149,6 +152,7 @@ _ONE_CHAR_OPS: dict[str, TokenKind] = {
     "<": TokenKind.LT,
     ">": TokenKind.GT,
     "=": TokenKind.EQ,
+    "?": TokenKind.QUESTION,
 }
 
 

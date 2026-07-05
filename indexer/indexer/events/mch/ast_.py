@@ -106,6 +106,27 @@ class Ternary(Expr):
     span: Span
 
 
+@dataclass(frozen=True)
+class ListLit(Expr):
+    """`[expr, ...]` — a list value (§9.6 G4). Elements evaluate in order."""
+    elements: tuple[Expr, ...]
+    span: Span
+
+
+@dataclass(frozen=True)
+class RecordField:
+    name: str
+    value: Expr
+    span: Span
+
+
+@dataclass(frozen=True)
+class RecordLit(Expr):
+    """`{key: expr, ...}` — a record (string-keyed map) value (§9.6 G4)."""
+    fields: tuple[RecordField, ...]
+    span: Span
+
+
 class NodeHead:
     pass
 
@@ -282,12 +303,34 @@ class OutField:
     name: str
     value: Expr
     span: Span
+    # `name?: expr` — omit this key from the produced data map when the value
+    # evaluates to null (§9.5 optional key). Default fields always emit the key.
+    optional: bool = False
 
 
 @dataclass(frozen=True)
 class OutStmt(BuildStmt):
     """`out { field: expr <sep> ... }`."""
     fields: tuple[OutField, ...]
+    span: Span
+
+
+@dataclass(frozen=True)
+class SwitchBranch:
+    """One arm of a `produces switch`. `condition is None` marks the `else`
+    arm. `btype` is the produced block type this arm selects; `out` its fields."""
+    condition: Expr | None
+    btype: str
+    out: OutStmt
+    span: Span
+
+
+@dataclass(frozen=True)
+class SwitchStmt(BuildStmt):
+    """`produces switch { when cond => btype out {...} ... else => btype out {...} }`
+    (§9.5). Branches are tested in order; the first true (or `else`) wins,
+    selecting both the produced btype and its `out` fields."""
+    branches: tuple[SwitchBranch, ...]
     span: Span
 
 

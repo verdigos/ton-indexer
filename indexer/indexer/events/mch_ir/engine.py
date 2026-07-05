@@ -662,7 +662,9 @@ class IrMatcher:
                 return None
             if outcome is None:
                 return None
-            produced = Block(self.produces[0], [], outcome.data)
+            # A `produces switch` selects the produced btype per branch; otherwise
+            # the matcher's single declared produces[0] is used.
+            produced = Block(outcome.btype or self.produces[0], [], outcome.data)
             produced.failed = outcome.failed
             produced.broken = outcome.broken
             produced.merge_blocks(consumed)

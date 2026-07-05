@@ -71,6 +71,71 @@ def test_r014_duplicate_out_field():
     assert "R014_DUP_OUT_FIELD" in codes
 
 
+# --- produces switch (§9.5) resolver diagnostics ---------------------------
+
+def _switch_registries() -> Registries:
+    reg = _registries()
+    for bt in ("A", "B", "C"):
+        reg.block_types[bt] = object
+    return reg
+
+
+def _switch_src(body: str, produces: str = "A | B") -> str:
+    return (
+        "opcode Foo = 0xF00\n"
+        f"matcher m {{\n  produces {produces}\n  entry @x\n\n  op Foo @x\n"
+        + body + "\n}"
+    )
+
+
+def test_switch_dispatch_resolves_ok():
+    # A well-formed switch compiles clean (no diagnostics).
+    src = _switch_src(
+        "produces switch {\n"
+        "  when 1 == 1 => A out { v: 1 }\n"
+        "  else => B out { v: 2 }\n"
+        "}"
+    )
+    resolve(parse(list(tokenize(src, "t.mch")), "t.mch"), _switch_registries())
+
+
+def test_switch_requires_else():
+    src = _switch_src("produces switch {\n  when 1 == 1 => A out { v: 1 }\n}")
+    codes = _codes(src, _switch_registries())
+    assert "R021_SWITCH_NO_ELSE" in codes
+
+
+def test_switch_branch_after_else():
+    src = _switch_src(
+        "produces switch {\n"
+        "  else => A out { v: 1 }\n"
+        "  when 1 == 1 => B out { v: 2 }\n"
+        "}"
+    )
+    codes = _codes(src, _switch_registries())
+    assert "R019_SWITCH_BRANCH_AFTER_ELSE" in codes
+
+
+def test_switch_btype_not_in_produces():
+    src = _switch_src(
+        "produces switch {\n"
+        "  when 1 == 1 => C out { v: 1 }\n"  # C not in `produces A | B`
+        "  else => A out { v: 2 }\n"
+        "}"
+    )
+    codes = _codes(src, _switch_registries())
+    assert "R020_SWITCH_BTYPE_NOT_DECLARED" in codes
+
+
+def test_switch_and_out_are_mutually_exclusive():
+    src = _switch_src(
+        "out { v: 1 }\n"
+        "produces switch {\n  when 1 == 1 => A out { v: 1 }\n  else => B out { v: 2 }\n}"
+    )
+    codes = _codes(src, _switch_registries())
+    assert "R017_MULTIPLE_OUT" in codes
+
+
 def test_r015_build_directive_plus_statements_is_ambiguous():
     src = (
         "opcode Foo = 0xF00\n"

@@ -29,6 +29,9 @@ class BuildOutcome:
     failed: bool
     broken: bool
     flows: list[FlowEffect]
+    # Produced btype selected by a `produces switch`; None means the matcher's
+    # declared produces[0] is used (the non-switch case).
+    btype: str | None = None
 
 
 class BuildProgram:
@@ -46,6 +49,7 @@ class BuildProgram:
     async def run(self, env: dict[str, Any]) -> BuildOutcome | None:
         ev = Evaluator(dict(env), self.registries)
         data: dict | None = None
+        btype: str | None = None
         failed = False
         broken = False
         flows: list[FlowEffect] = []
@@ -66,7 +70,9 @@ class BuildProgram:
                 args = tuple([await ev.eval(a) for a in stmt["args"]])
                 flows.append(FlowEffect(kind=stmt["kind"], args=args))
             elif s == "out":
-                data = {f["name"]: await ev.eval(f["expr"]) for f in stmt["fields"]}
+                data = await self._eval_out_fields(stmt["fields"], ev)
+            elif s == "switch":
+                btype, data = await self._eval_switch(stmt["branches"], ev)
             else:
                 raise EvalError(f"unsupported build statement {s!r}")
         return BuildOutcome(
@@ -74,7 +80,29 @@ class BuildProgram:
             failed=failed,
             broken=broken,
             flows=flows,
+            btype=btype,
         )
+
+    @staticmethod
+    async def _eval_out_fields(fields: list[dict], ev: Evaluator) -> dict:
+        """Evaluate `out` fields into a data map. An `optional` field whose value
+        is null is omitted from the map (present-vs-absent key, §9.5)."""
+        data: dict = {}
+        for f in fields:
+            value = await ev.eval(f["expr"])
+            if f.get("optional") and value is None:
+                continue
+            data[f["name"]] = value
+        return data
+
+    async def _eval_switch(self, branches: list[dict], ev: Evaluator) -> tuple[str, dict]:
+        """Evaluate a `produces switch`: the first branch whose `when` is true
+        (or the `else` arm, which has no `when`) selects the produced btype and
+        its `out` fields. No branch matching is a fault (reject)."""
+        for b in branches:
+            if "when" not in b or await ev.eval_bool(b["when"]):
+                return b["btype"], await self._eval_out_fields(b["fields"], ev)
+        raise EvalError("produces switch: no branch matched and no `else` arm")
 
     def _do_parse(self, stmt: dict, ev: Evaluator) -> None:
         target = ev.env.get(stmt["target"])

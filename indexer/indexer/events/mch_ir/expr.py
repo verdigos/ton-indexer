@@ -89,6 +89,10 @@ class Evaluator:
             if await self.eval_bool(e["cond"]):
                 return await self.eval(e["then"])
             return await self.eval(e["else"])
+        if k == "list":
+            return [await self.eval(it) for it in e["items"]]
+        if k == "record":
+            return {f["name"]: await self.eval(f["expr"]) for f in e["fields"]}
         raise EvalError(f"unsupported expression kind {k!r}")
 
     async def eval_bool(self, e: dict) -> bool:

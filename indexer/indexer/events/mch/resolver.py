@@ -660,11 +660,19 @@ def _check_build_stmts(
             m.span,
         )
     has_out = any(isinstance(s, ast_.OutStmt) for s in m.build_stmts)
-    if m.build is None and m.build_stmts and not has_out:
+    has_switch = any(isinstance(s, ast_.SwitchStmt) for s in m.build_stmts)
+    if m.build is None and m.build_stmts and not (has_out or has_switch):
         bag.error(
             "R016_BUILD_NO_OUT",
-            f"matcher {m.name!r} has build statements but no `out` block; "
-            f"nothing to produce",
+            f"matcher {m.name!r} has build statements but no `out` block or "
+            f"`produces switch`; nothing to produce",
+            m.span,
+        )
+    if has_out and has_switch:
+        bag.error(
+            "R017_MULTIPLE_OUT",
+            f"matcher {m.name!r} mixes an `out` block and a `produces switch`; "
+            f"use exactly one output mechanism",
             m.span,
         )
 
@@ -722,16 +730,57 @@ def _check_build_stmts(
                     stmt.span,
                 )
             out_seen = True
-            seen_fields: set[str] = set()
-            for f in stmt.fields:
-                if f.name in seen_fields:
+            _check_out_fields(stmt.fields, available, bag)
+        elif isinstance(stmt, ast_.SwitchStmt):
+            else_seen = False
+            for i, branch in enumerate(stmt.branches):
+                if branch.condition is not None:
+                    if else_seen:
+                        bag.error(
+                            "R019_SWITCH_BRANCH_AFTER_ELSE",
+                            f"produces switch: `when` branch after the `else` arm is unreachable",
+                            branch.span,
+                        )
+                    _check_expr_refs(branch.condition, available, bag)
+                else:
+                    if else_seen:
+                        bag.error(
+                            "R019_SWITCH_BRANCH_AFTER_ELSE",
+                            f"produces switch: more than one `else` arm",
+                            branch.span,
+                        )
+                    else_seen = True
+                if branch.btype not in m.produces:
                     bag.error(
-                        "R014_DUP_OUT_FIELD",
-                        f"out field {f.name!r} appears more than once",
-                        f.span,
+                        "R020_SWITCH_BTYPE_NOT_DECLARED",
+                        f"produces switch branch btype {branch.btype!r} is not in the "
+                        f"matcher's `produces` union {list(m.produces)}",
+                        branch.span,
                     )
-                seen_fields.add(f.name)
-                _check_expr_refs(f.value, available, bag)
+                _check_out_fields(branch.out.fields, available, bag)
+            if not else_seen:
+                bag.error(
+                    "R021_SWITCH_NO_ELSE",
+                    f"produces switch has no `else` arm (exhaustiveness cannot be "
+                    f"proven; add an `else`)",
+                    stmt.span,
+                )
+
+
+def _check_out_fields(fields: tuple[ast_.OutField, ...], available: set[str],
+                      bag: DiagnosticBag) -> None:
+    """Unique field names (R014) and resolvable value expressions, for an `out`
+    block or a `produces switch` branch's out."""
+    seen_fields: set[str] = set()
+    for f in fields:
+        if f.name in seen_fields:
+            bag.error(
+                "R014_DUP_OUT_FIELD",
+                f"out field {f.name!r} appears more than once",
+                f.span,
+            )
+        seen_fields.add(f.name)
+        _check_expr_refs(f.value, available, bag)
 
 
 def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag) -> None:
@@ -765,6 +814,12 @@ def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag) -
             value(e.cond)
             value(e.then)
             value(e.orelse)
+        elif isinstance(e, ast_.ListLit):
+            for x in e.elements:
+                value(x)
+        elif isinstance(e, ast_.RecordLit):
+            for f in e.fields:
+                value(f.value)
         # FieldRef / literals: nothing to resolve.
 
     value(expr)
