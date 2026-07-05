@@ -50,12 +50,9 @@ TONCO_MCH = Path(specs_pkg.__file__).parent / "tonco_swap.mch"
 _PREREQUISITES = (JettonTransferBlockMatcher, PTonTransferMatcher)
 
 
-def _compiled_matcher() -> BlockMatcher:
-    compiled = compile_file(TONCO_MCH, tonco_swap_registries())
-    return {cm.name: cm.matcher for cm in compiled}["tonco_swap"]
-
-
 def _ir_matcher():
+    # Compiling is a frontend-internal step ir_emit needs; no compiled matcher is
+    # run as a runtime (T29).
     compiled = compile_file(TONCO_MCH, tonco_swap_registries())
     artifact = emit_ir(compiled, [TONCO_MCH.name])
     art = mch_ir.load_artifact(artifact)
@@ -155,8 +152,6 @@ async def _run_three_way(trace) -> list[Block]:
     each other). Returns the legacy blocks for fixture-shape assertions."""
     legacy = await _run_matcher(ToncoSwapBlockMatcher(), trace)
     assert legacy, "legacy matcher produced no tonco blocks - bad fixture"
-    compiled = await _run_matcher(_compiled_matcher(), trace)
-    _assert_parity("compiled", compiled, legacy)
     ir = await _run_matcher(_ir_matcher(), trace)
     _assert_parity("ir", ir, legacy)
     return legacy

@@ -1,0 +1,74 @@
+[
+  {
+    "broken": false,
+    "btype": "jetton_swap",
+    "consumed": [
+      "6nF+TsOn7Mt7fGy/UVRh95ja3XyY4GOy/5DpzRQSu+I=",
+      "C+rcLpFkRiWin/Ln+EO8/NZBfRDVHmOMhzE/RZ0o258=",
+      "ExwM76y4A3fdkKhpJNXRSDErwIVOtPFWZKvptmdd+Os=",
+      "Mfaw5rlCZP0ZzOk4cxhBhRepid5izbDziKXtYvowUPc=",
+      "NrcUUkiLuv8bglwqdy/iBWLmUp7PFRgW5Ez6orqlooA=",
+      "NrcUUkiLuv8bglwqdy/iBWLmUp7PFRgW5Ez6orqlooA=",
+      "PrlNm3/MkqaUQhwQFPWhlGjKK9lgnfxXNyJ0KO4ioyg=",
+      "R2wLV4I1FIJyhYmHZNWxofvz38JHlIacwfQzScM0L7k=",
+      "lQR6KutRRvtPcEB57SMimWCq7O68kzF7vFQaGLdxoDU=",
+      "w7WKoIN31RUwekbhzzVfu3WNklu5gzzGC2FPzbnXuNI=",
+      "w7WKoIN31RUwekbhzzVfu3WNklu5gzzGC2FPzbnXuNI=",
+      "xY/MjC4idpXXKJKTh2UCID0Shntig9K1So4PXP5JB58=",
+      "zI8pA3c3qPvRNKKXFWKAUsDrflCWHWMIxi4Mqx/BZTA="
+    ],
+    "data": {
+      "destination_asset": "0:CD0EFE78BFF4C4539B76EAB17293296C74F42CBF99EC499687FEFEC94893ED32",
+      "dex": "'dedust'",
+      "dex_incoming_transfer": {
+        "amount": "185867644473",
+        "asset": "0:896E9D240693F03E8046F94E42F9C59F3FF8E792CBE8B467C0ACF179D10F508A",
+        "destination": "0:e2538871d92e4824541cf4963121ebb7d6eb873e3d0fbeb9491a69bb61b49514",
+        "destination_jetton_wallet": "0:fa0208087193f59f708b0ca4e4a0a0a15dc5b6a021176b377c1451b4951edca1",
+        "source": "0:81812a9f5f84c5d3629c62c6bcefc526cd37966a716f80fd070a301d9deeceb6",
+        "source_jetton_wallet": "0:af1edd7b6ed89dadce2c013e73b58aa2708fc1b848df4b07630296b8eb37dc67"
+      },
+      "dex_outgoing_transfer": {
+        "amount": "4666275916",
+        "asset": "0:CD0EFE78BFF4C4539B76EAB17293296C74F42CBF99EC499687FEFEC94893ED32",
+        "destination": "0:a17d0198e066c9103bdb66a63bf898e6a5141389aa53cbbe936b678445ed99e2",
+        "destination_jetton_wallet": "0:3e6dc70db3489e5d8357711cacc46ced25462ef0d585710841ef6b0db211ab3b",
+        "source": "0:bc8db25f47b32eecae687b2888a070b78162e67428eeda9501b9c5ea9900a507",
+        "source_jetton_wallet": "0:3ebbd5337967c173ca7497c42bd54fdbf60dfedf02ce82a1598e737f2508a74c"
+      },
+      "in": {
+        "amount": "185867644473",
+        "asset": "0:896E9D240693F03E8046F94E42F9C59F3FF8E792CBE8B467C0ACF179D10F508A"
+      },
+      "out": {
+        "amount": "4666275916",
+        "asset": "0:CD0EFE78BFF4C4539B76EAB17293296C74F42CBF99EC499687FEFEC94893ED32"
+      },
+      "peer_swaps": [
+        {
+          "in": {
+            "amount": "14787435",
+            "asset": "0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE"
+          },
+          "out": {
+            "amount": "4666275916",
+            "asset": "0:CD0EFE78BFF4C4539B76EAB17293296C74F42CBF99EC499687FEFEC94893ED32"
+          }
+        },
+        {
+          "in": {
+            "amount": "185867644473",
+            "asset": "0:896E9D240693F03E8046F94E42F9C59F3FF8E792CBE8B467C0ACF179D10F508A"
+          },
+          "out": {
+            "amount": "14787435",
+            "asset": "0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE"
+          }
+        }
+      ],
+      "sender": "0:81812a9f5f84c5d3629c62c6bcefc526cd37966a716f80fd070a301d9deeceb6",
+      "source_asset": "0:896E9D240693F03E8046F94E42F9C59F3FF8E792CBE8B467C0ACF179D10F508A"
+    },
+    "failed": false
+  }
+]

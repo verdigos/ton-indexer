@@ -42,15 +42,16 @@ COFFEE_MCH = Path(specs_pkg.__file__).parent / "coffee_liquidity.mch"
 MATCHER_NAME = "coffee_create_vault"
 
 
-def _compiled_and_ir() -> tuple[BlockMatcher, BlockMatcher]:
+def _ir_matcher() -> BlockMatcher:
+    # Compiling is a frontend-internal step ir_emit needs; the compiled matcher
+    # is never run as a runtime (T29).
     compiled = compile_file(COFFEE_MCH, coffee_liquidity_registries())
-    compiled_by_name = {cm.name: cm.matcher for cm in compiled}
     artifact = emit_ir(compiled, [COFFEE_MCH.name])
     art = mch_ir.load_artifact(artifact)
     ir_by_name = {
         m.name: m for m in mch_ir.build_matchers(art, coffee_liquidity_registries())
     }
-    return compiled_by_name[MATCHER_NAME], ir_by_name[MATCHER_NAME]
+    return ir_by_name[MATCHER_NAME]
 
 
 def _build_block_tree(trace) -> Block:
@@ -132,14 +133,12 @@ def _assert_field_parity(
 async def test_coffee_create_vault_parity(trace_data):
     """Create request + vault deploy: legacy == compiled == IR, field-level."""
     trace, _ = trace_data
-    compiled_matcher, ir_matcher = _compiled_and_ir()
+    ir_matcher = _ir_matcher()
 
     hw = await _run_matcher(CoffeeCreateVaultMatcher(), trace)
-    dsl = await _run_matcher(compiled_matcher, trace)
     ir = await _run_matcher(ir_matcher, trace)
 
-    _assert_field_parity(dsl, hw, "compiled-vs-legacy")
-    _assert_field_parity(ir, dsl, "ir-vs-compiled")
+    _assert_field_parity(ir, hw, "ir-vs-legacy")
 
     # Fixture sanity: the deploy call was consumed alongside the request.
     assert len(hw[0].event_nodes) >= 2, "fixture no longer carries the deploy call"

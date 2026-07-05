@@ -150,16 +150,14 @@ def _assert_field_parity(actual: list[Block], expected: list[Block],
 
 
 async def _run_parity(trace) -> list[Block]:
-    """legacy vs compiled, then compiled vs IR round trip. Returns the legacy
-    blocks for per-case semantic pins."""
+    """legacy vs the v2 IR engine (the compiled path is retired — T29). Returns
+    the legacy blocks for per-case semantic pins."""
     hw_blocks = await _run_matcher(TgBTCMintBlockMatcher(), trace)
 
+    # Compiling is a frontend-internal step ir_emit needs; no compiled matcher is
+    # run as a runtime. IR emit + JSON render always run (a break here must error,
+    # not skip).
     compiled = compile_file(TGBTC_MCH, tgbtc_registries())
-    by_name = {cm.name: cm.matcher for cm in compiled}
-    dsl_blocks = await _run_matcher(by_name["tgbtc_mint"], trace)
-    _assert_field_parity(dsl_blocks, hw_blocks, "dsl", "legacy")
-
-    # IR emit + JSON render always run (break here must error, not skip).
     artifact = emit_ir(compiled, [TGBTC_MCH.name])
     render_json(artifact)
     if not _HAVE_IR:
@@ -168,7 +166,7 @@ async def _run_parity(trace) -> list[Block]:
     art = _mch_ir.load_artifact(artifact)
     ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, tgbtc_registries())}
     ir_blocks = await _run_matcher(ir_by_name["tgbtc_mint"], trace)
-    _assert_field_parity(ir_blocks, dsl_blocks, "ir", "compiled")
+    _assert_field_parity(ir_blocks, hw_blocks, "ir", "legacy")
     return hw_blocks
 
 

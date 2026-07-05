@@ -43,9 +43,21 @@ from indexer.events.blocks.utils.tree_utils import to_tree
 from indexer.events.event_processing import init_block
 from indexer.events.mch import compile_file
 from indexer.events.mch.builders import coffee_registries
+from indexer.events.mch.ir_emit import emit_ir
 import indexer.events.mch.specs as specs_pkg
 
 COFFEE_MCH = Path(specs_pkg.__file__).parent / "coffee_swap.mch"
+
+# --- IR engine gate (T29: the DSL leg is the v2 IR engine, not the compiled path)
+try:
+    from indexer.events import mch_ir as _mch_ir
+
+    _HAVE_IR = hasattr(_mch_ir, "load_artifact") and hasattr(_mch_ir, "build_matchers")
+except Exception:  # pragma: no cover - import error path
+    _mch_ir = None
+    _HAVE_IR = False
+
+_SKIP_REASON = "indexer.events.mch_ir not importable; the IR engine is the DSL runtime"
 
 _PREREQUISITES: list[BlockMatcher] = [
     JettonTransferBlockMatcher(),
@@ -53,10 +65,16 @@ _PREREQUISITES: list[BlockMatcher] = [
 ]
 
 
-def _compile_dsl_matcher() -> BlockMatcher:
+def _dsl_matcher() -> BlockMatcher:
+    """Build the DSL matcher through the v2 IR engine (compile is a frontend-
+    internal step ir_emit needs; no compiled matcher is run as a runtime)."""
+    if not _HAVE_IR:
+        pytest.skip(_SKIP_REASON)
     compiled = compile_file(COFFEE_MCH, coffee_registries())
-    by_name = {cm.name: cm.matcher for cm in compiled}
-    return by_name["coffee_swap"]
+    artifact = emit_ir(compiled, [COFFEE_MCH.name])
+    art = _mch_ir.load_artifact(artifact)
+    ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, coffee_registries())}
+    return ir_by_name["coffee_swap"]
 
 
 def _build_block_tree(trace) -> Block:
@@ -133,7 +151,7 @@ def _assert_field_parity(dsl_blocks: list[Block], hw_blocks: list[Block]) -> Non
 
 async def _run_parity(trace, expect_peer_swaps: int) -> None:
     hw_blocks = await _run_matcher(CoffeeSwapBlockMatcher(), trace)
-    dsl_blocks = await _run_matcher(_compile_dsl_matcher(), trace)
+    dsl_blocks = await _run_matcher(_dsl_matcher(), trace)
     _assert_field_parity(dsl_blocks, hw_blocks)
     assert len(hw_blocks[0].data["peer_swaps"]) == expect_peer_swaps, (
         "fixture no longer exercises the intended hop count"

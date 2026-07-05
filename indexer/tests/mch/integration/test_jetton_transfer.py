@@ -16,7 +16,19 @@ from indexer.events.blocks.messages import (
 from indexer.events.blocks.utils.tree_utils import to_tree
 from indexer.events.event_processing import init_block
 from indexer.events.mch import compile_text
+from indexer.events.mch.ir_emit import emit_ir
 from indexer.events.mch.registry import Registries
+
+# --- IR engine gate (T29: the DSL leg is the v2 IR engine, not the compiled path)
+try:
+    from indexer.events import mch_ir as _mch_ir
+
+    _HAVE_IR = hasattr(_mch_ir, "load_artifact") and hasattr(_mch_ir, "build_matchers")
+except Exception:  # pragma: no cover - import error path
+    _mch_ir = None
+    _HAVE_IR = False
+
+_SKIP_REASON = "indexer.events.mch_ir not importable; the IR engine is the DSL runtime"
 
 
 JETTON_TRANSFER_MCH = """
@@ -115,11 +127,16 @@ async def _run_matcher(matcher: BlockMatcher, trace) -> list:
 async def test_dsl_matches_hand_written_jetton_transfer(trace_data):
     trace, _ = trace_data
 
-    # Compile the DSL with anchor-capture list.
+    # Build the DSL matcher through the v2 IR engine (compile is a frontend-
+    # internal step ir_emit needs; no compiled matcher is run as a runtime).
+    if not _HAVE_IR:
+        pytest.skip(_SKIP_REASON)
     captured_anchors: list = []
     reg = _make_registries(captured_anchors)
     compiled = compile_text(JETTON_TRANSFER_MCH, "jetton_transfer.mch", reg)
-    dsl_matcher = compiled[0].matcher
+    artifact = emit_ir(compiled, ["jetton_transfer.mch"])
+    art = _mch_ir.load_artifact(artifact)
+    dsl_matcher = list(_mch_ir.build_matchers(art, reg))[0]
 
     dsl_results = await _run_matcher(dsl_matcher, trace)
     hw_matcher = JettonTransferBlockMatcher()

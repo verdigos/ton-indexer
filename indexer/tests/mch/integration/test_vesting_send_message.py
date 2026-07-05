@@ -40,13 +40,14 @@ MATCHER_NAME = "vesting_send_message"
 TARGET_BTYPE = "vesting_send_message"
 
 
-def _compiled_and_ir() -> tuple[BlockMatcher, BlockMatcher]:
+def _ir_matcher() -> BlockMatcher:
+    # Compiling is a frontend-internal step ir_emit needs; the compiled matcher
+    # is never run as a runtime (T29).
     compiled = compile_file(VESTING_MCH, vesting_registries())
-    compiled_by_name = {cm.name: cm.matcher for cm in compiled}
     artifact = emit_ir(compiled, [VESTING_MCH.name])
     art = mch_ir.load_artifact(artifact)
     ir_by_name = {m.name: m for m in mch_ir.build_matchers(art, vesting_registries())}
-    return compiled_by_name[MATCHER_NAME], ir_by_name[MATCHER_NAME]
+    return ir_by_name[MATCHER_NAME]
 
 
 def _build_block_tree(trace) -> Block:
@@ -131,14 +132,12 @@ def _assert_field_parity(actual: list[Block], reference: list[Block], label: str
 async def test_vesting_send_message_parity(trace_data):
     """Send-message request + response: legacy == compiled == IR, field-level."""
     trace, _ = trace_data
-    compiled_matcher, ir_matcher = _compiled_and_ir()
+    ir_matcher = _ir_matcher()
 
     hw_blocks = await _run_matcher(VestingSendMessageBlockMatcher(), trace)
-    dsl_blocks = await _run_matcher(compiled_matcher, trace)
     ir_blocks = await _run_matcher(ir_matcher, trace)
 
-    _assert_field_parity(dsl_blocks, hw_blocks, "compiled-vs-legacy")
-    _assert_field_parity(ir_blocks, dsl_blocks, "ir-vs-compiled")
+    _assert_field_parity(ir_blocks, hw_blocks, "ir-vs-legacy")
 
     # Fixture sanity: the response was consumed alongside the request.
     assert len(hw_blocks[0].event_nodes) >= 2, "fixture no longer carries the response"

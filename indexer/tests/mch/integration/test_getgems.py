@@ -152,29 +152,28 @@ def _assert_parity(actual: list[Block], expected: list[Block],
         )
 
 
-def _compiled_and_ir():
+def _ir_matcher():
+    # Compiling is a frontend-internal step ir_emit needs; no compiled matcher is
+    # run as a runtime (T29).
     compiled = compile_file(GETGEMS_MCH, getgems_registries())
-    compiled_by_name = {cm.name: cm.matcher for cm in compiled}
     artifact = emit_ir(compiled, [GETGEMS_MCH.name])
     render_json(artifact)  # emit path must not raise
     art = mch_ir.load_artifact(artifact)
     ir_by_name = {m.name: m for m in mch_ir.build_matchers(art, getgems_registries())}
-    return compiled_by_name[MATCHER_NAME], ir_by_name[MATCHER_NAME]
+    return ir_by_name[MATCHER_NAME]
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("filename", [c[0] for c in CASES], ids=[c[1] for c in CASES])
 async def test_getgems_purchase_parity(traces_dir, filename):
     trace = _load_trace(traces_dir, filename)
-    compiled_matcher, ir_matcher = _compiled_and_ir()
+    ir_matcher = _ir_matcher()
 
     hw = await _run_side(GetgemsNftPurchaseBlockMatcher(), trace, prereqs=(NftTransferBlockMatcher(),))
-    dsl = await _run_side(compiled_matcher, trace, prereqs=(NftTransferBlockMatcher(),))
     ir = await _run_side(ir_matcher, trace, prereqs=(NftTransferBlockMatcher(),))
 
     assert len(hw) > 0, "legacy matcher produced no nft_purchase blocks - stale fixture"
-    _assert_parity(dsl, hw, "compiled", "legacy")
-    _assert_parity(ir, dsl, "ir", "compiled")
+    _assert_parity(ir, hw, "ir", "legacy")
 
 
 # ---------------------------------------------------------------------------
@@ -304,15 +303,13 @@ async def _run_side_tree(matcher: BlockMatcher, root: Block) -> list[Block]:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("comment", ["finish", "stop"])
 async def test_getgems_finish_stop_proxy_parity(comment):
-    compiled_matcher, ir_matcher = _compiled_and_ir()
+    ir_matcher = _ir_matcher()
 
     hw = await _run_side_tree(GetgemsNftPurchaseBlockMatcher(), _build_proxy_tree(comment))
-    dsl = await _run_side_tree(compiled_matcher, _build_proxy_tree(comment))
     ir = await _run_side_tree(ir_matcher, _build_proxy_tree(comment))
 
     assert len(hw) == 1, "legacy should build exactly one proxy nft_purchase"
     # The proxy branch actually inserted an EmptyBlock (topology carries it).
     assert any(isinstance(c, EmptyBlock) for c in hw[0].children_blocks), "no proxy inserted"
 
-    _assert_parity(dsl, hw, "compiled", "legacy")
-    _assert_parity(ir, dsl, "ir", "compiled")
+    _assert_parity(ir, hw, "ir", "legacy")

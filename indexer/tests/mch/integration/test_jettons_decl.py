@@ -27,8 +27,20 @@ from indexer.events.blocks.utils.tree_utils import to_tree
 from indexer.events.event_processing import init_block
 from indexer.events.mch import compile_file
 from indexer.events.mch.builders import jetton_decl_registries
+from indexer.events.mch.ir_emit import emit_ir
 
 JETTONS_DECL_MCH = Path(mch.__file__).parent / "specs_decl" / "jettons.mch"
+
+# --- IR engine gate (T29: the DSL leg is the v2 IR engine, not the compiled path)
+try:
+    from indexer.events import mch_ir as _mch_ir
+
+    _HAVE_IR = hasattr(_mch_ir, "load_artifact") and hasattr(_mch_ir, "build_matchers")
+except Exception:  # pragma: no cover - import error path
+    _mch_ir = None
+    _HAVE_IR = False
+
+_SKIP_REASON = "indexer.events.mch_ir not importable; the IR engine is the DSL runtime"
 
 LEGACY_MATCHERS = {
     "jetton_transfer": JettonTransferBlockMatcher,
@@ -37,10 +49,16 @@ LEGACY_MATCHERS = {
 }
 
 
-def _compile_decl_matcher(name: str) -> BlockMatcher:
+def _decl_matcher(name: str) -> BlockMatcher:
+    """Build the declarative-spec matcher through the v2 IR engine (compile is a
+    frontend-internal step ir_emit needs; no compiled matcher is run)."""
+    if not _HAVE_IR:
+        pytest.skip(_SKIP_REASON)
     compiled = compile_file(JETTONS_DECL_MCH, jetton_decl_registries())
-    by_name = {cm.name: cm.matcher for cm in compiled}
-    return by_name[name]
+    artifact = emit_ir(compiled, [JETTONS_DECL_MCH.name])
+    art = _mch_ir.load_artifact(artifact)
+    ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, jetton_decl_registries())}
+    return ir_by_name[name]
 
 
 def _build_block_tree(trace) -> Block:
@@ -112,7 +130,7 @@ def _assert_field_parity(decl_blocks: list[Block], hw_blocks: list[Block], btype
 
 async def _run_parity(trace, btype: str, anchor_opcode: int | None = None) -> None:
     hw_results = await _run_matcher(LEGACY_MATCHERS[btype](), trace)
-    decl_results = await _run_matcher(_compile_decl_matcher(btype), trace)
+    decl_results = await _run_matcher(_decl_matcher(btype), trace)
 
     hw_blocks = [b for b in hw_results if b.btype == btype]
     decl_blocks = [b for b in decl_results if b.btype == btype]

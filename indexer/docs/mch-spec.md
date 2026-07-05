@@ -687,6 +687,8 @@ Normative contract (v0.1 was silent; hand-written matchers already rely on this)
 - An **exception** escaping a build function (or `[M4]` a parse failure / expression runtime error) is also a rejection, additionally reported through the host's diagnostics channel. It must never abort trace processing.
 - Consumption is exactly: the pattern-matched blocks, minus `omit`-excluded subtrees `[M4]`, plus auto-appended excess/bounce siblings (§8.4–8.5). Builders must not otherwise edit the consumed set.
 
+**Clean rejection, normative** `[M3, T22/T29]`: a build rejection — whether the builder returns empty, the builder raises, or a declarative `reject when` fires — consumes **nothing** and appends **nothing**: the excess/bounce auto-append of the previous bullet applies only to a *successful* build. The anchor and every candidate block are left exactly as found, so a later matcher in registration order may attempt (and consume) the same anchor. The Python IR engine (`indexer/events/mch_ir/engine.py`) implements this rule for all three rejection paths and is the reference implementation. The compiled path (`indexer/events/mch/compiler.py` via `blocks/basic_matchers.py`) has a known deviation: its base `try_build` auto-appends the anchor's excess/bounce children even when the builder rejects. This is not fixed on the compiled path — it is demoted by T29 stage 1 and removed with the compiler in T29 stage 2.
+
 ## 11. Host-language contract
 
 A host language provides these registries, populated at startup:

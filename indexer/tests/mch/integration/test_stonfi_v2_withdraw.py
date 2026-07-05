@@ -380,11 +380,6 @@ def _assert_field_parity(actual: list[Block], expected: list[Block],
         )
 
 
-def _compile_dsl_matchers() -> list[BlockMatcher]:
-    compiled = compile_file(WITHDRAW_MCH, stonfi_liquidity_registries())
-    return [cm.matcher for cm in compiled]
-
-
 def _ir_matchers():
     compiled = compile_file(WITHDRAW_MCH, stonfi_liquidity_registries())
     artifact = emit_ir(compiled, [WITHDRAW_MCH.name])
@@ -397,20 +392,17 @@ def _ir_matchers():
 
 
 async def _run_parity(build_txs) -> list[Block]:
-    """legacy vs compiled, then compiled vs IR round trip. Returns legacy blocks."""
+    """legacy vs the v2 IR engine (the compiled path is retired — T29). Returns
+    legacy blocks."""
     context.interface_repository.set(TestInterfaceRepository(_interfaces()))
     hw_blocks = await _run_matchers([StonfiV2WithdrawLiquidityMatcher()], build_txs())
-
-    context.interface_repository.set(TestInterfaceRepository(_interfaces()))
-    dsl_blocks = await _run_matchers(_compile_dsl_matchers(), build_txs())
-    _assert_field_parity(dsl_blocks, hw_blocks, "dsl", "legacy")
 
     ir_matchers = _ir_matchers()
     if ir_matchers is None:
         pytest.skip(_SKIP_REASON)
     context.interface_repository.set(TestInterfaceRepository(_interfaces()))
     ir_blocks = await _run_matchers(ir_matchers, build_txs())
-    _assert_field_parity(ir_blocks, dsl_blocks, "ir", "compiled")
+    _assert_field_parity(ir_blocks, hw_blocks, "ir", "legacy")
     return hw_blocks
 
 
@@ -457,8 +449,11 @@ async def test_stonfi_v2_withdraw_both_reject_without_lp_wallet():
     context.interface_repository.set(TestInterfaceRepository(_interfaces(with_lp_wallet=False)))
     hw_blocks = await _run_matchers(
         [StonfiV2WithdrawLiquidityMatcher()], _build_withdraw_transactions(jetton_first=True))
+    ir_matchers = _ir_matchers()
+    if ir_matchers is None:
+        pytest.skip(_SKIP_REASON)
     context.interface_repository.set(TestInterfaceRepository(_interfaces(with_lp_wallet=False)))
-    dsl_blocks = await _run_matchers(
-        _compile_dsl_matchers(), _build_withdraw_transactions(jetton_first=True))
+    ir_blocks = await _run_matchers(
+        ir_matchers, _build_withdraw_transactions(jetton_first=True))
     assert hw_blocks == []
-    assert dsl_blocks == []
+    assert ir_blocks == []

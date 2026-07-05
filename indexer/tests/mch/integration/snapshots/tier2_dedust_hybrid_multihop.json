@@ -1,0 +1,73 @@
+[
+  {
+    "broken": false,
+    "btype": "jetton_swap",
+    "consumed": [
+      "9YeeIme1GAt5jIEHS6xblzIsOy24w7DpyRU+6XoC4KI=",
+      "9YeeIme1GAt5jIEHS6xblzIsOy24w7DpyRU+6XoC4KI=",
+      "BaEH9LPjbcnI1DX+lgVgAUfiAMQG7FMmUGdx7Y3KBYw=",
+      "PRVYBD64rm4y/VoMjFFEicOLJXgkoPTOicMgF0T7XUQ=",
+      "PRVYBD64rm4y/VoMjFFEicOLJXgkoPTOicMgF0T7XUQ=",
+      "Y9pHvfaJk4eJ9qouo46z7FC18ixAOAbyhocfi6URWoM=",
+      "Ye27dO5Y57PKzBqPTBsz0Dqqo83HkNCXjnsFA5tp1CE=",
+      "a/vIopBCVmihqsLzvoHTLasuqxWjscN4M8dS+UltIMQ=",
+      "ao4+MM6CRFxBQXk/paWFkwPDETt6vMQoiyXnaJbAkHk=",
+      "cWjAd1bL+s/qdtT/3vZRJV32oQ/jcooXjf8HGUnLes0=",
+      "hNp88Fr+v+OcwbdpXA+nU5g+LhdR5orEONpZPWotraA=",
+      "t0NkHVoCTcnvpPELco4sQnaLY3D+7j7sSwbuDPTI4kk="
+    ],
+    "data": {
+      "destination_asset": "0:2F956143C461769579BAEF2E32CC2D7BC18283F40D20BB03E432CD603AC33FFC",
+      "dex": "'dedust'",
+      "dex_incoming_transfer": {
+        "amount": "3423056355653",
+        "asset": "0:78DB4C90B19A1B19CCB45580DF48A1E91B6410970FA3D5FFED3EED49E3CF08FF",
+        "destination": "0:d9e323f038378d8b6dbf423ab1f472a43394af057e2a1c14f4975f553ea06ece",
+        "destination_jetton_wallet": "0:b29819f08843c5e65b6f4c036c79f0b46ab4b92129f85a58e45d022e60fcc4d5",
+        "source": "0:3225e9c36215bc23875da06755ec2704f5cce4f1c2beb4c595f6f7001603da47",
+        "source_jetton_wallet": "0:a347d287741b24f74cf9d736b8849da858776bd521f84008a09cd3d59645d9cb"
+      },
+      "dex_outgoing_transfer": {
+        "amount": "139497569039755",
+        "asset": "0:2F956143C461769579BAEF2E32CC2D7BC18283F40D20BB03E432CD603AC33FFC",
+        "destination": "0:3225e9c36215bc23875da06755ec2704f5cce4f1c2beb4c595f6f7001603da47",
+        "destination_jetton_wallet": "0:d73b1f0b4f9c7d83701b69c9724144d2bc1b2dc07e3780b9ef1eafdbedafc040",
+        "source": "0:09c5b9b0870270f85a26165b75458ba475e4e5b620a65a5b2ead0b1031126165",
+        "source_jetton_wallet": "0:d10fa4fa26903310e34d971e93dc7388135ca8b8a9e85b11c132445f6ce307a3"
+      },
+      "in": {
+        "amount": "3423056355653",
+        "asset": "0:78DB4C90B19A1B19CCB45580DF48A1E91B6410970FA3D5FFED3EED49E3CF08FF"
+      },
+      "out": {
+        "amount": "139497569039755",
+        "asset": "0:2F956143C461769579BAEF2E32CC2D7BC18283F40D20BB03E432CD603AC33FFC"
+      },
+      "peer_swaps": [
+        {
+          "in": {
+            "amount": "3423056355653",
+            "asset": "0:78DB4C90B19A1B19CCB45580DF48A1E91B6410970FA3D5FFED3EED49E3CF08FF"
+          },
+          "out": {
+            "amount": "94771943760",
+            "asset": "TON"
+          }
+        },
+        {
+          "in": {
+            "amount": "94771943760",
+            "asset": "TON"
+          },
+          "out": {
+            "amount": "139497569039755",
+            "asset": "0:2F956143C461769579BAEF2E32CC2D7BC18283F40D20BB03E432CD603AC33FFC"
+          }
+        }
+      ],
+      "sender": "0:3225e9c36215bc23875da06755ec2704f5cce4f1c2beb4c595f6f7001603da47",
+      "source_asset": "0:78DB4C90B19A1B19CCB45580DF48A1E91B6410970FA3D5FFED3EED49E3CF08FF"
+    },
+    "failed": false
+  }
+]

@@ -75,15 +75,16 @@ def _prereqs() -> tuple[BlockMatcher, ...]:
     return (NftMintBlockMatcher(), JettonTransferBlockMatcher(), PTonTransferMatcher())
 
 
-def _compiled_and_ir() -> tuple[BlockMatcher, BlockMatcher]:
+def _ir_matcher() -> BlockMatcher:
+    # Compiling is a frontend-internal step ir_emit needs; the compiled matcher
+    # is never run as a runtime (T29).
     compiled = compile_file(TONCO_MCH, tonco_liquidity_registries())
-    compiled_by_name = {cm.name: cm.matcher for cm in compiled}
     artifact = emit_ir(compiled, [TONCO_MCH.name])
     art = mch_ir.load_artifact(artifact)
     ir_by_name = {
         m.name: m for m in mch_ir.build_matchers(art, tonco_liquidity_registries())
     }
-    return compiled_by_name[MATCHER_NAME], ir_by_name[MATCHER_NAME]
+    return ir_by_name[MATCHER_NAME]
 
 
 def _build_block_tree(trace) -> Block:
@@ -181,11 +182,9 @@ def _assert_field_parity(
 )
 async def test_tonco_deposit_parity(traces_dir, filename):
     trace = _load_trace(traces_dir, filename)
-    compiled_matcher, ir_matcher = _compiled_and_ir()
+    ir_matcher = _ir_matcher()
 
     hw = await _run_matcher(ToncoDepositLiquidityMatcher(), trace, prereqs=_prereqs())
-    dsl = await _run_matcher(compiled_matcher, trace, prereqs=_prereqs())
     ir = await _run_matcher(ir_matcher, trace, prereqs=_prereqs())
 
-    _assert_field_parity(dsl, hw, "compiled-vs-legacy")
-    _assert_field_parity(ir, dsl, "ir-vs-compiled")
+    _assert_field_parity(ir, hw, "ir-vs-legacy")

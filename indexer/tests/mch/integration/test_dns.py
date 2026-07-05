@@ -34,10 +34,22 @@ from indexer.events.blocks.utils.tree_utils import to_tree
 from indexer.events.event_processing import init_block
 from indexer.events.mch import compile_file
 from indexer.events.mch.builders import dns_registries
+from indexer.events.mch.ir_emit import emit_ir
 import indexer.events.mch.specs as specs_pkg
 from tests.utils.repository import TestInterfaceRepository
 
 DNS_MCH = Path(specs_pkg.__file__).parent / "dns.mch"
+
+# --- IR engine gate (T29: the DSL leg is the v2 IR engine, not the compiled path)
+try:
+    from indexer.events import mch_ir as _mch_ir
+
+    _HAVE_IR = hasattr(_mch_ir, "load_artifact") and hasattr(_mch_ir, "build_matchers")
+except Exception:  # pragma: no cover - import error path
+    _mch_ir = None
+    _HAVE_IR = False
+
+_SKIP_REASON = "indexer.events.mch_ir not importable; the IR engine is the DSL runtime"
 
 DNS_OPCODE = 0x4eb1f0f9
 BOUNCE_OPCODE = 0xffffffff
@@ -139,9 +151,15 @@ def _interfaces() -> dict:
 
 # --- harness (mirrors test_jettons_family.py) ---------------------------------
 
-def _compile_dsl_matcher():
+def _dsl_matcher():
+    """Build the DSL matcher through the v2 IR engine (compile is a frontend-
+    internal step ir_emit needs; no compiled matcher is run as a runtime)."""
+    if not _HAVE_IR:
+        pytest.skip(_SKIP_REASON)
     compiled = compile_file(DNS_MCH, dns_registries())
-    return compiled[0].matcher
+    artifact = emit_ir(compiled, [DNS_MCH.name])
+    art = _mch_ir.load_artifact(artifact)
+    return list(_mch_ir.build_matchers(art, dns_registries()))[0]
 
 
 def _build_block_tree(txs) -> Block:
@@ -213,7 +231,7 @@ async def _run_parity(outcome: str, *, with_bounce: bool = False, aborted: bool 
     context.interface_repository.set(TestInterfaceRepository(_interfaces()))
     hw_results = await _run_matcher(ChangeDnsRecordMatcher(), _build_dns_transactions(outcome, with_bounce, aborted))
     context.interface_repository.set(TestInterfaceRepository(_interfaces()))
-    dsl_results = await _run_matcher(_compile_dsl_matcher(), _build_dns_transactions(outcome, with_bounce, aborted))
+    dsl_results = await _run_matcher(_dsl_matcher(), _build_dns_transactions(outcome, with_bounce, aborted))
 
     hw_blocks = [b for b in hw_results if b.btype == outcome]
     dsl_blocks = [b for b in dsl_results if b.btype == outcome]

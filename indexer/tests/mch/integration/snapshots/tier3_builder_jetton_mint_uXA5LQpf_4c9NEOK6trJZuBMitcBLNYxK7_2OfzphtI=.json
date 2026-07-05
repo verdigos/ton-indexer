@@ -1,0 +1,19 @@
+[
+  {
+    "broken": false,
+    "btype": "jetton_mint",
+    "consumed": [
+      "9CvPufQflaWDm28wf/Gq0QqWX3lrp8f6XEfOkFWypu0=",
+      "CaPlFc4IKHZSrTTXnP5uyFdHE2lx2Zn9zkV1Dd6/jAI=",
+      "pEoLd6n7i/1gCpAbCYY6ksgtEE/E0bKW6yi1FUQIj+o="
+    ],
+    "data": {
+      "amount": "4853188593690",
+      "asset": "0:1C4838CCE43FDB1152C3EC496E911B3A873F7043B09BB79E6284598D12178107",
+      "to": "0:a8b9a93f49cc467e91138f62ffdcc5f037b5e28b7f985daa800afc703aa32691",
+      "to_jetton_wallet": "0:d7407b037da2f593f8bb997524ebaf7be9c537958282a60dc09bd3c39d26df27",
+      "ton_amount": "908814249160002342682739450328523377"
+    },
+    "failed": false
+  }
+]

@@ -141,21 +141,18 @@ def _assert_field_parity(actual: list[Block], expected: list[Block], btype: str,
 
 
 async def _run_parity(trace, matcher_name: str) -> list[Block]:
-    """legacy vs compiled, then compiled vs IR round trip. Returns the legacy
-    blocks for per-case semantic pins."""
+    """legacy vs the v2 IR engine (the compiled path is retired — T29). Returns
+    the legacy blocks for per-case semantic pins."""
     btype = matcher_name
     legacy_cls = _MATCHER_FOR[matcher_name]
 
     context.interface_repository.set(TestInterfaceRepository(_INTERFACES))
     hw = [b for b in await _run_matcher(legacy_cls(), trace) if b.btype == btype]
 
+    # Compiling is a frontend-internal step ir_emit needs; no compiled matcher is
+    # run as a runtime. IR emit + JSON render always run (a break here must error,
+    # not skip).
     compiled = compile_file(JVAULT_MCH, jvault_registries())
-    by_name = {cm.name: cm.matcher for cm in compiled}
-    context.interface_repository.set(TestInterfaceRepository(_INTERFACES))
-    dsl = [b for b in await _run_matcher(by_name[matcher_name], trace) if b.btype == btype]
-    _assert_field_parity(dsl, hw, btype, "dsl", "legacy")
-
-    # IR emit + JSON render always run (break here must error, not skip).
     artifact = emit_ir(compiled, [JVAULT_MCH.name])
     render_json(artifact)
     if not _HAVE_IR:
@@ -165,7 +162,7 @@ async def _run_parity(trace, matcher_name: str) -> list[Block]:
     ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, jvault_registries())}
     context.interface_repository.set(TestInterfaceRepository(_INTERFACES))
     ir = [b for b in await _run_matcher(ir_by_name[matcher_name], trace) if b.btype == btype]
-    _assert_field_parity(ir, dsl, btype, "ir", "compiled")
+    _assert_field_parity(ir, hw, btype, "ir", "legacy")
     return hw
 
 

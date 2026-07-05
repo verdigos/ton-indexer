@@ -133,16 +133,14 @@ def _assert_field_parity(actual: list[Block], expected: list[Block],
 
 
 async def _run_parity(trace) -> list[Block]:
-    """legacy vs compiled, then compiled vs IR round trip. Returns the legacy
-    blocks for per-case semantic pins."""
+    """legacy vs the v2 IR engine (the compiled path is retired — T29). Returns
+    the legacy blocks for per-case semantic pins."""
     hw_blocks = await _run_matcher(EvaaWithdrawBlockMatcher(), trace)
 
+    # Compiling the spec is a frontend-internal step ir_emit needs; no compiled
+    # matcher is run as a runtime. IR emit + JSON render always run (a break here
+    # must error, not skip).
     compiled = compile_file(EVAA_MCH, evaa_registries())
-    by_name = {cm.name: cm.matcher for cm in compiled}
-    dsl_blocks = await _run_matcher(by_name["evaa_withdraw"], trace)
-    _assert_field_parity(dsl_blocks, hw_blocks, "dsl", "legacy")
-
-    # IR emit + JSON render always run (break here must error, not skip).
     artifact = emit_ir(compiled, [EVAA_MCH.name])
     render_json(artifact)
     if not _HAVE_IR:
@@ -151,7 +149,7 @@ async def _run_parity(trace) -> list[Block]:
     art = _mch_ir.load_artifact(artifact)
     ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, evaa_registries())}
     ir_blocks = await _run_matcher(ir_by_name["evaa_withdraw"], trace)
-    _assert_field_parity(ir_blocks, dsl_blocks, "ir", "compiled")
+    _assert_field_parity(ir_blocks, hw_blocks, "ir", "legacy")
     return hw_blocks
 
 
@@ -210,20 +208,19 @@ async def test_evaa_withdraw_parity_missing_prices(trace_data):
 
 # --- Same-head XOR capture-binding proof ------------------------------------
 #
-# The evaa_withdraw builder is consumed-set-driven precisely BECAUSE the
-# compiled path used to bind the wrong same-head XOR branch (@coll_ok on FAIL
-# traces, where the two `op EvaaWithdrawCollateralized` arms head-test
-# identically). With the compiled walker aligned to the v2 IR engine's
-# _match_or (full-subtree trial, first fully-matching branch wins), the
-# compiled Match now binds the FAIL-branch captures — matching the IR engine.
-# We spy the Match object each path hands its builder and assert the bindings
-# directly (the shared consumed-set builder ignores captures, so parity above
-# cannot observe this).
+# The evaa_withdraw builder is consumed-set-driven precisely BECAUSE a naive
+# same-head XOR walker binds the wrong branch (@coll_ok on FAIL traces, where the
+# two `op EvaaWithdrawCollateralized` arms head-test identically). The v2 IR
+# engine's _match_or does a full-subtree trial and binds the first FULLY matching
+# branch, so on a fail trace it binds the FAIL-branch captures. We spy the Match
+# object the IR engine hands the builder and assert the bindings directly (the
+# shared consumed-set builder ignores captures, so the field parity above cannot
+# observe this).
 
 def _spy_registries():
     """evaa registries whose build_evaa_withdraw records the Match it receives
-    (both the compiled synthesized build_block and the IR engine pass the bound
-    captures on the Match) before delegating to the real builder."""
+    (the IR engine passes the bound captures on the Match) before delegating to
+    the real builder."""
     reg = evaa_registries()
     recorded: list = []
     real = reg.builders["build_evaa_withdraw"]
@@ -239,25 +236,18 @@ def _spy_registries():
 
 
 async def _binding_proof(trace):
-    """Run the compiled and IR evaa matchers over `trace`, returning the Match
-    object each bound (with @coll_ok / @coll_fail / @fail_excess capture attrs)."""
-    reg_c, rec_c = _spy_registries()
-    compiled = compile_file(EVAA_MCH, reg_c)
-    by_name = {cm.name: cm.matcher for cm in compiled}
-    await _run_matcher(by_name["evaa_withdraw"], trace)
-    assert rec_c, "compiled path produced no evaa_withdraw match"
-
-    ir_match = None
-    if _HAVE_IR:
-        reg_i, rec_i = _spy_registries()
-        compiled_i = compile_file(EVAA_MCH, reg_i)
-        artifact = emit_ir(compiled_i, [EVAA_MCH.name])
-        art = _mch_ir.load_artifact(artifact)
-        ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, reg_i)}
-        await _run_matcher(ir_by_name["evaa_withdraw"], trace)
-        assert rec_i, "IR path produced no evaa_withdraw match"
-        ir_match = rec_i[0]
-    return rec_c[0], ir_match
+    """Run the IR evaa matcher over `trace`, returning the Match object it bound
+    (with @coll_ok / @coll_fail / @fail_excess capture attrs)."""
+    if not _HAVE_IR:
+        pytest.skip(_SKIP_REASON)
+    reg_i, rec_i = _spy_registries()
+    compiled_i = compile_file(EVAA_MCH, reg_i)
+    artifact = emit_ir(compiled_i, [EVAA_MCH.name])
+    art = _mch_ir.load_artifact(artifact)
+    ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, reg_i)}
+    await _run_matcher(ir_by_name["evaa_withdraw"], trace)
+    assert rec_i, "IR path produced no evaa_withdraw match"
+    return rec_i[0]
 
 
 @pytest.mark.asyncio
@@ -265,45 +255,31 @@ async def _binding_proof(trace):
 async def test_evaa_no_funds_binds_coll_fail_not_coll_ok(trace_data):
     """The core misbinding case: a real `op EvaaWithdrawCollateralized` (0x211)
     block exists and the FAIL branch (@coll_fail) is the one the trace matches.
-    Pre-fix the compiled path bound @coll_ok (first head match); now it binds
-    @coll_fail, matching the IR engine."""
+    A naive first-head walker would bind @coll_ok; the IR engine binds
+    @coll_fail."""
     trace, _ = trace_data
-    compiled_m, ir_m = await _binding_proof(trace)
-    assert compiled_m.coll_fail is not None, "compiled path must bind @coll_fail on the fail trace"
-    assert compiled_m.coll_ok is None, "compiled path must NOT bind @coll_ok (the misbinding)"
-    # Compiled and IR run on independently built block trees, so compare
-    # bindings by opcode/None-ness rather than object identity.
-    if ir_m is not None:
-        assert ir_m.coll_ok is None
-        assert ir_m.coll_fail is not None
-        assert ir_m.coll_fail.opcode == compiled_m.coll_fail.opcode
+    ir_m = await _binding_proof(trace)
+    assert ir_m.coll_fail is not None, "IR engine must bind @coll_fail on the fail trace"
+    assert ir_m.coll_ok is None, "IR engine must NOT bind @coll_ok (the misbinding)"
 
 
 @pytest.mark.asyncio
 @pytest.mark.trace_file("02KO-3RSDiakxzyMbk2MxKMsVsAgtGM78n1aWdxqFm4=.lz4")
 async def test_evaa_locked_binds_fail_excess_only(trace_data):
     """User-contract rejection: the winning arm is the third (fail_excess) XOR;
-    neither collateralized capture binds. Compiled and IR must agree."""
+    neither collateralized capture binds."""
     trace, _ = trace_data
-    compiled_m, ir_m = await _binding_proof(trace)
-    assert compiled_m.fail_excess is not None
-    assert compiled_m.coll_ok is None
-    assert compiled_m.coll_fail is None
-    if ir_m is not None:
-        assert ir_m.coll_ok is None and ir_m.coll_fail is None
-        assert ir_m.fail_excess is not None
-        assert ir_m.fail_excess.opcode == compiled_m.fail_excess.opcode
+    ir_m = await _binding_proof(trace)
+    assert ir_m.fail_excess is not None
+    assert ir_m.coll_ok is None
+    assert ir_m.coll_fail is None
 
 
 @pytest.mark.asyncio
 @pytest.mark.trace_file("02N57kDv6SOZ0OaS-7TnLwTtvm5xt12EM7aaLOl5QKk=.lz4")
 async def test_evaa_not_collateralized_binds_fail_excess_only(trace_data):
     trace, _ = trace_data
-    compiled_m, ir_m = await _binding_proof(trace)
-    assert compiled_m.fail_excess is not None
-    assert compiled_m.coll_ok is None
-    assert compiled_m.coll_fail is None
-    if ir_m is not None:
-        assert ir_m.coll_ok is None and ir_m.coll_fail is None
-        assert ir_m.fail_excess is not None
-        assert ir_m.fail_excess.opcode == compiled_m.fail_excess.opcode
+    ir_m = await _binding_proof(trace)
+    assert ir_m.fail_excess is not None
+    assert ir_m.coll_ok is None
+    assert ir_m.coll_fail is None

@@ -25,8 +25,20 @@ from indexer.events.event_processing import init_block
 import indexer.events.mch as mch
 from indexer.events.mch import compile_file
 from indexer.events.mch.builders import dedust_hybrid_registries
+from indexer.events.mch.ir_emit import emit_ir
 
 HYBRID_MCH = Path(mch.__file__).parent / "specs_decl" / "dedust_swap_hybrid.mch"
+
+# --- IR engine gate (T29: the DSL leg is the v2 IR engine, not the compiled path)
+try:
+    from indexer.events import mch_ir as _mch_ir
+
+    _HAVE_IR = hasattr(_mch_ir, "load_artifact") and hasattr(_mch_ir, "build_matchers")
+except Exception:  # pragma: no cover - import error path
+    _mch_ir = None
+    _HAVE_IR = False
+
+_SKIP_REASON = "indexer.events.mch_ir not importable; the IR engine is the DSL runtime"
 
 _PREREQUISITES: list[BlockMatcher] = [
     JettonTransferBlockMatcher(),
@@ -34,10 +46,16 @@ _PREREQUISITES: list[BlockMatcher] = [
 ]
 
 
-def _compile_hybrid_matcher() -> BlockMatcher:
+def _hybrid_matcher() -> BlockMatcher:
+    """Build the hybrid DSL matcher through the v2 IR engine (compile is a
+    frontend-internal step ir_emit needs; no compiled matcher is run)."""
+    if not _HAVE_IR:
+        pytest.skip(_SKIP_REASON)
     compiled = compile_file(HYBRID_MCH, dedust_hybrid_registries())
-    by_name = {cm.name: cm.matcher for cm in compiled}
-    return by_name["dedust_swap_hybrid"]
+    artifact = emit_ir(compiled, [HYBRID_MCH.name])
+    art = _mch_ir.load_artifact(artifact)
+    ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, dedust_hybrid_registries())}
+    return ir_by_name["dedust_swap_hybrid"]
 
 
 def _build_block_tree(trace) -> Block:
@@ -111,7 +129,7 @@ def _assert_field_parity(hybrid_blocks: list[Block], hw_blocks: list[Block]) -> 
 
 async def _run_parity(trace, expect_peer_swaps: int) -> None:
     hw_blocks = await _run_matcher(DedustSwapBlockMatcher(), trace)
-    hybrid_blocks = await _run_matcher(_compile_hybrid_matcher(), trace)
+    hybrid_blocks = await _run_matcher(_hybrid_matcher(), trace)
     _assert_field_parity(hybrid_blocks, hw_blocks)
     assert len(hw_blocks[0].data["peer_swaps"]) == expect_peer_swaps, (
         "fixture no longer exercises the intended hop count"
@@ -151,6 +169,6 @@ async def test_dedust_hybrid_both_reject_on_build_error(trace_data):
     matcher rejects via the try_build exception guard. Both produce nothing."""
     trace, _ = trace_data
     hw_blocks = await _run_matcher(DedustSwapBlockMatcher(), trace)
-    hybrid_blocks = await _run_matcher(_compile_hybrid_matcher(), trace)
+    hybrid_blocks = await _run_matcher(_hybrid_matcher(), trace)
     assert hw_blocks == []
     assert hybrid_blocks == []

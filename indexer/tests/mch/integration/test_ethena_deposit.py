@@ -53,13 +53,14 @@ def _prerequisites() -> list[BlockMatcher]:
     return [JettonTransferBlockMatcher(), JettonMintBlockMatcher()]
 
 
-def _compiled_and_ir() -> tuple[BlockMatcher, BlockMatcher]:
+def _ir_matcher() -> BlockMatcher:
+    # Compiling is a frontend-internal step ir_emit needs; the compiled matcher
+    # is never run as a runtime (T29).
     compiled = compile_file(ETHENA_MCH, ethena_registries())
-    compiled_by_name = {cm.name: cm.matcher for cm in compiled}
     artifact = emit_ir(compiled, [ETHENA_MCH.name])
     art = mch_ir.load_artifact(artifact)
     ir_by_name = {m.name: m for m in mch_ir.build_matchers(art, ethena_registries())}
-    return compiled_by_name[MATCHER_NAME], ir_by_name[MATCHER_NAME]
+    return ir_by_name[MATCHER_NAME]
 
 
 def _build_block_tree(trace) -> Block:
@@ -143,11 +144,9 @@ async def test_ethena_deposit_parity(trace_data):
     """USDe -> tsUSDe deposit: legacy == compiled == IR, field-level, including
     the hardcoded-asset gate passing and the btype anchor."""
     trace, _ = trace_data
-    compiled_matcher, ir_matcher = _compiled_and_ir()
+    ir_matcher = _ir_matcher()
 
     hw_blocks = await _run_matcher(EthenaDepositBlockMatcher(), trace, _prerequisites())
-    dsl_blocks = await _run_matcher(compiled_matcher, trace, _prerequisites())
     ir_blocks = await _run_matcher(ir_matcher, trace, _prerequisites())
 
-    _assert_field_parity(dsl_blocks, hw_blocks, "compiled-vs-legacy")
-    _assert_field_parity(ir_blocks, dsl_blocks, "ir-vs-compiled")
+    _assert_field_parity(ir_blocks, hw_blocks, "ir-vs-legacy")

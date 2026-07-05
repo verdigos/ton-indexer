@@ -385,7 +385,8 @@ class IrMatcher:
                 "mch_ir matcher %r: error while building block %r: %s",
                 self.name, block, e,
             )
-            return None
+            return []  # §10.7: a raising builder is a clean rejection, not a
+                       # structural mismatch — no consumption, no aux append.
         if produced is None:
             return []  # clean rejection: no aux blocks to strip
         result = [produced]

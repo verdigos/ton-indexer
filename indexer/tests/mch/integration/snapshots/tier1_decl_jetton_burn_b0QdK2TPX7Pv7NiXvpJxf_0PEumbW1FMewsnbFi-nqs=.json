@@ -1,0 +1,17 @@
+[
+  {
+    "broken": false,
+    "btype": "jetton_burn",
+    "consumed": [
+      "6rbRCdWJPq4Ut9e3BRHFK9g6ZxDoaE4WHDGDZCYdf0M=",
+      "e9H7UdXUUBgxtKM4pPO0sAkTN+ziLDV5jwpqQwWeJRI="
+    ],
+    "data": {
+      "amount": "3162270",
+      "asset": "0:BCAB8EFC2C80EA4FADB497EE47A697D7E215F9F18061519C94CFAC0B32D19427",
+      "jetton_wallet": "0:7b37ff1c46d31224706a3dd1085f43cd935adf2ea38b0c9c43643ac23946fb70",
+      "owner": "0:7bdd8723c306e017b2a51fe0395c883b8eb8866314c9c17fda61de4043f369f1"
+    },
+    "failed": false
+  }
+]

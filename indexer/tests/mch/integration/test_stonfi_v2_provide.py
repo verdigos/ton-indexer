@@ -452,11 +452,6 @@ def _assert_swap_tolerant_parity(actual: list[Block], reference: list[Block],
     assert _node_hashes(a) == _node_hashes(r)
 
 
-def _compile_dsl_matchers() -> list[BlockMatcher]:
-    compiled = compile_file(PROVIDE_MCH, stonfi_provide_registries())
-    return [cm.matcher for cm in compiled]
-
-
 def _ir_matchers():
     compiled = compile_file(PROVIDE_MCH, stonfi_provide_registries())
     artifact = emit_ir(compiled, [PROVIDE_MCH.name])
@@ -482,17 +477,15 @@ async def _run_remake(matchers: list[BlockMatcher], legs: list[str]) -> list[Blo
 
 
 async def _run_parity(legs: list[str], compare=_assert_field_parity) -> list[Block]:
-    """legacy vs compiled(+pass), then compiled vs IR round trip. Returns
-    legacy blocks."""
+    """legacy vs the v2 IR engine (+pairing pass); the compiled path is retired
+    (T29). Returns legacy blocks."""
     hw = await _run_legacy(legs)
-    dsl = await _run_remake(_compile_dsl_matchers(), legs)
-    compare(dsl, hw, "dsl-vs-legacy")
 
     ir_matchers = _ir_matchers()
     if ir_matchers is None:
         pytest.skip(_SKIP_REASON)
     ir = await _run_remake(ir_matchers, legs)
-    compare(ir, dsl, "ir-vs-compiled")
+    compare(ir, hw, "ir-vs-legacy")
     return hw
 
 

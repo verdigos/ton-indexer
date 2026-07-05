@@ -141,22 +141,17 @@ def test_cyclic_ir_emits_strategy_and_back_edge():
 
 
 @pytest.mark.asyncio
-async def test_cyclic_descent_matches_multi_hop_both_engines(build_block_tree):
-    compiled, reg, captured = _compile_cyclic()
+async def test_cyclic_descent_matches_multi_hop_ir(build_block_tree):
+    compiled, _reg, _c = _compile_cyclic()
     tree = _two_hop_tree(build_block_tree)
-
-    m = compiled[0].matcher
-    result = await m.try_build(tree)
-    assert result is not None and len(captured) == 1
-    # Whole chain consumed: anchor S,P,T + inner S,P,F.
-    assert len(captured[0]._mch_consumed) == _count_blocks(tree) == 6
 
     art = mch_ir.load_artifact(emit_ir(compiled, ["cyc.mch"]))
     reg2, captured2 = _registries({}, "build_cyc", "CB")
     ir_m = {x.name: x for x in mch_ir.build_matchers(art, reg2)}["cyc"]
-    ir_result = await ir_m.try_build(_two_hop_tree(build_block_tree))
+    ir_result = await ir_m.try_build(tree)
     assert ir_result is not None and len(captured2) == 1
-    assert len(captured2[0]._mch_consumed) == 6
+    # Whole chain consumed: anchor S,P,T + inner S,P,F.
+    assert len(captured2[0]._mch_consumed) == _count_blocks(tree) == 6
 
 
 @pytest.mark.asyncio
@@ -191,20 +186,15 @@ async def test_cyclic_mandatory_continuation_disambiguates_shared_prefix(build_b
             ])
         return BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x2, children=[spec])])
 
-    for factory in ("compiled", "ir"):
-        reg, captured = _registries({}, "build_pfx", "CB")
-        compiled = compile_text(src, "pfx.mch", reg)
-        if factory == "compiled":
-            m = compiled[0].matcher
-            use_captured = captured
-        else:
-            art = mch_ir.load_artifact(emit_ir(compiled, ["pfx.mch"]))
-            reg2, use_captured = _registries({}, "build_pfx", "CB")
-            m = {x.name: x for x in mch_ir.build_matchers(art, reg2)}["pfx"]
-        tree = build_block_tree(hop_chain(2))  # 3 levels: S P T / S P T / S P T(final)
-        result = await m.try_build(tree)
-        assert result is not None and len(use_captured) == 1, factory
-        assert len(use_captured[0]._mch_consumed) == 9, factory
+    reg, _captured = _registries({}, "build_pfx", "CB")
+    compiled = compile_text(src, "pfx.mch", reg)
+    art = mch_ir.load_artifact(emit_ir(compiled, ["pfx.mch"]))
+    reg2, use_captured = _registries({}, "build_pfx", "CB")
+    m = {x.name: x for x in mch_ir.build_matchers(art, reg2)}["pfx"]
+    tree = build_block_tree(hop_chain(2))  # 3 levels: S P T / S P T / S P T(final)
+    result = await m.try_build(tree)
+    assert result is not None and len(use_captured) == 1
+    assert len(use_captured[0]._mch_consumed) == 9
 
 
 # ---------------------------------------------------------------------------
@@ -340,10 +330,10 @@ async def test_legacy_or_matcher_ignores_branch_optionality(build_block_tree):
 
 @pytest.mark.asyncio
 async def test_mch_maybe_branch_inside_alternative_is_inert(build_block_tree):
-    """mch pin, both engines: `( maybe op X | op Y )` as a required child —
+    """mch pin (IR engine): `( maybe op X | op Y )` as a required child —
     branch-level `maybe` does NOT make the alternative optional. A tree whose
     child matches neither branch fails the match; the losing maybe-branch
-    contributes nothing."""
+    contributes nothing. (Mirrors the legacy OrMatcher inertness pinned above.)"""
     src = """
     opcode A = 0x1
     opcode X = 0x2
@@ -357,21 +347,16 @@ async def test_mch_maybe_branch_inside_alternative_is_inert(build_block_tree):
         op A @a -> ( maybe op X | op Y )
     }
     """
-    for factory in ("compiled", "ir"):
-        reg, captured = _registries({}, "build_quirk", "QB")
-        compiled = compile_text(src, "quirk.mch", reg)
-        if factory == "compiled":
-            m = compiled[0].matcher
-            use_captured = captured
-        else:
-            art = mch_ir.load_artifact(emit_ir(compiled, ["quirk.mch"]))
-            reg2, use_captured = _registries({}, "build_quirk", "QB")
-            m = {x.name: x for x in mch_ir.build_matchers(art, reg2)}["quirk"]
+    reg, _captured = _registries({}, "build_quirk", "QB")
+    compiled = compile_text(src, "quirk.mch", reg)
+    art = mch_ir.load_artifact(emit_ir(compiled, ["quirk.mch"]))
+    reg2, use_captured = _registries({}, "build_quirk", "QB")
+    m = {x.name: x for x in mch_ir.build_matchers(art, reg2)}["quirk"]
 
-        neither = build_block_tree(BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x9)]))
-        result = await m.try_build(neither)
-        assert not result and len(use_captured) == 0, factory
+    neither = build_block_tree(BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x9)]))
+    result = await m.try_build(neither)
+    assert not result and len(use_captured) == 0
 
-        with_y = build_block_tree(BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x3)]))
-        result = await m.try_build(with_y)
-        assert result is not None and len(use_captured) == 1, factory
+    with_y = build_block_tree(BlockSpec(opcode=0x1, children=[BlockSpec(opcode=0x3)]))
+    result = await m.try_build(with_y)
+    assert result is not None and len(use_captured) == 1

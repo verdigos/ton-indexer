@@ -62,17 +62,10 @@ _SKIP_REASON = (
 )
 
 
-def _compile_dsl_matcher() -> BlockMatcher:
-    compiled = compile_file(LAYERZERO_MCH, layerzero_receive_registries())
-    by_name = {cm.name: cm.matcher for cm in compiled}
-    return by_name["layerzero_receive"]
-
-
 def _build_ir_matcher() -> BlockMatcher:
-    """Compile -> emit IR -> load -> build; return the round-tripped matcher.
-
-    Also renders the artifact to JSON (must not raise) so a break in the emit
-    plumbing ERRORS here rather than silently skipping. Assumes _HAVE_IR."""
+    """Compile (frontend-internal) -> emit IR -> load -> build; return the IR
+    matcher. Also renders the artifact to JSON (must not raise) so a break in the
+    emit plumbing ERRORS here rather than silently skipping. Assumes _HAVE_IR."""
     compiled = compile_file(LAYERZERO_MCH, layerzero_receive_registries())
     artifact = emit_ir(compiled, [LAYERZERO_MCH.name])
     render_json(artifact)
@@ -130,37 +123,34 @@ def _assert_field_parity(a_blocks: list[Block], b_blocks: list[Block], label: st
 
 
 async def _run_all(trace):
-    """Return (legacy, compiled, ir_or_None) block lists over the SAME trace,
-    each built on an independently constructed block tree."""
+    """Return (legacy, ir_or_None) block lists over the SAME trace, each built on
+    an independently constructed block tree. The compiled path is retired (T29)."""
     legacy = await _run_matcher(LayerZeroReceiveMatcher(), trace)
-    compiled = await _run_matcher(_compile_dsl_matcher(), trace)
     ir = await _run_matcher(_build_ir_matcher(), trace) if _HAVE_IR else None
-    return legacy, compiled, ir
+    return legacy, ir
 
 
 @pytest.mark.asyncio
 @pytest.mark.trace_file("1lRaVzUa7EjqG228WiDTg_2b_HSGlO5apCmj2JEAHxA=.lz4")
 async def test_layerzero_receive_parity(trace_data):
-    """First receive fixture (nonce 729): compiled DSL == legacy, IR == compiled."""
+    """First receive fixture (nonce 729): IR == legacy, field-level."""
     trace, _ = trace_data
-    legacy, compiled, ir = await _run_all(trace)
-    _assert_field_parity(compiled, legacy, "compiled-vs-legacy")
+    legacy, ir = await _run_all(trace)
     # The dup-label mapping produced the OUTER-derived channel/oapp, not the inner.
     assert legacy[0].data.channel != legacy[0].data.oapp
-    assert compiled[0].data.packet_data.nonce == 729
     if not _HAVE_IR:
         pytest.skip(_SKIP_REASON)
-    _assert_field_parity(ir, compiled, "ir-vs-compiled")
+    _assert_field_parity(ir, legacy, "ir-vs-legacy")
+    assert ir[0].data.packet_data.nonce == 729
 
 
 @pytest.mark.asyncio
 @pytest.mark.trace_file("2gDW04F5Zve-t6WkfZR2jOgM15IDtYfVkIbuRTvrzT8=.lz4")
 async def test_layerzero_receive_parity_2(trace_data):
-    """Second receive fixture (nonce 162): compiled DSL == legacy, IR == compiled."""
+    """Second receive fixture (nonce 162): IR == legacy, field-level."""
     trace, _ = trace_data
-    legacy, compiled, ir = await _run_all(trace)
-    _assert_field_parity(compiled, legacy, "compiled-vs-legacy")
-    assert compiled[0].data.packet_data.nonce == 162
+    legacy, ir = await _run_all(trace)
     if not _HAVE_IR:
         pytest.skip(_SKIP_REASON)
-    _assert_field_parity(ir, compiled, "ir-vs-compiled")
+    _assert_field_parity(ir, legacy, "ir-vs-legacy")
+    assert ir[0].data.packet_data.nonce == 162

@@ -122,11 +122,6 @@ def _interfaces(is_nominator_pool: bool = True) -> dict:
 
 # --- harness (mirrors test_dns.py) ------------------------------------------
 
-def _compile_dsl_matcher():
-    compiled = compile_file(NOMINATOR_MCH, nominator_registries())
-    return compiled[0].matcher
-
-
 def _build_block_tree(txs) -> Block:
     node = to_tree(txs)
     root = Block("root", [])
@@ -193,15 +188,15 @@ def _assert_field_parity(actual: list[Block], expected: list[Block],
 
 
 async def _run_parity(txs, *, interfaces: dict) -> tuple[list[Block], list[Block]]:
-    """legacy vs compiled, then compiled vs IR round trip."""
+    """legacy vs the v2 IR engine (the compiled path is retired — T29). Returns
+    (legacy blocks, IR blocks)."""
     context.interface_repository.set(TestInterfaceRepository(interfaces))
     hw_blocks = await _run_matcher(NominatorPoolWithdrawMatcher(), txs)
-    context.interface_repository.set(TestInterfaceRepository(interfaces))
-    compiled = compile_file(NOMINATOR_MCH, nominator_registries())
-    by_name = {cm.name: cm.matcher for cm in compiled}
-    dsl_blocks = await _run_matcher(by_name["nominator_pool_withdraw"], txs)
-    _assert_field_parity(dsl_blocks, hw_blocks, "dsl", "legacy")
 
+    # Compiling is a frontend-internal step ir_emit needs; no compiled matcher is
+    # run as a runtime. IR emit + JSON render always run (a break here must error,
+    # not skip).
+    compiled = compile_file(NOMINATOR_MCH, nominator_registries())
     artifact = emit_ir(compiled, [NOMINATOR_MCH.name])
     render_json(artifact)
     if not _HAVE_IR:
@@ -211,8 +206,8 @@ async def _run_parity(txs, *, interfaces: dict) -> tuple[list[Block], list[Block
     ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, nominator_registries())}
     context.interface_repository.set(TestInterfaceRepository(interfaces))
     ir_blocks = await _run_matcher(ir_by_name["nominator_pool_withdraw"], txs)
-    _assert_field_parity(ir_blocks, dsl_blocks, "ir", "compiled")
-    return hw_blocks, dsl_blocks
+    _assert_field_parity(ir_blocks, hw_blocks, "ir", "legacy")
+    return hw_blocks, ir_blocks
 
 
 @pytest.mark.asyncio
@@ -228,9 +223,9 @@ async def test_two_payouts_parity_same_granularity():
     """R05 accept criterion: output granularity (block count) must match
     legacy exactly - one block per payout, not one aggregate block."""
     txs = _build_withdraw_transactions([5 * 10 ** 9, 7 * 10 ** 9])
-    hw_blocks, dsl_blocks = await _run_parity(txs, interfaces=_interfaces())
+    hw_blocks, ir_blocks = await _run_parity(txs, interfaces=_interfaces())
     assert len(hw_blocks) == 2
-    assert len(dsl_blocks) == 2
+    assert len(ir_blocks) == 2
 
 
 @pytest.mark.asyncio
@@ -239,9 +234,9 @@ async def test_rejects_non_nominator_pool():
     NominatorPool interface - legacy's outer check vs the DSL's per-payout
     check in the shared core produce the same (empty) result."""
     txs = _build_withdraw_transactions([5 * 10 ** 9, 7 * 10 ** 9])
-    hw_blocks, dsl_blocks = await _run_parity(txs, interfaces=_interfaces(is_nominator_pool=False))
+    hw_blocks, ir_blocks = await _run_parity(txs, interfaces=_interfaces(is_nominator_pool=False))
     assert hw_blocks == []
-    assert dsl_blocks == []
+    assert ir_blocks == []
 
 
 @pytest.mark.asyncio
@@ -251,6 +246,6 @@ async def test_failed_flag_never_set_even_on_aborted_payout_tx():
     stays the Block-default False regardless of the payout tx's abort
     status. The remake must reproduce this exactly, not "fix" it."""
     txs = _build_withdraw_transactions([5 * 10 ** 9], payout_aborted=True)
-    hw_blocks, dsl_blocks = await _run_parity(txs, interfaces=_interfaces())
+    hw_blocks, ir_blocks = await _run_parity(txs, interfaces=_interfaces())
     assert hw_blocks[0].failed is False
-    assert dsl_blocks[0].failed is False
+    assert ir_blocks[0].failed is False

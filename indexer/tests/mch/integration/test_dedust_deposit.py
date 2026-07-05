@@ -85,15 +85,15 @@ def _load_trace(traces_dir: Path, filename: str):
     return trace
 
 
-def _compiled_and_ir() -> tuple[dict, dict]:
+def _ir_by_name() -> dict:
+    # Compiling is a frontend-internal step ir_emit needs; no compiled matcher is
+    # run as a runtime (T29).
     compiled = compile_file(DEDUST_DEPOSIT_MCH, dedust_deposit_registries())
-    compiled_by_name = {cm.name: cm.matcher for cm in compiled}
     artifact = emit_ir(compiled, [DEDUST_DEPOSIT_MCH.name])
     art = mch_ir.load_artifact(artifact)
-    ir_by_name = {
+    return {
         m.name: m for m in mch_ir.build_matchers(art, dedust_deposit_registries())
     }
-    return compiled_by_name, ir_by_name
 
 
 def _build_block_tree(trace) -> Block:
@@ -190,14 +190,11 @@ def _split(blocks: list[Block]) -> dict[str, list[Block]]:
 )
 async def test_dedust_deposit_parity(traces_dir, filename):
     trace = _load_trace(traces_dir, filename)
-    compiled_by_name, ir_by_name = _compiled_and_ir()
+    ir_by_name = _ir_by_name()
     prereqs = (JettonTransferBlockMatcher(), PTonTransferMatcher())
 
     hw = await _run_side(
         [DedustDepositBlockMatcher(), DedustDepositFirstAssetBlockMatcher()], trace
-    )
-    dsl = await _run_side(
-        [compiled_by_name[n] for n in MATCHER_NAMES], trace, prereqs=prereqs
     )
     ir = await _run_side(
         [ir_by_name[n] for n in MATCHER_NAMES], trace, prereqs=prereqs
@@ -205,15 +202,12 @@ async def test_dedust_deposit_parity(traces_dir, filename):
 
     assert len(hw) > 0, "legacy pair produced no deposit blocks - stale fixture"
 
-    hw_s, dsl_s, ir_s = _split(hw), _split(dsl), _split(ir)
+    hw_s, ir_s = _split(hw), _split(ir)
     for tag in ("final", "partial"):
-        _assert_field_parity(dsl_s[tag], hw_s[tag], f"compiled-vs-legacy[{tag}]")
-        _assert_field_parity(ir_s[tag], dsl_s[tag], f"ir-vs-compiled[{tag}]")
+        _assert_field_parity(ir_s[tag], hw_s[tag], f"ir-vs-legacy[{tag}]")
 
     # Host-side merge pass (spec §5.5) must dispatch identically on the
     # mch-produced classes — run it over each side and re-check parity.
     hw_pp = await post_process_dedust_liquidity(hw)
-    dsl_pp = await post_process_dedust_liquidity(dsl)
     ir_pp = await post_process_dedust_liquidity(ir)
-    _assert_field_parity(dsl_pp, hw_pp, "postprocess compiled-vs-legacy")
-    _assert_field_parity(ir_pp, dsl_pp, "postprocess ir-vs-compiled")
+    _assert_field_parity(ir_pp, hw_pp, "postprocess ir-vs-legacy")
