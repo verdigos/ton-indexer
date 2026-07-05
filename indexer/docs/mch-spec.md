@@ -593,11 +593,12 @@ Branches are tested in order; first true branch wins. `else` is required unless 
 
 ### 9.6 Expression language
 
-Deliberately small, **pure and total**. Features: capture/local references, field access (`x.y`), the implicit accessors `CAPTURE.msg` (message envelope: `source`, `destination`, `value`, `opcode`) and `CAPTURE.body` (parsed body after `parse`), literals, comparisons, `and`/`or`/`not`, `?? ` default, `x if cond else y`, and a fixed builtin set:
+Deliberately small, **pure and total**. Features: capture/local references, field access (`x.y`), the implicit accessors `CAPTURE.msg` (message envelope: `source`, `destination`, `value`, `opcode`), `CAPTURE.body` (parsed body after `parse`), and `CAPTURE.data` (a composed block's produced data), literals, comparisons, `and`/`or`/`not`, `?? ` default, `x if cond else y`, and a fixed builtin set:
 
+- `CAPTURE.data.<field>` — reads a field of a captured block's produced `data` (the block a *prior* matcher built, e.g. `transfer.data.sender` where `transfer` is a composed `jetton_transfer`). Access is a plain map lookup; a missing field rejects the match (mirrors the host's `data[key]` KeyError). Host semantics: dict lookup first, attribute fallback (dataclass interop during the migration); the C++ engine's block data is a `map<string, Value>`, so the accessor is a pure map lookup there.
 - Constructors: `asset(master)`, `ton_asset()`, `account(addr)`, `amount(x)` — the `Asset`/`AccountId`/`Amount` value objects. `account(null)` short-circuits to null (a *missing* address); `addr_none()` builds the distinct **addr_none** `AccountId` (present but empty — repr `addr_none`, `as_str()` → null). A field that must carry a present-but-empty address uses `account(x) ?? addr_none()`, mirroring the host's `AccountId(None)`.
 - Encoding: `b64(x)` base64-encodes `x`; a raw `Cell` is BOC-encoded first (mirrors `cell.to_boc()`), so a field carrying either boc bytes or a parsed Cell serialises identically.
-- List combinators over list captures: `first(xs)`, `last(xs)`, `sum(xs)`, `len(xs)`, `zip(xs, ys)`, `map(xs, field)` (field projection only, no lambdas).
+- List combinators over list captures: `first(xs)`, `last(xs)`, `sum(xs)`, `len(xs)`, `zip(xs, ys)`, `map(xs, field)` (field projection only, no lambdas). **Status: planned — NOT yet in the Python `BUILTINS` table.** Matchers needing list aggregation stay on a host `fn` until these land.
 - Declared host functions: `fn` names, called like builtins.
 
 No user-defined loops, no recursion, no mutation, no string manipulation. If a computation does not fit, it belongs in a host `fn`. The grammar is bytecode-friendly by design: every expression compiles to a short stack program for the M5 IR (§11.4), and every host implements the same ~20-op VM with shared conformance vectors.

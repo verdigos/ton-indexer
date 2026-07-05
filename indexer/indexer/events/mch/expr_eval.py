@@ -178,8 +178,13 @@ def _access(obj: Any, field: str, bodies: dict[int, Any]) -> Any:
             return obj.broken
         if field == "btype":
             return obj.btype
+        if field == "data":
+            # A captured block's produced data (set by a prior matcher). Composed
+            # here so a declarative build can read a child block's fields, e.g.
+            # `transfer.data.sender`. Key access below is a plain map lookup.
+            return obj.data
         raise EvalError(
-            f"unknown block accessor {field!r} (expected msg/body/failed/broken/btype)"
+            f"unknown block accessor {field!r} (expected msg/body/data/failed/broken/btype)"
         )
     if isinstance(obj, list):
         if field == "body":
@@ -195,6 +200,12 @@ def _access(obj: Any, field: str, bodies: dict[int, Any]) -> Any:
                     out.append(bodies[id(b)])
             return out
         raise EvalError(f"field {field!r} is not defined on a list capture")
+    if isinstance(obj, dict):
+        # Block `data` map (or any record dict): pure key lookup, a missing key
+        # is a fault (mirrors the host's `data[key]` KeyError -> match rejection).
+        if field in obj:
+            return obj[field]
+        raise EvalError(f"data has no field {field!r}")
     try:
         return getattr(obj, field)
     except AttributeError:

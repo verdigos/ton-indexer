@@ -8,10 +8,7 @@ match (spec §10.7); the synthesized wrapper merges the consumed blocks.
 """
 from __future__ import annotations
 
-from indexer.events.blocks.ethena_staking import (
-    EthenaDepositBlock,
-    build_ethena_deposit_core,
-)
+from indexer.events.blocks.ethena_staking import EthenaDepositBlock
 from indexer.events.mch.registry import Registries
 
 BLOCK_TYPES = {
@@ -20,13 +17,13 @@ BLOCK_TYPES = {
 
 
 def register_ethena(reg: Registries) -> Registries:
-    """Register everything specs/ethena.mch needs into `reg`."""
+    """Register everything specs/ethena.mch needs into `reg`.
+
+    specs/ethena.mch is FULLY DECLARATIVE: the hardcoded USDe/tsUSDe asset gate
+    is `reject when` clauses and every field is read off the composed
+    jetton_transfer / jetton_mint blocks' `data`. No builder to register.
+    """
     reg.block_types.update(BLOCK_TYPES)
-
-    @reg.register_builder("build_ethena_deposit")
-    async def build_ethena_deposit(m):
-        return build_ethena_deposit_core(m.transfer, m.mint)
-
     return reg
 
 

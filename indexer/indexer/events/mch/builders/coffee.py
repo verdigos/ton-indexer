@@ -20,10 +20,7 @@ Returns None to reject the match (spec §10.7).
 from __future__ import annotations
 
 from indexer.events.blocks.basic_blocks import CallContractBlock
-from indexer.events.blocks.liquidity import (
-    CoffeeCreateVaultBlock,
-    build_coffee_create_vault_core,
-)
+from indexer.events.blocks.liquidity import CoffeeCreateVaultBlock
 from indexer.events.blocks.messages.coffee import (
     CoffeeCreateVault,
     CoffeeDeploy,
@@ -117,22 +114,21 @@ LIQUIDITY_BLOCK_TYPES = {
     "CoffeeCreateVaultBlock": CoffeeCreateVaultBlock,
 }
 
+LIQUIDITY_MESSAGE_TYPES = {
+    "CoffeeCreateVault": CoffeeCreateVault,
+}
+
 
 def register_coffee_liquidity(reg: Registries) -> Registries:
-    """Register everything specs/coffee_liquidity.mch needs into `reg`."""
+    """Register everything specs/coffee_liquidity.mch needs into `reg`.
+
+    specs/coffee_liquidity.mch is FULLY DECLARATIVE: the four fields come from
+    the anchor's envelope + parsed body (asset) and the captured deploy call's
+    envelope, so this registers the message parser (for `parse`) but no builder.
+    """
     reg.opcodes.update(LIQUIDITY_OPCODES)
     reg.block_types.update(LIQUIDITY_BLOCK_TYPES)
-
-    @reg.register_builder("build_coffee_create_vault")
-    async def build_coffee_create_vault(m):
-        consumed = m._mch_consumed
-        block = consumed[0]
-        deploy = next((b for b in consumed[1:]
-                       if isinstance(b, CallContractBlock)
-                       and b.opcode == CoffeeDeploy.opcode
-                       and b.previous_block is block), None)
-        return await build_coffee_create_vault_core(block, deploy)
-
+    reg.message_types.update(LIQUIDITY_MESSAGE_TYPES)
     return reg
 
 

@@ -96,6 +96,17 @@ def _value(amount: Amount | None):
     return amount.value
 
 
+def _dget(data, key):
+    """Read a field from a block's `data` regardless of representation: a dict
+    (the declarative-build product — a plain btype + map, matching the C++
+    engine's canonical output) or a dataclass/object (the legacy build cores).
+    Dict lookup first, attribute fallback. Used only by the `_fill_*` of
+    matchers with a declarative `.mch` build, which must serve both paths."""
+    if isinstance(data, dict):
+        return data[key]
+    return getattr(data, key)
+
+
 def _calc_action_id(block: Block) -> str:
     root_event_node = min(block.event_nodes, key=lambda n: n.get_lt())
     key = ""
@@ -937,10 +948,10 @@ def _fill_tonco_deposit_liquidity_action(block: ToncoDepositLiquidityBlock, acti
     }
 
 def _fill_coffee_create_vault(block: CoffeeCreateVaultBlock, action: Action):
-    action.source = _addr(block.data.sender)
-    action.destination = _addr(block.data.vault)
-    action.asset = _addr(block.data.asset)
-    action.value = block.data.amount.value
+    action.source = _addr(_dget(block.data, 'sender'))
+    action.destination = _addr(_dget(block.data, 'vault'))
+    action.asset = _addr(_dget(block.data, 'asset'))
+    action.value = _value(_dget(block.data, 'amount'))
 
 def _fill_coffee_create_pool_creator(block: CoffeeCreatePoolCreatorBlock, action: Action):
     action.source = _addr(block.data.sender)
@@ -1276,15 +1287,15 @@ def _fill_ethena_withdrawal_request(block: EthenaWithdrawalRequestBlock, action:
 
 def _fill_ethena_deposit_action(block: EthenaDepositBlock, action: Action):
     action.type = 'stake_deposit'
-    action.source = _addr(block.data.source)
-    action.source_secondary = _addr(block.data.user_jetton_wallet)
-    action.destination = _addr(block.data.pool)
-    action.amount = block.data.value.value
-    action.asset = _addr(block.data.asset)
-    action.asset2 = _addr(block.data.source_asset)
+    action.source = _addr(_dget(block.data, 'source'))
+    action.source_secondary = _addr(_dget(block.data, 'user_jetton_wallet'))
+    action.destination = _addr(_dget(block.data, 'pool'))
+    action.amount = _value(_dget(block.data, 'value'))
+    action.asset = _addr(_dget(block.data, 'asset'))
+    action.asset2 = _addr(_dget(block.data, 'source_asset'))
     action.staking_data = {
         'provider': 'ethena',
-        'tokens_minted': _value(block.data.tokens_minted)
+        'tokens_minted': _value(_dget(block.data, 'tokens_minted'))
     }
 
 

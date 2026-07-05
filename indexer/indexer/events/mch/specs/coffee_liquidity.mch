@@ -6,8 +6,9 @@
 # the raw 0x2c76b973 / 0xd1735400 literals in the legacy matcher). Both
 # discovery hops are optional (TON/extra-currency vaults skip them).
 #
-# The builder delegates to build_coffee_create_vault_core and returns the
-# registered CoffeeCreateVaultBlock class.
+# Fully declarative build (M4 §9): sender/amount from the anchor envelope, asset
+# from its parsed body, vault from the captured CoffeeDeploy call's envelope.
+# The produced block is the canonical generic block (btype + data map).
 
 opcode CoffeeCreateVault    = 0xc0ffee06
 opcode CoffeeDeploy         = 0xc0ffee22
@@ -16,11 +17,18 @@ opcode TakeWalletAddress    = 0xd1735400
 
 matcher coffee_create_vault {
     produces CoffeeCreateVaultBlock
-    build    build_coffee_create_vault
     entry    @create
 
     op CoffeeCreateVault @create
       -> op CoffeeDeploy @deploy
       -> maybe op ProvideWalletAddress
       -> maybe op TakeWalletAddress
+
+    parse create as CoffeeCreateVault
+    out {
+        sender: account(create.msg.source)
+        vault:  account(deploy.msg.destination)
+        asset:  create.body.asset
+        amount: amount(create.msg.value)
+    }
 }

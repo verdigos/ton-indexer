@@ -1,10 +1,11 @@
 """Field-level parity between CoffeeCreateVaultMatcher and
 specs/coffee_liquidity.mch, PLUS the IR round trip.
 
-Three matcher graphs are compared block-for-block at the same bar as the
-T13-T17 ports (block class + btype, deep `data` equality — the block carries a
-CoffeeCreateVaultData dataclass, compared field by field — failed/broken
-flags, value_flow, consumed event-node set):
+Three matcher graphs are compared block-for-block: btype, deep `data` equality
+(the legacy block carries a CoffeeCreateVaultData dataclass, the declarative IR
+build a plain dict — normalized and compared field by field, NOT by class/data
+type per the wave-B G11 decision), failed/broken flags, value_flow, and the
+consumed event-node set:
 
     legacy    =  CoffeeCreateVaultMatcher (hand-written)
     compiled  =  compile_file(coffee_liquidity.mch)               (frontend)
@@ -26,10 +27,7 @@ import pytest
 
 from indexer.events.blocks.basic_matchers import BlockMatcher
 from indexer.events.blocks.core import Block
-from indexer.events.blocks.liquidity import (
-    CoffeeCreateVaultBlock,
-    CoffeeCreateVaultMatcher,
-)
+from indexer.events.blocks.liquidity import CoffeeCreateVaultMatcher
 from indexer.events.blocks.utils.tree_utils import to_tree
 from indexer.events.event_processing import init_block
 from indexer.events import mch_ir
@@ -70,7 +68,7 @@ async def _run_matcher(matcher: BlockMatcher, trace) -> list[Block]:
         result = await matcher.try_build(b)
         if result is not None:
             matches.extend(result)
-    return [b for b in matches if isinstance(b, CoffeeCreateVaultBlock)]
+    return [b for b in matches if b.btype == "coffee_create_vault"]
 
 
 def _values_equal(a, b) -> bool:
@@ -106,12 +104,14 @@ def _assert_field_parity(
         f"{label} count mismatch: actual={len(actual)} reference={len(reference)}"
     )
     for a, r in zip(sorted(actual, key=_sort_key), sorted(reference, key=_sort_key)):
-        assert type(a) is type(r) and a.btype == r.btype == "coffee_create_vault"
+        # Parity is on btype + data-map fields, NOT block class / data type: the
+        # declarative build product is the canonical generic Block + dict (the
+        # C++ engine has no host subclasses/dataclasses). Sanctioned G11
+        # adaptation — see the wave-B design note. The legacy dataclass and the
+        # declarative dict are normalized by _data_items and compared per key.
+        assert a.btype == r.btype == "coffee_create_vault"
         assert a.failed == r.failed, f"{label} failed flag: {a.failed} vs {r.failed}"
         assert a.broken == r.broken, f"{label} broken flag: {a.broken} vs {r.broken}"
-        assert type(a.data) is type(r.data), (
-            f"{label} data type: {type(a.data)} vs {type(r.data)}"
-        )
         a_data, r_data = _data_items(a), _data_items(r)
         assert set(a_data.keys()) == set(r_data.keys())
         for key in sorted(r_data):
