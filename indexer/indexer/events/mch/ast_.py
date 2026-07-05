@@ -366,30 +366,9 @@ class MatcherDecl:
 
 
 @dataclass(frozen=True)
-class CapturePath:
-    """A.B.C as parsed in `stitch.key`."""
-    root_capture: str
-    attrs: tuple[str, ...]
-    span: Span
-
-
-@dataclass(frozen=True)
-class StitchDecl:
-    name: str
-    partial: str
-    final: str
-    key: CapturePath
-    ttl_value: int
-    ttl_unit: str
-    merge: str
-    span: Span
-
-
-@dataclass(frozen=True)
 class File:
     path: str
     opcodes:    tuple[OpcodeDecl, ...]
     predicates: tuple[PredicateDecl, ...]
     rules:      tuple[RuleDecl, ...]
     matchers:   tuple[MatcherDecl, ...]
-    stitches:   tuple[StitchDecl, ...]

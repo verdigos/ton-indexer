@@ -48,6 +48,12 @@ P011_DUPLICATE_DIRECTIVE = "P011_DUPLICATE_DIRECTIVE"
 """A matcher declares the same at-most-once directive more than once
 (currently: `shape`, §8.7)."""
 
+P012_STITCH_REMOVED = "P012_STITCH_REMOVED"
+"""A `stitch` declaration was encountered. stitch was removed in 0.2 (§3.5,
+§5.5): cross-trace joining is permanently out of scope; paired results are
+merged by host post-process code. The v0.1 words `stitch partial final key
+ttl merge` stay reserved solely to make this error targeted."""
+
 C011_UNKNOWN_SHAPER = "C011_UNKNOWN_SHAPER"
 """The `shape` directive names a shaper that is not present in the host's
 shaper registry (§8.7, §11.1)."""

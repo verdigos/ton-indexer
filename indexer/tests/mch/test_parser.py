@@ -79,7 +79,8 @@ def test_parse_matcher_with_directive_overrides():
     assert f.matchers[0].include_bounces is False
 
 
-def test_parse_stitch_declaration():
+def test_stitch_declaration_rejected_with_migration_error():
+    # stitch removed in 0.2 (T05); keywords stay reserved for this targeted error
     src = """
     stitch s {
         partial p
@@ -89,16 +90,7 @@ def test_parse_stitch_declaration():
         merge   merge_fn
     }
     """
-    f = _parse(src)
-    assert len(f.stitches) == 1
-    s = f.stitches[0]
-    assert s.partial == "p"
-    assert s.final == "f"
-    assert s.key.root_capture == "topup"
-    assert s.key.attrs == ("destination",)
-    assert s.ttl_value == 6
-    assert s.ttl_unit == "h"
-    assert s.merge == "merge_fn"
+    _parse_expect_error(src, "P012_STITCH_REMOVED")
 
 
 def test_parse_node_op_with_capture():

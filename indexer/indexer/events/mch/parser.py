@@ -115,7 +115,6 @@ def parse(tokens: Iterable[Token], path: str) -> ast_.File:
     predicates: list[ast_.PredicateDecl] = []
     rules:      list[ast_.RuleDecl] = []
     matchers:   list[ast_.MatcherDecl] = []
-    stitches:   list[ast_.StitchDecl] = []
 
     s.skip_newlines()
     while not s.at(TokenKind.EOF):
@@ -129,7 +128,12 @@ def parse(tokens: Iterable[Token], path: str) -> ast_.File:
         elif t.kind is TokenKind.KW_MATCHER:
             matchers.append(_parse_matcher_decl(s))
         elif t.kind is TokenKind.KW_STITCH:
-            stitches.append(_parse_stitch_decl(s))
+            s.bag.error(
+                "P012_STITCH_REMOVED",
+                "stitch was removed in 0.2; paired results are merged by host post-process code",
+                t.span,
+            )
+            raise CompileError(bag)
         else:
             s.bag.error(
                 "P001_UNEXPECTED_TOKEN",
@@ -148,7 +152,6 @@ def parse(tokens: Iterable[Token], path: str) -> ast_.File:
         predicates=tuple(predicates),
         rules=tuple(rules),
         matchers=tuple(matchers),
-        stitches=tuple(stitches),
     )
 
 
@@ -297,84 +300,6 @@ def _parse_bool_literal(s: _ParserState) -> bool:
         return False
     s.bag.error("P001_UNEXPECTED_TOKEN", f"expected 'true' or 'false', found {t.text!r}", t.span)
     raise CompileError(s.bag)
-
-
-def _parse_stitch_decl(s: _ParserState) -> ast_.StitchDecl:
-    start = s.eat(TokenKind.KW_STITCH).span
-    name_tok = s.eat(TokenKind.IDENT)
-    s.eat(TokenKind.LBRACE)
-    s.skip_newlines()
-
-    partial: str | None = None
-    final:   str | None = None
-    key:     ast_.CapturePath | None = None
-    ttl_value: int | None = None
-    ttl_unit:  str | None = None
-    merge_fn: str | None = None
-
-    while not s.at(TokenKind.RBRACE) and not s.at(TokenKind.EOF):
-        t = s.peek()
-        if t.kind is TokenKind.KW_PARTIAL:
-            s.i += 1
-            partial = s.eat(TokenKind.IDENT).text
-        elif t.kind is TokenKind.KW_FINAL:
-            s.i += 1
-            final = s.eat(TokenKind.IDENT).text
-        elif t.kind is TokenKind.KW_KEY:
-            s.i += 1
-            key = _parse_capture_path(s)
-        elif t.kind is TokenKind.KW_TTL:
-            s.i += 1
-            tt = s.eat(TokenKind.DURATION)
-            ttl_value = int(tt.text[:-1])
-            ttl_unit = tt.text[-1]
-        elif t.kind is TokenKind.KW_MERGE:
-            s.i += 1
-            merge_fn = s.eat(TokenKind.IDENT).text
-        else:
-            s.bag.error(
-                "P001_UNEXPECTED_TOKEN",
-                f"expected stitch directive, found {t.kind.name}",
-                t.span,
-            )
-            raise CompileError(s.bag)
-        s.skip_newlines()
-
-    end = s.eat(TokenKind.RBRACE).span
-    if None in (partial, final, key, ttl_value, ttl_unit, merge_fn):
-        s.bag.error(
-            "P001_UNEXPECTED_TOKEN",
-            f"stitch {name_tok.text!r} missing required directive",
-            _join(start, end),
-        )
-        raise CompileError(s.bag)
-    return ast_.StitchDecl(
-        name=name_tok.text,
-        partial=partial,                     # type: ignore[arg-type]
-        final=final,                         # type: ignore[arg-type]
-        key=key,                             # type: ignore[arg-type]
-        ttl_value=ttl_value,                 # type: ignore[arg-type]
-        ttl_unit=ttl_unit,                   # type: ignore[arg-type]
-        merge=merge_fn,                      # type: ignore[arg-type]
-        span=_join(start, end),
-    )
-
-
-def _parse_capture_path(s: _ParserState) -> ast_.CapturePath:
-    start = s.eat(TokenKind.AT).span
-    root_tok = s.eat(TokenKind.IDENT)
-    attrs: list[str] = []
-    end_span = root_tok.span
-    while s.at(TokenKind.DOT):
-        s.i += 1
-        a = s.eat(TokenKind.IDENT)
-        attrs.append(a.text)
-        end_span = a.span
-    return ast_.CapturePath(
-        root_capture=root_tok.text,
-        attrs=tuple(attrs),
-        span=_join(start, end_span),
-    )
 
 
 def _parse_pattern_expr(s: _ParserState) -> ast_.PatternExpr:

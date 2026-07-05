@@ -58,7 +58,7 @@ Goal: add tests for diagnostic codes that have zero coverage: `C001_RECURSION_SH
 Accept: each listed code has at least one asserting test; both silent-drop shapes error or lower correctly (both silent-drop shapes: DONE).
 
 ### T05 — Remove `stitch`, reserve keywords, add migration error
-Status: todo
+Status: done (2026-07-05 — stitch grammar/AST/resolver acceptance deleted (`StitchDecl`, `CapturePath`, `_parse_stitch_decl`, `W900_STITCH_DEFERRED`); keywords stay reserved; parser emits `P012_STITCH_REMOVED` with the migration hint. NOTE: spec had assigned `P011_STITCH_REMOVED`, but P011 was taken by `P011_DUPLICATE_DIRECTIVE` (shape/priority) — spec §3.5/§13 updated to P012.)
 Spec: §3.5, §5.5, §12.1
 Needs: T01
 Goal: delete stitch grammar/AST/resolver acceptance and its parser tests. Keep `stitch partial final key ttl merge` as reserved words; parser emits `P011_STITCH_REMOVED` with hint "paired results are merged by host post-process code" when `stitch` is encountered.
@@ -437,20 +437,20 @@ Accept: corpus parity; `fn` count recorded in this file (baseline for the parity
 ## M5 — IR & C++
 
 ### T40 — IR format specification
-Status: todo
+Status: done (2026-07-06 — normative `docs/mch-ir-spec.md` v1.0 replacing the POC doc (superseded banner on mch-ir-poc.md); documents artifact layout / matcher+anchor+node records / expr encoding + full builtin semantics table / build program / registry-reference contracts / T20+T21 determinism guarantees / load-time validation summary, with a fully annotated vesting example artifact. Two doc-vs-code inconsistencies flagged, NOT normalized: (1) on-the-wire `mch_ir_version` is still literal "0.1-poc" — bumping is an M5 decision; (2) `registration_order` is source order, priority applied at load by `build_matchers` stable sort — old POC claim "registration_order = priority order" was false. Note: roadmap's "expression bytecode" framing was stale — actual IR encodes expression TREES.)
 Spec: §11.4
 Needs: T30 (VM design), M3 complete
 Goal: `docs/mch-ir-spec.md`: versioned artifact layout (matcher table, anchors as opcode/btype sets, structural graphs, capture slots, expression bytecode, lookup plans, fn signatures, priority order), golden-fixture format.
 Accept: doc + at least one hand-written golden fixture for the jetton_transfer matcher.
 
 ### T41 — Frontend emits IR; Python engine consumes it
-Status: todo
+Status: done (2026-07-05 — effectively delivered by T29: the frontend lowers to LNode records and `ir_emit` serializes them; `mch_ir/` (loader + engine) is the ONLY mch runtime and the full suite runs through the IR path. Golden-fixture CI diff = covered by the byte-identity checks used in T29/waves + T40's annotated example.)
 Needs: T40
 Goal: compiler backend serializing the resolved namespace to IR; Python engine gains an IR loader that reconstructs matchers from the artifact instead of (or verifying against) direct lowering. Same test suite must pass through the IR path.
 Accept: full `tests/mch/` green with IR path enabled; golden IR fixtures diffed in CI-style test.
 
 ### T42 — Expression VM conformance vectors
-Status: todo
+Status: done (2026-07-06 — 78 language-neutral vectors `tests/mch_ir/vectors/expr_vectors.json` (`{name, src, expr(IR), env, expect[, lookups]}`, regen via `vectors/_generate.py` so `expr` is exactly the frontend-emitted IR); runner `test_expr_vectors.py` executes all through the async Evaluator + every sync-legal one through `_sync_eval` = 91 cases green. Coverage: every expr kind, all 12 builtins, all 9 bin ops, null-propagation per operator, ??/short-circuit, Asset==string case-insensitive, combinator edges, nested literals, exit_code, 10 fault vectors. Value-encoding convention shared with mch-ir-spec.md §12. No evaluator bugs found. Intentional gaps (host-object-shaped, covered by engine/integration tests): Block-object accessors, list.body, where-clause data reads.)
 Needs: T41
 Goal: language-neutral test vectors (input stack/consts → expected result) covering every VM op and null-handling edge; Python VM passes all.
 Accept: vector file + runner test.

@@ -104,7 +104,7 @@ true false null
 and or not
 ```
 
-The v0.1 keywords `stitch`, `partial`, `final`, `key`, `ttl`, `merge` are removed from the language but remain reserved so the parser can emit a targeted migration error (`P011_STITCH_REMOVED`: "stitch was removed in 0.2; paired results are merged by host post-process code").
+The v0.1 keywords `stitch`, `partial`, `final`, `key`, `ttl`, `merge` are removed from the language but remain reserved so the parser can emit a targeted migration error (`P012_STITCH_REMOVED`: "stitch was removed in 0.2; paired results are merged by host post-process code").
 
 ### 3.6 Comments
 
@@ -801,7 +801,7 @@ Milestone tags mark when a rule becomes active (untagged = M1, active now).
 - A capture on a sequence atom chained after a recursive rule reference in the same chain (`C007_CAPTURE_AFTER_RECURSION`); later children-set items and parent-chain captures are legal (§7.2/§10.3).
 - Mixing `|` and `^` at the same nesting level (`P010_ALTERNATIVE_SEPARATOR_MIX`).
 - Matcher lacks `entry` (`R008_ENTRY_REQUIRED`).
-- `stitch` keyword encountered (`P011_STITCH_REMOVED` — hint: paired results are merged by host post-process code).
+- `stitch` keyword encountered (`P012_STITCH_REMOVED` — hint: paired results are merged by host post-process code).
 - `[M4]` `parse … as T` where `T` is not in the message-type registry (`B001_UNKNOWN_MESSAGE_TYPE`).
 - `[M4]` Unknown `fn` (`B002_UNKNOWN_FN`) or wrong arity (`B003_FN_ARITY`).
 - `[M4]` A `lookup` key expression depends on another lookup (`B004_LOOKUP_DEPENDS_ON_LOOKUP`).

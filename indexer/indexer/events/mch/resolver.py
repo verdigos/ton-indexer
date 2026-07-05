@@ -193,7 +193,6 @@ class ResolvedFile:
     opcodes: dict[str, int]
     rule_recursion: dict[str, RecursionClass]
     matchers: tuple[ResolvedMatcher, ...]
-    stitches: tuple[ast_.StitchDecl, ...]
     diagnostics: DiagnosticBag
 
 
@@ -212,14 +211,6 @@ def resolve(file: ast_.File, registries: Registries) -> ResolvedFile:
 
     _check_priorities(file, bag)
 
-    if file.stitches:
-        for s in file.stitches:
-            bag.warning(
-                "W900_STITCH_DEFERRED",
-                f"stitch declarations are accepted but not lowered in v0",
-                s.span,
-            )
-
     if bag.has_errors:
         raise CompileError(bag)
 
@@ -228,7 +219,6 @@ def resolve(file: ast_.File, registries: Registries) -> ResolvedFile:
         opcodes=opcodes,
         rule_recursion=rule_recursion,
         matchers=tuple(resolved_matchers),
-        stitches=file.stitches,
         diagnostics=bag,
     )
 

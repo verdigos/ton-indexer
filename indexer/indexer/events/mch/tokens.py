@@ -52,7 +52,8 @@ class TokenKind(Enum):
     KW_NOT = "not"
     KW_AND = "and"
     KW_OR = "or"
-    # stitch keywords (accepted in v0; compiler emits W900_STITCH_DEFERRED)
+    # v0.1 stitch keywords — removed from the language (§3.5), kept reserved so
+    # the parser can emit the targeted migration error P012_STITCH_REMOVED
     KW_PARTIAL = "partial"
     KW_FINAL = "final"
     KW_KEY = "key"

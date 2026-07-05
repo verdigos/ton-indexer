@@ -1,5 +1,7 @@
 # MCH IR — POC Schema (v0.1-poc)
 
+> **⚠️ SUPERSEDED (2026-07-06).** The normative IR specification is now **`docs/mch-ir-spec.md` (v1.0)**, which documents the artifact as actually emitted/consumed today — including the wave-1/2 additions this POC predates (`priority`, `produces switch` + optional keys, list/record literals, the `.data`/`exit_code` accessors, the `addr_none`/`b64`-Cell/list-combinator builtins, and the T20/T21 determinism guarantees). This file is kept for history only; do not implement against it. The on-the-wire `mch_ir_version` tag remains `"0.1-poc"`.
+
 **Status:** POC contract for branch `mch-ir-poc`. NOT the final M5 IR (that one adds expression bytecode, typed capture tables, conformance triples). This document is the binding contract between the Python emitter and the Go loader. If either side needs a deviation, update this file first.
 
 ## Purpose
