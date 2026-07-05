@@ -169,9 +169,13 @@ def _assert_field_parity(actual: list[Block], expected: list[Block],
         assert a.failed == e.failed, f"failed flag: {actual_tag}={a.failed} {expected_tag}={e.failed}"
         assert a.broken == e.broken, f"broken flag: {actual_tag}={a.broken} {expected_tag}={e.broken}"
 
-        assert type(a.data) is type(e.data) is NominatorPoolWithdrawRequestData
+        # legacy (production path) stays a dataclass; the DSL leg is the v2 IR
+        # engine's declarative build, whose canonical product is a generic Block
+        # + dict data (btype + fields, sanctioned wave-B adaptation).
+        assert type(e.data) is NominatorPoolWithdrawRequestData
         for fname in ("source", "pool", "payout_amount"):
-            av, ev = getattr(a.data, fname), getattr(e.data, fname)
+            av = a.data[fname] if isinstance(a.data, dict) else getattr(a.data, fname)
+            ev = getattr(e.data, fname)
             assert _values_equal(av, ev), (
                 f"data.{fname}: {actual_tag}={av!r} ({type(av).__name__}) "
                 f"{expected_tag}={ev!r} ({type(ev).__name__})"

@@ -31,7 +31,6 @@ from indexer.events.blocks.liquidity import (
     DedustDepositLiquidityPartial,
     build_dedust_deposit_liquidity_core,
     build_dedust_deposit_partial_core,
-    build_dedust_withdraw_core,
 )
 from indexer.events.blocks.messages import (
     DedustPayout,
@@ -63,7 +62,6 @@ from indexer.events.blocks.swaps import (
     _get_dedust_jetton_swap_sequence,
     _parse_dedust_steps,
     _unwrap_dedust_include,
-    build_dedust_swap_core,
 )
 from indexer.events.blocks.utils import AccountId, Amount, Asset
 from indexer.events.blocks.utils.block_utils import (
@@ -71,7 +69,11 @@ from indexer.events.blocks.utils.block_utils import (
     find_call_contracts,
     find_messages,
 )
-from indexer.events.mch.registry import Registries
+from indexer.events.mch.registry import (
+    Registries,
+    default_lookups,
+    default_message_types,
+)
 
 OPCODES = {
     "DedustSwapExternal":     DedustSwapExternal.opcode,
@@ -99,15 +101,17 @@ WITHDRAW_BLOCK_TYPES = {
 
 
 def register_dedust(reg: Registries) -> Registries:
-    """Register everything specs/dedust_swap.mch needs into `reg`."""
+    """Register everything specs/dedust_swap.mch needs into `reg`.
+
+    specs/dedust_swap.mch is now a HYBRID declarative build (like
+    specs_decl/dedust_swap_hybrid.mch): the reject/failed/scalar wiring is
+    declarative, the two host fns own the imperative residue. The legacy
+    build_dedust_swap_core (blocks/swaps.py) stays the parity reference.
+    """
     reg.opcodes.update(OPCODES)
     reg.block_types.update(BLOCK_TYPES)
-
-    @reg.register_builder("build_dedust_swap")
-    async def build_dedust_swap(m):
-        consumed = m._mch_consumed
-        return await build_dedust_swap_core(consumed[0], consumed[1:])
-
+    reg.register_fn("dedust_swap_legs")(_dedust_swap_legs)
+    reg.register_fn("dedust_swap_failed")(_dedust_swap_failed)
     return reg
 
 
@@ -280,14 +284,18 @@ def dedust_hybrid_registries() -> Registries:
 
 
 def register_dedust_withdraw(reg: Registries) -> Registries:
-    """Register everything specs/dedust_withdraw.mch needs into `reg`."""
+    """Register everything specs/dedust_withdraw.mch needs into `reg`.
+
+    specs/dedust_withdraw.mch is a FULLY DECLARATIVE build: it needs the opcode /
+    block-type registration plus message parsers (`parse burn/req_* as ...`) and
+    the jetton_wallet lookup. No host builder — the shared
+    build_dedust_withdraw_core (blocks/liquidity.py) stays with the legacy
+    DedustWithdrawBlockMatcher on the production path only.
+    """
     reg.opcodes.update(WITHDRAW_OPCODES)
     reg.block_types.update(WITHDRAW_BLOCK_TYPES)
-
-    @reg.register_builder("build_dedust_withdraw")
-    async def build_dedust_withdraw(m):
-        return await build_dedust_withdraw_core(m.burn, [m.payout_1, m.payout_2])
-
+    reg.message_types.update(default_message_types())
+    reg.lookups.update(default_lookups())
     return reg
 
 

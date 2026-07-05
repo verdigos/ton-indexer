@@ -1,30 +1,25 @@
-"""mch builder for the LayerZero receive matcher (specs/layerzero.mch).
+"""mch registration for the LayerZero receive matcher (specs/layerzero.mch).
 
-Ported from blocks/layerzero.py LayerZeroReceiveMatcher. The legacy build reads a
-single labeled block ("execute_callback") out of its consumed set and delegates
-the rest to `build_layerzero_receive_core` (shared with the legacy matcher).
+specs/layerzero.mch is DECLARATIVE (M4 §9): the runtime evaluates parse/reject/out,
+so this module only registers the opcodes, the produced block type, the message
+parser (for `parse execute as LayerZeroOappExecuteCallback`), and the single host
+`fn` the declarative build cannot express.
 
-DUP-LABEL MAPPING (spec header explains why there are two capture names): the
-legacy pattern reuses the label "execute_callback" on two nested non-exclusive
-nodes — LayerzeroLzReceiveExecute (0x0c7b8418, layerzero.py:363) and
-LayerZeroOappExecuteCallback (0xcaae25a1, layerzero.py:368). Same-name captures
-are only legal across exclusive branches (R005), so the spec gives them distinct
-names: @execute (outer) and @oapp_callback (inner). The legacy `get_labeled`
-returns the FIRST label in traversal order — the OUTER one — so this builder
-passes `m.execute` to the core. `m.oapp_callback` (the inner OApp callback) binds
-for pattern fidelity but the legacy build never read it; verified against both
-corpus fixtures.
+Host `fn` (the only remaining dual-implementation liability):
 
-Captures bind as scalars (the pattern has no recursion). The anchor block is
-`m.prepare` (the Channel LZ_RECEIVE_PREPARE); the core reads
-`block.get_message().source` off it for the receive sender.
+- layerzero_dst_oapp_matches — the legacy safety check `dest[2:].lower() ==
+  dst_oapp[2:].lower()`. The envelope destination is a TON address (`0:<hex>`)
+  and the packet dst_oapp is a bare 256-bit hash (`0x<hex>`); `account()` rejects
+  the `0x` form (AddressError), and the expression language has no string
+  manipulation (§9.6), so prefix-strip + case-insensitive hex compare stays here.
+  Byte-identical to build_layerzero_receive_core's guard.
+
+The legacy LayerZeroReceiveMatcher and build_layerzero_receive_core stay the
+parity reference.
 """
 from __future__ import annotations
 
-from indexer.events.blocks.layerzero import (
-    LayerZeroReceiveBlock,
-    build_layerzero_receive_core,
-)
+from indexer.events.blocks.layerzero import LayerZeroReceiveBlock
 from indexer.events.blocks.messages.layerzero import (
     ChannelLzReceiveLock,
     ChannelLzReceivePrepare,
@@ -48,20 +43,25 @@ BLOCK_TYPES = {
     "LayerZeroReceiveBlock": LayerZeroReceiveBlock,
 }
 
+MESSAGE_TYPES = {
+    "LayerZeroOappExecuteCallback": LayerZeroOappExecuteCallback,
+}
+
 
 def register_layerzero_receive(reg: Registries) -> Registries:
     """Register everything specs/layerzero.mch needs into `reg`."""
     reg.opcodes.update(OPCODES)
     reg.block_types.update(BLOCK_TYPES)
+    reg.message_types.update(MESSAGE_TYPES)
 
-    @reg.register_builder("build_layerzero_receive")
-    async def build_layerzero_receive(m):
-        # @execute is the OUTER LayerzeroLzReceiveExecute — the block the legacy
-        # get_labeled("execute_callback") resolves to. @oapp_callback (inner) is
-        # bound but intentionally unused, matching the legacy build. The core
-        # returns None to reject (spec §10.7); the synthesized wrapper does the
-        # merge_blocks, so the core must not.
-        return build_layerzero_receive_core(m.prepare, m.execute)
+    @reg.register_fn("layerzero_dst_oapp_matches")
+    async def layerzero_dst_oapp_matches(destination, dst_oapp) -> bool:
+        # dest[2:].lower() == dst_oapp[2:].lower() — strip `0:` / `0x`, compare
+        # the hex case-insensitively (see module docstring for why this can't be
+        # `account(a) == account(b)`).
+        if destination is None or dst_oapp is None:
+            return False
+        return str(destination)[2:].lower() == str(dst_oapp)[2:].lower()
 
     return reg
 

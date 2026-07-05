@@ -100,7 +100,10 @@ async def _run_matcher(matcher: BlockMatcher, trace) -> list:
         result = await matcher.try_build(b)
         if result is not None:
             matches.extend(result)
-    return [b for b in matches if isinstance(b, JettonSwapBlock)]
+    # Filter by btype, not class: the declarative hybrid build produces the
+    # canonical generic Block + dict (sanctioned G11 adaptation, wave-B), while
+    # the legacy matcher produces a JettonSwapBlock — both btype "jetton_swap".
+    return [b for b in matches if b.btype == "jetton_swap"]
 
 
 def _values_equal(a, b) -> bool:

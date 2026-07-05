@@ -1,5 +1,5 @@
 # Stonfi v2 withdraw liquidity (R04 remake) — remade from blocks/liquidity.py
-# StonfiV2WithdrawLiquidityMatcher.
+# StonfiV2WithdrawLiquidityMatcher. FULLY DECLARATIVE build (no host builder).
 #
 # The legacy matcher anchors on ONE pool pay-to (op 0x657b54f5) and then does an
 # imperative sibling scan (block.previous_block.next_blocks) to pick up the
@@ -23,10 +23,11 @@
 # core can read the sender off refund.previous_block, and the parent is consumed.
 #
 # Each pay-to has a jetton_transfer child; a TON payout carries a PTonTransfer
-# grandchild under that transfer (`maybe op PTonTransfer`) — legacy reads the
-# ton_amount off it and marks the leg is_ton. The captures bind positionally
-# (no recursion), so the builder is capture-driven, delegating to the shared
-# build_stonfi_v2_withdraw_core (same fn the legacy matcher now calls).
+# grandchild under that transfer (`maybe op PTonTransfer`) — the leg's ton_amount
+# is read off it and the leg is marked is_ton. All captures bind positionally
+# (no recursion), so the build reads each pay-to's jetton_transfer `.data` and
+# the optional PTonTransfer body directly; the legacy build core's manual merge
+# of the pTON blocks is subsumed by the engine merging the captured pton_1/pton_2.
 
 opcode StonfiV2PayTo                 = 0x657b54f5
 opcode StonfiV2WithdrawFromPool      = 0x297437cf
@@ -36,22 +37,64 @@ opcode PTonTransfer                  = 0x01f3835d
 
 matcher stonfi_v2_withdraw {
     produces dex_withdraw_liquidity
-    build    build_stonfi_v2_withdraw
     entry    @burn
 
     btype jetton_burn @burn
       -> op StonfiV2WithdrawFromPool @router
            -> { op StonfiV2PayTo @payout_1 -> btype jetton_transfer @jt_1 -> maybe op PTonTransfer @pton_1
               ; op StonfiV2PayTo @payout_2 -> btype jetton_transfer @jt_2 -> maybe op PTonTransfer @pton_2 }
+
+    parse pton_1 as PTonTransfer
+    parse pton_2 as PTonTransfer
+    out {
+        dex:                 "stonfi_v2"
+        sender:              burn.data.owner
+        sender_wallet:       burn.data.jetton_wallet
+        pool:                account(payout_1.msg.source)
+        asset:               burn.data.asset
+        lp_tokens_burnt:     burn.data.amount
+        is_refund:           false
+        amount1_out:         amount(pton_1.body.ton_amount ?? 0) if pton_1 != null else jt_1.data.amount
+        asset1_out:          ton_asset() if pton_1 != null else jt_1.data.asset
+        dex_wallet_1:        jt_1.data.sender
+        dex_jetton_wallet_1: jt_1.data.sender_wallet
+        wallet1:             jt_1.data.receiver_wallet
+        amount2_out:         amount(pton_2.body.ton_amount ?? 0) if pton_2 != null else jt_2.data.amount
+        asset2_out:          ton_asset() if pton_2 != null else jt_2.data.asset
+        dex_wallet_2:        jt_2.data.sender
+        dex_jetton_wallet_2: jt_2.data.sender_wallet
+        wallet2:             jt_2.data.receiver_wallet
+    }
 }
 
 matcher stonfi_v2_withdraw_refund {
     produces dex_withdraw_liquidity
-    build    build_stonfi_v2_withdraw_refund
     entry    @refund
 
     op StonfiV2WithdrawRefund @refund
       -> { op StonfiV2PayTo @payout_1 -> btype jetton_transfer @jt_1 -> maybe op PTonTransfer @pton_1
          ; op StonfiV2PayTo @payout_2 -> btype jetton_transfer @jt_2 -> maybe op PTonTransfer @pton_2 }
       <- op StonfiV2WithdrawRefundParent @refund_parent
+
+    parse pton_1 as PTonTransfer
+    parse pton_2 as PTonTransfer
+    out {
+        dex:                 "stonfi_v2"
+        sender:              account(refund_parent.msg.source)
+        sender_wallet:       null
+        pool:                account(payout_1.msg.source)
+        asset:               null
+        lp_tokens_burnt:     null
+        is_refund:           true
+        amount1_out:         amount(pton_1.body.ton_amount ?? 0) if pton_1 != null else jt_1.data.amount
+        asset1_out:          ton_asset() if pton_1 != null else jt_1.data.asset
+        dex_wallet_1:        jt_1.data.sender
+        dex_jetton_wallet_1: jt_1.data.sender_wallet
+        wallet1:             jt_1.data.receiver_wallet
+        amount2_out:         amount(pton_2.body.ton_amount ?? 0) if pton_2 != null else jt_2.data.amount
+        asset2_out:          ton_asset() if pton_2 != null else jt_2.data.asset
+        dex_wallet_2:        jt_2.data.sender
+        dex_jetton_wallet_2: jt_2.data.sender_wallet
+        wallet2:             jt_2.data.receiver_wallet
+    }
 }

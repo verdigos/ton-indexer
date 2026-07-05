@@ -52,7 +52,6 @@ predicate evaa_service_comment
 
 matcher evaa_withdraw {
     produces EvaaWithdrawBlock
-    build    build_evaa_withdraw
     entry    @master
 
     op EvaaWithdrawMaster @master
@@ -68,4 +67,35 @@ matcher evaa_withdraw {
            ^ op EvaaWithdrawNotCollateralizedExcess @fail_excess
            ^ op EvaaWithdrawMissingPricesExcess @fail_excess
            ^ op EvaaWithdrawExecutionCrashed @fail_excess ) )
+
+    # Declarative build (M4 §9), field-for-field with build_evaa_withdraw_core.
+    # The IR engine binds @coll_ok / @coll_fail / @fail_excess per the winning
+    # exclusive branch (only the compiled path mis-bound the shared-head
+    # @coll_ok/@coll_fail — retired), so `coll_ok != null` is the success test
+    # exactly like the core's `if withdraw_collateralized_success:` branch.
+    parse master     as EvaaWithdrawMaster
+    parse coll_ok    as EvaaWithdrawCollateralized     # null on the fail branches
+    parse fail_excess as EvaaWithdrawFailExcess         # null unless a user-contract error fired
+    let is_ton  = master.body.asset_id == 0x1A4219FE5E60D63AF2A3CC7DCE6FEC69B45C6B5718497A6148E7C232AC87BD8A
+    let success = coll_ok != null
+    # Legacy `return None` guards: a collateralized-success outcome must carry the
+    # matching payout leg; a match with no outcome group is impossible structurally
+    # but the last guard mirrors the core's trailing `return None`.
+    reject when success and is_ton and ton_payout == null
+    reject when success and not is_ton and jetton_payout == null
+    reject when coll_ok == null and coll_fail == null and fail_excess == null
+    out {
+        owner:                   account(master.msg.source)
+        owner_contract:          account(user.msg.destination)
+        recipient:               account(master.body.recipient_address)
+        master:                  account(master.msg.destination)
+        asset_id:                master.body.asset_id
+        is_ton:                  is_ton
+        is_success:              success
+        amount:                  coll_ok.body.withdraw_amount_current if success else master.body.amount
+        asset:                   (ton_asset() if is_ton else jetton_payout.data.asset) if success else null
+        recipient_jetton_wallet: account(jetton_payout.data.receiver_wallet) if (success and not is_ton) else null
+        master_jetton_wallet:    account(jetton_payout.data.sender_wallet) if (success and not is_ton) else null
+        fail_reason:             null if success else ("withdraw_no_funds_excess" if coll_fail != null else fail_excess.body.reason)
+    }
 }

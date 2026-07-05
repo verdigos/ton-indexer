@@ -530,28 +530,29 @@ def _fill_dns_renew_action(block: DnsRenewBlock, action: Action):
     action.asset = _addr(block.data['collection_address'])
 
 def _fill_tonstakers_withdraw_request_action(block: TONStakersWithdrawRequestBlock, action: Action):
-    action.source = _addr(block.data.source)
-    action.source_secondary = _addr(block.data.tsTON_wallet)
-    action.destination = _addr(block.data.pool)
-    action.amount = block.data.tokens_burnt.value
+    action.source = _addr(_dget(block.data, 'source'))
+    action.source_secondary = _addr(_dget(block.data, 'tsTON_wallet'))
+    action.destination = _addr(_dget(block.data, 'pool'))
+    action.amount = _dget(block.data, 'tokens_burnt').value
     action.type = 'stake_withdrawal_request'
-    action.asset = _addr(block.data.asset)
+    action.asset = _addr(_dget(block.data, 'asset'))
     action.staking_data = {
         'provider': 'liquid_staking',
-        'ts_nft': _addr(block.data.minted_nft)
+        'ts_nft': _addr(_dget(block.data, 'minted_nft'))
     }
 
 def _fill_tonstakers_withdraw_action(block: TONStakersWithdrawBlock, action: Action):
-    action.source = _addr(block.data.stake_holder)
-    action.destination = _addr(block.data.pool)
-    action.amount = block.data.amount.value
+    action.source = _addr(_dget(block.data, 'stake_holder'))
+    action.destination = _addr(_dget(block.data, 'pool'))
+    action.amount = _dget(block.data, 'amount').value
     action.type = 'stake_withdrawal'
+    tokens_burnt = _dget(block.data, 'tokens_burnt')
     action.staking_data = {
         'provider': 'liquid_staking',
-        'ts_nft': _addr(block.data.burnt_nft),
-        'tokens_burnt': block.data.tokens_burnt.value if block.data.tokens_burnt is not None else None,
+        'ts_nft': _addr(_dget(block.data, 'burnt_nft')),
+        'tokens_burnt': tokens_burnt.value if tokens_burnt is not None else None,
     }
-    action.asset = _addr(block.data.asset)
+    action.asset = _addr(_dget(block.data, 'asset'))
 
 def _fill_subscribe_action(block: SubscriptionBlock, action: Action):
     action.source = block.data['subscriber'].as_str()
@@ -671,16 +672,17 @@ def _fill_nominator_pool_deposit_action(block: NominatorPoolDepositBlock, action
     }
 
 def _fill_nominator_pool_withdraw_request_action(block: NominatorPoolWithdrawRequestBlock, action: Action):
-    if block.data.payout_amount is None:
+    payout_amount = _dget(block.data, 'payout_amount')
+    if payout_amount is None:
         action.type = 'stake_withdrawal_request'
     else:
         action.type = 'stake_withdrawal'
-        action.amount = block.data.payout_amount.value
+        action.amount = payout_amount.value
     action.staking_data = {
         'provider': 'nominator'
     }
-    action.source = block.data.source.as_str()
-    action.destination = block.data.pool.as_str()
+    action.source = _dget(block.data, 'source').as_str()
+    action.destination = _dget(block.data, 'pool').as_str()
 
 def _fill_tick_tock_action(block: Block, action: Action):
     action.source = _addr(block.data['account'])
@@ -704,21 +706,23 @@ def _fill_evaa_supply_action(block: EvaaSupplyBlock, action: Action):
     }
 
 def _fill_evaa_withdraw_action(block: EvaaWithdrawBlock, action: Action):
-    action.source = _addr(block.data.owner)
-    action.destination = _addr(block.data.recipient)
-    action.destination_secondary = _addr(block.data.owner_contract)
-    action.amount = block.data.amount
-    action.asset = _addr(block.data.asset)
-    action.success = block.data.is_success
+    data = block.data  # dict (declarative build) or EvaaWithdrawData (legacy)
+    action.source = _addr(_dget(data, 'owner'))
+    action.destination = _addr(_dget(data, 'recipient'))
+    action.destination_secondary = _addr(_dget(data, 'owner_contract'))
+    action.amount = _dget(data, 'amount')
+    action.asset = _addr(_dget(data, 'asset'))
+    action.success = _dget(data, 'is_success')
     if block.failed:
         action.success = False
+    asset_id = _dget(data, 'asset_id')
     action.evaa_withdraw_data = {
-        "is_ton": block.data.is_ton,
-        "recipient_jetton_wallet": _addr(block.data.recipient_jetton_wallet) if block.data.recipient_jetton_wallet else None,
-        "master_jetton_wallet": _addr(block.data.master_jetton_wallet) if block.data.master_jetton_wallet else None,
-        "fail_reason": block.data.fail_reason,
-        "master": _addr(block.data.master),
-        "asset_id": hex(block.data.asset_id) if block.data.asset_id is not None else None,
+        "is_ton": _dget(data, 'is_ton'),
+        "recipient_jetton_wallet": _addr(_dget(data, 'recipient_jetton_wallet')) if _dget(data, 'recipient_jetton_wallet') else None,
+        "master_jetton_wallet": _addr(_dget(data, 'master_jetton_wallet')) if _dget(data, 'master_jetton_wallet') else None,
+        "fail_reason": _dget(data, 'fail_reason'),
+        "master": _addr(_dget(data, 'master')),
+        "asset_id": hex(asset_id) if asset_id is not None else None,
     }
 
 
@@ -1238,10 +1242,13 @@ def _fill_layerzero_send_tokens_action(block: LayerZeroSendTokensBlock, action: 
     action.source = _addr(block.data.sender)
 
 def _fill_layerzero_receive_action(block: LayerZeroReceiveBlock, action: Action):
-    action.source = _addr(block.data.sender)
-    action.destination = _addr(block.data.oapp)
-    action.destination_secondary = _addr(block.data.channel)
-    action.layerzero_packet_data = block.data.packet_data.__dict__
+    action.source = _addr(_dget(block.data, 'sender'))
+    action.destination = _addr(_dget(block.data, 'oapp'))
+    action.destination_secondary = _addr(_dget(block.data, 'channel'))
+    packet_data = _dget(block.data, 'packet_data')
+    # Declarative build emits packet_data as a plain dict (record literal); the
+    # legacy core builds a LayerZeroPacketData dataclass. Normalize to a dict.
+    action.layerzero_packet_data = packet_data if isinstance(packet_data, dict) else packet_data.__dict__
 
 def _fill_layerzero_commit_packet_action(block: LayerZeroCommitPacketBlock, action: Action):
     action.source = _addr(block.data.sender)

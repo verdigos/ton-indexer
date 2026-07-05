@@ -423,15 +423,19 @@ def build_layerzero_receive_core(block: Block, execute_callback_block: CallContr
         sender=AccountId(block.get_message().source),
         channel=AccountId(execute_callback_msg.source),
         oapp=AccountId(execute_callback_msg.destination),
-        packet_data=LayerZeroPacketData(
-            src_oapp=packet.path.src_oapp,
-            dst_oapp=packet.path.dst_oapp,
-            src_eid=packet.path.src_eid,
-            dst_eid=packet.path.dst_eid,
-            nonce=packet.nonce,
-            guid=packet.guid,
-            message=packet.message
-        )
+        # Canonical dict form (matches specs/layerzero.mch's `packet_data` record
+        # literal — the C++ engine has no LayerZeroPacketData subclass). Field
+        # names identical to LayerZeroPacketData; the serializer takes this dict
+        # verbatim into layerzero_packet_data.
+        packet_data={
+            "src_oapp": packet.path.src_oapp,
+            "dst_oapp": packet.path.dst_oapp,
+            "src_eid":  packet.path.src_eid,
+            "dst_eid":  packet.path.dst_eid,
+            "nonce":    packet.nonce,
+            "guid":     packet.guid,
+            "message":  packet.message,
+        },
     )
 
     return LayerZeroReceiveBlock(data)

@@ -114,9 +114,14 @@ def _assert_field_parity(actual: list[Block], expected: list[Block],
         assert a.failed == e.failed, f"failed flag: {actual_tag}={a.failed} {expected_tag}={e.failed}"
         assert a.broken == e.broken, f"broken flag: {actual_tag}={a.broken} {expected_tag}={e.broken}"
 
-        assert type(a.data) is type(e.data) is EvaaWithdrawData
+        # specs/evaa.mch has a declarative build, so the IR block's `data` is the
+        # canonical dict (btype + map); the legacy block carries EvaaWithdrawData.
+        # Compare field-for-field over the dataclass schema regardless of shape
+        # (wave-B btype+data acceptance).
+        def _get(d, name):
+            return d[name] if isinstance(d, dict) else getattr(d, name)
         for f in fields(EvaaWithdrawData):
-            av, ev = getattr(a.data, f.name), getattr(e.data, f.name)
+            av, ev = _get(a.data, f.name), _get(e.data, f.name)
             assert _values_equal(av, ev), (
                 f"data.{f.name}: {actual_tag}={av!r} ({type(av).__name__}) "
                 f"{expected_tag}={ev!r} ({type(ev).__name__})"
@@ -217,59 +222,58 @@ async def test_evaa_withdraw_parity_missing_prices(trace_data):
 # shared consumed-set builder ignores captures, so the field parity above cannot
 # observe this).
 
-def _spy_registries():
-    """evaa registries whose build_evaa_withdraw records the Match it receives
-    (the IR engine passes the bound captures on the Match) before delegating to
-    the real builder."""
-    reg = evaa_registries()
-    recorded: list = []
-    real = reg.builders["build_evaa_withdraw"]
+async def _binding_proof(trace, monkeypatch):
+    """Run the IR evaa matcher over `trace`, returning the capture environment it
+    bound (with @coll_ok / @coll_fail / @fail_excess) as a namespace.
 
-    async def spy(m):
-        recorded.append(m)
-        return await real(m)
-
-    # Overwrite the dict entry directly — register_builder guards against
-    # re-registration; the wrapped builder is the same real core.
-    reg.builders["build_evaa_withdraw"] = spy
-    return reg, recorded
-
-
-async def _binding_proof(trace):
-    """Run the IR evaa matcher over `trace`, returning the Match object it bound
-    (with @coll_ok / @coll_fail / @fail_excess capture attrs)."""
+    specs/evaa.mch is declarative — there is no build function to spy on. Instead
+    we record the env the IR engine hands its BuildProgram (keyed by capture
+    name), which is exactly where the exclusive-branch bindings land."""
     if not _HAVE_IR:
         pytest.skip(_SKIP_REASON)
-    reg_i, rec_i = _spy_registries()
+    from types import SimpleNamespace
+
+    from indexer.events.mch_ir import program as _progmod
+
+    recorded: list = []
+    real_run = _progmod.BuildProgram.run
+
+    async def spy_run(self, env):
+        recorded.append(dict(env))
+        return await real_run(self, env)
+
+    monkeypatch.setattr(_progmod.BuildProgram, "run", spy_run)
+
+    reg_i = evaa_registries()
     compiled_i = compile_file(EVAA_MCH, reg_i)
     artifact = emit_ir(compiled_i, [EVAA_MCH.name])
     art = _mch_ir.load_artifact(artifact)
     ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, reg_i)}
     await _run_matcher(ir_by_name["evaa_withdraw"], trace)
-    assert rec_i, "IR path produced no evaa_withdraw match"
-    return rec_i[0]
+    assert recorded, "IR path produced no evaa_withdraw match"
+    return SimpleNamespace(**recorded[0])
 
 
 @pytest.mark.asyncio
 @pytest.mark.trace_file("0CHtYFyuAUpk75hWntPKTfF2qcVEfOXnt4BCzfzXD2w=.lz4")
-async def test_evaa_no_funds_binds_coll_fail_not_coll_ok(trace_data):
+async def test_evaa_no_funds_binds_coll_fail_not_coll_ok(trace_data, monkeypatch):
     """The core misbinding case: a real `op EvaaWithdrawCollateralized` (0x211)
     block exists and the FAIL branch (@coll_fail) is the one the trace matches.
     A naive first-head walker would bind @coll_ok; the IR engine binds
     @coll_fail."""
     trace, _ = trace_data
-    ir_m = await _binding_proof(trace)
+    ir_m = await _binding_proof(trace, monkeypatch)
     assert ir_m.coll_fail is not None, "IR engine must bind @coll_fail on the fail trace"
     assert ir_m.coll_ok is None, "IR engine must NOT bind @coll_ok (the misbinding)"
 
 
 @pytest.mark.asyncio
 @pytest.mark.trace_file("02KO-3RSDiakxzyMbk2MxKMsVsAgtGM78n1aWdxqFm4=.lz4")
-async def test_evaa_locked_binds_fail_excess_only(trace_data):
+async def test_evaa_locked_binds_fail_excess_only(trace_data, monkeypatch):
     """User-contract rejection: the winning arm is the third (fail_excess) XOR;
     neither collateralized capture binds."""
     trace, _ = trace_data
-    ir_m = await _binding_proof(trace)
+    ir_m = await _binding_proof(trace, monkeypatch)
     assert ir_m.fail_excess is not None
     assert ir_m.coll_ok is None
     assert ir_m.coll_fail is None
@@ -277,9 +281,9 @@ async def test_evaa_locked_binds_fail_excess_only(trace_data):
 
 @pytest.mark.asyncio
 @pytest.mark.trace_file("02N57kDv6SOZ0OaS-7TnLwTtvm5xt12EM7aaLOl5QKk=.lz4")
-async def test_evaa_not_collateralized_binds_fail_excess_only(trace_data):
+async def test_evaa_not_collateralized_binds_fail_excess_only(trace_data, monkeypatch):
     trace, _ = trace_data
-    ir_m = await _binding_proof(trace)
+    ir_m = await _binding_proof(trace, monkeypatch)
     assert ir_m.fail_excess is not None
     assert ir_m.coll_ok is None
     assert ir_m.coll_fail is None

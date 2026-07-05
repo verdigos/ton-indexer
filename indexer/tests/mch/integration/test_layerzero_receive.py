@@ -91,7 +91,11 @@ async def _run_matcher(matcher: BlockMatcher, trace) -> list:
         result = await matcher.try_build(b)
         if result is not None:
             matches.extend(result)
-    return [b for b in matches if isinstance(b, LayerZeroReceiveBlock)]
+    # specs/layerzero.mch has a declarative build, so the IR engine yields a
+    # canonical generic Block (btype + dict data), not a LayerZeroReceiveBlock
+    # instance; the legacy matcher still yields the dataclass block. Filter by
+    # btype so both paths flow through (wave-B btype+data acceptance).
+    return [b for b in matches if b.btype == "layerzero_receive"]
 
 
 def _node_hashes(block: Block) -> list[str]:
@@ -100,6 +104,29 @@ def _node_hashes(block: Block) -> list[str]:
 
 def _sort_key(block: Block):
     return (block.min_lt, tuple(_node_hashes(block)))
+
+
+def _data_dict(data) -> dict:
+    """Normalize a produced block's `data` to a plain dict regardless of
+    representation (legacy LayerZeroReceiveData dataclass vs the declarative
+    build's dict). AccountId defines __eq__, so field values compare directly."""
+    get = (lambda k: data[k]) if isinstance(data, dict) else (lambda k: getattr(data, k))
+    pd = get("packet_data")
+    pget = (lambda k: pd[k]) if isinstance(pd, dict) else (lambda k: getattr(pd, k))
+    return {
+        "sender": get("sender"),
+        "channel": get("channel"),
+        "oapp": get("oapp"),
+        "packet_data": {
+            k: pget(k)
+            for k in ("src_oapp", "dst_oapp", "src_eid", "dst_eid", "nonce", "guid", "message")
+        },
+    }
+
+
+def _packet_nonce(data):
+    pd = data["packet_data"] if isinstance(data, dict) else data.packet_data
+    return pd["nonce"] if isinstance(pd, dict) else pd.nonce
 
 
 def _assert_field_parity(a_blocks: list[Block], b_blocks: list[Block], label: str) -> None:
@@ -111,9 +138,9 @@ def _assert_field_parity(a_blocks: list[Block], b_blocks: list[Block], label: st
         assert a.btype == b.btype == "layerzero_receive"
         assert a.failed == b.failed, f"{label}: failed flag: a={a.failed} b={b.failed}"
         assert a.broken == b.broken, f"{label}: broken flag: a={a.broken} b={b.broken}"
-        # LayerZeroReceiveData / LayerZeroPacketData / AccountId are all dataclasses
-        # (or define __eq__), so a single recursive compare covers every field.
-        assert a.data == b.data, f"{label}: data: a={a.data} b={b.data}"
+        # a.data is the declarative build's dict, b.data the legacy dataclass;
+        # normalize both to a dict (AccountId/values define __eq__).
+        assert _data_dict(a.data) == _data_dict(b.data), f"{label}: data: a={a.data} b={b.data}"
         assert a.value_flow.to_dict() == b.value_flow.to_dict(), (
             f"{label}: value_flow: a={a.value_flow.to_dict()} b={b.value_flow.to_dict()}"
         )
@@ -141,7 +168,7 @@ async def test_layerzero_receive_parity(trace_data):
     if not _HAVE_IR:
         pytest.skip(_SKIP_REASON)
     _assert_field_parity(ir, legacy, "ir-vs-legacy")
-    assert ir[0].data.packet_data.nonce == 729
+    assert _packet_nonce(ir[0].data) == 729
 
 
 @pytest.mark.asyncio
@@ -153,4 +180,4 @@ async def test_layerzero_receive_parity_2(trace_data):
     if not _HAVE_IR:
         pytest.skip(_SKIP_REASON)
     _assert_field_parity(ir, legacy, "ir-vs-legacy")
-    assert ir[0].data.packet_data.nonce == 162
+    assert _packet_nonce(ir[0].data) == 162
