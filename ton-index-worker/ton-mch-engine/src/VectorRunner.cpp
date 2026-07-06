@@ -182,6 +182,10 @@ int load_vectors_json(const std::string &path, std::string &buf, Json &root) {
 
 }  // namespace
 
+Value decode_vector_value(const td::JsonValue &e) {
+  return decode(e);
+}
+
 int run_vectors(const std::string &path) {
   std::string buf;
   Json root;

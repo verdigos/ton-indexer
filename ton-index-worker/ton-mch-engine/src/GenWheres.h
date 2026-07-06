@@ -24,4 +24,8 @@ struct GenWhere {
 // The generated table, ascending node_id (artifact node order).
 const std::vector<GenWhere> &gen_wheres();
 
+// SHA-256 (hex) of the artifact the table was generated from (see
+// gen_builds_source_sha in GenBuilds.h — same wrong-pairing guard).
+const char *gen_wheres_source_sha();
+
 }  // namespace mch

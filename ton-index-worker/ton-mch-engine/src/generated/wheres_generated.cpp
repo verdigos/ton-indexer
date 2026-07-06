@@ -19,4 +19,6 @@ const std::vector<GenWhere> &gen_wheres() {
   return table;
 }
 
+const char *gen_wheres_source_sha() { return "fa33ec6272ba14d709089a02a734177983f14b61655a1212b757feba6470e3de"; }
+
 }  // namespace mch

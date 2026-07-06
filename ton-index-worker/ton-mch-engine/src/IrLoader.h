@@ -72,6 +72,8 @@ struct CompiledNode {
 
 struct CompiledMatcher {
   std::string name;
+  int artifact_index{-1};  // index in the artifact `matchers` array (gen_builds key)
+  bool has_build_program{false};
   std::vector<std::string> produces;
 
   AnchorKind anchor_kind{AnchorKind::OpcodeSet};
@@ -101,6 +103,10 @@ struct CompiledMatcher {
 
 struct LoadedIr {
   std::vector<CompiledMatcher> matchers;  // priority order (stable by priority)
+
+  // SHA-256 (hex) of the artifact file bytes — compared against the generated
+  // tables' source shas (gen_builds_source_sha / gen_wheres_source_sha).
+  std::string source_sha256;
 
   // Anchor index (built per §3.1; the walk gates on test_self so this is an
   // available optimization, reported but not the gating mechanism).

@@ -34,8 +34,14 @@ add_executable(ton-mch-engine
     src/IrLoader.cpp
     src/Walker.cpp
     src/MatchRunner.cpp
+    src/BuildRuntime.cpp
+    src/BuildVectorRunner.cpp
+    src/BuildDriver.cpp
+    src/BuildSmoke.cpp
+    src/Classify.cpp
     src/generated/vectors_generated.cpp
     src/generated/wheres_generated.cpp
+    src/generated/builds_generated.cpp
 )
 target_include_directories(ton-mch-engine
     PUBLIC src

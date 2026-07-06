@@ -117,6 +117,14 @@ int run_match(const std::string &artifact_path, const std::vector<std::string> &
   WhereTable gen_table;
   const WhereTable *gen = nullptr;
   if (use_gen) {
+    if (ir.source_sha256 != gen_wheres_source_sha()) {
+      std::fprintf(stderr,
+                   "generated where table was built from a DIFFERENT artifact (table sha %s, "
+                   "loaded %s) — regenerate: mch-codegen --wheres %s -o "
+                   "src/generated/wheres_generated.cpp\n",
+                   gen_wheres_source_sha(), ir.source_sha256.c_str(), artifact_path.c_str());
+      return 2;
+    }
     for (const GenWhere &g : gen_wheres()) {
       gen_table.emplace(g.node_id, g.fn);
     }

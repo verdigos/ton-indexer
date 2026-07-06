@@ -1,5 +1,7 @@
 #include "ExprCodegen.h"
 
+#include <cctype>
+#include <map>
 #include <stdexcept>
 #include <vector>
 
@@ -39,15 +41,31 @@ std::string join(const std::vector<std::string> &parts, const std::string &sep) 
 // Ports cpp_expr_emit._Emitter: emits one function body, returning the Value
 // temp name for each subexpression. The temp counter is shared across nested
 // blocks so names never collide (byte-parity with the Python numbering).
+enum class EmitMode { Vectors, Where, Build };
+
 class Emitter {
  public:
-  // Where mode changes only the environment-dependent leaves: dotfield reads
-  // the candidate block (rt_dotfield(w, ...)), name/lookup fault with the
-  // Python sync evaluator's outcome (they are unbound / not evaluable there).
-  explicit Emitter(bool where_mode = false) : where_mode_(where_mode) {
+  // Modes change only the environment-dependent leaves + the fault return:
+  //  - Vectors: name -> rt_name(env,..), lookup -> rt_lookup(lk,..);
+  //  - Where: dotfield -> rt_dotfield(w,..); name/lookup fault (Python sync
+  //    where evaluator has no env);
+  //  - Build: name -> scope map (slot / let-local / well-known), attr ->
+  //    rt_access_build (bodies-aware), lookup -> rt_lookup_build, and every
+  //    fault early-returns BuildOutcome::rejected (spec §10.7).
+  explicit Emitter(EmitMode mode = EmitMode::Vectors) : mode_(mode) {
   }
 
   std::vector<std::string> lines;
+  // Build mode: name -> C++ expression yielding its Value. Seeded with the
+  // well-knowns + captures; `let` statements overwrite entries.
+  std::map<std::string, std::string> scope;
+
+  int fresh_public() { return fresh(); }
+  void line_public(const std::string &s) { line(s); }
+  std::string fault_return(const std::string &res) const { return fault_line(res); }
+  std::pair<std::string, std::vector<std::string>> emit_block(const Json &node) {
+    return block(node);
+  }
 
   std::string emit(const Json &e) {
     const std::string k = jstr(e, "k");
@@ -75,20 +93,33 @@ class Emitter {
       return "v" + num(i);
     }
     if (k == "name") {
-      if (where_mode_) {
+      const std::string id = jstr(e, "id");
+      if (mode_ == EmitMode::Where) {
         // No environment exists at test_self time (expr_eval._sync_eval).
-        return bind("rt_fault(\"name '" + jstr(e, "id") + "' is not bound in a `where` clause\")");
+        return bind("rt_fault(\"name '" + id + "' is not bound in a `where` clause\")");
       }
-      return bind("rt_name(env, " + cstr(jstr(e, "id")) + ")");
+      if (mode_ == EmitMode::Build) {
+        auto it = scope.find(id);
+        if (it == scope.end()) {
+          return bind("rt_fault(\"name '" + id + "' is not bound\")");
+        }
+        int i = fresh();
+        line("Value v" + num(i) + " = " + it->second + ";");
+        return "v" + num(i);
+      }
+      return bind("rt_name(env, " + cstr(id) + ")");
     }
     if (k == "dotfield") {
-      if (where_mode_) {
+      if (mode_ == EmitMode::Where) {
         return bind("rt_dotfield(w, " + cstr(jstr(e, "name")) + ")");
       }
       return bind("rt_fault(\"leading-dot field is only valid inside an inline `where (expr)`\")");
     }
     if (k == "attr") {
       std::string of = emit(*jfield(e, "of"));
+      if (mode_ == EmitMode::Build) {
+        return bind("rt_access_build(env, " + of + ", " + cstr(jstr(e, "name")) + ")");
+      }
       return bind("rt_access(" + of + ", " + cstr(jstr(e, "name")) + ")");
     }
     if (k == "call") {
@@ -96,11 +127,14 @@ class Emitter {
       return bind("rt_call_builtin(" + cstr(jstr(e, "fn")) + ", std::vector<Value>{" + argv + "})");
     }
     if (k == "lookup") {
-      if (where_mode_) {
+      if (mode_ == EmitMode::Where) {
         // Load-time rejected in a where_expr; defensive fault (sync test_self).
         return bind("rt_fault(\"lookup is not evaluable in a `where` clause\")");
       }
       std::string argv = emit_args(*jfield(e, "args"));
+      if (mode_ == EmitMode::Build) {
+        return bind("rt_lookup_build(env, " + cstr(jstr(e, "name")) + ", std::vector<Value>{" + argv + "})");
+      }
       return bind("rt_lookup(lk, " + cstr(jstr(e, "name")) + ", std::vector<Value>{" + argv + "})");
     }
     if (k == "unary") {
@@ -137,17 +171,27 @@ class Emitter {
   }
 
  private:
-  bool where_mode_ = false;
+  EmitMode mode_ = EmitMode::Vectors;
   int n_ = 0;
 
   int fresh() { return n_++; }
   static std::string num(int i) { return std::to_string(i); }
   void line(const std::string &s) { lines.push_back(s); }
 
+  // Early return on a faulted EvalResult temp: expression fns propagate the
+  // EvalResult; a build fn's fault is a clean rejection (program.py EvalError).
+  std::string fault_line(const std::string &res) const {
+    if (mode_ == EmitMode::Build) {
+      return "if (" + res + ".faulted) return BuildOutcome::rejected(std::move(" + res +
+             ".message));";
+    }
+    return "if (" + res + ".faulted) return " + res + ";";
+  }
+
   std::string bind(const std::string &rexpr) {
     int i = fresh();
     line("EvalResult r" + num(i) + " = " + rexpr + ";");
-    line("if (r" + num(i) + ".faulted) return r" + num(i) + ";");
+    line(fault_line("r" + num(i)));
     line("Value v" + num(i) + " = std::move(r" + num(i) + ".value);");
     return "v" + num(i);
   }
@@ -208,7 +252,7 @@ class Emitter {
     std::string left = emit(*jfield(e, "l"));
     int i = fresh();
     line("EvalResult rb" + num(i) + " = rt_require_bool(" + left + ");");
-    line("if (rb" + num(i) + ".faulted) return rb" + num(i) + ";");
+    line(fault_line("rb" + num(i)));
     line("Value v" + num(i) + ";");
     auto [right, rblock] = block(*jfield(e, "r"));
     std::string short_val = op == "and" ? "false" : "true";
@@ -216,7 +260,7 @@ class Emitter {
     line("if (" + cond + ") { v" + num(i) + " = Value::make_bool(" + short_val + "); } else {");
     emit_block_into(rblock);
     line("  EvalResult rr" + num(i) + " = rt_require_bool(" + right + ");");
-    line("  if (rr" + num(i) + ".faulted) return rr" + num(i) + ";");
+    line("  " + fault_line("rr" + num(i)));
     line("  v" + num(i) + " = Value::make_bool(rr" + num(i) + ".value.boolean);");
     line("}");
     return "v" + num(i);
@@ -238,7 +282,7 @@ class Emitter {
     std::string cond = emit(*jfield(e, "cond"));
     int i = fresh();
     line("EvalResult rc" + num(i) + " = rt_require_bool(" + cond + ");");
-    line("if (rc" + num(i) + ".faulted) return rc" + num(i) + ";");
+    line(fault_line("rc" + num(i)));
     line("Value v" + num(i) + ";");
     auto [tval, tblock] = block(*jfield(e, "then"));
     auto [eval_, eblock] = block(*jfield(e, "else"));
@@ -252,6 +296,202 @@ class Emitter {
     return "v" + num(i);
   }
 };
+
+// --- build-statement generator (Phase B1, D2) --------------------------------
+// Ports program.py BuildProgram.run statement-for-statement into straight-line
+// C++ over BuildRuntime/ExprRuntime. One BuildGen per matcher record.
+class BuildGen {
+ public:
+  explicit BuildGen(const Json &matcher) : em_(EmitMode::Build) {
+    // Well-known env names first; captures shadow them (engine.py setdefault).
+    em_.scope["consumed"] = "env.consumed";
+    em_.scope["anchor"] = "Value::make_block(env.anchor)";
+    if (const Json *caps = jfield(matcher, "captures"); caps != nullptr && caps->type() == JType::Array) {
+      int slot = 0;
+      for (const auto &c : caps->get_array()) {
+        em_.scope[jstr(c, "name")] = "env.slots[" + std::to_string(slot) + "]";
+        slot++;
+      }
+    }
+    program_ = jfield(matcher, "build_program");
+  }
+
+  std::string generate(const std::string &fn_name) {
+    if (program_ != nullptr && program_->type() == JType::Array) {
+      for (const auto &stmt : program_->get_array()) {
+        emit_stmt(stmt);
+      }
+    }
+    std::vector<std::string> body;
+    for (const auto &ln : em_.lines) {
+      body.push_back("  " + ln);
+    }
+    return "BuildOutcome " + fn_name + "(BuildEnv &env) {\n"
+           "  (void)env;\n"
+           "  BuildOutcome o = BuildOutcome::accepted();\n" +
+           join(body, "\n") + (body.empty() ? "" : "\n") +
+           "  return o;\n"
+           "}\n";
+  }
+
+ private:
+  Emitter em_;
+  const Json *program_{nullptr};
+
+  // Run `fn` with em_.lines swapped out; returns the captured lines.
+  template <typename Fn>
+  std::vector<std::string> buffered(Fn &&fn) {
+    std::vector<std::string> saved;
+    saved.swap(em_.lines);
+    fn();
+    std::vector<std::string> captured;
+    captured.swap(em_.lines);
+    em_.lines = std::move(saved);
+    return captured;
+  }
+
+  void indent_into(const std::vector<std::string> &block_lines) {
+    for (const auto &ln : block_lines) {
+      em_.line_public("  " + ln);
+    }
+  }
+
+  // Evaluate a bool condition (program.py eval_bool: non-bool -> EvalError ->
+  // rejection); returns the EvalResult temp holding the checked bool.
+  std::string emit_bool(const Json &expr) {
+    std::string val = em_.emit(expr);
+    int i = em_.fresh_public();
+    em_.line_public("EvalResult sb" + std::to_string(i) + " = rt_require_bool(" + val + ");");
+    em_.line_public(em_.fault_return("sb" + std::to_string(i)));
+    return "sb" + std::to_string(i);
+  }
+
+  // `out` / switch-branch fields -> a Value::Fields temp (program.py
+  // _eval_out_fields: an `optional` field whose value is null is omitted).
+  std::string emit_fields(const Json &fields) {
+    int i = em_.fresh_public();
+    std::string fs = "fs" + std::to_string(i);
+    em_.line_public("Value::Fields " + fs + ";");
+    for (const auto &f : fields.get_array()) {
+      std::string val = em_.emit(*jfield(f, "expr"));
+      const Json *opt = jfield(f, "optional");
+      bool optional = opt != nullptr && opt->type() == JType::Boolean && opt->get_boolean();
+      if (optional) {
+        em_.line_public("if (!" + val + ".is_null()) " + fs + ".emplace_back(" +
+                        cstr(jstr(f, "name")) + ", " + val + ");");
+      } else {
+        em_.line_public(fs + ".emplace_back(" + cstr(jstr(f, "name")) + ", " + val + ");");
+      }
+    }
+    return fs;
+  }
+
+  // `produces switch`: first branch whose `when` is true (else arm has no
+  // `when`); LAZY — later branch conditions must not evaluate once one
+  // matched; no branch -> fault -> rejection (program.py _eval_switch).
+  void emit_switch(const td::JsonArray &branches, std::size_t idx) {
+    if (idx == branches.size()) {
+      em_.line_public(
+          "return BuildOutcome::rejected(\"produces switch: no branch matched and no `else` "
+          "arm\");");
+      return;
+    }
+    const Json &b = branches[idx];
+    if (jfield(b, "when") == nullptr) {  // else arm: unconditional
+      std::string fs = emit_fields(*jfield(b, "fields"));
+      em_.line_public("o.btype = " + cstr(jstr(b, "btype")) + ";");
+      em_.line_public("o.data = Value::make_dict(std::move(" + fs + "));");
+      return;
+    }
+    std::string cond = emit_bool(*jfield(b, "when"));
+    auto then_lines = buffered([&] {
+      std::string fs = emit_fields(*jfield(b, "fields"));
+      em_.line_public("o.btype = " + cstr(jstr(b, "btype")) + ";");
+      em_.line_public("o.data = Value::make_dict(std::move(" + fs + "));");
+    });
+    auto else_lines = buffered([&] { emit_switch(branches, idx + 1); });
+    em_.line_public("if (" + cond + ".value.boolean) {");
+    indent_into(then_lines);
+    em_.line_public("} else {");
+    indent_into(else_lines);
+    em_.line_public("}");
+  }
+
+  void emit_stmt(const Json &stmt) {
+    const std::string s = jstr(stmt, "s");
+    if (s == "parse") {
+      const std::string target = jstr(stmt, "target");
+      auto it = em_.scope.find(target);
+      if (it == em_.scope.end()) {
+        // program.py _do_parse: env.get(target) is None -> no-op.
+        em_.line_public("// parse target '" + target + "' is unbound: no-op");
+        return;
+      }
+      std::vector<std::string> types;
+      for (const auto &t : jfield(stmt, "types")->get_array()) {
+        types.push_back(cstr(t.get_string().str()));
+      }
+      int i = em_.fresh_public();
+      em_.line_public("Value pt" + std::to_string(i) + " = " + it->second + ";");
+      em_.line_public("EvalResult sp" + std::to_string(i) + " = rt_parse(env, pt" +
+                      std::to_string(i) + ", std::vector<std::string>{" + join(types, ", ") +
+                      "});");
+      em_.line_public(em_.fault_return("sp" + std::to_string(i)));
+      return;
+    }
+    if (s == "let") {
+      std::string val = em_.emit(*jfield(stmt, "expr"));
+      em_.scope[jstr(stmt, "name")] = val;  // later refs copy the local
+      return;
+    }
+    if (s == "reject") {
+      std::string cond = emit_bool(*jfield(stmt, "when"));
+      em_.line_public("if (" + cond +
+                      ".value.boolean) return BuildOutcome::rejected(\"reject when\");");
+      return;
+    }
+    if (s == "failed" || s == "broken") {
+      // program.py: `failed = failed or await eval_bool(...)` — the condition
+      // is NOT evaluated once the flag is already true (short-circuit).
+      const std::string flag = s == "failed" ? "o.failed" : "o.broken";
+      auto body = buffered([&] {
+        std::string cond = emit_bool(*jfield(stmt, "when"));
+        em_.line_public(flag + " = " + cond + ".value.boolean;");
+      });
+      em_.line_public("if (!" + flag + ") {");
+      indent_into(body);
+      em_.line_public("}");
+      return;
+    }
+    if (s == "flow") {
+      std::vector<std::string> args;
+      for (const auto &a : jfield(stmt, "args")->get_array()) {
+        args.push_back(em_.emit(a));
+      }
+      em_.line_public("o.flows.push_back(FlowOp{" + cstr(jstr(stmt, "kind")) +
+                      ", std::vector<Value>{" + join(args, ", ") + "}});");
+      return;
+    }
+    if (s == "out") {
+      std::string fs = emit_fields(*jfield(stmt, "fields"));
+      em_.line_public("o.data = Value::make_dict(std::move(" + fs + "));");
+      return;
+    }
+    if (s == "switch") {
+      emit_switch(jfield(stmt, "branches")->get_array(), 0);
+      return;
+    }
+    throw std::runtime_error("unsupported build statement '" + s + "'");
+  }
+};
+
+std::string sanitize_ident(const std::string &s) {
+  std::string out;
+  for (char c : s) {
+    out += (std::isalnum(static_cast<unsigned char>(c)) != 0) ? c : '_';
+  }
+  return out;
+}
 
 }  // namespace
 
@@ -291,7 +531,7 @@ std::string generate_function(const std::string &fn_name, const Json &expr) {
 }
 
 std::string generate_where_function(const std::string &fn_name, const Json &expr) {
-  Emitter em(/*where_mode=*/true);
+  Emitter em(EmitMode::Where);
   std::string result = em.emit(expr);
   std::vector<std::string> body;
   for (const auto &ln : em.lines) {
@@ -332,7 +572,8 @@ std::string generate_vectors_file(const Json &root, const std::string &header) {
   return join(out, "\n");
 }
 
-std::string generate_wheres_file(const Json &root, const std::string &header) {
+std::string generate_wheres_file(const Json &root, const std::string &header,
+                                 const std::string &source_sha) {
   const Json *nodes = jfield(root, td::Slice("nodes"));
   if (nodes == nullptr || nodes->type() != JType::Array) {
     throw std::runtime_error("IR artifact has no `nodes` array");
@@ -362,6 +603,66 @@ std::string generate_wheres_file(const Json &root, const std::string &header) {
   out.push_back("  };");
   out.push_back("  return table;");
   out.push_back("}");
+  out.push_back("");
+  out.push_back("const char *gen_wheres_source_sha() { return " + cstr(source_sha) + "; }");
+  out.push_back("");
+  out.push_back("}  // namespace mch");
+  out.push_back("");
+  return join(out, "\n");
+}
+
+std::string generate_builds_file(const Json &root, const std::string &header,
+                                 const std::string &source_sha) {
+  // Two accepted roots: an IR artifact ({matchers:[...]}, fn per matcher with
+  // a build_program, id = matcher index) or a build-vectors document
+  // ({build_vectors:[...]}, fn per case, id = case index).
+  struct Entry {
+    std::size_t id;
+    std::string name;
+    const Json *matcher;
+  };
+  std::vector<Entry> entries;
+  if (const Json *cases = jfield(root, "build_vectors");
+      cases != nullptr && cases->type() == JType::Array) {
+    const auto &arr = cases->get_array();
+    for (std::size_t i = 0; i < arr.size(); i++) {
+      const Json *m = jfield(arr[i], "matcher");
+      if (m == nullptr) {
+        throw std::runtime_error("build vector " + std::to_string(i) + " has no `matcher`");
+      }
+      entries.push_back({i, jstr(arr[i], "name"), m});
+    }
+  } else if (const Json *matchers = jfield(root, "matchers");
+             matchers != nullptr && matchers->type() == JType::Array) {
+    const auto &arr = matchers->get_array();
+    for (std::size_t i = 0; i < arr.size(); i++) {
+      if (jfield(arr[i], "build_program") != nullptr) {
+        entries.push_back({i, jstr(arr[i], "name"), &arr[i]});
+      }
+    }
+  } else {
+    throw std::runtime_error("input has neither `build_vectors` nor `matchers`");
+  }
+
+  std::vector<std::string> out = {
+      header, "#include \"GenBuilds.h\"", "", "namespace mch {", "namespace {", ""};
+  for (const Entry &e : entries) {
+    BuildGen gen(*e.matcher);
+    out.push_back(gen.generate("build_" + std::to_string(e.id) + "_" + sanitize_ident(e.name)));
+  }
+  out.push_back("}  // namespace");
+  out.push_back("");
+  out.push_back("const std::vector<GenBuild> &gen_builds() {");
+  out.push_back("  static const std::vector<GenBuild> table = {");
+  for (const Entry &e : entries) {
+    out.push_back("      {" + std::to_string(e.id) + ", " + cstr(e.name) + ", &build_" +
+                  std::to_string(e.id) + "_" + sanitize_ident(e.name) + "},");
+  }
+  out.push_back("  };");
+  out.push_back("  return table;");
+  out.push_back("}");
+  out.push_back("");
+  out.push_back("const char *gen_builds_source_sha() { return " + cstr(source_sha) + "; }");
   out.push_back("");
   out.push_back("}  // namespace mch");
   out.push_back("");

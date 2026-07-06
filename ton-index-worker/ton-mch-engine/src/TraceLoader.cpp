@@ -141,6 +141,52 @@ std::unique_ptr<Message> parse_message(const msgpack::object &m) {
   return msg;
 }
 
+// Generic msgpack -> Value for the `interfaces` section (schema note in
+// TraceLoader.h). u64 values above int64 range widen through RefInt256.
+Value msgpack_to_value(const msgpack::object &o) {
+  switch (o.type) {
+    case msgpack::type::NIL:
+      return Value::null();
+    case msgpack::type::BOOLEAN:
+      return Value::make_bool(o.via.boolean);
+    case msgpack::type::POSITIVE_INTEGER: {
+      unsigned long long v = o.via.u64;
+      if (v <= 0x7FFFFFFFFFFFFFFFULL) {
+        return Value::make_int64(static_cast<std::int64_t>(v));
+      }
+      auto hi = td::make_refint(static_cast<long long>(v >> 32));
+      return Value::make_int((hi << 32) +
+                             td::make_refint(static_cast<long long>(v & 0xFFFFFFFFULL)));
+    }
+    case msgpack::type::NEGATIVE_INTEGER:
+      return Value::make_int64(o.via.i64);
+    case msgpack::type::STR:
+      return Value::make_str(std::string(o.via.str.ptr, o.via.str.size));
+    case msgpack::type::BIN:
+      return Value::make_bytes(std::string(o.via.bin.ptr, o.via.bin.size));
+    case msgpack::type::ARRAY: {
+      std::vector<Value> xs;
+      for (std::uint32_t i = 0; i < o.via.array.size; i++) {
+        xs.push_back(msgpack_to_value(o.via.array.ptr[i]));
+      }
+      return Value::make_list(std::move(xs));
+    }
+    case msgpack::type::MAP: {
+      Value::Fields fs;
+      for (std::uint32_t i = 0; i < o.via.map.size; i++) {
+        const auto &kv = o.via.map.ptr[i];
+        std::string key = kv.key.type == msgpack::type::STR
+                              ? std::string(kv.key.via.str.ptr, kv.key.via.str.size)
+                              : std::string{};
+        fs.emplace_back(std::move(key), msgpack_to_value(kv.val));
+      }
+      return Value::make_dict(std::move(fs));
+    }
+    default:
+      return Value::null();  // FLOAT etc: no Value kind (documented in the header)
+  }
+}
+
 std::unique_ptr<Transaction> parse_transaction(const msgpack::object &t) {
   auto tx = std::make_unique<Transaction>();
   tx->hash = get_str(t, "hash");
@@ -194,6 +240,17 @@ td::Result<Trace> load_trace(const std::string &path) {
   for (auto &tx : trace.transactions) {
     for (auto &m : tx->messages) {
       m->tx = tx.get();
+    }
+  }
+  if (const auto *ifs = map_get(root, "interfaces");
+      !is_nil(ifs) && ifs->type == msgpack::type::MAP) {
+    for (std::uint32_t i = 0; i < ifs->via.map.size; i++) {
+      const auto &kv = ifs->via.map.ptr[i];
+      if (kv.key.type != msgpack::type::STR) {
+        continue;
+      }
+      trace.interfaces.emplace(std::string(kv.key.via.str.ptr, kv.key.via.str.size),
+                               msgpack_to_value(kv.val));
     }
   }
   return trace;

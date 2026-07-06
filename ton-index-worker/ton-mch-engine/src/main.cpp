@@ -12,6 +12,9 @@
 #include "crypto/vm/cp0.h"
 
 #include "BlockTree.h"
+#include "BuildSmoke.h"
+#include "Classify.h"
+#include "BuildVectorRunner.h"
 #include "MatchRunner.h"
 #include "MsgParse.h"
 #include "TraceLoader.h"
@@ -134,8 +137,11 @@ int main(int argc, char *argv[]) {
   std::string ir_path;
   std::string vectors_path;
   std::string vectors_gen_path;
+  std::string build_vectors_path;
   bool match_mode = false;
   bool match_gen = false;
+  bool build_smoke_mode = false;
+  bool classify_mode = false;
   bool parse_dump_mode = false;
   std::vector<std::string> trace_paths;
 
@@ -146,6 +152,9 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "vectors-gen",
                "Run expression conformance vectors through GENERATED code and exit",
                [&](td::Slice value) { vectors_gen_path = value.str(); });
+  p.add_option('\0', "build-vectors",
+               "Run build-program conformance vectors through GENERATED build fns and exit",
+               [&](td::Slice value) { build_vectors_path = value.str(); });
   p.add_option('\0', "match", "Match-phase dump: -I <artifact> -T <fixture|dir> (repeatable)",
                [&]() { match_mode = true; });
   p.add_option('\0', "match-gen",
@@ -154,6 +163,12 @@ int main(int argc, char *argv[]) {
                  match_mode = true;
                  match_gen = true;
                });
+  p.add_option('\0', "build-smoke",
+               "Build-phase smoke dump (two-phase lookups): -I <artifact> -T <fixture|dir>",
+               [&]() { build_smoke_mode = true; });
+  p.add_option('\0', "classify",
+               "End-to-end classify dump (match+build+merge loop): -I <artifact> -T <fixture|dir>",
+               [&]() { classify_mode = true; });
   p.add_option('\0', "parse-dump", "Message-parse dump: -T <fixture|dir> (repeatable)",
                [&]() { parse_dump_mode = true; });
   p.add_option('\0', "help", "prints help", [&]() {
@@ -196,9 +211,24 @@ int main(int argc, char *argv[]) {
     return mch::run_vectors_gen(vectors_gen_path);
   }
 
+  if (!build_vectors_path.empty()) {
+    // Build-program conformance mode (generated build fns): no scheduler needed.
+    return mch::run_build_vectors(build_vectors_path);
+  }
+
   if (match_mode) {
     // Match-phase dump mode: no actor scheduler needed.
     return mch::run_match(ir_path, trace_paths, match_gen);
+  }
+
+  if (build_smoke_mode) {
+    // Build-phase smoke mode (two-phase lookups): no scheduler needed.
+    return mch::run_build_smoke(ir_path, trace_paths);
+  }
+
+  if (classify_mode) {
+    // End-to-end classify mode: no scheduler needed.
+    return mch::run_classify(ir_path, trace_paths);
   }
 
   if (parse_dump_mode) {

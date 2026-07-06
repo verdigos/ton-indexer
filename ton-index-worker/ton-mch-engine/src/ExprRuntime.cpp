@@ -445,11 +445,13 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
       return rt_ok(Value::make_str(td::base64_encode(x.str)));
     }
     if (x.t == VType::Cell) {
-      auto r = vm::std_boc_serialize(x.cell, 0);
+      // pytoniq to_boc() defaults (no idx/crc/cache) in pytoniq CONTAINER
+      // LAYOUT — td's writer orders multi-ref trees differently (B0).
+      auto r = pytoniq_to_boc(x.cell, /*hash_crc32=*/false);
       if (r.is_error()) {
         return rt_fault("b64: cell serialization failed");
       }
-      return rt_ok(Value::make_str(td::base64_encode(r.move_as_ok().as_slice())));
+      return rt_ok(Value::make_str(td::base64_encode(r.move_as_ok())));
     }
     return rt_fault("b64: expects bytes or a cell, got " + x.describe());
   }

@@ -224,7 +224,18 @@ no implementation without user sign-off.
 ## 10. Standing hazards (memorize)
 
 - Frontier diamond-dup deviation (BlockTree.h header) — suspect #1 on any future diamond A/B diff.
-- BOC bytes differ pytoniq vs td (root hash equal) — vesting message_boc_str.
+- BOC bytes: byte parity achieved via `pytoniq_to_boc()` in Value.cpp (pytoniq cell order emulated;
+  the ref-layout divergence was real). CRC per call site: MsgParse payload bytes crc=true
+  (jettons.py explicit `hash_crc32=True`), `b64(Cell)` crc=false (bare `to_boc()` defaults).
+- Matcher ordering (T20): all specs default priority 100 → ties break on FILE NAME. Production
+  artifact orders ethena_deposit BEFORE jetton_transfer (e<j), so a composed-btype matcher can
+  never see blocks produced by a later-named matcher within one engine pass sequence. T26 /
+  production wiring must review spec priorities (or ordering) — B3 classify worked around it by
+  prefixing the decl-jettons file `a_`.
+- Outer classify BFS visits siblings in CANONICAL (min_lt) order on both A/B sides — consistent
+  with the substrate invariant, but NOT byte-order-identical to production Python
+  event_processing (raw insertion order). Matters only when overlapping matches race on sibling
+  order; revisit at Phase G production parity.
 - `td::json_decode` mutates its buffer; JsonValue holds Slices into it — keep buffers alive
   (WhereExpr self-owned-buffer pattern is the template).
 - Leaf `.data` in C++ mirrors a SUBSET (extra_currencies / ton_transfer comment omitted —

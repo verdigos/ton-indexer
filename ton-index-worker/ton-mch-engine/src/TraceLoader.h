@@ -2,12 +2,16 @@
 // Python indexer's recorder (tests/traces/*.lz4, schema per
 // tests/utils/trace_deserializer.py). Mirrors mch-go-poc/trace/load.go: only
 // the fields needed for structural matching are decoded; unknown msgpack keys
-// are ignored.
+// are ignored — plus (B2) the root `interfaces` section: the per-account
+// interface data Python's TestInterfaceRepository serves lookups from.
 #pragma once
+
+#include "Value.h"
 
 #include "td/utils/Status.h"
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -67,6 +71,12 @@ struct Transaction {
 struct Trace {
   std::string trace_id;
   std::vector<std::unique_ptr<Transaction>> transactions;
+  // Root `interfaces` section, decoded generically: account (raw uppercase
+  // string, the msgpack key) -> Dict{InterfaceName -> Dict{field -> value}}.
+  // Kept raw enough that a LookupSource can apply per-kind semantics on top
+  // (B2). Msgpack scalars map: str->Str, int->Int, bool->Bool, nil->Null,
+  // bin->Bytes, map->Dict, array->List; floats have no Value kind -> Null.
+  std::map<std::string, Value> interfaces;
 };
 
 // Reads, decompresses and decodes one fixture file.

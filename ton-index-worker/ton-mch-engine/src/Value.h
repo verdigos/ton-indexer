@@ -100,6 +100,15 @@ struct Value {
   std::string describe() const;
 };
 
+// Serialize a cell tree in PYTONIQ container layout (Cell.to_boc): pytoniq's
+// cell order is a pre-order DFS where a revisited cell is popped and
+// re-appended with its subtree re-walked, so shared cells sink to their LAST
+// visit — td's std_boc_serialize orders cells differently, so its bytes are
+// NOT byte-equal for multi-ref trees (B0 finding). Python-side byte parity
+// (jetton payload bytes = to_boc(hash_crc32=True), b64(Cell) = to_boc()
+// defaults) requires this writer. has_idx/cache_bits are always false.
+td::Result<std::string> pytoniq_to_boc(const td::Ref<vm::Cell> &root, bool hash_crc32);
+
 // Normalize a raw TON address string "wc:hex64" to canonical "wc:HEX64".
 // Returns nullopt for anything that is not a well-formed raw address (the
 // vectors never use user-friendly base64). "addr_none" is NOT handled here.

@@ -1,6 +1,7 @@
 #include "IrLoader.h"
 
 #include "td/utils/JsonBuilder.h"
+#include "td/utils/crypto.h"
 
 #include <algorithm>
 #include <fstream>
@@ -323,6 +324,7 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     m.ref_shapers.insert(jstr(rec, "shape"));
   }
   if (const Json *bp = jfield(rec, "build_program"); bp != nullptr) {
+    m.has_build_program = true;
     scan_program(*bp, m);
   }
 
@@ -369,6 +371,18 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
   ss << in.rdbuf();
   std::string buf = ss.str();
 
+  std::string source_sha;
+  {
+    // Hash BEFORE json_decode mutates the buffer.
+    unsigned char digest[32];
+    td::sha256(td::Slice(buf), td::MutableSlice(digest, 32));
+    static const char *hex = "0123456789abcdef";
+    for (int i = 0; i < 32; i++) {
+      source_sha += hex[digest[i] >> 4];
+      source_sha += hex[digest[i] & 0xF];
+    }
+  }
+
   auto r_root = td::json_decode(td::MutableSlice(buf));
   if (r_root.is_error()) {
     return td::Status::Error("IR json parse error: " + r_root.error().message().str());
@@ -393,11 +407,13 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
   }
 
   LoadedIr out;
+  out.source_sha256 = source_sha;
   out.n_nodes = static_cast<int>(pool.size());
 
   std::vector<CompiledMatcher> compiled;
   for (const auto &rec : matchers->get_array()) {
     CompiledMatcher m;
+    m.artifact_index = static_cast<int>(compiled.size());
     TRY_STATUS(build_matcher(rec, pool, m));
     compiled.push_back(std::move(m));
   }

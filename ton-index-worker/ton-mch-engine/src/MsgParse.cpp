@@ -52,10 +52,11 @@ td::RefInt256 refint_u64(unsigned long long v) {
   return (hi << 32) + td::make_refint(static_cast<long long>(v & 0xFFFFFFFFULL));
 }
 
-// Serialized BOC bytes, mirroring pytoniq Cell.to_boc(hash_crc32=True).
+// Serialized BOC bytes, mirroring pytoniq Cell.to_boc(hash_crc32=True)
+// BYTE-FOR-BYTE (B0): pytoniq container layout differs from td's on
+// multi-ref trees, so the pytoniq-order writer is used, not std_boc_serialize.
 td::Result<std::string> boc_bytes(const td::Ref<vm::Cell> &c) {
-  TRY_RESULT(b, vm::std_boc_serialize(c, vm::BagOfCells::Mode::WithCRC32C));
-  return b.as_slice().str();
+  return pytoniq_to_boc(c, /*hash_crc32=*/true);
 }
 
 // pytoniq Slice.load_address(). Advances `cs`. Error == the Python parser
@@ -560,22 +561,11 @@ std::string render_value(const Value &v) {
       return v.num->to_dec_string();
     case VType::Str:
       return "str:" + v.str;
-    case VType::Bytes: {
-      // BOC payload bytes (custom_payload / forward_payload / comment that
-      // happens to be a BOC) render as the ROOT CELL hash: pytoniq and td
-      // serialize the same cell tree with different ref layouts, so the raw
-      // container bytes are NOT cross-language comparable while the content is.
-      if (v.str.size() >= 4 && static_cast<unsigned char>(v.str[0]) == 0xb5 &&
-          static_cast<unsigned char>(v.str[1]) == 0xee && static_cast<unsigned char>(v.str[2]) == 0x9c &&
-          static_cast<unsigned char>(v.str[3]) == 0x72) {
-        auto r = vm::std_boc_deserialize(td::Slice(v.str));
-        if (r.is_ok()) {
-          auto h = r.ok()->get_hash();
-          return "boc:" + hex_upper(h.as_slice().ubegin(), h.as_slice().size());
-        }
-      }
+    case VType::Bytes:
+      // FULL raw bytes (B0/D4 verification): pytoniq and td produce
+      // byte-identical BOC containers for the same cell tree and flag set,
+      // so payload bytes render as their exact base64 and are compared raw.
       return "b64:" + td::base64_encode(td::Slice(v.str));
-    }
     case VType::Account:
       return v.addr_none ? "addr_none" : v.str;
     case VType::Cell: {

@@ -1,6 +1,11 @@
 #include "Value.h"
 
+#include "td/utils/crypto.h"
+#include "vm/cells/DataCell.h"
+
 #include <cctype>
+#include <list>
+#include <map>
 
 namespace mch {
 
@@ -124,6 +129,110 @@ const Value *Value::field(const std::string &name) const {
     }
   }
   return nullptr;
+}
+
+namespace {
+
+// pytoniq Cell.order(): pre-order DFS; a revisited cell is POPPED from its
+// current position and re-appended, then its refs are re-walked (so the whole
+// shared subtree sinks to the last visit). Insertion order == cell index.
+void pytoniq_order(const td::Ref<vm::Cell> &cell,
+                   std::list<td::Ref<vm::DataCell>> &order,
+                   std::map<vm::Cell::Hash, std::list<td::Ref<vm::DataCell>>::iterator> &pos) {
+  auto r_loaded = cell->load_cell();
+  if (r_loaded.is_error()) {
+    return;  // caller re-checks via serialize failure; loaded cells never fail here
+  }
+  td::Ref<vm::DataCell> dc = r_loaded.move_as_ok().data_cell;
+  vm::Cell::Hash h = dc->get_hash();
+  auto it = pos.find(h);
+  if (it != pos.end()) {
+    order.erase(it->second);
+    pos.erase(it);
+  }
+  pos[h] = order.insert(order.end(), dc);
+  int n = dc->get_refs_cnt();
+  for (int i = 0; i < n; i++) {
+    pytoniq_order(dc->get_ref(i), order, pos);
+  }
+}
+
+}  // namespace
+
+td::Result<std::string> pytoniq_to_boc(const td::Ref<vm::Cell> &root, bool hash_crc32) {
+  if (root.is_null()) {
+    return td::Status::Error("pytoniq_to_boc: null cell");
+  }
+  std::list<td::Ref<vm::DataCell>> order;
+  std::map<vm::Cell::Hash, std::list<td::Ref<vm::DataCell>>::iterator> pos;
+  pytoniq_order(root, order, pos);
+
+  std::vector<td::Ref<vm::DataCell>> cells(order.begin(), order.end());
+  std::map<vm::Cell::Hash, std::size_t> index;
+  for (std::size_t i = 0; i < cells.size(); i++) {
+    index[cells[i]->get_hash()] = i;
+  }
+
+  const std::size_t cells_num = cells.size();
+  // pytoniq cells_len: byte length of cells_num ((bit_length + 7) // 8).
+  std::size_t cells_len = 0;
+  for (std::size_t v = cells_num; v > 0; v >>= 8) {
+    cells_len++;
+  }
+  if (cells_len == 0) {
+    cells_len = 1;
+  }
+
+  auto append_be = [](std::string &out, unsigned long long v, std::size_t n) {
+    for (std::size_t i = 0; i < n; i++) {
+      out.push_back(static_cast<char>((v >> (8 * (n - 1 - i))) & 0xFF));
+    }
+  };
+
+  std::string payload;
+  for (const auto &dc : cells) {
+    int sz = dc->get_serialized_size(false);
+    std::string cell_bytes(static_cast<std::size_t>(sz), '\0');
+    if (dc->serialize(reinterpret_cast<unsigned char *>(cell_bytes.data()), sz, false) != sz) {
+      return td::Status::Error("pytoniq_to_boc: cell serialize failed");
+    }
+    payload += cell_bytes;
+    int n = dc->get_refs_cnt();
+    for (int i = 0; i < n; i++) {
+      auto r_ref = dc->get_ref(i)->load_cell();
+      if (r_ref.is_error()) {
+        return td::Status::Error("pytoniq_to_boc: ref load failed");
+      }
+      append_be(payload, index.at(r_ref.move_as_ok().data_cell->get_hash()), cells_len);
+    }
+  }
+
+  // pytoniq payload_len: byte length of len(payload).
+  std::size_t payload_len = 0;
+  for (std::size_t v = payload.size(); v > 0; v >>= 8) {
+    payload_len++;
+  }
+  if (payload_len == 0) {
+    payload_len = 1;
+  }
+
+  std::string out;
+  out += "\xb5\xee\x9c\x72";
+  out.push_back(static_cast<char>((hash_crc32 ? 64 : 0) | cells_len));
+  out.push_back(static_cast<char>(payload_len));
+  append_be(out, cells_num, cells_len);   // cells_num
+  append_be(out, 1, cells_len);           // root_num
+  append_be(out, 0, cells_len);           // absent
+  append_be(out, payload.size(), payload_len);
+  append_be(out, 0, cells_len);           // root_index
+  out += payload;
+  if (hash_crc32) {
+    td::uint32 crc = td::crc32c(td::Slice(out));
+    for (int i = 0; i < 4; i++) {  // little-endian (pytoniq crc32c default)
+      out.push_back(static_cast<char>((crc >> (8 * i)) & 0xFF));
+    }
+  }
+  return out;
 }
 
 std::optional<std::string> normalize_raw_address(const std::string &s) {
