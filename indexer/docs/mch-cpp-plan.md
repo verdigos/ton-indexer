@@ -1,0 +1,236 @@
+# MCH C++ Runtime — Implementation Plan
+
+Status date: 2026-07-06. Owner doc for finishing the MCH engine (Python + C++). Written to be
+executable by a less-capable model: every task states its goal, exact files, verification
+commands, and acceptance gate. Do tasks in order inside a phase; phases marked ∥ may run in
+parallel by different agents ONLY with the stated file-ownership boundaries.
+
+---
+
+## 0. Ground rules (read before ANY task)
+
+1. **Never break a green gate.** Before starting a task, run the full gate set (§1); after
+   finishing, run it again. A task is not done while any gate is red. Gates are listed with
+   exact commands — no substitutes.
+2. **One semantics.** All expression/value behavior lives in `ton-mch-engine/src/ExprRuntime.*`.
+   The interpreter (`ExprEval`) and all generated code call the same `rt_*` functions. Never
+   implement a semantic twice. If codegen output disagrees with the interpreter, codegen is
+   wrong (or you found an interpreter bug: STOP, report, do not silently fix).
+3. **Python is ground truth.** The Python IR engine (`indexer/indexer/events/mch_ir/`) and
+   evaluators (`indexer/indexer/events/mch/expr_eval.py`) define correct behavior. Docs can be
+   stale; when doc and code disagree, code wins and the doc gap gets reported (not silently
+   edited).
+4. **A/B discipline.** Every C++ layer is verified by a byte-identical diff against a Python
+   twin over the full fixture corpus (`indexer/tests/traces/*.lz4`, 147 files). New layers get
+   new twins (scratchpad scripts, NOT committed to the repo). Dump formats use only
+   cross-language-proven fields (btype/opcode/min_lt — never raw tx_hash strings unless the
+   string form itself was A/B'd).
+5. **No hot reload, ever** (user decision 2026-07-05). The IR artifact is loaded once at startup
+   or embedded at build time. No reload/versioning/invalidation machinery.
+6. **No cross-trace functionality, ever.** A trace is processed in isolation.
+7. **IR JSON is the version-controlled contract.** Python emits it
+   (`python -m indexer.events.mch.ir_emit`); committed copies live in
+   `ton-index-worker/ton-mch-engine/ir/` (manual sync, documented in `ir/README.md`). The C++
+   build never invokes Python — codegen is the C++ tool `mch-codegen`.
+8. **Commits**: only when the user explicitly says so. One-line messages, no Co-Authored-By.
+   Unrelated pre-existing working-tree changes stay OUT of MCH commits (hunk-split with
+   `git diff | awk '/^@@/{h++} ...' | git apply --cached --recount` when a file mixes both).
+9. **Windows build workflow** (critical, do not deviate):
+   - Build ONLY via the wrapper: `cmd //c "<scratchpad>\build_mch.bat"` (vcvars64 + CLion cmake,
+     target ton-mch-engine). If the scratchpad bat is gone, recreate it: call
+     `"C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat"`,
+     then `"C:\Users\verdigo\AppData\Local\Programs\CLion\bin\cmake\win\x64\bin\cmake.exe"
+     --build S:\Dev\ton-indexer-clear\ton-index-worker\cmake-build-debug-visual-studio
+     --target ton-mch-engine` (add `--target mch-codegen` when needed).
+   - NEVER run cmake configure under vcvars (libpqxx try_compile breaks). Configure happens in a
+     plain environment (the IDE does it automatically on CMakeLists change).
+   - After editing a CMakeLists: the first bat run may fail with a transient libpqxx
+     "Permission denied" recompaction error — just re-run the bat once.
+   - MSVC gotchas: `td::Slice` ctor is explicit (wrap `const char*`); `#include <iostream>` for
+     std::cout; WIN32_LEAN_AND_MEAN is set repo-wide (do not remove).
+10. **Python venv**: `S:\Dev\H-dump\tonscan-indexator\venv0\Scripts\python.exe`. Python tests
+    run from `S:\Dev\ton-indexer-clear\indexer`.
+
+## 1. Gate set (run all; exact commands)
+
+Paths: `EXE = ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe`,
+`TR = indexer/tests/traces`, `SCRATCH = <session scratchpad>` (twins live there; if lost,
+regenerate per the layer's task description below).
+
+| Gate | Command | Pass |
+|---|---|---|
+| Python suites | `python -m pytest tests/mch tests/mch_ir tests/test_actions.py -q` | all pass (baseline 1923 + growth) |
+| Expr interpreter | `EXE --vectors ton-mch-engine/ir/expr_vectors.json` | 91/91 (or grown count) |
+| Expr generated | `EXE --vectors-gen ton-mch-engine/ir/expr_vectors.json` | same count |
+| Substrate trees | py_block_tree.py vs (no direct exe mode; covered by match A/B) | — |
+| Match walker | `EXE --match -I <mch_ir.json> -T TR` vs `py_match_dump.py` | diff 0 |
+| where_expr interp | `EXE --match -I <where_ir.json> -T TR` vs py twin | diff 0 |
+| where_expr gen | regen wheres table for the artifact, rebuild, `EXE --match-gen ...` | diff 0; restore empty committed table after |
+| Msg parsing | `EXE --parse-dump -T TR` vs `py_msg_dump.py` | diff 0 |
+| Codegen determinism | delete `src/generated/vectors_generated.cpp`, rebuild | regenerated byte-identical |
+
+## 2. Where things stand (done, verified)
+
+- **Python side feature-complete for C++**: language frozen (combinators, list/record literals,
+  `produces switch` + optional keys, arithmetic `+ - *`, `addr_none()`, `b64(Cell)`, `.data`
+  accessor, `msg.exit_code`); determinism pinned (T21 canonical order = min_lt asc stable;
+  T20 priority); normative IR spec `docs/mch-ir-spec.md` v1.0; 91 conformance vectors;
+  compiled path deleted (mch_ir is the only runtime); 11 matchers declarative-or-hybrid.
+  Deferred by decision (do NOT implement without user): G-LC `map(xs as e => …)`, G-Q
+  `any/all`, `in` operator, division. Cut: `omit`, string ops, multi-return lookups, `fn` decl.
+- **C++ engine** (`ton-index-worker/ton-mch-engine/`, commit 6dc01d45): trace loader (lz4+msgpack),
+  Block substrate (canonical next_blocks invariant; A/B ×147), expr VM + `mch-codegen` C++
+  codegen tool (91/91 both paths), IR loader + match-phase walker (A/B 0 diff; 27/32 matchers
+  runnable, 5 pred-skipped), where_expr both modes (synthetic-spec A/B 0 diff), TL-B jetton
+  parsing layer (`tlb/mch-msgs.tlb` + `MsgParse` adapters, 381 msgs A/B 0 diff).
+- **Key structs**: `Value` (RefInt256 ints, addr_none state, Dict/Obj map kinds, VType::Block
+  non-owning ptr), `WhereEnv{block, slots, n_slots}` (slot array reserved for captures),
+  `EvalResult{faulted, value, message}` (no exceptions escape).
+
+## 3. Phase A — build-program design note (single agent, main-thread quality)
+
+**Goal**: a written design (`docs/mch-cpp-buildprog-design.md`) for executing build programs
+(parse/let/lookup/reject/failed/broken/flow/out/produces-switch) in C++, reviewed by the user
+BEFORE implementation. Decisions to settle, each with recommendation + alternative:
+
+1. **Async model.** `parse` is sync in C++ (TL-B adapters are pure), but `lookup` needs data
+   access (interface repository equivalent) and Python batches lookups. Options:
+   (a) two-phase collect→fetch→resume (mirrors the T32 paper design; matches actor model:
+   collect lookup keys during a dry pass, actor-request them, resume with a filled table);
+   (b) C++20 coroutines. Recommend (a): deterministic, testable offline (lookup table injected —
+   exactly how the vectors already model lookups), no coroutine toolchain risk.
+2. **Codegen vs interpret for statements.** Expressions already codegen. Recommend: statements
+   also codegen (one `build_<matcher>()` fn per matcher emitted by `mch-codegen --builds`),
+   with an interpreter fallback only if a debugging need appears. Statements are a small fixed
+   set; straight-line emission mirrors the expr emitter.
+3. **Env layout.** Extend `WhereEnv` shape: slots array (captures, slot-indexed — the walker
+   already binds slots), locals from `let` become generated C++ locals (no runtime env needed),
+   parsed bodies land in generated locals via `MsgParse` registry calls.
+4. **BOC-bytes divergence** (vesting `message_boc_str`): pytoniq and td serialize the same cell
+   tree with different container layouts (root hash equal). Decide: (a) root-hash parity bar
+   for Cell-derived string fields (document per-field), (b) pytoniq-order BOC writer in C++,
+   (c) switch Python to td-canonical bytes. Recommend (a) now, revisit if a consumer needs
+   byte-equal BOCs.
+5. **Merge + produced block**: build accept → `Block` from arena, btype from produces/switch,
+   data = out-map (dict Value), then `merge_blocks(consumed)`; auto-append excess/bounce to the
+   result list AFTER build (v1 parity, `pre_build_auto_append=False`). merge_blocks returning
+   false == clean rejection (`[]`).
+6. **Host bindings enumeration**: from the artifact, list every referenced pred / lookup /
+   fn / shaper / builder / message-type with its C++ status (exists / TL-B tier / hand-write
+   tier / blocked). This table drives Phase C/D scope. (Preds: 8 across 5 matchers; shapers: 1
+   production user; fns: dedust legs/fail, tonstakers minted-nft, layerzero same-hash, tgbtc
+   endian-hex; lookups: nft_item raw, jetton_wallet, nominator_pool, dedust_pool(s)…)
+
+Acceptance: doc exists, user signed off on decisions 1-4.
+
+## 4. Phase B — build programs in C++ (after A sign-off)
+
+Tasks, in order:
+
+1. **B1 — statement codegen** (`mch-codegen --builds <mch_ir.json>`): emit
+   `BuildOutcome build_<matcher>(BuildEnv&)` per matcher with a build_program; BuildEnv =
+   {slots, parsed-message accessors, lookup table ref, block refs}. `parse` → MsgParse registry
+   call on the captured block's body (soft-parse: failure → statement-level effect identical to
+   Python program.py); `let` → local; `reject/failed/broken when` → early returns/flags;
+   `flow` → recorded flow ops (Phase E consumes); `out`/`switch` → data map + btype.
+   Ground truth: `indexer/indexer/events/mch_ir/program.py` — port its execution order and
+   edge semantics EXACTLY (optional keys omitted when null, switch first-true + else, etc.).
+   Gate: new golden test — Python `BuildProgram.run` vs generated fn over synthetic envs
+   (build the analog of expr vectors: `build_vectors.json`, committed in both repos' contract
+   dirs like expr_vectors.json).
+2. **B2 — lookup two-phase runtime**: collect pass (generated code runs with a "collector"
+   lookup table that records keys and returns null), fetch adapter interface
+   (`class LookupSource { virtual fetch(kind, key) -> Value; }`), offline implementation =
+   fixture-backed table (the trace fixtures bundle interface data — same source the Python
+   TestInterfaceRepository uses; write a loader for that section of the .lz4). Resume pass runs
+   the real build. Gate: lookups resolve identically to Python on corpus fixtures.
+3. **B3 — try_build end-to-end**: walker match → captures → build → merge → produced block +
+   auto-append; engine loop = priority-ordered matchers over BFS with re-scan semantics ported
+   from `engine.py` (read its loop; blocks produced mid-pass are visible to later matchers
+   exactly as in Python). Gate: **full-classification A/B** — new dump `--classify` (produced
+   block tree: btype/data/consumed/topology per matcher) vs a Python twin running the real IR
+   engine `build_matchers` + process loop, 147 fixtures, diff 0, for the matcher subset whose
+   host bindings exist (start: all-declarative matchers — vesting, dns needs nft_item lookup,
+   ethena, coffee_create_vault, jettons-decl, stonfi_v2_withdraw, dedust_withdraw, nominator
+   needs lookup+pred…). Maintain an explicit skip table like the match-phase one; shrink it as
+   Phases C/D land bindings.
+
+## 5. Phase C ∥ — TL-B message families (parallel-safe vs Phase B; owns tlb/, MsgParse.*, CMake end-section)
+
+Extend `tlb/mch-msgs.tlb` + `MsgParse` adapters family by family, verified per family via
+`--parse-dump` A/B extension of `py_msg_dump.py`. Priority order (artifact demand first):
+1. Messages referenced by declarative matchers' `parse` statements (see artifact
+   `message_types`): vesting (VestingSendMessage), dns (ChangeDnsRecord), dedust
+   (DedustPayout/PayoutFromPool/SwapNotification/SwapPeer/SwapExternal), stonfi v2
+   (PTonTransfer + swap/provide bodies), ethena, coffee, tonstakers, evaa headers,
+   jvault, tgbtc, telegram_nft (TeleitemBidInfo probe), getgems, layerzero (HAND-WRITE tier),
+   wallet externals (HAND-WRITE tier, needed only for tonco in-arm? verify demand).
+2. Rules: untagged constructors + explicit opcode field (soft-parse parity); fields stop where
+   Python stops; hand-written fallback INSIDE the adapter is fine (document); addresses
+   pytoniq-style; `csr_unpack_inexact`.
+Gate per family: parse-dump diff 0 over corpus; families absent from corpus get synthetic body
+tests (build BOC in the twin with pytoniq, feed both sides).
+
+## 6. Phase D ∥ — host bindings (predicates, fns, shapers)
+
+Port Python host bindings to C++, registered in a `HostRegistry` (name → fn) the loader checks
+(replacing "unrunnable" skips):
+1. Preds (unblock 5 matchers): evaa_* (4, header-parse), nominator_pool_withdraw_parent,
+   getgems_purchase + getgems_seller_payout, stonfi_v1_sender_payment, no_internal_transfer,
+   pton_self_transfer. Each is a small body/topology test — port from
+   `indexer/indexer/events/mch/builders/*.py` registrations (follow the import to the impl).
+2. Fns: dedust_swap_legs / dedust_swap_failed (needs dedust pool lookups + async hop —
+   two-phase per B2), tonstakers_minted_nft (topology read), layerzero_dst_oapp_matches,
+   tgbtc endian-hex.
+3. Shaper: getgems_proxy_insert (EmptyBlock insert_between + sibling absorption — needs
+   Block::insert_between ported; add to BlockTree with a unit test mirroring the Python R06/R07
+   parity tests).
+Gate: each binding flips its matcher from the skip table into the classify A/B with diff 0.
+
+## 7. Phase E — value flows + post-processing + serializer boundary
+
+1. `AccountValueFlow` port (blocks/core.py) + `flow` statement execution + merge propagation.
+   Gate: extend classify dump with value_flow, A/B 0 diff.
+2. Host post-process passes: `post_process_dedust_liquidity` + `post_process_stonfi_v2_liquidity`
+   (pairing/merge surgery — port from `indexer/indexer/events/blocks/liquidity.py`; these run
+   AFTER matching, before serialization; they are host-side BY DESIGN, not DSL features).
+3. Serializer boundary decision (user input needed): C++ Action production (port
+   `block_tree_serializer.py` `_fill_*` for MCH-produced btypes) vs emitting the block tree to
+   the existing pipeline. NOT in scope until B-D are green.
+
+## 8. Phase F — Python-side remainder (independent of C++; any tier model)
+
+1. `mch_ir_version` bump "0.1-poc" → "1.0" (USER DECISION pending) — loader accept + re-emit +
+   re-sync `ir/` copies + doc.
+2. Doc destaling: T42 "78 vectors" → 91 (docs/mch-roadmap.md + mch-ir-spec.md §12 refs);
+   `docs/mch-engine-v2.md` §7 list-order claim → `_canonical` min_lt sort (T21);
+   `docs/mch-codegen-usage.md` still v0.1-era.
+3. Open roadmap (do only on user ask): T19 walk-parity follow-ups (mch_walk_compare stubbed),
+   T25 cross-file namespace, T26 production wiring behind feature flag (must also register
+   `post_process_stonfi_v2_liquidity`), T27 corpus parity harness, evaa lowering optimization
+   (bench outlier), M4 remainder T30-T32/T34-T36 statuses (several effectively done — audit),
+   T01/T03/T04-rest.
+4. Remaining builder-tier matchers stay on builders BY DESIGN (each has a named irreducible
+   core). Do not convert without new language decisions from the user.
+
+## 9. Phase G — production shape (design-only until B-F done)
+
+C++ engine as part of ton-index-worker pipeline: actor wrapping (MchEngineWorker exists),
+artifact embedded at build (codegen already proves the model), DB access for lookups
+(actor-request adapter implementing LookupSource), classification output → actions insert.
+Benchmark vs Python on the corpus (dev_utils/mch_bench.py methodology). All design-note first;
+no implementation without user sign-off.
+
+## 10. Standing hazards (memorize)
+
+- Frontier diamond-dup deviation (BlockTree.h header) — suspect #1 on any future diamond A/B diff.
+- BOC bytes differ pytoniq vs td (root hash equal) — vesting message_boc_str.
+- `td::json_decode` mutates its buffer; JsonValue holds Slices into it — keep buffers alive
+  (WhereExpr self-owned-buffer pattern is the template).
+- Leaf `.data` in C++ mirrors a SUBSET (extra_currencies / ton_transfer comment omitted —
+  reading them faults where Python yields a value; wire through MsgParse when first needed).
+- Python `.gitignore` `[Bb][Uu][Ii][Ll][Dd]*` hides `indexer/events/mch/builders/` — `git add -f`.
+- Envelope `.msg` fields the C++ loader doesn't decode fault (fwd_fee etc.) — extend TraceLoader
+  when a spec first touches one.
+- Skip tables must always be computed from the ARTIFACT (both sides), never from registry
+  availability — that's what keeps twins honest.
