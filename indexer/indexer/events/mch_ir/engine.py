@@ -57,11 +57,24 @@ from types import SimpleNamespace
 
 from indexer.events.blocks.core import Block
 from indexer.events.mch.registry import Registries
-from indexer.events.mch_ir.expr import EvalError, eval_where_expr
+from indexer.events.mch_ir.expr import BUILTINS, EvalError, eval_where_expr
 from indexer.events.mch_ir.loader import Artifact, IrLoadError
 from indexer.events.mch_ir.program import BuildProgram, apply_flows
 
 logger = logging.getLogger(__name__)
+
+
+def _collect_host_fn_names(node, out: set) -> None:
+    """Collect every non-builtin `call` fn name reachable from a build-program
+    statement (host fns; builtins are excluded)."""
+    if isinstance(node, dict):
+        if node.get("k") == "call" and node.get("fn") not in BUILTINS:
+            out.add(node["fn"])
+        for v in node.values():
+            _collect_host_fn_names(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            _collect_host_fn_names(v, out)
 
 _EXCESS_OPCODE = 0xD53276DB
 _BOUNCE_OPCODE = 0xFFFFFFFF
@@ -112,6 +125,18 @@ def build_matchers(art: Artifact, registries: Registries) -> list["IrMatcher"]:
                             f"matcher {m['name']!r}: parse message type {t!r} "
                             f"is not registered"
                         )
+        # A build-program `call` whose fn is not a builtin is a host fn; it must
+        # be registered, exactly as builders/shapers/predicates/message-types
+        # hard-fail here (registry model, spec §9.10 — there is no `fn`
+        # declaration form). Where-clause calls are builtin-only (loader-checked).
+        fn_names: set[str] = set()
+        for stmt in m.get("build_program") or ():
+            _collect_host_fn_names(stmt, fn_names)
+        for fn in sorted(fn_names):
+            if fn not in registries.fns:
+                raise IrLoadError(
+                    f"matcher {m['name']!r}: host fn {fn!r} is not registered"
+                )
 
     compiled = [IrMatcher(record, art.nodes, registries) for record in art.matchers]
     # Priority order (§8.6/§10.6): ascending priority (default 100), ties broken

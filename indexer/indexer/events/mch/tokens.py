@@ -90,6 +90,8 @@ class TokenKind(Enum):
     GE = ">="
     COALESCE = "??"
     MINUS = "-"
+    PLUS = "+"
+    STAR = "*"
     FATARROW = "=>"
     QUESTION = "?"
     # control

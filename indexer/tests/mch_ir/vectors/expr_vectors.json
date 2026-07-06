@@ -1389,6 +1389,329 @@
    "expect": 3
   },
   {
+   "name": "add",
+   "src": "a + b",
+   "expr": {
+    "k": "bin",
+    "op": "+",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": 3,
+    "b": 4
+   },
+   "expect": 7
+  },
+  {
+   "name": "sub",
+   "src": "a - b",
+   "expr": {
+    "k": "bin",
+    "op": "-",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": 10,
+    "b": 3
+   },
+   "expect": 7
+  },
+  {
+   "name": "mul",
+   "src": "a * b",
+   "expr": {
+    "k": "bin",
+    "op": "*",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": 6,
+    "b": 7
+   },
+   "expect": 42
+  },
+  {
+   "name": "precedence_mul_over_add",
+   "src": "a + b * c",
+   "expr": {
+    "k": "bin",
+    "op": "+",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "bin",
+     "op": "*",
+     "l": {
+      "k": "name",
+      "id": "b"
+     },
+     "r": {
+      "k": "name",
+      "id": "c"
+     }
+    }
+   },
+   "env": {
+    "a": 2,
+    "b": 3,
+    "c": 4
+   },
+   "expect": 14
+  },
+  {
+   "name": "precedence_arith_over_cmp",
+   "src": "a + b == c",
+   "expr": {
+    "k": "bin",
+    "op": "==",
+    "l": {
+     "k": "bin",
+     "op": "+",
+     "l": {
+      "k": "name",
+      "id": "a"
+     },
+     "r": {
+      "k": "name",
+      "id": "b"
+     }
+    },
+    "r": {
+     "k": "name",
+     "id": "c"
+    }
+   },
+   "env": {
+    "a": 2,
+    "b": 3,
+    "c": 5
+   },
+   "expect": true
+  },
+  {
+   "name": "sub_left_assoc",
+   "src": "a - b - c",
+   "expr": {
+    "k": "bin",
+    "op": "-",
+    "l": {
+     "k": "bin",
+     "op": "-",
+     "l": {
+      "k": "name",
+      "id": "a"
+     },
+     "r": {
+      "k": "name",
+      "id": "b"
+     }
+    },
+    "r": {
+     "k": "name",
+     "id": "c"
+    }
+   },
+   "env": {
+    "a": 10,
+    "b": 3,
+    "c": 2
+   },
+   "expect": 5
+  },
+  {
+   "name": "mul_then_sub",
+   "src": "a * b - c",
+   "expr": {
+    "k": "bin",
+    "op": "-",
+    "l": {
+     "k": "bin",
+     "op": "*",
+     "l": {
+      "k": "name",
+      "id": "a"
+     },
+     "r": {
+      "k": "name",
+      "id": "b"
+     }
+    },
+    "r": {
+     "k": "name",
+     "id": "c"
+    }
+   },
+   "env": {
+    "a": 2,
+    "b": 3,
+    "c": 1
+   },
+   "expect": 5
+  },
+  {
+   "name": "neg_operand_in_sub",
+   "src": "a - -b",
+   "expr": {
+    "k": "bin",
+    "op": "-",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "unary",
+     "op": "-",
+     "x": {
+      "k": "name",
+      "id": "b"
+     }
+    }
+   },
+   "env": {
+    "a": 5,
+    "b": 3
+   },
+   "expect": 8
+  },
+  {
+   "name": "arith_null_prop",
+   "src": "a + b",
+   "expr": {
+    "k": "bin",
+    "op": "+",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": null,
+    "b": 3
+   },
+   "expect": null
+  },
+  {
+   "name": "arith_amount_coerce",
+   "src": "a - b",
+   "expr": {
+    "k": "bin",
+    "op": "-",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": {
+     "$amount": 10
+    },
+    "b": {
+     "$amount": 3
+    }
+   },
+   "expect": 7
+  },
+  {
+   "name": "arith_amount_mixed",
+   "src": "a + b",
+   "expr": {
+    "k": "bin",
+    "op": "+",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": {
+     "$amount": 10
+    },
+    "b": 5
+   },
+   "expect": 15
+  },
+  {
+   "name": "arith_noninteger_fault",
+   "src": "a + b",
+   "expr": {
+    "k": "bin",
+    "op": "+",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": "x",
+    "b": 3
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "arith_bool_fault",
+   "src": "a + b",
+   "expr": {
+    "k": "bin",
+    "op": "+",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": true,
+    "b": 3
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
    "name": "ternary_then",
    "src": "x if c else y",
    "expr": {

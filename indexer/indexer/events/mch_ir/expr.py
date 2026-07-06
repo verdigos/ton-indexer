@@ -30,6 +30,7 @@ from indexer.events.mch.expr_eval import (  # noqa: F401 — re-exports
     BUILTINS,
     EvalError,
     _access,
+    _arith_result,
     _call_builtin,
     _eq_result,
     _neg_result,
@@ -154,4 +155,6 @@ class Evaluator:
             return _eq_result(op, left, right)
         if op in ("<", "<=", ">", ">="):
             return _ord_result(op, left, right)
+        if op in ("+", "-", "*"):
+            return _arith_result(op, left, right)
         raise EvalError(f"unknown binary operator {op!r}")

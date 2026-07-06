@@ -20,6 +20,18 @@ Status values: `todo`, `wip`, `done`, `blocked(<reason>)`.
 
 ---
 
+## Language decisions — 2026-07-06 (do not re-litigate)
+
+Settled while stress-testing the completed expression language on the complex matchers:
+
+- **Integer arithmetic `+ - *` — IN** (G-ARITH, done). Two precedence levels (additive < multiplicative, both above comparison), left-associative, integer-only with `Amount`→int coercion (like `sum`), null propagates. **Division `/` OMITTED** until a matcher demands it (div-by-zero decision deferred). Spec §9.6.1, IR §7. Retired the `tonstakers_immediate_amount` host fn (`amount(immediate.msg.value - request.msg.value)`).
+- **List comprehension (`map(xs as e => expr)`, G-LC) + boolean fold (`any`/`all`, G-Q) — DEFERRED, evidence-gated** (spec §16.1). Highest-leverage for declarative swap/liquidity coverage but scoping/binding cost not bought before the C++ twin proves the leg-assembly fns are a real pain; swaps stay HYBRID regardless because of the irreducible async multi-hop pool fn.
+- **`in` / set-membership operator — SKIPPED** (or-chains cover the known constant-set cases).
+- **`fn IDENT(params)` declaration — STRUCK** (spec §9.10). The registry + bare-call is the canonical model; host-fn existence is now a load-time check in `build_matchers` (aligned with builders/shapers). The never-implemented `B002_UNKNOWN_FN`/`B003_FN_ARITY` diagnostics are withdrawn.
+- **§15b G7 correction:** `account()` normalization does NOT cover bare-hash / workchain-stripped compares (layerzero — `account("0x<hex>")` raises); those stay a boolean host `fn`.
+
+---
+
 ## M1 — Core hardening
 
 Current compiler already covers M1 language scope. These tasks close verification gaps and known holes.

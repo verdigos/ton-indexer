@@ -22,7 +22,7 @@ from indexer.events.blocks.utils import AccountId, Amount, Asset
 from indexer.events.mch.compile import compile_text
 from indexer.events.mch.ir_emit import emit_ir
 from indexer.events.mch.registry import Registries
-from indexer.events.mch_ir import build_matchers, load_artifact
+from indexer.events.mch_ir import IrLoadError, build_matchers, load_artifact
 
 RAW_SRC = "0:" + "11" * 32
 RAW_DST = "0:" + "22" * 32
@@ -687,18 +687,18 @@ async def test_fn_exception_rejects_match(caplog):
     assert any("rejecting match" in r.message for r in caplog.records)
 
 
-@pytest.mark.asyncio
-async def test_unknown_callee_rejects_match(caplog):
+def test_unknown_host_fn_is_a_load_error():
+    """A build-program call to an unregistered host fn hard-fails at
+    build_matchers time — the registry model (spec §9.10), aligned with how
+    builders/shapers/predicates/message-types are checked, rather than a silent
+    runtime rejection."""
     src = """
     matcher fn_missing { produces FB entry @x
         op Foo @x
         out { v: nosuch(x) } }
     """
-    m = _ir(src, _fn_registries())
-    anchor = _cc(0xF00)
-    with caplog.at_level("WARNING", logger="indexer.events.mch_ir.engine"):
-        assert await m.try_build(anchor) == []
-    assert any("unknown builtin or host fn" in r.message for r in caplog.records)
+    with pytest.raises(IrLoadError):
+        _ir(src, _fn_registries())
 
 
 # ==========================================================================

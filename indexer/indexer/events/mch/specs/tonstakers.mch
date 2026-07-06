@@ -11,9 +11,6 @@
 # arms map their fields declaratively; two host fns cover the genuinely
 # inexpressible residue (each a named language gap):
 #
-#   tonstakers_immediate_amount(immediate, request) — GAP: the expression
-#     grammar has no binary arithmetic (only unary '-'); the immediate payout is
-#     `immediate.msg.value - request.msg.value`.
 #   tonstakers_minted_nft(delayed) — GAP: reading the minted request NFT's
 #     address off delayed.next_blocks is block-topology navigation, deliberately
 #     excluded from the language (§15b). The NFT is a NON-consumed neighbor
@@ -47,7 +44,7 @@ matcher tonstakers_withdraw {
             burnt_nft:    null
             pool:         account(request.msg.destination)
             tokens_burnt: amount(burn.body.amount)
-            amount:       tonstakers_immediate_amount(immediate_withdrawal, request)
+            amount:       amount(immediate_withdrawal.msg.value - request.msg.value)
             asset:        asset(request.msg.source)
         }
         else => tonstakers_withdraw_request out {

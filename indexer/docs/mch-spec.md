@@ -606,7 +606,7 @@ Plain (non-`?`) fields always emit their key. C++: skip the map insert when the 
 
 ### 9.6 Expression language
 
-Deliberately small, **pure and total**. Features: capture/local references, field access (`x.y`), the implicit accessors `CAPTURE.msg` (message envelope: `source`, `destination`, `value`, `opcode`, `exit_code`), `CAPTURE.body` (parsed body after `parse`), and `CAPTURE.data` (a composed block's produced data), literals, comparisons, `and`/`or`/`not`, `?? ` default, `x if cond else y`, and a fixed builtin set:
+Deliberately small, **pure and total**. Features: capture/local references, field access (`x.y`), the implicit accessors `CAPTURE.msg` (message envelope: `source`, `destination`, `value`, `opcode`, `exit_code`), `CAPTURE.body` (parsed body after `parse`), and `CAPTURE.data` (a composed block's produced data), literals, comparisons, `and`/`or`/`not`, `?? ` default, `x if cond else y`, integer arithmetic `+ - *` (§9.6.1), and a fixed builtin set:
 
 `CAPTURE.msg.exit_code` is a **defined** envelope field: the compute-phase exit code of the message's transaction (null when the transaction records none). It is the only non-topology way to reach transaction state and exists specifically so success/rejection can gate on the exit code without a host `fn`; it is spec'd here rather than reached by generic attribute chaining (the C++ envelope has a fixed field set).
 
@@ -615,9 +615,13 @@ Deliberately small, **pure and total**. Features: capture/local references, fiel
 - Encoding: `b64(x)` base64-encodes `x`; a raw `Cell` is BOC-encoded first (mirrors `cell.to_boc()`), so a field carrying either boc bytes or a parsed Cell serialises identically.
 - Composite literals: a **list literal** `[expr, ...]` (evaluates to an ordered list) and a **record literal** `{name: expr, ...}` (evaluates to a string-keyed map). Both nest freely and are the way to build nested composite output fields (legs, packet data) without a host `fn`. Trailing commas and newlines are allowed. IR encoding: `{"k":"list","items":[…]}` and `{"k":"record","fields":[{"name":…,"expr":…}]}`. C++: `vector` / `map` construction.
 - List combinators over list captures / list literals: `first(xs)`, `last(xs)`, `len(xs)`, `sum(xs)`, `zip(xs, ys)`, `map(xs, "field")` (field projection only, no lambdas). Fixed, total edge semantics (each is a one-line loop in C++): a **null** list argument yields null (the call short-circuit); on a real list — `first`/`last` of an **empty** list is null; `len` is the element count (empty → 0); `sum` coerces each element to an integer (`Amount` → its value, `int` → itself, anything else is a fault) and returns an integer (empty → 0); `zip` truncates to the shorter input and yields 2-element lists; `map(xs, "field")` projects one field per element — the field is a **string literal** (dict key lookup, attribute fallback; a missing field is a fault). A missing field or non-numeric `sum` element rejects the match (spec §10.7). `map` takes a quoted field name, not a bare identifier — a bare name is ambiguous with a value reference and not C++-clean; there is no map-with-constructor form (that stays a host `fn`).
-- Declared host functions: `fn` names, called like builtins.
+- Host functions: any call whose name is not a builtin resolves to a host `fn` from the registries (no separate declaration form — see the §9.10 note). An unregistered fn is a load-time error (`build_matchers`), aligned with builders/shapers.
 
 No user-defined loops, no recursion, no mutation, no string manipulation. If a computation does not fit, it belongs in a host `fn`. The grammar is bytecode-friendly by design: every expression compiles to a short stack program for the M5 IR (§11.4), and every host implements the same ~20-op VM with shared conformance vectors.
+
+#### 9.6.1 Integer arithmetic (`+ - *`)
+
+Binary `+`, `-`, `*` on integers. Precedence, low → high: comparison < additive (`+ -`, left-associative) < multiplicative (`*`, left-associative); arithmetic binds tighter than comparisons, so `a + b == c` is `(a + b) == c`. A leading `-` is unary negation (a distinct, tighter form). Semantics: **integer-only** and total — each operand coerces to an integer (`Amount` → its `.value`, `int` → itself; `bool` and any other type are a fault), the result is a plain `int`, and **null on either side propagates to null** (like the other binary operators). Amount coercion (same rule as `sum`) is what lets `a.msg.value - b.msg.value` work whether the envelope value is an `int` or an `Amount`; wrap the result in `amount(...)` for an `Amount` field. **Division `/` is deliberately omitted** (div-by-zero semantics is a decision not needed yet; add it only when a matcher demands it). IR encoding: `{"k":"bin","op":"+"|"-"|"*","l":…,"r":…}`. C++: integer add/sub/mul with the same null-propagation and Amount→int coercion.
 
 ### 9.7 Execution phases and lookup batching
 
@@ -643,15 +647,11 @@ flow fees(account_expr, amount_expr)
 
 Originally proposed to exclude a captured subtree from the consumed set when a condition held. **Cut from the language:** the one motivating case (stonfi v1 excluding the referral-payout subtree for certain exit codes) was resolved the other way by R12 — predicate-gating at *match* time (an inline `where`/predicate on the subtree node) keeps the blocks out of the match to begin with, so there is no post-match consumption surgery to sanction. With zero users and a match-time replacement, `omit` is not part of the grammar, the IR, or any engine. Do not use it; gate consumption in the pattern instead.
 
-### 9.10 `fn IDENT(params)`
+### 9.10 Host functions — **`fn` declaration STRUCK (2026-07-06); registry model is canonical**
 
-Declares a host function callable from expressions. The host registers the implementation; the compiler checks the name and arity at load time (`B002_UNKNOWN_FN`, `B003_FN_ARITY`). Host fns are synchronous and pure over their inputs (they receive already-fetched lookup results, never the repository itself).
+There is **no `fn IDENT(params)` declaration form**. A host function is any expression call whose name is not a builtin (§9.6); it resolves to the implementation the host registered (`Registries.fns`), receives already-evaluated arguments (nulls pass through, unlike builtins), and is pure over them. Existence and (implicit) arity are enforced at load: `build_matchers` hard-fails when a referenced host fn is not registered — the same discipline as builders, shapers, predicates, and message types. The proposed `B002_UNKNOWN_FN`/`B003_FN_ARITY` compile diagnostics were never implemented and are withdrawn; the registry check subsumes B002, and arity is enforced by the Python signature at call time.
 
-```
-fn stonfi_referral_split(payouts)     # corner case: referral vs out disambiguation
-```
-
-Every `fn` is a dual-implementation parity liability. The roadmap tracks the count; a growing count is a signal the expression language is missing a feature (or the matcher is fighting the domain).
+Rationale for the strike: a declaration line duplicated information the registry already carries and drifted from it; the single source of truth is the registered callable. Each host fn is still a dual-implementation (Python + C++) parity liability — a growing count signals a missing language feature or a matcher fighting the domain (§16 tracks the deferred features that would retire them).
 
 ## 10. Compilation
 
@@ -1091,7 +1091,10 @@ matcher change_dns_record {
 
 Recorded so a future reader does not re-litigate these. Each was demanded by a real matcher and resolved WITHOUT a language feature:
 
-- **String / byte manipulation (slice, `lower`, `hex`, endian conversion) — CUT.** Address-tail comparisons (layerzero `dst_oapp`) use `account(a) == account(b)` (the constructor normalizes); protocol-specific byte formatting (tgbtc `bitcoin_txid` little-endian hex) stays a host `fn`. No general string ops in the expression language.
+- **String / byte manipulation (slice, `lower`, `hex`, endian conversion) — CUT.** No general string ops in the expression language. Two recipes for the cases that motivated it:
+  - Full-address equality → `account(a) == account(b)` (the `AccountId` constructor normalizes case + form, and `Asset == "0:hex"` compares case-insensitively).
+  - **Bare-hash / workchain-stripped compares stay a host `fn`.** *(Correction to the earlier note: `account()` does NOT cover this.)* layerzero compares `dst_oapp` against a callback destination after stripping the `0:`/`0x` prefix (`[2:].lower()`) — i.e. raw 32-byte hashes, not full addresses. `account("0x<hex>")` / `account("<bare-hash>")` **raises** (no workchain, unparseable), so the constructor cannot normalize them. Express such a compare with a boolean host `fn` (`fn same_hash(a_addr, b_addr) -> bool`) that does the strip+compare — the "boolean-predicate host fn" pattern, same shape as the swap-family failure scans.
+  - Protocol-specific byte formatting (tgbtc `bitcoin_txid` little-endian hex, pubkey hex) stays a host `fn`.
 - **Block topology / aggregate navigation (`previous_block`, `next_blocks`, `event_nodes`, `.value`) — NOT a language feature.** Reach a neighbouring block by capturing it in the PATTERN and reading its envelope / `.data`; aggregate a value with `sum(...)` over a captured list. Transaction state is reachable only through the defined `msg.exit_code` envelope field (§9.6), never generic attribute chaining.
 - **Multi-return lookups / set-membership — CUT.** A lookup is single-shape (name + key → record | null). Return several values as ONE record and read its fields (`r.staking_pool`); test membership with a targeted nullable lookup + `reject when x == null` (e.g. `lookup nominator_pool(addr)`), not an `in` operator. These are host-registration patterns, not language gaps.
 - **`omit` (consumption surgery) — DROPPED** (§9.9): match-time predicate gating replaces it.
@@ -1105,7 +1108,14 @@ Listed only so implementers do not paint themselves into a corner. NOT scheduled
 - A `using` import system for cross-file rule references with namespacing
 - `pre_build_auto_append` finer-grained control over excess/bounce timing
 - Pattern fragments parameterised by capture (`rule X(@a) = …`)
-- Set-membership literals in inline predicates (`where .x in {A, B}`)
+- Set-membership literals in inline predicates (`where .x in {A, B}`) — an `in` over a list literal; **skipped** for now (or-chains cover the known constant-set cases; C++ = linear scan)
+
+### 16.1 List comprehension + quantifiers — DEFERRED (evidence-gated)
+
+Two related constructs, deferred until the C++ twin proves the need (trigger condition: the swap/liquidity leg-assembly host fns become a real maintenance/parity cost in the C++ engine). They are the single highest-leverage additions for declarative swap/liquidity coverage but carry scoping/binding complexity we do not buy before that evidence — the affected matchers stay HYBRID anyway because of the irreducible async multi-hop pool-resolution fn, so nothing is unblocked *end-to-end* by adding them alone.
+
+- **G-LC — element-wise list transform (`map(xs as e => <expr(e)>)`).** Today `map(xs, "field")` only projects one field. Every swap builds `peer_swaps = [ {in:{asset,amount}, out:{asset,amount}}, … ]`, one record per hop, from a list capture — inexpressible without mapping each element through an arbitrary sub-expression (a record literal, a ternary asset from `{is_ton, jetton_address}`). Design: one bound element variable + one pure sub-expression, no nested comprehensions. C++ one-liner: `std::transform` with a lambda over the element.
+- **G-Q — boolean fold (`any(xs as e => <bool(e)>)` / `all(...)`).** The swap `failed`/`ok` scans are "every hop has its success notification/event" / "some pay_to exit_code is bad" — a quantifier over a list capture with a per-element predicate. Depends on G-LC's element binding. C++: `std::any_of` / `std::all_of`.
 
 ## 17. Glossary
 

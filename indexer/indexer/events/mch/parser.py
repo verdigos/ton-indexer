@@ -696,12 +696,34 @@ def _parse_not(s: _ParserState) -> ast_.Expr:
 
 
 def _parse_cmp(s: _ParserState) -> ast_.Expr:
-    left = _parse_coalesce(s)
+    left = _parse_additive(s)
     op = _CMP_OPS.get(s.peek().kind)
     if op is not None:
         s.i += 1
-        right = _parse_coalesce(s)  # non-associative: exactly one comparison
+        right = _parse_additive(s)  # non-associative: exactly one comparison
         return ast_.BinaryOp(op=op, left=left, right=right, span=_join(left.span, right.span))
+    return left
+
+
+def _parse_additive(s: _ParserState) -> ast_.Expr:
+    """`+` / `-` (left-associative); binds tighter than comparison, looser than
+    `*` (§9.6 G-ARITH). A leading `-` is unary and belongs to `_parse_unary`."""
+    left = _parse_multiplicative(s)
+    while s.at(TokenKind.PLUS) or s.at(TokenKind.MINUS):
+        op = "+" if s.at(TokenKind.PLUS) else "-"
+        s.i += 1
+        right = _parse_multiplicative(s)
+        left = ast_.BinaryOp(op=op, left=left, right=right, span=_join(left.span, right.span))
+    return left
+
+
+def _parse_multiplicative(s: _ParserState) -> ast_.Expr:
+    """`*` (left-associative); the tightest binary arithmetic level."""
+    left = _parse_coalesce(s)
+    while s.at(TokenKind.STAR):
+        s.i += 1
+        right = _parse_coalesce(s)
+        left = ast_.BinaryOp(op="*", left=left, right=right, span=_join(left.span, right.span))
     return left
 
 

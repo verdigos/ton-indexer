@@ -24,7 +24,7 @@ EXPR_KINDS = frozenset({
     "lookup", "unary", "bin", "ternary", "list", "record",
 })
 UNARY_OPS = frozenset({"not", "-"})
-BIN_OPS = frozenset({"and", "or", "==", "!=", "<", "<=", ">", ">=", "??"})
+BIN_OPS = frozenset({"and", "or", "==", "!=", "<", "<=", ">", ">=", "??", "+", "-", "*"})
 STMT_TAGS = frozenset({"parse", "let", "reject", "failed", "broken", "flow", "out", "switch"})
 FLOW_ARITY = {"jetton": 3, "ton": 2, "fees": 2}
 

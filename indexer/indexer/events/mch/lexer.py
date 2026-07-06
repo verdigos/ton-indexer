@@ -15,6 +15,8 @@ _SINGLE_CHAR: dict[str, TokenKind] = {
     "}": TokenKind.RBRACE,
     "[": TokenKind.LBRACKET,
     "]": TokenKind.RBRACKET,
+    "+": TokenKind.PLUS,
+    "*": TokenKind.STAR,
     "(": TokenKind.LPAREN,
     ")": TokenKind.RPAREN,
     ".": TokenKind.DOT,

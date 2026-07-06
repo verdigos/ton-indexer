@@ -213,6 +213,37 @@ def _neg_result(v: Any) -> Any:
         raise EvalError(f"unary '-' on {type(v).__name__}: {ex}") from ex
 
 
+def _arith_int(v: Any) -> int:
+    """Coerce an arithmetic operand to int: Amount -> its value, int -> itself
+    (bool rejected — it is an int subclass), anything else is a fault. Mirrors
+    sum()'s coercion so `a.msg.value - b.msg.value` works whether the envelope
+    value is an int or an Amount."""
+    if isinstance(v, Amount):
+        return v.value
+    if isinstance(v, bool):
+        raise EvalError("arithmetic operand must be an integer, got bool")
+    if isinstance(v, int):
+        return v
+    raise EvalError(f"arithmetic operand must be an integer or Amount, got {type(v).__name__}")
+
+
+def _arith_result(op: str, left: Any, right: Any) -> Any:
+    """Integer arithmetic `+`/`-`/`*` (spec §9.6 G-ARITH). Null on either side
+    propagates to null; operands coerce to int (Amount -> value); the result is
+    a plain int. No division (deliberately omitted — div-by-zero semantics is
+    not needed yet)."""
+    if left is None or right is None:
+        return None
+    a, b = _arith_int(left), _arith_int(right)
+    if op == "+":
+        return a + b
+    if op == "-":
+        return a - b
+    if op == "*":
+        return a * b
+    raise EvalError(f"unknown arithmetic operator {op!r}")
+
+
 def _call_builtin(name: str, args: list[Any]) -> Any:
     fn, arity = BUILTINS[name]
     if len(args) != arity:
@@ -355,6 +386,8 @@ def _sync_eval(e: dict, block: Block) -> Any:
             return _eq_result(op, left, right)
         if op in ("<", "<=", ">", ">="):
             return _ord_result(op, left, right)
+        if op in ("+", "-", "*"):
+            return _arith_result(op, left, right)
         raise EvalError(f"unknown binary operator {op!r}")
     if k == "ternary":
         if _require_bool(_sync_eval(e["cond"], block)):

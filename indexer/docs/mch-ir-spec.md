@@ -161,7 +161,7 @@ Expressions are inlined trees tagged by `"k"`. Vocabulary: `int str bool null na
 { "k": "call",   "fn": "account", "args": [<expr>, ...] }
 { "k": "lookup", "name": "jetton_wallet", "args": [<expr>, ...] }
 { "k": "unary",  "op": "not" | "-", "x": <expr> }
-{ "k": "bin",    "op": "and"|"or"|"=="|"!="|"<"|"<="|">"|">="|"??", "l": <expr>, "r": <expr> }
+{ "k": "bin",    "op": "and"|"or"|"=="|"!="|"<"|"<="|">"|">="|"??"|"+"|"-"|"*", "l": <expr>, "r": <expr> }
 { "k": "ternary", "cond": <expr>, "then": <expr>, "else": <expr> }
 { "k": "list",   "items": [<expr>, ...] }
 { "k": "record", "fields": [ {"name": "legs", "expr": <expr>}, ... ] }
@@ -204,14 +204,14 @@ List combinators require a list argument (else fault). `map`'s field arg is a st
 
 ### 7.4 Operators
 - `unary`: `not` (bool operand required, result bool); `-` (numeric negate; `-null` → null).
-- `bin` — lazy: `and`/`or` (each side required bool, short-circuit), `??` (left unless null, else right). Strict: `==`/`!=` (structural null handling — two nulls are equal, null vs non-null unequal; otherwise host `==`; **note** `Asset == string` is case-insensitive on the master address); `<`/`<=`/`>`/`>=` (null on either side → false; else host ordering; non-orderable types → fault).
+- `bin` — lazy: `and`/`or` (each side required bool, short-circuit), `??` (left unless null, else right). Strict: `==`/`!=` (structural null handling — two nulls are equal, null vs non-null unequal; otherwise host `==`; **note** `Asset == string` is case-insensitive on the master address); `<`/`<=`/`>`/`>=` (null on either side → false; else host ordering; non-orderable types → fault); **integer arithmetic** `+`/`-`/`*` (null on either side → null; operands coerce to int — `Amount`→its value, `int`→itself, `bool`/other → fault; result is a plain int; no division). Precedence: comparison < additive (`+ -`) < multiplicative (`*`), all left-associative.
 - `ternary`: `cond` (required bool) selects `then`/`else`.
 - `list` → a Python list of the evaluated items; `record` → a dict `{name: value}`.
 
 ### 7.5 where_expr (node head predicate)
 A node's `where_expr` is evaluated by the **sync** evaluator against the candidate block. `dotfield` reads the block's `data`; a missing field / `data is None` / any fault / a non-bool result all fail the test (False) — **never** raised out of matching. `lookup` and non-builtin `call` are rejected at load (`_check_where_expr_sync`) and by the frontend compiler — a `where_expr` is builtin-only and synchronous.
 
-**Load-time checks (`_check_expr`):** `k` in vocabulary; literal `v` exact type; `name.id`/`dotfield.name`/`attr.name` strings; `attr.of` recursively valid; `call`/`lookup` have string name + array args (recursively valid); `unary.op ∈ {not,-}`; `bin.op ∈ {and,or,==,!=,<,<=,>,>=,??}`; `ternary` has cond/then/else; `list.items` array; `record.fields` each `{name:str, expr}`.
+**Load-time checks (`_check_expr`):** `k` in vocabulary; literal `v` exact type; `name.id`/`dotfield.name`/`attr.name` strings; `attr.of` recursively valid; `call`/`lookup` have string name + array args (recursively valid); `unary.op ∈ {not,-}`; `bin.op ∈ {and,or,==,!=,<,<=,>,>=,??,+,-,*}`; `ternary` has cond/then/else; `list.items` array; `record.fields` each `{name:str, expr}`.
 
 ## 8. Determinism guarantees (normative for any engine)
 
@@ -237,7 +237,7 @@ Predicate/mixed/pred-anchor and message-type names are validated at load in `bui
 
 ## 10. Load-time validation summary (what a loader MUST reject)
 
-Structural (registry-independent, `load_artifact`): wrong/absent `mch_ir_version`; non-object root; missing `matchers`/`nodes` arrays; any node/matcher/expr/statement shape violation above; out-of-range node/matcher/child/parent/children/branch/root indices; two matchers sharing a `root`; a `where_expr` containing a `lookup` or a non-builtin `call`; a `cyclic` recursion carrying `exit`. Registry-dependent (`build_matchers`): an unregistered predicate (node/anchor), builder, shaper, or `parse` message type. A raising expression/builder/parse at RUN time is a clean match rejection (`[]`), never a crash.
+Structural (registry-independent, `load_artifact`): wrong/absent `mch_ir_version`; non-object root; missing `matchers`/`nodes` arrays; any node/matcher/expr/statement shape violation above; out-of-range node/matcher/child/parent/children/branch/root indices; two matchers sharing a `root`; a `where_expr` containing a `lookup` or a non-builtin `call`; a `cyclic` recursion carrying `exit`. Registry-dependent (`build_matchers`): an unregistered predicate (node/anchor), builder, shaper, `parse` message type, or **host fn** (a build-program `call` whose name is not a builtin and is absent from `Registries.fns`). A raising expression/builder/parse at RUN time is a clean match rejection (`[]`), never a crash.
 
 ## 11. Annotated example — `specs/vesting.mch`
 

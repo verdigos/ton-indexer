@@ -1,12 +1,10 @@
 """mch registries for the tonstakers withdraw matcher (specs/tonstakers.mch).
 
 HYBRID declarative build: the produced btype/fields/flags are expressed with a
-`produces switch` + `out {...}` in the spec; only two genuinely inexpressible
-pieces stay as host fns (each a named language gap documented in the spec):
+`produces switch` + `out {...}` in the spec; the immediate payout is now
+declarative arithmetic (`amount(immediate.msg.value - request.msg.value)`, G-ARITH),
+leaving ONE genuinely inexpressible piece as a host fn:
 
-  tonstakers_immediate_amount — the immediate payout is
-    `immediate.msg.value - request.msg.value`, and the expression grammar has no
-    binary arithmetic (only unary '-').
   tonstakers_minted_nft — reads the minted request NFT off
     delayed.next_blocks; block-topology navigation is excluded from the language
     (§15b), and the NFT is a NON-consumed neighbor (NftMintBlockMatcher's own
@@ -31,7 +29,7 @@ from indexer.events.blocks.messages.staking import (
     TONStakersWithdrawRequest,
 )
 from indexer.events.blocks.nft import NftMintBlock
-from indexer.events.blocks.utils import AccountId, Amount
+from indexer.events.blocks.utils import AccountId
 from indexer.events.blocks.utils.block_utils import find_call_contract
 from indexer.events.mch.registry import Registries, default_message_types
 
@@ -50,14 +48,6 @@ BLOCK_TYPES = {
     "tonstakers_withdraw":         Block,
     "tonstakers_withdraw_request": Block,
 }
-
-
-async def _tonstakers_immediate_amount(immediate, request):
-    """Immediate payout = pool-withdrawal msg.value minus withdraw-request
-    msg.value (GAP: no binary arithmetic in the expression grammar)."""
-    if immediate is None or request is None:
-        return None
-    return Amount(immediate.get_message().value - request.get_message().value)
 
 
 async def _tonstakers_minted_nft(delayed):
@@ -79,7 +69,6 @@ def register_tonstakers(reg: Registries) -> Registries:
     reg.opcodes.update(OPCODES)
     reg.block_types.update(BLOCK_TYPES)
     reg.message_types.update(default_message_types())
-    reg.register_fn("tonstakers_immediate_amount")(_tonstakers_immediate_amount)
     reg.register_fn("tonstakers_minted_nft")(_tonstakers_minted_nft)
     return reg
 
