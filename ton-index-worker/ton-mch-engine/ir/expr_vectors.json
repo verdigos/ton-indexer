@@ -1,0 +1,2005 @@
+{
+ "_readme": "Expression conformance vectors (T42). Value-encoding convention: docs/mch-ir-spec.md §12. `expr` is IR (docs/mch-ir-spec.md §7). Regenerate with tests/mch_ir/vectors/_generate.py.",
+ "vectors": [
+  {
+   "name": "int_lit",
+   "src": "42",
+   "expr": {
+    "k": "int",
+    "v": 42
+   },
+   "env": {},
+   "expect": 42
+  },
+  {
+   "name": "hex_lit",
+   "src": "0xff",
+   "expr": {
+    "k": "int",
+    "v": 255
+   },
+   "env": {},
+   "expect": 255
+  },
+  {
+   "name": "str_lit",
+   "src": "\"hi\"",
+   "expr": {
+    "k": "str",
+    "v": "hi"
+   },
+   "env": {},
+   "expect": "hi"
+  },
+  {
+   "name": "bool_true",
+   "src": "true",
+   "expr": {
+    "k": "bool",
+    "v": true
+   },
+   "env": {},
+   "expect": true
+  },
+  {
+   "name": "bool_false",
+   "src": "false",
+   "expr": {
+    "k": "bool",
+    "v": false
+   },
+   "env": {},
+   "expect": false
+  },
+  {
+   "name": "null_lit",
+   "src": "null",
+   "expr": {
+    "k": "null"
+   },
+   "env": {},
+   "expect": null
+  },
+  {
+   "name": "name_bound",
+   "src": "a",
+   "expr": {
+    "k": "name",
+    "id": "a"
+   },
+   "env": {
+    "a": 7
+   },
+   "expect": 7
+  },
+  {
+   "name": "name_unbound_fault",
+   "src": "a",
+   "expr": {
+    "k": "name",
+    "id": "a"
+   },
+   "env": {},
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "attr_obj_field",
+   "src": "o.x",
+   "expr": {
+    "k": "attr",
+    "of": {
+     "k": "name",
+     "id": "o"
+    },
+    "name": "x"
+   },
+   "env": {
+    "o": {
+     "$obj": {
+      "x": 9
+     }
+    }
+   },
+   "expect": 9
+  },
+  {
+   "name": "attr_chain",
+   "src": "o.a.b",
+   "expr": {
+    "k": "attr",
+    "of": {
+     "k": "attr",
+     "of": {
+      "k": "name",
+      "id": "o"
+     },
+     "name": "a"
+    },
+    "name": "b"
+   },
+   "env": {
+    "o": {
+     "$obj": {
+      "a": {
+       "$obj": {
+        "b": 3
+       }
+      }
+     }
+    }
+   },
+   "expect": 3
+  },
+  {
+   "name": "attr_on_null",
+   "src": "o.x",
+   "expr": {
+    "k": "attr",
+    "of": {
+     "k": "name",
+     "id": "o"
+    },
+    "name": "x"
+   },
+   "env": {
+    "o": null
+   },
+   "expect": null
+  },
+  {
+   "name": "attr_dict_key",
+   "src": "d.k",
+   "expr": {
+    "k": "attr",
+    "of": {
+     "k": "name",
+     "id": "d"
+    },
+    "name": "k"
+   },
+   "env": {
+    "d": {
+     "$dict": {
+      "k": 5
+     }
+    }
+   },
+   "expect": 5
+  },
+  {
+   "name": "attr_dict_missing_fault",
+   "src": "d.k",
+   "expr": {
+    "k": "attr",
+    "of": {
+     "k": "name",
+     "id": "d"
+    },
+    "name": "k"
+   },
+   "env": {
+    "d": {
+     "$dict": {
+      "other": 1
+     }
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "exit_code",
+   "src": "m.exit_code",
+   "expr": {
+    "k": "attr",
+    "of": {
+     "k": "name",
+     "id": "m"
+    },
+    "name": "exit_code"
+   },
+   "env": {
+    "m": {
+     "$obj": {
+      "transaction": {
+       "$obj": {
+        "compute_exit_code": 123
+       }
+      }
+     }
+    }
+   },
+   "expect": 123
+  },
+  {
+   "name": "exit_code_absent_field",
+   "src": "m.exit_code",
+   "expr": {
+    "k": "attr",
+    "of": {
+     "k": "name",
+     "id": "m"
+    },
+    "name": "exit_code"
+   },
+   "env": {
+    "m": {
+     "$obj": {
+      "transaction": {
+       "$obj": {}
+      }
+     }
+    }
+   },
+   "expect": null
+  },
+  {
+   "name": "exit_code_no_tx_fault",
+   "src": "m.exit_code",
+   "expr": {
+    "k": "attr",
+    "of": {
+     "k": "name",
+     "id": "m"
+    },
+    "name": "exit_code"
+   },
+   "env": {
+    "m": {
+     "$obj": {}
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "dotfield_in_build_fault",
+   "src": ".value",
+   "expr": {
+    "k": "dotfield",
+    "name": "value"
+   },
+   "env": {},
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "account_str",
+   "src": "account(a)",
+   "expr": {
+    "k": "call",
+    "fn": "account",
+    "args": [
+     {
+      "k": "name",
+      "id": "a"
+     }
+    ]
+   },
+   "env": {
+    "a": "0:abababababababababababababababababababababababababababababababab"
+   },
+   "expect": {
+    "$account": "0:abababababababababababababababababababababababababababababababab"
+   }
+  },
+  {
+   "name": "account_null",
+   "src": "account(a)",
+   "expr": {
+    "k": "call",
+    "fn": "account",
+    "args": [
+     {
+      "k": "name",
+      "id": "a"
+     }
+    ]
+   },
+   "env": {
+    "a": null
+   },
+   "expect": null
+  },
+  {
+   "name": "addr_none",
+   "src": "addr_none()",
+   "expr": {
+    "k": "call",
+    "fn": "addr_none",
+    "args": []
+   },
+   "env": {},
+   "expect": {
+    "$account": null
+   }
+  },
+  {
+   "name": "amount_int",
+   "src": "amount(a)",
+   "expr": {
+    "k": "call",
+    "fn": "amount",
+    "args": [
+     {
+      "k": "name",
+      "id": "a"
+     }
+    ]
+   },
+   "env": {
+    "a": 50
+   },
+   "expect": {
+    "$amount": 50
+   }
+  },
+  {
+   "name": "amount_amount",
+   "src": "amount(a)",
+   "expr": {
+    "k": "call",
+    "fn": "amount",
+    "args": [
+     {
+      "k": "name",
+      "id": "a"
+     }
+    ]
+   },
+   "env": {
+    "a": {
+     "$amount": 50
+    }
+   },
+   "expect": {
+    "$amount": 50
+   }
+  },
+  {
+   "name": "asset_jetton",
+   "src": "asset(a)",
+   "expr": {
+    "k": "call",
+    "fn": "asset",
+    "args": [
+     {
+      "k": "name",
+      "id": "a"
+     }
+    ]
+   },
+   "env": {
+    "a": "0:abababababababababababababababababababababababababababababababab"
+   },
+   "expect": {
+    "$asset_jetton": "0:abababababababababababababababababababababababababababababababab"
+   }
+  },
+  {
+   "name": "ton_asset",
+   "src": "ton_asset()",
+   "expr": {
+    "k": "call",
+    "fn": "ton_asset",
+    "args": []
+   },
+   "env": {},
+   "expect": {
+    "$asset_ton": true
+   }
+  },
+  {
+   "name": "b64_bytes",
+   "src": "b64(a)",
+   "expr": {
+    "k": "call",
+    "fn": "b64",
+    "args": [
+     {
+      "k": "name",
+      "id": "a"
+     }
+    ]
+   },
+   "env": {
+    "a": {
+     "$bytes_b64": "AQIDaGVsbG8="
+    }
+   },
+   "expect": "AQIDaGVsbG8="
+  },
+  {
+   "name": "b64_cell",
+   "src": "b64(a)",
+   "expr": {
+    "k": "call",
+    "fn": "b64",
+    "args": [
+     {
+      "k": "name",
+      "id": "a"
+     }
+    ]
+   },
+   "env": {
+    "a": {
+     "$cell_b64": "te6ccgEBAQEABwAACt6tvu8H"
+    }
+   },
+   "expect": "te6ccgEBAQEABwAACt6tvu8H"
+  },
+  {
+   "name": "first_nonempty",
+   "src": "first(xs)",
+   "expr": {
+    "k": "call",
+    "fn": "first",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      10,
+      20
+     ]
+    }
+   },
+   "expect": 10
+  },
+  {
+   "name": "first_empty",
+   "src": "first(xs)",
+   "expr": {
+    "k": "call",
+    "fn": "first",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": []
+    }
+   },
+   "expect": null
+  },
+  {
+   "name": "first_null",
+   "src": "first(xs)",
+   "expr": {
+    "k": "call",
+    "fn": "first",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     }
+    ]
+   },
+   "env": {
+    "xs": null
+   },
+   "expect": null
+  },
+  {
+   "name": "last_nonempty",
+   "src": "last(xs)",
+   "expr": {
+    "k": "call",
+    "fn": "last",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      10,
+      20
+     ]
+    }
+   },
+   "expect": 20
+  },
+  {
+   "name": "len_list",
+   "src": "len(xs)",
+   "expr": {
+    "k": "call",
+    "fn": "len",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      1,
+      2,
+      3
+     ]
+    }
+   },
+   "expect": 3
+  },
+  {
+   "name": "len_empty",
+   "src": "len(xs)",
+   "expr": {
+    "k": "call",
+    "fn": "len",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": []
+    }
+   },
+   "expect": 0
+  },
+  {
+   "name": "len_null",
+   "src": "len(xs)",
+   "expr": {
+    "k": "call",
+    "fn": "len",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     }
+    ]
+   },
+   "env": {
+    "xs": null
+   },
+   "expect": null
+  },
+  {
+   "name": "len_nonlist_fault",
+   "src": "len(xs)",
+   "expr": {
+    "k": "call",
+    "fn": "len",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     }
+    ]
+   },
+   "env": {
+    "xs": 5
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "sum_ints",
+   "src": "sum(xs)",
+   "expr": {
+    "k": "call",
+    "fn": "sum",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      1,
+      2,
+      3
+     ]
+    }
+   },
+   "expect": 6
+  },
+  {
+   "name": "sum_amounts",
+   "src": "sum(xs)",
+   "expr": {
+    "k": "call",
+    "fn": "sum",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      {
+       "$amount": 10
+      },
+      {
+       "$amount": 5
+      }
+     ]
+    }
+   },
+   "expect": 15
+  },
+  {
+   "name": "sum_empty",
+   "src": "sum(xs)",
+   "expr": {
+    "k": "call",
+    "fn": "sum",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": []
+    }
+   },
+   "expect": 0
+  },
+  {
+   "name": "sum_mixed_fault",
+   "src": "sum(xs)",
+   "expr": {
+    "k": "call",
+    "fn": "sum",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      1,
+      "x"
+     ]
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "zip_equal",
+   "src": "zip(xs, ys)",
+   "expr": {
+    "k": "call",
+    "fn": "zip",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     },
+     {
+      "k": "name",
+      "id": "ys"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      1,
+      2
+     ]
+    },
+    "ys": {
+     "$list": [
+      3,
+      4
+     ]
+    }
+   },
+   "expect": {
+    "$list": [
+     {
+      "$list": [
+       1,
+       3
+      ]
+     },
+     {
+      "$list": [
+       2,
+       4
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "zip_mismatch",
+   "src": "zip(xs, ys)",
+   "expr": {
+    "k": "call",
+    "fn": "zip",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     },
+     {
+      "k": "name",
+      "id": "ys"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      1,
+      2,
+      3
+     ]
+    },
+    "ys": {
+     "$list": [
+      9
+     ]
+    }
+   },
+   "expect": {
+    "$list": [
+     {
+      "$list": [
+       1,
+       9
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "map_field",
+   "src": "map(xs, \"a\")",
+   "expr": {
+    "k": "call",
+    "fn": "map",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     },
+     {
+      "k": "str",
+      "v": "a"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      {
+       "a": 1
+      },
+      {
+       "a": 2
+      }
+     ]
+    }
+   },
+   "expect": {
+    "$list": [
+     1,
+     2
+    ]
+   }
+  },
+  {
+   "name": "map_missing_fault",
+   "src": "map(xs, \"z\")",
+   "expr": {
+    "k": "call",
+    "fn": "map",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     },
+     {
+      "k": "str",
+      "v": "z"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      {
+       "a": 1
+      }
+     ]
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "map_empty",
+   "src": "map(xs, \"a\")",
+   "expr": {
+    "k": "call",
+    "fn": "map",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     },
+     {
+      "k": "str",
+      "v": "a"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": []
+    }
+   },
+   "expect": {
+    "$list": []
+   }
+  },
+  {
+   "name": "sum_of_map",
+   "src": "sum(map(xs, \"a\"))",
+   "expr": {
+    "k": "call",
+    "fn": "sum",
+    "args": [
+     {
+      "k": "call",
+      "fn": "map",
+      "args": [
+       {
+        "k": "name",
+        "id": "xs"
+       },
+       {
+        "k": "str",
+        "v": "a"
+       }
+      ]
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      {
+       "a": 3
+      },
+      {
+       "a": 4
+      }
+     ]
+    }
+   },
+   "expect": 7
+  },
+  {
+   "name": "not_true",
+   "src": "not a",
+   "expr": {
+    "k": "unary",
+    "op": "not",
+    "x": {
+     "k": "name",
+     "id": "a"
+    }
+   },
+   "env": {
+    "a": true
+   },
+   "expect": false
+  },
+  {
+   "name": "not_false",
+   "src": "not a",
+   "expr": {
+    "k": "unary",
+    "op": "not",
+    "x": {
+     "k": "name",
+     "id": "a"
+    }
+   },
+   "env": {
+    "a": false
+   },
+   "expect": true
+  },
+  {
+   "name": "not_nonbool_fault",
+   "src": "not a",
+   "expr": {
+    "k": "unary",
+    "op": "not",
+    "x": {
+     "k": "name",
+     "id": "a"
+    }
+   },
+   "env": {
+    "a": 5
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "neg_int",
+   "src": "-a",
+   "expr": {
+    "k": "unary",
+    "op": "-",
+    "x": {
+     "k": "name",
+     "id": "a"
+    }
+   },
+   "env": {
+    "a": 5
+   },
+   "expect": -5
+  },
+  {
+   "name": "neg_null",
+   "src": "-a",
+   "expr": {
+    "k": "unary",
+    "op": "-",
+    "x": {
+     "k": "name",
+     "id": "a"
+    }
+   },
+   "env": {
+    "a": null
+   },
+   "expect": null
+  },
+  {
+   "name": "eq_true",
+   "src": "a == b",
+   "expr": {
+    "k": "bin",
+    "op": "==",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": 3,
+    "b": 3
+   },
+   "expect": true
+  },
+  {
+   "name": "eq_false",
+   "src": "a == b",
+   "expr": {
+    "k": "bin",
+    "op": "==",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": 3,
+    "b": 4
+   },
+   "expect": false
+  },
+  {
+   "name": "eq_null_null",
+   "src": "a == b",
+   "expr": {
+    "k": "bin",
+    "op": "==",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": null,
+    "b": null
+   },
+   "expect": true
+  },
+  {
+   "name": "eq_null_val",
+   "src": "a == b",
+   "expr": {
+    "k": "bin",
+    "op": "==",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": null,
+    "b": 3
+   },
+   "expect": false
+  },
+  {
+   "name": "ne_true",
+   "src": "a != b",
+   "expr": {
+    "k": "bin",
+    "op": "!=",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": 3,
+    "b": 4
+   },
+   "expect": true
+  },
+  {
+   "name": "asset_eq_string_ci",
+   "src": "a == b",
+   "expr": {
+    "k": "bin",
+    "op": "==",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": {
+     "$asset_jetton": "0:abababababababababababababababababababababababababababababababab"
+    },
+    "b": "0:ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB"
+   },
+   "expect": true
+  },
+  {
+   "name": "lt_true",
+   "src": "a < b",
+   "expr": {
+    "k": "bin",
+    "op": "<",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": 3,
+    "b": 4
+   },
+   "expect": true
+  },
+  {
+   "name": "le_eq",
+   "src": "a <= b",
+   "expr": {
+    "k": "bin",
+    "op": "<=",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": 4,
+    "b": 4
+   },
+   "expect": true
+  },
+  {
+   "name": "gt_false",
+   "src": "a > b",
+   "expr": {
+    "k": "bin",
+    "op": ">",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": 3,
+    "b": 4
+   },
+   "expect": false
+  },
+  {
+   "name": "ge_true",
+   "src": "a >= b",
+   "expr": {
+    "k": "bin",
+    "op": ">=",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": 4,
+    "b": 4
+   },
+   "expect": true
+  },
+  {
+   "name": "ord_null_false",
+   "src": "a < b",
+   "expr": {
+    "k": "bin",
+    "op": "<",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": null,
+    "b": 4
+   },
+   "expect": false
+  },
+  {
+   "name": "ord_nonorder_fault",
+   "src": "a < b",
+   "expr": {
+    "k": "bin",
+    "op": "<",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": "x",
+    "b": 3
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "and_true",
+   "src": "a and b",
+   "expr": {
+    "k": "bin",
+    "op": "and",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": true,
+    "b": true
+   },
+   "expect": true
+  },
+  {
+   "name": "and_short_circuit",
+   "src": "a and b",
+   "expr": {
+    "k": "bin",
+    "op": "and",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": false,
+    "b": 5
+   },
+   "expect": false
+  },
+  {
+   "name": "or_true_short_circuit",
+   "src": "a or b",
+   "expr": {
+    "k": "bin",
+    "op": "or",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": true,
+    "b": 5
+   },
+   "expect": true
+  },
+  {
+   "name": "coalesce_left",
+   "src": "a ?? b",
+   "expr": {
+    "k": "bin",
+    "op": "??",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": 7,
+    "b": 9
+   },
+   "expect": 7
+  },
+  {
+   "name": "coalesce_right",
+   "src": "a ?? b",
+   "expr": {
+    "k": "bin",
+    "op": "??",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": null,
+    "b": 9
+   },
+   "expect": 9
+  },
+  {
+   "name": "coalesce_chain",
+   "src": "a ?? b ?? c",
+   "expr": {
+    "k": "bin",
+    "op": "??",
+    "l": {
+     "k": "bin",
+     "op": "??",
+     "l": {
+      "k": "name",
+      "id": "a"
+     },
+     "r": {
+      "k": "name",
+      "id": "b"
+     }
+    },
+    "r": {
+     "k": "name",
+     "id": "c"
+    }
+   },
+   "env": {
+    "a": null,
+    "b": null,
+    "c": 3
+   },
+   "expect": 3
+  },
+  {
+   "name": "add",
+   "src": "a + b",
+   "expr": {
+    "k": "bin",
+    "op": "+",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": 3,
+    "b": 4
+   },
+   "expect": 7
+  },
+  {
+   "name": "sub",
+   "src": "a - b",
+   "expr": {
+    "k": "bin",
+    "op": "-",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": 10,
+    "b": 3
+   },
+   "expect": 7
+  },
+  {
+   "name": "mul",
+   "src": "a * b",
+   "expr": {
+    "k": "bin",
+    "op": "*",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": 6,
+    "b": 7
+   },
+   "expect": 42
+  },
+  {
+   "name": "precedence_mul_over_add",
+   "src": "a + b * c",
+   "expr": {
+    "k": "bin",
+    "op": "+",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "bin",
+     "op": "*",
+     "l": {
+      "k": "name",
+      "id": "b"
+     },
+     "r": {
+      "k": "name",
+      "id": "c"
+     }
+    }
+   },
+   "env": {
+    "a": 2,
+    "b": 3,
+    "c": 4
+   },
+   "expect": 14
+  },
+  {
+   "name": "precedence_arith_over_cmp",
+   "src": "a + b == c",
+   "expr": {
+    "k": "bin",
+    "op": "==",
+    "l": {
+     "k": "bin",
+     "op": "+",
+     "l": {
+      "k": "name",
+      "id": "a"
+     },
+     "r": {
+      "k": "name",
+      "id": "b"
+     }
+    },
+    "r": {
+     "k": "name",
+     "id": "c"
+    }
+   },
+   "env": {
+    "a": 2,
+    "b": 3,
+    "c": 5
+   },
+   "expect": true
+  },
+  {
+   "name": "sub_left_assoc",
+   "src": "a - b - c",
+   "expr": {
+    "k": "bin",
+    "op": "-",
+    "l": {
+     "k": "bin",
+     "op": "-",
+     "l": {
+      "k": "name",
+      "id": "a"
+     },
+     "r": {
+      "k": "name",
+      "id": "b"
+     }
+    },
+    "r": {
+     "k": "name",
+     "id": "c"
+    }
+   },
+   "env": {
+    "a": 10,
+    "b": 3,
+    "c": 2
+   },
+   "expect": 5
+  },
+  {
+   "name": "mul_then_sub",
+   "src": "a * b - c",
+   "expr": {
+    "k": "bin",
+    "op": "-",
+    "l": {
+     "k": "bin",
+     "op": "*",
+     "l": {
+      "k": "name",
+      "id": "a"
+     },
+     "r": {
+      "k": "name",
+      "id": "b"
+     }
+    },
+    "r": {
+     "k": "name",
+     "id": "c"
+    }
+   },
+   "env": {
+    "a": 2,
+    "b": 3,
+    "c": 1
+   },
+   "expect": 5
+  },
+  {
+   "name": "neg_operand_in_sub",
+   "src": "a - -b",
+   "expr": {
+    "k": "bin",
+    "op": "-",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "unary",
+     "op": "-",
+     "x": {
+      "k": "name",
+      "id": "b"
+     }
+    }
+   },
+   "env": {
+    "a": 5,
+    "b": 3
+   },
+   "expect": 8
+  },
+  {
+   "name": "arith_null_prop",
+   "src": "a + b",
+   "expr": {
+    "k": "bin",
+    "op": "+",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": null,
+    "b": 3
+   },
+   "expect": null
+  },
+  {
+   "name": "arith_amount_coerce",
+   "src": "a - b",
+   "expr": {
+    "k": "bin",
+    "op": "-",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": {
+     "$amount": 10
+    },
+    "b": {
+     "$amount": 3
+    }
+   },
+   "expect": 7
+  },
+  {
+   "name": "arith_amount_mixed",
+   "src": "a + b",
+   "expr": {
+    "k": "bin",
+    "op": "+",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": {
+     "$amount": 10
+    },
+    "b": 5
+   },
+   "expect": 15
+  },
+  {
+   "name": "arith_noninteger_fault",
+   "src": "a + b",
+   "expr": {
+    "k": "bin",
+    "op": "+",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": "x",
+    "b": 3
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "arith_bool_fault",
+   "src": "a + b",
+   "expr": {
+    "k": "bin",
+    "op": "+",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": true,
+    "b": 3
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "ternary_then",
+   "src": "x if c else y",
+   "expr": {
+    "k": "ternary",
+    "cond": {
+     "k": "name",
+     "id": "c"
+    },
+    "then": {
+     "k": "name",
+     "id": "x"
+    },
+    "else": {
+     "k": "name",
+     "id": "y"
+    }
+   },
+   "env": {
+    "c": true,
+    "x": 1,
+    "y": 2
+   },
+   "expect": 1
+  },
+  {
+   "name": "ternary_else",
+   "src": "x if c else y",
+   "expr": {
+    "k": "ternary",
+    "cond": {
+     "k": "name",
+     "id": "c"
+    },
+    "then": {
+     "k": "name",
+     "id": "x"
+    },
+    "else": {
+     "k": "name",
+     "id": "y"
+    }
+   },
+   "env": {
+    "c": false,
+    "x": 1,
+    "y": 2
+   },
+   "expect": 2
+  },
+  {
+   "name": "ternary_cond_nonbool_fault",
+   "src": "x if c else y",
+   "expr": {
+    "k": "ternary",
+    "cond": {
+     "k": "name",
+     "id": "c"
+    },
+    "then": {
+     "k": "name",
+     "id": "x"
+    },
+    "else": {
+     "k": "name",
+     "id": "y"
+    }
+   },
+   "env": {
+    "c": 5,
+    "x": 1,
+    "y": 2
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "list_empty",
+   "src": "[]",
+   "expr": {
+    "k": "list",
+    "items": []
+   },
+   "env": {},
+   "expect": {
+    "$list": []
+   }
+  },
+  {
+   "name": "list_vals",
+   "src": "[1, 2, 3]",
+   "expr": {
+    "k": "list",
+    "items": [
+     {
+      "k": "int",
+      "v": 1
+     },
+     {
+      "k": "int",
+      "v": 2
+     },
+     {
+      "k": "int",
+      "v": 3
+     }
+    ]
+   },
+   "env": {},
+   "expect": {
+    "$list": [
+     1,
+     2,
+     3
+    ]
+   }
+  },
+  {
+   "name": "list_env",
+   "src": "[a, b]",
+   "expr": {
+    "k": "list",
+    "items": [
+     {
+      "k": "name",
+      "id": "a"
+     },
+     {
+      "k": "name",
+      "id": "b"
+     }
+    ]
+   },
+   "env": {
+    "a": 7,
+    "b": 8
+   },
+   "expect": {
+    "$list": [
+     7,
+     8
+    ]
+   }
+  },
+  {
+   "name": "record_empty",
+   "src": "{}",
+   "expr": {
+    "k": "record",
+    "fields": []
+   },
+   "env": {},
+   "expect": {}
+  },
+  {
+   "name": "record_vals",
+   "src": "{x: 1, y: 2}",
+   "expr": {
+    "k": "record",
+    "fields": [
+     {
+      "name": "x",
+      "expr": {
+       "k": "int",
+       "v": 1
+      }
+     },
+     {
+      "name": "y",
+      "expr": {
+       "k": "int",
+       "v": 2
+      }
+     }
+    ]
+   },
+   "env": {},
+   "expect": {
+    "x": 1,
+    "y": 2
+   }
+  },
+  {
+   "name": "record_nested",
+   "src": "{legs: [1, 2], meta: {n: 3}}",
+   "expr": {
+    "k": "record",
+    "fields": [
+     {
+      "name": "legs",
+      "expr": {
+       "k": "list",
+       "items": [
+        {
+         "k": "int",
+         "v": 1
+        },
+        {
+         "k": "int",
+         "v": 2
+        }
+       ]
+      }
+     },
+     {
+      "name": "meta",
+      "expr": {
+       "k": "record",
+       "fields": [
+        {
+         "name": "n",
+         "expr": {
+          "k": "int",
+          "v": 3
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "env": {},
+   "expect": {
+    "legs": {
+     "$list": [
+      1,
+      2
+     ]
+    },
+    "meta": {
+     "n": 3
+    }
+   }
+  },
+  {
+   "name": "lookup_field",
+   "src": "(lookup jetton_wallet(a)).owner",
+   "expr": {
+    "k": "attr",
+    "of": {
+     "k": "lookup",
+     "name": "jetton_wallet",
+     "args": [
+      {
+       "k": "name",
+       "id": "a"
+      }
+     ]
+    },
+    "name": "owner"
+   },
+   "env": {
+    "a": "0:abababababababababababababababababababababababababababababababab"
+   },
+   "expect": "0:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+   "lookups": {
+    "jetton_wallet": {
+     "$obj": {
+      "owner": "0:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "jetton": "0:abababababababababababababababababababababababababababababababab"
+     }
+    }
+   }
+  },
+  {
+   "name": "lookup_null_arg",
+   "src": "lookup jetton_wallet(a)",
+   "expr": {
+    "k": "lookup",
+    "name": "jetton_wallet",
+    "args": [
+     {
+      "k": "name",
+      "id": "a"
+     }
+    ]
+   },
+   "env": {
+    "a": null
+   },
+   "expect": null,
+   "lookups": {
+    "jetton_wallet": {
+     "$obj": {
+      "owner": "0:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+     }
+    }
+   }
+  }
+ ]
+}

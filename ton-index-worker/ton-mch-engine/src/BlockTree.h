@@ -1,0 +1,198 @@
+// EventNode tree + Block substrate for the MCH engine.
+//
+// Ports the Python indexer's structural machinery (blocks/utils/tree_utils.py
+// to_tree, blocks/core.py Block, event_processing.init_block) following the
+// already-validated Go port (mch-go-poc/tree/tree.go, A/B-verified against the
+// Python engine on real fixtures).
+//
+// Deliberate deviations from the Python substrate (all deterministic):
+//  - next_blocks is kept in canonical order (min_lt asc, stable) at all times:
+//    after tree construction and after every merge. The Python IR engine
+//    instead sorts candidates at every walk site (T21); maintaining the
+//    invariant here lets the C++ walker read lists raw with identical
+//    observable semantics.
+//  - find_frontier dedups its output; Python's find_next can yield the same
+//    block twice on diamond shapes and keeps duplicates in next_blocks.
+//    Suspect #1 if a matcher A/B diff ever shows up on diamond traces.
+//  - compact_connections preserves first-seen order (Python uses set()).
+//  - No `transient` flag: only legacy LabelBlock ever set it; the IR engine
+//    produces no transient blocks, so the merge filter would filter nothing.
+#pragma once
+
+#include "TraceLoader.h"
+#include "Value.h"
+
+#include "td/utils/Status.h"
+
+#include <cstdint>
+#include <deque>
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace mch {
+
+// --- EventNode -------------------------------------------------------------
+
+// A node in the message tree. For a normal transaction the node's msg is the
+// incoming message; for a notification/log leaf it is the destination-less
+// outgoing message.
+struct EventNode {
+  const Message *msg{nullptr};
+  const Transaction *tx{nullptr};
+  bool is_tick_tock{false};
+  EventNode *parent{nullptr};
+  std::vector<EventNode *> children;
+
+  std::optional<std::uint32_t> opcode() const {
+    return msg != nullptr ? msg->opcode32() : std::nullopt;
+  }
+
+  // Mirrors EventNode.get_lt.
+  std::int64_t lt() const {
+    if (is_tick_tock && tx != nullptr) {
+      return tx->lt;
+    }
+    if (msg != nullptr && msg->created_lt) {
+      return *msg->created_lt;
+    }
+    if (msg != nullptr) {
+      return msg->tx_lt;
+    }
+    return 0;
+  }
+
+  std::string tx_hash() const {
+    if (tx != nullptr) {
+      return tx->hash;
+    }
+    if (msg != nullptr) {
+      return msg->tx_hash;
+    }
+    return {};
+  }
+};
+
+// Owns every EventNode; nodes reference each other by raw pointer.
+struct EventTree {
+  std::vector<std::unique_ptr<EventNode>> nodes;
+  EventNode *root{nullptr};
+  // Nodes not reachable from root (Python asserts a single root; we tolerate
+  // and count, so parity harnesses can flag silent loss).
+  std::size_t unlinked{0};
+};
+
+// Ports tree_utils.to_tree: builds the EventNode tree from the flat
+// transaction list using msg_hash linkage. The Trace must outlive the tree.
+EventTree to_tree(const Trace &trace);
+
+// --- Block -----------------------------------------------------------------
+
+struct Block {
+  std::string btype;
+  std::optional<std::uint32_t> opcode;  // set for call_contract blocks
+
+  // Python Block.data. Leaf blocks carry the basic_blocks.py constructor dicts
+  // (subset: see init_block); a produced (composed) block will carry its build
+  // output. Null == Python data=None. Read by where_exprs via rt_dotfield.
+  Value data;
+
+  std::vector<const EventNode *> event_nodes;
+  std::vector<Block *> next_blocks;  // canonical order: (min_lt asc, stable)
+  std::vector<Block *> children_blocks;
+  Block *previous_block{nullptr};
+  Block *parent{nullptr};
+
+  bool failed{false};
+  bool broken{false};
+
+  std::int64_t min_lt{0};
+  std::int64_t min_lt_without_initiating_tx{0};
+
+  // Ports Block.connect.
+  void connect(Block *other) {
+    next_blocks.push_back(other);
+    other->previous_block = this;
+  }
+
+  Block *topmost_parent() {
+    Block *b = this;
+    while (b->parent != nullptr) {
+      b = b->parent;
+    }
+    return b;
+  }
+
+  // Re-establishes the canonical next_blocks order (min_lt asc, stable).
+  void sort_next_blocks();
+
+  // Ports Block.compact_connections (deterministic: preserves first-seen
+  // order instead of Python's set()).
+  void compact_connections();
+
+  // Ports Block.merge_blocks. Returns false when the merged set has no
+  // earliest common block (Python raises -> clean build rejection). Must be
+  // called only AFTER a build accepts: merges are never rolled back.
+  bool merge_blocks(const std::vector<Block *> &blocks);
+
+  // Ports Block.bfs_iter(include_self=true). The visitor may mutate the tree
+  // (merges): each node's next_blocks are read after the visitor runs on it.
+  template <typename Visitor>
+  void bfs(Visitor &&visit) {
+    std::deque<Block *> queue{this};
+    while (!queue.empty()) {
+      Block *cur = queue.front();
+      queue.pop_front();
+      visit(cur);
+      for (Block *n : cur->next_blocks) {
+        queue.push_back(n);
+      }
+    }
+  }
+
+  std::string anchor_tx_hash() const {
+    return event_nodes.empty() ? std::string{} : event_nodes.front()->tx_hash();
+  }
+
+ private:
+  int direction() const;
+  std::vector<Block *> find_frontier(const std::vector<Block *> &in_set) const;
+  void calculate_min_max_lt();
+
+  friend Block *ensure_earliest_common_block(const std::vector<Block *> &blocks);
+};
+
+// Owns every Block; blocks reference each other by raw pointer.
+struct BlockArena {
+  std::vector<std::unique_ptr<Block>> blocks;
+
+  Block *make(std::string btype) {
+    blocks.push_back(std::make_unique<Block>());
+    blocks.back()->btype = std::move(btype);
+    return blocks.back().get();
+  }
+};
+
+// Ports event_processing.init_block: classify each event node into a leaf
+// block (tick_tock / ton_transfer / call_contract) and connect the subtree.
+// Iterative (trace depth is unbounded); leaves next_blocks canonical.
+Block *init_block(BlockArena &arena, const EventNode *node);
+
+// --- TraceContext ------------------------------------------------------------
+
+// Bundles the chained-lifetime objects (Trace -> EventTree -> BlockArena) so
+// they cannot be torn apart. Everything in the arena points into the tree,
+// which points into the trace.
+struct TraceContext {
+  Trace trace;
+  EventTree tree;
+  BlockArena arena;
+  Block *root{nullptr};
+};
+
+// Loads an .lz4 trace fixture and builds the full block substrate.
+// tree.root == nullptr (empty trace) is an error.
+td::Result<TraceContext> load_trace_context(const std::string &path);
+
+}  // namespace mch

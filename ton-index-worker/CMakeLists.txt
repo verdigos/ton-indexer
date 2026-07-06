@@ -5,6 +5,13 @@ project(ton-index-cpp)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if (WIN32)
+    # Prevent <windows.h> (pulled in transitively via COM/ole2 headers) from
+    # defining the "interface" macro as "struct", which collides with
+    # variables/identifiers named "interface" throughout the codebase.
+    add_compile_definitions(WIN32_LEAN_AND_MEAN)
+endif()
+
 option(PGTON "Enable adding the pgton subdirectory" OFF)
 option(TON_USE_JEMALLOC "Use \"ON\" to enable JeMalloc." OFF)
 
@@ -28,7 +35,11 @@ set(REDIS_PLUS_PLUS_BUILD_TEST OFF CACHE BOOL "disable test" FORCE)
 
 # workaround to link static libhiredis
 set(TON_INDEXER_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
-set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+if (MSVC)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES .lib)
+else()
+    set(CMAKE_FIND_LIBRARY_SUFFIXES .a)
+endif()
 find_library(TON_INDEXER_HIREDIS_STATIC_LIB hiredis REQUIRED)
 set(CMAKE_FIND_LIBRARY_SUFFIXES ${TON_INDEXER_CMAKE_FIND_LIBRARY_SUFFIXES})
 unset(TON_INDEXER_CMAKE_FIND_LIBRARY_SUFFIXES)
@@ -71,6 +82,7 @@ add_subdirectory(ton-smc-debug)
 add_subdirectory(ton-trace-emulator)
 add_subdirectory(ton-trace-task-emulator)
 add_subdirectory(celldb-migrate)
+add_subdirectory(ton-mch-engine)
 
 if (PGTON)
     message("Building pgton")

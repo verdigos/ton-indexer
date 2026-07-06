@@ -1,0 +1,400 @@
+#include "Walker.h"
+
+#include "ExprEval.h"
+
+#include <algorithm>
+#include <map>
+#include <tuple>
+#include <unordered_set>
+
+namespace mch {
+
+namespace {
+
+constexpr std::uint32_t kExcessOpcode = 0xD53276DB;
+constexpr std::uint32_t kBounceOpcode = 0xFFFFFFFF;
+constexpr long kExitIdx = -1;  // frame idx marker for the exit attempt
+
+struct Frame {
+  int nid{-1};   // -1 == no frame
+  long idx{0};   // iter_index (>=0) or kExitIdx
+};
+
+struct FrameEntry {
+  bool is_step;
+  int nid;
+  long iter;
+  bool consumed_any;
+};
+
+struct Mark {
+  std::size_t nb, nc, nf;
+};
+
+std::vector<Block *> canonical(const std::vector<Block *> &v) {
+  std::vector<Block *> out = v;
+  std::stable_sort(out.begin(), out.end(),
+                   [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
+  return out;
+}
+
+// Per-attempt walk state (spec §3.2). Owns the match recursion; the matcher is
+// immutable.
+class MatchState {
+ public:
+  MatchState(const CompiledMatcher &m, const WhereTable *gen) : m_(m), gen_(gen) {
+  }
+
+  bool match_node(int nid, Block *block, bool absorb = true) {
+    const CompiledNode &node = m_.nodes[nid];
+    if (node.kind == NodeKind::Or) {
+      return match_or(node, block);
+    }
+    if (node.kind == NodeKind::Recursive) {
+      return match_recursive(nid, node, block);
+    }
+    if (!test_head(nid, block)) {
+      return false;
+    }
+    consume(block);
+    if (node.slot >= 0) {
+      bind(node.slot, block);
+    }
+    if (!match_child_edge(node, block)) {
+      return false;
+    }
+    if (!match_children_set(node, block)) {
+      return false;
+    }
+    if (!match_parent_edge(node, block)) {
+      return false;
+    }
+    if (absorb) {
+      absorb_aux(block);
+    }
+    return true;
+  }
+
+  MatchResult finish() {
+    MatchResult r;
+    r.consumed = consumed_;
+    r.captures = assemble_captures();
+    return r;
+  }
+
+ private:
+  // ---- where_expr evaluation (engine.py eval_where_expr rule) ----
+  // Never raises/aborts: a fault or a non-bool result is simply False.
+  bool eval_where(const CompiledNode &node, Block *block) const {
+    WhereEnv w{block, nullptr, 0};
+    EvalResult r;
+    if (gen_ != nullptr) {
+      auto it = gen_->find(node.global_id);
+      if (it == gen_->end()) {
+        return false;  // guarded against at load (run_match validates coverage)
+      }
+      r = it->second(w);
+    } else {
+      if (!node.where_expr) {
+        return false;
+      }
+      static const Env kEmptyEnv;
+      static const Lookups kEmptyLookups;
+      ExprEval ev(kEmptyEnv, kEmptyLookups, &w);
+      r = ev.evaluate(node.where_expr->expr);
+    }
+    return !r.faulted && r.value.t == VType::Bool && r.value.boolean;
+  }
+
+  // ---- head test (kind + where + where_expr, no edges) ----
+  bool test_head(int nid, Block *block) const {
+    const CompiledNode &node = m_.nodes[nid];
+    bool ok = false;
+    switch (node.kind) {
+      case NodeKind::Contract:
+        ok = block->btype == "call_contract" && block->opcode && *block->opcode == node.opcode;
+        break;
+      case NodeKind::BlockType:
+        ok = block->btype == node.btype;
+        break;
+      case NodeKind::Any:
+        ok = true;
+        break;
+      case NodeKind::Or:
+        if (node.exclusive) {
+          int c = 0;
+          for (int b : node.branches) {
+            if (test_head(b, block)) c++;
+          }
+          ok = c == 1;
+        } else {
+          for (int b : node.branches) {
+            if (test_head(b, block)) {
+              ok = true;
+              break;
+            }
+          }
+        }
+        break;
+      case NodeKind::Recursive:
+        ok = test_head(node.step, block);
+        break;
+      case NodeKind::Pred:
+        ok = false;  // no predicate registry in this stage (matcher is unrunnable)
+        break;
+    }
+    if (!ok) {
+      return false;
+    }
+    // Named `where` predicates stay unwired (a runnable matcher carries none);
+    // inline where_exprs compose onto the head test (engine.py §4.1).
+    if (!node.where_name.empty()) {
+      return false;
+    }
+    if (node.has_where_expr && !eval_where(node, block)) {
+      return false;
+    }
+    return true;
+  }
+
+  bool match_child_edge(const CompiledNode &node, Block *block) {
+    if (node.child < 0) {
+      return true;
+    }
+    bool matched_any = false;
+    for (Block *cand : canonical(block->next_blocks)) {
+      Mark mk = mark();
+      if (match_node(node.child, cand)) {
+        matched_any = true;
+      } else {
+        rollback(mk);
+      }
+    }
+    return matched_any || m_.nodes[node.child].optional;
+  }
+
+  bool match_children_set(const CompiledNode &node, Block *block) {
+    if (node.children.empty()) {
+      return true;
+    }
+    std::vector<Block *> working = canonical(block->next_blocks);
+    for (int item : node.children) {
+      bool matched = false;
+      for (std::size_t i = 0; i < working.size(); i++) {
+        Mark mk = mark();
+        if (match_node(item, working[i])) {
+          working.erase(working.begin() + i);
+          matched = true;
+          break;
+        }
+        rollback(mk);
+      }
+      if (!matched && !m_.nodes[item].optional) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool match_parent_edge(const CompiledNode &node, Block *block) {
+    if (node.parent < 0) {
+      return true;
+    }
+    Block *prev = block->previous_block;
+    if (prev != nullptr) {
+      Mark mk = mark();
+      if (match_node(node.parent, prev)) {
+        return true;
+      }
+      rollback(mk);
+    }
+    return m_.nodes[node.parent].optional;
+  }
+
+  bool match_or(const CompiledNode &node, Block *block) {
+    for (int bid : node.branches) {
+      Mark mk = mark();
+      if (match_node(bid, block)) {
+        return true;
+      }
+      rollback(mk);
+    }
+    return false;
+  }
+
+  bool match_recursive(int nid, const CompiledNode &node, Block *entry) {
+    // Entry gate: the recursive node's own where clauses run against the entry
+    // block before the strategy dispatch (engine.py _match_recursive).
+    if (!node.where_name.empty()) {
+      return false;  // named predicates stay unwired
+    }
+    if (node.has_where_expr && !eval_where(node, entry)) {
+      return false;
+    }
+    if (node.strategy == RecStrategy::Cyclic) {
+      return match_node(node.step, entry);
+    }
+    if (!test_head(node.step, entry)) {
+      return false;
+    }
+    Frame outer = frame_;
+    std::vector<Block *> frontier{entry};
+    long iter_index = 0;
+    while (true) {
+      bool stepped = false;
+      for (Block *cand : frontier) {
+        if (node.exit >= 0) {
+          Mark mk = mark();
+          frame_ = Frame{nid, kExitIdx};
+          if (match_node(node.exit, cand)) {
+            frames_.push_back(FrameEntry{false, nid, 0, false});
+            frame_ = outer;
+            return true;
+          }
+          rollback(mk);
+        }
+        Mark mk = mark();
+        frame_ = Frame{nid, iter_index};
+        if (match_node(node.step, cand)) {
+          stepped = true;
+          std::vector<Block *> step_consumed(consumed_.begin() + mk.nc, consumed_.end());
+          frames_.push_back(FrameEntry{true, nid, iter_index, !step_consumed.empty()});
+          std::vector<Block *> nf;
+          for (Block *b : step_consumed) {
+            for (Block *x : b->next_blocks) {
+              nf.push_back(x);
+            }
+          }
+          frontier = canonical(nf);
+          break;
+        }
+        rollback(mk);
+      }
+      if (!stepped) {
+        frame_ = outer;
+        return iter_index > 0;
+      }
+      iter_index++;
+    }
+  }
+
+  void absorb_aux(Block *block) {
+    for (Block *nb : canonical(block->next_blocks)) {
+      if (nb->btype == "call_contract" && nb->opcode &&
+          (*nb->opcode == kExcessOpcode || *nb->opcode == kBounceOpcode)) {
+        consume(nb);
+      }
+    }
+  }
+
+  // ---- context primitives ----
+  Mark mark() const { return Mark{bindings_.size(), consumed_.size(), frames_.size()}; }
+
+  void rollback(const Mark &mk) {
+    bindings_.resize(mk.nb);
+    for (std::size_t i = mk.nc; i < consumed_.size(); i++) {
+      visited_.erase(consumed_[i]);
+    }
+    consumed_.resize(mk.nc);
+    frames_.resize(mk.nf);
+  }
+
+  void consume(Block *b) {
+    if (visited_.insert(b).second) {
+      consumed_.push_back(b);
+    }
+  }
+
+  void bind(int slot, Block *b) { bindings_.emplace_back(slot, frame_, b); }
+
+  std::vector<Capture> assemble_captures() const {
+    std::map<int, Block *> first_any;
+    std::map<std::tuple<int, int, long>, Block *> first_framed;
+    for (const auto &t : bindings_) {
+      int slot = std::get<0>(t);
+      const Frame &f = std::get<1>(t);
+      Block *b = std::get<2>(t);
+      first_any.emplace(slot, b);
+      first_framed.emplace(std::make_tuple(slot, f.nid, f.idx), b);
+    }
+
+    std::vector<Capture> out;
+    for (int slot = 0; slot < static_cast<int>(m_.slot_names.size()); slot++) {
+      Capture c;
+      c.name = m_.slot_names[slot];
+      if (m_.cards[slot] != "many") {
+        c.is_list = false;
+        auto it = first_any.find(slot);
+        c.vals.push_back(it != first_any.end() ? it->second : nullptr);
+        out.push_back(std::move(c));
+        continue;
+      }
+      c.is_list = true;
+      if (m_.owned_slots.count(slot) == 0) {
+        for (const auto &t : bindings_) {
+          if (std::get<0>(t) == slot) {
+            c.vals.push_back(std::get<2>(t));
+          }
+        }
+        out.push_back(std::move(c));
+        continue;
+      }
+      for (const FrameEntry &e : frames_) {
+        if (e.is_step) {
+          auto ss = m_.step_slots.find(e.nid);
+          if (e.consumed_any && ss != m_.step_slots.end() && ss->second.count(slot)) {
+            auto it = first_framed.find(std::make_tuple(slot, e.nid, e.iter));
+            c.vals.push_back(it != first_framed.end() ? it->second : nullptr);
+          }
+        } else {
+          auto es = m_.exit_slots.find(e.nid);
+          if (es != m_.exit_slots.end() && es->second.count(slot)) {
+            auto it = first_framed.find(std::make_tuple(slot, e.nid, kExitIdx));
+            c.vals.push_back(it != first_framed.end() ? it->second : nullptr);
+          }
+        }
+      }
+      out.push_back(std::move(c));
+    }
+    return out;
+  }
+
+  const CompiledMatcher &m_;
+  const WhereTable *gen_{nullptr};
+  std::vector<std::tuple<int, Frame, Block *>> bindings_;
+  std::vector<Block *> consumed_;
+  std::unordered_set<Block *> visited_;
+  std::vector<FrameEntry> frames_;
+  Frame frame_;
+};
+
+}  // namespace
+
+bool matcher_test_self(const CompiledMatcher &m, const Block *b) {
+  switch (m.anchor_kind) {
+    case AnchorKind::OpcodeSet:
+      return b->btype == "call_contract" && b->opcode && m.anchor_opcodes.count(*b->opcode) > 0;
+    case AnchorKind::BType:
+      return m.anchor_btypes.count(b->btype) > 0;
+    case AnchorKind::Pred:
+    case AnchorKind::Mixed:
+      return false;  // predicate/mixed anchors are unrunnable in this stage
+  }
+  return false;
+}
+
+std::optional<MatchResult> matcher_match(const CompiledMatcher &m, Block *anchor,
+                                         const WhereTable *gen) {
+  if (!matcher_test_self(m, anchor)) {
+    return std::nullopt;
+  }
+  MatchState st(m, gen);
+  // Root skips nested aux absorption (root-level excess/bounce are a build-
+  // result concern, appended after build, not part of the match consumed set).
+  if (!st.match_node(0, anchor, /*absorb=*/false)) {
+    return std::nullopt;
+  }
+  return st.finish();
+}
+
+}  // namespace mch

@@ -1,0 +1,6674 @@
+{
+  "mch_ir_version": "0.1-poc",
+  "frontend": {
+    "generator": "mch-python",
+    "source_files": [
+      "coffee_liquidity.mch",
+      "coffee_swap.mch",
+      "dedust_deposit.mch",
+      "dedust_swap.mch",
+      "dedust_withdraw.mch",
+      "dns.mch",
+      "ethena.mch",
+      "evaa.mch",
+      "getgems.mch",
+      "jetton_transfer.mch",
+      "jettons.mch",
+      "jvault.mch",
+      "layerzero.mch",
+      "nominator.mch",
+      "stonfi_v1_swap.mch",
+      "stonfi_v2_provide.mch",
+      "stonfi_v2_swap.mch",
+      "stonfi_v2_withdraw.mch",
+      "telegram_nft.mch",
+      "tgbtc.mch",
+      "tonco_liquidity.mch",
+      "tonco_swap.mch",
+      "tonstakers.mch",
+      "vesting.mch"
+    ]
+  },
+  "matchers": [
+    {
+      "name": "coffee_create_vault",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          3237998086
+        ]
+      },
+      "root": 0,
+      "produces": [
+        "coffee_create_vault"
+      ],
+      "captures": [
+        {
+          "name": "create",
+          "card": "one"
+        },
+        {
+          "name": "deploy",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "create",
+          "types": [
+            "CoffeeCreateVault"
+          ]
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "create"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "vault",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "deploy"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "create"
+                  },
+                  "name": "body"
+                },
+                "name": "asset"
+              }
+            },
+            {
+              "name": "amount",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "create"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "value"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "coffee_swap",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          3237998112
+        ]
+      },
+      "root": 4,
+      "produces": [
+        "jetton_swap"
+      ],
+      "captures": [
+        {
+          "name": "swap",
+          "card": "one"
+        },
+        {
+          "name": "event",
+          "card": "one"
+        },
+        {
+          "name": "peer",
+          "card": "many"
+        },
+        {
+          "name": "peer_event",
+          "card": "many"
+        },
+        {
+          "name": "payout",
+          "card": "one"
+        },
+        {
+          "name": "out",
+          "card": "one"
+        },
+        {
+          "name": "in_transfer",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_coffee_swap"
+    },
+    {
+      "name": "dedust_deposit_final",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          3043726744
+        ]
+      },
+      "root": 23,
+      "produces": [
+        "dedust_deposit_liquidity"
+      ],
+      "captures": [
+        {
+          "name": "pool",
+          "card": "one"
+        },
+        {
+          "name": "lp_transfer",
+          "card": "one"
+        },
+        {
+          "name": "rejection",
+          "card": "one"
+        },
+        {
+          "name": "deposit_ton",
+          "card": "one"
+        },
+        {
+          "name": "deposit_transfer",
+          "card": "one"
+        },
+        {
+          "name": "deposit_notify",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_dedust_deposit_final"
+    },
+    {
+      "name": "dedust_deposit_partial",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1411649509
+        ]
+      },
+      "root": 52,
+      "produces": [
+        "dedust_deposit_liquidity_partial"
+      ],
+      "captures": [
+        {
+          "name": "topup",
+          "card": "one"
+        },
+        {
+          "name": "deposit_ton",
+          "card": "one"
+        },
+        {
+          "name": "deposit_transfer",
+          "card": "one"
+        },
+        {
+          "name": "deposit_notify",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_dedust_deposit_partial"
+    },
+    {
+      "name": "dedust_swap",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1643009069
+        ]
+      },
+      "root": 61,
+      "produces": [
+        "jetton_swap"
+      ],
+      "captures": [
+        {
+          "name": "ext",
+          "card": "one"
+        },
+        {
+          "name": "payout",
+          "card": "one"
+        },
+        {
+          "name": "out_jetton",
+          "card": "one"
+        },
+        {
+          "name": "out_ton",
+          "card": "one"
+        },
+        {
+          "name": "peer",
+          "card": "many"
+        },
+        {
+          "name": "peer_notification",
+          "card": "many"
+        },
+        {
+          "name": "notification",
+          "card": "opt"
+        },
+        {
+          "name": "in_transfer",
+          "card": "one"
+        },
+        {
+          "name": "swap_request",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "let",
+          "name": "legs",
+          "expr": {
+            "k": "call",
+            "fn": "dedust_swap_legs",
+            "args": [
+              {
+                "k": "name",
+                "id": "consumed"
+              },
+              {
+                "k": "name",
+                "id": "in_transfer"
+              },
+              {
+                "k": "name",
+                "id": "swap_request"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "legs"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "call",
+            "fn": "dedust_swap_failed",
+            "args": [
+              {
+                "k": "name",
+                "id": "consumed"
+              }
+            ]
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "dex",
+              "expr": {
+                "k": "str",
+                "v": "dedust"
+              }
+            },
+            {
+              "name": "sender",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "==",
+                  "l": {
+                    "k": "name",
+                    "id": "in_transfer"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "swap_request"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "source"
+                    }
+                  ]
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "legs"
+                  },
+                  "name": "sender"
+                }
+              }
+            },
+            {
+              "name": "source_asset",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "==",
+                  "l": {
+                    "k": "name",
+                    "id": "in_transfer"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "ton_asset",
+                  "args": []
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "legs"
+                  },
+                  "name": "asset_in"
+                }
+              }
+            },
+            {
+              "name": "destination_asset",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "legs"
+                },
+                "name": "destination_asset"
+              }
+            },
+            {
+              "name": "dex_incoming_transfer",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "legs"
+                },
+                "name": "dex_incoming_transfer"
+              }
+            },
+            {
+              "name": "dex_outgoing_transfer",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "legs"
+                },
+                "name": "dex_outgoing_transfer"
+              }
+            },
+            {
+              "name": "in",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "legs"
+                },
+                "name": "in_leg"
+              }
+            },
+            {
+              "name": "out",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "legs"
+                },
+                "name": "out_leg"
+              }
+            },
+            {
+              "name": "peer_swaps",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "legs"
+                },
+                "name": "peer_swaps"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "dedust_withdraw",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1499400124
+        ]
+      },
+      "root": 81,
+      "produces": [
+        "dex_withdraw_liquidity"
+      ],
+      "captures": [
+        {
+          "name": "burn",
+          "card": "one"
+        },
+        {
+          "name": "notification",
+          "card": "one"
+        },
+        {
+          "name": "req_1",
+          "card": "one"
+        },
+        {
+          "name": "ton_1",
+          "card": "one"
+        },
+        {
+          "name": "jt_1",
+          "card": "one"
+        },
+        {
+          "name": "req_2",
+          "card": "one"
+        },
+        {
+          "name": "ton_2",
+          "card": "one"
+        },
+        {
+          "name": "jt_2",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "burn",
+          "types": [
+            "JettonBurn"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "req_1",
+          "types": [
+            "DedustPayoutFromPool"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "req_2",
+          "types": [
+            "DedustPayoutFromPool"
+          ]
+        },
+        {
+          "s": "let",
+          "name": "lp_wallet",
+          "expr": {
+            "k": "lookup",
+            "name": "jetton_wallet",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "burn"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "lp_wallet"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "dex",
+              "expr": {
+                "k": "str",
+                "v": "dedust"
+              }
+            },
+            {
+              "name": "sender",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "burn"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "sender_wallet",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "burn"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "notification"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "call",
+                "fn": "asset",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "lp_wallet"
+                    },
+                    "name": "jetton"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "lp_tokens_burnt",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "burn"
+                      },
+                      "name": "body"
+                    },
+                    "name": "amount"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "is_refund",
+              "expr": {
+                "k": "bool",
+                "v": false
+              }
+            },
+            {
+              "name": "amount1_out",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "req_1"
+                      },
+                      "name": "body"
+                    },
+                    "name": "amount"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset1_out",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "==",
+                  "l": {
+                    "k": "name",
+                    "id": "jt_1"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "ton_asset",
+                  "args": []
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_1"
+                    },
+                    "name": "data"
+                  },
+                  "name": "asset"
+                }
+              }
+            },
+            {
+              "name": "dex_wallet_1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "==",
+                  "l": {
+                    "k": "name",
+                    "id": "jt_1"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "ton_1"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "source"
+                    }
+                  ]
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_1"
+                    },
+                    "name": "data"
+                  },
+                  "name": "sender"
+                }
+              }
+            },
+            {
+              "name": "dex_jetton_wallet_1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "==",
+                  "l": {
+                    "k": "name",
+                    "id": "jt_1"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "null"
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_1"
+                    },
+                    "name": "data"
+                  },
+                  "name": "sender_wallet"
+                }
+              }
+            },
+            {
+              "name": "wallet1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "==",
+                  "l": {
+                    "k": "name",
+                    "id": "jt_1"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "null"
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_1"
+                    },
+                    "name": "data"
+                  },
+                  "name": "receiver_wallet"
+                }
+              }
+            },
+            {
+              "name": "amount2_out",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "req_2"
+                      },
+                      "name": "body"
+                    },
+                    "name": "amount"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset2_out",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "==",
+                  "l": {
+                    "k": "name",
+                    "id": "jt_2"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "ton_asset",
+                  "args": []
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_2"
+                    },
+                    "name": "data"
+                  },
+                  "name": "asset"
+                }
+              }
+            },
+            {
+              "name": "dex_wallet_2",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "==",
+                  "l": {
+                    "k": "name",
+                    "id": "jt_2"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "ton_2"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "source"
+                    }
+                  ]
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_2"
+                    },
+                    "name": "data"
+                  },
+                  "name": "sender"
+                }
+              }
+            },
+            {
+              "name": "dex_jetton_wallet_2",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "==",
+                  "l": {
+                    "k": "name",
+                    "id": "jt_2"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "null"
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_2"
+                    },
+                    "name": "data"
+                  },
+                  "name": "sender_wallet"
+                }
+              }
+            },
+            {
+              "name": "wallet2",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "==",
+                  "l": {
+                    "k": "name",
+                    "id": "jt_2"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "null"
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_2"
+                    },
+                    "name": "data"
+                  },
+                  "name": "receiver_wallet"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "change_dns",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1320284409
+        ]
+      },
+      "root": 91,
+      "produces": [
+        "change_dns",
+        "renew_dns",
+        "delete_dns"
+      ],
+      "captures": [
+        {
+          "name": "dns",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "dns",
+          "types": [
+            "ChangeDnsRecordMessage"
+          ]
+        },
+        {
+          "s": "let",
+          "name": "nft",
+          "expr": {
+            "k": "lookup",
+            "name": "nft_item",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "dns"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "attr",
+            "of": {
+              "k": "name",
+              "id": "dns"
+            },
+            "name": "failed"
+          }
+        },
+        {
+          "s": "switch",
+          "branches": [
+            {
+              "btype": "change_dns",
+              "fields": [
+                {
+                  "name": "source",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "dns"
+                          },
+                          "name": "msg"
+                        },
+                        "name": "source"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "destination",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "dns"
+                          },
+                          "name": "msg"
+                        },
+                        "name": "destination"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "key",
+                  "expr": {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "dns"
+                      },
+                      "name": "body"
+                    },
+                    "name": "key"
+                  }
+                },
+                {
+                  "name": "value",
+                  "expr": {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "dns"
+                      },
+                      "name": "body"
+                    },
+                    "name": "value"
+                  }
+                },
+                {
+                  "name": "collection_address",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "nft"
+                        },
+                        "name": "collection_address"
+                      }
+                    ]
+                  },
+                  "optional": true
+                }
+              ],
+              "when": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "dns"
+                  },
+                  "name": "body"
+                },
+                "name": "has_value"
+              }
+            },
+            {
+              "btype": "renew_dns",
+              "fields": [
+                {
+                  "name": "source",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "dns"
+                          },
+                          "name": "msg"
+                        },
+                        "name": "source"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "destination",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "dns"
+                          },
+                          "name": "msg"
+                        },
+                        "name": "destination"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "collection_address",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "nft"
+                        },
+                        "name": "collection_address"
+                      }
+                    ]
+                  },
+                  "optional": true
+                }
+              ],
+              "when": {
+                "k": "bin",
+                "op": "==",
+                "l": {
+                  "k": "call",
+                  "fn": "b64",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "dns"
+                        },
+                        "name": "body"
+                      },
+                      "name": "key"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "str",
+                  "v": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                }
+              }
+            },
+            {
+              "btype": "delete_dns",
+              "fields": [
+                {
+                  "name": "source",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "dns"
+                          },
+                          "name": "msg"
+                        },
+                        "name": "source"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "destination",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "dns"
+                          },
+                          "name": "msg"
+                        },
+                        "name": "destination"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "key",
+                  "expr": {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "dns"
+                      },
+                      "name": "body"
+                    },
+                    "name": "key"
+                  }
+                },
+                {
+                  "name": "collection_address",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "nft"
+                        },
+                        "name": "collection_address"
+                      }
+                    ]
+                  },
+                  "optional": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ethena_deposit",
+      "anchor": {
+        "kind": "btype",
+        "values": [
+          "jetton_transfer"
+        ]
+      },
+      "root": 93,
+      "produces": [
+        "ethena_deposit"
+      ],
+      "captures": [
+        {
+          "name": "transfer",
+          "card": "one"
+        },
+        {
+          "name": "mint",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "!=",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "transfer"
+                },
+                "name": "data"
+              },
+              "name": "asset"
+            },
+            "r": {
+              "k": "str",
+              "v": "0:086FA2A675F74347B08DD4606A549B8FDB98829CB282BC1949D3B12FBAED9DCC"
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "!=",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "mint"
+                },
+                "name": "data"
+              },
+              "name": "asset"
+            },
+            "r": {
+              "k": "str",
+              "v": "0:D0E545323C7ACB7102653C073377F7E3C67F122EB94D430A250739F109D4A57D"
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "source",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "transfer"
+                      },
+                      "name": "data"
+                    },
+                    "name": "sender"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "user_jetton_wallet",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "transfer"
+                      },
+                      "name": "data"
+                    },
+                    "name": "sender_wallet"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "transfer"
+                      },
+                      "name": "data"
+                    },
+                    "name": "receiver"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "value",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "transfer"
+                      },
+                      "name": "data"
+                    },
+                    "name": "amount"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "tokens_minted",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "mint"
+                      },
+                      "name": "data"
+                    },
+                    "name": "amount"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "mint"
+                  },
+                  "name": "data"
+                },
+                "name": "asset"
+              }
+            },
+            {
+              "name": "source_asset",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "asset"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "evaa_withdraw",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          2
+        ]
+      },
+      "root": 95,
+      "produces": [
+        "evaa_withdraw"
+      ],
+      "captures": [
+        {
+          "name": "master",
+          "card": "one"
+        },
+        {
+          "name": "user",
+          "card": "one"
+        },
+        {
+          "name": "coll_ok",
+          "card": "one"
+        },
+        {
+          "name": "jetton_payout",
+          "card": "one"
+        },
+        {
+          "name": "ton_payout",
+          "card": "one"
+        },
+        {
+          "name": "coll_fail",
+          "card": "one"
+        },
+        {
+          "name": "fail_excess",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "master",
+          "types": [
+            "EvaaWithdrawMaster"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "coll_ok",
+          "types": [
+            "EvaaWithdrawCollateralized"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "fail_excess",
+          "types": [
+            "EvaaWithdrawFailExcess"
+          ]
+        },
+        {
+          "s": "let",
+          "name": "is_ton",
+          "expr": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "master"
+                },
+                "name": "body"
+              },
+              "name": "asset_id"
+            },
+            "r": {
+              "k": "int",
+              "v": 11876925370864614464799087627157805050745321306404563164673853337929163193738
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "success",
+          "expr": {
+            "k": "bin",
+            "op": "!=",
+            "l": {
+              "k": "name",
+              "id": "coll_ok"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "and",
+              "l": {
+                "k": "name",
+                "id": "success"
+              },
+              "r": {
+                "k": "name",
+                "id": "is_ton"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "ton_payout"
+              },
+              "r": {
+                "k": "null"
+              }
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "and",
+              "l": {
+                "k": "name",
+                "id": "success"
+              },
+              "r": {
+                "k": "unary",
+                "op": "not",
+                "x": {
+                  "k": "name",
+                  "id": "is_ton"
+                }
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "jetton_payout"
+              },
+              "r": {
+                "k": "null"
+              }
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "and",
+              "l": {
+                "k": "bin",
+                "op": "==",
+                "l": {
+                  "k": "name",
+                  "id": "coll_ok"
+                },
+                "r": {
+                  "k": "null"
+                }
+              },
+              "r": {
+                "k": "bin",
+                "op": "==",
+                "l": {
+                  "k": "name",
+                  "id": "coll_fail"
+                },
+                "r": {
+                  "k": "null"
+                }
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "fail_excess"
+              },
+              "r": {
+                "k": "null"
+              }
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "owner",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "master"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "owner_contract",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "user"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "recipient",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "master"
+                      },
+                      "name": "body"
+                    },
+                    "name": "recipient_address"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "master",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "master"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "master"
+                  },
+                  "name": "body"
+                },
+                "name": "asset_id"
+              }
+            },
+            {
+              "name": "is_ton",
+              "expr": {
+                "k": "name",
+                "id": "is_ton"
+              }
+            },
+            {
+              "name": "is_success",
+              "expr": {
+                "k": "name",
+                "id": "success"
+              }
+            },
+            {
+              "name": "amount",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "success"
+                },
+                "then": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "coll_ok"
+                    },
+                    "name": "body"
+                  },
+                  "name": "withdraw_amount_current"
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "master"
+                    },
+                    "name": "body"
+                  },
+                  "name": "amount"
+                }
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "success"
+                },
+                "then": {
+                  "k": "ternary",
+                  "cond": {
+                    "k": "name",
+                    "id": "is_ton"
+                  },
+                  "then": {
+                    "k": "call",
+                    "fn": "ton_asset",
+                    "args": []
+                  },
+                  "else": {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "jetton_payout"
+                      },
+                      "name": "data"
+                    },
+                    "name": "asset"
+                  }
+                },
+                "else": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "recipient_jetton_wallet",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "and",
+                  "l": {
+                    "k": "name",
+                    "id": "success"
+                  },
+                  "r": {
+                    "k": "unary",
+                    "op": "not",
+                    "x": {
+                      "k": "name",
+                      "id": "is_ton"
+                    }
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "jetton_payout"
+                        },
+                        "name": "data"
+                      },
+                      "name": "receiver_wallet"
+                    }
+                  ]
+                },
+                "else": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "master_jetton_wallet",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "and",
+                  "l": {
+                    "k": "name",
+                    "id": "success"
+                  },
+                  "r": {
+                    "k": "unary",
+                    "op": "not",
+                    "x": {
+                      "k": "name",
+                      "id": "is_ton"
+                    }
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "jetton_payout"
+                        },
+                        "name": "data"
+                      },
+                      "name": "sender_wallet"
+                    }
+                  ]
+                },
+                "else": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "fail_reason",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "success"
+                },
+                "then": {
+                  "k": "null"
+                },
+                "else": {
+                  "k": "ternary",
+                  "cond": {
+                    "k": "bin",
+                    "op": "!=",
+                    "l": {
+                      "k": "name",
+                      "id": "coll_fail"
+                    },
+                    "r": {
+                      "k": "null"
+                    }
+                  },
+                  "then": {
+                    "k": "str",
+                    "v": "withdraw_no_funds_excess"
+                  },
+                  "else": {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "fail_excess"
+                      },
+                      "name": "body"
+                    },
+                    "name": "reason"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getgems_nft_purchase",
+      "anchor": {
+        "kind": "btype",
+        "values": [
+          "nft_transfer"
+        ]
+      },
+      "root": 113,
+      "produces": [
+        "NftPurchaseBlock"
+      ],
+      "captures": [
+        {
+          "name": "nft",
+          "card": "one"
+        },
+        {
+          "name": "payout",
+          "card": "opt"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_getgems_nft_purchase",
+      "shape": "getgems_proxy_insert"
+    },
+    {
+      "name": "jetton_transfer",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          260734629
+        ]
+      },
+      "root": 115,
+      "produces": [
+        "jetton_transfer"
+      ],
+      "captures": [
+        {
+          "name": "transfer",
+          "card": "one"
+        },
+        {
+          "name": "internal",
+          "card": "one"
+        },
+        {
+          "name": "notify",
+          "card": "opt"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_jetton_transfer"
+    },
+    {
+      "name": "jetton_transfer",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          260734629
+        ]
+      },
+      "root": 118,
+      "produces": [
+        "jetton_transfer"
+      ],
+      "captures": [
+        {
+          "name": "transfer",
+          "card": "one"
+        },
+        {
+          "name": "internal",
+          "card": "one"
+        },
+        {
+          "name": "notify",
+          "card": "opt"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_jetton_transfer"
+    },
+    {
+      "name": "jetton_burn",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1499400124
+        ]
+      },
+      "root": 121,
+      "produces": [
+        "jetton_burn"
+      ],
+      "captures": [
+        {
+          "name": "burn",
+          "card": "one"
+        },
+        {
+          "name": "notification",
+          "card": "opt"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_jetton_burn"
+    },
+    {
+      "name": "jetton_mint",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          21,
+          1680571655
+        ]
+      },
+      "root": 123,
+      "produces": [
+        "jetton_mint"
+      ],
+      "captures": [
+        {
+          "name": "mint",
+          "card": "one"
+        },
+        {
+          "name": "notify",
+          "card": "opt"
+        },
+        {
+          "name": "internal",
+          "card": "opt"
+        },
+        {
+          "name": "internal_notify",
+          "card": "opt"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_jetton_mint"
+    },
+    {
+      "name": "jvault_stake",
+      "anchor": {
+        "kind": "btype",
+        "values": [
+          "jetton_transfer"
+        ]
+      },
+      "root": 128,
+      "produces": [
+        "JVaultStakeBlock"
+      ],
+      "captures": [
+        {
+          "name": "transfer",
+          "card": "one"
+        },
+        {
+          "name": "receive",
+          "card": "one"
+        },
+        {
+          "name": "request",
+          "card": "one"
+        },
+        {
+          "name": "ref",
+          "card": "many"
+        },
+        {
+          "name": "refupd",
+          "card": "many"
+        },
+        {
+          "name": "update",
+          "card": "one"
+        },
+        {
+          "name": "cancel",
+          "card": "one"
+        },
+        {
+          "name": "cancel_transfer",
+          "card": "opt"
+        },
+        {
+          "name": "setdata",
+          "card": "opt"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_jvault_stake"
+    },
+    {
+      "name": "jvault_unstake",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1234866786
+        ]
+      },
+      "root": 140,
+      "produces": [
+        "JVaultUnstakeBlock"
+      ],
+      "captures": [
+        {
+          "name": "unstake",
+          "card": "one"
+        },
+        {
+          "name": "request",
+          "card": "opt"
+        },
+        {
+          "name": "ref",
+          "card": "many"
+        },
+        {
+          "name": "refupd",
+          "card": "many"
+        },
+        {
+          "name": "fee",
+          "card": "opt"
+        },
+        {
+          "name": "withdraw",
+          "card": "opt"
+        },
+        {
+          "name": "update",
+          "card": "opt"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_jvault_unstake"
+    },
+    {
+      "name": "jvault_claim",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          2027548937
+        ]
+      },
+      "root": 149,
+      "produces": [
+        "JVaultClaimBlock"
+      ],
+      "captures": [
+        {
+          "name": "claim",
+          "card": "one"
+        },
+        {
+          "name": "send",
+          "card": "one"
+        },
+        {
+          "name": "withdraw",
+          "card": "one"
+        },
+        {
+          "name": "update",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_jvault_claim"
+    },
+    {
+      "name": "jvault_unstake_request",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          23647415
+        ]
+      },
+      "root": 153,
+      "produces": [
+        "JVaultUnstakeRequestBlock"
+      ],
+      "captures": [
+        {
+          "name": "request_anchor",
+          "card": "one"
+        },
+        {
+          "name": "request",
+          "card": "opt"
+        },
+        {
+          "name": "ref",
+          "card": "many"
+        },
+        {
+          "name": "refupd",
+          "card": "many"
+        },
+        {
+          "name": "update",
+          "card": "opt"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_jvault_unstake_request"
+    },
+    {
+      "name": "layerzero_receive",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          586394633
+        ]
+      },
+      "root": 160,
+      "produces": [
+        "layerzero_receive"
+      ],
+      "captures": [
+        {
+          "name": "prepare",
+          "card": "one"
+        },
+        {
+          "name": "execute",
+          "card": "one"
+        },
+        {
+          "name": "oapp_callback",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "execute",
+          "types": [
+            "LayerZeroOappExecuteCallback"
+          ]
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "unary",
+            "op": "not",
+            "x": {
+              "k": "call",
+              "fn": "layerzero_dst_oapp_matches",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "execute"
+                    },
+                    "name": "msg"
+                  },
+                  "name": "destination"
+                },
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "execute"
+                        },
+                        "name": "body"
+                      },
+                      "name": "packet"
+                    },
+                    "name": "path"
+                  },
+                  "name": "dst_oapp"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "prepare"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "channel",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "execute"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "oapp",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "execute"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "packet_data",
+              "expr": {
+                "k": "record",
+                "fields": [
+                  {
+                    "name": "src_oapp",
+                    "expr": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "execute"
+                            },
+                            "name": "body"
+                          },
+                          "name": "packet"
+                        },
+                        "name": "path"
+                      },
+                      "name": "src_oapp"
+                    }
+                  },
+                  {
+                    "name": "dst_oapp",
+                    "expr": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "execute"
+                            },
+                            "name": "body"
+                          },
+                          "name": "packet"
+                        },
+                        "name": "path"
+                      },
+                      "name": "dst_oapp"
+                    }
+                  },
+                  {
+                    "name": "src_eid",
+                    "expr": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "execute"
+                            },
+                            "name": "body"
+                          },
+                          "name": "packet"
+                        },
+                        "name": "path"
+                      },
+                      "name": "src_eid"
+                    }
+                  },
+                  {
+                    "name": "dst_eid",
+                    "expr": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "execute"
+                            },
+                            "name": "body"
+                          },
+                          "name": "packet"
+                        },
+                        "name": "path"
+                      },
+                      "name": "dst_eid"
+                    }
+                  },
+                  {
+                    "name": "nonce",
+                    "expr": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "execute"
+                          },
+                          "name": "body"
+                        },
+                        "name": "packet"
+                      },
+                      "name": "nonce"
+                    }
+                  },
+                  {
+                    "name": "guid",
+                    "expr": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "execute"
+                          },
+                          "name": "body"
+                        },
+                        "name": "packet"
+                      },
+                      "name": "guid"
+                    }
+                  },
+                  {
+                    "name": "message",
+                    "expr": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "execute"
+                          },
+                          "name": "body"
+                        },
+                        "name": "packet"
+                      },
+                      "name": "message"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nominator_pool_withdraw",
+      "anchor": {
+        "kind": "btype",
+        "values": [
+          "ton_transfer"
+        ]
+      },
+      "root": 169,
+      "produces": [
+        "nominator_pool_withdraw_request"
+      ],
+      "captures": [
+        {
+          "name": "payout",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "let",
+          "name": "pool_iface",
+          "expr": {
+            "k": "lookup",
+            "name": "nominator_pool",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "payout"
+                  },
+                  "name": "msg"
+                },
+                "name": "source"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "pool_iface"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "source",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "payout"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "payout"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "payout_amount",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "payout"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "value"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "stonfi_v1_swap",
+      "anchor": {
+        "kind": "btype",
+        "values": [
+          "jetton_transfer"
+        ]
+      },
+      "root": 170,
+      "produces": [
+        "jetton_swap"
+      ],
+      "captures": [
+        {
+          "name": "in_transfer",
+          "card": "one"
+        },
+        {
+          "name": "swap",
+          "card": "one"
+        },
+        {
+          "name": "req",
+          "card": "one"
+        },
+        {
+          "name": "out",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_stonfi_v1_swap"
+    },
+    {
+      "name": "stonfi_v2_provide_final",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          935368415
+        ]
+      },
+      "root": 174,
+      "produces": [
+        "StonfiV2DepositLiquidity"
+      ],
+      "captures": [
+        {
+          "name": "provide",
+          "card": "one"
+        },
+        {
+          "name": "add",
+          "card": "one"
+        },
+        {
+          "name": "cb",
+          "card": "one"
+        },
+        {
+          "name": "lp_transfer",
+          "card": "one"
+        },
+        {
+          "name": "refund",
+          "card": "one"
+        },
+        {
+          "name": "notify_pton",
+          "card": "one"
+        },
+        {
+          "name": "in_pton",
+          "card": "one"
+        },
+        {
+          "name": "in_jt",
+          "card": "one"
+        },
+        {
+          "name": "notify_raw",
+          "card": "one"
+        },
+        {
+          "name": "internal_raw",
+          "card": "one"
+        },
+        {
+          "name": "in_jt_raw",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_stonfi_v2_provide_final"
+    },
+    {
+      "name": "stonfi_v2_provide_partial",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          935368415
+        ]
+      },
+      "root": 187,
+      "produces": [
+        "StonfiV2DepositLiquidityPartial"
+      ],
+      "captures": [
+        {
+          "name": "provide",
+          "card": "one"
+        },
+        {
+          "name": "add",
+          "card": "one"
+        },
+        {
+          "name": "notify_pton",
+          "card": "one"
+        },
+        {
+          "name": "in_pton",
+          "card": "one"
+        },
+        {
+          "name": "in_jt",
+          "card": "one"
+        },
+        {
+          "name": "notify_raw",
+          "card": "one"
+        },
+        {
+          "name": "internal_raw",
+          "card": "one"
+        },
+        {
+          "name": "in_jt_raw",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_stonfi_v2_provide_partial"
+    },
+    {
+      "name": "stonfi_v2_swap",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1717886506
+        ]
+      },
+      "root": 196,
+      "produces": [
+        "jetton_swap"
+      ],
+      "captures": [
+        {
+          "name": "swap",
+          "card": "one"
+        },
+        {
+          "name": "payout",
+          "card": "one"
+        },
+        {
+          "name": "out_transfer",
+          "card": "opt"
+        },
+        {
+          "name": "peer_swap",
+          "card": "many"
+        },
+        {
+          "name": "peer_payout",
+          "card": "many"
+        },
+        {
+          "name": "peer_out",
+          "card": "many"
+        },
+        {
+          "name": "in_transfer",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_stonfi_v2_swap"
+    },
+    {
+      "name": "stonfi_v2_withdraw",
+      "anchor": {
+        "kind": "btype",
+        "values": [
+          "jetton_burn"
+        ]
+      },
+      "root": 247,
+      "produces": [
+        "dex_withdraw_liquidity"
+      ],
+      "captures": [
+        {
+          "name": "burn",
+          "card": "one"
+        },
+        {
+          "name": "router",
+          "card": "one"
+        },
+        {
+          "name": "payout_1",
+          "card": "one"
+        },
+        {
+          "name": "jt_1",
+          "card": "one"
+        },
+        {
+          "name": "pton_1",
+          "card": "opt"
+        },
+        {
+          "name": "payout_2",
+          "card": "one"
+        },
+        {
+          "name": "jt_2",
+          "card": "one"
+        },
+        {
+          "name": "pton_2",
+          "card": "opt"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "pton_1",
+          "types": [
+            "PTonTransfer"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "pton_2",
+          "types": [
+            "PTonTransfer"
+          ]
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "dex",
+              "expr": {
+                "k": "str",
+                "v": "stonfi_v2"
+              }
+            },
+            {
+              "name": "sender",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "burn"
+                  },
+                  "name": "data"
+                },
+                "name": "owner"
+              }
+            },
+            {
+              "name": "sender_wallet",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "burn"
+                  },
+                  "name": "data"
+                },
+                "name": "jetton_wallet"
+              }
+            },
+            {
+              "name": "pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "payout_1"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "burn"
+                  },
+                  "name": "data"
+                },
+                "name": "asset"
+              }
+            },
+            {
+              "name": "lp_tokens_burnt",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "burn"
+                  },
+                  "name": "data"
+                },
+                "name": "amount"
+              }
+            },
+            {
+              "name": "is_refund",
+              "expr": {
+                "k": "bool",
+                "v": false
+              }
+            },
+            {
+              "name": "amount1_out",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "pton_1"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "amount",
+                  "args": [
+                    {
+                      "k": "bin",
+                      "op": "??",
+                      "l": {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "pton_1"
+                          },
+                          "name": "body"
+                        },
+                        "name": "ton_amount"
+                      },
+                      "r": {
+                        "k": "int",
+                        "v": 0
+                      }
+                    }
+                  ]
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_1"
+                    },
+                    "name": "data"
+                  },
+                  "name": "amount"
+                }
+              }
+            },
+            {
+              "name": "asset1_out",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "pton_1"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "ton_asset",
+                  "args": []
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_1"
+                    },
+                    "name": "data"
+                  },
+                  "name": "asset"
+                }
+              }
+            },
+            {
+              "name": "dex_wallet_1",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "jt_1"
+                  },
+                  "name": "data"
+                },
+                "name": "sender"
+              }
+            },
+            {
+              "name": "dex_jetton_wallet_1",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "jt_1"
+                  },
+                  "name": "data"
+                },
+                "name": "sender_wallet"
+              }
+            },
+            {
+              "name": "wallet1",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "jt_1"
+                  },
+                  "name": "data"
+                },
+                "name": "receiver_wallet"
+              }
+            },
+            {
+              "name": "amount2_out",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "pton_2"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "amount",
+                  "args": [
+                    {
+                      "k": "bin",
+                      "op": "??",
+                      "l": {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "pton_2"
+                          },
+                          "name": "body"
+                        },
+                        "name": "ton_amount"
+                      },
+                      "r": {
+                        "k": "int",
+                        "v": 0
+                      }
+                    }
+                  ]
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_2"
+                    },
+                    "name": "data"
+                  },
+                  "name": "amount"
+                }
+              }
+            },
+            {
+              "name": "asset2_out",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "pton_2"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "ton_asset",
+                  "args": []
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_2"
+                    },
+                    "name": "data"
+                  },
+                  "name": "asset"
+                }
+              }
+            },
+            {
+              "name": "dex_wallet_2",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "jt_2"
+                  },
+                  "name": "data"
+                },
+                "name": "sender"
+              }
+            },
+            {
+              "name": "dex_jetton_wallet_2",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "jt_2"
+                  },
+                  "name": "data"
+                },
+                "name": "sender_wallet"
+              }
+            },
+            {
+              "name": "wallet2",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "jt_2"
+                  },
+                  "name": "data"
+                },
+                "name": "receiver_wallet"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "stonfi_v2_withdraw_refund",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          261677752
+        ]
+      },
+      "root": 255,
+      "produces": [
+        "dex_withdraw_liquidity"
+      ],
+      "captures": [
+        {
+          "name": "refund",
+          "card": "one"
+        },
+        {
+          "name": "payout_1",
+          "card": "one"
+        },
+        {
+          "name": "jt_1",
+          "card": "one"
+        },
+        {
+          "name": "pton_1",
+          "card": "opt"
+        },
+        {
+          "name": "payout_2",
+          "card": "one"
+        },
+        {
+          "name": "jt_2",
+          "card": "one"
+        },
+        {
+          "name": "pton_2",
+          "card": "opt"
+        },
+        {
+          "name": "refund_parent",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "pton_1",
+          "types": [
+            "PTonTransfer"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "pton_2",
+          "types": [
+            "PTonTransfer"
+          ]
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "dex",
+              "expr": {
+                "k": "str",
+                "v": "stonfi_v2"
+              }
+            },
+            {
+              "name": "sender",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "refund_parent"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "sender_wallet",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "payout_1"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "lp_tokens_burnt",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "is_refund",
+              "expr": {
+                "k": "bool",
+                "v": true
+              }
+            },
+            {
+              "name": "amount1_out",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "pton_1"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "amount",
+                  "args": [
+                    {
+                      "k": "bin",
+                      "op": "??",
+                      "l": {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "pton_1"
+                          },
+                          "name": "body"
+                        },
+                        "name": "ton_amount"
+                      },
+                      "r": {
+                        "k": "int",
+                        "v": 0
+                      }
+                    }
+                  ]
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_1"
+                    },
+                    "name": "data"
+                  },
+                  "name": "amount"
+                }
+              }
+            },
+            {
+              "name": "asset1_out",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "pton_1"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "ton_asset",
+                  "args": []
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_1"
+                    },
+                    "name": "data"
+                  },
+                  "name": "asset"
+                }
+              }
+            },
+            {
+              "name": "dex_wallet_1",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "jt_1"
+                  },
+                  "name": "data"
+                },
+                "name": "sender"
+              }
+            },
+            {
+              "name": "dex_jetton_wallet_1",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "jt_1"
+                  },
+                  "name": "data"
+                },
+                "name": "sender_wallet"
+              }
+            },
+            {
+              "name": "wallet1",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "jt_1"
+                  },
+                  "name": "data"
+                },
+                "name": "receiver_wallet"
+              }
+            },
+            {
+              "name": "amount2_out",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "pton_2"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "amount",
+                  "args": [
+                    {
+                      "k": "bin",
+                      "op": "??",
+                      "l": {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "pton_2"
+                          },
+                          "name": "body"
+                        },
+                        "name": "ton_amount"
+                      },
+                      "r": {
+                        "k": "int",
+                        "v": 0
+                      }
+                    }
+                  ]
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_2"
+                    },
+                    "name": "data"
+                  },
+                  "name": "amount"
+                }
+              }
+            },
+            {
+              "name": "asset2_out",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "pton_2"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "ton_asset",
+                  "args": []
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt_2"
+                    },
+                    "name": "data"
+                  },
+                  "name": "asset"
+                }
+              }
+            },
+            {
+              "name": "dex_wallet_2",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "jt_2"
+                  },
+                  "name": "data"
+                },
+                "name": "sender"
+              }
+            },
+            {
+              "name": "dex_jetton_wallet_2",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "jt_2"
+                  },
+                  "name": "data"
+                },
+                "name": "sender_wallet"
+              }
+            },
+            {
+              "name": "wallet2",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "jt_2"
+                  },
+                  "name": "data"
+                },
+                "name": "receiver_wallet"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "telegram_nft_purchase",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          85167505
+        ]
+      },
+      "root": 263,
+      "produces": [
+        "NftTransferBlock"
+      ],
+      "captures": [
+        {
+          "name": "assigned",
+          "card": "one"
+        },
+        {
+          "name": "payment",
+          "card": "one"
+        },
+        {
+          "name": "payout_1",
+          "card": "one"
+        },
+        {
+          "name": "payout_2",
+          "card": "opt"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_telegram_nft_purchase"
+    },
+    {
+      "name": "tgbtc_mint",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1064836388
+        ]
+      },
+      "root": 267,
+      "produces": [
+        "TgBTCMintBlock"
+      ],
+      "captures": [
+        {
+          "name": "head",
+          "card": "one"
+        },
+        {
+          "name": "mid",
+          "card": "many"
+        },
+        {
+          "name": "tail",
+          "card": "many"
+        },
+        {
+          "name": "log",
+          "card": "many"
+        },
+        {
+          "name": "mint",
+          "card": "many"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_tgbtc_mint"
+    },
+    {
+      "name": "tonco_deposit_liquidity",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1052660785
+        ]
+      },
+      "root": 273,
+      "produces": [
+        "tonco_deposit_liquidity"
+      ],
+      "captures": [
+        {
+          "name": "add_liquidity",
+          "card": "one"
+        },
+        {
+          "name": "refund_router_call",
+          "card": "opt"
+        },
+        {
+          "name": "excess_transfer_0",
+          "card": "opt"
+        },
+        {
+          "name": "excess_transfer_1",
+          "card": "opt"
+        },
+        {
+          "name": "nft_mint",
+          "card": "one"
+        },
+        {
+          "name": "ton_input",
+          "card": "one"
+        },
+        {
+          "name": "ton_input_addition",
+          "card": "one"
+        },
+        {
+          "name": "jetton_input",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_tonco_deposit_liquidity"
+    },
+    {
+      "name": "tonco_swap",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          2818267384
+        ]
+      },
+      "root": 287,
+      "produces": [
+        "jetton_swap"
+      ],
+      "captures": [
+        {
+          "name": "swap",
+          "card": "one"
+        },
+        {
+          "name": "in_transfer",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "builder": "build_tonco_swap"
+    },
+    {
+      "name": "tonstakers_withdraw",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1499400124
+        ]
+      },
+      "root": 315,
+      "produces": [
+        "tonstakers_withdraw",
+        "tonstakers_withdraw_request"
+      ],
+      "captures": [
+        {
+          "name": "burn",
+          "card": "one"
+        },
+        {
+          "name": "request",
+          "card": "one"
+        },
+        {
+          "name": "immediate_withdrawal",
+          "card": "one"
+        },
+        {
+          "name": "delayed_withdrawal",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "burn",
+          "types": [
+            "JettonBurn"
+          ]
+        },
+        {
+          "s": "let",
+          "name": "minted",
+          "expr": {
+            "k": "call",
+            "fn": "tonstakers_minted_nft",
+            "args": [
+              {
+                "k": "name",
+                "id": "delayed_withdrawal"
+              }
+            ]
+          }
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "attr",
+            "of": {
+              "k": "name",
+              "id": "burn"
+            },
+            "name": "failed"
+          }
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "immediate_withdrawal"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "minted"
+              },
+              "r": {
+                "k": "null"
+              }
+            }
+          }
+        },
+        {
+          "s": "switch",
+          "branches": [
+            {
+              "btype": "tonstakers_withdraw",
+              "fields": [
+                {
+                  "name": "stake_holder",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "burn"
+                          },
+                          "name": "msg"
+                        },
+                        "name": "source"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "burnt_nft",
+                  "expr": {
+                    "k": "null"
+                  }
+                },
+                {
+                  "name": "pool",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "request"
+                          },
+                          "name": "msg"
+                        },
+                        "name": "destination"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "tokens_burnt",
+                  "expr": {
+                    "k": "call",
+                    "fn": "amount",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "burn"
+                          },
+                          "name": "body"
+                        },
+                        "name": "amount"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "amount",
+                  "expr": {
+                    "k": "call",
+                    "fn": "amount",
+                    "args": [
+                      {
+                        "k": "bin",
+                        "op": "-",
+                        "l": {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "immediate_withdrawal"
+                            },
+                            "name": "msg"
+                          },
+                          "name": "value"
+                        },
+                        "r": {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "request"
+                            },
+                            "name": "msg"
+                          },
+                          "name": "value"
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "asset",
+                  "expr": {
+                    "k": "call",
+                    "fn": "asset",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "request"
+                          },
+                          "name": "msg"
+                        },
+                        "name": "source"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "when": {
+                "k": "bin",
+                "op": "!=",
+                "l": {
+                  "k": "name",
+                  "id": "immediate_withdrawal"
+                },
+                "r": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "btype": "tonstakers_withdraw_request",
+              "fields": [
+                {
+                  "name": "source",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "burn"
+                          },
+                          "name": "msg"
+                        },
+                        "name": "source"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "tsTON_wallet",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "burn"
+                          },
+                          "name": "msg"
+                        },
+                        "name": "destination"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "pool",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "request"
+                          },
+                          "name": "msg"
+                        },
+                        "name": "destination"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "tokens_burnt",
+                  "expr": {
+                    "k": "call",
+                    "fn": "amount",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "burn"
+                          },
+                          "name": "body"
+                        },
+                        "name": "amount"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "minted_nft",
+                  "expr": {
+                    "k": "name",
+                    "id": "minted"
+                  }
+                },
+                {
+                  "name": "asset",
+                  "expr": {
+                    "k": "call",
+                    "fn": "asset",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "request"
+                          },
+                          "name": "msg"
+                        },
+                        "name": "source"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "vesting_send_message",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          2809346765
+        ]
+      },
+      "root": 321,
+      "produces": [
+        "vesting_send_message"
+      ],
+      "captures": [
+        {
+          "name": "send",
+          "card": "one"
+        },
+        {
+          "name": "response",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "send",
+          "types": [
+            "VestingSendMessage"
+          ]
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "send"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "vesting",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "send"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "send"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            },
+            {
+              "name": "message_boc_str",
+              "expr": {
+                "k": "call",
+                "fn": "b64",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "send"
+                      },
+                      "name": "body"
+                    },
+                    "name": "message_cell"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "message_destination",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "send"
+                      },
+                      "name": "body"
+                    },
+                    "name": "message_destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "message_value",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "send"
+                      },
+                      "name": "body"
+                    },
+                    "name": "message_value"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "kind": "contract",
+      "opcode": 3237998086,
+      "capture": "create",
+      "child": 1
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998114,
+      "capture": "deploy",
+      "child": 2
+    },
+    {
+      "kind": "contract",
+      "opcode": 745978227,
+      "optional": true,
+      "child": 3
+    },
+    {
+      "kind": "contract",
+      "opcode": 3513996288,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998112,
+      "capture": "swap",
+      "children": [
+        5,
+        6
+      ],
+      "parent": 20
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998128,
+      "capture": "event"
+    },
+    {
+      "kind": "or",
+      "branches": [
+        7,
+        15
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "recursive",
+      "step": 8,
+      "exit": 10,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998112,
+      "capture": "peer",
+      "child": 9
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998128,
+      "capture": "peer_event"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998113,
+      "child": 11
+    },
+    {
+      "kind": "or",
+      "branches": [
+        12,
+        13,
+        14
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998130
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998134
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998113,
+      "capture": "payout",
+      "child": 16
+    },
+    {
+      "kind": "or",
+      "branches": [
+        17,
+        18,
+        19
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "out"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998130,
+      "capture": "out"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998134,
+      "capture": "out"
+    },
+    {
+      "kind": "or",
+      "branches": [
+        21,
+        22
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "in_transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998080,
+      "capture": "in_transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3043726744,
+      "capture": "pool",
+      "children": [
+        24,
+        35
+      ],
+      "parent": 43
+    },
+    {
+      "kind": "or",
+      "branches": [
+        25,
+        27
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 395134233,
+      "capture": "lp_transfer",
+      "child": 26
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 3785583828,
+      "capture": "rejection",
+      "children": [
+        28,
+        29,
+        32
+      ]
+    },
+    {
+      "kind": "block_type",
+      "btype": "ton_transfer",
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1795913855,
+      "optional": true,
+      "children": [
+        30,
+        31
+      ]
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1196394191,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1795913855,
+      "optional": true,
+      "children": [
+        33,
+        34
+      ]
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1196394191,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 2867302998,
+      "optional": true,
+      "children": [
+        36,
+        37,
+        40
+      ]
+    },
+    {
+      "kind": "block_type",
+      "btype": "ton_transfer",
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1795913855,
+      "optional": true,
+      "children": [
+        38,
+        39
+      ]
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1196394191,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1795913855,
+      "optional": true,
+      "children": [
+        41,
+        42
+      ]
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1196394191,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1411649509,
+      "parent": 44
+    },
+    {
+      "kind": "contract",
+      "opcode": 4031694118,
+      "children": [
+        45
+      ],
+      "parent": 46
+    },
+    {
+      "kind": "contract",
+      "opcode": 2604311546,
+      "optional": true
+    },
+    {
+      "kind": "or",
+      "branches": [
+        47,
+        48,
+        49
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 3579725446,
+      "capture": "deposit_ton"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "deposit_transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "capture": "deposit_notify",
+      "parent": 50
+    },
+    {
+      "kind": "contract",
+      "opcode": 395134233,
+      "parent": 51
+    },
+    {
+      "kind": "contract",
+      "opcode": 260734629
+    },
+    {
+      "kind": "contract",
+      "opcode": 1411649509,
+      "capture": "topup",
+      "parent": 53
+    },
+    {
+      "kind": "contract",
+      "opcode": 4031694118,
+      "children": [
+        54
+      ],
+      "parent": 55
+    },
+    {
+      "kind": "contract",
+      "opcode": 2604311546
+    },
+    {
+      "kind": "or",
+      "branches": [
+        56,
+        57,
+        58
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 3579725446,
+      "capture": "deposit_ton"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "deposit_transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "capture": "deposit_notify",
+      "parent": 59
+    },
+    {
+      "kind": "contract",
+      "opcode": 395134233,
+      "parent": 60
+    },
+    {
+      "kind": "contract",
+      "opcode": 260734629
+    },
+    {
+      "kind": "contract",
+      "opcode": 1643009069,
+      "capture": "ext",
+      "children": [
+        62,
+        77
+      ],
+      "parent": 78
+    },
+    {
+      "kind": "or",
+      "branches": [
+        63,
+        67
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 2907617013,
+      "capture": "payout",
+      "child": 64
+    },
+    {
+      "kind": "or",
+      "branches": [
+        65,
+        66
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "out_jetton"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1196394191,
+      "capture": "out_ton"
+    },
+    {
+      "kind": "recursive",
+      "step": 68,
+      "exit": 73,
+      "optional": true
+    },
+    {
+      "kind": "or",
+      "branches": [
+        69,
+        71
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 1923917994,
+      "capture": "peer",
+      "children": [
+        70
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 2623606243,
+      "optional": true,
+      "capture": "peer_notification"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1643009069,
+      "capture": "peer",
+      "children": [
+        72
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 2623606243,
+      "optional": true,
+      "capture": "peer_notification"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2907617013,
+      "child": 74
+    },
+    {
+      "kind": "or",
+      "branches": [
+        75,
+        76
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1196394191
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2623606243,
+      "optional": true,
+      "capture": "notification"
+    },
+    {
+      "kind": "or",
+      "branches": [
+        79,
+        80
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "in_transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3926267997,
+      "capture": "swap_request"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1499400124,
+      "capture": "burn",
+      "child": 82
+    },
+    {
+      "kind": "contract",
+      "opcode": 2078119902,
+      "capture": "notification",
+      "children": [
+        83,
+        87
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 2907617013,
+      "capture": "req_1",
+      "child": 84
+    },
+    {
+      "kind": "or",
+      "branches": [
+        85,
+        86
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1196394191,
+      "capture": "ton_1"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "jt_1"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2907617013,
+      "capture": "req_2",
+      "child": 88
+    },
+    {
+      "kind": "or",
+      "branches": [
+        89,
+        90
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1196394191,
+      "capture": "ton_2"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "jt_2"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1320284409,
+      "capture": "dns",
+      "child": 92
+    },
+    {
+      "kind": "contract",
+      "opcode": 4294967295,
+      "optional": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "transfer",
+      "child": 94
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_mint",
+      "capture": "mint"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2,
+      "capture": "master",
+      "child": 96
+    },
+    {
+      "kind": "pred",
+      "pred": "evaa_user_withdraw_user",
+      "capture": "user",
+      "child": 97
+    },
+    {
+      "kind": "or",
+      "branches": [
+        98,
+        105,
+        108
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 529,
+      "capture": "coll_ok",
+      "children": [
+        99,
+        103
+      ]
+    },
+    {
+      "kind": "or",
+      "branches": [
+        100,
+        101
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "jetton_payout"
+    },
+    {
+      "kind": "contract",
+      "opcode": 8474,
+      "capture": "ton_payout",
+      "child": 102
+    },
+    {
+      "kind": "pred",
+      "pred": "evaa_service_comment",
+      "optional": true
+    },
+    {
+      "kind": "pred",
+      "pred": "evaa_user_withdraw_success",
+      "child": 104
+    },
+    {
+      "kind": "block_type",
+      "btype": "ton_transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 529,
+      "capture": "coll_fail",
+      "child": 106
+    },
+    {
+      "kind": "pred",
+      "pred": "evaa_user_withdraw_fail",
+      "child": 107
+    },
+    {
+      "kind": "contract",
+      "opcode": 2170856
+    },
+    {
+      "kind": "or",
+      "branches": [
+        109,
+        110,
+        111,
+        112
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 8678,
+      "capture": "fail_excess"
+    },
+    {
+      "kind": "contract",
+      "opcode": 8679,
+      "capture": "fail_excess"
+    },
+    {
+      "kind": "contract",
+      "opcode": 8680,
+      "capture": "fail_excess"
+    },
+    {
+      "kind": "contract",
+      "opcode": 8684,
+      "capture": "fail_excess"
+    },
+    {
+      "kind": "block_type",
+      "btype": "nft_transfer",
+      "capture": "nft",
+      "where": "getgems_purchase",
+      "child": 114
+    },
+    {
+      "kind": "block_type",
+      "btype": "ton_transfer",
+      "optional": true,
+      "capture": "payout",
+      "where": "getgems_seller_payout"
+    },
+    {
+      "kind": "contract",
+      "opcode": 260734629,
+      "capture": "transfer",
+      "child": 116
+    },
+    {
+      "kind": "contract",
+      "opcode": 395134233,
+      "capture": "internal",
+      "child": 117
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "optional": true,
+      "capture": "notify"
+    },
+    {
+      "kind": "contract",
+      "opcode": 260734629,
+      "capture": "transfer",
+      "child": 119
+    },
+    {
+      "kind": "contract",
+      "opcode": 395134233,
+      "capture": "internal",
+      "child": 120
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "optional": true,
+      "capture": "notify"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1499400124,
+      "capture": "burn",
+      "child": 122
+    },
+    {
+      "kind": "contract",
+      "opcode": 2078119902,
+      "optional": true,
+      "capture": "notification"
+    },
+    {
+      "kind": "any",
+      "capture": "mint",
+      "child": 124
+    },
+    {
+      "kind": "or",
+      "branches": [
+        125,
+        126
+      ],
+      "exclusive": false,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "capture": "notify"
+    },
+    {
+      "kind": "contract",
+      "opcode": 395134233,
+      "capture": "internal",
+      "child": 127
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "optional": true,
+      "capture": "internal_notify"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "transfer",
+      "children": [
+        129,
+        139
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 3599387329,
+      "capture": "receive",
+      "child": 130
+    },
+    {
+      "kind": "or",
+      "branches": [
+        131,
+        137
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 4123376291,
+      "capture": "request",
+      "children": [
+        132,
+        136
+      ]
+    },
+    {
+      "kind": "recursive",
+      "step": 133,
+      "optional": true
+    },
+    {
+      "kind": "or",
+      "branches": [
+        134,
+        135
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 1438866240,
+      "capture": "ref"
+    },
+    {
+      "kind": "contract",
+      "opcode": 124708064,
+      "capture": "refupd"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2928871374,
+      "capture": "update"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2662179289,
+      "capture": "cancel",
+      "child": 138
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "optional": true,
+      "capture": "cancel_transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 942936554,
+      "optional": true,
+      "capture": "setdata"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1234866786,
+      "capture": "unstake",
+      "child": 141
+    },
+    {
+      "kind": "contract",
+      "opcode": 4123376291,
+      "optional": true,
+      "capture": "request",
+      "children": [
+        142,
+        146,
+        147,
+        148
+      ]
+    },
+    {
+      "kind": "recursive",
+      "step": 143,
+      "optional": true
+    },
+    {
+      "kind": "or",
+      "branches": [
+        144,
+        145
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 1438866240,
+      "capture": "ref"
+    },
+    {
+      "kind": "contract",
+      "opcode": 124708064,
+      "capture": "refupd"
+    },
+    {
+      "kind": "block_type",
+      "btype": "ton_transfer",
+      "optional": true,
+      "capture": "fee"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "withdraw"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2928871374,
+      "capture": "update"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2027548937,
+      "capture": "claim",
+      "child": 150
+    },
+    {
+      "kind": "contract",
+      "opcode": 1153179619,
+      "capture": "send",
+      "children": [
+        151,
+        152
+      ]
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "withdraw"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2928871374,
+      "capture": "update"
+    },
+    {
+      "kind": "contract",
+      "opcode": 23647415,
+      "capture": "request_anchor",
+      "child": 154
+    },
+    {
+      "kind": "contract",
+      "opcode": 4123376291,
+      "optional": true,
+      "capture": "request",
+      "children": [
+        155,
+        159
+      ]
+    },
+    {
+      "kind": "recursive",
+      "step": 156,
+      "optional": true
+    },
+    {
+      "kind": "or",
+      "branches": [
+        157,
+        158
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 1438866240,
+      "capture": "ref"
+    },
+    {
+      "kind": "contract",
+      "opcode": 124708064,
+      "capture": "refupd"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2928871374,
+      "capture": "update"
+    },
+    {
+      "kind": "contract",
+      "opcode": 586394633,
+      "capture": "prepare",
+      "children": [
+        161,
+        162
+      ]
+    },
+    {
+      "kind": "block_type",
+      "btype": "ton_transfer",
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 2547990604,
+      "child": 163
+    },
+    {
+      "kind": "contract",
+      "opcode": 3077049286,
+      "child": 164
+    },
+    {
+      "kind": "contract",
+      "opcode": 209421336,
+      "capture": "execute",
+      "children": [
+        165,
+        166
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 3812333683,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 3400410529,
+      "capture": "oapp_callback",
+      "children": [
+        167,
+        168
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 3812333683,
+      "optional": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "ton_transfer",
+      "optional": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "ton_transfer",
+      "capture": "payout",
+      "where": "nominator_pool_withdraw_parent"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "in_transfer",
+      "child": 171
+    },
+    {
+      "kind": "contract",
+      "opcode": 630424929,
+      "capture": "swap",
+      "child": 172
+    },
+    {
+      "kind": "contract",
+      "opcode": 4181439551,
+      "capture": "req",
+      "where": "stonfi_v1_sender_payment",
+      "child": 173
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "out"
+    },
+    {
+      "kind": "contract",
+      "opcode": 935368415,
+      "capture": "provide",
+      "children": [
+        175
+      ],
+      "parent": 180
+    },
+    {
+      "kind": "contract",
+      "opcode": 1355195988,
+      "capture": "add",
+      "child": 176
+    },
+    {
+      "kind": "contract",
+      "opcode": 116184359,
+      "capture": "cb",
+      "child": 177
+    },
+    {
+      "kind": "or",
+      "branches": [
+        178,
+        179
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 395134233,
+      "capture": "lp_transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1355195988,
+      "capture": "refund"
+    },
+    {
+      "kind": "or",
+      "branches": [
+        181,
+        183,
+        184
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "capture": "notify_pton",
+      "parent": 182
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "capture": "in_pton"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "in_jt"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "capture": "notify_raw",
+      "parent": 185
+    },
+    {
+      "kind": "contract",
+      "opcode": 395134233,
+      "capture": "internal_raw",
+      "parent": 186
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "in_jt_raw"
+    },
+    {
+      "kind": "contract",
+      "opcode": 935368415,
+      "capture": "provide",
+      "children": [
+        188
+      ],
+      "parent": 189
+    },
+    {
+      "kind": "contract",
+      "opcode": 1355195988,
+      "capture": "add"
+    },
+    {
+      "kind": "or",
+      "branches": [
+        190,
+        192,
+        193
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "capture": "notify_pton",
+      "parent": 191
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "capture": "in_pton"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "in_jt"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "capture": "notify_raw",
+      "parent": 194
+    },
+    {
+      "kind": "contract",
+      "opcode": 395134233,
+      "capture": "internal_raw",
+      "parent": 195
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "in_jt_raw"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "swap",
+      "children": [
+        197
+      ],
+      "parent": 243
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "payout",
+      "child": 198
+    },
+    {
+      "kind": "or",
+      "branches": [
+        199,
+        215,
+        230
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "out_transfer",
+      "where": "no_internal_transfer",
+      "child": 200
+    },
+    {
+      "kind": "pred",
+      "pred": "pton_self_transfer",
+      "child": 201
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "child": 202
+    },
+    {
+      "kind": "recursive",
+      "step": 203,
+      "optional": true
+    },
+    {
+      "kind": "or",
+      "branches": [
+        204,
+        209,
+        213
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 205
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout",
+      "child": 206
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "peer_out",
+      "where": "no_internal_transfer",
+      "child": 207
+    },
+    {
+      "kind": "pred",
+      "pred": "pton_self_transfer",
+      "child": 208
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 210
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout",
+      "child": 211
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "peer_out",
+      "children": [
+        212
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 214
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "out_transfer",
+      "child": 216,
+      "children": [
+        229
+      ]
+    },
+    {
+      "kind": "recursive",
+      "step": 217,
+      "optional": true
+    },
+    {
+      "kind": "or",
+      "branches": [
+        218,
+        223,
+        227
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 219
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout",
+      "child": 220
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "peer_out",
+      "where": "no_internal_transfer",
+      "child": 221
+    },
+    {
+      "kind": "pred",
+      "pred": "pton_self_transfer",
+      "child": 222
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 224
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout",
+      "child": 225
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "peer_out",
+      "children": [
+        226
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 228
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout"
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true
+    },
+    {
+      "kind": "recursive",
+      "step": 231,
+      "optional": true
+    },
+    {
+      "kind": "or",
+      "branches": [
+        232,
+        237,
+        241
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 233
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout",
+      "child": 234
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "peer_out",
+      "where": "no_internal_transfer",
+      "child": 235
+    },
+    {
+      "kind": "pred",
+      "pred": "pton_self_transfer",
+      "child": 236
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 238
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout",
+      "child": 239
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "peer_out",
+      "children": [
+        240
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 242
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout"
+    },
+    {
+      "kind": "or",
+      "branches": [
+        244,
+        245
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "in_transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "parent": 246
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "capture": "in_transfer"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_burn",
+      "capture": "burn",
+      "child": 248
+    },
+    {
+      "kind": "contract",
+      "opcode": 695482319,
+      "capture": "router",
+      "children": [
+        249,
+        252
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "payout_1",
+      "child": 250
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "jt_1",
+      "child": 251
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true,
+      "capture": "pton_1"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "payout_2",
+      "child": 253
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "jt_2",
+      "child": 254
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true,
+      "capture": "pton_2"
+    },
+    {
+      "kind": "contract",
+      "opcode": 261677752,
+      "capture": "refund",
+      "children": [
+        256,
+        259
+      ],
+      "parent": 262
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "payout_1",
+      "child": 257
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "jt_1",
+      "child": 258
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true,
+      "capture": "pton_1"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "payout_2",
+      "child": 260
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "jt_2",
+      "child": 261
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true,
+      "capture": "pton_2"
+    },
+    {
+      "kind": "contract",
+      "opcode": 321624620,
+      "capture": "refund_parent"
+    },
+    {
+      "kind": "contract",
+      "opcode": 85167505,
+      "capture": "assigned",
+      "parent": 264
+    },
+    {
+      "kind": "block_type",
+      "btype": "ton_transfer",
+      "capture": "payment",
+      "children": [
+        265,
+        266
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 923790417,
+      "capture": "payout_1"
+    },
+    {
+      "kind": "contract",
+      "opcode": 923790417,
+      "optional": true,
+      "capture": "payout_2"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1064836388,
+      "capture": "head",
+      "child": 268
+    },
+    {
+      "kind": "recursive",
+      "step": 269,
+      "exit": 270,
+      "optional": true
+    },
+    {
+      "kind": "any",
+      "capture": "mid"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3827992475,
+      "capture": "tail",
+      "children": [
+        271,
+        272
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 2007502579,
+      "capture": "log"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_mint",
+      "capture": "mint"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1052660785,
+      "capture": "add_liquidity",
+      "children": [
+        274
+      ],
+      "parent": 282
+    },
+    {
+      "kind": "contract",
+      "opcode": 2171612920,
+      "optional": true,
+      "children": [
+        275,
+        280,
+        281
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 2715461997,
+      "optional": true,
+      "capture": "refund_router_call",
+      "children": [
+        276,
+        278
+      ]
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "optional": true,
+      "capture": "excess_transfer_0",
+      "children": [
+        277
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "optional": true,
+      "capture": "excess_transfer_1",
+      "children": [
+        279
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "nft_mint",
+      "capture": "nft_mint"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3576854235,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1147723383,
+      "parent": 283
+    },
+    {
+      "kind": "or",
+      "branches": [
+        284,
+        286
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "capture": "ton_input",
+      "parent": 285
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "capture": "ton_input_addition"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "jetton_input"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2818267384,
+      "capture": "swap",
+      "children": [
+        288
+      ],
+      "parent": 311
+    },
+    {
+      "kind": "contract",
+      "opcode": 2715461997,
+      "child": 289
+    },
+    {
+      "kind": "or",
+      "branches": [
+        290,
+        305,
+        307,
+        309
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "child": 291
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "child": 292
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "child": 293
+    },
+    {
+      "kind": "recursive",
+      "strategy": "cyclic",
+      "step": 294
+    },
+    {
+      "kind": "contract",
+      "opcode": 2818267384,
+      "child": 295
+    },
+    {
+      "kind": "contract",
+      "opcode": 2715461997,
+      "child": 296
+    },
+    {
+      "kind": "or",
+      "branches": [
+        297,
+        300,
+        301,
+        303
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "child": 298
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "child": 299
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "child": 294
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "child": 294
+    },
+    {
+      "kind": "contract",
+      "opcode": 260734629,
+      "child": 302
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "children": [
+        304
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "child": 306
+    },
+    {
+      "kind": "recursive",
+      "strategy": "cyclic",
+      "step": 294
+    },
+    {
+      "kind": "contract",
+      "opcode": 260734629,
+      "child": 308
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "children": [
+        310
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true
+    },
+    {
+      "kind": "or",
+      "branches": [
+        312,
+        313
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "in_transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "parent": 314
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "capture": "in_transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1499400124,
+      "capture": "burn",
+      "child": 316
+    },
+    {
+      "kind": "contract",
+      "opcode": 2078119902,
+      "child": 317
+    },
+    {
+      "kind": "contract",
+      "opcode": 832244956,
+      "capture": "request",
+      "child": 318
+    },
+    {
+      "kind": "or",
+      "branches": [
+        319,
+        320
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 175592284,
+      "capture": "immediate_withdrawal"
+    },
+    {
+      "kind": "contract",
+      "opcode": 376746144,
+      "capture": "delayed_withdrawal"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2809346765,
+      "capture": "send",
+      "child": 322
+    },
+    {
+      "kind": "contract",
+      "opcode": 4151524045,
+      "capture": "response"
+    }
+  ],
+  "registration_order": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31
+  ]
+}
