@@ -35,16 +35,14 @@ bool asset_eq(const Value &l, const Value &r) {
   return !l.has_jetton || l.str == r.str;
 }
 
-// Asset == string: case-insensitive compare of the jetton master's raw string
-// (Asset.__eq__ lowercases both sides; TON asset matches the literal "ton").
+// Asset == string: case-insensitive compare of the jetton master's raw string.
+// Python Asset.__eq__ evaluates `self.jetton_address.as_str().lower()` FIRST,
+// so an asset WITHOUT a jetton master (TON) raises AttributeError -> EvalError
+// -> fault; its `is_ton and other == "ton"` clause is unreachable. eq_result
+// faults that pair before reaching here (Phase C golden parse_coffee_vault_
+// native pinned this).
 bool asset_eq_str(const Value &asset, const std::string &s) {
-  if (asset.has_jetton) {
-    return to_lower(asset.str) == to_lower(s);
-  }
-  if (asset.is_ton) {
-    return to_lower(s) == "ton";
-  }
-  return false;
+  return asset.has_jetton && to_lower(asset.str) == to_lower(s);
 }
 
 bool account_eq(const Value &l, const Value &r) {
@@ -112,6 +110,12 @@ EvalResult eq_result(const Value &l, const Value &r, bool want_eq) {
   if (rt_is_null(l) || rt_is_null(r)) {
     eq = rt_is_null(l) && rt_is_null(r);
   } else {
+    // Asset-without-jetton-master vs string: Python Asset.__eq__ raises
+    // (None.as_str()) before its is_ton clause -> EvalError -> fault.
+    if ((l.t == VType::Asset && !l.has_jetton && r.t == VType::Str) ||
+        (r.t == VType::Asset && !r.has_jetton && l.t == VType::Str)) {
+      return rt_fault("'==' failed: asset has no jetton master string");
+    }
     eq = raw_eq(l, r);
   }
   return rt_ok(Value::make_bool(want_eq ? eq : !eq));

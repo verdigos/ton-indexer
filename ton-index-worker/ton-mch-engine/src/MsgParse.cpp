@@ -476,6 +476,343 @@ td::Result<Value> parse_never(const td::Ref<vm::Cell> &) {
   return td::Status::Error("message type is not constructible (Python parity)");
 }
 
+// --- Phase C adapters (all HAND-WRITTEN: each family carries a pytoniq quirk
+// a clean TL-B constructor cannot express — dns's dead-value_slice chunk walk,
+// vesting's inner msg-info descent, pton's to_cell() remainder, coffee's
+// custom asset tag; dedust payout is trivial and stays consistent) ----------
+
+// str.decode() parity: Python's strict utf-8 decode raises on invalid bytes,
+// failing the whole parse.
+bool valid_utf8(const std::string &s) {
+  size_t i = 0;
+  while (i < s.size()) {
+    unsigned char c = static_cast<unsigned char>(s[i]);
+    int n;
+    if (c < 0x80) {
+      n = 0;
+    } else if ((c & 0xE0) == 0xC0 && c >= 0xC2) {
+      n = 1;
+    } else if ((c & 0xF0) == 0xE0) {
+      n = 2;
+    } else if ((c & 0xF8) == 0xF0 && c <= 0xF4) {
+      n = 3;
+    } else {
+      return false;
+    }
+    if (i + n >= s.size()) {
+      return false;
+    }
+    for (int k = 1; k <= n; k++) {
+      if ((static_cast<unsigned char>(s[i + k]) & 0xC0) != 0x80) {
+        return false;
+      }
+    }
+    // Reject overlongs / surrogates / >U+10FFFF like Python's strict decoder.
+    if (n == 2) {
+      unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+      if ((c == 0xE0 && c1 < 0xA0) || (c == 0xED && c1 >= 0xA0)) {
+        return false;
+      }
+    }
+    if (n == 3) {
+      unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+      if ((c == 0xF0 && c1 < 0x90) || (c == 0xF4 && c1 >= 0x90)) {
+        return false;
+      }
+    }
+    i += n + 1;
+  }
+  return true;
+}
+
+td::Result<std::string> fetch_bytes_str(vm::CellSlice &cs, int n) {
+  if (!cs.have(n * 8)) {
+    return td::Status::Error("bytes: underflow");
+  }
+  std::string out(static_cast<size_t>(n), '\0');
+  if (!cs.fetch_bytes(reinterpret_cast<unsigned char *>(out.data()), n)) {
+    return td::Status::Error("bytes: fetch failed");
+  }
+  return out;
+}
+
+// AccountId(load_address()) as dns's value dicts wrap it: None -> AccountId(None)
+// (addr_none Account, NOT null); an extern address string raises in the
+// AccountId ctor -> the whole parse fails.
+td::Result<Value> account_id_of(Value addr) {
+  if (addr.is_null()) {
+    return Value::make_account_none();
+  }
+  if (addr.t == VType::Str) {
+    return td::Status::Error("AccountId(extern) raises");
+  }
+  return addr;
+}
+
+// ChangeDnsRecordMessage (messages/dns.py). The DNSText chunk walk reproduces
+// the Python loop verbatim: every chunk's length+text is read from the SAME
+// value slice; the first extra chunk consumes one of ITS refs into the dead
+// value_slice variable; a third chunk calls load_ref on a Cell and always
+// raises (-> parse fail).
+td::Result<Value> parse_change_dns(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64) || !cs.advance(32)) {
+    return td::Status::Error("dns: header underflow");
+  }
+  auto query_id = cs.fetch_ulong(64);
+  TRY_RESULT(key, fetch_bytes_str(cs, 32));
+  bool has_value = cs.size_refs() > 0;
+  Value value = Value::null();
+  if (has_value) {
+    vm::CellSlice vs;
+    bool special = false;
+    try {
+      vs = vm::load_cell_slice_special(cs.fetch_ref(), special);
+    } catch (...) {
+      return td::Status::Error("dns: bad value cell");
+    }
+    if (!vs.have(16)) {
+      return td::Status::Error("dns: schema underflow");
+    }
+    auto schema = static_cast<unsigned>(vs.fetch_ulong(16));
+    Value::Fields vf;
+    if (schema == 0xba93) {
+      TRY_RESULT(addr, load_address_py(vs));
+      TRY_RESULT(acc, account_id_of(std::move(addr)));
+      vf.emplace_back("schema", Value::make_str("DNSNextResolver"));
+      vf.emplace_back("address", std::move(acc));
+    } else if (schema == 0xad01) {
+      TRY_RESULT(adnl, fetch_bytes_str(vs, 32));
+      if (!vs.have(8)) {
+        return td::Status::Error("dns: adnl flags underflow");
+      }
+      vf.emplace_back("schema", Value::make_str("DNSAdnlAddress"));
+      vf.emplace_back("address", Value::make_bytes(std::move(adnl)));
+      vf.emplace_back("flags", Value::make_int64(static_cast<std::int64_t>(vs.fetch_ulong(8))));
+    } else if (schema == 0x9fd3) {
+      TRY_RESULT(addr, load_address_py(vs));
+      TRY_RESULT(acc, account_id_of(std::move(addr)));
+      if (!vs.have(8)) {
+        return td::Status::Error("dns: smc flags underflow");
+      }
+      vf.emplace_back("schema", Value::make_str("DNSSmcAddress"));
+      vf.emplace_back("address", std::move(acc));
+      vf.emplace_back("flags", Value::make_int64(static_cast<std::int64_t>(vs.fetch_ulong(8))));
+    } else if (schema == 0x7473) {
+      TRY_RESULT(bag, fetch_bytes_str(vs, 32));
+      vf.emplace_back("schema", Value::make_str("DNSStorageAddress"));
+      vf.emplace_back("address", Value::make_bytes(std::move(bag)));
+    } else if (schema == 0x1eda) {
+      if (!vs.have(8)) {
+        return td::Status::Error("dns: chunk count underflow");
+      }
+      int chunks = static_cast<int>(vs.fetch_ulong(8));
+      std::string dns_text;
+      bool value_slice_is_cell = false;
+      while (chunks > 0) {
+        if (!vs.have(8)) {
+          return td::Status::Error("dns: chunk len underflow");
+        }
+        int len = static_cast<int>(vs.fetch_ulong(8));
+        TRY_RESULT(chunk, fetch_bytes_str(vs, len));
+        if (!valid_utf8(chunk)) {
+          return td::Status::Error("dns: chunk not utf-8");
+        }
+        dns_text += chunk;
+        chunks--;
+        if (chunks > 0) {
+          if (value_slice_is_cell) {
+            // Python: Cell.load_ref does not exist -> AttributeError.
+            return td::Status::Error("dns: load_ref on a cell");
+          }
+          if (vs.size_refs() == 0) {
+            return td::Status::Error("dns: chunk ref missing");
+          }
+          vs.fetch_ref();  // consumed into the dead value_slice variable
+          value_slice_is_cell = true;
+        }
+      }
+      vf.emplace_back("schema", Value::make_str("DNSText"));
+      vf.emplace_back("dns_text", Value::make_str(std::move(dns_text)));
+    } else {
+      vf.emplace_back("schema", Value::make_str("Unknown"));
+    }
+    value = Value::make_dict(std::move(vf));
+  }
+  Value::Fields f;
+  f.emplace_back("query_id", Value::make_int(refint_u64(query_id)));
+  f.emplace_back("key", Value::make_bytes(std::move(key)));
+  f.emplace_back("has_value", Value::make_bool(has_value));
+  f.emplace_back("value", std::move(value));
+  return Value::make_obj(std::move(f));
+}
+
+// VestingSendMessage (messages/vesting.py): the inner message cell's
+// int_msg_info header is fully deserialized (any failure fails the parse).
+// Deviation (documented): a present extra-currency dict ref is consumed but
+// not deep-validated (Python's HashMap.parse would validate; vesting inner
+// messages never carry extra currencies in practice).
+td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64 + 8) || !cs.advance(32)) {
+    return td::Status::Error("vesting: header underflow");
+  }
+  auto query_id = cs.fetch_ulong(64);
+  auto send_mode = cs.fetch_ulong(8);
+  if (cs.size_refs() == 0) {
+    return td::Status::Error("vesting: message_cell ref missing");
+  }
+  td::Ref<vm::Cell> message_cell = cs.fetch_ref();
+
+  vm::CellSlice ms;
+  bool special = false;
+  try {
+    ms = vm::load_cell_slice_special(message_cell, special);
+  } catch (...) {
+    return td::Status::Error("vesting: bad message cell");
+  }
+  // InternalMsgInfo.deserialize: tag bit 0, ihr_disabled/bounce/bounced,
+  // src, dest, value (grams + extra dict), ihr_fee, fwd_fee, lt, at.
+  if (!ms.have(4)) {
+    return td::Status::Error("vesting: msg info underflow");
+  }
+  if (ms.fetch_ulong(1) != 0) {
+    return td::Status::Error("vesting: not int_msg_info");
+  }
+  ms.advance(3);
+  TRY_RESULT(src, load_address_py(ms));
+  (void)src;
+  TRY_RESULT(dest, load_address_py(ms));
+  TRY_RESULT(grams, load_coins_py(ms));
+  if (!ms.have(1)) {
+    return td::Status::Error("vesting: extra dict underflow");
+  }
+  if (ms.fetch_ulong(1)) {
+    if (ms.size_refs() == 0) {
+      return td::Status::Error("vesting: extra dict ref missing");
+    }
+    ms.fetch_ref();
+  }
+  TRY_RESULT(ihr_fee, load_coins_py(ms));
+  (void)ihr_fee;
+  TRY_RESULT(fwd_fee, load_coins_py(ms));
+  (void)fwd_fee;
+  if (!ms.have(64 + 32)) {
+    return td::Status::Error("vesting: lt/at underflow");
+  }
+  ms.advance(64 + 32);
+
+  Value::Fields f;
+  f.emplace_back("query_id", Value::make_int(refint_u64(query_id)));
+  f.emplace_back("send_mode", Value::make_int64(static_cast<std::int64_t>(send_mode)));
+  f.emplace_back("message_cell", Value::make_cell(std::move(message_cell)));
+  f.emplace_back("message_destination", std::move(dest));
+  f.emplace_back("message_value", Value::make_int(std::move(grams)));
+  return Value::make_obj(std::move(f));
+}
+
+// PTonTransfer (messages/swaps.py): forward_payload = maybe-ref Cell, else the
+// slice REMAINDER as a cell when refs remain (pytoniq body.to_cell(): remaining
+// bits + refs FROM the current ref cursor — NOT the copy() reset).
+td::Result<Value> parse_pton_transfer(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64) || !cs.advance(32)) {
+    return td::Status::Error("pton: header underflow");
+  }
+  auto query_id = cs.fetch_ulong(64);
+  TRY_RESULT(ton_amount, load_coins_py(cs));
+  TRY_RESULT(refund_address, load_address_py(cs));
+  if (!cs.have(1)) {
+    return td::Status::Error("pton: forward_payload bit missing");
+  }
+  Value forward_payload = Value::null();
+  if (cs.fetch_ulong(1)) {
+    if (cs.size_refs() == 0) {
+      return td::Status::Error("pton: forward_payload ref missing");
+    }
+    forward_payload = Value::make_cell(cs.fetch_ref());
+  } else if (cs.size_refs() > 0) {
+    try {
+      vm::CellBuilder cb;
+      cb.store_bits(cs.data_bits(), cs.size());
+      for (unsigned i = 0; i < cs.size_refs(); i++) {
+        cb.store_ref(cs.prefetch_ref(i));
+      }
+      forward_payload = Value::make_cell(cb.finalize());
+    } catch (...) {
+      return td::Status::Error("pton: to_cell failed");
+    }
+  }
+  Value::Fields f;
+  f.emplace_back("query_id", Value::make_int(refint_u64(query_id)));
+  f.emplace_back("ton_amount", Value::make_int(std::move(ton_amount)));
+  f.emplace_back("refund_address", std::move(refund_address));
+  f.emplace_back("forward_payload", std::move(forward_payload));
+  return Value::make_obj(std::move(f));
+}
+
+// DedustPayoutFromPool (messages/swaps.py).
+td::Result<Value> parse_dedust_payout_from_pool(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64) || !cs.advance(32)) {
+    return td::Status::Error("dedust payout: header underflow");
+  }
+  auto query_id = cs.fetch_ulong(64);
+  if (cs.size_refs() == 0) {
+    return td::Status::Error("dedust payout: proof ref missing");
+  }
+  td::Ref<vm::Cell> proof = cs.fetch_ref();
+  TRY_RESULT(amount, load_coins_py(cs));
+  Value::Fields f;
+  f.emplace_back("query_id", Value::make_int(refint_u64(query_id)));
+  f.emplace_back("proof", Value::make_cell(std::move(proof)));
+  f.emplace_back("amount", Value::make_int(std::move(amount)));
+  return Value::make_obj(std::move(f));
+}
+
+// CoffeeCreateVault (messages/coffee.py + load_coffee_asset): native/jetton
+// asset tags; extra$10 and the invalid tag raise in Python -> parse fail.
+td::Result<Value> parse_coffee_create_vault(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64) || !cs.advance(32)) {
+    return td::Status::Error("coffee vault: header underflow");
+  }
+  auto query_id = cs.fetch_ulong(64);
+  if (!cs.have(2)) {
+    return td::Status::Error("coffee vault: asset tag underflow");
+  }
+  auto tag = cs.fetch_ulong(2);
+  Value asset;
+  if (tag == 0) {
+    asset = Value::make_asset_ton();
+  } else if (tag == 1) {
+    if (!cs.have(8)) {
+      return td::Status::Error("coffee vault: asset chain underflow");
+    }
+    int chain = static_cast<int>(cs.fetch_ulong(8));
+    if (!cs.have(256)) {
+      return td::Status::Error("coffee vault: asset hash underflow");
+    }
+    unsigned char buf[32];
+    if (!cs.fetch_bytes(buf, 32)) {
+      return td::Status::Error("coffee vault: asset hash fetch failed");
+    }
+    asset = Value::make_asset_jetton(std::to_string(chain) + ":" + hex_upper(buf, 32));
+  } else {
+    // extra$10 -> NotImplementedError; anything else -> ValueError.
+    return td::Status::Error("coffee vault: unsupported asset tag");
+  }
+  Value::Fields f;
+  f.emplace_back("query_id", Value::make_int(refint_u64(query_id)));
+  f.emplace_back("asset", std::move(asset));
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::map<std::string, MsgParserFn> &message_parsers() {
@@ -487,6 +824,11 @@ const std::map<std::string, MsgParserFn> &message_parsers() {
       {"JettonMint", parse_jetton_mint},
       {"MinterJettonMint", parse_minter_jetton_mint},
       {"JettonBurnNotification", parse_never},
+      {"ChangeDnsRecordMessage", parse_change_dns},
+      {"VestingSendMessage", parse_vesting_send_message},
+      {"PTonTransfer", parse_pton_transfer},
+      {"DedustPayoutFromPool", parse_dedust_payout_from_pool},
+      {"CoffeeCreateVault", parse_coffee_create_vault},
   };
   return parsers;
 }
@@ -528,6 +870,11 @@ constexpr DumpType kDumpTypes[] = {
     {0x7362d09c, "JettonNotify"},
     {0x642b7d07, "JettonMint"},
     {0x00000015, "MinterJettonMint"},
+    {0x4eb1f0f9, "ChangeDnsRecordMessage"},
+    {0xa7733acd, "VestingSendMessage"},
+    {0x01f3835d, "PTonTransfer"},
+    {0xad4eb6f5, "DedustPayoutFromPool"},
+    {0xc0ffee06, "CoffeeCreateVault"},
 };
 
 std::string render_value(const Value &v);
@@ -572,6 +919,8 @@ std::string render_value(const Value &v) {
       auto h = v.cell->get_hash();
       return "cell:" + hex_upper(h.as_slice().ubegin(), h.as_slice().size());
     }
+    case VType::Asset:
+      return v.is_ton ? "asset:TON" : "asset:" + v.str;
     case VType::Dict:
     case VType::Obj:
       return render_fields_sorted(*v.fields);

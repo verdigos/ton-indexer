@@ -78,11 +78,15 @@ regenerate per the layer's task description below).
   compiled path deleted (mch_ir is the only runtime); 11 matchers declarative-or-hybrid.
   Deferred by decision (do NOT implement without user): G-LC `map(xs as e => …)`, G-Q
   `any/all`, `in` operator, division. Cut: `omit`, string ops, multi-return lookups, `fn` decl.
-- **C++ engine** (`ton-index-worker/ton-mch-engine/`, commit 6dc01d45): trace loader (lz4+msgpack),
-  Block substrate (canonical next_blocks invariant; A/B ×147), expr VM + `mch-codegen` C++
-  codegen tool (91/91 both paths), IR loader + match-phase walker (A/B 0 diff; 27/32 matchers
-  runnable, 5 pred-skipped), where_expr both modes (synthetic-spec A/B 0 diff), TL-B jetton
-  parsing layer (`tlb/mch-msgs.tlb` + `MsgParse` adapters, 381 msgs A/B 0 diff).
+- **C++ engine** (`ton-index-worker/ton-mch-engine/`, commits 6dc01d45 + 54e72caf = Phase B
+  complete): trace loader (lz4+msgpack), Block substrate (canonical next_blocks invariant;
+  A/B ×147), expr VM + `mch-codegen` C++ codegen tool (91/91 both paths), IR loader +
+  match-phase walker (A/B 0 diff; 27/32 matchers runnable, 5 pred-skipped), where_expr both
+  modes (synthetic-spec A/B 0 diff), TL-B jetton parsing layer (`tlb/mch-msgs.tlb` +
+  `MsgParse` adapters, 381 msgs A/B 0 diff), pytoniq-order BOC writer (byte parity),
+  build-statement codegen + BuildRuntime (golden build vectors), two-phase fixture lookups,
+  end-to-end `--classify` loop (A/B 0 diff; classify corpus artifact = 35 matchers incl.
+  specs_decl jettons — the bare production artifact is 32).
 - **Key structs**: `Value` (RefInt256 ints, addr_none state, Dict/Obj map kinds, VType::Block
   non-owning ptr), `WhereEnv{block, slots, n_slots}` (slot array reserved for captures),
   `EvalResult{faulted, value, message}` (no exceptions escape).
@@ -204,7 +208,15 @@ Gate: each binding flips its matcher from the skip table into the classify A/B w
    re-sync `ir/` copies + doc.
 2. Doc destaling: T42 "78 vectors" → 91 (docs/mch-roadmap.md + mch-ir-spec.md §12 refs);
    `docs/mch-engine-v2.md` §7 list-order claim → `_canonical` min_lt sort (T21);
-   `docs/mch-codegen-usage.md` still v0.1-era.
+   `docs/mch-codegen-usage.md` still v0.1-era;
+   **Asset == string semantics** (Phase C wave 1 finding, pinned by golden vector
+   `parse_coffee_vault_native`): Python `Asset.__eq__` (ton_utils.py:39) reads
+   `jetton_address.as_str()` BEFORE the is_ton clause, so TON-asset == string ALWAYS
+   raises → EvalError → rejection; the "ton" string match is dead code. Docs claiming
+   TON-matches-"ton" are wrong: mch-ir-spec.md §7 + spec §9.6 need "jetton-only;
+   TON-asset vs string faults"; C++ Value.h's Asset==string note stale too (fix in
+   hygiene wave). Alternatively FIX Python to honor the intent — language decision,
+   but the fault behavior is what production data was built on.
 3. Open roadmap (do only on user ask): T19 walk-parity follow-ups (mch_walk_compare stubbed),
    T25 cross-file namespace, T26 production wiring behind feature flag (must also register
    `post_process_stonfi_v2_liquidity`), T27 corpus parity harness, evaa lowering optimization
@@ -245,3 +257,76 @@ no implementation without user sign-off.
   when a spec first touches one.
 - Skip tables must always be computed from the ARTIFACT (both sides), never from registry
   availability — that's what keeps twins honest.
+
+## 11. Simplification backlog (compat audit, 2026-07-07)
+
+From the read-only python-compat audit of ton-mch-engine (~7.2k LOC), classified against the
+parity bar "only the final block tree and the DB-written Action must match Python". Lead
+corrections applied. Execute as a hygiene wave AFTER Phase C lands (same-tree conflicts).
+
+### Approved backlog
+
+0. **Generated files out of git, per-document outputs (first hygiene item).** Today only
+   vectors + tlb outputs are CMake custom_commands; wheres/builds are regenerated MANUALLY
+   (hence the verification swap cycle), and ALL outputs are written into the SOURCE tree and
+   committed. Target: every codegen output → `${CMAKE_CURRENT_BINARY_DIR}/generated/`
+   (include dir added, nothing committed, source tree immutable during build); wheres/builds
+   get real custom_commands with PER-DOCUMENT outputs + distinct table symbols
+   (`builds_vectors_gen` ← ir/build_vectors.json for the runner; `builds_artifact_gen` +
+   `wheres_artifact_gen` ← ir/mch_ir.json for match/classify) — kills the manual swap cycle;
+   runners select by the existing sha guard. Committed contract shrinks to ir/*.json +
+   tlb/*.tlb + tool sources. Cost: codegen diffs invisible in review (mitigated by the
+   byte-determinism gate + sha guards).
+
+1. **D1 — Amount(None) → Null (both-sides wave, biggest cleanup).** Python's `Amount(None)` is
+   an accident of an Optional field; C++ models it as a third equality regime
+   (Value.h:50,83, Value.cpp:51-55,284-291, ExprRuntime.cpp:16-18,66-69,144-146,
+   BlockTree.cpp:282). Cleaner: absent value = Null, normal null-propagation. Coordinated
+   change: indexer expr_eval.py + mch_ir/expr.py, expr-vectors regen (Amount(None) cases),
+   IR spec §7 note, C++ removal of make_amount_none + special-eq branches. Gates shift by
+   regen, not by relaxation.
+2. **Harness/runtime isolation (C++-only, no semantics):**
+   - move `run_parse_dump` + render helpers (~160 LOC) out of MsgParse.cpp into a harness file;
+   - split the ACTION dump-printing out of Classify.cpp's try_build before Phase E builds on it;
+   - dedupe `block_key` (MatchRunner.cpp:20-29 local copy vs BuildDriver's);
+   - **B-leak fix**: runtime `rt_eq` container fallback currently calls the ASYMMETRIC vector
+     comparator `structural_equal` (ExprRuntime.cpp:107 → Value.cpp:274). Define container `==`
+     in the IR spec, give the runtime its own symmetric implementation, keep structural_equal
+     harness-only.
+3. **Trivia sweep (~30 LOC):** dead `parse_never`/JettonBurnNotification registration
+   (MsgParse.cpp:475-477,489); unread `MsgContent.hash` (TraceLoader.cpp:137). KEEP
+   `op_index`/`btype_index` (IrLoader) — currently unconsumed but built for the production
+   loop's anchor index (Phase G).
+
+### Rejected / corrected by lead
+
+- **C1/C2 "jetton payload machinery is gate-only" — WRONG, stays.** The audit grepped
+  `specs/*.mch` only and missed `specs_decl/jettons.mch` — the very family running in
+  classify. Its produced data carries `forward_payload` (b64 BOC bytes), `comment`,
+  `custom_payload`, `stonfi_swap_body` → DB-visible TODAY. Therefore the payload parsing,
+  the crc32=true byte path, AND the pytoniq `Slice.copy()` ref-reset bug replication (D6,
+  MsgParse.cpp:153-167,283-288) are all load-bearing. D6's "decide at M4" framing is dead:
+  the DB already carries pytoniq-shaped payload bytes; changing that = Python fix + reindex
+  delta decision, out of scope here.
+
+### Parked spec-level questions (language decisions, low priority, none blocking)
+
+- D2: lookup registration-check-before-null-strict ordering — pick deliberately in spec or
+  drop the check (only observable for unregistered-kind-with-null-arg; unreachable in
+  production paths).
+- D3: Dict-vs-Obj map split — could merge into one map kind + envelope flag (~30-40 LOC);
+  touches vector value-encoding ($dict/$obj).
+- D4: Amount not orderable (mirrors Python) — arguably the language SHOULD order Amounts;
+  if adopted, Python follows C++.
+- D7 (no action): C++ deviations Python should eventually adopt — frontier diamond-dedup,
+  compact first-seen order, orphan-tolerate to_tree, canonical-order invariant. Documented
+  in BlockTree.h.
+
+### Confirmed load-bearing (audit class A — never simplify)
+
+Leaf failed semantics; merge/ensure_earliest/canonical machinery incl.
+min_lt_without_initiating_tx + direction() tiebreak; walker child-edge multi-match
+accumulation + children-set first-match-wins + mark/rollback + recursion gap-alignment;
+absorb_aux + root auto-append; classify mid-mutation loop; RefInt256; addr_none +
+Asset case-insensitive eq; load_address_py; skip machinery; `pytoniq_to_boc` (BOTH call
+sites — b64 builtin AND MsgParse payload bytes, per the C1 correction).

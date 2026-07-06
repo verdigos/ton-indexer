@@ -3406,6 +3406,1502 @@
    }
   },
   {
+   "name": "parse_dns_next_resolver",
+   "matcher": {
+    "name": "parse_dns_next_resolver",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "ChangeDnsRecordMessage"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "hv",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "has_value"
+        }
+       },
+       {
+        "name": "key",
+        "expr": {
+         "k": "call",
+         "fn": "b64",
+         "args": [
+          {
+           "k": "attr",
+           "of": {
+            "k": "attr",
+            "of": {
+             "k": "name",
+             "id": "t"
+            },
+            "name": "body"
+           },
+           "name": "key"
+          }
+         ]
+        }
+       },
+       {
+        "name": "schema",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "attr",
+           "of": {
+            "k": "name",
+            "id": "t"
+           },
+           "name": "body"
+          },
+          "name": "value"
+         },
+         "name": "schema"
+        }
+       },
+       {
+        "name": "addr",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "attr",
+           "of": {
+            "k": "name",
+            "id": "t"
+           },
+           "name": "body"
+          },
+          "name": "value"
+         },
+         "name": "address"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "opcode": 286331153,
+      "failed": false,
+      "broken": false,
+      "data": {
+       "opcode": 286331153,
+       "source": {
+        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+       },
+       "destination": {
+        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+       },
+       "value": {
+        "$amount": 1000000000
+       }
+      },
+      "msg": {
+       "msg_hash": "msg_t",
+       "tx_hash": "tx_t",
+       "tx_lt": 1000,
+       "direction": "in",
+       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "value": 1000000000,
+       "opcode": 286331153,
+       "created_lt": 999,
+       "created_at": 1699999999,
+       "bounce": false,
+       "bounced": false
+      },
+      "tx": {
+       "hash": "tx_t",
+       "lt": 1000,
+       "now": 1700000000,
+       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "aborted": false,
+       "orig_status": "active",
+       "end_status": "active",
+       "compute_exit_code": 0
+      },
+      "body_b64": "te6ccgEBAgEAVQABWE6x8PkAAAAAAAAACwABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fAQBHupOAGZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmQ"
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "hv": true,
+     "key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+     "schema": "DNSNextResolver",
+     "addr": {
+      "$account": "0:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+     }
+    },
+    "failed": false,
+    "broken": false,
+    "flows": []
+   }
+  },
+  {
+   "name": "parse_dns_smc_flags",
+   "matcher": {
+    "name": "parse_dns_smc_flags",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "ChangeDnsRecordMessage"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "schema",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "attr",
+           "of": {
+            "k": "name",
+            "id": "t"
+           },
+           "name": "body"
+          },
+          "name": "value"
+         },
+         "name": "schema"
+        }
+       },
+       {
+        "name": "addr",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "attr",
+           "of": {
+            "k": "name",
+            "id": "t"
+           },
+           "name": "body"
+          },
+          "name": "value"
+         },
+         "name": "address"
+        }
+       },
+       {
+        "name": "flags",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "attr",
+           "of": {
+            "k": "name",
+            "id": "t"
+           },
+           "name": "body"
+          },
+          "name": "value"
+         },
+         "name": "flags"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "opcode": 286331153,
+      "failed": false,
+      "broken": false,
+      "data": {
+       "opcode": 286331153,
+       "source": {
+        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+       },
+       "destination": {
+        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+       },
+       "value": {
+        "$amount": 1000000000
+       }
+      },
+      "msg": {
+       "msg_hash": "msg_t",
+       "tx_hash": "tx_t",
+       "tx_lt": 1000,
+       "direction": "in",
+       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "value": 1000000000,
+       "opcode": 286331153,
+       "created_lt": 999,
+       "created_at": 1699999999,
+       "bounce": false,
+       "bounced": false
+      },
+      "tx": {
+       "hash": "tx_t",
+       "lt": 1000,
+       "now": 1700000000,
+       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "aborted": false,
+       "orig_status": "active",
+       "end_status": "active",
+       "compute_exit_code": 0
+      },
+      "body_b64": "te6ccgEBAgEAVgABWE6x8PkAAAAAAAAACwABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fAQBJn9OAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVAsA=="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "schema": "DNSSmcAddress",
+     "addr": {
+      "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+     },
+     "flags": 5
+    },
+    "failed": false,
+    "broken": false,
+    "flows": []
+   }
+  },
+  {
+   "name": "parse_dns_text",
+   "matcher": {
+    "name": "parse_dns_text",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "ChangeDnsRecordMessage"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "schema",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "attr",
+           "of": {
+            "k": "name",
+            "id": "t"
+           },
+           "name": "body"
+          },
+          "name": "value"
+         },
+         "name": "schema"
+        }
+       },
+       {
+        "name": "text",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "attr",
+           "of": {
+            "k": "name",
+            "id": "t"
+           },
+           "name": "body"
+          },
+          "name": "value"
+         },
+         "name": "dns_text"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "opcode": 286331153,
+      "failed": false,
+      "broken": false,
+      "data": {
+       "opcode": 286331153,
+       "source": {
+        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+       },
+       "destination": {
+        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+       },
+       "value": {
+        "$amount": 1000000000
+       }
+      },
+      "msg": {
+       "msg_hash": "msg_t",
+       "tx_hash": "tx_t",
+       "tx_lt": 1000,
+       "direction": "in",
+       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "value": 1000000000,
+       "opcode": 286331153,
+       "created_lt": 999,
+       "created_at": 1699999999,
+       "bounce": false,
+       "bounced": false
+      },
+      "tx": {
+       "hash": "tx_t",
+       "lt": 1000,
+       "now": 1700000000,
+       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "aborted": false,
+       "orig_status": "active",
+       "end_status": "active",
+       "compute_exit_code": 0
+      },
+      "body_b64": "te6ccgEBAgEAOwABWE6x8PkAAAAAAAAACwABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fAQAUHtoBBndhbGxldA=="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "schema": "DNSText",
+     "text": "wallet"
+    },
+    "failed": false,
+    "broken": false,
+    "flows": []
+   }
+  },
+  {
+   "name": "parse_dns_no_value",
+   "matcher": {
+    "name": "parse_dns_no_value",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "ChangeDnsRecordMessage"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "hv",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "has_value"
+        }
+       },
+       {
+        "name": "v",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "value"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "opcode": 286331153,
+      "failed": false,
+      "broken": false,
+      "data": {
+       "opcode": 286331153,
+       "source": {
+        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+       },
+       "destination": {
+        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+       },
+       "value": {
+        "$amount": 1000000000
+       }
+      },
+      "msg": {
+       "msg_hash": "msg_t",
+       "tx_hash": "tx_t",
+       "tx_lt": 1000,
+       "direction": "in",
+       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "value": 1000000000,
+       "opcode": 286331153,
+       "created_lt": 999,
+       "created_at": 1699999999,
+       "bounce": false,
+       "bounced": false
+      },
+      "tx": {
+       "hash": "tx_t",
+       "lt": 1000,
+       "now": 1700000000,
+       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "aborted": false,
+       "orig_status": "active",
+       "end_status": "active",
+       "compute_exit_code": 0
+      },
+      "body_b64": "te6ccgEBAQEALgAAWE6x8PkAAAAAAAAACwABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4f"
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "hv": false,
+     "v": null
+    },
+    "failed": false,
+    "broken": false,
+    "flows": []
+   }
+  },
+  {
+   "name": "parse_dns_unknown_schema",
+   "matcher": {
+    "name": "parse_dns_unknown_schema",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "ChangeDnsRecordMessage"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "schema",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "attr",
+           "of": {
+            "k": "name",
+            "id": "t"
+           },
+           "name": "body"
+          },
+          "name": "value"
+         },
+         "name": "schema"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "opcode": 286331153,
+      "failed": false,
+      "broken": false,
+      "data": {
+       "opcode": 286331153,
+       "source": {
+        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+       },
+       "destination": {
+        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+       },
+       "value": {
+        "$amount": 1000000000
+       }
+      },
+      "msg": {
+       "msg_hash": "msg_t",
+       "tx_hash": "tx_t",
+       "tx_lt": 1000,
+       "direction": "in",
+       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "value": 1000000000,
+       "opcode": 286331153,
+       "created_lt": 999,
+       "created_at": 1699999999,
+       "bounce": false,
+       "bounced": false
+      },
+      "tx": {
+       "hash": "tx_t",
+       "lt": 1000,
+       "now": 1700000000,
+       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "aborted": false,
+       "orig_status": "active",
+       "end_status": "active",
+       "compute_exit_code": 0
+      },
+      "body_b64": "te6ccgEBAgEANwABWE6x8PkAAAAAAAAACwABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fAQAMEjQAAAAH"
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "schema": "Unknown"
+    },
+    "failed": false,
+    "broken": false,
+    "flows": []
+   }
+  },
+  {
+   "name": "parse_vesting",
+   "matcher": {
+    "name": "parse_vesting",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "VestingSendMessage"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "dst",
+        "expr": {
+         "k": "call",
+         "fn": "account",
+         "args": [
+          {
+           "k": "attr",
+           "of": {
+            "k": "attr",
+            "of": {
+             "k": "name",
+             "id": "t"
+            },
+            "name": "body"
+           },
+           "name": "message_destination"
+          }
+         ]
+        }
+       },
+       {
+        "name": "val",
+        "expr": {
+         "k": "call",
+         "fn": "amount",
+         "args": [
+          {
+           "k": "attr",
+           "of": {
+            "k": "attr",
+            "of": {
+             "k": "name",
+             "id": "t"
+            },
+            "name": "body"
+           },
+           "name": "message_value"
+          }
+         ]
+        }
+       },
+       {
+        "name": "mode",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "send_mode"
+        }
+       },
+       {
+        "name": "mc",
+        "expr": {
+         "k": "call",
+         "fn": "b64",
+         "args": [
+          {
+           "k": "attr",
+           "of": {
+            "k": "attr",
+            "of": {
+             "k": "name",
+             "id": "t"
+            },
+            "name": "body"
+           },
+           "name": "message_cell"
+          }
+         ]
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "opcode": 286331153,
+      "failed": false,
+      "broken": false,
+      "data": {
+       "opcode": 286331153,
+       "source": {
+        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+       },
+       "destination": {
+        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+       },
+       "value": {
+        "$amount": 1000000000
+       }
+      },
+      "msg": {
+       "msg_hash": "msg_t",
+       "tx_hash": "tx_t",
+       "tx_lt": 1000,
+       "direction": "in",
+       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "value": 1000000000,
+       "opcode": 286331153,
+       "created_lt": 999,
+       "created_at": 1699999999,
+       "bounce": false,
+       "bounced": false
+      },
+      "tx": {
+       "hash": "tx_t",
+       "lt": 1000,
+       "now": 1700000000,
+       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "aborted": false,
+       "orig_status": "active",
+       "end_status": "active",
+       "compute_exit_code": 0
+      },
+      "body_b64": "te6ccgEBAgEAZwABGqdzOs0AAAAAAAAAFQMBAKkIAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVAC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u00J3DAAAAAAAAAAAAPYAAAOR"
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "dst": {
+      "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+     },
+     "val": {
+      "$amount": 3500000000
+     },
+     "mode": 3,
+     "mc": "te6ccgEBAQEAVwAAqQgBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUALu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7TQncMAAAAAAAAAAAA9gAAA5E="
+    },
+    "failed": false,
+    "broken": false,
+    "flows": []
+   }
+  },
+  {
+   "name": "parse_pton_ref_payload",
+   "matcher": {
+    "name": "parse_pton_ref_payload",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "PTonTransfer"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "amt",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "ton_amount"
+        }
+       },
+       {
+        "name": "refund",
+        "expr": {
+         "k": "call",
+         "fn": "account",
+         "args": [
+          {
+           "k": "attr",
+           "of": {
+            "k": "attr",
+            "of": {
+             "k": "name",
+             "id": "t"
+            },
+            "name": "body"
+           },
+           "name": "refund_address"
+          }
+         ]
+        }
+       },
+       {
+        "name": "haspl",
+        "expr": {
+         "k": "bin",
+         "op": "!=",
+         "l": {
+          "k": "attr",
+          "of": {
+           "k": "attr",
+           "of": {
+            "k": "name",
+            "id": "t"
+           },
+           "name": "body"
+          },
+          "name": "forward_payload"
+         },
+         "r": {
+          "k": "null"
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "opcode": 286331153,
+      "failed": false,
+      "broken": false,
+      "data": {
+       "opcode": 286331153,
+       "source": {
+        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+       },
+       "destination": {
+        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+       },
+       "value": {
+        "$amount": 1000000000
+       }
+      },
+      "msg": {
+       "msg_hash": "msg_t",
+       "tx_hash": "tx_t",
+       "tx_lt": 1000,
+       "direction": "in",
+       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "value": 1000000000,
+       "opcode": 286331153,
+       "created_lt": 999,
+       "created_at": 1699999999,
+       "bounce": false,
+       "bounced": false
+      },
+      "tx": {
+       "hash": "tx_t",
+       "lt": 1000,
+       "now": 1700000000,
+       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "aborted": false,
+       "orig_status": "active",
+       "end_status": "active",
+       "compute_exit_code": 0
+      },
+      "body_b64": "te6ccgEBAgEAOQABZAHzg10AAAAAAAAACENaTpAIAZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZAQAE3q0="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "amt": 900000000,
+     "refund": {
+      "$account": "0:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+     },
+     "haspl": true
+    },
+    "failed": false,
+    "broken": false,
+    "flows": []
+   }
+  },
+  {
+   "name": "parse_pton_inline_payload",
+   "matcher": {
+    "name": "parse_pton_inline_payload",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "PTonTransfer"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "pl",
+        "expr": {
+         "k": "call",
+         "fn": "b64",
+         "args": [
+          {
+           "k": "attr",
+           "of": {
+            "k": "attr",
+            "of": {
+             "k": "name",
+             "id": "t"
+            },
+            "name": "body"
+           },
+           "name": "forward_payload"
+          }
+         ]
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "opcode": 286331153,
+      "failed": false,
+      "broken": false,
+      "data": {
+       "opcode": 286331153,
+       "source": {
+        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+       },
+       "destination": {
+        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+       },
+       "value": {
+        "$amount": 1000000000
+       }
+      },
+      "msg": {
+       "msg_hash": "msg_t",
+       "tx_hash": "tx_t",
+       "tx_lt": 1000,
+       "direction": "in",
+       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "value": 1000000000,
+       "opcode": 286331153,
+       "created_lt": 999,
+       "created_at": 1699999999,
+       "bounce": false,
+       "bounced": false
+      },
+      "tx": {
+       "hash": "tx_t",
+       "lt": 1000,
+       "now": 1700000000,
+       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "aborted": false,
+       "orig_status": "active",
+       "end_status": "active",
+       "compute_exit_code": 0
+      },
+      "body_b64": "te6ccgEBAgEAOgABZgHzg10AAAAAAAAACENaTpAIAZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmYqwEABN6t"
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "pl": "te6ccgEBAgEACAABAqsBAATerQ=="
+    },
+    "failed": false,
+    "broken": false,
+    "flows": []
+   }
+  },
+  {
+   "name": "parse_dedust_payout",
+   "matcher": {
+    "name": "parse_dedust_payout",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "DedustPayoutFromPool"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "qid",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "query_id"
+        }
+       },
+       {
+        "name": "amt",
+        "expr": {
+         "k": "call",
+         "fn": "amount",
+         "args": [
+          {
+           "k": "attr",
+           "of": {
+            "k": "attr",
+            "of": {
+             "k": "name",
+             "id": "t"
+            },
+            "name": "body"
+           },
+           "name": "amount"
+          }
+         ]
+        }
+       },
+       {
+        "name": "proof",
+        "expr": {
+         "k": "call",
+         "fn": "b64",
+         "args": [
+          {
+           "k": "attr",
+           "of": {
+            "k": "attr",
+            "of": {
+             "k": "name",
+             "id": "t"
+            },
+            "name": "body"
+           },
+           "name": "proof"
+          }
+         ]
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "opcode": 286331153,
+      "failed": false,
+      "broken": false,
+      "data": {
+       "opcode": 286331153,
+       "source": {
+        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+       },
+       "destination": {
+        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+       },
+       "value": {
+        "$amount": 1000000000
+       }
+      },
+      "msg": {
+       "msg_hash": "msg_t",
+       "tx_hash": "tx_t",
+       "tx_lt": 1000,
+       "direction": "in",
+       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "value": 1000000000,
+       "opcode": 286331153,
+       "created_lt": 999,
+       "created_at": 1699999999,
+       "bounce": false,
+       "bounced": false
+      },
+      "tx": {
+       "hash": "tx_t",
+       "lt": 1000,
+       "now": 1700000000,
+       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "aborted": false,
+       "orig_status": "active",
+       "end_status": "active",
+       "compute_exit_code": 0
+      },
+      "body_b64": "te6ccgEBAgEAGAABIa1OtvUAAAAAAAAABULlAUr4AQAEyv4="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "qid": 5,
+     "amt": {
+      "$amount": 777000111
+     },
+     "proof": "te6ccgEBAQEABAAABMr+"
+    },
+    "failed": false,
+    "broken": false,
+    "flows": []
+   }
+  },
+  {
+   "name": "parse_coffee_vault_native",
+   "matcher": {
+    "name": "parse_coffee_vault_native",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "CoffeeCreateVault"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "a",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "asset"
+        }
+       },
+       {
+        "name": "is_ton",
+        "expr": {
+         "k": "bin",
+         "op": "==",
+         "l": {
+          "k": "attr",
+          "of": {
+           "k": "attr",
+           "of": {
+            "k": "name",
+            "id": "t"
+           },
+           "name": "body"
+          },
+          "name": "asset"
+         },
+         "r": {
+          "k": "str",
+          "v": "ton"
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "opcode": 286331153,
+      "failed": false,
+      "broken": false,
+      "data": {
+       "opcode": 286331153,
+       "source": {
+        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+       },
+       "destination": {
+        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+       },
+       "value": {
+        "$amount": 1000000000
+       }
+      },
+      "msg": {
+       "msg_hash": "msg_t",
+       "tx_hash": "tx_t",
+       "tx_lt": 1000,
+       "direction": "in",
+       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "value": 1000000000,
+       "opcode": 286331153,
+       "created_lt": 999,
+       "created_at": 1699999999,
+       "bounce": false,
+       "bounced": false
+      },
+      "tx": {
+       "hash": "tx_t",
+       "lt": 1000,
+       "now": 1700000000,
+       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "aborted": false,
+       "orig_status": "active",
+       "end_status": "active",
+       "compute_exit_code": 0
+      },
+      "body_b64": "te6ccgEBAQEADwAAGcD/7gYAAAAAAAAAAiA="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": true
+   }
+  },
+  {
+   "name": "parse_coffee_vault_jetton",
+   "matcher": {
+    "name": "parse_coffee_vault_jetton",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "CoffeeCreateVault"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "a",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "asset"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "opcode": 286331153,
+      "failed": false,
+      "broken": false,
+      "data": {
+       "opcode": 286331153,
+       "source": {
+        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+       },
+       "destination": {
+        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+       },
+       "value": {
+        "$amount": 1000000000
+       }
+      },
+      "msg": {
+       "msg_hash": "msg_t",
+       "tx_hash": "tx_t",
+       "tx_lt": 1000,
+       "direction": "in",
+       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "value": 1000000000,
+       "opcode": 286331153,
+       "created_lt": 999,
+       "created_at": 1699999999,
+       "bounce": false,
+       "bounced": false
+      },
+      "tx": {
+       "hash": "tx_t",
+       "lt": 1000,
+       "now": 1700000000,
+       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "aborted": false,
+       "orig_status": "active",
+       "end_status": "active",
+       "compute_exit_code": 0
+      },
+      "body_b64": "te6ccgEBAQEAMAAAW8D/7gYAAAAAAAAAAkAzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc3Nzc2A="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "a": {
+      "$asset_jetton": "0:CDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCD"
+     }
+    },
+    "failed": false,
+    "broken": false,
+    "flows": []
+   }
+  },
+  {
    "name": "switch_no_match_rejects",
    "matcher": {
     "name": "switch_no_match_rejects",

@@ -46,6 +46,14 @@ capture NAMES never appear at runtime). List captures = Value lists in their slo
 bodies and `let` locals are generated C++ locals, not env entries.
 
 ### D4. BOC bytes: raw-byte equality is the parity bar
+
+> **Post-implementation note (B0 outcome, 2026-07-07):** the equality BAR stood, but the
+> mechanism prediction below was wrong. The "different ref layouts" finding was REAL — pytoniq's
+> `Cell.order()` sinks shared subtrees to their last visit; td orders differently. Byte parity
+> was achieved by emulating pytoniq's writer in C++ (`pytoniq_to_boc` in Value.cpp), with CRC
+> per call site matching the exact Python code path: MsgParse payload bytes crc=true
+> (jettons.py explicit `hash_crc32=True`), `b64(Cell)` builtin crc=false (bare `to_boc()`).
+> See plan §10 and mch-overview §4.
 User assessment (verified on flags): pytoniq `to_boc()` defaults = has_idx False,
 hash_crc32 False, cache_bits False ≡ td `vm::std_boc_serialize(cell, 0)`. Cross-language
 Cell-derived bytes/strings (e.g. vesting `message_boc_str = b64(cell)`) must be BYTE-IDENTICAL.

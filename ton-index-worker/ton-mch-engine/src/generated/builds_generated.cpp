@@ -828,7 +828,392 @@ BuildOutcome build_23_data_accessor(BuildEnv &env) {
   return o;
 }
 
-BuildOutcome build_24_switch_no_match_rejects(BuildEnv &env) {
+BuildOutcome build_24_parse_dns_next_resolver(BuildEnv &env) {
+  (void)env;
+  BuildOutcome o = BuildOutcome::accepted();
+  Value pt0 = env.slots[0];
+  EvalResult sp0 = rt_parse(env, pt0, std::vector<std::string>{"ChangeDnsRecordMessage"});
+  if (sp0.faulted) return BuildOutcome::rejected(std::move(sp0.message));
+  Value::Fields fs1;
+  Value v2 = env.slots[0];
+  EvalResult r3 = rt_access_build(env, v2, "body");
+  if (r3.faulted) return BuildOutcome::rejected(std::move(r3.message));
+  Value v3 = std::move(r3.value);
+  EvalResult r4 = rt_access_build(env, v3, "has_value");
+  if (r4.faulted) return BuildOutcome::rejected(std::move(r4.message));
+  Value v4 = std::move(r4.value);
+  fs1.emplace_back("hv", v4);
+  Value v5 = env.slots[0];
+  EvalResult r6 = rt_access_build(env, v5, "body");
+  if (r6.faulted) return BuildOutcome::rejected(std::move(r6.message));
+  Value v6 = std::move(r6.value);
+  EvalResult r7 = rt_access_build(env, v6, "key");
+  if (r7.faulted) return BuildOutcome::rejected(std::move(r7.message));
+  Value v7 = std::move(r7.value);
+  EvalResult r8 = rt_call_builtin("b64", std::vector<Value>{v7});
+  if (r8.faulted) return BuildOutcome::rejected(std::move(r8.message));
+  Value v8 = std::move(r8.value);
+  fs1.emplace_back("key", v8);
+  Value v9 = env.slots[0];
+  EvalResult r10 = rt_access_build(env, v9, "body");
+  if (r10.faulted) return BuildOutcome::rejected(std::move(r10.message));
+  Value v10 = std::move(r10.value);
+  EvalResult r11 = rt_access_build(env, v10, "value");
+  if (r11.faulted) return BuildOutcome::rejected(std::move(r11.message));
+  Value v11 = std::move(r11.value);
+  EvalResult r12 = rt_access_build(env, v11, "schema");
+  if (r12.faulted) return BuildOutcome::rejected(std::move(r12.message));
+  Value v12 = std::move(r12.value);
+  fs1.emplace_back("schema", v12);
+  Value v13 = env.slots[0];
+  EvalResult r14 = rt_access_build(env, v13, "body");
+  if (r14.faulted) return BuildOutcome::rejected(std::move(r14.message));
+  Value v14 = std::move(r14.value);
+  EvalResult r15 = rt_access_build(env, v14, "value");
+  if (r15.faulted) return BuildOutcome::rejected(std::move(r15.message));
+  Value v15 = std::move(r15.value);
+  EvalResult r16 = rt_access_build(env, v15, "address");
+  if (r16.faulted) return BuildOutcome::rejected(std::move(r16.message));
+  Value v16 = std::move(r16.value);
+  fs1.emplace_back("addr", v16);
+  o.data = Value::make_dict(std::move(fs1));
+  return o;
+}
+
+BuildOutcome build_25_parse_dns_smc_flags(BuildEnv &env) {
+  (void)env;
+  BuildOutcome o = BuildOutcome::accepted();
+  Value pt0 = env.slots[0];
+  EvalResult sp0 = rt_parse(env, pt0, std::vector<std::string>{"ChangeDnsRecordMessage"});
+  if (sp0.faulted) return BuildOutcome::rejected(std::move(sp0.message));
+  Value::Fields fs1;
+  Value v2 = env.slots[0];
+  EvalResult r3 = rt_access_build(env, v2, "body");
+  if (r3.faulted) return BuildOutcome::rejected(std::move(r3.message));
+  Value v3 = std::move(r3.value);
+  EvalResult r4 = rt_access_build(env, v3, "value");
+  if (r4.faulted) return BuildOutcome::rejected(std::move(r4.message));
+  Value v4 = std::move(r4.value);
+  EvalResult r5 = rt_access_build(env, v4, "schema");
+  if (r5.faulted) return BuildOutcome::rejected(std::move(r5.message));
+  Value v5 = std::move(r5.value);
+  fs1.emplace_back("schema", v5);
+  Value v6 = env.slots[0];
+  EvalResult r7 = rt_access_build(env, v6, "body");
+  if (r7.faulted) return BuildOutcome::rejected(std::move(r7.message));
+  Value v7 = std::move(r7.value);
+  EvalResult r8 = rt_access_build(env, v7, "value");
+  if (r8.faulted) return BuildOutcome::rejected(std::move(r8.message));
+  Value v8 = std::move(r8.value);
+  EvalResult r9 = rt_access_build(env, v8, "address");
+  if (r9.faulted) return BuildOutcome::rejected(std::move(r9.message));
+  Value v9 = std::move(r9.value);
+  fs1.emplace_back("addr", v9);
+  Value v10 = env.slots[0];
+  EvalResult r11 = rt_access_build(env, v10, "body");
+  if (r11.faulted) return BuildOutcome::rejected(std::move(r11.message));
+  Value v11 = std::move(r11.value);
+  EvalResult r12 = rt_access_build(env, v11, "value");
+  if (r12.faulted) return BuildOutcome::rejected(std::move(r12.message));
+  Value v12 = std::move(r12.value);
+  EvalResult r13 = rt_access_build(env, v12, "flags");
+  if (r13.faulted) return BuildOutcome::rejected(std::move(r13.message));
+  Value v13 = std::move(r13.value);
+  fs1.emplace_back("flags", v13);
+  o.data = Value::make_dict(std::move(fs1));
+  return o;
+}
+
+BuildOutcome build_26_parse_dns_text(BuildEnv &env) {
+  (void)env;
+  BuildOutcome o = BuildOutcome::accepted();
+  Value pt0 = env.slots[0];
+  EvalResult sp0 = rt_parse(env, pt0, std::vector<std::string>{"ChangeDnsRecordMessage"});
+  if (sp0.faulted) return BuildOutcome::rejected(std::move(sp0.message));
+  Value::Fields fs1;
+  Value v2 = env.slots[0];
+  EvalResult r3 = rt_access_build(env, v2, "body");
+  if (r3.faulted) return BuildOutcome::rejected(std::move(r3.message));
+  Value v3 = std::move(r3.value);
+  EvalResult r4 = rt_access_build(env, v3, "value");
+  if (r4.faulted) return BuildOutcome::rejected(std::move(r4.message));
+  Value v4 = std::move(r4.value);
+  EvalResult r5 = rt_access_build(env, v4, "schema");
+  if (r5.faulted) return BuildOutcome::rejected(std::move(r5.message));
+  Value v5 = std::move(r5.value);
+  fs1.emplace_back("schema", v5);
+  Value v6 = env.slots[0];
+  EvalResult r7 = rt_access_build(env, v6, "body");
+  if (r7.faulted) return BuildOutcome::rejected(std::move(r7.message));
+  Value v7 = std::move(r7.value);
+  EvalResult r8 = rt_access_build(env, v7, "value");
+  if (r8.faulted) return BuildOutcome::rejected(std::move(r8.message));
+  Value v8 = std::move(r8.value);
+  EvalResult r9 = rt_access_build(env, v8, "dns_text");
+  if (r9.faulted) return BuildOutcome::rejected(std::move(r9.message));
+  Value v9 = std::move(r9.value);
+  fs1.emplace_back("text", v9);
+  o.data = Value::make_dict(std::move(fs1));
+  return o;
+}
+
+BuildOutcome build_27_parse_dns_no_value(BuildEnv &env) {
+  (void)env;
+  BuildOutcome o = BuildOutcome::accepted();
+  Value pt0 = env.slots[0];
+  EvalResult sp0 = rt_parse(env, pt0, std::vector<std::string>{"ChangeDnsRecordMessage"});
+  if (sp0.faulted) return BuildOutcome::rejected(std::move(sp0.message));
+  Value::Fields fs1;
+  Value v2 = env.slots[0];
+  EvalResult r3 = rt_access_build(env, v2, "body");
+  if (r3.faulted) return BuildOutcome::rejected(std::move(r3.message));
+  Value v3 = std::move(r3.value);
+  EvalResult r4 = rt_access_build(env, v3, "has_value");
+  if (r4.faulted) return BuildOutcome::rejected(std::move(r4.message));
+  Value v4 = std::move(r4.value);
+  fs1.emplace_back("hv", v4);
+  Value v5 = env.slots[0];
+  EvalResult r6 = rt_access_build(env, v5, "body");
+  if (r6.faulted) return BuildOutcome::rejected(std::move(r6.message));
+  Value v6 = std::move(r6.value);
+  EvalResult r7 = rt_access_build(env, v6, "value");
+  if (r7.faulted) return BuildOutcome::rejected(std::move(r7.message));
+  Value v7 = std::move(r7.value);
+  fs1.emplace_back("v", v7);
+  o.data = Value::make_dict(std::move(fs1));
+  return o;
+}
+
+BuildOutcome build_28_parse_dns_unknown_schema(BuildEnv &env) {
+  (void)env;
+  BuildOutcome o = BuildOutcome::accepted();
+  Value pt0 = env.slots[0];
+  EvalResult sp0 = rt_parse(env, pt0, std::vector<std::string>{"ChangeDnsRecordMessage"});
+  if (sp0.faulted) return BuildOutcome::rejected(std::move(sp0.message));
+  Value::Fields fs1;
+  Value v2 = env.slots[0];
+  EvalResult r3 = rt_access_build(env, v2, "body");
+  if (r3.faulted) return BuildOutcome::rejected(std::move(r3.message));
+  Value v3 = std::move(r3.value);
+  EvalResult r4 = rt_access_build(env, v3, "value");
+  if (r4.faulted) return BuildOutcome::rejected(std::move(r4.message));
+  Value v4 = std::move(r4.value);
+  EvalResult r5 = rt_access_build(env, v4, "schema");
+  if (r5.faulted) return BuildOutcome::rejected(std::move(r5.message));
+  Value v5 = std::move(r5.value);
+  fs1.emplace_back("schema", v5);
+  o.data = Value::make_dict(std::move(fs1));
+  return o;
+}
+
+BuildOutcome build_29_parse_vesting(BuildEnv &env) {
+  (void)env;
+  BuildOutcome o = BuildOutcome::accepted();
+  Value pt0 = env.slots[0];
+  EvalResult sp0 = rt_parse(env, pt0, std::vector<std::string>{"VestingSendMessage"});
+  if (sp0.faulted) return BuildOutcome::rejected(std::move(sp0.message));
+  Value::Fields fs1;
+  Value v2 = env.slots[0];
+  EvalResult r3 = rt_access_build(env, v2, "body");
+  if (r3.faulted) return BuildOutcome::rejected(std::move(r3.message));
+  Value v3 = std::move(r3.value);
+  EvalResult r4 = rt_access_build(env, v3, "message_destination");
+  if (r4.faulted) return BuildOutcome::rejected(std::move(r4.message));
+  Value v4 = std::move(r4.value);
+  EvalResult r5 = rt_call_builtin("account", std::vector<Value>{v4});
+  if (r5.faulted) return BuildOutcome::rejected(std::move(r5.message));
+  Value v5 = std::move(r5.value);
+  fs1.emplace_back("dst", v5);
+  Value v6 = env.slots[0];
+  EvalResult r7 = rt_access_build(env, v6, "body");
+  if (r7.faulted) return BuildOutcome::rejected(std::move(r7.message));
+  Value v7 = std::move(r7.value);
+  EvalResult r8 = rt_access_build(env, v7, "message_value");
+  if (r8.faulted) return BuildOutcome::rejected(std::move(r8.message));
+  Value v8 = std::move(r8.value);
+  EvalResult r9 = rt_call_builtin("amount", std::vector<Value>{v8});
+  if (r9.faulted) return BuildOutcome::rejected(std::move(r9.message));
+  Value v9 = std::move(r9.value);
+  fs1.emplace_back("val", v9);
+  Value v10 = env.slots[0];
+  EvalResult r11 = rt_access_build(env, v10, "body");
+  if (r11.faulted) return BuildOutcome::rejected(std::move(r11.message));
+  Value v11 = std::move(r11.value);
+  EvalResult r12 = rt_access_build(env, v11, "send_mode");
+  if (r12.faulted) return BuildOutcome::rejected(std::move(r12.message));
+  Value v12 = std::move(r12.value);
+  fs1.emplace_back("mode", v12);
+  Value v13 = env.slots[0];
+  EvalResult r14 = rt_access_build(env, v13, "body");
+  if (r14.faulted) return BuildOutcome::rejected(std::move(r14.message));
+  Value v14 = std::move(r14.value);
+  EvalResult r15 = rt_access_build(env, v14, "message_cell");
+  if (r15.faulted) return BuildOutcome::rejected(std::move(r15.message));
+  Value v15 = std::move(r15.value);
+  EvalResult r16 = rt_call_builtin("b64", std::vector<Value>{v15});
+  if (r16.faulted) return BuildOutcome::rejected(std::move(r16.message));
+  Value v16 = std::move(r16.value);
+  fs1.emplace_back("mc", v16);
+  o.data = Value::make_dict(std::move(fs1));
+  return o;
+}
+
+BuildOutcome build_30_parse_pton_ref_payload(BuildEnv &env) {
+  (void)env;
+  BuildOutcome o = BuildOutcome::accepted();
+  Value pt0 = env.slots[0];
+  EvalResult sp0 = rt_parse(env, pt0, std::vector<std::string>{"PTonTransfer"});
+  if (sp0.faulted) return BuildOutcome::rejected(std::move(sp0.message));
+  Value::Fields fs1;
+  Value v2 = env.slots[0];
+  EvalResult r3 = rt_access_build(env, v2, "body");
+  if (r3.faulted) return BuildOutcome::rejected(std::move(r3.message));
+  Value v3 = std::move(r3.value);
+  EvalResult r4 = rt_access_build(env, v3, "ton_amount");
+  if (r4.faulted) return BuildOutcome::rejected(std::move(r4.message));
+  Value v4 = std::move(r4.value);
+  fs1.emplace_back("amt", v4);
+  Value v5 = env.slots[0];
+  EvalResult r6 = rt_access_build(env, v5, "body");
+  if (r6.faulted) return BuildOutcome::rejected(std::move(r6.message));
+  Value v6 = std::move(r6.value);
+  EvalResult r7 = rt_access_build(env, v6, "refund_address");
+  if (r7.faulted) return BuildOutcome::rejected(std::move(r7.message));
+  Value v7 = std::move(r7.value);
+  EvalResult r8 = rt_call_builtin("account", std::vector<Value>{v7});
+  if (r8.faulted) return BuildOutcome::rejected(std::move(r8.message));
+  Value v8 = std::move(r8.value);
+  fs1.emplace_back("refund", v8);
+  Value v9 = env.slots[0];
+  EvalResult r10 = rt_access_build(env, v9, "body");
+  if (r10.faulted) return BuildOutcome::rejected(std::move(r10.message));
+  Value v10 = std::move(r10.value);
+  EvalResult r11 = rt_access_build(env, v10, "forward_payload");
+  if (r11.faulted) return BuildOutcome::rejected(std::move(r11.message));
+  Value v11 = std::move(r11.value);
+  Value v12 = Value::null();
+  EvalResult r13 = rt_ne(v11, v12);
+  if (r13.faulted) return BuildOutcome::rejected(std::move(r13.message));
+  Value v13 = std::move(r13.value);
+  fs1.emplace_back("haspl", v13);
+  o.data = Value::make_dict(std::move(fs1));
+  return o;
+}
+
+BuildOutcome build_31_parse_pton_inline_payload(BuildEnv &env) {
+  (void)env;
+  BuildOutcome o = BuildOutcome::accepted();
+  Value pt0 = env.slots[0];
+  EvalResult sp0 = rt_parse(env, pt0, std::vector<std::string>{"PTonTransfer"});
+  if (sp0.faulted) return BuildOutcome::rejected(std::move(sp0.message));
+  Value::Fields fs1;
+  Value v2 = env.slots[0];
+  EvalResult r3 = rt_access_build(env, v2, "body");
+  if (r3.faulted) return BuildOutcome::rejected(std::move(r3.message));
+  Value v3 = std::move(r3.value);
+  EvalResult r4 = rt_access_build(env, v3, "forward_payload");
+  if (r4.faulted) return BuildOutcome::rejected(std::move(r4.message));
+  Value v4 = std::move(r4.value);
+  EvalResult r5 = rt_call_builtin("b64", std::vector<Value>{v4});
+  if (r5.faulted) return BuildOutcome::rejected(std::move(r5.message));
+  Value v5 = std::move(r5.value);
+  fs1.emplace_back("pl", v5);
+  o.data = Value::make_dict(std::move(fs1));
+  return o;
+}
+
+BuildOutcome build_32_parse_dedust_payout(BuildEnv &env) {
+  (void)env;
+  BuildOutcome o = BuildOutcome::accepted();
+  Value pt0 = env.slots[0];
+  EvalResult sp0 = rt_parse(env, pt0, std::vector<std::string>{"DedustPayoutFromPool"});
+  if (sp0.faulted) return BuildOutcome::rejected(std::move(sp0.message));
+  Value::Fields fs1;
+  Value v2 = env.slots[0];
+  EvalResult r3 = rt_access_build(env, v2, "body");
+  if (r3.faulted) return BuildOutcome::rejected(std::move(r3.message));
+  Value v3 = std::move(r3.value);
+  EvalResult r4 = rt_access_build(env, v3, "query_id");
+  if (r4.faulted) return BuildOutcome::rejected(std::move(r4.message));
+  Value v4 = std::move(r4.value);
+  fs1.emplace_back("qid", v4);
+  Value v5 = env.slots[0];
+  EvalResult r6 = rt_access_build(env, v5, "body");
+  if (r6.faulted) return BuildOutcome::rejected(std::move(r6.message));
+  Value v6 = std::move(r6.value);
+  EvalResult r7 = rt_access_build(env, v6, "amount");
+  if (r7.faulted) return BuildOutcome::rejected(std::move(r7.message));
+  Value v7 = std::move(r7.value);
+  EvalResult r8 = rt_call_builtin("amount", std::vector<Value>{v7});
+  if (r8.faulted) return BuildOutcome::rejected(std::move(r8.message));
+  Value v8 = std::move(r8.value);
+  fs1.emplace_back("amt", v8);
+  Value v9 = env.slots[0];
+  EvalResult r10 = rt_access_build(env, v9, "body");
+  if (r10.faulted) return BuildOutcome::rejected(std::move(r10.message));
+  Value v10 = std::move(r10.value);
+  EvalResult r11 = rt_access_build(env, v10, "proof");
+  if (r11.faulted) return BuildOutcome::rejected(std::move(r11.message));
+  Value v11 = std::move(r11.value);
+  EvalResult r12 = rt_call_builtin("b64", std::vector<Value>{v11});
+  if (r12.faulted) return BuildOutcome::rejected(std::move(r12.message));
+  Value v12 = std::move(r12.value);
+  fs1.emplace_back("proof", v12);
+  o.data = Value::make_dict(std::move(fs1));
+  return o;
+}
+
+BuildOutcome build_33_parse_coffee_vault_native(BuildEnv &env) {
+  (void)env;
+  BuildOutcome o = BuildOutcome::accepted();
+  Value pt0 = env.slots[0];
+  EvalResult sp0 = rt_parse(env, pt0, std::vector<std::string>{"CoffeeCreateVault"});
+  if (sp0.faulted) return BuildOutcome::rejected(std::move(sp0.message));
+  Value::Fields fs1;
+  Value v2 = env.slots[0];
+  EvalResult r3 = rt_access_build(env, v2, "body");
+  if (r3.faulted) return BuildOutcome::rejected(std::move(r3.message));
+  Value v3 = std::move(r3.value);
+  EvalResult r4 = rt_access_build(env, v3, "asset");
+  if (r4.faulted) return BuildOutcome::rejected(std::move(r4.message));
+  Value v4 = std::move(r4.value);
+  fs1.emplace_back("a", v4);
+  Value v5 = env.slots[0];
+  EvalResult r6 = rt_access_build(env, v5, "body");
+  if (r6.faulted) return BuildOutcome::rejected(std::move(r6.message));
+  Value v6 = std::move(r6.value);
+  EvalResult r7 = rt_access_build(env, v6, "asset");
+  if (r7.faulted) return BuildOutcome::rejected(std::move(r7.message));
+  Value v7 = std::move(r7.value);
+  Value v8 = Value::make_str("ton");
+  EvalResult r9 = rt_eq(v7, v8);
+  if (r9.faulted) return BuildOutcome::rejected(std::move(r9.message));
+  Value v9 = std::move(r9.value);
+  fs1.emplace_back("is_ton", v9);
+  o.data = Value::make_dict(std::move(fs1));
+  return o;
+}
+
+BuildOutcome build_34_parse_coffee_vault_jetton(BuildEnv &env) {
+  (void)env;
+  BuildOutcome o = BuildOutcome::accepted();
+  Value pt0 = env.slots[0];
+  EvalResult sp0 = rt_parse(env, pt0, std::vector<std::string>{"CoffeeCreateVault"});
+  if (sp0.faulted) return BuildOutcome::rejected(std::move(sp0.message));
+  Value::Fields fs1;
+  Value v2 = env.slots[0];
+  EvalResult r3 = rt_access_build(env, v2, "body");
+  if (r3.faulted) return BuildOutcome::rejected(std::move(r3.message));
+  Value v3 = std::move(r3.value);
+  EvalResult r4 = rt_access_build(env, v3, "asset");
+  if (r4.faulted) return BuildOutcome::rejected(std::move(r4.message));
+  Value v4 = std::move(r4.value);
+  fs1.emplace_back("a", v4);
+  o.data = Value::make_dict(std::move(fs1));
+  return o;
+}
+
+BuildOutcome build_35_switch_no_match_rejects(BuildEnv &env) {
   (void)env;
   BuildOutcome o = BuildOutcome::accepted();
   Value v0 = env.slots[0];
@@ -885,11 +1270,22 @@ const std::vector<GenBuild> &gen_builds() {
       {21, "well_knowns", &build_21_well_knowns},
       {22, "list_parse_and_body", &build_22_list_parse_and_body},
       {23, "data_accessor", &build_23_data_accessor},
-      {24, "switch_no_match_rejects", &build_24_switch_no_match_rejects},
+      {24, "parse_dns_next_resolver", &build_24_parse_dns_next_resolver},
+      {25, "parse_dns_smc_flags", &build_25_parse_dns_smc_flags},
+      {26, "parse_dns_text", &build_26_parse_dns_text},
+      {27, "parse_dns_no_value", &build_27_parse_dns_no_value},
+      {28, "parse_dns_unknown_schema", &build_28_parse_dns_unknown_schema},
+      {29, "parse_vesting", &build_29_parse_vesting},
+      {30, "parse_pton_ref_payload", &build_30_parse_pton_ref_payload},
+      {31, "parse_pton_inline_payload", &build_31_parse_pton_inline_payload},
+      {32, "parse_dedust_payout", &build_32_parse_dedust_payout},
+      {33, "parse_coffee_vault_native", &build_33_parse_coffee_vault_native},
+      {34, "parse_coffee_vault_jetton", &build_34_parse_coffee_vault_jetton},
+      {35, "switch_no_match_rejects", &build_35_switch_no_match_rejects},
   };
   return table;
 }
 
-const char *gen_builds_source_sha() { return "8b6e1ad80cbc5d728d469eed9006571d74e29168e225916d8a4d743fa9bc6e8f"; }
+const char *gen_builds_source_sha() { return "fa12ba4768589636025e6fccdf12177a00d2518ac577d0e43bac64a7c8bf367e"; }
 
 }  // namespace mch
