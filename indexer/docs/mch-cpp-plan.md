@@ -350,4 +350,43 @@ min_lt_without_initiating_tx + direction() tiebreak; walker child-edge multi-mat
 accumulation + children-set first-match-wins + mark/rollback + recursion gap-alignment;
 absorb_aux + root auto-append; classify mid-mutation loop; RefInt256; addr_none +
 Asset case-insensitive eq; load_address_py; skip machinery; `pytoniq_to_boc` (BOTH call
-sites — b64 builtin AND MsgParse payload bytes, per the C1 correction).
+sites — b64 builtin AND MsgParse payload bytes, per the C1 correction — but see the
+BOC-parity evidence below: the byte bar itself is queued for replacement, which would
+retire `pytoniq_to_boc` entirely).
+
+## 12. BOC serialization parity — corpus evidence (2026-07-07, decision pending)
+
+Question revisited (user): is byte-identity of BOC container bytes a real invariant, or a
+serializer implementation detail? Empirical scan of ALL 1477 fixture message bodies (DB
+provenance = td bytes written by the C++ indexer), re-serialized with pytoniq and compared
+(scratchpad `boc_parity_scan.py` / `boc_divergence_deep.py`, session 50ed80b7):
+
+- **Root hash equal 1477/1477.** Every serialization decodes to the identical cell tree.
+- **Two divergence mechanisms, nothing else:**
+  1. **CRC flag** — DB bodies carry td's CRC (flags byte 0x41), pytoniq default omits it
+     (+4 bytes). Pure container framing. With `hash_crc32=True` matched, **1273/1477 (86%)
+     are byte-identical** — td and pytoniq fully agree on linear-chain trees (typical
+     jetton transfer + snake payload).
+  2. **Topological cell order** — 204/1477 (14%): same cells (content multiset equal
+     204/204), different container sequence + ref-index bytes. Occurs ONLY on branching
+     trees (113 multi-ref, 91 shared-subtree; opcodes: w5 `0x7369676e` multi-action,
+     multisig, coffee, jetton ops with branching payloads).
+- **Why:** the BOC spec allows any topological order. pytoniq = last-visit DFS (verified
+  exactly, 204/204 — `pytoniq_to_boc` is a correct clone). td = its own 3-phase weighted
+  `reorder_cells`/`revisit` (boc.cpp:258-380, reverse-child iteration) — matches nothing
+  textbook. Every implementation (td, pytoniq, ton-core JS, tonutils) picks its own order;
+  none parity-chase another.
+- **DB reality:** already mixed-provenance — bodies = td bytes with CRC, action payload
+  fields = pytoniq bytes without. No consumer ever noticed: everything parses, nothing
+  byte-compares. The DB invariant is **decoded-tree identity**, not bytes.
+
+**Queued decision (user leaning yes, not yet ordered):** switch the A/B parity bar for
+Cell-derived output fields (jetton `forward_payload`/`custom_payload`/`stonfi_swap_body`,
+vesting `message_boc_str`) from byte-equality to **root-hash equality**; C++ then uses
+native `td::std_boc_serialize`, `pytoniq_to_boc` is deleted (~100 LOC — and with it the
+review finding P3, pytoniq_order's exponential re-walk DoS, which was excluded from the
+fix wave for exactly this reason). Comparators render such fields as `cellhash:<HASH>`.
+Python side unchanged (its pytoniq bytes remain valid under the same bar). Transition
+note: post-switch C++ production rows carry td bytes where Python-era rows carry pytoniq
+bytes for the same logical payload — decode-identical; only breaks a consumer that does
+string equality on payload columns (none known; grep ton-index-go before flipping).
