@@ -176,10 +176,18 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
       return rt_fault("dedust notify: parse");
     }
     Value n = r.move_as_ok();
+    const Value *amount_in_f = n.field("amount_in");
+    const Value *asset_in_f = n.field("asset_in");
+    const Value *amount_out_f = n.field("amount_out");
+    const Value *asset_out_f = n.field("asset_out");
+    if (amount_in_f == nullptr || asset_in_f == nullptr || amount_out_f == nullptr ||
+        asset_out_f == nullptr) {
+      return rt_fault("dedust notify: missing leg field");
+    }
     Value in_leg = Value::make_dict(Value::Fields{
-        {"amount", to_amount(*n.field("amount_in"))}, {"asset", *n.field("asset_in")}});
+        {"amount", to_amount(*amount_in_f)}, {"asset", *asset_in_f}});
     Value out_leg = Value::make_dict(Value::Fields{
-        {"amount", to_amount(*n.field("amount_out"))}, {"asset", *n.field("asset_out")}});
+        {"amount", to_amount(*amount_out_f)}, {"asset", *asset_out_f}});
     peer_swaps.push_back(Value::make_dict(Value::Fields{
         {"in", std::move(in_leg)}, {"out", std::move(out_leg)}}));
   }
@@ -328,19 +336,33 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
         {"in", std::move(in_leg)}, {"out", std::move(out_leg)}}));
   }
 
-  Value first_in = *peer_swaps.front().field("in");
-  Value last_out = *peer_swaps.back().field("out");
+  const Value *first_in_f = peer_swaps.front().field("in");
+  const Value *last_out_f = peer_swaps.back().field("out");
+  if (first_in_f == nullptr || last_out_f == nullptr) {
+    return rt_fault("dedust legs: missing in/out leg");
+  }
+  Value first_in = *first_in_f;
+  Value last_out = *last_out_f;
+
+  const Value *in_asset_f = first_in.field("asset");
+  const Value *in_amount_f = first_in.field("amount");
+  const Value *out_asset_f = last_out.field("asset");
+  const Value *out_amount_f = last_out.field("amount");
+  if (in_asset_f == nullptr || in_amount_f == nullptr || out_asset_f == nullptr ||
+      out_amount_f == nullptr) {
+    return rt_fault("dedust legs: leg missing amount/asset");
+  }
 
   Value dex_incoming_transfer = Value::make_dict(Value::Fields{
-      {"asset", *first_in.field("asset")},
-      {"amount", *first_in.field("amount")},
+      {"asset", *in_asset_f},
+      {"amount", *in_amount_f},
       {"source", sender},
       {"source_jetton_wallet", sender_wallet},
       {"destination", dex_incoming_wallet},
       {"destination_jetton_wallet", dex_incoming_jetton_wallet}});
   Value dex_outgoing_transfer = Value::make_dict(Value::Fields{
-      {"asset", *last_out.field("asset")},
-      {"amount", *last_out.field("amount")},
+      {"asset", *out_asset_f},
+      {"amount", *out_amount_f},
       {"source", dex_outgoing_wallet},
       {"source_jetton_wallet", dex_outgoing_jetton_wallet},
       {"destination", receiver},

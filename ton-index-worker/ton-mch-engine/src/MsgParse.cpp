@@ -153,6 +153,9 @@ std::string render_value(const Value &v) {
     case VType::Account:
       return v.addr_none ? "addr_none" : v.str;
     case VType::Cell: {
+      if (v.cell.is_null()) {
+        return "cell:null";
+      }
       auto h = v.cell->get_hash();
       return "cell:" + hex_upper(h.as_slice().ubegin(), h.as_slice().size());
     }

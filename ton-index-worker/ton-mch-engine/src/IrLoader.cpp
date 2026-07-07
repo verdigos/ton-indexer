@@ -6,8 +6,10 @@
 #include "td/utils/crypto.h"
 
 #include <algorithm>
+#include <exception>
 #include <fstream>
 #include <sstream>
+#include <string>
 
 namespace mch {
 
@@ -50,6 +52,21 @@ std::int64_t jint(const Json &e, td::Slice name, std::int64_t dflt = 0) {
 bool jbool(const Json &e, td::Slice name, bool dflt = false) {
   const Json *f = jfield(e, name);
   return (f != nullptr && f->type() == JType::Boolean) ? f->get_boolean() : dflt;
+}
+
+// Parse a JSON Number token as int64. A malformed / overflowing token in a
+// corrupt artifact becomes a clean Status error instead of an uncaught
+// std::stoll throw (std::invalid_argument / std::out_of_range).
+td::Result<std::int64_t> num_i64(const Json &n) {
+  if (n.type() != JType::Number) {
+    return td::Status::Error("expected a JSON number");
+  }
+  const std::string s = n.get_number().str();
+  try {
+    return static_cast<std::int64_t>(std::stoll(s));
+  } catch (const std::exception &) {
+    return td::Status::Error("malformed JSON number '" + s + "'");
+  }
 }
 
 // Node ids referenced by a node record, in the fixed order Python's _edge_refs
@@ -163,12 +180,21 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
   const std::string ak = anchor != nullptr ? jstr(*anchor, "kind") : "";
   if (ak == "opcode_set") {
     m.anchor_kind = AnchorKind::OpcodeSet;
-    for (const auto &v : jfield(*anchor, "values")->get_array()) {
-      m.anchor_opcodes.insert(static_cast<std::uint32_t>(std::stoll(v.get_number().str()) & 0xFFFFFFFF));
+    const Json *values = jfield(*anchor, "values");
+    if (values == nullptr || values->type() != JType::Array) {
+      return td::Status::Error("matcher " + m.name + ": opcode_set anchor missing 'values' array");
+    }
+    for (const auto &v : values->get_array()) {
+      TRY_RESULT(op, num_i64(v));
+      m.anchor_opcodes.insert(static_cast<std::uint32_t>(op & 0xFFFFFFFF));
     }
   } else if (ak == "btype") {
     m.anchor_kind = AnchorKind::BType;
-    for (const auto &v : jfield(*anchor, "values")->get_array()) {
+    const Json *values = jfield(*anchor, "values");
+    if (values == nullptr || values->type() != JType::Array) {
+      return td::Status::Error("matcher " + m.name + ": btype anchor missing 'values' array");
+    }
+    for (const auto &v : values->get_array()) {
       m.anchor_btypes.insert(v.get_string().str());
     }
   } else if (ak == "pred") {
@@ -260,13 +286,15 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     cn.child = has(nrec, "child") ? rm(static_cast<int>(jint(nrec, "child"))) : -1;
     if (const Json *ch = jfield(nrec, "children"); ch != nullptr && ch->type() == JType::Array) {
       for (const auto &c : ch->get_array()) {
-        cn.children.push_back(rm(static_cast<int>(std::stoll(c.get_number().str()))));
+        TRY_RESULT(cid, num_i64(c));
+        cn.children.push_back(rm(static_cast<int>(cid)));
       }
     }
     cn.parent = has(nrec, "parent") ? rm(static_cast<int>(jint(nrec, "parent"))) : -1;
     if (const Json *br = jfield(nrec, "branches"); br != nullptr && br->type() == JType::Array) {
       for (const auto &b : br->get_array()) {
-        cn.branches.push_back(rm(static_cast<int>(std::stoll(b.get_number().str()))));
+        TRY_RESULT(bid, num_i64(b));
+        cn.branches.push_back(rm(static_cast<int>(bid)));
       }
     }
     cn.step = has(nrec, "step") ? rm(static_cast<int>(jint(nrec, "step"))) : -1;

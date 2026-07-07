@@ -16,6 +16,14 @@ constexpr std::uint32_t kExcessOpcode = 0xD53276DB;
 constexpr std::uint32_t kBounceOpcode = 0xFFFFFFFF;
 constexpr long kExitIdx = -1;  // frame idx marker for the exit attempt
 
+// Match recursion depth cap. depth == block-tree depth reached through the
+// mutual recursion (match_node -> child/children/parent/or/recursive edges).
+// Python's default recursion limit is 1000 with several frames per level;
+// 500 here trips well before either runtime's native stack fails. No corpus
+// trace is anywhere near this (max depth 2); this only guards pathological
+// inputs, converting an undefined stack overflow into a clean per-trace fail.
+constexpr int kMaxMatchDepth = 500;
+
 struct Frame {
   int nid{-1};   // -1 == no frame
   long idx{0};   // iter_index (>=0) or kExitIdx
@@ -47,6 +55,14 @@ class MatchState {
   }
 
   bool match_node(int nid, Block *block, bool absorb = true) {
+    struct DepthGuard {
+      int &d;
+      explicit DepthGuard(int &x) : d(x) { ++d; }
+      ~DepthGuard() { --d; }
+    } depth_guard(depth_);
+    if (depth_ > kMaxMatchDepth) {
+      throw MatchDepthExceeded();
+    }
     const CompiledNode &node = m_.nodes[nid];
     if (node.kind == NodeKind::Or) {
       return match_or(node, block);
@@ -376,6 +392,7 @@ class MatchState {
   std::unordered_set<Block *> visited_;
   std::vector<FrameEntry> frames_;
   Frame frame_;
+  int depth_{0};  // current match recursion depth (kMaxMatchDepth cap)
 };
 
 }  // namespace

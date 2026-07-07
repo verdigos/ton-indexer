@@ -53,11 +53,19 @@ td::Result<Value> load_address_py(vm::CellSlice &cs) {
     if (!cs.have(len)) {
       return td::Status::Error("address: extern underflow");
     }
-    auto v = cs.fetch_int256(len, false);
-    if (v.is_null()) {
-      return td::Status::Error("address: extern fetch failed");
+    // pytoniq addr_extern: ba2int(bits, signed=False) — an unsigned big-endian
+    // integer of exactly `len` bits (1..511). fetch_int256(len, false) returns
+    // an invalid-but-non-null RefInt256 for len in 257..511 (renders as NaN),
+    // diverging from Python's exact bigint; build the value by 32-bit chunks so
+    // every length up to 511 is exact. For len <= 256 this yields the identical
+    // decimal fetch_int256 produced.
+    td::RefInt256 acc = td::make_refint(0);
+    for (int rem = len; rem > 0;) {
+      int k = rem < 32 ? rem : 32;
+      acc = (acc << k) + td::make_refint(static_cast<long long>(cs.fetch_ulong(k)));
+      rem -= k;
     }
-    return Value::make_str("extern:" + std::to_string(len) + ":" + v->to_dec_string());
+    return Value::make_str("extern:" + std::to_string(len) + ":" + acc->to_dec_string());
   }
   if (tag == 3) {
     return td::Status::Error("address: addr_var unsupported");  // pytoniq raises

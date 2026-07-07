@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <map>
+#include <stdexcept>
 
 namespace mch {
 
@@ -56,6 +57,9 @@ std::string render_value(const Value &v) {
     case VType::Asset:
       return v.is_ton ? "asset:TON" : "asset:" + v.str;
     case VType::Cell: {
+      if (v.cell.is_null()) {
+        return "cell:null";
+      }
       auto h = v.cell->get_hash();
       return "cell:" + hex_upper(h.as_slice().ubegin(), h.as_slice().size());
     }
@@ -164,16 +168,26 @@ BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
   };
 
   std::map<std::string, Value> fetched;
+  bool converged = false;
   for (int round = 0; round < 8; round++) {
     CollectingLookupTable coll(kinds, fetched);
     BuildEnv env = fresh_env(&coll);
     fn(env);  // dry pass, outcome discarded
     if (coll.misses.empty()) {
+      converged = true;
       break;
     }
     for (const auto &[key, ka] : coll.misses) {
       fetched.emplace(key, src.fetch(ka.first, ka.second));
     }
+  }
+  // Python resolves any lookup-arg-of-lookup depth inline, so an unconverged
+  // fixpoint here is a genuine divergence, not a benign truncation — do not
+  // proceed with a partial table (silent wrongness). Throw to the classify
+  // trace boundary (Python's per-trace fallback). Today's artifacts have max
+  // lookup depth 2 and converge in <=2 rounds, so this never fires.
+  if (!converged) {
+    throw std::runtime_error("two-phase lookup did not converge after 8 rounds");
   }
 
   FilledLookupTable filled(kinds, std::move(fetched));

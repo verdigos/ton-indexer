@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <deque>
+#include <exception>
 #include <filesystem>
 #include <set>
 #include <string>
@@ -189,28 +190,55 @@ int run_classify(const std::string &artifact_path, const std::vector<std::string
       continue;
     }
     auto ctx = r_ctx.move_as_ok();
+    // Python to_tree asserts a single root; the C++ substrate tolerates orphan
+    // subtrees but the loss must not be silent (BlockTree.cpp). Surface to
+    // stderr only — stdout (the A/B channel) stays byte-identical, and no
+    // corpus trace has orphans, so this never fires in the gates.
+    if (ctx.tree.unlinked != 0) {
+      std::fprintf(stderr, "WARN %s: %zu orphan nodes unreachable from root\n",
+                   fs::path(f).filename().string().c_str(), ctx.tree.unlinked);
+    }
     FixtureLookupSource src(&ctx.trace.interfaces);
 
     // Synthetic root wrapper (process_event_async: Block('root').connect(...)).
     Block *wrapper = ctx.arena.make("root");
     wrapper->connect(ctx.root);
 
-    for (int mi : included) {
-      const CompiledMatcher &m = ir.matchers[mi];
-      auto fn = build_fns.at(m.artifact_index);
-      // Python bfs_iter port: FIFO; cur's next_blocks are read AFTER try_build
-      // ran on cur (generator resume order) — merges mutate the tree mid-walk.
-      std::deque<Block *> queue{wrapper};
-      while (!queue.empty()) {
-        Block *cur = queue.front();
-        queue.pop_front();
-        if (cur->parent == nullptr) {
-          try_build(m, fn, cur, ctx.arena, kinds, src);
-        }
-        for (Block *n : cur->next_blocks) {
-          queue.push_back(n);
+    // Per-trace exception boundary (Python parity): a pred/builder/parser
+    // exception escaping match/build — a recursion-depth trip (Walker
+    // MatchDepthExceeded), a two-phase non-convergence (run_two_phase), a
+    // pytoniq BOC/index fault, a VmError on a pruned ref — propagates OUT of
+    // the engine to event_processing.py's per-trace `except Exception`, which
+    // discards the trace's actions and falls back. Here that is a single
+    // `TRACE_FAIL` line on stdout (the reason goes to stderr so the A/B
+    // channel is byte-comparable). No corpus trace triggers this.
+    try {
+      for (int mi : included) {
+        const CompiledMatcher &m = ir.matchers[mi];
+        auto fn = build_fns.at(m.artifact_index);
+        // Python bfs_iter port: FIFO; cur's next_blocks are read AFTER
+        // try_build ran on cur (generator resume order) — merges mutate the
+        // tree mid-walk.
+        std::deque<Block *> queue{wrapper};
+        while (!queue.empty()) {
+          Block *cur = queue.front();
+          queue.pop_front();
+          if (cur->parent == nullptr) {
+            try_build(m, fn, cur, ctx.arena, kinds, src);
+          }
+          for (Block *n : cur->next_blocks) {
+            queue.push_back(n);
+          }
         }
       }
+    } catch (const std::exception &e) {
+      std::printf("TRACE_FAIL\n");
+      std::fprintf(stderr, "TRACE_FAIL %s: %s\n",
+                   fs::path(f).filename().string().c_str(), e.what());
+    } catch (...) {
+      std::printf("TRACE_FAIL\n");
+      std::fprintf(stderr, "TRACE_FAIL %s: unknown exception\n",
+                   fs::path(f).filename().string().c_str());
     }
   }
   return 0;
