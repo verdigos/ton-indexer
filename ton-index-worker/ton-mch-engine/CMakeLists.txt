@@ -107,12 +107,27 @@ add_executable(ton-mch-engine
     src/Walker.cpp
     src/MatchRunner.cpp
     src/HostRegistry.cpp
+    src/host/HostCommon.cpp
+    src/host/HostNominator.cpp
+    src/host/HostEvaa.cpp
+    src/host/HostDedust.cpp
+    src/host/HostLayerZero.cpp
+    src/host/HostTonstakers.cpp
     src/BuildRuntime.cpp
     src/BuildVectorRunner.cpp
     src/BuildDriver.cpp
     src/BuildSmoke.cpp
     src/Classify.cpp
     src/MsgParse.cpp
+    src/parse/PSlice.cpp
+    src/parse/ParseJettons.cpp
+    src/parse/ParseDns.cpp
+    src/parse/ParseVesting.cpp
+    src/parse/ParsePton.cpp
+    src/parse/ParseDedust.cpp
+    src/parse/ParseCoffee.cpp
+    src/parse/ParseEvaa.cpp
+    src/parse/ParseLayerZero.cpp
     ${MCH_GENERATED_SOURCES}
 )
 target_include_directories(ton-mch-engine

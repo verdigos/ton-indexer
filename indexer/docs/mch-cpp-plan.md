@@ -297,6 +297,27 @@ corrections applied. Execute as a hygiene wave AFTER Phase C lands (same-tree co
    (MsgParse.cpp:475-477,489); unread `MsgContent.hash` (TraceLoader.cpp:137). KEEP
    `op_index`/`btype_index` (IrLoader) — currently unconsumed but built for the production
    loop's anchor index (Phase G).
+4. **Codegen optimization pass (lead review of generated code, 2026-07-07; schedule inside
+   Phase G where a benchmark can prove it).** The emitter (`codegen/ExprCodegen.cpp`) produces
+   correct-but-naïve code; all fixes are emitter-level, behavior-preserving, and verified for
+   free by the existing byte-gates (vectors 91/91, classify/parse-dump diff 0 after regen).
+   Ranked by impact (user-confirmed: 4a + 4b are the priority):
+   - **4a. Static dispatch (highest).** Every emitted call goes through string-keyed runtime
+     dispatch: `rt_call_builtin("account", vector<Value>{v4})` = std::map arity lookup +
+     name if-chain + a heap-allocated args vector PER CALL; `rt_access_build(env, v, "msg")`
+     = strcmp chain. The codegen knows builtin and accessor statically — emit direct calls
+     (`rt_builtin_account(...)`, enum-dispatched accessors), no name strings, no arg vectors.
+     Matters doubly because the SAME emitter produces where_expr code, which runs per
+     (block × matcher) in the match loop — the production hot path.
+   - **4b. Kill gratuitous Value copies (second).** Emitted `Value v2 = env.slots[0];` copies
+     a ~120-byte struct (std::string + RefInt256 + Ref<Cell> + 2 shared_ptrs = 4 atomic
+     refcount bumps) only to pass it to a `const Value&` parameter. Emit the ref expression
+     directly (`rt_access_build(env, env.slots[0], "msg")`); locals only where a value is
+     genuinely consumed twice.
+   - 4c. `std::move` into `Fields::emplace_back` for dead temporaries; `fs.reserve(n)` (field
+     count known at codegen time).
+   - 4d. Function-local `static const` for constant argument lists (e.g. the
+     `std::vector<std::string>{"CoffeeCreateVault"}` rebuilt on every `rt_parse` call).
 
 ### Rejected / corrected by lead
 
