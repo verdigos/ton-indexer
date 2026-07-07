@@ -251,12 +251,12 @@ int run_build_vectors(const std::string &path) {
       source_sha += hex[digest[i] & 0xF];
     }
   }
-  if (source_sha != gen_builds_source_sha()) {
+  if (source_sha != gen_builds_vectors_source_sha()) {
     std::fprintf(stderr,
-                 "generated build table was built from a DIFFERENT document (table sha %s, "
-                 "loaded %s) — regenerate: mch-codegen --builds %s -o "
-                 "src/generated/builds_generated.cpp\n",
-                 gen_builds_source_sha(), source_sha.c_str(), path.c_str());
+                 "generated build-vectors table was built from a DIFFERENT document (table sha "
+                 "%s, loaded %s) — the CMake build regenerates it from ir/build_vectors.json; "
+                 "rebuild ton-mch-engine or pass that file\n",
+                 gen_builds_vectors_source_sha(), source_sha.c_str());
     return 2;
   }
   auto r_root = td::json_decode(td::MutableSlice(buf));
@@ -271,12 +271,12 @@ int run_build_vectors(const std::string &path) {
     return 2;
   }
   const auto &arr = cases->get_array();
-  const auto &table = gen_builds();
+  const auto &table = gen_builds_vectors();
   if (table.size() != arr.size()) {
     std::fprintf(stderr,
-                 "generated build table has %zu fns for %zu cases — regenerate: "
-                 "mch-codegen --builds %s -o src/generated/builds_generated.cpp\n",
-                 table.size(), arr.size(), path.c_str());
+                 "generated build-vectors table has %zu fns for %zu cases — rebuild "
+                 "ton-mch-engine (CMake regenerates it from ir/build_vectors.json)\n",
+                 table.size(), arr.size());
     return 2;
   }
 

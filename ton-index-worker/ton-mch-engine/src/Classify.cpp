@@ -119,12 +119,16 @@ int run_classify(const std::string &artifact_path, const std::vector<std::string
   }
   LoadedIr ir = r_ir.move_as_ok();
 
-  if (ir.source_sha256 != gen_builds_source_sha()) {
+  const char *table_kind = nullptr;
+  const std::vector<GenBuild> *table = select_gen_builds(ir.source_sha256, &table_kind);
+  if (table == nullptr) {
     std::fprintf(stderr,
-                 "generated build table was built from a DIFFERENT artifact (table sha %s, "
-                 "loaded %s) — regenerate: mch-codegen --builds %s -o "
-                 "src/generated/builds_generated.cpp\n",
-                 gen_builds_source_sha(), ir.source_sha256.c_str(), artifact_path.c_str());
+                 "no generated build table matches this artifact (loaded sha %s; ir table %s, "
+                 "testbed table %s) — the CMake build pairs tables with ir/mch_ir.json and the "
+                 "optional -DMCH_TESTBED_IR artifact; rebuild ton-mch-engine or pass a paired "
+                 "artifact\n",
+                 ir.source_sha256.c_str(), gen_builds_ir_source_sha(),
+                 *gen_builds_testbed_source_sha() ? gen_builds_testbed_source_sha() : "(stub)");
     return 2;
   }
 
@@ -146,16 +150,15 @@ int run_classify(const std::string &artifact_path, const std::vector<std::string
   }
 
   std::unordered_map<int, BuildOutcome (*)(BuildEnv &)> build_fns;
-  for (const GenBuild &g : gen_builds()) {
+  for (const GenBuild &g : *table) {
     build_fns.emplace(g.id, g.fn);
   }
   for (int mi : included) {
     if (build_fns.find(ir.matchers[mi].artifact_index) == build_fns.end()) {
       std::fprintf(stderr,
-                   "generated build table has no fn for matcher '%s' (artifact index %d) — "
-                   "regenerate: mch-codegen --builds %s -o src/generated/builds_generated.cpp\n",
-                   ir.matchers[mi].name.c_str(), ir.matchers[mi].artifact_index,
-                   artifact_path.c_str());
+                   "generated %s build table has no fn for matcher '%s' (artifact index %d) — "
+                   "rebuild ton-mch-engine (CMake regenerates the paired tables)\n",
+                   table_kind, ir.matchers[mi].name.c_str(), ir.matchers[mi].artifact_index);
       return 2;
     }
   }

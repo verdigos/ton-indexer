@@ -1,6 +1,6 @@
-// Stable interface for the generated expression-vector functions
-// (src/generated/vectors_generated.cpp, produced by
-// indexer/events/mch/cpp_expr_emit.py). Consumed by `--vectors-gen`.
+// Stable interface for the generated expression-vector functions (produced by
+// `mch-codegen --vectors ir/expr_vectors.json` as a CMake build step;
+// build-tree output, not in git). Consumed by `--vectors-gen`.
 #pragma once
 
 #include "ExprRuntime.h"

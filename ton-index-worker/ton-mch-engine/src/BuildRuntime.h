@@ -192,4 +192,11 @@ EvalResult rt_access_build(const BuildEnv &env, const Value &obj, const std::str
 EvalResult rt_lookup_build(const BuildEnv &env, const std::string &kind,
                            const std::vector<Value> &args);
 
+// Host `fn` call (build mode only): dispatches to HostRegistry::host_fns().
+// UNLIKE rt_call_builtin, arguments are NOT null-strict — they pass through to
+// the fn verbatim. Unknown name -> fault; the fn's own fault propagates. The
+// generated build code emits this for every `call` whose fn is not a builtin.
+EvalResult rt_call_hostfn(BuildEnv &env, const std::string &name,
+                          const std::vector<Value> &args);
+
 }  // namespace mch

@@ -1,6 +1,7 @@
 #include "Walker.h"
 
 #include "ExprEval.h"
+#include "HostRegistry.h"
 
 #include <algorithm>
 #include <map>
@@ -139,17 +140,23 @@ class MatchState {
       case NodeKind::Recursive:
         ok = test_head(node.step, block);
         break;
-      case NodeKind::Pred:
-        ok = false;  // no predicate registry in this stage (matcher is unrunnable)
+      case NodeKind::Pred: {
+        auto it = host_predicates().find(node.pred_name);
+        ok = it != host_predicates().end() && it->second(block);
         break;
+      }
     }
     if (!ok) {
       return false;
     }
-    // Named `where` predicates stay unwired (a runnable matcher carries none);
-    // inline where_exprs compose onto the head test (engine.py §4.1).
+    // Named `where` predicate (engine.py: `node.where(block)`), then inline
+    // where_exprs compose onto the head test (§4.1). Loader gates runnability
+    // on the registry, so a missing name here means an unrunnable matcher.
     if (!node.where_name.empty()) {
-      return false;
+      auto it = host_predicates().find(node.where_name);
+      if (it == host_predicates().end() || !it->second(block)) {
+        return false;
+      }
     }
     if (node.has_where_expr && !eval_where(node, block)) {
       return false;
@@ -226,7 +233,10 @@ class MatchState {
     // Entry gate: the recursive node's own where clauses run against the entry
     // block before the strategy dispatch (engine.py _match_recursive).
     if (!node.where_name.empty()) {
-      return false;  // named predicates stay unwired
+      auto it = host_predicates().find(node.where_name);
+      if (it == host_predicates().end() || !it->second(entry)) {
+        return false;
+      }
     }
     if (node.has_where_expr && !eval_where(node, entry)) {
       return false;
@@ -376,9 +386,13 @@ bool matcher_test_self(const CompiledMatcher &m, const Block *b) {
       return b->btype == "call_contract" && b->opcode && m.anchor_opcodes.count(*b->opcode) > 0;
     case AnchorKind::BType:
       return m.anchor_btypes.count(b->btype) > 0;
-    case AnchorKind::Pred:
+    case AnchorKind::Pred: {
+      // engine.py test_self: full-scan predicate anchor, no prefilter.
+      auto it = host_predicates().find(m.anchor_pred);
+      return it != host_predicates().end() && it->second(b);
+    }
     case AnchorKind::Mixed:
-      return false;  // predicate/mixed anchors are unrunnable in this stage
+      return false;  // branch structure not stored; loader keeps these unrunnable
   }
   return false;
 }

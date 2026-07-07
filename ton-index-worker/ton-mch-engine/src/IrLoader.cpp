@@ -1,5 +1,7 @@
 #include "IrLoader.h"
 
+#include "HostRegistry.h"
+
 #include "td/utils/JsonBuilder.h"
 #include "td/utils/crypto.h"
 
@@ -171,7 +173,8 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     }
   } else if (ak == "pred") {
     m.anchor_kind = AnchorKind::Pred;
-    m.ref_preds.insert(jstr(*anchor, "pred"));
+    m.anchor_pred = jstr(*anchor, "pred");
+    m.ref_preds.insert(m.anchor_pred);
   } else if (ak == "mixed") {
     m.anchor_kind = AnchorKind::Mixed;
     if (const Json *br = jfield(*anchor, "branches"); br != nullptr && br->type() == JType::Array) {
@@ -346,16 +349,30 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     pred_names.insert(m.ref_preds.begin(), m.ref_preds.end());
   }
   m.ref_preds.insert(pred_names.begin(), pred_names.end());
-  if (!pred_names.empty()) {
+  // Runnable iff every referenced predicate is in the host registry (Phase D);
+  // the skip reason lists only the MISSING names. A mixed anchor stays
+  // unrunnable even when its predicates exist: the loader does not yet store
+  // the branch structure matcher_test_self would need (no current
+  // build_program matcher has one — guard, not a plan).
+  std::set<std::string> missing;
+  for (const std::string &p : pred_names) {
+    if (host_predicates().find(p) == host_predicates().end()) {
+      missing.insert(p);
+    }
+  }
+  if (!missing.empty()) {
     m.unrunnable = true;
     std::string reason = "pred:";
     bool first = true;
-    for (const std::string &p : pred_names) {
+    for (const std::string &p : missing) {
       if (!first) reason += ",";
       first = false;
       reason += p;
     }
     m.skip_reason = reason;
+  } else if (m.anchor_kind == AnchorKind::Mixed && !m.ref_preds.empty()) {
+    m.unrunnable = true;
+    m.skip_reason = "mixed_anchor_preds";
   }
   return td::Status::OK();
 }

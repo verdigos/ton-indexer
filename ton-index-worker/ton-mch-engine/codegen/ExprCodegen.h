@@ -45,12 +45,15 @@ std::string generate_vectors_file(const td::JsonValue &root, const std::string &
 std::string generate_wheres_file(const td::JsonValue &root, const std::string &header,
                                  const std::string &source_sha);
 
-// Emit the whole builds_generated.cpp (Phase B1, D2): one
+// Emit a whole builds table file (Phase B1, D2): one
 // `BuildOutcome build_<id>_<name>(BuildEnv&)` per matcher carrying a
-// build_program, plus the gen_builds() table. Accepts an IR artifact root
+// build_program, plus the `gen_builds_<suffix>()` / `gen_builds_<suffix>_
+// source_sha()` table accessors. Accepts an IR artifact root
 // ({matchers:[...]}, id = matcher index) or a build-vectors root
-// ({build_vectors:[...]}, id = case index).
+// ({build_vectors:[...]}, id = case index). `suffix` gives each input
+// document its own table symbols so tables from BOTH documents link into one
+// binary (ir + vectors) and never need manual re-pairing.
 std::string generate_builds_file(const td::JsonValue &root, const std::string &header,
-                                 const std::string &source_sha);
+                                 const std::string &source_sha, const std::string &suffix);
 
 }  // namespace mch_codegen

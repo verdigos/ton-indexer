@@ -774,6 +774,83 @@ td::Result<Value> parse_dedust_payout_from_pool(const td::Ref<vm::Cell> &body) {
   return Value::make_obj(std::move(f));
 }
 
+// --- Phase D adapters (EVAA withdraw family; messages/evaa.py) --------------
+
+// withdraw_master#00000002: query_id u64, asset_id u256, amount u64, recipient.
+td::Result<Value> parse_evaa_withdraw_master(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64 + 256 + 64) || !cs.advance(32)) {
+    return td::Status::Error("evaa master: underflow");
+  }
+  auto query_id = cs.fetch_ulong(64);
+  auto asset_id = cs.fetch_int256(256, false);
+  if (asset_id.is_null()) {
+    return td::Status::Error("evaa master: asset_id fetch failed");
+  }
+  auto amount = cs.fetch_ulong(64);
+  TRY_RESULT(recipient, load_address_py(cs));
+  Value::Fields f;
+  f.emplace_back("query_id", Value::make_int(refint_u64(query_id)));
+  f.emplace_back("asset_id", Value::make_int(std::move(asset_id)));
+  f.emplace_back("amount", Value::make_int(refint_u64(amount)));
+  f.emplace_back("recipient_address", std::move(recipient));
+  return Value::make_obj(std::move(f));
+}
+
+// withdraw_collateralized#00000211: query_id u64, owner addr, asset_id u256,
+// withdraw_amount_current u64 (rest skipped like the Python parser).
+td::Result<Value> parse_evaa_withdraw_collateralized(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64) || !cs.advance(32)) {
+    return td::Status::Error("evaa coll: underflow");
+  }
+  auto query_id = cs.fetch_ulong(64);
+  TRY_RESULT(owner, load_address_py(cs));
+  if (!cs.have(256 + 64)) {
+    return td::Status::Error("evaa coll: underflow");
+  }
+  auto asset_id = cs.fetch_int256(256, false);
+  if (asset_id.is_null()) {
+    return td::Status::Error("evaa coll: asset_id fetch failed");
+  }
+  auto amount = cs.fetch_ulong(64);
+  Value::Fields f;
+  f.emplace_back("query_id", Value::make_int(refint_u64(query_id)));
+  f.emplace_back("owner_address", std::move(owner));
+  f.emplace_back("asset_id", Value::make_int(std::move(asset_id)));
+  f.emplace_back("withdraw_amount_current", Value::make_int(refint_u64(amount)));
+  return Value::make_obj(std::move(f));
+}
+
+// EvaaWithdrawFailExcess: opcode-tagged reason; an unknown opcode raises in
+// Python (ValueError) -> soft-parse failure.
+td::Result<Value> parse_evaa_withdraw_fail_excess(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32)) {
+    return td::Status::Error("evaa fail excess: underflow");
+  }
+  auto op = static_cast<td::uint32>(cs.fetch_ulong(32));
+  const char *reason;
+  if (op == 0x21e6) {
+    reason = "withdraw_locked_excess";
+  } else if (op == 0x21e7) {
+    reason = "withdraw_not_collateralized_excess";
+  } else if (op == 0x21e8) {
+    reason = "withdraw_missing_prices_excess";
+  } else if (op == 0x21ec) {
+    reason = "withdraw_execution_crashed";
+  } else {
+    return td::Status::Error("evaa fail excess: unknown opcode");
+  }
+  Value::Fields f;
+  f.emplace_back("opcode", Value::make_int64(static_cast<std::int64_t>(op)));
+  f.emplace_back("reason", Value::make_str(reason));
+  return Value::make_obj(std::move(f));
+}
+
 // CoffeeCreateVault (messages/coffee.py + load_coffee_asset): native/jetton
 // asset tags; extra$10 and the invalid tag raise in Python -> parse fail.
 td::Result<Value> parse_coffee_create_vault(const td::Ref<vm::Cell> &body) {
@@ -813,6 +890,195 @@ td::Result<Value> parse_coffee_create_vault(const td::Ref<vm::Cell> &body) {
   return Value::make_obj(std::move(f));
 }
 
+// messages/swaps.py load_asset: kind:uint4 (0 -> TON) else wc:uint8 + 32 bytes.
+// Asset(False, Address((wc, bytes))) -> canonical "wc:HEX" upper (AccountId).
+td::Result<Value> load_dedust_asset(vm::CellSlice &cs) {
+  if (!cs.have(4)) {
+    return td::Status::Error("dedust asset: kind underflow");
+  }
+  auto kind = cs.fetch_ulong(4);
+  if (kind == 0) {
+    return Value::make_asset_ton();
+  }
+  if (!cs.have(8 + 256)) {
+    return td::Status::Error("dedust asset: jetton underflow");
+  }
+  int wc = static_cast<int>(cs.fetch_ulong(8));
+  unsigned char buf[32];
+  if (!cs.fetch_bytes(buf, 32)) {
+    return td::Status::Error("dedust asset: hash fetch failed");
+  }
+  return Value::make_asset_jetton(std::to_string(wc) + ":" + hex_upper(buf, 32));
+}
+
+// DedustSwapNotification (messages/swaps.py). Parses the full body incl. the
+// ref (Python load_ref() raises when absent -> parse fails -> host fn rejects).
+td::Result<Value> parse_dedust_swap_notification(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("dedust notify: opcode underflow");
+  }
+  TRY_RESULT(asset_in, load_dedust_asset(cs));
+  TRY_RESULT(asset_out, load_dedust_asset(cs));
+  TRY_RESULT(amount_in, load_coins_py(cs));
+  TRY_RESULT(amount_out, load_coins_py(cs));
+  if (cs.size_refs() == 0) {
+    return td::Status::Error("dedust notify: ref missing");
+  }
+  bool special = false;
+  vm::CellSlice ref;
+  try {
+    ref = vm::load_cell_slice_special(cs.fetch_ref(), special);
+  } catch (...) {
+    return td::Status::Error("dedust notify: bad ref cell");
+  }
+  TRY_RESULT(sender_address, load_address_py(ref));
+  TRY_RESULT(ref_address, load_address_py(ref));
+  TRY_RESULT(reserve_0, load_coins_py(ref));
+  TRY_RESULT(reserve_1, load_coins_py(ref));
+  Value::Fields f;
+  f.emplace_back("asset_in", std::move(asset_in));
+  f.emplace_back("asset_out", std::move(asset_out));
+  f.emplace_back("amount_in", Value::make_int(std::move(amount_in)));
+  f.emplace_back("amount_out", Value::make_int(std::move(amount_out)));
+  f.emplace_back("sender_address", std::move(sender_address));
+  f.emplace_back("ref_address", std::move(ref_address));
+  f.emplace_back("reserve_0", Value::make_int(std::move(reserve_0)));
+  f.emplace_back("reserve_1", Value::make_int(std::move(reserve_1)));
+  return Value::make_obj(std::move(f));
+}
+
+// --- LayerZero (messages/layerzero.py:149-208, 1377-1383) --------------------
+// LayerZeroOappExecuteCallback: cell = slice.to_cell(); packet =
+// LayerZeroPacket(cell.refs[0].refs[0]). The twin dumps vars() recursively, so
+// the Obj mirrors EVERY Python attribute, incl. b (the source cell), s (the
+// slice AFTER all loads -> remainder rebuilt as a cell) and the asserted
+// header ints. guid/src_oapp/dst_oapp are Python hex(): "0x" + lowercase
+// MINIMAL digits (leading zeros stripped — unlike the 64-digit account form).
+// message is '0x' + bits.tobytes().hex(): bit-level bytes, right-padded to a
+// byte boundary, leading zeros KEPT.
+
+td::Result<std::string> lz_hex_min(vm::CellSlice &cs, int bits) {
+  auto v = cs.fetch_int256(bits, false);
+  if (v.is_null()) {
+    return td::Status::Error("lz: int underflow");
+  }
+  return "0x" + td::hex_string(v);
+}
+
+td::Result<Value> lz_parse_path(const td::Ref<vm::Cell> &c) {
+  PSlice ps = pslice_from_cell(c);
+  auto hi = ps.cs.fetch_int256(152, false);
+  if (hi.is_null() || td::dec_string(hi) != "8903714975572488637007080065659") {
+    return td::Status::Error("lz path: header info mismatch");
+  }
+  auto hf = ps.cs.fetch_int256(198, true);
+  if (hf.is_null() || td::dec_string(hf) != "-1") {
+    return td::Status::Error("lz path: header filler mismatch");
+  }
+  if (!ps.cs.have(32)) {
+    return td::Status::Error("lz path: src_eid underflow");
+  }
+  auto src_eid = ps.cs.fetch_ulong(32);
+  TRY_RESULT(src_oapp, lz_hex_min(ps.cs, 256));
+  if (!ps.cs.have(32)) {
+    return td::Status::Error("lz path: dst_eid underflow");
+  }
+  auto dst_eid = ps.cs.fetch_ulong(32);
+  TRY_RESULT(dst_oapp, lz_hex_min(ps.cs, 256));
+  TRY_RESULT(rem, pslice_to_cell(ps));
+  Value::Fields f;
+  f.emplace_back("b", Value::make_cell(c));
+  f.emplace_back("s", Value::make_cell(std::move(rem)));
+  f.emplace_back("header_info", Value::make_int(std::move(hi)));
+  f.emplace_back("header_filler", Value::make_int(std::move(hf)));
+  f.emplace_back("src_eid", Value::make_int64(static_cast<std::int64_t>(src_eid)));
+  f.emplace_back("src_oapp", Value::make_str(std::move(src_oapp)));
+  f.emplace_back("dst_eid", Value::make_int64(static_cast<std::int64_t>(dst_eid)));
+  f.emplace_back("dst_oapp", Value::make_str(std::move(dst_oapp)));
+  return Value::make_obj(std::move(f));
+}
+
+td::Result<Value> lz_parse_packet(const td::Ref<vm::Cell> &c) {
+  PSlice ps = pslice_from_cell(c);
+  auto hi = ps.cs.fetch_int256(152, false);
+  if (hi.is_null() || td::dec_string(hi) != "417359019239977417716476838698419835") {
+    return td::Status::Error("lz packet: header info mismatch");
+  }
+  auto hf = ps.cs.fetch_int256(198, true);
+  if (hf.is_null() || td::dec_string(hf) != "-1") {
+    return td::Status::Error("lz packet: header filler mismatch");
+  }
+  if (ps.off >= ps.refs.size()) {
+    return td::Status::Error("lz packet: path ref missing");
+  }
+  auto path_cell = ps.refs[ps.off++];
+  TRY_RESULT(path, lz_parse_path(path_cell));
+  if (ps.off >= ps.refs.size()) {
+    return td::Status::Error("lz packet: message ref missing");
+  }
+  auto msg_cell = ps.refs[ps.off++];
+  std::string message;
+  {
+    bool special = false;
+    vm::CellSlice mcs;
+    try {
+      mcs = vm::load_cell_slice_special(msg_cell, special);
+    } catch (...) {
+      return td::Status::Error("lz packet: bad message cell");
+    }
+    unsigned n_bits = mcs.size();
+    size_t n_bytes = (n_bits + 7) / 8;
+    std::string buf(n_bytes, '\0');
+    if (n_bits > 0) {
+      td::BitPtr(reinterpret_cast<unsigned char *>(buf.data())).copy_from(mcs.data_bits(), n_bits);
+    }
+    static const char hexd[] = "0123456789abcdef";
+    message = "0x";
+    for (char cbyte : buf) {
+      unsigned char b = static_cast<unsigned char>(cbyte);
+      message += hexd[b >> 4];
+      message += hexd[b & 0xF];
+    }
+  }
+  if (!ps.cs.have(64)) {
+    return td::Status::Error("lz packet: nonce underflow");
+  }
+  auto nonce = ps.cs.fetch_ulong(64);
+  TRY_RESULT(guid, lz_hex_min(ps.cs, 256));
+  TRY_RESULT(rem, pslice_to_cell(ps));
+  Value::Fields f;
+  f.emplace_back("b", Value::make_cell(c));
+  f.emplace_back("s", Value::make_cell(std::move(rem)));
+  f.emplace_back("header_info", Value::make_int(std::move(hi)));
+  f.emplace_back("header_filler", Value::make_int(std::move(hf)));
+  f.emplace_back("path", std::move(path));
+  f.emplace_back("message", Value::make_str(std::move(message)));
+  f.emplace_back("nonce", Value::make_int(td::make_refint(nonce)));
+  f.emplace_back("guid", Value::make_str(std::move(guid)));
+  return Value::make_obj(std::move(f));
+}
+
+td::Result<Value> parse_layerzero_oapp_execute_callback(const td::Ref<vm::Cell> &body) {
+  // self.cell = slice.to_cell() on the FRESH body slice — pytoniq rebuilds the
+  // cell; hash-identical to the body root, but rebuilt to mirror the semantics.
+  PSlice ps = pslice_from_cell(body);
+  TRY_RESULT(cell0, pslice_to_cell(ps));
+  if (ps.refs.empty()) {
+    return td::Status::Error("lz callback: refs[0] missing");
+  }
+  PSlice r0 = pslice_from_cell(ps.refs[0]);
+  if (r0.refs.empty()) {
+    return td::Status::Error("lz callback: refs[0].refs[0] missing");
+  }
+  TRY_RESULT(packet, lz_parse_packet(r0.refs[0]));
+  Value::Fields f;
+  f.emplace_back("cell", Value::make_cell(std::move(cell0)));
+  f.emplace_back("packet", std::move(packet));
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::map<std::string, MsgParserFn> &message_parsers() {
@@ -828,7 +1094,12 @@ const std::map<std::string, MsgParserFn> &message_parsers() {
       {"VestingSendMessage", parse_vesting_send_message},
       {"PTonTransfer", parse_pton_transfer},
       {"DedustPayoutFromPool", parse_dedust_payout_from_pool},
+      {"DedustSwapNotification", parse_dedust_swap_notification},
       {"CoffeeCreateVault", parse_coffee_create_vault},
+      {"EvaaWithdrawMaster", parse_evaa_withdraw_master},
+      {"EvaaWithdrawCollateralized", parse_evaa_withdraw_collateralized},
+      {"EvaaWithdrawFailExcess", parse_evaa_withdraw_fail_excess},
+      {"LayerZeroOappExecuteCallback", parse_layerzero_oapp_execute_callback},
   };
   return parsers;
 }
@@ -843,6 +1114,140 @@ td::Result<Value> parse_message_body(const std::string &type_name, const td::Ref
   } catch (...) {
     return td::Status::Error("parse threw");
   }
+}
+
+td::Result<td::RefInt256> pyslice_load_coins(vm::CellSlice &cs) {
+  return load_coins_py(cs);
+}
+
+// blocks/swaps.py _parse_dedust_steps: walk the SwapStep chain (already
+// positioned past the sum-type/header). Each link: pool addr, 1 flag bit,
+// coins, maybe-ref to the next step. Returns the pool addresses in walk order
+// (AccountId(load_address()).as_str(); addr_none -> "addr_none").
+td::Result<std::vector<std::string>> parse_dedust_steps(vm::CellSlice cs) {
+  std::vector<std::string> steps;
+  for (;;) {
+    TRY_RESULT(addr, load_address_py(cs));  // pytoniq load_address
+    std::string pool = (addr.t == VType::Account && !addr.addr_none) ? addr.str : "addr_none";
+    if (!cs.have(1)) {
+      return td::Status::Error("dedust steps: flag bit underflow");
+    }
+    cs.advance(1);                    // load_bit
+    TRY_RESULT(_coins, load_coins_py(cs));
+    (void)_coins;
+    if (!cs.have(1)) {                // load_maybe_ref: the Maybe bit
+      return td::Status::Error("dedust steps: maybe-ref bit underflow");
+    }
+    bool has_next = cs.fetch_ulong(1) != 0;
+    steps.push_back(std::move(pool));
+    if (!has_next) {
+      return steps;
+    }
+    if (cs.size_refs() == 0) {
+      return td::Status::Error("dedust steps: next-step ref missing");
+    }
+    bool special = false;
+    try {
+      cs = vm::load_cell_slice_special(cs.fetch_ref(), special);  // next_step.to_slice()
+    } catch (...) {
+      return td::Status::Error("dedust steps: bad next-step cell");
+    }
+  }
+}
+
+namespace {
+
+// Python bytes.decode("utf-8", errors="backslashreplace") + .replace("\u0000", "").
+std::string decode_backslashreplace_strip_nul(const std::string &raw) {
+  std::string out;
+  size_t i = 0;
+  auto bad = [&out](unsigned char c) {
+    static const char *hex = "0123456789abcdef";
+    out += "\\x";
+    out += hex[c >> 4];
+    out += hex[c & 0xF];
+  };
+  while (i < raw.size()) {
+    unsigned char c = static_cast<unsigned char>(raw[i]);
+    int n;
+    if (c < 0x80) {
+      n = 0;
+    } else if ((c & 0xE0) == 0xC0 && c >= 0xC2) {
+      n = 1;
+    } else if ((c & 0xF0) == 0xE0) {
+      n = 2;
+    } else if ((c & 0xF8) == 0xF0 && c <= 0xF4) {
+      n = 3;
+    } else {
+      bad(c);
+      i++;
+      continue;
+    }
+    bool ok = i + n < raw.size();
+    for (int k = 1; ok && k <= n; k++) {
+      if ((static_cast<unsigned char>(raw[i + k]) & 0xC0) != 0x80) {
+        ok = false;
+      }
+    }
+    if (ok && n == 2) {
+      unsigned char c1 = static_cast<unsigned char>(raw[i + 1]);
+      if ((c == 0xE0 && c1 < 0xA0) || (c == 0xED && c1 >= 0xA0)) {
+        ok = false;
+      }
+    }
+    if (ok && n == 3) {
+      unsigned char c1 = static_cast<unsigned char>(raw[i + 1]);
+      if ((c == 0xF0 && c1 < 0x90) || (c == 0xF4 && c1 >= 0x90)) {
+        ok = false;
+      }
+    }
+    if (!ok) {
+      bad(c);
+      i++;
+      continue;
+    }
+    if (c == 0) {
+      i++;  // U+0000 stripped
+      continue;
+    }
+    out.append(raw, i, static_cast<size_t>(n) + 1);
+    i += static_cast<size_t>(n) + 1;
+  }
+  return out;
+}
+
+}  // namespace
+
+std::optional<std::string> ton_transfer_comment(const td::Ref<vm::Cell> &body) {
+  auto r_ctx = open_body(body);
+  if (r_ctx.is_error()) {
+    return std::nullopt;
+  }
+  auto ctx = r_ctx.move_as_ok();
+  auto &cs = ctx.cs;
+  if (cs.size() < 32) {
+    return std::nullopt;  // TonTransferMessage: comment None
+  }
+  auto op = static_cast<td::uint32>(cs.fetch_ulong(32));
+  bool encrypted = op == 0x2167da4b;
+  if (!(cs.size() >= 8 && cs.size() % 8 == 0 &&
+        (cs.size_refs() == 0 || cs.size_refs() == 1))) {
+    return std::nullopt;
+  }
+  PSlice ps;
+  ps.cs = cs;
+  for (unsigned i = 0; i < cs.size_refs(); i++) {
+    ps.refs.push_back(cs.prefetch_ref(i));
+  }
+  auto r = load_snake_bytes(ps);
+  if (r.is_error()) {
+    return std::nullopt;  // Python's inner try swallows
+  }
+  std::string bytes = r.move_as_ok();
+  if (encrypted) {
+    return td::base64_encode(td::Slice(bytes));
+  }
+  return decode_backslashreplace_strip_nul(bytes);
 }
 
 // --- --parse-dump mode -------------------------------------------------------
@@ -874,7 +1279,15 @@ constexpr DumpType kDumpTypes[] = {
     {0xa7733acd, "VestingSendMessage"},
     {0x01f3835d, "PTonTransfer"},
     {0xad4eb6f5, "DedustPayoutFromPool"},
+    {0x9c610de3, "DedustSwapNotification"},
     {0xc0ffee06, "CoffeeCreateVault"},
+    {0x00000002, "EvaaWithdrawMaster"},
+    {0x00000211, "EvaaWithdrawCollateralized"},
+    {0x000021e6, "EvaaWithdrawFailExcess"},
+    {0x000021e7, "EvaaWithdrawFailExcess"},
+    {0x000021e8, "EvaaWithdrawFailExcess"},
+    {0x000021ec, "EvaaWithdrawFailExcess"},
+    {0xcaae25a1, "LayerZeroOappExecuteCallback"},
 };
 
 std::string render_value(const Value &v);

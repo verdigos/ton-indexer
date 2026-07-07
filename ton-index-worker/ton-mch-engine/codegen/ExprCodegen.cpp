@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <vector>
 
@@ -27,6 +28,15 @@ const Json *jfield(const Json &e, td::Slice name) {
 std::string jstr(const Json &e, const char *name) {
   const Json *f = jfield(e, td::Slice(name));
   return f != nullptr && f->type() == JType::String ? f->get_string().str() : std::string{};
+}
+
+// The fixed builtin set (rt_call_builtin's arity table). Anything else in a
+// `call` node is a host fn (registries.fns) in build programs.
+bool is_builtin(const std::string &name) {
+  static const std::set<std::string> builtins = {
+      "account", "amount", "asset", "ton_asset", "addr_none", "b64",
+      "first",   "last",   "len",   "sum",       "zip",       "map"};
+  return builtins.count(name) != 0;
 }
 
 std::string join(const std::vector<std::string> &parts, const std::string &sep) {
@@ -123,8 +133,15 @@ class Emitter {
       return bind("rt_access(" + of + ", " + cstr(jstr(e, "name")) + ")");
     }
     if (k == "call") {
+      const std::string fn = jstr(e, "fn");
       std::string argv = emit_args(*jfield(e, "args"));
-      return bind("rt_call_builtin(" + cstr(jstr(e, "fn")) + ", std::vector<Value>{" + argv + "})");
+      // Build mode: a non-builtin call is a host `fn` (registries.fns) — emit
+      // rt_call_hostfn (env-aware, NULL ARGS PASS THROUGH, unlike rt_call_builtin
+      // which is null-strict). Vectors/Where modes only ever see builtins.
+      if (mode_ == EmitMode::Build && !is_builtin(fn)) {
+        return bind("rt_call_hostfn(env, " + cstr(fn) + ", std::vector<Value>{" + argv + "})");
+      }
+      return bind("rt_call_builtin(" + cstr(fn) + ", std::vector<Value>{" + argv + "})");
     }
     if (k == "lookup") {
       if (mode_ == EmitMode::Where) {
@@ -612,7 +629,7 @@ std::string generate_wheres_file(const Json &root, const std::string &header,
 }
 
 std::string generate_builds_file(const Json &root, const std::string &header,
-                                 const std::string &source_sha) {
+                                 const std::string &source_sha, const std::string &suffix) {
   // Two accepted roots: an IR artifact ({matchers:[...]}, fn per matcher with
   // a build_program, id = matcher index) or a build-vectors document
   // ({build_vectors:[...]}, fn per case, id = case index).
@@ -650,9 +667,10 @@ std::string generate_builds_file(const Json &root, const std::string &header,
     BuildGen gen(*e.matcher);
     out.push_back(gen.generate("build_" + std::to_string(e.id) + "_" + sanitize_ident(e.name)));
   }
+  const std::string table_fn = "gen_builds_" + sanitize_ident(suffix);
   out.push_back("}  // namespace");
   out.push_back("");
-  out.push_back("const std::vector<GenBuild> &gen_builds() {");
+  out.push_back("const std::vector<GenBuild> &" + table_fn + "() {");
   out.push_back("  static const std::vector<GenBuild> table = {");
   for (const Entry &e : entries) {
     out.push_back("      {" + std::to_string(e.id) + ", " + cstr(e.name) + ", &build_" +
@@ -662,7 +680,7 @@ std::string generate_builds_file(const Json &root, const std::string &header,
   out.push_back("  return table;");
   out.push_back("}");
   out.push_back("");
-  out.push_back("const char *gen_builds_source_sha() { return " + cstr(source_sha) + "; }");
+  out.push_back("const char *" + table_fn + "_source_sha() { return " + cstr(source_sha) + "; }");
   out.push_back("");
   out.push_back("}  // namespace mch");
   out.push_back("");

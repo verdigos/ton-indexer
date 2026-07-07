@@ -120,9 +120,9 @@ int run_match(const std::string &artifact_path, const std::vector<std::string> &
     if (ir.source_sha256 != gen_wheres_source_sha()) {
       std::fprintf(stderr,
                    "generated where table was built from a DIFFERENT artifact (table sha %s, "
-                   "loaded %s) — regenerate: mch-codegen --wheres %s -o "
-                   "src/generated/wheres_generated.cpp\n",
-                   gen_wheres_source_sha(), ir.source_sha256.c_str(), artifact_path.c_str());
+                   "loaded %s) — the CMake build regenerates it from ir/mch_ir.json; rebuild "
+                   "ton-mch-engine or pass that artifact\n",
+                   gen_wheres_source_sha(), ir.source_sha256.c_str());
       return 2;
     }
     for (const GenWhere &g : gen_wheres()) {
@@ -138,8 +138,8 @@ int run_match(const std::string &artifact_path, const std::vector<std::string> &
         if (n.has_where_expr && gen_table.find(n.global_id) == gen_table.end()) {
           std::fprintf(stderr,
                        "generated where table has no function for node %d (matcher %s) — "
-                       "regenerate: mch-codegen --wheres %s -o src/generated/wheres_generated.cpp\n",
-                       n.global_id, m.name.c_str(), artifact_path.c_str());
+                       "rebuild ton-mch-engine (CMake regenerates it from ir/mch_ir.json)\n",
+                       n.global_id, m.name.c_str());
           return 2;
         }
       }

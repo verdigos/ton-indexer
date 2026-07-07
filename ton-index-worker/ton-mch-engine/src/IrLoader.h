@@ -79,6 +79,7 @@ struct CompiledMatcher {
   AnchorKind anchor_kind{AnchorKind::OpcodeSet};
   std::unordered_set<std::uint32_t> anchor_opcodes;
   std::unordered_set<std::string> anchor_btypes;
+  std::string anchor_pred;  // Pred-kind anchor's predicate name
 
   std::vector<CompiledNode> nodes;      // local pool, remapped, root == 0
   std::vector<std::string> slot_names;  // slot id -> capture name (decl order)

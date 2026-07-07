@@ -1,6 +1,6 @@
-// Stable interface for the generated where_expr functions
-// (src/generated/wheres_generated.cpp, produced by `mch-codegen --wheres
-// <mch_ir.json>`). One function per artifact node carrying a `where_expr`,
+// Stable interface for the generated where_expr functions (produced by
+// `mch-codegen --wheres ir/mch_ir.json` as a CMake build step; build-tree
+// output, not in git). One function per artifact node carrying a `where_expr`,
 // keyed by the ARTIFACT-GLOBAL node index (CompiledNode::global_id) — stable
 // across the loader's per-matcher remap because the emitter's node ids are
 // deterministic. The walker uses this table when the runner enables generated

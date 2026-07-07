@@ -1,14 +1,27 @@
-// Stable interface for the generated build-program functions
-// (src/generated/builds_generated.cpp, produced by `mch-codegen --builds`).
-// One function per matcher carrying a build_program. The generator accepts
-// either an IR artifact (keyed by matcher index in the artifact's `matchers`
-// array) or a build_vectors.json (keyed by vector index) — both are stable
-// ids for their input document. A table generated from a different document
-// than the one being run is a hard error at the runner level.
+// Stable interface for the generated build-program functions (produced by
+// `mch-codegen --builds <doc> --suffix <sfx>` as a CMake build step; the
+// outputs live in the build tree, not in git). One function per matcher
+// carrying a build_program. Each input document gets its OWN table symbols so
+// all tables link into one binary and every consumer is permanently paired
+// with its document:
+//  - gen_builds_ir():      generated from ir/mch_ir.json (keyed by matcher
+//    index in the artifact's `matchers` array) — classify / build-smoke;
+//  - gen_builds_vectors(): generated from ir/build_vectors.json (keyed by
+//    vector index) — the --build-vectors conformance runner;
+//  - gen_builds_testbed(): OPTIONAL (-DMCH_TESTBED_IR=<artifact.json>) —
+//    a phase's experimental artifact, so classify/build-smoke can run against
+//    a testbed WITHOUT editing the ir/mch_ir.json contract mid-phase. Without
+//    the cache var this resolves to the committed empty stub
+//    (BuildsTestbedStub.cpp; its sha "" never matches a real artifact).
+// The *_source_sha() guards stay as a safety net: runners hard-fail when the
+// sha differs from the document they load — with per-document generation the
+// pairing is correct by construction, but a wrong pairing must remain
+// impossible to run silently.
 #pragma once
 
 #include "BuildRuntime.h"
 
+#include <string>
 #include <vector>
 
 namespace mch {
@@ -19,12 +32,22 @@ struct GenBuild {
   BuildOutcome (*fn)(BuildEnv &);
 };
 
-// The generated table, ascending id.
-const std::vector<GenBuild> &gen_builds();
+// Table from ir/mch_ir.json, ascending matcher index.
+const std::vector<GenBuild> &gen_builds_ir();
+const char *gen_builds_ir_source_sha();
 
-// SHA-256 (hex) of the source document the table was generated from. Runners
-// hard-fail when it differs from the document they load — a wrong table/
-// artifact pairing must be impossible to run silently.
-const char *gen_builds_source_sha();
+// Table from ir/build_vectors.json, ascending vector index.
+const std::vector<GenBuild> &gen_builds_vectors();
+const char *gen_builds_vectors_source_sha();
+
+// Table from ${MCH_TESTBED_IR} (or the empty stub when the var is unset).
+const std::vector<GenBuild> &gen_builds_testbed();
+const char *gen_builds_testbed_source_sha();
+
+// The artifact-keyed table whose source sha matches `sha` (ir first, then
+// testbed); nullptr when neither matches. `which` (optional) receives
+// "ir"/"testbed" for diagnostics.
+const std::vector<GenBuild> *select_gen_builds(const std::string &sha,
+                                               const char **which = nullptr);
 
 }  // namespace mch

@@ -21,8 +21,10 @@
 
 #include "td/utils/Status.h"
 #include "vm/cells/Cell.h"
+#include "vm/cellslice.h"
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -37,6 +39,22 @@ const std::map<std::string, MsgParserFn> &message_parsers();
 // Parse `body` as the named registered type; error when the name is unknown
 // or the parse fails (caller implements soft-parse alternatives on top).
 td::Result<Value> parse_message_body(const std::string &type_name, const td::Ref<vm::Cell> &body);
+
+// pytoniq Slice.load_coins() (len nibble 0 -> 0), exported for host predicates
+// that parse variable-length headers (HostRegistry, e.g. EVAA).
+td::Result<td::RefInt256> pyslice_load_coins(vm::CellSlice &cs);
+
+// blocks/swaps.py _parse_dedust_steps: walk the SwapStep chain from a slice
+// positioned at the first step, returning the pool addresses in walk order.
+// Exported for the dedust_swap host fn (HostRegistry).
+td::Result<std::vector<std::string>> parse_dedust_steps(vm::CellSlice cs);
+
+// TonTransferBlock.comment derivation (basic_blocks.py + common.py
+// TonTransferMessage): nullopt == comment None; encrypted comments come back
+// base64-encoded; plain comments are utf-8 decoded with backslashreplace and
+// U+0000 stripped — exactly the string Python compares. Parse trouble that
+// Python's inner try swallows yields nullopt.
+std::optional<std::string> ton_transfer_comment(const td::Ref<vm::Cell> &body);
 
 // `--parse-dump` mode: for every message in the fixture(s) whose opcode is a
 // registered jetton-family opcode, parse the body and print a canonical line

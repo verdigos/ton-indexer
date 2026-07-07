@@ -1,6 +1,8 @@
 #include "BuildDriver.h"
 
 #include "BlockTree.h"
+#include "GenBuilds.h"
+#include "HostRegistry.h"
 #include "MsgParse.h"
 
 #include "td/utils/base64.h"
@@ -106,6 +108,12 @@ std::string build_skip_reason(const CompiledMatcher &m) {
       missing_lookups.push_back(l);
     }
   }
+  std::vector<std::string> missing_fns;
+  for (const std::string &fn : m.ref_fns) {
+    if (host_fns().find(fn) == host_fns().end()) {
+      missing_fns.push_back(fn);
+    }
+  }
   std::string reason;
   auto add = [&reason](const std::string &tag, const std::vector<std::string> &names) {
     if (names.empty()) {
@@ -120,7 +128,7 @@ std::string build_skip_reason(const CompiledMatcher &m) {
   };
   add("types", missing_types);
   add("lookups", missing_lookups);
-  add("fns", std::vector<std::string>(m.ref_fns.begin(), m.ref_fns.end()));
+  add("fns", missing_fns);
   add("shaper", std::vector<std::string>(m.ref_shapers.begin(), m.ref_shapers.end()));
   return reason;  // empty == included
 }
@@ -171,6 +179,22 @@ BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
   FilledLookupTable filled(kinds, std::move(fetched));
   BuildEnv env = fresh_env(&filled);
   return fn(env);
+}
+
+const std::vector<GenBuild> *select_gen_builds(const std::string &sha, const char **which) {
+  if (sha == gen_builds_ir_source_sha()) {
+    if (which != nullptr) {
+      *which = "ir";
+    }
+    return &gen_builds_ir();
+  }
+  if (sha == gen_builds_testbed_source_sha()) {
+    if (which != nullptr) {
+      *which = "testbed";
+    }
+    return &gen_builds_testbed();
+  }
+  return nullptr;
 }
 
 }  // namespace mch

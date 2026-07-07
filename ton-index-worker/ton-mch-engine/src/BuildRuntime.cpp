@@ -209,6 +209,20 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     }
     return it->second;  // the account's whole interfaces Dict
   }
+  if (kind == "dedust_pool") {
+    // TestInterfaceRepository.get_dedust_pool: interfaces[addr]["DedustPool"]
+    // (RAW key == AccountId.as_str() upper) -> DedustPool(assets=data["assets"]).
+    // Absent -> null; the host fn then rejects (Python None.assets raises).
+    auto it = interfaces_->find(addr);
+    if (it == interfaces_->end()) {
+      return Value::null();
+    }
+    const Value *pool = it->second.field("DedustPool");
+    if (pool == nullptr) {
+      return Value::null();
+    }
+    return iface_obj(*pool, {"assets"});
+  }
   return Value::null();
 }
 

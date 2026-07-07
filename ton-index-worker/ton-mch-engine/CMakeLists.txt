@@ -9,19 +9,91 @@ add_executable(mch-codegen
 target_compile_features(mch-codegen PRIVATE cxx_std_20)
 target_link_libraries(mch-codegen tdutils)
 
-# Generated expression-conformance functions + table (mirrors the tlbc/tokens
-# codegen precedent in tondb-scanner/CMakeLists.txt). Committed in-tree AND
-# regenerable: the custom command rebuilds it when mch-codegen or the input JSON
-# changes.
+# --- generated sources ---------------------------------------------------------
+# EVERY generated file (mch-codegen tables + tlbc parsers) is a build step whose
+# output lives in the build tree (${CMAKE_CURRENT_BINARY_DIR}/generated/), never
+# in the source tree or git. The ir/*.json inputs and tlb/mch-msgs.tlb ARE the
+# version-controlled contract; the .cpp tables are derived artifacts.
+#
+# Per-document build tables: mch-codegen --builds emits gen_builds_<suffix>()
+# symbols, so the table generated from ir/mch_ir.json (classify / build-smoke)
+# and the one from ir/build_vectors.json (--build-vectors) both link into the
+# binary, each permanently paired with its input document. The runners' sha256
+# guards remain as a safety net but now pass by construction.
+set(MCH_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+file(MAKE_DIRECTORY ${MCH_GEN_DIR})
+
 add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/generated/vectors_generated.cpp
+    OUTPUT ${MCH_GEN_DIR}/vectors_generated.cpp
     COMMAND mch-codegen --vectors ${CMAKE_CURRENT_SOURCE_DIR}/ir/expr_vectors.json
-            -o ${CMAKE_CURRENT_SOURCE_DIR}/src/generated/vectors_generated.cpp
+            -o ${MCH_GEN_DIR}/vectors_generated.cpp
     DEPENDS mch-codegen ${CMAKE_CURRENT_SOURCE_DIR}/ir/expr_vectors.json
-    COMMENT "Generate MCH expression conformance functions (mch-codegen)"
+    COMMENT "Generate MCH expression conformance functions (mch-codegen --vectors)"
 )
-add_custom_target(mch_codegen_vectors
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/generated/vectors_generated.cpp)
+add_custom_command(
+    OUTPUT ${MCH_GEN_DIR}/wheres_generated.cpp
+    COMMAND mch-codegen --wheres ${CMAKE_CURRENT_SOURCE_DIR}/ir/mch_ir.json
+            -o ${MCH_GEN_DIR}/wheres_generated.cpp
+    DEPENDS mch-codegen ${CMAKE_CURRENT_SOURCE_DIR}/ir/mch_ir.json
+    COMMENT "Generate MCH where_expr functions (mch-codegen --wheres)"
+)
+add_custom_command(
+    OUTPUT ${MCH_GEN_DIR}/builds_ir_generated.cpp
+    COMMAND mch-codegen --builds ${CMAKE_CURRENT_SOURCE_DIR}/ir/mch_ir.json
+            --suffix ir -o ${MCH_GEN_DIR}/builds_ir_generated.cpp
+    DEPENDS mch-codegen ${CMAKE_CURRENT_SOURCE_DIR}/ir/mch_ir.json
+    COMMENT "Generate MCH build-program functions from the IR artifact (mch-codegen --builds)"
+)
+add_custom_command(
+    OUTPUT ${MCH_GEN_DIR}/builds_vectors_generated.cpp
+    COMMAND mch-codegen --builds ${CMAKE_CURRENT_SOURCE_DIR}/ir/build_vectors.json
+            --suffix vectors -o ${MCH_GEN_DIR}/builds_vectors_generated.cpp
+    DEPENDS mch-codegen ${CMAKE_CURRENT_SOURCE_DIR}/ir/build_vectors.json
+    COMMENT "Generate MCH build-program functions from the build vectors (mch-codegen --builds)"
+)
+
+# TL-B jetton-family parsers from tlb/mch-msgs.tlb via tlbc (same build-tree
+# discipline as the mch-codegen outputs above).
+set(MCH_MSGS_TLB
+    ${MCH_GEN_DIR}/mch-msgs-tlb.cpp
+    ${MCH_GEN_DIR}/mch-msgs-tlb.h
+)
+add_custom_command(
+    WORKING_DIRECTORY ${MCH_GEN_DIR}
+    COMMAND tlbc -o mch-msgs-tlb -n mchmsg::gen -z ${CMAKE_CURRENT_SOURCE_DIR}/tlb/mch-msgs.tlb
+    COMMENT "Generate mch-msgs tlb source files"
+    OUTPUT ${MCH_MSGS_TLB}
+    DEPENDS tlbc ${CMAKE_CURRENT_SOURCE_DIR}/tlb/mch-msgs.tlb
+)
+
+# OPTIONAL testbed table (-DMCH_TESTBED_IR=<artifact.json>): lets a phase run
+# classify / build-smoke against an experimental artifact WITHOUT editing the
+# ir/mch_ir.json contract — runners select the table by source sha
+# (select_gen_builds). Unset (default): the committed empty stub is compiled.
+set(MCH_TESTBED_IR "" CACHE FILEPATH
+    "Optional experimental IR artifact; generates a third build table (gen_builds_testbed)")
+if(MCH_TESTBED_IR)
+    add_custom_command(
+        OUTPUT ${MCH_GEN_DIR}/builds_testbed_generated.cpp
+        COMMAND mch-codegen --builds ${MCH_TESTBED_IR}
+                --suffix testbed -o ${MCH_GEN_DIR}/builds_testbed_generated.cpp
+        DEPENDS mch-codegen ${MCH_TESTBED_IR}
+        COMMENT "Generate MCH build-program functions from the TESTBED artifact (mch-codegen --builds)"
+    )
+    set(MCH_TESTBED_SOURCE ${MCH_GEN_DIR}/builds_testbed_generated.cpp)
+else()
+    set(MCH_TESTBED_SOURCE src/BuildsTestbedStub.cpp)
+endif()
+
+set(MCH_GENERATED_SOURCES
+    ${MCH_GEN_DIR}/vectors_generated.cpp
+    ${MCH_GEN_DIR}/wheres_generated.cpp
+    ${MCH_GEN_DIR}/builds_ir_generated.cpp
+    ${MCH_GEN_DIR}/builds_vectors_generated.cpp
+    ${MCH_TESTBED_SOURCE}
+    ${MCH_GEN_DIR}/mch-msgs-tlb.cpp
+)
+add_custom_target(mch_generate_sources DEPENDS ${MCH_GENERATED_SOURCES} ${MCH_GEN_DIR}/mch-msgs-tlb.h)
 
 add_executable(ton-mch-engine
     src/main.cpp
@@ -34,47 +106,29 @@ add_executable(ton-mch-engine
     src/IrLoader.cpp
     src/Walker.cpp
     src/MatchRunner.cpp
+    src/HostRegistry.cpp
     src/BuildRuntime.cpp
     src/BuildVectorRunner.cpp
     src/BuildDriver.cpp
     src/BuildSmoke.cpp
     src/Classify.cpp
-    src/generated/vectors_generated.cpp
-    src/generated/wheres_generated.cpp
-    src/generated/builds_generated.cpp
+    src/MsgParse.cpp
+    ${MCH_GENERATED_SOURCES}
 )
 target_include_directories(ton-mch-engine
     PUBLIC src
+    # MsgParse.cpp includes "generated/mch-msgs-tlb.h" -> resolves into the
+    # build tree; nothing generated ever lands under src/.
+    PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
 )
 target_compile_features(ton-mch-engine PRIVATE cxx_std_20)
 
 find_package(lz4 CONFIG REQUIRED)
 target_link_libraries(ton-mch-engine tondb-scanner lz4::lz4)
 
-# Ensure the generated source is (re)built before ton-mch-engine compiles it.
-add_dependencies(ton-mch-engine mch_codegen_vectors)
+# Belt-and-suspenders ordering: the OUTPUT->source wiring above already forces
+# generation before compilation; the explicit target keeps clean-dir builds
+# honest if sources move between targets later.
+add_dependencies(ton-mch-engine mch_generate_sources)
 
 install(TARGETS ton-mch-engine RUNTIME DESTINATION bin)
-
-# --- TL-B message-parsing layer (MsgParse) -----------------------------------
-# Generated jetton-family parsers from tlb/mch-msgs.tlb via tlbc (clones the
-# tondb-scanner tokens-tlb precedent). Committed in-tree AND regenerable.
-# Keep this section contiguous and at the END of the file.
-set(MCH_MSGS_TLB
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/generated/mch-msgs-tlb.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/generated/mch-msgs-tlb.h
-)
-add_custom_command(
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/generated
-    COMMAND tlbc -o mch-msgs-tlb -n mchmsg::gen -z ${CMAKE_CURRENT_SOURCE_DIR}/tlb/mch-msgs.tlb
-    COMMENT "Generate mch-msgs tlb source files"
-    OUTPUT ${MCH_MSGS_TLB}
-    DEPENDS tlbc ${CMAKE_CURRENT_SOURCE_DIR}/tlb/mch-msgs.tlb
-)
-add_custom_target(mch_tlb_generate_msgs DEPENDS ${MCH_MSGS_TLB})
-add_dependencies(ton-mch-engine mch_tlb_generate_msgs)
-target_sources(ton-mch-engine PRIVATE
-    src/MsgParse.cpp
-    src/generated/mch-msgs-tlb.cpp
-)
-# --- end TL-B message-parsing layer -------------------------------------------
