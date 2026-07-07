@@ -44,6 +44,21 @@ R018_BAD_FLOW = "R018_BAD_FLOW"
 """A `flow` statement names an unknown kind or has the wrong number of
 arguments — must be jetton(3), ton(2), or fees(2) (§9.8)."""
 
+R022_UNNORMALIZED_PRODUCES_CLASS = "R022_UNNORMALIZED_PRODUCES_CLASS"
+"""A PascalCase (class-name) `produces` token has no class->btype entry in
+mch/btypes.py CLASS_TO_BTYPE, so it cannot be normalized to the block's real
+btype (spec §8.1, report F3). Left unresolved it would silently emit the class
+name itself as the produced btype — a downstream mismatch the serializer and
+legacy blocks never key on. Add the entry, or use the bare btype string."""
+
+R023_PARSE_TARGET_COMPOSED_BLOCK = "R023_PARSE_TARGET_COMPOSED_BLOCK"
+"""A `parse X as T` statement targets a capture bound by a `btype` node — a
+composed/produced block built by a PRIOR matcher (spec §9.1, report F1). A
+produced block's `get_body()` reads `event_nodes[0]`, whose identity after the
+prior matcher's `merge_blocks` is not the anchor protocol message, so the
+re-parse does not round-trip and `.body` silently null-propagates. Read the
+prior matcher's fields via `X.data.<field>` instead of re-parsing."""
+
 P011_DUPLICATE_DIRECTIVE = "P011_DUPLICATE_DIRECTIVE"
 """A matcher declares the same at-most-once directive more than once
 (currently: `shape`, §8.7)."""

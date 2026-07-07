@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Iterable
 
-from indexer.events.mch import ast_
+from indexer.events.mch import ast_, diagnostics
+from indexer.events.mch.btypes import CLASS_TO_BTYPE, is_class_name
 from indexer.events.mch.diagnostics import CompileError, DiagnosticBag, Span
 from indexer.events.mch.registry import Registries
 
@@ -253,15 +254,55 @@ def _check_predicates(file: ast_.File, registries: Registries, bag: DiagnosticBa
             )
 
 
+def _is_real_block_class(cls: object) -> bool:
+    """True for a concrete typed block class (a `Block` subclass other than the
+    base). Stubs (`object`, used by the emit stub registries and the synthetic
+    test matchers) and the generic `Block` itself carry their btype as the
+    produced name, so they keep the identity fallback and are not R022 cases."""
+    from indexer.events.blocks.core import Block  # lazy: keep resolver import-light
+    return isinstance(cls, type) and issubclass(cls, Block) and cls is not Block
+
+
 def _check_produces_union(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> None:
     """Validate every name in a matcher's `produces` union (spec §8.1 M2) against
-    the host's block-type registry. A single-name `produces` is a 1-element union."""
+    the host's block-type registry. A single-name `produces` is a 1-element union.
+
+    Also validates that a PascalCase (class-name) `produces` normalizes to a real
+    btype via `btypes.CLASS_TO_BTYPE` (report F3). Without an entry the name would
+    otherwise fall through to the class-name STRING as the produced btype — a
+    silent downstream mismatch (the serializer and legacy blocks key on the real
+    btype). Snake_case names are bare btypes and need no entry."""
     for m in file.matchers:
         for name in m.produces:
             if name not in registries.block_types:
                 bag.error(
                     "C003_UNKNOWN_BLOCK_TYPE",
                     f"matcher {m.name!r}: produces type {name!r} is not registered",
+                    m.span,
+                )
+            elif (
+                m.build is None
+                and is_class_name(name)
+                and name not in CLASS_TO_BTYPE
+                and _is_real_block_class(registries.block_types[name])
+            ):
+                # DECLARATIVE matcher (no host `build` fn) whose `produces` names
+                # a REAL typed block class (not a stub `object`/generic `Block`)
+                # absent from the map: the engine stamps this btype on the block
+                # it constructs, so an unresolved class name would silently emit
+                # the class-name string as the produced btype — a downstream
+                # mismatch the serializer never keys on (report F3). Builder
+                # matchers construct their own block, so their `produces` btype
+                # is documentation only and keeps the identity fallback; stubs
+                # and generic-Block producers likewise (their intended btype IS
+                # the name), so this never fires on the synthetic test matchers.
+                bag.error(
+                    diagnostics.R022_UNNORMALIZED_PRODUCES_CLASS,
+                    f"matcher {m.name!r}: declarative `produces` class {name!r} "
+                    f"has no btype mapping in mch/btypes.py CLASS_TO_BTYPE — it "
+                    f"would silently emit {name!r} as the produced btype instead "
+                    f"of the block's real btype. Add the class->btype entry, or "
+                    f"use the bare btype string in `produces`.",
                     m.span,
                 )
 
@@ -678,6 +719,21 @@ def _check_build_stmts(
                 bag.error(
                     "R011_PARSE_TARGET_NOT_CAPTURE",
                     f"parse target {stmt.capture!r} is not a pattern capture",
+                    stmt.span,
+                )
+            elif isinstance(captures[stmt.capture].head, ast_.BTypeHead):
+                # F1: parsing a composed/produced block's body never round-trips
+                # (§9.1). Its get_body() reads event_nodes[0], which after the
+                # prior matcher's merge is not the anchor protocol message, so the
+                # parse silently yields a null body. Read the prior matcher's
+                # fields via `<capture>.data.<field>` instead.
+                bag.error(
+                    diagnostics.R023_PARSE_TARGET_COMPOSED_BLOCK,
+                    f"parse target {stmt.capture!r} is a composed block "
+                    f"(captured by `btype {captures[stmt.capture].head.name}`); "
+                    f"re-parsing a produced block's body does not round-trip. "
+                    f"Read its fields via `{stmt.capture}.data.<field>` instead "
+                    f"of `parse … as …`.",
                     stmt.span,
                 )
             for t in stmt.msg_types:

@@ -2564,14 +2564,20 @@
             {
               "name": "staked_amount",
               "expr": {
-                "k": "call",
-                "fn": "jvault_transfer_amount",
-                "args": [
-                  {
-                    "k": "name",
-                    "id": "transfer"
-                  }
-                ]
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "transfer"
+                    },
+                    "name": "data"
+                  },
+                  "name": "desired_amount"
+                },
+                "name": "value"
               }
             },
             {
@@ -2581,8 +2587,16 @@
                 "fn": "jvault_stake_period",
                 "args": [
                   {
-                    "k": "name",
-                    "id": "transfer"
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "transfer"
+                      },
+                      "name": "data"
+                    },
+                    "name": "forward_payload"
                   }
                 ]
               }
@@ -3114,14 +3128,20 @@
                 "k": "list",
                 "items": [
                   {
-                    "k": "call",
-                    "fn": "jvault_transfer_amount",
-                    "args": [
-                      {
-                        "k": "name",
-                        "id": "withdraw"
-                      }
-                    ]
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "withdraw"
+                        },
+                        "name": "data"
+                      },
+                      "name": "desired_amount"
+                    },
+                    "name": "value"
                   }
                 ]
               }

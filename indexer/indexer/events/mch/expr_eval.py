@@ -316,6 +316,16 @@ def _access(obj: Any, field: str, bodies: dict[int, Any]) -> Any:
         if field in obj:
             return obj[field]
         raise EvalError(f"data has no field {field!r}")
+    if isinstance(obj, Amount):
+        # `Amount.value` (spec §9.6): unwrap the wrapper to its raw int, the
+        # inverse of the `amount(x)` builtin. This is the sanctioned way to feed
+        # a jetton/DEX block's `Amount`-typed `data` scalar into a raw-int output
+        # field. Explicit (not generic getattr) so the C++ Value model — where
+        # Amount carries `num` — mirrors it with a fixed accessor. `Amount(None)`
+        # carries `value is None`, so `.value` yields null there.
+        if field == "value":
+            return obj.value
+        raise EvalError(f"unknown Amount accessor {field!r} (expected value)")
     if field == "exit_code":
         # `CAPTURE.msg.exit_code` (§9.6): a defined envelope field — the
         # compute-phase exit code of the message's transaction (null if absent).

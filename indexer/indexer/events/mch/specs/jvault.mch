@@ -13,10 +13,15 @@
 #   record-lookup pattern — see builders/jvault.py.
 # - unstake / unstake_request success/rejection gate on the lookup record and
 #   on `msg.exit_code` (the defined envelope field) — no host build fn.
-# - claim's claimed_jettons/claimed_amounts are a host list-transform fn + a
-#   one-element list literal (the constructor-map gap is deferred G-LC, §16.1).
+# - stake/claim read the incoming/withdraw jetton_transfer's amount straight off
+#   the composed block's `data.desired_amount` (an Amount) and unwrap it with F2
+#   `.value` — no host fn (F1: a composed block's message cannot be re-`parse`d,
+#   but its produced `data` already carries the scalars).
+# - claim's claimed_jettons still maps the claim body's jetton-wallet list
+#   through AccountId (host fn — constructor-map is deferred G-LC, §16.1).
 # - stake's forward_payload sub-cell parse stays a host fn (jvault_stake_period)
-#   — the sanctioned irreducible escape (§15b: protocol-specific cell parsing).
+#   — the sanctioned irreducible escape (§15b: protocol-specific cell parsing) —
+#   now reading the b64 `data.forward_payload` string, so it is C++-portable.
 #
 # Produced btype is the bare string (jvault_stake, …) rather than the class
 # name: the class→btype normalization map (mch/btypes.py) does not carry the
@@ -55,11 +60,14 @@ matcher jvault_stake {
 
     # Legacy build_jvault_stake_core, field-for-field. The staker + asset come
     # off the already-built incoming jetton_transfer's `data`; the stake wallet
-    # and pool are the receive call's envelope. The staked amount and stake
-    # period both live on the transfer's parsed message (amount is a scalar; the
-    # period is a forward_payload sub-cell) — both reached via host fn, since the
-    # composed block's `.jetton_transfer_message` is invisible to expressions and
-    # re-`parse`ing its get_body does not round-trip.
+    # and pool are the receive call's envelope. The staked amount is the outer
+    # transfer amount — the composed jetton_transfer already carries it as
+    # `data.desired_amount` (an Amount), unwrapped to a raw int via F2 `.value`
+    # (legacy reads jetton_transfer_message.amount == that desired amount). The
+    # stake period is a forward_payload sub-cell — an irreducible cell parse
+    # (§15b), so it stays a host fn, but reads the composed block's
+    # `data.forward_payload` (a b64 string both engines carry) rather than the
+    # legacy `.jetton_transfer_message` attribute, so the fn is C++-portable.
     reject when cancel == null and request == null
     failed when receive.failed
     failed when cancel != null
@@ -70,8 +78,8 @@ matcher jvault_stake {
         asset:         transfer.data.asset
         stake_wallet:  account(receive.msg.destination)
         staking_pool:  account(receive.msg.source)
-        staked_amount: jvault_transfer_amount(transfer)
-        period:        jvault_stake_period(transfer)
+        staked_amount: transfer.data.desired_amount.value
+        period:        jvault_stake_period(transfer.data.forward_payload)
     }
 }
 
@@ -117,18 +125,21 @@ matcher jvault_claim {
       -> op JVaultSendClaimedRewards @send
            -> { btype jetton_transfer @withdraw ; op JVaultUpdateRewards @update }
 
-    # Legacy build_jvault_claim_core. claimed_jettons is the claim body's
-    # jetton-wallet dict mapped through the AccountId constructor (host fn —
-    # constructor-map is deferred G-LC); claimed_amounts is the single withdraw
-    # leg's raw transfer amount as a one-element list literal (the amount read is
-    # a host fn — a composed jetton_transfer's message can't be re-`parse`d).
+    # Legacy build_jvault_claim_core. claimed_jettons maps the claim body's
+    # jetton-wallet list through the AccountId constructor (host fn — the
+    # constructor-map `map(xs as e => account(e))` is deferred G-LC, §16.1);
+    # the fn takes the plain address list off the parsed body, so it is
+    # portable. claimed_amounts is the single withdraw leg's outer transfer
+    # amount, carried on the composed jetton_transfer as `data.desired_amount`
+    # (an Amount), unwrapped via F2 `.value` — the same scalar legacy reads as
+    # withdrawal.jetton_transfer_message.amount — as a one-element list literal.
     parse claim as JVaultClaim
     out {
         sender:          account(claim.msg.source)
         stake_wallet:    account(claim.msg.destination)
         staking_pool:    account(send.msg.destination)
         claimed_jettons: jvault_account_list(claim.body.jettons_to_claim)
-        claimed_amounts: [ jvault_transfer_amount(withdraw) ]
+        claimed_amounts: [ withdraw.data.desired_amount.value ]
     }
 }
 

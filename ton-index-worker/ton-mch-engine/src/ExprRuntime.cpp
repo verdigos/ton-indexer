@@ -300,6 +300,14 @@ EvalResult rt_access(const Value &obj, const std::string &field) {
   if (obj.t == VType::List) {
     return rt_fault("field '" + field + "' on a list capture requires matcher context");
   }
+  if (obj.t == VType::Amount) {
+    // Amount.value (spec §9.6, F2): unwrap the wrapper to its raw int, the
+    // inverse of amount(x). Amount(None) carries a null num -> yields null.
+    if (field == "value") {
+      return rt_ok(obj.num.is_null() ? Value::null() : Value::make_int(obj.num));
+    }
+    return rt_fault("unknown Amount accessor '" + field + "' (expected value)");
+  }
   if (field == "exit_code") {
     return rt_fault("`exit_code` is only valid on a message envelope");
   }

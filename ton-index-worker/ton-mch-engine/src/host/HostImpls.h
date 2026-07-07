@@ -33,4 +33,8 @@ EvalResult layerzero_dst_oapp_matches(BuildEnv &env, const std::vector<Value> &a
 // Tonstakers (HostTonstakers.cpp).
 EvalResult tonstakers_minted_nft(BuildEnv &env, const std::vector<Value> &args);
 
+// JVault (HostJvault.cpp).
+EvalResult jvault_stake_period(BuildEnv &env, const std::vector<Value> &args);
+EvalResult jvault_account_list(BuildEnv &env, const std::vector<Value> &args);
+
 }  // namespace mch

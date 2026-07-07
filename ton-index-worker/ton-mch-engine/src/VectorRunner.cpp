@@ -72,7 +72,14 @@ Value decode(const Json &e) {
   }
 
   if (has_tag(e, "$amount")) {
-    return Value::make_amount(td::dec_string_to_int256(jfield(e, "$amount")->get_number().str()));
+    // {"$amount": null} encodes Amount(None) (F2 amount_value_null vector); a
+    // number encodes a concrete amount. get_number() on the null node would
+    // CHECK/abort, so branch on the node type.
+    const auto *v = jfield(e, "$amount");
+    if (v == nullptr || v->type() == td::JsonValue::Type::Null) {
+      return Value::make_amount_none();
+    }
+    return Value::make_amount(td::dec_string_to_int256(v->get_number().str()));
   }
   if (has_tag(e, "$account")) {
     const Json *a = jfield(e, "$account");

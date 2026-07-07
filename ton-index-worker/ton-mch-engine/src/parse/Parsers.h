@@ -47,5 +47,6 @@ td::Result<Value> parse_layerzero_oapp_execute_callback(const td::Ref<vm::Cell> 
 // JVault family (ParseJvault.cpp).
 td::Result<Value> parse_jvault_unstake_jettons(const td::Ref<vm::Cell> &body);
 td::Result<Value> parse_jvault_unstake_request(const td::Ref<vm::Cell> &body);
+td::Result<Value> parse_jvault_claim(const td::Ref<vm::Cell> &body);
 
 }  // namespace mch

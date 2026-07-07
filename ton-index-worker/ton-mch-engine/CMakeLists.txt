@@ -113,6 +113,7 @@ add_executable(ton-mch-engine
     src/host/HostDedust.cpp
     src/host/HostLayerZero.cpp
     src/host/HostTonstakers.cpp
+    src/host/HostJvault.cpp
     src/BuildRuntime.cpp
     src/BuildVectorRunner.cpp
     src/BuildDriver.cpp

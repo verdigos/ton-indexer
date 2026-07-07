@@ -58,6 +58,7 @@ const std::map<std::string, MsgParserFn> &message_parsers() {
       {"LayerZeroOappExecuteCallback", parse_layerzero_oapp_execute_callback},
       {"JVaultUnstakeJettons", parse_jvault_unstake_jettons},
       {"JVaultUnstakeRequest", parse_jvault_unstake_request},
+      {"JVaultClaim", parse_jvault_claim},
   };
   return parsers;
 }

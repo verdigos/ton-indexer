@@ -632,3 +632,115 @@ def test_duplicate_opcode_captures_now_allowed():
         _m_registries(),
     )
     assert set(rf.matchers[0].captures.keys()) == {"first", "second"}
+
+
+# --- F3: produces class -> btype normalization (R022) -----------------------
+
+def _error_codes(src: str, reg: Registries) -> list[str]:
+    try:
+        rf = _resolve(src, reg)
+    except CompileError as ex:
+        return [d.code for d in ex.bag.items]
+    return [d.code for d in rf.diagnostics.items]
+
+
+def _real_block_registries():
+    """Registries whose block_types map a class name to a REAL typed Block
+    subclass (btype != class name), exercising the R022 registry-aware check."""
+    from indexer.events.blocks.core import Block
+
+    class FakeThingBlock(Block):
+        def __init__(self):
+            super().__init__("fake_thing", [], None)
+
+    reg = Registries()
+    reg.block_types["FakeThingBlock"] = FakeThingBlock
+    reg.block_types["fake_thing"] = FakeThingBlock
+    reg.block_types["JettonTransferBlock"] = FakeThingBlock  # mapped name, any class
+    return reg
+
+
+def test_r022_declarative_unmapped_class_errors():
+    # A declarative matcher (no `build`) producing a real typed class absent from
+    # CLASS_TO_BTYPE would silently emit the class-name string as the btype.
+    src = (
+        "opcode Foo = 0x1\n"
+        "matcher m {\n produces FakeThingBlock\n entry @x\n op Foo @x\n"
+        "  out { a: 1 }\n}"
+    )
+    assert "R022_UNNORMALIZED_PRODUCES_CLASS" in _error_codes(src, _real_block_registries())
+
+
+def test_r022_bare_btype_ok():
+    # The snake_case bare-btype form resolves by identity; no diagnostic.
+    src = (
+        "opcode Foo = 0x1\n"
+        "matcher m {\n produces fake_thing\n entry @x\n op Foo @x\n"
+        "  out { a: 1 }\n}"
+    )
+    assert "R022_UNNORMALIZED_PRODUCES_CLASS" not in _error_codes(src, _real_block_registries())
+
+
+def test_r022_mapped_class_ok():
+    # A class name present in CLASS_TO_BTYPE resolves; no diagnostic.
+    src = (
+        "opcode Foo = 0x1\n"
+        "matcher m {\n produces JettonTransferBlock\n entry @x\n op Foo @x\n"
+        "  out { a: 1 }\n}"
+    )
+    assert "R022_UNNORMALIZED_PRODUCES_CLASS" not in _error_codes(src, _real_block_registries())
+
+
+def test_r022_builder_matcher_exempt():
+    # A builder matcher constructs its own block, so an unmapped `produces` class
+    # is documentation only — no R022 (identity fallback is harmless).
+    reg = _real_block_registries()
+
+    async def _b(match):
+        return None
+    reg.builders["build_m"] = _b
+    src = (
+        "opcode Foo = 0x1\n"
+        "matcher m {\n produces FakeThingBlock\n build build_m\n entry @x\n op Foo @x\n}"
+    )
+    assert "R022_UNNORMALIZED_PRODUCES_CLASS" not in _error_codes(src, reg)
+
+
+def test_r022_stub_block_type_exempt():
+    # A stub-registered produces (block_types[name] is `object`) keeps identity;
+    # this is the synthetic-test-matcher shape and must not trip R022.
+    src = (
+        "opcode Foo = 0x1\n"
+        "matcher m {\n produces FB\n entry @x\n op Foo @x\n  out { a: 1 }\n}"
+    )
+    assert "R022_UNNORMALIZED_PRODUCES_CLASS" not in _error_codes(src, _fb_registries())
+
+
+# --- F1: parse on a composed btype capture (R023) ---------------------------
+
+def _parse_registries():
+    reg = _fb_registries()
+    reg.message_types["JettonTransfer"] = object  # stub parser class
+    return reg
+
+
+def test_r023_parse_composed_btype_capture_errors():
+    # Parsing a composed/produced block (captured by `btype`) never round-trips:
+    # its get_body() reads event_nodes[0], not the anchor protocol message.
+    src = (
+        "matcher m {\n produces FB\n build b\n entry @t\n"
+        "  btype jetton_transfer @t\n"
+        "  parse t as JettonTransfer\n}"
+    )
+    assert "R023_PARSE_TARGET_COMPOSED_BLOCK" in _error_codes(src, _parse_registries())
+
+
+def test_r023_parse_op_capture_ok():
+    # Parsing a raw call-contract capture (`op`) is fine — get_body() is the
+    # anchor's own body.
+    src = (
+        "opcode Foo = 0x1\n"
+        "matcher m {\n produces FB\n build b\n entry @t\n"
+        "  op Foo @t\n  parse t as JettonTransfer\n}"
+    )
+    assert "R023_PARSE_TARGET_COMPOSED_BLOCK" not in _error_codes(src, _parse_registries())

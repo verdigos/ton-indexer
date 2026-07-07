@@ -16,16 +16,25 @@ a dual-implementation parity liability):
   etc. and rejects on null. First real use of the pattern.
 - fn `jvault_stake_period`: parses the stake period out of the jetton-transfer
   forward_payload sub-cell. Protocol-specific cell parsing — the sanctioned
-  irreducible escape (§15b), not a data field an inline test could reach.
+  irreducible escape (§15b), not a data field an inline test could reach. It
+  takes the composed transfer's `data.forward_payload` (a b64 BOC string both
+  engines carry), NOT the legacy `.jetton_transfer_message` attribute, so it is
+  a pure fn over a string and portable to the C++ engine (F1).
 - fn `jvault_account_list`: maps the claim body's jetton-wallet address list
   through the AccountId constructor. Needed only because element-wise
   constructor-map (`map(xs as e => account(e))`) is deferred G-LC (§16.1);
   `map(xs, "field")` projects a field, it cannot apply a constructor.
 
+The old `jvault_transfer_amount` fn is gone: F1+F2 read the transfer amount
+straight off `transfer.data.desired_amount.value` (stake) /
+`withdraw.data.desired_amount.value` (claim).
+
 The legacy JVault*BlockMatcher and the build_*_core functions stay the parity
 reference (blocks/jvault.py).
 """
 from __future__ import annotations
+
+import base64
 
 from pytoniq_core import Cell
 
@@ -76,24 +85,18 @@ def register_jvault(reg: Registries) -> Registries:
             return None
         return {"staking_pool": pool, "asset": asset, "jvault_asset": jvault_asset}
 
-    @reg.register_fn("jvault_transfer_amount")
-    async def jvault_transfer_amount(transfer_block):
-        # The outer transfer amount as a raw int (legacy reads
-        # block.jetton_transfer_message.amount for both stake's staked_amount and
-        # claim's claimed_amounts). The composed jetton_transfer's
-        # `.jetton_transfer_message` attribute is invisible to the expression
-        # layer (only msg/body/data), and re-`parse`ing its get_body does NOT
-        # round-trip (amount comes back null), so this stays a host read.
-        return transfer_block.jetton_transfer_message.amount
-
     @reg.register_fn("jvault_stake_period")
-    async def jvault_stake_period(transfer_block):
+    async def jvault_stake_period(forward_payload_b64):
         # blocks/jvault.py build_jvault_stake_core: skip the 32-bit op, read the
         # 32-bit period out of the transfer forward_payload sub-cell (the
-        # sanctioned irreducible cell parse). Reads the block's already-parsed
-        # message, the exact object the legacy core uses.
-        forward_payload = transfer_block.jetton_transfer_message.forward_payload
-        body = Cell.from_boc(forward_payload)[0].begin_parse()
+        # sanctioned irreducible cell parse). Takes the composed jetton_transfer's
+        # `data.forward_payload` — a b64 BOC string both the legacy and
+        # declarative jetton builds emit identically — so the fn is a pure
+        # string->int transform with a direct C++ analog (no block-internal
+        # reach). None forward_payload (absent) yields a null period.
+        if forward_payload_b64 is None:
+            return None
+        body = Cell.from_boc(base64.b64decode(forward_payload_b64))[0].begin_parse()
         body.load_uint(32)
         return body.load_uint(32)
 
