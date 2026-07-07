@@ -128,6 +128,7 @@ add_executable(ton-mch-engine
     src/parse/ParseCoffee.cpp
     src/parse/ParseEvaa.cpp
     src/parse/ParseLayerZero.cpp
+    src/parse/ParseJvault.cpp
     ${MCH_GENERATED_SOURCES}
 )
 target_include_directories(ton-mch-engine

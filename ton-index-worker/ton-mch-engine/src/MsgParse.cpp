@@ -56,6 +56,8 @@ const std::map<std::string, MsgParserFn> &message_parsers() {
       {"EvaaWithdrawCollateralized", parse_evaa_withdraw_collateralized},
       {"EvaaWithdrawFailExcess", parse_evaa_withdraw_fail_excess},
       {"LayerZeroOappExecuteCallback", parse_layerzero_oapp_execute_callback},
+      {"JVaultUnstakeJettons", parse_jvault_unstake_jettons},
+      {"JVaultUnstakeRequest", parse_jvault_unstake_request},
   };
   return parsers;
 }

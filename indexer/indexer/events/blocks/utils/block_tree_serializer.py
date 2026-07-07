@@ -739,45 +739,45 @@ def _fill_evaa_liquidate_action(block: EvaaLiquidateBlock, action: Action):
         "debt_amount": block.data.debt_amount
     }
 def _fill_jvault_stake(block: JVaultStakeBlock, action: Action):
-    action.source = _addr(block.data.sender)
-    action.source_secondary = _addr(block.data.sender_wallet)
-    action.asset = _addr(block.data.asset)
-    action.destination = _addr(block.data.staking_pool)
-    action.amount = block.data.staked_amount
+    action.source = _addr(_dget(block.data, 'sender'))
+    action.source_secondary = _addr(_dget(block.data, 'sender_wallet'))
+    action.asset = _addr(_dget(block.data, 'asset'))
+    action.destination = _addr(_dget(block.data, 'staking_pool'))
+    action.amount = _dget(block.data, 'staked_amount')
     action.jvault_stake_data = {
-        "period": block.data.period,
-        "stake_wallet": _addr(block.data.stake_wallet),
+        "period": _dget(block.data, 'period'),
+        "stake_wallet": _addr(_dget(block.data, 'stake_wallet')),
     }
 
 
 def _fill_jvault_unstake(block: JVaultUnstakeBlock, action: Action):
-    action.source = _addr(block.data.sender)
-    action.source_secondary = _addr(block.data.stake_wallet)
-    action.destination = _addr(block.data.staking_pool)
-    action.amount = block.data.unstaked_amount
-    action.opcode = block.data.exit_code
-    action.asset = _addr(block.data.asset)
-    action.asset2 = _addr(block.data.jvault_asset)
+    action.source = _addr(_dget(block.data, 'sender'))
+    action.source_secondary = _addr(_dget(block.data, 'stake_wallet'))
+    action.destination = _addr(_dget(block.data, 'staking_pool'))
+    action.amount = _dget(block.data, 'unstaked_amount')
+    action.opcode = _dget(block.data, 'exit_code')
+    action.asset = _addr(_dget(block.data, 'asset'))
+    action.asset2 = _addr(_dget(block.data, 'jvault_asset'))
 
 
 def _fill_jvault_claim(block: JVaultClaimBlock, action: Action):
-    action.source = _addr(block.data.sender)
-    action.source_secondary = _addr(block.data.stake_wallet)
-    action.destination = _addr(block.data.staking_pool)
+    action.source = _addr(_dget(block.data, 'sender'))
+    action.source_secondary = _addr(_dget(block.data, 'stake_wallet'))
+    action.destination = _addr(_dget(block.data, 'staking_pool'))
     action.jvault_claim_data = {
-        "claimed_jettons": list(map(_addr, block.data.claimed_jettons)),
-        "claimed_amounts": block.data.claimed_amounts,
+        "claimed_jettons": list(map(_addr, _dget(block.data, 'claimed_jettons'))),
+        "claimed_amounts": _dget(block.data, 'claimed_amounts'),
     }
 
 
 def _fill_jvault_unstake_request(block: JVaultUnstakeRequestBlock, action: Action):
-    action.source = _addr(block.data.sender)
-    action.source_secondary = _addr(block.data.stake_wallet)
-    action.destination = _addr(block.data.staking_pool)
-    action.amount = block.data.requested_amount
-    action.asset = _addr(block.data.asset)
-    action.asset2 = _addr(block.data.jvault_asset)
-    action.opcode = block.data.exit_code
+    action.source = _addr(_dget(block.data, 'sender'))
+    action.source_secondary = _addr(_dget(block.data, 'stake_wallet'))
+    action.destination = _addr(_dget(block.data, 'staking_pool'))
+    action.amount = _dget(block.data, 'requested_amount')
+    action.asset = _addr(_dget(block.data, 'asset'))
+    action.asset2 = _addr(_dget(block.data, 'jvault_asset'))
+    action.opcode = _dget(block.data, 'exit_code')
 
 
 def _fill_multisig_create_order(block: MultisigCreateOrderBlock, action: Action):

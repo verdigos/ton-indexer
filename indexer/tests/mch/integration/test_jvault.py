@@ -122,9 +122,17 @@ def _assert_field_parity(actual: list[Block], expected: list[Block], btype: str,
         assert a.failed == e.failed, f"failed flag: {actual_tag}={a.failed} {expected_tag}={e.failed}"
         assert a.broken == e.broken, f"broken flag: {actual_tag}={a.broken} {expected_tag}={e.broken}"
 
-        assert type(a.data) is type(e.data) and is_dataclass(a.data)
-        for f in fields(a.data):
-            av, ev = getattr(a.data, f.name), getattr(e.data, f.name)
+        # specs/jvault.mch is now a declarative build, so the IR block's `data`
+        # is the canonical dict (bare btype + map); the legacy block carries a
+        # JVault* dataclass. Compare field-for-field over the dataclass schema
+        # regardless of shape (wave-B btype+data acceptance, cf. test_evaa).
+        assert is_dataclass(e.data)
+
+        def _get(d, name):
+            return d[name] if isinstance(d, dict) else getattr(d, name)
+
+        for f in fields(e.data):
+            av, ev = _get(a.data, f.name), _get(e.data, f.name)
             assert _values_equal(av, ev), (
                 f"data.{f.name}: {actual_tag}={av!r} ({type(av).__name__}) "
                 f"{expected_tag}={ev!r} ({type(ev).__name__})"

@@ -2336,7 +2336,7 @@
       },
       "root": 128,
       "produces": [
-        "JVaultStakeBlock"
+        "jvault_stake"
       ],
       "captures": [
         {
@@ -2378,7 +2378,218 @@
       ],
       "include_excess": true,
       "include_bounces": true,
-      "builder": "build_jvault_stake"
+      "build_program": [
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "cancel"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "request"
+              },
+              "r": {
+                "k": "null"
+              }
+            }
+          }
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "attr",
+            "of": {
+              "k": "name",
+              "id": "receive"
+            },
+            "name": "failed"
+          }
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "!=",
+            "l": {
+              "k": "name",
+              "id": "cancel"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "name",
+                "id": "request"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "attr",
+              "of": {
+                "k": "name",
+                "id": "request"
+              },
+              "name": "failed"
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "transfer"
+                      },
+                      "name": "data"
+                    },
+                    "name": "sender"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "sender_wallet",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "transfer"
+                      },
+                      "name": "data"
+                    },
+                    "name": "sender_wallet"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "asset"
+              }
+            },
+            {
+              "name": "stake_wallet",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "receive"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "staking_pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "receive"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "staked_amount",
+              "expr": {
+                "k": "call",
+                "fn": "jvault_transfer_amount",
+                "args": [
+                  {
+                    "k": "name",
+                    "id": "transfer"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "period",
+              "expr": {
+                "k": "call",
+                "fn": "jvault_stake_period",
+                "args": [
+                  {
+                    "k": "name",
+                    "id": "transfer"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "jvault_unstake",
@@ -2390,7 +2601,7 @@
       },
       "root": 140,
       "produces": [
-        "JVaultUnstakeBlock"
+        "jvault_unstake"
       ],
       "captures": [
         {
@@ -2424,7 +2635,351 @@
       ],
       "include_excess": true,
       "include_bounces": true,
-      "builder": "build_jvault_unstake"
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "unstake",
+          "types": [
+            "JVaultUnstakeJettons"
+          ]
+        },
+        {
+          "s": "let",
+          "name": "assets",
+          "expr": {
+            "k": "lookup",
+            "name": "jvault_assets",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "unstake"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "let",
+          "name": "early",
+          "expr": {
+            "k": "bin",
+            "op": "or",
+            "l": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "request"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "withdraw"
+              },
+              "r": {
+                "k": "null"
+              }
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "assets"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "name",
+                "id": "assets"
+              },
+              "name": "asset"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "unary",
+              "op": "not",
+              "x": {
+                "k": "name",
+                "id": "early"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "assets"
+                },
+                "name": "asset"
+              },
+              "r": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "withdraw"
+                  },
+                  "name": "data"
+                },
+                "name": "asset"
+              }
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "unstake"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "stake_wallet",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "unstake"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "staking_pool",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "unary",
+                  "op": "not",
+                  "x": {
+                    "k": "name",
+                    "id": "early"
+                  }
+                },
+                "then": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "request"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "assets"
+                  },
+                  "name": "staking_pool"
+                }
+              }
+            },
+            {
+              "name": "unstaked_amount",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "unstake"
+                  },
+                  "name": "body"
+                },
+                "name": "jettons_to_unstake"
+              }
+            },
+            {
+              "name": "unstake_fee_taken",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "unary",
+                  "op": "not",
+                  "x": {
+                    "k": "name",
+                    "id": "early"
+                  }
+                },
+                "then": {
+                  "k": "bin",
+                  "op": "??",
+                  "l": {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "fee"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "value"
+                  },
+                  "r": {
+                    "k": "int",
+                    "v": 0
+                  }
+                },
+                "else": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "unary",
+                  "op": "not",
+                  "x": {
+                    "k": "name",
+                    "id": "early"
+                  }
+                },
+                "then": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "withdraw"
+                    },
+                    "name": "data"
+                  },
+                  "name": "asset"
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "assets"
+                  },
+                  "name": "asset"
+                }
+              }
+            },
+            {
+              "name": "jvault_asset",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "assets"
+                },
+                "name": "jvault_asset"
+              }
+            },
+            {
+              "name": "exit_code",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "unary",
+                  "op": "not",
+                  "x": {
+                    "k": "name",
+                    "id": "early"
+                  }
+                },
+                "then": {
+                  "k": "null"
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "unstake"
+                    },
+                    "name": "msg"
+                  },
+                  "name": "exit_code"
+                }
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "jvault_claim",
@@ -2436,7 +2991,7 @@
       },
       "root": 149,
       "produces": [
-        "JVaultClaimBlock"
+        "jvault_claim"
       ],
       "captures": [
         {
@@ -2458,7 +3013,122 @@
       ],
       "include_excess": true,
       "include_bounces": true,
-      "builder": "build_jvault_claim"
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "claim",
+          "types": [
+            "JVaultClaim"
+          ]
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "claim"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "stake_wallet",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "claim"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "staking_pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "send"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "claimed_jettons",
+              "expr": {
+                "k": "call",
+                "fn": "jvault_account_list",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "claim"
+                      },
+                      "name": "body"
+                    },
+                    "name": "jettons_to_claim"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "claimed_amounts",
+              "expr": {
+                "k": "list",
+                "items": [
+                  {
+                    "k": "call",
+                    "fn": "jvault_transfer_amount",
+                    "args": [
+                      {
+                        "k": "name",
+                        "id": "withdraw"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "jvault_unstake_request",
@@ -2470,7 +3140,7 @@
       },
       "root": 153,
       "produces": [
-        "JVaultUnstakeRequestBlock"
+        "jvault_unstake_request"
       ],
       "captures": [
         {
@@ -2496,7 +3166,287 @@
       ],
       "include_excess": true,
       "include_bounces": true,
-      "builder": "build_jvault_unstake_request"
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "request_anchor",
+          "types": [
+            "JVaultUnstakeRequest"
+          ]
+        },
+        {
+          "s": "let",
+          "name": "assets",
+          "expr": {
+            "k": "lookup",
+            "name": "jvault_assets",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "request_anchor"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "let",
+          "name": "early",
+          "expr": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "request"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "name",
+              "id": "early"
+            },
+            "r": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "assets"
+              },
+              "r": {
+                "k": "null"
+              }
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "name",
+              "id": "early"
+            },
+            "r": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "assets"
+                },
+                "name": "asset"
+              },
+              "r": {
+                "k": "null"
+              }
+            }
+          }
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "name",
+            "id": "early"
+          }
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "unary",
+              "op": "not",
+              "x": {
+                "k": "name",
+                "id": "early"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "or",
+              "l": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "request_anchor"
+                },
+                "name": "failed"
+              },
+              "r": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "request"
+                },
+                "name": "failed"
+              }
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "request_anchor"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "stake_wallet",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "request_anchor"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "staking_pool",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "early"
+                },
+                "then": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "assets"
+                  },
+                  "name": "staking_pool"
+                },
+                "else": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "request"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "requested_amount",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "request_anchor"
+                  },
+                  "name": "body"
+                },
+                "name": "jettons_to_unstake"
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "assets"
+                },
+                "name": "asset"
+              }
+            },
+            {
+              "name": "jvault_asset",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "assets"
+                },
+                "name": "jvault_asset"
+              }
+            },
+            {
+              "name": "exit_code",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "early"
+                },
+                "then": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "request_anchor"
+                    },
+                    "name": "msg"
+                  },
+                  "name": "exit_code"
+                },
+                "else": {
+                  "k": "null"
+                }
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "layerzero_receive",

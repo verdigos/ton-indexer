@@ -1,99 +1,105 @@
-"""mch builders for the jvault family (specs/jvault.mch) — R02 remake.
+"""mch registration for the jvault family (specs/jvault.mch) — R02 declarative.
 
-Thin adapters over the shared cores in blocks/jvault.py (the same functions the
-legacy JVault*BlockMatcher.build_block methods now call). Consumed-set-driven
-(Match._mch_consumed), same convention as builders/evaa.py: the referral
-recursion and the post-recursion `@update`/`@withdraw` positions do not bind
-positionally (spec §7.2), and every legacy participant role carries a unique
-opcode/btype within one match's consumed set, so `_derive_*` reconstructs the
-roles unambiguously and delegates to the core.
+specs/jvault.mch is now DECLARATIVE (M4 §9): the runtime evaluates
+parse/lookup/reject/failed/out field-for-field with the legacy cores in
+blocks/jvault.py, so this module registers only the produced block types, the
+message parsers (`parse`), the record-returning assets lookup, and the two
+host fns the language cannot express.
 
-Each core returns a single Block (or None to reject); the synthesized mch
-build_block wraps it (merge_blocks([anchor] + other_blocks), return [produced]),
-exactly like the legacy matcher's own wrapper.
+Registrations and the GAP each one represents (spec §9.10 — every host hook is
+a dual-implementation parity liability):
+
+- lookup `jvault_assets` (record, spec §15b G10): wraps extract_jvault_assets
+  (blocks/jvault.py) — two chained interface-repo reads plus a data-cell parse
+  — and returns ONE record {staking_pool, asset, jvault_asset} or null. This is
+  the sanctioned multi-value-as-record shape: the build reads `assets.asset`
+  etc. and rejects on null. First real use of the pattern.
+- fn `jvault_stake_period`: parses the stake period out of the jetton-transfer
+  forward_payload sub-cell. Protocol-specific cell parsing — the sanctioned
+  irreducible escape (§15b), not a data field an inline test could reach.
+- fn `jvault_account_list`: maps the claim body's jetton-wallet address list
+  through the AccountId constructor. Needed only because element-wise
+  constructor-map (`map(xs as e => account(e))`) is deferred G-LC (§16.1);
+  `map(xs, "field")` projects a field, it cannot apply a constructor.
+
+The legacy JVault*BlockMatcher and the build_*_core functions stay the parity
+reference (blocks/jvault.py).
 """
 from __future__ import annotations
 
-from indexer.events.blocks.basic_blocks import CallContractBlock, TonTransferBlock
+from pytoniq_core import Cell
+
 from indexer.events.blocks.core import Block
-from indexer.events.blocks.jettons import JettonTransferBlock
 from indexer.events.blocks.jvault import (
     JVaultClaimBlock,
     JVaultStakeBlock,
     JVaultUnstakeBlock,
     JVaultUnstakeRequestBlock,
-    build_jvault_claim_core,
-    build_jvault_stake_core,
-    build_jvault_unstake_core,
-    build_jvault_unstake_request_core,
+    extract_jvault_assets,
 )
 from indexer.events.blocks.messages.jvault import (
-    JVaultRequestUpdateRewards,
-    JVaultSendClaimedRewards,
+    JVaultClaim,
+    JVaultUnstakeJettons,
+    JVaultUnstakeRequest,
 )
+from indexer.events.blocks.utils import AccountId
 from indexer.events.mch.registry import Registries
 
-JVAULT_STAKE_CANCEL_OPCODE = 0x9EADA1D9
-
 BLOCK_TYPES = {
-    "JVaultStakeBlock": JVaultStakeBlock,
-    "JVaultUnstakeBlock": JVaultUnstakeBlock,
-    "JVaultClaimBlock": JVaultClaimBlock,
-    "JVaultUnstakeRequestBlock": JVaultUnstakeRequestBlock,
+    "jvault_stake": JVaultStakeBlock,
+    "jvault_unstake": JVaultUnstakeBlock,
+    "jvault_claim": JVaultClaimBlock,
+    "jvault_unstake_request": JVaultUnstakeRequestBlock,
 }
 
-
-def _first_call(consumed: list[Block], opcode: int) -> CallContractBlock | None:
-    return next((b for b in consumed
-                 if isinstance(b, CallContractBlock) and b.opcode == opcode), None)
-
-
-def _first_jetton_transfer(consumed: list[Block]) -> JettonTransferBlock | None:
-    return next((b for b in consumed if isinstance(b, JettonTransferBlock)), None)
-
-
-def _first_ton_transfer(consumed: list[Block]) -> TonTransferBlock | None:
-    return next((b for b in consumed if isinstance(b, TonTransferBlock)), None)
+MESSAGE_TYPES = {
+    "JVaultUnstakeJettons": JVaultUnstakeJettons,
+    "JVaultUnstakeRequest": JVaultUnstakeRequest,
+    "JVaultClaim": JVaultClaim,
+}
 
 
 def register_jvault(reg: Registries) -> Registries:
     """Register everything specs/jvault.mch needs into `reg`."""
     reg.block_types.update(BLOCK_TYPES)
+    reg.message_types.update(MESSAGE_TYPES)
 
-    @reg.register_builder("build_jvault_stake")
-    async def build_jvault_stake(m):
-        consumed = m._mch_consumed
-        anchor = consumed[0]  # the incoming jetton_transfer
-        receive = _first_call(consumed, 0xD68A4AC1)  # JVaultReceiveJettons
-        request_update = _first_call(consumed, JVaultRequestUpdateRewards.opcode)
-        cancellation = _first_call(consumed, JVAULT_STAKE_CANCEL_OPCODE)
-        return build_jvault_stake_core(anchor, receive, request_update, cancellation)
+    @reg.register_lookup("jvault_assets")
+    async def jvault_assets(stake_wallet):
+        # G10 record lookup: resolve the stake wallet to its (staking_pool,
+        # asset, jvault_asset) triple as one record, or null when unresolvable.
+        # Mirrors extract_jvault_assets' (None, None, None) total-failure sentinel
+        # as a null record; a partial resolution keeps null-valued fields so the
+        # build can reject on `assets.asset == null` exactly where the cores do.
+        pool, asset, jvault_asset = await extract_jvault_assets(stake_wallet)
+        if pool is None and asset is None and jvault_asset is None:
+            return None
+        return {"staking_pool": pool, "asset": asset, "jvault_asset": jvault_asset}
 
-    @reg.register_builder("build_jvault_unstake")
-    async def build_jvault_unstake(m):
-        consumed = m._mch_consumed
-        anchor = consumed[0]  # the unstake_jettons call
-        request_update = _first_call(consumed, JVaultRequestUpdateRewards.opcode)
-        # The anchor is a CallContractBlock, so the only jetton_transfer /
-        # ton_transfer in the consumed set are the withdraw and the unstake fee.
-        withdraw = _first_jetton_transfer(consumed)
-        fee = _first_ton_transfer(consumed)
-        return await build_jvault_unstake_core(anchor, request_update, withdraw, fee)
+    @reg.register_fn("jvault_transfer_amount")
+    async def jvault_transfer_amount(transfer_block):
+        # The outer transfer amount as a raw int (legacy reads
+        # block.jetton_transfer_message.amount for both stake's staked_amount and
+        # claim's claimed_amounts). The composed jetton_transfer's
+        # `.jetton_transfer_message` attribute is invisible to the expression
+        # layer (only msg/body/data), and re-`parse`ing its get_body does NOT
+        # round-trip (amount comes back null), so this stays a host read.
+        return transfer_block.jetton_transfer_message.amount
 
-    @reg.register_builder("build_jvault_claim")
-    async def build_jvault_claim(m):
-        consumed = m._mch_consumed
-        anchor = consumed[0]  # the claim call
-        send_to_pool = _first_call(consumed, JVaultSendClaimedRewards.opcode)
-        withdrawal = _first_jetton_transfer(consumed)
-        return build_jvault_claim_core(anchor, send_to_pool, withdrawal)
+    @reg.register_fn("jvault_stake_period")
+    async def jvault_stake_period(transfer_block):
+        # blocks/jvault.py build_jvault_stake_core: skip the 32-bit op, read the
+        # 32-bit period out of the transfer forward_payload sub-cell (the
+        # sanctioned irreducible cell parse). Reads the block's already-parsed
+        # message, the exact object the legacy core uses.
+        forward_payload = transfer_block.jetton_transfer_message.forward_payload
+        body = Cell.from_boc(forward_payload)[0].begin_parse()
+        body.load_uint(32)
+        return body.load_uint(32)
 
-    @reg.register_builder("build_jvault_unstake_request")
-    async def build_jvault_unstake_request(m):
-        consumed = m._mch_consumed
-        anchor = consumed[0]  # the unstake_request call
-        request_update = _first_call(consumed, JVaultRequestUpdateRewards.opcode)
-        return await build_jvault_unstake_request_core(anchor, request_update)
+    @reg.register_fn("jvault_account_list")
+    async def jvault_account_list(addresses):
+        return [AccountId(a) for a in addresses]
 
     return reg
 
