@@ -41,6 +41,8 @@ struct Options {
   bool index_interfaces_{false};
   bool index_account_states_{false};
   std::string working_dir_;
+  // When set (via --accounts-file), only these accounts are scanned instead of the full shard sweep.
+  std::shared_ptr<const std::vector<block::StdAddress>> account_addresses_;
 };
 
 class ShardStateScanner;

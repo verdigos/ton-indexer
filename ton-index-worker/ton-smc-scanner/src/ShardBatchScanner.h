@@ -63,3 +63,27 @@ public:
   void got_reload_cell_db_reader(td::Result<std::shared_ptr<vm::CellDbReader>> result);
   void update_checkpoint(td::Bits256 new_checkpoint);
 };
+
+// Targeted-scan counterpart of ShardStateScanner: instead of sweeping the whole shard accounts
+// dictionary, it looks up an explicit list of addresses (already routed to this shard) and feeds
+// the matched accounts through the same StateBatchParser -> insert path. No checkpointing/reload.
+class AccountListShardScanner: public td::actor::Actor {
+private:
+  ShardStateDataPtr shard_state_data_;
+  Options options_;
+  std::vector<block::StdAddress> addresses_;
+
+  ton::ShardIdFull shard_;
+  std::vector<std::pair<td::Bits256, block::gen::ShardAccount::Record>> accounts_;
+  std::size_t next_index_{0};
+  std::uint32_t batches_in_flight_{0};
+
+public:
+  AccountListShardScanner(ShardStateDataPtr shard_state_data, Options options, std::vector<block::StdAddress> addresses);
+
+  void start_up() override;
+  void schedule_next();
+  void batch_parsed(std::vector<InsertData> results);
+  void batch_inserted();
+  void fail_batch(td::Status error);
+};
