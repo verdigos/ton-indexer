@@ -1801,6 +1801,80 @@ func (s *KvrocksStore) QueryDNSRecords(ctx context.Context, req models.DNSRecord
 	return s.orderedDNSRecords(ctx, ids)
 }
 
+func (s *KvrocksStore) QueryDNSAuctions(ctx context.Context, req models.DNSAuctionsRequest, settings models.RequestSettings) ([]models.DNSAuction, error) {
+	ctx = s.pinReadSnapshot(ctx)
+	limReq := req.GetLimitParams()
+
+	limit, offset, err := kvrocksLimitOffset(limReq, settings)
+	if err != nil {
+		return nil, err
+	}
+	if req.Bidder == nil {
+		return nil, models.IndexError{Code: 422, Message: "bidder is required"}
+	}
+
+	now := time.Now().Unix()
+	// Index members are "{auction_end_time zero-padded to 20 digits}:{nft_item_address}", sorted ascending
+	// by auction end time. splitKey is the padded key for now+1, so every member with auction_end_time <= now
+	// sorts strictly below it (won), and every member with auction_end_time > now sorts at or above it (bidding).
+	splitKey := padDecimalString(strconv.FormatInt(now+1, 10), 20)
+	minBound, maxBound := "-", "+"
+	switch req.State {
+	case "", "all":
+		// full range
+	case "won":
+		maxBound = "(" + splitKey
+	case "bidding":
+		minBound = "[" + splitKey
+	default:
+		return nil, models.IndexError{Code: 422, Message: fmt.Sprintf("state is not allowed: %s", req.State)}
+	}
+
+	indexName := "bidder:" + string(*req.Bidder) + ":by_auction_end_time"
+	members, err := s.rangeByLexBounds(ctx, "dns_entries", indexName, minBound, maxBound, limit, offset, false)
+	if err != nil {
+		return nil, err
+	}
+	records, err := s.orderedDNSRecords(ctx, addressIDsFromLexMembers(members))
+	if err != nil {
+		return nil, err
+	}
+	auctions := dnsRecordsToAuctions(records, now)
+	if req.IncludeNftItems != nil && *req.IncludeNftItems {
+		if err := s.attachAuctionNFTItems(ctx, auctions); err != nil {
+			return nil, err
+		}
+	}
+	return auctions, nil
+}
+
+// attachAuctionNFTItems loads the full NFT item (with collection and on-sale details) for each auction's
+// nft_item_address and hangs it off the auction. Mirrors how QueryNFTItems fetches and enriches a page.
+func (s *KvrocksStore) attachAuctionNFTItems(ctx context.Context, auctions []models.DNSAuction) error {
+	ids := []string{}
+	seen := map[string]struct{}{}
+	for _, a := range auctions {
+		ids = appendUniqueString(ids, seen, string(a.NftItemAddress))
+	}
+	items, err := s.orderedNFTItems(ctx, ids)
+	if err != nil {
+		return err
+	}
+	if err := s.attachNFTItemDetails(ctx, items); err != nil {
+		return err
+	}
+	byAddr := make(map[models.AccountAddress]*models.NFTItem, len(items))
+	for i := range items {
+		byAddr[items[i].Address] = &items[i]
+	}
+	for i := range auctions {
+		if item, ok := byAddr[auctions[i].NftItemAddress]; ok {
+			auctions[i].NftItem = item
+		}
+	}
+	return nil
+}
+
 func (s *KvrocksStore) GetNFTSales(ctx context.Context, addresses []models.AccountAddress) ([]models.RawNFTSale, error) {
 	ctx = s.pinReadSnapshot(ctx)
 	sales, err := s.getGetgemsSales(ctx, addresses)
