@@ -713,6 +713,58 @@ func GetDNSRecords(c *fiber.Ctx) error {
 	return c.JSON(resp)
 }
 
+// @summary Get Active DNS Auctions
+//
+// @description Query TON DNS item auctions where the given address is the current leading bidder. Only covers
+// @description auctions with a live bidder entry: once an auction settles and the winner claims the item it drops
+// @description out of the index, so this endpoint reflects current bids only. Use the *state* filter to split
+// @description ongoing bids from ended-but-unclaimed ones: `bidding` means the auction is still open
+// @description (auction_end_time > now), `won` means it has ended and the winner is fixed but the claim is pending
+// @description (auction_end_time <= now). The `finished` flag on each item carries the same auction_end_time <= now test.
+// @description Set *include_nft_items* to embed the full NFT item (with collection and on-sale details) in each
+// @description auction. NFT and collection metadata is returned in the *metadata* map whenever available.
+//
+// @id api_v3_get_dns_active_auctions
+// @tags dns
+// @Accept json
+// @Produce json
+// @success 200 {object} models.DNSAuctionsResponse
+// @failure 400 {object} models.RequestError
+// @param bidder query string true "Bidder address in any form. Auctions where this address is the current leading bidder will be returned."
+// @param state query string false "Auction state filter: *all* (default), *won* (ended, auction_end_time <= now), *bidding* (ongoing, auction_end_time > now)." Enums(all, won, bidding) default(all)
+// @param include_nft_items query bool false "Embed full NFT item details for each returned auction." default(false)
+// @param limit query int32 false "Limit number of queried rows. Use with *offset* to batch read." minimum(1) maximum(1000) default(100)
+// @param offset query int32 false "Skip first N rows. Use with *limit* to batch read." minimum(0) default(0)
+// @router /api/v3/dns/activeAuctions [get]
+// @security		APIKeyHeader
+// @security		APIKeyQuery
+func GetDNSAuctions(c *fiber.Ctx) error {
+	request_settings := GetRequestSettings(c, &settings)
+	req := models.DNSAuctionsRequest{}
+	if err := c.QueryParser(&req); err != nil {
+		return models.IndexError{Code: 422, Message: err.Error()}
+	}
+
+	if req.Bidder == nil || !req.Bidder.IsAddressStd() {
+		return models.IndexError{Code: 422, Message: "bidder address is required"}
+	}
+
+	switch req.State {
+	case "", "all", "won", "bidding":
+	default:
+		return models.IndexError{Code: 422, Message: "state must be one of: all, won, bidding"}
+	}
+
+	res, book, metadata, err := pool.QueryDNSAuctions(req, request_settings)
+	if err != nil {
+		return err
+	}
+	crud.SubstituteImgproxyBaseUrl(&metadata, settings.ImgProxyBaseUrl)
+
+	resp := models.DNSAuctionsResponse{Auctions: res, AddressBook: book, Metadata: metadata}
+	return c.JSON(resp)
+}
+
 // @summary Get Vesting Contracts
 //
 // @description Get vesting contracts by specified filters
@@ -2842,6 +2894,7 @@ func main() {
 	app.Get("/api/v3/walletStates", GetWalletStates)
 
 	app.Get("/api/v3/dns/records", GetDNSRecords)
+	app.Get("/api/v3/dns/activeAuctions", GetDNSAuctions)
 
 	// vesting
 	app.Get("/api/v3/vesting", GetVestingContracts)
