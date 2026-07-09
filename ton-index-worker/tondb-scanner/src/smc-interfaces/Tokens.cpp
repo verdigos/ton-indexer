@@ -339,10 +339,10 @@ void NftItemDetectorR::process_domain_and_dns_data(const block::StdAddress& root
     if (dns_data.is_ok()) {
         dns_data.ok_ref().domain = domain.move_as_ok();
         if (auto status = get_auction_info(dns_data.ok_ref()); status.is_error()) {
-          LOG(INFO) << "Failed to get dns auction info for " << address_ << ": " << status;
+          LOG(DEBUG) << "Failed to get dns auction info for " << address_ << ": " << status;
         }
         if (auto status = get_last_fill_up_time(dns_data.ok_ref()); status.is_error()) {
-          LOG(INFO) << "Failed to get dns last fill up time for " << address_ << ": " << status;
+          LOG(DEBUG) << "Failed to get dns last fill up time for " << address_ << ": " << status;
         }
         item_data.dns_entry = dns_data.move_as_ok();
     }
