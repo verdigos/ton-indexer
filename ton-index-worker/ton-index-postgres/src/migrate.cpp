@@ -953,6 +953,10 @@ create table if not exists dns_entries
     dns_wallet          tonaddr,
     dns_site_adnl       tonhash,
     dns_storage_bag_id  tonhash,
+    max_bid_address     tonaddr,
+    max_bid_amount      numeric,
+    auction_end_time    bigint,
+    last_fill_up_time   bigint,
     last_transaction_lt bigint,
     destroyed           boolean not null default false
 ) with (fillfactor = 70);
