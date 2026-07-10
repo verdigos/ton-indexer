@@ -75,6 +75,10 @@ _V: list[tuple] = [
     ("addr_none", "addr_none()", {}, {"$account": None}),
     ("amount_int", "amount(a)", {"a": 50}, {"$amount": 50}),
     ("amount_amount", "amount(a)", {"a": {"$amount": 50}}, {"$amount": 50}),
+    # `.value` unwrap (F2): the inverse of amount(x). Amount(None).value -> null.
+    ("amount_value", "a.value", {"a": {"$amount": 50}}, 50),
+    ("amount_value_null", "a.value", {"a": {"$amount": None}}, None),
+    ("amount_value_bad_accessor_fault", "a.foo", {"a": {"$amount": 50}}, FAULT),
     ("asset_jetton", "asset(a)", {"a": RAW}, {"$asset_jetton": RAW}),
     ("ton_asset", "ton_asset()", {}, {"$asset_ton": True}),
     ("b64_bytes", "b64(a)", {"a": {"$bytes_b64": _SOME_BYTES_B64}}, _SOME_BYTES_B64),

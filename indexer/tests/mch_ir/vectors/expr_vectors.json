@@ -362,6 +362,62 @@
    }
   },
   {
+   "name": "amount_value",
+   "src": "a.value",
+   "expr": {
+    "k": "attr",
+    "of": {
+     "k": "name",
+     "id": "a"
+    },
+    "name": "value"
+   },
+   "env": {
+    "a": {
+     "$amount": 50
+    }
+   },
+   "expect": 50
+  },
+  {
+   "name": "amount_value_null",
+   "src": "a.value",
+   "expr": {
+    "k": "attr",
+    "of": {
+     "k": "name",
+     "id": "a"
+    },
+    "name": "value"
+   },
+   "env": {
+    "a": {
+     "$amount": null
+    }
+   },
+   "expect": null
+  },
+  {
+   "name": "amount_value_bad_accessor_fault",
+   "src": "a.foo",
+   "expr": {
+    "k": "attr",
+    "of": {
+     "k": "name",
+     "id": "a"
+    },
+    "name": "foo"
+   },
+   "env": {
+    "a": {
+     "$amount": 50
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
    "name": "asset_jetton",
    "src": "asset(a)",
    "expr": {

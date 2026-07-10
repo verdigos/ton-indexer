@@ -8,6 +8,7 @@ block's value_flow, skipping any effect with a null argument.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,6 +16,8 @@ from indexer.events.blocks.core import Block
 from indexer.events.blocks.utils import AccountId, Amount
 from indexer.events.mch.registry import Registries
 from indexer.events.mch_ir.expr import EvalError, Evaluator
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -116,14 +119,25 @@ class BuildProgram:
             ev.bodies[id(target)] = self._soft_parse(target, stmt["types"])
 
     def _soft_parse(self, block: Any, msg_types: list[str]) -> Any:
+        last_exc: Exception | None = None
         for name in msg_types:
             cls = self.registries.message_types.get(name)
             if cls is None:
                 raise EvalError(f"message type {name!r} is not registered")
             try:
                 return cls(block.get_body())
-            except Exception:
+            except Exception as ex:
+                last_exc = ex
                 continue  # soft: try the next alternative
+        # Every alternative failed. The body stays null (soft, §6.1) and an
+        # expression handles it with `??`/`reject`; but the swallow used to be
+        # invisible (report F1/F6). A debug signal turns "why is .body null?"
+        # into one grep. The compile-time R023 diagnostic catches the common
+        # cause (parsing a composed `btype` capture) at author time.
+        logger.debug(
+            "mch soft-parse failed for all of %s (btype=%s): %s",
+            msg_types, getattr(block, "btype", "?"), last_exc,
+        )
         return None
 
 
