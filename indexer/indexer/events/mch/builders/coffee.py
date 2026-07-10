@@ -1,12 +1,14 @@
-"""mch builder for the coffee swap matcher (specs/coffee_swap.mch).
+"""mch host fn for the coffee swap matcher (specs/coffee_swap.mch).
 
-The legacy build (blocks/swaps.py build_coffee_swap_core) needs the incoming
-transfer, the CoffeePayoutInternal and the outgoing transfer, plus the full
-consumed set for find_call_contracts. The legacy matcher extracts the three
-via labels; the mch engine has no labels, and this builder (which predates
-the T18 capture fixes — exit-branch and post-recursion captures bind since
-then, spec §7.2) derives them structurally from `Match._mch_consumed`, which
-it needs anyway for the core's scan:
+specs/coffee_swap.mch is a HYBRID declarative build: the pattern, reject/failed
+wiring and out-field mapping live in the .mch, and the imperative residue is
+the single host fn below. The shared core (blocks/swaps.py
+build_coffee_swap_core) needs the incoming transfer, the CoffeePayoutInternal
+and the outgoing transfer, plus the full consumed set for find_call_contracts.
+The legacy matcher extracts the three via labels; the mch engine has no labels,
+and this host fn (which predates the T18 capture fixes — exit-branch and
+post-recursion captures bind since then, spec §7.2) derives them structurally
+from the consumed set, which it needs anyway for the core's scan:
 
 - in_transfer: the anchor's previous_block (the anchor's parent alternative is
   required, so the block is always consumed when the match succeeds);
@@ -18,6 +20,8 @@ it needs anyway for the core's scan:
 Returns None to reject the match (spec §10.7).
 """
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 from indexer.events.blocks.basic_blocks import CallContractBlock
 from indexer.events.blocks.liquidity import CoffeeCreateVaultBlock
@@ -50,48 +54,54 @@ BLOCK_TYPES = {
 _OUT_OPCODES = (CoffeePayout.opcode, CoffeeNotification.opcode)
 
 
+async def _coffee_swap_data(consumed):
+    """Imperative residue of the coffee swap build: derive the three leg roles
+    from the consumed set, delegate to the shared core, and expose its data
+    dict as a namespace (`.failed` drives the failed flag). Returns None to
+    reject (core returns None on a missing role or no hops, spec §10.7)."""
+    block, others = consumed[0], list(consumed[1:])
+
+    in_transfer = None
+    prev = block.previous_block
+    if prev is not None and prev in others:
+        if prev.btype == "jetton_transfer" or (
+            isinstance(prev, CallContractBlock)
+            and prev.opcode == CoffeeSwapNative.opcode
+        ):
+            in_transfer = prev
+
+    payout = next(
+        (
+            b for b in others
+            if isinstance(b, CallContractBlock)
+            and b.opcode == CoffeePayoutInternal.opcode
+        ),
+        None,
+    )
+
+    out_transfer = None
+    if payout is not None:
+        for b in others:
+            if b.previous_block is payout and (
+                b.btype == "jetton_transfer"
+                or (isinstance(b, CallContractBlock) and b.opcode in _OUT_OPCODES)
+            ):
+                out_transfer = b
+                break
+
+    new_block = await build_coffee_swap_core(
+        block, others, in_transfer, payout, out_transfer
+    )
+    if new_block is None:
+        return None
+    return SimpleNamespace(failed=new_block.failed, **new_block.data)
+
+
 def register_coffee(reg: Registries) -> Registries:
     """Register everything specs/coffee_swap.mch needs into `reg`."""
     reg.opcodes.update(OPCODES)
     reg.block_types.update(BLOCK_TYPES)
-
-    @reg.register_builder("build_coffee_swap")
-    async def build_coffee_swap(m):
-        consumed = m._mch_consumed
-        block, others = consumed[0], list(consumed[1:])
-
-        in_transfer = None
-        prev = block.previous_block
-        if prev is not None and prev in others:
-            if prev.btype == "jetton_transfer" or (
-                isinstance(prev, CallContractBlock)
-                and prev.opcode == CoffeeSwapNative.opcode
-            ):
-                in_transfer = prev
-
-        payout = next(
-            (
-                b for b in others
-                if isinstance(b, CallContractBlock)
-                and b.opcode == CoffeePayoutInternal.opcode
-            ),
-            None,
-        )
-
-        out_transfer = None
-        if payout is not None:
-            for b in others:
-                if b.previous_block is payout and (
-                    b.btype == "jetton_transfer"
-                    or (isinstance(b, CallContractBlock) and b.opcode in _OUT_OPCODES)
-                ):
-                    out_transfer = b
-                    break
-
-        return await build_coffee_swap_core(
-            block, others, in_transfer, payout, out_transfer
-        )
-
+    reg.register_fn("coffee_swap_data")(_coffee_swap_data)
     return reg
 
 

@@ -81,7 +81,7 @@ async def _run_matcher(matcher, trace) -> list:
         if result is not None:
             matches.extend(result)
     return [b for b in matches
-            if isinstance(b, JettonSwapBlock) and b.data.get("dex") == "tonco"]
+            if b.btype == "jetton_swap" and b.data.get("dex") == "tonco"]
 
 
 def _values_equal(a, b) -> bool:

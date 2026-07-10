@@ -34,10 +34,17 @@
 #   hop has no pton sibling.
 #
 # No captures inside the rule (C012 forbids them — cyclic bodies never bind);
-# the builder derives every legacy label role (peer_swap/payout/out_transfer/
+# the host fn derives every legacy label role (peer_swap/payout/out_transfer/
 # intermediate_transfer/intermediate_hop_trigger/in_transfer) structurally
-# from Match._mch_consumed and delegates to the shared
-# build_tonco_swap_core (blocks/swaps.py).
+# from `consumed` and delegates to the shared build_tonco_swap_core
+# (blocks/swaps.py).
+#
+# HYBRID declarative build. The cyclic match, multi-hop pool walk, per-hop BOC
+# parsing and jetton-wallet interface lookups are all irreducible (cyclic
+# bodies bind no captures at all), so a single host fn returns the full
+# jetton_swap field record + the failed flag; the `out` block assembles the
+# produced Block(btype jetton_swap) from it and `failed when r.failed` sets the
+# flag. The fn returns null to reject (spec §10.7).
 
 opcode ToncoPoolV3Swap    = 0xa7fb58f8
 opcode ToncoRouterV3PayTo = 0xa1daa96d
@@ -60,8 +67,7 @@ rule tonco_hop cyclic = (
 )
 
 matcher tonco_swap {
-    produces JettonSwapBlock
-    build    build_tonco_swap
+    produces jetton_swap
     entry    @swap
 
     op ToncoPoolV3Swap @swap
@@ -72,4 +78,20 @@ matcher tonco_swap {
                 | btype jetton_transfer -> { maybe op PTonTransfer } ) }
       <- ( btype jetton_transfer @in_transfer
          ^ op JettonNotify <- op PTonTransfer @in_transfer )
+
+    let r = tonco_swap_data(consumed)
+    reject when r == null
+    failed when r.failed
+    out {
+        dex:                   r.dex
+        source_asset:          r.source_asset
+        destination_asset:     r.destination_asset
+        sender:                r.sender
+        dex_incoming_transfer: r.dex_incoming_transfer
+        dex_outgoing_transfer: r.dex_outgoing_transfer
+        referral_amount:       r.referral_amount
+        referral_address:      r.referral_address
+        peer_swaps:            r.peer_swaps
+        min_out_amount:        r.min_out_amount
+    }
 }

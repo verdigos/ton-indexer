@@ -34,10 +34,22 @@
 # JettonTransferBlockMatcher / PTonTransferMatcher, like legacy
 # (event_processing order).
 #
-# Builders are consumed-set driven (Match._mch_consumed + previous_block
-# navigation, dedust_deposit convention); captures are kept for pattern
-# fidelity only. Data building delegates to the shared
-# build_stonfi_v2_provide_core (same fn the legacy matcher now calls).
+# FULLY DECLARATIVE build (no host builder). Each leg's single-block data is
+# the same build_stonfi_v2_provide_core computed inline: the incoming jetton
+# leg's `.data.asset`/`.data.sender_wallet` (a raw pTON leg carries neither ->
+# ton_asset / null), the provide message's amount1/amount2/from_user (parsed),
+# the LP-mint amount off the callback's JettonInternalTransfer (final only),
+# and the pool off the provide envelope. The paired amount_2/asset_2/
+# sender_wallet_2 stay null here — post_process_stonfi_v2_liquidity fills them
+# when it merges the partner leg (spec §5.5).
+#
+# Product is a generic Block(btype dex_deposit_liquidity) instead of the
+# class-tagged StonfiV2DepositLiquidity[Partial]; the pairing pass dispatches
+# dual (isinstance legacy classes OR btype+dex marker, see
+# post_process_stonfi_v2_liquidity) so both the legacy and mch paths pair
+# identically. The final/partial split is unchanged: `final` (callback
+# mandatory) registers FIRST and consumes completed legs; `partial` picks up
+# the rest.
 
 opcode StonfiV2ProvideLiquidity = 0x37c096df
 opcode StonfiV2AddLiquidity     = 0x50c6a654
@@ -56,8 +68,7 @@ rule in_leg = (
 )
 
 matcher stonfi_v2_provide_final {
-    produces StonfiV2DepositLiquidity
-    build    build_stonfi_v2_provide_final
+    produces dex_deposit_liquidity
     entry    @provide
 
     op StonfiV2ProvideLiquidity @provide
@@ -66,14 +77,45 @@ matcher stonfi_v2_provide_final {
                   -> ( op JettonInternalTransfer @lp_transfer
                      | op StonfiV2AddLiquidity @refund ) }
       <- $in_leg
+
+    parse provide     as StonfiV2ProvideLiquidity
+    parse lp_transfer as JettonInternalTransfer
+    let in_jt_block = in_jt ?? in_jt_raw
+    failed when refund != null
+    out {
+        dex:             "stonfi_v2"
+        amount_1:        amount(provide.body.amount1) if provide.body.amount1 > 0 else amount(provide.body.amount2)
+        asset_1:         ton_asset() if in_jt_block == null else in_jt_block.data.asset
+        sender:          account(provide.body.from_user)
+        sender_wallet_1: null if in_jt_block == null else in_jt_block.data.sender_wallet
+        amount_2:        null
+        asset_2:         null
+        sender_wallet_2: null
+        pool:            account(provide.msg.destination)
+        lp_tokens_minted: null if lp_transfer == null else amount(lp_transfer.body.amount)
+    }
 }
 
 matcher stonfi_v2_provide_partial {
-    produces StonfiV2DepositLiquidityPartial
-    build    build_stonfi_v2_provide_partial
+    produces dex_deposit_liquidity
     entry    @provide
 
     op StonfiV2ProvideLiquidity @provide
       -> { op StonfiV2AddLiquidity @add }
       <- $in_leg
+
+    parse provide as StonfiV2ProvideLiquidity
+    let in_jt_block = in_jt ?? in_jt_raw
+    out {
+        dex:             "stonfi_v2"
+        amount_1:        amount(provide.body.amount1) if provide.body.amount1 > 0 else amount(provide.body.amount2)
+        asset_1:         ton_asset() if in_jt_block == null else in_jt_block.data.asset
+        sender:          account(provide.body.from_user)
+        sender_wallet_1: null if in_jt_block == null else in_jt_block.data.sender_wallet
+        amount_2:        null
+        asset_2:         null
+        sender_wallet_2: null
+        pool:            account(provide.msg.destination)
+        lp_tokens_minted: null
+    }
 }

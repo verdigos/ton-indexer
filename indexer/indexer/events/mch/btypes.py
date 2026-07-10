@@ -47,6 +47,9 @@ CLASS_TO_BTYPE: dict[str, str] = {
     "CoffeeCreateVaultBlock": "coffee_create_vault",
     "DedustDepositLiquidity": "dedust_deposit_liquidity",
     "DedustDepositLiquidityPartial": "dedust_deposit_liquidity_partial",
+    "NftPurchaseBlock": "nft_purchase",
+    "NftTransferBlock": "nft_transfer",
+    "TgBTCMintBlock": "tgbtc_mint",
 }
 
 

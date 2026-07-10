@@ -102,6 +102,73 @@ async def _try_get_nft_purchase_data(block: Block, owner: str) -> dict | None:
     return None
 
 
+def _purchase_parent_to_consume(prev_block: 'Block | None') -> 'Block | None':
+    """Legacy purchase-branch parent consumption: the funding parent (buyer
+    payment / sale-contract call) is absorbed into the nft_transfer unless it is
+    a finish/stop sale-contract ton_transfer (that shape rides the getgems proxy
+    surgery instead). Shared by the legacy wrapper and the mch shaper."""
+    if isinstance(prev_block, TonTransferBlock):
+        return prev_block if prev_block.comment not in ['finish', 'stop'] else None
+    if isinstance(prev_block, CallContractBlock) and prev_block.get_message().source is None:
+        return prev_block
+    return None
+
+
+async def build_nft_transfer_core(
+        block: Block,
+        ownership_message: 'NftOwnershipAssigned | None') -> tuple['NftTransferBlock | None', list[Block]]:
+    """Shared field build for a base NFT transfer (plain transfer + getgems
+    purchase). Pure over the anchor `block` (the NftTransfer call) and the
+    optional parsed NftOwnershipAssigned notification (prev_owner source).
+
+    Returns `(new_block, extra)` — the produced NftTransferBlock (data set, NOT
+    merged) plus the funding parent to consume in the purchase branch (`[]`
+    otherwise), or `(None, [])` to reject when the NFT item is unknown. Merging
+    is the caller's job (legacy wrapper / mch synthesized wrapper + shaper),
+    mirroring build_telegram_nft_purchase_core.
+    """
+    new_block = NftTransferBlock()
+    data = dict()
+    data['is_purchase'] = False
+    nft_transfer_message = NftTransfer(
+        Slice.one_from_boc(block.event_nodes[0].message.message_content.body))
+    if ownership_message is not None:
+        data['prev_owner'] = AccountId(ownership_message.prev_owner)
+    else:
+        data['prev_owner'] = AccountId(block.event_nodes[0].message.source)
+    data['query_id'] = nft_transfer_message.query_id
+    data['forward_amount'] = Amount(nft_transfer_message.forward_amount)
+    if nft_transfer_message.response_destination:
+        data['response_destination'] = AccountId(nft_transfer_message.response_destination)
+    else:
+        data['response_destination'] = None
+    data['custom_payload'] = base64.b64encode(nft_transfer_message.custom_payload).decode('utf-8') if (
+            nft_transfer_message.custom_payload is not None) else None
+    data['forward_payload'] = base64.b64encode(nft_transfer_message.forward_payload).decode('utf-8') if (
+            nft_transfer_message.forward_payload is not None) else None
+    data['new_owner'] = AccountId(nft_transfer_message.new_owner)
+    data['nft'] = await _get_nft_data(AccountId(block.event_nodes[0].message.transaction.account))
+    if not data['nft']['exists']:
+        return None, []
+    extra: list[Block] = []
+    if block.previous_block is not None:
+        nft_purchase_data = await _try_get_nft_purchase_data(block, nft_transfer_message.new_owner.to_str(False))
+        if nft_purchase_data is not None and AccountId(nft_purchase_data['nft_address']) == data['nft']['address']:
+            real_owner = AccountId(nft_purchase_data['real_prev_owner'])
+            if real_owner != data['new_owner']:
+                data['is_purchase'] = True
+                data['marketplace'] = 'getgems'
+                data['marketplace_address'] = AccountId(nft_purchase_data['marketplace_address'])
+                data['price'] = Amount(nft_purchase_data['price'])
+                data['real_prev_owner'] = AccountId(nft_purchase_data['real_prev_owner'])
+                parent = _purchase_parent_to_consume(block.previous_block)
+                if parent is not None:
+                    extra.append(parent)
+    new_block.data = data
+    new_block.failed = block.failed
+    return new_block, extra
+
+
 class NftTransferBlockMatcher(BlockMatcher):
     def __init__(self):
         super().__init__(child_matcher=OrMatcher([
@@ -114,54 +181,12 @@ class NftTransferBlockMatcher(BlockMatcher):
             return True
 
     async def build_block(self, block: Block, other_blocks: list['Block']):
-        new_block = NftTransferBlock()
-        include = [block]
-        data = dict()
-        data['is_purchase'] = False
-        nft_transfer_message = NftTransfer(
-            Slice.one_from_boc(block.event_nodes[0].message.message_content.body))
         ownership_assigned_message = find_messages(other_blocks, NftOwnershipAssigned)
-        if len(ownership_assigned_message) > 0:
-            nft_ownership_message = ownership_assigned_message[0][1]
-            data['prev_owner'] = AccountId(nft_ownership_message.prev_owner)
-        else:
-            data['prev_owner'] = AccountId(block.event_nodes[0].message.source)
-        data['query_id'] = nft_transfer_message.query_id
-        data['forward_amount'] = Amount(nft_transfer_message.forward_amount)
-        if nft_transfer_message.response_destination:
-            data['response_destination'] = AccountId(nft_transfer_message.response_destination)
-        else:
-            data['response_destination'] = None
-        data['custom_payload'] = base64.b64encode(nft_transfer_message.custom_payload).decode('utf-8') if (
-                nft_transfer_message.custom_payload is not None) else None
-        data['forward_payload'] = base64.b64encode(nft_transfer_message.forward_payload).decode('utf-8') if (
-                nft_transfer_message.forward_payload is not None) else None
-        data['new_owner'] = AccountId(nft_transfer_message.new_owner)
-        data['nft'] = await _get_nft_data(AccountId(block.event_nodes[0].message.transaction.account))
-        if not data['nft']['exists']:
+        ownership_message = ownership_assigned_message[0][1] if len(ownership_assigned_message) > 0 else None
+        new_block, extra = await build_nft_transfer_core(block, ownership_message)
+        if new_block is None:
             return []
-        if block.previous_block is not None:
-            nft_purchase_data = await _try_get_nft_purchase_data(block, nft_transfer_message.new_owner.to_str(False))
-            if nft_purchase_data is not None and AccountId(nft_purchase_data['nft_address']) == data['nft']['address']:
-                real_owner = AccountId(nft_purchase_data['real_prev_owner'])
-                if real_owner != data['new_owner']:
-                    data['is_purchase'] = True
-                    data['marketplace'] = 'getgems'
-                    data['marketplace_address'] = AccountId(nft_purchase_data['marketplace_address'])
-                    data['price'] = Amount(nft_purchase_data['price'])
-                    data['real_prev_owner'] = AccountId(nft_purchase_data['real_prev_owner'])
-                    if isinstance(block.previous_block, TonTransferBlock):
-                        if block.previous_block.comment not in ['finish', 'stop']:
-                            include.append(block.previous_block)
-                    elif isinstance(block.previous_block, CallContractBlock) and block.previous_block.get_message().source is None:
-                        include.append(block.previous_block)
-
-        include.extend(other_blocks)
-        new_block.merge_blocks(include)
-        new_block.data = data
-        if not data['nft']['exists']:
-            new_block.broken = True
-        new_block.failed = block.failed
+        new_block.merge_blocks([block] + extra + other_blocks)
         return [new_block]
 
 @dataclass()

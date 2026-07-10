@@ -1,33 +1,37 @@
-"""mch builder for the tgbtc_mint matcher (specs/tgbtc.mch).
+"""mch host fn + shaper for the tgbtc_mint matcher (specs/tgbtc.mch).
 
-Thin adapter over the shared core `build_tgbtc_mint_core` in blocks/tgbtc.py —
-the same function the legacy TgBTCMintBlockMatcher calls.
+HYBRID declarative build (C++-runnable): the matcher has no `build` directive —
+the produced btype, the reject decision and the out-field mapping live in the
+.mch; the imperative residue is the single host fn `tgbtc_mint_data` below. It
+delegates to the shared core `build_tgbtc_mint_core` in blocks/tgbtc.py (the same
+function the legacy matcher calls) and exposes the produced TgBTCMintData
+dataclass as a namespace. `null` from the core (missing pieces / unparseable log)
+drives `reject when d == null`.
 
-Consumed-set-driven (`Match._mch_consumed`), NOT capture-driven — same situation
-as specs/evaa.mch: the three blocks the core needs sit in the recursion's exit
-branch (@tail/@log/@mint would be list bindings under §7.2 and the compiled
-path's positional walker mis-binds same-position exit captures). Each role
-carries a unique signature within one match's consumed set, so the derivation is
-unambiguous:
+Consumed-set-driven (the well-known `consumed` env name), NOT capture-driven —
+same situation as specs/evaa.mch: the three blocks the core needs sit in the
+recursion's exit branch (@tail/@log/@mint would be list bindings under §7.2 and
+the compiled path's positional walker mis-binds same-position exit captures).
+Each role carries a unique signature within one match's consumed set:
 
-- head:        the sole CallContractBlock with opcode 0x3F781D24 (also the
-               anchor, i.e. consumed[0]).
+- head:        the sole CallContractBlock with opcode 0x3F781D24 (also the anchor).
 - success log: the sole CallContractBlock with opcode 0x77A80EF3.
 - jetton_mint: the sole block with btype "jetton_mint".
 
-Deployment side-effects: every CallContractBlock whose transaction deploys its
-destination carries a `ContractDeploy` block in its `children_blocks` (attached
-at init, sharing the parent's event node — NOT reachable via `next_blocks`, so
-the structural match never consumes it). The legacy matcher sweeps these up in
-its ancestor walk (`children_of_prev`) and merges them into the produced block;
-to stay byte-identical (same event-node multiset, ContractDeploy as a direct
-child) this builder collects them from the consumed set's `children_blocks` and
-merges them before returning. The engine's own merge of the matched chain runs
-afterward and composes cleanly (verified against legacy on all four fixtures).
-The blocks are still surfaced as their own `contract_deploy` actions by the
-`unwind_deployments` post-process pass, exactly as in the legacy path.
+Deployment side-effects ride on the shaper `tgbtc_deploy_absorb`: every
+CallContractBlock whose transaction deploys its destination carries a
+`ContractDeploy` block in its `children_blocks` (attached at init, sharing the
+parent's event node — NOT reachable via `next_blocks`, so the structural match
+never consumes it). The legacy matcher sweeps these up and merges them into the
+produced block; to stay byte-identical (ContractDeploy as a direct child) the
+shaper collects them from the consumed set's `children_blocks` and merges them as
+the last build step, after the wrapper's consumed-merge. `unwind_deployments`
+still surfaces them as their own `contract_deploy` actions.
 """
 from __future__ import annotations
+
+from dataclasses import fields as dc_fields
+from types import SimpleNamespace
 
 from indexer.events.blocks.basic_blocks import CallContractBlock, ContractDeploy
 from indexer.events.blocks.core import Block
@@ -67,9 +71,8 @@ def register_tgbtc(reg: Registries) -> Registries:
     reg.opcodes.update(OPCODES)
     reg.block_types.update(BLOCK_TYPES)
 
-    @reg.register_builder("build_tgbtc_mint")
-    async def build_tgbtc_mint(m):
-        consumed = m._mch_consumed
+    @reg.register_fn("tgbtc_mint_data")
+    async def tgbtc_mint_data(consumed):
         head = _first_call(consumed, _HEAD_OPCODE)
         success_log = _first_call(consumed, TgBTCMintEvent.opcode)
         jetton_mint = next(
@@ -78,15 +81,20 @@ def register_tgbtc(reg: Registries) -> Registries:
         produced = build_tgbtc_mint_core(head, success_log, jetton_mint)
         if produced is None:
             return None
+        return SimpleNamespace(
+            **{f.name: getattr(produced.data, f.name) for f in dc_fields(produced.data)}
+        )
+
+    @reg.register_shaper("tgbtc_deploy_absorb")
+    def tgbtc_deploy_absorb(produced: Block, match) -> None:
         deploys = [
             c
-            for b in consumed
+            for b in match.consumed
             for c in b.children_blocks
             if isinstance(c, ContractDeploy)
         ]
         if deploys:
             produced.merge_blocks(deploys)
-        return produced
 
     return reg
 

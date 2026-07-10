@@ -104,8 +104,10 @@ async def _run_matcher(matcher: BlockMatcher, trace) -> list:
         result = await matcher.try_build(b)
         if result is not None:
             matches.extend(result)
+    # Wave-B: the hybrid build produces a plain Block with btype 'jetton_swap'
+    # (not a JettonSwapBlock instance); filter on btype, not class identity.
     return [b for b in matches
-            if isinstance(b, JettonSwapBlock) and b.data.get("dex") == "stonfi_v2"]
+            if b.btype == "jetton_swap" and b.data.get("dex") == "stonfi_v2"]
 
 
 def _values_equal(a, b) -> bool:

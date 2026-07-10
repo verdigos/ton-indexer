@@ -21,8 +21,8 @@ merge covers it. Returns None to reject the match (spec §10.7).
 from __future__ import annotations
 
 from indexer.events.blocks.basic_blocks import CallContractBlock
+from indexer.events.blocks.core import Block
 from indexer.events.blocks.liquidity import (
-    ToncoDepositLiquidityBlock,
     build_tonco_deposit_liquidity_core,
 )
 from indexer.events.blocks.messages import (
@@ -47,39 +47,45 @@ OPCODES = {
 }
 
 BLOCK_TYPES = {
-    "ToncoDepositLiquidityBlock": ToncoDepositLiquidityBlock,
+    "tonco_deposit_liquidity": Block,
 }
+
+
+async def _tonco_deposit_liquidity_data(consumed: list[Block]):
+    """Host residue of the tonco deposit-liquidity build (hybrid declarative
+    spec). Derives the legacy label roles structurally from the consumed set +
+    previous_block navigation and delegates to
+    build_tonco_deposit_liquidity_core; returns the ToncoDepositLiquidityData
+    record the `out` block flattens, or None to reject (spec §10.7)."""
+    block = consumed[0]
+    try:
+        # anchor <- FundAccount <- input transfer
+        input_transfer = block.previous_block.previous_block
+        nft_mint = next((b for b in consumed if b.btype == "nft_mint"), None)
+        pay_to = next((b for b in consumed
+                       if isinstance(b, CallContractBlock)
+                       and b.opcode == ToncoRouterV3PayTo.opcode), None)
+        excess_transfers: list = []
+        if pay_to is not None:
+            excess_transfers = [b for b in consumed
+                                if b.btype == "jetton_transfer"
+                                and b.previous_block is pay_to][:2]
+        while len(excess_transfers) < 2:
+            excess_transfers.append(None)
+        blocks = await build_tonco_deposit_liquidity_core(
+            block, nft_mint, input_transfer, excess_transfers)
+    except Exception:
+        return None
+    if not blocks:
+        return None
+    return blocks[0].data
 
 
 def register_tonco_liquidity(reg: Registries) -> Registries:
     """Register everything specs/tonco_liquidity.mch needs into `reg`."""
     reg.opcodes.update(OPCODES)
     reg.block_types.update(BLOCK_TYPES)
-
-    @reg.register_builder("build_tonco_deposit_liquidity")
-    async def build_tonco_deposit_liquidity(m):
-        consumed = m._mch_consumed
-        block = consumed[0]
-        try:
-            # anchor <- FundAccount <- input transfer
-            input_transfer = block.previous_block.previous_block
-            nft_mint = next((b for b in consumed if b.btype == "nft_mint"), None)
-            pay_to = next((b for b in consumed
-                           if isinstance(b, CallContractBlock)
-                           and b.opcode == ToncoRouterV3PayTo.opcode), None)
-            excess_transfers: list = []
-            if pay_to is not None:
-                excess_transfers = [b for b in consumed
-                                    if b.btype == "jetton_transfer"
-                                    and b.previous_block is pay_to][:2]
-            while len(excess_transfers) < 2:
-                excess_transfers.append(None)
-            blocks = await build_tonco_deposit_liquidity_core(
-                block, nft_mint, input_transfer, excess_transfers)
-        except Exception:
-            return None
-        return blocks[0] if blocks else None
-
+    reg.register_fn("tonco_deposit_liquidity_data")(_tonco_deposit_liquidity_data)
     return reg
 
 

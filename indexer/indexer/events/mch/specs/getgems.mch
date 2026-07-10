@@ -43,10 +43,35 @@ predicate getgems_seller_payout
 
 matcher getgems_nft_purchase {
     produces NftPurchaseBlock
-    build    build_getgems_nft_purchase
     shape    getgems_proxy_insert
     entry    @nft
 
     btype nft_transfer @nft where getgems_purchase
       -> maybe btype ton_transfer @payout where getgems_seller_payout
+
+    # HYBRID declarative build (C++-runnable). The imperative residue (seller
+    # payout scan + core field build) is the one host fn; every produced field
+    # is mapped declaratively from its namespace.
+    let d = getgems_nft_purchase_data(nft)
+    reject when d == null
+    out {
+        nft_address:              d.nft_address
+        collection_address:       d.collection_address
+        nft_index:                d.nft_index
+        prev_owner:               d.prev_owner
+        new_owner:                d.new_owner
+        query_id:                 d.query_id
+        forward_amount:           d.forward_amount
+        response_destination:     d.response_destination
+        custom_payload:           d.custom_payload
+        forward_payload:          d.forward_payload
+        payout_amount:            d.payout_amount
+        payout_comment_encrypted: d.payout_comment_encrypted
+        payout_comment_encoded:   d.payout_comment_encoded
+        payout_comment:           d.payout_comment
+        price:                    d.price
+        real_prev_owner:          d.real_prev_owner
+        marketplace:              d.marketplace
+        marketplace_address:      d.marketplace_address
+    }
 }

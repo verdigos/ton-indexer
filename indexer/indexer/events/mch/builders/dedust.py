@@ -336,8 +336,8 @@ DEPOSIT_OPCODES = {
 }
 
 DEPOSIT_BLOCK_TYPES = {
-    "DedustDepositLiquidity":        DedustDepositLiquidity,
-    "DedustDepositLiquidityPartial": DedustDepositLiquidityPartial,
+    "dedust_deposit_liquidity":         Block,
+    "dedust_deposit_liquidity_partial": Block,
 }
 
 
@@ -358,68 +358,70 @@ def _dedust_deposit_leg(leg: Block) -> tuple[Block | None, list | None]:
     return leg, None
 
 
+async def _dedust_deposit_final_data(consumed: list[Block]) -> SimpleNamespace | None:
+    """Host residue of the dedust final-deposit build (hybrid declarative
+    spec). Derives the legacy label roles structurally from the consumed set +
+    previous_block navigation and delegates to build_dedust_deposit_liquidity_core.
+    Returns the field record (the `out` block maps `dex`/`failed`), or None to
+    reject (spec §10.7). `success` stays in the record — the spec drives
+    `failed when not r.success`."""
+    block = consumed[0]
+    try:
+        # anchor <- topup <- ask <- deposit leg
+        leg = block.previous_block.previous_block.previous_block
+        deposit, jt_calls = _dedust_deposit_leg(leg)
+        if jt_calls is None:
+            jt_calls = [b for b in consumed
+                        if isinstance(b, CallContractBlock)
+                        and b.opcode == JettonTransfer.opcode]
+        lp_transfer = next((b for b in consumed[1:]
+                            if isinstance(b, CallContractBlock)
+                            and b.opcode == JettonInternalTransfer.opcode
+                            and b.previous_block is block), None)
+        rejection = next((b for b in consumed[1:]
+                          if isinstance(b, CallContractBlock)
+                          and b.opcode == DEDUST_REJECTION_OPCODE
+                          and b.previous_block is block), None)
+        returns = [b for b in consumed
+                   if isinstance(b, CallContractBlock)
+                   and b.opcode == DedustReturnExcessFromVault.opcode]
+        ton_excesses = [b for b in consumed
+                        if isinstance(b, CallContractBlock)
+                        and b.opcode == DedustPayout.opcode
+                        and b.previous_block in returns]
+        jetton_excesses = [b for b in consumed
+                           if isinstance(b, JettonTransferBlock)
+                           and b.previous_block in returns]
+        data = await build_dedust_deposit_liquidity_core(
+            block, deposit, lp_transfer, rejection, jt_calls,
+            ton_excesses, jetton_excesses)
+    except Exception:
+        return None
+    return SimpleNamespace(**data)
+
+
+async def _dedust_deposit_partial_data(consumed: list[Block]) -> SimpleNamespace | None:
+    """Host residue of the dedust first-asset (partial) deposit build. Returns
+    the field record or None to reject — including the legacy guard
+    (final-deposit opcodes after the topup), which
+    build_dedust_deposit_partial_core raises on."""
+    block = consumed[0]
+    try:
+        # anchor (topup) <- ask <- deposit leg
+        leg = block.previous_block.previous_block
+        deposit, _ = _dedust_deposit_leg(leg)
+        data = await build_dedust_deposit_partial_core(block, deposit, consumed)
+    except Exception:
+        return None
+    return SimpleNamespace(**data)
+
+
 def register_dedust_deposit(reg: Registries) -> Registries:
     """Register everything specs/dedust_deposit.mch needs into `reg`."""
     reg.opcodes.update(DEPOSIT_OPCODES)
     reg.block_types.update(DEPOSIT_BLOCK_TYPES)
-
-    @reg.register_builder("build_dedust_deposit_final")
-    async def build_dedust_deposit_final(m):
-        consumed = m._mch_consumed
-        block = consumed[0]
-        try:
-            # anchor <- topup <- ask <- deposit leg
-            leg = block.previous_block.previous_block.previous_block
-            deposit, jt_calls = _dedust_deposit_leg(leg)
-            if jt_calls is None:
-                jt_calls = [b for b in consumed
-                            if isinstance(b, CallContractBlock)
-                            and b.opcode == JettonTransfer.opcode]
-            lp_transfer = next((b for b in consumed[1:]
-                                if isinstance(b, CallContractBlock)
-                                and b.opcode == JettonInternalTransfer.opcode
-                                and b.previous_block is block), None)
-            rejection = next((b for b in consumed[1:]
-                              if isinstance(b, CallContractBlock)
-                              and b.opcode == DEDUST_REJECTION_OPCODE
-                              and b.previous_block is block), None)
-            returns = [b for b in consumed
-                       if isinstance(b, CallContractBlock)
-                       and b.opcode == DedustReturnExcessFromVault.opcode]
-            ton_excesses = [b for b in consumed
-                            if isinstance(b, CallContractBlock)
-                            and b.opcode == DedustPayout.opcode
-                            and b.previous_block in returns]
-            jetton_excesses = [b for b in consumed
-                               if isinstance(b, JettonTransferBlock)
-                               and b.previous_block in returns]
-            data = await build_dedust_deposit_liquidity_core(
-                block, deposit, lp_transfer, rejection, jt_calls,
-                ton_excesses, jetton_excesses)
-        except Exception:
-            return None
-        new_block = DedustDepositLiquidity({})
-        new_block.data = data
-        new_block.data["dex"] = "dedust"
-        new_block.failed = not data.get("success", True)
-        return new_block
-
-    @reg.register_builder("build_dedust_deposit_partial")
-    async def build_dedust_deposit_partial(m):
-        consumed = m._mch_consumed
-        block = consumed[0]
-        try:
-            # anchor (topup) <- ask <- deposit leg
-            leg = block.previous_block.previous_block
-            deposit, _ = _dedust_deposit_leg(leg)
-            data = await build_dedust_deposit_partial_core(block, deposit, consumed)
-        except Exception:
-            return None
-        new_block = DedustDepositLiquidityPartial({})
-        new_block.data = data
-        new_block.data["dex"] = "dedust"
-        return new_block
-
+    reg.register_fn("dedust_deposit_final_data")(_dedust_deposit_final_data)
+    reg.register_fn("dedust_deposit_partial_data")(_dedust_deposit_partial_data)
     return reg
 
 

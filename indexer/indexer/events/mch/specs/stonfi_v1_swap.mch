@@ -28,13 +28,37 @@ opcode StonfiPaymentRequest = 0xf93bb43f
 
 predicate stonfi_v1_sender_payment
 
+# HYBRID declarative build. The pattern, the failed flag and the out-field
+# mapping are declarative; the imperative residue stays in one named host fn
+# (a gap, like dedust_swap_legs):
+#   stonfi_v1_swap_data — reconstructs the payment-request list from the swap
+#     call's children (tree order == legacy consumption order) and delegates to
+#     the shared build_stonfi_v1_swap_core (payment-request classification by
+#     exit code, referral extraction from the UNCONSUMED ok_ref sibling, and
+#     the get_jetton_wallet lookups). Returns a namespace mirroring the core's
+#     data dict; `.success` drives the failed flag.
 matcher stonfi_v1_swap {
     produces JettonSwapBlock
-    build    build_stonfi_v1_swap
     entry    @in_transfer
 
     btype jetton_transfer @in_transfer
       -> op StonfiSwap @swap
       -> op StonfiPaymentRequest @req where stonfi_v1_sender_payment
       -> btype jetton_transfer @out
+
+    let d = stonfi_v1_swap_data(in_transfer, swap)
+    failed when not d.success
+    out {
+        dex:                   d.dex
+        sender:                d.sender
+        receiver:              d.receiver
+        dex_incoming_transfer: d.dex_incoming_transfer
+        dex_outgoing_transfer: d.dex_outgoing_transfer
+        destination_asset:     d.destination_asset
+        destination_wallet:    d.destination_wallet
+        referral_amount:       d.referral_amount
+        referral_address:      d.referral_address
+        peer_swaps:            d.peer_swaps
+        success:               d.success
+    }
 }

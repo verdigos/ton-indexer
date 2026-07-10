@@ -1,18 +1,21 @@
-"""mch builder for the stonfi_v2 swap matcher (specs/stonfi_v2_swap.mch).
+"""mch host fn for the stonfi_v2 swap matcher (specs/stonfi_v2_swap.mch).
 
-The legacy build (blocks/swaps.py StonfiV2SwapBlockMatcher.build_block) works
-off LabelBlocks, which the mch engine does not emit. This builder predates the
-T18 capture fixes (post-recursion and exit-branch captures bind since then,
-spec §7.2) and reconstructs the label roles structurally from
-`Match._mch_consumed`, delegating to the shared core
-`build_stonfi_v2_swap_core` — kept as-is; the consumed set remains the
-simplest faithful input for the legacy scan logic.
+specs/stonfi_v2_swap.mch is a HYBRID declarative build: the pattern, failed
+flag and out-field mapping live in the .mch, and the imperative residue is the
+single host fn below plus the two predicates. The legacy build (blocks/swaps.py
+StonfiV2SwapBlockMatcher.build_block) works off LabelBlocks, which the mch
+engine does not emit; `_derive_parts` reconstructs the label roles structurally
+from the consumed set (it predates the T18 capture fixes — spec §7.2 — and the
+consumed set remains the simplest faithful input for the legacy scan logic),
+then delegates to the shared core `build_stonfi_v2_swap_core`.
 
 The core's additional_blocks_to_include (terminal pton transfer call) is
 ignored here: the pattern already consumes that block via the
 `{ maybe op PTonTransfer }` children set, so the synthesized merge covers it.
 """
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 from indexer.events.blocks.basic_blocks import CallContractBlock
 from indexer.events.blocks.core import Block
@@ -64,6 +67,20 @@ def _derive_parts(consumed: list[Block]):
     return anchor, peer_swap_blocks, in_transfer, out_transfer
 
 
+async def _stonfi_v2_swap_data(consumed: list[Block]) -> SimpleNamespace:
+    """Imperative residue of the stonfi_v2 swap build: reconstruct the leg
+    roles from the consumed set, delegate to the shared core, and expose its
+    data dict as a namespace (`.failed` drives the failed flag). The core's
+    additional_blocks_to_include is dropped — the pattern already consumes the
+    terminal pton call. The core sets `anchor.broken` on a wallet-lookup miss;
+    that flag rides on a merged child, exactly as the legacy build leaves it
+    (merge_blocks does not propagate it to the produced swap block)."""
+    anchor, peer_swap_blocks, in_transfer, out_transfer = _derive_parts(consumed)
+    new_block, _additional = await build_stonfi_v2_swap_core(
+        anchor, peer_swap_blocks, in_transfer, out_transfer)
+    return SimpleNamespace(failed=new_block.failed, **new_block.data)
+
+
 def register_stonfi_v2(reg: Registries) -> Registries:
     """Register everything specs/stonfi_v2_swap.mch needs into `reg`."""
     reg.opcodes.update(OPCODES)
@@ -84,13 +101,7 @@ def register_stonfi_v2(reg: Registries) -> Registries:
     def no_internal_transfer(block: Block) -> bool:
         return not block.data['has_internal_transfer']
 
-    @reg.register_builder("build_stonfi_v2_swap")
-    async def build_stonfi_v2_swap(m):
-        anchor, peer_swap_blocks, in_transfer, out_transfer = _derive_parts(
-            m._mch_consumed)
-        new_block, _additional = await build_stonfi_v2_swap_core(
-            anchor, peer_swap_blocks, in_transfer, out_transfer)
-        return new_block
+    reg.register_fn("stonfi_v2_swap_data")(_stonfi_v2_swap_data)
 
     return reg
 

@@ -127,6 +127,7 @@ from indexer.events.mch.builders.evaa import evaa_registries
 from indexer.events.mch.builders.jvault import jvault_registries
 from indexer.events.mch.builders.layerzero import layerzero_receive_registries
 from indexer.events.mch.builders.getgems import getgems_registries
+from indexer.events.mch.builders.nft_transfer import nft_transfer_registries
 from indexer.events.mch.builders.nominator import nominator_registries
 from indexer.events.mch.builders.stonfi_liquidity import stonfi_liquidity_registries
 from indexer.events.mch.builders.stonfi_provide import stonfi_provide_registries
@@ -223,8 +224,12 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
      (JVaultStakeBlockMatcher, JVaultUnstakeBlockMatcher, JVaultClaimBlockMatcher,
       JVaultUnstakeRequestBlockMatcher)),
     # Remake wave 1 (2026-07-04): R01/R03/R04/R05.
-    ("specs/telegram_nft.mch", _SPECS_DIR / "telegram_nft.mch", telegram_nft_registries, (),
-     (TelegramNftPurchaseBlockMatcher,)),
+    # telegram_nft has NO sweep row: legacy test_self is a bare NftOwnershipAssigned
+    # opcode and over-fires on non-purchase/getgems/tonstakers traces, while the mch
+    # pattern deliberately requires the ton_transfer->AuctionFillUp fragment shape
+    # (documented scope narrowing, spec header). The row only became comparable when
+    # produces normalization un-vacuumed it (2026-07-10) and immediately diverged on
+    # exactly those out-of-scope fixtures. Coverage: test_telegram_nft.py per-spec.
     ("specs/tgbtc.mch", _SPECS_DIR / "tgbtc.mch", tgbtc_registries, (JettonMintBlockMatcher,),
      (TgBTCMintBlockMatcher,)),
     # stonfi_v2_withdraw is btype-anchored (jetton_burn) — run-on-all row, rejects everywhere off-protocol.
@@ -241,6 +246,10 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     # (host pairing pass out of sweep scope).
     ("specs/getgems.mch", _SPECS_DIR / "getgems.mch", getgems_registries, (NftTransferBlockMatcher,),
      (GetgemsNftPurchaseBlockMatcher,)),
+    # Conversion wave (2026-07-10): nft_transfer base remake — opcode-anchored run-on-all
+    # row; covers plain (non-purchase) transfers the per-spec purchase fixtures don't.
+    ("specs/nft_transfer.mch", _SPECS_DIR / "nft_transfer.mch", nft_transfer_registries, (),
+     (NftTransferBlockMatcher,)),
     ("specs/stonfi_v2_provide.mch", _SPECS_DIR / "stonfi_v2_provide.mch", stonfi_provide_registries,
      (JettonTransferBlockMatcher, PTonTransferMatcher), (StonfiV2ProvideLiquidityMatcher,)),
     # Remake wave 4 (2026-07-04): R12 stonfi v1 (consumption surgery killed at match time).

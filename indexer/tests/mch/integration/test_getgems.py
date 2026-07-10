@@ -92,7 +92,9 @@ async def _run_side(matcher: BlockMatcher, trace, prereqs=()) -> list[Block]:
         result = await matcher.try_build(b)
         if result is not None:
             produced.extend(result)
-    return [b for b in produced if isinstance(b, NftPurchaseBlock)]
+    # Wave-B: the hybrid build produces a plain Block with btype 'nft_purchase'
+    # (not a NftPurchaseBlock instance); filter on btype, not class identity.
+    return [b for b in produced if b.btype == "nft_purchase"]
 
 
 def _values_equal(a, b) -> bool:
@@ -101,6 +103,20 @@ def _values_equal(a, b) -> bool:
     if type(a) is not type(b):
         return False
     return bool(a == b)
+
+
+def _data_keys(block: Block) -> set:
+    """Field names of the produced block's data, dict (IR hybrid) or NftPurchaseData
+    dataclass (legacy) alike."""
+    d = block.data
+    if isinstance(d, dict):
+        return set(d.keys())
+    return {f.name for f in d.__dataclass_fields__.values()}
+
+
+def _data_get(block: Block, key: str):
+    d = block.data
+    return d[key] if isinstance(d, dict) else getattr(d, key)
 
 
 def _node_hashes(block: Block) -> list[str]:
@@ -126,16 +142,16 @@ def _assert_parity(actual: list[Block], expected: list[Block],
         f"count mismatch: {actual_tag}={len(actual)} {expected_tag}={len(expected)}"
     )
     for a, e in zip(sorted(actual, key=_sort_key), sorted(expected, key=_sort_key)):
-        assert type(a) is type(e), f"block class: {actual_tag}={type(a)} {expected_tag}={type(e)}"
+        # Wave-B: IR hybrid produces a plain Block(dict); legacy a NftPurchaseBlock
+        # (dataclass). Assert btype + per-field data, not class/dataclass identity.
         assert a.btype == e.btype == "nft_purchase"
         assert a.failed == e.failed, f"failed flag: {actual_tag}={a.failed} {expected_tag}={e.failed}"
         assert a.broken == e.broken, f"broken flag: {actual_tag}={a.broken} {expected_tag}={e.broken}"
 
-        akeys = {f.name for f in a.data.__dataclass_fields__.values()}
-        ekeys = {f.name for f in e.data.__dataclass_fields__.values()}
+        akeys, ekeys = _data_keys(a), _data_keys(e)
         assert akeys == ekeys, f"data fields: {actual_tag}={sorted(akeys)} {expected_tag}={sorted(ekeys)}"
         for key in sorted(ekeys):
-            av, ev = getattr(a.data, key), getattr(e.data, key)
+            av, ev = _data_get(a, key), _data_get(e, key)
             assert _values_equal(av, ev), (
                 f"data.{key}: {actual_tag}={av!r} ({type(av).__name__}) "
                 f"{expected_tag}={ev!r} ({type(ev).__name__})"
@@ -297,7 +313,7 @@ async def _run_side_tree(matcher: BlockMatcher, root: Block) -> list[Block]:
         result = await matcher.try_build(b)
         if result is not None:
             produced.extend(result)
-    return [b for b in produced if isinstance(b, NftPurchaseBlock)]
+    return [b for b in produced if b.btype == "nft_purchase"]
 
 
 @pytest.mark.asyncio

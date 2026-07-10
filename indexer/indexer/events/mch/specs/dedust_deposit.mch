@@ -67,9 +67,19 @@ rule vault_excess =
       -> { maybe btype jetton_transfer
          ; maybe op DedustPayout }
 
+# HYBRID declarative build. The reject/failed/`dex` wiring and the block
+# assembly are declarative; the imperative residue (deposit-leg resolution via
+# previous_block navigation, per-vault BOC parsing, jetton-wallet interface
+# lookups, and the excess-payout scan over the consumed set) stays in two host
+# fns that return the field record. Each fn returns null to reject (spec §10.7),
+# reproducing the builder's `return None` (including the partial matcher's
+# final-deposit-opcodes-after-topup guard). Product is a generic
+# Block(btype dedust_deposit_liquidity[_partial]); the distinct btypes let
+# post_process_dedust_liquidity dual-dispatch (isinstance legacy classes OR
+# btype) so both paths pair identically.
+
 matcher dedust_deposit_final {
-    produces DedustDepositLiquidity
-    build    build_dedust_deposit_final
+    produces dedust_deposit_liquidity
     entry    @pool
 
     op DedustDepositLiquidityToPool @pool
@@ -82,15 +92,55 @@ matcher dedust_deposit_final {
       <- op DedustAskLiquidityFactory
          -> { maybe op DedustDeployDepositContract }
          <- $deposit_leg
+
+    let r = dedust_deposit_final_data(consumed)
+    reject when r == null
+    failed when not r.success
+    out {
+        dex:                  "dedust"
+        sender:               r.sender
+        pool_address:         r.pool_address
+        deposit_contract:     r.deposit_contract
+        lp_tokens_minted:     r.lp_tokens_minted
+        asset_1:              r.asset_1
+        asset_2:              r.asset_2
+        amount_1:             r.amount_1
+        amount_2:             r.amount_2
+        target_asset_1:       r.target_asset_1
+        target_amount_1:      r.target_amount_1
+        target_asset_2:       r.target_asset_2
+        target_amount_2:      r.target_amount_2
+        user_jetton_wallet_1: r.user_jetton_wallet_1
+        user_jetton_wallet_2: r.user_jetton_wallet_2
+        vault_excesses:       r.vault_excesses
+        success:              r.success
+    }
 }
 
 matcher dedust_deposit_partial {
-    produces DedustDepositLiquidityPartial
-    build    build_dedust_deposit_partial
+    produces dedust_deposit_liquidity_partial
     entry    @topup
 
     op DedustTopUpLiquidityDepositContract @topup
       <- op DedustAskLiquidityFactory
          -> { op DedustDeployDepositContract }
          <- $deposit_leg
+
+    let r = dedust_deposit_partial_data(consumed)
+    reject when r == null
+    out {
+        dex:                  "dedust"
+        sender:               r.sender
+        deposit_contract:     r.deposit_contract
+        asset_1:              r.asset_1
+        amount_1:             r.amount_1
+        asset_2:              r.asset_2
+        amount_2:             r.amount_2
+        user_jetton_wallet_1: r.user_jetton_wallet_1
+        user_jetton_wallet_2: r.user_jetton_wallet_2
+        target_asset_1:       r.target_asset_1
+        target_amount_1:      r.target_amount_1
+        target_asset_2:       r.target_asset_2
+        target_amount_2:      r.target_amount_2
+    }
 }

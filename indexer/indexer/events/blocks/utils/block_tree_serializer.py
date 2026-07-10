@@ -906,14 +906,17 @@ def _fill_tgbtc_dkg_log_action(block: TgBTCDkgLogBlock, action: Action):
 
 
 def _fill_tonco_deposit_liquidity_action(block: ToncoDepositLiquidityBlock, action: Action):
+    # `data` is the legacy ToncoDepositLiquidityData dataclass OR the declarative
+    # mch build's dict (tonco_liquidity.mch) — read both via _dget.
+    d = block.data
     action.type = 'dex_deposit_liquidity'
-    action.source = _addr(block.data.sender)
-    action.source_secondary = _addr(block.data.sender_wallet_1 or block.data.sender_wallet_2)
-    action.destination = _addr(block.data.pool)
-    action.destination_secondary = _addr(block.data.account_contract)
+    action.source = _addr(_dget(d, 'sender'))
+    action.source_secondary = _addr(_dget(d, 'sender_wallet_1') or _dget(d, 'sender_wallet_2'))
+    action.destination = _addr(_dget(d, 'pool'))
+    action.destination_secondary = _addr(_dget(d, 'account_contract'))
     vault_excesses = []
-    if block.data.excesses:
-        for excess in block.data.excesses:
+    if _dget(d, 'excesses'):
+        for excess in _dget(d, 'excesses'):
             vault_excesses.append({
                 'asset': _addr(excess[0]),
                 'amount': excess[1].value,
@@ -922,7 +925,7 @@ def _fill_tonco_deposit_liquidity_action(block: ToncoDepositLiquidityBlock, acti
     actual_amount_1 = None
     actual_asset_2 = None
     actual_amount_2 = None
-    for (amt, asset) in [(block.data.amount_1, block.data.asset_1), (block.data.amount_2, block.data.asset_2)]:
+    for (amt, asset) in [(_dget(d, 'amount_1'), _dget(d, 'asset_1')), (_dget(d, 'amount_2'), _dget(d, 'asset_2'))]:
         if amt is None:
             continue
         if actual_amount_1 is None:
@@ -937,17 +940,17 @@ def _fill_tonco_deposit_liquidity_action(block: ToncoDepositLiquidityBlock, acti
         "amount2": actual_amount_2.value if actual_amount_2 else None,
         "asset1": _addr(actual_asset_1),
         "asset2": _addr(actual_asset_2),
-        "user_jetton_wallet_1": _addr(block.data.sender_wallet_1),
-        "user_jetton_wallet_2": _addr(block.data.sender_wallet_2),
-        "lp_tokens_minted": block.data.lp_tokens_minted.value if block.data.lp_tokens_minted else None,
-        "tick_lower": block.data.tick_lower,
-        "tick_upper": block.data.tick_upper,
-        "nft_index": block.data.nft_index,
-        "nft_address": _addr(block.data.nft_address),
-        "target_amount_1": block.data.position_amount_1.value,
-        "target_amount_2": block.data.position_amount_2.value,
-        "target_asset_1": _addr(block.data.asset_1),
-        "target_asset_2": _addr(block.data.asset_2),
+        "user_jetton_wallet_1": _addr(_dget(d, 'sender_wallet_1')),
+        "user_jetton_wallet_2": _addr(_dget(d, 'sender_wallet_2')),
+        "lp_tokens_minted": _dget(d, 'lp_tokens_minted').value if _dget(d, 'lp_tokens_minted') else None,
+        "tick_lower": _dget(d, 'tick_lower'),
+        "tick_upper": _dget(d, 'tick_upper'),
+        "nft_index": _dget(d, 'nft_index'),
+        "nft_address": _addr(_dget(d, 'nft_address')),
+        "target_amount_1": _dget(d, 'position_amount_1').value,
+        "target_amount_2": _dget(d, 'position_amount_2').value,
+        "target_asset_1": _addr(_dget(d, 'asset_1')),
+        "target_asset_2": _addr(_dget(d, 'asset_2')),
         "vault_excesses": vault_excesses,
     }
 

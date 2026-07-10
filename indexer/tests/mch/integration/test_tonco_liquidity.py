@@ -107,7 +107,7 @@ async def _run_matcher(matcher: BlockMatcher, trace, prereqs=()) -> list[Block]:
         result = await matcher.try_build(b)
         if result is not None:
             matches.extend(result)
-    return [b for b in matches if isinstance(b, ToncoDepositLiquidityBlock)]
+    return [b for b in matches if b.btype == "tonco_deposit_liquidity"]
 
 
 def _values_equal(a, b) -> bool:
@@ -143,12 +143,14 @@ def _assert_field_parity(
         f"{label} count mismatch: actual={len(actual)} reference={len(reference)}"
     )
     for a, r in zip(sorted(actual, key=_sort_key), sorted(reference, key=_sort_key)):
-        assert type(a) is type(r) and a.btype == r.btype == "tonco_deposit_liquidity"
+        # Block CLASS and data representation deliberately not compared: the
+        # declarative mch product is a generic Block with a dict data map, the
+        # legacy build a ToncoDepositLiquidityBlock carrying a dataclass — btype
+        # and per-field data are the parity property (Wave-B). _data_items
+        # normalizes dataclass/dict.
+        assert a.btype == r.btype == "tonco_deposit_liquidity"
         assert a.failed == r.failed, f"{label} failed flag: {a.failed} vs {r.failed}"
         assert a.broken == r.broken, f"{label} broken flag: {a.broken} vs {r.broken}"
-        assert type(a.data) is type(r.data), (
-            f"{label} data type: {type(a.data)} vs {type(r.data)}"
-        )
         a_data, r_data = _data_items(a), _data_items(r)
         assert set(a_data.keys()) == set(r_data.keys())
         for key in sorted(r_data):

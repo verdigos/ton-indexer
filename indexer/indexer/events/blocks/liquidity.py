@@ -508,11 +508,18 @@ async def post_process_dedust_liquidity(blocks: list[Block]) -> list[Block]:
     final_deposits = []
     used_deposit_contracts = defaultdict(int)
 
+    # Dual dispatch (spec §5.5): the legacy pair tags its output with the
+    # DedustDepositLiquidity[Partial] subclasses; the declarative mch build
+    # (specs/dedust_deposit.mch) emits generic Block(btype
+    # dedust_deposit_liquidity[_partial]). The distinct btypes carry the same
+    # final/partial split, so match either form.
     for b in blocks:
-        if isinstance(b, DedustDepositLiquidityPartial):
+        if isinstance(b, DedustDepositLiquidityPartial) or \
+                b.btype == "dedust_deposit_liquidity_partial":
             first_deposits.append(b)
             used_deposit_contracts[b.data['deposit_contract']] += 1
-        elif isinstance(b, DedustDepositLiquidity):
+        elif isinstance(b, DedustDepositLiquidity) or \
+                b.btype == "dedust_deposit_liquidity":
             final_deposits.append(b)
             used_deposit_contracts[b.data['deposit_contract']] += 1
 
@@ -787,6 +794,19 @@ def build_stonfi_v2_provide_core(
 _STONFI_V2_DEPOSIT_CLASSES = (StonfiV2DepositLiquidity, StonfiV2DepositLiquidityPartial)
 
 
+def _is_stonfi_v2_provide_leg(b: Block) -> bool:
+    """Dual dispatch for the pairing pass (spec §5.5): the legacy matcher tags
+    its produced legs with the StonfiV2DepositLiquidity[Partial] subclasses,
+    while the declarative mch build (specs/stonfi_v2_provide.mch) emits a
+    generic Block(btype dex_deposit_liquidity) carrying dex == 'stonfi_v2'.
+    Both are the same single-leg deposit the pass pairs; match either form."""
+    if isinstance(b, _STONFI_V2_DEPOSIT_CLASSES):
+        return True
+    return (b.btype == "dex_deposit_liquidity"
+            and isinstance(b.data, dict)
+            and b.data.get("dex") == "stonfi_v2")
+
+
 def _stonfi_v2_provide_fire_order(block: Block) -> tuple[int, int]:
     """Legacy fire order for a produced provide-liquidity block: the legacy
     matcher is a single BFS pass, so the leg whose 0x37c096df anchor sits
@@ -916,7 +936,7 @@ async def post_process_stonfi_v2_liquidity(blocks: list[Block]) -> list[Block]:
     pass pairs one candidate per block, latest-fired first.
 
     NOT registered in event_processing yet — production wiring is T26."""
-    deposits = [b for b in blocks if isinstance(b, _STONFI_V2_DEPOSIT_CLASSES)]
+    deposits = [b for b in blocks if _is_stonfi_v2_provide_leg(b)]
     if len(deposits) < 2:
         return blocks
 

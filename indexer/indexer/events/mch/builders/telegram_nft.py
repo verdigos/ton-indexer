@@ -1,14 +1,22 @@
-"""mch builder for the telegram_nft_purchase matcher (specs/telegram_nft.mch).
+"""mch host fn for the telegram_nft_purchase matcher (specs/telegram_nft.mch).
 
-Thin adapter over the shared core `build_telegram_nft_purchase_core` in
-blocks/nft.py — the same function the legacy TelegramNftPurchaseBlockMatcher
-calls. Capture-driven: the pattern has no recursion and no same-head XOR, so
-@assigned / @payment / @payout_1 / @payout_2 bind positionally on both the
-compiled and the IR paths. The core recomputes every data field and the
-consumed set from those blocks, so the produced block is byte-identical to the
-legacy matcher's.
+HYBRID declarative build (C++-runnable): the matcher has no `build` directive —
+the produced btype, the reject decision and the out-field mapping live in the
+.mch; the imperative residue is the single host fn `telegram_nft_purchase_data`
+below. It delegates to the shared core `build_telegram_nft_purchase_core` in
+blocks/nft.py (the same function the legacy matcher calls) and exposes the
+produced data dict as a namespace with a FIXED key set (`.get(k)` → None for the
+keys the core omits in a given branch). The out{} maps the always-present keys
+plainly and the payout-count-conditional royalty keys with `?:` (omit-when-null),
+reproducing the legacy variable-key dict. `null` from the core → `reject when`.
+
+Consumed set: the pattern captures @payment + @payout_1/@payout_2, which the
+synthesized wrapper merges — identical to the legacy [anchor] + extra set — so
+no shaper is needed.
 """
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 from indexer.events.blocks.messages.nft import AuctionFillUp, NftOwnershipAssigned
 from indexer.events.blocks.nft import (
@@ -26,20 +34,30 @@ BLOCK_TYPES = {
     "NftTransferBlock": NftTransferBlock,
 }
 
+# Full key set the core may emit. The namespace always carries all of them
+# (None where the core's branch omits the key); out{} decides present-vs-absent
+# per field (plain = always emitted, `?:` = omitted when null).
+_TELEGRAM_KEYS = (
+    "is_purchase", "new_owner", "prev_owner", "query_id", "forward_amount",
+    "response_destination", "custom_payload", "forward_payload", "nft",
+    "real_prev_owner", "price", "marketplace",
+    "royalty_amount", "royalty_address", "payout_amount", "payout_address",
+)
+
 
 def register_telegram_nft(reg: Registries) -> Registries:
     """Register everything specs/telegram_nft.mch needs into `reg`."""
     reg.opcodes.update(OPCODES)
     reg.block_types.update(BLOCK_TYPES)
 
-    @reg.register_builder("build_telegram_nft_purchase")
-    async def build_telegram_nft_purchase(m):
-        payouts = [p for p in (m.payout_1, m.payout_2) if p is not None]
-        new_block, _extra = await build_telegram_nft_purchase_core(m.assigned, m.payment, payouts)
-        # The synthesized wrapper merges [anchor] + consumed set (payment +
-        # payouts), which equals the legacy [anchor] + extra set. Return the
-        # unmerged block, or None to reject (spec §10.7).
-        return new_block
+    @reg.register_fn("telegram_nft_purchase_data")
+    async def telegram_nft_purchase_data(assigned, payment, payout_1, payout_2):
+        payouts = [p for p in (payout_1, payout_2) if p is not None]
+        new_block, _extra = await build_telegram_nft_purchase_core(assigned, payment, payouts)
+        if new_block is None:
+            return None
+        data = new_block.data
+        return SimpleNamespace(**{k: data.get(k) for k in _TELEGRAM_KEYS})
 
     return reg
 

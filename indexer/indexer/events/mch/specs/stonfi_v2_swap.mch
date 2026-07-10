@@ -53,9 +53,18 @@ rule swap_hop = (
       -> maybe $swap_hop
 )
 
+# HYBRID declarative build. The pattern, the failed flag and the out-field
+# mapping are declarative; the imperative residue stays in one named host fn
+# (a gap, like dedust_swap_legs):
+#   stonfi_v2_swap_data — reconstructs the (swap, pay_to) leg pairs and the
+#     in/out transfers from the consumed set, then delegates to the shared
+#     build_stonfi_v2_swap_core (async get_pool_accounts_recursive walk,
+#     per-hop get_jetton_wallet lookups, peer-leg list assembly, the broken-
+#     loop wallet-miss guard, and the failed-swap destination_asset fallback).
+#     Returns a namespace mirroring the core's data dict; `.failed` drives the
+#     failed flag.
 matcher stonfi_v2_swap {
     produces JettonSwapBlock
-    build    build_stonfi_v2_swap
     entry    @swap
 
     op StonfiV2Swap @swap
@@ -70,4 +79,18 @@ matcher stonfi_v2_swap {
                 ^ $swap_hop ) }
       <- ( btype jetton_transfer @in_transfer
          ^ op JettonNotify <- op PTonTransfer @in_transfer )
+
+    let d = stonfi_v2_swap_data(consumed)
+    failed when d.failed
+    out {
+        dex:                   d.dex
+        source_asset:          d.source_asset
+        destination_asset:     d.destination_asset
+        sender:                d.sender
+        dex_incoming_transfer: d.dex_incoming_transfer
+        dex_outgoing_transfer: d.dex_outgoing_transfer
+        referral_amount:       d.referral_amount
+        referral_address:      d.referral_address
+        peer_swaps:            d.peer_swaps
+    }
 }

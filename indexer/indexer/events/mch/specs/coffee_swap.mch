@@ -32,9 +32,17 @@ rule swap_chain = (
   ^ op CoffeePayoutInternal -> ( btype jetton_transfer | op CoffeePayout | op CoffeeNotification )
 )
 
+# HYBRID declarative build. The pattern, the reject/failed wiring and the
+# out-field mapping are declarative; the imperative residue stays in one named
+# host fn (a gap, like dedust_swap_legs):
+#   coffee_swap_data — reconstructs the in-transfer / payout / out-transfer
+#     roles from the consumed set, then delegates to the shared
+#     build_coffee_swap_core (per-hop success-event scan, peer-leg list
+#     assembly, in/out leg extraction). Returns null to reject (core returns
+#     None on a missing role or no hops); otherwise a namespace mirroring the
+#     core's data dict, with `.failed` driving the failed flag.
 matcher coffee_swap {
     produces JettonSwapBlock
-    build    build_coffee_swap
     entry    @swap
 
     op CoffeeSwapInternal @swap
@@ -43,4 +51,19 @@ matcher coffee_swap {
            | op CoffeePayoutInternal @payout
                -> ( btype jetton_transfer @out ^ op CoffeePayout @out ^ op CoffeeNotification @out ) ) }
       <- ( btype jetton_transfer @in_transfer ^ op CoffeeSwapNative @in_transfer )
+
+    let d = coffee_swap_data(consumed)
+    reject when d == null
+    failed when d.failed
+    out {
+        dex:                   d.dex
+        sender:                d.sender
+        source_asset:          d.source_asset
+        destination_asset:     d.destination_asset
+        dex_incoming_transfer: d.dex_incoming_transfer
+        dex_outgoing_transfer: d.dex_outgoing_transfer
+        peer_swaps:            d.peer_swaps
+        referral_amount:       d.referral_amount
+        referral_address:      d.referral_address
+    }
 }

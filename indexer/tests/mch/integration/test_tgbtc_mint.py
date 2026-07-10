@@ -127,9 +127,12 @@ def _assert_field_parity(actual: list[Block], expected: list[Block],
         assert a.failed == e.failed, f"failed flag: {actual_tag}={a.failed} {expected_tag}={e.failed}"
         assert a.broken == e.broken, f"broken flag: {actual_tag}={a.broken} {expected_tag}={e.broken}"
 
-        assert type(a.data) is type(e.data) is TgBTCMintData
+        # Wave-B: the hybrid build produces a plain Block(dict); legacy a
+        # TgBTCMintBlock (TgBTCMintData dataclass). Compare per-field, agnostic
+        # to dict-vs-dataclass on each side.
         for f in fields(TgBTCMintData):
-            av, ev = getattr(a.data, f.name), getattr(e.data, f.name)
+            av = a.data[f.name] if isinstance(a.data, dict) else getattr(a.data, f.name)
+            ev = e.data[f.name] if isinstance(e.data, dict) else getattr(e.data, f.name)
             assert _values_equal(av, ev), (
                 f"data.{f.name}: {actual_tag}={av!r} ({type(av).__name__}) "
                 f"{expected_tag}={ev!r} ({type(ev).__name__})"

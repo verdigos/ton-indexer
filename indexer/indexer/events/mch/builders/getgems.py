@@ -1,11 +1,13 @@
-"""mch builder + shaper for the getgems_nft_purchase matcher (specs/getgems.mch).
+"""mch host fn + shaper for the getgems_nft_purchase matcher (specs/getgems.mch).
 
-Remake of blocks/nft.py GetgemsNftPurchaseBlockMatcher — see the spec header for
-why the corpus (non-proxy) shape is a plain `nft_transfer -> payout` child edge
-and why the finish/stop sale-contract branch rides on the shaper instead.
-
-The builder is a thin adapter over the shared core `build_getgems_nft_purchase_core`
-in blocks/nft.py — the same function the legacy matcher's thin wrapper calls.
+HYBRID declarative build (C++-runnable): the matcher has no `build` directive —
+the produced btype, the reject decision and the out-field mapping live in the
+.mch, and the imperative residue is the single host fn `getgems_nft_purchase_data`
+below. It delegates to the shared core `build_getgems_nft_purchase_core` in
+blocks/nft.py (the same function the legacy matcher's thin wrapper calls) and
+exposes the produced NftPurchaseData dataclass as a namespace the out{} reads.
+`null` from the core (no real_prev_owner / seller payout not found) drives
+`reject when d == null`.
 
 Two host predicates reproduce the legacy `test_self` (getgems_purchase) and the
 legacy seller-payout scan condition (getgems_seller_payout, restricted to the
@@ -17,6 +19,9 @@ EmptyBlock + `insert_between`, plus absorbing the sibling payout (which the
 pattern could not consume) at the same point legacy's single merge did.
 """
 from __future__ import annotations
+
+from dataclasses import fields as dc_fields
+from types import SimpleNamespace
 
 from indexer.events.blocks.basic_blocks import TonTransferBlock
 from indexer.events.blocks.core import Block, EmptyBlock
@@ -85,16 +90,22 @@ def register_getgems(reg: Registries) -> Registries:
             and block.get_message().destination == anchor.data.get("real_prev_owner")
         )
 
-    @reg.register_builder("build_getgems_nft_purchase")
-    async def build_getgems_nft_purchase(m):
-        # Data (incl. payout fields) comes from the seller ton_transfer; the
-        # legacy scan finds the same block @payout captured in the normal branch
-        # and the sibling in the finish/stop branch. The synthesized wrapper
-        # merges [anchor] + captured @payout (present only in the normal branch);
-        # the shaper adds the sibling payout in the finish/stop branch. Returns
-        # the unmerged block, or None to reject (spec §10.7).
-        payout = _find_seller_payout(m.nft)
-        return build_getgems_nft_purchase_core(m.nft, payout)
+    @reg.register_fn("getgems_nft_purchase_data")
+    async def getgems_nft_purchase_data(nft):
+        # Imperative residue: the seller-payout scan (normal child branch AND the
+        # finish/stop sibling branch) + the core field build. Data (incl. payout
+        # fields) comes from the seller ton_transfer. Returns a namespace mirroring
+        # NftPurchaseData for the out{} mapping, or None → `reject when d == null`.
+        # The consumed set (anchor + captured @payout in the normal branch, plus
+        # the sibling payout the shaper adds in the finish/stop branch) is the
+        # engine's / shaper's job, not this fn's.
+        payout = _find_seller_payout(nft)
+        block = build_getgems_nft_purchase_core(nft, payout)
+        if block is None:
+            return None
+        return SimpleNamespace(
+            **{f.name: getattr(block.data, f.name) for f in dc_fields(block.data)}
+        )
 
     @reg.register_shaper("getgems_proxy_insert")
     def getgems_proxy_insert(produced: Block, match) -> None:

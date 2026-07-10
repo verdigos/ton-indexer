@@ -48,10 +48,28 @@ opcode TgBTCMintSuccessLog = 0x77A80EF3
 
 matcher tgbtc_mint {
     produces TgBTCMintBlock
-    build    build_tgbtc_mint
+    shape    tgbtc_deploy_absorb
     entry    @head
 
     op TgBTCMintHead @head -> $mint_chain
+
+    # HYBRID declarative build (C++-runnable). The core (log parse, endian-hex
+    # bitcoin_txid, jetton_mint asset/wallet) is the one consumed-set-driven host
+    # fn; every produced field maps from its namespace. The ContractDeploy
+    # side-effect children ride on the shaper (see the builder module docstring).
+    let d = tgbtc_mint_data(consumed)
+    reject when d == null
+    out {
+        sender:            d.sender
+        recipient:         d.recipient
+        amount:            d.amount
+        asset:             d.asset
+        bitcoin_txid:      d.bitcoin_txid
+        success:           d.success
+        recipient_wallet:  d.recipient_wallet
+        teleport_contract: d.teleport_contract
+        crippled:          d.crippled
+    }
 }
 
 # Descend the trunk: each hop is any block that is not the tail; recursion

@@ -77,6 +77,10 @@ CASES = [
 ]
 
 _DEPOSIT_CLASSES = (DedustDepositLiquidity, DedustDepositLiquidityPartial)
+# The declarative mch build (dedust_deposit.mch) emits generic Blocks with
+# these btypes instead of the legacy class instances; the pairing pass and this
+# harness dispatch on btype (Wave-B: converted matchers assert btype not class).
+_DEPOSIT_BTYPES = ("dedust_deposit_liquidity", "dedust_deposit_liquidity_partial")
 
 
 def _load_trace(traces_dir: Path, filename: str):
@@ -119,7 +123,7 @@ async def _run_side(matchers: list[BlockMatcher], trace, prereqs=()) -> list[Blo
             result = await matcher.try_build(b)
             if result is not None:
                 produced.extend(result)
-    return [b for b in produced if isinstance(b, _DEPOSIT_CLASSES)]
+    return [b for b in produced if b.btype in _DEPOSIT_BTYPES]
 
 
 def _values_equal(a, b) -> bool:
@@ -145,7 +149,9 @@ def _assert_field_parity(
         f"{label} count mismatch: actual={len(actual)} reference={len(reference)}"
     )
     for a, r in zip(sorted(actual, key=_sort_key), sorted(reference, key=_sort_key)):
-        assert type(a) is type(r), f"{label} block class: {type(a)} vs {type(r)}"
+        # Block CLASS deliberately not compared: the declarative mch product is a
+        # generic Block, the legacy build a DedustDepositLiquidity[Partial]
+        # subclass — btype is the parity property (Wave-B).
         assert a.btype == r.btype, f"{label} btype: {a.btype} vs {r.btype}"
         assert a.failed == r.failed, f"{label} failed flag: {a.failed} vs {r.failed}"
         assert a.broken == r.broken, f"{label} broken flag: {a.broken} vs {r.broken}"
@@ -179,8 +185,8 @@ def _assert_field_parity(
 
 def _split(blocks: list[Block]) -> dict[str, list[Block]]:
     return {
-        "final": [b for b in blocks if isinstance(b, DedustDepositLiquidity)],
-        "partial": [b for b in blocks if isinstance(b, DedustDepositLiquidityPartial)],
+        "final": [b for b in blocks if b.btype == "dedust_deposit_liquidity"],
+        "partial": [b for b in blocks if b.btype == "dedust_deposit_liquidity_partial"],
     }
 
 

@@ -37,11 +37,37 @@ opcode AuctionFillUp        = 0x370FEC51
 
 matcher telegram_nft_purchase {
     produces NftTransferBlock
-    build    build_telegram_nft_purchase
     entry    @assigned
 
     op NftOwnershipAssigned @assigned
       <- btype ton_transfer @payment
       -> { op AuctionFillUp @payout_1
          ; maybe op AuctionFillUp @payout_2 }
+
+    # HYBRID declarative build (C++-runnable). The core (nft-data lookup, teleitem
+    # payload dispatch, payout ordering) is the one host fn; fields map from its
+    # namespace. Pattern requires a ton_transfer parent + >=1 AuctionFillUp payout
+    # => always the fragment purchase shape (is_purchase true, real_prev_owner
+    # present-null, one/two payouts) — so all but the royalty pair are plain; the
+    # royalty pair (2-payout only) is `?:` to match the legacy conditional keys.
+    let d = telegram_nft_purchase_data(assigned, payment, payout_1, payout_2)
+    reject when d == null
+    out {
+        is_purchase:          d.is_purchase
+        prev_owner:           d.prev_owner
+        new_owner:            d.new_owner
+        query_id:             d.query_id
+        forward_amount:       d.forward_amount
+        response_destination: d.response_destination
+        custom_payload:       d.custom_payload
+        forward_payload:      d.forward_payload
+        nft:                  d.nft
+        real_prev_owner:      d.real_prev_owner
+        price:                d.price
+        marketplace:          d.marketplace
+        payout_amount:        d.payout_amount
+        payout_address:       d.payout_address
+        royalty_amount?:      d.royalty_amount
+        royalty_address?:     d.royalty_address
+    }
 }

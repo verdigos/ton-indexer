@@ -15,11 +15,12 @@ NOT to be confused with builders/tonco.py — that one is tonco LIQUIDITY.
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from indexer.events.blocks.basic_blocks import CallContractBlock
 from indexer.events.blocks.core import Block
 from indexer.events.blocks.messages import JettonNotify, JettonTransfer, PTonTransfer
 from indexer.events.blocks.swaps import (
-    JettonSwapBlock,
     ToncoSwapBlockMatcher,
     build_tonco_swap_core,
 )
@@ -34,7 +35,7 @@ OPCODES = {
 }
 
 BLOCK_TYPES = {
-    "JettonSwapBlock": JettonSwapBlock,
+    "jetton_swap": Block,
 }
 
 
@@ -102,19 +103,26 @@ def _derive_parts(consumed: list[Block]):
             intermediate_transfers, intermediate_hop_triggers)
 
 
+async def _tonco_swap_data(consumed: list[Block]):
+    """Host residue of the tonco swap build (hybrid declarative spec). Derives
+    the legacy label roles from the consumed set (cyclic bodies bind no
+    captures) and delegates to build_tonco_swap_core; returns the jetton_swap
+    field record with the `failed` flag attached (the spec drives
+    `failed when r.failed`), or None to reject (spec §10.7)."""
+    core = await build_tonco_swap_core(*_derive_parts(consumed))
+    if core is None:
+        return None
+    new_block, _additional = core
+    record = SimpleNamespace(**new_block.data)
+    record.failed = new_block.failed
+    return record
+
+
 def register_tonco_swap(reg: Registries) -> Registries:
     """Register everything specs/tonco_swap.mch needs into `reg`."""
     reg.opcodes.update(OPCODES)
     reg.block_types.update(BLOCK_TYPES)
-
-    @reg.register_builder("build_tonco_swap")
-    async def build_tonco_swap(m):
-        core = await build_tonco_swap_core(*_derive_parts(m._mch_consumed))
-        if core is None:
-            return None
-        new_block, _additional = core
-        return new_block
-
+    reg.register_fn("tonco_swap_data")(_tonco_swap_data)
     return reg
 
 
