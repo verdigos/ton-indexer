@@ -118,6 +118,12 @@ std::string build_skip_reason(const CompiledMatcher &m) {
       missing_fns.push_back(fn);
     }
   }
+  std::vector<std::string> missing_shapers;
+  for (const std::string &s : m.ref_shapers) {
+    if (host_shapers().find(s) == host_shapers().end()) {
+      missing_shapers.push_back(s);
+    }
+  }
   std::string reason;
   auto add = [&reason](const std::string &tag, const std::vector<std::string> &names) {
     if (names.empty()) {
@@ -133,7 +139,7 @@ std::string build_skip_reason(const CompiledMatcher &m) {
   add("types", missing_types);
   add("lookups", missing_lookups);
   add("fns", missing_fns);
-  add("shaper", std::vector<std::string>(m.ref_shapers.begin(), m.ref_shapers.end()));
+  add("shaper", missing_shapers);
   return reason;  // empty == included
 }
 

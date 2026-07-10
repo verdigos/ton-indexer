@@ -19,6 +19,7 @@
 namespace mch {
 
 struct Block;   // BlockTree.h
+struct BlockArena;  // BlockTree.h
 struct BuildEnv;  // BuildRuntime.h
 
 using HostPredFn = bool (*)(const Block *);
@@ -38,5 +39,28 @@ using HostFn = EvalResult (*)(BuildEnv &, const std::vector<Value> &);
 // Registered host fns, name -> fn (names are the Python registry keys). The IR
 // loader / build_skip_reason gate a matcher's inclusion on this registry.
 const std::map<std::string, HostFn> &host_fns();
+
+// Host `shape` implementations (Python registries.shapers): a post-build
+// topology pass (spec §8.7). Python signature is `shaper(produced, match)`;
+// captured blocks are reached by name and an arena is needed to mint proxy
+// blocks (Python EmptyBlock() self-allocates; C++ blocks are arena-owned), so
+// both ride on ShaperMatch. No engine call site invokes shapers yet — no
+// matcher has both a build_program and a `shape` (getgems has a `shape` but is
+// builder-tier). Registered so build_skip_reason stops reporting a registered
+// shaper as a missing binding, and so the --shape-test harness can drive it.
+struct ShaperMatch {
+  std::map<std::string, Block *> captures;  // capture name -> block (or absent)
+  BlockArena *arena{nullptr};               // proxy-block allocation
+
+  Block *capture(const std::string &name) const {
+    auto it = captures.find(name);
+    return it == captures.end() ? nullptr : it->second;
+  }
+};
+
+using HostShaperFn = void (*)(Block *produced, const ShaperMatch &m);
+
+// Registered host shapers, name -> fn (names are the Python registry keys).
+const std::map<std::string, HostShaperFn> &host_shapers();
 
 }  // namespace mch

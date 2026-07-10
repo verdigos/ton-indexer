@@ -108,6 +108,7 @@ add_executable(ton-mch-engine
     src/MatchRunner.cpp
     src/HostRegistry.cpp
     src/host/HostCommon.cpp
+    src/host/HostGetgems.cpp
     src/host/HostNominator.cpp
     src/host/HostEvaa.cpp
     src/host/HostDedust.cpp
@@ -119,6 +120,7 @@ add_executable(ton-mch-engine
     src/BuildDriver.cpp
     src/BuildSmoke.cpp
     src/Classify.cpp
+    src/ShapeTest.cpp
     src/MsgParse.cpp
     src/parse/PSlice.cpp
     src/parse/ParseJettons.cpp

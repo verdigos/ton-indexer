@@ -40,4 +40,11 @@ const std::map<std::string, HostPredFn> &host_predicates() {
   return preds;
 }
 
+const std::map<std::string, HostShaperFn> &host_shapers() {
+  static const std::map<std::string, HostShaperFn> shapers = {
+      {"getgems_proxy_insert", getgems_proxy_insert},
+  };
+  return shapers;
+}
+
 }  // namespace mch

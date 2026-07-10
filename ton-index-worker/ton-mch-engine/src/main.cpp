@@ -17,6 +17,7 @@
 #include "BuildVectorRunner.h"
 #include "MatchRunner.h"
 #include "MsgParse.h"
+#include "ShapeTest.h"
 #include "TraceLoader.h"
 #include "VectorRunner.h"
 
@@ -143,6 +144,7 @@ int main(int argc, char *argv[]) {
   bool build_smoke_mode = false;
   bool classify_mode = false;
   bool parse_dump_mode = false;
+  bool shape_test_mode = false;
   std::vector<std::string> trace_paths;
 
   td::OptionParser p;
@@ -171,6 +173,9 @@ int main(int argc, char *argv[]) {
                [&]() { classify_mode = true; });
   p.add_option('\0', "parse-dump", "Message-parse dump: -T <fixture|dir> (repeatable)",
                [&]() { parse_dump_mode = true; });
+  p.add_option('\0', "shape-test",
+               "Shaper substrate self-test (Block::insert_between + getgems_proxy_insert)",
+               [&]() { shape_test_mode = true; });
   p.add_option('\0', "help", "prints help", [&]() {
     char b[10240];
     td::StringBuilder sb(td::MutableSlice{b, 10000});
@@ -234,6 +239,11 @@ int main(int argc, char *argv[]) {
   if (parse_dump_mode) {
     // Message-parse dump mode: no actor scheduler needed.
     return mch::run_parse_dump(trace_paths);
+  }
+
+  if (shape_test_mode) {
+    // Shaper substrate self-test: no actor scheduler needed.
+    return mch::run_shape_test();
   }
 
   td::actor::Scheduler scheduler({threads});

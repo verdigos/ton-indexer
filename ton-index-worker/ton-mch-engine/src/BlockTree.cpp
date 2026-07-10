@@ -135,6 +135,45 @@ void Block::compact_connections() {
   sort_next_blocks();
 }
 
+void Block::insert_between(const std::vector<Block *> &targets, Block *new_block) {
+  // Rewire grandchild edges: any child of this block whose next_blocks holds a
+  // target has that edge redirected to new_block. Python removes the first
+  // occurrence and appends new_block per (child, target) hit — mirror exactly
+  // (a child can end up with new_block appended more than once).
+  for (Block *child : children_blocks) {
+    for (Block *t : targets) {
+      auto &nb = child->next_blocks;
+      auto it = std::find(nb.begin(), nb.end(), t);
+      if (it != nb.end()) {
+        nb.erase(it);
+        nb.push_back(new_block);
+      }
+    }
+  }
+  // Drop every target from this block's next_blocks.
+  std::unordered_set<const Block *> target_set(targets.begin(), targets.end());
+  std::vector<Block *> kept;
+  kept.reserve(next_blocks.size());
+  for (Block *n : next_blocks) {
+    if (target_set.count(n) == 0) {
+      kept.push_back(n);
+    }
+  }
+  next_blocks = std::move(kept);
+  // Reparent each target's children that pointed back at the target.
+  for (Block *t : targets) {
+    for (Block *child : t->children_blocks) {
+      if (child->previous_block == t) {
+        child->previous_block = new_block;
+      }
+    }
+  }
+  connect(new_block);
+  for (Block *t : targets) {
+    new_block->connect(t);
+  }
+}
+
 std::vector<Block *> Block::find_frontier(const std::vector<Block *> &in_set) const {
   std::unordered_set<const Block *> set(in_set.begin(), in_set.end());
   std::deque<Block *> queue(next_blocks.begin(), next_blocks.end());

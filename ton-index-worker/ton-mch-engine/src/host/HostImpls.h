@@ -13,6 +13,11 @@ namespace mch {
 
 struct Block;     // BlockTree.h
 struct BuildEnv;  // BuildRuntime.h
+struct ShaperMatch;  // HostRegistry.h
+
+// Getgems (HostGetgems.cpp): the getgems_proxy_insert shaper only (the match
+// predicates land with the matcher's future Python declarative conversion).
+void getgems_proxy_insert(Block *produced, const ShaperMatch &m);
 
 // Nominator (HostNominator.cpp).
 bool nominator_pool_withdraw_parent(const Block *b);
