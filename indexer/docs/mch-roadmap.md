@@ -196,7 +196,7 @@ Accept: both tests green; zero extraction-phase test_self events in walk-compare
 
 Origin: the 2026-07-04 port wave + follow-up taxonomy classified every matcher the port wave could not express. Verdict (user, 2026-07-04): most are *workarounds around legacy-engine limits*, not domain requirements — remake them in the mch paradigm instead of porting the hacks.
 
-**Remake gate (binding, user decision 2026-07-04):** the internal pattern/walk may differ freely from legacy, but OUTPUT must be identical — produced block btype, `data` (field-level), `failed`/`broken`, `value_flow`, consumed event-node set, **and block topology** (`children_blocks`/`next_blocks` exactly as `serialize_blocks` sees them) — the action hierarchy derives from topology, so block parity is not optional.
+**Remake gate (binding, user decision 2026-07-04; amended 2026-07-07):** the internal pattern/walk may differ freely from legacy, but OUTPUT must be identical — produced block btype, `data` (field-level), `failed`/`broken`, ~~`value_flow`~~, consumed event-node set, **and block topology** (`children_blocks`/`next_blocks` exactly as `serialize_blocks` sees them) — the action hierarchy derives from topology, so block parity is not optional. **`value_flow` DROPPED from the gate (2026-07-07):** it is not persisted to the DB and the Go API computes flows separately; `flow` (spec §9.8) is slated for removal from the language and the C++ engine never produces value_flow. See docs/mch-cpp-plan.md §7.
 
 Acceptance convention for every R-task below (in addition to per-task Accept):
 1. Three-way parity: legacy == compiled path == v2 IR engine, on every fixture.

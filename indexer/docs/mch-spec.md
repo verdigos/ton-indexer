@@ -633,7 +633,7 @@ Build statements run in three engine-driven phases:
 
 This removes async interleaving as a source of cross-host divergence and improves throughput (one await instead of N).
 
-### 9.8 `flow KIND(args)`
+### 9.8 `flow KIND(args)` — **TODO: REMOVE FROM THE LANGUAGE (user decision 2026-07-07)**
 
 Records value-flow effects on the produced block (mirrors `AccountValueFlow`):
 
@@ -642,6 +642,14 @@ flow jetton(owner_expr, master_expr, amount_expr)
 flow ton(account_expr, amount_expr)
 flow fees(account_expr, amount_expr)
 ```
+
+**Scheduled for removal.** `AccountValueFlow` is not persisted to the database, and the Go API
+computes value flows separately at its own endpoint — no consumer reads the block-level
+`value_flow` the mch engine would produce. `flow` is therefore dead weight: the C++ engine will
+never execute it (Phase E does not port `AccountValueFlow`), and `value_flow` is dropped from
+the parity gate. The statement is to be deleted from the grammar / AST / resolver / IR emit and
+the C++ FlowOp plumbing. Until that cleanup lands the frontend may keep parsing it as a no-op.
+Do not add new `flow` statements to specs.
 
 ### 9.9 `omit @CAPTURE when expr` — **DROPPED (not implemented)**
 

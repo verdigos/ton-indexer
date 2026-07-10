@@ -191,11 +191,21 @@ Port Python host bindings to C++, registered in a `HostRegistry` (name → fn) t
    parity tests).
 Gate: each binding flips its matcher from the skip table into the classify A/B with diff 0.
 
-## 7. Phase E — value flows + post-processing + serializer boundary
+## 7. Phase E — post-processing + serializer boundary
 
-1. `AccountValueFlow` port (blocks/core.py) + `flow` statement execution + merge propagation.
-   Gate: extend classify dump with value_flow, A/B 0 diff.
-2. Host post-process passes: `post_process_dedust_liquidity` + `post_process_stonfi_v2_liquidity`
+> **`flow` / value-flow DROPPED (user decision 2026-07-07).** `AccountValueFlow` is NOT
+> persisted to the DB, and the Go API computes value flows a different way at a separate
+> endpoint — so the C++ engine never needs to produce it. Consequences:
+> - Phase E does NOT port `AccountValueFlow` and does NOT execute `flow` statements.
+> - `value_flow` is REMOVED from the remake/parity gate (roadmap M2R gate + all A/B classify
+>   dumps) — nothing downstream reads it.
+> - `flow KIND(args)` (spec §9.8) is marked **TODO: remove from the language entirely** —
+>   drop the statement from lexer/parser/AST/resolver/IR-emit and the C++ BuildRuntime FlowOp
+>   plumbing. Until that cleanup lands, the frontend may keep parsing `flow` as a no-op; the
+>   C++ engine ignores emitted FlowOps. No spec/matcher depends on its effect.
+> This materially shrinks Phase E — it becomes post-process passes + the serializer boundary.
+
+1. Host post-process passes: `post_process_dedust_liquidity` + `post_process_stonfi_v2_liquidity`
    (pairing/merge surgery — port from `indexer/indexer/events/blocks/liquidity.py`; these run
    AFTER matching, before serialization; they are host-side BY DESIGN, not DSL features).
 3. Serializer boundary decision (user input needed): C++ Action production (port
