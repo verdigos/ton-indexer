@@ -26,6 +26,13 @@ std::string render_value(const Value &v);
 // computes the identical set from the artifact + the same fixed lists.
 std::string build_skip_reason(const CompiledMatcher &m);
 
+// One-shot startup diagnostic (§4.4): every message type any matcher's
+// build_program references via `parse` that is ABSENT from message_parsers().
+// Such a gap silently forces a `types:` build skip; surfacing it on stderr
+// makes a missing-parser artifact loud. Stderr only — never touches the
+// stdout dump the A/B gate compares.
+void warn_missing_artifact_parsers(const LoadedIr &ir);
+
 // MatchResult captures -> slot values in slot-declaration order
 // (scalar: Block/Null; many: List with Null gaps).
 std::vector<Value> slots_from_captures(const std::vector<Capture> &captures);

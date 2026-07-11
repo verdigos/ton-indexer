@@ -1,6 +1,7 @@
 #include "ExprCodegen.h"
 
 #include <cctype>
+#include <cstdio>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -515,6 +516,7 @@ std::string sanitize_ident(const std::string &s) {
 std::string cstr(const std::string &s) {
   std::string out = "\"";
   for (char ch : s) {
+    auto uc = static_cast<unsigned char>(ch);
     if (ch == '\\') {
       out += "\\\\";
     } else if (ch == '"') {
@@ -525,6 +527,15 @@ std::string cstr(const std::string &s) {
       out += "\\t";
     } else if (ch == '\r') {
       out += "\\r";
+    } else if (uc < 0x20 || uc == 0x7f) {
+      // Every other control byte (incl. NUL — a real past bug) as a 3-digit
+      // octal escape. Octal is used instead of \x because \x greedily consumes
+      // ALL following hex digits: `\x0` before a literal 'a' would parse as
+      // \x0a. A 3-digit octal escape reads at most 3 digits, so an adjacent
+      // digit can never extend it.
+      char buf[5];
+      std::snprintf(buf, sizeof(buf), "\\%03o", uc);
+      out += buf;
     } else {
       out += ch;
     }

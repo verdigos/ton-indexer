@@ -51,6 +51,7 @@ int run_build_smoke(const std::string &artifact_path, const std::vector<std::str
     return 2;
   }
   LoadedIr ir = r_ir.move_as_ok();
+  warn_missing_artifact_parsers(ir);
 
   const char *table_kind = nullptr;
   const std::vector<GenBuild> *table = select_gen_builds(ir.source_sha256, &table_kind);

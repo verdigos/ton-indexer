@@ -21,8 +21,9 @@
 
 namespace mch_codegen {
 
-// C++ string-literal body (escaped): the exact escaping the Python generator
-// used (\\ \" \n \t \r).
+// C++ string-literal body (escaped): \\ \" \n \t \r, plus every other control
+// byte (< 0x20 and 0x7F, NUL included) as a 3-digit octal escape so an adjacent
+// digit cannot extend it (the \x greedy-hex hazard). Verified by `--selftest`.
 std::string cstr(const std::string &s);
 
 // Emit one `EvalResult <fn_name>(const mch::Env&, const mch::Lookups&)` from an

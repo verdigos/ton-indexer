@@ -58,6 +58,34 @@ int fail(const std::string &msg) {
   return 2;
 }
 
+// Escape-hardening self-test (§8.7): the string-literal emitter must render
+// EVERY control byte safely and adjacency-proof. A known past bug emitted a raw
+// NUL; a naive `\x` escape also mis-parses before an adjacent hex digit.
+int run_selftest() {
+  int failures = 0;
+  auto expect = [&](const std::string &name, const std::string &got, const std::string &want) {
+    if (got != want) {
+      std::fprintf(stderr, "FAIL %s: got %s want %s\n", name.c_str(), got.c_str(), want.c_str());
+      failures++;
+    }
+  };
+  using mch_codegen::cstr;
+  expect("plain", cstr("abc"), "\"abc\"");
+  expect("quote_backslash", cstr("a\"b\\c"), "\"a\\\"b\\\\c\"");
+  expect("named_ctrl", cstr("a\nb\tc\rd"), "\"a\\nb\\tc\\rd\"");
+  // NUL followed by an ASCII digit: octal keeps them separate (\000 then '7').
+  expect("nul_then_digit", cstr(std::string("\0" "7", 2)), "\"\\0007\"");
+  // Bare NUL and other low control bytes -> 3-digit octal.
+  expect("bare_nul", cstr(std::string("\0", 1)), "\"\\000\"");
+  expect("byte_0x01", cstr(std::string("\x01", 1)), "\"\\001\"");
+  expect("byte_0x1f", cstr(std::string("\x1f", 1)), "\"\\037\"");
+  expect("del_0x7f", cstr(std::string("\x7f", 1)), "\"\\177\"");
+  // Bytes >= 0x20 (and < 0x7f) pass through unescaped.
+  expect("high_printable", cstr("~ "), "\"~ \"");
+  std::fprintf(stderr, "mch-codegen selftest: %s\n", failures == 0 ? "ALL PASS" : "FAILURES");
+  return failures == 0 ? 0 : 1;
+}
+
 }  // namespace
 
 int main(int argc, char *argv[]) {
@@ -68,7 +96,9 @@ int main(int argc, char *argv[]) {
   std::string out_path;
   for (int i = 1; i < argc; i++) {
     std::string a = argv[i];
-    if (a == "--vectors" && i + 1 < argc) {
+    if (a == "--selftest") {
+      return run_selftest();
+    } else if (a == "--vectors" && i + 1 < argc) {
       vectors_path = argv[++i];
     } else if (a == "--wheres" && i + 1 < argc) {
       wheres_path = argv[++i];

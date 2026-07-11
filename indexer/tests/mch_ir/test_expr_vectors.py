@@ -43,6 +43,8 @@ def _decode(v):
     if isinstance(v, dict):
         if "$amount" in v:
             return Amount(v["$amount"])
+        if "$amount_float" in v:
+            return Amount(float(v["$amount_float"]))  # render-only; faults at use
         if "$account" in v:
             return AccountId(v["$account"])          # null -> addr_none
         if "$asset_ton" in v:

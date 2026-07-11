@@ -6,7 +6,9 @@
 #include "ShapeTest.h"
 
 #include "BlockTree.h"
+#include "BuildRuntime.h"
 #include "HostRegistry.h"
+#include "Value.h"
 #include "host/HostImpls.h"
 
 #include <algorithm>
@@ -119,12 +121,44 @@ void test_getgems_proxy_insert() {
   check("getgems/proxy_absorbed", proxy_absorbed);
 }
 
+// §4.1: the typed lookup key must not collide across structurally distinct
+// requests. Each pair below collided under the old NUL-concatenation scheme.
+void test_lookup_key() {
+  const std::string embedded_nul("a\0b", 3);
+  // Embedded NUL in one string vs two separate strings.
+  check("lookup_key/embedded_nul_vs_two_args",
+        lookup_key("k", {Value::make_str(embedded_nul)}) !=
+            lookup_key("k", {Value::make_str("a"), Value::make_str("b")}));
+  // Same textual payload, different Value type (Str vs Account).
+  const std::string addr = "0:" + std::string(64, 'A');
+  check("lookup_key/str_vs_account",
+        lookup_key("k", {Value::make_str(addr)}) !=
+            lookup_key("k", {Value::make_account_raw(addr)}));
+  // Same textual payload, different Value type (Str vs Bytes).
+  check("lookup_key/str_vs_bytes",
+        lookup_key("k", {Value::make_str("xy")}) !=
+            lookup_key("k", {Value::make_bytes("xy")}));
+  // Arity boundary: "kind + one arg" vs "kind-with-suffix + no args" cannot
+  // alias, and matching payloads at different arities stay distinct.
+  check("lookup_key/arity_distinct",
+        lookup_key("k", {Value::make_str("a")}) != lookup_key("k", {}));
+  // Kind boundary: a kind whose tail equals the next arg's head must not merge.
+  check("lookup_key/kind_arg_boundary",
+        lookup_key("ka", {Value::make_str("b")}) !=
+            lookup_key("k", {Value::make_str("ab")}));
+  // Determinism: identical requests produce identical keys.
+  check("lookup_key/deterministic",
+        lookup_key("k", {Value::make_str(addr)}) ==
+            lookup_key("k", {Value::make_str(addr)}));
+}
+
 }  // namespace
 
 int run_shape_test() {
   g_fail = 0;
   test_insert_between();
   test_getgems_proxy_insert();
+  test_lookup_key();
   std::printf("SHAPE-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }

@@ -178,6 +178,11 @@ def _eq_result(op: str, left: Any, right: Any) -> bool:
     """`==` / `!=` with structural null handling (never calls user __eq__ on None)."""
     if left is None or right is None:
         eq = left is None and right is None
+    elif (isinstance(left, Amount) and isinstance(left.value, float)) or \
+            (isinstance(right, Amount) and isinstance(right.value, float)):
+        # The language has no floats — comparing a float-backed Amount faults
+        # (§4.2, C++ parity) rather than silently comparing float values.
+        raise EvalError("'==' on a float-backed Amount (the language has no floats)")
     else:
         try:
             eq = bool(left == right)
@@ -219,6 +224,9 @@ def _arith_int(v: Any) -> int:
     sum()'s coercion so `a.msg.value - b.msg.value` works whether the envelope
     value is an int or an Amount."""
     if isinstance(v, Amount):
+        if isinstance(v.value, float):
+            raise EvalError(
+                "arithmetic operand is a float-backed Amount (the language has no floats)")
         return v.value
     if isinstance(v, bool):
         raise EvalError("arithmetic operand must be an integer, got bool")
@@ -324,6 +332,11 @@ def _access(obj: Any, field: str, bodies: dict[int, Any]) -> Any:
         # Amount carries `num` — mirrors it with a fixed accessor. `Amount(None)`
         # carries `value is None`, so `.value` yields null there.
         if field == "value":
+            if isinstance(obj.value, float):
+                # The language has no floats; a float-backed Amount (getgems
+                # price) is render-only, so `.value` faults instead of leaking
+                # a float into an integer output field (§4.2, C++ parity).
+                raise EvalError("`.value` on a float-backed Amount (the language has no floats)")
             return obj.value
         raise EvalError(f"unknown Amount accessor {field!r} (expected value)")
     if field == "exit_code":

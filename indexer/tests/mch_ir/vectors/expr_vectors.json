@@ -418,6 +418,78 @@
    }
   },
   {
+   "name": "amount_float_value_fault",
+   "src": "a.value",
+   "expr": {
+    "k": "attr",
+    "of": {
+     "k": "name",
+     "id": "a"
+    },
+    "name": "value"
+   },
+   "env": {
+    "a": {
+     "$amount_float": 1.5
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "amount_float_eq_fault",
+   "src": "a == b",
+   "expr": {
+    "k": "bin",
+    "op": "==",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": {
+     "$amount_float": 1.5
+    },
+    "b": {
+     "$amount": 1
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "amount_float_arith_fault",
+   "src": "a + b",
+   "expr": {
+    "k": "bin",
+    "op": "+",
+    "l": {
+     "k": "name",
+     "id": "a"
+    },
+    "r": {
+     "k": "name",
+     "id": "b"
+    }
+   },
+   "env": {
+    "a": {
+     "$amount_float": 1.5
+    },
+    "b": 1
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
    "name": "asset_jetton",
    "src": "asset(a)",
    "expr": {

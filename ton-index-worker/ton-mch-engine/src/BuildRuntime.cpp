@@ -114,23 +114,47 @@ EvalResult rt_access_build(const BuildEnv &env, const Value &obj, const std::str
 // --- two-phase lookup runtime (B2) -------------------------------------------
 
 std::string lookup_key(const std::string &kind, const std::vector<Value> &args) {
-  std::string key = kind;
+  // Type-tagged + length-prefixed encoding (§4.1). NUL-concatenation was
+  // ambiguous — an embedded NUL in a payload, a differing arity, or the same
+  // text carried by two different Value types could all collapse to the same
+  // key and cross-wire a fetched lookup result. Here every segment is framed
+  // as `<tag><decimal-len>:<payload>`, so no payload byte (NUL included) can
+  // be mistaken for a separator and no two structurally distinct requests
+  // share a key. The kind and the arg count are framed too.
+  auto frame = [](std::string &out, char tag, const std::string &payload) {
+    out += tag;
+    out += std::to_string(payload.size());
+    out += ':';
+    out += payload;
+  };
+  std::string key;
+  frame(key, 'K', kind);
+  key += 'n';
+  key += std::to_string(args.size());
+  key += ';';
   for (const Value &a : args) {
-    key += static_cast<char>(0);
     switch (a.t) {
       case VType::Str:
+        frame(key, 's', a.str);
+        break;
       case VType::Bytes:
-        key += a.str;
+        frame(key, 'b', a.str);
         break;
       case VType::Account:
-        key += a.addr_none ? "addr_none" : a.str;
+        if (a.addr_none) {
+          key += "a-;";  // addr_none: a distinct, payload-free tag
+        } else {
+          frame(key, 'a', a.str);
+        }
         break;
       case VType::Int:
+        frame(key, 'i', a.num.is_null() ? "nan" : a.num->to_dec_string());
+        break;
       case VType::Amount:
-        key += a.num.is_null() ? "nan" : a.num->to_dec_string();
+        frame(key, 'm', a.num.is_null() ? "nan" : a.num->to_dec_string());
         break;
       default:
-        key += a.describe();
+        frame(key, '?', a.describe());
     }
   }
   return key;

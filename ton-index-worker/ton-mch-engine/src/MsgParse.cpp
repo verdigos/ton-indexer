@@ -26,6 +26,9 @@
 #include "td/utils/base64.h"
 #include "vm/boc.h"
 #include "vm/cellslice.h"
+#include "vm/excno.hpp"
+
+#include <exception>
 
 #include <algorithm>
 #include <cstdio>
@@ -49,6 +52,7 @@ const std::map<std::string, MsgParserFn> &message_parsers() {
       {"ChangeDnsRecordMessage", parse_change_dns},
       {"VestingSendMessage", parse_vesting_send_message},
       {"PTonTransfer", parse_pton_transfer},
+      {"StonfiV2ProvideLiquidity", parse_stonfi_v2_provide_liquidity},
       {"DedustPayoutFromPool", parse_dedust_payout_from_pool},
       {"DedustSwapNotification", parse_dedust_swap_notification},
       {"CoffeeCreateVault", parse_coffee_create_vault},
@@ -68,10 +72,22 @@ td::Result<Value> parse_message_body(const std::string &type_name, const td::Ref
   if (it == message_parsers().end()) {
     return td::Status::Error(PSLICE() << "message type " << type_name << " is not registered");
   }
+  // Soft-parse (§5.4): a malformed body must reduce to a clean parse failure,
+  // but only for the exception kinds a parser legitimately raises — cell VM
+  // errors and std::exception subclasses (out_of_range/logic_error from the
+  // hand-written tails). Anything else (bad_alloc, unknown host faults) is an
+  // infrastructure failure and propagates to the trace-level handler rather
+  // than being misclassified as an ordinary parse mismatch.
   try {
     return it->second(body);
-  } catch (...) {
-    return td::Status::Error("parse threw");
+  } catch (const vm::VmError &e) {
+    return e.as_status("parse threw: ");
+  } catch (const vm::VmVirtError &) {
+    return td::Status::Error("parse threw: vm virtualization error");
+  } catch (const vm::VmNoGas &) {
+    return td::Status::Error("parse threw: out of gas");
+  } catch (const std::exception &e) {
+    return td::Status::Error(PSLICE() << "parse threw: " << e.what());
   }
 }
 
@@ -103,6 +119,7 @@ constexpr DumpType kDumpTypes[] = {
     {0x4eb1f0f9, "ChangeDnsRecordMessage"},
     {0xa7733acd, "VestingSendMessage"},
     {0x01f3835d, "PTonTransfer"},
+    {0x37c096df, "StonfiV2ProvideLiquidity"},
     {0xad4eb6f5, "DedustPayoutFromPool"},
     {0x9c610de3, "DedustSwapNotification"},
     {0xc0ffee06, "CoffeeCreateVault"},

@@ -79,6 +79,13 @@ _V: list[tuple] = [
     ("amount_value", "a.value", {"a": {"$amount": 50}}, 50),
     ("amount_value_null", "a.value", {"a": {"$amount": None}}, None),
     ("amount_value_bad_accessor_fault", "a.foo", {"a": {"$amount": 50}}, FAULT),
+    # Float-backed Amount (render-only, getgems price): the language has no
+    # floats, so any USE faults — `.value` unwrap, `==`, arithmetic (§4.2).
+    ("amount_float_value_fault", "a.value", {"a": {"$amount_float": 1.5}}, FAULT),
+    ("amount_float_eq_fault", "a == b",
+     {"a": {"$amount_float": 1.5}, "b": {"$amount": 1}}, FAULT),
+    ("amount_float_arith_fault", "a + b",
+     {"a": {"$amount_float": 1.5}, "b": 1}, FAULT),
     ("asset_jetton", "asset(a)", {"a": RAW}, {"$asset_jetton": RAW}),
     ("ton_asset", "ton_asset()", {}, {"$asset_ton": True}),
     ("b64_bytes", "b64(a)", {"a": {"$bytes_b64": _SOME_BYTES_B64}}, _SOME_BYTES_B64),

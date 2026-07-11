@@ -29,6 +29,9 @@ td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body);
 // pTON family (ParsePton.cpp).
 td::Result<Value> parse_pton_transfer(const td::Ref<vm::Cell> &body);
 
+// Ston.fi v2 family (ParseStonfi.cpp).
+td::Result<Value> parse_stonfi_v2_provide_liquidity(const td::Ref<vm::Cell> &body);
+
 // DeDust family (ParseDedust.cpp).
 td::Result<Value> parse_dedust_payout_from_pool(const td::Ref<vm::Cell> &body);
 td::Result<Value> parse_dedust_swap_notification(const td::Ref<vm::Cell> &body);

@@ -8,6 +8,7 @@
 #include "td/utils/base64.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <map>
 #include <stdexcept>
 
@@ -159,6 +160,30 @@ std::string build_skip_reason(const CompiledMatcher &m) {
   add("fns", missing_fns);
   add("shaper", missing_shapers);
   return reason;  // empty == included
+}
+
+void warn_missing_artifact_parsers(const LoadedIr &ir) {
+  const auto &parsers = message_parsers();
+  std::set<std::string> missing;
+  for (const CompiledMatcher &m : ir.matchers) {
+    for (const std::string &t : m.ref_msgtypes) {
+      if (parsers.find(t) == parsers.end()) {
+        missing.insert(t);
+      }
+    }
+  }
+  if (missing.empty()) {
+    return;
+  }
+  std::string joined;
+  for (const std::string &t : missing) {
+    if (!joined.empty()) joined += ", ";
+    joined += t;
+  }
+  std::fprintf(stderr,
+               "WARNING: artifact references %zu message type(s) with no registered C++ parser "
+               "(matchers that parse them will be build-skipped): %s\n",
+               missing.size(), joined.c_str());
 }
 
 std::vector<Value> slots_from_captures(const std::vector<Capture> &captures) {

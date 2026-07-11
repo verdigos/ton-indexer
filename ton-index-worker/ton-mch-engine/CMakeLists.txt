@@ -133,6 +133,7 @@ add_executable(ton-mch-engine
     src/parse/ParseDns.cpp
     src/parse/ParseVesting.cpp
     src/parse/ParsePton.cpp
+    src/parse/ParseStonfi.cpp
     src/parse/ParseDedust.cpp
     src/parse/ParseCoffee.cpp
     src/parse/ParseEvaa.cpp
@@ -157,3 +158,19 @@ target_link_libraries(ton-mch-engine tondb-scanner lz4::lz4)
 add_dependencies(ton-mch-engine mch_generate_sources)
 
 install(TARGETS ton-mch-engine RUNTIME DESTINATION bin)
+
+# --- CTest wiring (§10.1) ------------------------------------------------------
+# The deterministic, self-contained gate modes as native tests (`ctest -R mch`).
+# The differential A/B gates (parse-dump / classify vs the Python twins) stay
+# OUT — they need the fixture corpus and Python and are run from the harness.
+enable_testing()
+add_test(NAME mch_expr_vectors
+    COMMAND ton-mch-engine --vectors ${CMAKE_CURRENT_SOURCE_DIR}/ir/expr_vectors.json)
+add_test(NAME mch_expr_vectors_gen
+    COMMAND ton-mch-engine --vectors-gen ${CMAKE_CURRENT_SOURCE_DIR}/ir/expr_vectors.json)
+add_test(NAME mch_build_vectors
+    COMMAND ton-mch-engine --build-vectors ${CMAKE_CURRENT_SOURCE_DIR}/ir/build_vectors.json)
+add_test(NAME mch_shape_test
+    COMMAND ton-mch-engine --shape-test)
+add_test(NAME mch_codegen_selftest
+    COMMAND mch-codegen --selftest)

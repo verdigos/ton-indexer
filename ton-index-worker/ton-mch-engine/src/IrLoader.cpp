@@ -99,13 +99,17 @@ std::vector<int> edge_refs(const Json &rec) {
   return out;
 }
 
-NodeKind parse_kind(const std::string &k) {
+// Fail closed on an unrecognized kind: an unknown/typo'd kind must NOT
+// silently degrade to the permissive `any` wildcard (§8.1) — that would make
+// a corrupt artifact match more blocks than authored.
+td::Result<NodeKind> parse_kind(const std::string &k) {
   if (k == "contract") return NodeKind::Contract;
   if (k == "block_type") return NodeKind::BlockType;
   if (k == "pred") return NodeKind::Pred;
   if (k == "or") return NodeKind::Or;
   if (k == "recursive") return NodeKind::Recursive;
-  return NodeKind::Any;
+  if (k == "any") return NodeKind::Any;
+  return td::Status::Error("unknown node kind '" + k + "'");
 }
 
 // Recursively collect host-fn / lookup / parse-type names from a build_program
@@ -226,8 +230,15 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
   }
 
   // Reachable subgraph remapped to local ids (root = 0), discovery order over
-  // edge_refs — mirrors IrMatcher.__init__.
+  // edge_refs — mirrors IrMatcher.__init__. A missing or out-of-range root is
+  // a corrupt artifact, not a default-to-node-0 (§8.1 fail-closed).
+  if (!has(rec, "root")) {
+    return td::Status::Error("matcher " + m.name + ": missing 'root'");
+  }
   int root = static_cast<int>(jint(rec, "root"));
+  if (root < 0 || root >= static_cast<int>(pool.size())) {
+    return td::Status::Error("matcher " + m.name + ": root index out of range");
+  }
   std::vector<int> order{root};
   std::unordered_map<int, int> remap{{root, 0}};
   std::size_t qi = 0;
@@ -249,7 +260,8 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     const Json &nrec = *pool[old];
     CompiledNode cn;
     cn.global_id = old;
-    cn.kind = parse_kind(jstr(nrec, "kind"));
+    TRY_RESULT(kind, parse_kind(jstr(nrec, "kind")));
+    cn.kind = kind;
     if (has(nrec, "opcode")) {
       cn.opcode = static_cast<std::uint32_t>(jint(nrec, "opcode") & 0xFFFFFFFF);
       cn.has_opcode = true;
@@ -347,6 +359,11 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
 
   m.include_excess = jbool(rec, "include_excess", true);
   m.include_bounces = jbool(rec, "include_bounces", true);
+  // A present-but-non-numeric priority is corruption, not a silent default-100
+  // (§8.1): absence still defaults to 100 (matches the Python frontend).
+  if (const Json *pf = jfield(rec, "priority"); pf != nullptr && pf->type() != JType::Number) {
+    return td::Status::Error("matcher " + m.name + ": 'priority' must be a number");
+  }
   m.priority = static_cast<int>(jint(rec, "priority", 100));
   if (has(rec, "builder")) {
     m.ref_builders.insert(jstr(rec, "builder"));
@@ -466,8 +483,24 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
   // registration_order (default: identity), then stable-sort by priority.
   std::vector<int> reg_order;
   if (const Json *ro = jfield(root, "registration_order"); ro != nullptr && ro->type() == JType::Array) {
+    // Must be a permutation of [0, matchers): a stray/out-of-range/duplicate
+    // index would index compiled[] out of bounds (or drop a matcher) during
+    // the priority sort below — fail closed (§8.1) instead.
+    std::vector<bool> seen(compiled.size(), false);
     for (const auto &mi : ro->get_array()) {
-      reg_order.push_back(static_cast<int>(std::stoll(mi.get_number().str())));
+      TRY_RESULT(idx64, num_i64(mi));
+      int idx = static_cast<int>(idx64);
+      if (idx < 0 || idx >= static_cast<int>(compiled.size())) {
+        return td::Status::Error("registration_order index out of range");
+      }
+      if (seen[idx]) {
+        return td::Status::Error("registration_order has a duplicate index");
+      }
+      seen[idx] = true;
+      reg_order.push_back(idx);
+    }
+    if (reg_order.size() != compiled.size()) {
+      return td::Status::Error("registration_order must list every matcher exactly once");
     }
   } else {
     for (int i = 0; i < static_cast<int>(compiled.size()); i++) {

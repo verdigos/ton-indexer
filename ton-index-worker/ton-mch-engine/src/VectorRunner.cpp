@@ -81,6 +81,11 @@ Value decode(const Json &e) {
     }
     return Value::make_amount(td::dec_string_to_int256(v->get_number().str()));
   }
+  if (has_tag(e, "$amount_float")) {
+    // A render-only float-backed Amount (getgems price); faults at use (§4.2).
+    const auto *v = jfield(e, "$amount_float");
+    return Value::make_amount_float(v != nullptr ? std::stod(v->get_number().str()) : 0.0);
+  }
   if (has_tag(e, "$account")) {
     const Json *a = jfield(e, "$account");
     if (a->type() == JType::Null) {
