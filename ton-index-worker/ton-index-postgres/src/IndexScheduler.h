@@ -12,6 +12,7 @@
 #include "DataParser.h"
 #include "smc-interfaces/InterfacesDetector.h"
 #include "Otel.h"
+#include "MchClassifierActor.h"  // mch-classify: shadow classification (Phase G)
 
 using Detector = InterfacesDetector<JettonWalletDetectorR, JettonMasterDetectorR,
                                       NftItemDetectorR, NftCollectionDetectorR,
@@ -39,6 +40,9 @@ private:
   std::int32_t to_seqno_{0};
   bool force_index_{false};
   bool is_in_sync_{false};
+
+  // Phase G shadow classifier engine (artifact + setup), loaded once; null = off.
+  std::shared_ptr<const mch::MchEnginePrep> mch_prep_;
 
   td::Timestamp last_alarm_timestamp_;
   std::double_t avg_tps_{0};
@@ -72,6 +76,11 @@ public:
   void start_up() override;
   void alarm() override;
   void run();
+
+  // Phase G shadow mode: when set, seqno_interfaces_processed ALSO fires a
+  // fire-and-forget MchClassifierActor over the same ParsedBlock (log-only, no
+  // insert, no effect on pipeline flow/promises). Off by default.
+  void set_mch_shadow(std::shared_ptr<const mch::MchEnginePrep> prep) { mch_prep_ = std::move(prep); }
 private:
   void schedule_next_seqnos();
 

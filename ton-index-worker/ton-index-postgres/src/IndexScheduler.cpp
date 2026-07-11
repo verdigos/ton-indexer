@@ -342,6 +342,15 @@ void IndexScheduler::seqno_interfaces_processed(std::uint32_t mc_seqno, ParsedBl
     finish_seqno_otel_stage(mc_seqno);
     start_seqno_otel_stage(mc_seqno, "detect_actions");
 
+    // Phase G shadow mode (additive, fire-and-forget): classify the same
+    // assembled+interfaced ParsedBlock through the MCH C++ engine and LOG a
+    // per-trace summary. No insert, no promise, no effect on the pipeline. The
+    // ParsedBlockPtr is a shared_ptr; the shadow actor only READS the trace
+    // transactions + account_interfaces_ that this stage already populated.
+    if (mch_prep_ != nullptr) {
+        td::actor::create_actor<mch::MchClassifierActor>("MchShadow", mch_prep_, parsed_block, mc_seqno).release();
+    }
+
     auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), mc_seqno](td::Result<ParsedBlockPtr> R) {
         if (R.is_error()) {
             auto error = R.move_as_error();

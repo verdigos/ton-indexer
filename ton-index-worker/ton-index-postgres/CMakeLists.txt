@@ -11,6 +11,7 @@ target_link_libraries(
     ton-index-postgres
     tondb-scanner
     ton-observability
+    mch-classify
     pqxx
 )
 target_link_options(ton-index-postgres PUBLIC -rdynamic)

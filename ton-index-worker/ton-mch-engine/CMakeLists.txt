@@ -128,6 +128,8 @@ add_library(mch-classify STATIC
     src/BuildDriver.cpp
     src/ClassifyCore.cpp
     src/SchemaTraceLoader.cpp
+    src/ParsedBlockLookupSource.cpp
+    src/MchClassifierActor.cpp
     src/MsgParse.cpp
     src/parse/PSlice.cpp
     src/parse/ParseJettons.cpp
@@ -151,7 +153,7 @@ target_include_directories(mch-classify
 target_compile_features(mch-classify PUBLIC cxx_std_20)
 
 find_package(lz4 CONFIG REQUIRED)
-target_link_libraries(mch-classify PUBLIC tondb-scanner lz4::lz4)
+target_link_libraries(mch-classify PUBLIC tondb-scanner tdactor lz4::lz4)
 add_dependencies(mch-classify mch_generate_sources)
 
 # The CLI/dev tool: harness TUs (dump/runners/main) over the core lib.

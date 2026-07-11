@@ -157,6 +157,17 @@ The engine's `LookupSource { fetch(kind, key) }` gets a production adapter:
    real work. --mch-shadow wiring deferred until the loader + actor exist. NOTE:
    ton-index-postgres does NOT build locally (pre-existing protobuf/MSVC failure,
    independent — zero references to mch-classify; production builds are Linux-remote).
+   **SLICE 3 DONE 2026-07-12** (adapter body + actor + shadow flag + prod gate):
+   `ParsedBlockLookupSource.{h,cpp}` (two-tier LookupSource, §3 per-kind V2 mapping table),
+   `MchClassifierActor.{h,cpp}` + `load_engine_prep` (thin td::actor: group txs by
+   `schema::Transaction.trace_id` -> SchemaTraceLoader -> classify_trace with tier-1-only
+   ParsedBlockLookupSource -> log summary, NO insert/DB), `--mch-shadow <artifact>` flag in
+   ton-index-postgres (additive fire-and-forget spawn in seqno_interfaces_processed,
+   startup-fatal on a bad artifact per §4; links mch-classify — REMOTE-VERIFY only, postgres
+   still doesn't build locally), and the FULL production-path gate
+   `--classify-prod`/`--actions-prod` (SchemaGate: schema loader trace +
+   ParsedBlockLookupSource with fixture tier-2 fallback) diff 0 x147 (196/196) vs
+   `--classify`/`--actions`. nft-family offline-gate limitation named in §7 step 3.
 4. §6 item 7 priorities + remaining blessed deltas documented.
 5. Benchmark vs Python (dev_utils/mch_bench.py methodology) on the corpus + a live range.
 6. Flip decision (user) with the shadow-diff report in hand.
@@ -167,8 +178,15 @@ The engine's `LookupSource { fetch(kind, key) }` gets a production adapter:
 > (harness synthesis) + `--classify-schema`/`--actions-schema` gates — BOTH diff 0 vs the
 > msgpack path over all 147 fixtures (196/196). One subtlety proven by the gate: `aborted`
 > lives inside the schema TransactionDescr variant (not flat) and drives success/failed —
-> round-trips correctly. Remaining slices: ParsedBlockLookupSource body (§3 mapping),
-> MchClassifierActor, --mch-shadow. Spec kept below for reference.
+> round-trips correctly.
+
+> **SLICE 3 DONE 2026-07-12**: `ParsedBlockLookupSource.{h,cpp}` (lib, §3 mapping),
+> `MchClassifierActor.{h,cpp}` + `load_engine_prep` (lib), `--mch-shadow` flag
+> (ton-index-postgres, additive), and the FULL production-path gate
+> `--classify-prod`/`--actions-prod` (SchemaGate: schema loader trace +
+> ParsedBlockLookupSource) — BOTH diff 0 vs `--classify`/`--actions` over all 147 fixtures
+> (196/196). See §3 for the per-kind mapping + the nft-family offline-gate limitation.
+> Spec kept below for reference.
 
 Investigated + fully de-risked by the step-3 teammate; build handed to a fresh session.
 

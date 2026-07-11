@@ -145,8 +145,10 @@ int main(int argc, char *argv[]) {
   bool build_smoke_mode = false;
   bool classify_mode = false;
   bool classify_schema_mode = false;
+  bool classify_prod_mode = false;
   bool actions_mode = false;
   bool actions_schema_mode = false;
+  bool actions_prod_mode = false;
   bool parse_dump_mode = false;
   bool shape_test_mode = false;
   std::vector<std::string> trace_paths;
@@ -186,6 +188,14 @@ int main(int argc, char *argv[]) {
                "Action-row dump via the production SchemaTraceLoader path (A/B gate vs "
                "--actions): -I <artifact> -T <fixture|dir>",
                [&]() { actions_schema_mode = true; });
+  p.add_option('\0', "classify-prod",
+               "Classify via the FULL production path (SchemaTraceLoader + "
+               "ParsedBlockLookupSource; A/B gate vs --classify): -I <artifact> -T <fixture|dir>",
+               [&]() { classify_prod_mode = true; });
+  p.add_option('\0', "actions-prod",
+               "Action-row dump via the FULL production path (A/B gate vs --actions): "
+               "-I <artifact> -T <fixture|dir>",
+               [&]() { actions_prod_mode = true; });
   p.add_option('\0', "parse-dump", "Message-parse dump: -T <fixture|dir> (repeatable)",
                [&]() { parse_dump_mode = true; });
   p.add_option('\0', "shape-test",
@@ -252,6 +262,14 @@ int main(int argc, char *argv[]) {
 
   if (actions_schema_mode) {
     return mch::run_actions_schema(ir_path, trace_paths);
+  }
+
+  if (classify_prod_mode) {
+    return mch::run_classify_prod(ir_path, trace_paths);
+  }
+
+  if (actions_prod_mode) {
+    return mch::run_actions_prod(ir_path, trace_paths);
   }
 
   if (classify_mode) {

@@ -724,7 +724,8 @@ std::string render_action(const Action &a) {
 // Action row (build_action + render_action)). --classify and --actions differ
 // ONLY in the per-action render, so they share this.
 int run_dump(const std::string &artifact_path, const std::vector<std::string> &paths,
-             bool actions_mode, const TraceContextLoader &load_ctx) {
+             bool actions_mode, const TraceContextLoader &load_ctx,
+             const LookupSourceFactory &lookup_factory) {
   auto r_ir = load_ir(artifact_path);
   if (r_ir.is_error()) {
     std::fprintf(stderr, "failed to load IR artifact: %s\n", r_ir.error().message().c_str());
@@ -773,9 +774,11 @@ int run_dump(const std::string &artifact_path, const std::vector<std::string> &p
       std::fprintf(stderr, "WARN %s: %zu orphan nodes unreachable from root\n",
                    fs::path(f).filename().string().c_str(), ctx.tree.unlinked);
     }
-    FixtureLookupSource src(&ctx.trace.interfaces);
+    std::shared_ptr<LookupSource> src =
+        lookup_factory ? lookup_factory(ctx)
+                       : std::make_shared<FixtureLookupSource>(&ctx.trace.interfaces);
 
-    ClassifyResult res = classify_trace(ctx, ir, setup, src);
+    ClassifyResult res = classify_trace(ctx, ir, setup, *src);
     if (res.failure) {
       // Per-trace exception boundary (event_processing.py): buffered — the
       // regular actions are discarded, a single TRACE_FAIL on stdout, the reason
