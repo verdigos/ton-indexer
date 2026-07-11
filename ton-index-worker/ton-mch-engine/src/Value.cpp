@@ -164,15 +164,17 @@ td::Result<std::string> td_boc_serialize(const td::Ref<vm::Cell> &root) {
   return r.move_as_ok().as_slice().str();
 }
 
-bool is_boc_field(const std::string &key) {
+const std::set<std::string> &boc_field_names() {
   // Cell-derived BOC container fields (plan §12). `comment` / `bitcoin_txid` /
   // `pubkey` are raw non-BOC bytes and are DELIBERATELY excluded.
   static const std::set<std::string> kBocFields = {
       "forward_payload", "custom_payload", "message_boc", "message_boc_str",
       "order_boc",       "order_boc_str",  "stonfi_swap_body",
   };
-  return kBocFields.count(key) != 0;
+  return kBocFields;
 }
+
+bool is_boc_field(const std::string &key) { return boc_field_names().count(key) != 0; }
 
 std::string boc_field_cellhash(const Value &v) {
   auto hash_of = [](const td::Ref<vm::Cell> &cell) -> std::string {

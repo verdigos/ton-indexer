@@ -67,9 +67,9 @@ CLASSES = {
 
 
 # §12 root-hash bar: Cell-derived BOC container fields render as cell root hash
-# ("cellhash:HEX"). comment / bitcoin_txid / pubkey stay raw.
-BOC_FIELDS = {"forward_payload", "custom_payload", "message_boc",
-              "message_boc_str", "order_boc", "order_boc_str", "stonfi_swap_body"}
+# ("cellhash:HEX"). comment / bitcoin_txid / pubkey stay raw. BOC_FIELDS comes
+# from cpp_surface.json (`ton-mch-engine --surface`) — one source of truth (A3ii).
+from cpp_surface import BOC_FIELDS  # noqa: E402
 
 
 def _cellhash(v):

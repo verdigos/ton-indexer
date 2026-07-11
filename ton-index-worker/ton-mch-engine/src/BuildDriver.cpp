@@ -209,7 +209,8 @@ std::vector<Value> slots_from_captures(const std::vector<Capture> &captures) {
 
 BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
                            const std::vector<Value> &slots, const Value &consumed,
-                           const std::set<std::string> &kinds, const LookupSource &src) {
+                           const std::set<std::string> &kinds, const LookupSource &src,
+                           bool needs_lookups) {
   auto fresh_env = [&](const LookupTable *table) {
     BuildEnv env;
     env.anchor = anchor;
@@ -219,6 +220,15 @@ BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
     env.lookups = table;
     return env;
   };
+
+  // A2: a matcher with no lookup nodes and no host fns can never miss in the dry
+  // pass, so run the final pass directly against an empty filled table. Same
+  // result as the loop below (which would converge on round 0 with no fetches).
+  if (!needs_lookups) {
+    FilledLookupTable filled(kinds, {});
+    BuildEnv env = fresh_env(&filled);
+    return fn(env);
+  }
 
   std::map<std::string, Value> fetched;
   bool converged = false;

@@ -6,6 +6,10 @@
 # blocks/jettons.py (build_jetton_transfer_core / _get_jetton_burn_data /
 # _get_jetton_mint_data). Kept OUT of specs/ so the Go artifact emission of that
 # dir is not polluted with these duplicate anchors.
+#
+# Each matcher declares `priority 90` (< default 100) so it registers ahead of
+# the priority-100 specs regardless of emission order — replacing the former
+# 'a_jettons_decl.mch' filename-sort hack (T20). See ir/emit_manifest.json.
 
 opcode JettonTransfer         = 0x0f8a7ea5
 opcode JettonInternalTransfer = 0x178d4519
@@ -30,6 +34,7 @@ opcode MinterJettonMint       = 0x00000015
 # ---------------------------------------------------------------------------
 matcher jetton_transfer {
     produces JettonTransferBlock
+    priority 90
     entry    @transfer
 
     op JettonTransfer @transfer
@@ -75,6 +80,7 @@ matcher jetton_transfer {
 # ---------------------------------------------------------------------------
 matcher jetton_burn {
     produces JettonBurnBlock
+    priority 90
     entry    @burn
 
     op JettonBurn @burn -> maybe op JettonBurnNotification @notification
@@ -110,6 +116,7 @@ matcher jetton_burn {
 # ---------------------------------------------------------------------------
 matcher jetton_mint {
     produces JettonMintBlock
+    priority 90
     entry    @mint
 
     (op JettonMint @mint ^ op MinterJettonMint @mint)

@@ -22,9 +22,31 @@ Gate = `Compare-Object`/diff of engine stdout vs twin stdout, expected 0 lines.
 plan §0.9). Cap parallelism when the user works in parallel:
 `$env:CMAKE_BUILD_PARALLEL_LEVEL=4` (or copy the bat and add `-j 4`).
 
+## C++ registry surface (cpp_surface.json / cpp_surface.py)
+
+The twins gate matcher runnability against the C++ host/parse registries
+(message parsers, host preds/fns/shapers, lookup kinds, BOC field names). Those
+sets used to be hand-mirrored inline in each twin (CPP_PARSERS etc.) and drifted
+independently. They now live in ONE file:
+
+- `cpp_surface.json` — emitted by `ton-mch-engine --surface` from the LIVE C++
+  registries (stable-sorted JSON). Regenerate after adding a parser / host
+  binding / lookup kind / BOC field:
+
+      ton-mch-engine --surface > ton-index-worker/ton-mch-engine/twins/cpp_surface.json
+
+- `cpp_surface.py` — loads that JSON and exposes `CPP_PARSERS`,
+  `CPP_LOOKUP_KINDS`, `CPP_SHAPERS`, `CPP_PREDS`, `CPP_FNS`, `BOC_FIELDS`. All
+  four twins import from it (each imports only what it uses).
+
+`BUILTINS` stays inline in py_classify/py_actions — it is the fixed expr-builtin
+set, not a host registry. `lookup_kinds` includes `dedust_pool` (fetched by the
+dedust_swap_legs host fn, never a `lookup` node) — an honest registry superset
+that moves no skip decision. Drift between the committed JSON and the live engine
+is guarded by `indexer/tests/mch/test_cpp_surface.py` and, for output-affecting
+drift, by the classify/parse A/B gates themselves.
+
 History: these lived in session scratchpads (plan §0.4 originally said "NOT committed");
 moved into the repo 2026-07-11 for fresh-context durability — they encode gate semantics
-(field-keyed cellhash renders, canonical sorting, skip tables, CPP_* surface lists) that are
-expensive to reconstruct. The CPP_* surface lists inside py_classify/py_match_dump must be
-kept in sync with the C++ registries when host bindings/parsers are added (grep for
-CPP_PARSERS / CPP_PREDS / CPP_FNS / CPP_SHAPERS / LOOKUP_KINDS / BOC_FIELDS).
+(field-keyed cellhash renders, canonical sorting, skip tables) that are expensive to
+reconstruct.

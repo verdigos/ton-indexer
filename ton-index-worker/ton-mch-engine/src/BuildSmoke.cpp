@@ -142,8 +142,9 @@ int run_build_smoke(const std::string &artifact_path, const std::vector<std::str
         }
         Value consumed = Value::make_list(std::move(consumed_vals));
 
-        BuildOutcome o =
-            run_two_phase(build_fns.at(m.artifact_index), block, slots, consumed, kinds, src);
+        bool needs_lookups = !(m.ref_lookups.empty() && m.ref_fns.empty());
+        BuildOutcome o = run_two_phase(build_fns.at(m.artifact_index), block, slots, consumed,
+                                       kinds, src, needs_lookups);
         if (o.is_rejected) {
           std::printf("BUILD %s anchor=%s rejected\n", m.name.c_str(), block_key(block).c_str());
           continue;

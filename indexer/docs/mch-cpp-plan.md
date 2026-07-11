@@ -58,7 +58,9 @@ parallel by different agents ONLY with the stated file-ownership boundaries.
 
 Paths: `EXE = ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe`,
 `ENG = ton-index-worker/ton-mch-engine`, `TR = indexer/tests/traces` (147 fixtures),
-`ART = ENG/ir/mch_ir.json` (the ONE current declarative artifact, 36 matchers, version "1.0").
+`ART = ENG/ir/mch_ir.json` (the ONE current declarative artifact, 32 matchers all-declarative,
+version "1.0"; REPRODUCIBLE: `python -m indexer.events.mch.ir_emit --manifest ENG/ir/emit_manifest.json`
+— legacy builder-tier jetton specs excluded from prod artifact 2026-07-12, conformance-only).
 **Twins live IN THE REPO: `ENG/twins/` (moved from session scratchpads 2026-07-11 — see
 twins/README.md for invocations). Twins run from `indexer/` with the venv python.**
 Build: PowerShell tool + `ENG/twins/build_mch.bat` (NEVER Bash — mangles vcvars); parallel-cap
@@ -67,13 +69,13 @@ CMake-integrated (regenerate automatically from ir/*.json; sha-paired, exit 2 on
 
 | Gate | Command | Pass (current) |
 |---|---|---|
-| Python suites | `python -m pytest tests/mch tests/mch_ir tests/test_actions.py -q` | 1950 passed / 2 skipped |
+| Python suites | `python -m pytest tests/mch tests/mch_ir tests/test_actions.py -q` | 1953 passed / 2 skipped |
 | Expr interpreter | `EXE --vectors ENG/ir/expr_vectors.json` | 97/97 |
 | Expr generated | `EXE --vectors-gen ENG/ir/expr_vectors.json` | 97/97 |
 | Build vectors | `EXE --build-vectors ENG/ir/build_vectors.json` | 36/36 |
 | Shape/self tests | `EXE --shape-test`; `ctest --test-dir <builddir>/ton-mch-engine -R mch` | ALL PASS; 5/5 |
 | Msg parsing | `EXE --parse-dump -T TR` vs `twins/py_msg_dump.py` | diff 0 |
-| Match walker | `EXE --match -I ART -T TR` vs `twins/py_match_dump.py` | diff 0 (574 lines) |
+| Match walker | `EXE --match -I ART -T TR` vs `twins/py_match_dump.py` | diff 0 (328 lines) |
 | Classify | `EXE --classify -I ART -T TR` vs `twins/py_classify.py` | diff 0 (196 ACTIONs) |
 | Action rows | `EXE --actions -I ART -T TR` vs `twins/py_actions.py` | diff 0 (196 rows, accounts + cellhash fields) |
 | Schema loader | `EXE --classify-schema -I ART -T TR` vs `--classify` (and --actions-schema vs --actions) | diff 0 (196) |

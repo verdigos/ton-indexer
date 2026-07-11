@@ -167,6 +167,7 @@ add_executable(ton-mch-engine
     src/ShapeTest.cpp
     src/ParseDump.cpp
     src/SchemaGate.cpp
+    src/Surface.cpp
 )
 target_include_directories(ton-mch-engine PRIVATE src ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_features(ton-mch-engine PRIVATE cxx_std_20)

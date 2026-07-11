@@ -101,13 +101,9 @@ def _reachable(nodes, root):
     return out
 
 
-CPP_PREDS = {"nominator_pool_withdraw_parent", "evaa_user_withdraw_user",
-             "evaa_user_withdraw_success", "evaa_user_withdraw_fail",
-             "evaa_service_comment", "getgems_purchase", "getgems_seller_payout",
-             "stonfi_v1_sender_payment",
-             # stonfi_v2 preds, enabled by the §11.5 dual-dispatch wave (core is
-             # now btype-driven/deterministic).
-             "no_internal_transfer", "pton_self_transfer"}
+# Host predicate surface from cpp_surface.json (`ton-mch-engine --surface`) —
+# one source of truth for all twins (A3ii).
+from cpp_surface import CPP_PREDS  # noqa: E402
 
 
 def skip_reason(rec, nodes):

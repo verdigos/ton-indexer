@@ -315,11 +315,13 @@ def emit_ir(
     }
 
 
-def emit_dir(specs_dir: Path) -> dict:
-    """Compile every .mch file in `specs_dir` (sorted by file name) and emit IR."""
-    paths = sorted(Path(specs_dir).glob("*.mch"), key=lambda p: p.name)
-    if not paths:
-        raise FileNotFoundError(f"no .mch files found in {specs_dir}")
+def _emit_paths(paths: list[Path], source_files: list[str]) -> dict:
+    """Compile the given .mch files IN THE GIVEN ORDER and emit IR.
+
+    Emission order == matcher registration order (source-position tie-break for
+    equal `priority`), so callers control ordering by ordering `paths`.
+    `source_files` is the label list written to `frontend.source_files`.
+    """
     files = [
         parse(list(tokenize(p.read_text(encoding="utf-8"), str(p))), str(p))
         for p in paths
@@ -328,7 +330,33 @@ def emit_dir(specs_dir: Path) -> dict:
     compiled: list[CompiledMatcher] = []
     for p in paths:
         compiled.extend(compile_file(p, registries))
-    return emit_ir(compiled, [p.name for p in paths])
+    return emit_ir(compiled, source_files)
+
+
+def emit_dir(specs_dir: Path) -> dict:
+    """Compile every .mch file in `specs_dir` (sorted by file name) and emit IR."""
+    paths = sorted(Path(specs_dir).glob("*.mch"), key=lambda p: p.name)
+    if not paths:
+        raise FileNotFoundError(f"no .mch files found in {specs_dir}")
+    return _emit_paths(paths, [p.name for p in paths])
+
+
+def emit_manifest(manifest_path: Path) -> dict:
+    """Compile the spec files listed in a manifest and emit IR.
+
+    Manifest = JSON ``{"specs": ["<rel>", ...]}``; each entry is a spec path
+    relative to the mch package dir (this file's parent), resolved so the
+    artifact is reproducible from committed sources. The list order IS the
+    registration order; `frontend.source_files` = the entries verbatim.
+    """
+    data = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    rels: list[str] = data["specs"]
+    base = Path(__file__).resolve().parent
+    paths = [base / r for r in rels]
+    missing = [str(p) for p in paths if not p.is_file()]
+    if missing:
+        raise FileNotFoundError(f"manifest references missing spec files: {missing}")
+    return _emit_paths(paths, list(rels))
 
 
 def render_json(artifact: dict) -> str:
@@ -340,11 +368,18 @@ def main(argv: list[str] | None = None) -> None:
         prog="python -m indexer.events.mch.ir_emit",
         description="Emit MCH IR (1.0) from a directory of .mch spec files.",
     )
-    ap.add_argument("specs_dir", help="directory containing .mch spec files")
+    ap.add_argument("specs_dir", nargs="?", help="directory containing .mch spec files")
+    ap.add_argument(
+        "--manifest",
+        help="JSON manifest listing spec files in registration order "
+        "(paths relative to the mch package dir); reproducible artifact source",
+    )
     ap.add_argument("-o", "--output", required=True, help="output JSON path")
     args = ap.parse_args(argv)
 
-    artifact = emit_dir(Path(args.specs_dir))
+    if bool(args.specs_dir) == bool(args.manifest):
+        ap.error("provide exactly one of specs_dir or --manifest")
+    artifact = emit_manifest(Path(args.manifest)) if args.manifest else emit_dir(Path(args.specs_dir))
     with open(args.output, "w", encoding="utf-8", newline="\n") as f:
         f.write(render_json(artifact))
     print(

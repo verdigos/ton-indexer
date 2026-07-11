@@ -35,6 +35,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -124,6 +125,8 @@ td::Result<std::string> td_boc_serialize(const td::Ref<vm::Cell> &root);
 // cellhash string, or "" if the value is not a decodable BOC (caller falls back
 // to the normal render).
 bool is_boc_field(const std::string &key);
+// The BOC-field name set backing is_boc_field (surfaced by --surface for the twins).
+const std::set<std::string> &boc_field_names();
 std::string boc_field_cellhash(const Value &v);
 
 // Normalize a raw TON address string "wc:hex64" to canonical "wc:HEX64".

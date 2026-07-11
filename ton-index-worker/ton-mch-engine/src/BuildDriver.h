@@ -41,8 +41,14 @@ std::vector<Value> slots_from_captures(const std::vector<Capture> &captures);
 // CollectingLookupTable (a single dry pass cannot see lookup-arg-of-lookup
 // keys), fetch through `src`, resume against the immutable filled table.
 // Each pass runs with a fresh BuildEnv (bodies are per-run state).
+//
+// `needs_lookups` = the matcher references a `lookup` node or a host `fn` (which
+// fetches via the table). When false (12/36 matchers), the collect pass can only
+// ever produce zero misses, so it is skipped: a single final pass against an
+// empty filled table is byte-identical to collect→converge→final. (A2)
 BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
                            const std::vector<Value> &slots, const Value &consumed,
-                           const std::set<std::string> &kinds, const LookupSource &src);
+                           const std::set<std::string> &kinds, const LookupSource &src,
+                           bool needs_lookups);
 
 }  // namespace mch

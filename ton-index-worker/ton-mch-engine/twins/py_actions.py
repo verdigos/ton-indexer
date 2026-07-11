@@ -86,34 +86,14 @@ def combined_registries() -> Registries:
     return out
 
 
-# --- C++ surface (shared contract with BuildDriver.cpp / py_classify.py) ------
-CPP_PARSERS = {"JettonTransfer", "JettonInternalTransfer", "JettonBurn",
-               "JettonNotify", "JettonMint", "MinterJettonMint",
-               "JettonBurnNotification", "ChangeDnsRecordMessage",
-               "VestingSendMessage", "PTonTransfer", "StonfiV2ProvideLiquidity",
-               "DedustPayoutFromPool",
-               "DedustSwapNotification", "CoffeeCreateVault", "EvaaWithdrawMaster",
-               "EvaaWithdrawCollateralized", "EvaaWithdrawFailExcess",
-               "LayerZeroOappExecuteCallback",
-               "JVaultUnstakeJettons", "JVaultUnstakeRequest", "JVaultClaim"}
-CPP_LOOKUP_KINDS = {"jetton_wallet", "nft_item", "nominator_pool", "jvault_assets",
-                    "nft_sale", "nft_auction"}
-CPP_SHAPERS = {"getgems_proxy_insert", "nft_transfer_parent_absorb",
-               "tgbtc_deploy_absorb"}
-CPP_PREDS = {"nominator_pool_withdraw_parent", "evaa_user_withdraw_user",
-             "evaa_user_withdraw_success", "evaa_user_withdraw_fail",
-             "evaa_service_comment", "getgems_purchase", "getgems_seller_payout",
-             "stonfi_v1_sender_payment",
-             "no_internal_transfer", "pton_self_transfer"}
-CPP_FNS = {"dedust_swap_legs", "dedust_swap_failed",
-           "layerzero_dst_oapp_matches", "tonstakers_minted_nft",
-           "jvault_stake_period", "jvault_account_list",
-           "nft_transfer_data", "getgems_nft_purchase_data",
-           "telegram_nft_purchase_data", "tgbtc_mint_data",
-           "coffee_swap_data", "stonfi_v1_swap_data",
-           "dedust_deposit_final_data", "dedust_deposit_partial_data",
-           "tonco_deposit_liquidity_data", "tonco_swap_data",
-           "stonfi_v2_swap_data"}
+# C++ registry surface (parsers/lookup_kinds/shapers/preds/fns/boc_fields) from
+# cpp_surface.json (`ton-mch-engine --surface`) — one source of truth, no
+# per-twin drift (A3ii). BUILTINS is the fixed expr-builtin set, not a host
+# registry, so it stays inline.
+from cpp_surface import (  # noqa: E402
+    BOC_FIELDS, CPP_FNS, CPP_LOOKUP_KINDS, CPP_PARSERS, CPP_PREDS, CPP_SHAPERS,
+)
+
 BUILTINS = {"account", "amount", "asset", "ton_asset", "addr_none", "b64",
             "first", "last", "len", "sum", "zip", "map"}
 
@@ -159,12 +139,10 @@ def block_key(b):
     return s
 
 
-# §12 root-hash bar: Cell-derived BOC container fields render as their cell
-# root hash ("cellhash:HEX") so pytoniq-vs-td serialization provenance is
-# invisible to the byte-level A/B comparison. comment/bitcoin_txid/pubkey are
-# raw non-BOC bytes and stay as-is.
-BOC_FIELDS = {"forward_payload", "custom_payload", "message_boc",
-              "message_boc_str", "order_boc", "order_boc_str", "stonfi_swap_body"}
+# §12 root-hash bar: Cell-derived BOC container fields (BOC_FIELDS, from
+# cpp_surface) render as their cell root hash ("cellhash:HEX") so pytoniq-vs-td
+# serialization provenance is invisible to the byte-level A/B comparison.
+# comment/bitcoin_txid/pubkey are raw non-BOC bytes and stay as-is.
 
 
 def _cellhash(v):

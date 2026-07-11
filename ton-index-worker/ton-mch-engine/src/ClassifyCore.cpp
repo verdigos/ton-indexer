@@ -35,8 +35,10 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
   for (Block *b : res->consumed) {
     consumed_vals.push_back(Value::make_block(b));
   }
+  bool needs_lookups = !(m.ref_lookups.empty() && m.ref_fns.empty());
   BuildOutcome o = run_two_phase(fn, block, slots,
-                                 Value::make_list(std::move(consumed_vals)), kinds, src);
+                                 Value::make_list(std::move(consumed_vals)), kinds, src,
+                                 needs_lookups);
   if (o.is_rejected) {
     return false;  // clean rejection §10.7: no consumption, no aux append
   }

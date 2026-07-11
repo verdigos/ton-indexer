@@ -4,17 +4,41 @@ from __future__ import annotations
 from pathlib import Path
 
 from indexer.events.mch.compile import compile_text
-from indexer.events.mch.ir_emit import build_stub_registries, emit_dir, emit_ir, render_json
+from indexer.events.mch.ir_emit import (
+    build_stub_registries,
+    emit_dir,
+    emit_ir,
+    emit_manifest,
+    render_json,
+)
 from indexer.events.mch.lexer import tokenize
 from indexer.events.mch.parser import parse
 
 SPECS_DIR = (
     Path(__file__).resolve().parents[2] / "indexer" / "events" / "mch" / "specs"
 )
+# Committed reproducible-emit contract (A1): manifest + the artifact it produces.
+IR_DIR = (
+    Path(__file__).resolve().parents[3]
+    / "ton-index-worker" / "ton-mch-engine" / "ir"
+)
 
 
 def _emit() -> dict:
     return emit_dir(SPECS_DIR)
+
+
+def test_manifest_reproduces_committed_artifact():
+    """The committed ir/mch_ir.json must be byte-reproducible from its manifest —
+    the A1 reproducibility guarantee (no session-scratch emit dir)."""
+    manifest = IR_DIR / "emit_manifest.json"
+    committed = IR_DIR / "mch_ir.json"
+    if not manifest.is_file() or not committed.is_file():
+        import pytest
+
+        pytest.skip("C++ engine ir/ dir not present in this checkout")
+    emitted = render_json(emit_manifest(manifest)).encode("utf-8")
+    assert emitted == committed.read_bytes()
 
 
 def test_emit_specs_dir_deterministic():

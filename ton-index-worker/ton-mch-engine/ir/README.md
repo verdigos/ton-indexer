@@ -3,17 +3,40 @@
 These JSON files are the cross-language contract consumed by the C++ build
 (mch-codegen reads them; no Python is required to build ton-mch-engine).
 
-- `mch_ir.json` — the compiled matcher IR artifact (currently 36 matchers,
-  32 with declarative build programs). Input for `--wheres` (where_expr
-  functions) and `--builds --suffix ir` (build-program functions used by
-  `--classify` / `--build-smoke`); loaded at runtime by `--match` /
-  `--build-smoke` / `--classify`.
+- `mch_ir.json` — the compiled matcher IR artifact (currently 32 matchers, all
+  declarative). Input for `--wheres` (where_expr functions) and `--builds
+  --suffix ir` (build-program functions used by `--classify` / `--build-smoke`);
+  loaded at runtime by `--match` / `--build-smoke` / `--classify`. The two
+  legacy builder-tier jetton specs (specs/jetton_transfer.mch, specs/jettons.mch)
+  are excluded from this PRODUCTION artifact (A4) — see the manifest's
+  `excluded_note`. They stay in specs/ for the Python conformance suite; emitting
+  from the specs/ dir directly (emit_dir) still includes them.
 - `expr_vectors.json` — 97 expression conformance vectors. Input for
   `--vectors` (functions run by `--vectors-gen`); loaded at runtime by
   `--vectors` / `--vectors-gen`.
 - `build_vectors.json` — 36 build-program conformance cases. Input for
   `--builds --suffix vectors` (functions run by `--build-vectors`); loaded at
   runtime by `--build-vectors`.
+- `emit_manifest.json` — the reproducible source list for `mch_ir.json`. Lists
+  every spec file (relative to the mch package dir), in registration order.
+
+## Regenerating mch_ir.json from spec sources (reproducible)
+
+`mch_ir.json` is emitted from the committed `.mch` specs via the manifest — there
+is no session-scratch emit dir. From `indexer/` with the venv python:
+
+    python -m indexer.events.mch.ir_emit \
+      --manifest ../ton-index-worker/ton-mch-engine/ir/emit_manifest.json \
+      -o ../ton-index-worker/ton-mch-engine/ir/mch_ir.json
+
+The manifest lists `specs_decl/jettons.mch` first, then the `specs/*.mch` files
+in file-name order (minus the two excluded legacy jetton specs, see below);
+`frontend.source_files` echoes the manifest paths. Matcher
+registration order follows the list; equal-`priority` matchers tie-break on it.
+The declarative jetton family carries in-spec `priority 90` (< default 100) so it
+registers ahead of the priority-100 specs — this replaced the former
+`a_jettons_decl.mch` filename-sort hack (plan §10 T20). Byte-reproduction is
+guarded by `tests/mch/test_ir_emit.py::test_manifest_reproduces_committed_artifact`.
 
 ## Codegen is a build step — never regenerate by hand
 
