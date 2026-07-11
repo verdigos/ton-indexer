@@ -101,9 +101,14 @@ The engine's `LookupSource { fetch(kind, key) }` gets a production adapter:
 
 ## 6. Known deltas to close (or bless) before flip — the Phase G worklist
 
-1. accounts + role_assignment + action_accounts rows — NOT ported (needs
-   initiating_event_node on the C++ Block + role logic port). REQUIRED before flip:
-   action_accounts feeds the API's account queries.
+1. accounts + action_accounts rows — NOT ported (needs initiating_event_node on the C++
+   Block). REQUIRED before flip: action_accounts feeds the API's account queries.
+   **CORRECTION (step-2 STOP finding, 2026-07-11): there is NO role system on this branch.**
+   role_assignment.py doesn't exist; Action has no account_roles; the action_accounts DDL +
+   SQLAlchemy model are role-less (action_id/trace_id/account + lt/utime denorm columns);
+   get_action_accounts() emits one role-less row per account. CLAUDE.md/memory descriptions
+   of ROLE_SENDER/RECEIVER are STALE (role system lives outside this branch's data model).
+   Scope reduced accordingly: accounts assembly + tx_hashes extension only.
 2. tx_hashes extension by initiating_event_node — same member, same wave as (1).
 3. unwind_deployments post-processor — absent both sides in the harness; production Python
    RUNS it. Must be ported before flip (small tree pass).
