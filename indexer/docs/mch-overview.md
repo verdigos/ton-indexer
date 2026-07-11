@@ -293,16 +293,26 @@ ton-index-worker/ton-mch-engine/   C++ runtime: src/ (substrate, walker, runtime
 
 ## 10. Current state and what's left
 
-Done and verified (as of 2026-07-07): language feature-complete for the C++
-milestone; determinism pinned; IR spec v1.0 normative; Python IR engine is the
-only mch runtime in Python; ~11 matchers fully/hybrid declarative; C++ through
-Phase B — full pipeline (tree → match → lookups → generated build → merge →
-classify) A/B-clean on the cleared surface (4/35 matchers included; the rest
-skip on missing host bindings).
+Done and verified (as of 2026-07-11, through commit b43c5df0): **phases B–F ALL
+complete.** Language frozen; determinism pinned; IR spec v1.0 normative AND
+on-the-wire (`mch_ir_version: "1.0"`, strict); all matchers declarative-or-hybrid
+except the two builder-tier jetton conformance references (by design); C++ runs
+the FULL pipeline — tree → match → two-phase lookups → generated builds → merge
+→ post-process (dedust + stonfi_v2 + unwind_deployments) → Action rows — with
+A/B diff 0 over all 147 fixtures: 196 classify actions = 196 Action rows
+(accounts + tx_hashes; roles don't exist in this branch's data model). The
+dead-isinstance catalogue is closed (all swap/liquidity cores dual-dispatched +
+ported). BOC parity = root-hash bar (pytoniq writer deleted; native td
+serialization; field-keyed cellhash renders). Codegen emits static-dispatched,
+copy-free code (~23% faster classify). The engine is split into the
+`mch-classify` static library (pure ClassifyCore, buffered atomic per-trace
+results) + a harness exe (dump adapters, twins in `ton-mch-engine/twins/`).
 
-Remaining: Phase C parser families (each family shrinks the skip table),
-Phase D host preds/fns/shaper, Phase E flows + post-processors + serializer
-boundary, Phase F Python-side destaling (incl. the `mch_ir_version`
-"0.1-poc"→"1.0" bump decision), Phase G production wiring (actor-based lookup
-source, priority review, deployment shape). Detailed sequencing:
-`mch-cpp-plan.md` §4-§9.
+Remaining = Phase G production wiring, tracked in `mch-cpp-prod-design.md`
+(THE active doc; decisions Q1 shadow-mode / Q2 two-tier lookups / Q3
+startup-fatal all made): SchemaTraceLoader (spec §8a, in progress),
+ParsedBlockLookupSource body, MchClassifierActor, `--mch-shadow` flag,
+shadow run on the remote server, explicit spec priorities, flip decision.
+Coverage growth (remaining legacy-only matchers) and the `mch-codegen --msgs`
+parser frontend are parallel tracks, not blockers. Detailed sequencing:
+`mch-cpp-plan.md` §1 (current gate set) + prod-design §7.
