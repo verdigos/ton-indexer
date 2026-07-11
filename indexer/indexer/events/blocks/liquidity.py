@@ -1441,7 +1441,8 @@ async def build_tonco_deposit_liquidity_core(
     excesses = []
     for excess_transfer in excess_transfers:
         if excess_transfer:
-            if isinstance(excess_transfer, JettonTransferBlock):
+            # Dual dispatch (§11.5): btype covers legacy + declarative jetton legs.
+            if excess_transfer.btype == "jetton_transfer":
                 pton_transfer = find_call_contract(
                     excess_transfer.next_blocks, PTonTransfer.opcode
                 )

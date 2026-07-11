@@ -13,9 +13,13 @@
 #include "common/refint.h"
 #include "vm/cellslice.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <map>
 #include <optional>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace mch {
@@ -24,6 +28,10 @@ namespace {
 
 constexpr std::uint32_t kJettonNotify = 0x7362d09c;
 constexpr std::uint32_t kFundAccountPayload = 0x4468de77;
+constexpr std::uint32_t kV3Swap = 0xa7fb58f8;         // POOLV3_SWAP (swap request + in-payload)
+constexpr std::uint32_t kV3PayTo = 0xa1daa96d;        // ROUTERV3_PAY_TO
+constexpr std::uint32_t kJettonTransfer = 0x0f8a7ea5;
+constexpr std::uint32_t kPTonTransfer = 0x01f3835d;
 
 const std::vector<std::string> &tonco_pton_masters() {
   static const std::vector<std::string> m = {
@@ -82,6 +90,118 @@ Value wallet_asset(BuildEnv &env, const std::string &addr) {
   return Value::make_asset_jetton(norm ? *norm : jf->str);
 }
 
+std::optional<std::string> acc_str_t(const Value &v) {
+  if (v.t == VType::Account && !v.addr_none) {
+    return v.str;
+  }
+  return std::nullopt;
+}
+
+// messages/swaps.py ToncoPoolV3Swap: the core reads only source_wallet (the
+// two ref cells carry amounts/payloads the core does not touch here).
+td::Result<Value> parse_v3_swap_source_wallet(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
+    return td::Status::Error("v3 swap: header underflow");
+  }
+  TRY_RESULT(owner, load_address_py(cs));
+  (void)owner;
+  return load_address_py(cs);  // source_wallet
+}
+
+// messages/swaps.py ToncoRouterV3PayTo: exit_code + the coinsinfo maybe-ref
+// (amount0/jetton0/amount1/jetton1). The conditional swap/burn info cells are
+// unused by the core.
+struct RouterPayTo {
+  std::uint32_t exit_code{0};
+  td::RefInt256 amount0, amount1;  // null == None
+  Value jetton0, jetton1;          // account or Null
+};
+td::Result<RouterPayTo> parse_v3_pay_to(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
+    return td::Status::Error("v3 pay_to: header underflow");
+  }
+  TRY_RESULT(r0, load_address_py(cs));
+  (void)r0;
+  TRY_RESULT(r1, load_address_py(cs));
+  (void)r1;
+  if (!cs.have(32 + 64)) {
+    return td::Status::Error("v3 pay_to: exit/seqno underflow");
+  }
+  RouterPayTo pt;
+  pt.exit_code = static_cast<std::uint32_t>(cs.fetch_ulong(32));
+  cs.advance(64);  // seqno
+  if (!cs.have(1)) {
+    return td::Status::Error("v3 pay_to: coinsinfo maybe bit");
+  }
+  if (cs.fetch_ulong(1)) {
+    if (cs.size_refs() < 1) {
+      return td::Status::Error("v3 pay_to: coinsinfo ref missing");
+    }
+    TRY_RESULT(ci, open_ref_t(cs.fetch_ref()));
+    TRY_RESULT_ASSIGN(pt.amount0, load_coins_py(ci));
+    TRY_RESULT_ASSIGN(pt.jetton0, load_address_py(ci));
+    TRY_RESULT_ASSIGN(pt.amount1, load_coins_py(ci));
+    TRY_RESULT_ASSIGN(pt.jetton1, load_address_py(ci));
+  }
+  return pt;
+}
+
+// messages/swaps.py ToncoPoolV3SwapPayload.get_target_wallets_and_amounts_
+// recursive: walk the nested in-transfer payload cells collecting
+// (target_wallet, min_out) pairs. Depth-guarded (malformed/adversarial nesting
+// must not unbound-recurse); a bad inner tail is swallowed (Python try/except).
+constexpr int kMaxPayloadDepth = 64;
+void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string, td::RefInt256>> &out,
+                             int depth) {
+  if (depth > kMaxPayloadDepth) {
+    return;
+  }
+  if (!cs.have(32) || !cs.advance(32)) {
+    return;  // opcode
+  }
+  auto r_addr = load_address_py(cs);
+  if (r_addr.is_error()) {
+    return;
+  }
+  Value target = r_addr.move_as_ok();
+  if (!cs.have(160)) {
+    return;
+  }
+  cs.advance(160);  // price_limit_sqrt
+  auto r_min = load_coins_py(cs);
+  if (r_min.is_error()) {
+    return;
+  }
+  td::RefInt256 min_out = r_min.move_as_ok();
+  if (auto ts = acc_str_t(target)) {
+    out.emplace_back(*ts, min_out.is_null() ? td::make_refint(0) : min_out);
+  }
+  auto r_rcpt = load_address_py(cs);  // recipient
+  if (r_rcpt.is_error()) {
+    return;
+  }
+  if (!cs.have(1)) {
+    return;
+  }
+  if (cs.fetch_ulong(1) && cs.size_refs() > 0) {  // payload maybe-ref
+    try {
+      auto inner = open_ref_t(cs.fetch_ref());
+      if (inner.is_ok()) {
+        vm::CellSlice ics = inner.move_as_ok();
+        if (ics.have(32) && ics.prefetch_ulong(32) == kV3Swap) {
+          collect_payload_targets(ics, out, depth + 1);
+        }
+      }
+    } catch (...) {
+      // Python swallows inner-payload errors.
+    }
+  }
+}
+
 }  // namespace
 
 // builders/tonco.py _tonco_deposit_liquidity_data -> blocks/liquidity.py
@@ -115,9 +235,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
       break;
     }
   }
-  // excess_transfers isinstance(JettonTransferBlock) is DEAD under the IR engine
-  // (generic Block) -> the excesses loop `else: continue`s every element, so the
-  // excesses list is always empty. (No lookup, no ordering to reproduce.)
+  // (excess_transfers are gathered below by btype near the record assembly.)
 
   // add_liquidity body.
   auto r_body = block_body(block);
@@ -283,6 +401,44 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
     sw2 = sender_wallet;
   }
 
+  // excesses (§11.5 dual dispatch): the up-to-two jetton_transfer children of
+  // the ROUTERV3_PAY_TO, each (asset, amount) — a pTON child makes it a TON
+  // excess, else the leg's `.data`. No corpus coverage; ported for parity.
+  std::vector<Value> excesses;
+  {
+    const Block *pay_to = nullptr;
+    for (const Block *b : consumed) {
+      if (is_call_op(b, kV3PayTo)) { pay_to = b; break; }
+    }
+    if (pay_to != nullptr) {
+      int n = 0;
+      for (const Block *b : consumed) {
+        if (n >= 2) break;
+        if (b->btype != "jetton_transfer" || b->previous_block != pay_to) continue;
+        n++;
+        const Block *pton = find_call_t(b->next_blocks, kPTonTransfer);
+        Value ex_amount, ex_asset;
+        if (pton != nullptr) {
+          td::RefInt256 ta;
+          auto rb = block_body(pton);
+          if (rb.is_ok()) {
+            auto rp = parse_message_body("PTonTransfer", rb.ok());
+            if (rp.is_ok()) {
+              const Value *tav = rp.ok().field("ton_amount");
+              if (tav != nullptr && (tav->t == VType::Int || tav->t == VType::Amount)) ta = tav->num;
+            }
+          }
+          ex_amount = amount_or_zero_t(ta);
+          ex_asset = Value::make_asset_ton();
+        } else {
+          ex_amount = data_field(b, "amount");
+          ex_asset = data_field(b, "asset");
+        }
+        excesses.push_back(Value::make_list(std::vector<Value>{ex_asset, ex_amount}));
+      }
+    }
+  }
+
   const Message *bm = block_msg(block);
   Value::Fields d;
   d.emplace_back("sender", std::move(sender));
@@ -302,27 +458,286 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   d.emplace_back("amount_2", std::move(amount_2));
   d.emplace_back("asset_2", std::move(asset_2));
   d.emplace_back("sender_wallet_2", std::move(sw2));
-  d.emplace_back("excesses", Value::make_list({}));
+  d.emplace_back("excesses", Value::make_list(std::move(excesses)));
   return rt_ok(Value::make_obj(std::move(d)));
 }
 
-// builders/tonco_swap.py _tonco_swap_data -> blocks/swaps.py build_tonco_swap_core.
-// Under the IR engine this fn ALWAYS rejects: the core resolves the outgoing
-// transfer with `isinstance(out_transfer, JettonTransferBlock)` (swaps.py:926) —
-// a LEGACY class. out_transfer is always a generic jetton_transfer Block or a
-// raw JettonTransfer call under the IR engine, so the isinstance is False and
-// the else arm `return None` (swaps.py:962-966) fires; the core's only other
-// exits are also None (empty out_transfers, in-leg parse failure). _tonco_swap_data
-// then returns None -> reject. (The in-leg is processed first and reads
-// in_transfer.event_nodes[0].message non-deterministically, but that value is
-// discarded on the reject, so the rejection is deterministic.) The tonco-swap
-// pattern also never matches any corpus trace, so this fn is never even invoked
-// there. Wired for surface parity; the SKIP->included flip adds zero ACTIONs.
-EvalResult tonco_swap_data(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1) {
+namespace {
+
+// A jetton in/out leg's asset with the tonco pton conversion: a jetton master
+// in the pton set becomes TON; otherwise the block's `.data['asset']` is kept.
+Value tonco_leg_asset(const Value &asset_v) {
+  if (asset_v.t == VType::Asset && asset_v.has_jetton && tonco_is_pton(asset_v.str)) {
+    return Value::make_asset_ton();
+  }
+  return asset_v;
+}
+
+// builders/tonco_swap.py _derive_parts: reconstruct the legacy label roles from
+// the consumed set (cyclic bodies bind no captures).
+struct ToncoParts {
+  const Block *anchor{nullptr};
+  const Block *in_transfer{nullptr};
+  std::vector<const Block *> peer_swaps;  // non-anchor swaps, lt-sorted
+  std::vector<const Block *> payouts;     // lt-sorted
+  std::vector<const Block *> out_transfers;
+};
+ToncoParts derive_tonco_parts(const std::vector<const Block *> &consumed) {
+  ToncoParts p;
+  p.anchor = consumed.front();
+  auto by_lt = [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; };
+  std::vector<const Block *> swaps;
+  std::set<const Block *> swap_ids;
+  for (const Block *b : consumed) {
+    if (is_call_op(b, kV3Swap)) {
+      swaps.push_back(b);
+      swap_ids.insert(b);
+    }
+  }
+  for (const Block *b : consumed) {
+    if (is_call_op(b, kV3PayTo)) p.payouts.push_back(b);
+  }
+  std::stable_sort(p.payouts.begin(), p.payouts.end(), by_lt);
+  std::set<const Block *> payout_ids(p.payouts.begin(), p.payouts.end());
+  for (const Block *b : swaps) {
+    if (b != p.anchor) p.peer_swaps.push_back(b);
+  }
+  std::stable_sort(p.peer_swaps.begin(), p.peer_swaps.end(), by_lt);
+  const Block *prev = p.anchor->previous_block;
+  if (prev != nullptr) {
+    p.in_transfer = (prev->btype == "jetton_transfer") ? prev : prev->previous_block;
+  }
+  auto leads_to_hop = [&](const Block *b) -> bool {
+    for (Block *c : b->next_blocks) {
+      if (swap_ids.count(c)) return true;
+      if (is_call_op(c, kPTonTransfer)) {
+        for (Block *cc : c->next_blocks) {
+          if (is_call_op(cc, kJettonNotify)) {
+            for (Block *g : cc->next_blocks) {
+              if (swap_ids.count(g)) return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  };
+  for (const Block *b : consumed) {
+    if (b->previous_block != nullptr && payout_ids.count(b->previous_block) &&
+        (b->btype == "jetton_transfer" || is_call_op(b, kJettonTransfer))) {
+      if (!leads_to_hop(b)) p.out_transfers.push_back(b);  // intermediates unused downstream
+    }
+  }
+  std::stable_sort(p.out_transfers.begin(), p.out_transfers.end(), by_lt);
+  return p;
+}
+
+}  // namespace
+
+// builders/tonco_swap.py _tonco_swap_data -> blocks/swaps.py build_tonco_swap_core
+// (§11.5 full port). args = (consumed list). Deterministic: the jetton legs are
+// read by btype/`.data` (swaps.py:856/926), the pTON in-leg from a single-leaf
+// call message. Multi-hop peer_swaps + the failed-swap recursive-payload
+// fallback are ported faithfully (no corpus coverage — single-hop only).
+EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
+  if (args.size() != 1 || args[0].t != VType::List) {
     return rt_ok(Value::null());
   }
-  return rt_ok(Value::null());  // out_transfer isinstance JettonTransferBlock dead -> None
+  std::vector<const Block *> consumed;
+  for (const Value &v : *args[0].items) {
+    const Block *b = as_block(v);
+    if (b != nullptr) consumed.push_back(b);
+  }
+  if (consumed.empty()) return rt_ok(Value::null());
+  ToncoParts parts = derive_tonco_parts(consumed);
+
+  auto by_lt = [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; };
+  std::vector<const Block *> all_swaps = parts.peer_swaps;
+  all_swaps.insert(all_swaps.begin(), parts.anchor);
+  std::stable_sort(all_swaps.begin(), all_swaps.end(), by_lt);
+  const std::vector<const Block *> &all_payouts = parts.payouts;
+  if (parts.in_transfer == nullptr || all_swaps.size() != all_payouts.size()) {
+    return rt_ok(Value::null());
+  }
+  const Block *in_transfer_block = parts.in_transfer;
+
+  bool ok = true;
+  struct Step {
+    Value source_wallet;
+    RouterPayTo pay;
+    std::int64_t min_lt;
+  };
+  std::vector<Step> swap_steps;
+  std::map<std::string, Value> jw_asset_map;
+  for (std::size_t i = 0; i < all_swaps.size(); i++) {
+    auto r_sbody = block_body(all_swaps[i]);
+    if (r_sbody.is_error()) { ok = false; continue; }
+    auto r_sw = parse_v3_swap_source_wallet(r_sbody.move_as_ok());
+    if (r_sw.is_error()) { ok = false; continue; }
+    auto r_pbody = block_body(all_payouts[i]);
+    if (r_pbody.is_error()) { ok = false; continue; }
+    auto r_pt = parse_v3_pay_to(r_pbody.move_as_ok());
+    if (r_pt.is_error()) { ok = false; continue; }
+    RouterPayTo pt = r_pt.move_as_ok();
+    if (pt.exit_code != 0 && pt.exit_code != 200) ok = false;
+    Value source_wallet = r_sw.move_as_ok();
+    std::string key = acc_str_t(source_wallet).value_or("");
+    swap_steps.push_back({source_wallet, pt, all_swaps[i]->min_lt});
+    if (jw_asset_map.find(key) == jw_asset_map.end()) {
+      Value asset = wallet_asset(env, key);  // pton -> TON, jetton, or Null on miss
+      if (!asset.is_null()) jw_asset_map[key] = asset;
+    }
+  }
+  std::stable_sort(swap_steps.begin(), swap_steps.end(),
+                   [](const Step &a, const Step &b) { return a.min_lt < b.min_lt; });
+
+  // --- incoming transfer ---
+  Value sender, in_asset, in_amount, in_source, in_source_jw, in_dest, in_dest_jw;
+  td::Ref<vm::Cell> in_payload;
+  if (in_transfer_block->btype == "jetton_transfer") {
+    in_asset = tonco_leg_asset(data_field(in_transfer_block, "asset"));
+    sender = data_field(in_transfer_block, "sender");
+    in_amount = data_field(in_transfer_block, "amount");
+    in_source = data_field(in_transfer_block, "sender");
+    in_source_jw = data_field(in_transfer_block, "sender_wallet");
+    in_dest = data_field(in_transfer_block, "receiver");
+    in_dest_jw = data_field(in_transfer_block, "receiver_wallet");
+    Value fp = data_field(in_transfer_block, "forward_payload");
+    if (fp.t == VType::Cell && fp.cell.not_null()) in_payload = fp.cell;
+  } else {
+    const Message *m = block_msg(in_transfer_block);
+    if (m == nullptr) return rt_ok(Value::null());  // except -> None
+    td::RefInt256 amt = m->value ? td::make_refint(*m->value) : td::RefInt256();
+    if (m->opcode32() && *m->opcode32() == kPTonTransfer) {
+      auto rb = block_body(in_transfer_block);
+      if (rb.is_error()) return rt_ok(Value::null());
+      auto rp = parse_message_body("PTonTransfer", rb.ok());
+      if (rp.is_error()) return rt_ok(Value::null());
+      const Value *ta = rp.ok().field("ton_amount");
+      amt = (ta != nullptr && (ta->t == VType::Int || ta->t == VType::Amount)) ? ta->num
+                                                                              : td::RefInt256();
+      const Value *fpv = rp.ok().field("forward_payload");
+      if (fpv != nullptr && fpv->t == VType::Cell && fpv->cell.not_null()) in_payload = fpv->cell;
+    }
+    sender = account_from_opt(m->source);
+    in_asset = Value::make_asset_ton();
+    in_amount = amount_or_zero_t(amt);
+    in_source = account_from_opt(m->source);
+    in_source_jw = Value::null();
+    const Message *am = block_msg(parts.anchor);
+    in_dest = account_from_opt(am != nullptr ? am->source : std::nullopt);
+    in_dest_jw = account_from_opt(m->destination);
+  }
+
+  // --- outgoing transfer ---
+  const Block *out_transfer = parts.out_transfers.empty() ? nullptr : parts.out_transfers.back();
+  if (out_transfer == nullptr) return rt_ok(Value::null());
+  if (out_transfer->btype != "jetton_transfer") {
+    return rt_ok(Value::null());  // unsupported out type
+  }
+  Value out_asset = tonco_leg_asset(data_field(out_transfer, "asset"));
+  Value out_receiver_jw = data_field(out_transfer, "receiver_wallet");
+  Value out_sender_jw = data_field(out_transfer, "sender_wallet");
+  if (auto rw = acc_str_t(out_receiver_jw)) jw_asset_map[*rw] = out_asset;
+  if (auto sw = acc_str_t(out_sender_jw)) jw_asset_map[*sw] = out_asset;
+  Value out_amount = data_field(out_transfer, "amount");
+  Value out_source = data_field(out_transfer, "sender");
+  Value out_dest = data_field(out_transfer, "receiver");
+
+  // --- peer_swaps (multi-hop only; empty for single-hop corpus) ---
+  auto payout_assets = [](const RouterPayTo &pt) {
+    std::vector<std::pair<td::RefInt256, Value>> a;
+    if (!pt.amount0.is_null() && pt.jetton0.t == VType::Account) a.emplace_back(pt.amount0, pt.jetton0);
+    if (!pt.amount1.is_null() && pt.jetton1.t == VType::Account) a.emplace_back(pt.amount1, pt.jetton1);
+    std::stable_sort(a.begin(), a.end(), [](const auto &x, const auto &y) {
+      td::RefInt256 xa = x.first.is_null() ? td::make_refint(0) : x.first;
+      td::RefInt256 ya = y.first.is_null() ? td::make_refint(0) : y.first;
+      return td::cmp(xa, ya) > 0;  // reverse
+    });
+    return a;
+  };
+  auto leg = [](const Value &amount, const Value &asset) {
+    return Value::make_dict(Value::Fields{{"amount", amount}, {"asset", asset}});
+  };
+  std::vector<Value> peer_swap_data;
+  if (swap_steps.size() > 1) {
+    auto a0 = payout_assets(swap_steps[0].pay);
+    if (!a0.empty()) {
+      auto out_addr = acc_str_t(a0[0].second).value_or("");
+      auto it = jw_asset_map.find(out_addr);
+      if (it != jw_asset_map.end()) {
+        Value prev_out = leg(amount_or_zero_t(a0[0].first), it->second);
+        peer_swap_data.push_back(Value::make_dict(
+            Value::Fields{{"in", leg(in_amount, in_asset)}, {"out", prev_out}}));
+        for (std::size_t i = 1; i < swap_steps.size(); i++) {
+          const RouterPayTo &np = swap_steps[i].pay;
+          if (np.exit_code != 0 && np.exit_code != 200) continue;
+          auto an = payout_assets(np);
+          if (an.empty()) continue;
+          auto na = acc_str_t(an[0].second).value_or("");
+          auto nit = jw_asset_map.find(na);
+          Value next_asset = nit != jw_asset_map.end() ? nit->second : Value::make_asset_ton();
+          Value next_out = leg(amount_or_zero_t(an[0].first), next_asset);
+          peer_swap_data.push_back(
+              Value::make_dict(Value::Fields{{"in", prev_out}, {"out", next_out}}));
+          prev_out = next_out;
+        }
+      }
+    }
+  }
+
+  // --- destination asset / min_out (+ failed-swap recursive-payload fallback) ---
+  Value destination_asset = out_asset;
+  Value min_out_amount = out_amount;
+  if (!ok && !swap_steps.empty() && in_payload.not_null()) {
+    std::vector<std::pair<std::string, td::RefInt256>> targets;
+    try {
+      vm::CellSlice cs = vm::load_cell_slice(in_payload);
+      collect_payload_targets(cs, targets, 0);
+    } catch (...) {
+    }
+    if (!targets.empty()) {
+      const std::string &twallet = targets.back().first;
+      Value target_asset;
+      auto it = jw_asset_map.find(twallet);
+      if (it != jw_asset_map.end()) target_asset = it->second;
+      if (target_asset.is_null()) {
+        Value ta = wallet_asset(env, twallet);
+        if (!ta.is_null()) target_asset = ta;
+      }
+      if (!target_asset.is_null()) {
+        destination_asset = target_asset;
+        min_out_amount = amount_or_zero_t(targets.back().second);
+      }
+    }
+  }
+
+  Value::Fields incoming{{"asset", in_asset},
+                         {"amount", in_amount},
+                         {"source", in_source},
+                         {"source_jetton_wallet", in_source_jw},
+                         {"destination", in_dest},
+                         {"destination_jetton_wallet", in_dest_jw}};
+  Value::Fields outgoing{{"asset", out_asset},
+                         {"amount", out_amount},
+                         {"source", out_source},
+                         {"source_jetton_wallet", out_sender_jw},
+                         {"destination", out_dest},
+                         {"destination_jetton_wallet", out_receiver_jw}};
+
+  Value::Fields rec;
+  rec.emplace_back("dex", Value::make_str("tonco"));
+  rec.emplace_back("source_asset", in_asset);
+  rec.emplace_back("destination_asset", std::move(destination_asset));
+  rec.emplace_back("sender", sender);
+  rec.emplace_back("dex_incoming_transfer", Value::make_dict(std::move(incoming)));
+  rec.emplace_back("dex_outgoing_transfer", Value::make_dict(std::move(outgoing)));
+  rec.emplace_back("referral_amount", Value::null());
+  rec.emplace_back("referral_address", Value::null());
+  rec.emplace_back("peer_swaps", Value::make_list(std::move(peer_swap_data)));
+  rec.emplace_back("min_out_amount", std::move(min_out_amount));
+  rec.emplace_back("failed", Value::make_bool(!ok));
+  return rt_ok(Value::make_obj(std::move(rec)));
 }
 
 }  // namespace mch

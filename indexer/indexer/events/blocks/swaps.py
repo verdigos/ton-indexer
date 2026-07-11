@@ -853,7 +853,8 @@ async def build_tonco_swap_core(
     sender = None
     in_transfer_payload = begin_cell().end_cell()
 
-    if isinstance(in_transfer_block, JettonTransferBlock):
+    # Dual dispatch (§11.5): btype covers legacy + declarative jetton legs.
+    if in_transfer_block is not None and in_transfer_block.btype == "jetton_transfer":
         sender = in_transfer_block.data.get("sender")
         jetton_address = in_transfer_block.data.get("asset").jetton_address
 
@@ -932,7 +933,7 @@ async def build_tonco_swap_core(
     if pton_transfer:
         additional_blocks.append(pton_transfer)
 
-    if isinstance(out_transfer, JettonTransferBlock):
+    if out_transfer is not None and out_transfer.btype == "jetton_transfer":
         try:
             jetton_address = out_transfer.data.get("asset").jetton_address
             is_pton = False
@@ -986,7 +987,7 @@ async def build_tonco_swap_core(
 
     # process intermediate_transfers - these contain PTonTransfer when router sends pTON to itself
     for transfer in intermediate_transfers:
-        if isinstance(transfer, JettonTransferBlock):
+        if transfer.btype == "jetton_transfer":
             intermediate_data.append(
                 {
                     "block": transfer,

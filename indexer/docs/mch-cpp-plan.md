@@ -392,6 +392,16 @@ corrections applied. Execute as a hygiene wave AFTER Phase C lands (same-tree co
      re-applied with next() defaults. Classify 196→197=197 diff 0; corpus stonfi_v1 trace fires
      both sides. REMAINING from this item: tonco_swap + tonco_deposit excesses full port
      (recursive ToncoPoolV3SwapPayload parser + ~250L multi-hop core; 2 corpus traces).
+   - **ITEM CLOSED 2026-07-11 (tonco wave):** tonco full C++ port done — 3 v3 parsers incl.
+     RECURSIVE ToncoPoolV3SwapPayload (kMaxPayloadDepth=64, throws never CHECKs; inner-tail
+     errors swallowed = Python try/except parity), _derive_parts reconstruction from the
+     consumed set (cyclic bodies bind no captures), ~250L core with per-step two-phase
+     source_wallet lookups, deposit-excess fill (zero corpus coverage — regression-gated only).
+     Python flips re-applied (swaps.py 856/935/989, liquidity.py 1449). Both corpus tonco_swap
+     traces fire identically (single-hop pTON-in/jetton-out). Classify 197→199=199 diff 0 both
+     artifacts; determinism across hashseeds. Deliberately NOT flipped: swaps.py:227 (legacy
+     anchor test_self, not a core read), swaps.py:686 dedust core (not catalogued, symmetric).
+     All catalogued dead-isinstance sites now dual-dispatched + C++-ported.
 
 6. **Wave-0 correctness batch (adopted from `mch-cpp-fresh-architecture-review-2026-07-11.md`, lead-triaged 2026-07-11).**
    The fresh external review largely re-derives this backlog (its §6.3=item 2, §8.5=item 4,
