@@ -45,6 +45,7 @@ TraceClassifySummary classify_one(const MchEnginePrep &prep,
     if (r_trace.is_error()) {
       sum.failure = true;
       sum.failure_reason = r_trace.move_as_error().message().str();
+      sum.failure_category = FailureCategory::malformed_trace;
       return sum;
     }
     TraceContext ctx;
@@ -53,6 +54,7 @@ TraceClassifySummary classify_one(const MchEnginePrep &prep,
     if (ctx.tree.root == nullptr) {
       sum.failure = true;
       sum.failure_reason = "empty event tree";
+      sum.failure_category = FailureCategory::malformed_trace;
       return sum;
     }
     ctx.root = init_block(ctx.arena, ctx.tree.root);
@@ -61,6 +63,8 @@ TraceClassifySummary classify_one(const MchEnginePrep &prep,
     ClassifyResult res = classify_trace(ctx, prep.ir, prep.setup, src);
     sum.failure = res.failure;
     sum.failure_reason = res.failure_reason;
+    sum.failure_category = res.failure_category;
+    sum.lookup_stats = src.stats();
     sum.action_count = res.actions.size();
     std::set<std::string> names;
     for (const CoreAction &a : res.actions) {
@@ -70,11 +74,28 @@ TraceClassifySummary classify_one(const MchEnginePrep &prep,
   } catch (const std::exception &e) {
     sum.failure = true;
     sum.failure_reason = std::string("exception: ") + e.what();
+    sum.failure_category = FailureCategory::engine_fault;
   } catch (...) {
     sum.failure = true;
     sum.failure_reason = "unknown exception";
+    sum.failure_category = FailureCategory::engine_fault;
   }
   return sum;
+}
+
+const char *category_name(FailureCategory c) {
+  switch (c) {
+    case FailureCategory::none: return "none";
+    case FailureCategory::matcher_skip: return "matcher_skip";
+    case FailureCategory::clean_reject: return "clean_reject";
+    case FailureCategory::parse_null: return "parse_null";
+    case FailureCategory::lookup_miss_tier1: return "lookup_miss_tier1";
+    case FailureCategory::lookup_miss_tier2: return "lookup_miss_tier2";
+    case FailureCategory::lookup_infra_fail: return "lookup_infra_fail";
+    case FailureCategory::engine_fault: return "engine_fault";
+    case FailureCategory::malformed_trace: return "malformed_trace";
+  }
+  return "?";
 }
 
 }  // namespace
@@ -97,15 +118,22 @@ void MchClassifierActor::start_up() {
       block_ != nullptr ? block_->account_interfaces_ : empty_ifaces;
 
   std::size_t traces = 0, total_actions = 0, failures = 0;
+  std::map<FailureCategory, std::size_t> category_counts;  // per-category trace failures
+  ParsedBlockLookupSource::LookupStats agg_lookups;        // summed tier attribution
   for (const auto &[trace_id, txs] : by_trace) {
     std::string tid = td::base64_encode(trace_id.as_slice());
     TraceClassifySummary sum = classify_one(*prep_, ifaces, tid, txs);
     traces++;
     total_actions += sum.action_count;
+    agg_lookups.tier1_hits += sum.lookup_stats.tier1_hits;
+    agg_lookups.tier2_hits += sum.lookup_stats.tier2_hits;
+    agg_lookups.misses += sum.lookup_stats.misses;
     if (sum.failure) {
       failures++;
+      category_counts[sum.failure_category]++;
       LOG(WARNING) << "[mch-shadow] seqno=" << mc_seqno_ << " trace=" << tid
-                   << " FAILED: " << sum.failure_reason;
+                   << " FAILED (" << category_name(sum.failure_category)
+                   << "): " << sum.failure_reason;
     } else {
       std::string names;
       for (const std::string &n : sum.matcher_names) {
@@ -116,8 +144,18 @@ void MchClassifierActor::start_up() {
                  << " actions=" << sum.action_count << " matchers=[" << names << "]";
     }
   }
+  // Per-category failure breakdown + tier-2 hit-rate (prod-design §3 metric).
+  std::string cats;
+  for (const auto &[cat, n] : category_counts) {
+    if (!cats.empty()) cats += ",";
+    cats += std::string(category_name(cat)) + "=" + std::to_string(n);
+  }
+  std::size_t resolved = agg_lookups.tier1_hits + agg_lookups.tier2_hits;
   LOG(INFO) << "[mch-shadow] seqno=" << mc_seqno_ << " traces=" << traces
-            << " actions=" << total_actions << " failures=" << failures;
+            << " actions=" << total_actions << " failures=" << failures << " [" << cats << "]"
+            << " lookups{tier1=" << agg_lookups.tier1_hits << " tier2=" << agg_lookups.tier2_hits
+            << " miss=" << agg_lookups.misses << " tier2_rate="
+            << (resolved ? (100 * agg_lookups.tier2_hits / resolved) : 0) << "%}";
 
   stop();
 }

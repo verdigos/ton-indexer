@@ -52,6 +52,17 @@ class ParsedBlockLookupSource : public LookupSource {
 
   Value fetch(const std::string &kind, const std::vector<Value> &args) const override;
 
+  // Tier-attribution telemetry (Phase G slice 3 review): every resolved lookup
+  // is charged to the tier that served it; unresolved calls are misses. Gives
+  // the prod-design §3 tier-2 hit-rate for free in shadow mode
+  // (tier2_hits / (tier1_hits + tier2_hits)). Does not affect fetch() results.
+  struct LookupStats {
+    std::size_t tier1_hits{0};  // served from account_interfaces_ (in-block)
+    std::size_t tier2_hits{0};  // served from the tier-2 fallback (DB/kvrocks / fixture)
+    std::size_t misses{0};      // unresolved after both tiers (null result)
+  };
+  const LookupStats &stats() const { return stats_; }
+
  private:
   // Tier-1 resolve from account_interfaces_ (null == miss). Only the tier-1
   // kinds are handled; everything else returns null so fetch() routes to tier 2.
@@ -59,6 +70,7 @@ class ParsedBlockLookupSource : public LookupSource {
 
   const InterfaceMap *account_interfaces_;
   Tier2Hook tier2_;
+  mutable LookupStats stats_;  // fetch() is const; counters are telemetry
 };
 
 }  // namespace mch

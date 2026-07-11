@@ -142,11 +142,18 @@ Value ParsedBlockLookupSource::fetch(const std::string &kind, const std::vector<
   if (tier1_kinds.count(kind) != 0) {
     Value v = tier1(kind, args[0].str);
     if (!v.is_null()) {
+      stats_.tier1_hits++;
       return v;
     }
   }
   // Tier-2-only kinds (nominator_pool, jvault_assets) and every tier-1 miss.
-  return tier2_ ? tier2_(kind, args) : Value::null();
+  Value r = tier2_ ? tier2_(kind, args) : Value::null();
+  if (!r.is_null()) {
+    stats_.tier2_hits++;
+  } else {
+    stats_.misses++;
+  }
+  return r;
 }
 
 }  // namespace mch

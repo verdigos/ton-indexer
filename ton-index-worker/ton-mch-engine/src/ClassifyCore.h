@@ -18,6 +18,39 @@
 
 namespace mch {
 
+// Failure/skip taxonomy (additive, Phase G slice 3 review). A shared vocabulary
+// for WHY a matcher/trace did not produce actions; used for shadow-mode
+// telemetry only — rendering-agnostic, no dump/twin sees it, existing gates stay
+// byte-stable. Categories:
+//   - matcher_skip:       matcher excluded at setup (missing pred/parser/lookup/
+//                         fn/shaper) — available from ClassifySetup.skips, a
+//                         setup-level fact, not a per-trace outcome.
+//   - clean_reject:       try_build match/build returned no block (spec §10.7).
+//   - parse_null:         a `parse` soft-parsed to null (all alternatives failed).
+//   - lookup_miss_tier1:  a lookup resolved past the in-block interfaces (tier-1
+//                         miss) — attributed by ParsedBlockLookupSource counters.
+//   - lookup_miss_tier2:  a lookup unresolved after the tier-2 fallback too.
+//   - lookup_infra_fail:  two-phase lookup did not converge (infra error).
+//   - engine_fault:       a mid-trace exception (Python's per-trace fallback).
+//   - malformed_trace:    the trace could not be loaded into an event tree
+//                         (schema map / empty tree) — set caller/actor-side.
+// clean_reject / parse_null / the per-lookup tier categories are per-(block,
+// matcher, lookup) events on the hot path, NOT trace-terminal outcomes, so they
+// are counted (ParsedBlockLookupSource) or left uncounted rather than stored on
+// the single-valued ClassifyResult field. failure_category names only the
+// trace-terminal reason.
+enum class FailureCategory {
+  none,
+  matcher_skip,
+  clean_reject,
+  parse_null,
+  lookup_miss_tier1,
+  lookup_miss_tier2,
+  lookup_infra_fail,
+  engine_fault,
+  malformed_trace,
+};
+
 // One produced action, RENDERING-AGNOSTIC: raw block pointers + fire-time
 // aux/flows. The adapter renders block_key(anchor)/data/consumed/aux/flows or
 // builds an Action row from `produced`. Pointers reference the caller's arena
@@ -38,6 +71,8 @@ struct ClassifyResult {
   std::vector<CoreAction> actions;  // surviving post-pass, in fire order
   bool failure = false;
   std::string failure_reason;
+  // Trace-terminal failure category (additive telemetry; none unless `failure`).
+  FailureCategory failure_category = FailureCategory::none;
   // Step 2c basic-actions fallback (try_classify_basic_actions): populated ONLY
   // when `failure` — a fresh leaf-only classify (no matchers) + the
   // post-processor chain, one CoreAction per surviving spine block of a basic

@@ -452,9 +452,17 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
   } catch (const std::exception &e) {
     result.failure = true;
     result.failure_reason = e.what();
+    // The two-phase driver throws this exact message on non-convergence — an
+    // infra fault, distinct from a spec/parse engine fault. Everything else is
+    // a generic engine_fault (Python's per-trace fallback boundary).
+    result.failure_category =
+        result.failure_reason.find("two-phase lookup did not converge") != std::string::npos
+            ? FailureCategory::lookup_infra_fail
+            : FailureCategory::engine_fault;
   } catch (...) {
     result.failure = true;
     result.failure_reason = "unknown exception";
+    result.failure_category = FailureCategory::engine_fault;
   }
   if (result.failure) {
     result.actions.clear();  // event_processing.py discards the trace's actions

@@ -11,6 +11,7 @@
 
 #include "ClassifyCore.h"
 #include "IrLoader.h"
+#include "ParsedBlockLookupSource.h"
 
 #include "IndexData.h"  // ParsedBlockPtr (tondb-scanner, PUBLIC include)
 
@@ -43,6 +44,8 @@ struct TraceClassifySummary {
   std::vector<std::string> matcher_names;
   bool failure{false};
   std::string failure_reason;
+  FailureCategory failure_category{FailureCategory::none};
+  ParsedBlockLookupSource::LookupStats lookup_stats;  // tier attribution
 };
 
 class MchClassifierActor : public td::actor::Actor {
