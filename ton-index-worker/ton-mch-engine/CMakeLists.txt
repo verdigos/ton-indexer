@@ -95,17 +95,20 @@ set(MCH_GENERATED_SOURCES
 )
 add_custom_target(mch_generate_sources DEPENDS ${MCH_GENERATED_SOURCES} ${MCH_GEN_DIR}/mch-msgs-tlb.h)
 
-add_executable(ton-mch-engine
-    src/main.cpp
+# --- mch-classify: the classification CORE static library (Phase G step 3,
+# prod-design §2). The pure pipeline TUs (no CLI/dump/harness) — ton-index-
+# postgres will link THIS; the CLI exe below links it + the harness TUs. Slice
+# 1 is ADDITIVE: identical objects, split into a lib for reuse. (build_action /
+# fill_* Action-row rendering stays with the harness Classify.cpp for now — it
+# moves lib-side in the slice that wires the production actor.)
+add_library(mch-classify STATIC
     src/TraceLoader.cpp
     src/BlockTree.cpp
     src/Value.cpp
     src/ExprRuntime.cpp
     src/ExprEval.cpp
-    src/VectorRunner.cpp
     src/IrLoader.cpp
     src/Walker.cpp
-    src/MatchRunner.cpp
     src/HostRegistry.cpp
     src/host/HostCommon.cpp
     src/host/HostGetgems.cpp
@@ -122,14 +125,9 @@ add_executable(ton-mch-engine
     src/host/HostDedustDeposit.cpp
     src/host/HostTonco.cpp
     src/BuildRuntime.cpp
-    src/BuildVectorRunner.cpp
     src/BuildDriver.cpp
-    src/BuildSmoke.cpp
     src/ClassifyCore.cpp
-    src/Classify.cpp
-    src/ShapeTest.cpp
     src/MsgParse.cpp
-    src/ParseDump.cpp
     src/parse/PSlice.cpp
     src/parse/ParseJettons.cpp
     src/parse/ParseDns.cpp
@@ -143,20 +141,32 @@ add_executable(ton-mch-engine
     src/parse/ParseJvault.cpp
     ${MCH_GENERATED_SOURCES}
 )
-target_include_directories(ton-mch-engine
+target_include_directories(mch-classify
     PUBLIC src
     # MsgParse.cpp includes "generated/mch-msgs-tlb.h" -> resolves into the
     # build tree; nothing generated ever lands under src/.
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
 )
-target_compile_features(ton-mch-engine PRIVATE cxx_std_20)
+target_compile_features(mch-classify PUBLIC cxx_std_20)
 
 find_package(lz4 CONFIG REQUIRED)
-target_link_libraries(ton-mch-engine tondb-scanner lz4::lz4)
+target_link_libraries(mch-classify PUBLIC tondb-scanner lz4::lz4)
+add_dependencies(mch-classify mch_generate_sources)
 
-# Belt-and-suspenders ordering: the OUTPUT->source wiring above already forces
-# generation before compilation; the explicit target keeps clean-dir builds
-# honest if sources move between targets later.
+# The CLI/dev tool: harness TUs (dump/runners/main) over the core lib.
+add_executable(ton-mch-engine
+    src/main.cpp
+    src/VectorRunner.cpp
+    src/MatchRunner.cpp
+    src/BuildVectorRunner.cpp
+    src/BuildSmoke.cpp
+    src/Classify.cpp
+    src/ShapeTest.cpp
+    src/ParseDump.cpp
+)
+target_include_directories(ton-mch-engine PRIVATE src ${CMAKE_CURRENT_BINARY_DIR})
+target_compile_features(ton-mch-engine PRIVATE cxx_std_20)
+target_link_libraries(ton-mch-engine mch-classify)
 add_dependencies(ton-mch-engine mch_generate_sources)
 
 install(TARGETS ton-mch-engine RUNTIME DESTINATION bin)

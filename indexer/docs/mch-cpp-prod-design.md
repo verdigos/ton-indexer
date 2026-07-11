@@ -144,6 +144,19 @@ The engine's `LookupSource { fetch(kind, key) }` gets a production adapter:
    no failing corpus trace; shadow mode is where fallback fidelity gets real data.
 3. §3 production LookupSource adapter + §4 embedding + §1 actor — first shadow run on a
    dev seqno range, diff vs Python-written rows.
+   **SLICE 1 DONE 2026-07-11**: `mch-classify` static lib target split out (exe = harness
+   TUs linking it; all gates byte-stable; Action-row fills stay harness-side until the actor
+   slice moves them). Adapter kind→BlockchainInterfaceV2 mapping SPEC'd (jetton_wallet/
+   nft_item/nft_sale/nft_auction/dedust_pool = tier-1 direct, field names 1:1 with the
+   fixture Obj shapes; jvault_assets = tier-1-computed; **nominator_pool = TIER-2-ONLY** —
+   no V2 interface variant exists, must come from the DB/kvrocks hook). trace→EventNode
+   FEASIBILITY VERDICT: SUBSTANTIAL — production needs a PARALLEL LOADER mapping
+   schema::Trace{edges}/Transaction/Message → the TraceLoader structs and rebuilding the
+   EventNode tree from TraceEdges (root = ext-in tx; node = message + processing tx; parent
+   via sending tx; tick_tock from description). All fields present; it's the next slice's
+   real work. --mch-shadow wiring deferred until the loader + actor exist. NOTE:
+   ton-index-postgres does NOT build locally (pre-existing protobuf/MSVC failure,
+   independent — zero references to mch-classify; production builds are Linux-remote).
 4. §6 item 7 priorities + remaining blessed deltas documented.
 5. Benchmark vs Python (dev_utils/mch_bench.py methodology) on the corpus + a live range.
 6. Flip decision (user) with the shadow-diff report in hand.
