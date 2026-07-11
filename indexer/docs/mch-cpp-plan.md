@@ -512,6 +512,24 @@ corrections applied. Execute as a hygiene wave AFTER Phase C lands (same-tree co
   compact first-seen order, orphan-tolerate to_tree, canonical-order invariant. Documented
   in BlockTree.h.
 
+7. **Second review (fable, 2026-07-12) — untouched aspects; report =
+   `docs/mch-review-untouched-2026-07-12.md`, triage ADOPTED as written there.**
+   Adopted pre-shadow hygiene wave (order A1→A3ii→A2→A4): A1 artifact NOT reproducible from
+   repo (source .mch emit dir was session-scratch; fix = committed emit manifest + in-spec
+   `priority` directive [already in the language, unused] → kills the T20 'a_' filename
+   hack), A3ii exe `--surface` JSON mode consumed by twins (kills CPP_* hand-sync), A2
+   single-pass build for lookup-free matchers (12/36), A4 dedupe matcher names in prod
+   artifact (shadow metrics are name-keyed). Adopted pre-flip: B3 failure-taxonomy enum at
+   ClassifyResult seam (sent into the actor slice mid-build), B1 anchor prefilter
+   (opcode/btype inventory intersection → skip whole traversals), B2 the ordered-but-never-
+   scheduled `flow` removal wave. Parked post-flip/measure-first: C1 msg-envelope
+   memoization or fused .msg.field op (biggest hot-spot: fresh 21-field Obj per access,
+   74 sites — NOT covered by the 4a "accessor infeasible" verdict), C2 int64 fast path,
+   C3 TU sharding + canonical() elision (blocked on insert_between invariant), C4 IR opt
+   passes = never at current scale. Honest-negative confirmations: wave-0 all verified
+   landed; sha-pairing solid; Python reference runtime maintainable; perf NOT a flip
+   blocker (~3.2 ms/trace debug).
+
 ### Confirmed load-bearing (audit class A — never simplify)
 
 Leaf failed semantics; merge/ensure_earliest/canonical machinery incl.
