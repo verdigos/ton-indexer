@@ -383,11 +383,9 @@ void emit_action(const PendingAction &a) {
 // ===========================================================================
 // Phase E part 2: C++ Action production (block_tree_serializer.py port).
 //
-// Scope: the composite btypes that FIRE in the corpus classify dump AND whose
-// Python serializer fill is dict-compatible (16 of them; vesting_send_message +
-// tgbtc_mint are excluded — attribute-only Python fills, see NOTE at
-// fill_action), rendered per surviving post-pass PendingAction — the same block
-// set the classify dump emits. Basic leaf actions (call_contract/ton_transfer/
+// Scope: the composite btypes that FIRE in the corpus classify dump (18 of
+// them), rendered per surviving post-pass PendingAction — the same block set
+// the classify dump emits. Basic leaf actions (call_contract/ton_transfer/
 // contract_deploy) and the serializer's spine-walk / child-recursion wrapper
 // (parent_action_id, ancestor_type, v1_ops) are OUT of scope: the C++ leaf
 // .data is a subset (§10 hazard) and those wrappers add no fill coverage.
@@ -822,16 +820,33 @@ void fill_coffee_create_vault(const Value &d, Action &a) {
   a.value = av_amount(dg(d, "amount"));
 }
 
-// NOTE — vesting_send_message + tgbtc_mint are DELIBERATELY NOT ported here.
-// Their Python serializer fills (_fill_vesting_send_message /
-// _fill_tgbtc_mint_action in block_tree_serializer.py) read block.data via
-// ATTRIBUTE access (`block.data.sender`, `block.data.crippled`), not `_dget`,
-// so they raise AttributeError on the declarative DICT block the MCH engine
-// produces — there is no valid A/B ground truth for the dict path. They stay
-// skip-table entries until the serializer gets the `_dget` dual-dispatch wave
-// (a Python-side change, out of scope: the serializer is read-only ground
-// truth). The dict-driven C++ fills are trivial (see git history) and can be
-// re-added in lockstep with that Python wave.
+void fill_vesting_send_message(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.destination = av_addr(dg(d, "vesting"));
+  a.destination_secondary = av_addr(dg(d, "message_destination"));
+  a.amount = av_amount(dg(d, "message_value"));
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("message_boc", dg(d, "message_boc_str"));
+  a.vesting_send_message_data = mkdict(std::move(f));
+}
+
+void fill_tgbtc_mint(const Value &d, Action &a) {
+  a.type = "tgbtc_mint";
+  Value cr = dg(d, "crippled");
+  if (cr.t == VType::Bool && cr.boolean) a.type += "_fallback";
+  a.source = av_addr(dg(d, "sender"));
+  a.destination = av_addr(dg(d, "recipient"));
+  a.amount = av_amount(dg(d, "amount"));
+  a.asset = av_addr(dg(d, "asset"));
+  Value succ = dg(d, "success");
+  a.success = succ.t == VType::Bool && succ.boolean;
+  Value::Fields ex;
+  ex.emplace_back("btc_txid", dg(d, "bitcoin_txid"));
+  a.extra = mkdict(std::move(ex));
+  a.source_secondary = av_addr(dg(d, "teleport_contract"));
+  a.destination_secondary = av_addr(dg(d, "recipient_wallet"));
+}
 
 // Dispatch a produced block to its fill (block_to_action match). Returns false
 // for a btype outside the ported set (skip-table entry).
@@ -854,8 +869,8 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "ethena_deposit") fill_ethena_deposit(d, a);
   else if (t == "layerzero_receive") fill_layerzero_receive(d, a);
   else if (t == "coffee_create_vault") fill_coffee_create_vault(d, a);
-  // vesting_send_message / tgbtc_mint: skip (see NOTE above fill_action) —
-  // Python serializer fill is attribute-only, no declarative A/B reference.
+  else if (t == "vesting_send_message") fill_vesting_send_message(d, a);
+  else if (t == "tgbtc_mint") fill_tgbtc_mint(d, a);
   else return false;
   return true;
 }

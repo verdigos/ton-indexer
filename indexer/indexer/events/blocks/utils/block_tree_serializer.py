@@ -823,15 +823,17 @@ def _fill_multisig_execute(block: MultisigExecuteBlock, action: Action):
 
 
 def _fill_vesting_send_message(block: VestingSendMessageBlock, action: Action):
-    action.source = _addr(block.data.sender)
-    action.destination = _addr(block.data.vesting)
+    # dual-access via _dget: legacy VestingSendMessageData dataclass OR the
+    # declarative vesting.mch build's dict (both carry identical field names).
+    action.source = _addr(_dget(block.data, 'sender'))
+    action.destination = _addr(_dget(block.data, 'vesting'))
     action.destination_secondary = _addr(
-        block.data.message_destination
+        _dget(block.data, 'message_destination')
     )  # where the msg was sent to
-    action.amount = block.data.message_value.value  # the value of the msg
+    action.amount = _dget(block.data, 'message_value').value  # the value of the msg
     action.vesting_send_message_data = {
-        "query_id": block.data.query_id,
-        "message_boc": block.data.message_boc_str,
+        "query_id": _dget(block.data, 'query_id'),
+        "message_boc": _dget(block.data, 'message_boc_str'),
     }
 
 
@@ -863,17 +865,20 @@ def _fill_tonco_deploy_pool(block: ToncoDeployPoolBlock, action: Action):
     }
 
 def _fill_tgbtc_mint_action(block: TgBTCMintBlock, action: Action):
+    # dual-access via _dget: legacy TgBTCMintData dataclass OR the declarative
+    # tgbtc.mch build's dict (identical field names; amount stays a raw int).
     action.type = 'tgbtc_mint'
-    if block.data.crippled:
+    if _dget(block.data, 'crippled'):
         action.type += '_fallback'
-    action.source = _addr(block.data.sender)
-    action.destination = _addr(block.data.recipient)
-    action.amount = block.data.amount
-    action.asset = _addr(block.data.asset)
-    action.success = block.data.success
-    action.asset_secondary = block.data.bitcoin_txid
-    action.source_secondary = _addr(block.data.teleport_contract)
-    action.destination_secondary = _addr(block.data.recipient_wallet)
+    action.source = _addr(_dget(block.data, 'sender'))
+    action.destination = _addr(_dget(block.data, 'recipient'))
+    action.amount = _dget(block.data, 'amount')
+    action.asset = _addr(_dget(block.data, 'asset'))
+    action.success = _dget(block.data, 'success')
+    # bitcoin txid is not a TON address — pgton tonaddr columns reject it
+    action.extra = {"btc_txid": _dget(block.data, 'bitcoin_txid')}
+    action.source_secondary = _addr(_dget(block.data, 'teleport_contract'))
+    action.destination_secondary = _addr(_dget(block.data, 'recipient_wallet'))
 
 
 def _fill_tgbtc_burn_action(block: TgBTCBurnBlock, action: Action):
