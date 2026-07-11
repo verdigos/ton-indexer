@@ -381,6 +381,17 @@ corrections applied. Execute as a hygiene wave AFTER Phase C lands (same-tree co
    - TWIN-INFRA GAP found: py_classify combined_registries() lacks legacy 'build_coffee_swap'
      builder → testbed artifact (classify_ir_decl.json) fails IrLoadError on the PYTHON side
      only (C++ testbed classify clean, 156 actions). Fix twin registry so both artifacts gate.
+   - **RESOLVED 2026-07-11 (follow-up wave, commit 7a225dbc):** twin gap was NOT a missing
+     registration — classify_ir_decl.json was an OBSOLETE pre-conversion artifact referencing
+     deleted builders. classify/specs regenerates byte-identical to ir/mch_ir.json → there is
+     ONE current declarative artifact (the dead-isinstance "testbed" IS the prod artifact now);
+     classify_ir_decl.json regenerated as an alias, candidate for retirement. A legacy-jettons
+     control artifact is not C++-gateable by construction (C++ skips legacy builders).
+     stonfi_v1 FULL C++ PORT DONE: StonfiSwapMessage/StonfiPaymentRequest parsers + ~110L core
+     (3 two-phase jetton_wallet lookups, btype/data-only = deterministic), Python dual-dispatch
+     re-applied with next() defaults. Classify 196→197=197 diff 0; corpus stonfi_v1 trace fires
+     both sides. REMAINING from this item: tonco_swap + tonco_deposit excesses full port
+     (recursive ToncoPoolV3SwapPayload parser + ~250L multi-hop core; 2 corpus traces).
 
 6. **Wave-0 correctness batch (adopted from `mch-cpp-fresh-architecture-review-2026-07-11.md`, lead-triaged 2026-07-11).**
    The fresh external review largely re-derives this backlog (its §6.3=item 2, §8.5=item 4,
