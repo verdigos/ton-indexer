@@ -115,7 +115,11 @@ class Emitter {
           return bind("rt_fault(\"name '" + id + "' is not bound\")");
         }
         int i = fresh();
-        line("Value v" + num(i) + " = " + it->second + ";");
+        // §11.4b: bind by const-ref, not a copy — a name read (env.slots[k] /
+        // consumed / a let alias / a lifetime-extended anchor temporary) is only
+        // ever read or copied downstream, never moved-from, so this elides a
+        // ~120-byte Value copy per reference on the build hot path.
+        line("const Value &v" + num(i) + " = " + it->second + ";");
         return "v" + num(i);
       }
       return bind("rt_name(env, " + cstr(id) + ")");
@@ -142,7 +146,11 @@ class Emitter {
       if (mode_ == EmitMode::Build && !is_builtin(fn)) {
         return bind("rt_call_hostfn(env, " + cstr(fn) + ", std::vector<Value>{" + argv + "})");
       }
-      return bind("rt_call_builtin(" + cstr(fn) + ", std::vector<Value>{" + argv + "})");
+      // §11.4a static dispatch: the builtin name + arity are known at emit time,
+      // so call the typed core directly — no name-keyed dispatch, no per-call
+      // heap args vector (§11.4b). is_builtin() gates this; the arg temps are
+      // Value locals passed by const-ref (rt_builtin_* take const Value&).
+      return bind("rt_builtin_" + fn + "(" + argv + ")");
     }
     if (k == "lookup") {
       if (mode_ == EmitMode::Where) {

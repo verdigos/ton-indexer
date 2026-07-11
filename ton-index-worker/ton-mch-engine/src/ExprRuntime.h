@@ -84,6 +84,22 @@ EvalResult rt_sub(const Value &l, const Value &r);
 EvalResult rt_mul(const Value &l, const Value &r);
 
 // --- builtins (null-strict: any null argument short-circuits to null) ---
+// Per-builtin cores. The interpreter dispatches through rt_call_builtin; the
+// generated code (§11.4a static dispatch) calls the typed rt_builtin_<name>
+// directly — no name string, no per-call args vector. ONE semantics: both
+// paths run the SAME core (plan §0.2).
 EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &args);
+EvalResult rt_builtin_account(const Value &x);
+EvalResult rt_builtin_amount(const Value &x);
+EvalResult rt_builtin_asset(const Value &x);
+EvalResult rt_builtin_ton_asset();
+EvalResult rt_builtin_addr_none();
+EvalResult rt_builtin_b64(const Value &x);
+EvalResult rt_builtin_first(const Value &x);
+EvalResult rt_builtin_last(const Value &x);
+EvalResult rt_builtin_len(const Value &x);
+EvalResult rt_builtin_sum(const Value &x);
+EvalResult rt_builtin_zip(const Value &a, const Value &b);
+EvalResult rt_builtin_map(const Value &a, const Value &b);
 
 }  // namespace mch

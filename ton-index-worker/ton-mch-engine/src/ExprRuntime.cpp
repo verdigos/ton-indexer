@@ -405,6 +405,137 @@ EvalResult rt_add(const Value &l, const Value &r) { return arith(l, r, '+'); }
 EvalResult rt_sub(const Value &l, const Value &r) { return arith(l, r, '-'); }
 EvalResult rt_mul(const Value &l, const Value &r) { return arith(l, r, '*'); }
 
+// Per-builtin cores (null-strict for 1+ arg builtins). BOTH the interpreter
+// dispatch (rt_call_builtin, vector args) and generated code (static direct
+// calls, §11.4a) go through these — ONE semantics (plan §0.2). Generated code
+// emits rt_builtin_<name>(args...) directly, skipping the name-keyed dispatch
+// AND the per-call heap args vector (§11.4b).
+static bool bi_require_list(const Value &v, const std::vector<Value> *&out) {
+  if (v.t != VType::List) return false;
+  out = v.items.get();
+  return true;
+}
+
+EvalResult rt_builtin_account(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  if (x.t == VType::Account) return rt_ok(x);
+  if (x.t == VType::Str) {
+    if (x.str == "addr_none") return rt_ok(Value::make_account_none());
+    auto norm = normalize_raw_address(x.str);
+    if (!norm) return rt_fault("account: invalid address " + x.str);
+    return rt_ok(Value::make_account_raw(*norm));
+  }
+  return rt_fault("account: cannot build from " + x.describe());
+}
+
+EvalResult rt_builtin_amount(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  if (x.t == VType::Amount || x.t == VType::Int) return rt_ok(Value::make_amount(x.num));
+  return rt_fault("amount: cannot build from " + x.describe());
+}
+
+EvalResult rt_builtin_asset(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  if (x.t == VType::Str) {
+    auto norm = normalize_raw_address(x.str);
+    if (!norm) return rt_fault("asset: invalid jetton master " + x.str);
+    return rt_ok(Value::make_asset_jetton(*norm));
+  }
+  if (x.t == VType::Account && !x.addr_none) return rt_ok(Value::make_asset_jetton(x.str));
+  return rt_fault("asset: cannot build from " + x.describe());
+}
+
+EvalResult rt_builtin_ton_asset() { return rt_ok(Value::make_asset_ton()); }
+
+EvalResult rt_builtin_addr_none() { return rt_ok(Value::make_account_none()); }
+
+EvalResult rt_builtin_b64(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  if (x.t == VType::Bytes) return rt_ok(Value::make_str(td::base64_encode(x.str)));
+  if (x.t == VType::Cell) {
+    // §12: native td BOC bytes. The b64 STRING differs from pytoniq's on
+    // multi-ref trees, but every consumer decodes it back to the same cell
+    // (root hash equal), and the dumps render such fields by cellhash.
+    auto r = td_boc_serialize(x.cell);
+    if (r.is_error()) return rt_fault("b64: cell serialization failed");
+    return rt_ok(Value::make_str(td::base64_encode(r.move_as_ok())));
+  }
+  return rt_fault("b64: expects bytes or a cell, got " + x.describe());
+}
+
+EvalResult rt_builtin_first(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  const std::vector<Value> *xs = nullptr;
+  if (!bi_require_list(x, xs)) return rt_fault("first expects a list, got " + x.describe());
+  return rt_ok(xs->empty() ? Value::null() : xs->front());
+}
+
+EvalResult rt_builtin_last(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  const std::vector<Value> *xs = nullptr;
+  if (!bi_require_list(x, xs)) return rt_fault("last expects a list, got " + x.describe());
+  return rt_ok(xs->empty() ? Value::null() : xs->back());
+}
+
+EvalResult rt_builtin_len(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  const std::vector<Value> *xs = nullptr;
+  if (!bi_require_list(x, xs)) return rt_fault("len expects a list, got " + x.describe());
+  return rt_ok(Value::make_int64(static_cast<std::int64_t>(xs->size())));
+}
+
+EvalResult rt_builtin_sum(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  const std::vector<Value> *xs = nullptr;
+  if (!bi_require_list(x, xs)) return rt_fault("sum expects a list, got " + x.describe());
+  td::RefInt256 acc = td::make_refint(0);
+  for (const auto &el : *xs) {
+    td::RefInt256 v;
+    std::string err;
+    if (!coerce_int(el, v, err)) {
+      return rt_fault("sum: element is not an integer or Amount (" + el.describe() + ")");
+    }
+    acc += v;
+  }
+  return rt_ok(Value::make_int(std::move(acc)));
+}
+
+EvalResult rt_builtin_zip(const Value &a, const Value &b) {
+  if (rt_is_null(a) || rt_is_null(b)) return rt_ok(Value::null());
+  const std::vector<Value> *xs = nullptr;
+  const std::vector<Value> *ys = nullptr;
+  if (!bi_require_list(a, xs) || !bi_require_list(b, ys)) return rt_fault("zip expects two lists");
+  std::vector<Value> out;
+  std::size_t n = std::min(xs->size(), ys->size());
+  out.reserve(n);
+  for (std::size_t i = 0; i < n; i++) out.push_back(Value::make_list({(*xs)[i], (*ys)[i]}));
+  return rt_ok(Value::make_list(std::move(out)));
+}
+
+EvalResult rt_builtin_map(const Value &a, const Value &b) {
+  if (rt_is_null(a) || rt_is_null(b)) return rt_ok(Value::null());
+  const std::vector<Value> *xs = nullptr;
+  if (!bi_require_list(a, xs)) return rt_fault("map expects a list, got " + a.describe());
+  if (b.t != VType::Str) return rt_fault("map field must be a string, got " + b.describe());
+  const std::string &f = b.str;
+  std::vector<Value> out;
+  out.reserve(xs->size());
+  for (const auto &x : *xs) {
+    if (rt_is_null(x)) {
+      out.push_back(Value::null());
+      continue;
+    }
+    if (x.t == VType::Dict || x.t == VType::Obj) {
+      const Value *fv = x.field(f);
+      if (fv == nullptr) return rt_fault("map: element has no field '" + f + "'");
+      out.push_back(*fv);
+    } else {
+      return rt_fault("map: " + x.describe() + " has no field '" + f + "'");
+    }
+  }
+  return rt_ok(Value::make_list(std::move(out)));
+}
+
 EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &args) {
   static const std::map<std::string, int> arity = {
       {"account", 1}, {"amount", 1},  {"asset", 1}, {"ton_asset", 0},
@@ -418,144 +549,19 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   if (static_cast<int>(args.size()) != ar->second) {
     return rt_fault("builtin " + name + " arity mismatch");
   }
-  for (const auto &a : args) {
-    if (rt_is_null(a)) {
-      return rt_ok(Value::null());  // null-strict short-circuit
-    }
-  }
-
-  auto require_list = [&](const Value &v, const std::vector<Value> *&out) -> bool {
-    if (v.t != VType::List) {
-      return false;
-    }
-    out = v.items.get();
-    return true;
-  };
-
-  if (name == "account") {
-    const Value &x = args[0];
-    if (x.t == VType::Account) {
-      return rt_ok(x);
-    }
-    if (x.t == VType::Str) {
-      if (x.str == "addr_none") {
-        return rt_ok(Value::make_account_none());
-      }
-      auto norm = normalize_raw_address(x.str);
-      if (!norm) {
-        return rt_fault("account: invalid address " + x.str);
-      }
-      return rt_ok(Value::make_account_raw(*norm));
-    }
-    return rt_fault("account: cannot build from " + x.describe());
-  }
-  if (name == "amount") {
-    const Value &x = args[0];
-    if (x.t == VType::Amount || x.t == VType::Int) {
-      return rt_ok(Value::make_amount(x.num));
-    }
-    return rt_fault("amount: cannot build from " + x.describe());
-  }
-  if (name == "asset") {
-    const Value &x = args[0];
-    if (x.t == VType::Str) {
-      auto norm = normalize_raw_address(x.str);
-      if (!norm) {
-        return rt_fault("asset: invalid jetton master " + x.str);
-      }
-      return rt_ok(Value::make_asset_jetton(*norm));
-    }
-    if (x.t == VType::Account && !x.addr_none) {
-      return rt_ok(Value::make_asset_jetton(x.str));
-    }
-    return rt_fault("asset: cannot build from " + x.describe());
-  }
-  if (name == "ton_asset") {
-    return rt_ok(Value::make_asset_ton());
-  }
-  if (name == "addr_none") {
-    return rt_ok(Value::make_account_none());
-  }
-  if (name == "b64") {
-    const Value &x = args[0];
-    if (x.t == VType::Bytes) {
-      return rt_ok(Value::make_str(td::base64_encode(x.str)));
-    }
-    if (x.t == VType::Cell) {
-      // §12: native td BOC bytes. The b64 STRING differs from pytoniq's on
-      // multi-ref trees, but every consumer decodes it back to the same cell
-      // (root hash equal), and the dumps render such fields by cellhash.
-      auto r = td_boc_serialize(x.cell);
-      if (r.is_error()) {
-        return rt_fault("b64: cell serialization failed");
-      }
-      return rt_ok(Value::make_str(td::base64_encode(r.move_as_ok())));
-    }
-    return rt_fault("b64: expects bytes or a cell, got " + x.describe());
-  }
-
-  const std::vector<Value> *xs = nullptr;
-  if (name == "first") {
-    if (!require_list(args[0], xs)) return rt_fault("first expects a list, got " + args[0].describe());
-    return rt_ok(xs->empty() ? Value::null() : xs->front());
-  }
-  if (name == "last") {
-    if (!require_list(args[0], xs)) return rt_fault("last expects a list, got " + args[0].describe());
-    return rt_ok(xs->empty() ? Value::null() : xs->back());
-  }
-  if (name == "len") {
-    if (!require_list(args[0], xs)) return rt_fault("len expects a list, got " + args[0].describe());
-    return rt_ok(Value::make_int64(static_cast<std::int64_t>(xs->size())));
-  }
-  if (name == "sum") {
-    if (!require_list(args[0], xs)) return rt_fault("sum expects a list, got " + args[0].describe());
-    td::RefInt256 acc = td::make_refint(0);
-    for (const auto &x : *xs) {
-      td::RefInt256 v;
-      std::string err;
-      if (!coerce_int(x, v, err)) {
-        return rt_fault("sum: element is not an integer or Amount (" + x.describe() + ")");
-      }
-      acc += v;
-    }
-    return rt_ok(Value::make_int(std::move(acc)));
-  }
-  if (name == "zip") {
-    const std::vector<Value> *ys = nullptr;
-    if (!require_list(args[0], xs) || !require_list(args[1], ys)) {
-      return rt_fault("zip expects two lists");
-    }
-    std::vector<Value> out;
-    std::size_t n = std::min(xs->size(), ys->size());
-    for (std::size_t i = 0; i < n; i++) {
-      out.push_back(Value::make_list({(*xs)[i], (*ys)[i]}));
-    }
-    return rt_ok(Value::make_list(std::move(out)));
-  }
-  if (name == "map") {
-    if (!require_list(args[0], xs)) return rt_fault("map expects a list, got " + args[0].describe());
-    if (args[1].t != VType::Str) {
-      return rt_fault("map field must be a string, got " + args[1].describe());
-    }
-    const std::string &f = args[1].str;
-    std::vector<Value> out;
-    for (const auto &x : *xs) {
-      if (rt_is_null(x)) {
-        out.push_back(Value::null());
-        continue;
-      }
-      if (x.t == VType::Dict || x.t == VType::Obj) {
-        const Value *fv = x.field(f);
-        if (fv == nullptr) {
-          return rt_fault("map: element has no field '" + f + "'");
-        }
-        out.push_back(*fv);
-      } else {
-        return rt_fault("map: " + x.describe() + " has no field '" + f + "'");
-      }
-    }
-    return rt_ok(Value::make_list(std::move(out)));
-  }
+  // Dispatch to the shared per-builtin cores (null-strict handled inside each).
+  if (name == "account") return rt_builtin_account(args[0]);
+  if (name == "amount") return rt_builtin_amount(args[0]);
+  if (name == "asset") return rt_builtin_asset(args[0]);
+  if (name == "ton_asset") return rt_builtin_ton_asset();
+  if (name == "addr_none") return rt_builtin_addr_none();
+  if (name == "b64") return rt_builtin_b64(args[0]);
+  if (name == "first") return rt_builtin_first(args[0]);
+  if (name == "last") return rt_builtin_last(args[0]);
+  if (name == "len") return rt_builtin_len(args[0]);
+  if (name == "sum") return rt_builtin_sum(args[0]);
+  if (name == "zip") return rt_builtin_zip(args[0], args[1]);
+  if (name == "map") return rt_builtin_map(args[0], args[1]);
   return rt_fault("unreachable builtin " + name);
 }
 

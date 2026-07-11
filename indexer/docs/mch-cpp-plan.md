@@ -321,8 +321,18 @@ corrections applied. Execute as a hygiene wave AFTER Phase C lands (same-tree co
    (MsgParse.cpp:475-477,489); unread `MsgContent.hash` (TraceLoader.cpp:137). KEEP
    `op_index`/`btype_index` (IrLoader) — currently unconsumed but built for the production
    loop's anchor index (Phase G).
-4. **Codegen optimization pass (lead review of generated code, 2026-07-07; schedule inside
-   Phase G where a benchmark can prove it).** The emitter (`codegen/ExprCodegen.cpp`) produces
+4. **Codegen optimization pass — 4a+4b DONE 2026-07-11.** Builtins refactored to shared
+   typed cores `rt_builtin_<name>()` (interpreter's rt_call_builtin delegates to the SAME
+   cores — one-semantics held); emitter emits direct calls (126 direct, 0 string-dispatched
+   in builds table) + `const Value&` aliases for name reads (no ~120-byte copies) + reserve()
+   in zip/map. Measured (debug build, median of 3, full corpus): --classify 924→711 ms (~23%),
+   --match 417→340 ms (~18% — where_expr hot path, same emitter). ACCESSOR static dispatch
+   assessed INFEASIBLE: rt_access dispatches on runtime VALUE TYPE (Block/Obj/Dict/Amount),
+   emitter knows only the field name — nothing to statically select; Obj/Dict access is an
+   inherent dict scan. 4c partially done (reserve), 4d not pursued. All byte-gates green after
+   regen. (Original analysis below for history.)
+   **(historical)** (lead review of generated code, 2026-07-07; schedule inside
+   Phase G where a benchmark can prove it). The emitter (`codegen/ExprCodegen.cpp`) produces
    correct-but-naïve code; all fixes are emitter-level, behavior-preserving, and verified for
    free by the existing byte-gates (vectors 91/91, classify/parse-dump diff 0 after regen).
    Ranked by impact (user-confirmed: 4a + 4b are the priority):
