@@ -7,9 +7,16 @@
 #include "GenBuilds.h"
 #include "HostRegistry.h"
 #include "IrLoader.h"
+#include "MsgParse.h"
 #include "Walker.h"
 
+#include "td/utils/base64.h"
+#include "td/utils/crypto.h"
+
+#include "common/refint.h"
+
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <deque>
 #include <exception>
@@ -373,6 +380,567 @@ void emit_action(const PendingAction &a) {
               a.aux_s.c_str());
 }
 
+// ===========================================================================
+// Phase E part 2: C++ Action production (block_tree_serializer.py port).
+//
+// Scope: the composite btypes that FIRE in the corpus classify dump AND whose
+// Python serializer fill is dict-compatible (16 of them; vesting_send_message +
+// tgbtc_mint are excluded — attribute-only Python fills, see NOTE at
+// fill_action), rendered per surviving post-pass PendingAction — the same block
+// set the classify dump emits. Basic leaf actions (call_contract/ton_transfer/
+// contract_deploy) and the serializer's spine-walk / child-recursion wrapper
+// (parent_action_id, ancestor_type, v1_ops) are OUT of scope: the C++ leaf
+// .data is a subset (§10 hazard) and those wrappers add no fill coverage.
+//
+// STAGED OUT (reported): accounts + role_assignment + the block_to_action
+// tx_hashes extension by initiating_event_node — the C++ Block has no
+// initiating_event_node member, so accounts/roles cannot be reproduced
+// deterministically (Phase G production wiring). tx_hashes below is the BASE
+// set (event_nodes only), computed identically on both A/B sides. trace_id /
+// trace_* / finality are constant-per-fixture and not rendered.
+// ===========================================================================
+
+// _addr(): AccountId/Asset/None -> canonical address STRING (Str) or Null.
+// Composites and directional fields store addresses as plain strings (Python
+// _addr / .as_str()), so they render with the "str:" prefix on both sides.
+Value av_addr(const Value &v) {
+  if (v.is_null()) return Value::null();
+  if (v.t == VType::Asset) return v.has_jetton ? Value::make_str(v.str) : Value::null();
+  if (v.t == VType::Account) return v.addr_none ? Value::null() : Value::make_str(v.str);
+  return Value::null();
+}
+
+// Amount.value / _value(): Amount -> its underlying Int (or Float / Null);
+// a plain Int (jvault/evaa/tgbtc raw amounts) passes through unchanged.
+Value av_amount(const Value &v) {
+  if (v.is_null()) return Value::null();
+  if (v.t == VType::Amount) {
+    if (v.amount_float) return Value::make_float(v.dnum);
+    return v.num.is_null() ? Value::null() : Value::make_int(v.num);
+  }
+  return v;  // Int / Float passthrough
+}
+
+// data field read (Dict/Obj); missing == Null.
+Value dg(const Value &d, const char *k) {
+  const Value *v = d.field(k);
+  return v != nullptr ? *v : Value::null();
+}
+bool has(const Value &d, const char *k) { return d.field(k) != nullptr; }
+
+// Python hex(int): "0x" + lowercase magnitude, no leading zeros. Only used for
+// EVAA asset_id (a positive 256-bit id). Null -> Null.
+Value av_hex(const Value &v) {
+  if (v.is_null() || v.t != VType::Int || v.num.is_null()) return Value::null();
+  return Value::make_str("0x" + td::hex_string(v.num, false));
+}
+
+// jetton/nft `comment`: produced field is RAW bytes (Bytes) or Null. encrypted
+// -> base64; else utf-8 backslashreplace + U+0000 strip (decode_comment_bytes).
+Value comment_value(const Value &d) {
+  const Value *c = d.field("comment");
+  if (c == nullptr || c->is_null()) return Value::null();
+  bool enc = false;
+  const Value *e = d.field("encrypted_comment");
+  if (e != nullptr && e->t == VType::Bool) enc = e->boolean;
+  if (enc) return Value::make_str(td::base64_encode(td::Slice(c->str)));
+  return Value::make_str(decode_comment_bytes(c->str));
+}
+
+// get_utime (tree_utils.py): tick_tock -> tx.now; created_lt set -> created_at;
+// else tx.now.
+std::int64_t node_utime(const EventNode *n) {
+  if (n->is_tick_tock && n->tx != nullptr) return n->tx->now;
+  if (n->msg != nullptr && n->msg->created_lt) {
+    return n->msg->created_at ? *n->msg->created_at : 0;
+  }
+  return n->tx != nullptr ? n->tx->now : 0;
+}
+
+// The rendered Action (fixed schema; unset fields are Null, rendered "null").
+struct Action {
+  std::string action_id;
+  std::string type;
+  bool success{true};
+  std::int64_t start_lt{0}, end_lt{0}, start_utime{0}, end_utime{0}, mc_seqno_end{0};
+  std::vector<std::string> tx_hashes;
+  Value source, source_secondary, destination, destination_secondary;
+  Value asset, asset_secondary, asset2, asset2_secondary;
+  Value amount, value, opcode;
+  Value ton_transfer_data, jetton_transfer_data, jetton_swap_data, nft_transfer_data,
+      nft_listing_data, dex_deposit_liquidity_data, staking_data, evaa_withdraw_data,
+      vesting_send_message_data, layerzero_packet_data, jvault_stake_data, jvault_claim_data,
+      extra;
+};
+
+Value mkdict(Value::Fields f) { return Value::make_dict(std::move(f)); }
+
+// --- per-btype fills (block_tree_serializer.py _fill_*) ---------------------
+
+void fill_jetton_transfer(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.source_secondary = av_addr(dg(d, "sender_wallet"));
+  a.destination = av_addr(dg(d, "receiver"));
+  a.destination_secondary = has(d, "receiver_wallet") ? av_addr(dg(d, "receiver_wallet")) : Value::null();
+  a.amount = av_amount(dg(d, "amount"));
+  Value asset = dg(d, "asset");
+  a.asset = (asset.is_null() || (asset.t == VType::Asset && asset.is_ton)) ? Value::null() : av_addr(asset);
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("response_destination", av_addr(dg(d, "response_address")));
+  f.emplace_back("forward_amount", av_amount(dg(d, "forward_amount")));
+  f.emplace_back("custom_payload", dg(d, "custom_payload"));
+  f.emplace_back("forward_payload", dg(d, "forward_payload"));
+  f.emplace_back("comment", comment_value(d));
+  f.emplace_back("is_encrypted_comment", dg(d, "encrypted_comment"));
+  a.jetton_transfer_data = mkdict(std::move(f));
+}
+
+void fill_jetton_burn(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "owner"));
+  a.source_secondary = av_addr(dg(d, "jetton_wallet"));
+  a.asset = av_addr(dg(d, "asset"));  // asset.jetton_address.as_str()
+  a.amount = av_amount(dg(d, "amount"));
+}
+
+void fill_jetton_mint(const Value &d, Action &a) {
+  a.destination = av_addr(dg(d, "to"));
+  a.destination_secondary = av_addr(dg(d, "to_jetton_wallet"));
+  a.asset = av_addr(dg(d, "asset"));  // asset.jetton_address
+  a.amount = av_amount(dg(d, "amount"));
+  a.value = av_amount(dg(d, "ton_amount"));
+}
+
+Value convert_transfer(const Value &t) {
+  Value::Fields f;
+  f.emplace_back("amount", av_amount(dg(t, "amount")));
+  f.emplace_back("source", av_addr(dg(t, "source")));
+  f.emplace_back("source_jetton_wallet", av_addr(dg(t, "source_jetton_wallet")));
+  f.emplace_back("destination", av_addr(dg(t, "destination")));
+  f.emplace_back("destination_jetton_wallet", av_addr(dg(t, "destination_jetton_wallet")));
+  f.emplace_back("asset", av_addr(dg(t, "asset")));
+  return mkdict(std::move(f));
+}
+
+Value convert_peer_swap(const Value &ps) {
+  Value in = dg(ps, "in"), out = dg(ps, "out");
+  Value::Fields f;
+  f.emplace_back("amount_in", av_amount(dg(in, "amount")));
+  f.emplace_back("asset_in", av_addr(dg(in, "asset")));
+  f.emplace_back("amount_out", av_amount(dg(out, "amount")));
+  f.emplace_back("asset_out", av_addr(dg(out, "asset")));
+  return mkdict(std::move(f));
+}
+
+void fill_jetton_swap(const Value &d, Action &a) {
+  Value dit = dg(d, "dex_incoming_transfer");
+  Value dot = dg(d, "dex_outgoing_transfer");
+  Value in_conv = convert_transfer(dit);
+  Value out_conv = convert_transfer(dot);
+  a.asset = av_addr(dg(dit, "asset"));
+  a.asset2 = av_addr(dg(dot, "asset"));
+  Value dex = dg(d, "dex");
+  if (dex.t == VType::Str && (dex.str == "stonfi_v2" || dex.str == "dedust" || dex.str == "tonco")) {
+    a.asset = av_addr(dg(d, "source_asset"));
+    a.asset2 = av_addr(dg(d, "destination_asset"));
+  }
+  a.source = dg(in_conv, "source");
+  a.source_secondary = dg(in_conv, "source_jetton_wallet");
+  a.destination = dg(out_conv, "destination");
+  a.destination_secondary = dg(out_conv, "destination_jetton_wallet");
+  if (has(d, "destination_wallet") && !dg(d, "destination_wallet").is_null()) {
+    a.destination_secondary = av_addr(dg(d, "destination_wallet"));
+  }
+  if (has(d, "destination_asset") && !dg(d, "destination_asset").is_null()) {
+    a.asset2 = av_addr(dg(d, "destination_asset"));
+  }
+  Value min_out = Value::null();
+  if (has(d, "min_out_amount")) min_out = av_amount(dg(d, "min_out_amount"));
+  Value::Fields f;
+  f.emplace_back("dex", dex);
+  f.emplace_back("sender", av_addr(dg(d, "sender")));
+  f.emplace_back("dex_incoming_transfer", in_conv);
+  f.emplace_back("dex_outgoing_transfer", out_conv);
+  f.emplace_back("min_out_amount", min_out);
+  if (has(d, "peer_swaps") && !dg(d, "peer_swaps").is_null()) {
+    Value ps = dg(d, "peer_swaps");
+    std::vector<Value> conv;
+    if (ps.items) {
+      for (const Value &s : *ps.items) conv.push_back(convert_peer_swap(s));
+    }
+    f.emplace_back("peer_swaps", Value::make_list(std::move(conv)));
+  }
+  a.jetton_swap_data = mkdict(std::move(f));
+}
+
+void fill_nft_transfer(const Value &d, Action &a) {
+  if (has(d, "prev_owner") && !dg(d, "prev_owner").is_null()) {
+    a.source = av_addr(dg(d, "prev_owner"));
+  }
+  a.destination = av_addr(dg(d, "new_owner"));
+  Value nft = dg(d, "nft");
+  a.asset_secondary = av_addr(dg(nft, "address"));
+  Value coll = dg(nft, "collection");
+  if (!coll.is_null()) a.asset = av_addr(dg(coll, "address"));
+  bool is_purchase = dg(d, "is_purchase").t == VType::Bool && dg(d, "is_purchase").boolean;
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("is_purchase", dg(d, "is_purchase"));
+  f.emplace_back("price", (has(d, "price") && is_purchase) ? av_amount(dg(d, "price")) : Value::null());
+  f.emplace_back("nft_item_index", dg(nft, "index"));  // Float passthrough
+  Value fwd = dg(d, "forward_amount");
+  f.emplace_back("forward_amount", fwd.is_null() ? Value::null() : av_amount(fwd));
+  f.emplace_back("custom_payload", dg(d, "custom_payload"));
+  f.emplace_back("forward_payload", dg(d, "forward_payload"));
+  Value resp = dg(d, "response_destination");
+  f.emplace_back("response_destination", resp.is_null() ? Value::null() : av_addr(resp));
+  f.emplace_back("marketplace", (has(d, "marketplace") && !dg(d, "marketplace").is_null()) ? dg(d, "marketplace") : Value::null());
+  f.emplace_back("marketplace_address", (has(d, "marketplace_address") && !dg(d, "marketplace_address").is_null()) ? av_addr(dg(d, "marketplace_address")) : Value::null());
+  f.emplace_back("real_prev_owner", (has(d, "real_prev_owner") && !dg(d, "real_prev_owner").is_null()) ? av_addr(dg(d, "real_prev_owner")) : Value::null());
+  f.emplace_back("payout_amount", has(d, "payout_amount") ? av_amount(dg(d, "payout_amount")) : Value::null());
+  f.emplace_back("payout_comment_encrypted", dg(d, "payout_comment_encrypted"));
+  f.emplace_back("payout_comment_encoded", dg(d, "payout_comment_encoded"));
+  f.emplace_back("payout_comment", dg(d, "payout_comment"));
+  f.emplace_back("royalty_amount", has(d, "royalty_amount") ? av_amount(dg(d, "royalty_amount")) : Value::null());
+  a.nft_transfer_data = mkdict(std::move(f));
+  Value::Fields l;
+  l.emplace_back("marketplace_fee_address", has(d, "payout_address") ? av_addr(dg(d, "payout_address")) : Value::null());
+  l.emplace_back("royalty_address", has(d, "royalty_address") ? av_addr(dg(d, "royalty_address")) : Value::null());
+  a.nft_listing_data = mkdict(std::move(l));
+}
+
+void fill_dedust_deposit(const Value &d, Action &a) {
+  a.type = "dex_deposit_liquidity";
+  a.source = av_addr(dg(d, "sender"));
+  a.destination = av_addr(dg(d, "pool_address"));
+  a.destination_secondary = av_addr(dg(d, "deposit_contract"));
+  std::vector<Value> excesses;
+  Value ve = dg(d, "vault_excesses");
+  if (ve.items) {
+    for (const Value &e : *ve.items) {
+      Value::Fields ef;
+      Value a0 = Value::null(), a1 = Value::null();
+      if (e.items && e.items->size() >= 2) {
+        a0 = (*e.items)[0];
+        a1 = (*e.items)[1];
+      }
+      ef.emplace_back("asset", av_addr(a0));
+      ef.emplace_back("amount", av_amount(a1));
+      excesses.push_back(mkdict(std::move(ef)));
+    }
+  }
+  Value::Fields f;
+  f.emplace_back("dex", dg(d, "dex"));
+  f.emplace_back("asset1", av_addr(dg(d, "asset_1")));
+  f.emplace_back("amount1", av_amount(dg(d, "amount_1")));
+  f.emplace_back("asset2", av_addr(dg(d, "asset_2")));
+  f.emplace_back("amount2", av_amount(dg(d, "amount_2")));
+  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "user_jetton_wallet_1")));
+  f.emplace_back("user_jetton_wallet_2", av_addr(dg(d, "user_jetton_wallet_2")));
+  f.emplace_back("lp_tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
+  f.emplace_back("target_asset_1", av_addr(dg(d, "target_asset_1")));
+  f.emplace_back("target_amount_1", av_amount(dg(d, "target_amount_1")));
+  f.emplace_back("target_asset_2", av_addr(dg(d, "target_asset_2")));
+  f.emplace_back("target_amount_2", av_amount(dg(d, "target_amount_2")));
+  f.emplace_back("vault_excesses", Value::make_list(std::move(excesses)));
+  a.dex_deposit_liquidity_data = mkdict(std::move(f));
+}
+
+void fill_dedust_deposit_partial(const Value &d, Action &a) {
+  a.type = "dex_deposit_liquidity";
+  a.source = av_addr(dg(d, "sender"));
+  a.destination_secondary = av_addr(dg(d, "deposit_contract"));
+  Value::Fields f;
+  f.emplace_back("dex", dg(d, "dex"));
+  f.emplace_back("asset1", av_addr(dg(d, "asset_1")));
+  f.emplace_back("amount1", av_amount(dg(d, "amount_1")));
+  f.emplace_back("asset2", av_addr(dg(d, "asset_2")));
+  f.emplace_back("amount2", av_amount(dg(d, "amount_2")));
+  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "user_jetton_wallet_1")));
+  f.emplace_back("user_jetton_wallet_2", av_addr(dg(d, "user_jetton_wallet_2")));
+  f.emplace_back("lp_tokens_minted", Value::null());
+  f.emplace_back("target_asset_1", av_addr(dg(d, "target_asset_1")));
+  f.emplace_back("target_amount_1", av_amount(dg(d, "target_amount_1")));
+  f.emplace_back("target_asset_2", av_addr(dg(d, "target_asset_2")));
+  f.emplace_back("target_amount_2", av_amount(dg(d, "target_amount_2")));
+  a.dex_deposit_liquidity_data = mkdict(std::move(f));
+}
+
+void fill_tonco_deposit(const Value &d, Action &a) {
+  a.type = "dex_deposit_liquidity";
+  a.source = av_addr(dg(d, "sender"));
+  Value sw1 = dg(d, "sender_wallet_1"), sw2 = dg(d, "sender_wallet_2");
+  a.source_secondary = av_addr(!sw1.is_null() ? sw1 : sw2);
+  a.destination = av_addr(dg(d, "pool"));
+  a.destination_secondary = av_addr(dg(d, "account_contract"));
+  std::vector<Value> excesses;
+  Value ve = dg(d, "excesses");
+  if (ve.items) {
+    for (const Value &e : *ve.items) {
+      Value::Fields ef;
+      Value a0 = Value::null(), a1 = Value::null();
+      if (e.items && e.items->size() >= 2) {
+        a0 = (*e.items)[0];
+        a1 = (*e.items)[1];
+      }
+      ef.emplace_back("asset", av_addr(a0));
+      ef.emplace_back("amount", av_amount(a1));
+      excesses.push_back(mkdict(std::move(ef)));
+    }
+  }
+  // pick the first/second present (non-null amount) leg
+  Value amt1 = dg(d, "amount_1"), as1 = dg(d, "asset_1");
+  Value amt2 = dg(d, "amount_2"), as2 = dg(d, "asset_2");
+  Value actual_amount_1 = Value::null(), actual_asset_1 = Value::null();
+  Value actual_amount_2 = Value::null(), actual_asset_2 = Value::null();
+  Value pairs_amt[2] = {amt1, amt2};
+  Value pairs_asset[2] = {as1, as2};
+  for (int i = 0; i < 2; i++) {
+    if (pairs_amt[i].is_null()) continue;
+    if (actual_amount_1.is_null()) {
+      actual_amount_1 = pairs_amt[i];
+      actual_asset_1 = pairs_asset[i];
+    } else {
+      actual_amount_2 = pairs_amt[i];
+      actual_asset_2 = pairs_asset[i];
+    }
+  }
+  Value::Fields f;
+  f.emplace_back("dex", Value::make_str("tonco"));
+  f.emplace_back("amount1", av_amount(actual_amount_1));
+  f.emplace_back("amount2", av_amount(actual_amount_2));
+  f.emplace_back("asset1", av_addr(actual_asset_1));
+  f.emplace_back("asset2", av_addr(actual_asset_2));
+  f.emplace_back("user_jetton_wallet_1", av_addr(sw1));
+  f.emplace_back("user_jetton_wallet_2", av_addr(sw2));
+  f.emplace_back("lp_tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
+  f.emplace_back("tick_lower", dg(d, "tick_lower"));
+  f.emplace_back("tick_upper", dg(d, "tick_upper"));
+  f.emplace_back("nft_index", dg(d, "nft_index"));
+  f.emplace_back("nft_address", av_addr(dg(d, "nft_address")));
+  f.emplace_back("target_amount_1", av_amount(dg(d, "position_amount_1")));
+  f.emplace_back("target_amount_2", av_amount(dg(d, "position_amount_2")));
+  f.emplace_back("target_asset_1", av_addr(dg(d, "asset_1")));
+  f.emplace_back("target_asset_2", av_addr(dg(d, "asset_2")));
+  f.emplace_back("vault_excesses", Value::make_list(std::move(excesses)));
+  a.dex_deposit_liquidity_data = mkdict(std::move(f));
+}
+
+void fill_evaa_withdraw(const Value &d, Action &a, bool block_failed) {
+  a.source = av_addr(dg(d, "owner"));
+  a.destination = av_addr(dg(d, "recipient"));
+  a.destination_secondary = av_addr(dg(d, "owner_contract"));
+  a.amount = av_amount(dg(d, "amount"));
+  a.asset = av_addr(dg(d, "asset"));
+  Value succ = dg(d, "is_success");
+  a.success = succ.t == VType::Bool && succ.boolean;
+  if (block_failed) a.success = false;
+  Value::Fields f;
+  f.emplace_back("is_ton", dg(d, "is_ton"));
+  Value rjw = dg(d, "recipient_jetton_wallet");
+  f.emplace_back("recipient_jetton_wallet", rjw.is_null() ? Value::null() : av_addr(rjw));
+  Value mjw = dg(d, "master_jetton_wallet");
+  f.emplace_back("master_jetton_wallet", mjw.is_null() ? Value::null() : av_addr(mjw));
+  f.emplace_back("fail_reason", dg(d, "fail_reason"));
+  f.emplace_back("master", av_addr(dg(d, "master")));
+  f.emplace_back("asset_id", av_hex(dg(d, "asset_id")));
+  a.evaa_withdraw_data = mkdict(std::move(f));
+}
+
+void fill_jvault_stake(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.source_secondary = av_addr(dg(d, "sender_wallet"));
+  a.asset = av_addr(dg(d, "asset"));
+  a.destination = av_addr(dg(d, "staking_pool"));
+  a.amount = av_amount(dg(d, "staked_amount"));
+  Value::Fields f;
+  f.emplace_back("period", dg(d, "period"));
+  f.emplace_back("stake_wallet", av_addr(dg(d, "stake_wallet")));
+  a.jvault_stake_data = mkdict(std::move(f));
+}
+
+void fill_jvault_unstake(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.source_secondary = av_addr(dg(d, "stake_wallet"));
+  a.destination = av_addr(dg(d, "staking_pool"));
+  a.amount = av_amount(dg(d, "unstaked_amount"));
+  a.opcode = dg(d, "exit_code");
+  a.asset = av_addr(dg(d, "asset"));
+  a.asset2 = av_addr(dg(d, "jvault_asset"));
+}
+
+void fill_jvault_unstake_request(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.source_secondary = av_addr(dg(d, "stake_wallet"));
+  a.destination = av_addr(dg(d, "staking_pool"));
+  a.amount = av_amount(dg(d, "requested_amount"));
+  a.asset = av_addr(dg(d, "asset"));
+  a.asset2 = av_addr(dg(d, "jvault_asset"));
+  a.opcode = dg(d, "exit_code");
+}
+
+void fill_jvault_claim(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.source_secondary = av_addr(dg(d, "stake_wallet"));
+  a.destination = av_addr(dg(d, "staking_pool"));
+  std::vector<Value> jettons;
+  Value cj = dg(d, "claimed_jettons");
+  if (cj.items) {
+    for (const Value &j : *cj.items) jettons.push_back(av_addr(j));
+  }
+  Value::Fields f;
+  f.emplace_back("claimed_jettons", Value::make_list(std::move(jettons)));
+  f.emplace_back("claimed_amounts", dg(d, "claimed_amounts"));
+  a.jvault_claim_data = mkdict(std::move(f));
+}
+
+void fill_ethena_deposit(const Value &d, Action &a) {
+  a.type = "stake_deposit";
+  a.source = av_addr(dg(d, "source"));
+  a.source_secondary = av_addr(dg(d, "user_jetton_wallet"));
+  a.destination = av_addr(dg(d, "pool"));
+  a.amount = av_amount(dg(d, "value"));
+  a.asset = av_addr(dg(d, "asset"));
+  a.asset2 = av_addr(dg(d, "source_asset"));
+  Value::Fields f;
+  f.emplace_back("provider", Value::make_str("ethena"));
+  f.emplace_back("tokens_minted", av_amount(dg(d, "tokens_minted")));
+  a.staking_data = mkdict(std::move(f));
+}
+
+void fill_layerzero_receive(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.destination = av_addr(dg(d, "oapp"));
+  a.destination_secondary = av_addr(dg(d, "channel"));
+  a.layerzero_packet_data = dg(d, "packet_data");  // record dict passthrough
+}
+
+void fill_coffee_create_vault(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.destination = av_addr(dg(d, "vault"));
+  a.asset = av_addr(dg(d, "asset"));
+  a.value = av_amount(dg(d, "amount"));
+}
+
+// NOTE — vesting_send_message + tgbtc_mint are DELIBERATELY NOT ported here.
+// Their Python serializer fills (_fill_vesting_send_message /
+// _fill_tgbtc_mint_action in block_tree_serializer.py) read block.data via
+// ATTRIBUTE access (`block.data.sender`, `block.data.crippled`), not `_dget`,
+// so they raise AttributeError on the declarative DICT block the MCH engine
+// produces — there is no valid A/B ground truth for the dict path. They stay
+// skip-table entries until the serializer gets the `_dget` dual-dispatch wave
+// (a Python-side change, out of scope: the serializer is read-only ground
+// truth). The dict-driven C++ fills are trivial (see git history) and can be
+// re-added in lockstep with that Python wave.
+
+// Dispatch a produced block to its fill (block_to_action match). Returns false
+// for a btype outside the ported set (skip-table entry).
+bool fill_action(Block *b, Action &a) {
+  const Value &d = b->data;
+  const std::string &t = b->btype;
+  if (t == "jetton_transfer") fill_jetton_transfer(d, a);
+  else if (t == "jetton_burn") fill_jetton_burn(d, a);
+  else if (t == "jetton_mint") fill_jetton_mint(d, a);
+  else if (t == "jetton_swap") fill_jetton_swap(d, a);
+  else if (t == "nft_transfer") fill_nft_transfer(d, a);
+  else if (t == "dedust_deposit_liquidity") fill_dedust_deposit(d, a);
+  else if (t == "dedust_deposit_liquidity_partial") fill_dedust_deposit_partial(d, a);
+  else if (t == "tonco_deposit_liquidity") fill_tonco_deposit(d, a);
+  else if (t == "evaa_withdraw") fill_evaa_withdraw(d, a, b->failed);
+  else if (t == "jvault_stake") fill_jvault_stake(d, a);
+  else if (t == "jvault_unstake") fill_jvault_unstake(d, a);
+  else if (t == "jvault_unstake_request") fill_jvault_unstake_request(d, a);
+  else if (t == "jvault_claim") fill_jvault_claim(d, a);
+  else if (t == "ethena_deposit") fill_ethena_deposit(d, a);
+  else if (t == "layerzero_receive") fill_layerzero_receive(d, a);
+  else if (t == "coffee_create_vault") fill_coffee_create_vault(d, a);
+  // vesting_send_message / tgbtc_mint: skip (see NOTE above fill_action) —
+  // Python serializer fill is attribute-only, no declarative A/B reference.
+  else return false;
+  return true;
+}
+
+// _base_block_to_action + block_to_action dispatch, over a produced block.
+bool build_action(Block *b, Action &a) {
+  a.type = b->btype;
+  a.success = !b->failed;
+  // action_id: sha256(root_event_node msg_hash|tx_hash + btype), base64.
+  const EventNode *root = nullptr;
+  for (const EventNode *n : b->event_nodes) {
+    if (root == nullptr || n->lt() < root->lt()) root = n;
+  }
+  std::string key;
+  if (root != nullptr) {
+    key = (root->msg != nullptr) ? root->msg->msg_hash : root->tx_hash();
+  }
+  key += b->btype;
+  std::string digest = td::sha256(td::Slice(key));
+  a.action_id = td::base64_encode(td::Slice(digest));
+  // tx_hashes (base set, event_nodes only) + lt/utime ranges + mc_seqno_end.
+  std::set<std::string> ths;
+  std::int64_t maxlt = std::numeric_limits<std::int64_t>::min();
+  std::int64_t minu = std::numeric_limits<std::int64_t>::max();
+  std::int64_t maxu = std::numeric_limits<std::int64_t>::min();
+  std::int64_t seqmax = std::numeric_limits<std::int64_t>::min();
+  for (const EventNode *n : b->event_nodes) {
+    ths.insert(n->tx_hash());
+    std::int64_t tlt = n->tx != nullptr ? n->tx->lt : 0;
+    maxlt = std::max(maxlt, tlt);
+    minu = std::min(minu, node_utime(n));
+    maxu = std::max(maxu, n->tx != nullptr ? n->tx->now : 0);
+    if (n->tx != nullptr) seqmax = std::max(seqmax, n->tx->mc_block_seqno);
+  }
+  a.tx_hashes.assign(ths.begin(), ths.end());
+  a.start_lt = b->min_lt;
+  a.end_lt = b->event_nodes.empty() ? 0 : maxlt;
+  a.start_utime = b->event_nodes.empty() ? 0 : minu;
+  a.end_utime = b->event_nodes.empty() ? 0 : maxu;
+  a.mc_seqno_end = b->event_nodes.empty() ? 0 : seqmax;
+  return fill_action(b, a);
+}
+
+std::string render_action(const Action &a) {
+  Value::Fields f;
+  f.emplace_back("id", Value::make_str(a.action_id));
+  f.emplace_back("type", Value::make_str(a.type));
+  f.emplace_back("success", Value::make_bool(a.success));
+  f.emplace_back("start_lt", Value::make_int64(a.start_lt));
+  f.emplace_back("end_lt", Value::make_int64(a.end_lt));
+  f.emplace_back("start_utime", Value::make_int64(a.start_utime));
+  f.emplace_back("end_utime", Value::make_int64(a.end_utime));
+  f.emplace_back("mc_seqno_end", Value::make_int64(a.mc_seqno_end));
+  std::vector<std::string> th = a.tx_hashes;
+  std::sort(th.begin(), th.end());
+  std::vector<Value> thv;
+  for (const std::string &s : th) thv.push_back(Value::make_str(s));
+  f.emplace_back("tx_hashes", Value::make_list(std::move(thv)));
+  f.emplace_back("source", a.source);
+  f.emplace_back("source_secondary", a.source_secondary);
+  f.emplace_back("destination", a.destination);
+  f.emplace_back("destination_secondary", a.destination_secondary);
+  f.emplace_back("asset", a.asset);
+  f.emplace_back("asset_secondary", a.asset_secondary);
+  f.emplace_back("asset2", a.asset2);
+  f.emplace_back("asset2_secondary", a.asset2_secondary);
+  f.emplace_back("amount", a.amount);
+  f.emplace_back("value", a.value);
+  f.emplace_back("opcode", a.opcode);
+  f.emplace_back("ton_transfer_data", a.ton_transfer_data);
+  f.emplace_back("jetton_transfer_data", a.jetton_transfer_data);
+  f.emplace_back("jetton_swap_data", a.jetton_swap_data);
+  f.emplace_back("nft_transfer_data", a.nft_transfer_data);
+  f.emplace_back("nft_listing_data", a.nft_listing_data);
+  f.emplace_back("dex_deposit_liquidity_data", a.dex_deposit_liquidity_data);
+  f.emplace_back("staking_data", a.staking_data);
+  f.emplace_back("evaa_withdraw_data", a.evaa_withdraw_data);
+  f.emplace_back("vesting_send_message_data", a.vesting_send_message_data);
+  f.emplace_back("layerzero_packet_data", a.layerzero_packet_data);
+  f.emplace_back("jvault_stake_data", a.jvault_stake_data);
+  f.emplace_back("jvault_claim_data", a.jvault_claim_data);
+  f.emplace_back("extra", a.extra);
+  return render_value(Value::make_dict(std::move(f)));
+}
+
 }  // namespace
 
 int run_classify(const std::string &artifact_path, const std::vector<std::string> &paths) {
@@ -524,6 +1092,135 @@ int run_classify(const std::string &artifact_path, const std::vector<std::string
       std::printf("TRACE_FAIL\n");
       std::fprintf(stderr, "TRACE_FAIL %s: %s\n",
                    fs::path(f).filename().string().c_str(), e.what());
+    } catch (...) {
+      std::printf("TRACE_FAIL\n");
+      std::fprintf(stderr, "TRACE_FAIL %s: unknown exception\n",
+                   fs::path(f).filename().string().c_str());
+    }
+  }
+  return 0;
+}
+
+// Phase E part 2 dump (`--actions`): identical collect->pass pipeline as
+// run_classify, but each surviving post-pass produced block is rendered as a
+// serialized Action row (build_action + render_action). Deliberately mirrors
+// run_classify's loop verbatim (shared try_build / post_process helpers) so the
+// two dumps stay structurally in lock-step; only the emit step differs.
+int run_actions(const std::string &artifact_path, const std::vector<std::string> &paths) {
+  auto r_ir = load_ir(artifact_path);
+  if (r_ir.is_error()) {
+    std::fprintf(stderr, "failed to load IR artifact: %s\n", r_ir.error().message().c_str());
+    return 2;
+  }
+  LoadedIr ir = r_ir.move_as_ok();
+  warn_missing_artifact_parsers(ir);
+
+  const char *table_kind = nullptr;
+  const std::vector<GenBuild> *table = select_gen_builds(ir.source_sha256, &table_kind);
+  if (table == nullptr) {
+    std::fprintf(stderr, "no generated build table matches this artifact (loaded sha %s)\n",
+                 ir.source_sha256.c_str());
+    return 2;
+  }
+
+  std::vector<int> included;
+  std::vector<std::pair<std::string, std::string>> skips;
+  std::set<std::string> kinds;
+  for (int i = 0; i < static_cast<int>(ir.matchers.size()); i++) {
+    std::string reason = build_skip_reason(ir.matchers[i]);
+    if (!reason.empty()) {
+      skips.emplace_back(ir.matchers[i].name, reason);
+      continue;
+    }
+    included.push_back(i);
+    kinds.insert(ir.matchers[i].ref_lookups.begin(), ir.matchers[i].ref_lookups.end());
+  }
+  std::sort(skips.begin(), skips.end());
+  for (const auto &s : skips) {
+    std::printf("SKIP %s reason=%s\n", s.first.c_str(), s.second.c_str());
+  }
+
+  std::unordered_map<int, BuildOutcome (*)(BuildEnv &)> build_fns;
+  for (const GenBuild &g : *table) {
+    build_fns.emplace(g.id, g.fn);
+  }
+  for (int mi : included) {
+    if (build_fns.find(ir.matchers[mi].artifact_index) == build_fns.end()) {
+      std::fprintf(stderr, "generated %s build table has no fn for matcher '%s' (index %d)\n",
+                   table_kind, ir.matchers[mi].name.c_str(), ir.matchers[mi].artifact_index);
+      return 2;
+    }
+  }
+
+  namespace fs = std::filesystem;
+  std::vector<std::string> fixtures;
+  for (const std::string &p : paths) {
+    std::error_code ec;
+    if (fs::is_directory(p, ec)) {
+      std::vector<std::string> names;
+      for (const auto &e : fs::directory_iterator(p)) {
+        if (e.path().extension() == ".lz4") names.push_back(e.path().string());
+      }
+      std::sort(names.begin(), names.end());
+      fixtures.insert(fixtures.end(), names.begin(), names.end());
+    } else {
+      fixtures.push_back(p);
+    }
+  }
+
+  for (const std::string &f : fixtures) {
+    std::printf("=== %s\n", fs::path(f).filename().string().c_str());
+    auto r_ctx = load_trace_context(f);
+    if (r_ctx.is_error()) {
+      std::printf("ERROR: %s\n", r_ctx.error().message().c_str());
+      continue;
+    }
+    auto ctx = r_ctx.move_as_ok();
+    if (ctx.tree.unlinked != 0) {
+      std::fprintf(stderr, "WARN %s: %zu orphan nodes unreachable from root\n",
+                   fs::path(f).filename().string().c_str(), ctx.tree.unlinked);
+    }
+    FixtureLookupSource src(&ctx.trace.interfaces);
+    Block *wrapper = ctx.arena.make("root");
+    wrapper->connect(ctx.root);
+
+    std::vector<PendingAction> pending;
+    try {
+      for (int mi : included) {
+        const CompiledMatcher &m = ir.matchers[mi];
+        auto fn = build_fns.at(m.artifact_index);
+        std::deque<Block *> queue{wrapper};
+        while (!queue.empty()) {
+          Block *cur = queue.front();
+          queue.pop_front();
+          if (cur->parent == nullptr) {
+            try_build(m, fn, cur, ctx.arena, kinds, src, pending);
+          }
+          for (Block *n : cur->next_blocks) queue.push_back(n);
+        }
+      }
+      std::vector<Block *> spine;
+      {
+        std::deque<Block *> q{wrapper};
+        while (!q.empty()) {
+          Block *cur = q.front();
+          q.pop_front();
+          spine.push_back(cur);
+          for (Block *n : cur->next_blocks) q.push_back(n);
+        }
+      }
+      std::set<Block *> removed;
+      post_process_dedust_liquidity(spine, removed);
+      post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
+      for (const PendingAction &p : pending) {
+        if (removed.count(p.produced)) continue;
+        Action act;
+        if (!build_action(p.produced, act)) continue;  // btype outside ported set
+        std::printf("ACTION anchor=%s %s\n", p.anchor_key.c_str(), render_action(act).c_str());
+      }
+    } catch (const std::exception &e) {
+      std::printf("TRACE_FAIL\n");
+      std::fprintf(stderr, "TRACE_FAIL %s: %s\n", fs::path(f).filename().string().c_str(), e.what());
     } catch (...) {
       std::printf("TRACE_FAIL\n");
       std::fprintf(stderr, "TRACE_FAIL %s: unknown exception\n",

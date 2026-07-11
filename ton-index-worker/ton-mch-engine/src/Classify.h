@@ -43,4 +43,14 @@ namespace mch {
 
 int run_classify(const std::string &artifact_path, const std::vector<std::string> &paths);
 
+// Phase E part 2 (`--actions`): serialized-Action-row dump. Same collect->pass
+// pipeline as run_classify; each surviving post-pass produced block is rendered
+// as an Action row (block_tree_serializer.py _fill_* port, scoped to the ~18
+// composite btypes that fire in the corpus). Python twin:
+// scratchpad/classify/py_actions.py. Dump line:
+//   ACTION anchor=<key> {id=..,type=..,<directional>,<composite maps>..}
+// Value rendering per BuildDriver render_value (sorted keys). See Classify.cpp
+// header block for the staged-out set (accounts/roles/initiating-tx extension).
+int run_actions(const std::string &artifact_path, const std::vector<std::string> &paths);
+
 }  // namespace mch

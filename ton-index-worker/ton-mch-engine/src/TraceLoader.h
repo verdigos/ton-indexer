@@ -58,6 +58,7 @@ struct Transaction {
   std::string hash;
   std::int64_t lt{0};
   std::int64_t now{0};
+  std::int64_t mc_block_seqno{0};  // Action.mc_seqno_end (Phase E serializer)
   std::string account;
   std::string descr;  // "ord" | "tick_tock" | ...
   std::string orig_status;

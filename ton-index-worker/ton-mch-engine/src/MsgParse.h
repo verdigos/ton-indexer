@@ -56,6 +56,11 @@ td::Result<std::vector<std::string>> parse_dedust_steps(vm::CellSlice cs);
 // Python's inner try swallows yields nullopt.
 std::optional<std::string> ton_transfer_comment(const td::Ref<vm::Cell> &body);
 
+// Decode raw comment bytes with Python's bytes.decode("utf-8",
+// errors="backslashreplace").replace("\u0000", "") — the codec the Phase E
+// serializer applies to jetton_transfer/nft `comment` payload bytes.
+std::string decode_comment_bytes(const std::string &raw);
+
 // `--parse-dump` mode: for every message in the fixture(s) whose opcode is a
 // registered jetton-family opcode, parse the body and print a canonical line
 // (see py_msg_dump.py twin). Returns 0 on success.

@@ -289,4 +289,10 @@ std::optional<std::string> ton_transfer_comment(const td::Ref<vm::Cell> &body) {
   return decode_backslashreplace_strip_nul(bytes);
 }
 
+// Public wrapper (Phase E serializer: jetton_transfer/nft comment fields carry
+// RAW payload bytes that the fill decodes with the same codec as ton_transfer).
+std::string decode_comment_bytes(const std::string &raw) {
+  return decode_backslashreplace_strip_nul(raw);
+}
+
 }  // namespace mch

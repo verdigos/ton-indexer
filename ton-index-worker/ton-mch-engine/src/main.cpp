@@ -143,6 +143,7 @@ int main(int argc, char *argv[]) {
   bool match_gen = false;
   bool build_smoke_mode = false;
   bool classify_mode = false;
+  bool actions_mode = false;
   bool parse_dump_mode = false;
   bool shape_test_mode = false;
   std::vector<std::string> trace_paths;
@@ -171,6 +172,9 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "classify",
                "End-to-end classify dump (match+build+merge loop): -I <artifact> -T <fixture|dir>",
                [&]() { classify_mode = true; });
+  p.add_option('\0', "actions",
+               "Serialized-Action-row dump (Phase E part 2): -I <artifact> -T <fixture|dir>",
+               [&]() { actions_mode = true; });
   p.add_option('\0', "parse-dump", "Message-parse dump: -T <fixture|dir> (repeatable)",
                [&]() { parse_dump_mode = true; });
   p.add_option('\0', "shape-test",
@@ -234,6 +238,11 @@ int main(int argc, char *argv[]) {
   if (classify_mode) {
     // End-to-end classify mode: no scheduler needed.
     return mch::run_classify(ir_path, trace_paths);
+  }
+
+  if (actions_mode) {
+    // Serialized-Action-row dump (Phase E part 2): no scheduler needed.
+    return mch::run_actions(ir_path, trace_paths);
   }
 
   if (parse_dump_mode) {

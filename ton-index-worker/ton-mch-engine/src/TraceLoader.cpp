@@ -198,6 +198,7 @@ std::unique_ptr<Transaction> parse_transaction(const msgpack::object &t) {
   tx->hash = get_str(t, "hash");
   tx->lt = get_i64(t, "lt");
   tx->now = get_i64(t, "now");
+  tx->mc_block_seqno = get_i64(t, "mc_block_seqno");
   tx->account = get_str(t, "account");
   tx->descr = get_str(t, "descr");
   tx->orig_status = get_str(t, "orig_status");
