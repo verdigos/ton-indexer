@@ -5,7 +5,7 @@ registered builder.
 Same fixtures and acceptance bar as test_jettons_family.py: for each fixture the
 legacy matcher and the declarative-compiled matcher run on independently built
 block trees, and every produced block is compared field by field — btype,
-`data` dict (deep, per-key), `failed`/`broken` flags, value_flow, and the
+`data` dict (deep, per-key), `failed`/`broken` flags, and the
 consumed event-node set (sorted tx hashes). The declarative path produces a
 generic Block, so parity is on `.btype` (normalized string), not the class.
 """
@@ -120,9 +120,10 @@ def _assert_field_parity(decl_blocks: list[Block], hw_blocks: list[Block], btype
                 f"legacy={hv!r} ({type(hv).__name__})"
             )
 
-        assert d.value_flow.to_dict() == h.value_flow.to_dict(), (
-            f"value_flow: decl={d.value_flow.to_dict()} legacy={h.value_flow.to_dict()}"
-        )
+        # value_flow is intentionally NOT compared: the `flow` statement was
+        # removed (plan §7 — AccountValueFlow is not persisted, the Go API
+        # computes flows separately), so the declarative jetton matchers no
+        # longer populate value_flow while the legacy builders still do.
         assert _node_hashes(d) == _node_hashes(h), (
             f"consumed event nodes: decl={_node_hashes(d)} legacy={_node_hashes(h)}"
         )

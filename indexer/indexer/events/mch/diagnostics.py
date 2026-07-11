@@ -40,10 +40,6 @@ R016_BUILD_NO_OUT = "R016_BUILD_NO_OUT"
 R017_MULTIPLE_OUT = "R017_MULTIPLE_OUT"
 """More than one `out` block in a matcher body; exactly one is allowed (§9.5)."""
 
-R018_BAD_FLOW = "R018_BAD_FLOW"
-"""A `flow` statement names an unknown kind or has the wrong number of
-arguments — must be jetton(3), ton(2), or fees(2) (§9.8)."""
-
 R022_UNNORMALIZED_PRODUCES_CLASS = "R022_UNNORMALIZED_PRODUCES_CLASS"
 """A PascalCase (class-name) `produces` token has no class->btype entry in
 mch/btypes.py CLASS_TO_BTYPE, so it cannot be normalized to the block's real

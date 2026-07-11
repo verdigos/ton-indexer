@@ -489,15 +489,6 @@ class BuildGen {
       em_.line_public("}");
       return;
     }
-    if (s == "flow") {
-      std::vector<std::string> args;
-      for (const auto &a : jfield(stmt, "args")->get_array()) {
-        args.push_back(em_.emit(a));
-      }
-      em_.line_public("o.flows.push_back(FlowOp{" + cstr(jstr(stmt, "kind")) +
-                      ", std::vector<Value>{" + join(args, ", ") + "}});");
-      return;
-    }
     if (s == "out") {
       std::string fs = emit_fields(*jfield(stmt, "fields"));
       em_.line_public("o.data = Value::make_dict(std::move(" + fs + "));");

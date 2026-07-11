@@ -20,7 +20,6 @@ from indexer.events.mch.lexer import tokenize
 from indexer.events.mch.parser import parse
 from indexer.events.mch.registry import Registries
 from indexer.events.mch_ir.expr import EvalError, Evaluator
-from indexer.events.mch_ir.program import FlowEffect, apply_flows
 
 RAW = "0:" + "00" * 32
 RAW2 = "0:" + "aa" * 32
@@ -387,25 +386,6 @@ def test_where_expr_faults_fail_the_test():
     assert eval_where_expr(_where_json(".missing == 1"), Block("t", [], {"v": 1})) is False
     assert eval_where_expr(_where_json(".value > 5"), Block("t", [], None)) is False
     assert eval_where_expr(_where_json(".value"), Block("t", [], {"value": 3})) is False
-
-
-# ==========================================================================
-# apply_flows
-# ==========================================================================
-
-def test_apply_flows_records_effects_and_skips_null_legs():
-    b = Block("t", [], None)
-    owner, master = AccountId(RAW), AccountId(RAW2)
-    apply_flows(b, [
-        FlowEffect("ton", (owner, Amount(5))),
-        FlowEffect("fees", (owner, 2)),
-        FlowEffect("jetton", (owner, master, 10)),
-        FlowEffect("ton", (None, 100)),  # null leg: skipped
-    ])
-    flow = b.value_flow.flow[owner]
-    assert flow.ton == 5
-    assert flow.fees == 2
-    assert flow.jettons[master] == 10
 
 
 # ==========================================================================

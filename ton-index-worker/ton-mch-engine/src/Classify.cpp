@@ -51,23 +51,11 @@ void emit_action(const CoreAction &a) {
   }
   aux_s += "]";
 
-  std::string flows_s = "[";
-  for (std::size_t i = 0; i < a.flows.size(); i++) {
-    if (i) flows_s += ",";
-    flows_s += a.flows[i].kind + "(";
-    for (std::size_t j = 0; j < a.flows[i].args.size(); j++) {
-      if (j) flows_s += ",";
-      flows_s += render_value(a.flows[i].args[j]);
-    }
-    flows_s += ")";
-  }
-  flows_s += "]";
-
-  std::printf("ACTION %s anchor=%s btype=%s failed=%d broken=%d data=%s flows=%s "
+  std::printf("ACTION %s anchor=%s btype=%s failed=%d broken=%d data=%s "
               "consumed=%s auto=%s\n",
               a.matcher_name.c_str(), block_key(a.anchor).c_str(), a.produced->btype.c_str(),
               a.produced->failed ? 1 : 0, a.produced->broken ? 1 : 0,
-              render_value(a.produced->data).c_str(), flows_s.c_str(), consumed_s.c_str(),
+              render_value(a.produced->data).c_str(), consumed_s.c_str(),
               aux_s.c_str());
 }
 

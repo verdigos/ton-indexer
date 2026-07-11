@@ -1,7 +1,7 @@
 """Declarative build path (M4 §9) — frontend resolver diagnostics (R011-R018).
 
 T29 stage 1 retired the compiled runtime, so the end-to-end run of declarative
-matchers (parse/let/lookup/reject/failed/broken/out/flow, runtime-error
+matchers (parse/let/lookup/reject/failed/broken/out, runtime-error
 rejection) is now exercised against the v2 IR engine in
 tests/mch_ir/test_engine.py and tests/mch_ir/test_compiled_ports.py. What
 remains here is the resolver's compile-time validation of build statements.
@@ -155,22 +155,14 @@ def test_r017_multiple_out_blocks():
     assert "R017_MULTIPLE_OUT" in codes
 
 
-def test_r018_flow_kind_and_arity():
-    codes = _codes(_diag_src("flow bogus(1)\nout { v: 1 }"))
-    assert "R018_BAD_FLOW" in codes
-    codes = _codes(_diag_src("flow ton(1)\nout { v: 1 }"))
-    assert "R018_BAD_FLOW" in codes
-
-
 def test_declarative_matcher_resolves_clean():
     # Control: the declarative form itself carries no errors.
     src = _diag_src(
         "parse x as FakeTransfer\n"
         "let amt = x.body.amount\n"
         "reject when amt == null\n"
-        "flow ton(account(x.msg.source), amt)\n"
         "out { amount: amt }"
     )
     rf = resolve(parse(list(tokenize(src, "t.mch")), "t.mch"), _registries())
     assert rf.matchers[0].decl.build is None
-    assert len(rf.matchers[0].build_stmts) == 5
+    assert len(rf.matchers[0].build_stmts) == 4

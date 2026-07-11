@@ -159,7 +159,6 @@ matcher decl_happy {
         src:    account(x.msg.source)
         size:   "big" if amt > 100 else "small"
     }
-    flow ton(account(x.msg.source), amt)
 }
 """
 
@@ -178,7 +177,6 @@ async def test_declarative_matcher_matches_compiled_output():
     assert produced.data["size"] == "big"
     assert produced.failed is False
     assert produced.broken is False
-    assert produced.value_flow.flow[AccountId(RAW_SRC)].ton == 777
     # Consumption: both pattern blocks absorbed into the produced block.
     assert anchor.parent is produced
     assert bar.parent is produced

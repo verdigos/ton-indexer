@@ -252,22 +252,6 @@ def skip_reason(rec, nodes):
     return ";".join(parts) or None
 
 
-def wrap_program(m):
-    """Capture the BuildOutcome try_build swallows (flows/btype for the dump)."""
-    prog = m._program
-    if prog is None or getattr(prog, "_wrapped", False):
-        return
-    orig = prog.run
-
-    async def run(env):
-        out = await orig(env)
-        prog._last_outcome = out
-        return out
-
-    prog.run = run
-    prog._wrapped = True
-
-
 async def classify_fixture(path, included):
     try:
         with open(path, "rb") as f:
@@ -304,24 +288,19 @@ async def classify_fixture(path, included):
     try:
         # Phase E: COLLECT produced actions during the matcher loop; the
         # post-process passes (which merge/remove blocks) run AFTER, then the
-        # surviving actions are emitted from their FINAL state. flows/aux are
+        # surviving actions are emitted from their FINAL state. aux is
         # fire-time (unchanged by pairing); data/consumed are post-pass.
-        pending = []  # (matcher_name, anchor_key, produced, flows_s, aux_s)
+        pending = []  # (matcher_name, anchor_key, produced, aux_s)
         for m in included:
             for b in bfs_canonical(root):
                 if b.parent is not None:
                     continue
-                m._program._last_outcome = None
                 r = await m.try_build(b)
                 if not r:
                     continue
                 produced, aux = r[0], r[1:]
-                outcome = m._program._last_outcome
-                flows_s = "[" + ",".join(
-                    f.kind + "(" + ",".join(render(a) for a in f.args) + ")"
-                    for f in outcome.flows) + "]"
                 aux_s = "[" + ",".join(block_key(a) for a in aux) + "]"
-                pending.append((m.name, block_key(b), produced, flows_s, aux_s))
+                pending.append((m.name, block_key(b), produced, aux_s))
 
         # Spine list ([root] + bfs), then the REAL host passes. removed = the
         # produced blocks a pass merged away (spine diff); every other collected
@@ -335,7 +314,7 @@ async def classify_fixture(path, included):
         spine = await unwind_deployments(spine)  # Step 2b (production chain parity)
         removed = before - set(id(x) for x in spine)
 
-        for (name, anchor_key, produced, flows_s, aux_s) in pending:
+        for (name, anchor_key, produced, aux_s) in pending:
             if id(produced) in removed:
                 continue
             data_s = "{" + ",".join(
@@ -343,7 +322,7 @@ async def classify_fixture(path, included):
             consumed_s = "[" + ",".join(sorted(block_key(c) for c in produced.children_blocks)) + "]"
             print(f"ACTION {name} anchor={anchor_key} btype={produced.btype} "
                   f"failed={1 if produced.failed else 0} broken={1 if produced.broken else 0} "
-                  f"data={data_s} flows={flows_s} consumed={consumed_s} auto={aux_s}")
+                  f"data={data_s} consumed={consumed_s} auto={aux_s}")
     except Exception as e:  # noqa: BLE001
         print("TRACE_FAIL")
         print(f"TRACE_FAIL {os.path.basename(path)}: {type(e).__name__}: {e}", file=sys.stderr)
@@ -361,8 +340,6 @@ def main(artifact_path, corpus):
     for name, reason in skips:
         print(f"SKIP {name} reason={reason}")
     included = [matchers[i] for i in range(len(matchers)) if reasons[i] is None]
-    for m in included:
-        wrap_program(m)
 
     names = ([corpus] if not os.path.isdir(corpus) else
              [os.path.join(corpus, n) for n in sorted(os.listdir(corpus)) if n.endswith(".lz4")])

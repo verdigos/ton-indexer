@@ -175,8 +175,7 @@
      "sum": 1000000005
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -314,8 +313,7 @@
      "required": null
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -427,8 +425,7 @@
      "ok": true
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -750,280 +747,7 @@
      "ok": 1
     },
     "failed": true,
-    "broken": false,
-    "flows": []
-   }
-  },
-  {
-   "name": "flow_ops",
-   "matcher": {
-    "name": "flow_ops",
-    "captures": [
-     {
-      "name": "t",
-      "card": "one"
-     }
-    ],
-    "build_program": [
-     {
-      "s": "flow",
-      "kind": "jetton",
-      "args": [
-       {
-        "k": "call",
-        "fn": "account",
-        "args": [
-         {
-          "k": "attr",
-          "of": {
-           "k": "attr",
-           "of": {
-            "k": "name",
-            "id": "t"
-           },
-           "name": "msg"
-          },
-          "name": "source"
-         }
-        ]
-       },
-       {
-        "k": "call",
-        "fn": "account",
-        "args": [
-         {
-          "k": "attr",
-          "of": {
-           "k": "attr",
-           "of": {
-            "k": "name",
-            "id": "t"
-           },
-           "name": "msg"
-          },
-          "name": "destination"
-         }
-        ]
-       },
-       {
-        "k": "attr",
-        "of": {
-         "k": "attr",
-         "of": {
-          "k": "name",
-          "id": "t"
-         },
-         "name": "msg"
-        },
-        "name": "value"
-       }
-      ]
-     },
-     {
-      "s": "flow",
-      "kind": "ton",
-      "args": [
-       {
-        "k": "call",
-        "fn": "account",
-        "args": [
-         {
-          "k": "attr",
-          "of": {
-           "k": "attr",
-           "of": {
-            "k": "name",
-            "id": "t"
-           },
-           "name": "msg"
-          },
-          "name": "destination"
-         }
-        ]
-       },
-       {
-        "k": "bin",
-        "op": "-",
-        "l": {
-         "k": "int",
-         "v": 0
-        },
-        "r": {
-         "k": "attr",
-         "of": {
-          "k": "attr",
-          "of": {
-           "k": "name",
-           "id": "t"
-          },
-          "name": "msg"
-         },
-         "name": "value"
-        }
-       }
-      ]
-     },
-     {
-      "s": "flow",
-      "kind": "fees",
-      "args": [
-       {
-        "k": "call",
-        "fn": "account",
-        "args": [
-         {
-          "k": "attr",
-          "of": {
-           "k": "attr",
-           "of": {
-            "k": "name",
-            "id": "t"
-           },
-           "name": "msg"
-          },
-          "name": "source"
-         }
-        ]
-       },
-       {
-        "k": "ternary",
-        "cond": {
-         "k": "bin",
-         "op": "==",
-         "l": {
-          "k": "attr",
-          "of": {
-           "k": "attr",
-           "of": {
-            "k": "name",
-            "id": "t"
-           },
-           "name": "msg"
-          },
-          "name": "source"
-         },
-         "r": {
-          "k": "null"
-         }
-        },
-        "then": {
-         "k": "int",
-         "v": 1
-        },
-        "else": {
-         "k": "null"
-        }
-       }
-      ]
-     },
-     {
-      "s": "out",
-      "fields": [
-       {
-        "name": "ok",
-        "expr": {
-         "k": "int",
-         "v": 1
-        }
-       }
-      ]
-     }
-    ],
-    "produces": [
-     "BvBlock"
-    ]
-   },
-   "env": {
-    "slots": {
-     "t": {
-      "btype": "call_contract",
-      "opcode": 286331153,
-      "failed": false,
-      "broken": false,
-      "data": {
-       "opcode": 286331153,
-       "source": {
-        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-       },
-       "destination": {
-        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
-       },
-       "value": {
-        "$amount": 1000000000
-       }
-      },
-      "msg": {
-       "msg_hash": "msg_t",
-       "tx_hash": "tx_t",
-       "tx_lt": 1000,
-       "direction": "in",
-       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-       "value": 1000000000,
-       "opcode": 286331153,
-       "created_lt": 999,
-       "created_at": 1699999999,
-       "bounce": false,
-       "bounced": false
-      },
-      "tx": {
-       "hash": "tx_t",
-       "lt": 1000,
-       "now": 1700000000,
-       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-       "aborted": false,
-       "orig_status": "active",
-       "end_status": "active",
-       "compute_exit_code": 0
-      },
-      "body_b64": "te6ccgEBAQEABgAACBERERE="
-     }
-    },
-    "anchor": "t",
-    "consumed": [
-     "t"
-    ]
-   },
-   "expect": {
-    "rejected": false,
-    "btype": null,
-    "data": {
-     "ok": 1
-    },
-    "failed": false,
-    "broken": false,
-    "flows": [
-     {
-      "kind": "jetton",
-      "args": [
-       {
-        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-       },
-       {
-        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
-       },
-       1000000000
-      ]
-     },
-     {
-      "kind": "ton",
-      "args": [
-       {
-        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
-       },
-       -1000000000
-      ]
-     },
-     {
-      "kind": "fees",
-      "args": [
-       {
-        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-       },
-       null
-      ]
-     }
-    ]
+    "broken": false
    }
   },
   {
@@ -1207,8 +931,7 @@
      "pl": null
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -1308,8 +1031,7 @@
      "b": null
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -1438,8 +1160,7 @@
      }
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -1544,8 +1265,7 @@
      "b": null
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -1785,8 +1505,7 @@
      }
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -2237,8 +1956,7 @@
      "is_null": true
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -2399,8 +2117,7 @@
      "inited": true
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -2534,8 +2251,7 @@
      "ok": 1
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -2703,8 +2419,7 @@
      "v": 1000000000
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -2847,8 +2562,7 @@
      }
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -3015,8 +2729,7 @@
      "af": false
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -3267,8 +2980,7 @@
      "f": 1000000000
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -3401,8 +3113,7 @@
      "missing": false
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -3570,8 +3281,7 @@
      }
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -3721,8 +3431,7 @@
      "flags": 5
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -3850,8 +3559,7 @@
      "text": "wallet"
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -3971,8 +3679,7 @@
      "v": null
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -4080,8 +3787,7 @@
      "schema": "Unknown"
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -4255,8 +3961,7 @@
      "mc": "te6ccgEBAQEAVwAAqQgBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUALu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7TQncMAAAAAAAAAAAA9gAAA5E="
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -4407,8 +4112,7 @@
      "haspl": true
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -4518,8 +4222,7 @@
      "pl": "te6ccgEBAgEACAABAqsBAATerQ=="
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -4669,8 +4372,7 @@
      "proof": "te6ccgEBAQEABAAABMr+"
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {
@@ -4897,8 +4599,7 @@
      }
     },
     "failed": false,
-    "broken": false,
-    "flows": []
+    "broken": false
    }
   },
   {

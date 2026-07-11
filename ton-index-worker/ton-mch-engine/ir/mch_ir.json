@@ -756,48 +756,6 @@
               }
             }
           ]
-        },
-        {
-          "s": "flow",
-          "kind": "jetton",
-          "args": [
-            {
-              "k": "call",
-              "fn": "account",
-              "args": [
-                {
-                  "k": "attr",
-                  "of": {
-                    "k": "name",
-                    "id": "wallet"
-                  },
-                  "name": "owner"
-                }
-              ]
-            },
-            {
-              "k": "call",
-              "fn": "account",
-              "args": [
-                {
-                  "k": "attr",
-                  "of": {
-                    "k": "name",
-                    "id": "wallet"
-                  },
-                  "name": "jetton"
-                }
-              ]
-            },
-            {
-              "k": "unary",
-              "op": "-",
-              "x": {
-                "k": "name",
-                "id": "burn_amount"
-              }
-            }
-          ]
         }
       ]
     },
@@ -923,34 +881,6 @@
               "r": {
                 "k": "null"
               }
-            }
-          }
-        },
-        {
-          "s": "let",
-          "name": "flow_owner",
-          "expr": {
-            "k": "ternary",
-            "cond": {
-              "k": "name",
-              "id": "use_internal"
-            },
-            "then": {
-              "k": "call",
-              "fn": "account",
-              "args": [
-                {
-                  "k": "attr",
-                  "of": {
-                    "k": "name",
-                    "id": "rjwallet"
-                  },
-                  "name": "owner"
-                }
-              ]
-            },
-            "else": {
-              "k": "null"
             }
           }
         },
@@ -1182,42 +1112,6 @@
                   ]
                 }
               }
-            }
-          ]
-        },
-        {
-          "s": "flow",
-          "kind": "jetton",
-          "args": [
-            {
-              "k": "name",
-              "id": "flow_owner"
-            },
-            {
-              "k": "call",
-              "fn": "account",
-              "args": [
-                {
-                  "k": "attr",
-                  "of": {
-                    "k": "name",
-                    "id": "rjwallet"
-                  },
-                  "name": "jetton"
-                }
-              ]
-            },
-            {
-              "k": "attr",
-              "of": {
-                "k": "attr",
-                "of": {
-                  "k": "name",
-                  "id": "internal"
-                },
-                "name": "body"
-              },
-              "name": "amount"
             }
           ]
         }

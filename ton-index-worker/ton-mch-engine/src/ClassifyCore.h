@@ -11,9 +11,11 @@
 #include "IrLoader.h"
 #include "TraceLoader.h"
 
+#include <cstdint>
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace mch {
@@ -51,16 +53,15 @@ enum class FailureCategory {
   malformed_trace,
 };
 
-// One produced action, RENDERING-AGNOSTIC: raw block pointers + fire-time
-// aux/flows. The adapter renders block_key(anchor)/data/consumed/aux/flows or
-// builds an Action row from `produced`. Pointers reference the caller's arena
-// (TraceContext), valid for as long as the caller keeps it alive.
+// One produced action, RENDERING-AGNOSTIC: raw block pointers + fire-time aux.
+// The adapter renders block_key(anchor)/data/consumed/aux or builds an Action
+// row from `produced`. Pointers reference the caller's arena (TraceContext),
+// valid for as long as the caller keeps it alive.
 struct CoreAction {
   std::string matcher_name;
   Block *anchor;
   Block *produced;
   std::vector<Block *> aux;    // fire-time excess/bounce auto-append (anchor)
-  std::vector<FlowOp> flows;   // fire-time flow ops (value_flow dropped §7)
 };
 
 // Buffered ATOMIC per-trace result: on a mid-trace throw the pipeline sets
@@ -81,11 +82,25 @@ struct ClassifyResult {
   std::vector<CoreAction> fallback_actions;
 };
 
+// B1 anchor prefilter: the per-trace opcode/btype inventory an included
+// matcher's anchor must intersect for its outer BFS to have any chance of a
+// match. `prefilter` is true only for opcode/btype anchors (the two anchor kinds
+// matcher_test_self can decide from the block's own op/btype); pred-anchored
+// matchers stay full-scan (their test runs a predicate, not an op/btype check).
+// `opcodes`/`btypes` point into the owning CompiledMatcher's anchor sets (valid
+// for the LoadedIr's lifetime).
+struct AnchorFilter {
+  bool prefilter = false;
+  const std::unordered_set<std::uint32_t> *opcodes = nullptr;  // OpcodeSet anchor
+  const std::unordered_set<std::string> *btypes = nullptr;     // BType anchor
+};
+
 // Trace-independent run prep computed once from the artifact: the runnable
 // matcher set, the SKIP table (name -> reason, sorted), the generated build-fn
 // map, and the union of referenced lookup kinds.
 struct ClassifySetup {
   std::vector<int> included;
+  std::vector<AnchorFilter> anchor_filters;  // parallel to `included` (B1)
   std::vector<std::pair<std::string, std::string>> skips;
   std::unordered_map<int, BuildOutcome (*)(BuildEnv &)> build_fns;
   std::set<std::string> kinds;

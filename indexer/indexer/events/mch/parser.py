@@ -17,7 +17,7 @@ _SOFT_KEYWORDS: frozenset[TokenKind] = frozenset({
     TokenKind.KW_REJECT, TokenKind.KW_FAILED, TokenKind.KW_BROKEN,
     TokenKind.KW_WHEN, TokenKind.KW_LOOKUP, TokenKind.KW_NOT,
     TokenKind.KW_AND, TokenKind.KW_OR, TokenKind.KW_NULL,
-    TokenKind.KW_FLOW, TokenKind.KW_IF, TokenKind.KW_ELSE,
+    TokenKind.KW_IF, TokenKind.KW_ELSE,
     TokenKind.KW_SHAPE,
 })
 
@@ -34,7 +34,7 @@ _CMP_OPS: dict[TokenKind, str] = {
 _BUILD_STMT_HEADS: frozenset[TokenKind] = frozenset({
     TokenKind.KW_PARSE, TokenKind.KW_LET, TokenKind.KW_REJECT,
     TokenKind.KW_FAILED, TokenKind.KW_BROKEN, TokenKind.KW_OUT,
-    TokenKind.KW_FLOW, TokenKind.KW_PRODUCES,
+    TokenKind.KW_PRODUCES,
 })
 
 
@@ -522,8 +522,6 @@ def _parse_build_stmts(s: _ParserState) -> tuple[ast_.BuildStmt, ...]:
             stmts.append(_parse_guard_stmt(s, TokenKind.KW_BROKEN, ast_.BrokenStmt))
         elif t.kind is TokenKind.KW_OUT:
             stmts.append(_parse_out_stmt(s))
-        elif t.kind is TokenKind.KW_FLOW:
-            stmts.append(_parse_flow_stmt(s))
         elif t.kind is TokenKind.KW_PRODUCES:
             stmts.append(_parse_switch_stmt(s))
     return tuple(stmts)
@@ -542,15 +540,6 @@ def _parse_parse_stmt(s: _ParserState) -> ast_.ParseStmt:
         types.append(alt.text)
         end_span = alt.span
     return ast_.ParseStmt(capture=cap.text, msg_types=tuple(types), span=_join(start, end_span))
-
-
-def _parse_flow_stmt(s: _ParserState) -> ast_.FlowStmt:
-    """`flow KIND(expr, ...)` — kind/arity validated by the resolver (R018)."""
-    start = s.eat(TokenKind.KW_FLOW).span
-    kind = s.eat(TokenKind.IDENT)
-    s.eat(TokenKind.LPAREN)
-    args, end = _parse_arg_list(s)
-    return ast_.FlowStmt(kind=kind.text, args=args, span=_join(start, end))
 
 
 def _parse_let_stmt(s: _ParserState) -> ast_.LetStmt:

@@ -1,6 +1,6 @@
 # Jetton family matchers — FULLY DECLARATIVE build (M4 §9).
 #
-# Same patterns as specs/jettons.mch, but the produced-block data/flags/flow are
+# Same patterns as specs/jettons.mch, but the produced-block data/flags are
 # expressed with build statements + `out {...}` instead of a registered `build`
 # directive. Field-for-field parity with the legacy imperative cores in
 # blocks/jettons.py (build_jetton_transfer_core / _get_jetton_burn_data /
@@ -96,7 +96,6 @@ matcher jetton_burn {
         amount:        amount(burn_amount)
         asset:         asset(wallet.jetton)
     }
-    flow jetton(account(wallet.owner), account(wallet.jetton), -burn_amount)
 }
 
 # ---------------------------------------------------------------------------
@@ -108,11 +107,9 @@ matcher jetton_burn {
 # (to_address/ton_amount are read identically from either type).
 #
 # When the mint did not fail AND an internal-transfer leg is present, the mint
-# resolved into a real credit: full data + positive jetton value_flow + failed
-# from the internal leg. Otherwise it's the fallback shape (amount only for the
-# 0x15 minter opcode) with failed = true. The `flow_owner` ternary makes the
-# jetton leg a no-op in the fallback branch (a null flow arg is skipped),
-# mirroring legacy which only adds the flow in the internal branch.
+# resolved into a real credit: full data + failed from the internal leg.
+# Otherwise it's the fallback shape (amount only for the 0x15 minter opcode)
+# with failed = true.
 # ---------------------------------------------------------------------------
 matcher jetton_mint {
     produces JettonMintBlock
@@ -128,7 +125,6 @@ matcher jetton_mint {
     let use_internal = not mint.failed and internal != null
     let rjwallet     = lookup jetton_wallet(internal.msg.destination)
     reject when use_internal and rjwallet == null
-    let flow_owner   = account(rjwallet.owner) if use_internal else null
     failed when internal.failed if use_internal else true
     out {
         to:               account(rjwallet.owner) if use_internal else account(mint.body.to_address)
@@ -137,5 +133,4 @@ matcher jetton_mint {
         ton_amount:       amount(mint.body.ton_amount)
         asset:            asset(rjwallet.jetton) if use_internal else asset(mint.msg.destination)
     }
-    flow jetton(flow_owner, account(rjwallet.jetton), internal.body.amount)
 }

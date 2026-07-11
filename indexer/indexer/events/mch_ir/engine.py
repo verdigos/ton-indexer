@@ -59,7 +59,7 @@ from indexer.events.blocks.core import Block
 from indexer.events.mch.registry import Registries
 from indexer.events.mch_ir.expr import BUILTINS, EvalError, eval_where_expr
 from indexer.events.mch_ir.loader import Artifact, IrLoadError
-from indexer.events.mch_ir.program import BuildProgram, apply_flows
+from indexer.events.mch_ir.program import BuildProgram
 
 logger = logging.getLogger(__name__)
 
@@ -666,10 +666,10 @@ class IrMatcher:
         return env
 
     def _apply_shape(self, produced: Block, match_obj) -> None:
-        """§8.7 `shape` hook: LAST build step, after merge (and flows on
-        declarative matchers) — same point as the compiled path, so topology
-        parity holds. Shapers are sync `(produced_block, match) -> None` and
-        may mutate only the produced block's region."""
+        """§8.7 `shape` hook: LAST build step, after merge — same point as the
+        compiled path, so topology parity holds. Shapers are sync
+        `(produced_block, match) -> None` and may mutate only the produced
+        block's region."""
         if self._shaper_name is None:
             return
         shaper = self._registries.shapers.get(self._shaper_name)
@@ -721,7 +721,6 @@ class IrMatcher:
             produced.failed = outcome.failed
             produced.broken = outcome.broken
             produced.merge_blocks(consumed)
-            apply_flows(produced, outcome.flows)
             self._apply_shape(produced, SimpleNamespace(**env))
             return produced
 

@@ -69,10 +69,10 @@ CMake-integrated (regenerate automatically from ir/*.json; sha-paired, exit 2 on
 
 | Gate | Command | Pass (current) |
 |---|---|---|
-| Python suites | `python -m pytest tests/mch tests/mch_ir tests/test_actions.py -q` | 1953 passed / 2 skipped |
+| Python suites | `python -m pytest tests/mch tests/mch_ir tests/test_actions.py -q` | 1950 passed / 2 skipped |
 | Expr interpreter | `EXE --vectors ENG/ir/expr_vectors.json` | 97/97 |
 | Expr generated | `EXE --vectors-gen ENG/ir/expr_vectors.json` | 97/97 |
-| Build vectors | `EXE --build-vectors ENG/ir/build_vectors.json` | 36/36 |
+| Build vectors | `EXE --build-vectors ENG/ir/build_vectors.json` | 35/35 (flow case removed 2026-07-12) |
 | Shape/self tests | `EXE --shape-test`; `ctest --test-dir <builddir>/ton-mch-engine -R mch` | ALL PASS; 5/5 |
 | Msg parsing | `EXE --parse-dump -T TR` vs `twins/py_msg_dump.py` | diff 0 |
 | Match walker | `EXE --match -I ART -T TR` vs `twins/py_match_dump.py` | diff 0 (328 lines) |

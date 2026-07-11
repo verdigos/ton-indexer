@@ -13,7 +13,7 @@ two matcher graphs run over independently constructed block trees:
 
 Every produced block is compared at the same bar as the per-protocol parity
 tests: btype, deep per-key `data` equality (value + exact type), `failed`/
-`broken` flags, `value_flow.to_dict()`, and the consumed event-node multiset
+`broken` flags, and the consumed event-node multiset
 (sorted tx hashes — order-independent, never compared in list order). Block
 CLASS and TOPOLOGY are intentionally NOT compared (remakes legitimately deviate
 on both while keeping every field above identical — the per-protocol remake
@@ -457,10 +457,10 @@ def _diff_blocks(legacy_blocks: list[Block], ir_blocks: list[Block]) -> list[str
                     f"ir={iv!r} ({type(iv).__name__})"
                 )
 
-        cvf, ivf = c.value_flow.to_dict(), ir.value_flow.to_dict()
-        if cvf != ivf:
-            divs.append(f"{p} value_flow: legacy={cvf} ir={ivf}")
-
+        # value_flow intentionally NOT compared (plan §7): the `flow` statement
+        # was removed, so declarative matchers no longer populate value_flow
+        # while legacy builders still do. value_flow is not persisted / not a
+        # parity concern.
         ch, ih = _node_hashes(c), _node_hashes(ir)
         if ch != ih:
             divs.append(f"{p} consumed nodes: legacy={ch} ir={ih}")

@@ -149,21 +149,10 @@ int run_build_smoke(const std::string &artifact_path, const std::vector<std::str
           std::printf("BUILD %s anchor=%s rejected\n", m.name.c_str(), block_key(block).c_str());
           continue;
         }
-        std::string flows = "[";
-        for (std::size_t i = 0; i < o.flows.size(); i++) {
-          if (i) flows += ",";
-          flows += o.flows[i].kind + "(";
-          for (std::size_t j = 0; j < o.flows[i].args.size(); j++) {
-            if (j) flows += ",";
-            flows += render_value(o.flows[i].args[j]);
-          }
-          flows += ")";
-        }
-        flows += "]";
-        std::printf("BUILD %s anchor=%s btype=%s failed=%d broken=%d data=%s flows=%s\n",
+        std::printf("BUILD %s anchor=%s btype=%s failed=%d broken=%d data=%s\n",
                     m.name.c_str(), block_key(block).c_str(),
                     o.btype.empty() ? "-" : o.btype.c_str(), o.failed ? 1 : 0, o.broken ? 1 : 0,
-                    render_value(o.data).c_str(), flows.c_str());
+                    render_value(o.data).c_str());
       }
     }
   }

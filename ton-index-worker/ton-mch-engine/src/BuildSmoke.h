@@ -13,7 +13,7 @@
 //   === <fixture-basename>
 //   BUILD <matcher> anchor=<block_key> rejected
 //   BUILD <matcher> anchor=<block_key> btype=<bt|-> failed=0|1 broken=0|1
-//         data={k=v,...} flows=[kind(a,..),...]      # one line, data keys sorted
+//         data={k=v,...}                             # one line, data keys sorted
 // Value rendering: null | true/false | <dec int> | amount:<dec> | str:<s> |
 // <raw account>|addr_none | asset:TON|asset:<raw> | b64:<base64> |
 // cell:<HASH> | obj{k=v,..} | {k=v,..} (both key-sorted) | [v,..] |

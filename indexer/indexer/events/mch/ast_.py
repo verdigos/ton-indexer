@@ -289,16 +289,6 @@ class BrokenStmt(BuildStmt):
 
 
 @dataclass(frozen=True)
-class FlowStmt(BuildStmt):
-    """`flow jetton(owner, master, amount)` | `flow ton(account, amount)` |
-    `flow fees(account, amount)` — value-flow effects on the produced block
-    (Block.value_flow add_jetton/add_ton/add_fees, spec §9.8)."""
-    kind: str
-    args: tuple[Expr, ...]
-    span: Span
-
-
-@dataclass(frozen=True)
 class OutField:
     name: str
     value: Expr

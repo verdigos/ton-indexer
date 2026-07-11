@@ -656,9 +656,6 @@ def _resolve_matcher(
     )
 
 
-# Required argument counts for `flow KIND(...)` (§9.8).
-_FLOW_ARITIES: dict[str, int] = {"jetton": 3, "ton": 2, "fees": 2}
-
 # Env names the synthesized declarative build path always binds (compiler
 # `build_block`: `consumed` = deduped consumed-block list, `anchor` = anchor
 # block). They resolve like captures in build expressions, and `let` may not
@@ -683,7 +680,6 @@ def _check_build_stmts(
       it may sit anywhere among the statements, evaluation stays source-order.
     - Exactly one of `build` directive / build statements (R015); declarative
       matchers must have an `out` (R016).
-    - `flow` kind and arity must match §9.8 (R018).
     """
     if m.build is not None and m.build_stmts:
         bag.error(
@@ -754,22 +750,6 @@ def _check_build_stmts(
             available.add(stmt.name)
         elif isinstance(stmt, (ast_.RejectStmt, ast_.FailedStmt, ast_.BrokenStmt)):
             _check_expr_refs(stmt.condition, available, bag)
-        elif isinstance(stmt, ast_.FlowStmt):
-            arity = _FLOW_ARITIES.get(stmt.kind)
-            if arity is None:
-                bag.error(
-                    "R018_BAD_FLOW",
-                    f"unknown flow kind {stmt.kind!r}; expected jetton, ton, or fees",
-                    stmt.span,
-                )
-            elif len(stmt.args) != arity:
-                bag.error(
-                    "R018_BAD_FLOW",
-                    f"flow {stmt.kind} takes {arity} arguments, got {len(stmt.args)}",
-                    stmt.span,
-                )
-            for a in stmt.args:
-                _check_expr_refs(a, available, bag)
         elif isinstance(stmt, ast_.OutStmt):
             if out_seen:
                 bag.error(

@@ -28,7 +28,7 @@
 //   SKIP <matcher> reason=...   # once, sorted (same rules as BuildSmoke.h)
 //   === <fixture-basename>
 //   ACTION <matcher> anchor=<key> btype=<bt> failed=0|1 broken=0|1
-//          data={..} flows=[..] consumed=[<key>,..] auto=[<key>,..]
+//          data={..} consumed=[<key>,..] auto=[<key>,..]
 // consumed = SORTED keys of the produced block's children_blocks (== the merge
 // set); auto = canonical (min_lt) order, unsorted. Value rendering per
 // BuildSmoke.h. Rejections print nothing (matches Python r in (None, [])).

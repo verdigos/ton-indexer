@@ -152,7 +152,6 @@ matcher test_build_program {
         sender: a.msg.source if a.msg.source != null else b.msg.source
         amount: amount(a.msg.value)
     }
-    flow ton(a.msg.source, a.msg.value)
 }
 """
 
@@ -225,7 +224,6 @@ def test_build_program_encoding():
                 },
             ],
         },
-        {"s": "flow", "kind": "ton", "args": [a_msg_source, a_msg_value]},
     ]
     # Declarative matcher (build statements, no registered builder): "builder"
     # is omitted entirely, not emitted as null (container rule).

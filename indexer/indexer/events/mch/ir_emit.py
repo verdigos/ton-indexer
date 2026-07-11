@@ -229,8 +229,6 @@ def _emit_stmt(stmt: ast_.BuildStmt) -> dict:
         return {"s": "failed", "when": _emit_expr(stmt.condition)}
     if isinstance(stmt, ast_.BrokenStmt):
         return {"s": "broken", "when": _emit_expr(stmt.condition)}
-    if isinstance(stmt, ast_.FlowStmt):
-        return {"s": "flow", "kind": stmt.kind, "args": [_emit_expr(a) for a in stmt.args]}
     if isinstance(stmt, ast_.OutStmt):
         return {"s": "out", "fields": _emit_out_fields(stmt.fields)}
     if isinstance(stmt, ast_.SwitchStmt):

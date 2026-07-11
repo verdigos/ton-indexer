@@ -84,7 +84,7 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
     }
   }
 
-  out.push_back(CoreAction{m.name, block, produced, std::move(aux), std::move(o.flows)});
+  out.push_back(CoreAction{m.name, block, produced, std::move(aux)});
   return true;
 }
 
@@ -358,7 +358,7 @@ std::vector<CoreAction> basic_classify_fallback(TraceContext &ctx) {
           continue;
         }
       }
-      out.push_back(CoreAction{"basic", b, b, {}, {}});
+      out.push_back(CoreAction{"basic", b, b, {}});
     }
   } catch (...) {
     out.clear();  // Python: fallback returns [] on any exception
@@ -388,6 +388,18 @@ ClassifySetup prepare_classify(const LoadedIr &ir) {
     }
     s.included.push_back(i);
     s.kinds.insert(ir.matchers[i].ref_lookups.begin(), ir.matchers[i].ref_lookups.end());
+    // B1: precompute the anchor prefilter. Only opcode/btype anchors are
+    // prefilterable; pred (and never-runnable mixed) anchors stay full-scan.
+    AnchorFilter af;
+    const CompiledMatcher &m = ir.matchers[i];
+    if (m.anchor_kind == AnchorKind::OpcodeSet) {
+      af.prefilter = true;
+      af.opcodes = &m.anchor_opcodes;
+    } else if (m.anchor_kind == AnchorKind::BType) {
+      af.prefilter = true;
+      af.btypes = &m.anchor_btypes;
+    }
+    s.anchor_filters.push_back(af);
   }
   std::sort(s.skips.begin(), s.skips.end());
   for (const GenBuild &g : *table) {
@@ -413,11 +425,52 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
   Block *wrapper = ctx.arena.make("root");
   wrapper->connect(ctx.root);
 
+  // B1 anchor prefilter inventory: the opcodes + btypes present on the spine
+  // (blocks reachable via next_blocks — the outer BFS's anchor candidates). A
+  // matcher whose opcode/btype anchor intersects neither can match nothing, so
+  // its whole traversal is skipped. Opcodes are STATIC (produced composite blocks
+  // carry no opcode); btypes GROW as matchers fire (a later matcher may anchor on
+  // a produced btype), so produced btypes are folded in after each matcher. The
+  // inventory is a conservative superset — consumed blocks are never removed, so
+  // a skip only ever fires when the traversal provably matches nothing.
+  std::unordered_set<std::uint32_t> inv_opcodes;
+  std::unordered_set<std::string> inv_btypes;
+  {
+    std::deque<Block *> q{wrapper};
+    while (!q.empty()) {
+      Block *cur = q.front();
+      q.pop_front();
+      inv_btypes.insert(cur->btype);
+      if (cur->opcode) inv_opcodes.insert(*cur->opcode);
+      for (Block *n : cur->next_blocks) q.push_back(n);
+    }
+  }
+  auto anchor_can_match = [&](const AnchorFilter &af) -> bool {
+    if (!af.prefilter) return true;  // pred/mixed: always full-scan
+    if (af.opcodes != nullptr) {
+      for (std::uint32_t op : *af.opcodes) {
+        if (inv_opcodes.count(op)) return true;
+      }
+      return false;
+    }
+    if (af.btypes != nullptr) {
+      for (const std::string &bt : *af.btypes) {
+        if (inv_btypes.count(bt)) return true;
+      }
+      return false;
+    }
+    return true;
+  };
+
   std::vector<CoreAction> pending;
   try {
-    for (int mi : setup.included) {
-      const CompiledMatcher &m = ir.matchers[mi];
+    for (std::size_t k = 0; k < setup.included.size(); k++) {
+      if (!anchor_can_match(setup.anchor_filters[k])) {
+        continue;  // B1: no spine op/btype can satisfy this anchor — skip traversal
+      }
+      const CompiledMatcher &m = ir.matchers[setup.included[k]];
       auto fn = setup.build_fns.at(m.artifact_index);
+      std::size_t produced_from = pending.size();
       // Python bfs_iter port: FIFO; cur's next_blocks are read AFTER try_build
       // ran on cur (generator resume order) — merges mutate the tree mid-walk.
       std::deque<Block *> queue{wrapper};
@@ -430,6 +483,11 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
         for (Block *n : cur->next_blocks) {
           queue.push_back(n);
         }
+      }
+      // Fold this matcher's produced btypes into the inventory so a later
+      // btype-anchored matcher composing on them is not wrongly skipped.
+      for (std::size_t j = produced_from; j < pending.size(); j++) {
+        if (pending[j].produced != nullptr) inv_btypes.insert(pending[j].produced->btype);
       }
     }
 

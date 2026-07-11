@@ -25,8 +25,7 @@ EXPR_KINDS = frozenset({
 })
 UNARY_OPS = frozenset({"not", "-"})
 BIN_OPS = frozenset({"and", "or", "==", "!=", "<", "<=", ">", ">=", "??", "+", "-", "*"})
-STMT_TAGS = frozenset({"parse", "let", "reject", "failed", "broken", "flow", "out", "switch"})
-FLOW_ARITY = {"jetton": 3, "ton": 2, "fees": 2}
+STMT_TAGS = frozenset({"parse", "let", "reject", "failed", "broken", "out", "switch"})
 
 
 class IrLoadError(Exception):
@@ -186,13 +185,6 @@ def _check_stmt(where: str, stmt: Any) -> None:
         _check_expr(where, stmt.get("expr"))
     elif s in ("reject", "failed", "broken"):
         _check_expr(where, stmt.get("when"))
-    elif s == "flow":
-        arity = FLOW_ARITY.get(stmt.get("kind"))
-        args = stmt.get("args")
-        if arity is None or not isinstance(args, list) or len(args) != arity:
-            raise IrLoadError(f"{where}: bad flow statement {stmt!r}")
-        for a in args:
-            _check_expr(where, a)
     elif s == "out":
         _check_out_fields(where, stmt.get("fields"))
     elif s == "switch":

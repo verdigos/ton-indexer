@@ -27,14 +27,6 @@ namespace mch {
 
 struct Block;  // BlockTree.h
 
-// A recorded `flow` statement (program.py FlowEffect): args are the evaluated
-// values IN ORDER, INCLUDING nulls — null-arg effects are recorded here and
-// skipped only at apply time (apply_flows, Phase E).
-struct FlowOp {
-  std::string kind;  // "jetton" | "ton" | "fees"
-  std::vector<Value> args;
-};
-
 // program.py BuildOutcome | None. rejected==true corresponds to Python's None
 // (a `reject when` fired OR an EvalError surfaced); the other fields are then
 // meaningless. btype empty == Python btype None (non-switch matcher: caller
@@ -46,7 +38,6 @@ struct BuildOutcome {
   Value data;  // Dict; defaults to the empty dict (Python: data None -> {})
   bool failed{false};
   bool broken{false};
-  std::vector<FlowOp> flows;
 
   static BuildOutcome rejected(std::string reason = {}) {
     BuildOutcome o;

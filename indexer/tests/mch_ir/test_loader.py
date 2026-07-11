@@ -281,9 +281,9 @@ def test_bad_build_program_and_expr_tags():
 
     doc = _min_doc()
     doc["matchers"][0]["build_program"] = [
-        {"s": "flow", "kind": "ton", "args": [{"k": "int", "v": 1}]}  # arity 2
+        {"s": "bogus", "kind": "ton", "args": []}  # unknown statement tag
     ]
-    with pytest.raises(IrLoadError, match="flow"):
+    with pytest.raises(IrLoadError, match="bad build statement"):
         load_artifact(doc)
 
 

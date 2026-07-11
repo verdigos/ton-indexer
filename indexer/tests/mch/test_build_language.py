@@ -227,10 +227,8 @@ def test_where_expr_on_node():
     assert node.where_expr.left.field == "amount"
 
 
-def test_lex_flow_if_else_keywords():
-    assert _kinds("flow if else") == [
-        TokenKind.KW_FLOW, TokenKind.KW_IF, TokenKind.KW_ELSE,
-    ]
+def test_lex_if_else_keywords():
+    assert _kinds("if else") == [TokenKind.KW_IF, TokenKind.KW_ELSE]
 
 
 def test_ternary_parses_and_is_lowest_precedence():
@@ -248,18 +246,6 @@ def test_ternary_right_associative():
     assert isinstance(e, ast_.Ternary)
     assert isinstance(e.orelse, ast_.Ternary)
     assert e.orelse.cond.name == "b"
-
-
-def test_flow_stmt_parses():
-    m = _matcher(
-        "op Foo @x\n"
-        "flow jetton(a, b, c)\n"
-        "flow ton(a, b)\n"
-        "flow fees(a, b)"
-    )
-    kinds = [(s.kind, len(s.args)) for s in m.build_stmts]
-    assert all(isinstance(s, ast_.FlowStmt) for s in m.build_stmts)
-    assert kinds == [("jetton", 3), ("ton", 2), ("fees", 2)]
 
 
 def test_parse_stmt_alternatives():
