@@ -50,6 +50,7 @@ const std::map<std::string, HostFn> &host_fns();
 // shaper as a missing binding, and so the --shape-test harness can drive it.
 struct ShaperMatch {
   std::map<std::string, Block *> captures;  // capture name -> block (or absent)
+  std::vector<Block *> consumed;            // match consumed set (`match.consumed`)
   BlockArena *arena{nullptr};               // proxy-block allocation
 
   Block *capture(const std::string &name) const {

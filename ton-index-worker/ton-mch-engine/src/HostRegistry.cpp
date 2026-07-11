@@ -16,6 +16,24 @@ const std::map<std::string, HostFn> &host_fns() {
       {"tonstakers_minted_nft", tonstakers_minted_nft},
       {"jvault_stake_period", jvault_stake_period},
       {"jvault_account_list", jvault_account_list},
+      {"nft_transfer_data", nft_transfer_data},
+      {"getgems_nft_purchase_data", getgems_nft_purchase_data},
+      {"telegram_nft_purchase_data", telegram_nft_purchase_data},
+      {"tgbtc_mint_data", tgbtc_mint_data},
+      {"coffee_swap_data", coffee_swap_data},
+      {"stonfi_v1_swap_data", stonfi_v1_swap_data},
+      {"dedust_deposit_final_data", dedust_deposit_final_data},
+      {"dedust_deposit_partial_data", dedust_deposit_partial_data},
+      {"tonco_deposit_liquidity_data", tonco_deposit_liquidity_data},
+      {"tonco_swap_data", tonco_swap_data},
+      // stonfi_v2_swap_data: implemented (HostStonfi.cpp) but NOT registered.
+      // The Python reference core (build_stonfi_v2_swap_core) is non-
+      // deterministic on the in-leg: under the IR engine in_transfer is a
+      // generic Block (isinstance JettonTransferBlock False), so swaps.py:419's
+      // else arm reads in_transfer.event_nodes[0].message, and the produced
+      // jetton_transfer's event_nodes order is hash-seed dependent -> the twin's
+      // dex_incoming_transfer flakes run-to-run. A/B parity is impossible until
+      // the Python dual-dispatch wave makes that arm btype-driven/deterministic.
   };
   return fns;
 }
@@ -36,6 +54,12 @@ const std::map<std::string, HostPredFn> &host_predicates() {
       {"evaa_user_withdraw_success", evaa_user_withdraw_success},
       {"evaa_user_withdraw_fail", evaa_user_withdraw_fail},
       {"evaa_service_comment", evaa_service_comment},
+      {"getgems_purchase", getgems_purchase},
+      {"getgems_seller_payout", getgems_seller_payout},
+      {"stonfi_v1_sender_payment", stonfi_v1_sender_payment},
+      // no_internal_transfer / pton_self_transfer implemented (HostStonfi.cpp)
+      // but NOT registered: they gate only stonfi_v2_swap, which is disabled
+      // (see the host_fns() note on stonfi_v2_swap_data).
   };
   return preds;
 }
@@ -43,6 +67,8 @@ const std::map<std::string, HostPredFn> &host_predicates() {
 const std::map<std::string, HostShaperFn> &host_shapers() {
   static const std::map<std::string, HostShaperFn> shapers = {
       {"getgems_proxy_insert", getgems_proxy_insert},
+      {"nft_transfer_parent_absorb", nft_transfer_parent_absorb},
+      {"tgbtc_deploy_absorb", tgbtc_deploy_absorb},
   };
   return shapers;
 }

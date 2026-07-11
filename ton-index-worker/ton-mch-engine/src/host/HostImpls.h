@@ -15,9 +15,35 @@ struct Block;     // BlockTree.h
 struct BuildEnv;  // BuildRuntime.h
 struct ShaperMatch;  // HostRegistry.h
 
-// Getgems (HostGetgems.cpp): the getgems_proxy_insert shaper only (the match
-// predicates land with the matcher's future Python declarative conversion).
+// Getgems (HostGetgems.cpp): shaper + purchase/seller-payout preds + purchase fn.
 void getgems_proxy_insert(Block *produced, const ShaperMatch &m);
+bool getgems_purchase(const Block *block);
+bool getgems_seller_payout(const Block *block);
+EvalResult getgems_nft_purchase_data(BuildEnv &env, const std::vector<Value> &args);
+
+// NFT (HostNft.cpp): base nft_transfer host fn + parent-absorb shaper + telegram.
+EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args);
+void nft_transfer_parent_absorb(Block *produced, const ShaperMatch &m);
+EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &args);
+
+// tgBTC (HostTgbtc.cpp): mint host fn + deploy-absorb shaper.
+EvalResult tgbtc_mint_data(BuildEnv &env, const std::vector<Value> &args);
+void tgbtc_deploy_absorb(Block *produced, const ShaperMatch &m);
+
+// Coffee (HostCoffee.cpp): swap host fn.
+EvalResult coffee_swap_data(BuildEnv &env, const std::vector<Value> &args);
+
+// Stonfi (HostStonfi.cpp): v1 sender-payment pred + v1 swap fn (always-reject);
+// v2 preds (no_internal_transfer, pton_self_transfer) + v2 swap fn.
+bool stonfi_v1_sender_payment(const Block *block);
+EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args);
+bool no_internal_transfer(const Block *block);
+bool pton_self_transfer(const Block *block);
+EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args);
+
+// Tonco (HostTonco.cpp): deposit-liquidity fn + swap fn (always-reject under IR).
+EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> &args);
+EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args);
 
 // Nominator (HostNominator.cpp).
 bool nominator_pool_withdraw_parent(const Block *b);
@@ -31,6 +57,10 @@ bool evaa_service_comment(const Block *b);
 // DeDust (HostDedust.cpp).
 EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args);
 EvalResult dedust_swap_failed(BuildEnv &env, const std::vector<Value> &args);
+
+// DeDust liquidity deposit (HostDedustDeposit.cpp).
+EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &args);
+EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &args);
 
 // LayerZero (HostLayerZero.cpp).
 EvalResult layerzero_dst_oapp_matches(BuildEnv &env, const std::vector<Value> &args);

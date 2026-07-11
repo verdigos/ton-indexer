@@ -25,6 +25,16 @@ std::string hex_upper(const unsigned char *p, size_t n) {
   return out;
 }
 
+// Canonical float text shared with the Python twin ("%.17g" both sides). Chosen
+// over shortest-round-trip (repr / to_chars) because those disagree on round
+// numbers (repr keeps a trailing ".0", to_chars drops it); %.17g is one agreed
+// format, byte-verified on the corpus values.
+std::string fmt_g17(double v) {
+  char buf[64];
+  std::snprintf(buf, sizeof(buf), "%.17g", v);
+  return std::string(buf);
+}
+
 }  // namespace
 
 std::string block_key(const Block *b) {
@@ -46,7 +56,15 @@ std::string render_value(const Value &v) {
       return v.boolean ? "true" : "false";
     case VType::Int:
       return v.num.is_null() ? "nan" : v.num->to_dec_string();
+    case VType::Float:
+      // Bare Python float: "float:" + shortest-safe %.17g (byte-matched by the
+      // twin's "float:%.17g" % v). Renderable now, so the NFT purchase/shaper
+      // path fires instead of TRACE_FAILing.
+      return "float:" + fmt_g17(v.dnum);
     case VType::Amount:
+      if (v.amount_float) {
+        return "amount:" + fmt_g17(v.dnum);  // Python Amount(float): str(float)
+      }
       return "amount:" + (v.num.is_null() ? std::string("nan") : v.num->to_dec_string());
     case VType::Str:
       return "str:" + v.str;

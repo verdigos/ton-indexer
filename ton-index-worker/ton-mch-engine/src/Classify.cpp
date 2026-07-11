@@ -4,6 +4,7 @@
 #include "BuildDriver.h"
 #include "BuildRuntime.h"
 #include "GenBuilds.h"
+#include "HostRegistry.h"
 #include "IrLoader.h"
 #include "Walker.h"
 
@@ -50,6 +51,23 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
   produced->broken = o.broken;
   if (!produced->merge_blocks(res->consumed)) {
     return false;  // Python: merge raises -> try_build catches -> clean rejection
+  }
+
+  // §8.7 `shape` hook: LAST build step, after merge (engine.py _apply_shape).
+  // The shaper receives the produced block and a match view carrying the
+  // capture bindings (scalar name -> block) and the consumed set.
+  if (!m.ref_shapers.empty()) {
+    const std::string &shaper_name = *m.ref_shapers.begin();
+    auto sit = host_shapers().find(shaper_name);
+    if (sit != host_shapers().end()) {
+      ShaperMatch sm;
+      sm.arena = &arena;
+      sm.consumed = res->consumed;
+      for (const Capture &c : res->captures) {
+        sm.captures[c.name] = c.vals.empty() ? nullptr : c.vals.front();
+      }
+      sit->second(produced, sm);
+    }
   }
 
   // Root-level excess/bounce auto-append (engine.py try_build): from the

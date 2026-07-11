@@ -179,7 +179,8 @@ const std::set<std::string> &FixtureLookupSource::kinds() {
   // unchanged (no matcher references it as a lookup node, so no skip decision
   // moves on either the C++ or Python side).
   static const std::set<std::string> k = {"jetton_wallet", "nft_item", "nominator_pool",
-                                          "jvault_assets", "dedust_pool"};
+                                          "jvault_assets", "dedust_pool", "nft_sale",
+                                          "nft_auction"};
   return k;
 }
 
@@ -210,6 +211,35 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     }
     return iface_obj(*nft, {"address", "init", "index", "collection_address",
                             "owner_address", "content"});
+  }
+  if (kind == "nft_sale") {
+    // TestInterfaceRepository.get_nft_sale: interfaces[addr]["NftSale"] (RAW key)
+    // -> NftSale ORM. The nft host fn reads marketplace_address / nft_address /
+    // full_price / nft_owner_address.
+    auto it = interfaces_->find(addr);
+    if (it == interfaces_->end()) {
+      return Value::null();
+    }
+    const Value *sale = it->second.field("NftSale");
+    if (sale == nullptr) {
+      return Value::null();
+    }
+    return iface_obj(*sale, {"marketplace_address", "nft_address", "full_price",
+                             "nft_owner_address"});
+  }
+  if (kind == "nft_auction") {
+    // TestInterfaceRepository.get_nft_auction: interfaces[addr]["NftAuction"]
+    // (RAW key) -> NftAuction ORM. The nft host fn reads mp_addr / nft_addr /
+    // last_bid / nft_owner.
+    auto it = interfaces_->find(addr);
+    if (it == interfaces_->end()) {
+      return Value::null();
+    }
+    const Value *auc = it->second.field("NftAuction");
+    if (auc == nullptr) {
+      return Value::null();
+    }
+    return iface_obj(*auc, {"mp_addr", "nft_addr", "last_bid", "nft_owner"});
   }
   if (kind == "nominator_pool") {
     auto it = interfaces_->find(addr);

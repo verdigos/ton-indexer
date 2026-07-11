@@ -115,6 +115,12 @@ add_executable(ton-mch-engine
     src/host/HostLayerZero.cpp
     src/host/HostTonstakers.cpp
     src/host/HostJvault.cpp
+    src/host/HostNft.cpp
+    src/host/HostTgbtc.cpp
+    src/host/HostCoffee.cpp
+    src/host/HostStonfi.cpp
+    src/host/HostDedustDeposit.cpp
+    src/host/HostTonco.cpp
     src/BuildRuntime.cpp
     src/BuildVectorRunner.cpp
     src/BuildDriver.cpp

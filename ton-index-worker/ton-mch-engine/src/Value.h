@@ -55,6 +55,7 @@ enum class VType {
   Dict,     // pure key lookup
   Obj,      // attribute access + .exit_code
   Block,    // reference to a matched Block (msg/data/failed/broken/btype accessors)
+  Float,    // IEEE double from fixture data (Python float); bare -> unrenderable
 };
 
 struct Value {
@@ -62,6 +63,8 @@ struct Value {
 
   VType t{VType::Null};
   bool boolean{false};
+  double dnum{0.0};           // Float, and Amount-of-float (amount_float)
+  bool amount_float{false};   // Amount whose value is a Python float (renders %.17g)
   td::RefInt256 num;          // Int, Amount
   std::string str;            // Str (text), Bytes (raw), Account/Asset canonical addr
   bool addr_none{false};      // Account: addr_none marker
@@ -77,6 +80,8 @@ struct Value {
   static Value make_bool(bool b);
   static Value make_int(td::RefInt256 v);
   static Value make_int64(std::int64_t v);
+  static Value make_float(double v);
+  static Value make_amount_float(double v);  // Python Amount(float)
   static Value make_str(std::string s);
   static Value make_bytes(std::string raw);
   static Value make_amount(td::RefInt256 v);

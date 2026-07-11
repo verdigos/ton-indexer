@@ -329,6 +329,42 @@ corrections applied. Execute as a hygiene wave AFTER Phase C lands (same-tree co
    - 4d. Function-local `static const` for constant argument lists (e.g. the
      `std::vector<std::string>{"CoffeeCreateVault"}` rebuilt on every `rt_parse` call).
 
+5. **Dead-isinstance dual-dispatch wave (Python correctness, found by C++ testbed 2026-07-11 —
+   REQUIRED before Phase G flips production to declarative jettons).** Shared build cores gate
+   composed-block reads on `isinstance(x, JettonTransferBlock)` (and siblings). Under legacy
+   producers (today's production AND the parity sweep's prereqs) the class is real and legs
+   fill; under DECLARATIVE producers (C++ testbed, all-declarative future) the block is the
+   canonical generic Block → branch dead → swaps silently emit EMPTY `dex_incoming/outgoing_
+   transfer` and null sender/source_asset. First confirmed site: coffee swap core (12-line
+   testbed diff when C++ naively filled from btype). The sweep CANNOT catch this class of bug
+   — its prerequisite blocks always come from legacy matchers; only all-declarative
+   composition (testbed classify) exposes it. Fix pattern: dual dispatch (isinstance OR
+   btype+dict via `_dget`), exactly like the pairing passes got in the conversion wave.
+   Site catalogue (cpp-twins waves 1+2, 2026-07-11):
+   - blocks/swaps.py `build_coffee_swap_core` ~L1395 + ~L1424 — jetton in/out legs leave
+     `dex_incoming/outgoing_transfer` = {} and sender/source_asset = None (CONFIRMED LIVE:
+     the 6 corpus coffee_swap actions carry {} jetton legs today under declarative jettons).
+   - blocks/swaps.py `build_stonfi_v1_swap_core` ~L119/L124 `next(… isinstance)` with NO
+     default → StopIteration → stonfi_v1_swap ALWAYS rejects under declarative jettons
+     (matcher inert); also ~L136.
+   - **blocks/swaps.py:404 `build_stonfi_v2_swap_core` — WORSE THAN DEAD: NON-DETERMINISTIC.**
+     The dead isinstance arm is the deterministic one; the LIVE else arm (swaps.py:419-432)
+     reads `in_transfer.event_nodes[0].message` — a set-merged composite's node order is
+     hash-seed dependent (confirmed flaky across runs on the same trace: event_nodes[0]
+     flips ExcessMessage↔JettonNotify → dex_incoming_transfer/sender/source_asset/
+     peer_swaps[].in vary). BLOCKS the C++ stonfi_v2 A/B gate — its finished port sits
+     UNREGISTERED in HostStonfi.cpp until this arm goes btype/data-driven (deterministic).
+   - blocks/swaps.py:847/:876 `build_tonco_swap_core` in_transfer — same flaky message arm
+     (moot: out-leg rejects first); :926 out_transfer isinstance → `return None` → tonco_swap
+     is an ALWAYS-REJECT matcher under IR (corpus also has zero tonco-swap traces).
+   - blocks/liquidity.py:392-394 `build_dedust_deposit_liquidity_core` — `jetton_excesses`
+     always [].
+   - blocks/liquidity.py:1444 `build_tonco_deposit_liquidity_core` — excesses always [].
+   Coordinated wave: Python cores + C++ twins + vectors/classify regen; the C++ side must
+   flip its ports in lockstep (they currently reproduce the dead branches deliberately for
+   twin fidelity; stonfi_v2's C++ trio re-registers by flipping 3 HostRegistry.cpp entries
+   + 3 twin-surface names).
+
 ### Rejected / corrected by lead
 
 - **C1/C2 "jetton payload machinery is gate-only" — WRONG, stays.** The audit grepped

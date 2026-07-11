@@ -182,8 +182,14 @@ Value msgpack_to_value(const msgpack::object &o) {
       }
       return Value::make_dict(std::move(fs));
     }
+    case msgpack::type::FLOAT32:
+    case msgpack::type::FLOAT64:
+      // Fixture interface data (e.g. a huge NftItem.index or NftSale.full_price)
+      // decodes to a Python float; kept as VType::Float so a bare one renders
+      // unrenderable exactly as the Python twin's render() raises.
+      return Value::make_float(o.via.f64);
     default:
-      return Value::null();  // FLOAT etc: no Value kind (documented in the header)
+      return Value::null();
   }
 }
 

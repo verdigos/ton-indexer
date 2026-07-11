@@ -27,6 +27,21 @@ Value Value::make_int64(std::int64_t n) {
   return make_int(td::make_refint(n));
 }
 
+Value Value::make_float(double n) {
+  Value v;
+  v.t = VType::Float;
+  v.dnum = n;
+  return v;
+}
+
+Value Value::make_amount_float(double n) {
+  Value v;
+  v.t = VType::Amount;
+  v.amount_float = true;
+  v.dnum = n;
+  return v;
+}
+
 Value Value::make_str(std::string s) {
   Value v;
   v.t = VType::Str;

@@ -1,5 +1,11 @@
 #include "BlockTree.h"
 
+#include "MsgParse.h"
+
+#include "td/utils/base64.h"
+#include "vm/boc.h"
+#include "vm/cellslice.h"
+
 #include <algorithm>
 #include <deque>
 #include <limits>
@@ -12,6 +18,47 @@ namespace {
 
 // TonTransferMessage.encrypted_opcode — an encrypted-comment plain transfer.
 constexpr std::uint32_t kEncryptedTonOpcode = 0x2167da4b;
+
+// TonTransferBlock.comment/encrypted/comment_encoded (basic_blocks.py): parse
+// the leaf's message body. `comment` is decoded (base64 when encrypted, else
+// utf-8 backslashreplace with U+0000 stripped) exactly as ton_transfer_comment
+// does; `encrypted` is the op == TonTransferMessage.encrypted_opcode flag;
+// `comment_encoded` is set only when a comment is present AND encrypted. Any BOC
+// failure == Python's inner try swallowing -> comment None, encrypted false.
+struct LeafCommentInfo {
+  std::optional<std::string> comment;
+  bool encrypted{false};
+  bool comment_encoded{false};
+};
+
+LeafCommentInfo leaf_comment_info(const EventNode *node) {
+  LeafCommentInfo info;
+  const Message *msg = node != nullptr ? node->msg : nullptr;
+  if (msg == nullptr || !msg->content) {
+    return info;
+  }
+  auto r_raw = td::base64_decode(td::Slice(msg->content->body));
+  if (r_raw.is_error()) {
+    return info;
+  }
+  auto r_cell = vm::std_boc_deserialize(r_raw.move_as_ok());
+  if (r_cell.is_error()) {
+    return info;
+  }
+  td::Ref<vm::Cell> cell = r_cell.move_as_ok();
+  info.comment = ton_transfer_comment(cell);
+  // TonTransferMessage.encrypted: op == 0x2167da4b (peek the first 32 bits).
+  bool special = false;
+  try {
+    vm::CellSlice cs = vm::load_cell_slice_special(cell, special);
+    if (cs.size() >= 32) {
+      info.encrypted = static_cast<std::uint32_t>(cs.fetch_ulong(32)) == kEncryptedTonOpcode;
+    }
+  } catch (...) {
+  }
+  info.comment_encoded = info.comment.has_value() && info.encrypted;
+  return info;
+}
 
 }  // namespace
 
@@ -319,6 +366,14 @@ Value leaf_data(const std::string &btype, const EventNode *node,
   fs.emplace_back("value", (msg != nullptr && msg->value)
                                ? Value::make_amount(td::make_refint(*msg->value))
                                : Value::make_amount_none());
+  if (btype == "ton_transfer") {
+    // TonTransferBlock comment/encrypted/comment_encoded: needed by the getgems
+    // purchase predicate + fn and the nft_transfer_parent_absorb shaper.
+    LeafCommentInfo ci = leaf_comment_info(node);
+    fs.emplace_back("comment", ci.comment ? Value::make_str(*ci.comment) : Value::null());
+    fs.emplace_back("encrypted", Value::make_bool(ci.encrypted));
+    fs.emplace_back("comment_encoded", Value::make_bool(ci.comment_encoded));
+  }
   return Value::make_dict(std::move(fs));
 }
 
