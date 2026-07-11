@@ -65,9 +65,18 @@ The engine's `LookupSource { fetch(kind, key) }` gets a production adapter:
   nothing else changes.
 - Computed lookups (jvault_assets pattern, review §9.3): stay named resolvers behind the
   same seam; production impl reads the same interface structs.
-- Q2 (user): confirm the interfaces stage output is available to the actions stage in
-  ton-index-postgres today (Python reads it from DB/kvrocks; C++ in-process handoff would be
-  new plumbing). If not in-process, the adapter's fetch goes through the existing storage.
+- Q2 — ANSWERED (lead investigation 2026-07-11): YES, in-process. `ParsedBlockPtr` flows
+  through the whole IndexScheduler pipeline; `BlockInterfaceProcessor` populates
+  `ParsedBlock.account_interfaces_` (`unordered_map<StdAddress, vector<BlockchainInterfaceV2>>`,
+  IndexData.h:756) and `ActionDetector` receives the SAME ParsedBlockPtr — the
+  MchClassifierActor slots in identically. NUANCE (adapter must handle): per-seqno
+  `account_interfaces_` covers only accounts TOUCHED in that block, while the Python
+  classifier's interface_repository reads DB/kvrocks and can resolve interfaces detected
+  long ago (e.g. a jetton wallet lookup for a counterparty wallet untouched this seqno —
+  the fixtures bundle exactly such historical data). ► Adapter = two-tier fetch:
+  (1) in-block `account_interfaces_` map, (2) DB/kvrocks fallback for missing keys (an
+  actor-request round — the two-phase collect model batches these naturally). Tier-2 hit
+  rate should be measured in shadow mode; if it dominates, consider a warm interface cache.
 
 ## 4. Artifact + registries at build time
 
