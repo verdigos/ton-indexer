@@ -191,7 +191,17 @@ Port Python host bindings to C++, registered in a `HostRegistry` (name → fn) t
    parity tests).
 Gate: each binding flips its matcher from the skip table into the classify A/B with diff 0.
 
-## 7. Phase E — post-processing + serializer boundary
+## 7. Phase E — post-processing + serializer boundary — **DONE 2026-07-11**
+
+> Delivered (commits 05f587f8, 51820729, 3627fa24, 74534892): both liquidity post-process
+> passes ported (classify restructured to collect→pass→emit; dedust pairs merge, 3 partials
+> absorbed); C++ Action production (exact `_calc_action_id`, 18 btype fills, `--actions`
+> row-level A/B gate = 196 rows diff 0 both artifacts); serializer dead-attr audit CLOSED
+> (vesting/tgbtc_mint/nft_purchase fills flipped to `_dget` — attr-access would crash on
+> declarative dict blocks at production flip; all remaining attr-only fills are legacy-only
+> btypes). Staged to Phase G: accounts/roles + initiating_event_node tx_hashes extension
+> (C++ Block lacks the member), unwind_deployments wiring (absent both sides, consistent),
+> nft_purchase C++ fill (zero corpus coverage — named skip).
 
 > **`flow` / value-flow DROPPED (user decision 2026-07-07).** `AccountValueFlow` is NOT
 > persisted to the DB, and the Go API computes value flows a different way at a separate
