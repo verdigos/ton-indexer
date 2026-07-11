@@ -871,6 +871,12 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "coffee_create_vault") fill_coffee_create_vault(d, a);
   else if (t == "vesting_send_message") fill_vesting_send_message(d, a);
   else if (t == "tgbtc_mint") fill_tgbtc_mint(d, a);
+  // NAMED SKIP — nft_purchase / dns_purchase (getgems_nft_purchase +
+  // telegram_nft_purchase): the Python fill _fill_nft_purchase_action is now
+  // _dget-safe (dual-dispatch wave), but nft_purchase has ZERO corpus coverage
+  // (no getgems/telegram purchase traces fire), so there is nothing to A/B-gate
+  // — deliberately NOT ported. Add a fill here (Python fill already handles the
+  // dict) if a purchase trace ever enters the corpus.
   else return false;
   return true;
 }

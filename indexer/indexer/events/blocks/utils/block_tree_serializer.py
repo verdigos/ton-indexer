@@ -244,27 +244,29 @@ def _fill_nft_transfer_action(block: NftTransferBlock, action: Action):
     }
 
 def _fill_nft_purchase_action(block: NftPurchaseBlock, action: Action):
-    if block.data.prev_owner is not None:
-        action.source = _addr(block.data.prev_owner)
-    action.destination = _addr(block.data.new_owner)
-    action.asset_secondary = _addr(block.data.nft_address)
-    action.asset = _addr(block.data.collection_address)
+    # dual-access via _dget: legacy NftPurchaseData dataclass OR the declarative
+    # getgems/telegram_nft build's dict (both carry identical field names).
+    if _dget(block.data, 'prev_owner') is not None:
+        action.source = _addr(_dget(block.data, 'prev_owner'))
+    action.destination = _addr(_dget(block.data, 'new_owner'))
+    action.asset_secondary = _addr(_dget(block.data, 'nft_address'))
+    action.asset = _addr(_dget(block.data, 'collection_address'))
     action.nft_transfer_data = {
-        'query_id': block.data.query_id,
+        'query_id': _dget(block.data, 'query_id'),
         'is_purchase': True,
-        'price': _value(block.data.price),
-        'nft_item_index': block.data.nft_index,
-        'forward_amount':  _value(block.data.forward_amount),
-        'custom_payload': block.data.custom_payload,
-        'forward_payload': block.data.forward_payload,
-        'response_destination': _addr(block.data.response_destination),
-        'marketplace': block.data.marketplace,
-        'marketplace_address': _addr(block.data.marketplace_address),
-        'real_prev_owner': _addr(block.data.real_prev_owner),
-        'payout_amount': _value(block.data.payout_amount),
-        'payout_comment_encrypted': block.data.payout_comment_encrypted,
-        'payout_comment_encoded': block.data.payout_comment_encoded,
-        'payout_comment': block.data.payout_comment,
+        'price': _value(_dget(block.data, 'price')),
+        'nft_item_index': _dget(block.data, 'nft_index'),
+        'forward_amount':  _value(_dget(block.data, 'forward_amount')),
+        'custom_payload': _dget(block.data, 'custom_payload'),
+        'forward_payload': _dget(block.data, 'forward_payload'),
+        'response_destination': _addr(_dget(block.data, 'response_destination')),
+        'marketplace': _dget(block.data, 'marketplace'),
+        'marketplace_address': _addr(_dget(block.data, 'marketplace_address')),
+        'real_prev_owner': _addr(_dget(block.data, 'real_prev_owner')),
+        'payout_amount': _value(_dget(block.data, 'payout_amount')),
+        'payout_comment_encrypted': _dget(block.data, 'payout_comment_encrypted'),
+        'payout_comment_encoded': _dget(block.data, 'payout_comment_encoded'),
+        'payout_comment': _dget(block.data, 'payout_comment'),
     }
 
 def _fill_nft_discovery_action(block: NftDiscoveryBlock, action: Action):
