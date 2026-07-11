@@ -161,6 +161,37 @@ The engine's `LookupSource { fetch(kind, key) }` gets a production adapter:
 5. Benchmark vs Python (dev_utils/mch_bench.py methodology) on the corpus + a live range.
 6. Flip decision (user) with the shadow-diff report in hand.
 
+## 8a. SchemaTraceLoader build spec (step 3 slice 2 — de-risked 2026-07-11, build pending)
+
+Investigated + fully de-risked by the step-3 teammate; build handed to a fresh session.
+
+- **Load-bearing finding**: `schema::Trace` carries only `edges` — NO transactions list. And
+  our `to_tree` links the EventNode tree purely by MESSAGE-HASH (out-msg hash of parent tx ==
+  in-msg hash of child), NOT edges. Therefore: loader signature =
+  `SchemaTraceLoader(const std::vector<schema::Transaction>&)` (caller gathers the trace's
+  transactions — the per-seqno coverage nuance lives with the caller/actor); edges unused;
+  to_tree/init_block stay single-sourced and UNCHANGED.
+- **Field map** (schema → TraceLoader structs): tx.hash = base64(hash.as_slice());
+  account = convert::to_raw_address → "0:HEX"; lt/now/mc_seqno direct; orig/end_status =
+  AccountStatus enum→string {uninit,frozen,active,nonexist}; descr = TransactionDescr variant
+  name ("ord"|"tick_tock"|…); compute_exit_code = TrComputePhase_vm.exit_code
+  (TrComputePhase_skipped → null); skipped_reason = null. Messages flat + direction-tagged:
+  in_msg→"in", out_msgs[i]→"out"; msg_hash = base64(hash); tx_hash/tx_lt = owning tx;
+  source/destination already raw strings; opcode = signed int32; value = grams→int64;
+  has_extra_currencies = extra_currencies non-empty; created_lt/created_at/bounce/bounced
+  direct; content.body = schema::Message.**body_boc** (already-serialized BOC string — keeps
+  the b64 convention, ClassifyCore/MsgParse untouched; §12 cellhash renders make byte
+  provenance invisible). Include path confirmed: tondb-scanner exports src/ PUBLIC.
+- **The gate** (offline, all 147 fixtures): harness `--classify-schema` = path A (today's
+  msgpack loader) → SYNTHESIZE schema::Transactions from path-A structs (harness-only reverse
+  map: "0:HEX"→StdAddress, base64→Bits256, int64→CurrencyCollection, minimal
+  TransactionDescr_ord/tick_tock variant from descr+exit_code+aborted, status
+  string→AccountStatus, b64→body_boc) → SchemaTraceLoader → path B → classify; diff A vs B
+  expected 0. Interfaces map carried from path A (LookupSource territory, not trace→tree).
+  Known-lossy synthesis (storage/action/credit phases absent) is fine: the loader reads only
+  descr-type + exit_code + aborted.
+- Estimated ~400 lines bidirectional mapping + gate mode.
+
 ## 8. Explicitly out of scope for Phase G
 
 - Matcher coverage growth (remaining legacy-only matchers) — orthogonal, continues on the
