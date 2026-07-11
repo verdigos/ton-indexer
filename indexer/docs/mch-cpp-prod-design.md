@@ -129,8 +129,19 @@ The engine's `LookupSource { fetch(kind, key) }` gets a production adapter:
 ## 7. Rollout sequence (proposed)
 
 1. §2 isolation refactor (library + buffered results) — gates unchanged.
+   **DONE 2026-07-11 (24924d66)**: ClassifyCore/ClassifyDump split, buffered atomic results,
+   ParseDump extracted, rt_eq symmetric container_eq. All gates byte-stable, zero twin changes.
 2. §6 items 1/2/3/5 (accounts+roles wave, unwind_deployments, fallback) — extends the
    --actions gate to full-row parity incl. action_accounts.
+   **DONE 2026-07-11 (3dcc1476)**: accounts + tx_hashes via initiating_event_node (roles
+   dropped — §6.1 correction); unwind_deployments in the pass chain (zero-delta for dumps,
+   confirmed — matters only for the production spine walk; NOTE: production Python chain is
+   [dedust, unwind] — post_process_stonfi_v2_liquidity is STILL unregistered in
+   event_processing, the old T26 item, must be wired at the Python production flip);
+   basic-actions fallback as dormant ClassifyResult.fallback_actions with named gaps
+   (flat basic-btype walk, not full serialize_blocks recursion; twin fallback fidelity
+   deferred; extra_currencies absent from leaf data; tick_tock excluded). All ungated —
+   no failing corpus trace; shadow mode is where fallback fidelity gets real data.
 3. §3 production LookupSource adapter + §4 embedding + §1 actor — first shadow run on a
    dev seqno range, diff vs Python-written rows.
 4. §6 item 7 priorities + remaining blessed deltas documented.
