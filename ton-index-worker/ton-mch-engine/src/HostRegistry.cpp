@@ -26,14 +26,12 @@ const std::map<std::string, HostFn> &host_fns() {
       {"dedust_deposit_partial_data", dedust_deposit_partial_data},
       {"tonco_deposit_liquidity_data", tonco_deposit_liquidity_data},
       {"tonco_swap_data", tonco_swap_data},
-      // stonfi_v2_swap_data: implemented (HostStonfi.cpp) but NOT registered.
-      // The Python reference core (build_stonfi_v2_swap_core) is non-
-      // deterministic on the in-leg: under the IR engine in_transfer is a
-      // generic Block (isinstance JettonTransferBlock False), so swaps.py:419's
-      // else arm reads in_transfer.event_nodes[0].message, and the produced
-      // jetton_transfer's event_nodes order is hash-seed dependent -> the twin's
-      // dex_incoming_transfer flakes run-to-run. A/B parity is impossible until
-      // the Python dual-dispatch wave makes that arm btype-driven/deterministic.
+      // stonfi_v2_swap_data: registered by the §11.5 dual-dispatch wave. The
+      // Python core (build_stonfi_v2_swap_core) now reads the in-leg by btype
+      // (swaps.py:404) instead of the hash-seed-dependent
+      // in_transfer.event_nodes[0].message, so it is deterministic and matches
+      // this already-btype-driven port. A/B parity is now achievable.
+      {"stonfi_v2_swap_data", stonfi_v2_swap_data},
   };
   return fns;
 }
@@ -57,9 +55,10 @@ const std::map<std::string, HostPredFn> &host_predicates() {
       {"getgems_purchase", getgems_purchase},
       {"getgems_seller_payout", getgems_seller_payout},
       {"stonfi_v1_sender_payment", stonfi_v1_sender_payment},
-      // no_internal_transfer / pton_self_transfer implemented (HostStonfi.cpp)
-      // but NOT registered: they gate only stonfi_v2_swap, which is disabled
-      // (see the host_fns() note on stonfi_v2_swap_data).
+      // no_internal_transfer / pton_self_transfer gate stonfi_v2_swap, now
+      // enabled by the §11.5 dual-dispatch wave (see host_fns()).
+      {"no_internal_transfer", no_internal_transfer},
+      {"pton_self_transfer", pton_self_transfer},
   };
   return preds;
 }

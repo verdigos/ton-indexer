@@ -389,8 +389,11 @@ async def _dedust_deposit_final_data(consumed: list[Block]) -> SimpleNamespace |
                         if isinstance(b, CallContractBlock)
                         and b.opcode == DedustPayout.opcode
                         and b.previous_block in returns]
+        # Dual dispatch (§11.5): the jetton excess payout is a generic
+        # jetton_transfer block under the IR engine (isinstance dead), matched
+        # by btype. Its parent is the DedustReturnExcessFromVault.
         jetton_excesses = [b for b in consumed
-                           if isinstance(b, JettonTransferBlock)
+                           if b.btype == "jetton_transfer"
                            and b.previous_block in returns]
         data = await build_dedust_deposit_liquidity_core(
             block, deposit, lp_transfer, rejection, jt_calls,

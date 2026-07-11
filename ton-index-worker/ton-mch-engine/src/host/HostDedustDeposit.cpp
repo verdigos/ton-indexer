@@ -203,9 +203,11 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
       rejection = b;
     }
   }
-  // returns / ton_excesses. jetton_excesses is the isinstance(JettonTransferBlock)
-  // scan — a LEGACY class that never appears under the IR engine, so the list is
-  // always empty (dead branch, reproduced as []).
+  // returns / ton_excesses / jetton_excesses (§11.5 dual dispatch). Both excess
+  // legs hang off a DedustReturnExcessFromVault: the ton excess is a DedustPayout
+  // child, the jetton excess is a jetton_transfer child (labeled 'jetton_excess'
+  // in Python, matched by btype here). The jetton scan was previously a dead
+  // isinstance(JettonTransferBlock) reproduction (always []).
   std::vector<const Block *> returns;
   for (const Block *b : consumed) {
     if (is_call_op(b, kReturnExcessFromVault)) {
@@ -216,9 +218,13 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     return std::find(returns.begin(), returns.end(), p) != returns.end();
   };
   std::vector<const Block *> ton_excesses;
+  std::vector<const Block *> jetton_excesses;
   for (const Block *b : consumed) {
     if (is_call_op(b, kDedustPayout) && in_returns(b->previous_block)) {
       ton_excesses.push_back(b);
+    }
+    if (b->btype == "jetton_transfer" && in_returns(b->previous_block)) {
+      jetton_excesses.push_back(b);
     }
   }
 
@@ -344,7 +350,8 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     }
   }
 
-  // vault_excesses: TON excesses to the sender (jetton_excesses dead -> []).
+  // vault_excesses: TON excesses first (Python loop order), then jetton excesses
+  // whose receiver == sender, each as (asset, amount) from the leg's data.
   std::vector<Value> excesses;
   for (const Block *te : ton_excesses) {
     const Message *tm = block_msg(te);
@@ -358,6 +365,14 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
                             : Value::make_amount_none();
       excesses.push_back(Value::make_list(
           std::vector<Value>{Value::make_asset_ton(), std::move(amt)}));
+    }
+  }
+  for (const Block *je : jetton_excesses) {
+    Value recv = data_field(je, "receiver");
+    if (recv.t == VType::Account && !recv.addr_none && sender.t == VType::Account &&
+        !sender.addr_none && recv.str == sender.str) {
+      excesses.push_back(Value::make_list(
+          std::vector<Value>{data_field(je, "asset"), data_field(je, "amount")}));
     }
   }
 

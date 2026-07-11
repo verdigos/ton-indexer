@@ -364,6 +364,23 @@ corrections applied. Execute as a hygiene wave AFTER Phase C lands (same-tree co
    flip its ports in lockstep (they currently reproduce the dead branches deliberately for
    twin fidelity; stonfi_v2's C++ trio re-registers by flipping 3 HostRegistry.cpp entries
    + 3 twin-surface names).
+   **STATUS 2026-07-11 — PARTIALLY DONE (wave0 dual-dispatch wave, lead-verified):**
+   - DELIVERED: stonfi_v2 (swaps.py:404 btype-driven, NON-DETERMINISM FIXED — proven
+     identical across PYTHONHASHSEED 1/7/999; C++ trio re-registered; 7 stonfi_v2_swap
+     actions fire), coffee legs (both arms, 6 actions now carry filled jetton legs),
+     dedust_deposit jetton excesses (real site was builders/dedust.py:393, not the core).
+     Classify A/B 189 → 196 = 196 diff 0.
+   - DEFERRED (reverted to symmetric-reject, pre-wave green): stonfi_v1_swap + tonco_swap +
+     tonco_deposit excesses — their C++ host fns are STUBS, not dead branches; un-inerting
+     Python makes them fire with no C++ twin → needs FULL per-protocol C++ core ports
+     (stonfi_v1: StonfiSwapMessage + StonfiPaymentRequest parsers + ~110L core w/ 4 lookups;
+     tonco: 3 parsers incl. recursive payload + ~250L multi-hop core). Dedicated port waves.
+   - CORPUS CORRECTION (catalogue was stale): corpus NOW has 2 tonco_swap traces
+     (call_contract#a7fb58f8 anchors) + 1 stonfi_v1 trace — these ports have live A/B signal,
+     NOT moot. tonco_deposit excesses still zero-coverage.
+   - TWIN-INFRA GAP found: py_classify combined_registries() lacks legacy 'build_coffee_swap'
+     builder → testbed artifact (classify_ir_decl.json) fails IrLoadError on the PYTHON side
+     only (C++ testbed classify clean, 156 actions). Fix twin registry so both artifacts gate.
 
 6. **Wave-0 correctness batch (adopted from `mch-cpp-fresh-architecture-review-2026-07-11.md`, lead-triaged 2026-07-11).**
    The fresh external review largely re-derives this backlog (its §6.3=item 2, §8.5=item 4,

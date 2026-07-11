@@ -574,10 +574,11 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     }
   }
 
-  // in-transfer. in_transfer is EITHER a produced jetton_transfer block (which
-  // IS a JettonTransferBlock: specs_decl/jettons.mch `produces
-  // JettonTransferBlock`, so swaps.py:404's isinstance arm is LIVE -> read the
-  // block's data dict) OR a PTonTransfer call (the message-synthesized TON leg).
+  // in-transfer (§11.5 dual dispatch, deterministic). in_transfer is EITHER a
+  // produced jetton_transfer block (btype "jetton_transfer" — read its data
+  // dict) OR a PTonTransfer call (the message-synthesized TON leg). Python
+  // swaps.py:404 now gates on btype too, so the else arm handles ONLY the
+  // single-leaf pTON call — no more hash-seed-dependent event_nodes[0] read.
   if (in_transfer == nullptr) {
     return rt_fault("stonfi_v2: no in_transfer");
   }

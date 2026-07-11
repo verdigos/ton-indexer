@@ -401,7 +401,13 @@ async def build_stonfi_v2_swap_core(
 
     in_transfer_data = {}
     sender = None
-    if isinstance(in_transfer, JettonTransferBlock):
+    # Dual dispatch (§11.5): a jetton in-leg carries all fields in `.data` under
+    # BOTH legacy (JettonTransferBlock) and declarative (generic Block) producers
+    # — gate on btype. This also REMOVES the non-determinism: the old `else` arm
+    # read `in_transfer.event_nodes[0].message` on a set-merged composite whose
+    # node order is hash-seed dependent; routing the jetton leg here by btype
+    # leaves the else arm to the genuine single-leaf pTON call only.
+    if in_transfer is not None and in_transfer.btype == "jetton_transfer":
         sender = in_transfer.data['sender']
         jetton_address = in_transfer.data['asset'].jetton_address
         if jetton_address.as_str() in PTonTransferMatcher.pton_masters:
@@ -1392,7 +1398,8 @@ async def build_coffee_swap_core(
     # 3. parse incoming transfer
     in_transfer_data = {}
     sender = None
-    if isinstance(in_transfer_block, JettonTransferBlock):
+    # Dual dispatch (§11.5): btype covers legacy + declarative jetton legs.
+    if in_transfer_block is not None and in_transfer_block.btype == "jetton_transfer":
         sender = in_transfer_block.data["sender"]
         in_transfer_data = {
             "asset": in_transfer_block.data["asset"],
@@ -1421,7 +1428,7 @@ async def build_coffee_swap_core(
 
     # 4. parse outgoing transfer
     out_transfer_data = {}
-    if isinstance(out_transfer_block, JettonTransferBlock):
+    if out_transfer_block is not None and out_transfer_block.btype == "jetton_transfer":
         out_transfer_data = {
             "asset": out_transfer_block.data["asset"],
             "amount": out_transfer_block.data["amount"],

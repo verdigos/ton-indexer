@@ -201,13 +201,21 @@ EvalResult coffee_swap_data(BuildEnv &, const std::vector<Value> &args) {
     return rt_ok(Value::null());
   }
 
-  // in_transfer_data. The JettonTransferBlock arm of build_coffee_swap_core is
-  // isinstance-gated on the LEGACY class; under the IR engine a jetton_transfer
-  // is the generic Block, so that branch is dead (in_data stays {}, sender None,
-  // matching the Python twin) — only the CoffeeSwapNative arm is live.
+  // in_transfer_data (§11.5 dual dispatch). A jetton in-leg is a generic Block
+  // with btype "jetton_transfer" whose `.data` carries the transfer fields
+  // (swaps.py:1395 now gates on btype); else the CoffeeSwapNative TON arm.
   Value sender = Value::null();
   Value in_data = Value::make_dict({});
-  if (is_call_op(in_transfer, kCoffeeSwapNative)) {
+  if (in_transfer->btype == "jetton_transfer") {
+    sender = data_field(in_transfer, "sender");
+    in_data = Value::make_dict(Value::Fields{
+        {"asset", data_field(in_transfer, "asset")},
+        {"amount", data_field(in_transfer, "amount")},
+        {"source", data_field(in_transfer, "sender")},
+        {"source_jetton_wallet", data_field(in_transfer, "sender_wallet")},
+        {"destination", data_field(in_transfer, "receiver")},
+        {"destination_jetton_wallet", data_field(in_transfer, "receiver_wallet")}});
+  } else if (is_call_op(in_transfer, kCoffeeSwapNative)) {
     auto r_body = block_body(in_transfer);
     if (r_body.is_error()) {
       return rt_fault("coffee: native body");
@@ -232,10 +240,18 @@ EvalResult coffee_swap_data(BuildEnv &, const std::vector<Value> &args) {
                        account_from_opt(m != nullptr ? m->destination : std::nullopt));
   }
 
-  // out_transfer_data. The JettonTransferBlock arm is likewise dead under the IR
-  // engine (out_data stays {}); only CoffeePayout / CoffeeNotification are live.
+  // out_transfer_data (§11.5 dual dispatch). Jetton out-leg via btype/.data
+  // (swaps.py:1424); else CoffeePayout / CoffeeNotification TON arms.
   Value out_data = Value::make_dict({});
-  if (is_call_op(out_transfer, kCoffeePayout)) {
+  if (out_transfer->btype == "jetton_transfer") {
+    out_data = Value::make_dict(Value::Fields{
+        {"asset", data_field(out_transfer, "asset")},
+        {"amount", data_field(out_transfer, "amount")},
+        {"source", data_field(out_transfer, "sender")},
+        {"source_jetton_wallet", data_field(out_transfer, "sender_wallet")},
+        {"destination", data_field(out_transfer, "receiver")},
+        {"destination_jetton_wallet", data_field(out_transfer, "receiver_wallet")}});
+  } else if (is_call_op(out_transfer, kCoffeePayout)) {
     auto r_body = block_body(payout);
     if (r_body.is_error()) {
       return rt_fault("coffee: payout body");
