@@ -1,9 +1,15 @@
 # MCH C++ Engine — Phase G Production Design (DRAFT for user review)
 
-Status: DRAFT 2026-07-11, written after B–F completion (all gates green at db31c3ad:
-classify/actions A/B diff 0 both artifacts, 196 rows; pytest 1950/2). Companion to
-`mch-cpp-plan.md` §9. NOTHING here is implemented; every numbered decision needs user
-sign-off (recommendations marked ►).
+Status: ACTIVE 2026-07-11 (user delegated direction: "do as u think needed"). Written after
+B–F completion (all gates green at db31c3ad: classify/actions A/B diff 0 both artifacts,
+196 rows; pytest 1950/2). Companion to `mch-cpp-plan.md` §9. Recommendations marked ►.
+DECIDED under delegation (lead, 2026-07-11): Q1 = SHADOW MODE first on a bounded seqno
+range (Python stays authoritative; C++ diffs logged) — flip is a later user decision with
+the shadow report in hand. Q3 = FATAL at startup in production builds on an unrunnable
+artifact matcher (artifact and binary ship together; mismatch = build bug). Q2 = under
+lead investigation (interfaces-stage output availability to the actions stage in
+ton-index-postgres); answer shapes §3's adapter, not §2's refactor. Rollout step 1 (§2
+isolation refactor) STARTED.
 
 ## 0. What Phase G is
 
