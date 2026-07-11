@@ -208,9 +208,13 @@ Gate: each binding flips its matcher from the skip table into the classify A/B w
 1. Host post-process passes: `post_process_dedust_liquidity` + `post_process_stonfi_v2_liquidity`
    (pairing/merge surgery — port from `indexer/indexer/events/blocks/liquidity.py`; these run
    AFTER matching, before serialization; they are host-side BY DESIGN, not DSL features).
-3. Serializer boundary decision (user input needed): C++ Action production (port
-   `block_tree_serializer.py` `_fill_*` for MCH-produced btypes) vs emitting the block tree to
-   the existing pipeline. NOT in scope until B-D are green.
+3. Serializer boundary decision — **DECIDED (user, 2026-07-11): C++ Action production.**
+   Port `block_tree_serializer.py` `_fill_*` scoped to MCH-produced btypes only (~15-20 fills,
+   not all ~50), staged: declarative-family btypes first. Gate = Action-row-level A/B dump
+   (new mode; C++ Action fields vs Python serializer output over the corpus) — stronger than
+   block-level parity. Rationale: production classification lives inside the C++ indexer and
+   Action rows are the DB deliverable; an emit-tree seam would only feed code shaped exactly
+   like this port anyway. Runs after the post-process passes (item 1) land.
 
 ## 8. Phase F — Python-side remainder (independent of C++; any tier model)
 
