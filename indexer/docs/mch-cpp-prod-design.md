@@ -161,7 +161,14 @@ The engine's `LookupSource { fetch(kind, key) }` gets a production adapter:
 5. Benchmark vs Python (dev_utils/mch_bench.py methodology) on the corpus + a live range.
 6. Flip decision (user) with the shadow-diff report in hand.
 
-## 8a. SchemaTraceLoader build spec (step 3 slice 2 — de-risked 2026-07-11, build pending)
+## 8a. SchemaTraceLoader build spec (step 3 slice 2 — **BUILT + GATED, committed f95f967a 2026-07-12**)
+
+> Landed: `SchemaTraceLoader.{h,cpp}` (lib) per the spec below + `SchemaGate.{h,cpp}`
+> (harness synthesis) + `--classify-schema`/`--actions-schema` gates — BOTH diff 0 vs the
+> msgpack path over all 147 fixtures (196/196). One subtlety proven by the gate: `aborted`
+> lives inside the schema TransactionDescr variant (not flat) and drives success/failed —
+> round-trips correctly. Remaining slices: ParsedBlockLookupSource body (§3 mapping),
+> MchClassifierActor, --mch-shadow. Spec kept below for reference.
 
 Investigated + fully de-risked by the step-3 teammate; build handed to a fresh session.
 

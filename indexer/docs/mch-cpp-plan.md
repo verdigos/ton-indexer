@@ -76,7 +76,7 @@ CMake-integrated (regenerate automatically from ir/*.json; sha-paired, exit 2 on
 | Match walker | `EXE --match -I ART -T TR` vs `twins/py_match_dump.py` | diff 0 (574 lines) |
 | Classify | `EXE --classify -I ART -T TR` vs `twins/py_classify.py` | diff 0 (196 ACTIONs) |
 | Action rows | `EXE --actions -I ART -T TR` vs `twins/py_actions.py` | diff 0 (196 rows, accounts + cellhash fields) |
-| Schema loader | `EXE --classify-schema …` vs `--classify` (in progress, step 3 slice 2) | diff 0 when landed |
+| Schema loader | `EXE --classify-schema -I ART -T TR` vs `--classify` (and --actions-schema vs --actions) | diff 0 (196) |
 | Codegen determinism | covered by ctest `mch_codegen_selftest` + CMake regen | byte-identical |
 
 Notes: 2 pytest skips = dns + stonfi_v2_provide (anchor opcodes absent from corpus).
