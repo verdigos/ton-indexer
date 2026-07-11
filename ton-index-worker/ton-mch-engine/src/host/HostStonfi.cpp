@@ -26,7 +26,9 @@ namespace mch {
 namespace {
 
 constexpr std::uint32_t kStonfiPaymentRequest = 0xf93bb43f;
+constexpr std::uint32_t kStonfiSwap = 0x25938561;      // v1 swap request call
 constexpr std::uint32_t kStonfiSwapOk = 0xc64370e5;
+constexpr std::uint32_t kStonfiSwapOkRef = 0x45078540;  // ok_ref (referral leg)
 constexpr std::uint32_t kStonfiSwapNoLiq = 0x5ffe1295;
 constexpr std::uint32_t kStonfiSwapReserveErr = 0x38976e9b;
 
@@ -98,6 +100,98 @@ td::Result<std::uint32_t> stonfi_payment_exit_code(const td::Ref<vm::Cell> &body
   TRY_RESULT(token1, load_address_py(ref));
   (void)token1;
   return exit_code;
+}
+
+// messages/swaps.py StonfiPaymentRequest, full field set (the v1 swap core
+// reads exit_code + amount0/token0/amount1/token1 from the ref).
+struct PaymentReq {
+  std::uint32_t exit_code{0};
+  td::RefInt256 amount0_out, amount1_out;
+  Value token0, token1;  // account values
+};
+td::Result<PaymentReq> parse_payment_request(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
+    return td::Status::Error("stonfi payment: header underflow");
+  }
+  TRY_RESULT(owner, load_address_py(cs));
+  (void)owner;
+  if (!cs.have(32)) {
+    return td::Status::Error("stonfi payment: exit_code underflow");
+  }
+  PaymentReq pr;
+  pr.exit_code = static_cast<std::uint32_t>(cs.fetch_ulong(32));
+  if (cs.size_refs() < 1) {
+    return td::Status::Error("stonfi payment: ref missing");
+  }
+  bool special = false;
+  vm::CellSlice ref;
+  try {
+    ref = vm::load_cell_slice_special(cs.fetch_ref(), special);
+  } catch (...) {
+    return td::Status::Error("stonfi payment: ref slice");
+  }
+  TRY_RESULT_ASSIGN(pr.amount0_out, load_coins_py(ref));
+  TRY_RESULT_ASSIGN(pr.token0, load_address_py(ref));
+  TRY_RESULT_ASSIGN(pr.amount1_out, load_coins_py(ref));
+  TRY_RESULT_ASSIGN(pr.token1, load_address_py(ref));
+  return pr;
+}
+
+// messages/swaps.py StonfiSwapMessage. Fields the v1 core reads:
+// from_user_address, token_wallet, amount, from_real_user (in the ref).
+struct SwapV1 {
+  Value from_user_address;
+  Value token_wallet;
+  td::RefInt256 amount;
+  Value from_real_user;
+};
+td::Result<SwapV1> parse_swap_v1(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
+    return td::Status::Error("stonfi swap: header underflow");
+  }
+  SwapV1 sw;
+  TRY_RESULT_ASSIGN(sw.from_user_address, load_address_py(cs));
+  TRY_RESULT_ASSIGN(sw.token_wallet, load_address_py(cs));
+  TRY_RESULT_ASSIGN(sw.amount, load_coins_py(cs));
+  TRY_RESULT(min_out, load_coins_py(cs));  // min_out (unused)
+  (void)min_out;
+  if (!cs.have(1)) {
+    return td::Status::Error("stonfi swap: has_ref underflow");
+  }
+  cs.advance(1);  // has_ref bit (ref_address after from_real_user is unused)
+  if (cs.size_refs() < 1) {
+    return td::Status::Error("stonfi swap: ref missing");
+  }
+  bool special = false;
+  vm::CellSlice ref;
+  try {
+    ref = vm::load_cell_slice_special(cs.fetch_ref(), special);
+  } catch (...) {
+    return td::Status::Error("stonfi swap: ref slice");
+  }
+  TRY_RESULT_ASSIGN(sw.from_real_user, load_address_py(ref));
+  return sw;
+}
+
+// sender-related exit codes (stonfi_sender_related_exit_codes).
+bool sender_related(std::uint32_t ec) {
+  return ec == kStonfiSwapOk || ec == kStonfiSwapNoLiq || ec == kStonfiSwapReserveErr;
+}
+
+// Asset from a jetton_wallet lookup WITHOUT the pton-master conversion the v2
+// core applies: v1 builds Asset(is_ton = jetton is None) directly, so a real
+// jetton wallet (even a pton master) yields a jetton asset here.
+Value wallet_asset_v1(const Value &wallet) {
+  const Value *jf = wallet.is_null() ? nullptr : wallet.field("jetton");
+  if (jf == nullptr || jf->t != VType::Str) {
+    return Value::make_asset_ton();  // AccountId(None) -> Asset(is_ton=True)
+  }
+  auto norm = normalize_raw_address(jf->str);
+  return Value::make_asset_jetton(norm ? *norm : jf->str);
 }
 
 // --- stonfi v2 --------------------------------------------------------------
@@ -326,24 +420,195 @@ bool stonfi_v1_sender_payment(const Block *block) {
 }
 
 // builders/stonfi_v1.py _stonfi_v1_swap_data -> blocks/swaps.py
-// build_stonfi_v1_swap_core. Under the IR engine this fn ALWAYS rejects: the
-// core resolves the outgoing transfer via
-// `next(b for b in payment_request_block.next_blocks
-//       if isinstance(b, JettonTransferBlock))` — JettonTransferBlock is the
-// LEGACY class, and every produced jetton_transfer is now the generic Block,
-// so the generator is empty and `next(...)` with no default raises
-// StopIteration on the first sender-related payment request. (If no payment
-// request were sender-related the loop would leave out_addr None and
-// `out_addr.to_str()` would raise instead.) Either path is an unconditional
-// exception -> EvalError -> match rejection, matching the Python twin's 0
-// actions for this matcher. Wired for surface parity (the SKIP->included flip
-// adds zero ACTIONs).
-EvalResult stonfi_v1_swap_data(BuildEnv &, const std::vector<Value> &args) {
+// build_stonfi_v1_swap_core (§11.5 full port). args = (in_transfer anchor,
+// StonfiSwap call). The outgoing transfer is now resolved by btype (matches the
+// generic declarative jetton_transfer block); no try/except in the Python
+// wrapper, so any nav/parse/lookup miss raises -> rt_fault -> match rejection.
+EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   if (args.size() != 2) {
     return rt_fault("stonfi_v1_swap_data: bad arguments");
   }
-  return rt_fault("stonfi_v1_swap_data: JettonTransferBlock legacy class absent "
-                  "under IR (StopIteration)");
+  const Block *block = as_block(args[0]);  // in_transfer (anchor jetton_transfer)
+  const Block *swap = as_block(args[1]);   // StonfiSwap call
+  if (block == nullptr || swap == nullptr) {
+    return rt_fault("stonfi_v1: null capture");
+  }
+  // AccountId(x): None -> addr_none; a present address stays as-is.
+  auto acc_wrap = [](const Value &v) {
+    return v.is_null() ? Value::make_account_none() : v;
+  };
+
+  auto r_sb = block_body(swap);
+  if (r_sb.is_error()) return rt_fault("stonfi_v1: swap body");
+  auto r_sw = parse_swap_v1(r_sb.move_as_ok());
+  if (r_sw.is_error()) return rt_fault("stonfi_v1: swap parse");
+  SwapV1 sw = r_sw.move_as_ok();
+
+  // payment_requests: swap children that are StonfiPaymentRequest calls with a
+  // jetton_transfer child, in tree order (matches the Python builder).
+  struct PR { PaymentReq msg; const Block *blk; };
+  std::vector<PR> prs;
+  for (Block *x : swap->next_blocks) {
+    if (!is_call_op(x, kStonfiPaymentRequest)) continue;
+    bool has_jt = false;
+    for (Block *nb : x->next_blocks) {
+      if (nb->btype == "jetton_transfer") { has_jt = true; break; }
+    }
+    if (!has_jt) continue;
+    auto rb = block_body(x);
+    if (rb.is_error()) return rt_fault("stonfi_v1: payment body");
+    auto rp = parse_payment_request(rb.move_as_ok());
+    if (rp.is_error()) return rt_fault("stonfi_v1: payment parse");
+    prs.push_back({rp.move_as_ok(), x});
+  }
+  if (prs.empty()) return rt_fault("stonfi_v1: no payment requests");  // assert len>0
+
+  auto first_jt_child = [](const Block *pb) -> const Block * {
+    for (Block *b : pb->next_blocks) {
+      if (b->btype == "jetton_transfer") return b;
+    }
+    return nullptr;
+  };
+
+  td::RefInt256 out_amt, ref_amt;   // null == None
+  Value out_addr, ref_addr;         // Null == None
+  const Block *outgoing_jt = nullptr;
+  bool success_swap = false;
+  const Block *in_jt = swap->previous_block;
+
+  for (auto &pr : prs) {
+    td::RefInt256 amount;
+    Value addr;
+    if (!pr.msg.amount0_out.is_null() && pr.msg.amount0_out->sgn() > 0) {
+      amount = pr.msg.amount0_out;
+      addr = pr.msg.token0;
+    } else {
+      amount = pr.msg.amount1_out;
+      addr = pr.msg.token1;
+    }
+    if (sender_related(pr.msg.exit_code)) {
+      success_swap = (pr.msg.exit_code == kStonfiSwapOk);
+      if (out_amt.is_null()) {
+        outgoing_jt = first_jt_child(pr.blk);
+        out_amt = amount;
+        out_addr = addr;
+      } else if (td::cmp(out_amt, amount) < 0) {
+        outgoing_jt = first_jt_child(pr.blk);
+        ref_amt = out_amt;
+        ref_addr = out_addr;
+        out_amt = amount;
+        out_addr = addr;
+      }
+    } else if (pr.msg.exit_code == kStonfiSwapOkRef) {
+      ref_amt = amount;
+      ref_addr = addr;  // referral_request_blocks dropped (never consumed)
+    }
+  }
+
+  Value actual_out_addr = out_addr;
+  // stonfi_swap_body override of out_addr (jetton_wallet), if present.
+  if (block->btype == "jetton_transfer") {
+    Value sb = data_field(block, "stonfi_swap_body");
+    if (sb.t == VType::Dict) {
+      const Value *jw = sb.field("jetton_wallet");
+      if (jw != nullptr) out_addr = *jw;
+    }
+  }
+  // Three jetton_wallet lookups, ISSUED before any deref so the two-phase
+  // collect pass records all keys before a null-lookup fault. A None address
+  // here mirrors Python's `addr.to_str()` on None -> raise -> reject.
+  auto s_out = acc_str(out_addr);
+  auto s_act = acc_str(actual_out_addr);
+  auto s_in = acc_str(sw.token_wallet);
+  if (!s_out || !s_act || !s_in) {
+    return rt_fault("stonfi_v1: null address for wallet lookup");
+  }
+  Value out_wallet = env.lookups->get("jetton_wallet", std::vector<Value>{Value::make_str(*s_out)});
+  Value actual_out_wallet =
+      env.lookups->get("jetton_wallet", std::vector<Value>{Value::make_str(*s_act)});
+  Value dex_in_wallet =
+      env.lookups->get("jetton_wallet", std::vector<Value>{Value::make_str(*s_in)});
+
+  // dex_in_wallet.owner is dereferenced unconditionally in Python -> a miss
+  // raises -> reject; outgoing_jt likewise (its .data is read unguarded).
+  if (dex_in_wallet.is_null()) return rt_fault("stonfi_v1: dex_in wallet lookup miss");
+  if (outgoing_jt == nullptr) return rt_fault("stonfi_v1: no outgoing jetton transfer");
+
+  Value in_source_jw = Value::null();
+  {
+    Value hit = data_field(in_jt, "has_internal_transfer");
+    if ((hit.t == VType::Bool && hit.boolean) ||
+        (hit.t == VType::Int && !hit.num.is_null() && hit.num->sgn() != 0)) {
+      in_source_jw = data_field(in_jt, "sender_wallet");
+    }
+  }
+  Value out_dest_jw = Value::null();
+  {
+    Value hit = data_field(outgoing_jt, "has_internal_transfer");
+    if ((hit.t == VType::Bool && hit.boolean) ||
+        (hit.t == VType::Int && !hit.num.is_null() && hit.num->sgn() != 0)) {
+      out_dest_jw = data_field(outgoing_jt, "receiver_wallet");
+    }
+  }
+
+  const Value *in_owner = dex_in_wallet.field("owner");
+  Value in_dest = (in_owner != nullptr && in_owner->t == VType::Str)
+                      ? account_from_opt(in_owner->str)
+                      : Value::make_account_none();
+
+  Value::Fields incoming{
+      {"asset", wallet_asset_v1(dex_in_wallet)},
+      {"amount", Value::make_amount(sw.amount.is_null() ? td::make_refint(0) : sw.amount)},
+      {"source", acc_wrap(sw.from_real_user)},
+      {"source_jetton_wallet", in_source_jw},
+      {"destination", in_dest},
+      {"destination_jetton_wallet", acc_wrap(sw.token_wallet)}};
+
+  Value::Fields outgoing{
+      {"asset", wallet_asset_v1(actual_out_wallet)},
+      {"amount", Value::make_amount(out_amt.is_null() ? td::make_refint(0) : out_amt)},
+      {"source", data_field(outgoing_jt, "sender")},
+      {"source_jetton_wallet", data_field(outgoing_jt, "sender_wallet")}};
+  if (!out_dest_jw.is_null()) {
+    outgoing.emplace_back("destination_jetton_wallet", out_dest_jw);
+    outgoing.emplace_back("destination", data_field(outgoing_jt, "receiver"));
+  } else {
+    Value sb = data_field(in_jt, "stonfi_swap_body");
+    if (sb.t == VType::Dict) {
+      const Value *ua = sb.field("user_address");
+      outgoing.emplace_back("destination", acc_wrap(ua != nullptr ? *ua : Value::null()));
+      outgoing.emplace_back("destination_jetton_wallet", Value::null());
+    } else {
+      outgoing.emplace_back("destination", acc_wrap(sw.from_user_address));
+      outgoing.emplace_back("destination_jetton_wallet", Value::null());
+    }
+  }
+
+  // target/destination asset from out_wallet (no pton conversion; None when the
+  // wallet is absent or carries no jetton master).
+  Value target_asset = Value::null();
+  if (!out_wallet.is_null()) {
+    const Value *jf = out_wallet.field("jetton");
+    if (jf != nullptr && jf->t == VType::Str) {
+      auto norm = normalize_raw_address(jf->str);
+      target_asset = Value::make_asset_jetton(norm ? *norm : jf->str);
+    }
+  }
+
+  Value::Fields d;
+  d.emplace_back("dex", Value::make_str("stonfi"));
+  d.emplace_back("sender", acc_wrap(sw.from_real_user));
+  d.emplace_back("receiver", acc_wrap(sw.from_user_address));
+  d.emplace_back("dex_incoming_transfer", Value::make_dict(std::move(incoming)));
+  d.emplace_back("dex_outgoing_transfer", Value::make_dict(std::move(outgoing)));
+  d.emplace_back("destination_asset", std::move(target_asset));
+  d.emplace_back("destination_wallet", out_addr.is_null() ? Value::null() : acc_wrap(out_addr));
+  d.emplace_back("referral_amount",
+                 ref_amt.is_null() ? Value::make_amount_none() : Value::make_amount(ref_amt));
+  d.emplace_back("referral_address", ref_addr.is_null() ? Value::null() : acc_wrap(ref_addr));
+  d.emplace_back("peer_swaps", Value::make_list({}));
+  d.emplace_back("success", Value::make_bool(success_swap));
+  return rt_ok(Value::make_obj(std::move(d)));
 }
 
 // builders/stonfi.py no_internal_transfer: not block.data['has_internal_transfer'].

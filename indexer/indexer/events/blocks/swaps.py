@@ -116,13 +116,13 @@ async def build_stonfi_v1_swap_core(block, swap_call_block, payment_requests_mes
         if payment_request.exit_code in stonfi_sender_related_exit_codes:
             success_swap = (payment_request.exit_code == stonfi_swap_ok_exit_code)
             if out_amt is None:
-                outgoing_jetton_transfer = next(b for b in payment_request_block.next_blocks
-                                                if isinstance(b, JettonTransferBlock))
+                outgoing_jetton_transfer = next((b for b in payment_request_block.next_blocks
+                                                 if b.btype == "jetton_transfer"), None)
                 out_amt = amount
                 out_addr = addr
             elif out_amt < amount:
-                outgoing_jetton_transfer = next(b for b in payment_request_block.next_blocks
-                                                if isinstance(b, JettonTransferBlock))
+                outgoing_jetton_transfer = next((b for b in payment_request_block.next_blocks
+                                                 if b.btype == "jetton_transfer"), None)
                 ref_amt = out_amt
                 ref_addr = out_addr
                 out_amt = amount
@@ -133,8 +133,11 @@ async def build_stonfi_v1_swap_core(block, swap_call_block, payment_requests_mes
             referral_request_blocks.append(payment_request_block)
 
     actual_out_addr = out_addr
-    if isinstance(block, JettonTransferBlock) and block.jetton_transfer_message.stonfi_swap_body is not None:
-        out_addr = block.jetton_transfer_message.stonfi_swap_body['jetton_wallet']
+    # Dual dispatch (§11.5): legacy JettonTransferBlock exposes the parsed body
+    # via `.jetton_transfer_message`; a declarative jetton_transfer block is a
+    # generic Block whose `.data['stonfi_swap_body']` carries the same dict.
+    if block.btype == "jetton_transfer" and block.data.get('stonfi_swap_body') is not None:
+        out_addr = block.data['stonfi_swap_body']['jetton_wallet']
     out_wallet = await context.interface_repository.get().get_jetton_wallet(out_addr.to_str(False).upper())
     actual_out_wallet = await context.interface_repository.get().get_jetton_wallet(actual_out_addr.to_str(False).upper())
     dex_in_wallet = await context.interface_repository.get().get_jetton_wallet(
