@@ -23,7 +23,7 @@ def test_emit_specs_dir_deterministic():
     assert first.encode("utf-8") == second.encode("utf-8")
 
     artifact = _emit()
-    assert artifact["mch_ir_version"] == "0.1-poc"
+    assert artifact["mch_ir_version"] == "1.0"
     assert artifact["frontend"]["generator"] == "mch-python"
     # Every .mch in the specs dir is represented (count-agnostic: the spec set
     # grows as matchers are ported).

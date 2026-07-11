@@ -14,7 +14,7 @@ from typing import Any
 
 from indexer.events.mch_ir.expr import BUILTINS
 
-IR_VERSION = "0.1-poc"
+IR_VERSION = "1.0"
 
 NODE_KINDS = frozenset({"contract", "block_type", "pred", "any", "or", "recursive"})
 ANCHOR_KINDS = frozenset({"opcode_set", "btype", "mixed", "pred"})
@@ -30,7 +30,7 @@ FLOW_ARITY = {"jetton": 3, "ton": 2, "fees": 2}
 
 
 class IrLoadError(Exception):
-    """The artifact violates the 0.1-poc schema (or a host name is missing)."""
+    """The artifact violates the 1.0 schema (or a host name is missing)."""
 
 
 @dataclass

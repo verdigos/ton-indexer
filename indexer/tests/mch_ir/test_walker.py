@@ -11,7 +11,7 @@ validations (unknown parse message type, nested recursion).
 Matchers come from the real frontend (compile_text -> emit_ir -> load ->
 build_matchers) except where a shape the frontend cannot emit is needed
 (child+children overlap, overlapping exclusive heads, nested recursion) —
-those use hand-crafted artifact dicts against the 0.1-poc schema.
+those use hand-crafted artifact dicts against the 1.0 schema.
 """
 from __future__ import annotations
 
@@ -136,7 +136,7 @@ def _grab_registries() -> tuple[Registries, list]:
 
 def _artifact(nodes: list[dict], matcher: dict) -> dict:
     return {
-        "mch_ir_version": "0.1-poc",
+        "mch_ir_version": "1.0",
         "frontend": {"generator": "test", "source_files": []},
         "matchers": [matcher],
         "nodes": nodes,

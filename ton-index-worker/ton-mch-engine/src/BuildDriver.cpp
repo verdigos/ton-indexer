@@ -102,7 +102,11 @@ std::string render_value(const Value &v) {
       for (const auto &k : keys) {
         if (!first) out += ",";
         first = false;
-        out += k + "=" + render_value(*v.field(k));
+        // §12 root-hash bar: Cell-derived BOC fields render as cellhash.
+        std::string rendered;
+        if (is_boc_field(k)) rendered = boc_field_cellhash(*v.field(k));
+        if (rendered.empty()) rendered = render_value(*v.field(k));
+        out += k + "=" + rendered;
       }
       return out + "}";
     }

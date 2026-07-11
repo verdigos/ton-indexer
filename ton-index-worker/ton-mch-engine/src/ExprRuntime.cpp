@@ -482,9 +482,10 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
       return rt_ok(Value::make_str(td::base64_encode(x.str)));
     }
     if (x.t == VType::Cell) {
-      // pytoniq to_boc() defaults (no idx/crc/cache) in pytoniq CONTAINER
-      // LAYOUT — td's writer orders multi-ref trees differently (B0).
-      auto r = pytoniq_to_boc(x.cell, /*hash_crc32=*/false);
+      // §12: native td BOC bytes. The b64 STRING differs from pytoniq's on
+      // multi-ref trees, but every consumer decodes it back to the same cell
+      // (root hash equal), and the dumps render such fields by cellhash.
+      auto r = td_boc_serialize(x.cell);
       if (r.is_error()) {
         return rt_fault("b64: cell serialization failed");
       }

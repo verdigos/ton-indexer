@@ -435,7 +435,7 @@ corrections applied. Execute as a hygiene wave AFTER Phase C lands (same-tree co
    - **Narrow `catch (...)` in parse dispatch** (§5.4): map only vm::VmError/known parse
      throws to soft-null; let infra errors (bad_alloc etc.) escape to trace-fail.
    - **Generated-string escape hardening** (§8.7): emit robust byte escapes for ALL control
-     bytes (we already hit the ` ` NUL bug once); generator tests.
+     bytes (we already hit the `` NUL bug once); generator tests.
    - **Loader fail-closed verification** (§8.1 claim, UNVERIFIED): check IrLoader on unknown
      node kinds / missing roots / bad registration order — if anything degrades permissively,
      fail closed. Review's claim not yet confirmed by lead.
@@ -512,13 +512,19 @@ provenance = td bytes written by the C++ indexer), re-serialized with pytoniq an
   fields = pytoniq bytes without. No consumer ever noticed: everything parses, nothing
   byte-compares. The DB invariant is **decoded-tree identity**, not bytes.
 
-**Queued decision (user leaning yes, not yet ordered):** switch the A/B parity bar for
+**DECISION ORDERED + DONE 2026-07-11 (session actions-port).** Switched the A/B parity bar for
 Cell-derived output fields (jetton `forward_payload`/`custom_payload`/`stonfi_swap_body`,
-vesting `message_boc_str`) from byte-equality to **root-hash equality**; C++ then uses
-native `td::std_boc_serialize`, `pytoniq_to_boc` is deleted (~100 LOC — and with it the
-review finding P3, pytoniq_order's exponential re-walk DoS, which was excluded from the
-fix wave for exactly this reason). Comparators render such fields as `cellhash:<HASH>`.
-Python side unchanged (its pytoniq bytes remain valid under the same bar). Transition
-note: post-switch C++ production rows carry td bytes where Python-era rows carry pytoniq
-bytes for the same logical payload — decode-identical; only breaks a consumer that does
-string equality on payload columns (none known; grep ton-index-go before flipping).
+vesting `message_boc_str`) from byte-equality to **root-hash equality**; C++ now uses
+native `td::std_boc_serialize` (mode 0) everywhere and `pytoniq_to_boc` + `pytoniq_order`
+are DELETED (P3 exponential-re-walk DoS gone). Comparators render such fields as
+`cellhash:<HASH-UPPER>` — a shared `is_boc_field`/`boc_field_cellhash` in Value.cpp keyed by
+field name (both C++ dump renderers + the 3 Python twins), decoding the b64 str / raw BOC
+bytes to the cell root hash. `comment`/`bitcoin_txid`/`pubkey` are raw non-BOC bytes and
+stay as-is. Python production unchanged (its pytoniq bytes remain valid under the same bar).
+AUDIT CORRECTION (vs the original model): the Cell-derived fields render as `str:`/`b64:`
+b64() output, NOT `b64:` uniformly — the field-keyed decode handles both. b64_cell expr
+vector unchanged (single-cell td == pytoniq); no build-vector regen needed. All gates diff 0.
+Prereq confirmed: `grep ton-index-go` — no consumer does byte/string equality on payload
+columns (SQL SELECT + JSON tags only). Transition note: post-switch C++ production rows carry
+td bytes where Python-era rows carry pytoniq bytes for the same logical payload —
+decode-identical; only breaks a consumer that does string equality on payload columns (none).

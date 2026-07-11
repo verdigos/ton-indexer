@@ -138,7 +138,11 @@ std::string render_fields_sorted(const Value::Fields &fields) {
   std::vector<std::pair<std::string, std::string>> kv;
   kv.reserve(fields.size());
   for (const auto &f : fields) {
-    kv.emplace_back(f.first, render_value(f.second));
+    // §12 root-hash bar: Cell-derived BOC fields render as cellhash.
+    std::string rendered;
+    if (is_boc_field(f.first)) rendered = boc_field_cellhash(f.second);
+    if (rendered.empty()) rendered = render_value(f.second);
+    kv.emplace_back(f.first, rendered);
   }
   std::sort(kv.begin(), kv.end());
   std::string out = "{";

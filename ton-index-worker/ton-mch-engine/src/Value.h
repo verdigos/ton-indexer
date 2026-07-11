@@ -16,8 +16,10 @@
 //    as_str() -> null. Addresses are normalized to the raw "wc:HEX" form with
 //    UPPERCASE hex (matches AccountId.as_str()); only the raw form is parsed
 //    (the vectors never use user-friendly base64 addresses).
-//  - Asset == string is a case-insensitive compare of the jetton master's raw
-//    string (Asset.__eq__ lowercases both sides without re-normalizing `other`).
+//  - Asset == string is JETTON-ONLY: a case-insensitive compare of the jetton
+//    master's raw string (Asset.__eq__ lowercases both sides without
+//    re-normalizing `other`). A TON asset vs a string FAULTS — __eq__ reads the
+//    jetton master before the is_ton branch, so the "ton"-string match is dead.
 //  - Dict vs Obj are two distinct map kinds: Dict is pure key lookup (Python
 //    dict / block data map / record literal), Obj is attribute access with the
 //    special `.exit_code` envelope accessor (Python SimpleNamespace, the $obj
@@ -105,14 +107,24 @@ struct Value {
   std::string describe() const;
 };
 
-// Serialize a cell tree in PYTONIQ container layout (Cell.to_boc): pytoniq's
-// cell order is a pre-order DFS where a revisited cell is popped and
-// re-appended with its subtree re-walked, so shared cells sink to their LAST
-// visit — td's std_boc_serialize orders cells differently, so its bytes are
-// NOT byte-equal for multi-ref trees (B0 finding). Python-side byte parity
-// (jetton payload bytes = to_boc(hash_crc32=True), b64(Cell) = to_boc()
-// defaults) requires this writer. has_idx/cache_bits are always false.
-td::Result<std::string> pytoniq_to_boc(const td::Ref<vm::Cell> &root, bool hash_crc32);
+// Serialize a cell tree to standard BOC bytes (td std_boc_serialize, mode 0).
+// Plan §12: Cell-derived output fields are compared by ROOT HASH, not bytes, so
+// container byte order is no longer significant and the deterministic native
+// writer is used everywhere (the former pytoniq-order writer — and its P3
+// exponential-re-walk DoS — is gone).
+td::Result<std::string> td_boc_serialize(const td::Ref<vm::Cell> &root);
+
+// Plan §12 root-hash parity bar. A produced/parsed field whose value is a
+// Cell-derived BOC container (a b64 string from the b64() builtin, or raw BOC
+// Bytes from MsgParse) is rendered in the dumps as the cell's ROOT HASH
+// ("cellhash:HEX-UPPER") instead of its exact bytes, so serialization-order /
+// CRC provenance (pytoniq vs td) is invisible to the byte-level A/B comparison.
+// `is_boc_field` gates the render by field name (comment / bitcoin_txid / pubkey
+// are raw non-BOC bytes and stay as-is). `boc_field_cellhash` returns the
+// cellhash string, or "" if the value is not a decodable BOC (caller falls back
+// to the normal render).
+bool is_boc_field(const std::string &key);
+std::string boc_field_cellhash(const Value &v);
 
 // Normalize a raw TON address string "wc:hex64" to canonical "wc:HEX64".
 // Returns nullopt for anything that is not a well-formed raw address (the

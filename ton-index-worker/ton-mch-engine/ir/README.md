@@ -3,12 +3,12 @@
 These JSON files are the cross-language contract consumed by the C++ build
 (mch-codegen reads them; no Python is required to build ton-mch-engine).
 
-- `mch_ir.json` — the compiled matcher IR artifact (currently 32 matchers,
-  12 with declarative build programs). Input for `--wheres` (where_expr
+- `mch_ir.json` — the compiled matcher IR artifact (currently 36 matchers,
+  32 with declarative build programs). Input for `--wheres` (where_expr
   functions) and `--builds --suffix ir` (build-program functions used by
   `--classify` / `--build-smoke`); loaded at runtime by `--match` /
   `--build-smoke` / `--classify`.
-- `expr_vectors.json` — 91 expression conformance vectors. Input for
+- `expr_vectors.json` — 97 expression conformance vectors. Input for
   `--vectors` (functions run by `--vectors-gen`); loaded at runtime by
   `--vectors` / `--vectors-gen`.
 - `build_vectors.json` — 36 build-program conformance cases. Input for

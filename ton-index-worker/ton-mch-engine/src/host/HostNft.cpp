@@ -106,7 +106,7 @@ td::Result<NftTransferMsg> parse_nft_transfer(const td::Ref<vm::Cell> &body) {
     return td::Status::Error("nft_transfer: bad custom_payload");
   }
   if (cp.not_null()) {
-    TRY_RESULT(cp_boc, pytoniq_to_boc(cp, /*hash_crc32=*/true));
+    TRY_RESULT(cp_boc, td_boc_serialize(cp));
     out.custom_payload = Value::make_bytes(std::move(cp_boc));
   }
   TRY_RESULT_ASSIGN(out.forward_amount, load_coins_py(cs));
@@ -126,7 +126,7 @@ td::Result<NftTransferMsg> parse_nft_transfer(const td::Ref<vm::Cell> &body) {
       ps.off = 0;
       TRY_RESULT_ASSIGN(fp_cell, pslice_to_cell(ps));
     }
-    TRY_RESULT(fp_boc, pytoniq_to_boc(fp_cell, /*hash_crc32=*/true));
+    TRY_RESULT(fp_boc, td_boc_serialize(fp_cell));
     out.forward_payload = Value::make_bytes(std::move(fp_boc));
   }
   return out;
@@ -185,7 +185,7 @@ td::Result<OwnershipFull> parse_ownership_full(const td::Ref<vm::Cell> &body) {
   if (r_cell.is_error()) {
     return out;
   }
-  auto r_boc = pytoniq_to_boc(r_cell.move_as_ok(), /*hash_crc32=*/true);
+  auto r_boc = td_boc_serialize(r_cell.move_as_ok());
   if (r_boc.is_error()) {
     return out;
   }

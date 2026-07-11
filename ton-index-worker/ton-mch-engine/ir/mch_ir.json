@@ -1,5 +1,5 @@
 {
-  "mch_ir_version": "0.1-poc",
+  "mch_ir_version": "1.0",
   "frontend": {
     "generator": "mch-python",
     "source_files": [

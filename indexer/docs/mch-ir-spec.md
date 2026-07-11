@@ -2,7 +2,7 @@
 
 **Status: NORMATIVE.** This document supersedes `docs/mch-ir-poc.md` (kept for history). It is the binding contract between the Python emitter (`indexer/events/mch/ir_emit.py` + `expr_ir.py`), the loader/engine (`indexer/events/mch_ir/`), and any future host (the C++ engine). It documents the artifact **as actually emitted and consumed today** — where wording below says MUST/omitted/rejected, that reflects `ir_emit.py`/`loader.py`/`engine.py`/`program.py`/`expr_eval.py` behavior at the time of writing.
 
-> **Version-tag note (inconsistency, not normalized here):** the on-the-wire `mch_ir_version` string is still `"0.1-poc"` (`loader.IR_VERSION` / `expr_ir.IR_VERSION`); the loader rejects any other value. This document is *spec* version 1.0; the *artifact* version tag is unchanged pending a deliberate M5 bump. A host must emit/accept exactly `"0.1-poc"`.
+> **Version tag:** the on-the-wire `mch_ir_version` string is `"1.0"` (`loader.IR_VERSION` / `expr_ir.IR_VERSION`), matching this document's spec version; the loader rejects any other value. A host must emit/accept exactly `"1.0"`. (The former `"1.0"` PoC tag was retired in the 1.0 bump, 2026-07-11; artifacts + fixtures regenerated in lockstep.)
 
 ## 1. Container
 
@@ -15,7 +15,7 @@
 
 ```json
 {
-  "mch_ir_version": "0.1-poc",
+  "mch_ir_version": "1.0",
   "frontend": { "generator": "mch-python", "source_files": ["vesting.mch"] },
   "matchers": [ <matcher record>, ... ],
   "nodes":    [ <node record>, ... ],
@@ -23,7 +23,7 @@
 }
 ```
 
-- `mch_ir_version` — MUST equal `"0.1-poc"` (loader hard-rejects otherwise).
+- `mch_ir_version` — MUST equal `"1.0"` (loader hard-rejects otherwise).
 - `frontend` — informational (`generator`, `source_files`). Loader keeps it, does not validate its contents.
 - `matchers` — the matcher table (§3), array (required).
 - `nodes` — the shared, flat node pool (§5), array (required). Node records reference each other by index; cyclic references are legal (see `recursive`/cyclic, §5.5).
@@ -204,7 +204,7 @@ List combinators require a list argument (else fault). `map`'s field arg is a st
 
 ### 7.4 Operators
 - `unary`: `not` (bool operand required, result bool); `-` (numeric negate; `-null` → null).
-- `bin` — lazy: `and`/`or` (each side required bool, short-circuit), `??` (left unless null, else right). Strict: `==`/`!=` (structural null handling — two nulls are equal, null vs non-null unequal; otherwise host `==`; **note** `Asset == string` is case-insensitive on the master address); `<`/`<=`/`>`/`>=` (null on either side → false; else host ordering; non-orderable types → fault); **integer arithmetic** `+`/`-`/`*` (null on either side → null; operands coerce to int — `Amount`→its value, `int`→itself, `bool`/other → fault; result is a plain int; no division). Precedence: comparison < additive (`+ -`) < multiplicative (`*`), all left-associative.
+- `bin` — lazy: `and`/`or` (each side required bool, short-circuit), `??` (left unless null, else right). Strict: `==`/`!=` (structural null handling — two nulls are equal, null vs non-null unequal; otherwise host `==`; **note** `Asset == string` is JETTON-ONLY and case-insensitive on the master address — a TON asset compared to a string FAULTS, because `Asset.__eq__` reads the jetton master (`jetton_address.as_str()`) BEFORE the `is_ton` branch, so the "ton"-string match is dead code); `<`/`<=`/`>`/`>=` (null on either side → false; else host ordering; non-orderable types → fault); **integer arithmetic** `+`/`-`/`*` (null on either side → null; operands coerce to int — `Amount`→its value, `int`→itself, `bool`/other → fault; result is a plain int; no division). Precedence: comparison < additive (`+ -`) < multiplicative (`*`), all left-associative.
 - `ternary`: `cond` (required bool) selects `then`/`else`.
 - `list` → a Python list of the evaluated items; `record` → a dict `{name: value}`.
 
@@ -245,7 +245,7 @@ The declarative vesting matcher (`op VestingSendMessage @send -> op VestingSendM
 
 ```json
 {
-  "mch_ir_version": "0.1-poc",
+  "mch_ir_version": "1.0",
   "frontend": { "generator": "mch-python", "source_files": ["vesting.mch"] },
   "matchers": [
     {

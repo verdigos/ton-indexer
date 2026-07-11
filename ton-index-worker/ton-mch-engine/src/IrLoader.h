@@ -1,6 +1,6 @@
 // MCH IR artifact loader (docs/mch-ir-spec.md §3, §5; docs/mch-engine-v2.md §3.1).
 //
-// Parses the `0.1-poc` artifact JSON into immutable CompiledMatcher /
+// Parses the `1.0` artifact JSON into immutable CompiledMatcher /
 // CompiledNode tables, mirroring the Python reference (mch_ir/loader.py +
 // engine.py build_matchers / IrMatcher.__init__). Everything is copied out of
 // the JSON tree, so the decoded document need not outlive the load.

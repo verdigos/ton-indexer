@@ -338,7 +338,7 @@ def render_json(artifact: dict) -> str:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="python -m indexer.events.mch.ir_emit",
-        description="Emit MCH IR (0.1-poc) from a directory of .mch spec files.",
+        description="Emit MCH IR (1.0) from a directory of .mch spec files.",
     )
     ap.add_argument("specs_dir", help="directory containing .mch spec files")
     ap.add_argument("-o", "--output", required=True, help="output JSON path")

@@ -271,7 +271,7 @@ async def test_tier3_builder_jettons_snapshot(traces_dir, name, filename):
 # ---------------------------------------------------------------------------
 @pytest.mark.skipif(not _HAVE_IR, reason=_SKIP_REASON)
 def test_neg_version_mismatch_rejected():
-    """load_artifact is version-checked (schema: mch_ir_version == '0.1-poc')."""
+    """load_artifact is version-checked (schema: mch_ir_version == '1.0')."""
     compiled = compile_file(JETTONS_DECL_MCH, jetton_decl_registries())
     artifact = emit_ir(compiled, [JETTONS_DECL_MCH.name])
     artifact["mch_ir_version"] = "9.9-not-a-real-version"

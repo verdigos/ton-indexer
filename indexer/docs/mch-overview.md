@@ -251,7 +251,7 @@ family keeps a small irreducible host core by design.
 The project's central discipline: **every layer gets a language-neutral gate
 before the next layer starts**, and gates never break silently.
 
-- **Conformance vectors** — `ir/expr_vectors.json` (91: every expr kind,
+- **Conformance vectors** — `ir/expr_vectors.json` (97: every expr kind,
   builtin, operator, null-propagation, faults) and `ir/build_vectors.json`
   (25: every statement kind, rejections, lookups). Expectations are generated
   by *running the real Python evaluators* — never hand-authored.

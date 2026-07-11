@@ -18,11 +18,11 @@ namespace mch {
 
 namespace {
 
-// Serialized BOC bytes, mirroring pytoniq Cell.to_boc(hash_crc32=True)
-// BYTE-FOR-BYTE (B0): pytoniq container layout differs from td's on
-// multi-ref trees, so the pytoniq-order writer is used, not std_boc_serialize.
+// Serialized BOC bytes (§12: native td writer, root-hash bar). The container
+// bytes differ from pytoniq's on multi-ref trees, but payload fields are
+// compared/rendered by cell root hash, so the difference is invisible.
 td::Result<std::string> boc_bytes(const td::Ref<vm::Cell> &c) {
-  return pytoniq_to_boc(c, /*hash_crc32=*/true);
+  return td_boc_serialize(c);
 }
 
 td::Result<Value> addr_value(td::Ref<vm::CellSlice> csr) {
