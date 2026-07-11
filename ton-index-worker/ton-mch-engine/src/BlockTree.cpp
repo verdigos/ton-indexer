@@ -304,6 +304,10 @@ bool Block::merge_blocks(const std::vector<Block *> &blocks) {
     fb->previous_block = this;
   }
   previous_block = earliest->previous_block;
+  // core.py merge_blocks: the merged block inherits initiating_event_node from
+  // the earliest merged block (Step 2a). is_ghost_block would OR over ghost
+  // nodes, but the C++ substrate has none, so it stays false.
+  initiating_event_node = earliest->initiating_event_node;
   calculate_min_max_lt();
   sort_next_blocks();
   if (earliest->previous_block != nullptr) {
@@ -325,6 +329,9 @@ void init_leaf(Block *b, const EventNode *node) {
   b->event_nodes.push_back(node);
   b->min_lt = node->lt();
   b->min_lt_without_initiating_tx = node->tx != nullptr ? node->tx->lt : node->lt();
+  // core.py Block.__init__: a single-node block's initiating_event_node is that
+  // node's tree parent (nullptr at the root). (Step 2a.)
+  b->initiating_event_node = node->parent;
 }
 
 Value account_or_null(const std::optional<std::string> &addr) {

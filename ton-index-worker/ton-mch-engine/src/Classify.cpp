@@ -153,6 +153,7 @@ struct Action {
   bool success{true};
   std::int64_t start_lt{0}, end_lt{0}, start_utime{0}, end_utime{0}, mc_seqno_end{0};
   std::vector<std::string> tx_hashes;
+  std::vector<std::string> accounts;  // Step 2a: role-less action_accounts set
   Value source, source_secondary, destination, destination_secondary;
   Value asset, asset_secondary, asset2, asset2_secondary;
   Value amount, value, opcode;
@@ -539,12 +540,37 @@ void fill_tgbtc_mint(const Value &d, Action &a) {
   a.destination_secondary = av_addr(dg(d, "recipient_wallet"));
 }
 
+// --- basic-actions fallback fills (Step 2c; block_tree_serializer.py) --------
+// Reached ONLY on the FALLBACK path (ClassifyResult.failure) — the main dump's
+// `pending` is matcher-produced composites, never these leaf btypes. Corpus has
+// no failing traces, so this path is ungated (regression-gated only).
+void fill_call_contract(const Value &d, Action &a) {
+  a.opcode = dg(d, "opcode");
+  a.value = av_amount(dg(d, "value"));
+  a.source = av_addr(dg(d, "source"));
+  a.destination = av_addr(dg(d, "destination"));
+  // value_extra_currencies is not a rendered column; `extra_currencies` is
+  // absent from the C++ leaf data (§10 residual) — Python defaults it to {}.
+}
+
+void fill_ton_transfer(const Value &d, Action &a) {
+  a.value = av_amount(dg(d, "value"));
+  a.source = av_addr(dg(d, "source"));
+  a.destination = av_addr(dg(d, "destination"));
+  Value::Fields f;
+  f.emplace_back("content", dg(d, "comment"));  // leaf_comment_info already strips U+0000
+  f.emplace_back("encrypted", dg(d, "encrypted"));
+  a.ton_transfer_data = mkdict(std::move(f));
+}
+
 // Dispatch a produced block to its fill (block_to_action match). Returns false
 // for a btype outside the ported set (skip-table entry).
 bool fill_action(Block *b, Action &a) {
   const Value &d = b->data;
   const std::string &t = b->btype;
-  if (t == "jetton_transfer") fill_jetton_transfer(d, a);
+  if (t == "call_contract" || t == "contract_deploy") fill_call_contract(d, a);
+  else if (t == "ton_transfer") fill_ton_transfer(d, a);
+  else if (t == "jetton_transfer") fill_jetton_transfer(d, a);
   else if (t == "jetton_burn") fill_jetton_burn(d, a);
   else if (t == "jetton_mint") fill_jetton_mint(d, a);
   else if (t == "jetton_swap") fill_jetton_swap(d, a);
@@ -602,13 +628,44 @@ bool build_action(Block *b, Action &a) {
     maxu = std::max(maxu, n->tx != nullptr ? n->tx->now : 0);
     if (n->tx != nullptr) seqmax = std::max(seqmax, n->tx->mc_block_seqno);
   }
+  // tx_hashes extension by initiating_event_node (block_to_action, Step 2a).
+  if (b->initiating_event_node != nullptr) {
+    ths.insert(b->initiating_event_node->tx_hash());
+  }
   a.tx_hashes.assign(ths.begin(), ths.end());
   a.start_lt = b->min_lt;
   a.end_lt = b->event_nodes.empty() ? 0 : maxlt;
   a.start_utime = b->event_nodes.empty() ? 0 : minu;
   a.end_utime = b->event_nodes.empty() ? 0 : maxu;
   a.mc_seqno_end = b->event_nodes.empty() ? 0 : seqmax;
-  return fill_action(b, a);
+  if (!fill_action(b, a)) return false;
+
+  // accounts assembly (block_to_action tail, Step 2a; role-less — no role
+  // system on this branch). base = each event_node's tx account; + source/
+  // source_secondary; + destination/destination_secondary UNLESS ghost; +
+  // the initiating tx account (non-tick_tock). Dedup, drop nulls. Directional
+  // fields are av_addr Str values (or Null → skipped).
+  std::vector<std::string> accts;
+  for (const EventNode *n : b->event_nodes) {
+    if (n->tx != nullptr) accts.push_back(n->tx->account);
+  }
+  auto push_acc = [&](const Value &v) {
+    if (v.t == VType::Str) accts.push_back(v.str);
+  };
+  push_acc(a.source);
+  push_acc(a.source_secondary);
+  if (!b->is_ghost_block) {
+    push_acc(a.destination);
+    push_acc(a.destination_secondary);
+  }
+  if (b->initiating_event_node != nullptr && !b->initiating_event_node->is_tick_tock &&
+      b->initiating_event_node->tx != nullptr) {
+    accts.push_back(b->initiating_event_node->tx->account);
+  }
+  std::sort(accts.begin(), accts.end());
+  accts.erase(std::unique(accts.begin(), accts.end()), accts.end());
+  a.accounts = std::move(accts);
+  return true;
 }
 
 std::string render_action(const Action &a) {
@@ -626,6 +683,11 @@ std::string render_action(const Action &a) {
   std::vector<Value> thv;
   for (const std::string &s : th) thv.push_back(Value::make_str(s));
   f.emplace_back("tx_hashes", Value::make_list(std::move(thv)));
+  std::vector<std::string> ac = a.accounts;
+  std::sort(ac.begin(), ac.end());
+  std::vector<Value> acv;
+  for (const std::string &s : ac) acv.push_back(Value::make_str(s));
+  f.emplace_back("accounts", Value::make_list(std::move(acv)));
   f.emplace_back("source", a.source);
   f.emplace_back("source_secondary", a.source_secondary);
   f.emplace_back("destination", a.destination);
@@ -713,12 +775,22 @@ int run_dump(const std::string &artifact_path, const std::vector<std::string> &p
 
     ClassifyResult res = classify_trace(ctx, ir, setup, src);
     if (res.failure) {
-      // Per-trace exception boundary (event_processing.py): buffered — NOTHING
-      // emitted, a single TRACE_FAIL on stdout, the reason on stderr (A/B
-      // channel stays byte-comparable). No corpus trace triggers this.
+      // Per-trace exception boundary (event_processing.py): buffered — the
+      // regular actions are discarded, a single TRACE_FAIL on stdout, the reason
+      // on stderr (A/B channel stays byte-comparable). In --actions mode the
+      // basic-actions fallback rows (Step 2c) follow behind a FALLBACK tag.
+      // No corpus trace triggers this — the fallback path is ungated.
       std::printf("TRACE_FAIL\n");
       std::fprintf(stderr, "TRACE_FAIL %s: %s\n", fs::path(f).filename().string().c_str(),
                    res.failure_reason.c_str());
+      if (actions_mode) {
+        for (const CoreAction &a : res.fallback_actions) {
+          Action act;
+          if (!build_action(a.produced, act)) continue;
+          std::printf("FALLBACK anchor=%s %s\n", block_key(a.anchor).c_str(),
+                      render_action(act).c_str());
+        }
+      }
       continue;
     }
     for (const CoreAction &a : res.actions) {

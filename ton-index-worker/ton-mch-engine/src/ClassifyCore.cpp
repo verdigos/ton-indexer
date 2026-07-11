@@ -297,6 +297,73 @@ void post_process_stonfi_v2_liquidity(std::vector<Block *> &blocks, BlockArena &
   }
 }
 
+// event_processing.py unwind_deployments (3rd production post-processor, Step
+// 2b): promote ContractDeploy blocks nested in children up to the top-level
+// spine list. The Python `for block in blocks` loop SEES appends (it re-scans
+// the promoted deploys), so the C++ index loop must too. NOTE: a no-op for the
+// classify/actions DUMP — the dump emits matcher-produced blocks (`pending`),
+// and this only appends to the spine, which the dump never walks; ported to
+// keep the post-processor chain aligned with production for Phase G.
+void unwind_deployments(std::vector<Block *> &blocks) {
+  std::set<Block *> visited;
+  for (std::size_t i = 0; i < blocks.size(); i++) {  // index loop: sees appends
+    std::deque<Block *> queue(blocks[i]->children_blocks.begin(),
+                              blocks[i]->children_blocks.end());
+    while (!queue.empty()) {
+      Block *child = queue.front();
+      queue.pop_front();
+      if (child->btype == "contract_deploy" && visited.count(child) == 0) {
+        blocks.push_back(child);
+      } else {
+        for (Block *c : child->children_blocks) queue.push_back(c);
+      }
+      visited.insert(child);
+    }
+  }
+}
+
+// try_classify_basic_actions (event_processing.py, Step 2c): a FRESH leaf-only
+// classify (init_block over the same event tree, NO matchers) + the
+// post-processor chain; one CoreAction per surviving spine block of a basic
+// btype. serialize_blocks skip conditions applied: skip root/empty, and
+// call_contract with a null source or destination. Throw-safe (Python's
+// fallback returns [] on any exception). Ungated (corpus has no failing traces).
+std::vector<CoreAction> basic_classify_fallback(TraceContext &ctx) {
+  std::vector<CoreAction> out;
+  try {
+    Block *root = init_block(ctx.arena, ctx.tree.root);
+    Block *wrap = ctx.arena.make("root");
+    wrap->connect(root);
+    std::vector<Block *> spine;
+    {
+      std::deque<Block *> q{wrap};
+      while (!q.empty()) {
+        Block *cur = q.front();
+        q.pop_front();
+        spine.push_back(cur);
+        for (Block *n : cur->next_blocks) q.push_back(n);
+      }
+    }
+    std::set<Block *> removed;
+    post_process_dedust_liquidity(spine, removed);
+    post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
+    unwind_deployments(spine);
+    for (Block *b : spine) {
+      if (b->btype == "root" || b->btype == "empty" || removed.count(b) != 0) continue;
+      if (b->btype == "call_contract") {
+        if (pp_field(b->data, "source").is_null() ||
+            pp_field(b->data, "destination").is_null()) {
+          continue;
+        }
+      }
+      out.push_back(CoreAction{"basic", b, b, {}, {}});
+    }
+  } catch (...) {
+    out.clear();  // Python: fallback returns [] on any exception
+  }
+  return out;
+}
+
 }  // namespace
 
 ClassifySetup prepare_classify(const LoadedIr &ir) {
@@ -378,6 +445,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
     std::set<Block *> removed;
     post_process_dedust_liquidity(spine, removed);
     post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
+    unwind_deployments(spine);  // Step 2b (no-op for the dump; production chain parity)
     for (CoreAction &a : pending) {
       if (!removed.count(a.produced)) result.actions.push_back(std::move(a));
     }
@@ -387,6 +455,10 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
   } catch (...) {
     result.failure = true;
     result.failure_reason = "unknown exception";
+  }
+  if (result.failure) {
+    result.actions.clear();  // event_processing.py discards the trace's actions
+    result.fallback_actions = basic_classify_fallback(ctx);
   }
   return result;
 }

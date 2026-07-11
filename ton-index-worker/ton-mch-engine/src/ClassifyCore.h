@@ -38,6 +38,12 @@ struct ClassifyResult {
   std::vector<CoreAction> actions;  // surviving post-pass, in fire order
   bool failure = false;
   std::string failure_reason;
+  // Step 2c basic-actions fallback (try_classify_basic_actions): populated ONLY
+  // when `failure` — a fresh leaf-only classify (no matchers) + the
+  // post-processor chain, one CoreAction per surviving spine block of a basic
+  // btype (call_contract / contract_deploy / ton_transfer). Production commits
+  // these when classification fails. Ungated (corpus has no failing traces).
+  std::vector<CoreAction> fallback_actions;
 };
 
 // Trace-independent run prep computed once from the artifact: the runnable

@@ -104,6 +104,15 @@ struct Block {
   Block *previous_block{nullptr};
   Block *parent{nullptr};
 
+  // core.py Block.initiating_event_node: a leaf block's single node's tree
+  // parent; a merged block inherits it from the earliest merged block. Drives
+  // the serializer's accounts assembly + tx_hashes extension (Phase G step 2a).
+  const EventNode *initiating_event_node{nullptr};
+  // core.py is_ghost_block: the C++ substrate has no ghost nodes (an
+  // intended-but-not-started op), so this stays false — none of the ported
+  // btypes are ghost blocks (A/B-verified). Gate for the destination accounts.
+  bool is_ghost_block{false};
+
   bool failed{false};
   bool broken{false};
 
