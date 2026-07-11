@@ -164,10 +164,13 @@ struct Block {
     return event_nodes.empty() ? std::string{} : event_nodes.front()->tx_hash();
   }
 
+  // Recompute min/max lt from the current event_nodes (Phase E passes call this
+  // after absorbing a paired leg's nodes). Public: post-process is host-side.
+  void calculate_min_max_lt();
+
  private:
   int direction() const;
   std::vector<Block *> find_frontier(const std::vector<Block *> &in_set) const;
-  void calculate_min_max_lt();
 
   friend Block *ensure_earliest_common_block(const std::vector<Block *> &blocks);
 };
