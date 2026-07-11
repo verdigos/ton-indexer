@@ -365,6 +365,40 @@ corrections applied. Execute as a hygiene wave AFTER Phase C lands (same-tree co
    twin fidelity; stonfi_v2's C++ trio re-registers by flipping 3 HostRegistry.cpp entries
    + 3 twin-surface names).
 
+6. **Wave-0 correctness batch (adopted from `mch-cpp-fresh-architecture-review-2026-07-11.md`, lead-triaged 2026-07-11).**
+   The fresh external review largely re-derives this backlog (its §6.3=item 2, §8.5=item 4,
+   §9.2=item 5/C5, §9.3=C4, §5.5=tlb verdict, §5.7=§12 BOC) — good independent confirmation,
+   NOT new workstreams. Genuinely new + adopted as one small batch:
+   - **StonfiV2ProvideLiquidity parser missing** (review §4.4, verified): both provide
+     matchers parse it, C++ registry lacks it → both SKIP. Implement parser + twin +
+     dump entry + parity. Also add an artifact-vs-parser-surface check (every message type
+     referenced by the artifact must exist in the registry — load-time or gate-time).
+   - **Typed lookup request key** (§4.1, verified `lookup_key()` = kind + NUL-joined args):
+     collision unreachable today (args are always `0:HEX` addresses) but fix is cheap —
+     type-tagged + length-prefixed encoding (or structural key), + collision vectors.
+   - **Float-backed Amount fault-at-use** (§4.2, verified `make_amount_float` coexists with
+     `make_amount_none`): render-only type today; make `.value` and comparisons FAULT on a
+     float-backed Amount (language has no floats — reject at use, not full float semantics),
+     + vectors.
+   - **Narrow `catch (...)` in parse dispatch** (§5.4): map only vm::VmError/known parse
+     throws to soft-null; let infra errors (bad_alloc etc.) escape to trace-fail.
+   - **Generated-string escape hardening** (§8.7): emit robust byte escapes for ALL control
+     bytes (we already hit the ` ` NUL bug once); generator tests.
+   - **Loader fail-closed verification** (§8.1 claim, UNVERIFIED): check IrLoader on unknown
+     node kinds / missing roots / bad registration order — if anything degrades permissively,
+     fail closed. Review's claim not yet confirmed by lead.
+   - **CTest registration** (§10.1): wire the existing gate modes (vectors, vectors-gen,
+     build-vectors, shape-test) as CTest entries (= C7 gate-runner, formalized).
+   Explicitly REJECTED/deferred from the review: §4.3 buffered classification now (harness
+   streams identically on BOTH sides — twin symmetry keeps the A/B gate honest; buffering is
+   item 2 at Phase G), §4.5 as P0 (production feed is TraceAssembler-validated; visited-set
+   defense folds into Phase G), §5.2 parse-as-expression (IR v2 wishlist; cross-language
+   migration for QoL), §7.1/7.2 BlockGraph module + shaper edit-plans (churn on A/B-proven
+   topology code, no gate gain; Python shapers mutate directly too — parity argument),
+   Wave-1 typed-IR/execution-plan as next step (right Phase-G end-state, wrong order —
+   dual-dispatch wave and coverage come first, per the review's own "don't encode a
+   temporary architecture" logic).
+
 ### Rejected / corrected by lead
 
 - **C1/C2 "jetton payload machinery is gate-only" — WRONG, stays.** The audit grepped
