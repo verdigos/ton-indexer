@@ -1,6 +1,7 @@
 #include "MatchRunner.h"
 
 #include "BlockTree.h"
+#include "BuildDriver.h"  // shared block_key (§11 item 2 dedupe)
 #include "GenWheres.h"
 #include "IrLoader.h"
 #include "Walker.h"
@@ -17,16 +18,8 @@ namespace mch {
 
 namespace {
 
-std::string block_key(const Block *b) {
-  std::string key = b->btype;
-  if (b->opcode) {
-    char buf[16];
-    std::snprintf(buf, sizeof(buf), "#%08x", *b->opcode);
-    key += buf;
-  }
-  key += "@" + std::to_string(b->min_lt);
-  return key;
-}
+// block_key is the shared Block dump-key helper (BuildDriver.h) — §11 item 2
+// dedupe removed the local copy that used to live here.
 
 std::string cap_val(const Capture &c) {
   if (!c.is_list) {

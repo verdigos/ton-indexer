@@ -71,6 +71,13 @@ bool account_eq_str(const Value &acc, const std::string &s) {
   return norm.has_value() && acc.str == *norm;
 }
 
+// Symmetric container equality for the language `==` (rt_eq); defined below.
+// §11 item 2: the runtime owns its own container `==` instead of borrowing the
+// harness comparator `structural_equal` (an expected-vs-actual vector helper).
+// The two are behaviourally equivalent for the value model today — this is a
+// separation of concerns so `structural_equal` stays harness-only.
+bool container_eq(const Value &l, const Value &r);
+
 // Structural `==` on two non-null values (mirrors _eq_result's raw compare).
 bool raw_eq(const Value &l, const Value &r) {
   if (amount_none(l) || amount_none(r)) {
@@ -113,7 +120,36 @@ bool raw_eq(const Value &l, const Value &r) {
   if (l.t == VType::Str && r.t == VType::Account) {
     return account_eq_str(r, l.str);
   }
-  return structural_equal(l, r);  // lists/dicts/cells and mismatched types
+  return container_eq(l, r);  // lists/dicts/cells and mismatched types
+}
+
+// Symmetric `==` on containers, recursing through raw_eq (so nested scalars use
+// the language's typed equality). List: same length, element-wise. Dict/Obj:
+// same map kind + exact key-set + per-key equal. Cell: root-hash equal. Any
+// other/mismatched pairing is unequal. Mirrors Python list/dict `==`.
+bool container_eq(const Value &l, const Value &r) {
+  if (l.t == VType::List && r.t == VType::List) {
+    const auto &xs = *l.items;
+    const auto &ys = *r.items;
+    if (xs.size() != ys.size()) return false;
+    for (std::size_t i = 0; i < xs.size(); i++) {
+      if (!raw_eq(xs[i], ys[i])) return false;
+    }
+    return true;
+  }
+  if ((l.t == VType::Dict || l.t == VType::Obj) && l.t == r.t) {
+    if (!l.fields || !r.fields || l.fields->size() != r.fields->size()) return false;
+    for (const auto &kv : *l.fields) {
+      const Value *rv = r.field(kv.first);
+      if (rv == nullptr || !raw_eq(kv.second, *rv)) return false;
+    }
+    return true;
+  }
+  if (l.t == VType::Cell && r.t == VType::Cell) {
+    if (l.cell.is_null() || r.cell.is_null()) return l.cell.is_null() && r.cell.is_null();
+    return l.cell->get_hash() == r.cell->get_hash();
+  }
+  return false;  // mismatched types / non-container
 }
 
 EvalResult eq_result(const Value &l, const Value &r, bool want_eq) {

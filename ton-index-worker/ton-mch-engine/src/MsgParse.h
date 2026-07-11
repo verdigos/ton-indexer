@@ -61,9 +61,6 @@ std::optional<std::string> ton_transfer_comment(const td::Ref<vm::Cell> &body);
 // serializer applies to jetton_transfer/nft `comment` payload bytes.
 std::string decode_comment_bytes(const std::string &raw);
 
-// `--parse-dump` mode: for every message in the fixture(s) whose opcode is a
-// registered jetton-family opcode, parse the body and print a canonical line
-// (see py_msg_dump.py twin). Returns 0 on success.
-int run_parse_dump(const std::vector<std::string> &paths);
+// (--parse-dump moved to ParseDump.h — §11 item 2 harness isolation.)
 
 }  // namespace mch

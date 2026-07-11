@@ -125,9 +125,11 @@ add_executable(ton-mch-engine
     src/BuildVectorRunner.cpp
     src/BuildDriver.cpp
     src/BuildSmoke.cpp
+    src/ClassifyCore.cpp
     src/Classify.cpp
     src/ShapeTest.cpp
     src/MsgParse.cpp
+    src/ParseDump.cpp
     src/parse/PSlice.cpp
     src/parse/ParseJettons.cpp
     src/parse/ParseDns.cpp

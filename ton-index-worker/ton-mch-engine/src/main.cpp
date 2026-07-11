@@ -16,7 +16,7 @@
 #include "Classify.h"
 #include "BuildVectorRunner.h"
 #include "MatchRunner.h"
-#include "MsgParse.h"
+#include "ParseDump.h"
 #include "ShapeTest.h"
 #include "TraceLoader.h"
 #include "VectorRunner.h"
