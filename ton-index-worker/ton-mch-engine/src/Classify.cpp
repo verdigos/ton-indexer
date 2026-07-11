@@ -715,6 +715,8 @@ std::string render_action(const Action &a) {
   return render_value(Value::make_dict(std::move(f)));
 }
 
+}  // namespace
+
 // Shared CLI dump adapter over ClassifyCore (§11 item 2 / prod-design §2). The
 // core computes a buffered per-trace ClassifyResult; this reproduces today's
 // stdout byte-for-byte (SKIP header, `=== fixture`, ERROR/TRACE_FAIL lines, then
@@ -722,7 +724,7 @@ std::string render_action(const Action &a) {
 // Action row (build_action + render_action)). --classify and --actions differ
 // ONLY in the per-action render, so they share this.
 int run_dump(const std::string &artifact_path, const std::vector<std::string> &paths,
-             bool actions_mode) {
+             bool actions_mode, const TraceContextLoader &load_ctx) {
   auto r_ir = load_ir(artifact_path);
   if (r_ir.is_error()) {
     std::fprintf(stderr, "failed to load IR artifact: %s\n", r_ir.error().message().c_str());
@@ -760,7 +762,7 @@ int run_dump(const std::string &artifact_path, const std::vector<std::string> &p
 
   for (const std::string &f : fixtures) {
     std::printf("=== %s\n", fs::path(f).filename().string().c_str());
-    auto r_ctx = load_trace_context(f);
+    auto r_ctx = load_ctx(f);
     if (r_ctx.is_error()) {
       std::printf("ERROR: %s\n", r_ctx.error().message().c_str());
       continue;
@@ -807,14 +809,12 @@ int run_dump(const std::string &artifact_path, const std::vector<std::string> &p
   return 0;
 }
 
-}  // namespace
-
 int run_classify(const std::string &artifact_path, const std::vector<std::string> &paths) {
-  return run_dump(artifact_path, paths, /*actions_mode=*/false);
+  return run_dump(artifact_path, paths, /*actions_mode=*/false, load_trace_context);
 }
 
 int run_actions(const std::string &artifact_path, const std::vector<std::string> &paths) {
-  return run_dump(artifact_path, paths, /*actions_mode=*/true);
+  return run_dump(artifact_path, paths, /*actions_mode=*/true, load_trace_context);
 }
 
 }  // namespace mch

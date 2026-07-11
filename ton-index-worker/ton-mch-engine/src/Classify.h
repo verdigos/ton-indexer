@@ -36,12 +36,28 @@
 // gen_builds() must have been generated from THIS artifact (sha-checked).
 #pragma once
 
+#include "BlockTree.h"  // TraceContext (loader callback return type)
+
+#include <functional>
 #include <string>
 #include <vector>
 
 namespace mch {
 
+struct CoreAction;  // ClassifyCore.h
+
+// How run_dump acquires a trace's TraceContext for a fixture path. Path A = the
+// msgpack loader (load_trace_context); the schema A/B gate injects a callback
+// that synthesizes schema::Transactions and runs SchemaTraceLoader (SchemaGate.cpp).
+using TraceContextLoader = std::function<td::Result<TraceContext>(const std::string &)>;
+
 int run_classify(const std::string &artifact_path, const std::vector<std::string> &paths);
+
+// Shared classify/actions dump over an injectable context loader (the render +
+// engine loop live here; only ctx acquisition varies A vs B). Exported so the
+// schema A/B gate reuses the exact rendering, keeping path B byte-comparable.
+int run_dump(const std::string &artifact_path, const std::vector<std::string> &paths,
+             bool actions_mode, const TraceContextLoader &load_ctx);
 
 // Phase E part 2 (`--actions`): serialized-Action-row dump. Same collect->pass
 // pipeline as run_classify; each surviving post-pass produced block is rendered

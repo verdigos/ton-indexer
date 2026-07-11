@@ -17,6 +17,7 @@
 #include "BuildVectorRunner.h"
 #include "MatchRunner.h"
 #include "ParseDump.h"
+#include "SchemaGate.h"
 #include "ShapeTest.h"
 #include "TraceLoader.h"
 #include "VectorRunner.h"
@@ -143,7 +144,9 @@ int main(int argc, char *argv[]) {
   bool match_gen = false;
   bool build_smoke_mode = false;
   bool classify_mode = false;
+  bool classify_schema_mode = false;
   bool actions_mode = false;
+  bool actions_schema_mode = false;
   bool parse_dump_mode = false;
   bool shape_test_mode = false;
   std::vector<std::string> trace_paths;
@@ -172,9 +175,17 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "classify",
                "End-to-end classify dump (match+build+merge loop): -I <artifact> -T <fixture|dir>",
                [&]() { classify_mode = true; });
+  p.add_option('\0', "classify-schema",
+               "Classify via the production SchemaTraceLoader path (A/B gate vs --classify): "
+               "-I <artifact> -T <fixture|dir>",
+               [&]() { classify_schema_mode = true; });
   p.add_option('\0', "actions",
                "Serialized-Action-row dump (Phase E part 2): -I <artifact> -T <fixture|dir>",
                [&]() { actions_mode = true; });
+  p.add_option('\0', "actions-schema",
+               "Action-row dump via the production SchemaTraceLoader path (A/B gate vs "
+               "--actions): -I <artifact> -T <fixture|dir>",
+               [&]() { actions_schema_mode = true; });
   p.add_option('\0', "parse-dump", "Message-parse dump: -T <fixture|dir> (repeatable)",
                [&]() { parse_dump_mode = true; });
   p.add_option('\0', "shape-test",
@@ -233,6 +244,14 @@ int main(int argc, char *argv[]) {
   if (build_smoke_mode) {
     // Build-phase smoke mode (two-phase lookups): no scheduler needed.
     return mch::run_build_smoke(ir_path, trace_paths);
+  }
+
+  if (classify_schema_mode) {
+    return mch::run_classify_schema(ir_path, trace_paths);
+  }
+
+  if (actions_schema_mode) {
+    return mch::run_actions_schema(ir_path, trace_paths);
   }
 
   if (classify_mode) {
