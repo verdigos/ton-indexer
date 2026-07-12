@@ -239,6 +239,18 @@ Execution notes for whoever runs a wave:
 
 ## 5. Wave log (append after each wave)
 
+- **W6-PRE 2026-07-12** (committed 93e22880): gating verification DONE — new expr kinds are
+  ADDITIVE within IR v1.0 (emitter + both loaders regenerate lockstep in-repo; extending
+  EXPR_KINDS + runtime dispatch same release = sanctioned path, same as list/record; NO
+  version bump; W7/v1.1 stays separate). LOAD-BEARING: `map(xs, "field")` BUILTIN ALREADY
+  EXISTS (field projection) — the lambda form `map(xs as e => expr)` is a NEW node kind,
+  parser disambiguates on `as`, do NOT overload the builtin. Pinned: null xs→null, non-list
+  →fault, empty→[]/false/true, no nested comprehensions, binder scope = body-only (resolver
+  scope-frame; STOP if more needed). Executor (minify-w1) handed off at the pre-W6a
+  boundary after 5 waves (responsible fatigue call); full executable spec =
+  **docs/mch-w6-handoff.md**; minify-w1 TaskStop'd BEFORE spawning fresh executor (per the
+  teammate-ops lesson). Fresh session: read handoff doc + this doc §0/§4, execute W6a→c.
+
 - **W5 CLOSED 2026-07-12** (lead-verified: actions A/B 0, prod 0, pytest 1954/2).
   **M5 chain construct NOT BUILT — verdict: not-worth-building** (same class as W4
   per-dex records). The 3 walks are irreducibly heterogeneous: stonfi_v2 pool_accounts =
