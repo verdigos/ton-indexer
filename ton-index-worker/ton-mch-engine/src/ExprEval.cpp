@@ -101,6 +101,26 @@ EvalResult ExprEval::eval(const Json &e) {
     }
     return rt_ok(Value::make_dict(std::move(fs)));
   }
+  if (k == "mapc" || k == "quant") {
+    EvalResult xs = eval(*jfield(e, "xs"));
+    if (xs.faulted) {
+      return xs;
+    }
+    const std::string var = jfield(e, "var")->get_string().str();
+    const Json *body = jfield(e, "body");
+    // Copy the env; the element var shadows any outer binding for the body only
+    // (mirrors the Python scope frame), leaving env_ untouched.
+    Env local = env_;
+    ElementFn body_fn = [&](const Value &el) -> EvalResult {
+      local[var] = el;
+      ExprEval sub(local, lookups_, where_);
+      return sub.eval(*body);
+    };
+    if (k == "mapc") {
+      return rt_mapc(xs.value, body_fn);
+    }
+    return rt_quant(jfield(e, "op")->get_string().str() == "all", xs.value, body_fn);
+  }
   return rt_fault("unsupported expression kind '" + k + "'");
 }
 

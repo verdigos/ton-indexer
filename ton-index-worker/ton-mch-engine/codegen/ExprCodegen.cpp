@@ -105,6 +105,13 @@ class Emitter {
     }
     if (k == "name") {
       const std::string id = jstr(e, "id");
+      // Comprehension element binders shadow every mode's name resolution: a
+      // reference to the bound var reads the lambda parameter directly (§16.1).
+      if (auto lit = locals_.find(id); lit != locals_.end()) {
+        int i = fresh();
+        line("const Value &v" + num(i) + " = " + lit->second + ";");
+        return "v" + num(i);
+      }
       if (mode_ == EmitMode::Where) {
         // No environment exists at test_self time (expr_eval._sync_eval).
         return bind("rt_fault(\"name '" + id + "' is not bound in a `where` clause\")");
@@ -193,12 +200,23 @@ class Emitter {
       line("Value v" + num(i) + " = Value::make_dict(Value::Fields{" + join(pairs, ", ") + "});");
       return "v" + num(i);
     }
+    if (k == "mapc" || k == "quant") {
+      return emit_comprehension(e, k == "quant");
+    }
     throw std::runtime_error("unsupported expression kind '" + k + "'");
   }
 
  private:
   EmitMode mode_ = EmitMode::Vectors;
   int n_ = 0;
+  // Comprehension element binders (spec §16.1): name -> C++ expr yielding the
+  // element Value (the lambda parameter). Checked first in the `name` branch,
+  // in every mode. No nesting (frontend R024), so a single flat map suffices.
+  std::map<std::string, std::string> locals_;
+  // True while emitting a comprehension body — the body is an EvalResult-
+  // returning lambda, so a fault must `return r;` (EvalResult) even in Build
+  // mode, not `return BuildOutcome::rejected(...)` (which is the outer fn type).
+  bool in_lambda_ = false;
 
   int fresh() { return n_++; }
   static std::string num(int i) { return std::to_string(i); }
@@ -206,12 +224,51 @@ class Emitter {
 
   // Early return on a faulted EvalResult temp: expression fns propagate the
   // EvalResult; a build fn's fault is a clean rejection (program.py EvalError).
+  // Inside a comprehension body lambda (EvalResult-returning), a Build-mode
+  // fault still returns the EvalResult — rt_mapc/rt_quant propagate it.
   std::string fault_line(const std::string &res) const {
-    if (mode_ == EmitMode::Build) {
+    if (mode_ == EmitMode::Build && !in_lambda_) {
       return "if (" + res + ".faulted) return BuildOutcome::rejected(std::move(" + res +
              ".message));";
     }
     return "if (" + res + ".faulted) return " + res + ";";
+  }
+
+  // `map|any|all(xs as VAR => body)` (§16.1). Emits the list expr, then a
+  // lambda binding VAR per element, dispatched through the shared rt_mapc /
+  // rt_quant cores — the SAME cores the interpreter calls.
+  std::string emit_comprehension(const Json &e, bool is_quant) {
+    if (mode_ == EmitMode::Where) {
+      // Load/compile-rejected in a where_expr; defensive fault (sync test_self).
+      return bind("rt_fault(\"comprehensions are not evaluable in a `where` clause\")");
+    }
+    std::string xs = emit(*jfield(e, "xs"));
+    const std::string var = jstr(e, "var");
+    int i = fresh();
+    const std::string param = "el" + num(i);
+    // Bind VAR to the lambda param for the body only (shadow-safe save/restore).
+    const bool had = locals_.count(var) != 0;
+    const std::string prev = had ? locals_[var] : std::string();
+    locals_[var] = param;
+    const bool saved_in_lambda = in_lambda_;
+    in_lambda_ = true;
+    auto [bval, blines] = block(*jfield(e, "body"));
+    in_lambda_ = saved_in_lambda;
+    if (had) {
+      locals_[var] = prev;
+    } else {
+      locals_.erase(var);
+    }
+    line("auto body" + num(i) + " = [&](const Value &" + param + ") -> EvalResult {");
+    line("  (void)" + param + ";");
+    emit_block_into(blines);
+    line("  return rt_ok(" + bval + ");");
+    line("};");
+    if (is_quant) {
+      const std::string is_all = jstr(e, "op") == "all" ? "true" : "false";
+      return bind("rt_quant(" + is_all + ", " + xs + ", body" + num(i) + ")");
+    }
+    return bind("rt_mapc(" + xs + ", body" + num(i) + ")");
   }
 
   std::string bind(const std::string &rexpr) {

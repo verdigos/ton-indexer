@@ -21,6 +21,7 @@
 
 #include "Value.h"
 
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -90,6 +91,16 @@ EvalResult rt_mul(const Value &l, const Value &r);
 // paths run the SAME core (plan §0.2).
 EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &args);
 EvalResult rt_builtin_account(const Value &x);
+// --- comprehensions (G-LC / G-Q, spec §16.1) ---
+// Shared cores for `map(xs as e => body)` / `any|all(xs as e => body)`. `body`
+// is invoked once per element with that element bound; the core owns the
+// null/non-list/empty/short-circuit semantics IDENTICALLY for the interpreter
+// (ExprEval) and the generated code (ONE semantics, plan §0.2). null xs -> null;
+// non-list xs -> fault; empty -> [] (map) / false (any) / true (all). Quantifiers
+// short-circuit like std::any_of/std::all_of and require a bool body.
+using ElementFn = std::function<EvalResult(const Value &)>;
+EvalResult rt_mapc(const Value &xs, const ElementFn &body);
+EvalResult rt_quant(bool is_all, const Value &xs, const ElementFn &body);
 EvalResult rt_builtin_amount(const Value &x);
 EvalResult rt_builtin_asset(const Value &x);
 EvalResult rt_builtin_ton_asset();

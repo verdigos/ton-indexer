@@ -572,6 +572,43 @@ EvalResult rt_builtin_map(const Value &a, const Value &b) {
   return rt_ok(Value::make_list(std::move(out)));
 }
 
+EvalResult rt_mapc(const Value &xs, const ElementFn &body) {
+  if (rt_is_null(xs)) return rt_ok(Value::null());
+  if (xs.t != VType::List) return rt_fault("map comprehension expects a list, got " + xs.describe());
+  std::vector<Value> out;
+  out.reserve(xs.items->size());
+  for (const auto &el : *xs.items) {
+    EvalResult r = body(el);
+    if (r.faulted) return r;
+    out.push_back(std::move(r.value));
+  }
+  return rt_ok(Value::make_list(std::move(out)));
+}
+
+EvalResult rt_quant(bool is_all, const Value &xs, const ElementFn &body) {
+  if (rt_is_null(xs)) return rt_ok(Value::null());
+  if (xs.t != VType::List) {
+    return rt_fault(std::string(is_all ? "all" : "any") + " comprehension expects a list, got " +
+                    xs.describe());
+  }
+  bool result = is_all;  // all of empty = true, any of empty = false
+  for (const auto &el : *xs.items) {
+    EvalResult r = body(el);
+    if (r.faulted) return r;
+    EvalResult b = rt_require_bool(r.value);
+    if (b.faulted) return b;
+    if (!is_all && b.value.boolean) {
+      result = true;
+      break;
+    }
+    if (is_all && !b.value.boolean) {
+      result = false;
+      break;
+    }
+  }
+  return rt_ok(Value::make_bool(result));
+}
+
 EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &args) {
   static const std::map<std::string, int> arity = {
       {"account", 1}, {"amount", 1},  {"asset", 1}, {"ton_asset", 0},
