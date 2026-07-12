@@ -239,6 +239,17 @@ Execution notes for whoever runs a wave:
 
 ## 5. Wave log (append after each wave)
 
+- **W7a DONE 2026-07-12 (7a947f99)**: parse-as-expression python-first — ParseExpr AST,
+  parser (statement form consumed first → expr position unambiguous), resolver R012,
+  {"k":"parse"} IR kind, loader accept + where-sync-reject + C013, async eval FAULT-on-fail
+  (no soft-null, §0.5(a)) + stateless return (fixes hidden-mutable-state note), works
+  inside map-comprehension. 11 new tests, pytest 1988/2. IR DELIBERATELY still 1.0,
+  artifact untouched — strict 1.1 bump + C++ + build-vector = W7b in ONE stage (§0.5(b)).
+  Executor rotation #2 at the a→b boundary (same §8a pattern): minify-w6 wrote
+  **docs/mch-w7-handoff.md** (W7b crux: rt_parse_expr RETURNS Value + faults, inverting
+  statement rt_parse's env.bodies store + soft-null; v1.1 surface list; W7c candidates +
+  method), was TaskStop'd; fresh executor minify-w7 spawned on the handoff.
+
 - **W6 DONE 2026-07-12** (a: 2707ac30, b: 80adda0b, c: see commit; lead-verified each —
   final: 115/115 vectors both paths, classify/actions 196 A/B 0 AND diff-0 vs pre-W6c
   baseline = true semantic no-op, pytest 1977/2). LANGUAGE: mapc/quant landed end-to-end
