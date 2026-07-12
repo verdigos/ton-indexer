@@ -477,10 +477,8 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   return rt_ok(Value::make_obj(std::move(d)));
 }
 
-// builders/stonfi.py no_internal_transfer: not block.data['has_internal_transfer'].
-bool no_internal_transfer(const Block *block) {
-  return !data_truthy(block, "has_internal_transfer");
-}
+// no_internal_transfer is gone (W6): folded into the spec as the inline
+// `where (not .has_internal_transfer)` on the stonfi_v2 jetton_transfer out-arm.
 
 // builders/stonfi.py pton_self_transfer -> validate_stonfi_v2_intermediate_pton_transfer
 // (try/except -> False). The intermediate pton call's previous jetton_transfer

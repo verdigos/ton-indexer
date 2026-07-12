@@ -20,10 +20,10 @@ a dual-implementation parity liability):
   takes the composed transfer's `data.forward_payload` (a b64 BOC string both
   engines carry), NOT the legacy `.jetton_transfer_message` attribute, so it is
   a pure fn over a string and portable to the C++ engine (F1).
-- fn `jvault_account_list`: maps the claim body's jetton-wallet address list
-  through the AccountId constructor. Needed only because element-wise
-  constructor-map (`map(xs as e => account(e))`) is deferred G-LC (§16.1);
-  `map(xs, "field")` projects a field, it cannot apply a constructor.
+The former `jvault_account_list` fn is gone (W6): the claim body's jetton-wallet
+address list now maps through the AccountId constructor with the G-LC
+comprehension `map(xs as e => account(e))` directly in the spec — the fn existed
+only because element-wise constructor-map was deferred (§16.1).
 
 The old `jvault_transfer_amount` fn is gone: F1+F2 read the transfer amount
 straight off `transfer.data.desired_amount.value` (stake) /
@@ -51,7 +51,6 @@ from indexer.events.blocks.messages.jvault import (
     JVaultUnstakeJettons,
     JVaultUnstakeRequest,
 )
-from indexer.events.blocks.utils import AccountId
 from indexer.events.mch.registry import Registries
 
 BLOCK_TYPES = {
@@ -99,10 +98,6 @@ def register_jvault(reg: Registries) -> Registries:
         body = Cell.from_boc(base64.b64decode(forward_payload_b64))[0].begin_parse()
         body.load_uint(32)
         return body.load_uint(32)
-
-    @reg.register_fn("jvault_account_list")
-    async def jvault_account_list(addresses):
-        return [AccountId(a) for a in addresses]
 
     return reg
 

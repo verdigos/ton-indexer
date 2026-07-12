@@ -34,10 +34,10 @@ void tgbtc_deploy_absorb(Block *produced, const ShaperMatch &m);
 EvalResult coffee_swap_data(BuildEnv &env, const std::vector<Value> &args);
 
 // Stonfi (HostStonfi.cpp): v1 sender-payment pred + v1 swap fn (always-reject);
-// v2 preds (no_internal_transfer, pton_self_transfer) + v2 swap fn.
+// v2 pton_self_transfer pred + v2 swap fn. (no_internal_transfer moved to an
+// inline where-expr in W6.)
 bool stonfi_v1_sender_payment(const Block *block);
 EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args);
-bool no_internal_transfer(const Block *block);
 bool pton_self_transfer(const Block *block);
 EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args);
 
@@ -68,8 +68,7 @@ EvalResult layerzero_dst_oapp_matches(BuildEnv &env, const std::vector<Value> &a
 // Tonstakers (HostTonstakers.cpp).
 EvalResult tonstakers_minted_nft(BuildEnv &env, const std::vector<Value> &args);
 
-// JVault (HostJvault.cpp).
+// JVault (HostJvault.cpp). (jvault_account_list moved to a spec G-LC map in W6.)
 EvalResult jvault_stake_period(BuildEnv &env, const std::vector<Value> &args);
-EvalResult jvault_account_list(BuildEnv &env, const std::vector<Value> &args);
 
 }  // namespace mch

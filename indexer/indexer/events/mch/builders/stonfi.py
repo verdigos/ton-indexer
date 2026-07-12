@@ -97,10 +97,9 @@ def register_stonfi_v2(reg: Registries) -> Registries:
         except Exception:
             return False
 
-    @reg.register_predicate("no_internal_transfer")
-    def no_internal_transfer(block: Block) -> bool:
-        return not block.data['has_internal_transfer']
-
+    # `no_internal_transfer` (was `not block.data['has_internal_transfer']`) is
+    # gone (W6): folded into the spec as the inline `where (not
+    # .has_internal_transfer)` on the jetton_transfer out-arm.
     reg.register_fn("stonfi_v2_swap_data")(_stonfi_v2_swap_data)
 
     return reg

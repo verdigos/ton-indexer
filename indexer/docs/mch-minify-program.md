@@ -225,7 +225,7 @@ wave-specific gates. Lead verifies fresh + commits per wave. Doc updated same co
 | W3 | M1 wave-2: host-embedded decoders → schema + shim (approach A) | classify/actions diff 0; all 12 | **DONE** (8 converted — see log; ~14/~810 premise corrected) |
 | W4 | M2 remainder: views extraction; per-dex records assessed no-ROI | byte-identical; all 12 | **DONE** (honest shortfall — see log) |
 | W5 | M5 chain-walk construct | — | **CLOSED: NOT BUILT** (verdict in log) + open_ref dedup landed |
-| W6 | M3a language: G-LC map + G-Q any/all — spec+parser+resolver+IR+py-runtime+C++ interp+codegen, Python-FIRST, new expr vectors both paths. THEN M4 spec moves (tonstakers, getgems, tgbtc_mint, jvault_account_list, dedust_swap_failed, no_internal_transfer-if-resolver-permits) + delete the moved fns + artifact regen batched ONCE | expr vectors grown both paths; classify/actions diff 0 (semantic no-ops); pytest grown; all 12 | PENDING (user-approved) |
+| W6 | M3a language (G-LC map + G-Q any/all both runtimes) + M4 spec moves | vectors 115 both paths; 196 diff 0; all 12 | **DONE** (2 moves landed, 4 parked w/ evidence — see log) |
 | W7 | M3b: parse-as-expression + IR v1.1 (minimal, strict bump; fault→reject semantics); then DEX-core shrink pass (attempt all, keep diff-0, park resisters); abort rule per §0.5(d) | full set + regen | PENDING (FULLY PRE-AUTHORIZED §0.5, runs LAST, no check-in needed) |
 
 Execution notes for whoever runs a wave:
@@ -238,6 +238,24 @@ Execution notes for whoever runs a wave:
   decision after program + shadow both conclude (user call).
 
 ## 5. Wave log (append after each wave)
+
+- **W6 DONE 2026-07-12** (a: 2707ac30, b: 80adda0b, c: see commit; lead-verified each —
+  final: 115/115 vectors both paths, classify/actions 196 A/B 0 AND diff-0 vs pre-W6c
+  baseline = true semantic no-op, pytest 1977/2). LANGUAGE: mapc/quant landed end-to-end
+  (frontend + py IR + C++ interp/codegen, shared rt cores, 18 new vectors; binder = one
+  resolver scope frame — §3.4 soft spot held; R024 no-nesting; `as`-keyword disambiguation
+  from the EXISTING map(xs,"field") builtin). SPEC MOVES: 2 landed both-sides-deleted —
+  jvault_account_list → `map(... as jw => account(jw))` (corpus 1×) and no_internal_transfer
+  → inline `where (not .has_internal_transfer)` (corpus 121×). 4 PARKED with evidence
+  (§3.7 class, do not re-attempt without new machinery): tonstakers_minted_nft (EMPIRICAL:
+  two-way parity test failed — NFT is an nft_mint BLOCK by tonstakers' turn, op-capture
+  can't bind; btype-capture would diverge consumed set), dedust_swap_failed (needs a
+  `children(block, op)` topology accessor + include-set membership — NOT in language; G-Q
+  landed ZERO production moves, conformance-only for now; children() = candidate future
+  feature IF a 2nd use appears), getgems (finish/stop-branch payout = unconsumed-sibling
+  read, untested shape → latent silent divergence), tgbtc_mint (list bindings under
+  $mint_chain recursion — spec documents they can't be read). Net W6: language capability
+  permanent, immediate deletion modest — jvault fn + pred both sides + the moved logic.
 
 - **W6-PRE 2026-07-12** (committed 93e22880): gating verification DONE — new expr kinds are
   ADDITIVE within IR v1.0 (emitter + both loaders regenerate lockstep in-repo; extending

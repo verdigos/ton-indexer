@@ -50,34 +50,8 @@ EvalResult jvault_stake_period(BuildEnv &, const std::vector<Value> &args) {
   return rt_ok(*r.ok().field("stake_period"));
 }
 
-// builders/jvault.py jvault_account_list(addresses): [AccountId(a) for a in xs].
-// The parsed JVaultClaim body already carries jettons_to_claim as account
-// Values (load_address_py), so the AccountId wrap is an identity over the list
-// here (the render already matches AccountId.as_str()); the fn exists only
-// because the element-wise constructor-map `map(xs as e => account(e))` is
-// deferred G-LC (spec §16.1). Non-list / null -> fault (Python iterating those
-// raises).
-EvalResult jvault_account_list(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("jvault_account_list: bad arguments");
-  }
-  if (args[0].t != VType::List || args[0].items == nullptr) {
-    return rt_fault("jvault_account_list: expected a list");
-  }
-  std::vector<Value> out;
-  out.reserve(args[0].items->size());
-  for (const auto &e : *args[0].items) {
-    if (e.t == VType::Account) {
-      out.push_back(e);
-    } else if (e.t == VType::Str) {
-      out.push_back(Value::make_account_raw(e.str));
-    } else if (e.is_null()) {
-      out.push_back(Value::make_account_none());
-    } else {
-      return rt_fault("jvault_account_list: element is not an address");
-    }
-  }
-  return rt_ok(Value::make_list(std::move(out)));
-}
+// jvault_account_list is gone (W6): the claim body's jetton-wallet list maps
+// through the account() constructor via the spec G-LC comprehension
+// `map(xs as e => account(e))` (spec §16.1) — no host fn.
 
 }  // namespace mch

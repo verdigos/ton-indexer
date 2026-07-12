@@ -126,19 +126,20 @@ matcher jvault_claim {
            -> { btype jetton_transfer @withdraw ; op JVaultUpdateRewards @update }
 
     # Legacy build_jvault_claim_core. claimed_jettons maps the claim body's
-    # jetton-wallet list through the AccountId constructor (host fn — the
-    # constructor-map `map(xs as e => account(e))` is deferred G-LC, §16.1);
-    # the fn takes the plain address list off the parsed body, so it is
-    # portable. claimed_amounts is the single withdraw leg's outer transfer
-    # amount, carried on the composed jetton_transfer as `data.desired_amount`
-    # (an Amount), unwrapped via F2 `.value` — the same scalar legacy reads as
+    # jetton-wallet list through the AccountId constructor — now the G-LC
+    # comprehension `map(xs as e => account(e))` (§16.1 W6), the exact
+    # element-wise constructor map that used to live in the `jvault_account_list`
+    # host fn (which existed ONLY because G-LC was deferred). claimed_amounts is
+    # the single withdraw leg's outer transfer amount, carried on the composed
+    # jetton_transfer as `data.desired_amount` (an Amount), unwrapped via F2
+    # `.value` — the same scalar legacy reads as
     # withdrawal.jetton_transfer_message.amount — as a one-element list literal.
     parse claim as JVaultClaim
     out {
         sender:          account(claim.msg.source)
         stake_wallet:    account(claim.msg.destination)
         staking_pool:    account(send.msg.destination)
-        claimed_jettons: jvault_account_list(claim.body.jettons_to_claim)
+        claimed_jettons: map(claim.body.jettons_to_claim as jw => account(jw))
         claimed_amounts: [ withdraw.data.desired_amount.value ]
     }
 }

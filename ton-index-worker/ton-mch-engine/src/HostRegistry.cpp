@@ -15,7 +15,6 @@ const std::map<std::string, HostFn> &host_fns() {
       {"layerzero_dst_oapp_matches", layerzero_dst_oapp_matches},
       {"tonstakers_minted_nft", tonstakers_minted_nft},
       {"jvault_stake_period", jvault_stake_period},
-      {"jvault_account_list", jvault_account_list},
       {"nft_transfer_data", nft_transfer_data},
       {"getgems_nft_purchase_data", getgems_nft_purchase_data},
       {"telegram_nft_purchase_data", telegram_nft_purchase_data},
@@ -55,9 +54,8 @@ const std::map<std::string, HostPredFn> &host_predicates() {
       {"getgems_purchase", getgems_purchase},
       {"getgems_seller_payout", getgems_seller_payout},
       {"stonfi_v1_sender_payment", stonfi_v1_sender_payment},
-      // no_internal_transfer / pton_self_transfer gate stonfi_v2_swap, now
-      // enabled by the §11.5 dual-dispatch wave (see host_fns()).
-      {"no_internal_transfer", no_internal_transfer},
+      // pton_self_transfer gates stonfi_v2_swap. (no_internal_transfer folded
+      // into an inline where-expr in W6.)
       {"pton_self_transfer", pton_self_transfer},
   };
   return preds;

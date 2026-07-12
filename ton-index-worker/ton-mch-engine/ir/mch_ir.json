@@ -4851,22 +4851,30 @@
             {
               "name": "claimed_jettons",
               "expr": {
-                "k": "call",
-                "fn": "jvault_account_list",
-                "args": [
-                  {
+                "k": "mapc",
+                "xs": {
+                  "k": "attr",
+                  "of": {
                     "k": "attr",
                     "of": {
-                      "k": "attr",
-                      "of": {
-                        "k": "name",
-                        "id": "claim"
-                      },
-                      "name": "body"
+                      "k": "name",
+                      "id": "claim"
                     },
-                    "name": "jettons_to_claim"
-                  }
-                ]
+                    "name": "body"
+                  },
+                  "name": "jettons_to_claim"
+                },
+                "var": "jw",
+                "body": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "name",
+                      "id": "jw"
+                    }
+                  ]
+                }
               }
             },
             {
@@ -10361,7 +10369,14 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "out_transfer",
-      "where": "no_internal_transfer",
+      "where_expr": {
+        "k": "unary",
+        "op": "not",
+        "x": {
+          "k": "dotfield",
+          "name": "has_internal_transfer"
+        }
+      },
       "child": 200
     },
     {
@@ -10404,7 +10419,14 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "peer_out",
-      "where": "no_internal_transfer",
+      "where_expr": {
+        "k": "unary",
+        "op": "not",
+        "x": {
+          "k": "dotfield",
+          "name": "has_internal_transfer"
+        }
+      },
       "child": 207
     },
     {
@@ -10491,7 +10513,14 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "peer_out",
-      "where": "no_internal_transfer",
+      "where_expr": {
+        "k": "unary",
+        "op": "not",
+        "x": {
+          "k": "dotfield",
+          "name": "has_internal_transfer"
+        }
+      },
       "child": 221
     },
     {
@@ -10574,7 +10603,14 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "peer_out",
-      "where": "no_internal_transfer",
+      "where_expr": {
+        "k": "unary",
+        "op": "not",
+        "x": {
+          "k": "dotfield",
+          "name": "has_internal_transfer"
+        }
+      },
       "child": 235
     },
     {

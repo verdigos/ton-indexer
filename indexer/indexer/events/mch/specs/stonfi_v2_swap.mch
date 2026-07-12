@@ -8,9 +8,10 @@
 #   parent edge stays attached to the anchor (§6.5 CB exemption; a bare
 #   `-> ... <-` chain is C009);
 # - §14.2's idealized `op JettonInternalTransfer` out-arm is really
-#   `btype jetton_transfer` + two host predicates: `no_internal_transfer`
-#   (M4 inline-predicate candidate: `.has_internal_transfer == false`) and
-#   the payload-validating `pton_self_transfer` on a bare `pred` node
+#   `btype jetton_transfer` + an inline `where (not .has_internal_transfer)`
+#   (the former `no_internal_transfer` host predicate, folded into the language
+#   in W6 — reads the jetton_transfer block's own `has_internal_transfer` data
+#   flag) plus the payload-validating `pton_self_transfer` on a bare `pred` node
 #   (legacy GenericMatcher has no opcode constraint);
 # - `^` is used where legacy has ordered OrMatcher because same-name captures
 #   require declared exclusivity (R005); hop branches actually overlap by
@@ -32,14 +33,13 @@ opcode JettonNotify  = 0x7362d09c
 opcode PTonTransfer  = 0x01f3835d
 
 predicate pton_self_transfer
-predicate no_internal_transfer
 
 # One router hop per unrolling: swap request + payment, then continuation via
 # a validated intermediate pton chain, a plain jetton transfer, or directly.
 rule swap_hop = (
     op StonfiV2Swap @peer_swap
       -> op StonfiV2PayTo @peer_payout
-      -> btype jetton_transfer @peer_out where no_internal_transfer
+      -> btype jetton_transfer @peer_out where (not .has_internal_transfer)
       -> pred pton_self_transfer
       -> op JettonNotify
       -> maybe $swap_hop
@@ -69,7 +69,7 @@ matcher stonfi_v2_swap {
 
     op StonfiV2Swap @swap
       -> { op StonfiV2PayTo @payout
-             -> ( btype jetton_transfer @out_transfer where no_internal_transfer
+             -> ( btype jetton_transfer @out_transfer where (not .has_internal_transfer)
                     -> pred pton_self_transfer
                     -> op JettonNotify
                     -> maybe $swap_hop
