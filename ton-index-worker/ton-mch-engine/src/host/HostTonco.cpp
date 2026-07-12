@@ -3,6 +3,7 @@
 // build_tonco_swap_core). See host/HostImpls.h for the internal registry surface.
 #include "host/HostImpls.h"
 
+#include "host/BlockViews.h"
 #include "host/DexPton.h"
 #include "host/HostCommon.h"
 
@@ -63,12 +64,7 @@ Value wallet_asset(BuildEnv &env, const std::string &addr) {
   return wallet_jetton_asset(jw, /*pton_conversion=*/true);
 }
 
-std::optional<std::string> acc_str_t(const Value &v) {
-  if (v.t == VType::Account && !v.addr_none) {
-    return v.str;
-  }
-  return std::nullopt;
-}
+// (acc_str moved to host/BlockViews.h — shared with the stonfi core.)
 
 // messages/swaps.py ToncoPoolV3Swap: the core reads only source_wallet (the
 // two ref cells carry amounts/payloads the core does not touch here).
@@ -146,7 +142,7 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
     return;
   }
   td::RefInt256 min_out = r_min.move_as_ok();
-  if (auto ts = acc_str_t(target)) {
+  if (auto ts = acc_str(target)) {
     out.emplace_back(*ts, min_out.is_null() ? td::make_refint(0) : min_out);
   }
   auto r_rcpt = load_address_py(cs);  // recipient
@@ -550,7 +546,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     RouterPayTo pt = r_pt.move_as_ok();
     if (pt.exit_code != 0 && pt.exit_code != 200) ok = false;
     Value source_wallet = r_sw.move_as_ok();
-    std::string key = acc_str_t(source_wallet).value_or("");
+    std::string key = acc_str(source_wallet).value_or("");
     swap_steps.push_back({source_wallet, pt, all_swaps[i]->min_lt});
     if (jw_asset_map.find(key) == jw_asset_map.end()) {
       Value asset = wallet_asset(env, key);  // pton -> TON, jetton, or Null on miss
@@ -607,8 +603,8 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   Value out_asset = tonco_leg_asset(data_field(out_transfer, "asset"));
   Value out_receiver_jw = data_field(out_transfer, "receiver_wallet");
   Value out_sender_jw = data_field(out_transfer, "sender_wallet");
-  if (auto rw = acc_str_t(out_receiver_jw)) jw_asset_map[*rw] = out_asset;
-  if (auto sw = acc_str_t(out_sender_jw)) jw_asset_map[*sw] = out_asset;
+  if (auto rw = acc_str(out_receiver_jw)) jw_asset_map[*rw] = out_asset;
+  if (auto sw = acc_str(out_sender_jw)) jw_asset_map[*sw] = out_asset;
   Value out_amount = data_field(out_transfer, "amount");
   Value out_source = data_field(out_transfer, "sender");
   Value out_dest = data_field(out_transfer, "receiver");
@@ -632,7 +628,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   if (swap_steps.size() > 1) {
     auto a0 = payout_assets(swap_steps[0].pay);
     if (!a0.empty()) {
-      auto out_addr = acc_str_t(a0[0].second).value_or("");
+      auto out_addr = acc_str(a0[0].second).value_or("");
       auto it = jw_asset_map.find(out_addr);
       if (it != jw_asset_map.end()) {
         Value prev_out = leg(amount_or_zero_t(a0[0].first), it->second);
@@ -643,7 +639,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
           if (np.exit_code != 0 && np.exit_code != 200) continue;
           auto an = payout_assets(np);
           if (an.empty()) continue;
-          auto na = acc_str_t(an[0].second).value_or("");
+          auto na = acc_str(an[0].second).value_or("");
           auto nit = jw_asset_map.find(na);
           Value next_asset = nit != jw_asset_map.end() ? nit->second : Value::make_asset_ton();
           Value next_out = leg(amount_or_zero_t(an[0].first), next_asset);

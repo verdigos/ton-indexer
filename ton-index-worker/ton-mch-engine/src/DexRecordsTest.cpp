@@ -5,6 +5,7 @@
 #include "BuildRuntime.h"
 #include "ExprRuntime.h"
 #include "Value.h"
+#include "host/BlockViews.h"
 #include "host/DexPton.h"
 #include "host/DexRecords.h"
 #include "host/HostAdapter.h"
@@ -243,6 +244,33 @@ void test_pton_helper() {
   check("pton/other_convert_jetton", oc.t == VType::Asset && oc.has_jetton);
 }
 
+// --- block views (W4) -------------------------------------------------------
+
+void test_data_truthy() {
+  BlockArena arena;
+  Block *b = arena.make("jetton_transfer");
+  b->data = Value::make_dict(Value::Fields{
+      {"flag_true", Value::make_bool(true)},
+      {"flag_false", Value::make_bool(false)},
+      {"one", Value::make_int(td::make_refint(1))},
+      {"zero", Value::make_int(td::make_refint(0))},
+      {"null", Value::null()}});
+  check("view/data_truthy_bool_true", data_truthy(b, "flag_true"));
+  check("view/data_truthy_bool_false", !data_truthy(b, "flag_false"));
+  check("view/data_truthy_int_nonzero", data_truthy(b, "one"));
+  check("view/data_truthy_int_zero", !data_truthy(b, "zero"));
+  check("view/data_truthy_null", !data_truthy(b, "null"));
+  check("view/data_truthy_absent", !data_truthy(b, "missing"));
+}
+
+void test_acc_str() {
+  const std::string addr = "0:" + std::string(64, 'A');
+  auto s = acc_str(Value::make_account_raw(addr));
+  check("view/acc_str_account", s.has_value() && *s == addr);
+  check("view/acc_str_none", !acc_str(Value::make_account_none()).has_value());
+  check("view/acc_str_nonaccount", !acc_str(Value::make_str(addr)).has_value());
+}
+
 }  // namespace
 
 int run_dexrecords_test() {
@@ -256,6 +284,8 @@ int run_dexrecords_test() {
   test_decode_consumed();
   test_run_swap_host();
   test_pton_helper();
+  test_data_truthy();
+  test_acc_str();
   std::printf("DEXRECORDS-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }

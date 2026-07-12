@@ -50,4 +50,17 @@ void unique_lt_sorted(std::vector<const Block *> &blocks) {
                    [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
 }
 
+bool data_truthy(const Block *b, const char *field) {
+  Value v = data_field(b, field);
+  return (v.t == VType::Bool && v.boolean) ||
+         (v.t == VType::Int && !v.num.is_null() && v.num->sgn() != 0);
+}
+
+std::optional<std::string> acc_str(const Value &v) {
+  if (v.t == VType::Account && !v.addr_none) {
+    return v.str;
+  }
+  return std::nullopt;
+}
+
 }  // namespace mch

@@ -3,7 +3,9 @@
 // surface and HostRegistry.h for the public one.
 #include "host/HostImpls.h"
 
+#include "host/BlockViews.h"
 #include "host/DexPton.h"
+#include "host/DexRecords.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -44,13 +46,7 @@ constexpr std::uint32_t kV2PayTo = 0x657b54f5;      // pay_to call
 constexpr std::uint32_t kV2CrossSwapB = 0x69cf1a5b;
 constexpr std::uint32_t kPTonTransfer = 0x01f3835d;
 
-// account -> canonical "wc:HEX" string, or nullopt for addr_none/non-account.
-std::optional<std::string> acc_str(const Value &v) {
-  if (v.t == VType::Account && !v.addr_none) {
-    return v.str;
-  }
-  return std::nullopt;
-}
+// (acc_str moved to host/BlockViews.h — shared with the tonco core.)
 
 // messages/swaps.py StonfiPaymentRequest.__init__ IN FULL: opcode(32),
 // query_id(64), owner(load_address), exit_code(32), then a ref whose slice
@@ -422,22 +418,12 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   if (dex_in_wallet.is_null()) return rt_fault("stonfi_v1: dex_in wallet lookup miss");
   if (outgoing_jt == nullptr) return rt_fault("stonfi_v1: no outgoing jetton transfer");
 
-  Value in_source_jw = Value::null();
-  {
-    Value hit = data_field(in_jt, "has_internal_transfer");
-    if ((hit.t == VType::Bool && hit.boolean) ||
-        (hit.t == VType::Int && !hit.num.is_null() && hit.num->sgn() != 0)) {
-      in_source_jw = data_field(in_jt, "sender_wallet");
-    }
-  }
-  Value out_dest_jw = Value::null();
-  {
-    Value hit = data_field(outgoing_jt, "has_internal_transfer");
-    if ((hit.t == VType::Bool && hit.boolean) ||
-        (hit.t == VType::Int && !hit.num.is_null() && hit.num->sgn() != 0)) {
-      out_dest_jw = data_field(outgoing_jt, "receiver_wallet");
-    }
-  }
+  Value in_source_jw =
+      data_truthy(in_jt, "has_internal_transfer") ? data_field(in_jt, "sender_wallet")
+                                                  : Value::null();
+  Value out_dest_jw =
+      data_truthy(outgoing_jt, "has_internal_transfer") ? data_field(outgoing_jt, "receiver_wallet")
+                                                        : Value::null();
 
   const Value *in_owner = dex_in_wallet.field("owner");
   Value in_dest = (in_owner != nullptr && in_owner->t == VType::Str)
@@ -501,10 +487,7 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
 
 // builders/stonfi.py no_internal_transfer: not block.data['has_internal_transfer'].
 bool no_internal_transfer(const Block *block) {
-  Value v = data_field(block, "has_internal_transfer");
-  bool hit = (v.t == VType::Bool && v.boolean) ||
-             (v.t == VType::Int && !v.num.is_null() && v.num->sgn() != 0);
-  return !hit;
+  return !data_truthy(block, "has_internal_transfer");
 }
 
 // builders/stonfi.py pton_self_transfer -> validate_stonfi_v2_intermediate_pton_transfer
@@ -516,9 +499,7 @@ bool pton_self_transfer(const Block *block) {
   if (prev == nullptr) {
     return false;
   }
-  Value hit = data_field(prev, "has_internal_transfer");
-  if ((hit.t == VType::Bool && hit.boolean) ||
-      (hit.t == VType::Int && !hit.num.is_null() && hit.num->sgn() != 0)) {
+  if (data_truthy(prev, "has_internal_transfer")) {
     return false;
   }
   Value recv = data_field(prev, "receiver");
@@ -740,13 +721,9 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     }
     Value in_asset = is_pton_master(asset_v.str) ? Value::make_asset_ton() : asset_v;
     sender = data_field(in_transfer, "sender");
-    in_data = Value::make_dict(Value::Fields{
-        {"asset", std::move(in_asset)},
-        {"amount", data_field(in_transfer, "amount")},
-        {"source", data_field(in_transfer, "sender")},
-        {"source_jetton_wallet", data_field(in_transfer, "sender_wallet")},
-        {"destination", data_field(in_transfer, "receiver")},
-        {"destination_jetton_wallet", data_field(in_transfer, "receiver_wallet")}});
+    TransferLeg leg = TransferLeg::from_jetton_transfer(in_transfer);
+    leg.asset = std::move(in_asset);  // pton-normalized asset overrides the data field
+    in_data = leg.encode();
   } else {
     const Message *im = block_msg(in_transfer);
     if (im == nullptr) {
@@ -837,10 +814,7 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
       break;
     }
   }
-  Value has_int = data_field(out_transfer, "has_internal_transfer");
-  bool out_has_internal = (has_int.t == VType::Bool && has_int.boolean) ||
-                          (has_int.t == VType::Int && !has_int.num.is_null() &&
-                           has_int.num->sgn() != 0);
+  bool out_has_internal = data_truthy(out_transfer, "has_internal_transfer");
   Value out_data;
   if (pton_transfer == nullptr && out_has_internal) {
     Value asset_f = data_field(out_transfer, "asset");
@@ -850,13 +824,9 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
       return rt_fault("stonfi_v2: out asset has no jetton_address");
     }
     Value out_asset = is_pton_master(asset_f.str) ? Value::make_asset_ton() : asset_f;
-    out_data = Value::make_dict(Value::Fields{
-        {"asset", std::move(out_asset)},
-        {"amount", data_field(out_transfer, "amount")},
-        {"source", data_field(out_transfer, "sender")},
-        {"source_jetton_wallet", data_field(out_transfer, "sender_wallet")},
-        {"destination", data_field(out_transfer, "receiver")},
-        {"destination_jetton_wallet", data_field(out_transfer, "receiver_wallet")}});
+    TransferLeg leg = TransferLeg::from_jetton_transfer(out_transfer);
+    leg.asset = std::move(out_asset);
+    out_data = leg.encode();
   } else {
     if (pton_transfer == nullptr) {
       return rt_fault("stonfi_v2: pton out missing");  // PTonTransfer(None) -> raise
