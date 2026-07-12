@@ -213,6 +213,51 @@ schema ~250. Marginal cost per new DEX protocol: 300-1,000 LOC ×2 runtimes → 
 lines + 100-250 LOC core ×2. Soft spots: DEX-core shrink ±15% (stonfi_v2 failure-fallback
 interleaving may resist); generator LOC is shape-guess until DSL grammar fixed.
 
+## 3.9 PROGRAM CLOSE-OUT (2026-07-12 — all waves complete)
+
+**Verdict vs the report's promise (§3.8), honest:** the −35% total-LOC number did NOT
+materialize as raw deletion; what landed is better characterized as:
+- **M1 delivered fully** — the program's real win. Hand-maintained parse surface ~480 →
+  145 schema lines; 22 messages generated (14 registered + 8 host-embedded); 4 parser TUs
+  deleted; 44 boundary vectors + repro guard = coverage that never existed. NEW protocol
+  message cost: ~10 schema lines instead of ~40 C++ LOC each.
+- **M2 delivered partially** (W1 coffee pilot + W4 views) — per-dex field ORDER killed the
+  universal-encoder ambition (W1 finding, W4 verdict). Shared surface = DexPton (3 variants
+  → 1 flag), views (data_truthy/acc_str/lt-sort/calls), TransferLeg::from_jetton_transfer,
+  coffee typed adapter (const_cast dead), open_ref_cell (W5 remnant). Coffee's host thunk =
+  1 line.
+- **M3 capability landed permanently, immediate deletions modest**: map/any-all/parse-expr
+  in BOTH runtimes (115 expr + 38 build vectors), IR v1.1 strict. Spec moves: 2 landed
+  (jvault_account_list, no_internal_transfer — fn+pred deleted BOTH sides), 4+3 parked
+  with definitive evidence.
+- **M5 correctly killed** (heterogeneous walks; every construct param would have had one
+  consumer).
+- **The DEX cores stay hand-written** — confirmed three independent times (report §3.7 →
+  W4 → W7c). Their blockers are topology accessors + ordered-list ops + irreducible async,
+  NOT parsing or comprehensions.
+
+**Durable capability gains** (why the program pays even where LOC didn't fall):
+reproducible generated parsers with boundary gates; typed authoring seam for new hosts;
+language that can express projection/quantification/parsing declaratively for FUTURE
+matchers; +~90 tests (pytest 1950→1988, ctest 5→7, build-vec 35→38, expr-vec 97→115,
+msg-vec 0→44); 3 executor-rotation handoff docs proving session-corruption recovery works.
+
+**Parked register (do NOT re-attempt without the named enabler):**
+- children()/next/prev topology accessors — would unlock dedust_swap_failed + stonfi_v2
+  pairing moves; build IF a 2nd independent use appears (2 candidates exist now: that's
+  borderline — user call).
+- concat/sort_by_lt list builtins — single consumer today (dedust legs).
+- tonstakers_minted_nft (consumed-set divergence), getgems (unconsumed-sibling),
+  tgbtc_mint (list-under-recursion reads — NOTE W7c corrected the spec comment: list
+  captures DO bind readable gap-aligned lists; tgbtc's real blocker is positional
+  mis-binding of same-position exit captures), maybe_ref-DESCEND (single use).
+- ref_msgtypes expr-walk in both loaders — REQUIRED before any spec ever uses parse-expr
+  (capability checks are statement-only today; W7b note, W7c confirmed no spec uses it yet).
+
+**Merge**: branch mch-minify (16 commits) merges into mch-engine-v2 at user's discretion;
+shadow-run track unaffected (mch-engine-v2 artifact stays v1.0 until merge — note the
+version-strictness interplay: merged engine requires regen'd v1.1 artifact, one commit).
+
 ## 4. WAVE PLAN + STATUS (update after every wave)
 
 Gate rule: every wave ends with the FULL plan §1 gate set green (current numbers §0.5) +
@@ -226,7 +271,7 @@ wave-specific gates. Lead verifies fresh + commits per wave. Doc updated same co
 | W4 | M2 remainder: views extraction; per-dex records assessed no-ROI | byte-identical; all 12 | **DONE** (honest shortfall — see log) |
 | W5 | M5 chain-walk construct | — | **CLOSED: NOT BUILT** (verdict in log) + open_ref dedup landed |
 | W6 | M3a language (G-LC map + G-Q any/all both runtimes) + M4 spec moves | vectors 115 both paths; 196 diff 0; all 12 | **DONE** (2 moves landed, 4 parked w/ evidence — see log) |
-| W7 | M3b: parse-as-expression + IR v1.1 (minimal, strict bump; fault→reject semantics); then DEX-core shrink pass (attempt all, keep diff-0, park resisters); abort rule per §0.5(d) | full set + regen | PENDING (FULLY PRE-AUTHORIZED §0.5, runs LAST, no check-in needed) |
+| W7 | M3b: parse-as-expression + IR v1.1 (minimal, strict bump; fault→reject semantics); then DEX-core shrink pass (attempt all, keep diff-0, park resisters); abort rule per §0.5(d) | full set + regen | **W7a+W7b DONE; W7c FULL PARK (0 moves)** — see log |
 
 Execution notes for whoever runs a wave:
 - Opus teammate per wave, caveman preamble, hard-rules block (§0.5), RETURN spec, lead
@@ -238,6 +283,65 @@ Execution notes for whoever runs a wave:
   decision after program + shadow both conclude (user call).
 
 ## 5. Wave log (append after each wave)
+
+- **W7c FULL PARK 2026-07-12** (executor minify-w7; lead-verified: no code changes, W7b
+  gates stay green). **DEX-core shrink pass = 0 moves land.** All three candidates
+  (stonfi_v2_swap_data / tonco_swap_data / dedust _dedust_swap_legs) resist, and NONE of the
+  resistance is the per-element-parse blocker parse-expression (W7a/b) solves — confirming
+  §3.7 ("six DEX cores stay hand-written forever; shrink 40-50% via M1/M2 [C++, done in
+  W1-W4], NOT via language"). Per-candidate evidence:
+  - **tonco** — HARD PARK, definitive: the spec uses CYCLIC recursion, and cyclic bodies bind
+    ZERO captures (compiler C012 + engine.py:344-352 raise on any in-body slot). There is no
+    hop-list to map over at all. Host fn derives every leg role structurally from `consumed`.
+    Not parse-blocked; unfixable without abandoning cyclic descent.
+  - **stonfi_v2** — PARK: the per-hop record assembly lives INSIDE the shared async core
+    `build_stonfi_v2_swap_core` (get_pool_accounts_recursive walk + per-hop get_jetton_wallet
+    lookups + broken-loop guard + failed-swap destination_asset fallback) — irreducible async.
+    Upstream, `_derive_parts` pairs each swap with its payout via block TOPOLOGY
+    (`s.next_blocks`, `.previous_block`, `min_lt` sort) to feed the core (swap,payout) pairs +
+    in/out transfers; the language has no topology accessors (same gap as the W6c
+    dedust_swap_failed `children()` park). The `@peer_swap`/`@peer_payout` list captures DO
+    bind (engine.py _assemble_captures:655-665 assembles owned `many` slots as gap-aligned
+    lists — the "captures kept for pattern fidelity" comments predate this, NOT a read-block),
+    but pairing + the async record build cannot move.
+  - **dedust** — PARK: `peer_swaps` = the DedustSwapNotification bodies, **lt-sorted**, split
+    across TWO separate captures (`@notification` on the anchor + `@peer_notification` under
+    `$peer_chain`). Unifying them needs list CONCATENATION and the length-0 case SYNTHESIZES
+    the single leg from async/topology values (actual_amount_out from payout resolution over
+    `payout_from_pool[0].next_blocks` + `in include` membership). The language builtin set is
+    closed = {account,amount,asset,ton_asset,addr_none,b64,first,last,len,sum,zip,map} — **no
+    concat, no sort/lt-order guarantee, no append**; `+` is arithmetic only. `destination_asset`
+    is the irreducible async pool-hop walk (`_get_dedust_jetton_swap_sequence` over parsed BOC
+    steps, §3.7). The scalar `.data`-derived halves (sender=in_transfer.data.sender,
+    source_asset=in_transfer.data.asset) ARE expressible, but those values stay load-bearing
+    INSIDE the host fn (feed destination_asset + the transfer records) → relocating them yields
+    ~0 host shrink at real byte-risk = exactly the W4 honest-shortfall lesson; SKIPPED by
+    judgment, not attempted-then-reverted.
+  §0.5(d) SCOPING PROPOSAL (report only, NOT built): the DEX cores are blocked by three
+  missing capabilities, none of which is capture-scoping and none worth building for a
+  single-consumer DEX pass — (1) a block-topology accessor family `children(block, op)` /
+  `next(block)` / `prev(block)` (also the parked dedust_swap_failed's blocker; build IF a 2nd
+  independent use appears), (2) ordered-list builtins `concat`/`sort_by_lt` (single-use here),
+  (3) there is no way to fold an irreducible async pool-hop walk (get_pool_accounts_recursive /
+  _get_dedust_jetton_swap_sequence) into a declarative out-field — that residue is host-fn
+  forever by design (§3.7). Verdict: DEX cores stay HYBRID; W7's language win is
+  parse-expression as a capability (proven both runtimes, gated), immediate DEX deletion = 0.
+
+- **W7b DONE 2026-07-12 (592f7283)**: C++ parse-expression + STRICT IR v1.1 bump, one commit.
+  rt_parse_expr (BuildRuntime.{h,cpp}) returns the parsed Obj + FAULTS on total failure —
+  inverts the statement rt_parse (no env.bodies store, no soft-null; null/non-block target →
+  fault). ExprEval + ExprCodegen `k=="parse"` (Build emits rt_parse_expr; Where/Vectors
+  defensive fault). IrLoader + both Python loaders + all fixtures bumped strict "1.0"→"1.1"
+  (no dual-accept); prod artifact regen via manifest (1-line version diff, byte-identical
+  else). 3 parse build-vectors added (build_vectors_version 0.1→0.2): success + no-type-parses
+  fault + null-target fault; oracle values Python-verified. Gates: build-vec 35→38, expr
+  115×2, msg-vec 44, ctest 7/7, parse 577/match 328/classify 196/actions all A/B 0 +
+  schema/prod 0, pytest 1988/2, 0 aborts. Everything stayed 196/diff-0 vs pre-W7b baseline
+  (artifact only changed its version tag). W7c NOTE (load-bearing): C++ IrLoader scan_program
+  collects ref_msgtypes only from the STATEMENT parse (`"s":"parse"`), NOT the expr node
+  (`"k":"parse"`); Python has no ref_msgtypes scan at all — harmless while no artifact carries
+  parse-expr (W7c landed none), but the FIRST production parse-expr must extend that scan +
+  verify surface/skip parity both sides.
 
 - **W7a DONE 2026-07-12 (7a947f99)**: parse-as-expression python-first — ParseExpr AST,
   parser (statement form consumed first → expr position unambiguous), resolver R012,
