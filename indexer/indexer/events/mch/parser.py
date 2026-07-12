@@ -817,9 +817,32 @@ def _parse_comprehension(s: _ParserState) -> ast_.Comprehension:
                               span=_join(head.span, end))
 
 
+def _parse_parse_expr(s: _ParserState) -> ast_.ParseExpr:
+    """`parse <target> as T (| T)*` in expression position (W7). The target is a
+    postfix expression (a capture / element var / `.field` chain); `as`
+    terminates it. Faults at eval time if no type parses the body (§0.5(a))."""
+    start = s.eat(TokenKind.KW_PARSE).span
+    target = _parse_postfix(s)
+    s.eat(TokenKind.KW_AS)
+    msg = s.eat(TokenKind.IDENT)
+    types = [msg.text]
+    end = msg.span
+    while s.at(TokenKind.PIPE):
+        s.i += 1
+        alt = s.eat(TokenKind.IDENT)
+        types.append(alt.text)
+        end = alt.span
+    return ast_.ParseExpr(target=target, msg_types=tuple(types), span=_join(start, end))
+
+
 def _parse_primary(s: _ParserState) -> ast_.Expr:
     if _at_comprehension(s):
         return _parse_comprehension(s)
+    # `parse … as T` in expression position (W7). The build STATEMENT form is
+    # handled by _parse_build_stmts before expression parsing is reached, so a
+    # `parse` seen here is always the expression form.
+    if s.at(TokenKind.KW_PARSE):
+        return _parse_parse_expr(s)
     t = s.peek()
     if t.kind is TokenKind.HEX:
         s.i += 1

@@ -799,6 +799,14 @@ def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
             span,
         )
         return False
+    if isinstance(e, ast_.ParseExpr):
+        ctx.bag.error(
+            "C013_WHERE_EXPR_NOT_SYNC",
+            "`where (expr)` cannot contain a `parse` expression "
+            "(build-expression only)",
+            span,
+        )
+        return False
     if isinstance(e, ast_.Call):
         callee = e.callee
         if not isinstance(callee, ast_.NameRef) or callee.name not in _EXPR_BUILTINS:

@@ -114,6 +114,21 @@ class ListLit(Expr):
 
 
 @dataclass(frozen=True)
+class ParseExpr(Expr):
+    """`parse <target> as T (| T)*` in EXPRESSION position (W7, IR v1.1).
+
+    Evaluates `target` to a block and parses its body against the message types
+    in source order (first success wins). On total failure (no type parses, or a
+    null/non-block target) it FAULTS — the build rejects. There is no soft-null
+    variant (spec §0.5(a)); the result is the parsed message object. Distinct
+    from the `parse CAPTURE as T` build STATEMENT (ParseStmt), which records the
+    body in a side table for later `.body` access."""
+    target: Expr
+    msg_types: tuple[str, ...]
+    span: Span
+
+
+@dataclass(frozen=True)
 class Comprehension(Expr):
     """`map|any|all(xs as e => body)` — lambda comprehension (§16.1 G-LC/G-Q).
 

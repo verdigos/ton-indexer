@@ -740,7 +740,7 @@ def _check_build_stmts(
                         stmt.span,
                     )
         elif isinstance(stmt, ast_.LetStmt):
-            _check_expr_refs(stmt.value, available, bag)
+            _check_expr_refs(stmt.value, available, bag, registries)
             if stmt.name in available:
                 bag.error(
                     "R013_DUP_LET",
@@ -749,7 +749,7 @@ def _check_build_stmts(
                 )
             available.add(stmt.name)
         elif isinstance(stmt, (ast_.RejectStmt, ast_.FailedStmt, ast_.BrokenStmt)):
-            _check_expr_refs(stmt.condition, available, bag)
+            _check_expr_refs(stmt.condition, available, bag, registries)
         elif isinstance(stmt, ast_.OutStmt):
             if out_seen:
                 bag.error(
@@ -758,7 +758,7 @@ def _check_build_stmts(
                     stmt.span,
                 )
             out_seen = True
-            _check_out_fields(stmt.fields, available, bag)
+            _check_out_fields(stmt.fields, available, bag, registries)
         elif isinstance(stmt, ast_.SwitchStmt):
             else_seen = False
             for i, branch in enumerate(stmt.branches):
@@ -769,7 +769,7 @@ def _check_build_stmts(
                             f"produces switch: `when` branch after the `else` arm is unreachable",
                             branch.span,
                         )
-                    _check_expr_refs(branch.condition, available, bag)
+                    _check_expr_refs(branch.condition, available, bag, registries)
                 else:
                     if else_seen:
                         bag.error(
@@ -785,7 +785,7 @@ def _check_build_stmts(
                         f"matcher's `produces` union {list(m.produces)}",
                         branch.span,
                     )
-                _check_out_fields(branch.out.fields, available, bag)
+                _check_out_fields(branch.out.fields, available, bag, registries)
             if not else_seen:
                 bag.error(
                     "R021_SWITCH_NO_ELSE",
@@ -815,7 +815,7 @@ def _check_priorities(file: ast_.File, bag: DiagnosticBag) -> None:
 
 
 def _check_out_fields(fields: tuple[ast_.OutField, ...], available: set[str],
-                      bag: DiagnosticBag) -> None:
+                      bag: DiagnosticBag, registries: Registries) -> None:
     """Unique field names (R014) and resolvable value expressions, for an `out`
     block or a `produces switch` branch's out."""
     seen_fields: set[str] = set()
@@ -827,10 +827,11 @@ def _check_out_fields(fields: tuple[ast_.OutField, ...], available: set[str],
                 f.span,
             )
         seen_fields.add(f.name)
-        _check_expr_refs(f.value, available, bag)
+        _check_expr_refs(f.value, available, bag, registries)
 
 
-def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag) -> None:
+def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag,
+                     registries: Registries) -> None:
     """Report each value-position NameRef not in `available`. A bare NameRef used
     as a call callee is a function/builtin name and is skipped.
 
@@ -871,6 +872,18 @@ def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag) -
         elif isinstance(e, ast_.RecordLit):
             for f in e.fields:
                 value(f.value, avail, in_comp)
+        elif isinstance(e, ast_.ParseExpr):
+            # `parse <target> as T` (W7): the target is a value expression; the
+            # message types must name registered host message parsers (R012, same
+            # as the `parse` build statement).
+            value(e.target, avail, in_comp)
+            for t in e.msg_types:
+                if t not in registries.message_types:
+                    bag.error(
+                        "R012_UNKNOWN_MESSAGE_TYPE",
+                        f"message type {t!r} is not registered in the host",
+                        e.span,
+                    )
         elif isinstance(e, ast_.Comprehension):
             if in_comp:
                 bag.error(

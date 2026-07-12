@@ -62,6 +62,10 @@ def emit_expr(e: ast_.Expr) -> dict:
         return {"k": "record", "fields": [
             {"name": f.name, "expr": emit_expr(f.value)} for f in e.fields
         ]}
+    if isinstance(e, ast_.ParseExpr):
+        # `parse` expression node (W7, IR v1.1): a target expr + message-type
+        # alternatives; faults at eval on total failure (IR spec §7).
+        return {"k": "parse", "x": emit_expr(e.target), "types": list(e.msg_types)}
     if isinstance(e, ast_.Comprehension):
         # map -> `mapc`; any/all -> `quant` carrying the op (§16.1, IR spec §7).
         if e.kind == "map":

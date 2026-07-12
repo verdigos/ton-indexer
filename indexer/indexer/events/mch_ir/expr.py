@@ -98,6 +98,8 @@ class Evaluator:
             return await self._eval_mapc(e)
         if k == "quant":
             return await self._eval_quant(e)
+        if k == "parse":
+            return await self._eval_parse(e)
         raise EvalError(f"unsupported expression kind {k!r}")
 
     async def eval_bool(self, e: dict) -> bool:
@@ -164,6 +166,32 @@ class Evaluator:
                 return False
 
         return _Frame()
+
+    async def _eval_parse(self, e: dict) -> Any:
+        """`parse target as T (| T)*` (W7): parse the target block's body against
+        the message types in source order, first success wins. FAULTS (build
+        reject) on a null/non-block target or when no type parses — there is no
+        soft-null variant (spec §0.5(a)). Returns the parsed message object."""
+        target = await self.eval(e["x"])
+        if target is None:
+            raise EvalError("parse: target is null")
+        get_body = getattr(target, "get_body", None)
+        if get_body is None:
+            raise EvalError(f"parse: target is not a block (got {type(target).__name__})")
+        body = get_body()
+        last_exc: Exception | None = None
+        for name in e["types"]:
+            cls = self.registries.message_types.get(name)
+            if cls is None:
+                raise EvalError(f"message type {name!r} is not registered")
+            try:
+                return cls(body)
+            except Exception as ex:  # soft across type alternatives; total failure faults
+                last_exc = ex
+                continue
+        raise EvalError(
+            f"parse: no message type in {list(e['types'])} parsed the body ({last_exc})"
+        )
 
     async def _eval_call(self, e: dict) -> Any:
         name = e["fn"]

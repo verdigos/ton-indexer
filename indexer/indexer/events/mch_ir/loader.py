@@ -22,6 +22,7 @@ CAPTURE_CARDS = frozenset({"one", "opt", "many"})
 EXPR_KINDS = frozenset({
     "int", "str", "bool", "null", "name", "dotfield", "attr", "call",
     "lookup", "unary", "bin", "ternary", "list", "record", "mapc", "quant",
+    "parse",
 })
 UNARY_OPS = frozenset({"not", "-"})
 BIN_OPS = frozenset({"and", "or", "==", "!=", "<", "<=", ">", ">=", "??", "+", "-", "*"})
@@ -275,6 +276,11 @@ def _check_expr(where: str, e: Any) -> None:
             raise IrLoadError(f"{where}: quant node needs a string 'var'")
         _check_expr(where, e.get("xs"))
         _check_expr(where, e.get("body"))
+    elif k == "parse":
+        types = e.get("types")
+        if not isinstance(types, list) or not types or not all(isinstance(t, str) for t in types):
+            raise IrLoadError(f"{where}: parse node needs a non-empty string 'types' array")
+        _check_expr(where, e.get("x"))
 
 
 def _check_node(i: int, node: Any, n_nodes: int) -> None:
@@ -347,6 +353,11 @@ def _check_where_expr_sync(where: str, e: dict) -> None:
     if k in ("mapc", "quant"):
         raise IrLoadError(
             f"{where}: where_expr cannot contain map/any/all comprehensions "
+            f"(build-expression only)"
+        )
+    if k == "parse":
+        raise IrLoadError(
+            f"{where}: where_expr cannot contain a `parse` expression "
             f"(build-expression only)"
         )
     if k == "call" and e["fn"] not in BUILTINS:

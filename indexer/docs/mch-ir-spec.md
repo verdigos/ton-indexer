@@ -148,7 +148,7 @@ No head test of its own (used as the permissive root under an opcode-set/btype/p
 
 ## 7. Expression encoding
 
-Expressions are inlined trees tagged by `"k"`. Vocabulary: `int str bool null name dotfield attr call lookup unary bin ternary list record mapc quant`.
+Expressions are inlined trees tagged by `"k"`. Vocabulary: `int str bool null name dotfield attr call lookup unary bin ternary list record mapc quant parse`.
 
 ```json
 { "k": "int",  "v": 42 }
@@ -167,6 +167,7 @@ Expressions are inlined trees tagged by `"k"`. Vocabulary: `int str bool null na
 { "k": "record", "fields": [ {"name": "legs", "expr": <expr>}, ... ] }
 { "k": "mapc",   "xs": <expr>, "var": "e", "body": <expr> }
 { "k": "quant",  "op": "any" | "all", "xs": <expr>, "var": "e", "body": <expr> }
+{ "k": "parse",  "x": <expr>, "types": ["MsgTypeA", "MsgTypeB"] }
 ```
 
 ### 7.1 Leaves & references
@@ -217,10 +218,13 @@ A **build-expression only** construct (rejected in `where_expr`, §7.5). `var` b
 - **null `xs` → null** (all three); **non-list `xs` → fault**; **empty `xs`:** `mapc` → `[]`, `any` → `false`, `all` → `true`.
 - **No nesting:** a comprehension may not appear inside another comprehension's `xs`/`body` (frontend R024; the IR structural check does not re-derive this — it is an emitter invariant).
 
-### 7.5 where_expr (node head predicate)
-A node's `where_expr` is evaluated by the **sync** evaluator against the candidate block. `dotfield` reads the block's `data`; a missing field / `data is None` / any fault / a non-bool result all fail the test (False) — **never** raised out of matching. `lookup`, non-builtin `call`, and `mapc`/`quant` comprehensions are rejected at load (`_check_where_expr_sync`) and by the frontend compiler — a `where_expr` is builtin-only and synchronous.
+### 7.4.2 Parse expression (`parse`) — W7, IR v1.1
+`parse x as T (| T)*` in **build-expression** position. Evaluates `x` to a block, parses its body against `types` in source order (first success wins), and returns the parsed message object. **Faults** (build reject) on a null/non-block target OR when no type parses the body — there is NO soft-null variant (spec §0.5(a)). Distinct from the `parse` build STATEMENT (§9), which records the body in a side table for later `.body` access; the expression form is stateless and returns the object directly. Rejected in a `where_expr` (§7.5). The parsed object's fields are read by `attr` (host attribute access, §7.2). This node is the only addition in the strict **IR v1.1** bump (§3, `mch_ir_version` "1.1"); a 1.0 loader rejects a 1.1 artifact and vice-versa (no dual-accept).
 
-**Load-time checks (`_check_expr`):** `k` in vocabulary; literal `v` exact type; `name.id`/`dotfield.name`/`attr.name` strings; `attr.of` recursively valid; `call`/`lookup` have string name + array args (recursively valid); `unary.op ∈ {not,-}`; `bin.op ∈ {and,or,==,!=,<,<=,>,>=,??,+,-,*}`; `ternary` has cond/then/else; `list.items` array; `record.fields` each `{name:str, expr}`; `mapc`/`quant` have string `var` + recursively valid `xs`/`body` (and `quant.op ∈ {any,all}`).
+### 7.5 where_expr (node head predicate)
+A node's `where_expr` is evaluated by the **sync** evaluator against the candidate block. `dotfield` reads the block's `data`; a missing field / `data is None` / any fault / a non-bool result all fail the test (False) — **never** raised out of matching. `lookup`, non-builtin `call`, `mapc`/`quant` comprehensions, and `parse` expressions are rejected at load (`_check_where_expr_sync`) and by the frontend compiler — a `where_expr` is builtin-only and synchronous.
+
+**Load-time checks (`_check_expr`):** `k` in vocabulary; literal `v` exact type; `name.id`/`dotfield.name`/`attr.name` strings; `attr.of` recursively valid; `call`/`lookup` have string name + array args (recursively valid); `unary.op ∈ {not,-}`; `bin.op ∈ {and,or,==,!=,<,<=,>,>=,??,+,-,*}`; `ternary` has cond/then/else; `list.items` array; `record.fields` each `{name:str, expr}`; `mapc`/`quant` have string `var` + recursively valid `xs`/`body` (and `quant.op ∈ {any,all}`); `parse` has a non-empty string `types` array + recursively valid `x`.
 
 ## 8. Determinism guarantees (normative for any engine)
 
