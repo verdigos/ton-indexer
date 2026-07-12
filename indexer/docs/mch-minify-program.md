@@ -17,7 +17,16 @@ pick up at the first wave whose status isn't DONE.
    batched with IR v1.1, only after G-LC/G-Q prove out.
 4. **Timing**: minimization runs PARALLEL to the shadow-run track (shadow = mch-engine-v2
    branch, remote server, user-driven; flip gate independent of this program).
-5. Standing (from earlier sessions, still in force): commits per wave after lead
+5. **W7 pre-authorization (user, 2026-07-12 — W7 needs NO further check-in):**
+   (a) parse-expression failure semantics = FAULT → build reject, exactly like statement
+   form; single form, NO nullable `parse?` variant. (b) IR v1.1 = MINIMAL: only the new
+   parse expr node kind + strict version bump (no dual-accept; artifact + both loaders +
+   fixtures regen one commit); no other IR items ride along. (c) DEX-core shrink pass:
+   attempt ALL protocols (stonfi_v2/tonco/dedust), keep only diff-0 outcomes, park
+   resisters with a report — no per-protocol check-ins. (d) Abort rule: if the resolver
+   needs new capture-scoping semantics (cost →M+), PARK W7 automatically, ship what's
+   green, report the scoping design as a proposal.
+6. Standing (from earlier sessions, still in force): commits per wave after lead
    verification; one-line messages, no Co-Authored-By; pre-existing working-tree changes
    (core/database.py, core/settings.py, serializer hunks, tgbtc.yaml, deleted lz4,
    ton-index-go, submodule ptrs) stay OUT of commits; -j4 build cap; PowerShell +
@@ -217,7 +226,7 @@ wave-specific gates. Lead verifies fresh + commits per wave. Doc updated same co
 | W4 | M2 remainder: DeDust/Stonfi/Tonco/Nft/Getgems/Tgbtc hosts → records + adapters + views (extract view ops only on 2nd demonstrated use) | byte-identical; all 12 | PENDING |
 | W5 | M5 chain-walk construct in generator (dedust steps, stonfi_v2 pool_accounts, tonco payload targets) | parse-dump/classify diff 0; all 12 | PENDING |
 | W6 | M3a language: G-LC map + G-Q any/all — spec+parser+resolver+IR+py-runtime+C++ interp+codegen, Python-FIRST, new expr vectors both paths. THEN M4 spec moves (tonstakers, getgems, tgbtc_mint, jvault_account_list, dedust_swap_failed, no_internal_transfer-if-resolver-permits) + delete the moved fns + artifact regen batched ONCE | expr vectors grown both paths; classify/actions diff 0 (semantic no-ops); pytest grown; all 12 | PENDING (user-approved) |
-| W7 | M3b: parse-as-expression + IR v1.1 (version bump, strict); then optional DEX-core shrink pass using it | full set + regen; separate user check-in before starting | PENDING (approved in principle, LAST) |
+| W7 | M3b: parse-as-expression + IR v1.1 (minimal, strict bump; fault→reject semantics); then DEX-core shrink pass (attempt all, keep diff-0, park resisters); abort rule per §0.5(d) | full set + regen | PENDING (FULLY PRE-AUTHORIZED §0.5, runs LAST, no check-in needed) |
 
 Execution notes for whoever runs a wave:
 - Opus teammate per wave, caveman preamble, hard-rules block (§0.5), RETURN spec, lead
