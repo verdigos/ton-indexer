@@ -11,12 +11,13 @@
 
 namespace mch {
 
-// Jetton family (ParseJettons.cpp).
+// NOTE: 14 registered parsers are now schema-generated — their rows come from
+// generated_message_parsers() (MsgParsersGenerated.h). Only the kept-hand
+// irregular / single-use parsers are declared below.
+
+// Jetton family (ParseJettons.cpp): forward-payload-tail transfer, nested-capture
+// minter mint, and the non-constructible burn-notification.
 td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body);
-td::Result<Value> parse_jetton_internal_transfer(const td::Ref<vm::Cell> &body);
-td::Result<Value> parse_jetton_burn(const td::Ref<vm::Cell> &body);
-td::Result<Value> parse_jetton_notify(const td::Ref<vm::Cell> &body);
-td::Result<Value> parse_jetton_mint(const td::Ref<vm::Cell> &body);
 td::Result<Value> parse_minter_jetton_mint(const td::Ref<vm::Cell> &body);
 td::Result<Value> parse_never(const td::Ref<vm::Cell> &body);
 
@@ -26,30 +27,10 @@ td::Result<Value> parse_change_dns(const td::Ref<vm::Cell> &body);
 // Vesting family (ParseVesting.cpp).
 td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body);
 
-// pTON family (ParsePton.cpp).
-td::Result<Value> parse_pton_transfer(const td::Ref<vm::Cell> &body);
-
-// Ston.fi v2 family (ParseStonfi.cpp).
-td::Result<Value> parse_stonfi_v2_provide_liquidity(const td::Ref<vm::Cell> &body);
-
-// DeDust family (ParseDedust.cpp).
-td::Result<Value> parse_dedust_payout_from_pool(const td::Ref<vm::Cell> &body);
-td::Result<Value> parse_dedust_swap_notification(const td::Ref<vm::Cell> &body);
-
-// Coffee family (ParseCoffee.cpp).
-td::Result<Value> parse_coffee_create_vault(const td::Ref<vm::Cell> &body);
-
-// EVAA withdraw family (ParseEvaa.cpp).
-td::Result<Value> parse_evaa_withdraw_master(const td::Ref<vm::Cell> &body);
-td::Result<Value> parse_evaa_withdraw_collateralized(const td::Ref<vm::Cell> &body);
+// EVAA withdraw family (ParseEvaa.cpp): opcode-enum fail_excess only.
 td::Result<Value> parse_evaa_withdraw_fail_excess(const td::Ref<vm::Cell> &body);
 
 // LayerZero family (ParseLayerZero.cpp).
 td::Result<Value> parse_layerzero_oapp_execute_callback(const td::Ref<vm::Cell> &body);
-
-// JVault family (ParseJvault.cpp).
-td::Result<Value> parse_jvault_unstake_jettons(const td::Ref<vm::Cell> &body);
-td::Result<Value> parse_jvault_unstake_request(const td::Ref<vm::Cell> &body);
-td::Result<Value> parse_jvault_claim(const td::Ref<vm::Cell> &body);
 
 }  // namespace mch

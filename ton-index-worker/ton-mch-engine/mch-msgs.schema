@@ -1,0 +1,145 @@
+# mch-msgs.schema — declarative message-body parser schema (M1, program doc §3.2).
+#
+# The generator indexer/indexer/events/mch/msgs_gen.py compiles this file into a
+# committed C++ TU (src/MsgParsersGenerated.cpp) of per-message body parsers that
+# call ONLY the existing PSlice leaf helpers (load_coins_py / load_address_py /
+# fetch_int256 / fetch_ref / the cell-slice cursor / vm::Dictionary) — zero new
+# leaf semantics. Each parser reproduces its hand predecessor byte-for-byte; the
+# parse-dump A/B twin gate is the correctness bar.
+#
+# ============================ GRAMMAR ============================
+#
+#   file      := (comment | message)*
+#   comment   := '#' .*
+#   message   := 'message' NAME 'opcode' HEX [policy] '{' field* '}'
+#   policy    := 'skip-opcode'            # (default) skip the leading 32 bits
+#   field     := NAME ':' type
+#   type      := leaf | 'ref' '{' field* '}'
+#
+# The leading 32 opcode bits are ALWAYS skipped unchecked (every hand parser
+# advance(32)s without validating — soft-parse leniency). The HEX after `opcode`
+# is documentation + vector filler only; it is never compared. A message with no
+# query_id simply omits the field (e.g. DedustSwapNotification).
+#
+# LEAF TYPES (each maps 1:1 to an existing helper; emitted value in parens):
+#   u64            fetch_ulong(64)            -> Int   (refint_u64)
+#   uint256        fetch_int256(256, false)   -> Int
+#   coins          load_coins_py              -> Int   (VarUInteger 16; len nibble 0 -> 0)
+#   addr_py        load_address_py            -> Account | Null | "extern:.." Str
+#   asset2         2-bit tag (coffee)         -> Asset  (0=TON, 1=jetton wc:HEX)
+#   asset4         4-bit kind (dedust)        -> Asset  (0=TON, else jetton wc:HEX)
+#   ref_cell       mandatory fetch_ref        -> Cell   (kept whole, not descended)
+#   dict_keys267   HashmapE(267) key walk     -> List[Account]  (values ignored)
+#   fwd_cell_bits  maybe-ref-or-remainder     -> Cell | Null; remainder taken when
+#                                                 unconsumed BITS remain (JettonNotify)
+#   fwd_cell_refs  maybe-ref-or-remainder     -> Cell | Null; remainder taken when
+#                                                 unconsumed REFS remain (PTonTransfer)
+#
+# COMPOSITE:
+#   ref { ... }    descend a mandatory ref into a fresh cursor; the subfields are
+#                  FLATTENED into the parent object (the group name is not emitted).
+#
+# NOT GENERATED (kept hand — see Parsers.h / MsgParse.cpp):
+#   JettonTransfer          forward-payload sum-type tail (hand continuation)
+#   JettonBurnNotification  parse_never (Python class is not Slice-constructible)
+#   MinterJettonMint        master_msg is both a Cell field AND a prefixed descend
+#                           (single-use nested-capture construct — not in the DSL)
+#   EvaaWithdrawFailExcess  opcode IS an enum (no skip) emitting opcode+reason
+#                           (single-use enum construct — not in the DSL)
+#   ChangeDnsRecordMessage / VestingSendMessage / LayerZeroOappExecuteCallback
+#                           irreducible hand parsers (dns / int_msg_info / layerzero)
+# ================================================================
+
+message JettonInternalTransfer opcode 0x178d4519 {
+  query_id: u64
+  amount: coins
+  from_address: addr_py
+  response_address: addr_py
+  forward_ton_amount: coins
+}
+
+message JettonBurn opcode 0x595f07bc {
+  query_id: u64
+  amount: coins
+  response_destination: addr_py
+}
+
+message JettonNotify opcode 0x7362d09c {
+  query_id: u64
+  jetton_amount: coins
+  from_user: addr_py
+  forward_payload_cell: fwd_cell_bits
+}
+
+message JettonMint opcode 0x642b7d07 {
+  query_id: u64
+  to_address: addr_py
+  ton_amount: coins
+}
+
+message PTonTransfer opcode 0x01f3835d {
+  query_id: u64
+  ton_amount: coins
+  refund_address: addr_py
+  forward_payload: fwd_cell_refs
+}
+
+message StonfiV2ProvideLiquidity opcode 0x37c096df {
+  query_id: u64
+  from_user: addr_py
+  amount1: coins
+  amount2: coins
+}
+
+message DedustPayoutFromPool opcode 0x474f86cf {
+  query_id: u64
+  proof: ref_cell
+  amount: coins
+}
+
+message DedustSwapNotification opcode 0x9c610de3 {
+  asset_in: asset4
+  asset_out: asset4
+  amount_in: coins
+  amount_out: coins
+  info: ref {
+    sender_address: addr_py
+    ref_address: addr_py
+    reserve_0: coins
+    reserve_1: coins
+  }
+}
+
+message CoffeeCreateVault opcode 0x00000000 {
+  query_id: u64
+  asset: asset2
+}
+
+message EvaaWithdrawMaster opcode 0x00000002 {
+  query_id: u64
+  asset_id: uint256
+  amount: u64
+  recipient_address: addr_py
+}
+
+message EvaaWithdrawCollateralized opcode 0x00000211 {
+  query_id: u64
+  owner_address: addr_py
+  asset_id: uint256
+  withdraw_amount_current: u64
+}
+
+message JVaultUnstakeJettons opcode 0x499a9262 {
+  query_id: u64
+  jettons_to_unstake: coins
+}
+
+message JVaultUnstakeRequest opcode 0x0168d4b7 {
+  query_id: u64
+  jettons_to_unstake: coins
+}
+
+message JVaultClaim opcode 0x78d9f109 {
+  query_id: u64
+  jettons_to_claim: dict_keys267
+}

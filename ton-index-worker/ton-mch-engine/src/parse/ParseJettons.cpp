@@ -157,92 +157,9 @@ td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body) {
   return Value::make_obj(std::move(f));
 }
 
-td::Result<Value> parse_jetton_internal_transfer(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(ctx, open_body(body));
-  mchmsg::gen::MchJettonInternalTransfer::Record rec;
-  if (!mchmsg::gen::t_MchJettonInternalTransfer.unpack(ctx.cs, rec)) {
-    return td::Status::Error("tlb: internal_transfer unpack failed");
-  }
-  TRY_RESULT(amount, var_uint16(rec.amount));
-  TRY_RESULT(from_address, addr_value(rec.from_address));
-  TRY_RESULT(response_address, addr_value(rec.response_address));
-  TRY_RESULT(forward_ton_amount, var_uint16(rec.forward_ton_amount));
-  Value::Fields f;
-  f.emplace_back("query_id", Value::make_int(refint_u64(rec.query_id)));
-  f.emplace_back("amount", Value::make_int(std::move(amount)));
-  f.emplace_back("from_address", std::move(from_address));
-  f.emplace_back("response_address", std::move(response_address));
-  f.emplace_back("forward_ton_amount", Value::make_int(std::move(forward_ton_amount)));
-  return Value::make_obj(std::move(f));
-}
-
-td::Result<Value> parse_jetton_burn(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(ctx, open_body(body));
-  mchmsg::gen::MchJettonBurn::Record rec;
-  if (!mchmsg::gen::t_MchJettonBurn.unpack(ctx.cs, rec)) {
-    return td::Status::Error("tlb: burn unpack failed");
-  }
-  TRY_RESULT(amount, var_uint16(rec.amount));
-  TRY_RESULT(response_destination, addr_value(rec.response_destination));
-  Value::Fields f;
-  f.emplace_back("query_id", Value::make_int(refint_u64(rec.query_id)));
-  f.emplace_back("amount", Value::make_int(std::move(amount)));
-  f.emplace_back("response_destination", std::move(response_destination));
-  return Value::make_obj(std::move(f));
-}
-
-td::Result<Value> parse_jetton_notify(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(ctx, open_body(body));
-  auto &cs = ctx.cs;
-  mchmsg::gen::MchJettonNotify::Record rec;
-  if (!mchmsg::gen::t_MchJettonNotify.unpack(cs, rec)) {
-    return td::Status::Error("tlb: notify unpack failed");
-  }
-  TRY_RESULT(jetton_amount, var_uint16(rec.jetton_amount));
-  TRY_RESULT(from_user, addr_value(rec.from_user));
-  // load_maybe_ref: the Maybe bit itself is REQUIRED (pytoniq raises on empty).
-  if (!cs.have(1)) {
-    return td::Status::Error("notify: no forward_payload bit");
-  }
-  Value forward_payload_cell = Value::null();
-  if (cs.fetch_ulong(1)) {
-    if (cs.size_refs() == 0) {
-      return td::Status::Error("notify: forward_payload ref missing");
-    }
-    forward_payload_cell = Value::make_cell(cs.fetch_ref());
-  } else if (cs.size() > 0) {
-    // Python keeps the body SLICE; the twin renders it via to_cell(), so we
-    // build Cell(remaining bits, remaining refs) here.
-    PSlice ps;
-    ps.cs = cs;
-    for (unsigned i = 0; i < cs.size_refs(); i++) {
-      ps.refs.push_back(cs.prefetch_ref(i));
-    }
-    TRY_RESULT(c, pslice_to_cell(ps));
-    forward_payload_cell = Value::make_cell(std::move(c));
-  }
-  Value::Fields f;
-  f.emplace_back("query_id", Value::make_int(refint_u64(rec.query_id)));
-  f.emplace_back("jetton_amount", Value::make_int(std::move(jetton_amount)));
-  f.emplace_back("from_user", std::move(from_user));
-  f.emplace_back("forward_payload_cell", std::move(forward_payload_cell));
-  return Value::make_obj(std::move(f));
-}
-
-td::Result<Value> parse_jetton_mint(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(ctx, open_body(body));
-  mchmsg::gen::MchJettonMint::Record rec;
-  if (!mchmsg::gen::t_MchJettonMint.unpack(ctx.cs, rec)) {
-    return td::Status::Error("tlb: mint unpack failed");
-  }
-  TRY_RESULT(to_address, addr_value(rec.to_address));
-  TRY_RESULT(ton_amount, var_uint16(rec.ton_amount));
-  Value::Fields f;
-  f.emplace_back("query_id", Value::make_int(refint_u64(rec.query_id)));
-  f.emplace_back("to_address", std::move(to_address));
-  f.emplace_back("ton_amount", Value::make_int(std::move(ton_amount)));
-  return Value::make_obj(std::move(f));
-}
+// NOTE: jetton_internal_transfer / jetton_burn / jetton_notify / jetton_mint are
+// now schema-generated (mch-msgs.schema -> MsgParsersGenerated.cpp). Only the
+// forward-payload-tail transfer and the nested-capture minter mint stay hand.
 
 td::Result<Value> parse_minter_jetton_mint(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(ctx, open_body(body));

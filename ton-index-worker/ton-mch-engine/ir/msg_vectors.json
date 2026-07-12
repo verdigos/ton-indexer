@@ -1,0 +1,145 @@
+{
+  "note": "M1 boundary-coverage vectors (msgs_gen.py). ok=parses, fail=parse error.",
+  "cases": [
+    {
+      "type": "JettonInternalTransfer",
+      "body": "te6ccgEBAQEAEAAAGxeNRRkAAAAAAAAAAAAI",
+      "expect": "ok"
+    },
+    {
+      "type": "JettonInternalTransfer",
+      "body": "te6ccgEBAQEABgAACBeNRRk=",
+      "expect": "fail"
+    },
+    {
+      "type": "JettonBurn",
+      "body": "te6ccgEBAQEADwAAGVlfB7wAAAAAAAAAAAI=",
+      "expect": "ok"
+    },
+    {
+      "type": "JettonBurn",
+      "body": "te6ccgEBAQEABgAACFlfB7w=",
+      "expect": "fail"
+    },
+    {
+      "type": "JettonNotify",
+      "body": "te6ccgEBAQEADwAAGXNi0JwAAAAAAAAAAAE=",
+      "expect": "ok"
+    },
+    {
+      "type": "JettonNotify",
+      "body": "te6ccgEBAQEABgAACHNi0Jw=",
+      "expect": "fail"
+    },
+    {
+      "type": "JettonMint",
+      "body": "te6ccgEBAQEADwAAGWQrfQcAAAAAAAAAAAI=",
+      "expect": "ok"
+    },
+    {
+      "type": "JettonMint",
+      "body": "te6ccgEBAQEABgAACGQrfQc=",
+      "expect": "fail"
+    },
+    {
+      "type": "PTonTransfer",
+      "body": "te6ccgEBAQEADwAAGQHzg10AAAAAAAAAAAE=",
+      "expect": "ok"
+    },
+    {
+      "type": "PTonTransfer",
+      "body": "te6ccgEBAQEABgAACAHzg10=",
+      "expect": "fail"
+    },
+    {
+      "type": "StonfiV2ProvideLiquidity",
+      "body": "te6ccgEBAQEAEAAAGzfAlt8AAAAAAAAAAAAg",
+      "expect": "ok"
+    },
+    {
+      "type": "StonfiV2ProvideLiquidity",
+      "body": "te6ccgEBAQEABgAACDfAlt8=",
+      "expect": "fail"
+    },
+    {
+      "type": "DedustPayoutFromPool",
+      "body": "te6ccgEBAgEAEgABGUdPhs8AAAAAAAAAAAgBAAA=",
+      "expect": "ok"
+    },
+    {
+      "type": "DedustPayoutFromPool",
+      "body": "te6ccgEBAQEABgAACEdPhs8=",
+      "expect": "fail"
+    },
+    {
+      "type": "DedustSwapNotification",
+      "body": "te6ccgEBAgEADQABDJxhDeMAAAEAAwAI",
+      "expect": "ok"
+    },
+    {
+      "type": "DedustSwapNotification",
+      "body": "te6ccgEBAQEABgAACJxhDeM=",
+      "expect": "fail"
+    },
+    {
+      "type": "CoffeeCreateVault",
+      "body": "te6ccgEBAQEADwAAGQAAAAAAAAAAAAAAACA=",
+      "expect": "ok"
+    },
+    {
+      "type": "CoffeeCreateVault",
+      "body": "te6ccgEBAQEABgAACAAAAAA=",
+      "expect": "fail"
+    },
+    {
+      "type": "EvaaWithdrawMaster",
+      "body": "te6ccgEBAQEANwAAaQAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg",
+      "expect": "ok"
+    },
+    {
+      "type": "EvaaWithdrawMaster",
+      "body": "te6ccgEBAQEABgAACAAAAAI=",
+      "expect": "fail"
+    },
+    {
+      "type": "EvaaWithdrawCollateralized",
+      "body": "te6ccgEBAQEANwAAaQAAAhEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg",
+      "expect": "ok"
+    },
+    {
+      "type": "EvaaWithdrawCollateralized",
+      "body": "te6ccgEBAQEABgAACAAAAhE=",
+      "expect": "fail"
+    },
+    {
+      "type": "JVaultUnstakeJettons",
+      "body": "te6ccgEBAQEADwAAGUmakmIAAAAAAAAAAAg=",
+      "expect": "ok"
+    },
+    {
+      "type": "JVaultUnstakeJettons",
+      "body": "te6ccgEBAQEABgAACEmakmI=",
+      "expect": "fail"
+    },
+    {
+      "type": "JVaultUnstakeRequest",
+      "body": "te6ccgEBAQEADwAAGQFo1LcAAAAAAAAAAAg=",
+      "expect": "ok"
+    },
+    {
+      "type": "JVaultUnstakeRequest",
+      "body": "te6ccgEBAQEABgAACAFo1Lc=",
+      "expect": "fail"
+    },
+    {
+      "type": "JVaultClaim",
+      "body": "te6ccgEBAQEADwAAGXjZ8QkAAAAAAAAAAEA=",
+      "expect": "ok"
+    },
+    {
+      "type": "JVaultClaim",
+      "body": "te6ccgEBAQEABgAACHjZ8Qk=",
+      "expect": "fail"
+    }
+  ]
+}

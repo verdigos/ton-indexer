@@ -12,53 +12,9 @@
 
 namespace mch {
 
-// withdraw_master#00000002: query_id u64, asset_id u256, amount u64, recipient.
-td::Result<Value> parse_evaa_withdraw_master(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(ctx, open_body(body));
-  auto &cs = ctx.cs;
-  if (!cs.have(32 + 64 + 256 + 64) || !cs.advance(32)) {
-    return td::Status::Error("evaa master: underflow");
-  }
-  auto query_id = cs.fetch_ulong(64);
-  auto asset_id = cs.fetch_int256(256, false);
-  if (asset_id.is_null()) {
-    return td::Status::Error("evaa master: asset_id fetch failed");
-  }
-  auto amount = cs.fetch_ulong(64);
-  TRY_RESULT(recipient, load_address_py(cs));
-  Value::Fields f;
-  f.emplace_back("query_id", Value::make_int(refint_u64(query_id)));
-  f.emplace_back("asset_id", Value::make_int(std::move(asset_id)));
-  f.emplace_back("amount", Value::make_int(refint_u64(amount)));
-  f.emplace_back("recipient_address", std::move(recipient));
-  return Value::make_obj(std::move(f));
-}
-
-// withdraw_collateralized#00000211: query_id u64, owner addr, asset_id u256,
-// withdraw_amount_current u64 (rest skipped like the Python parser).
-td::Result<Value> parse_evaa_withdraw_collateralized(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(ctx, open_body(body));
-  auto &cs = ctx.cs;
-  if (!cs.have(32 + 64) || !cs.advance(32)) {
-    return td::Status::Error("evaa coll: underflow");
-  }
-  auto query_id = cs.fetch_ulong(64);
-  TRY_RESULT(owner, load_address_py(cs));
-  if (!cs.have(256 + 64)) {
-    return td::Status::Error("evaa coll: underflow");
-  }
-  auto asset_id = cs.fetch_int256(256, false);
-  if (asset_id.is_null()) {
-    return td::Status::Error("evaa coll: asset_id fetch failed");
-  }
-  auto amount = cs.fetch_ulong(64);
-  Value::Fields f;
-  f.emplace_back("query_id", Value::make_int(refint_u64(query_id)));
-  f.emplace_back("owner_address", std::move(owner));
-  f.emplace_back("asset_id", Value::make_int(std::move(asset_id)));
-  f.emplace_back("withdraw_amount_current", Value::make_int(refint_u64(amount)));
-  return Value::make_obj(std::move(f));
-}
+// NOTE: withdraw_master and withdraw_collateralized are now schema-generated
+// (mch-msgs.schema -> MsgParsersGenerated.cpp). Only the opcode-enum fail_excess
+// (a single-use construct not in the DSL) stays hand.
 
 // EvaaWithdrawFailExcess: opcode-tagged reason; an unknown opcode raises in
 // Python (ValueError) -> soft-parse failure.

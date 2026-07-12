@@ -135,17 +135,14 @@ add_library(mch-classify STATIC
     src/ParsedBlockLookupSource.cpp
     src/MchClassifierActor.cpp
     src/MsgParse.cpp
+    src/MsgParsersGenerated.cpp
     src/parse/PSlice.cpp
     src/parse/ParseJettons.cpp
     src/parse/ParseDns.cpp
     src/parse/ParseVesting.cpp
-    src/parse/ParsePton.cpp
-    src/parse/ParseStonfi.cpp
     src/parse/ParseDedust.cpp
-    src/parse/ParseCoffee.cpp
     src/parse/ParseEvaa.cpp
     src/parse/ParseLayerZero.cpp
-    src/parse/ParseJvault.cpp
     ${MCH_GENERATED_SOURCES}
 )
 target_include_directories(mch-classify
@@ -170,6 +167,7 @@ add_executable(ton-mch-engine
     src/Classify.cpp
     src/ShapeTest.cpp
     src/DexRecordsTest.cpp
+    src/MsgVectorRunner.cpp
     src/ParseDump.cpp
     src/SchemaGate.cpp
     src/Surface.cpp
@@ -196,5 +194,7 @@ add_test(NAME mch_shape_test
     COMMAND ton-mch-engine --shape-test)
 add_test(NAME mch_dexrecords
     COMMAND ton-mch-engine --dexrecords-test)
+add_test(NAME mch_msg_vectors
+    COMMAND ton-mch-engine --msg-vectors ${CMAKE_CURRENT_SOURCE_DIR}/ir/msg_vectors.json)
 add_test(NAME mch_codegen_selftest
     COMMAND mch-codegen --selftest)

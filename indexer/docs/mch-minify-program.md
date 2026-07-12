@@ -221,7 +221,7 @@ wave-specific gates. Lead verifies fresh + commits per wave. Doc updated same co
 | Wave | Content | Gate | Status |
 |---|---|---|---|
 | W1 | M2 pilot: DexRecords module (TransferLeg/PeerSwap/SwapRecord + one encoder) + typed host adapter (HostContext, ConsumedBlocks) + first view helpers + convert HostCoffee (incl. const_cast kill) + pton/wallet→asset shared helper | all byte-identical + typed unit tests (ctest) | **DONE** (commit: see log) |
-| W2 | M1 generator: DSL grammar + Python generator (beside ir_emit, manifest/sha discipline) + emit the 16 regular REGISTERED parsers + descriptor table + generated per-parser vectors + ctest; delete replaced hand parsers | parse-dump diff 0; new vectors ctest; all 12 gates | PENDING |
+| W2 | M1 generator: DSL grammar + Python generator (beside ir_emit, manifest/sha discipline) + emit the 16 regular REGISTERED parsers + descriptor table + generated per-parser vectors + ctest; delete replaced hand parsers | parse-dump diff 0; new vectors ctest; all 12 gates | **DONE** (14/21 generated — see log) |
 | W3 | M1 wave-2: schema entries for ~14 host-embedded messages (PayTo, SwapV1/V2, V3PayTo, PoolDeposit, NftTransfer, Ownership ×2, coffee event/native/payout, tgbtc event, jvault payload, evaa fail_excess enum); hosts switch to parse_message_body; delete ~810 LOC | classify/actions diff 0; all 12 | PENDING |
 | W4 | M2 remainder: DeDust/Stonfi/Tonco/Nft/Getgems/Tgbtc hosts → records + adapters + views (extract view ops only on 2nd demonstrated use) | byte-identical; all 12 | PENDING |
 | W5 | M5 chain-walk construct in generator (dedust steps, stonfi_v2 pool_accounts, tonco payload targets) | parse-dump/classify diff 0; all 12 | PENDING |
@@ -238,6 +238,28 @@ Execution notes for whoever runs a wave:
   decision after program + shadow both conclude (user call).
 
 ## 5. Wave log (append after each wave)
+
+- **W2 DONE 2026-07-12** (lead-verified: parse-dump A/B 0 [577], actions A/B 0, msg-vectors
+  28/28, pytest 1954/2 [+4 test_msgs_gen]). Landed: mch-msgs.schema (145 lines, grammar in
+  header = the doc) + msgs_gen.py (431, --check repro guard) → MsgParsersGenerated.{cpp,h}
+  (562 derived) + ir/msg_vectors.json (boundary vectors: minimal-valid must-parse +
+  truncation must-fail; NOT a value oracle — twins own value parity) + --msg-vectors mode +
+  ctest mch_msg_vectors (7/7 total). AUDIT CORRECTIONS to §3.1 (doc was optimistic):
+  real coverage = **14/21 generated** not 16 — leaf vocabulary is ~10 constructs
+  (u64, uint256, coins, addr_py, asset2, asset4, ref_cell, dict_keys267,
+  fwd_cell_bits/fwd_cell_refs [remainder keyed on bits vs refs — genuinely different,
+  param'd], ref{} descend-flatten); 2 BESPOKE single-use stay hand (MinterJettonMint
+  nested-ref-capture-with-prefix; EvaaWithdrawFailExcess opcode-IS-enum) per the program's
+  own no-single-use-seams principle; 5 irregulars unchanged (jetton_transfer tail-hook
+  candidate for W3+, burn_notification parse_never, dns, vesting, layerzero). The 5 jetton
+  regulars were tlbc-based, converted to generated cursor code (var_uint16==load_coins_py,
+  load_address_py both paths — proven byte-identical); mch-msgs.tlb STAYS (jetton_transfer
+  + minter), 5 tlb constructors dead-but-present. Descriptor table lives Python-side
+  (drives vectors); NOT surfaced via --surface (kept cpp_surface.json stable — registered
+  set identical). Hand-maintained parse surface ~480 → ~145 schema lines. Deleted:
+  ParsePton/ParseStonfi/ParseCoffee/ParseJvault.cpp; shrunk: ParseJettons 283→200,
+  ParseDedust 136→57, ParseEvaa 90→46, Parsers.h 55→36. W3 note: host-embedded decoders
+  reuse asset2/asset4/ref/fwd_cell (DSL covers); bespoke patterns will recur there.
 
 - **W1 DONE 2026-07-12** (lead-verified: classify/actions A/B 0, vectors 97, build-vec 35,
   dexrecords-test PASS, pytest 1950/2). Landed: DexPton.{h,cpp} (ONE flag drives both

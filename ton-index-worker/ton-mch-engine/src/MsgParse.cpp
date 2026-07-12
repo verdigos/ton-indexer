@@ -18,6 +18,7 @@
 //  - payload_sum_type is Python hex(): lowercase, no zero padding.
 #include "MsgParse.h"
 
+#include "MsgParsersGenerated.h"
 #include "TraceLoader.h"
 #include "parse/PSlice.h"
 #include "parse/Parsers.h"
@@ -40,30 +41,28 @@
 
 namespace mch {
 
+// The registered parser set = the M1 schema-generated rows (14, from
+// mch-msgs.schema via msgs_gen.py) merged with the kept-hand parsers (7). The
+// generated names never collide with the hand ones; the total registered set
+// (and therefore --surface / cpp_surface.json) is byte-identical to the former
+// hand map.
 const std::map<std::string, MsgParserFn> &message_parsers() {
-  static const std::map<std::string, MsgParserFn> parsers = {
-      {"JettonTransfer", parse_jetton_transfer},
-      {"JettonInternalTransfer", parse_jetton_internal_transfer},
-      {"JettonBurn", parse_jetton_burn},
-      {"JettonNotify", parse_jetton_notify},
-      {"JettonMint", parse_jetton_mint},
-      {"MinterJettonMint", parse_minter_jetton_mint},
-      {"JettonBurnNotification", parse_never},
-      {"ChangeDnsRecordMessage", parse_change_dns},
-      {"VestingSendMessage", parse_vesting_send_message},
-      {"PTonTransfer", parse_pton_transfer},
-      {"StonfiV2ProvideLiquidity", parse_stonfi_v2_provide_liquidity},
-      {"DedustPayoutFromPool", parse_dedust_payout_from_pool},
-      {"DedustSwapNotification", parse_dedust_swap_notification},
-      {"CoffeeCreateVault", parse_coffee_create_vault},
-      {"EvaaWithdrawMaster", parse_evaa_withdraw_master},
-      {"EvaaWithdrawCollateralized", parse_evaa_withdraw_collateralized},
-      {"EvaaWithdrawFailExcess", parse_evaa_withdraw_fail_excess},
-      {"LayerZeroOappExecuteCallback", parse_layerzero_oapp_execute_callback},
-      {"JVaultUnstakeJettons", parse_jvault_unstake_jettons},
-      {"JVaultUnstakeRequest", parse_jvault_unstake_request},
-      {"JVaultClaim", parse_jvault_claim},
-  };
+  static const std::map<std::string, MsgParserFn> parsers = [] {
+    std::map<std::string, MsgParserFn> m = {
+        // Kept hand (irregular / single-use constructs — see mch-msgs.schema):
+        {"JettonTransfer", parse_jetton_transfer},         // forward-payload tail hook
+        {"MinterJettonMint", parse_minter_jetton_mint},    // nested ref-capture
+        {"JettonBurnNotification", parse_never},           // not Slice-constructible
+        {"ChangeDnsRecordMessage", parse_change_dns},
+        {"VestingSendMessage", parse_vesting_send_message},
+        {"EvaaWithdrawFailExcess", parse_evaa_withdraw_fail_excess},  // opcode-enum
+        {"LayerZeroOappExecuteCallback", parse_layerzero_oapp_execute_callback},
+    };
+    for (const auto &row : generated_message_parsers()) {
+      m.emplace(row.first, row.second);
+    }
+    return m;
+  }();
   return parsers;
 }
 

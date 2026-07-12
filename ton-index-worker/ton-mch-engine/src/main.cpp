@@ -15,6 +15,7 @@
 #include "BuildSmoke.h"
 #include "Classify.h"
 #include "DexRecordsTest.h"
+#include "MsgVectorRunner.h"
 #include "BuildVectorRunner.h"
 #include "MatchRunner.h"
 #include "ParseDump.h"
@@ -142,6 +143,7 @@ int main(int argc, char *argv[]) {
   std::string vectors_path;
   std::string vectors_gen_path;
   std::string build_vectors_path;
+  std::string msg_vectors_path;
   bool match_mode = false;
   bool match_gen = false;
   bool build_smoke_mode = false;
@@ -167,6 +169,9 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "build-vectors",
                "Run build-program conformance vectors through GENERATED build fns and exit",
                [&](td::Slice value) { build_vectors_path = value.str(); });
+  p.add_option('\0', "msg-vectors",
+               "Run M1 message-schema boundary vectors (parse ok/fail) and exit",
+               [&](td::Slice value) { msg_vectors_path = value.str(); });
   p.add_option('\0', "match", "Match-phase dump: -I <artifact> -T <fixture|dir> (repeatable)",
                [&]() { match_mode = true; });
   p.add_option('\0', "match-gen",
@@ -255,6 +260,11 @@ int main(int argc, char *argv[]) {
   if (!build_vectors_path.empty()) {
     // Build-program conformance mode (generated build fns): no scheduler needed.
     return mch::run_build_vectors(build_vectors_path);
+  }
+
+  if (!msg_vectors_path.empty()) {
+    // M1 message-schema boundary vectors: no scheduler needed.
+    return mch::run_msg_vectors(msg_vectors_path);
   }
 
   if (match_mode) {
