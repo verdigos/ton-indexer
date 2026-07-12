@@ -1,0 +1,53 @@
+// Read-only block/consumed-set views (see host/BlockViews.h).
+#include "host/BlockViews.h"
+
+#include "BlockTree.h"
+#include "host/HostCommon.h"
+
+#include <algorithm>
+
+namespace mch {
+
+bool block_in(const std::vector<const Block *> &v, const Block *b) {
+  return std::find(v.begin(), v.end(), b) != v.end();
+}
+
+const Block *first_call(const std::vector<const Block *> &blocks, std::uint32_t op) {
+  for (const Block *b : blocks) {
+    if (is_call_op(b, op)) {
+      return b;
+    }
+  }
+  return nullptr;
+}
+
+std::vector<const Block *> all_calls(const std::vector<const Block *> &blocks, std::uint32_t op) {
+  std::vector<const Block *> out;
+  for (const Block *b : blocks) {
+    if (is_call_op(b, op)) {
+      out.push_back(b);
+    }
+  }
+  return out;
+}
+
+const Block *first_next_call(const Block *b, std::uint32_t op) {
+  if (b == nullptr) {
+    return nullptr;
+  }
+  for (const Block *n : b->next_blocks) {
+    if (is_call_op(n, op)) {
+      return n;
+    }
+  }
+  return nullptr;
+}
+
+void unique_lt_sorted(std::vector<const Block *> &blocks) {
+  std::sort(blocks.begin(), blocks.end());
+  blocks.erase(std::unique(blocks.begin(), blocks.end()), blocks.end());
+  std::stable_sort(blocks.begin(), blocks.end(),
+                   [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
+}
+
+}  // namespace mch

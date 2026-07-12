@@ -14,6 +14,7 @@
 #include "BlockTree.h"
 #include "BuildSmoke.h"
 #include "Classify.h"
+#include "DexRecordsTest.h"
 #include "BuildVectorRunner.h"
 #include "MatchRunner.h"
 #include "ParseDump.h"
@@ -152,6 +153,7 @@ int main(int argc, char *argv[]) {
   bool actions_prod_mode = false;
   bool parse_dump_mode = false;
   bool shape_test_mode = false;
+  bool dexrecords_test_mode = false;
   bool surface_mode = false;
   std::vector<std::string> trace_paths;
 
@@ -203,6 +205,9 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "shape-test",
                "Shaper substrate self-test (Block::insert_between + getgems_proxy_insert)",
                [&]() { shape_test_mode = true; });
+  p.add_option('\0', "dexrecords-test",
+               "Typed host-seam self-test (DexRecords encoders + HostAdapter + pTON helper)",
+               [&]() { dexrecords_test_mode = true; });
   p.add_option('\0', "surface",
                "Dump C++ host/parse registries (parsers/preds/fns/shapers/lookup_kinds/"
                "boc_fields) as stable-sorted JSON for the twins",
@@ -296,6 +301,11 @@ int main(int argc, char *argv[]) {
   if (shape_test_mode) {
     // Shaper substrate self-test: no actor scheduler needed.
     return mch::run_shape_test();
+  }
+
+  if (dexrecords_test_mode) {
+    // Typed host-seam self-test: no actor scheduler needed.
+    return mch::run_dexrecords_test();
   }
 
   if (surface_mode) {

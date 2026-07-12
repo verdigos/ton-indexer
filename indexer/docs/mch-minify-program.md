@@ -220,7 +220,7 @@ wave-specific gates. Lead verifies fresh + commits per wave. Doc updated same co
 
 | Wave | Content | Gate | Status |
 |---|---|---|---|
-| W1 | M2 pilot: DexRecords module (TransferLeg/PeerSwap/SwapRecord + one encoder) + typed host adapter (HostContext, ConsumedBlocks) + first view helpers + convert HostCoffee (incl. const_cast kill) + pton/wallet→asset shared helper | all byte-identical + typed unit tests (ctest) | **PENDING** |
+| W1 | M2 pilot: DexRecords module (TransferLeg/PeerSwap/SwapRecord + one encoder) + typed host adapter (HostContext, ConsumedBlocks) + first view helpers + convert HostCoffee (incl. const_cast kill) + pton/wallet→asset shared helper | all byte-identical + typed unit tests (ctest) | **DONE** (commit: see log) |
 | W2 | M1 generator: DSL grammar + Python generator (beside ir_emit, manifest/sha discipline) + emit the 16 regular REGISTERED parsers + descriptor table + generated per-parser vectors + ctest; delete replaced hand parsers | parse-dump diff 0; new vectors ctest; all 12 gates | PENDING |
 | W3 | M1 wave-2: schema entries for ~14 host-embedded messages (PayTo, SwapV1/V2, V3PayTo, PoolDeposit, NftTransfer, Ownership ×2, coffee event/native/payout, tgbtc event, jvault payload, evaa fail_excess enum); hosts switch to parse_message_body; delete ~810 LOC | classify/actions diff 0; all 12 | PENDING |
 | W4 | M2 remainder: DeDust/Stonfi/Tonco/Nft/Getgems/Tgbtc hosts → records + adapters + views (extract view ops only on 2nd demonstrated use) | byte-identical; all 12 | PENDING |
@@ -239,4 +239,20 @@ Execution notes for whoever runs a wave:
 
 ## 5. Wave log (append after each wave)
 
-- (empty — program not started)
+- **W1 DONE 2026-07-12** (lead-verified: classify/actions A/B 0, vectors 97, build-vec 35,
+  dexrecords-test PASS, pytest 1950/2). Landed: DexPton.{h,cpp} (ONE flag drives both
+  correlated conventions: pton_conversion=true (v2/tonco) = pton→TON + absent-jetton→Null;
+  false (v1) = no conversion + absent-jetton→Asset(TON); reproduces all 3 old variants,
+  both dup sites converted), DexRecords.{h,cpp} (SwapLeg/TransferLeg{+from_jetton_transfer}/
+  PeerSwap/SwapRecord{fill_peer_out_assets — const_cast KILLED}), HostAdapter.{h,cpp}
+  (ConsumedBlocks/HostContext/HostResult<T>/decode_consumed/run_swap_host — coffee thunk =
+  one line), BlockViews.{h,cpp} (block_in/first_call/all_calls/first_next_call/
+  unique_lt_sorted), DexRecordsTest + --dexrecords-test + ctest mch_dexrecords (6/6).
+  HostCoffee −54, HostStonfi −29, HostTonco −27.
+  **W4-RELEVANT FINDING: "one SwapRecord encoder for 5 dexes" too optimistic — top-record
+  field SET/ORDER is per-dex** (coffee: source_asset early/failed last; stonfi_v1:
+  receiver/destination_wallet/success, NO source_asset; stonfi_v2: failed FIRST); leg
+  orders also vary (stonfi_v1 OUTGOING reorders dest tail; stonfi_v2 peer inner leg
+  {amount,asset} reversed vs coffee SwapLeg). Byte-identical shared surface =
+  TransferLeg::from_jetton_transfer + DexPton + views; record/leg ORDER needs per-dex
+  encode or field-order lists in W4. data_truthy view deferred to W4 (no coffee use).

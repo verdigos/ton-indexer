@@ -3,6 +3,7 @@
 // build_tonco_swap_core). See host/HostImpls.h for the internal registry surface.
 #include "host/HostImpls.h"
 
+#include "host/DexPton.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -33,23 +34,6 @@ constexpr std::uint32_t kV3PayTo = 0xa1daa96d;        // ROUTERV3_PAY_TO
 constexpr std::uint32_t kJettonTransfer = 0x0f8a7ea5;
 constexpr std::uint32_t kPTonTransfer = 0x01f3835d;
 
-const std::vector<std::string> &tonco_pton_masters() {
-  static const std::vector<std::string> m = {
-      "0:8CDC1D7640AD5EE326527FC1AD0514F468B30DC84B0173F0E155F451B4E11F7C",
-      "0:671963027F7F85659AB55B821671688601CDCF1EE674FC7FBBB1A776A18D34A3",
-      "0:949C4C66760C002800E2FA3D8A3CA4E1C90A9373B53AE7472033483BF14CD95E"};
-  return m;
-}
-bool tonco_is_pton(const std::string &s) {
-  const auto &m = tonco_pton_masters();
-  for (const auto &x : m) {
-    if (x == s) {
-      return true;
-    }
-  }
-  return false;
-}
-
 td::Result<vm::CellSlice> open_ref_t(const td::Ref<vm::Cell> &c) {
   bool special = false;
   try {
@@ -76,18 +60,7 @@ const Block *find_call_t(const std::vector<Block *> &blocks, std::uint32_t op) {
 // wallet lookup misses (caller decides fallback).
 Value wallet_asset(BuildEnv &env, const std::string &addr) {
   Value jw = env.lookups->get("jetton_wallet", std::vector<Value>{Value::make_str(addr)});
-  if (jw.is_null()) {
-    return Value::null();
-  }
-  const Value *jf = jw.field("jetton");
-  if (jf == nullptr || jf->t != VType::Str) {
-    return Value::null();
-  }
-  if (tonco_is_pton(jf->str)) {
-    return Value::make_asset_ton();
-  }
-  auto norm = normalize_raw_address(jf->str);
-  return Value::make_asset_jetton(norm ? *norm : jf->str);
+  return wallet_jetton_asset(jw, /*pton_conversion=*/true);
 }
 
 std::optional<std::string> acc_str_t(const Value &v) {
@@ -467,7 +440,7 @@ namespace {
 // A jetton in/out leg's asset with the tonco pton conversion: a jetton master
 // in the pton set becomes TON; otherwise the block's `.data['asset']` is kept.
 Value tonco_leg_asset(const Value &asset_v) {
-  if (asset_v.t == VType::Asset && asset_v.has_jetton && tonco_is_pton(asset_v.str)) {
+  if (asset_v.t == VType::Asset && asset_v.has_jetton && is_pton_master(asset_v.str)) {
     return Value::make_asset_ton();
   }
   return asset_v;

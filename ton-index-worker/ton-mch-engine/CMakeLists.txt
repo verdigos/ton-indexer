@@ -111,6 +111,10 @@ add_library(mch-classify STATIC
     src/Walker.cpp
     src/HostRegistry.cpp
     src/host/HostCommon.cpp
+    src/host/DexPton.cpp
+    src/host/DexRecords.cpp
+    src/host/BlockViews.cpp
+    src/host/HostAdapter.cpp
     src/host/HostGetgems.cpp
     src/host/HostNominator.cpp
     src/host/HostEvaa.cpp
@@ -165,6 +169,7 @@ add_executable(ton-mch-engine
     src/BuildSmoke.cpp
     src/Classify.cpp
     src/ShapeTest.cpp
+    src/DexRecordsTest.cpp
     src/ParseDump.cpp
     src/SchemaGate.cpp
     src/Surface.cpp
@@ -189,5 +194,7 @@ add_test(NAME mch_build_vectors
     COMMAND ton-mch-engine --build-vectors ${CMAKE_CURRENT_SOURCE_DIR}/ir/build_vectors.json)
 add_test(NAME mch_shape_test
     COMMAND ton-mch-engine --shape-test)
+add_test(NAME mch_dexrecords
+    COMMAND ton-mch-engine --dexrecords-test)
 add_test(NAME mch_codegen_selftest
     COMMAND mch-codegen --selftest)

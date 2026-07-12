@@ -1,8 +1,16 @@
 // Coffee swap host fn (builders/coffee.py + blocks/swaps.py
 // build_coffee_swap_core). See host/HostImpls.h for the internal registry
 // surface. Message bodies are parsed inline (the spec parses none of them).
+//
+// W1 pilot for the typed host-authoring seam: coffee_swap_data is a thin thunk
+// over run_swap_host; the logic is the typed `coffee_swap` core below, which
+// derives a SwapRecord instead of assembling + mutating generic `Value` dicts
+// (the former const_cast peer-fill is now SwapRecord::fill_peer_out_assets).
 #include "host/HostImpls.h"
 
+#include "host/BlockViews.h"
+#include "host/DexRecords.h"
+#include "host/HostAdapter.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -13,9 +21,11 @@
 #include "common/refint.h"
 #include "vm/cellslice.h"
 
-#include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace mch {
@@ -28,6 +38,8 @@ constexpr std::uint32_t kCoffeeSwapSuccessfulEvent = 0xc0ffee30;
 constexpr std::uint32_t kCoffeePayoutInternal = 0xc0ffee21;
 constexpr std::uint32_t kCoffeePayout = 0xc0ffee32;
 constexpr std::uint32_t kCoffeeNotification = 0xc0ffee36;
+
+using R = HostResult<SwapRecord>;
 
 std::string hex_upper_bytes(const unsigned char *p, std::size_t n) {
   static const char *d = "0123456789ABCDEF";
@@ -64,63 +76,35 @@ td::Result<Value> load_coffee_asset(vm::CellSlice &cs) {
   return td::Status::Error("asset: unsupported tag");
 }
 
-const EventNode *first_node(const Block *b) {
-  return (b == nullptr || b->event_nodes.empty()) ? nullptr : b->event_nodes.front();
+// A TON-arm transfer leg (native / payout / notification): jetton wallets null.
+TransferLeg ton_leg(Value amount, Value source, Value dest) {
+  TransferLeg leg;
+  leg.asset = Value::make_asset_ton();
+  leg.amount = std::move(amount);
+  leg.source = std::move(source);
+  leg.source_jetton_wallet = Value::null();
+  leg.destination = std::move(dest);
+  leg.destination_jetton_wallet = Value::null();
+  return leg;
 }
-
-// A leg dict {asset, amount, source, source_jetton_wallet, destination,
-// destination_jetton_wallet}.
-Value make_leg(Value asset, Value amount, Value source, Value dest) {
-  Value::Fields f;
-  f.emplace_back("asset", std::move(asset));
-  f.emplace_back("amount", std::move(amount));
-  f.emplace_back("source", std::move(source));
-  f.emplace_back("source_jetton_wallet", Value::null());
-  f.emplace_back("destination", std::move(dest));
-  f.emplace_back("destination_jetton_wallet", Value::null());
-  return Value::make_dict(std::move(f));
-}
-
-}  // namespace
 
 // builders/coffee.py _coffee_swap_data + blocks/swaps.py build_coffee_swap_core.
 // TON-arm reachable under the IR engine (CoffeeSwapNative in, CoffeePayout /
 // CoffeeNotification out); the jetton legs need the skipped jetton_transfer
-// block. Returns the {failed, **data} namespace or Null to reject.
-EvalResult coffee_swap_data(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
-    return rt_fault("coffee_swap_data: bad arguments");
-  }
-  std::vector<const Block *> all;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) {
-      all.push_back(b);
-    }
-  }
-  if (all.empty()) {
-    return rt_fault("coffee_swap_data: empty consumed");
-  }
-  const Block *block = all.front();
-  std::vector<const Block *> others(all.begin() + 1, all.end());
+// block. Returns a SwapRecord, or reject() where a role is missing / no hop.
+R coffee_swap(HostContext &, const ConsumedBlocks &consumed) {
+  const Block *block = consumed.anchor();
+  std::vector<const Block *> others = consumed.others();
 
   // in_transfer = prev if in others and (jetton_transfer | CoffeeSwapNative).
   const Block *in_transfer = nullptr;
   const Block *prev = block->previous_block;
-  if (prev != nullptr) {
-    bool in_others = std::find(others.begin(), others.end(), prev) != others.end();
-    if (in_others && (prev->btype == "jetton_transfer" || is_call_op(prev, kCoffeeSwapNative))) {
-      in_transfer = prev;
-    }
+  if (prev != nullptr && block_in(others, prev) &&
+      (prev->btype == "jetton_transfer" || is_call_op(prev, kCoffeeSwapNative))) {
+    in_transfer = prev;
   }
   // payout = first CoffeePayoutInternal in others.
-  const Block *payout = nullptr;
-  for (const Block *b : others) {
-    if (is_call_op(b, kCoffeePayoutInternal)) {
-      payout = b;
-      break;
-    }
-  }
+  const Block *payout = first_call(others, kCoffeePayoutInternal);
   // out_transfer = first in others whose previous_block is payout and is a
   // jetton_transfer / CoffeePayout / CoffeeNotification.
   const Block *out_transfer = nullptr;
@@ -137,186 +121,148 @@ EvalResult coffee_swap_data(BuildEnv &, const std::vector<Value> &args) {
 
   // --- build_coffee_swap_core ---
   if (in_transfer == nullptr || payout == nullptr || out_transfer == nullptr) {
-    return rt_ok(Value::null());  // not all roles -> reject
+    return R::reject();  // not all roles
   }
 
   // swap_internal blocks (others + anchor), unique, sorted by min_lt.
-  std::vector<const Block *> swaps;
-  for (const Block *b : others) {
-    if (is_call_op(b, kCoffeeSwapInternal)) {
-      swaps.push_back(b);
-    }
-  }
+  std::vector<const Block *> swaps = all_calls(others, kCoffeeSwapInternal);
   swaps.push_back(block);  // the anchor is a CoffeeSwapInternal
-  std::sort(swaps.begin(), swaps.end());
-  swaps.erase(std::unique(swaps.begin(), swaps.end()), swaps.end());
-  std::stable_sort(swaps.begin(), swaps.end(),
-                   [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
+  unique_lt_sorted(swaps);
 
   bool ok = true;
-  std::vector<Value> peer_swaps;  // each {in:{asset,amount}, out:{asset,amount}}
+  std::vector<PeerSwap> peer_swaps;  // each {in:{asset,amount}, out:{asset,amount}}
   for (const Block *sw : swaps) {
-    const Block *event = nullptr;
-    for (Block *n : sw->next_blocks) {
-      if (is_call_op(n, kCoffeeSwapSuccessfulEvent)) {
-        event = n;
-        break;
-      }
-    }
+    const Block *event = first_next_call(sw, kCoffeeSwapSuccessfulEvent);
     if (event == nullptr) {
       ok = false;
       continue;
     }
     auto r_body = block_body(event);
     if (r_body.is_error()) {
-      return rt_fault("coffee: event body");
+      return R::fault("event body");
     }
     auto r_ctx = open_body(r_body.ok());
     if (r_ctx.is_error()) {
-      return rt_fault("coffee: event slice");
+      return R::fault("event slice");
     }
     auto ctx = r_ctx.move_as_ok();
     auto &cs = ctx.cs;
     if (!cs.have(32 + 64)) {
-      return rt_fault("coffee: event header");
+      return R::fault("event header");
     }
     cs.advance(32 + 64);  // opcode + query_id
     auto r_asset = load_coffee_asset(cs);
     if (r_asset.is_error()) {
-      return rt_fault("coffee: event asset");
+      return R::fault("event asset");
     }
     auto r_in = load_coins_py(cs);
     auto r_out = load_coins_py(cs);
     if (r_in.is_error() || r_out.is_error()) {
-      return rt_fault("coffee: event amounts");
+      return R::fault("event amounts");
     }
-    Value in_leg = Value::make_dict(Value::Fields{
-        {"asset", r_asset.move_as_ok()}, {"amount", Value::make_amount(r_in.move_as_ok())}});
-    Value out_leg = Value::make_dict(Value::Fields{
-        {"asset", Value::null()}, {"amount", Value::make_amount(r_out.move_as_ok())}});
-    peer_swaps.push_back(Value::make_dict(Value::Fields{
-        {"in", std::move(in_leg)}, {"out", std::move(out_leg)}}));
+    PeerSwap p;
+    p.in.asset = r_asset.move_as_ok();
+    p.in.amount = Value::make_amount(r_in.move_as_ok());
+    p.out.asset = Value::null();  // filled after all hops (fill_peer_out_assets)
+    p.out.amount = Value::make_amount(r_out.move_as_ok());
+    peer_swaps.push_back(std::move(p));
   }
   if (peer_swaps.empty()) {
-    return rt_ok(Value::null());
+    return R::reject();
   }
 
   // in_transfer_data (§11.5 dual dispatch). A jetton in-leg is a generic Block
   // with btype "jetton_transfer" whose `.data` carries the transfer fields
   // (swaps.py:1395 now gates on btype); else the CoffeeSwapNative TON arm.
   Value sender = Value::null();
-  Value in_data = Value::make_dict({});
+  TransferLeg in_leg;
   if (in_transfer->btype == "jetton_transfer") {
     sender = data_field(in_transfer, "sender");
-    in_data = Value::make_dict(Value::Fields{
-        {"asset", data_field(in_transfer, "asset")},
-        {"amount", data_field(in_transfer, "amount")},
-        {"source", data_field(in_transfer, "sender")},
-        {"source_jetton_wallet", data_field(in_transfer, "sender_wallet")},
-        {"destination", data_field(in_transfer, "receiver")},
-        {"destination_jetton_wallet", data_field(in_transfer, "receiver_wallet")}});
-  } else if (is_call_op(in_transfer, kCoffeeSwapNative)) {
+    in_leg = TransferLeg::from_jetton_transfer(in_transfer);
+  } else {  // is_call_op(in_transfer, kCoffeeSwapNative)
     auto r_body = block_body(in_transfer);
     if (r_body.is_error()) {
-      return rt_fault("coffee: native body");
+      return R::fault("native body");
     }
     auto r_ctx = open_body(r_body.ok());
     if (r_ctx.is_error()) {
-      return rt_fault("coffee: native header");
+      return R::fault("native header");
     }
     auto ctx = r_ctx.move_as_ok();
     auto &cs = ctx.cs;
     if (!cs.have(32 + 64)) {
-      return rt_fault("coffee: native header");
+      return R::fault("native header");
     }
     cs.advance(32 + 64);
     auto r_amt = load_coins_py(cs);
     if (r_amt.is_error()) {
-      return rt_fault("coffee: native amount");
+      return R::fault("native amount");
     }
     const Message *m = block_msg(in_transfer);
     sender = account_from_opt(m != nullptr ? m->source : std::nullopt);
-    in_data = make_leg(Value::make_asset_ton(), Value::make_amount(r_amt.move_as_ok()), sender,
-                       account_from_opt(m != nullptr ? m->destination : std::nullopt));
+    in_leg = ton_leg(Value::make_amount(r_amt.move_as_ok()), sender,
+                     account_from_opt(m != nullptr ? m->destination : std::nullopt));
   }
 
   // out_transfer_data (§11.5 dual dispatch). Jetton out-leg via btype/.data
   // (swaps.py:1424); else CoffeePayout / CoffeeNotification TON arms.
-  Value out_data = Value::make_dict({});
+  TransferLeg out_leg;
   if (out_transfer->btype == "jetton_transfer") {
-    out_data = Value::make_dict(Value::Fields{
-        {"asset", data_field(out_transfer, "asset")},
-        {"amount", data_field(out_transfer, "amount")},
-        {"source", data_field(out_transfer, "sender")},
-        {"source_jetton_wallet", data_field(out_transfer, "sender_wallet")},
-        {"destination", data_field(out_transfer, "receiver")},
-        {"destination_jetton_wallet", data_field(out_transfer, "receiver_wallet")}});
+    out_leg = TransferLeg::from_jetton_transfer(out_transfer);
   } else if (is_call_op(out_transfer, kCoffeePayout)) {
     auto r_body = block_body(payout);
     if (r_body.is_error()) {
-      return rt_fault("coffee: payout body");
+      return R::fault("payout body");
     }
     auto r_ctx = open_body(r_body.ok());
     if (r_ctx.is_error()) {
-      return rt_fault("coffee: payout header");
+      return R::fault("payout header");
     }
     auto ctx = r_ctx.move_as_ok();
     auto &cs = ctx.cs;
     if (!cs.have(32 + 64)) {
-      return rt_fault("coffee: payout header");
+      return R::fault("payout header");
     }
     cs.advance(32 + 64);
     auto r_rcpt = load_address_py(cs);
     auto r_amt = load_coins_py(cs);
     if (r_rcpt.is_error() || r_amt.is_error()) {
-      return rt_fault("coffee: payout fields");
+      return R::fault("payout fields");
     }
     const Message *m = block_msg(payout);
-    out_data = make_leg(Value::make_asset_ton(), Value::make_amount(r_amt.move_as_ok()),
-                        account_from_opt(m != nullptr ? m->source : std::nullopt),
-                        r_rcpt.move_as_ok());
+    out_leg = ton_leg(Value::make_amount(r_amt.move_as_ok()),
+                      account_from_opt(m != nullptr ? m->source : std::nullopt),
+                      r_rcpt.move_as_ok());
   } else if (is_call_op(out_transfer, kCoffeeNotification)) {
     const Message *m = block_msg(out_transfer);
     Value amt = (m != nullptr && m->value) ? Value::make_amount(td::make_refint(*m->value))
                                            : Value::make_amount_none();
-    out_data = make_leg(Value::make_asset_ton(), std::move(amt),
-                        account_from_opt(m != nullptr ? m->source : std::nullopt),
-                        account_from_opt(m != nullptr ? m->destination : std::nullopt));
+    out_leg = ton_leg(std::move(amt), account_from_opt(m != nullptr ? m->source : std::nullopt),
+                      account_from_opt(m != nullptr ? m->destination : std::nullopt));
   }
 
-  // Fill peer_swaps out-assets from the next hop / final payout.
-  for (std::size_t i = 0; i + 1 < peer_swaps.size(); i++) {
-    const Value *next_in = peer_swaps[i + 1].field("in");
-    const Value *next_asset = next_in != nullptr ? next_in->field("asset") : nullptr;
-    Value *out = const_cast<Value *>(peer_swaps[i].field("out"));
-    if (out != nullptr && next_asset != nullptr) {
-      out->fields->at(0).second = *next_asset;  // "asset" is first in the out dict
-    }
-  }
-  const Value *out_asset = out_data.field("asset");
-  if (out_asset != nullptr) {
-    Value *last_out = const_cast<Value *>(peer_swaps.back().field("out"));
-    if (last_out != nullptr) {
-      last_out->fields->at(0).second = *out_asset;
-    }
-  }
+  SwapRecord rec;
+  rec.dex = "coffee";
+  rec.sender = sender;
+  rec.source_asset = in_leg.asset;
+  rec.destination_asset = out_leg.asset;
+  rec.dex_incoming_transfer = std::move(in_leg);
+  rec.dex_outgoing_transfer = std::move(out_leg);
+  rec.peer_swaps = std::move(peer_swaps);
+  rec.referral_amount = Value::null();
+  rec.referral_address = Value::null();
+  rec.failed = !ok;
+  // Fill peer out-assets from the next hop / final payout (replaces the former
+  // const_cast on generic Value storage).
+  rec.fill_peer_out_assets();
+  return R::ok(std::move(rec));
+}
 
-  const Value *src_asset = in_data.field("asset");
-  const Value *dst_asset = out_data.field("asset");
+}  // namespace
 
-  Value::Fields data;
-  data.emplace_back("dex", Value::make_str("coffee"));
-  data.emplace_back("sender", sender);
-  data.emplace_back("source_asset", src_asset != nullptr ? *src_asset : Value::null());
-  data.emplace_back("destination_asset", dst_asset != nullptr ? *dst_asset : Value::null());
-  data.emplace_back("dex_incoming_transfer", std::move(in_data));
-  data.emplace_back("dex_outgoing_transfer", std::move(out_data));
-  data.emplace_back("peer_swaps",
-                    Value::make_list(peer_swaps.size() > 1 ? peer_swaps : std::vector<Value>{}));
-  data.emplace_back("referral_amount", Value::null());
-  data.emplace_back("referral_address", Value::null());
-  data.emplace_back("failed", Value::make_bool(!ok));
-  return rt_ok(Value::make_obj(std::move(data)));
+// Registered thunk: the typed core over the runtime host ABI.
+EvalResult coffee_swap_data(BuildEnv &env, const std::vector<Value> &args) {
+  return run_swap_host(env, args, "coffee_swap_data", coffee_swap);
 }
 
 }  // namespace mch

@@ -3,6 +3,7 @@
 // surface and HostRegistry.h for the public one.
 #include "host/HostImpls.h"
 
+#include "host/DexPton.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -42,18 +43,6 @@ constexpr std::uint32_t kV2Swap = 0x6664de2a;       // swap request call
 constexpr std::uint32_t kV2PayTo = 0x657b54f5;      // pay_to call
 constexpr std::uint32_t kV2CrossSwapB = 0x69cf1a5b;
 constexpr std::uint32_t kPTonTransfer = 0x01f3835d;
-
-const std::vector<std::string> &pton_masters() {
-  static const std::vector<std::string> m = {
-      "0:8CDC1D7640AD5EE326527FC1AD0514F468B30DC84B0173F0E155F451B4E11F7C",
-      "0:671963027F7F85659AB55B821671688601CDCF1EE674FC7FBBB1A776A18D34A3",
-      "0:949C4C66760C002800E2FA3D8A3CA4E1C90A9373B53AE7472033483BF14CD95E"};
-  return m;
-}
-bool is_pton_master(const std::string &s) {
-  const auto &m = pton_masters();
-  return std::find(m.begin(), m.end(), s) != m.end();
-}
 
 // account -> canonical "wc:HEX" string, or nullopt for addr_none/non-account.
 std::optional<std::string> acc_str(const Value &v) {
@@ -180,18 +169,6 @@ td::Result<SwapV1> parse_swap_v1(const td::Ref<vm::Cell> &body) {
 // sender-related exit codes (stonfi_sender_related_exit_codes).
 bool sender_related(std::uint32_t ec) {
   return ec == kStonfiSwapOk || ec == kStonfiSwapNoLiq || ec == kStonfiSwapReserveErr;
-}
-
-// Asset from a jetton_wallet lookup WITHOUT the pton-master conversion the v2
-// core applies: v1 builds Asset(is_ton = jetton is None) directly, so a real
-// jetton wallet (even a pton master) yields a jetton asset here.
-Value wallet_asset_v1(const Value &wallet) {
-  const Value *jf = wallet.is_null() ? nullptr : wallet.field("jetton");
-  if (jf == nullptr || jf->t != VType::Str) {
-    return Value::make_asset_ton();  // AccountId(None) -> Asset(is_ton=True)
-  }
-  auto norm = normalize_raw_address(jf->str);
-  return Value::make_asset_jetton(norm ? *norm : jf->str);
 }
 
 // --- stonfi v2 --------------------------------------------------------------
@@ -557,7 +534,7 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
                       : Value::make_account_none();
 
   Value::Fields incoming{
-      {"asset", wallet_asset_v1(dex_in_wallet)},
+      {"asset", wallet_jetton_asset(dex_in_wallet, /*pton_conversion=*/false)},
       {"amount", Value::make_amount(sw.amount.is_null() ? td::make_refint(0) : sw.amount)},
       {"source", acc_wrap(sw.from_real_user)},
       {"source_jetton_wallet", in_source_jw},
@@ -565,7 +542,7 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
       {"destination_jetton_wallet", acc_wrap(sw.token_wallet)}};
 
   Value::Fields outgoing{
-      {"asset", wallet_asset_v1(actual_out_wallet)},
+      {"asset", wallet_jetton_asset(actual_out_wallet, /*pton_conversion=*/false)},
       {"amount", Value::make_amount(out_amt.is_null() ? td::make_refint(0) : out_amt)},
       {"source", data_field(outgoing_jt, "sender")},
       {"source_jetton_wallet", data_field(outgoing_jt, "sender_wallet")}};
@@ -687,16 +664,10 @@ Value leg_dict(Value amount, Value asset) {
   return Value::make_dict(std::move(f));
 }
 
+// wallet.jetton -> Asset with the pTON conversion (a missing jetton yields Null,
+// the caller treats it as "no asset").
 Value asset_from_wallet_jetton(const Value &wallet) {
-  const Value *jf = wallet.is_null() ? nullptr : wallet.field("jetton");
-  if (jf == nullptr || jf->t != VType::Str) {
-    return Value::null();  // wallet.jetton None: caller treats as non-pton null
-  }
-  if (is_pton_master(jf->str)) {
-    return Value::make_asset_ton();
-  }
-  auto norm = normalize_raw_address(jf->str);
-  return Value::make_asset_jetton(norm ? *norm : jf->str);
+  return wallet_jetton_asset(wallet, /*pton_conversion=*/true);
 }
 
 }  // namespace
