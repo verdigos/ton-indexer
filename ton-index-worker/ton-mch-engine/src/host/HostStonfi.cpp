@@ -106,15 +106,7 @@ bool sender_related(std::uint32_t ec) {
 
 // --- stonfi v2 --------------------------------------------------------------
 
-// Open a ref cell into a CellSlice (abort-safe).
-td::Result<vm::CellSlice> open_ref(const td::Ref<vm::Cell> &c) {
-  bool special = false;
-  try {
-    return vm::load_cell_slice_special(c, special);
-  } catch (...) {
-    return td::Status::Error("ref slice");
-  }
-}
+// (open_ref moved to parse/PSlice.h as open_ref_cell — shared with tonco + dedust.)
 
 // messages/swaps.py StonfiV2PayTo. Fields the core reads: exit_code,
 // amount0_out, token0_address, amount1_out, token1_address (canonical upper).
@@ -156,7 +148,7 @@ td::Result<SwapV2> parse_swap_v2(const td::Ref<vm::Cell> &body) {
   if (cs.size_refs() < 1) {
     return td::Status::Error("swap_v2: dex_payload ref missing");
   }
-  TRY_RESULT(dex, open_ref(cs.fetch_ref()));
+  TRY_RESULT(dex, open_ref_cell(cs.fetch_ref()));
   if (!dex.have(32) || !dex.advance(32)) {  // transferred_op
     return td::Status::Error("swap_v2: transferred_op underflow");
   }
@@ -172,7 +164,7 @@ td::Result<SwapV2> parse_swap_v2(const td::Ref<vm::Cell> &body) {
   if (dex.size_refs() < 1) {
     return td::Status::Error("swap_v2: swap_body ref missing");
   }
-  TRY_RESULT(sb, open_ref(dex.fetch_ref()));
+  TRY_RESULT(sb, open_ref_cell(dex.fetch_ref()));
   TRY_RESULT(min_out, load_coins_py(sb));
   (void)min_out;
   TRY_RESULT(receiver, load_address_py(sb));
@@ -202,7 +194,7 @@ td::Result<std::vector<std::string>> pool_accounts(const SwapV2 &sv) {
   if (sv.custom_payload.is_null()) {
     return accounts;
   }
-  TRY_RESULT(cur, open_ref(sv.custom_payload));
+  TRY_RESULT(cur, open_ref_cell(sv.custom_payload));
   while (true) {
     if (!cur.have(32)) {
       return td::Status::Error("pool_accounts: sum_type underflow");
@@ -216,7 +208,7 @@ td::Result<std::vector<std::string>> pool_accounts(const SwapV2 &sv) {
     if (cur.size_refs() == 0) {
       break;
     }
-    TRY_RESULT(cross, open_ref(cur.fetch_ref()));
+    TRY_RESULT(cross, open_ref_cell(cur.fetch_ref()));
     TRY_RESULT(min_out, load_coins_py(cross));
     (void)min_out;
     TRY_RESULT(c2, load_coins_py(cross));
@@ -231,7 +223,7 @@ td::Result<std::vector<std::string>> pool_accounts(const SwapV2 &sv) {
       if (cross.size_refs() < 1) {
         return td::Status::Error("pool_accounts: inner ref missing");
       }
-      TRY_RESULT_ASSIGN(cur, open_ref(cross.fetch_ref()));
+      TRY_RESULT_ASSIGN(cur, open_ref_cell(cross.fetch_ref()));
     } else {
       break;
     }
@@ -262,7 +254,7 @@ std::optional<std::string> extract_target_wallet(const td::Ref<vm::Cell> &body) 
     if (cs.size_refs() < 1) {
       return std::nullopt;
     }
-    auto r = open_ref(cs.fetch_ref());
+    auto r = open_ref_cell(cs.fetch_ref());
     if (r.is_error()) {
       return std::nullopt;
     }
@@ -523,7 +515,7 @@ bool pton_self_transfer(const Block *block) {
   if (fp == nullptr || fp->t != VType::Cell) {
     return false;
   }
-  auto r_cs = open_ref(fp->cell);
+  auto r_cs = open_ref_cell(fp->cell);
   if (r_cs.is_error()) {
     return false;
   }

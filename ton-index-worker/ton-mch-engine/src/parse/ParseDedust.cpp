@@ -45,12 +45,7 @@ td::Result<std::vector<std::string>> parse_dedust_steps(vm::CellSlice cs) {
     if (cs.size_refs() == 0) {
       return td::Status::Error("dedust steps: next-step ref missing");
     }
-    bool special = false;
-    try {
-      cs = vm::load_cell_slice_special(cs.fetch_ref(), special);  // next_step.to_slice()
-    } catch (...) {
-      return td::Status::Error("dedust steps: bad next-step cell");
-    }
+    TRY_RESULT_ASSIGN(cs, open_ref_cell(cs.fetch_ref()));  // next_step.to_slice()
   }
 }
 

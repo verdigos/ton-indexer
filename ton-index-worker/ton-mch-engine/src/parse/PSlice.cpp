@@ -194,6 +194,15 @@ td::Result<td::RefInt256> pyslice_load_coins(vm::CellSlice &cs) {
   return load_coins_py(cs);
 }
 
+td::Result<vm::CellSlice> open_ref_cell(const td::Ref<vm::Cell> &c) {
+  bool special = false;
+  try {
+    return vm::load_cell_slice_special(c, special);
+  } catch (...) {
+    return td::Status::Error("ref slice");
+  }
+}
+
 namespace {
 
 // Python bytes.decode("utf-8", errors="backslashreplace") + .replace("\u0000", "").

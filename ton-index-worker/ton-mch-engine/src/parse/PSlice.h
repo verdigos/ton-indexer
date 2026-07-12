@@ -53,4 +53,9 @@ struct BodyCtx {
 
 td::Result<BodyCtx> open_body(const td::Ref<vm::Cell> &body);
 
+// pytoniq ref.begin_parse(): open a ref cell into a CellSlice, abort-safe (a
+// throwing load becomes an Error, never abort()). The shared "open a ref"
+// helper the stonfi + tonco cores and the dedust step walk each duplicated.
+td::Result<vm::CellSlice> open_ref_cell(const td::Ref<vm::Cell> &c);
+
 }  // namespace mch

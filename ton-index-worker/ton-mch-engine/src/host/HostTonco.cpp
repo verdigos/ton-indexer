@@ -35,14 +35,7 @@ constexpr std::uint32_t kV3PayTo = 0xa1daa96d;        // ROUTERV3_PAY_TO
 constexpr std::uint32_t kJettonTransfer = 0x0f8a7ea5;
 constexpr std::uint32_t kPTonTransfer = 0x01f3835d;
 
-td::Result<vm::CellSlice> open_ref_t(const td::Ref<vm::Cell> &c) {
-  bool special = false;
-  try {
-    return vm::load_cell_slice_special(c, special);
-  } catch (...) {
-    return td::Status::Error("ref slice");
-  }
-}
+// (open_ref moved to parse/PSlice.h as open_ref_cell — shared with stonfi + dedust.)
 
 Value amount_or_zero_t(td::RefInt256 v) {
   return v.is_null() ? Value::make_amount(td::make_refint(0)) : Value::make_amount(std::move(v));
@@ -106,7 +99,7 @@ td::Result<RouterPayTo> parse_v3_pay_to(const td::Ref<vm::Cell> &body) {
     if (cs.size_refs() < 1) {
       return td::Status::Error("v3 pay_to: coinsinfo ref missing");
     }
-    TRY_RESULT(ci, open_ref_t(cs.fetch_ref()));
+    TRY_RESULT(ci, open_ref_cell(cs.fetch_ref()));
     TRY_RESULT_ASSIGN(pt.amount0, load_coins_py(ci));
     TRY_RESULT_ASSIGN(pt.jetton0, load_address_py(ci));
     TRY_RESULT_ASSIGN(pt.amount1, load_coins_py(ci));
@@ -154,7 +147,7 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
   }
   if (cs.fetch_ulong(1) && cs.size_refs() > 0) {  // payload maybe-ref
     try {
-      auto inner = open_ref_t(cs.fetch_ref());
+      auto inner = open_ref_cell(cs.fetch_ref());
       if (inner.is_ok()) {
         vm::CellSlice ics = inner.move_as_ok();
         if (ics.have(32) && ics.prefetch_ulong(32) == kV3Swap) {
@@ -267,7 +260,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
     if (pcs.size_refs() < 1) {
       return rt_ok(Value::null());
     }
-    auto rf = open_ref_t(pcs.fetch_ref());
+    auto rf = open_ref_cell(pcs.fetch_ref());
     if (rf.is_error()) {
       return rt_ok(Value::null());
     }
@@ -312,7 +305,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   if (fp == nullptr || fp->t != VType::Cell) {
     return rt_ok(Value::null());
   }
-  auto rp = open_ref_t(fp->cell);
+  auto rp = open_ref_cell(fp->cell);
   if (rp.is_error()) {
     return rt_ok(Value::null());
   }

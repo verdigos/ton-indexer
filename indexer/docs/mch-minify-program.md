@@ -224,7 +224,7 @@ wave-specific gates. Lead verifies fresh + commits per wave. Doc updated same co
 | W2 | M1 generator: DSL grammar + Python generator (beside ir_emit, manifest/sha discipline) + emit the 16 regular REGISTERED parsers + descriptor table + generated per-parser vectors + ctest; delete replaced hand parsers | parse-dump diff 0; new vectors ctest; all 12 gates | **DONE** (14/21 generated — see log) |
 | W3 | M1 wave-2: host-embedded decoders → schema + shim (approach A) | classify/actions diff 0; all 12 | **DONE** (8 converted — see log; ~14/~810 premise corrected) |
 | W4 | M2 remainder: views extraction; per-dex records assessed no-ROI | byte-identical; all 12 | **DONE** (honest shortfall — see log) |
-| W5 | M5 chain-walk construct in generator (dedust steps, stonfi_v2 pool_accounts, tonco payload targets) | parse-dump/classify diff 0; all 12 | PENDING |
+| W5 | M5 chain-walk construct | — | **CLOSED: NOT BUILT** (verdict in log) + open_ref dedup landed |
 | W6 | M3a language: G-LC map + G-Q any/all — spec+parser+resolver+IR+py-runtime+C++ interp+codegen, Python-FIRST, new expr vectors both paths. THEN M4 spec moves (tonstakers, getgems, tgbtc_mint, jvault_account_list, dedust_swap_failed, no_internal_transfer-if-resolver-permits) + delete the moved fns + artifact regen batched ONCE | expr vectors grown both paths; classify/actions diff 0 (semantic no-ops); pytest grown; all 12 | PENDING (user-approved) |
 | W7 | M3b: parse-as-expression + IR v1.1 (minimal, strict bump; fault→reject semantics); then DEX-core shrink pass (attempt all, keep diff-0, park resisters); abort rule per §0.5(d) | full set + regen | PENDING (FULLY PRE-AUTHORIZED §0.5, runs LAST, no check-in needed) |
 
@@ -238,6 +238,19 @@ Execution notes for whoever runs a wave:
   decision after program + shadow both conclude (user call).
 
 ## 5. Wave log (append after each wave)
+
+- **W5 CLOSED 2026-07-12** (lead-verified: actions A/B 0, prod 0, pytest 1954/2).
+  **M5 chain construct NOT BUILT — verdict: not-worth-building** (same class as W4
+  per-dex records). The 3 walks are irreducibly heterogeneous: stonfi_v2 pool_accounts =
+  nested cross-ref continuation (2 refs deep) + sum_type-set termination + struct-seeded;
+  tonco collect_payload_targets = soft-swallow error policy + opcode-gated continuation +
+  conditional pair-push + depth-64 recursion (A/B-pinned cycle semantics); only dedust
+  steps is linear — and it's single-use AND a mid-fn slice walk (not a message body, would
+  need a standalone-walker generator mode for one consumer). A construct covering all 3 =
+  every parameter has exactly one consumer = config-shaped meta-generator. All 3 stay hand
+  (§3.7 class). maybe_ref-DESCEND (W3 flag) got no 2nd use → stays hand. LANDED instead:
+  `open_ref_cell` in PSlice — the byte-identical abort-safe ref-open helper triplicated
+  across all 3 walk sites (stonfi ×7, tonco ×4, dedust ×1 call sites; 3 defs → 1, net −6).
 
 - **W4 DONE 2026-07-12** (lead-verified: classify/actions A/B 0, dexrecords-test PASS,
   pytest 1954/2). HONEST SHORTFALL, calibrate future estimates: §3.3's "−800 +450" was
