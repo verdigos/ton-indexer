@@ -120,34 +120,16 @@ struct PoolDeposit {
   Value asset0, asset1;
   td::RefInt256 asset0_amount, asset1_amount;
 };
+// W3 shim: cursor-walk moved to the mch-msgs.schema DedustDepositLiquidityToPool
+// parser (proof + min_lp dropped there; owner + the field4-ref assets kept).
 td::Result<PoolDeposit> parse_pool_deposit(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(ctx, open_body(body));
-  auto &cs = ctx.cs;
-  if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
-    return td::Status::Error("pool deposit: header underflow");
-  }
-  if (cs.size_refs() < 1) {
-    return td::Status::Error("pool deposit: proof ref missing");
-  }
-  cs.fetch_ref();  // proof (discarded)
+  TRY_RESULT(v, parse_message_body("DedustDepositLiquidityToPool", body));
   PoolDeposit pd;
-  TRY_RESULT_ASSIGN(pd.owner, load_address_py(cs));
-  TRY_RESULT(min_lp, load_coins_py(cs));
-  (void)min_lp;
-  if (cs.size_refs() < 1) {
-    return td::Status::Error("pool deposit: field4 ref missing");
-  }
-  bool special = false;
-  vm::CellSlice f4;
-  try {
-    f4 = vm::load_cell_slice_special(cs.fetch_ref(), special);
-  } catch (...) {
-    return td::Status::Error("pool deposit: field4 slice");
-  }
-  TRY_RESULT_ASSIGN(pd.asset0, load_asset_4(f4));
-  TRY_RESULT_ASSIGN(pd.asset0_amount, load_coins_py(f4));
-  TRY_RESULT_ASSIGN(pd.asset1, load_asset_4(f4));
-  TRY_RESULT_ASSIGN(pd.asset1_amount, load_coins_py(f4));
+  pd.owner = *v.field("owner");
+  pd.asset0 = *v.field("asset0");
+  pd.asset0_amount = v.field("asset0_amount")->num;
+  pd.asset1 = *v.field("asset1");
+  pd.asset1_amount = v.field("asset1_amount")->num;
   return pd;
 }
 

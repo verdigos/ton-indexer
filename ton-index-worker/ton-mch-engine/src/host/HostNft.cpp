@@ -133,15 +133,12 @@ td::Result<NftTransferMsg> parse_nft_transfer(const td::Ref<vm::Cell> &body) {
 }
 
 // NftOwnershipAssigned: only prev_owner is read by the nft_transfer core.
+// W3 shim: cursor-walk moved to the mch-msgs.schema NftOwnershipAssignedPrevOwner
+// parser. (The FULL ownership+payload parse for the telegram core stays hand — it
+// is a soft partial parse a whole-or-nothing schema can't express.)
 td::Result<Value> parse_ownership_prev_owner(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(ctx, open_body(body));
-  auto &cs = ctx.cs;
-  if (!cs.have(32 + 64)) {
-    return td::Status::Error("ownership: header underflow");
-  }
-  cs.advance(32);   // opcode
-  cs.advance(64);   // query_id
-  return load_address_py(cs);
+  TRY_RESULT(v, parse_message_body("NftOwnershipAssignedPrevOwner", body));
+  return *v.field("prev_owner");
 }
 
 // Full NftOwnershipAssigned + NftPayload parse for the telegram core.

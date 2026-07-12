@@ -320,7 +320,8 @@ td::Result<Value> gen_parse_dedust_payout_from_pool(const td::Ref<vm::Cell> &bod
   }
   {
     if (cs.size_refs() == 0) { return td::Status::Error("DedustPayoutFromPool: proof ref missing"); }
-    f.emplace_back("proof", Value::make_cell(cs.fetch_ref()));
+    auto rf = cs.fetch_ref();
+    f.emplace_back("proof", Value::make_cell(std::move(rf)));
   }
   {
     auto rc = load_coins_py(cs);
@@ -537,6 +538,315 @@ td::Result<Value> gen_parse_j_vault_claim(const td::Ref<vm::Cell> &body) {
   return Value::make_obj(std::move(f));
 }
 
+// CoffeeSwapEvent (opcode 0xc0ffee30); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_coffee_swap_event(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CoffeeSwapEvent: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("CoffeeSwapEvent: _query_id underflow"); }
+  }
+  {
+    auto rs = gen_load_asset2(cs);
+    if (rs.is_error()) { return rs.move_as_error(); }
+    f.emplace_back("asset", rs.move_as_ok());
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount_in", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount_out", Value::make_int(rc.move_as_ok()));
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// NftOwnershipAssignedPrevOwner (opcode 0x05138d91); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_nft_ownership_assigned_prev_owner(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("NftOwnershipAssignedPrevOwner: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("NftOwnershipAssignedPrevOwner: _query_id underflow"); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("prev_owner", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// JVaultStakePeriodPayload (opcode 0x00000000); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_j_vault_stake_period_payload(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("JVaultStakePeriodPayload: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(32)) { return td::Status::Error("JVaultStakePeriodPayload: stake_period underflow"); }
+    auto q = cs.fetch_ulong(32);
+    f.emplace_back("stake_period", Value::make_int(refint_u64(q)));
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// StonfiPaymentRequest (opcode 0xf93bb43f); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_stonfi_payment_request(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("StonfiPaymentRequest: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("StonfiPaymentRequest: _query_id underflow"); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+  }
+  {
+    if (!cs.have(32)) { return td::Status::Error("StonfiPaymentRequest: exit_code underflow"); }
+    auto q = cs.fetch_ulong(32);
+    f.emplace_back("exit_code", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("StonfiPaymentRequest: info ref missing"); }
+    bool sp_info = false;
+    vm::CellSlice rc_info;
+    try { rc_info = vm::load_cell_slice_special(cs.fetch_ref(), sp_info); }
+    catch (...) { return td::Status::Error("StonfiPaymentRequest: info ref cell"); }
+    {
+      auto rc = load_coins_py(rc_info);
+      if (rc.is_error()) { return rc.move_as_error(); }
+      f.emplace_back("amount0_out", Value::make_int(rc.move_as_ok()));
+    }
+    {
+      auto ra = load_address_py(rc_info);
+      if (ra.is_error()) { return ra.move_as_error(); }
+      f.emplace_back("token0", ra.move_as_ok());
+    }
+    {
+      auto rc = load_coins_py(rc_info);
+      if (rc.is_error()) { return rc.move_as_error(); }
+      f.emplace_back("amount1_out", Value::make_int(rc.move_as_ok()));
+    }
+    {
+      auto ra = load_address_py(rc_info);
+      if (ra.is_error()) { return ra.move_as_error(); }
+      f.emplace_back("token1", ra.move_as_ok());
+    }
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// StonfiSwapMessage (opcode 0x25938561); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_stonfi_swap_message(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("StonfiSwapMessage: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("StonfiSwapMessage: _query_id underflow"); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("from_user_address", ra.move_as_ok());
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("token_wallet", ra.move_as_ok());
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    if (!cs.have(1) || !cs.advance(1)) { return td::Status::Error("StonfiSwapMessage: _has_ref underflow"); }
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("StonfiSwapMessage: info ref missing"); }
+    bool sp_info = false;
+    vm::CellSlice rc_info;
+    try { rc_info = vm::load_cell_slice_special(cs.fetch_ref(), sp_info); }
+    catch (...) { return td::Status::Error("StonfiSwapMessage: info ref cell"); }
+    {
+      auto ra = load_address_py(rc_info);
+      if (ra.is_error()) { return ra.move_as_error(); }
+      f.emplace_back("from_real_user", ra.move_as_ok());
+    }
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// StonfiV2PayTo (opcode 0x657b54f5); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_stonfi_v2_pay_to(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("StonfiV2PayTo: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("StonfiV2PayTo: _query_id underflow"); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+  }
+  {
+    if (!cs.have(32)) { return td::Status::Error("StonfiV2PayTo: exit_code underflow"); }
+    auto q = cs.fetch_ulong(32);
+    f.emplace_back("exit_code", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(1)) { return td::Status::Error("StonfiV2PayTo: _cp bit missing"); }
+    Value mc = Value::null();
+    if (cs.fetch_ulong(1)) {
+      if (cs.size_refs() == 0) { return td::Status::Error("StonfiV2PayTo: _cp ref missing"); }
+      mc = Value::make_cell(cs.fetch_ref());
+    }
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("StonfiV2PayTo: info ref missing"); }
+    bool sp_info = false;
+    vm::CellSlice rc_info;
+    try { rc_info = vm::load_cell_slice_special(cs.fetch_ref(), sp_info); }
+    catch (...) { return td::Status::Error("StonfiV2PayTo: info ref cell"); }
+    {
+      auto rc = load_coins_py(rc_info);
+      if (rc.is_error()) { return rc.move_as_error(); }
+    }
+    {
+      auto rc = load_coins_py(rc_info);
+      if (rc.is_error()) { return rc.move_as_error(); }
+      f.emplace_back("amount0_out", Value::make_int(rc.move_as_ok()));
+    }
+    {
+      auto ra = load_address_py(rc_info);
+      if (ra.is_error()) { return ra.move_as_error(); }
+      f.emplace_back("token0", ra.move_as_ok());
+    }
+    {
+      auto rc = load_coins_py(rc_info);
+      if (rc.is_error()) { return rc.move_as_error(); }
+      f.emplace_back("amount1_out", Value::make_int(rc.move_as_ok()));
+    }
+    {
+      auto ra = load_address_py(rc_info);
+      if (ra.is_error()) { return ra.move_as_error(); }
+      f.emplace_back("token1", ra.move_as_ok());
+    }
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// DedustDepositLiquidityToPool (opcode 0xb56b9598); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_dedust_deposit_liquidity_to_pool(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("DedustDepositLiquidityToPool: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("DedustDepositLiquidityToPool: _query_id underflow"); }
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("DedustDepositLiquidityToPool: _proof ref missing"); }
+    auto rf = cs.fetch_ref();
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("owner", ra.move_as_ok());
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("DedustDepositLiquidityToPool: field4 ref missing"); }
+    bool sp_field4 = false;
+    vm::CellSlice rc_field4;
+    try { rc_field4 = vm::load_cell_slice_special(cs.fetch_ref(), sp_field4); }
+    catch (...) { return td::Status::Error("DedustDepositLiquidityToPool: field4 ref cell"); }
+    {
+      auto rs = gen_load_asset4(rc_field4);
+      if (rs.is_error()) { return rs.move_as_error(); }
+      f.emplace_back("asset0", rs.move_as_ok());
+    }
+    {
+      auto rc = load_coins_py(rc_field4);
+      if (rc.is_error()) { return rc.move_as_error(); }
+      f.emplace_back("asset0_amount", Value::make_int(rc.move_as_ok()));
+    }
+    {
+      auto rs = gen_load_asset4(rc_field4);
+      if (rs.is_error()) { return rs.move_as_error(); }
+      f.emplace_back("asset1", rs.move_as_ok());
+    }
+    {
+      auto rc = load_coins_py(rc_field4);
+      if (rc.is_error()) { return rc.move_as_error(); }
+      f.emplace_back("asset1_amount", Value::make_int(rc.move_as_ok()));
+    }
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// ToncoRouterV3SwapSourceWallet (opcode 0xa7fb58f8); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_tonco_router_v3_swap_source_wallet(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("ToncoRouterV3SwapSourceWallet: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("ToncoRouterV3SwapSourceWallet: _query_id underflow"); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("source_wallet", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parsers() {
@@ -555,6 +865,14 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"JVaultUnstakeJettons", gen_parse_j_vault_unstake_jettons},
       {"JVaultUnstakeRequest", gen_parse_j_vault_unstake_request},
       {"JVaultClaim", gen_parse_j_vault_claim},
+      {"CoffeeSwapEvent", gen_parse_coffee_swap_event},
+      {"NftOwnershipAssignedPrevOwner", gen_parse_nft_ownership_assigned_prev_owner},
+      {"JVaultStakePeriodPayload", gen_parse_j_vault_stake_period_payload},
+      {"StonfiPaymentRequest", gen_parse_stonfi_payment_request},
+      {"StonfiSwapMessage", gen_parse_stonfi_swap_message},
+      {"StonfiV2PayTo", gen_parse_stonfi_v2_pay_to},
+      {"DedustDepositLiquidityToPool", gen_parse_dedust_deposit_liquidity_to_pool},
+      {"ToncoRouterV3SwapSourceWallet", gen_parse_tonco_router_v3_swap_source_wallet},
   };
   return rows;
 }

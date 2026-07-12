@@ -41,41 +41,6 @@ constexpr std::uint32_t kCoffeeNotification = 0xc0ffee36;
 
 using R = HostResult<SwapRecord>;
 
-std::string hex_upper_bytes(const unsigned char *p, std::size_t n) {
-  static const char *d = "0123456789ABCDEF";
-  std::string out(n * 2, '0');
-  for (std::size_t i = 0; i < n; i++) {
-    out[2 * i] = d[p[i] >> 4];
-    out[2 * i + 1] = d[p[i] & 0xF];
-  }
-  return out;
-}
-
-// messages/coffee.py load_coffee_asset. Advances cs. Errors on extra$10 (Python
-// raises NotImplementedError) and the invalid tag.
-td::Result<Value> load_coffee_asset(vm::CellSlice &cs) {
-  if (!cs.have(2)) {
-    return td::Status::Error("asset: underflow");
-  }
-  auto tag = cs.fetch_ulong(2);
-  if (tag == 0) {
-    return Value::make_asset_ton();
-  }
-  if (tag == 1) {
-    if (!cs.have(8 + 256)) {
-      return td::Status::Error("asset: jetton underflow");
-    }
-    auto chain = cs.fetch_ulong(8);
-    unsigned char hash[32];
-    if (!cs.fetch_bytes(hash, 32)) {
-      return td::Status::Error("asset: hash fetch");
-    }
-    std::string master = std::to_string(chain) + ":" + hex_upper_bytes(hash, 32);
-    return Value::make_asset_jetton(master);
-  }
-  return td::Status::Error("asset: unsupported tag");
-}
-
 // A TON-arm transfer leg (native / payout / notification): jetton wallets null.
 TransferLeg ton_leg(Value amount, Value source, Value dest) {
   TransferLeg leg;
@@ -137,34 +102,21 @@ R coffee_swap(HostContext &, const ConsumedBlocks &consumed) {
       ok = false;
       continue;
     }
+    // W3: event body decode moved to the mch-msgs.schema CoffeeSwapEvent parser.
     auto r_body = block_body(event);
     if (r_body.is_error()) {
       return R::fault("event body");
     }
-    auto r_ctx = open_body(r_body.ok());
-    if (r_ctx.is_error()) {
-      return R::fault("event slice");
+    auto r_ev = parse_message_body("CoffeeSwapEvent", r_body.move_as_ok());
+    if (r_ev.is_error()) {
+      return R::fault("event parse");
     }
-    auto ctx = r_ctx.move_as_ok();
-    auto &cs = ctx.cs;
-    if (!cs.have(32 + 64)) {
-      return R::fault("event header");
-    }
-    cs.advance(32 + 64);  // opcode + query_id
-    auto r_asset = load_coffee_asset(cs);
-    if (r_asset.is_error()) {
-      return R::fault("event asset");
-    }
-    auto r_in = load_coins_py(cs);
-    auto r_out = load_coins_py(cs);
-    if (r_in.is_error() || r_out.is_error()) {
-      return R::fault("event amounts");
-    }
+    Value ev = r_ev.move_as_ok();
     PeerSwap p;
-    p.in.asset = r_asset.move_as_ok();
-    p.in.amount = Value::make_amount(r_in.move_as_ok());
+    p.in.asset = *ev.field("asset");
+    p.in.amount = to_amount(*ev.field("amount_in"));
     p.out.asset = Value::null();  // filled after all hops (fill_peer_out_assets)
-    p.out.amount = Value::make_amount(r_out.move_as_ok());
+    p.out.amount = to_amount(*ev.field("amount_out"));
     peer_swaps.push_back(std::move(p));
   }
   if (peer_swaps.empty()) {

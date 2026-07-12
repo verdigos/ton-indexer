@@ -143,3 +143,100 @@ message JVaultClaim opcode 0x78d9f109 {
   query_id: u64
   jettons_to_claim: dict_keys267
 }
+
+# --- W3: host-embedded decoders (previously hand cursor-walks inside src/host/*).
+# Hosts now call parse_message_body(<name>, body) and unpack the Obj into their
+# existing typed struct (a thin shim); the per-fn error policy (rt_fault vs
+# Null-reject vs pred-False) stays in the host caller, unchanged.
+
+# HostCoffee coffee_swap peer event (opcode 0xc0ffee30). Fields: the swapped
+# asset (2-bit tag) + in/out coins. query_id skipped.
+message CoffeeSwapEvent opcode 0xc0ffee30 {
+  _query_id: bits 64
+  asset: asset2
+  amount_in: coins
+  amount_out: coins
+}
+
+# HostNft parse_ownership_prev_owner: the transfer core reads ONLY prev_owner.
+message NftOwnershipAssignedPrevOwner opcode 0x05138d91 {
+  _query_id: bits 64
+  prev_owner: addr_py
+}
+
+# HostJvault jvault_stake_period: a transfer forward_payload; op skipped, then a
+# 32-bit stake period. (Host decodes the b64 arg to a cell, then parse_message_body.)
+message JVaultStakePeriodPayload opcode 0x00000000 {
+  stake_period: u32
+}
+
+# HostStonfi parse_payment_request (StonfiPaymentRequest, opcode 0xf93bb43f). The
+# v1 core reads exit_code + amount0/token0/amount1/token1 (in a ref). owner dropped.
+message StonfiPaymentRequest opcode 0xf93bb43f {
+  _query_id: bits 64
+  _owner: addr_py
+  exit_code: u32
+  info: ref {
+    amount0_out: coins
+    token0: addr_py
+    amount1_out: coins
+    token1: addr_py
+  }
+}
+
+# HostStonfi parse_swap_v1 (StonfiSwapMessage, opcode 0x25938561). Core reads
+# from_user_address, token_wallet, amount, from_real_user (in a ref).
+message StonfiSwapMessage opcode 0x25938561 {
+  _query_id: bits 64
+  from_user_address: addr_py
+  token_wallet: addr_py
+  amount: coins
+  _min_out: coins
+  _has_ref: bits 1
+  info: ref {
+    from_real_user: addr_py
+  }
+}
+
+# HostStonfi parse_pay_to (StonfiV2PayTo, opcode 0x657b54f5). Core reads exit_code
+# + amount0/token0/amount1/token1 (in additional_info ref). to/exc/orig + the
+# custom_payload maybe-ref + fwd_ton are consumed-and-dropped.
+message StonfiV2PayTo opcode 0x657b54f5 {
+  _query_id: bits 64
+  _to: addr_py
+  _exc: addr_py
+  _orig: addr_py
+  exit_code: u32
+  _cp: maybe_ref_cell
+  info: ref {
+    _fwd_ton: coins
+    amount0_out: coins
+    token0: addr_py
+    amount1_out: coins
+    token1: addr_py
+  }
+}
+
+# HostDedustDeposit parse_pool_deposit (DedustDepositLiquidityToPool, opcode
+# 0xb56b9598). Core reads owner + asset0/asset0_amount/asset1/asset1_amount (in
+# field4 ref). proof ref + min_lp are dropped.
+message DedustDepositLiquidityToPool opcode 0xb56b9598 {
+  _query_id: bits 64
+  _proof: ref_cell
+  owner: addr_py
+  _min_lp: coins
+  field4: ref {
+    asset0: asset4
+    asset0_amount: coins
+    asset1: asset4
+    asset1_amount: coins
+  }
+}
+
+# HostTonco parse_v3_swap_source_wallet (ToncoRouterV3Swap, opcode 0xa7fb58f8).
+# Core reads ONLY source_wallet (owner dropped).
+message ToncoRouterV3SwapSourceWallet opcode 0xa7fb58f8 {
+  _query_id: bits 64
+  _owner: addr_py
+  source_wallet: addr_py
+}

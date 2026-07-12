@@ -72,15 +72,11 @@ std::optional<std::string> acc_str_t(const Value &v) {
 
 // messages/swaps.py ToncoPoolV3Swap: the core reads only source_wallet (the
 // two ref cells carry amounts/payloads the core does not touch here).
+// W3 shim: cursor-walk moved to the mch-msgs.schema ToncoRouterV3SwapSourceWallet
+// parser (owner dropped; only source_wallet kept).
 td::Result<Value> parse_v3_swap_source_wallet(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(ctx, open_body(body));
-  auto &cs = ctx.cs;
-  if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
-    return td::Status::Error("v3 swap: header underflow");
-  }
-  TRY_RESULT(owner, load_address_py(cs));
-  (void)owner;
-  return load_address_py(cs);  // source_wallet
+  TRY_RESULT(v, parse_message_body("ToncoRouterV3SwapSourceWallet", body));
+  return *v.field("source_wallet");
 }
 
 // messages/swaps.py ToncoRouterV3PayTo: exit_code + the coinsinfo maybe-ref

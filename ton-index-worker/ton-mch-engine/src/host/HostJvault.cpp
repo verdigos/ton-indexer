@@ -7,6 +7,7 @@
 // generic IR block lacks — see docs/mch-qol-report.md.
 #include "host/HostImpls.h"
 
+#include "MsgParse.h"
 #include "Value.h"
 
 #include "td/utils/base64.h"
@@ -40,11 +41,13 @@ EvalResult jvault_stake_period(BuildEnv &, const std::vector<Value> &args) {
   if (cell.is_error()) {
     return rt_fault("jvault_stake_period: BOC deserialize failed");
   }
-  vm::CellSlice cs = vm::load_cell_slice(cell.move_as_ok());
-  if (!cs.have(32 + 32) || !cs.advance(32)) {
+  // W3 shim: forward_payload decode moved to the mch-msgs.schema
+  // JVaultStakePeriodPayload parser.
+  auto r = parse_message_body("JVaultStakePeriodPayload", cell.move_as_ok());
+  if (r.is_error()) {
     return rt_fault("jvault_stake_period: forward_payload underflow");
   }
-  return rt_ok(Value::make_int64(static_cast<std::int64_t>(cs.fetch_ulong(32))));
+  return rt_ok(*r.ok().field("stake_period"));
 }
 
 // builders/jvault.py jvault_account_list(addresses): [AccountId(a) for a in xs].

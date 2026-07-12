@@ -30,16 +30,24 @@ VEC_OUT = ENG / "ir" / "msg_vectors.json"
 
 # --- schema model -----------------------------------------------------------
 LEAVES = {
-    "u64", "uint256", "coins", "addr_py", "asset2", "asset4",
-    "ref_cell", "dict_keys267", "fwd_cell_bits", "fwd_cell_refs",
+    "u32", "u64", "uint256", "coins", "addr_py", "asset2", "asset4",
+    "ref_cell", "maybe_ref_cell", "dict_keys267", "fwd_cell_bits", "fwd_cell_refs",
 }
+
+# A field whose name starts with "_" is PARSED (cursor advanced, failure still
+# fails the whole parse) but NOT emitted — the §3.2 parsed-and-dropped convention.
 
 
 @dataclass
 class Field:
     name: str
-    type: str  # a leaf name, or "ref"
+    type: str  # a leaf name, "bits", or "ref"
     sub: list["Field"] = field(default_factory=list)  # ref subfields
+    bitn: int = 0  # width for "bits N" (fixed-width skip)
+
+    @property
+    def drop(self) -> bool:
+        return self.name.startswith("_")
 
 
 @dataclass
@@ -81,6 +89,8 @@ def parse_schema(text: str) -> list[Message]:
             ftype = eat()
             if ftype == "ref":
                 out.append(Field(fname, "ref", parse_fields()))
+            elif ftype == "bits":
+                out.append(Field(fname, "bits", bitn=int(eat())))
             elif ftype in LEAVES:
                 out.append(Field(fname, ftype))
             else:
@@ -199,55 +209,76 @@ static td::Status gen_load_addr_dict267(vm::CellSlice &cs, std::vector<Value> &o
 
 
 def emit_field(msg: str, cur: str, f: Field, indent: str) -> list[str]:
-    """C++ lines reading one field from cursor `cur` into `Value::Fields f`."""
+    """C++ lines reading one field from cursor `cur`. A field is READ (cursor
+    advanced, failure fails the whole parse) always; it is emplaced into
+    `Value::Fields f` only when not dropped (name not starting with `_`)."""
     n = f.name
     err = lambda why: f'return td::Status::Error("{msg}: {n} {why}");'
     L: list[str] = []
     ind = indent
     if f.type == "ref":
+        # A ref group is always descended; its subfields flatten into the parent.
         L.append(f"{ind}{{")
         L.append(f"{ind}  if ({cur}.size_refs() == 0) {{ {err('ref missing')} }}")
-        L.append(f"{ind}  bool sp_{n} = false;")
-        L.append(f"{ind}  vm::CellSlice rc_{n};")
-        L.append(f"{ind}  try {{ rc_{n} = vm::load_cell_slice_special({cur}.fetch_ref(), sp_{n}); }}")
+        L.append(f"{ind}  bool sp_{n.strip('_')} = false;")
+        L.append(f"{ind}  vm::CellSlice rc_{n.strip('_')};")
+        L.append(f"{ind}  try {{ rc_{n.strip('_')} = vm::load_cell_slice_special({cur}.fetch_ref(), sp_{n.strip('_')}); }}")
         L.append(f'{ind}  catch (...) {{ {err("ref cell")} }}')
         for sub in f.sub:
-            L += emit_field(msg, f"rc_{n}", sub, ind + "  ")
+            L += emit_field(msg, f"rc_{n.strip('_')}", sub, ind + "  ")
         L.append(f"{ind}}}")
         return L
 
     L.append(f"{ind}{{")
     b = ind + "  "
-    if f.type == "u64":
+    emit = None  # C++ expression for the field value, or None for a pure skip
+    if f.type == "bits":
+        L.append(f"{b}if (!{cur}.have({f.bitn}) || !{cur}.advance({f.bitn})) {{ {err('underflow')} }}")
+    elif f.type == "u32":
+        L.append(f"{b}if (!{cur}.have(32)) {{ {err('underflow')} }}")
+        L.append(f"{b}auto q = {cur}.fetch_ulong(32);")
+        emit = "Value::make_int(refint_u64(q))"
+    elif f.type == "u64":
         L.append(f"{b}if (!{cur}.have(64)) {{ {err('underflow')} }}")
         L.append(f"{b}auto q = {cur}.fetch_ulong(64);")
-        L.append(f'{b}f.emplace_back("{n}", Value::make_int(refint_u64(q)));')
+        emit = "Value::make_int(refint_u64(q))"
     elif f.type == "uint256":
         L.append(f"{b}if (!{cur}.have(256)) {{ {err('underflow')} }}")
         L.append(f"{b}auto iv = {cur}.fetch_int256(256, false);")
         L.append(f'{b}if (iv.is_null()) {{ {err("fetch failed")} }}')
-        L.append(f'{b}f.emplace_back("{n}", Value::make_int(std::move(iv)));')
+        emit = "Value::make_int(std::move(iv))"
     elif f.type == "coins":
         L.append(f"{b}auto rc = load_coins_py({cur});")
         L.append(f"{b}if (rc.is_error()) {{ return rc.move_as_error(); }}")
-        L.append(f'{b}f.emplace_back("{n}", Value::make_int(rc.move_as_ok()));')
+        emit = "Value::make_int(rc.move_as_ok())"
     elif f.type == "addr_py":
         L.append(f"{b}auto ra = load_address_py({cur});")
         L.append(f"{b}if (ra.is_error()) {{ return ra.move_as_error(); }}")
-        L.append(f'{b}f.emplace_back("{n}", ra.move_as_ok());')
+        emit = "ra.move_as_ok()"
     elif f.type in ("asset2", "asset4"):
         helper = "gen_load_asset2" if f.type == "asset2" else "gen_load_asset4"
         L.append(f"{b}auto rs = {helper}({cur});")
         L.append(f"{b}if (rs.is_error()) {{ return rs.move_as_error(); }}")
-        L.append(f'{b}f.emplace_back("{n}", rs.move_as_ok());')
+        emit = "rs.move_as_ok()"
     elif f.type == "ref_cell":
         L.append(f"{b}if ({cur}.size_refs() == 0) {{ {err('ref missing')} }}")
-        L.append(f'{b}f.emplace_back("{n}", Value::make_cell({cur}.fetch_ref()));')
+        L.append(f"{b}auto rf = {cur}.fetch_ref();")  # consume even when dropped
+        emit = "Value::make_cell(std::move(rf))"
+    elif f.type == "maybe_ref_cell":
+        # Maybe ^Cell: bit=1 -> require+consume ref (Cell); bit=0 -> Null. No
+        # remainder fallback (distinct from fwd_cell_*).
+        L.append(f"{b}if (!{cur}.have(1)) {{ {err('bit missing')} }}")
+        L.append(f"{b}Value mc = Value::null();")
+        L.append(f"{b}if ({cur}.fetch_ulong(1)) {{")
+        L.append(f"{b}  if ({cur}.size_refs() == 0) {{ {err('ref missing')} }}")
+        L.append(f"{b}  mc = Value::make_cell({cur}.fetch_ref());")
+        L.append(f"{b}}}")
+        emit = "std::move(mc)"
     elif f.type == "dict_keys267":
         L.append(f"{b}std::vector<Value> keys;")
         L.append(f"{b}auto ds = gen_load_addr_dict267({cur}, keys);")
         L.append(f"{b}if (ds.is_error()) {{ return ds; }}")
-        L.append(f'{b}f.emplace_back("{n}", Value::make_list(std::move(keys)));')
+        emit = "Value::make_list(std::move(keys))"
     elif f.type in ("fwd_cell_bits", "fwd_cell_refs"):
         rest = f"{cur}.size() > 0" if f.type == "fwd_cell_bits" else f"{cur}.size_refs() > 0"
         L.append(f"{b}if (!{cur}.have(1)) {{ {err('bit missing')} }}")
@@ -262,9 +293,11 @@ def emit_field(msg: str, cur: str, f: Field, indent: str) -> list[str]:
         L.append(f"{b}  try {{ fc = Value::make_cell(cb.finalize()); }}")
         L.append(f'{b}  catch (...) {{ {err("to_cell failed")} }}')
         L.append(f"{b}}}")
-        L.append(f'{b}f.emplace_back("{n}", std::move(fc));')
+        emit = "std::move(fc)"
     else:  # pragma: no cover
         raise ValueError(f"unhandled leaf {f.type}")
+    if emit is not None and not f.drop:
+        L.append(f'{b}f.emplace_back("{n}", {emit});')
     L.append(f"{ind}}}")
     return L
 
@@ -363,8 +396,12 @@ def emit_vectors(msgs: list[Message]) -> str:
         return b.end_cell()
 
     def _build_fields(b, fields):
-        for f in fields:
-            if f.type == "u64":
+        for f in fields:  # dropped (_) fields still consume bits, so build them too
+            if f.type == "bits":
+                b.store_uint(0, f.bitn)
+            elif f.type == "u32":
+                b.store_uint(0, 32)
+            elif f.type == "u64":
                 b.store_uint(0, 64)
             elif f.type == "uint256":
                 b.store_uint(0, 256)
@@ -378,6 +415,8 @@ def emit_vectors(msgs: list[Message]) -> str:
                 b.store_uint(0, 4)  # TON
             elif f.type == "ref_cell":
                 b.store_ref(begin_cell().end_cell())
+            elif f.type == "maybe_ref_cell":
+                b.store_uint(0, 1)  # absent
             elif f.type == "dict_keys267":
                 b.store_uint(0, 1)  # empty HashmapE
             elif f.type in ("fwd_cell_bits", "fwd_cell_refs"):

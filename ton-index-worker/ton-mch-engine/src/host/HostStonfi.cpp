@@ -58,39 +58,6 @@ std::optional<std::string> acc_str(const Value &v) {
 // before the caller reads .exit_code, so any failure past exit_code (e.g. a
 // missing ref) still raises -> the pred's try/except returns False. Reproduce
 // the full parse and only report exit_code when every field parsed.
-td::Result<std::uint32_t> stonfi_payment_exit_code(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(ctx, open_body(body));
-  auto &cs = ctx.cs;
-  if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
-    return td::Status::Error("stonfi payment: header underflow");
-  }
-  TRY_RESULT(owner, load_address_py(cs));
-  (void)owner;
-  if (!cs.have(32)) {
-    return td::Status::Error("stonfi payment: exit_code underflow");
-  }
-  auto exit_code = static_cast<std::uint32_t>(cs.fetch_ulong(32));
-  if (cs.size_refs() < 1) {
-    return td::Status::Error("stonfi payment: ref missing");
-  }
-  bool special = false;
-  vm::CellSlice ref;
-  try {
-    ref = vm::load_cell_slice_special(cs.fetch_ref(), special);
-  } catch (...) {
-    return td::Status::Error("stonfi payment: ref slice");
-  }
-  TRY_RESULT(amount0, load_coins_py(ref));
-  (void)amount0;
-  TRY_RESULT(token0, load_address_py(ref));
-  (void)token0;
-  TRY_RESULT(amount1, load_coins_py(ref));
-  (void)amount1;
-  TRY_RESULT(token1, load_address_py(ref));
-  (void)token1;
-  return exit_code;
-}
-
 // messages/swaps.py StonfiPaymentRequest, full field set (the v1 swap core
 // reads exit_code + amount0/token0/amount1/token1 from the ref).
 struct PaymentReq {
@@ -98,34 +65,23 @@ struct PaymentReq {
   td::RefInt256 amount0_out, amount1_out;
   Value token0, token1;  // account values
 };
+// W3 shim: the cursor-walk moved to the mch-msgs.schema StonfiPaymentRequest
+// parser (MsgParsersGenerated.cpp); unpack its Obj into the struct. A parse
+// failure propagates the same td::Status the hand walk raised.
 td::Result<PaymentReq> parse_payment_request(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(ctx, open_body(body));
-  auto &cs = ctx.cs;
-  if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
-    return td::Status::Error("stonfi payment: header underflow");
-  }
-  TRY_RESULT(owner, load_address_py(cs));
-  (void)owner;
-  if (!cs.have(32)) {
-    return td::Status::Error("stonfi payment: exit_code underflow");
-  }
+  TRY_RESULT(v, parse_message_body("StonfiPaymentRequest", body));
   PaymentReq pr;
-  pr.exit_code = static_cast<std::uint32_t>(cs.fetch_ulong(32));
-  if (cs.size_refs() < 1) {
-    return td::Status::Error("stonfi payment: ref missing");
-  }
-  bool special = false;
-  vm::CellSlice ref;
-  try {
-    ref = vm::load_cell_slice_special(cs.fetch_ref(), special);
-  } catch (...) {
-    return td::Status::Error("stonfi payment: ref slice");
-  }
-  TRY_RESULT_ASSIGN(pr.amount0_out, load_coins_py(ref));
-  TRY_RESULT_ASSIGN(pr.token0, load_address_py(ref));
-  TRY_RESULT_ASSIGN(pr.amount1_out, load_coins_py(ref));
-  TRY_RESULT_ASSIGN(pr.token1, load_address_py(ref));
+  pr.exit_code = static_cast<std::uint32_t>(v.field("exit_code")->num->to_long());
+  pr.amount0_out = v.field("amount0_out")->num;
+  pr.token0 = *v.field("token0");
+  pr.amount1_out = v.field("amount1_out")->num;
+  pr.token1 = *v.field("token1");
   return pr;
+}
+
+td::Result<std::uint32_t> stonfi_payment_exit_code(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(pr, parse_payment_request(body));
+  return pr.exit_code;
 }
 
 // messages/swaps.py StonfiSwapMessage. Fields the v1 core reads:
@@ -136,33 +92,14 @@ struct SwapV1 {
   td::RefInt256 amount;
   Value from_real_user;
 };
+// W3 shim: cursor-walk moved to the mch-msgs.schema StonfiSwapMessage parser.
 td::Result<SwapV1> parse_swap_v1(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(ctx, open_body(body));
-  auto &cs = ctx.cs;
-  if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
-    return td::Status::Error("stonfi swap: header underflow");
-  }
+  TRY_RESULT(v, parse_message_body("StonfiSwapMessage", body));
   SwapV1 sw;
-  TRY_RESULT_ASSIGN(sw.from_user_address, load_address_py(cs));
-  TRY_RESULT_ASSIGN(sw.token_wallet, load_address_py(cs));
-  TRY_RESULT_ASSIGN(sw.amount, load_coins_py(cs));
-  TRY_RESULT(min_out, load_coins_py(cs));  // min_out (unused)
-  (void)min_out;
-  if (!cs.have(1)) {
-    return td::Status::Error("stonfi swap: has_ref underflow");
-  }
-  cs.advance(1);  // has_ref bit (ref_address after from_real_user is unused)
-  if (cs.size_refs() < 1) {
-    return td::Status::Error("stonfi swap: ref missing");
-  }
-  bool special = false;
-  vm::CellSlice ref;
-  try {
-    ref = vm::load_cell_slice_special(cs.fetch_ref(), special);
-  } catch (...) {
-    return td::Status::Error("stonfi swap: ref slice");
-  }
-  TRY_RESULT_ASSIGN(sw.from_real_user, load_address_py(ref));
+  sw.from_user_address = *v.field("from_user_address");
+  sw.token_wallet = *v.field("token_wallet");
+  sw.amount = v.field("amount")->num;
+  sw.from_real_user = *v.field("from_real_user");
   return sw;
 }
 
@@ -190,41 +127,15 @@ struct PayTo {
   td::RefInt256 amount0_out, amount1_out;
   Value token0, token1;  // account values
 };
+// W3 shim: cursor-walk moved to the mch-msgs.schema StonfiV2PayTo parser.
 td::Result<PayTo> parse_pay_to(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(ctx, open_body(body));
-  auto &cs = ctx.cs;
-  if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
-    return td::Status::Error("pay_to: header underflow");
-  }
-  TRY_RESULT(to_addr, load_address_py(cs));
-  (void)to_addr;
-  TRY_RESULT(exc, load_address_py(cs));
-  (void)exc;
-  TRY_RESULT(orig, load_address_py(cs));
-  (void)orig;
-  if (!cs.have(32 + 1)) {
-    return td::Status::Error("pay_to: exit_code underflow");
-  }
+  TRY_RESULT(v, parse_message_body("StonfiV2PayTo", body));
   PayTo pt;
-  pt.exit_code = static_cast<std::uint32_t>(cs.fetch_ulong(32));
-  // custom_payload maybe-ref.
-  if (cs.fetch_ulong(1)) {
-    if (cs.size_refs() < 1) {
-      return td::Status::Error("pay_to: custom_payload ref missing");
-    }
-    cs.fetch_ref();
-  }
-  if (cs.size_refs() < 1) {
-    return td::Status::Error("pay_to: additional_info ref missing");
-  }
-  TRY_RESULT(add, open_ref(cs.fetch_ref()));
-  auto &ai = add;
-  TRY_RESULT(fwd_ton, load_coins_py(ai));
-  (void)fwd_ton;
-  TRY_RESULT_ASSIGN(pt.amount0_out, load_coins_py(ai));
-  TRY_RESULT_ASSIGN(pt.token0, load_address_py(ai));
-  TRY_RESULT_ASSIGN(pt.amount1_out, load_coins_py(ai));
-  TRY_RESULT_ASSIGN(pt.token1, load_address_py(ai));
+  pt.exit_code = static_cast<std::uint32_t>(v.field("exit_code")->num->to_long());
+  pt.amount0_out = v.field("amount0_out")->num;
+  pt.token0 = *v.field("token0");
+  pt.amount1_out = v.field("amount1_out")->num;
+  pt.token1 = *v.field("token1");
   return pt;
 }
 

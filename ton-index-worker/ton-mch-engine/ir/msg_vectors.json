@@ -140,6 +140,86 @@
       "type": "JVaultClaim",
       "body": "te6ccgEBAQEABgAACHjZ8Qk=",
       "expect": "fail"
+    },
+    {
+      "type": "CoffeeSwapEvent",
+      "body": "te6ccgEBAQEAEAAAG8D/7jAAAAAAAAAAAAAg",
+      "expect": "ok"
+    },
+    {
+      "type": "CoffeeSwapEvent",
+      "body": "te6ccgEBAQEABgAACMD/7jA=",
+      "expect": "fail"
+    },
+    {
+      "type": "NftOwnershipAssignedPrevOwner",
+      "body": "te6ccgEBAQEADwAAGQUTjZEAAAAAAAAAACA=",
+      "expect": "ok"
+    },
+    {
+      "type": "NftOwnershipAssignedPrevOwner",
+      "body": "te6ccgEBAQEABgAACAUTjZE=",
+      "expect": "fail"
+    },
+    {
+      "type": "JVaultStakePeriodPayload",
+      "body": "te6ccgEBAQEACgAAEAAAAAAAAAAA",
+      "expect": "ok"
+    },
+    {
+      "type": "JVaultStakePeriodPayload",
+      "body": "te6ccgEBAQEABgAACAAAAAA=",
+      "expect": "fail"
+    },
+    {
+      "type": "StonfiPaymentRequest",
+      "body": "te6ccgEBAgEAGAABIfk7tD8AAAAAAAAAAAAAAAAgAQADAAg=",
+      "expect": "ok"
+    },
+    {
+      "type": "StonfiPaymentRequest",
+      "body": "te6ccgEBAQEABgAACPk7tD8=",
+      "expect": "fail"
+    },
+    {
+      "type": "StonfiSwapMessage",
+      "body": "te6ccgEBAgEAFAABGyWThWEAAAAAAAAAAAAEAQABIA==",
+      "expect": "ok"
+    },
+    {
+      "type": "StonfiSwapMessage",
+      "body": "te6ccgEBAQEABgAACCWThWE=",
+      "expect": "fail"
+    },
+    {
+      "type": "StonfiV2PayTo",
+      "body": "te6ccgEBAgEAGAABIWV7VPUAAAAAAAAAAAAAAAABAQAEAAA=",
+      "expect": "ok"
+    },
+    {
+      "type": "StonfiV2PayTo",
+      "body": "te6ccgEBAQEABgAACGV7VPU=",
+      "expect": "fail"
+    },
+    {
+      "type": "DedustDepositLiquidityToPool",
+      "body": "te6ccgEBAwEAFwACGbVrlZgAAAAAAAAAAAIBAgAAAAQAAA==",
+      "expect": "ok"
+    },
+    {
+      "type": "DedustDepositLiquidityToPool",
+      "body": "te6ccgEBAQEABgAACLVrlZg=",
+      "expect": "fail"
+    },
+    {
+      "type": "ToncoRouterV3SwapSourceWallet",
+      "body": "te6ccgEBAQEADwAAGaf7WPgAAAAAAAAAAAg=",
+      "expect": "ok"
+    },
+    {
+      "type": "ToncoRouterV3SwapSourceWallet",
+      "body": "te6ccgEBAQEABgAACKf7WPg=",
+      "expect": "fail"
     }
   ]
 }

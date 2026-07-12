@@ -222,7 +222,7 @@ wave-specific gates. Lead verifies fresh + commits per wave. Doc updated same co
 |---|---|---|---|
 | W1 | M2 pilot: DexRecords module (TransferLeg/PeerSwap/SwapRecord + one encoder) + typed host adapter (HostContext, ConsumedBlocks) + first view helpers + convert HostCoffee (incl. const_cast kill) + pton/wallet→asset shared helper | all byte-identical + typed unit tests (ctest) | **DONE** (commit: see log) |
 | W2 | M1 generator: DSL grammar + Python generator (beside ir_emit, manifest/sha discipline) + emit the 16 regular REGISTERED parsers + descriptor table + generated per-parser vectors + ctest; delete replaced hand parsers | parse-dump diff 0; new vectors ctest; all 12 gates | **DONE** (14/21 generated — see log) |
-| W3 | M1 wave-2: schema entries for ~14 host-embedded messages (PayTo, SwapV1/V2, V3PayTo, PoolDeposit, NftTransfer, Ownership ×2, coffee event/native/payout, tgbtc event, jvault payload, evaa fail_excess enum); hosts switch to parse_message_body; delete ~810 LOC | classify/actions diff 0; all 12 | PENDING |
+| W3 | M1 wave-2: host-embedded decoders → schema + shim (approach A) | classify/actions diff 0; all 12 | **DONE** (8 converted — see log; ~14/~810 premise corrected) |
 | W4 | M2 remainder: DeDust/Stonfi/Tonco/Nft/Getgems/Tgbtc hosts → records + adapters + views (extract view ops only on 2nd demonstrated use) | byte-identical; all 12 | PENDING |
 | W5 | M5 chain-walk construct in generator (dedust steps, stonfi_v2 pool_accounts, tonco payload targets) | parse-dump/classify diff 0; all 12 | PENDING |
 | W6 | M3a language: G-LC map + G-Q any/all — spec+parser+resolver+IR+py-runtime+C++ interp+codegen, Python-FIRST, new expr vectors both paths. THEN M4 spec moves (tonstakers, getgems, tgbtc_mint, jvault_account_list, dedust_swap_failed, no_internal_transfer-if-resolver-permits) + delete the moved fns + artifact regen batched ONCE | expr vectors grown both paths; classify/actions diff 0 (semantic no-ops); pytest grown; all 12 | PENDING (user-approved) |
@@ -238,6 +238,23 @@ Execution notes for whoever runs a wave:
   decision after program + shadow both conclude (user call).
 
 ## 5. Wave log (append after each wave)
+
+- **W3 DONE 2026-07-12** (lead-verified: parse/classify/actions A/B 0, msg-vectors 44/44,
+  pytest 1954/2). APPROACH A (shim) chosen over full-Value rewrite — B would fight W4's
+  typed direction; shim structs = the seam W4 absorbs. 8 decoders converted (CoffeeSwapEvent,
+  StonfiPaymentRequest [feeds exit-code pred], StonfiSwapMessage/v1, StonfiV2PayTo,
+  DedustDepositLiquidityToPool, NftOwnershipAssignedPrevOwner, JVaultStakePeriodPayload,
+  ToncoRouterV3SwapSourceWallet). STAY-HAND with reasons: TgBTCMintEvent (mixed field
+  policy + ZERO corpus coverage = byte-identity unverifiable — gate-discipline skip),
+  NftTransfer body + telegram Ownership FULL (copy() ref-reset / soft-partial — irreducible
+  class), StonfiSwapV2/tonco v3_pay_to/dedust final-partial assets/chain-walks → W5
+  (v3_pay_to needs a single-use maybe_ref-DESCEND construct — NOT added, flag if 2nd use
+  appears in W5). New DSL constructs (≥2 uses): u32, bits N, _dropped, maybe_ref_cell.
+  Generator bug fixed pre-ship (dropped ref_cell didn't consume its ref — fetch now always
+  side-effect). "~14 convertible/~810 LOC" premise CORRECTED → 8 clean + irregular class +
+  W5 split; host cursor-walks −162 net, +97 schema, consumption LOC falls in W4.
+  parse-dump verified opcode-gated (kDumpTypes) — no growth; surface +8 additive
+  (runnability keys only on artifact parse types — verified no coupling).
 
 - **W2 DONE 2026-07-12** (lead-verified: parse-dump A/B 0 [577], actions A/B 0, msg-vectors
   28/28, pytest 1954/2 [+4 test_msgs_gen]). Landed: mch-msgs.schema (145 lines, grammar in
