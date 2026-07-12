@@ -2128,6 +2128,614 @@
      }
     }
    }
+  },
+  {
+   "name": "comp_map_captured_list",
+   "src": "map(xs as s => s + 1)",
+   "expr": {
+    "k": "mapc",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "bin",
+     "op": "+",
+     "l": {
+      "k": "name",
+      "id": "s"
+     },
+     "r": {
+      "k": "int",
+      "v": 1
+     }
+    }
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      10,
+      20
+     ]
+    }
+   },
+   "expect": {
+    "$list": [
+     11,
+     21
+    ]
+   }
+  },
+  {
+   "name": "comp_map_record_body",
+   "src": "map(xs as s => {v: s.a})",
+   "expr": {
+    "k": "mapc",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "record",
+     "fields": [
+      {
+       "name": "v",
+       "expr": {
+        "k": "attr",
+        "of": {
+         "k": "name",
+         "id": "s"
+        },
+        "name": "a"
+       }
+      }
+     ]
+    }
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      {
+       "a": 1
+      },
+      {
+       "a": 2
+      }
+     ]
+    }
+   },
+   "expect": {
+    "$list": [
+     {
+      "v": 1
+     },
+     {
+      "v": 2
+     }
+    ]
+   }
+  },
+  {
+   "name": "comp_map_account",
+   "src": "map(xs as a => account(a))",
+   "expr": {
+    "k": "mapc",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "a",
+    "body": {
+     "k": "call",
+     "fn": "account",
+     "args": [
+      {
+       "k": "name",
+       "id": "a"
+      }
+     ]
+    }
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      "0:abababababababababababababababababababababababababababababababab",
+      "0:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+     ]
+    }
+   },
+   "expect": {
+    "$list": [
+     {
+      "$account": "0:abababababababababababababababababababababababababababababababab"
+     },
+     {
+      "$account": "0:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd"
+     }
+    ]
+   }
+  },
+  {
+   "name": "comp_map_then_sum",
+   "src": "sum(map(xs as s => s.a))",
+   "expr": {
+    "k": "call",
+    "fn": "sum",
+    "args": [
+     {
+      "k": "mapc",
+      "xs": {
+       "k": "name",
+       "id": "xs"
+      },
+      "var": "s",
+      "body": {
+       "k": "attr",
+       "of": {
+        "k": "name",
+        "id": "s"
+       },
+       "name": "a"
+      }
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      {
+       "a": 3
+      },
+      {
+       "a": 4
+      }
+     ]
+    }
+   },
+   "expect": 7
+  },
+  {
+   "name": "comp_map_empty",
+   "src": "map(xs as s => s + 1)",
+   "expr": {
+    "k": "mapc",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "bin",
+     "op": "+",
+     "l": {
+      "k": "name",
+      "id": "s"
+     },
+     "r": {
+      "k": "int",
+      "v": 1
+     }
+    }
+   },
+   "env": {
+    "xs": {
+     "$list": []
+    }
+   },
+   "expect": {
+    "$list": []
+   }
+  },
+  {
+   "name": "comp_map_null",
+   "src": "map(xs as s => s + 1)",
+   "expr": {
+    "k": "mapc",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "bin",
+     "op": "+",
+     "l": {
+      "k": "name",
+      "id": "s"
+     },
+     "r": {
+      "k": "int",
+      "v": 1
+     }
+    }
+   },
+   "env": {
+    "xs": null
+   },
+   "expect": null
+  },
+  {
+   "name": "comp_map_nonlist_fault",
+   "src": "map(xs as s => s)",
+   "expr": {
+    "k": "mapc",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "name",
+     "id": "s"
+    }
+   },
+   "env": {
+    "xs": 5
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "comp_binder_shadow",
+   "src": "[map(xs as s => s), s]",
+   "expr": {
+    "k": "list",
+    "items": [
+     {
+      "k": "mapc",
+      "xs": {
+       "k": "name",
+       "id": "xs"
+      },
+      "var": "s",
+      "body": {
+       "k": "name",
+       "id": "s"
+      }
+     },
+     {
+      "k": "name",
+      "id": "s"
+     }
+    ]
+   },
+   "env": {
+    "s": 99,
+    "xs": {
+     "$list": [
+      1,
+      2
+     ]
+    }
+   },
+   "expect": {
+    "$list": [
+     {
+      "$list": [
+       1,
+       2
+      ]
+     },
+     99
+    ]
+   }
+  },
+  {
+   "name": "comp_any_true",
+   "src": "any(xs as s => s > 2)",
+   "expr": {
+    "k": "quant",
+    "op": "any",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "bin",
+     "op": ">",
+     "l": {
+      "k": "name",
+      "id": "s"
+     },
+     "r": {
+      "k": "int",
+      "v": 2
+     }
+    }
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      1,
+      3
+     ]
+    }
+   },
+   "expect": true
+  },
+  {
+   "name": "comp_any_false",
+   "src": "any(xs as s => s > 5)",
+   "expr": {
+    "k": "quant",
+    "op": "any",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "bin",
+     "op": ">",
+     "l": {
+      "k": "name",
+      "id": "s"
+     },
+     "r": {
+      "k": "int",
+      "v": 5
+     }
+    }
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      1,
+      3
+     ]
+    }
+   },
+   "expect": false
+  },
+  {
+   "name": "comp_any_empty",
+   "src": "any(xs as s => s > 0)",
+   "expr": {
+    "k": "quant",
+    "op": "any",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "bin",
+     "op": ">",
+     "l": {
+      "k": "name",
+      "id": "s"
+     },
+     "r": {
+      "k": "int",
+      "v": 0
+     }
+    }
+   },
+   "env": {
+    "xs": {
+     "$list": []
+    }
+   },
+   "expect": false
+  },
+  {
+   "name": "comp_any_null",
+   "src": "any(xs as s => s > 0)",
+   "expr": {
+    "k": "quant",
+    "op": "any",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "bin",
+     "op": ">",
+     "l": {
+      "k": "name",
+      "id": "s"
+     },
+     "r": {
+      "k": "int",
+      "v": 0
+     }
+    }
+   },
+   "env": {
+    "xs": null
+   },
+   "expect": null
+  },
+  {
+   "name": "comp_all_true",
+   "src": "all(xs as s => s > 0)",
+   "expr": {
+    "k": "quant",
+    "op": "all",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "bin",
+     "op": ">",
+     "l": {
+      "k": "name",
+      "id": "s"
+     },
+     "r": {
+      "k": "int",
+      "v": 0
+     }
+    }
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      1,
+      3
+     ]
+    }
+   },
+   "expect": true
+  },
+  {
+   "name": "comp_all_false",
+   "src": "all(xs as s => s > 2)",
+   "expr": {
+    "k": "quant",
+    "op": "all",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "bin",
+     "op": ">",
+     "l": {
+      "k": "name",
+      "id": "s"
+     },
+     "r": {
+      "k": "int",
+      "v": 2
+     }
+    }
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      1,
+      3
+     ]
+    }
+   },
+   "expect": false
+  },
+  {
+   "name": "comp_all_empty",
+   "src": "all(xs as s => s > 0)",
+   "expr": {
+    "k": "quant",
+    "op": "all",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "bin",
+     "op": ">",
+     "l": {
+      "k": "name",
+      "id": "s"
+     },
+     "r": {
+      "k": "int",
+      "v": 0
+     }
+    }
+   },
+   "env": {
+    "xs": {
+     "$list": []
+    }
+   },
+   "expect": true
+  },
+  {
+   "name": "comp_all_null",
+   "src": "all(xs as s => s > 0)",
+   "expr": {
+    "k": "quant",
+    "op": "all",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "bin",
+     "op": ">",
+     "l": {
+      "k": "name",
+      "id": "s"
+     },
+     "r": {
+      "k": "int",
+      "v": 0
+     }
+    }
+   },
+   "env": {
+    "xs": null
+   },
+   "expect": null
+  },
+  {
+   "name": "comp_quant_nonlist_fault",
+   "src": "any(xs as s => s > 0)",
+   "expr": {
+    "k": "quant",
+    "op": "any",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "bin",
+     "op": ">",
+     "l": {
+      "k": "name",
+      "id": "s"
+     },
+     "r": {
+      "k": "int",
+      "v": 0
+     }
+    }
+   },
+   "env": {
+    "xs": 5
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "comp_quant_body_nonbool_fault",
+   "src": "any(xs as s => s)",
+   "expr": {
+    "k": "quant",
+    "op": "any",
+    "xs": {
+     "k": "name",
+     "id": "xs"
+    },
+    "var": "s",
+    "body": {
+     "k": "name",
+     "id": "s"
+    }
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      1
+     ]
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
   }
  ]
 }

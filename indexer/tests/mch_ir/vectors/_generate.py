@@ -168,6 +168,35 @@ _V: list[tuple] = [
      {"jetton_wallet": {"$obj": {"owner": RAW2, "jetton": RAW}}}),
     ("lookup_null_arg", "lookup jetton_wallet(a)", {"a": None}, None,
      {"jetton_wallet": {"$obj": {"owner": RAW2}}}),
+    # --- G-LC map comprehension (§16.1) ---
+    ("comp_map_captured_list", "map(xs as s => s + 1)",
+     {"xs": {"$list": [10, 20]}}, {"$list": [11, 21]}),
+    ("comp_map_record_body", "map(xs as s => {v: s.a})",
+     {"xs": {"$list": [{"a": 1}, {"a": 2}]}},
+     {"$list": [{"v": 1}, {"v": 2}]}),
+    ("comp_map_account", "map(xs as a => account(a))",
+     {"xs": {"$list": [RAW, RAW2]}},
+     {"$list": [{"$account": RAW}, {"$account": RAW2}]}),
+    ("comp_map_then_sum", 'sum(map(xs as s => s.a))',
+     {"xs": {"$list": [{"a": 3}, {"a": 4}]}}, 7),
+    ("comp_map_empty", "map(xs as s => s + 1)", {"xs": {"$list": []}}, {"$list": []}),
+    ("comp_map_null", "map(xs as s => s + 1)", {"xs": None}, None),
+    ("comp_map_nonlist_fault", "map(xs as s => s)", {"xs": 5}, FAULT),
+    # binder shadowing: `s` inside the body is the element, and the outer `s`
+    # binding is restored afterward (list evaluates the comprehension first).
+    ("comp_binder_shadow", "[map(xs as s => s), s]",
+     {"s": 99, "xs": {"$list": [1, 2]}}, {"$list": [{"$list": [1, 2]}, 99]}),
+    # --- G-Q any/all quantifiers (§16.1) ---
+    ("comp_any_true", "any(xs as s => s > 2)", {"xs": {"$list": [1, 3]}}, True),
+    ("comp_any_false", "any(xs as s => s > 5)", {"xs": {"$list": [1, 3]}}, False),
+    ("comp_any_empty", "any(xs as s => s > 0)", {"xs": {"$list": []}}, False),
+    ("comp_any_null", "any(xs as s => s > 0)", {"xs": None}, None),
+    ("comp_all_true", "all(xs as s => s > 0)", {"xs": {"$list": [1, 3]}}, True),
+    ("comp_all_false", "all(xs as s => s > 2)", {"xs": {"$list": [1, 3]}}, False),
+    ("comp_all_empty", "all(xs as s => s > 0)", {"xs": {"$list": []}}, True),
+    ("comp_all_null", "all(xs as s => s > 0)", {"xs": None}, None),
+    ("comp_quant_nonlist_fault", "any(xs as s => s > 0)", {"xs": 5}, FAULT),
+    ("comp_quant_body_nonbool_fault", "any(xs as s => s)", {"xs": {"$list": [1]}}, FAULT),
 ]
 
 

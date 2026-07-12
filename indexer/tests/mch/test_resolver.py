@@ -744,3 +744,69 @@ def test_r023_parse_op_capture_ok():
         "  op Foo @t\n  parse t as JettonTransfer\n}"
     )
     assert "R023_PARSE_TARGET_COMPOSED_BLOCK" not in _error_codes(src, _parse_registries())
+
+
+# --- G-LC/G-Q comprehensions (§16.1) ---------------------------------------
+
+def test_comprehension_nested_rejected():
+    # A comprehension inside another comprehension's body is R024.
+    src = (
+        "opcode Foo = 0x1\n"
+        "matcher m {\n produces FB\n entry @x\n"
+        "  op Foo @x\n"
+        "  let xs = [1, 2]\n"
+        "  out { r: map(xs as s => any(xs as t => t > s)) }\n}"
+    )
+    assert "R024_NESTED_COMPREHENSION" in _error_codes(src, _fb_registries())
+
+
+def test_comprehension_nested_in_xs_rejected():
+    # A comprehension in the iterated list (`xs`) is R024 too.
+    src = (
+        "opcode Foo = 0x1\n"
+        "matcher m {\n produces FB\n entry @x\n"
+        "  op Foo @x\n"
+        "  let xs = [1, 2]\n"
+        "  out { r: map(map(xs as s => s) as t => t) }\n}"
+    )
+    assert "R024_NESTED_COMPREHENSION" in _error_codes(src, _fb_registries())
+
+
+def test_comprehension_binder_shadows_capture_ok():
+    # The element var may shadow a `let`; body references resolve to the element,
+    # and the shadow raises no R010/R013/R024.
+    src = (
+        "opcode Foo = 0x1\n"
+        "matcher m {\n produces FB\n entry @x\n"
+        "  op Foo @x\n"
+        "  let xs = [1, 2]\n"
+        "  let s = 1\n"
+        "  out { r: map(xs as s => s + 1) }\n}"
+    )
+    codes = _error_codes(src, _fb_registries())
+    assert not any(c.startswith(("R010", "R013", "R024")) for c in codes), codes
+
+
+def test_comprehension_body_unresolved_ref_rejected():
+    # A body reference that is neither the element var nor an outer capture/let
+    # is still R010.
+    src = (
+        "opcode Foo = 0x1\n"
+        "matcher m {\n produces FB\n entry @x\n"
+        "  op Foo @x\n"
+        "  let xs = [1, 2]\n"
+        "  out { r: map(xs as s => s + zzz) }\n}"
+    )
+    assert "R010_UNRESOLVED_REFERENCE" in _error_codes(src, _fb_registries())
+
+
+def test_comprehension_xs_unbound_var_not_visible_rejected():
+    # The element var is NOT visible in `xs` (binds body only): referencing it in
+    # `xs` is unresolved.
+    src = (
+        "opcode Foo = 0x1\n"
+        "matcher m {\n produces FB\n entry @x\n"
+        "  op Foo @x\n"
+        "  out { r: map(s as s => s) }\n}"
+    )
+    assert "R010_UNRESOLVED_REFERENCE" in _error_codes(src, _fb_registries())

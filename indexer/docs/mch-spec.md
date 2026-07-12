@@ -1118,12 +1118,21 @@ Listed only so implementers do not paint themselves into a corner. NOT scheduled
 - Pattern fragments parameterised by capture (`rule X(@a) = …`)
 - Set-membership literals in inline predicates (`where .x in {A, B}`) — an `in` over a list literal; **skipped** for now (or-chains cover the known constant-set cases; C++ = linear scan)
 
-### 16.1 List comprehension + quantifiers — DEFERRED (evidence-gated)
+### 16.1 List comprehension + quantifiers — ADOPTED v1.0 (W6)
 
-Two related constructs, deferred until the C++ twin proves the need (trigger condition: the swap/liquidity leg-assembly host fns become a real maintenance/parity cost in the C++ engine). They are the single highest-leverage additions for declarative swap/liquidity coverage but carry scoping/binding complexity we do not buy before that evidence — the affected matchers stay HYBRID anyway because of the irreducible async multi-hop pool-resolution fn, so nothing is unblocked *end-to-end* by adding them alone.
+Two related build-expression constructs, adopted in W6 (the deferral trigger — swap/liquidity leg-assembly host fns becoming a maintenance/parity cost in the C++ engine — was met by measurement; user-approved 2026-07-12). Both are **build-expression only**: they are rejected inside an inline `where (expr)` clause (`test_self` is synchronous), exactly like `lookup`.
 
-- **G-LC — element-wise list transform (`map(xs as e => <expr(e)>)`).** Today `map(xs, "field")` only projects one field. Every swap builds `peer_swaps = [ {in:{asset,amount}, out:{asset,amount}}, … ]`, one record per hop, from a list capture — inexpressible without mapping each element through an arbitrary sub-expression (a record literal, a ternary asset from `{is_ton, jetton_address}`). Design: one bound element variable + one pure sub-expression, no nested comprehensions. C++ one-liner: `std::transform` with a lambda over the element.
-- **G-Q — boolean fold (`any(xs as e => <bool(e)>)` / `all(...)`).** The swap `failed`/`ok` scans are "every hop has its success notification/event" / "some pay_to exit_code is bad" — a quantifier over a list capture with a per-element predicate. Depends on G-LC's element binding. C++: `std::any_of` / `std::all_of`.
+- **G-LC — element-wise list transform (`map(xs as e => <expr(e)>)`).** Distinct from the `map(xs, "field")` builtin (single-field projection); the parser tells the two apart on the `as` keyword. Maps each element through an arbitrary pure sub-expression (a record literal, a ternary asset, a constructor). Result: a list. C++ one-liner: `std::transform` with a lambda over the element.
+- **G-Q — boolean fold (`any(xs as e => <bool(e)>)` / `all(...)`).** A quantifier over a list with a per-element bool predicate. Short-circuits (like `std::any_of` / `std::all_of`). Result: a bool. The body must evaluate to a bool (else fault).
+
+**Pinned semantics (both):**
+- **Binder scope:** the element var `e` is visible ONLY inside the body (a new scope frame). It is NOT visible in `xs`. The body MAY shadow an outer capture/`let` of the same name; the outer binding is restored after the comprehension.
+- **No nested comprehensions:** a `map|any|all` comprehension may not appear inside another comprehension's `xs` or `body` (diagnostic R024).
+- **null `xs` → null** for all three (matches the list-builtin null short-circuit).
+- **non-list `xs`** (non-null, non-list) **→ fault** (matches the list combinators).
+- **empty `xs`:** `map` → `[]`, `any` → `false`, `all` → `true`.
+
+IR encoding: `map` → `{"k":"mapc","xs":…,"var":"e","body":…}`; `any`/`all` → `{"k":"quant","op":"any|all","xs":…,"var":"e","body":…}` (IR spec §7).
 
 ## 17. Glossary
 

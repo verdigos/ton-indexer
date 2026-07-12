@@ -832,10 +832,14 @@ def _check_out_fields(fields: tuple[ast_.OutField, ...], available: set[str],
 
 def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag) -> None:
     """Report each value-position NameRef not in `available`. A bare NameRef used
-    as a call callee is a function/builtin name and is skipped."""
-    def value(e: ast_.Expr) -> None:
+    as a call callee is a function/builtin name and is skipped.
+
+    A `map|any|all(xs as e => body)` comprehension binds `e` in `body` only (a
+    new scope frame, §16.1); `body` may shadow an outer capture named `e`. A
+    comprehension nested in another comprehension's `xs` or `body` is R024."""
+    def value(e: ast_.Expr, avail: set[str], in_comp: bool) -> None:
         if isinstance(e, ast_.NameRef):
-            if e.name not in available:
+            if e.name not in avail:
                 bag.error(
                     "R010_UNRESOLVED_REFERENCE",
                     f"reference {e.name!r} does not resolve to a capture or a "
@@ -843,33 +847,46 @@ def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag) -
                     e.span,
                 )
         elif isinstance(e, ast_.FieldAccess):
-            value(e.target)
+            value(e.target, avail, in_comp)
         elif isinstance(e, ast_.Call):
             if not isinstance(e.callee, ast_.NameRef):
-                value(e.callee)
+                value(e.callee, avail, in_comp)
             for a in e.args:
-                value(a)
+                value(a, avail, in_comp)
         elif isinstance(e, ast_.LookupExpr):
             for a in e.args:
-                value(a)
+                value(a, avail, in_comp)
         elif isinstance(e, ast_.UnaryOp):
-            value(e.operand)
+            value(e.operand, avail, in_comp)
         elif isinstance(e, ast_.BinaryOp):
-            value(e.left)
-            value(e.right)
+            value(e.left, avail, in_comp)
+            value(e.right, avail, in_comp)
         elif isinstance(e, ast_.Ternary):
-            value(e.cond)
-            value(e.then)
-            value(e.orelse)
+            value(e.cond, avail, in_comp)
+            value(e.then, avail, in_comp)
+            value(e.orelse, avail, in_comp)
         elif isinstance(e, ast_.ListLit):
             for x in e.elements:
-                value(x)
+                value(x, avail, in_comp)
         elif isinstance(e, ast_.RecordLit):
             for f in e.fields:
-                value(f.value)
+                value(f.value, avail, in_comp)
+        elif isinstance(e, ast_.Comprehension):
+            if in_comp:
+                bag.error(
+                    diagnostics.R024_NESTED_COMPREHENSION,
+                    "nested comprehensions are not allowed; a `map|any|all` "
+                    "comprehension may not appear inside another comprehension "
+                    "(spec §16.1)",
+                    e.span,
+                )
+            # `xs` evaluates in the enclosing scope (no binder); `body` sees the
+            # element var, which may shadow an outer capture.
+            value(e.xs, avail, True)
+            value(e.body, avail | {e.var}, True)
         # FieldRef / literals: nothing to resolve.
 
-    value(expr)
+    value(expr, available, False)
 
 
 def _is_recursive_set(file: ast_.File) -> set[str]:

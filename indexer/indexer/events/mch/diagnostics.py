@@ -55,6 +55,12 @@ prior matcher's `merge_blocks` is not the anchor protocol message, so the
 re-parse does not round-trip and `.body` silently null-propagates. Read the
 prior matcher's fields via `X.data.<field>` instead of re-parsing."""
 
+R024_NESTED_COMPREHENSION = "R024_NESTED_COMPREHENSION"
+"""A `map|any|all(xs as e => body)` comprehension appears inside another
+comprehension (either the outer `xs` or `body`). Nested comprehensions are
+forbidden (spec §16.1): exactly one bound element var per comprehension, no
+comprehension in the iterated list or the body."""
+
 P011_DUPLICATE_DIRECTIVE = "P011_DUPLICATE_DIRECTIVE"
 """A matcher declares the same at-most-once directive more than once
 (currently: `shape`, §8.7)."""

@@ -94,10 +94,76 @@ class Evaluator:
             return [await self.eval(it) for it in e["items"]]
         if k == "record":
             return {f["name"]: await self.eval(f["expr"]) for f in e["fields"]}
+        if k == "mapc":
+            return await self._eval_mapc(e)
+        if k == "quant":
+            return await self._eval_quant(e)
         raise EvalError(f"unsupported expression kind {k!r}")
 
     async def eval_bool(self, e: dict) -> bool:
         return _require_bool(await self.eval(e))
+
+    async def _eval_mapc(self, e: dict) -> Any:
+        """`map(xs as VAR => body)` (§16.1 G-LC). null xs -> null; non-list xs ->
+        fault; empty -> []. Binds VAR in `self.env` per element (a new scope
+        frame), restoring the prior binding afterward so `body` may shadow an
+        outer capture named VAR."""
+        xs = await self.eval(e["xs"])
+        if xs is None:
+            return None
+        if not isinstance(xs, list):
+            raise EvalError(f"map comprehension expects a list, got {type(xs).__name__}")
+        var, body = e["var"], e["body"]
+        with self._bind_element(var):
+            out = []
+            for el in xs:
+                self.env[var] = el
+                out.append(await self.eval(body))
+        return out
+
+    async def _eval_quant(self, e: dict) -> Any:
+        """`any|all(xs as VAR => body)` (§16.1 G-Q). null xs -> null; non-list xs
+        -> fault; empty -> false (any) / true (all). Short-circuits like
+        std::any_of / std::all_of. `body` must be a bool."""
+        xs = await self.eval(e["xs"])
+        if xs is None:
+            return None
+        op = e["op"]
+        if not isinstance(xs, list):
+            raise EvalError(f"{op} comprehension expects a list, got {type(xs).__name__}")
+        var, body = e["var"], e["body"]
+        result = op == "all"  # all of empty = True, any of empty = False
+        with self._bind_element(var):
+            for el in xs:
+                self.env[var] = el
+                b = _require_bool(await self.eval(body))
+                if op == "any" and b:
+                    result = True
+                    break
+                if op == "all" and not b:
+                    result = False
+                    break
+        return result
+
+    def _bind_element(self, var: str):
+        """Context manager: introduce comprehension element var `var`, restoring
+        the previous binding (or absence) on exit. See _eval_mapc/_eval_quant."""
+        env = self.env
+        _UNSET = object()
+
+        class _Frame:
+            def __enter__(self_):
+                self_.saved = env.get(var, _UNSET)
+                return self_
+
+            def __exit__(self_, *exc):
+                if self_.saved is _UNSET:
+                    env.pop(var, None)
+                else:
+                    env[var] = self_.saved
+                return False
+
+        return _Frame()
 
     async def _eval_call(self, e: dict) -> Any:
         name = e["fn"]

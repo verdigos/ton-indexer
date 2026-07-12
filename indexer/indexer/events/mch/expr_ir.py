@@ -62,4 +62,11 @@ def emit_expr(e: ast_.Expr) -> dict:
         return {"k": "record", "fields": [
             {"name": f.name, "expr": emit_expr(f.value)} for f in e.fields
         ]}
+    if isinstance(e, ast_.Comprehension):
+        # map -> `mapc`; any/all -> `quant` carrying the op (§16.1, IR spec §7).
+        if e.kind == "map":
+            return {"k": "mapc", "xs": emit_expr(e.xs), "var": e.var,
+                    "body": emit_expr(e.body)}
+        return {"k": "quant", "op": e.kind, "xs": emit_expr(e.xs), "var": e.var,
+                "body": emit_expr(e.body)}
     raise ValueError(f"unsupported expression node {type(e).__name__} in IR emission")

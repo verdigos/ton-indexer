@@ -148,7 +148,7 @@ No head test of its own (used as the permissive root under an opcode-set/btype/p
 
 ## 7. Expression encoding
 
-Expressions are inlined trees tagged by `"k"`. Vocabulary: `int str bool null name dotfield attr call lookup unary bin ternary list record`.
+Expressions are inlined trees tagged by `"k"`. Vocabulary: `int str bool null name dotfield attr call lookup unary bin ternary list record mapc quant`.
 
 ```json
 { "k": "int",  "v": 42 }
@@ -165,6 +165,8 @@ Expressions are inlined trees tagged by `"k"`. Vocabulary: `int str bool null na
 { "k": "ternary", "cond": <expr>, "then": <expr>, "else": <expr> }
 { "k": "list",   "items": [<expr>, ...] }
 { "k": "record", "fields": [ {"name": "legs", "expr": <expr>}, ... ] }
+{ "k": "mapc",   "xs": <expr>, "var": "e", "body": <expr> }
+{ "k": "quant",  "op": "any" | "all", "xs": <expr>, "var": "e", "body": <expr> }
 ```
 
 ### 7.1 Leaves & references
@@ -208,10 +210,17 @@ List combinators require a list argument (else fault). `map`'s field arg is a st
 - `ternary`: `cond` (required bool) selects `then`/`else`.
 - `list` → a Python list of the evaluated items; `record` → a dict `{name: value}`.
 
-### 7.5 where_expr (node head predicate)
-A node's `where_expr` is evaluated by the **sync** evaluator against the candidate block. `dotfield` reads the block's `data`; a missing field / `data is None` / any fault / a non-bool result all fail the test (False) — **never** raised out of matching. `lookup` and non-builtin `call` are rejected at load (`_check_where_expr_sync`) and by the frontend compiler — a `where_expr` is builtin-only and synchronous.
+### 7.4.1 Comprehensions (`mapc` / `quant`) — G-LC / G-Q, spec §16.1
+A **build-expression only** construct (rejected in `where_expr`, §7.5). `var` binds one element of `xs` inside `body` only (a new scope frame); `body` may shadow an outer name of the same name, restored after. Distinct from the `map(xs, "f")` builtin (§7.3) — the FRONTEND parser disambiguates on the `as` keyword; in IR they are separate kinds.
+- `mapc` (G-LC): maps each element through `body`. Result = a list.
+- `quant` (G-Q): `op ∈ {any, all}`; `body` must be bool. Result = a bool. Short-circuits (like `std::any_of`/`std::all_of`).
+- **null `xs` → null** (all three); **non-list `xs` → fault**; **empty `xs`:** `mapc` → `[]`, `any` → `false`, `all` → `true`.
+- **No nesting:** a comprehension may not appear inside another comprehension's `xs`/`body` (frontend R024; the IR structural check does not re-derive this — it is an emitter invariant).
 
-**Load-time checks (`_check_expr`):** `k` in vocabulary; literal `v` exact type; `name.id`/`dotfield.name`/`attr.name` strings; `attr.of` recursively valid; `call`/`lookup` have string name + array args (recursively valid); `unary.op ∈ {not,-}`; `bin.op ∈ {and,or,==,!=,<,<=,>,>=,??,+,-,*}`; `ternary` has cond/then/else; `list.items` array; `record.fields` each `{name:str, expr}`.
+### 7.5 where_expr (node head predicate)
+A node's `where_expr` is evaluated by the **sync** evaluator against the candidate block. `dotfield` reads the block's `data`; a missing field / `data is None` / any fault / a non-bool result all fail the test (False) — **never** raised out of matching. `lookup`, non-builtin `call`, and `mapc`/`quant` comprehensions are rejected at load (`_check_where_expr_sync`) and by the frontend compiler — a `where_expr` is builtin-only and synchronous.
+
+**Load-time checks (`_check_expr`):** `k` in vocabulary; literal `v` exact type; `name.id`/`dotfield.name`/`attr.name` strings; `attr.of` recursively valid; `call`/`lookup` have string name + array args (recursively valid); `unary.op ∈ {not,-}`; `bin.op ∈ {and,or,==,!=,<,<=,>,>=,??,+,-,*}`; `ternary` has cond/then/else; `list.items` array; `record.fields` each `{name:str, expr}`; `mapc`/`quant` have string `var` + recursively valid `xs`/`body` (and `quant.op ∈ {any,all}`).
 
 ## 8. Determinism guarantees (normative for any engine)
 

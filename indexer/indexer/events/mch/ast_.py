@@ -114,6 +114,21 @@ class ListLit(Expr):
 
 
 @dataclass(frozen=True)
+class Comprehension(Expr):
+    """`map|any|all(xs as e => body)` — lambda comprehension (§16.1 G-LC/G-Q).
+
+    `kind` is "map" (list comprehension), "any" or "all" (quantifiers). `var` is
+    the element binder, visible ONLY inside `body` (a new scope frame). No nested
+    comprehensions. Distinct from the `map(xs, "field")` builtin call, which the
+    parser tells apart by the `as` keyword."""
+    kind: str  # "map" | "any" | "all"
+    xs: Expr
+    var: str
+    body: Expr
+    span: Span
+
+
+@dataclass(frozen=True)
 class RecordField:
     name: str
     value: Expr

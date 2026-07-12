@@ -765,7 +765,61 @@ def _parse_arg_list(s: _ParserState) -> tuple[tuple[ast_.Expr, ...], Span]:
     return tuple(args), end
 
 
+# `any` lexes to KW_ANY (the node-head keyword), `map`/`all` stay plain
+# identifiers.
+def _at_comprehension(s: _ParserState) -> bool:
+    """True at `map|any|all ( … as … => … )` — the lambda comprehension form,
+    told apart from the `map(xs, "f")` builtin call by an `as` keyword at the
+    argument list's top paren depth (handoff §1)."""
+    t = s.peek()
+    if t.kind is TokenKind.KW_ANY:
+        pass
+    elif t.kind is TokenKind.IDENT and t.text in ("map", "all"):
+        pass
+    else:
+        return False
+    if s.peek(1).kind is not TokenKind.LPAREN:
+        return False
+    depth = 0
+    j = 1
+    while True:
+        k = s.peek(j).kind
+        if k is TokenKind.EOF:
+            return False
+        if k in (TokenKind.LPAREN, TokenKind.LBRACKET, TokenKind.LBRACE):
+            depth += 1
+        elif k in (TokenKind.RPAREN, TokenKind.RBRACKET, TokenKind.RBRACE):
+            depth -= 1
+            if depth == 0:
+                return False
+        elif k is TokenKind.KW_AS and depth == 1:
+            return True
+        j += 1
+
+
+def _parse_comprehension(s: _ParserState) -> ast_.Comprehension:
+    """`map|any|all ( xs as VAR => body )` (§16.1). VAR binds one element,
+    visible only in `body`."""
+    head = s.peek()
+    kind = "any" if head.kind is TokenKind.KW_ANY else head.text  # map | all
+    s.i += 1
+    s.eat(TokenKind.LPAREN)
+    s.skip_newlines()
+    xs = _parse_expr(s)
+    s.eat(TokenKind.KW_AS)
+    var_tok = s.eat(TokenKind.IDENT)
+    s.eat(TokenKind.FATARROW)
+    s.skip_newlines()
+    body = _parse_expr(s)
+    s.skip_newlines()
+    end = s.eat(TokenKind.RPAREN).span
+    return ast_.Comprehension(kind=kind, xs=xs, var=var_tok.text, body=body,
+                              span=_join(head.span, end))
+
+
 def _parse_primary(s: _ParserState) -> ast_.Expr:
+    if _at_comprehension(s):
+        return _parse_comprehension(s)
     t = s.peek()
     if t.kind is TokenKind.HEX:
         s.i += 1

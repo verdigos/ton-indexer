@@ -791,6 +791,14 @@ def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
             span,
         )
         return False
+    if isinstance(e, ast_.Comprehension):
+        ctx.bag.error(
+            "C013_WHERE_EXPR_NOT_SYNC",
+            "`where (expr)` cannot contain map/any/all comprehensions "
+            "(build-expression only)",
+            span,
+        )
+        return False
     if isinstance(e, ast_.Call):
         callee = e.callee
         if not isinstance(callee, ast_.NameRef) or callee.name not in _EXPR_BUILTINS:

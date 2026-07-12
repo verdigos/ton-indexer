@@ -98,10 +98,11 @@ def _registries(vec) -> Registries:
 
 
 def _sync_legal(expr) -> bool:
-    """True when the expression contains no name/dotfield/lookup (the sync
-    where-clause evaluator has no environment and rejects lookups)."""
+    """True when the expression contains no name/dotfield/lookup/comprehension
+    (the sync where-clause evaluator has no environment, rejects lookups, and
+    does not evaluate map/any/all comprehensions — build-expression only)."""
     if isinstance(expr, dict):
-        if expr.get("k") in ("name", "dotfield", "lookup"):
+        if expr.get("k") in ("name", "dotfield", "lookup", "mapc", "quant"):
             return False
         return all(_sync_legal(v) for v in expr.values())
     if isinstance(expr, list):
