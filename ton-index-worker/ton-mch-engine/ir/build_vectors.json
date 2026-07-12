@@ -1,5 +1,5 @@
 {
- "build_vectors_version": "0.1",
+ "build_vectors_version": "0.2",
  "build_vectors": [
   {
    "name": "out_basic",
@@ -4701,6 +4701,344 @@
       },
       "body_b64": "te6ccgEBAQEABgAACBERERE="
      }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": true
+   }
+  },
+  {
+   "name": "parse_expr_transfer",
+   "matcher": {
+    "name": "parse_expr_transfer",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "let",
+      "name": "b",
+      "expr": {
+       "k": "parse",
+       "x": {
+        "k": "name",
+        "id": "t"
+       },
+       "types": [
+        "JettonTransfer"
+       ]
+      }
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "qid",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "name",
+          "id": "b"
+         },
+         "name": "query_id"
+        }
+       },
+       {
+        "name": "amt",
+        "expr": {
+         "k": "call",
+         "fn": "amount",
+         "args": [
+          {
+           "k": "attr",
+           "of": {
+            "k": "name",
+            "id": "b"
+           },
+           "name": "amount"
+          }
+         ]
+        }
+       },
+       {
+        "name": "dst",
+        "expr": {
+         "k": "call",
+         "fn": "account",
+         "args": [
+          {
+           "k": "attr",
+           "of": {
+            "k": "name",
+            "id": "b"
+           },
+           "name": "destination"
+          }
+         ]
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "opcode": 286331153,
+      "failed": false,
+      "broken": false,
+      "data": {
+       "opcode": 286331153,
+       "source": {
+        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+       },
+       "destination": {
+        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+       },
+       "value": {
+        "$amount": 1000000000
+       }
+      },
+      "msg": {
+       "msg_hash": "msg_t",
+       "tx_hash": "tx_t",
+       "tx_lt": 1000,
+       "direction": "in",
+       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "value": 1000000000,
+       "opcode": 286331153,
+       "created_lt": 999,
+       "created_at": 1699999999,
+       "bounce": false,
+       "bounced": false
+      },
+      "tx": {
+       "hash": "tx_t",
+       "lt": 1000,
+       "now": 1700000000,
+       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "aborted": false,
+       "orig_status": "active",
+       "end_status": "active",
+       "compute_exit_code": 0
+      },
+      "body_b64": "te6ccgEBAQEAWQAArQ+KfqUAAAAAAAAABzTEtAgBd3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3cAMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMIHc1lAQ=="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "qid": 7,
+     "amt": {
+      "$amount": 5000000
+     },
+     "dst": {
+      "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+     }
+    },
+    "failed": false,
+    "broken": false
+   }
+  },
+  {
+   "name": "parse_expr_no_type_parses_faults",
+   "matcher": {
+    "name": "parse_expr_no_type_parses_faults",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "q",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "parse",
+          "x": {
+           "k": "name",
+           "id": "t"
+          },
+          "types": [
+           "JettonTransfer"
+          ]
+         },
+         "name": "query_id"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "opcode": 286331153,
+      "failed": false,
+      "broken": false,
+      "data": {
+       "opcode": 286331153,
+       "source": {
+        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+       },
+       "destination": {
+        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+       },
+       "value": {
+        "$amount": 1000000000
+       }
+      },
+      "msg": {
+       "msg_hash": "msg_t",
+       "tx_hash": "tx_t",
+       "tx_lt": 1000,
+       "direction": "in",
+       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "value": 1000000000,
+       "opcode": 286331153,
+       "created_lt": 999,
+       "created_at": 1699999999,
+       "bounce": false,
+       "bounced": false
+      },
+      "tx": {
+       "hash": "tx_t",
+       "lt": 1000,
+       "now": 1700000000,
+       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "aborted": false,
+       "orig_status": "active",
+       "end_status": "active",
+       "compute_exit_code": 0
+      },
+      "body_b64": "te6ccgEBAQEABgAACBERERE="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": true
+   }
+  },
+  {
+   "name": "parse_expr_null_target_faults",
+   "matcher": {
+    "name": "parse_expr_null_target_faults",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     },
+     {
+      "name": "i",
+      "card": "opt"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "q",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "parse",
+          "x": {
+           "k": "name",
+           "id": "i"
+          },
+          "types": [
+           "JettonTransfer"
+          ]
+         },
+         "name": "query_id"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "opcode": 286331153,
+      "failed": false,
+      "broken": false,
+      "data": {
+       "opcode": 286331153,
+       "source": {
+        "$account": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+       },
+       "destination": {
+        "$account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+       },
+       "value": {
+        "$amount": 1000000000
+       }
+      },
+      "msg": {
+       "msg_hash": "msg_t",
+       "tx_hash": "tx_t",
+       "tx_lt": 1000,
+       "direction": "in",
+       "source": "0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+       "destination": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "value": 1000000000,
+       "opcode": 286331153,
+       "created_lt": 999,
+       "created_at": 1699999999,
+       "bounce": false,
+       "bounced": false
+      },
+      "tx": {
+       "hash": "tx_t",
+       "lt": 1000,
+       "now": 1700000000,
+       "account": "0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+       "aborted": false,
+       "orig_status": "active",
+       "end_status": "active",
+       "compute_exit_code": 0
+      },
+      "body_b64": "te6ccgEBAQEAWQAArQ+KfqUAAAAAAAAABzTEtAgBd3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3cAMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMIHc1lAQ=="
+     },
+     "i": null
     },
     "anchor": "t",
     "consumed": [

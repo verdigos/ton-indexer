@@ -203,6 +203,20 @@ class Emitter {
     if (k == "mapc" || k == "quant") {
       return emit_comprehension(e, k == "quant");
     }
+    if (k == "parse") {
+      // Build-only build EXPRESSION (W7, IR v1.1). Where/Vectors modes have no
+      // build env + no message parsers -> defensive fault (like lookup/mapc).
+      if (mode_ != EmitMode::Build) {
+        return bind("rt_fault(\"parse expression is only evaluable in a build program\")");
+      }
+      std::string x = emit(*jfield(e, "x"));
+      std::vector<std::string> types;
+      for (const auto &t : jfield(e, "types")->get_array()) {
+        types.push_back(cstr(t.get_string().str()));
+      }
+      return bind("rt_parse_expr(env, " + x + ", std::vector<std::string>{" +
+                  join(types, ", ") + "})");
+    }
     throw std::runtime_error("unsupported expression kind '" + k + "'");
   }
 

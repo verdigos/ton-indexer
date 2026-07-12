@@ -80,6 +80,27 @@ EvalResult rt_parse(BuildEnv &env, const Value &target, const std::vector<std::s
   return rt_ok(Value::null());
 }
 
+EvalResult rt_parse_expr(BuildEnv &env, const Value &target,
+                         const std::vector<std::string> &types) {
+  (void)env;  // stateless: no env.bodies store, unlike the statement form
+  // expr.py _eval_parse: a null target or a non-block target (no get_body)
+  // faults — the deliberate inversion of rt_parse's soft no-op on those.
+  if (target.t != VType::Block || target.block == nullptr) {
+    return rt_fault("parse expression: target is null or not a block");
+  }
+  Value body;
+  EvalResult r = soft_parse(target.block, types, body);
+  if (r.faulted) {
+    return r;  // unregistered type name
+  }
+  if (body.is_null()) {
+    // Every alternative failed to parse the body: total failure -> fault
+    // (build reject), NOT the statement form's soft-null.
+    return rt_fault("parse expression: no message type parsed the body");
+  }
+  return rt_ok(std::move(body));
+}
+
 EvalResult rt_access_build(const BuildEnv &env, const Value &obj, const std::string &field) {
   if (field == "body") {
     if (obj.t == VType::Block) {

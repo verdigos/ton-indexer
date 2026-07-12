@@ -121,6 +121,13 @@ EvalResult ExprEval::eval(const Json &e) {
     }
     return rt_quant(jfield(e, "op")->get_string().str() == "all", xs.value, body_fn);
   }
+  if (k == "parse") {
+    // Build-only (needs a Block target + message parsers). The interpreter runs
+    // --vectors (value-only, no blocks) and sync where clauses; a parse node
+    // never reaches either (build_vectors go through the generated BuildGen
+    // path). Defensive fault, mirroring the where/vectors guards in codegen.
+    return rt_fault("parse expression is only evaluable in a build program");
+  }
   return rt_fault("unsupported expression kind '" + k + "'");
 }
 

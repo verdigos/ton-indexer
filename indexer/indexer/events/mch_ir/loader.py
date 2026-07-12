@@ -14,7 +14,7 @@ from typing import Any
 
 from indexer.events.mch_ir.expr import BUILTINS
 
-IR_VERSION = "1.0"
+IR_VERSION = "1.1"
 
 NODE_KINDS = frozenset({"contract", "block_type", "pred", "any", "or", "recursive"})
 ANCHOR_KINDS = frozenset({"opcode_set", "btype", "mixed", "pred"})

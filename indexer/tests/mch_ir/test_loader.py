@@ -25,7 +25,7 @@ SPECS_DIR = Path(mch.__file__).parent / "specs"
 
 def _min_doc(**over) -> dict:
     doc = {
-        "mch_ir_version": "1.0",
+        "mch_ir_version": "1.1",
         "frontend": {"generator": "mch-python", "source_files": ["t.mch"]},
         "matchers": [{
             "name": "m",
@@ -115,7 +115,7 @@ def _stub_registries(artifact) -> Registries:
 def test_load_specs_artifact_from_dict_and_file(tmp_path):
     doc = emit_dir(SPECS_DIR)
     art = load_artifact(doc)
-    assert art.version == "1.0"
+    assert art.version == "1.1"
     # The original builder-based spec set has 9 matchers; the count grows as more
     # protocols are ported, so assert the structural invariant, not a magic count.
     assert len(art.matchers) >= 9

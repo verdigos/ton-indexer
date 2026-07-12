@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from indexer.events.mch import ast_
 
-IR_VERSION = "1.0"
+IR_VERSION = "1.1"
 
 
 def emit_expr(e: ast_.Expr) -> dict:

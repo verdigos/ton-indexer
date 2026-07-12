@@ -136,7 +136,7 @@ def _grab_registries() -> tuple[Registries, list]:
 
 def _artifact(nodes: list[dict], matcher: dict) -> dict:
     return {
-        "mch_ir_version": "1.0",
+        "mch_ir_version": "1.1",
         "frontend": {"generator": "test", "source_files": []},
         "matchers": [matcher],
         "nodes": nodes,
