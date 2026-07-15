@@ -293,8 +293,7 @@ teammates never commit. Wave-boundary ops (proven): executor rotation on long co
 | | T2.2 | structFieldsOf monomorph + client_ty_idx (cell side) + uLabelTyIdx + createLabelsForUnion; units ported from types-kernel behavior + generic fixtures; NB nullable DROPS uLabelTyIdx per reference (dynamic-serialization.ts:291, emit side agrees) — do not "fix" | **HIGH** | M | **opus** | **DONE** |
 | **W3 scalars** | T3.1 | intN/uintN/bool/coins/varintN/varuintN/bitsN load+store TDD, boundary units (min/max/truncation) | MED | M | sonnet | **DONE** |
 | **W4 addresses** | T4.1 | address/maybe_address/external_address/address_any load+store — @ton/core accept/reject parity + source-derived reject-space units | **HIGH** | M | **opus** | **DONE** (anycast = known-divergence, see log + §0.12b) |
-| **W5 refs+strings** | (brief note) | Same normative-excerpt rule for loadVarIntBig + loadStringRefTail reject-space | | | | |
-| **W5 refs+strings** | T5.1 | cell/cellOf/nullable(1-bit)/maybe_ref; snake string ref-tail; remaining snapshot | MED | M | sonnet | pending |
+| **W5 refs+strings** | T5.1 | cell/cellOf/nullable(1-bit)/maybe_ref; snake string ref-tail (normative-excerpt rule applied); remaining snapshot; BOC-flags pin (W0-deferred §0.14 item) | MED | M | sonnet | **DONE** |
 | **W6 containers** | T6.1 | arrayOf per §0.12: store = TS parity (1 elem/ref), load accepts BOTH chunked + 1-elem/ref; lispListOf; dict adapter (keys intN/uintN/address). DICT-PACK POLICY (final review F8): golden-hex parity requires vm::Dictionary label encodings bit-identical to @ton/core serializeDict; both aim canonical/minimal and likely agree — IF a label-form tie differs, write a custom dict WRITER matching the oracle (@ton/core), don't relitigate; unpack (production direction) unaffected | **HIGH** | M | **opus** | pending |
 | **W7 prefixes** | T7.1 | load_and_check_prefix (any len) + lookup peek + union prefix-tree dispatch (implicit-EATS / explicit-REREADS / T\|void / Either) + store side | **HIGH** | M | **opus** | pending |
 | **W8 interpreter** | T8.1 | AbiValue tree + canonical JSON dump | LOW | M | sonnet | pending |
@@ -418,6 +417,18 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
    walkers ~500, emitter 800-1,200).
 
 ## 6. Wave log (append per wave; status column above updates same commit)
+
+- **W5 DONE 2026-07-16** (lead-verified: 89 cases / 567 asserts / ctest 1/1).
+  AbiLeavesRef.{h,cpp}: cell/ref_slice(cellOf)/maybe_ref/maybe_prefix(nullable bit)/
+  string snake/remaining. **BOC FLAGS RESOLVED (W0-deferred §0.14 item):**
+  @ton/core toBoc() defaults {idx:false, crc32:true} ≡ vm::std_boc_serialize(root, 2)
+  (Mode::WithCRC32C) — BYTE-IDENTITY PROVEN vs Node on hand-built + 3 snake cells;
+  recorded in VALUE_SCHEMA.md; W8 cell dump = b64(std_boc_serialize(root,2)), oracle-
+  agreeing by construction. Snake string semantics pinned from strings.js: byte-ALIGNED
+  hard reject (no padding tolerance — loadPaddedBits is a different BOC-internal
+  method), ≤1 continuation ref, 127-byte/cell writer chunking. Leaves belt-and-
+  suspenders reject exotic cells via load_cell_slice_special (top-level reject still
+  W8's). remaining = snapshot-and-drain (matches core clone-then-consume).
 
 - **W4 DONE 2026-07-16** (lead-verified: 74 cases / 495 asserts / ctest 1/1).
   AbiLeavesAddress.{h,cpp}: AbiAddress{None|Std|Extern; wc int8-checked; hash Bits256;

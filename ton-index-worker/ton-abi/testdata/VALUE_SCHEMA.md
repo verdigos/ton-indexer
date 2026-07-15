@@ -57,6 +57,27 @@ W0 vectors have refs, so no vector here exercises the multi-line form — that
 first shows up once a fixture/struct with a `cell`/`cellOf`/ref field is added
 (W5+).
 
+## BOC serialization mode (W5 — resolves the W0-deferred §0.14 item)
+
+The `cell` value-JSON is a **BOC base64**. The serialization flags are pinned to
+match what the Node oracle (`@ton/core`) emits, so a generated `to_abi_value()`
+dump is byte-identical to the vector:
+
+- `@ton/core` `cell.toBoc()` defaults (Cell.js:170-173) to `{ idx: false,
+  crc32: true }` → no index, CRC32C appended, no cache bits.
+- The equivalent C++ call is **`vm::std_boc_serialize(root, 2)`** — mode bit
+  `Mode::WithCRC32C == 2` (boc.h:261), with `WithIndex(1)` / `WithCacheBits(16)`
+  OFF.
+- **Byte-identity proven** (`test/AbiLeavesRefTest.cpp`): a hand-built root cell
+  (`0x1234` + ref `0xAB`) serialized via `std_boc_serialize(_, 2)` equals, byte
+  for byte (base64), the `root.toBoc()` output recorded from a Node run:
+  `te6cckEBAgEACAABBBI0AQACqyFjJBU=`. Three `storeStringRefTail` cases (short /
+  empty / 200-byte multi-cell snake) are likewise asserted byte-identical to
+  `@ton/core`, exercising refs + the snake chunking.
+
+So: **`cell` dump = base64 of `vm::std_boc_serialize(root, 2)`**; W8's
+`to_abi_value` and the gen_vectors oracle agree by construction.
+
 ## Deviations from §0.14 — none found (so far)
 
 No deviation from the plan's frozen schema was discovered while building this
@@ -65,12 +86,7 @@ vector needs them yet), not contradicted:
 
 - bigint width-preserving external-address `{"extern": {"bits": N, "value":
   hex}}` — needs W4 (addresses).
-- `cell` = BOC base64 with pinned `vm::std_boc_serialize` flags — needs a
-  fixture/struct with a `cell`-typed field (W5+); no such field was picked at
-  W0, so the exact `@ton/core` `cell.toBoc()` default flags were NOT yet
-  determined/recorded here. **This is the one open item T0.2 flagged as
-  "determined + recorded in VALUE_SCHEMA.md at W0" that is still pending** —
-  deferred to the wave that first adds a cell-typed vector (W5), since none
-  of the 3 W0 fixtures' chosen scalar-only structs touch `cell`/`cellOf`.
+- `cell` = BOC base64 with pinned serialization flags — **RESOLVED at W5**, see
+  "BOC serialization mode" below.
 - union `hasValueField` distinction, `map` sorted-entries, `arrayOf`/tensor —
   no union/map/array field exists among the picked structs; needs W6/W7/W8.
