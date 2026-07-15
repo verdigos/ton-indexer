@@ -284,7 +284,7 @@ teammates never commit. Wave-boundary ops (proven): executor rotation on long co
 | | T1.3 | Loads-all-fixture-ABIs test (full set) | LOW | S | haiku | **DONE** (18/19 compile; small.tolk = upstream compiler error; err-* compile to VALID ABIs → committed as W11 reject-testdata) |
 | **W2 kernel** | T2.1 | SymTable + aliasTargetOf + resolution pass (flatten fields, sort prefix tables) TDD. THREE NAMED INVARIANTS (final review F3): (i) union label/prefix tables keyed per (union ty_idx, uLabelTyIdx) — labels are a USE-SITE property, same interned union can arrive with different uLabel from different instantiations; (ii) custom-hooked alias/enum nodes SURVIVE resolution as nodes (reference checks custom_pack_unpack BEFORE aliasTargetOf — dynamic-serialization.ts:335-374); (iii) prefix-freedom validated BEFORE sorting (makes sort provably behavior-preserving vs reference's declaration-order first-match) | MED→HIGH | M | **opus** (was sonnet — invariants subtle) | **DONE** |
 | | T2.2 | structFieldsOf monomorph + client_ty_idx (cell side) + uLabelTyIdx + createLabelsForUnion; units ported from types-kernel behavior + generic fixtures; NB nullable DROPS uLabelTyIdx per reference (dynamic-serialization.ts:291, emit side agrees) — do not "fix" | **HIGH** | M | **opus** | **DONE** |
-| **W3 scalars** | T3.1 | intN/uintN/bool/coins/varintN/varuintN/bitsN load+store TDD, boundary units (min/max/truncation) | MED | M | sonnet | pending |
+| **W3 scalars** | T3.1 | intN/uintN/bool/coins/varintN/varuintN/bitsN load+store TDD, boundary units (min/max/truncation) | MED | M | sonnet | **DONE** |
 | **W4 addresses** | T4.1 | address/maybe_address/external_address/address_any load+store — @ton/core accept/reject parity. Brief MUST include the relevant @ton/core implementation excerpts as NORMATIVE reading (vectors pin accepted inputs; the REJECT-space — anycast bit, addr_var, malformed extern, etc. — needs source-derived enumeration + error vectors per reject condition; §R.1 resolution) | **HIGH** | M | **opus** | pending |
 | **W5 refs+strings** | (brief note) | Same normative-excerpt rule for loadVarIntBig + loadStringRefTail reject-space | | | | |
 | **W5 refs+strings** | T5.1 | cell/cellOf/nullable(1-bit)/maybe_ref; snake string ref-tail; remaining snapshot | MED | M | sonnet | pending |
@@ -411,6 +411,16 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
    walkers ~500, emitter 800-1,200).
 
 ## 6. Wave log (append per wave; status column above updates same commit)
+
+- **W3 DONE 2026-07-16** (lead-verified: 55 cases / 387 asserts / ctest 1/1).
+  AbiLeavesScalar.{h,cpp}: int/uint/bool/coins/varint/varuint/bits load+store over
+  vm::CellSlice/CellBuilder, @ton/core-normative (BitReader/BitBuilder.js read + cited).
+  PARITY NUANCES pinned by tests: (1) varint size-byte count = @ton/core-exact
+  ceil((mag_bits+1)/8) — DIVERGES from two's-complement bit_size at exact powers of two
+  (-128 → 2 bytes); pack-parity-critical at W8. (2) var prefix width = log2(n) verified
+  exact (fail-closed non-power-of-2; real ABIs emit 16/32). (3) bitsN value =
+  Ref<CellSlice> bit-string (slice-ish §0.14 kind), not RefInt256; {bits,refs} dump =
+  W8's job. Leaves take Tolk width n, compute prefix internally.
 
 - **W2 DONE 2026-07-16** (lead-verified: 38 cases / 285 assertions / ctest 1/1,
   green-empty runner intact). AbiKernel.{h,cpp} landed: SymTable (per-kind, verbatim
