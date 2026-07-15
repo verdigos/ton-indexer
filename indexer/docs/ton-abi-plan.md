@@ -276,7 +276,7 @@ teammates never commit. Wave-boundary ops (proven): executor rotation on long co
 
 | Wave | Task | Content | Diff | Scope | Model | Status |
 |---|---|---|---|---|---|---|
-| **W0 scaffold** | T0.1 | CMake lib+test exe+ctest, vendor doctest, smoke green | LOW | S | haiku/sonnet | pending |
+| **W0 scaffold** | T0.1 | CMake lib+test exe+ctest, vendor doctest, smoke green | LOW | S | haiku/sonnet | **DONE** |
 | | T0.2 | gen_vectors.mjs + committed tools/package{,-lock}.json (§0.15; if the pkg is unpublished use file:/git dep, version = git hash); compile 3 fixtures, emit ABIs + first golden-hex vectors; SELF-VALIDATION REQUIRED (final review F4): (a) every emitted value-JSON re-parsed → dynamicPack → hex must equal the golden hex (lossless-serializer proof); (b) cases transcribed from reference specs assert the spec's LITERAL golden hex at generation time; (c) port the specs' custom-serializer TS impls (LotsOfWrappers.spec.ts:304-380) into gen_vectors. Write testdata/VALUE_SCHEMA.md — documents the serializer's validated output (§0.14), does NOT independently legislate | MED | M | sonnet | pending |
 | | T0.3 | VectorRunner skeleton: one doctest case per vector, vectors carry `enabled_from: <wave>` gating — runner GREEN on empty enabled set (green-at-boundary holds); waves enable their slices | LOW | S | haiku/sonnet | pending |
 | **W1 model+loader** | T1.1 | AbiModel PODs, all ~30 Ty kinds + ContractABI arrays (mechanical mirror) | LOW | M | sonnet | pending |
@@ -412,4 +412,19 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
 
 ## 6. Wave log (append per wave; status column above updates same commit)
 
-- (empty — not started)
+- **W0 DONE 2026-07-16** (lead-verified: build + ctest 1/1, VectorRunner 12 skipped/0
+  enabled = green-empty confirmed, regen byte-stable across consecutive runs). Landed:
+  ton-abi/ scaffold (lib + ton-abi-test + ctest, doctest v2.4.11 vendored, root
+  add_subdirectory), tools/gen_vectors.mjs with EXACT pins (@ton/tolk-abi-to-typescript
+  0.5.0 published, @ton/tolk-js 1.4.1, @ton/core 0.62.0 = reference's own devDep lock),
+  3 fixtures compiled (counter, lots-of-messages, lots-of-wrappers scalar structs), 12
+  vectors all enabled_from W8, self-validation (a)(b) pass ((c) vacuous — scalar-only
+  choice, custom impls deferred to W8/W9), VALUE_SCHEMA.md (validated subset).
+  FINDINGS: (1) td check.h redefines CHECK → shadows doctest's; push_macro/undef/
+  pop_macro pattern REQUIRED in any TU mixing doctest + tdutils (in VectorRunner.cpp,
+  remember for all future test TUs). (2) convertTolkFileToABI not in published exports
+  — gen_vectors carries its own ~10-line wrapper. (3) §0.14 BOC-flags item NOT
+  satisfiable at W0 (no cell-typed field in chosen vectors) — OPEN, moves to W5 (first
+  cell vector); recorded in VALUE_SCHEMA.md. (4) ctest runs scoped to build-dir/ton-abi
+  (root has no enable_testing — same as mch pattern). Note: T0.3 uses doctest SUBCASE
+  per vector (no dynamic TEST_CASE registration in doctest) — same granularity.

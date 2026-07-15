@@ -1,0 +1,143 @@
+{
+  "header": {
+    "pkg_version": "0.5.0",
+    "tolk_js_version": "1.4.1",
+    "core_version": "0.62.0",
+    "compiler_version": "1.4.1",
+    "abi_schema_version": "1.0"
+  },
+  "vectors": [
+    {
+      "fixture": "tolk_counter",
+      "struct": "IncreaseCounter",
+      "enabled_from": "W8",
+      "value": {
+        "$": "IncreaseCounter",
+        "queryId": "0",
+        "increaseBy": "1"
+      },
+      "golden_hex": "x{7E8764EF000000000000000000000001}"
+    },
+    {
+      "fixture": "tolk_counter",
+      "struct": "IncreaseCounter",
+      "enabled_from": "W8",
+      "value": {
+        "$": "IncreaseCounter",
+        "queryId": "123456789",
+        "increaseBy": "4294967295"
+      },
+      "golden_hex": "x{7E8764EF00000000075BCD15FFFFFFFF}"
+    },
+    {
+      "fixture": "tolk_counter",
+      "struct": "ResetCounter",
+      "enabled_from": "W8",
+      "value": {
+        "$": "ResetCounter",
+        "queryId": "0"
+      },
+      "golden_hex": "x{3A752F060000000000000000}"
+    },
+    {
+      "fixture": "tolk_counter",
+      "struct": "ResetCounter",
+      "enabled_from": "W8",
+      "value": {
+        "$": "ResetCounter",
+        "queryId": "18446744073709551615"
+      },
+      "golden_hex": "x{3A752F06FFFFFFFFFFFFFFFF}"
+    },
+    {
+      "fixture": "lots-of-messages",
+      "struct": "IncreaseBy",
+      "enabled_from": "W8",
+      "value": {
+        "$": "IncreaseBy",
+        "counter_id": "0",
+        "inc_by": "1"
+      },
+      "golden_hex": "x{123456780000000000000001}"
+    },
+    {
+      "fixture": "lots-of-messages",
+      "struct": "IncreaseBy",
+      "enabled_from": "W8",
+      "value": {
+        "$": "IncreaseBy",
+        "counter_id": "-5",
+        "inc_by": "100"
+      },
+      "golden_hex": "x{12345678FFFFFFFB00000064}"
+    },
+    {
+      "fixture": "lots-of-messages",
+      "struct": "EmptyMsg",
+      "enabled_from": "W8",
+      "value": {
+        "$": "EmptyMsg"
+      },
+      "golden_hex": "x{34567890}"
+    },
+    {
+      "fixture": "lots-of-wrappers",
+      "struct": "MsgSinglePrefix32",
+      "enabled_from": "W8",
+      "value": {
+        "$": "MsgSinglePrefix32",
+        "amount1": "80",
+        "amount2": "800000000"
+      },
+      "golden_hex": "x{8765432115042FAF0800}",
+      "source": "LotsOfWrappers.spec.ts literal gold"
+    },
+    {
+      "fixture": "lots-of-wrappers",
+      "struct": "CounterIncrement",
+      "enabled_from": "W8",
+      "value": {
+        "$": "CounterIncrement",
+        "counter_id": "123",
+        "inc_by": "78"
+      },
+      "golden_hex": "x{123456787B0000004E}",
+      "source": "LotsOfWrappers.spec.ts literal gold"
+    },
+    {
+      "fixture": "lots-of-wrappers",
+      "struct": "CounterDecrement",
+      "enabled_from": "W8",
+      "value": {
+        "$": "CounterDecrement",
+        "counter_id": "0",
+        "dec_by": "-38"
+      },
+      "golden_hex": "x{2345678900FFFFFFDA}",
+      "source": "LotsOfWrappers.spec.ts literal gold"
+    },
+    {
+      "fixture": "lots-of-wrappers",
+      "struct": "CounterReset0",
+      "enabled_from": "W8",
+      "value": {
+        "$": "CounterReset0",
+        "counter_id": "0"
+      },
+      "golden_hex": "x{3456789000}",
+      "source": "LotsOfWrappers.spec.ts literal gold"
+    },
+    {
+      "fixture": "lots-of-wrappers",
+      "struct": "CounterResetTo",
+      "enabled_from": "W8",
+      "value": {
+        "$": "CounterResetTo",
+        "counter_id": "0",
+        "initial_value": "29874329774732"
+      },
+      "golden_hex": "x{001843000000001B2BA8D06A8C}",
+      "source": "LotsOfWrappers.spec.ts literal gold"
+    }
+  ]
+}
