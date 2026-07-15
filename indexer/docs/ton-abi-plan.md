@@ -122,6 +122,13 @@ L0 TON-core vm (have) → L1 leaf runtime (~600-800 LOC, THE correctness-critica
     per the documented compiler format (best-effort) + deferred item: compiler-executed
     vectors via sandbox (store-on-TVM → committed cells) if arrays appear in real
     protocol messages.
+12b. KNOWN-DIVERGENCE #2 (decided at W4): ANYCAST internal addresses = REJECT (lead
+    decision on executor-surfaced conflict). @ton/core _loadInternalAddress PROCESSES
+    anycast (rewrites hash prefix — silently changes address identity); we fail-closed
+    reject instead: safer for an indexer than synthesizing rewritten addresses; no
+    fixture/vector/real-traffic carries anycast; anycast is near-dead in TON. Revisit
+    trigger: a production anycast message that matters. (~15-line change + hash-rewrite
+    helper if ever needed.)
 13. Model routing (§3): T11.1 executes on opus against a lead-authored emitted-shape
     spec (golden "this ABI struct → exactly this C++ text" examples in the W11 wave
     plan); escalate executor to Fable-class ONLY on demonstrated struggle in first
@@ -285,7 +292,7 @@ teammates never commit. Wave-boundary ops (proven): executor rotation on long co
 | **W2 kernel** | T2.1 | SymTable + aliasTargetOf + resolution pass (flatten fields, sort prefix tables) TDD. THREE NAMED INVARIANTS (final review F3): (i) union label/prefix tables keyed per (union ty_idx, uLabelTyIdx) — labels are a USE-SITE property, same interned union can arrive with different uLabel from different instantiations; (ii) custom-hooked alias/enum nodes SURVIVE resolution as nodes (reference checks custom_pack_unpack BEFORE aliasTargetOf — dynamic-serialization.ts:335-374); (iii) prefix-freedom validated BEFORE sorting (makes sort provably behavior-preserving vs reference's declaration-order first-match) | MED→HIGH | M | **opus** (was sonnet — invariants subtle) | **DONE** |
 | | T2.2 | structFieldsOf monomorph + client_ty_idx (cell side) + uLabelTyIdx + createLabelsForUnion; units ported from types-kernel behavior + generic fixtures; NB nullable DROPS uLabelTyIdx per reference (dynamic-serialization.ts:291, emit side agrees) — do not "fix" | **HIGH** | M | **opus** | **DONE** |
 | **W3 scalars** | T3.1 | intN/uintN/bool/coins/varintN/varuintN/bitsN load+store TDD, boundary units (min/max/truncation) | MED | M | sonnet | **DONE** |
-| **W4 addresses** | T4.1 | address/maybe_address/external_address/address_any load+store — @ton/core accept/reject parity. Brief MUST include the relevant @ton/core implementation excerpts as NORMATIVE reading (vectors pin accepted inputs; the REJECT-space — anycast bit, addr_var, malformed extern, etc. — needs source-derived enumeration + error vectors per reject condition; §R.1 resolution) | **HIGH** | M | **opus** | pending |
+| **W4 addresses** | T4.1 | address/maybe_address/external_address/address_any load+store — @ton/core accept/reject parity + source-derived reject-space units | **HIGH** | M | **opus** | **DONE** (anycast = known-divergence, see log + §0.12b) |
 | **W5 refs+strings** | (brief note) | Same normative-excerpt rule for loadVarIntBig + loadStringRefTail reject-space | | | | |
 | **W5 refs+strings** | T5.1 | cell/cellOf/nullable(1-bit)/maybe_ref; snake string ref-tail; remaining snapshot | MED | M | sonnet | pending |
 | **W6 containers** | T6.1 | arrayOf per §0.12: store = TS parity (1 elem/ref), load accepts BOTH chunked + 1-elem/ref; lispListOf; dict adapter (keys intN/uintN/address). DICT-PACK POLICY (final review F8): golden-hex parity requires vm::Dictionary label encodings bit-identical to @ton/core serializeDict; both aim canonical/minimal and likely agree — IF a label-form tie differs, write a custom dict WRITER matching the oracle (@ton/core), don't relitigate; unpack (production direction) unaffected | **HIGH** | M | **opus** | pending |
@@ -411,6 +418,17 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
    walkers ~500, emitter 800-1,200).
 
 ## 6. Wave log (append per wave; status column above updates same commit)
+
+- **W4 DONE 2026-07-16** (lead-verified: 74 cases / 495 asserts / ctest 1/1).
+  AbiLeavesAddress.{h,cpp}: AbiAddress{None|Std|Extern; wc int8-checked; hash Bits256;
+  ext_value = bit-slice up to 511 bits (WIDER than RefInt256 — hence slice not int)} +
+  4 load/store pairs; @ton/core tag map (0 none/1 extern/2 std/3 var) cited in header;
+  19 units incl. one per source-derived reject condition (anycast, addr_var ×2 paths,
+  truncations, wrong-tags, store rejects). DISCREPANCY SURFACED + DECIDED: plan brief
+  "anycast REJECT" vs @ton/core actual behavior (processes + rewrites hash prefix) —
+  executor followed plan, reported honestly; lead kept REJECT as known-divergence #2
+  (§0.12b: identity-rewriting is worse than rejection for an indexer; revisit trigger
+  named). Round-trips verified byte-identical via Cell::get_hash.
 
 - **W3 DONE 2026-07-16** (lead-verified: 55 cases / 387 asserts / ctest 1/1).
   AbiLeavesScalar.{h,cpp}: int/uint/bool/coins/varint/varuint/bits load+store over

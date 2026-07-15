@@ -12,6 +12,7 @@ add_library(ton-abi STATIC
     src/AbiLoader.cpp
     src/AbiKernel.cpp
     src/AbiLeavesScalar.cpp
+    src/AbiLeavesAddress.cpp
 )
 target_include_directories(ton-abi PUBLIC src)
 target_compile_features(ton-abi PUBLIC cxx_std_20)
@@ -23,6 +24,7 @@ add_executable(ton-abi-test
     test/AbiLoaderTest.cpp
     test/AbiKernelTest.cpp
     test/AbiLeavesScalarTest.cpp
+    test/AbiLeavesAddressTest.cpp
 )
 target_include_directories(ton-abi-test PRIVATE test)
 target_compile_features(ton-abi-test PRIVATE cxx_std_20)
