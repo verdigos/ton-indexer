@@ -10,6 +10,7 @@ cmake_minimum_required(VERSION 3.16)
 
 add_library(ton-abi STATIC
     src/AbiLoader.cpp
+    src/AbiKernel.cpp
 )
 target_include_directories(ton-abi PUBLIC src)
 target_compile_features(ton-abi PUBLIC cxx_std_20)
@@ -19,6 +20,7 @@ add_executable(ton-abi-test
     test/smoke_test.cpp
     test/VectorRunner.cpp
     test/AbiLoaderTest.cpp
+    test/AbiKernelTest.cpp
 )
 target_include_directories(ton-abi-test PRIVATE test)
 target_compile_features(ton-abi-test PRIVATE cxx_std_20)

@@ -282,8 +282,8 @@ teammates never commit. Wave-boundary ops (proven): executor rotation on long co
 | **W1 model+loader** | T1.1 | AbiModel PODs, all ~30 Ty kinds + ContractABI arrays (mechanical mirror) | LOW | M | sonnet | **DONE** |
 | | T1.2 | AbiLoader TDD: fail-closed walk; reject units — SEMANTIC invariants too: unknown kind, any nested index OOB, missing field, version ≠ "1.0", malformed bigint, duplicate decl names, instantiation arity mismatch, intN/uintN/bitsN width limits, alias cycles, union PREFIX-FREEDOM (no variant prefix strict-prefix of another — makes W2's sorted dispatch provably equal to reference declaration-order first-match), prefix bounds CORRECTED at W1: UNION-VARIANT prefix_len ≤ 32 (float64 rationale holds there), but STRUCT-level prefixes go WIDER (48-bit exists in lots-of-wrappers MsgSinglePrefix48) → struct bound = ≤1023 + uint64 prefix_num | MED→HIGH | M | sonnet (opus if invariant set balloons) | **DONE** |
 | | T1.3 | Loads-all-fixture-ABIs test (full set) | LOW | S | haiku | **DONE** (18/19 compile; small.tolk = upstream compiler error; err-* compile to VALID ABIs → committed as W11 reject-testdata) |
-| **W2 kernel** | T2.1 | SymTable + aliasTargetOf + resolution pass (flatten fields, sort prefix tables) TDD. THREE NAMED INVARIANTS (final review F3): (i) union label/prefix tables keyed per (union ty_idx, uLabelTyIdx) — labels are a USE-SITE property, same interned union can arrive with different uLabel from different instantiations; (ii) custom-hooked alias/enum nodes SURVIVE resolution as nodes (reference checks custom_pack_unpack BEFORE aliasTargetOf — dynamic-serialization.ts:335-374); (iii) prefix-freedom validated BEFORE sorting (makes sort provably behavior-preserving vs reference's declaration-order first-match) | MED→HIGH | M | **opus** (was sonnet — invariants subtle) | pending |
-| | T2.2 | structFieldsOf monomorph + client_ty_idx (cell side) + uLabelTyIdx + createLabelsForUnion; units ported from types-kernel behavior + generic fixtures; NB nullable DROPS uLabelTyIdx per reference (dynamic-serialization.ts:291, emit side agrees) — do not "fix" | **HIGH** | M | **opus** | pending |
+| **W2 kernel** | T2.1 | SymTable + aliasTargetOf + resolution pass (flatten fields, sort prefix tables) TDD. THREE NAMED INVARIANTS (final review F3): (i) union label/prefix tables keyed per (union ty_idx, uLabelTyIdx) — labels are a USE-SITE property, same interned union can arrive with different uLabel from different instantiations; (ii) custom-hooked alias/enum nodes SURVIVE resolution as nodes (reference checks custom_pack_unpack BEFORE aliasTargetOf — dynamic-serialization.ts:335-374); (iii) prefix-freedom validated BEFORE sorting (makes sort provably behavior-preserving vs reference's declaration-order first-match) | MED→HIGH | M | **opus** (was sonnet — invariants subtle) | **DONE** |
+| | T2.2 | structFieldsOf monomorph + client_ty_idx (cell side) + uLabelTyIdx + createLabelsForUnion; units ported from types-kernel behavior + generic fixtures; NB nullable DROPS uLabelTyIdx per reference (dynamic-serialization.ts:291, emit side agrees) — do not "fix" | **HIGH** | M | **opus** | **DONE** |
 | **W3 scalars** | T3.1 | intN/uintN/bool/coins/varintN/varuintN/bitsN load+store TDD, boundary units (min/max/truncation) | MED | M | sonnet | pending |
 | **W4 addresses** | T4.1 | address/maybe_address/external_address/address_any load+store — @ton/core accept/reject parity. Brief MUST include the relevant @ton/core implementation excerpts as NORMATIVE reading (vectors pin accepted inputs; the REJECT-space — anycast bit, addr_var, malformed extern, etc. — needs source-derived enumeration + error vectors per reject condition; §R.1 resolution) | **HIGH** | M | **opus** | pending |
 | **W5 refs+strings** | (brief note) | Same normative-excerpt rule for loadVarIntBig + loadStringRefTail reject-space | | | | |
@@ -411,6 +411,25 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
    walkers ~500, emitter 800-1,200).
 
 ## 6. Wave log (append per wave; status column above updates same commit)
+
+- **W2 DONE 2026-07-16** (lead-verified: 38 cases / 285 assertions / ctest 1/1,
+  green-empty runner intact). AbiKernel.{h,cpp} landed: SymTable (per-kind, verbatim
+  names — see correction below), aliasTargetOf, struct_fields_of (cell side),
+  create_labels_for_union + resolve_union{variants decl-order, dispatch_order sorted,
+  has_void}. INVARIANTS realized: (i) eager caches ONLY for use-site-independent data
+  (fields/targets/prefix-dispatch per ty_idx); labels computed per (union ty_idx,
+  uLabel) at CALL time, never cached under ty_idx alone — proven by test (same interned
+  union: int32/int64 vs T1/T2); (ii) kernel never reads custom_pack_unpack — W8 walker
+  MUST gate custom BEFORE alias/struct resolution (documented in header); (iii)
+  dispatch sort's behavior-preservation dependence on the loader prefix-freedom check
+  documented at build_union_dispatch. **CORRECTION to T2.1 row**: <...>-stripping does
+  NOT belong in the kernel — StructRef/AliasRef names are ALWAYS plain (all fixtures);
+  mangled names live only in struct_instantiations[].struct_name which the kernel
+  matches by ty_idx; stripping stays in the loader's arity validation (W1). §R.3
+  definitively resolved: eager flatten limited to use-site-independent data + per-call
+  labels = no walker duplication, thread-safe post-create. ResolvedField keeps pointer
+  into ContractABI (abi must outlive kernel — matches §0.16 immortal ownership); W11
+  gets name/default_value/client_ty_idx without copies.
 
 - **W1 DONE 2026-07-16** (lead-verified: 20 test cases / 115 assertions / ctest 1/1).
   AbiModel.h header-only PODs (~32 kinds, variant-based Ty, recursive ConstExpr via
