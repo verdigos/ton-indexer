@@ -279,9 +279,9 @@ teammates never commit. Wave-boundary ops (proven): executor rotation on long co
 | **W0 scaffold** | T0.1 | CMake lib+test exe+ctest, vendor doctest, smoke green | LOW | S | haiku/sonnet | **DONE** |
 | | T0.2 | gen_vectors.mjs + committed tools/package{,-lock}.json (§0.15; if the pkg is unpublished use file:/git dep, version = git hash); compile 3 fixtures, emit ABIs + first golden-hex vectors; SELF-VALIDATION REQUIRED (final review F4): (a) every emitted value-JSON re-parsed → dynamicPack → hex must equal the golden hex (lossless-serializer proof); (b) cases transcribed from reference specs assert the spec's LITERAL golden hex at generation time; (c) port the specs' custom-serializer TS impls (LotsOfWrappers.spec.ts:304-380) into gen_vectors. Write testdata/VALUE_SCHEMA.md — documents the serializer's validated output (§0.14), does NOT independently legislate | MED | M | sonnet | pending |
 | | T0.3 | VectorRunner skeleton: one doctest case per vector, vectors carry `enabled_from: <wave>` gating — runner GREEN on empty enabled set (green-at-boundary holds); waves enable their slices | LOW | S | haiku/sonnet | pending |
-| **W1 model+loader** | T1.1 | AbiModel PODs, all ~30 Ty kinds + ContractABI arrays (mechanical mirror) | LOW | M | sonnet | pending |
-| | T1.2 | AbiLoader TDD: fail-closed walk; reject units — SEMANTIC invariants too: unknown kind, any nested index OOB, missing field, version ≠ "1.0", malformed bigint, duplicate decl names, instantiation arity mismatch, intN/uintN/bitsN width limits, alias cycles, union PREFIX-FREEDOM (no variant prefix strict-prefix of another — makes W2's sorted dispatch provably equal to reference declaration-order first-match), prefix_len ≤ 32 (Tolk's emission bound; prefix_num is float64 JSON upstream — wider C++ acceptance would be oracle-unrepresentable) | MED→HIGH | M | sonnet (opus if invariant set balloons) | pending |
-| | T1.3 | Loads-all-26-fixture-ABIs test (rerun T0.2 for full set) | LOW | S | haiku | pending |
+| **W1 model+loader** | T1.1 | AbiModel PODs, all ~30 Ty kinds + ContractABI arrays (mechanical mirror) | LOW | M | sonnet | **DONE** |
+| | T1.2 | AbiLoader TDD: fail-closed walk; reject units — SEMANTIC invariants too: unknown kind, any nested index OOB, missing field, version ≠ "1.0", malformed bigint, duplicate decl names, instantiation arity mismatch, intN/uintN/bitsN width limits, alias cycles, union PREFIX-FREEDOM (no variant prefix strict-prefix of another — makes W2's sorted dispatch provably equal to reference declaration-order first-match), prefix bounds CORRECTED at W1: UNION-VARIANT prefix_len ≤ 32 (float64 rationale holds there), but STRUCT-level prefixes go WIDER (48-bit exists in lots-of-wrappers MsgSinglePrefix48) → struct bound = ≤1023 + uint64 prefix_num | MED→HIGH | M | sonnet (opus if invariant set balloons) | **DONE** |
+| | T1.3 | Loads-all-fixture-ABIs test (full set) | LOW | S | haiku | **DONE** (18/19 compile; small.tolk = upstream compiler error; err-* compile to VALID ABIs → committed as W11 reject-testdata) |
 | **W2 kernel** | T2.1 | SymTable + aliasTargetOf + resolution pass (flatten fields, sort prefix tables) TDD. THREE NAMED INVARIANTS (final review F3): (i) union label/prefix tables keyed per (union ty_idx, uLabelTyIdx) — labels are a USE-SITE property, same interned union can arrive with different uLabel from different instantiations; (ii) custom-hooked alias/enum nodes SURVIVE resolution as nodes (reference checks custom_pack_unpack BEFORE aliasTargetOf — dynamic-serialization.ts:335-374); (iii) prefix-freedom validated BEFORE sorting (makes sort provably behavior-preserving vs reference's declaration-order first-match) | MED→HIGH | M | **opus** (was sonnet — invariants subtle) | pending |
 | | T2.2 | structFieldsOf monomorph + client_ty_idx (cell side) + uLabelTyIdx + createLabelsForUnion; units ported from types-kernel behavior + generic fixtures; NB nullable DROPS uLabelTyIdx per reference (dynamic-serialization.ts:291, emit side agrees) — do not "fix" | **HIGH** | M | **opus** | pending |
 | **W3 scalars** | T3.1 | intN/uintN/bool/coins/varintN/varuintN/bitsN load+store TDD, boundary units (min/max/truncation) | MED | M | sonnet | pending |
@@ -411,6 +411,23 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
    walkers ~500, emitter 800-1,200).
 
 ## 6. Wave log (append per wave; status column above updates same commit)
+
+- **W1 DONE 2026-07-16** (lead-verified: 20 test cases / 115 assertions / ctest 1/1).
+  AbiModel.h header-only PODs (~32 kinds, variant-based Ty, recursive ConstExpr via
+  unique_ptr, RefInt256 bigints); AbiLoader fail-closed with FULL invariant list (14
+  reject units + accept on all fixtures); fixtures → all 26 (18 ABIs; imports/ ×7).
+  **PLAN CORRECTIONS from TDD evidence**: (1) struct_instantiations[].struct_name is
+  MANGLED ("ResetTo<int64>") — strip <...> before decl lookup (abi-types.ts doc comment
+  elides this); StructRef.struct_name IS plain. (2) prefix_len≤32 bound WRONG for
+  struct-level prefixes — 48-bit exists (MsgSinglePrefix48); struct bound now ≤1023 +
+  uint64 prefix_num; union-variant ≤32 stands (verified across all 26 fixtures).
+  (3) err-*.tolk compile to VALID ABIs ("err" = runtime/codegen-time, not compile) —
+  committed as future W11 reject-testdata. (4) small.tolk doesn't compile at all
+  (upstream tolk bug, unrelated) — source committed, no ABI, excluded from loads-all.
+  (5) dup-decl-name check is PER-KIND (reference SymTable = 3 separate maps, cross-kind
+  reuse legal). CHECK-macro guard needed in smoke_test.cpp too (any TU pulling
+  Status.h→logging.h→check.h). Executor self-caught a reinterpret_cast-across-types UB
+  before it ever built (replaced with function template).
 
 - **W0 DONE 2026-07-16** (lead-verified: build + ctest 1/1, VectorRunner 12 skipped/0
   enabled = green-empty confirmed, regen byte-stable across consecutive runs). Landed:

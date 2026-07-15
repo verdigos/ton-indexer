@@ -201,6 +201,58 @@ async function main() {
         }
     }
 
+    // ---- T1.3: extend the committed fixture set to all 26 reference .tolk
+    // files (19 top-level + 7 imports/), ABI JSON only -- vectors stay the 12
+    // above. imports/ is copied verbatim so the fixtures that import from it
+    // (jetton-minter/wallet-contract, lots-of-throws) keep resolving.
+    fs.mkdirSync(path.join(FIXTURES_DIR, 'imports'), { recursive: true });
+    for (const f of fs.readdirSync(path.join(FIXTURES_SRC, 'imports'))) {
+        fs.copyFileSync(path.join(FIXTURES_SRC, 'imports', f), path.join(FIXTURES_DIR, 'imports', f));
+    }
+
+    const remainingFixtures = [
+        'client-type-anno', 'debug-print-demos',
+        'err-cont-on-stack-1', 'err-cont-on-stack-2',
+        'err-invalid-map-key-1', 'err-invalid-map-key-2',
+        'generic-union-labels', 'has-not-init-storage',
+        'jetton-minter-contract', 'jetton-wallet-contract',
+        'lots-of-annotations', 'lots-of-getters', 'lots-of-storage',
+        'lots-of-throws', 'only-header',
+    ];
+    let loadableCount = 3;  // the 3 vector fixtures above already loaded fine
+    for (const fixture of remainingFixtures) {
+        const fileName = `${fixture}.tolk`;
+        fs.copyFileSync(path.join(FIXTURES_SRC, fileName), path.join(FIXTURES_DIR, fileName));
+        const abi = await compileTolk(path.join(FIXTURES_SRC, fileName));
+        if (abi.abi_schema_version !== '1.0') {
+            throw new Error(`unexpected abi_schema_version '${abi.abi_schema_version}' for ${fixture}`);
+        }
+        fs.writeFileSync(
+            path.join(FIXTURES_DIR, `${fixture}.abi.json`),
+            JSON.stringify(abi, null, 2) + '\n',
+        );
+        loadableCount++;
+    }
+
+    // small.tolk is copied for completeness (the plan's fixture set is "26
+    // .tolk files copied from the reference repo") but genuinely fails to
+    // compile with tolk-js -- a real Tolk compiler error unrelated to ABI
+    // loading ("can not use `int` as a boolean condition"), not a fixture
+    // we can produce an ABI for. No .abi.json is written for it, and the
+    // C++ loads-all test does not expect one.
+    fs.copyFileSync(path.join(FIXTURES_SRC, 'small.tolk'), path.join(FIXTURES_DIR, 'small.tolk'));
+    try {
+        await compileTolk(path.join(FIXTURES_SRC, 'small.tolk'));
+        throw new Error('small.tolk unexpectedly compiled -- update this script and the C++ loads-all test');
+    } catch (e) {
+        if (!/can not use `int` as a boolean condition/.test(e.message)) {
+            throw e;  // any OTHER failure is a real regression, not the known one
+        }
+        console.log(`small.tolk: known compile error (expected, not an ABI/loader issue): ${e.message.split('\n')[0]}`);
+    }
+
+    console.log(`copied 26 .tolk fixtures (19 top-level + 7 imports/), ${loadableCount} compile to a valid ABI`);
+
     const output = {
         header: {
             pkg_version: tolkAbiPkg.version,
