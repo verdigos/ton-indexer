@@ -295,7 +295,7 @@ teammates never commit. Wave-boundary ops (proven): executor rotation on long co
 | **W4 addresses** | T4.1 | address/maybe_address/external_address/address_any load+store — @ton/core accept/reject parity + source-derived reject-space units | **HIGH** | M | **opus** | **DONE** (anycast = known-divergence, see log + §0.12b) |
 | **W5 refs+strings** | T5.1 | cell/cellOf/nullable(1-bit)/maybe_ref; snake string ref-tail (normative-excerpt rule applied); remaining snapshot; BOC-flags pin (W0-deferred §0.14 item) | MED | M | sonnet | **DONE** |
 | **W6 containers** | T6.1 | arrayOf (TS-parity store / dual-format load), lispListOf, dict adapter | **HIGH** | M | **opus** | **DONE** (dict labels PROVEN identical vm↔core — no custom writer needed) |
-| **W7 prefixes** | T7.1 | load_and_check_prefix (any len) + lookup peek + union prefix-tree dispatch (implicit-EATS / explicit-REREADS / T\|void / Either) + store side | **HIGH** | M | **opus** | pending |
+| **W7 prefixes** | T7.1 | load_and_check_prefix (any len) + lookup peek + union prefix-tree dispatch + store side | **HIGH** | M | **opus** | **DONE** (leaf layer complete) |
 | **W8 interpreter** | T8.1 | AbiValue tree + canonical JSON dump | LOW | M | sonnet | pending |
 | | T8.2 | Unpack+pack walkers incl. tensor/shapedTuple inline recursion (no leaf helper needed — walker-level, explicitly HERE); custom-serializer registry (hooks fire BEFORE alias/enum target resolution, W2 invariant ii); top-level body open REJECTS exotic/special cells (abort-safe pattern; reference assumes none); field-path error chaining | MED | M | sonnet | pending |
 | | T8.3 | Full conformance: gen_vectors full run (all fixtures, value+error vectors), VectorRunner green | MED | M | sonnet | pending |
@@ -417,6 +417,22 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
    walkers ~500, emitter 800-1,200).
 
 ## 6. Wave log (append per wave; status column above updates same commit)
+
+- **W7 DONE 2026-07-16** (lead-verified: 114 cases / 691 asserts / ctest 1/1). LEAF
+  LAYER COMPLETE (W2-W7). AbiLeavesPrefix.{h,cpp}: load_and_check_prefix/store_prefix
+  (uint64 num, len≤1023, >64 high-bits-zero), lookup_prefix peek, dispatch_union,
+  store_union_prefix. REFERENCE SEMANTICS PINNED (the verify-and-cite asks): (1) VOID
+  ORDERING IS FORM-DEPENDENT — exact T|void: empty-check FIRST then variant[0]
+  UNCONDITIONALLY (discriminator = emptiness, no prefix probe, ds.ts:382-384); general
+  form: void LAST after all prefixes fail AND slice empty, else hard error (:408-410).
+  (2) Either bool fast path = PURE optimization of the static-codegen path; dynamic
+  path has NO special case → general loop only implemented. (3) Load: implicit EATEN
+  by dispatch, explicit PEEKED-left-in-place (variant's own loader re-reads) — proven
+  by cs.size()-unchanged test. (4) Store: union writes prefix ONLY when implicit;
+  explicit written by the variant's own store. **W8-HANDOFF.md committed** (inherited
+  API surface, W6 callback contract, 12 non-obvious gotchas incl. vm-hex-UPPERCASE-vs-
+  JSON-lowercase). Executor abi-w2 retired after 6 waves (W2-W7), rotation at the
+  clean leaf/walker boundary.
 
 - **W6 DONE 2026-07-16** (lead-verified: 103 cases / 620 asserts / ctest 1/1).
   AbiLeavesContainer.{h,cpp} (arrayOf/lispListOf) + AbiLeavesDict.{h,cpp}. Structural-
