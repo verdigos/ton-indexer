@@ -19,10 +19,17 @@ add_library(ton-abi STATIC
     src/AbiLeavesPrefix.cpp
     src/AbiValue.cpp
     src/AbiInterp.cpp
+    src/AbiEmit.cpp
 )
 target_include_directories(ton-abi PUBLIC src)
 target_compile_features(ton-abi PUBLIC cxx_std_20)
 target_link_libraries(ton-abi PUBLIC tdutils ton_crypto_core)
+
+# ton-abi-gen: the emitter CLI (W11, T11.1). Reuses AbiModel/AbiLoader/AbiKernel
+# + AbiEmit; emits committed generated/<contract>_gen.{h,cpp} pairs.
+add_executable(ton-abi-gen tools/AbiGenMain.cpp)
+target_compile_features(ton-abi-gen PRIVATE cxx_std_20)
+target_link_libraries(ton-abi-gen ton-abi tdutils)
 
 add_executable(ton-abi-test
     test/smoke_test.cpp
@@ -39,8 +46,13 @@ add_executable(ton-abi-test
     test/AbiInterpTest.cpp
     test/AbiInterpW9Test.cpp
     test/AbiW10Test.cpp
+    test/AbiEmitTest.cpp
+    # committed generated pairs (A/B gate input; W11 T11.1 subset compiled here)
+    generated/tolk_counter_gen.cpp
+    generated/lots_of_messages_gen.cpp
+    generated/generic_union_labels_gen.cpp
 )
-target_include_directories(ton-abi-test PRIVATE test)
+target_include_directories(ton-abi-test PRIVATE test generated)
 target_compile_features(ton-abi-test PRIVATE cxx_std_20)
 target_compile_definitions(ton-abi-test PRIVATE
     TON_ABI_VECTORS_FILE="${CMAKE_CURRENT_SOURCE_DIR}/testdata/abi_vectors.json"
