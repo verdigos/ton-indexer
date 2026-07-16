@@ -149,10 +149,11 @@ std::string kind_render(TyKind k) {
 // ---------------------------------------------------------------------------
 class Emitter {
  public:
-  Emitter(const ContractABI &abi, const AbiKernel &kernel) : abi_(abi), kernel_(kernel) {}
+  Emitter(const ContractABI &abi, const AbiKernel &kernel, std::string out_name)
+      : abi_(abi), kernel_(kernel), out_name_(std::move(out_name)) {}
 
   GeneratedFiles run() {
-    snake_ = snake_case(abi_.contract_name);
+    snake_ = out_name_.empty() ? snake_case(abi_.contract_name) : snake_case(out_name_);
     ns_ = "ton_abi::gen::" + snake_;
     collect_targets();
 
@@ -188,6 +189,7 @@ class Emitter {
     const ABIAlias *a = nullptr;
     const ABIEnum *e = nullptr;
     bool is_monomorph = false;
+    bool abi_value_form = false;  // fully-custom struct emitted as `using N = AbiValue` (no forward-decl)
 
     // filled during body emission
     std::string h_decl;   // header text (type + method sigs / using)
@@ -206,6 +208,7 @@ class Emitter {
 
   const ContractABI &abi_;
   const AbiKernel &kernel_;
+  std::string out_name_;
   std::string snake_;
   std::string ns_;
 
@@ -249,6 +252,10 @@ class Emitter {
         t.orig_name = d.as_struct.name;
         t.self_ty_idx = d.as_struct.ty_idx;
         t.s = &d.as_struct;
+        // Fully-custom struct -> type-erased AbiValue form (precomputed here so
+        // callers emitted before this decl resolve the free-function form).
+        t.abi_value_form = has_custom(d.as_struct.custom_pack_unpack, true) &&
+                           has_custom(d.as_struct.custom_pack_unpack, false);
         concrete_struct_[d.as_struct.name] = static_cast<int>(targets_.size());
         targets_.push_back(std::move(t));
       } else if (d.kind == DeclKind::Enum) {
@@ -368,6 +375,16 @@ class Emitter {
     throw HardFail{"name_for_ref on non-ref ty"};
   }
 
+  // True if a StructRef resolves to a fully-custom (AbiValue-form) struct, which
+  // exposes free N_from_slice/N_store/N_to_abi_value instead of member methods.
+  bool is_abivalue_struct(int ty_idx) {
+    const Ty &t = ty(ty_idx);
+    if (t.kind != TyKind::StructRef) {
+      return false;
+    }
+    return targets_[target_index_for_ref(ty_idx)].abi_value_form;
+  }
+
   int target_index_for_ref(int ty_idx) {
     const Ty &t = ty(ty_idx);
     if (t.kind == TyKind::EnumRef) {
@@ -436,6 +453,23 @@ class Emitter {
   }
 
   int depth_ = 0;
+  int uid_ = 0;  // monotonic suffix for emitted local temps -> no shadowing
+
+  // Raw try-binds emitted INSIDE composite IIFE/lambda bodies. We do NOT use
+  // td's TRY_RESULT/TRY_STATUS there: nesting one td try-macro inside another
+  // td try-macro's argument (e.g. Cell<Cell<T>>) is mishandled by MSVC's
+  // parser even with /Zc:preprocessor. These expand inline with unique temp
+  // names, so arbitrary nesting is fine. `var`/`rtmp` are caller-unique.
+  static std::string bind_res(const std::string &var, const std::string &rtmp, const std::string &expr) {
+    return "auto " + rtmp + " = (" + expr + ");\n    if (" + rtmp + ".is_error()) { return " + rtmp +
+           ".move_as_error(); }\n    auto " + var + " = " + rtmp + ".move_as_ok();\n";
+  }
+  static std::string bind_stat(const std::string &stmp, const std::string &expr) {
+    // `return <status>;` (not move_as_error) -- a Status error converts to both
+    // td::Status and td::Result<T> return types, matching TRY_STATUS semantics.
+    return "{ auto " + stmp + " = (" + expr + "); if (" + stmp + ".is_error()) { return " + stmp + "; } }";
+  }
+
   struct DepthGuard {
     int &d;
     explicit DepthGuard(int &dd, int ty_idx) : d(dd) {
@@ -638,7 +672,8 @@ class Emitter {
       case TyKind::EnumRef:
         return name_for_ref(ty_idx) + "_from_slice(" + sv + ")";
       case TyKind::StructRef:
-        return name_for_ref(ty_idx) + "::from_slice(" + sv + ")";
+        return is_abivalue_struct(ty_idx) ? name_for_ref(ty_idx) + "_from_slice(" + sv + ")"
+                                          : name_for_ref(ty_idx) + "::from_slice(" + sv + ")";
       case TyKind::AliasRef:
         return name_for_ref(ty_idx) + "_from_slice(" + sv + ")";
       case TyKind::Union:
@@ -646,24 +681,30 @@ class Emitter {
       case TyKind::Nullable: {
         int inner = std::get<TyNullable>(t.data).inner_ty_idx;
         std::string it = cpp_type(inner);
+        int k = ++uid_;
+        std::string nv = "__nv" + std::to_string(k);
         std::string s;
         s += "[&]() -> td::Result<std::optional<" + it + ">> {\n";
-        s += "    TRY_RESULT(__pres, load_maybe_prefix(" + sv + "));\n";
-        s += "    if (!__pres) { return std::optional<" + it + ">(); }\n";
-        s += "    TRY_RESULT(__nv, (" + load_expr(inner, sv, path, std::nullopt) + "));\n";
-        s += "    return std::optional<" + it + ">(std::move(__nv));\n";
+        s += "    " + bind_res("__pres" + std::to_string(k), "__rp" + std::to_string(k),
+                                "load_maybe_prefix(" + sv + ")");
+        s += "    if (!__pres" + std::to_string(k) + ") { return std::optional<" + it + ">(); }\n";
+        s += "    " + bind_res(nv, "__r" + std::to_string(k), load_expr(inner, sv, path, std::nullopt));
+        s += "    return std::optional<" + it + ">(std::move(" + nv + "));\n";
         s += "  }()";
         return s;
       }
       case TyKind::CellOf: {
         int inner = std::get<TyInner>(t.data).inner_ty_idx;
         std::string it = cpp_type(inner);
+        int k = ++uid_;
+        std::string cs = "__cs" + std::to_string(k), cv = "__cv" + std::to_string(k);
         std::string s;
         s += "[&]() -> td::Result<ton_abi::gen::CellOf<" + it + ">> {\n";
-        s += "    TRY_RESULT(__rs, load_ref_slice(" + sv + "));\n";
-        s += "    vm::CellSlice __cs = *__rs;\n";
-        s += "    TRY_RESULT(__cv, (" + load_expr(inner, "__cs", path, std::nullopt) + "));\n";
-        s += "    return ton_abi::gen::CellOf<" + it + ">{std::make_shared<" + it + ">(std::move(__cv))};\n";
+        s += "    " + bind_res("__rs" + std::to_string(k), "__rr" + std::to_string(k),
+                                "load_ref_slice(" + sv + ")");
+        s += "    vm::CellSlice " + cs + " = *__rs" + std::to_string(k) + ";\n";
+        s += "    " + bind_res(cv, "__rc" + std::to_string(k), load_expr(inner, cs, path, std::nullopt));
+        s += "    return ton_abi::gen::CellOf<" + it + ">{std::make_shared<" + it + ">(std::move(" + cv + "))};\n";
         s += "  }()";
         return s;
       }
@@ -672,15 +713,17 @@ class Emitter {
         int inner = std::get<TyInner>(t.data).inner_ty_idx;
         std::string it = cpp_type(inner);
         std::string leaf = t.kind == TyKind::ArrayOf ? "load_array" : "load_lisp_list";
+        int k = ++uid_;
+        std::string out = "__out" + std::to_string(k), e = "__e" + std::to_string(k), ev = "__ev" + std::to_string(k);
         std::string s;
         s += "[&]() -> td::Result<std::vector<" + it + ">> {\n";
-        s += "    std::vector<" + it + "> __out;\n";
-        s += "    TRY_STATUS(" + leaf + "(" + sv + ", [&](vm::CellSlice& __e) -> td::Status {\n";
-        s += "      TRY_RESULT(__ev, (" + load_expr(inner, "__e", path, std::nullopt) + "));\n";
-        s += "      __out.push_back(std::move(__ev));\n";
-        s += "      return td::Status::OK();\n";
-        s += "    }));\n";
-        s += "    return __out;\n";
+        s += "    std::vector<" + it + "> " + out + ";\n";
+        s += "    " + bind_stat("__ls" + std::to_string(k),
+                                leaf + "(" + sv + ", [&](vm::CellSlice& " + e + ") -> td::Status {\n" + "      " +
+                                    bind_res(ev, "__re" + std::to_string(k), load_expr(inner, e, path, std::nullopt)) +
+                                    "      " + out + ".push_back(std::move(" + ev + "));\n" +
+                                    "      return td::Status::OK();\n    })");
+        s += "\n    return " + out + ";\n";
         s += "  }()";
         return s;
       }
@@ -688,16 +731,18 @@ class Emitter {
       case TyKind::ShapedTuple: {
         const auto &items = std::get<TyItems>(t.data).items_ty_idx;
         std::string tt = cpp_type(ty_idx);
+        int k = ++uid_;
         std::string s;
         s += "[&]() -> td::Result<" + tt + "> {\n";
         for (std::size_t i = 0; i < items.size(); ++i) {
-          s += "    TRY_RESULT(__t" + std::to_string(i) + ", (" + load_expr(items[i], sv, path, std::nullopt) +
-               "));\n";
+          std::string ti = "__t" + std::to_string(k) + "_" + std::to_string(i);
+          s += "    " + bind_res(ti, "__rt" + std::to_string(k) + "_" + std::to_string(i),
+                                 load_expr(items[i], sv, path, std::nullopt));
         }
         s += "    return " + tt + "(";
         for (std::size_t i = 0; i < items.size(); ++i) {
           if (i) s += ", ";
-          s += "std::move(__t" + std::to_string(i) + ")";
+          s += "std::move(__t" + std::to_string(k) + "_" + std::to_string(i) + ")";
         }
         s += ");\n";
         s += "  }()";
@@ -709,25 +754,29 @@ class Emitter {
         std::string kt = cpp_key_type(m.key_ty_idx);
         std::string vt = cpp_type(m.value_ty_idx);
         const Ty &kty = ty(m.key_ty_idx);
+        int k = ++uid_;
+        std::string kc = "__k" + std::to_string(k), vc = "__vv" + std::to_string(k), out = "__out" + std::to_string(k);
+        std::string keyv = "__key" + std::to_string(k), valv = "__val" + std::to_string(k);
         std::string key_load;
         if (kty.kind == TyKind::IntN) {
-          key_load = "load_int(__k, " + std::to_string(std::get<TyWidth>(kty.data).n) + ")";
+          key_load = "load_int(" + kc + ", " + std::to_string(std::get<TyWidth>(kty.data).n) + ")";
         } else if (kty.kind == TyKind::UintN) {
-          key_load = "load_uint(__k, " + std::to_string(std::get<TyWidth>(kty.data).n) + ")";
+          key_load = "load_uint(" + kc + ", " + std::to_string(std::get<TyWidth>(kty.data).n) + ")";
         } else {
-          key_load = "load_address(__k)";
+          key_load = "load_address(" + kc + ")";
         }
+        std::string body;
+        body += "      " + bind_res(keyv, "__rk" + std::to_string(k), key_load);
+        body += "      " + bind_res(valv, "__rv" + std::to_string(k), load_expr(m.value_ty_idx, vc, path, std::nullopt));
+        body += "      " + out + ".emplace_back(std::move(" + keyv + "), std::move(" + valv + "));\n";
+        body += "      return td::Status::OK();\n    }";
         std::string s;
         s += "[&]() -> td::Result<std::vector<std::pair<" + kt + ", " + vt + ">>> {\n";
-        s += "    std::vector<std::pair<" + kt + ", " + vt + ">> __out;\n";
-        s += "    TRY_STATUS(load_dict(" + sv + ", " + std::to_string(kb) +
-             ", [&](vm::CellSlice& __k, vm::CellSlice& __vv) -> td::Status {\n";
-        s += "      TRY_RESULT(__key, (" + key_load + "));\n";
-        s += "      TRY_RESULT(__val, (" + load_expr(m.value_ty_idx, "__vv", path, std::nullopt) + "));\n";
-        s += "      __out.emplace_back(std::move(__key), std::move(__val));\n";
-        s += "      return td::Status::OK();\n";
-        s += "    }));\n";
-        s += "    return __out;\n";
+        s += "    std::vector<std::pair<" + kt + ", " + vt + ">> " + out + ";\n";
+        s += "    " + bind_stat("__ds" + std::to_string(k),
+                                "load_dict(" + sv + ", " + std::to_string(kb) + ", [&](vm::CellSlice& " + kc +
+                                    ", vm::CellSlice& " + vc + ") -> td::Status {\n" + body + ")");
+        s += "\n    return " + out + ";\n";
         s += "  }()";
         return s;
       }
@@ -761,7 +810,9 @@ class Emitter {
       case TyKind::Void:
         return "";  // no wire
       case TyKind::EnumRef: return "TRY_STATUS(" + name_for_ref(ty_idx) + "_store(" + bv + ", " + expr + "));";
-      case TyKind::StructRef: return "TRY_STATUS(" + expr + ".store(" + bv + "));";
+      case TyKind::StructRef:
+        return is_abivalue_struct(ty_idx) ? "TRY_STATUS(" + name_for_ref(ty_idx) + "_store(" + bv + ", " + expr + "));"
+                                          : "TRY_STATUS(" + expr + ".store(" + bv + "));";
       case TyKind::AliasRef: return "TRY_STATUS(" + name_for_ref(ty_idx) + "_store(" + bv + ", " + expr + "));";
       case TyKind::Union:
         return "TRY_STATUS(store_union_" + std::to_string(union_item_for(ty_idx)) + "(" + expr + ", " + bv + "));";
@@ -778,11 +829,13 @@ class Emitter {
       }
       case TyKind::CellOf: {
         int inner = std::get<TyInner>(t.data).inner_ty_idx;
+        int k = ++uid_;
+        std::string icb = "__icb" + std::to_string(k);
         std::string s;
         s += "{\n";
-        s += "    vm::CellBuilder __icb;\n";
-        s += "    " + store_stmt(inner, "(*(" + expr + ".ref))", "__icb", path, std::nullopt) + "\n";
-        s += "    TRY_STATUS(store_cell(" + bv + ", __icb.finalize()));\n";
+        s += "    vm::CellBuilder " + icb + ";\n";
+        s += "    " + store_stmt(inner, "(*(" + expr + ".ref))", icb, path, std::nullopt) + "\n";
+        s += "    " + bind_stat("__cs" + std::to_string(k), "store_cell(" + bv + ", " + icb + ".finalize())") + "\n";
         s += "  }";
         return s;
       }
@@ -790,13 +843,14 @@ class Emitter {
       case TyKind::LispListOf: {
         int inner = std::get<TyInner>(t.data).inner_ty_idx;
         std::string leaf = t.kind == TyKind::ArrayOf ? "store_array" : "store_lisp_list";
-        std::string s;
-        s += "TRY_STATUS(" + leaf + "(" + bv + ", " + expr +
-             ".size(), [&](vm::CellBuilder& __e, std::size_t __i) -> td::Status {\n";
-        s += "    " + store_stmt(inner, "(" + expr + "[__i])", "__e", path, std::nullopt) + "\n";
-        s += "    return td::Status::OK();\n";
-        s += "  }));";
-        return s;
+        int k = ++uid_;
+        std::string e = "__e" + std::to_string(k), i = "__i" + std::to_string(k);
+        std::string lam;
+        lam += leaf + "(" + bv + ", " + expr + ".size(), [&](vm::CellBuilder& " + e + ", std::size_t " + i +
+               ") -> td::Status {\n";
+        lam += "    " + store_stmt(inner, "(" + expr + "[" + i + "])", e, path, std::nullopt) + "\n";
+        lam += "    return td::Status::OK();\n  })";
+        return bind_stat("__as" + std::to_string(k), lam);
       }
       case TyKind::Tensor:
       case TyKind::ShapedTuple: {
@@ -812,23 +866,29 @@ class Emitter {
         const auto &m = std::get<TyMapKV>(t.data);
         int kb = dict_key_bits_or_fail(m.key_ty_idx, path);
         const Ty &kty = ty(m.key_ty_idx);
+        int k = ++uid_;
+        std::string i = "__i" + std::to_string(k), ko = "__ko" + std::to_string(k), vo = "__vo" + std::to_string(k),
+                    ent = "__ent" + std::to_string(k);
         std::string key_store;
         if (kty.kind == TyKind::IntN) {
-          key_store = "TRY_STATUS(store_int(__ko, __ent.first, " + std::to_string(std::get<TyWidth>(kty.data).n) + "));";
+          key_store = bind_stat("__ks" + std::to_string(k),
+                                "store_int(" + ko + ", " + ent + ".first, " +
+                                    std::to_string(std::get<TyWidth>(kty.data).n) + ")");
         } else if (kty.kind == TyKind::UintN) {
-          key_store = "TRY_STATUS(store_uint(__ko, __ent.first, " + std::to_string(std::get<TyWidth>(kty.data).n) + "));";
+          key_store = bind_stat("__ks" + std::to_string(k),
+                                "store_uint(" + ko + ", " + ent + ".first, " +
+                                    std::to_string(std::get<TyWidth>(kty.data).n) + ")");
         } else {
-          key_store = "TRY_STATUS(store_address(__ko, __ent.first));";
+          key_store = bind_stat("__ks" + std::to_string(k), "store_address(" + ko + ", " + ent + ".first)");
         }
-        std::string s;
-        s += "TRY_STATUS(store_dict(" + bv + ", " + std::to_string(kb) + ", " + expr +
-             ".size(), [&](std::size_t __i, vm::CellBuilder& __ko, vm::CellBuilder& __vo) -> td::Status {\n";
-        s += "    const auto& __ent = " + expr + "[__i];\n";
-        s += "    " + key_store + "\n";
-        s += "    " + store_stmt(m.value_ty_idx, "__ent.second", "__vo", path, std::nullopt) + "\n";
-        s += "    return td::Status::OK();\n";
-        s += "  }));";
-        return s;
+        std::string lam;
+        lam += "store_dict(" + bv + ", " + std::to_string(kb) + ", " + expr + ".size(), [&](std::size_t " + i +
+               ", vm::CellBuilder& " + ko + ", vm::CellBuilder& " + vo + ") -> td::Status {\n";
+        lam += "    const auto& " + ent + " = " + expr + "[" + i + "];\n";
+        lam += "    " + key_store + "\n";
+        lam += "    " + store_stmt(m.value_ty_idx, ent + ".second", vo, path, std::nullopt) + "\n";
+        lam += "    return td::Status::OK();\n  })";
+        return bind_stat("__ms" + std::to_string(k), lam);
       }
       default:
         throw HardFail{"store_stmt: non-serializable ty '" + kind_render(t.kind) + "' at " + path};
@@ -861,7 +921,9 @@ class Emitter {
       case TyKind::NullLiteral: return wrap("ton_abi::gen::abi_v_null()");
       case TyKind::Void: return wrap("ton_abi::gen::abi_v_void()");
       case TyKind::EnumRef: return name_for_ref(ty_idx) + "_to_abi_value(" + expr + ")";
-      case TyKind::StructRef: return "(" + expr + ").to_abi_value()";
+      case TyKind::StructRef:
+        return is_abivalue_struct(ty_idx) ? name_for_ref(ty_idx) + "_to_abi_value(" + expr + ")"
+                                          : "(" + expr + ").to_abi_value()";
       case TyKind::AliasRef: return name_for_ref(ty_idx) + "_to_abi_value(" + expr + ")";
       case TyKind::Nullable: {
         int inner = std::get<TyNullable>(t.data).inner_ty_idx;
@@ -874,73 +936,88 @@ class Emitter {
       }
       case TyKind::CellOf: {
         int inner = std::get<TyInner>(t.data).inner_ty_idx;
+        int k = ++uid_;
+        std::string iv = "__iv" + std::to_string(k);
         std::string s;
         s += "[&]() -> td::Result<AbiValue> {\n";
-        s += "    TRY_RESULT(__iv, (" + to_abi_expr(inner, "(*(" + expr + ".ref))", std::nullopt) + "));\n";
-        s += "    return AbiValue::make_cell_of(std::move(__iv));\n";
+        s += "    " + bind_res(iv, "__ri" + std::to_string(k),
+                               to_abi_expr(inner, "(*(" + expr + ".ref))", std::nullopt));
+        s += "    return AbiValue::make_cell_of(std::move(" + iv + "));\n";
         s += "  }()";
         return s;
       }
       case TyKind::ArrayOf:
       case TyKind::LispListOf: {
         int inner = std::get<TyInner>(t.data).inner_ty_idx;
+        int k = ++uid_;
+        std::string it = "__items" + std::to_string(k), x = "__x" + std::to_string(k), iv = "__iv" + std::to_string(k);
         std::string s;
         s += "[&]() -> td::Result<AbiValue> {\n";
-        s += "    std::vector<AbiValue> __items;\n";
-        s += "    for (const auto& __x : " + expr + ") {\n";
-        s += "      TRY_RESULT(__iv, (" + to_abi_expr(inner, "__x", std::nullopt) + "));\n";
-        s += "      __items.push_back(std::move(__iv));\n";
+        s += "    std::vector<AbiValue> " + it + ";\n";
+        s += "    for (const auto& " + x + " : " + expr + ") {\n";
+        s += "      " + bind_res(iv, "__ri" + std::to_string(k), to_abi_expr(inner, x, std::nullopt));
+        s += "      " + it + ".push_back(std::move(" + iv + "));\n";
         s += "    }\n";
-        s += "    return AbiValue::make_list(std::move(__items));\n";
+        s += "    return AbiValue::make_list(std::move(" + it + "));\n";
         s += "  }()";
         return s;
       }
       case TyKind::Tensor:
       case TyKind::ShapedTuple: {
         const auto &items = std::get<TyItems>(t.data).items_ty_idx;
+        int k = ++uid_;
+        std::string it = "__items" + std::to_string(k);
         std::string s;
         s += "[&]() -> td::Result<AbiValue> {\n";
-        s += "    std::vector<AbiValue> __items;\n";
+        s += "    std::vector<AbiValue> " + it + ";\n";
         for (std::size_t i = 0; i < items.size(); ++i) {
-          s += "    { TRY_RESULT(__iv, (" +
-               to_abi_expr(items[i], "std::get<" + std::to_string(i) + ">(" + expr + ")", std::nullopt) +
-               ")); __items.push_back(std::move(__iv)); }\n";
+          std::string iv = "__iv" + std::to_string(k) + "_" + std::to_string(i);
+          s += "    { " +
+               bind_res(iv, "__ri" + std::to_string(k) + "_" + std::to_string(i),
+                        to_abi_expr(items[i], "std::get<" + std::to_string(i) + ">(" + expr + ")", std::nullopt)) +
+               "      " + it + ".push_back(std::move(" + iv + ")); }\n";
         }
-        s += "    return AbiValue::make_list(std::move(__items));\n";
+        s += "    return AbiValue::make_list(std::move(" + it + "));\n";
         s += "  }()";
         return s;
       }
       case TyKind::MapKV: {
         const auto &m = std::get<TyMapKV>(t.data);
         const Ty &kty = ty(m.key_ty_idx);
-        std::string key_to_abi = kty.kind == TyKind::Address ? "ton_abi::gen::abi_v_address(__ent.first)"
-                                                             : "ton_abi::gen::abi_v_int(__ent.first)";
+        int k = ++uid_;
+        std::string en = "__entries" + std::to_string(k), ent = "__ent" + std::to_string(k),
+                    vv = "__vv" + std::to_string(k);
+        std::string key_to_abi = kty.kind == TyKind::Address ? "ton_abi::gen::abi_v_address(" + ent + ".first)"
+                                                             : "ton_abi::gen::abi_v_int(" + ent + ".first)";
         std::string s;
         s += "[&]() -> td::Result<AbiValue> {\n";
-        s += "    std::vector<std::pair<AbiValue, AbiValue>> __entries;\n";
-        s += "    for (const auto& __ent : " + expr + ") {\n";
-        s += "      TRY_RESULT(__vv, (" + to_abi_expr(m.value_ty_idx, "__ent.second", std::nullopt) + "));\n";
-        s += "      __entries.emplace_back(" + key_to_abi + ", std::move(__vv));\n";
+        s += "    std::vector<std::pair<AbiValue, AbiValue>> " + en + ";\n";
+        s += "    for (const auto& " + ent + " : " + expr + ") {\n";
+        s += "      " + bind_res(vv, "__rv" + std::to_string(k), to_abi_expr(m.value_ty_idx, ent + ".second", std::nullopt));
+        s += "      " + en + ".emplace_back(" + key_to_abi + ", std::move(" + vv + "));\n";
         s += "    }\n";
-        s += "    return AbiValue::make_map(std::move(__entries));\n";
+        s += "    return AbiValue::make_map(std::move(" + en + "));\n";
         s += "  }()";
         return s;
       }
       case TyKind::Union: {
         auto ru = kernel_.resolve_union(ty_idx, u_label).move_as_ok();
+        int k = ++uid_;
         std::string s;
         s += "[&]() -> td::Result<AbiValue> {\n";
         s += "    switch ((" + expr + ").index()) {\n";
         for (std::size_t i = 0; i < ru.variants.size(); ++i) {
           const auto &v = ru.variants[i];
+          std::string iv = "__iv" + std::to_string(k) + "_" + std::to_string(i);
           s += "      case " + std::to_string(i) + ": {\n";
-          s += "        TRY_RESULT(__iv, (" +
-               to_abi_expr(v.variant_ty_idx, "std::get<" + std::to_string(i) + ">(" + expr + ")", std::nullopt) +
-               "));\n";
+          s += "        " +
+               bind_res(iv, "__ri" + std::to_string(k) + "_" + std::to_string(i),
+                        to_abi_expr(v.variant_ty_idx, "std::get<" + std::to_string(i) + ">(" + expr + ")",
+                                    std::nullopt));
           if (v.has_value_field) {
-            s += "        return AbiValue::make_union(" + cpp_str_lit(v.label_str) + ", std::move(__iv));\n";
+            s += "        return AbiValue::make_union(" + cpp_str_lit(v.label_str) + ", std::move(" + iv + "));\n";
           } else {
-            s += "        return std::move(__iv);\n";
+            s += "        return std::move(" + iv + ");\n";
           }
           s += "      }\n";
         }
@@ -1054,9 +1131,51 @@ class Emitter {
     return pack ? c->pack_to_builder : c->unpack_from_slice;
   }
 
+  // A decl that is custom in EVERY direction it is used carries a value the
+  // typed form can't reconstruct (e.g. CustomPoint is an empty ABI struct whose
+  // custom (un)pack materialize x/y; TelegramString's target is `slice`). Emit
+  // it type-erased: `using N = AbiValue` + free N_from_slice/N_store/
+  // N_to_abi_value delegating to the typed registry<AbiValue> (§0.17).
+  void emit_custom_abivalue(Target &t) {
+    t.abi_value_form = true;
+    const std::string &N = t.cpp_name;
+    std::string key = abi_.contract_name + "::" + t.orig_name;
+    std::string h;
+    h += "using " + N + " = AbiValue;\n";
+    h += "td::Result<" + N + "> " + N + "_from_slice(vm::CellSlice& cs);\n";
+    h += "td::Status " + N + "_store(vm::CellBuilder& cb, const " + N + "& self);\n";
+    h += "td::Result<AbiValue> " + N + "_to_abi_value(const " + N + "& self);";
+    t.h_decl = h;
+
+    std::string c;
+    c += "td::Result<" + N + "> " + N + "_from_slice(vm::CellSlice& cs) {\n";
+    c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<AbiValue>(" + cpp_str_lit(key) + ");\n";
+    c += "  if (__e == nullptr || !__e->unpack) { return td::Status::Error(" +
+         cpp_str_lit("custom unpackFromSlice was not registered for '" + t.orig_name + "'") + "); }\n";
+    c += "  return __e->unpack(cs);\n}\n\n";
+    c += "td::Status " + N + "_store(vm::CellBuilder& cb, const " + N + "& self) {\n";
+    c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<AbiValue>(" + cpp_str_lit(key) + ");\n";
+    c += "  if (__e == nullptr || !__e->pack) { return td::Status::Error(" +
+         cpp_str_lit("custom packToBuilder was not registered for '" + t.orig_name + "'") + "); }\n";
+    c += "  return __e->pack(self, cb);\n}\n\n";
+    c += "td::Result<AbiValue> " + N + "_to_abi_value(const " + N + "& self) {\n";
+    c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<AbiValue>(" + cpp_str_lit(key) + ");\n";
+    c += "  if (__e == nullptr || !__e->to_abi_value) { return td::Status::Error(" +
+         cpp_str_lit("custom to_abi_value was not registered for '" + t.orig_name + "'") + "); }\n";
+    c += "  return __e->to_abi_value(self);\n}";
+    t.cpp_body = c;
+  }
+
   void emit_struct(int ti) {
     Target &t = targets_[ti];
     const ABIStruct *sd = t.s;
+
+    // Fully-custom struct -> type-erased AbiValue form (see emit_custom_abivalue).
+    if (t.abi_value_form) {
+      emit_custom_abivalue(t);
+      return;
+    }
+
     const auto &fields = *kernel_.struct_fields_of(t.self_ty_idx).move_as_ok();
 
     // representability: collect present (representable) fields.
@@ -1142,14 +1261,15 @@ class Emitter {
       c += "  return __e->unpack(cs);\n";
     } else {
       if (sd && sd->prefix) {
-        c += "  TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), \"" + t.orig_name + ": \");\n";
+        c += "  TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), " +
+             cpp_str_lit(t.orig_name + ": ") + ");\n";
       }
       c += "  " + N + " r;\n";
       for (const auto &fi : finfo) {
         std::string mn = member_name(fi.rf->name());
         std::string le = load_expr(fi.rf->ty_idx, "cs", t.orig_name + "." + fi.rf->name(), fi.rf->u_label_ty_idx);
-        c += "  TRY_RESULT_PREFIX_ASSIGN(r." + mn + ", (" + le + "), \"" + t.orig_name + "." + fi.rf->name() +
-             ": \");\n";
+        c += "  TRY_RESULT_PREFIX_ASSIGN(r." + mn + ", (" + le + "), " +
+             cpp_str_lit(t.orig_name + "." + fi.rf->name() + ": ") + ");\n";
       }
       c += "  return r;\n";
     }
@@ -1209,13 +1329,24 @@ class Emitter {
     int tgt_ty = target.ty_idx;
     bool rep = member_representable(tgt_ty);
 
-    std::string ct = rep ? cpp_type(tgt_ty) : "std::monostate";
-    if (rep) {
-      collect_type_deps(tgt_ty, t.deps);
-    }
-
     bool custom_unpack = has_custom(ad ? ad->custom_pack_unpack : std::nullopt, false);
     bool custom_pack = has_custom(ad ? ad->custom_pack_unpack : std::nullopt, true);
+    bool any_custom = custom_unpack || custom_pack;
+
+    // C++ type for the alias. Representable target -> that type. Non-representable
+    // target BUT custom-serialized in every used direction -> AbiValue (type-
+    // erased; the custom value isn't the target's type -- e.g. TelegramString's
+    // target is `slice` yet its custom unpack yields bits). Non-representable +
+    // non-custom -> monostate placeholder (both directions stub).
+    std::string ct;
+    if (rep) {
+      ct = cpp_type(tgt_ty);
+      collect_type_deps(tgt_ty, t.deps);
+    } else if (any_custom) {
+      ct = "AbiValue";
+    } else {
+      ct = "std::monostate";
+    }
 
     const std::string &N = t.cpp_name;
     std::string h;
@@ -1228,28 +1359,28 @@ class Emitter {
     std::string c;
     // from_slice
     c += "td::Result<" + N + "> " + N + "_from_slice(vm::CellSlice& cs) {\n";
-    if (!rep) {
-      c += "  return td::Status::Error(\"" + N + ": not serializable (alias target unrepresentable)\");\n";
-    } else if (custom_unpack) {
+    if (custom_unpack) {
       c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<" + N + ">(\"" + abi_.contract_name +
            "::" + t.orig_name + "\");\n";
       c += "  if (__e == nullptr || !__e->unpack) { return td::Status::Error(\"custom unpackFromSlice was not "
            "registered for '" + t.orig_name + "'\"); }\n";
       c += "  return __e->unpack(cs);\n";
+    } else if (!rep) {
+      c += "  return td::Status::Error(\"" + N + ": not serializable (alias target unrepresentable)\");\n";
     } else {
       c += "  return " + load_expr(tgt_ty, "cs", t.orig_name, target.u_label_ty_idx) + ";\n";
     }
     c += "}\n\n";
     // store
     c += "td::Status " + N + "_store(vm::CellBuilder& cb, const " + N + "& self) {\n";
-    if (!rep) {
-      c += "  return td::Status::Error(\"" + N + ": not serializable (alias target unrepresentable)\");\n";
-    } else if (custom_pack) {
+    if (custom_pack) {
       c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<" + N + ">(\"" + abi_.contract_name +
            "::" + t.orig_name + "\");\n";
       c += "  if (__e == nullptr || !__e->pack) { return td::Status::Error(\"custom packToBuilder was not "
            "registered for '" + t.orig_name + "'\"); }\n";
       c += "  return __e->pack(self, cb);\n";
+    } else if (!rep) {
+      c += "  return td::Status::Error(\"" + N + ": not serializable (alias target unrepresentable)\");\n";
     } else {
       c += "  " + store_stmt(tgt_ty, "self", "cb", t.orig_name, target.u_label_ty_idx) + "\n";
       c += "  return td::Status::OK();\n";
@@ -1257,14 +1388,14 @@ class Emitter {
     c += "}\n\n";
     // to_abi_value
     c += "td::Result<AbiValue> " + N + "_to_abi_value(const " + N + "& self) {\n";
-    if (!rep) {
-      c += "  return td::Status::Error(\"" + N + ": not representable as AbiValue\");\n";
-    } else if (custom_unpack) {
+    if (custom_unpack) {
       c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<" + N + ">(\"" + abi_.contract_name +
            "::" + t.orig_name + "\");\n";
       c += "  if (__e == nullptr || !__e->to_abi_value) { return td::Status::Error(\"custom to_abi_value was not "
            "registered for '" + t.orig_name + "'\"); }\n";
       c += "  return __e->to_abi_value(self);\n";
+    } else if (!rep) {
+      c += "  return td::Status::Error(\"" + N + ": not representable as AbiValue\");\n";
     } else {
       c += "  return " + to_abi_expr(tgt_ty, "self", target.u_label_ty_idx) + ";\n";
     }
@@ -1418,8 +1549,19 @@ class Emitter {
   // ---- member / default helpers ------------------------------------------
   std::string member_name(const std::string &field) {
     std::string s = sanitize_ident(field);
-    static const std::set<std::string> reserved = {"PREFIX", "PREFIX_LEN", "create", "from_slice", "store",
-                                                    "to_abi_value", "CreateArgs"};
+    static const std::set<std::string> reserved = {
+        // emitted member/method names that would collide
+        "PREFIX", "PREFIX_LEN", "create", "from_slice", "store", "to_abi_value", "CreateArgs",
+        // C++ keywords that are invalid identifiers
+        "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor", "bool", "break", "case", "catch",
+        "char", "char8_t", "char16_t", "char32_t", "class", "compl", "concept", "const", "consteval", "constexpr",
+        "constinit", "const_cast", "continue", "co_await", "co_return", "co_yield", "decltype", "default", "delete",
+        "do", "double", "dynamic_cast", "else", "enum", "explicit", "export", "extern", "false", "float", "for",
+        "friend", "goto", "if", "inline", "int", "long", "mutable", "namespace", "new", "noexcept", "not", "not_eq",
+        "nullptr", "operator", "or", "or_eq", "private", "protected", "public", "register", "reinterpret_cast",
+        "requires", "return", "short", "signed", "sizeof", "static", "static_assert", "static_cast", "struct",
+        "switch", "template", "this", "thread_local", "throw", "true", "try", "typedef", "typeid", "typename",
+        "union", "unsigned", "using", "virtual", "void", "volatile", "wchar_t", "while", "xor", "xor_eq"};
     if (reserved.count(s)) {
       s += "_";
     }
@@ -1518,7 +1660,7 @@ class Emitter {
     // Forward-declare every struct so cellOf<Struct> (shared_ptr indirection)
     // members can name a not-yet-defined struct (recursive-type support).
     for (const auto &t : targets_) {
-      if (t.kind == TKind::Struct) {
+      if (t.kind == TKind::Struct && !t.abi_value_form) {
         s += "struct " + t.cpp_name + ";\n";
       }
     }
@@ -1562,9 +1704,9 @@ class Emitter {
 
 }  // namespace
 
-td::Result<GeneratedFiles> emit_abi(const ContractABI &abi, const AbiKernel &kernel) {
+td::Result<GeneratedFiles> emit_abi(const ContractABI &abi, const AbiKernel &kernel, const std::string &out_name) {
   try {
-    Emitter em(abi, kernel);
+    Emitter em(abi, kernel, out_name);
     return em.run();
   } catch (const HardFail &hf) {
     return td::Status::Error(PSLICE() << "ton-abi-gen: " << hf.msg);

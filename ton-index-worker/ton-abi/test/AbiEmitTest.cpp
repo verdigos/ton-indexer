@@ -35,6 +35,8 @@
 #include "generic_union_labels_gen.h"
 #pragma pop_macro("CHECK")
 
+#include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <memory>
 #include <sstream>
@@ -299,3 +301,25 @@ TEST_CASE("emit: err-cont-on-stack emits cleanly; callable field -> stub") {
   std::string src2 = emit_source_of("err-cont-on-stack-2");
   CHECK(src2.find("not serializable") == std::string::npos);
 }
+
+// ---------------------------------------------------------------------------
+// Cli-analog (shape spec §11 / plan T11.3): the ton-abi-gen EXE writes a pair
+// to disk; the emitted header contains the struct's signature.
+// ---------------------------------------------------------------------------
+#if defined(TON_ABI_GEN_EXE) && defined(TON_ABI_TEST_TMP)
+TEST_CASE("cli: ton-abi-gen writes a header containing the struct signature") {
+  namespace fs = std::filesystem;
+  fs::path out = TON_ABI_TEST_TMP;
+  std::error_code ec;
+  fs::create_directories(out, ec);
+
+  std::string abi = std::string(TON_ABI_FIXTURES_DIR) + "/tolk_counter.abi.json";
+  std::string cmd = "\"\"" + std::string(TON_ABI_GEN_EXE) + "\" \"" + abi + "\" --out-dir \"" + out.string() + "\"\"";
+  int rc = std::system(cmd.c_str());
+  REQUIRE_MESSAGE(rc == 0, "ton-abi-gen exited " << rc << " for: " << cmd);
+
+  std::string header = read_file((out / "tolk_counter_gen.h").string());
+  CHECK(header.find("struct IncreaseCounter {") != std::string::npos);
+  CHECK(header.find("static td::Result<IncreaseCounter> from_slice(vm::CellSlice& cs);") != std::string::npos);
+}
+#endif

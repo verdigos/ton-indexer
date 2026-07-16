@@ -302,9 +302,9 @@ teammates never commit. Wave-boundary ops (proven): executor rotation on long co
 | **W9 suite port (INTERPRETER-ONLY)** | T9.1 | Deduplicated LotsOfWrappers port: error mapping + 9 customs + representative units + 3 custom vectors | MED | M | sonnet | **DONE** |
 | | T9.2 | Carve-outs: ClientTypeAnno client_ty_idx cell path, GenericUnionLabels literals, createCellOf hash-eq (default-fill case → W11 as planned) | MED | M | sonnet | **DONE** |
 | **W10 ABI-inspection** | T10.1 | OnlyHeader/LotsOfAnnotations/LotsOfThrows/LotsOfStorage-c2 asserts + enum-description loader patch | LOW | M | haiku/sonnet | **DONE** (HasNotInit derivation → deferred register) |
-| **W11 emitter** | T11.1 | ton-abi-gen core per lead-authored emitted-shape spec (§0.13): structs + public header + create()-with-defaults + to_abi_value() + typed custom registry calls (§0.17) + STUB-vs-FAIL per §0.18 + dynamic-path gate rule §0.19 (+ one-sided custom STRUCT unit) | **HIGH** | **L** | **opus** (spec by lead) | pending |
-| | T11.2 | Committed generated/ {.h,.cpp} + --check repro + A/B gate: generated vs interpreter on ALL vectors (custom-serializer cases via runtime registry registration in test setup) diff 0; static-vs-dynamic equivalence tests land HERE | MED | M | sonnet | pending |
-| | T11.3 | ErrorsAtCodegen port + Cli-analog test + LotsOfStorage default-fill port (create() materialization, moved from W9) | LOW→MED | M | sonnet | pending |
+| **W11 emitter** | T11.1 | ton-abi-gen core per lead shape spec | **HIGH** | **L** | **opus** | **DONE** |
+| | T11.2 | 17 generated pairs (18.3k LOC, all compiled) + --check ctest + FULL A/B (33 vectors, static==dynamic) + default-fill + MyBorderedInt typed | MED | M | opus (continued) | **DONE** |
+| | T11.3 | ErrorsAtCodegen pins (2 hard-fail + 2 emit-cleanly) + Cli-analog | LOW→MED | M | opus (continued) | **DONE** |
 | **W12 mch bridge** (lives in ton-mch-engine; full design section in wave plan per §0.16 BEFORE code) | T12.1 | MsgParserFn → std::function migration (TWO tables: MsgParse.cpp map + MsgParsersGenerated registry vector; NB message_parsers() is a Meyer's-static built on first call — restructure init or add a second registry, AND enforce §0.16 access-before-init error AT THE ACCESSOR: pre-init callers exist — BuildDriver artifact validation, --surface, ParseDump) + AbiValue→mch::Value adapter + registry rows per §0.16; all mch gates untouched | MED→HIGH | M | **opus** | pending |
 | | T12.2 | First new protocol end-to-end: .tolk decl → ABI → classified action. NB --surface/cpp_surface.json UPDATES here (gates-untouched applies to T12.1 only; normal protocol-addition procedure) | MED | M | sonnet | pending |
 
@@ -421,6 +421,29 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
    walkers ~500, emitter 800-1,200).
 
 ## 6. Wave log (append per wave; status column above updates same commit)
+
+- **W11 DONE 2026-07-16** (3 sub-stages; final lead-verified: ctest 2/2 [doctest 179
+  cases / 2576 asserts + ton_abi_gen_check --check byte-repro of all 17 pairs], all 17
+  generated pairs COMPILED into the test exe, 18,308 generated LOC). ton-abi-gen
+  emitter per lead shape spec: typed structs, BAKED dispatch (generated code never
+  links kernel/loader), per-direction custom gates (§0.19 reference bug not ported),
+  stub-vs-fail (§0.18 proven: err-map-key hard-fails, err-cont-on-stack emits stubs
+  cleanly), create()+defaults (exactness incl. ±2^100 bigints), to_abi_value.
+  **FULL A/B GATE GREEN: all 33 vectors through generated structs == expected ==
+  interpreter (static==dynamic equivalence), + repack hash round-trips, + expect_error
+  cases; 3 custom vectors via TYPED registry.** SPEC CORRECTIONS (T11.1, lead
+  accepted — spec was wrong, not executor): enums = RefInt256 + free helpers (int256
+  encoded_as exists; matches reference bigint repr); NO enum member-set validation
+  (reference does none; adding would break A/B — proven with out-of-range vector);
+  void variant = monostate. EMITTER RULES ADDED UNDER FIRE (T11.2, all gate-covered):
+  fully-custom decl → type-erased `using N = AbiValue` + registry<AbiValue> (typed
+  form impossible: TelegramString target=slice, CustomPoint empty struct); CellOf<T>
+  holds shared_ptr (recursive types); MSVC can't parse nested td TRY_* at depth-3 →
+  raw try-binds with unique temps; C++-keyword field names escaped (field named
+  `void` exists); quote-bearing field names via cpp_str_lit; fixture-stem filenames
+  (contract_name collides: both err fixtures = "Err"). Executor abi-w11 retired.
+  **PROGRAM PAUSED here by user order — W12 (mch bridge) NOT dispatched; awaits
+  explicit go.**
 
 - **W10 DONE 2026-07-16** (lead-verified: 165 cases / 2099 asserts / ctest 1/1). All
   ABI-inspection specs ported onto committed fixtures (compiler_version PINNED "1.4.1",

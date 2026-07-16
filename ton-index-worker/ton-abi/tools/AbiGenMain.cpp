@@ -48,6 +48,25 @@ int fail(const std::string &msg) {
   return 1;
 }
 
+// The fixture stem: input path basename minus a trailing ".abi.json" / ".json".
+// Used for the output filename + namespace so distinct fixtures that share a
+// contract_name (both err-cont-on-stack-* are "Err") don't collide.
+std::string fixture_stem(const std::string &path) {
+  std::string base = path;
+  auto slash = base.find_last_of("/\\");
+  if (slash != std::string::npos) {
+    base = base.substr(slash + 1);
+  }
+  for (const char *suf : {".abi.json", ".json"}) {
+    std::string s = suf;
+    if (base.size() > s.size() && base.compare(base.size() - s.size(), s.size(), s) == 0) {
+      base = base.substr(0, base.size() - s.size());
+      break;
+    }
+  }
+  return base;
+}
+
 td::Result<ton_abi::GeneratedFiles> gen_one(const std::string &abi_path) {
   TRY_RESULT(json, read_file(abi_path));
   TRY_RESULT(abi, ton_abi::load_abi_from_json(json));
@@ -56,7 +75,7 @@ td::Result<ton_abi::GeneratedFiles> gen_one(const std::string &abi_path) {
   // we resolve + emit fully before `abi` dies, so a stack local is fine.
   auto abi_box = std::make_unique<ton_abi::ContractABI>(std::move(abi));
   TRY_RESULT(kernel, ton_abi::AbiKernel::create(*abi_box));
-  TRY_RESULT(files, ton_abi::emit_abi(*abi_box, kernel));
+  TRY_RESULT(files, ton_abi::emit_abi(*abi_box, kernel, fixture_stem(abi_path)));
   return files;
 }
 

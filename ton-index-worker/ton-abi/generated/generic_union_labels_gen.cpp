@@ -25,38 +25,62 @@ StateInit StateInit::create(CreateArgs args) {
 td::Result<StateInit> StateInit::from_slice(vm::CellSlice& cs) {
   StateInit r;
   TRY_RESULT_PREFIX_ASSIGN(r.fixedPrefixLength, ([&]() -> td::Result<std::optional<td::RefInt256>> {
-    TRY_RESULT(__pres, load_maybe_prefix(cs));
-    if (!__pres) { return std::optional<td::RefInt256>(); }
-    TRY_RESULT(__nv, (load_uint(cs, 5)));
-    return std::optional<td::RefInt256>(std::move(__nv));
+    auto __rp1 = (load_maybe_prefix(cs));
+    if (__rp1.is_error()) { return __rp1.move_as_error(); }
+    auto __pres1 = __rp1.move_as_ok();
+    if (!__pres1) { return std::optional<td::RefInt256>(); }
+    auto __r1 = (load_uint(cs, 5));
+    if (__r1.is_error()) { return __r1.move_as_error(); }
+    auto __nv1 = __r1.move_as_ok();
+    return std::optional<td::RefInt256>(std::move(__nv1));
   }()), "StateInit.fixedPrefixLength: ");
   TRY_RESULT_PREFIX_ASSIGN(r.special, ([&]() -> td::Result<std::optional<std::tuple<bool, bool>>> {
-    TRY_RESULT(__pres, load_maybe_prefix(cs));
-    if (!__pres) { return std::optional<std::tuple<bool, bool>>(); }
-    TRY_RESULT(__nv, ([&]() -> td::Result<std::tuple<bool, bool>> {
-    TRY_RESULT(__t0, (load_bool(cs)));
-    TRY_RESULT(__t1, (load_bool(cs)));
-    return std::tuple<bool, bool>(std::move(__t0), std::move(__t1));
-  }()));
-    return std::optional<std::tuple<bool, bool>>(std::move(__nv));
+    auto __rp2 = (load_maybe_prefix(cs));
+    if (__rp2.is_error()) { return __rp2.move_as_error(); }
+    auto __pres2 = __rp2.move_as_ok();
+    if (!__pres2) { return std::optional<std::tuple<bool, bool>>(); }
+    auto __r2 = ([&]() -> td::Result<std::tuple<bool, bool>> {
+    auto __rt3_0 = (load_bool(cs));
+    if (__rt3_0.is_error()) { return __rt3_0.move_as_error(); }
+    auto __t3_0 = __rt3_0.move_as_ok();
+    auto __rt3_1 = (load_bool(cs));
+    if (__rt3_1.is_error()) { return __rt3_1.move_as_error(); }
+    auto __t3_1 = __rt3_1.move_as_ok();
+    return std::tuple<bool, bool>(std::move(__t3_0), std::move(__t3_1));
+  }());
+    if (__r2.is_error()) { return __r2.move_as_error(); }
+    auto __nv2 = __r2.move_as_ok();
+    return std::optional<std::tuple<bool, bool>>(std::move(__nv2));
   }()), "StateInit.special: ");
   TRY_RESULT_PREFIX_ASSIGN(r.code, ([&]() -> td::Result<std::optional<td::Ref<vm::Cell>>> {
-    TRY_RESULT(__pres, load_maybe_prefix(cs));
-    if (!__pres) { return std::optional<td::Ref<vm::Cell>>(); }
-    TRY_RESULT(__nv, (load_cell(cs)));
-    return std::optional<td::Ref<vm::Cell>>(std::move(__nv));
+    auto __rp4 = (load_maybe_prefix(cs));
+    if (__rp4.is_error()) { return __rp4.move_as_error(); }
+    auto __pres4 = __rp4.move_as_ok();
+    if (!__pres4) { return std::optional<td::Ref<vm::Cell>>(); }
+    auto __r4 = (load_cell(cs));
+    if (__r4.is_error()) { return __r4.move_as_error(); }
+    auto __nv4 = __r4.move_as_ok();
+    return std::optional<td::Ref<vm::Cell>>(std::move(__nv4));
   }()), "StateInit.code: ");
   TRY_RESULT_PREFIX_ASSIGN(r.data, ([&]() -> td::Result<std::optional<td::Ref<vm::Cell>>> {
-    TRY_RESULT(__pres, load_maybe_prefix(cs));
-    if (!__pres) { return std::optional<td::Ref<vm::Cell>>(); }
-    TRY_RESULT(__nv, (load_cell(cs)));
-    return std::optional<td::Ref<vm::Cell>>(std::move(__nv));
+    auto __rp5 = (load_maybe_prefix(cs));
+    if (__rp5.is_error()) { return __rp5.move_as_error(); }
+    auto __pres5 = __rp5.move_as_ok();
+    if (!__pres5) { return std::optional<td::Ref<vm::Cell>>(); }
+    auto __r5 = (load_cell(cs));
+    if (__r5.is_error()) { return __r5.move_as_error(); }
+    auto __nv5 = __r5.move_as_ok();
+    return std::optional<td::Ref<vm::Cell>>(std::move(__nv5));
   }()), "StateInit.data: ");
   TRY_RESULT_PREFIX_ASSIGN(r.library, ([&]() -> td::Result<std::optional<td::Ref<vm::Cell>>> {
-    TRY_RESULT(__pres, load_maybe_prefix(cs));
-    if (!__pres) { return std::optional<td::Ref<vm::Cell>>(); }
-    TRY_RESULT(__nv, (load_cell(cs)));
-    return std::optional<td::Ref<vm::Cell>>(std::move(__nv));
+    auto __rp6 = (load_maybe_prefix(cs));
+    if (__rp6.is_error()) { return __rp6.move_as_error(); }
+    auto __pres6 = __rp6.move_as_ok();
+    if (!__pres6) { return std::optional<td::Ref<vm::Cell>>(); }
+    auto __r6 = (load_cell(cs));
+    if (__r6.is_error()) { return __r6.move_as_error(); }
+    auto __nv6 = __r6.move_as_ok();
+    return std::optional<td::Ref<vm::Cell>>(std::move(__nv6));
   }()), "StateInit.library: ");
   return r;
 }
@@ -105,10 +129,16 @@ td::Result<AbiValue> StateInit::to_abi_value() const {
   { TRY_RESULT(__f, ([&]() -> td::Result<AbiValue> {
     if (!(this->special)) { return AbiValue::make_null(); }
     return [&]() -> td::Result<AbiValue> {
-    std::vector<AbiValue> __items;
-    { TRY_RESULT(__iv, (td::Result<AbiValue>(ton_abi::gen::abi_v_bool(std::get<0>((*(this->special))))))); __items.push_back(std::move(__iv)); }
-    { TRY_RESULT(__iv, (td::Result<AbiValue>(ton_abi::gen::abi_v_bool(std::get<1>((*(this->special))))))); __items.push_back(std::move(__iv)); }
-    return AbiValue::make_list(std::move(__items));
+    std::vector<AbiValue> __items7;
+    { auto __ri7_0 = (td::Result<AbiValue>(ton_abi::gen::abi_v_bool(std::get<0>((*(this->special))))));
+    if (__ri7_0.is_error()) { return __ri7_0.move_as_error(); }
+    auto __iv7_0 = __ri7_0.move_as_ok();
+      __items7.push_back(std::move(__iv7_0)); }
+    { auto __ri7_1 = (td::Result<AbiValue>(ton_abi::gen::abi_v_bool(std::get<1>((*(this->special))))));
+    if (__ri7_1.is_error()) { return __ri7_1.move_as_error(); }
+    auto __iv7_1 = __ri7_1.move_as_ok();
+      __items7.push_back(std::move(__iv7_1)); }
+    return AbiValue::make_list(std::move(__items7));
   }();
   }())); r.add_field("special", std::move(__f)); }
   { TRY_RESULT(__f, ([&]() -> td::Result<AbiValue> {
@@ -265,10 +295,14 @@ td::Result<TlbEitherRight_Cell_StateInit> TlbEitherRight_Cell_StateInit::from_sl
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "TlbEitherRight: ");
   TlbEitherRight_Cell_StateInit r;
   TRY_RESULT_PREFIX_ASSIGN(r.value, ([&]() -> td::Result<ton_abi::gen::CellOf<StateInit>> {
-    TRY_RESULT(__rs, load_ref_slice(cs));
-    vm::CellSlice __cs = *__rs;
-    TRY_RESULT(__cv, (StateInit::from_slice(__cs)));
-    return ton_abi::gen::CellOf<StateInit>{std::make_shared<StateInit>(std::move(__cv))};
+    auto __rr10 = (load_ref_slice(cs));
+    if (__rr10.is_error()) { return __rr10.move_as_error(); }
+    auto __rs10 = __rr10.move_as_ok();
+    vm::CellSlice __cs10 = *__rs10;
+    auto __rc10 = (StateInit::from_slice(__cs10));
+    if (__rc10.is_error()) { return __rc10.move_as_error(); }
+    auto __cv10 = __rc10.move_as_ok();
+    return ton_abi::gen::CellOf<StateInit>{std::make_shared<StateInit>(std::move(__cv10))};
   }()), "TlbEitherRight.value: ");
   return r;
 }
@@ -276,9 +310,9 @@ td::Result<TlbEitherRight_Cell_StateInit> TlbEitherRight_Cell_StateInit::from_sl
 td::Status TlbEitherRight_Cell_StateInit::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
   {
-    vm::CellBuilder __icb;
-    TRY_STATUS((*(this->value.ref)).store(__icb));
-    TRY_STATUS(store_cell(cb, __icb.finalize()));
+    vm::CellBuilder __icb11;
+    TRY_STATUS((*(this->value.ref)).store(__icb11));
+    { auto __cs11 = (store_cell(cb, __icb11.finalize())); if (__cs11.is_error()) { return __cs11; } }
   }
   return td::Status::OK();
 }
@@ -286,8 +320,10 @@ td::Status TlbEitherRight_Cell_StateInit::store(vm::CellBuilder& cb) const {
 td::Result<AbiValue> TlbEitherRight_Cell_StateInit::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("TlbEitherRight");
   { TRY_RESULT(__f, ([&]() -> td::Result<AbiValue> {
-    TRY_RESULT(__iv, (((*(this->value.ref))).to_abi_value()));
-    return AbiValue::make_cell_of(std::move(__iv));
+    auto __ri12 = (((*(this->value.ref))).to_abi_value());
+    if (__ri12.is_error()) { return __ri12.move_as_error(); }
+    auto __iv12 = __ri12.move_as_ok();
+    return AbiValue::make_cell_of(std::move(__iv12));
   }())); r.add_field("value", std::move(__f)); }
   return r;
 }
@@ -369,10 +405,14 @@ td::Result<AbiValue> TlbEitherLeft_bool::to_abi_value() const {
 
 td::Result<MyNullable_Point> MyNullable_Point_from_slice(vm::CellSlice& cs) {
   return [&]() -> td::Result<std::optional<Point>> {
-    TRY_RESULT(__pres, load_maybe_prefix(cs));
-    if (!__pres) { return std::optional<Point>(); }
-    TRY_RESULT(__nv, (Point::from_slice(cs)));
-    return std::optional<Point>(std::move(__nv));
+    auto __rp14 = (load_maybe_prefix(cs));
+    if (__rp14.is_error()) { return __rp14.move_as_error(); }
+    auto __pres14 = __rp14.move_as_ok();
+    if (!__pres14) { return std::optional<Point>(); }
+    auto __r14 = (Point::from_slice(cs));
+    if (__r14.is_error()) { return __r14.move_as_error(); }
+    auto __nv14 = __r14.move_as_ok();
+    return std::optional<Point>(std::move(__nv14));
   }();
 }
 
@@ -449,12 +489,16 @@ td::Result<AbiValue> GenericPair_int32_int64::to_abi_value() const {
   { TRY_RESULT(__f, ([&]() -> td::Result<AbiValue> {
     switch ((this->value).index()) {
       case 0: {
-        TRY_RESULT(__iv, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(std::get<0>(this->value)))));
-        return AbiValue::make_union("T1", std::move(__iv));
+        auto __ri8_0 = (td::Result<AbiValue>(ton_abi::gen::abi_v_int(std::get<0>(this->value))));
+    if (__ri8_0.is_error()) { return __ri8_0.move_as_error(); }
+    auto __iv8_0 = __ri8_0.move_as_ok();
+        return AbiValue::make_union("T1", std::move(__iv8_0));
       }
       case 1: {
-        TRY_RESULT(__iv, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(std::get<1>(this->value)))));
-        return AbiValue::make_union("T2", std::move(__iv));
+        auto __ri8_1 = (td::Result<AbiValue>(ton_abi::gen::abi_v_int(std::get<1>(this->value))));
+    if (__ri8_1.is_error()) { return __ri8_1.move_as_error(); }
+    auto __iv8_1 = __ri8_1.move_as_ok();
+        return AbiValue::make_union("T2", std::move(__iv8_1));
       }
       default: return td::Status::Error("union: invalid variant index");
     }
@@ -543,12 +587,16 @@ td::Result<AbiValue> GenericOrInt8_int16::to_abi_value() const {
   { TRY_RESULT(__f, ([&]() -> td::Result<AbiValue> {
     switch ((this->value).index()) {
       case 0: {
-        TRY_RESULT(__iv, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(std::get<0>(this->value)))));
-        return AbiValue::make_union("T", std::move(__iv));
+        auto __ri9_0 = (td::Result<AbiValue>(ton_abi::gen::abi_v_int(std::get<0>(this->value))));
+    if (__ri9_0.is_error()) { return __ri9_0.move_as_error(); }
+    auto __iv9_0 = __ri9_0.move_as_ok();
+        return AbiValue::make_union("T", std::move(__iv9_0));
       }
       case 1: {
-        TRY_RESULT(__iv, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(std::get<1>(this->value)))));
-        return AbiValue::make_union("int8", std::move(__iv));
+        auto __ri9_1 = (td::Result<AbiValue>(ton_abi::gen::abi_v_int(std::get<1>(this->value))));
+    if (__ri9_1.is_error()) { return __ri9_1.move_as_error(); }
+    auto __iv9_1 = __ri9_1.move_as_ok();
+        return AbiValue::make_union("int8", std::move(__iv9_1));
       }
       default: return td::Status::Error("union: invalid variant index");
     }
@@ -594,12 +642,16 @@ td::Result<AbiValue> AliasOrInt8_int16_to_abi_value(const AliasOrInt8_int16& sel
   return [&]() -> td::Result<AbiValue> {
     switch ((self).index()) {
       case 0: {
-        TRY_RESULT(__iv, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(std::get<0>(self)))));
-        return AbiValue::make_union("T", std::move(__iv));
+        auto __ri13_0 = (td::Result<AbiValue>(ton_abi::gen::abi_v_int(std::get<0>(self))));
+    if (__ri13_0.is_error()) { return __ri13_0.move_as_error(); }
+    auto __iv13_0 = __ri13_0.move_as_ok();
+        return AbiValue::make_union("T", std::move(__iv13_0));
       }
       case 1: {
-        TRY_RESULT(__iv, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(std::get<1>(self)))));
-        return AbiValue::make_union("int8", std::move(__iv));
+        auto __ri13_1 = (td::Result<AbiValue>(ton_abi::gen::abi_v_int(std::get<1>(self))));
+    if (__ri13_1.is_error()) { return __ri13_1.move_as_error(); }
+    auto __iv13_1 = __ri13_1.move_as_ok();
+        return AbiValue::make_union("int8", std::move(__iv13_1));
       }
       default: return td::Status::Error("union: invalid variant index");
     }
@@ -674,12 +726,16 @@ td::Result<AbiValue> TlbEither_StateInit_Cell_StateInit_to_abi_value(const TlbEi
   return [&]() -> td::Result<AbiValue> {
     switch ((self).index()) {
       case 0: {
-        TRY_RESULT(__iv, ((std::get<0>(self)).to_abi_value()));
-        return std::move(__iv);
+        auto __ri15_0 = ((std::get<0>(self)).to_abi_value());
+    if (__ri15_0.is_error()) { return __ri15_0.move_as_error(); }
+    auto __iv15_0 = __ri15_0.move_as_ok();
+        return std::move(__iv15_0);
       }
       case 1: {
-        TRY_RESULT(__iv, ((std::get<1>(self)).to_abi_value()));
-        return std::move(__iv);
+        auto __ri15_1 = ((std::get<1>(self)).to_abi_value());
+    if (__ri15_1.is_error()) { return __ri15_1.move_as_error(); }
+    auto __iv15_1 = __ri15_1.move_as_ok();
+        return std::move(__iv15_1);
       }
       default: return td::Status::Error("union: invalid variant index");
     }
@@ -754,12 +810,16 @@ td::Result<AbiValue> TlbMaybe_TlbEither_StateInit_Cell_StateInit_to_abi_value(co
   return [&]() -> td::Result<AbiValue> {
     switch ((self).index()) {
       case 0: {
-        TRY_RESULT(__iv, ((std::get<0>(self)).to_abi_value()));
-        return std::move(__iv);
+        auto __ri16_0 = ((std::get<0>(self)).to_abi_value());
+    if (__ri16_0.is_error()) { return __ri16_0.move_as_error(); }
+    auto __iv16_0 = __ri16_0.move_as_ok();
+        return std::move(__iv16_0);
       }
       case 1: {
-        TRY_RESULT(__iv, ((std::get<1>(self)).to_abi_value()));
-        return std::move(__iv);
+        auto __ri16_1 = ((std::get<1>(self)).to_abi_value());
+    if (__ri16_1.is_error()) { return __ri16_1.move_as_error(); }
+    auto __iv16_1 = __ri16_1.move_as_ok();
+        return std::move(__iv16_1);
       }
       default: return td::Status::Error("union: invalid variant index");
     }
@@ -840,12 +900,16 @@ td::Result<AbiValue> TlbEither_int32_bool_to_abi_value(const TlbEither_int32_boo
   return [&]() -> td::Result<AbiValue> {
     switch ((self).index()) {
       case 0: {
-        TRY_RESULT(__iv, ((std::get<0>(self)).to_abi_value()));
-        return std::move(__iv);
+        auto __ri17_0 = ((std::get<0>(self)).to_abi_value());
+    if (__ri17_0.is_error()) { return __ri17_0.move_as_error(); }
+    auto __iv17_0 = __ri17_0.move_as_ok();
+        return std::move(__iv17_0);
       }
       case 1: {
-        TRY_RESULT(__iv, ((std::get<1>(self)).to_abi_value()));
-        return std::move(__iv);
+        auto __ri17_1 = ((std::get<1>(self)).to_abi_value());
+    if (__ri17_1.is_error()) { return __ri17_1.move_as_error(); }
+    auto __iv17_1 = __ri17_1.move_as_ok();
+        return std::move(__iv17_1);
       }
       default: return td::Status::Error("union: invalid variant index");
     }
@@ -895,12 +959,16 @@ td::Result<AbiValue> TlbEither_bool_bool_to_abi_value(const TlbEither_bool_bool&
   return [&]() -> td::Result<AbiValue> {
     switch ((self).index()) {
       case 0: {
-        TRY_RESULT(__iv, ((std::get<0>(self)).to_abi_value()));
-        return std::move(__iv);
+        auto __ri18_0 = ((std::get<0>(self)).to_abi_value());
+    if (__ri18_0.is_error()) { return __ri18_0.move_as_error(); }
+    auto __iv18_0 = __ri18_0.move_as_ok();
+        return std::move(__iv18_0);
       }
       case 1: {
-        TRY_RESULT(__iv, ((std::get<1>(self)).to_abi_value()));
-        return std::move(__iv);
+        auto __ri18_1 = ((std::get<1>(self)).to_abi_value());
+    if (__ri18_1.is_error()) { return __ri18_1.move_as_error(); }
+    auto __iv18_1 = __ri18_1.move_as_ok();
+        return std::move(__iv18_1);
       }
       default: return td::Status::Error("union: invalid variant index");
     }
@@ -954,12 +1022,16 @@ td::Result<AbiValue> RawEither_int32_bool_to_abi_value(const RawEither_int32_boo
   return [&]() -> td::Result<AbiValue> {
     switch ((self).index()) {
       case 0: {
-        TRY_RESULT(__iv, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(std::get<0>(self)))));
-        return AbiValue::make_union("X", std::move(__iv));
+        auto __ri19_0 = (td::Result<AbiValue>(ton_abi::gen::abi_v_int(std::get<0>(self))));
+    if (__ri19_0.is_error()) { return __ri19_0.move_as_error(); }
+    auto __iv19_0 = __ri19_0.move_as_ok();
+        return AbiValue::make_union("X", std::move(__iv19_0));
       }
       case 1: {
-        TRY_RESULT(__iv, (td::Result<AbiValue>(ton_abi::gen::abi_v_bool(std::get<1>(self)))));
-        return AbiValue::make_union("Y", std::move(__iv));
+        auto __ri19_1 = (td::Result<AbiValue>(ton_abi::gen::abi_v_bool(std::get<1>(self))));
+    if (__ri19_1.is_error()) { return __ri19_1.move_as_error(); }
+    auto __iv19_1 = __ri19_1.move_as_ok();
+        return AbiValue::make_union("Y", std::move(__iv19_1));
       }
       default: return td::Status::Error("union: invalid variant index");
     }

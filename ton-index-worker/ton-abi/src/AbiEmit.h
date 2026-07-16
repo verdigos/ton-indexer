@@ -31,7 +31,11 @@ struct GeneratedFiles {
 };
 
 // Emit the generated pair for `abi` (kernel resolves it). Fail-closed on
-// non-standard map keys and any resolution error.
-td::Result<GeneratedFiles> emit_abi(const ContractABI &abi, const AbiKernel &kernel);
+// non-standard map keys and any resolution error. `out_name` (a fixture stem)
+// determines the output file basename + namespace -- NOT contract_name, since
+// distinct fixtures can share a contract_name (e.g. both err-cont-on-stack-*
+// are "Err"). When empty, falls back to the contract_name's snake form.
+td::Result<GeneratedFiles> emit_abi(const ContractABI &abi, const AbiKernel &kernel,
+                                    const std::string &out_name = {});
 
 }  // namespace ton_abi
