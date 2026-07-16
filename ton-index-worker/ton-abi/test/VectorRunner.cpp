@@ -33,6 +33,8 @@
 
 #include "AbiInterp.h"
 #include "AbiKernel.h"
+#include "AbiLeavesRef.h"
+#include "AbiLeavesScalar.h"
 #include "AbiLoader.h"
 #include "AbiValue.h"
 #include "common/bitstring.h"
@@ -305,6 +307,44 @@ td::Result<AbiValue> abi_value_from_json(const AbiKernel &kernel, int ty_idx, co
                                           std::optional<int> u_label_ty_idx) {
   TRY_RESULT(ty, kernel.ty_by_idx(ty_idx));
 
+  // W9 (T9.1): custom-serialized types dump as whatever AbiValue KIND their
+  // custom unpack fn produces (Bits/Int/Struct here), not what their alias/
+  // struct target would normally resolve to (bypassed by the custom gate) --
+  // so the JSON->AbiValue direction needs the same by-name special-casing
+  // gen_vectors.mjs's toValueJsonFull/fromValueJsonFull use.
+  if (ty->kind == TyKind::AliasRef) {
+    const auto &name = std::get<TyAliasRef>(ty->data).alias_name;
+    if (name == "TelegramString") {
+      const Json *bitsField = jfield(j, "bits");
+      const Json *refsField = jfield(j, "refs");
+      if (bitsField == nullptr || bitsField->type() != JType::String || refsField == nullptr) {
+        return td::Status::Error("TelegramString: expected {bits,refs} object");
+      }
+      vm::CellBuilder cb;
+      for (char c : bitsField->get_string()) {
+        cb.store_long_bool(c == '1' ? 1 : 0, 1);
+      }
+      return AbiValue::make_bits(vm::load_cell_slice_ref(cb.finalize()));
+    }
+    if (name == "Custom8") {
+      if (j.type() != JType::String) {
+        return td::Status::Error("Custom8: expected decimal string");
+      }
+      return AbiValue::make_int(td::dec_string_to_int256(j.get_string().str()));
+    }
+  }
+  if (ty->kind == TyKind::StructRef && std::get<TyStructRef>(ty->data).struct_name == "CustomPoint") {
+    const Json *xf = jfield(j, "x");
+    const Json *yf = jfield(j, "y");
+    if (xf == nullptr || xf->type() != JType::String || yf == nullptr || yf->type() != JType::String) {
+      return td::Status::Error("CustomPoint: expected {x,y} decimal strings");
+    }
+    AbiValue result = AbiValue::make_struct("CustomPoint");
+    result.add_field("x", AbiValue::make_int(td::dec_string_to_int256(xf->get_string().str())));
+    result.add_field("y", AbiValue::make_int(td::dec_string_to_int256(yf->get_string().str())));
+    return result;
+  }
+
   switch (ty->kind) {
     case TyKind::IntN:
     case TyKind::UintN:
@@ -556,6 +596,60 @@ std::string read_file(const std::string &path) {
   return ss.str();
 }
 
+// W9 (T9.1): the 3 custom serializers exercised by vectors (StorWithStr's
+// TelegramString field, PointWithCustomInt's Custom8 field, CustomPoint
+// itself) -- ports of LotsOfWrappers.spec.ts:243-380, same as
+// AbiInterpW9Test.cpp's native units. Registered on the 'lots-of-wrappers'
+// fixture ctx so unpack_value/pack_value can drive those vectors.
+td::Status TelegramString_pack(const AbiValue &v, vm::CellBuilder &cb) {
+  if (v.kind != AbiValueKind::Bits) {
+    return td::Status::Error("TelegramString custom pack: expected Bits value");
+  }
+  int bytes = (static_cast<int>(v.bits_v->size()) + 7) / 8;
+  TRY_STATUS(store_uint(cb, td::make_refint(bytes), 8));
+  cb.store_bits(v.bits_v->data_bits(), v.bits_v->size());
+  return td::Status::OK();
+}
+td::Result<AbiValue> TelegramString_unpack(vm::CellSlice &cs) {
+  TRY_RESULT(bytes, load_uint(cs, 8));
+  TRY_RESULT(bits, load_bits(cs, static_cast<int>(bytes->to_long()) * 8));
+  return AbiValue::make_bits(std::move(bits));
+}
+td::Status Custom8_pack(const AbiValue &v, vm::CellBuilder &cb) {
+  if (v.kind != AbiValueKind::Int) {
+    return td::Status::Error("Custom8 custom pack: expected Int value");
+  }
+  return store_uint(cb, v.int_v, 8);
+}
+td::Result<AbiValue> Custom8_unpack(vm::CellSlice &cs) {
+  TRY_RESULT(v, load_uint(cs, 8));
+  return AbiValue::make_int(std::move(v));
+}
+td::Status CustomPoint_pack(const AbiValue &v, vm::CellBuilder &cb) {
+  if (v.kind != AbiValueKind::Struct) {
+    return td::Status::Error("CustomPoint custom pack: expected Struct value");
+  }
+  const AbiValue *x = nullptr;
+  const AbiValue *y = nullptr;
+  for (const auto &f : v.struct_fields) {
+    if (f.first == "x") x = &f.second;
+    if (f.first == "y") y = &f.second;
+  }
+  if (x == nullptr || y == nullptr) {
+    return td::Status::Error("CustomPoint custom pack: missing x/y field");
+  }
+  TRY_STATUS(store_uint(cb, x->int_v, 8));
+  return store_uint(cb, y->int_v, 8);
+}
+td::Result<AbiValue> CustomPoint_unpack(vm::CellSlice &cs) {
+  TRY_RESULT(x, load_uint(cs, 8));
+  TRY_RESULT(y, load_uint(cs, 8));
+  AbiValue result = AbiValue::make_struct("CustomPoint");
+  result.add_field("x", AbiValue::make_int(std::move(x)));
+  result.add_field("y", AbiValue::make_int(std::move(y)));
+  return result;
+}
+
 FixtureCtx &fixture_ctx_for(std::unordered_map<std::string, std::unique_ptr<FixtureCtx>> &cache,
                             const std::string &fixture) {
   auto it = cache.find(fixture);
@@ -566,6 +660,12 @@ FixtureCtx &fixture_ctx_for(std::unordered_map<std::string, std::unique_ptr<Fixt
   auto r = load_abi_from_json(read_file(path));
   REQUIRE_MESSAGE(r.is_ok(), fixture << ": " << (r.is_error() ? r.error().message().str() : ""));
   auto inserted = cache.emplace(fixture, std::make_unique<FixtureCtx>(r.move_as_ok()));
+  if (fixture == "lots-of-wrappers") {
+    FixtureCtx &fc = *inserted.first->second;
+    REQUIRE(register_abi_custom_dynamic(fc.ctx, "TelegramString", TelegramString_pack, TelegramString_unpack).is_ok());
+    REQUIRE(register_abi_custom_dynamic(fc.ctx, "Custom8", Custom8_pack, Custom8_unpack).is_ok());
+    REQUIRE(register_abi_custom_dynamic(fc.ctx, "CustomPoint", CustomPoint_pack, CustomPoint_unpack).is_ok());
+  }
   return *inserted.first->second;
 }
 

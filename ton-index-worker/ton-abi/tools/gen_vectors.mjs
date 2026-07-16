@@ -175,9 +175,48 @@ function dictValueOf(ctx, valueTyIdx) {
 // available option (null / empty array / a union's void variant if present).
 const kMaxDepth = 6;
 
+// ---- W9 (T9.1): custom serializers ported verbatim from
+// LotsOfWrappers.spec.ts:243-380 (the ones that have a real fixture struct to
+// hang a vector off of -- Tensor3Skipping1/Color/OnlyWithPack/OnlyWithUnpack
+// have no wrapping struct in this fixture and are covered by native C++ units
+// in AbiInterpW9Test.cpp only). Gated BEFORE normal StructRef/AliasRef
+// resolution in sampleValue/toValueJsonFull/fromValueJsonFull, mirroring the
+// custom-gate-before-resolution invariant (W2 invariant ii) the C++ walker
+// follows.
+const W9_CUSTOM_SAMPLE = {
+    TelegramString: () => beginCell().storeBuffer(Buffer.from('hello')).endCell().beginParse(),
+    Custom8: () => 42n,
+    MyBorderedInt: () => 20n,  // packs to the ">10" range tag; unpacks back as 10n
+    CustomPoint: () => ({ x: 3n, y: 4n }),
+};
+const W9_CUSTOM_TO_JSON = {
+    TelegramString: (v) => {
+        const s = v.clone();
+        const n = s.remainingBits;
+        let bits = '';
+        for (let i = 0; i < n; i++) bits += s.loadUint(1).toString();
+        return { bits, refs: [] };
+    },
+    Custom8: (v) => v.toString(),
+    MyBorderedInt: (v) => v.toString(),
+    CustomPoint: (v) => ({ $: 'CustomPoint', x: v.x.toString(), y: v.y.toString() }),
+};
+const W9_CUSTOM_FROM_JSON = {
+    TelegramString: (j) => {
+        const b = beginCell();
+        for (const ch of j.bits) b.storeUint(ch === '1' ? 1 : 0, 1);
+        return b.endCell().beginParse();
+    },
+    Custom8: (j) => BigInt(j),
+    MyBorderedInt: (j) => BigInt(j),
+    CustomPoint: (j) => ({ x: BigInt(j.x), y: BigInt(j.y) }),
+};
+
 function sampleValue(ctx, tyIdx, uLabelTyIdx, depth) {
     const ty = ctx.symbols.tyByIdx(tyIdx);
     const d1 = depth + 1;
+    if (ty.kind === 'AliasRef' && W9_CUSTOM_SAMPLE[ty.alias_name]) return W9_CUSTOM_SAMPLE[ty.alias_name]();
+    if (ty.kind === 'StructRef' && W9_CUSTOM_SAMPLE[ty.struct_name]) return W9_CUSTOM_SAMPLE[ty.struct_name]();
     switch (ty.kind) {
         case 'intN': {
             const maxAbs = (1n << BigInt(Math.max(ty.n - 1, 0))) - 1n;  // signed range top
@@ -262,6 +301,8 @@ function sampleValue(ctx, tyIdx, uLabelTyIdx, depth) {
 
 function toValueJsonFull(ctx, tyIdx, v, uLabelTyIdx) {
     const ty = ctx.symbols.tyByIdx(tyIdx);
+    if (ty.kind === 'AliasRef' && W9_CUSTOM_TO_JSON[ty.alias_name]) return W9_CUSTOM_TO_JSON[ty.alias_name](v);
+    if (ty.kind === 'StructRef' && W9_CUSTOM_TO_JSON[ty.struct_name]) return W9_CUSTOM_TO_JSON[ty.struct_name](v);
     switch (ty.kind) {
         case 'intN': case 'uintN': case 'varintN': case 'varuintN': case 'coins':
             return v.toString();
@@ -346,6 +387,8 @@ function toValueJsonFull(ctx, tyIdx, v, uLabelTyIdx) {
 
 function fromValueJsonFull(ctx, tyIdx, j, uLabelTyIdx) {
     const ty = ctx.symbols.tyByIdx(tyIdx);
+    if (ty.kind === 'AliasRef' && W9_CUSTOM_FROM_JSON[ty.alias_name]) return W9_CUSTOM_FROM_JSON[ty.alias_name](j);
+    if (ty.kind === 'StructRef' && W9_CUSTOM_FROM_JSON[ty.struct_name]) return W9_CUSTOM_FROM_JSON[ty.struct_name](j);
     switch (ty.kind) {
         case 'intN': case 'uintN': case 'varintN': case 'varuintN': case 'coins':
             return BigInt(j);
@@ -613,6 +656,48 @@ async function main() {
     // sampled via the compound WithAnyAddress struct).
     {
         const ctx = ctxFor('lots-of-wrappers');
+
+        // W9 (T9.1): register the same custom impls the reference spec uses
+        // (LotsOfWrappers.spec.ts:243-380, copied verbatim minus TS types) on
+        // the ORACLE's own ctx, so packToBuilderDynamic/unpackFromSliceDynamic
+        // route through them for these vectors -- closes the W8 flag ("no
+        // custom-serializer vectors yet").
+        function TelegramString__packToBuilder(self, b) {
+            let bytes = Math.ceil(self.remainingBits / 8);
+            b.storeUint(bytes, 8);
+            b.storeSlice(self);
+        }
+        function TelegramString__unpackFromSlice(s) {
+            let bytes = s.loadUint(8);
+            return new (require('@ton/core').Slice)(new (require('@ton/core').BitReader)(s.loadBits(bytes * 8)), []);
+        }
+        function Custom8__packToBuilder(self, b) { b.storeUint(self, 8); }
+        function Custom8__unpackFromSlice(s) { return s.loadUintBig(8); }
+        function MyBorderedInt__packToBuilder(self, b) {
+            if (self > 10) { b.storeUint(1, 4); } else if (self > 0) { b.storeUint(2, 4); } else { b.storeUint(3, 4); }
+        }
+        function MyBorderedInt__unpackFromSlice(s) {
+            switch (s.loadUint(4)) {
+                case 1: return 10n;
+                case 2: return 0n;
+                case 3: return -1n;
+                default: throw new Error('bad MyBorderedInt tag');
+            }
+        }
+        function CustomPoint__packToBuilder(self, b) {
+            b.storeUint(self.x, 8);
+            b.storeUint(self.y, 8);
+        }
+        function CustomPoint__unpackFromSlice(s) {
+            return { $: 'CustomPoint', x: s.loadUintBig(8), y: s.loadUintBig(8) };
+        }
+        ctx.registerCustomPackUnpack('TelegramString', TelegramString__packToBuilder, TelegramString__unpackFromSlice);
+        ctx.registerCustomPackUnpack('Custom8', Custom8__packToBuilder, Custom8__unpackFromSlice);
+        ctx.registerCustomPackUnpack('MyBorderedInt', MyBorderedInt__packToBuilder, MyBorderedInt__unpackFromSlice);
+        ctx.registerCustomPackUnpack('CustomPoint', CustomPoint__packToBuilder, CustomPoint__unpackFromSlice);
+        // Color intentionally NOT registered (spec :376 asymmetry, §0.17) --
+        // no vector needed for that, it's a native-unit-only assertion.
+
         vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'JustAddress'));
         vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'JustMaybeInt32', { $: 'JustMaybeInt32', value: 5n }));
         vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'JustMaybeInt32', { $: 'JustMaybeInt32', value: null }));
@@ -623,6 +708,16 @@ async function main() {
         vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'WithMaps0'));
         vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'WithEnums'));
         vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'WithAnyAddress'));
+
+        // W9 custom-serializer vectors. WithMyBorder (MyBorderedInt) is
+        // deliberately NOT a vector here: its custom encoding is lossy AND
+        // non-idempotent (pack(20n) -> tag1 -> unpack -> 10n, but
+        // pack(10n) -> tag2, NOT tag1 -- 10 is not a fixed point), which
+        // breaks the vector harness's own round-trip self-check by design.
+        // Covered correctly by the native unit in AbiInterpW9Test.cpp instead.
+        vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'StorWithStr'));    // TelegramString field
+        vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'PointWithCustomInt'));  // Custom8 field
+        vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'CustomPoint'));    // custom struct itself
     }
 
     // -- generic-union-labels: monomorph instantiation (GenericPair<int32,int64>

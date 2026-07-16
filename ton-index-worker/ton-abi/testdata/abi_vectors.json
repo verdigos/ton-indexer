@@ -322,6 +322,43 @@
       "golden_hex": "x{2040011111111111111111111111111111111111111111111111111111111111111116_}\n x{2_}\n x{4_}"
     },
     {
+      "fixture": "lots-of-wrappers",
+      "struct": "StorWithStr",
+      "enabled_from": "W8",
+      "value": {
+        "$": "StorWithStr",
+        "a": "5",
+        "str": {
+          "bits": "0110100001100101011011000110110001101111",
+          "refs": []
+        },
+        "b": "5"
+      },
+      "golden_hex": "x{000000050568656C6C6F00000005}"
+    },
+    {
+      "fixture": "lots-of-wrappers",
+      "struct": "PointWithCustomInt",
+      "enabled_from": "W8",
+      "value": {
+        "$": "PointWithCustomInt",
+        "a": "42",
+        "b": "5"
+      },
+      "golden_hex": "x{2A05}"
+    },
+    {
+      "fixture": "lots-of-wrappers",
+      "struct": "CustomPoint",
+      "enabled_from": "W8",
+      "value": {
+        "$": "CustomPoint",
+        "x": "3",
+        "y": "4"
+      },
+      "golden_hex": "x{0304}"
+    },
+    {
       "fixture": "generic-union-labels",
       "struct": "MsgPair",
       "enabled_from": "W8",
