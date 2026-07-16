@@ -27,6 +27,96 @@ std::string lower(std::string s) {
   return s;
 }
 
+// Lossy UTF-8 decode, mirroring Node's Buffer.toString('utf8') (the WHATWG
+// UTF-8 decoder's replacement-on-error behavior, which @ton/core's
+// loadStringRefTail relies on -- VALUE_SCHEMA.md / §0.14 pins this exactly).
+// Verified against live `node -e` output (T8.3) on: lone continuation bytes,
+// truncation at every byte position of 2/3/4-byte sequences, always-invalid
+// lead bytes (C0/C1/F5-FF), overlong encodings (C0 80, C1 BF, E0 80 80),
+// UTF-16-surrogate encodings (ED A0-BF ..), and out-of-Unicode-range 4-byte
+// leads (F0 with 2nd byte <0x90, F4 with 2nd byte >0x8F). Key subtlety: when
+// the FIRST continuation byte of a sequence fails its lead-specific range
+// check, that byte is NOT consumed by the replacement (it's reprocessed as
+// its own byte next iteration) -- e.g. E0 80 80 yields THREE replacement
+// chars, not one, because 0x80 fails E0's required [0xA0,0xBF] second-byte
+// range and gets reprocessed as a lone continuation byte, which itself fails
+// again. But once at least one continuation byte has been validated, a LATER
+// bad byte consumes the whole valid prefix into a single replacement and does
+// NOT reprocess the bad byte as a continuation (e.g. E2 82 'A' -> one
+// replacement for E2+82, then 'A' decodes normally).
+std::string decode_utf8_lossy(const std::string &bytes) {
+  std::string out;
+  const std::size_t n = bytes.size();
+  std::size_t i = 0;
+  auto byte_at = [&](std::size_t idx) { return static_cast<unsigned char>(bytes[idx]); };
+  auto is_cont = [&](std::size_t idx) { return idx < n && (byte_at(idx) & 0xC0) == 0x80; };
+  auto replacement = [&]() { out += "\xEF\xBF\xBD"; };  // U+FFFD in UTF-8
+
+  while (i < n) {
+    unsigned char b0 = byte_at(i);
+    if (b0 < 0x80) {
+      out += static_cast<char>(b0);
+      i += 1;
+    } else if (b0 < 0xC2) {
+      // continuation byte with no lead, or an always-invalid overlong lead (C0/C1)
+      replacement();
+      i += 1;
+    } else if (b0 < 0xE0) {
+      if (is_cont(i + 1)) {
+        out.append(bytes, i, 2);
+        i += 2;
+      } else {
+        replacement();
+        i += 1;
+      }
+    } else if (b0 < 0xF0) {
+      unsigned char lo = 0x80, hi = 0xBF;
+      if (b0 == 0xE0) lo = 0xA0;        // exclude overlong 3-byte encodings
+      else if (b0 == 0xED) hi = 0x9F;   // exclude UTF-16 surrogate range D800-DFFF
+      unsigned char b1 = (i + 1 < n) ? byte_at(i + 1) : 0;
+      if (i + 1 < n && b1 >= lo && b1 <= hi) {
+        if (is_cont(i + 2)) {
+          out.append(bytes, i, 3);
+          i += 3;
+        } else {
+          replacement();
+          i += 2;  // b0,b1 validated as a unit; the failing byte is reprocessed next
+        }
+      } else {
+        replacement();
+        i += 1;  // b1 invalid (or absent) for this lead; reprocess it on its own
+      }
+    } else if (b0 < 0xF5) {
+      unsigned char lo = 0x80, hi = 0xBF;
+      if (b0 == 0xF0) lo = 0x90;        // exclude overlong 4-byte encodings
+      else if (b0 == 0xF4) hi = 0x8F;   // cap at U+10FFFF
+      unsigned char b1 = (i + 1 < n) ? byte_at(i + 1) : 0;
+      if (i + 1 < n && b1 >= lo && b1 <= hi) {
+        if (is_cont(i + 2)) {
+          if (is_cont(i + 3)) {
+            out.append(bytes, i, 4);
+            i += 4;
+          } else {
+            replacement();
+            i += 3;
+          }
+        } else {
+          replacement();
+          i += 2;
+        }
+      } else {
+        replacement();
+        i += 1;
+      }
+    } else {
+      // 0xF5-0xFF: always-invalid lead (beyond Unicode's 4-byte range)
+      replacement();
+      i += 1;
+    }
+  }
+  return out;
+}
+
 void dump_json_string(const std::string &s, std::string &out) {
   out += '"';
   for (unsigned char c : s) {
@@ -232,7 +322,9 @@ void AbiValue::dump_to(std::string &out) const {
     }
 
     case AbiValueKind::String:
-      dump_json_string(string_v, out);
+      // string_v holds RAW bytes (pack round-trips them byte-for-byte via
+      // store_string); the lossy-UTF8 decode is a DUMP-only transform (§0.14).
+      dump_json_string(decode_utf8_lossy(string_v), out);
       break;
 
     case AbiValueKind::List:

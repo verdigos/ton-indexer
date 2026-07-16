@@ -296,9 +296,9 @@ teammates never commit. Wave-boundary ops (proven): executor rotation on long co
 | **W5 refs+strings** | T5.1 | cell/cellOf/nullable(1-bit)/maybe_ref; snake string ref-tail (normative-excerpt rule applied); remaining snapshot; BOC-flags pin (W0-deferred §0.14 item) | MED | M | sonnet | **DONE** |
 | **W6 containers** | T6.1 | arrayOf (TS-parity store / dual-format load), lispListOf, dict adapter | **HIGH** | M | **opus** | **DONE** (dict labels PROVEN identical vm↔core — no custom writer needed) |
 | **W7 prefixes** | T7.1 | load_and_check_prefix (any len) + lookup peek + union prefix-tree dispatch + store side | **HIGH** | M | **opus** | **DONE** (leaf layer complete) |
-| **W8 interpreter** | T8.1 | AbiValue tree + canonical JSON dump | LOW | M | sonnet | pending |
-| | T8.2 | Unpack+pack walkers incl. tensor/shapedTuple inline recursion (no leaf helper needed — walker-level, explicitly HERE); custom-serializer registry (hooks fire BEFORE alias/enum target resolution, W2 invariant ii); top-level body open REJECTS exotic/special cells (abort-safe pattern; reference assumes none); field-path error chaining | MED | M | sonnet | pending |
-| | T8.3 | Full conformance: gen_vectors full run (all fixtures, value+error vectors), VectorRunner green | MED | M | sonnet | pending |
+| **W8 interpreter** | T8.1 | AbiValue tree + canonical JSON dump | LOW | M | sonnet | **DONE** |
+| | T8.2 | Unpack+pack walkers + dynamic custom registry + exotic reject + field-path errors | MED | M | sonnet | **DONE** |
+| | T8.3 | Vectors LIVE: 12→30 both directions + lossy UTF-8 + error vectors | MED | M | sonnet | **DONE** (gaps flagged: shapedTuple walker-level only; addressExt nibble-aligned; custom vectors = W9) |
 | **W9 suite port (INTERPRETER-ONLY — no generated-code deps)** | T9.1 | LotsOfWrappers port, DEDUPLICATED (decided round 3): golden-hex bulk is ALREADY the VectorRunner's job — native doctest units ONLY for what vectors can't express: the 30 error asserts (re-specified + mapping table), the 10 custom-serializer cases, ~10 representative direct round-trip units for debugging ergonomics | MED | M (was L) | sonnet + opus review | pending |
 | | T9.2 | Carve-outs (interpreter-side): ClientTypeAnno ×3, GenericUnionLabels run(), LotsOfMessages hash-eq. (Default-fill = create()/emitter concern → moved to W11) | MED | M | sonnet | pending |
 | **W10 ABI-inspection** | T10.1 | OnlyHeader/LotsOfAnnotations/LotsOfThrows/LotsOfStorage-c2 asserts; decide HasNotInit optional | LOW | M | haiku/sonnet | pending |
@@ -417,6 +417,29 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
    walkers ~500, emitter 800-1,200).
 
 ## 6. Wave log (append per wave; status column above updates same commit)
+
+- **W8 DONE 2026-07-16** (3 sub-stages, lead-verified each; final: 152 cases / 1497
+  asserts / ctest 1/1 / 30 vectors green BOTH directions / regen byte-stable).
+  T8.1 AbiValue 13-kind tree + canonical dump (design call accepted: Union kind only
+  for has_value_field variants — struct-labeled variants ARE their inner value,
+  dump-identical). T8.2 AbiInterp walkers (full TyKind switch; AbiInterpCtx dynamic
+  custom registry gated BEFORE resolution at GENERIC decl only — upstream limitation
+  inherited by design; union pack matches Null-shortcut/Void/label+struct-name;
+  exotic-cell top-level reject; real-fixture round-trips byte-exact).
+  T8.3 vectors 12→30 (address/nullable/cellOf/array/lisp/tensor/mapKV incl.
+  address-keyed/enum/generic-union labels T1-T2 proven/monomorphs + 3 error vectors:
+  truncation, prefix mismatch, union no-match via hand-authored
+  w8-hand-union.abi.json — REAL tolk unions are structurally exhaustive, dispatch gaps
+  need hand fixtures). LOSSY UTF-8 implemented dump-side, verified byte-for-byte vs
+  live Node on every edge class (truncations per position, lone continuation, overlong,
+  surrogates, out-of-range; the reprocess-vs-consume subtlety documented); adversarial
+  malformed-string vector = unpack_only (lossy ≠ invertible). GOTCHAS for posterity:
+  vm::CellBuilder::finalize() is CONSUMING (2nd call → empty cell — Built{} helper
+  pattern); T0.2(a) round-trip self-validation caught 2 oracle-side generator bugs
+  (mutable-loop-bound on remainingBits; union re-wrap before packToBuilderDynamic) —
+  the round-4 F4 requirement earned its keep. FLAGGED GAPS: shapedTuple vector-level
+  (walker-tested only — Recurrent fixture self-referential), addressExt augmented-hex
+  widths, custom-serializer vectors → W9.
 
 - **W7 DONE 2026-07-16** (lead-verified: 114 cases / 691 asserts / ctest 1/1). LEAF
   LAYER COMPLETE (W2-W7). AbiLeavesPrefix.{h,cpp}: load_and_check_prefix/store_prefix
