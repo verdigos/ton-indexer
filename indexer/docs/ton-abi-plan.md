@@ -301,7 +301,7 @@ teammates never commit. Wave-boundary ops (proven): executor rotation on long co
 | | T8.3 | Vectors LIVE: 12→30 both directions + lossy UTF-8 + error vectors | MED | M | sonnet | **DONE** (gaps flagged: shapedTuple walker-level only; addressExt nibble-aligned; custom vectors = W9) |
 | **W9 suite port (INTERPRETER-ONLY)** | T9.1 | Deduplicated LotsOfWrappers port: error mapping + 9 customs + representative units + 3 custom vectors | MED | M | sonnet | **DONE** |
 | | T9.2 | Carve-outs: ClientTypeAnno client_ty_idx cell path, GenericUnionLabels literals, createCellOf hash-eq (default-fill case → W11 as planned) | MED | M | sonnet | **DONE** |
-| **W10 ABI-inspection** | T10.1 | OnlyHeader/LotsOfAnnotations/LotsOfThrows/LotsOfStorage-c2 asserts; decide HasNotInit optional | LOW | M | haiku/sonnet | pending |
+| **W10 ABI-inspection** | T10.1 | OnlyHeader/LotsOfAnnotations/LotsOfThrows/LotsOfStorage-c2 asserts + enum-description loader patch | LOW | M | haiku/sonnet | **DONE** (HasNotInit derivation → deferred register) |
 | **W11 emitter** | T11.1 | ton-abi-gen core per lead-authored emitted-shape spec (§0.13): structs + public header + create()-with-defaults + to_abi_value() + typed custom registry calls (§0.17) + STUB-vs-FAIL per §0.18 + dynamic-path gate rule §0.19 (+ one-sided custom STRUCT unit) | **HIGH** | **L** | **opus** (spec by lead) | pending |
 | | T11.2 | Committed generated/ {.h,.cpp} + --check repro + A/B gate: generated vs interpreter on ALL vectors (custom-serializer cases via runtime registry registration in test setup) diff 0; static-vs-dynamic equivalence tests land HERE | MED | M | sonnet | pending |
 | | T11.3 | ErrorsAtCodegen port + Cli-analog test + LotsOfStorage default-fill port (create() materialization, moved from W9) | LOW→MED | M | sonnet | pending |
@@ -323,7 +323,11 @@ output names fixture + field path.
   stack, getter wrappers in emitter, debug-print (28 cases via committed TVM-stack
   vectors), LotsOfGetters 73 + TolkCounter 3 via in-tree external/ton emulator harness
   (~300-500 LOC). Trigger: first consumer needing getters.
-- HasNotInitializedStorage derivation (if skipped at W10).
+- HasNotInitializedStorage address/shard derivation (SKIPPED at W10 per delegated
+  criterion: toShard fixedPrefixLength+closeTo = real shard-prefix-rewrite math, not
+  trivial with existing machinery). Also from W8: shapedTuple dedicated vector
+  (walker-level covered; Recurrent fixture self-referential), addressExt augmented-hex
+  (non-nibble-aligned) width vectors.
 - tondb-scanner tokens::gen migration; official third-party ABI consumption.
 - Upstream gaps inherited: generic-union reshape, non-standard map keys, custom
   serializers on generics.
@@ -417,6 +421,20 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
    walkers ~500, emitter 800-1,200).
 
 ## 6. Wave log (append per wave; status column above updates same commit)
+
+- **W10 DONE 2026-07-16** (lead-verified: 165 cases / 2099 asserts / ctest 1/1). All
+  ABI-inspection specs ported onto committed fixtures (compiler_version PINNED "1.4.1",
+  full ConstExpr tree shapes incl. big-bigint + nested shapedTuple); HasNotInit trimmed
+  to the ABI-parse fact (derivation → deferred register); isDefaultValueSupported
+  noted for W11 (codegen concern). LOADER GAP found + PATCHED same wave: ABIEnumMember
+  description was silently dropped (model field + parse_enum read + real-value assert
+  added). Executor delivered 5 emitter-facing observations → W11 shape spec inputs:
+  (1) client_ty_idx swap direction reads backwards — kernel swaps TO client type on
+  CELL side; (2) monomorphs resolve by ty_idx never name; C++ ident needs mangling
+  (ResetTo<int64> → ResetTo_int64); (3) interpreter's string-label union pack matching
+  is NOT transferable — generated code dispatches via std::variant visitor; (4)
+  two-registry split confirmed necessary in practice; (5) non-idempotent custom
+  serializers exist (MyBorderedInt) — generated-code doc-comment honesty.
 
 - **W9 DONE 2026-07-16** (combined T9.1+T9.2, lead-verified: 160 cases / 1841 asserts /
   ctest 1/1 / 33 vectors / regen stable). testdata/ERROR_MAPPING.md committed: 20/27

@@ -512,6 +512,9 @@ td::Result<ABIEnum> parse_enum(const Json &j) {
     TRY_RESULT_ASSIGN(m.name, jstr_req(mj, "name"));
     TRY_RESULT_PREFIX(v, jbigint_req(mj, "value"), PSLICE() << "enum '" << en.name << "' member '" << m.name << "': ");
     m.value = v;
+    if (has(mj, "description")) {
+      m.description = jstr(mj, "description");
+    }
     en.members.push_back(std::move(m));
   }
   if (const Json *cpu = jfield(j, "custom_pack_unpack"); cpu != nullptr) {

@@ -207,6 +207,7 @@ struct ABIAlias {
 struct ABIEnumMember {
   std::string name;
   td::RefInt256 value;
+  std::optional<std::string> description;
 };
 
 struct ABIEnum {

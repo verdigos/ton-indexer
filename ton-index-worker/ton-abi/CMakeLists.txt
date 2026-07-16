@@ -38,6 +38,7 @@ add_executable(ton-abi-test
     test/AbiValueTest.cpp
     test/AbiInterpTest.cpp
     test/AbiInterpW9Test.cpp
+    test/AbiW10Test.cpp
 )
 target_include_directories(ton-abi-test PRIVATE test)
 target_compile_features(ton-abi-test PRIVATE cxx_std_20)
