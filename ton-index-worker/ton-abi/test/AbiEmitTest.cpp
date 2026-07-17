@@ -18,7 +18,6 @@
 #pragma push_macro("CHECK")
 #undef CHECK
 #include "AbiEmit.h"
-#include "AbiInterp.h"
 #include "AbiKernel.h"
 #include "AbiLeavesPrefix.h"
 #include "AbiLeavesScalar.h"
@@ -58,33 +57,6 @@ std::string read_file(const std::string &path) {
   return ss.str();
 }
 
-// abi + kernel + interp ctx bundle, pinned in place (kernel is non-owning).
-struct Ctx {
-  ContractABI abi;
-  AbiKernel kernel;
-  AbiInterpCtx interp;
-  explicit Ctx(ContractABI a)
-      : abi(std::move(a)), kernel(AbiKernel::create(abi).move_as_ok()), interp(kernel) {}
-  Ctx(const Ctx &) = delete;
-  Ctx(Ctx &&) = delete;
-};
-
-std::unique_ptr<Ctx> load_fixture_ctx(const std::string &name) {
-  std::string path = std::string(TON_ABI_FIXTURES_DIR) + "/" + name + ".abi.json";
-  auto r = load_abi_from_json(read_file(path));
-  REQUIRE_MESSAGE(r.is_ok(), name << ": " << (r.is_error() ? r.error().message().str() : ""));
-  return std::make_unique<Ctx>(r.move_as_ok());
-}
-
-// Interpreter dump of `cell` unpacked as struct `struct_name`.
-std::string interp_json(Ctx &c, const std::string &struct_name, const td::Ref<vm::Cell> &cell) {
-  int ty_idx = c.kernel.get_struct(struct_name).move_as_ok()->ty_idx;
-  auto cs = vm::load_cell_slice(cell);
-  auto r = unpack_value(c.interp, ty_idx, cs, "self");
-  REQUIRE_MESSAGE(r.is_ok(), struct_name << " interp unpack: " << (r.is_error() ? r.error().message().str() : ""));
-  return r.move_as_ok().to_json();
-}
-
 std::string emit_source_of(const std::string &fixture) {
   std::string path = std::string(TON_ABI_FIXTURES_DIR) + "/" + fixture + ".abi.json";
   auto abi = load_abi_from_json(read_file(path)).move_as_ok();
@@ -100,9 +72,7 @@ std::string emit_source_of(const std::string &fixture) {
 // ---------------------------------------------------------------------------
 // (A) generated vs interpreter, tolk_counter scalars + prefix
 // ---------------------------------------------------------------------------
-TEST_CASE("emit: tolk_counter IncreaseCounter generated == interpreter") {
-  auto c = load_fixture_ctx("tolk_counter");
-
+TEST_CASE("emit: tolk_counter IncreaseCounter generated dump + store round-trip") {
   vm::CellBuilder cb;
   REQUIRE(store_prefix(cb, 0x7E8764EFULL, 32).is_ok());
   REQUIRE(store_uint(cb, td::make_refint(123456789), 64).is_ok());
@@ -116,7 +86,6 @@ TEST_CASE("emit: tolk_counter IncreaseCounter generated == interpreter") {
   REQUIRE(gv.is_ok());
   std::string gen_dump = gv.ok().to_json();
 
-  CHECK(gen_dump == interp_json(*c, "IncreaseCounter", cell));
   CHECK(gen_dump == R"({"$":"IncreaseCounter","queryId":"123456789","increaseBy":"4294967295"})");
 
   // store round-trip: from_slice value re-stored == original cell hash.
@@ -138,7 +107,6 @@ TEST_CASE("emit: tolk_counter IncreaseCounter prefix mismatch fails") {
 // (A) generated vs interpreter, lots-of-messages: monomorph + empty struct
 // ---------------------------------------------------------------------------
 TEST_CASE("emit: lots-of-messages IncreaseBy negative int + default field") {
-  auto c = load_fixture_ctx("lots-of-messages");
   vm::CellBuilder cb;
   REQUIRE(store_prefix(cb, 0x12345678ULL, 32).is_ok());
   REQUIRE(store_int(cb, td::make_refint(-5), 32).is_ok());
@@ -149,33 +117,30 @@ TEST_CASE("emit: lots-of-messages IncreaseBy negative int + default field") {
   auto g = gen::lots_of_messages::IncreaseBy::from_slice(cs);
   REQUIRE(g.is_ok());
   std::string gen_dump = g.ok().to_abi_value().move_as_ok().to_json();
-  CHECK(gen_dump == interp_json(*c, "IncreaseBy", cell));
   CHECK(gen_dump == R"({"$":"IncreaseBy","counter_id":"-5","inc_by":"100"})");
 }
 
 TEST_CASE("emit: lots-of-messages EmptyMsg + create()-with-default") {
-  auto c = load_fixture_ctx("lots-of-messages");
   vm::CellBuilder cb;
   REQUIRE(store_prefix(cb, 0x34567890ULL, 32).is_ok());
   td::Ref<vm::Cell> cell = cb.finalize();
   auto cs = vm::load_cell_slice(cell);
   auto g = gen::lots_of_messages::EmptyMsg::from_slice(cs);
   REQUIRE(g.is_ok());
-  CHECK(g.ok().to_abi_value().move_as_ok().to_json() == interp_json(*c, "EmptyMsg", cell));
+  CHECK(g.ok().to_abi_value().move_as_ok().to_json() == R"({"$":"EmptyMsg"})");
 
   // create() materializes the inc_by=1 default when the optional arg is absent.
   gen::lots_of_messages::IncreaseBy::CreateArgs args;
-  args.counter_id = td::make_refint(7);
+  args.counter_id = 7;  // int8 -> td::int64 (W11.5)
   auto made = gen::lots_of_messages::IncreaseBy::create(args);
-  CHECK(made.inc_by->to_dec_string() == "1");
-  CHECK(made.counter_id->to_dec_string() == "7");
+  CHECK(made.inc_by == 1);       // int32 -> td::int64
+  CHECK(made.counter_id == 7);
 }
 
 // ---------------------------------------------------------------------------
 // (A) generated vs interpreter, generic-union-labels: struct->generic->union
 // ---------------------------------------------------------------------------
 TEST_CASE("emit: generic-union-labels MsgPair T1 union label round-trip") {
-  auto c = load_fixture_ctx("generic-union-labels");
   // MsgPair(0x10000001) -> GenericPair.value -> union{T1=int32}: implicit bit 0
   // then int32(5).
   vm::CellBuilder cb;
@@ -189,7 +154,6 @@ TEST_CASE("emit: generic-union-labels MsgPair T1 union label round-trip") {
   REQUIRE_MESSAGE(g.is_ok(), "gen from_slice: " << (g.is_error() ? g.error().message().str() : ""));
   std::string gen_dump = g.ok().to_abi_value().move_as_ok().to_json();
 
-  CHECK(gen_dump == interp_json(*c, "MsgPair", cell));
   CHECK(gen_dump ==
         R"({"$":"MsgPair","value":{"$":"GenericPair","value":{"$":"T1","value":"5"}}})");
 
@@ -198,8 +162,7 @@ TEST_CASE("emit: generic-union-labels MsgPair T1 union label round-trip") {
   CHECK(cb2.finalize()->get_hash() == cell->get_hash());
 }
 
-TEST_CASE("emit: generic-union-labels MsgOrInt16 T2 union label round-trip") {
-  auto c = load_fixture_ctx("generic-union-labels");
+TEST_CASE("emit: generic-union-labels MsgAliasInt16 T union label round-trip") {
   // MsgAliasInt16(0x10000005) -> AliasOrInt8_int16 union{T=int16}: implicit bit 0
   // then int16(5).
   vm::CellBuilder cb;
@@ -210,7 +173,8 @@ TEST_CASE("emit: generic-union-labels MsgOrInt16 T2 union label round-trip") {
   auto cs = vm::load_cell_slice(cell);
   auto g = gen::generic_union_labels::MsgAliasInt16::from_slice(cs);
   REQUIRE(g.is_ok());
-  CHECK(g.ok().to_abi_value().move_as_ok().to_json() == interp_json(*c, "MsgAliasInt16", cell));
+  CHECK(g.ok().to_abi_value().move_as_ok().to_json() ==
+        R"({"$":"MsgAliasInt16","value":{"$":"T","value":"5"}})");
 }
 
 // ---------------------------------------------------------------------------

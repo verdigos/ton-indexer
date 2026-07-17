@@ -8,7 +8,7 @@
 //
 // Custom-serializer vectors are driven via the TYPED registry (§0.17 (b)):
 // register_abi_custom<T> in setup, keyed <contract_name>::<decl>. TelegramString
-// and CustomPoint are AbiValue-form (type-erased); Custom8 is td::RefInt256.
+// and CustomPoint are AbiValue-form (type-erased); Custom8 is td::uint64.
 
 #include "doctest.h"
 
@@ -32,6 +32,7 @@
 #include "lots_of_storage_gen.h"
 #include "generic_union_labels_gen.h"
 #include "w8_hand_union_gen.h"
+#include "client_type_anno_gen.h"
 #pragma pop_macro("CHECK")
 
 #include <fstream>
@@ -39,6 +40,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <type_traits>
 
 #ifndef TON_ABI_VECTORS_FILE
 #error "TON_ABI_VECTORS_FILE must be defined by CMake"
@@ -224,12 +226,12 @@ std::map<std::string, GenEntry> build_dispatch() {
 
 // -------- typed custom serializers (register once) -------------------------
 void register_customs() {
-  // Custom8 -> td::RefInt256 (uint8).
-  auto st = ton_abi::gen::register_abi_custom<td::RefInt256>(
+  // Custom8 -> td::uint64 (uint8 target, n<=64 -> native member type; W11.5).
+  auto st = ton_abi::gen::register_abi_custom<td::uint64>(
       "LotsOfWrappers::Custom8",
-      [](const td::RefInt256 &v, vm::CellBuilder &cb) -> td::Status { return store_uint(cb, v, 8); },
-      [](vm::CellSlice &cs) -> td::Result<td::RefInt256> { return load_uint(cs, 8); },
-      [](const td::RefInt256 &v) -> td::Result<AbiValue> { return AbiValue::make_int(v); });
+      [](const td::uint64 &v, vm::CellBuilder &cb) -> td::Status { return store_uint64(cb, v, 8); },
+      [](vm::CellSlice &cs) -> td::Result<td::uint64> { return load_uint64(cs, 8); },
+      [](const td::uint64 &v) -> td::Result<AbiValue> { return AbiValue::make_int(td::make_refint(v)); });
   REQUIRE(st.is_ok());
 
   // TelegramString -> AbiValue (Bits): uint8 byte-length then that many bytes.
@@ -419,15 +421,64 @@ TEST_CASE("create() default-fill: LotsOfStorage StWithAllDefaults") {
   ls::StWithAllDefaults::CreateArgs args;  // all fields defaulted -> all optional, left empty
   ls::StWithAllDefaults s = ls::StWithAllDefaults::create(args);
 
-  CHECK(s.i1->to_dec_string() == "0");
-  CHECK(s.i5->to_dec_string() == "1267650600228229401496703205376");
-  CHECK(s.i6->to_dec_string() == "-1267650600228229401496703205375");
+  CHECK(s.i1 == 0);  // int32 -> td::int64 (W11.5)
+  CHECK(s.i5->to_dec_string() == "1267650600228229401496703205376");   // uint256 -> RefInt256
+  CHECK(s.i6->to_dec_string() == "-1267650600228229401496703205375");  // int256 -> RefInt256
   CHECK(s.b1 == true);
   CHECK(s.b2 == false);
   CHECK(s.s5 == "kopi");
-  // t1: (int8,int8,int8)? = (1,2,3) -> present optional<tuple>.
+  // t1: (int8,int8,int8)? = (1,2,3) -> present optional<tuple<td::int64,...>>.
   REQUIRE(s.t1.has_value());
-  CHECK(std::get<0>(*s.t1)->to_dec_string() == "1");
-  CHECK(std::get<1>(*s.t1)->to_dec_string() == "2");
-  CHECK(std::get<2>(*s.t1)->to_dec_string() == "3");
+  CHECK(std::get<0>(*s.t1) == 1);
+  CHECK(std::get<1>(*s.t1) == 2);
+  CHECK(std::get<2>(*s.t1) == 3);
+}
+
+// ---------------------------------------------------------------------------
+// client_ty_idx cell-side swap (ported from W9.2 AbiInterpW9Test, generated
+// path). ClientPayload.note is declared 'remaining' but carries
+// @abi.clientType 'string'; the kernel swaps to the cell type, so the emitted
+// member is std::string and the wire is a snake string ref-tail. Proves the
+// emitter consumed the kernel's client_ty_idx resolution end-to-end.
+// ---------------------------------------------------------------------------
+TEST_CASE("client_ty_idx: ClientPayload note reads as string (generated)") {
+  namespace ct = ton_abi::gen::client_type_anno;
+  static_assert(std::is_same_v<decltype(ct::ClientPayload::note), std::string>,
+                "note must be std::string (client_ty_idx swap), not a slice");
+  vm::CellBuilder cb;
+  REQUIRE(store_prefix(cb, 0x12345678u, 32).is_ok());
+  REQUIRE(store_string(cb, "hello").is_ok());
+  td::Ref<vm::Cell> cell = cb.finalize();
+
+  auto cs = vm::load_cell_slice(cell);
+  auto g = ct::ClientPayload::from_slice(cs);
+  REQUIRE_MESSAGE(g.is_ok(), "from_slice: " << (g.is_error() ? g.error().message().str() : ""));
+  CHECK(g.ok().to_abi_value().move_as_ok().to_json() == R"({"$":"ClientPayload","note":"hello"})");
+
+  vm::CellBuilder cb2;
+  REQUIRE(g.ok().store(cb2).is_ok());
+  CHECK(cb2.finalize()->get_hash() == cell->get_hash());
+}
+
+// ---------------------------------------------------------------------------
+// Custom declared-but-not-registered -> runtime error (ported from W9's
+// Color-asymmetry, generated typed registry). Color is a custom enum; the A/B
+// setup deliberately never registers it, so every direction must fail with a
+// 'not registered' runtime error (NOT a compile/link error) -- reference
+// semantics for registerCustomPackUnpack.
+// ---------------------------------------------------------------------------
+TEST_CASE("custom not registered: Color errors at runtime, all directions (generated)") {
+  namespace lw = ton_abi::gen::lots_of_wrappers;
+  ensure_customs();  // registers Custom8/TelegramString/CustomPoint/MyBorderedInt, NOT Color
+  vm::CellBuilder cb;
+  REQUIRE(store_uint(cb, td::make_refint(1), 2).is_ok());
+  auto cs = vm::load_cell_slice(cb.finalize());
+  auto r_un = lw::Color_from_slice(cs);
+  CHECK(r_un.is_error());
+  CHECK(r_un.error().message().str().find("not registered") != std::string::npos);
+
+  vm::CellBuilder got;
+  auto r_pk = lw::Color_store(got, td::make_refint(1));
+  CHECK(r_pk.is_error());
+  CHECK(r_pk.error().message().str().find("not registered") != std::string::npos);
 }

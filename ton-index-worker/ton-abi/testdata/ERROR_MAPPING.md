@@ -9,8 +9,42 @@ The reference asserts exact JS exception message text (jest's `.toThrow(...)`
 against string literals). Our C++ side asserts fail-closed by CATEGORY (the
 error trigger and rough shape of the message) rather than porting literal text
 -- `td::Status` messages are ours to word, not a byte-for-byte port target.
-Native units live in `test/AbiInterpW9Test.cpp`
-(`W9 error mapping: ...` test cases).
+
+## W11.5 re-homing (interpreter removed -- categories moved to the codegen path)
+
+The table below was written against the W8 interpreter (`AbiInterp`,
+`pack_value`/`unpack_value` over `AbiValue`). W11.5 removed the interpreter; the
+end state is pure codegen. Category ownership moved as follows:
+
+- **UNPACK-side non-serializable fields (#1-#11)** -- now owned by the emitter's
+  stub-vs-fail policy (plan §0.18): a struct with a non-serializable field
+  (bare `int`/`slice`/`builder`/`callable`/`unknown`) emits a COMPILING STUB
+  whose `from_slice`/`store` return a runtime `td::Status` error naming the
+  offending field. Tested in `test/AbiEmitTest.cpp` (`err-cont-on-stack`
+  callable-field stub; `omitted_reason` "not serializable" text). The decl-level
+  non-standard map key is a HARD codegen failure (same file, `err-invalid-map-key`).
+- **PACK-side "wrong value shape" (#12-#25)** -- these were interpreter-only:
+  they described `pack_value` rejecting a malformed `AbiValue`. The generated
+  path has NO pack-from-`AbiValue` entry; `store()` takes a TYPED struct whose
+  members are `td::int64`/`AbiAddress`/`std::vector<...>`/etc., so every one of
+  these "wrong kind / not a number / not an object / missing field" states is
+  rejected by the C++ TYPE SYSTEM at compile time, not a runtime check. They are
+  therefore all now **N/A (structurally impossible on the typed path)**, a
+  strictly stronger guarantee than the old "N/A (JS duck-typing)".
+- **UNPACK-side value errors (#15/#25 range, #20 bits width, #26 truncation,
+  #27 union-no-match)** -- owned by the generated `from_slice` leaf/dispatch
+  calls (the SAME leaves the interpreter used). Gated by the `expect_error`
+  conformance vectors through the generated structs in `test/AbiABGateTest.cpp`
+  (truncation, prefix mismatch, union no-match vectors) plus the leaf boundary
+  units in `test/AbiLeavesScalarTest.cpp`.
+- **DIVERGENCE A (builder/slice pack passthrough)** -- unchanged in outcome but
+  now enforced at CODEGEN: such fields make the struct non-serializable and the
+  emitter stubs both directions (§0.18), rather than the interpreter rejecting
+  at runtime. No fixture/vector exercises it; revisit trigger unchanged.
+
+The reference-trigger rows below are retained as-is for provenance; read
+"`AbiInterp.cpp`/`AbiInterpTest.cpp`/`pack_value`" in them as the historical
+W8 owner, superseded by the codegen owners named above.
 
 | # | Reference (line) | Trigger | C++ disposition |
 |---|---|---|---|

@@ -21,7 +21,7 @@ using ton_abi::AbiAddress;
 
 struct Holder;
 
-using AbiUnion_0 = std::variant<td::RefInt256, td::RefInt256>;
+using AbiUnion_0 = std::variant<td::int64, td::int64>;
 td::Result<AbiUnion_0> load_union_0(vm::CellSlice& cs);
 td::Status store_union_0(const AbiUnion_0& u, vm::CellBuilder& cb);
 

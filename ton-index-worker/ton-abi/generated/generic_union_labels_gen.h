@@ -38,14 +38,14 @@ struct TlbEitherRight_bool;
 struct TlbEitherLeft_bool;
 
 struct StateInit {
-  std::optional<td::RefInt256> fixedPrefixLength;
+  std::optional<td::uint64> fixedPrefixLength;
   std::optional<std::tuple<bool, bool>> special;
   std::optional<td::Ref<vm::Cell>> code;
   std::optional<td::Ref<vm::Cell>> data;
   std::optional<td::Ref<vm::Cell>> library;
 
   struct CreateArgs {
-    std::optional<td::RefInt256> fixedPrefixLength;
+    std::optional<td::uint64> fixedPrefixLength;
     std::optional<std::tuple<bool, bool>> special;
     std::optional<td::Ref<vm::Cell>> code;
     std::optional<td::Ref<vm::Cell>> data;
@@ -58,12 +58,12 @@ struct StateInit {
 };
 
 struct Point {
-  td::RefInt256 x;
-  td::RefInt256 y;
+  td::int64 x;
+  td::int64 y;
 
   struct CreateArgs {
-    td::RefInt256 x;
-    td::RefInt256 y;
+    td::int64 x;
+    td::int64 y;
   };
   static Point create(CreateArgs args);
   static td::Result<Point> from_slice(vm::CellSlice& cs);
@@ -72,10 +72,10 @@ struct Point {
 };
 
 struct GenericUnionLabelsStorage {
-  td::RefInt256 dummy;
+  td::uint64 dummy;
 
   struct CreateArgs {
-    td::RefInt256 dummy;
+    td::uint64 dummy;
   };
   static GenericUnionLabelsStorage create(CreateArgs args);
   static td::Result<GenericUnionLabelsStorage> from_slice(vm::CellSlice& cs);
@@ -144,10 +144,10 @@ struct TlbEitherRight_Cell_StateInit {
 struct TlbEitherLeft_int32 {
   static constexpr td::uint64 PREFIX = 0ULL;
   static constexpr int PREFIX_LEN = 1;
-  td::RefInt256 value;
+  td::int64 value;
 
   struct CreateArgs {
-    td::RefInt256 value;
+    td::int64 value;
   };
   static TlbEitherLeft_int32 create(CreateArgs args);
   static td::Result<TlbEitherLeft_int32> from_slice(vm::CellSlice& cs);
@@ -188,7 +188,7 @@ td::Result<MyNullable_Point> MyNullable_Point_from_slice(vm::CellSlice& cs);
 td::Status MyNullable_Point_store(vm::CellBuilder& cb, const MyNullable_Point& self);
 td::Result<AbiValue> MyNullable_Point_to_abi_value(const MyNullable_Point& self);
 
-using AbiUnion_0 = std::variant<td::RefInt256, td::RefInt256>;
+using AbiUnion_0 = std::variant<td::int64, td::int64>;
 td::Result<AbiUnion_0> load_union_0(vm::CellSlice& cs);
 td::Status store_union_0(const AbiUnion_0& u, vm::CellBuilder& cb);
 
@@ -218,7 +218,7 @@ struct MsgPair {
   td::Result<AbiValue> to_abi_value() const;
 };
 
-using AbiUnion_1 = std::variant<td::RefInt256, td::RefInt256>;
+using AbiUnion_1 = std::variant<td::int64, td::int64>;
 td::Result<AbiUnion_1> load_union_1(vm::CellSlice& cs);
 td::Status store_union_1(const AbiUnion_1& u, vm::CellBuilder& cb);
 
@@ -333,7 +333,7 @@ td::Result<TlbEither_bool_bool> TlbEither_bool_bool_from_slice(vm::CellSlice& cs
 td::Status TlbEither_bool_bool_store(vm::CellBuilder& cb, const TlbEither_bool_bool& self);
 td::Result<AbiValue> TlbEither_bool_bool_to_abi_value(const TlbEither_bool_bool& self);
 
-using AbiUnion_6 = std::variant<td::RefInt256, bool>;
+using AbiUnion_6 = std::variant<td::int64, bool>;
 td::Result<AbiUnion_6> load_union_6(vm::CellSlice& cs);
 td::Status store_union_6(const AbiUnion_6& u, vm::CellBuilder& cb);
 

@@ -16,12 +16,12 @@ td::Result<AbiUnion_0> load_union_0(vm::CellSlice& cs) {
   AbiUnion_0 __u;
   const bool __empty = cs.size() == 0 && cs.size_refs() == 0;
   if (lookup_prefix(cs, 10ULL, 8)) {
-    TRY_RESULT(__v, (load_int(cs, 8)));
+    TRY_RESULT(__v, (load_int64(cs, 8)));
     __u.emplace<0>(std::move(__v));
     return __u;
   }
   if (lookup_prefix(cs, 11ULL, 8)) {
-    TRY_RESULT(__v, (load_int(cs, 8)));
+    TRY_RESULT(__v, (load_int64(cs, 8)));
     __u.emplace<1>(std::move(__v));
     return __u;
   }
@@ -31,11 +31,11 @@ td::Result<AbiUnion_0> load_union_0(vm::CellSlice& cs) {
 td::Status store_union_0(const AbiUnion_0& u, vm::CellBuilder& cb) {
   switch (u.index()) {
     case 0: {
-      TRY_STATUS(store_int(cb, std::get<0>(u), 8));
+      TRY_STATUS(store_int64(cb, std::get<0>(u), 8));
       return td::Status::OK();
     }
     case 1: {
-      TRY_STATUS(store_int(cb, std::get<1>(u), 8));
+      TRY_STATUS(store_int64(cb, std::get<1>(u), 8));
       return td::Status::OK();
     }
     default: return td::Status::Error("union: invalid variant index");

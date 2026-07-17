@@ -27,12 +27,12 @@ struct BasicStorage_int64;
 struct IncreaseBy {
   static constexpr td::uint64 PREFIX = 305419896ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 counter_id;
-  td::RefInt256 inc_by;
+  td::int64 counter_id;
+  td::int64 inc_by;
 
   struct CreateArgs {
-    td::RefInt256 counter_id;
-    std::optional<td::RefInt256> inc_by;
+    td::int64 counter_id;
+    std::optional<td::int64> inc_by;
   };
   static IncreaseBy create(CreateArgs args);
   static td::Result<IncreaseBy> from_slice(vm::CellSlice& cs);
@@ -55,12 +55,12 @@ struct EmptyMsg {
 struct ResetTo_int64 {
   static constexpr td::uint64 PREFIX = 591751049ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 counter_id;
-  td::RefInt256 reset_to;
+  td::int64 counter_id;
+  td::int64 reset_to;
 
   struct CreateArgs {
-    td::RefInt256 counter_id;
-    td::RefInt256 reset_to;
+    td::int64 counter_id;
+    td::int64 reset_to;
   };
   static ResetTo_int64 create(CreateArgs args);
   static td::Result<ResetTo_int64> from_slice(vm::CellSlice& cs);
@@ -69,12 +69,12 @@ struct ResetTo_int64 {
 };
 
 struct BasicStorage_int64 {
-  td::RefInt256 counter_id;
-  td::RefInt256 counter_value;
+  td::int64 counter_id;
+  td::int64 counter_value;
 
   struct CreateArgs {
-    td::RefInt256 counter_id;
-    td::RefInt256 counter_value;
+    td::int64 counter_id;
+    td::int64 counter_value;
   };
   static BasicStorage_int64 create(CreateArgs args);
   static td::Result<BasicStorage_int64> from_slice(vm::CellSlice& cs);

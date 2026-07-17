@@ -34,21 +34,21 @@ Point Point::create(CreateArgs args) {
 
 td::Result<Point> Point::from_slice(vm::CellSlice& cs) {
   Point r;
-  TRY_RESULT_PREFIX_ASSIGN(r.x, (load_int(cs, 8)), "Point.x: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.y, (load_int(cs, 8)), "Point.y: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.x, (load_int64(cs, 8)), "Point.x: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.y, (load_int64(cs, 8)), "Point.y: ");
   return r;
 }
 
 td::Status Point::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_int(cb, this->x, 8));
-  TRY_STATUS(store_int(cb, this->y, 8));
+  TRY_STATUS(store_int64(cb, this->x, 8));
+  TRY_STATUS(store_int64(cb, this->y, 8));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> Point::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("Point");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->x)))); r.add_field("x", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->y)))); r.add_field("y", std::move(__f)); }
+  r.add_field("x", ton_abi::gen::abi_v_int(this->x));
+  r.add_field("y", ton_abi::gen::abi_v_int(this->y));
   return r;
 }
 
@@ -57,13 +57,13 @@ td::Result<AbiUnion_0> load_union_0(vm::CellSlice& cs) {
   const bool __empty = cs.size() == 0 && cs.size_refs() == 0;
   if (lookup_prefix(cs, 0ULL, 1)) {
     if (!cs.advance(1)) { return td::Status::Error("union: truncated implicit prefix"); }
-    TRY_RESULT(__v, (load_int(cs, 8)));
+    TRY_RESULT(__v, (load_int64(cs, 8)));
     __u.emplace<0>(std::move(__v));
     return __u;
   }
   if (lookup_prefix(cs, 1ULL, 1)) {
     if (!cs.advance(1)) { return td::Status::Error("union: truncated implicit prefix"); }
-    TRY_RESULT(__v, (load_int(cs, 32)));
+    TRY_RESULT(__v, (load_int64(cs, 32)));
     __u.emplace<1>(std::move(__v));
     return __u;
   }
@@ -74,12 +74,12 @@ td::Status store_union_0(const AbiUnion_0& u, vm::CellBuilder& cb) {
   switch (u.index()) {
     case 0: {
       TRY_STATUS(store_prefix(cb, 0ULL, 1));
-      TRY_STATUS(store_int(cb, std::get<0>(u), 8));
+      TRY_STATUS(store_int64(cb, std::get<0>(u), 8));
       return td::Status::OK();
     }
     case 1: {
       TRY_STATUS(store_prefix(cb, 1ULL, 1));
-      TRY_STATUS(store_int(cb, std::get<1>(u), 32));
+      TRY_STATUS(store_int64(cb, std::get<1>(u), 32));
       return td::Status::OK();
     }
     default: return td::Status::Error("union: invalid variant index");

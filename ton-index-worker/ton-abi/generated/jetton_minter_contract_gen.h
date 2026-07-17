@@ -56,7 +56,7 @@ td::Result<AbiValue> ForwardPayloadRemainder_to_abi_value(const ForwardPayloadRe
 struct InternalTransferStep {
   static constexpr td::uint64 PREFIX = 395134233ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
   td::RefInt256 jettonAmount;
   ton_abi::AbiAddress transferInitiator;
   ton_abi::AbiAddress sendExcessesTo;
@@ -64,7 +64,7 @@ struct InternalTransferStep {
   ForwardPayloadRemainder forwardPayload;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
     td::RefInt256 jettonAmount;
     ton_abi::AbiAddress transferInitiator;
     ton_abi::AbiAddress sendExcessesTo;
@@ -80,10 +80,10 @@ struct InternalTransferStep {
 struct ReturnExcessesBack {
   static constexpr td::uint64 PREFIX = 3576854235ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
   };
   static ReturnExcessesBack create(CreateArgs args);
   static td::Result<ReturnExcessesBack> from_slice(vm::CellSlice& cs);
@@ -94,13 +94,13 @@ struct ReturnExcessesBack {
 struct BurnNotificationForMinter {
   static constexpr td::uint64 PREFIX = 2078119902ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
   td::RefInt256 jettonAmount;
   ton_abi::AbiAddress burnInitiator;
   ton_abi::AbiAddress sendExcessesTo;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
     td::RefInt256 jettonAmount;
     ton_abi::AbiAddress burnInitiator;
     ton_abi::AbiAddress sendExcessesTo;
@@ -114,12 +114,12 @@ struct BurnNotificationForMinter {
 struct RequestWalletAddress {
   static constexpr td::uint64 PREFIX = 745978227ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
   ton_abi::AbiAddress ownerAddress;
   bool includeOwnerAddress;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
     ton_abi::AbiAddress ownerAddress;
     bool includeOwnerAddress;
   };
@@ -132,12 +132,12 @@ struct RequestWalletAddress {
 struct ResponseWalletAddress {
   static constexpr td::uint64 PREFIX = 3513996288ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
   ton_abi::AbiAddress jettonWalletAddress;
   std::optional<ton_abi::gen::CellOf<ton_abi::AbiAddress>> ownerAddress;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
     ton_abi::AbiAddress jettonWalletAddress;
     std::optional<ton_abi::gen::CellOf<ton_abi::AbiAddress>> ownerAddress;
   };
@@ -150,13 +150,13 @@ struct ResponseWalletAddress {
 struct MintNewJettons {
   static constexpr td::uint64 PREFIX = 21ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
   ton_abi::AbiAddress mintRecipient;
   td::RefInt256 tonAmount;
   ton_abi::gen::CellOf<InternalTransferStep> internalTransferMsg;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
     ton_abi::AbiAddress mintRecipient;
     td::RefInt256 tonAmount;
     ton_abi::gen::CellOf<InternalTransferStep> internalTransferMsg;
@@ -170,11 +170,11 @@ struct MintNewJettons {
 struct ChangeMinterAdmin {
   static constexpr td::uint64 PREFIX = 3ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
   ton_abi::AbiAddress newAdminAddress;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
     ton_abi::AbiAddress newAdminAddress;
   };
   static ChangeMinterAdmin create(CreateArgs args);
@@ -186,11 +186,11 @@ struct ChangeMinterAdmin {
 struct ChangeMinterContent {
   static constexpr td::uint64 PREFIX = 4ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
   td::Ref<vm::Cell> newContent;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
     td::Ref<vm::Cell> newContent;
   };
   static ChangeMinterContent create(CreateArgs args);

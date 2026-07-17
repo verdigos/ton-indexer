@@ -73,7 +73,7 @@ td::Status PackOptions::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> PackOptions::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("PackOptions");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_bool(this->skipBitsNValidation)))); r.add_field("skipBitsNValidation", std::move(__f)); }
+  r.add_field("skipBitsNValidation", ton_abi::gen::abi_v_bool(this->skipBitsNValidation));
   return r;
 }
 
@@ -86,21 +86,21 @@ Storage_me Storage_me::create(CreateArgs args) {
 
 td::Result<Storage_me> Storage_me::from_slice(vm::CellSlice& cs) {
   Storage_me r;
-  TRY_RESULT_PREFIX_ASSIGN(r.id, (load_uint(cs, 32)), "Storage@me.id: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.counter, (load_uint(cs, 32)), "Storage@me.counter: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.id, (load_uint64(cs, 32)), "Storage@me.id: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.counter, (load_uint64(cs, 32)), "Storage@me.counter: ");
   return r;
 }
 
 td::Status Storage_me::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_uint(cb, this->id, 32));
-  TRY_STATUS(store_uint(cb, this->counter, 32));
+  TRY_STATUS(store_uint64(cb, this->id, 32));
+  TRY_STATUS(store_uint64(cb, this->counter, 32));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> Storage_me::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("Storage@me");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->id)))); r.add_field("id", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->counter)))); r.add_field("counter", std::move(__f)); }
+  r.add_field("id", ton_abi::gen::abi_v_int(this->id));
+  r.add_field("counter", ton_abi::gen::abi_v_int(this->counter));
   return r;
 }
 
@@ -114,22 +114,22 @@ IncreaseCounter IncreaseCounter::create(CreateArgs args) {
 td::Result<IncreaseCounter> IncreaseCounter::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "IncreaseCounter: ");
   IncreaseCounter r;
-  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint(cs, 64)), "IncreaseCounter.queryId: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.increaseBy, (load_uint(cs, 32)), "IncreaseCounter.increaseBy: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint64(cs, 64)), "IncreaseCounter.queryId: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.increaseBy, (load_uint64(cs, 32)), "IncreaseCounter.increaseBy: ");
   return r;
 }
 
 td::Status IncreaseCounter::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_uint(cb, this->queryId, 64));
-  TRY_STATUS(store_uint(cb, this->increaseBy, 32));
+  TRY_STATUS(store_uint64(cb, this->queryId, 64));
+  TRY_STATUS(store_uint64(cb, this->increaseBy, 32));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> IncreaseCounter::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("IncreaseCounter");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->queryId)))); r.add_field("queryId", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->increaseBy)))); r.add_field("increaseBy", std::move(__f)); }
+  r.add_field("queryId", ton_abi::gen::abi_v_int(this->queryId));
+  r.add_field("increaseBy", ton_abi::gen::abi_v_int(this->increaseBy));
   return r;
 }
 
@@ -232,11 +232,11 @@ td::Result<AbiValue> E0Max_to_abi_value(const td::RefInt256& self) {
 }
 
 td::Result<MyInt32> MyInt32_from_slice(vm::CellSlice& cs) {
-  return load_int(cs, 32);
+  return load_int64(cs, 32);
 }
 
 td::Status MyInt32_store(vm::CellBuilder& cb, const MyInt32& self) {
-  TRY_STATUS(store_int(cb, self, 32));
+  TRY_STATUS(store_int64(cb, self, 32));
   return td::Status::OK();
 }
 
@@ -312,19 +312,19 @@ ResetCounter ResetCounter::create(CreateArgs args) {
 td::Result<ResetCounter> ResetCounter::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "ResetCounter: ");
   ResetCounter r;
-  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint(cs, 64)), "ResetCounter.queryId: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint64(cs, 64)), "ResetCounter.queryId: ");
   return r;
 }
 
 td::Status ResetCounter::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_uint(cb, this->queryId, 64));
+  TRY_STATUS(store_uint64(cb, this->queryId, 64));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> ResetCounter::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("ResetCounter");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->queryId)))); r.add_field("queryId", std::move(__f)); }
+  r.add_field("queryId", ton_abi::gen::abi_v_int(this->queryId));
   return r;
 }
 
@@ -350,19 +350,19 @@ TransferNotification_uint32 TransferNotification_uint32::create(CreateArgs args)
 td::Result<TransferNotification_uint32> TransferNotification_uint32::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "TransferNotification: ");
   TransferNotification_uint32 r;
-  TRY_RESULT_PREFIX_ASSIGN(r.payload, (load_uint(cs, 32)), "TransferNotification.payload: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.payload, (load_uint64(cs, 32)), "TransferNotification.payload: ");
   return r;
 }
 
 td::Status TransferNotification_uint32::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_uint(cb, this->payload, 32));
+  TRY_STATUS(store_uint64(cb, this->payload, 32));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> TransferNotification_uint32::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("TransferNotification");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->payload)))); r.add_field("payload", std::move(__f)); }
+  r.add_field("payload", ton_abi::gen::abi_v_int(this->payload));
   return r;
 }
 
@@ -477,18 +477,18 @@ Wrapper_int32 Wrapper_int32::create(CreateArgs args) {
 
 td::Result<Wrapper_int32> Wrapper_int32::from_slice(vm::CellSlice& cs) {
   Wrapper_int32 r;
-  TRY_RESULT_PREFIX_ASSIGN(r.item, (load_int(cs, 32)), "Wrapper.item: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.item, (load_int64(cs, 32)), "Wrapper.item: ");
   return r;
 }
 
 td::Status Wrapper_int32::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_int(cb, this->item, 32));
+  TRY_STATUS(store_int64(cb, this->item, 32));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> Wrapper_int32::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("Wrapper");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->item)))); r.add_field("item", std::move(__f)); }
+  r.add_field("item", ton_abi::gen::abi_v_int(this->item));
   return r;
 }
 
@@ -500,18 +500,18 @@ Wrapper_int64 Wrapper_int64::create(CreateArgs args) {
 
 td::Result<Wrapper_int64> Wrapper_int64::from_slice(vm::CellSlice& cs) {
   Wrapper_int64 r;
-  TRY_RESULT_PREFIX_ASSIGN(r.item, (load_int(cs, 64)), "Wrapper.item: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.item, (load_int64(cs, 64)), "Wrapper.item: ");
   return r;
 }
 
 td::Status Wrapper_int64::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_int(cb, this->item, 64));
+  TRY_STATUS(store_int64(cb, this->item, 64));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> Wrapper_int64::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("Wrapper");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->item)))); r.add_field("item", std::move(__f)); }
+  r.add_field("item", ton_abi::gen::abi_v_int(this->item));
   return r;
 }
 
@@ -614,7 +614,7 @@ td::Status WrapperN_address::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> WrapperN_address::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("WrapperN");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address_opt(this->item)))); r.add_field("item", std::move(__f)); }
+  r.add_field("item", ton_abi::gen::abi_v_address_opt(this->item));
   return r;
 }
 
@@ -689,10 +689,10 @@ Wrapper_array_int32 Wrapper_array_int32::create(CreateArgs args) {
 
 td::Result<Wrapper_array_int32> Wrapper_array_int32::from_slice(vm::CellSlice& cs) {
   Wrapper_array_int32 r;
-  TRY_RESULT_PREFIX_ASSIGN(r.item, ([&]() -> td::Result<std::vector<td::RefInt256>> {
-    std::vector<td::RefInt256> __out26;
+  TRY_RESULT_PREFIX_ASSIGN(r.item, ([&]() -> td::Result<std::vector<td::int64>> {
+    std::vector<td::int64> __out26;
     { auto __ls26 = (load_array(cs, [&](vm::CellSlice& __e26) -> td::Status {
-      auto __re26 = (load_int(__e26, 32));
+      auto __re26 = (load_int64(__e26, 32));
     if (__re26.is_error()) { return __re26.move_as_error(); }
     auto __ev26 = __re26.move_as_ok();
       __out26.push_back(std::move(__ev26));
@@ -705,7 +705,7 @@ td::Result<Wrapper_array_int32> Wrapper_array_int32::from_slice(vm::CellSlice& c
 
 td::Status Wrapper_array_int32::store(vm::CellBuilder& cb) const {
   { auto __as27 = (store_array(cb, this->item.size(), [&](vm::CellBuilder& __e27, std::size_t __i27) -> td::Status {
-    TRY_STATUS(store_int(__e27, (this->item[__i27]), 32));
+    TRY_STATUS(store_int64(__e27, (this->item[__i27]), 32));
     return td::Status::OK();
   })); if (__as27.is_error()) { return __as27; } }
   return td::Status::OK();
@@ -770,7 +770,7 @@ td::Status TransferNotification_void::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> TransferNotification_void::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("TransferNotification");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_void()))); r.add_field("payload", std::move(__f)); }
+  r.add_field("payload", ton_abi::gen::abi_v_void());
   return r;
 }
 
@@ -977,13 +977,13 @@ td::Result<AbiUnion_1> load_union_1(vm::CellSlice& cs) {
   const bool __empty = cs.size() == 0 && cs.size_refs() == 0;
   if (lookup_prefix(cs, 0ULL, 1)) {
     if (!cs.advance(1)) { return td::Status::Error("union: truncated implicit prefix"); }
-    TRY_RESULT(__v, (load_int(cs, 32)));
+    TRY_RESULT(__v, (load_int64(cs, 32)));
     __u.emplace<0>(std::move(__v));
     return __u;
   }
   if (lookup_prefix(cs, 1ULL, 1)) {
     if (!cs.advance(1)) { return td::Status::Error("union: truncated implicit prefix"); }
-    TRY_RESULT(__v, (load_int(cs, 64)));
+    TRY_RESULT(__v, (load_int64(cs, 64)));
     __u.emplace<1>(std::move(__v));
     return __u;
   }
@@ -994,12 +994,12 @@ td::Status store_union_1(const AbiUnion_1& u, vm::CellBuilder& cb) {
   switch (u.index()) {
     case 0: {
       TRY_STATUS(store_prefix(cb, 0ULL, 1));
-      TRY_STATUS(store_int(cb, std::get<0>(u), 32));
+      TRY_STATUS(store_int64(cb, std::get<0>(u), 32));
       return td::Status::OK();
     }
     case 1: {
       TRY_STATUS(store_prefix(cb, 1ULL, 1));
-      TRY_STATUS(store_int(cb, std::get<1>(u), 64));
+      TRY_STATUS(store_int64(cb, std::get<1>(u), 64));
       return td::Status::OK();
     }
     default: return td::Status::Error("union: invalid variant index");
@@ -1212,13 +1212,13 @@ td::Result<AbiUnion_2> load_union_2(vm::CellSlice& cs) {
   const bool __empty = cs.size() == 0 && cs.size_refs() == 0;
   if (lookup_prefix(cs, 0ULL, 2)) {
     if (!cs.advance(2)) { return td::Status::Error("union: truncated implicit prefix"); }
-    TRY_RESULT(__v, (load_int(cs, 8)));
+    TRY_RESULT(__v, (load_int64(cs, 8)));
     __u.emplace<0>(std::move(__v));
     return __u;
   }
   if (lookup_prefix(cs, 1ULL, 2)) {
     if (!cs.advance(2)) { return td::Status::Error("union: truncated implicit prefix"); }
-    TRY_RESULT(__v, (load_int(cs, 32)));
+    TRY_RESULT(__v, (load_int64(cs, 32)));
     __u.emplace<1>(std::move(__v));
     return __u;
   }
@@ -1235,12 +1235,12 @@ td::Status store_union_2(const AbiUnion_2& u, vm::CellBuilder& cb) {
   switch (u.index()) {
     case 0: {
       TRY_STATUS(store_prefix(cb, 0ULL, 2));
-      TRY_STATUS(store_int(cb, std::get<0>(u), 8));
+      TRY_STATUS(store_int64(cb, std::get<0>(u), 8));
       return td::Status::OK();
     }
     case 1: {
       TRY_STATUS(store_prefix(cb, 1ULL, 2));
-      TRY_STATUS(store_int(cb, std::get<1>(u), 32));
+      TRY_STATUS(store_int64(cb, std::get<1>(u), 32));
       return td::Status::OK();
     }
     case 2: {

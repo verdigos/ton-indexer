@@ -23,11 +23,11 @@ struct Inner;
 struct StWithAllDefaults;
 
 struct Inner {
-  td::RefInt256 in1;
+  td::int64 in1;
   bool in2;
 
   struct CreateArgs {
-    td::RefInt256 in1;
+    td::int64 in1;
     std::optional<bool> in2;
   };
   static Inner create(CreateArgs args);
@@ -47,13 +47,13 @@ td::Status E0Max_store(vm::CellBuilder& cb, const td::RefInt256& self);
 td::Result<AbiValue> E0Max_to_abi_value(const td::RefInt256& self);
 
 struct StWithAllDefaults {
-  td::RefInt256 i1;
+  td::int64 i1;
   td::RefInt256 i2;
-  td::RefInt256 i3;
-  td::RefInt256 i4;
+  td::int64 i3;
+  td::int64 i4;
   td::RefInt256 i5;
   td::RefInt256 i6;
-  std::optional<td::RefInt256> i7;
+  std::optional<td::int64> i7;
   td::RefInt256 e1;
   td::RefInt256 e2;
   bool b1;
@@ -69,26 +69,26 @@ struct StWithAllDefaults {
   ton_abi::AbiAddress a3;
   ton_abi::AbiAddress a4;
   std::optional<ton_abi::AbiAddress> a5;
-  std::optional<std::tuple<td::RefInt256, td::RefInt256, td::RefInt256>> t1;
+  std::optional<std::tuple<td::int64, td::int64, td::int64>> t1;
   std::tuple<td::Ref<vm::CellSlice>, ton_abi::AbiAddress, td::RefInt256> t2;
-  std::tuple<std::optional<td::RefInt256>, std::tuple<td::RefInt256, td::RefInt256>> t3;
-  std::tuple<td::RefInt256, td::RefInt256, td::RefInt256, td::RefInt256, td::RefInt256> t4;
-  std::optional<std::tuple<td::RefInt256, td::RefInt256>> t5;
-  std::tuple<td::RefInt256, std::optional<bool>> sh1;
-  std::tuple<std::tuple<td::RefInt256, std::optional<bool>>, std::tuple<std::string>> sh2;
-  std::tuple<std::vector<td::RefInt256>, std::vector<td::RefInt256>> arr1;
+  std::tuple<std::optional<td::int64>, std::tuple<td::int64, td::int64>> t3;
+  std::tuple<td::uint64, td::uint64, td::RefInt256, td::uint64, td::RefInt256> t4;
+  std::optional<std::tuple<td::int64, td::int64>> t5;
+  std::tuple<td::int64, std::optional<bool>> sh1;
+  std::tuple<std::tuple<td::int64, std::optional<bool>>, std::tuple<std::string>> sh2;
+  std::tuple<std::vector<td::int64>, std::vector<td::int64>> arr1;
   Inner o1;
   std::optional<Inner> o2;
   std::optional<Inner> o3;
 
   struct CreateArgs {
-    std::optional<td::RefInt256> i1;
+    std::optional<td::int64> i1;
     std::optional<td::RefInt256> i2;
-    std::optional<td::RefInt256> i3;
-    std::optional<td::RefInt256> i4;
+    std::optional<td::int64> i3;
+    std::optional<td::int64> i4;
     std::optional<td::RefInt256> i5;
     std::optional<td::RefInt256> i6;
-    std::optional<std::optional<td::RefInt256>> i7;
+    std::optional<std::optional<td::int64>> i7;
     std::optional<td::RefInt256> e1;
     std::optional<td::RefInt256> e2;
     std::optional<bool> b1;
@@ -104,14 +104,14 @@ struct StWithAllDefaults {
     std::optional<ton_abi::AbiAddress> a3;
     std::optional<ton_abi::AbiAddress> a4;
     std::optional<std::optional<ton_abi::AbiAddress>> a5;
-    std::optional<std::optional<std::tuple<td::RefInt256, td::RefInt256, td::RefInt256>>> t1;
+    std::optional<std::optional<std::tuple<td::int64, td::int64, td::int64>>> t1;
     std::optional<std::tuple<td::Ref<vm::CellSlice>, ton_abi::AbiAddress, td::RefInt256>> t2;
-    std::optional<std::tuple<std::optional<td::RefInt256>, std::tuple<td::RefInt256, td::RefInt256>>> t3;
-    std::optional<std::tuple<td::RefInt256, td::RefInt256, td::RefInt256, td::RefInt256, td::RefInt256>> t4;
-    std::optional<std::optional<std::tuple<td::RefInt256, td::RefInt256>>> t5;
-    std::optional<std::tuple<td::RefInt256, std::optional<bool>>> sh1;
-    std::optional<std::tuple<std::tuple<td::RefInt256, std::optional<bool>>, std::tuple<std::string>>> sh2;
-    std::optional<std::tuple<std::vector<td::RefInt256>, std::vector<td::RefInt256>>> arr1;
+    std::optional<std::tuple<std::optional<td::int64>, std::tuple<td::int64, td::int64>>> t3;
+    std::optional<std::tuple<td::uint64, td::uint64, td::RefInt256, td::uint64, td::RefInt256>> t4;
+    std::optional<std::optional<std::tuple<td::int64, td::int64>>> t5;
+    std::optional<std::tuple<td::int64, std::optional<bool>>> sh1;
+    std::optional<std::tuple<std::tuple<td::int64, std::optional<bool>>, std::tuple<std::string>>> sh2;
+    std::optional<std::tuple<std::vector<td::int64>, std::vector<td::int64>>> arr1;
     std::optional<Inner> o1;
     std::optional<std::optional<Inner>> o2;
     std::optional<std::optional<Inner>> o3;

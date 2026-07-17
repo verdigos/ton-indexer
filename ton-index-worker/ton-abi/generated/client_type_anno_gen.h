@@ -26,10 +26,10 @@ struct PayloadInRef;
 struct NotificationForNewOwner;
 
 struct ClientTypeStorage {
-  td::RefInt256 dummy;
+  td::uint64 dummy;
 
   struct CreateArgs {
-    td::RefInt256 dummy;
+    td::uint64 dummy;
   };
   static ClientTypeStorage create(CreateArgs args);
   static td::Result<ClientTypeStorage> from_slice(vm::CellSlice& cs);
@@ -86,12 +86,12 @@ td::Status store_union_0(const AbiUnion_0& u, vm::CellBuilder& cb);
 struct NotificationForNewOwner {
   static constexpr td::uint64 PREFIX = 85167505ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
   ton_abi::AbiAddress oldOwnerAddress;
   AbiUnion_0 payload;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
     ton_abi::AbiAddress oldOwnerAddress;
     AbiUnion_0 payload;
   };

@@ -30,7 +30,9 @@ tables are BAKED into the emitted code).
 
 | ABI ty | C++ member |
 |---|---|
-| intN/uintN/varintN/varuintN/coins | td::RefInt256 |
+| intN with n<=64 | td::int64 (W11.5 — native fast path load_int64/store_int64) |
+| uintN with n<=64 | td::uint64 (W11.5 — native fast path load_uint64/store_uint64; n=64 fits uint64) |
+| intN/uintN with n>64, varintN/varuintN/coins | td::RefInt256 |
 | bool | bool |
 | bitsN / remaining | td::Ref<vm::CellSlice> |
 | string | std::string (raw bytes; lossy-UTF8 only in to_abi_value dump) |
@@ -41,7 +43,7 @@ tables are BAKED into the emitted code).
 | arrayOf<T> / lispListOf<T> | std::vector<TypeOf(T)> |
 | tensor/shapedTuple | std::tuple<TypeOf(items)...> |
 | mapKV | std::vector<std::pair<KeyT, ValT>> in wire order |
-| EnumRef | generated enum class |
+| EnumRef | td::RefInt256 (W11 correction: bigint-valued free helpers, not enum class). W11.5: KEPT RefInt256 even for encoded_as n<=64 — the encoded_as scalar is read/written via the RefInt256 leaves (load_int/store_int), NOT the native fast path, to avoid rippling the free-function signatures for zero member-shape gain |
 | StructRef (concrete or monomorph) | the generated struct type |
 | union | std::variant<TypeOf(variants)...> (nullLiteral variant → std::monostate; void variant → struct <Name>_Void{} tag type emitted alongside) |
 | int/slice/builder/callable/unknown | field NOT representable → whole struct gets STUBS (§0.18); still emit the struct decl with a doc comment, members for representable fields omitted — see §7 |

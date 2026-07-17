@@ -5,8 +5,9 @@ cmake_minimum_required(VERSION 3.16)
 # ton-mch-engine dependency, ever (decision 5).
 # W0 (scaffold): lib + test exe + vendored doctest + ctest wiring.
 # W1 (T1.1/T1.2): AbiModel.h (header-only PODs) + AbiLoader.h/.cpp (JSON ->
-# AbiModel, fail-closed). AbiKernel/AbiLeaves/AbiValue/AbiInterp/AbiEmit land
-# in later waves.
+# AbiModel, fail-closed). AbiKernel/AbiLeaves/AbiValue/AbiEmit land in later
+# waves. (W11.5: the AbiInterp interpreter -- dev scaffolding -- was removed;
+# end state is pure codegen, AbiValue kept as the to_abi_value dump medium.)
 
 add_library(ton-abi STATIC
     src/AbiLoader.cpp
@@ -18,7 +19,6 @@ add_library(ton-abi STATIC
     src/AbiLeavesDict.cpp
     src/AbiLeavesPrefix.cpp
     src/AbiValue.cpp
-    src/AbiInterp.cpp
     src/AbiEmit.cpp
 )
 target_include_directories(ton-abi PUBLIC src)
@@ -33,7 +33,6 @@ target_link_libraries(ton-abi-gen ton-abi tdutils)
 
 add_executable(ton-abi-test
     test/smoke_test.cpp
-    test/VectorRunner.cpp
     test/AbiLoaderTest.cpp
     test/AbiKernelTest.cpp
     test/AbiLeavesScalarTest.cpp
@@ -43,8 +42,6 @@ add_executable(ton-abi-test
     test/AbiLeavesDictTest.cpp
     test/AbiLeavesPrefixTest.cpp
     test/AbiValueTest.cpp
-    test/AbiInterpTest.cpp
-    test/AbiInterpW9Test.cpp
     test/AbiW10Test.cpp
     test/AbiEmitTest.cpp
     test/AbiABGateTest.cpp

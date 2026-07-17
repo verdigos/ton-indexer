@@ -22,11 +22,11 @@ using ton_abi::AbiAddress;
 struct NftItemStorageNotInitialized;
 
 struct NftItemStorageNotInitialized {
-  td::RefInt256 itemIndex;
+  td::uint64 itemIndex;
   ton_abi::AbiAddress collectionAddress;
 
   struct CreateArgs {
-    td::RefInt256 itemIndex;
+    td::uint64 itemIndex;
     ton_abi::AbiAddress collectionAddress;
   };
   static NftItemStorageNotInitialized create(CreateArgs args);

@@ -20,18 +20,18 @@ ClientTypeStorage ClientTypeStorage::create(CreateArgs args) {
 
 td::Result<ClientTypeStorage> ClientTypeStorage::from_slice(vm::CellSlice& cs) {
   ClientTypeStorage r;
-  TRY_RESULT_PREFIX_ASSIGN(r.dummy, (load_uint(cs, 32)), "ClientTypeStorage.dummy: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.dummy, (load_uint64(cs, 32)), "ClientTypeStorage.dummy: ");
   return r;
 }
 
 td::Status ClientTypeStorage::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_uint(cb, this->dummy, 32));
+  TRY_STATUS(store_uint64(cb, this->dummy, 32));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> ClientTypeStorage::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("ClientTypeStorage");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->dummy)))); r.add_field("dummy", std::move(__f)); }
+  r.add_field("dummy", ton_abi::gen::abi_v_int(this->dummy));
   return r;
 }
 
@@ -56,7 +56,7 @@ td::Status ClientPayload::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> ClientPayload::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("ClientPayload");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_string(this->note)))); r.add_field("note", std::move(__f)); }
+  r.add_field("note", ton_abi::gen::abi_v_string(this->note));
   return r;
 }
 
@@ -81,7 +81,7 @@ td::Status PayloadInline::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> PayloadInline::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("PayloadInline");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_bits(this->value)))); r.add_field("value", std::move(__f)); }
+  r.add_field("value", ton_abi::gen::abi_v_bits(this->value));
   return r;
 }
 
@@ -169,7 +169,7 @@ NotificationForNewOwner NotificationForNewOwner::create(CreateArgs args) {
 td::Result<NotificationForNewOwner> NotificationForNewOwner::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "NotificationForNewOwner: ");
   NotificationForNewOwner r;
-  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint(cs, 64)), "NotificationForNewOwner.queryId: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint64(cs, 64)), "NotificationForNewOwner.queryId: ");
   TRY_RESULT_PREFIX_ASSIGN(r.oldOwnerAddress, (load_address(cs)), "NotificationForNewOwner.oldOwnerAddress: ");
   TRY_RESULT_PREFIX_ASSIGN(r.payload, (load_union_0(cs)), "NotificationForNewOwner.payload: ");
   return r;
@@ -177,7 +177,7 @@ td::Result<NotificationForNewOwner> NotificationForNewOwner::from_slice(vm::Cell
 
 td::Status NotificationForNewOwner::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_uint(cb, this->queryId, 64));
+  TRY_STATUS(store_uint64(cb, this->queryId, 64));
   TRY_STATUS(store_address(cb, this->oldOwnerAddress));
   TRY_STATUS(store_union_0(this->payload, cb));
   return td::Status::OK();
@@ -185,8 +185,8 @@ td::Status NotificationForNewOwner::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> NotificationForNewOwner::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("NotificationForNewOwner");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->queryId)))); r.add_field("queryId", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->oldOwnerAddress)))); r.add_field("oldOwnerAddress", std::move(__f)); }
+  r.add_field("queryId", ton_abi::gen::abi_v_int(this->queryId));
+  r.add_field("oldOwnerAddress", ton_abi::gen::abi_v_address(this->oldOwnerAddress));
   { TRY_RESULT(__f, ([&]() -> td::Result<AbiValue> {
     switch ((this->payload).index()) {
       case 0: {

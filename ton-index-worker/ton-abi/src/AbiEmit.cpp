@@ -480,13 +480,27 @@ class Emitter {
     ~DepthGuard() { --d; }
   };
 
+  // intN/uintN with n<=64 map to a native C++ integer (td::int64 / td::uint64)
+  // instead of td::RefInt256 -- the leaf fast paths (load_int64/store_int64/...)
+  // are bit-for-bit identical on the wire, so this is a member-type change only.
+  // n>64, varintN, varuintN and coins keep td::RefInt256. Returns "" for any
+  // non-native-int kind.
+  static std::string native_int_type(const Ty &t) {
+    if (t.kind == TyKind::IntN && std::get<TyWidth>(t.data).n <= 64) return "td::int64";
+    if (t.kind == TyKind::UintN && std::get<TyWidth>(t.data).n <= 64) return "td::uint64";
+    return "";
+  }
+
   // ---- C++ type string ----------------------------------------------------
   std::string cpp_type(int ty_idx) {
     DepthGuard __g(depth_, ty_idx);
     const Ty &t = ty(ty_idx);
     switch (t.kind) {
       case TyKind::IntN:
-      case TyKind::UintN:
+      case TyKind::UintN: {
+        std::string nt = native_int_type(t);
+        return nt.empty() ? "td::RefInt256" : nt;
+      }
       case TyKind::VarIntN:
       case TyKind::VarUIntN:
       case TyKind::Coins:
@@ -545,7 +559,8 @@ class Emitter {
   std::string cpp_key_type(int key_ty_idx) {
     const Ty &t = ty(key_ty_idx);
     if (t.kind == TyKind::IntN || t.kind == TyKind::UintN) {
-      return "td::RefInt256";
+      std::string nt = native_int_type(t);
+      return nt.empty() ? "td::RefInt256" : nt;
     }
     if (t.kind == TyKind::Address) {
       return "ton_abi::AbiAddress";
@@ -652,8 +667,14 @@ class Emitter {
     DepthGuard __g(depth_, ty_idx);
     const Ty &t = ty(ty_idx);
     switch (t.kind) {
-      case TyKind::IntN: return "load_int(" + sv + ", " + std::to_string(std::get<TyWidth>(t.data).n) + ")";
-      case TyKind::UintN: return "load_uint(" + sv + ", " + std::to_string(std::get<TyWidth>(t.data).n) + ")";
+      case TyKind::IntN: {
+        std::string w = std::to_string(std::get<TyWidth>(t.data).n);
+        return (native_int_type(t).empty() ? "load_int(" : "load_int64(") + sv + ", " + w + ")";
+      }
+      case TyKind::UintN: {
+        std::string w = std::to_string(std::get<TyWidth>(t.data).n);
+        return (native_int_type(t).empty() ? "load_uint(" : "load_uint64(") + sv + ", " + w + ")";
+      }
       case TyKind::VarIntN: return "load_varint(" + sv + ", " + std::to_string(std::get<TyWidth>(t.data).n) + ")";
       case TyKind::VarUIntN: return "load_varuint(" + sv + ", " + std::to_string(std::get<TyWidth>(t.data).n) + ")";
       case TyKind::Coins: return "load_coins(" + sv + ")";
@@ -759,9 +780,11 @@ class Emitter {
         std::string keyv = "__key" + std::to_string(k), valv = "__val" + std::to_string(k);
         std::string key_load;
         if (kty.kind == TyKind::IntN) {
-          key_load = "load_int(" + kc + ", " + std::to_string(std::get<TyWidth>(kty.data).n) + ")";
+          key_load = (native_int_type(kty).empty() ? "load_int(" : "load_int64(") + kc + ", " +
+                     std::to_string(std::get<TyWidth>(kty.data).n) + ")";
         } else if (kty.kind == TyKind::UintN) {
-          key_load = "load_uint(" + kc + ", " + std::to_string(std::get<TyWidth>(kty.data).n) + ")";
+          key_load = (native_int_type(kty).empty() ? "load_uint(" : "load_uint64(") + kc + ", " +
+                     std::to_string(std::get<TyWidth>(kty.data).n) + ")";
         } else {
           key_load = "load_address(" + kc + ")";
         }
@@ -792,8 +815,12 @@ class Emitter {
     const Ty &t = ty(ty_idx);
     auto W = [&]() { return std::to_string(std::get<TyWidth>(t.data).n); };
     switch (t.kind) {
-      case TyKind::IntN: return "TRY_STATUS(store_int(" + bv + ", " + expr + ", " + W() + "));";
-      case TyKind::UintN: return "TRY_STATUS(store_uint(" + bv + ", " + expr + ", " + W() + "));";
+      case TyKind::IntN:
+        return "TRY_STATUS(" + std::string(native_int_type(t).empty() ? "store_int(" : "store_int64(") + bv + ", " +
+               expr + ", " + W() + "));";
+      case TyKind::UintN:
+        return "TRY_STATUS(" + std::string(native_int_type(t).empty() ? "store_uint(" : "store_uint64(") + bv + ", " +
+               expr + ", " + W() + "));";
       case TyKind::VarIntN: return "TRY_STATUS(store_varint(" + bv + ", " + expr + ", " + W() + "));";
       case TyKind::VarUIntN: return "TRY_STATUS(store_varuint(" + bv + ", " + expr + ", " + W() + "));";
       case TyKind::Coins: return "TRY_STATUS(store_coins(" + bv + ", " + expr + "));";
@@ -872,12 +899,12 @@ class Emitter {
         std::string key_store;
         if (kty.kind == TyKind::IntN) {
           key_store = bind_stat("__ks" + std::to_string(k),
-                                "store_int(" + ko + ", " + ent + ".first, " +
-                                    std::to_string(std::get<TyWidth>(kty.data).n) + ")");
+                                std::string(native_int_type(kty).empty() ? "store_int(" : "store_int64(") + ko + ", " +
+                                    ent + ".first, " + std::to_string(std::get<TyWidth>(kty.data).n) + ")");
         } else if (kty.kind == TyKind::UintN) {
           key_store = bind_stat("__ks" + std::to_string(k),
-                                "store_uint(" + ko + ", " + ent + ".first, " +
-                                    std::to_string(std::get<TyWidth>(kty.data).n) + ")");
+                                std::string(native_int_type(kty).empty() ? "store_uint(" : "store_uint64(") + ko +
+                                    ", " + ent + ".first, " + std::to_string(std::get<TyWidth>(kty.data).n) + ")");
         } else {
           key_store = bind_stat("__ks" + std::to_string(k), "store_address(" + ko + ", " + ent + ".first)");
         }
@@ -895,31 +922,71 @@ class Emitter {
     }
   }
 
-  // ---- to_abi_value expression (returns C++ expr of td::Result<AbiValue>) -
-  std::string to_abi_expr(int ty_idx, const std::string &expr, std::optional<int> u_label) {
-    DepthGuard __g(depth_, ty_idx);
-    const Ty &t = ty(ty_idx);
-    auto wrap = [](const std::string &av) { return "td::Result<AbiValue>(" + av + ")"; };
+  // A leaf kind whose to_abi_value converter is INFALLIBLE (a plain abi_v_*
+  // call, never a td::Result). For these the struct to_abi_value() body can
+  // add_field directly, skipping the TRY_RESULT unwrap ceremony (W11.5 §3).
+  static bool is_infallible_leaf(const Ty &t) {
     switch (t.kind) {
       case TyKind::IntN:
       case TyKind::UintN:
       case TyKind::VarIntN:
       case TyKind::VarUIntN:
       case TyKind::Coins:
-        return wrap("ton_abi::gen::abi_v_int(" + expr + ")");
-      case TyKind::Bool: return wrap("ton_abi::gen::abi_v_bool(" + expr + ")");
-      case TyKind::Cell: return wrap("ton_abi::gen::abi_v_cell(" + expr + ")");
+      case TyKind::Bool:
+      case TyKind::Cell:
       case TyKind::BitsN:
       case TyKind::Remaining:
-        return wrap("ton_abi::gen::abi_v_bits(" + expr + ")");
-      case TyKind::String: return wrap("ton_abi::gen::abi_v_string(" + expr + ")");
+      case TyKind::String:
       case TyKind::Address:
       case TyKind::AddressExt:
       case TyKind::AddressAny:
-        return wrap("ton_abi::gen::abi_v_address(" + expr + ")");
-      case TyKind::AddressOpt: return wrap("ton_abi::gen::abi_v_address_opt(" + expr + ")");
-      case TyKind::NullLiteral: return wrap("ton_abi::gen::abi_v_null()");
-      case TyKind::Void: return wrap("ton_abi::gen::abi_v_void()");
+      case TyKind::AddressOpt:
+      case TyKind::NullLiteral:
+      case TyKind::Void:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  // The bare (unwrapped) abi_v_* expression for an infallible leaf kind.
+  // Precondition: is_infallible_leaf(ty(ty_idx)).
+  std::string to_abi_leaf_expr(int ty_idx, const std::string &expr) {
+    const Ty &t = ty(ty_idx);
+    switch (t.kind) {
+      case TyKind::IntN:
+      case TyKind::UintN:
+      case TyKind::VarIntN:
+      case TyKind::VarUIntN:
+      case TyKind::Coins:
+        return "ton_abi::gen::abi_v_int(" + expr + ")";
+      case TyKind::Bool: return "ton_abi::gen::abi_v_bool(" + expr + ")";
+      case TyKind::Cell: return "ton_abi::gen::abi_v_cell(" + expr + ")";
+      case TyKind::BitsN:
+      case TyKind::Remaining:
+        return "ton_abi::gen::abi_v_bits(" + expr + ")";
+      case TyKind::String: return "ton_abi::gen::abi_v_string(" + expr + ")";
+      case TyKind::Address:
+      case TyKind::AddressExt:
+      case TyKind::AddressAny:
+        return "ton_abi::gen::abi_v_address(" + expr + ")";
+      case TyKind::AddressOpt: return "ton_abi::gen::abi_v_address_opt(" + expr + ")";
+      case TyKind::NullLiteral: return "ton_abi::gen::abi_v_null()";
+      case TyKind::Void: return "ton_abi::gen::abi_v_void()";
+      default:
+        throw HardFail{"to_abi_leaf_expr: not an infallible leaf"};
+    }
+  }
+
+  // ---- to_abi_value expression (returns C++ expr of td::Result<AbiValue>) -
+  std::string to_abi_expr(int ty_idx, const std::string &expr, std::optional<int> u_label) {
+    DepthGuard __g(depth_, ty_idx);
+    const Ty &t = ty(ty_idx);
+    auto wrap = [](const std::string &av) { return "td::Result<AbiValue>(" + av + ")"; };
+    if (is_infallible_leaf(t)) {
+      return wrap(to_abi_leaf_expr(ty_idx, expr));
+    }
+    switch (t.kind) {
       case TyKind::EnumRef: return name_for_ref(ty_idx) + "_to_abi_value(" + expr + ")";
       case TyKind::StructRef:
         return is_abivalue_struct(ty_idx) ? name_for_ref(ty_idx) + "_to_abi_value(" + expr + ")"
@@ -1044,9 +1111,13 @@ class Emitter {
       return "std::optional<" + cpp_type(inner) + ">(" + const_expr(ce, inner) + ")";
     }
     switch (ce.kind) {
-      case ConstExprKind::Int:
-        return "td::dec_string_to_int256(std::string(\"" + std::get<ConstExprInt>(ce.data).v->to_dec_string() +
-               "\"))";
+      case ConstExprKind::Int: {
+        std::string dec = std::get<ConstExprInt>(ce.data).v->to_dec_string();
+        std::string nt = native_int_type(ft);
+        if (nt == "td::int64") return "static_cast<td::int64>(" + dec + "LL)";
+        if (nt == "td::uint64") return "static_cast<td::uint64>(" + dec + "ULL)";
+        return "td::dec_string_to_int256(std::string(\"" + dec + "\"))";
+      }
       case ConstExprKind::Bool:
         return std::get<ConstExprBool>(ce.data).v ? "true" : "false";
       case ConstExprKind::Null: {
@@ -1313,8 +1384,14 @@ class Emitter {
       c += "  AbiValue r = AbiValue::make_struct(" + cpp_str_lit(t.orig_name) + ");\n";
       for (const auto &fi : finfo) {
         std::string mn = member_name(fi.rf->name());
-        c += "  { TRY_RESULT(__f, (" + to_abi_expr(fi.rf->ty_idx, "this->" + mn, fi.rf->u_label_ty_idx) +
-             ")); r.add_field(" + cpp_str_lit(fi.rf->name()) + ", std::move(__f)); }\n";
+        if (is_infallible_leaf(ty(fi.rf->ty_idx))) {
+          // Infallible converter: add_field directly, no TRY_RESULT ceremony.
+          c += "  r.add_field(" + cpp_str_lit(fi.rf->name()) + ", " +
+               to_abi_leaf_expr(fi.rf->ty_idx, "this->" + mn) + ");\n";
+        } else {
+          c += "  { TRY_RESULT(__f, (" + to_abi_expr(fi.rf->ty_idx, "this->" + mn, fi.rf->u_label_ty_idx) +
+               ")); r.add_field(" + cpp_str_lit(fi.rf->name()) + ", std::move(__f)); }\n";
+        }
       }
       c += "  return r;\n";
     }
@@ -1410,6 +1487,20 @@ class Emitter {
     bool custom_unpack = has_custom(ed->custom_pack_unpack, false);
     bool custom_pack = has_custom(ed->custom_pack_unpack, true);
 
+    // Enum values stay td::RefInt256 (bigint repr, matches the reference and
+    // avoids rippling the free-function signatures). The encoded_as scalar is
+    // therefore read/written via the RefInt256 leaves EVEN when its width <= 64
+    // -- the native fast path would return td::int64/uint64 and mismatch the
+    // RefInt256 helper signature. VarIntN/Coins encodings already yield RefInt256
+    // through load_expr/store_stmt, so only IntN/UintN need the override.
+    const Ty &et = ty(enc);
+    bool enc_int = et.kind == TyKind::IntN || et.kind == TyKind::UintN;
+    std::string enc_w = enc_int ? std::to_string(std::get<TyWidth>(et.data).n) : "";
+    std::string enc_load = et.kind == TyKind::UintN ? "load_uint(cs, " + enc_w + ")"
+                                                    : "load_int(cs, " + enc_w + ")";
+    std::string enc_store = et.kind == TyKind::UintN ? "store_uint(cb, self, " + enc_w + ")"
+                                                     : "store_int(cb, self, " + enc_w + ")";
+
     const std::string &N = t.cpp_name;
     std::string h;
     h += "// enum " + t.orig_name + " (bigint-valued, encoded_as leaf scalar)\n";
@@ -1427,7 +1518,7 @@ class Emitter {
            "registered for '" + t.orig_name + "'\"); }\n";
       c += "  return __e->unpack(cs);\n";
     } else {
-      c += "  return " + load_expr(enc, "cs", t.orig_name, std::nullopt) + ";\n";
+      c += "  return " + (enc_int ? enc_load : load_expr(enc, "cs", t.orig_name, std::nullopt)) + ";\n";
     }
     c += "}\n\n";
     c += "td::Status " + N + "_store(vm::CellBuilder& cb, const td::RefInt256& self) {\n";
@@ -1438,7 +1529,8 @@ class Emitter {
            "registered for '" + t.orig_name + "'\"); }\n";
       c += "  return __e->pack(self, cb);\n";
     } else {
-      c += "  " + store_stmt(enc, "self", "cb", t.orig_name, std::nullopt) + "\n";
+      c += "  " + (enc_int ? "TRY_STATUS(" + enc_store + ");" : store_stmt(enc, "self", "cb", t.orig_name, std::nullopt)) +
+           "\n";
       c += "  return td::Status::OK();\n";
     }
     c += "}\n\n";

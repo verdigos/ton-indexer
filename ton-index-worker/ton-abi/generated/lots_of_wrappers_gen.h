@@ -135,10 +135,10 @@ td::Status dict_store(vm::CellBuilder& cb, const dict& self);
 td::Result<AbiValue> dict_to_abi_value(const dict& self);
 
 struct JustUint5 {
-  td::RefInt256 value;
+  td::uint64 value;
 
   struct CreateArgs {
-    td::RefInt256 value;
+    td::uint64 value;
   };
   static JustUint5 create(CreateArgs args);
   static td::Result<JustUint5> from_slice(vm::CellSlice& cs);
@@ -147,10 +147,10 @@ struct JustUint5 {
 };
 
 struct JustInt32 {
-  td::RefInt256 value;
+  td::int64 value;
 
   struct CreateArgs {
-    td::RefInt256 value;
+    td::int64 value;
   };
   static JustInt32 create(CreateArgs args);
   static td::Result<JustInt32> from_slice(vm::CellSlice& cs);
@@ -159,10 +159,10 @@ struct JustInt32 {
 };
 
 struct JustMaybeInt32 {
-  std::optional<td::RefInt256> value;
+  std::optional<td::int64> value;
 
   struct CreateArgs {
-    std::optional<std::optional<td::RefInt256>> value;
+    std::optional<std::optional<td::int64>> value;
   };
   static JustMaybeInt32 create(CreateArgs args);
   static td::Result<JustMaybeInt32> from_slice(vm::CellSlice& cs);
@@ -171,11 +171,11 @@ struct JustMaybeInt32 {
 };
 
 struct TwoInts32AndCoins {
-  td::RefInt256 op;
+  td::int64 op;
   td::RefInt256 amount;
 
   struct CreateArgs {
-    td::RefInt256 op;
+    td::int64 op;
     std::optional<td::RefInt256> amount;
   };
   static TwoInts32AndCoins create(CreateArgs args);
@@ -185,12 +185,12 @@ struct TwoInts32AndCoins {
 };
 
 struct TwoInts32And64 {
-  td::RefInt256 op;
-  td::RefInt256 query_id;
+  td::int64 op;
+  td::uint64 query_id;
 
   struct CreateArgs {
-    td::RefInt256 op;
-    td::RefInt256 query_id;
+    td::int64 op;
+    td::uint64 query_id;
   };
   static TwoInts32And64 create(CreateArgs args);
   static td::Result<TwoInts32And64> from_slice(vm::CellSlice& cs);
@@ -199,12 +199,12 @@ struct TwoInts32And64 {
 };
 
 struct TwoInts32AndRef64 {
-  td::RefInt256 op;
-  ton_abi::gen::CellOf<td::RefInt256> query_id_ref;
+  td::int64 op;
+  ton_abi::gen::CellOf<td::uint64> query_id_ref;
 
   struct CreateArgs {
-    td::RefInt256 op;
-    ton_abi::gen::CellOf<td::RefInt256> query_id_ref;
+    td::int64 op;
+    ton_abi::gen::CellOf<td::uint64> query_id_ref;
   };
   static TwoInts32AndRef64 create(CreateArgs args);
   static td::Result<TwoInts32AndRef64> from_slice(vm::CellSlice& cs);
@@ -213,13 +213,13 @@ struct TwoInts32AndRef64 {
 };
 
 struct TwoInts32AndMaybe64 {
-  td::RefInt256 op;
-  std::optional<td::RefInt256> query_id;
+  td::int64 op;
+  std::optional<td::uint64> query_id;
   bool demo_bool_field;
 
   struct CreateArgs {
-    td::RefInt256 op;
-    std::optional<td::RefInt256> query_id;
+    td::int64 op;
+    std::optional<td::uint64> query_id;
     bool demo_bool_field;
   };
   static TwoInts32AndMaybe64 create(CreateArgs args);
@@ -241,14 +241,14 @@ struct JustAddress {
 };
 
 struct TwoInts32And64SepByAddress {
-  td::RefInt256 op;
+  td::int64 op;
   ton_abi::AbiAddress addr_e;
-  td::RefInt256 query_id;
+  td::uint64 query_id;
 
   struct CreateArgs {
-    td::RefInt256 op;
+    td::int64 op;
     ton_abi::AbiAddress addr_e;
-    td::RefInt256 query_id;
+    td::uint64 query_id;
   };
   static TwoInts32And64SepByAddress create(CreateArgs args);
   static td::Result<TwoInts32And64SepByAddress> from_slice(vm::CellSlice& cs);
@@ -257,10 +257,10 @@ struct TwoInts32And64SepByAddress {
 };
 
 struct Inner1 {
-  td::RefInt256 query_id_ref;
+  td::uint64 query_id_ref;
 
   struct CreateArgs {
-    td::RefInt256 query_id_ref;
+    td::uint64 query_id_ref;
   };
   static Inner1 create(CreateArgs args);
   static td::Result<Inner1> from_slice(vm::CellSlice& cs);
@@ -269,10 +269,10 @@ struct Inner1 {
 };
 
 struct Inner2 {
-  td::RefInt256 i64_in_ref;
+  td::int64 i64_in_ref;
 
   struct CreateArgs {
-    td::RefInt256 i64_in_ref;
+    td::int64 i64_in_ref;
   };
   static Inner2 create(CreateArgs args);
   static td::Result<Inner2> from_slice(vm::CellSlice& cs);
@@ -291,11 +291,11 @@ struct MaybeNothing {
 };
 
 struct IntAndRestInlineCell {
-  td::RefInt256 op;
+  td::int64 op;
   td::Ref<vm::CellSlice> rest;
 
   struct CreateArgs {
-    td::RefInt256 op;
+    td::int64 op;
     td::Ref<vm::CellSlice> rest;
   };
   static IntAndRestInlineCell create(CreateArgs args);
@@ -305,11 +305,11 @@ struct IntAndRestInlineCell {
 };
 
 struct IntAndRestRefCell {
-  td::RefInt256 op;
+  td::int64 op;
   td::Ref<vm::Cell> rest;
 
   struct CreateArgs {
-    td::RefInt256 op;
+    td::int64 op;
     td::Ref<vm::Cell> rest;
   };
   static IntAndRestRefCell create(CreateArgs args);
@@ -319,20 +319,20 @@ struct IntAndRestRefCell {
 };
 
 struct DifferentMaybeRefs {
-  td::RefInt256 op;
+  td::int64 op;
   std::optional<td::Ref<vm::Cell>> ref1m;
   dict ref2m;
   td::Ref<vm::Cell> ref3;
   std::optional<ton_abi::gen::CellOf<JustInt32>> ref4m32;
-  td::RefInt256 query_id;
+  td::int64 query_id;
 
   struct CreateArgs {
-    std::optional<td::RefInt256> op;
+    std::optional<td::int64> op;
     std::optional<td::Ref<vm::Cell>> ref1m;
     dict ref2m;
     td::Ref<vm::Cell> ref3;
     std::optional<ton_abi::gen::CellOf<JustInt32>> ref4m32;
-    td::RefInt256 query_id;
+    td::int64 query_id;
   };
   static DifferentMaybeRefs create(CreateArgs args);
   static td::Result<DifferentMaybeRefs> from_slice(vm::CellSlice& cs);
@@ -409,10 +409,10 @@ struct EdgeCaseInts {
 };
 
 struct WriteWithBuilder {
-  td::RefInt256 f1;
+  td::int64 f1;
 
   struct CreateArgs {
-    td::RefInt256 f1;
+    td::int64 f1;
   };
   static WriteWithBuilder create(CreateArgs args);
   static td::Result<WriteWithBuilder> from_slice(vm::CellSlice& cs);
@@ -421,10 +421,10 @@ struct WriteWithBuilder {
 };
 
 struct WriteWithSlice {
-  td::RefInt256 f1;
+  td::int64 f1;
 
   struct CreateArgs {
-    td::RefInt256 f1;
+    td::int64 f1;
   };
   static WriteWithSlice create(CreateArgs args);
   static td::Result<WriteWithSlice> from_slice(vm::CellSlice& cs);
@@ -433,13 +433,13 @@ struct WriteWithSlice {
 };
 
 struct ReadWrittenWithBuilder {
-  td::RefInt256 f1;
-  td::RefInt256 someInt;
+  td::int64 f1;
+  td::uint64 someInt;
   std::optional<td::Ref<vm::Cell>> someCell;
 
   struct CreateArgs {
-    td::RefInt256 f1;
-    td::RefInt256 someInt;
+    td::int64 f1;
+    td::uint64 someInt;
     std::optional<td::Ref<vm::Cell>> someCell;
   };
   static ReadWrittenWithBuilder create(CreateArgs args);
@@ -451,13 +451,13 @@ struct ReadWrittenWithBuilder {
 struct Tail224 {
   JustInt32 ji;
   ton_abi::AbiAddress addr;
-  std::optional<ton_abi::gen::CellOf<td::RefInt256>> ref1;
+  std::optional<ton_abi::gen::CellOf<td::int64>> ref1;
   ton_abi::gen::CellOf<JustAddress> ref2;
 
   struct CreateArgs {
     JustInt32 ji;
     ton_abi::AbiAddress addr;
-    std::optional<ton_abi::gen::CellOf<td::RefInt256>> ref1;
+    std::optional<ton_abi::gen::CellOf<td::int64>> ref1;
     ton_abi::gen::CellOf<JustAddress> ref2;
   };
   static Tail224 create(CreateArgs args);
@@ -467,12 +467,12 @@ struct Tail224 {
 };
 
 struct WithTwoRestFields {
-  td::RefInt256 i32;
+  td::int64 i32;
   td::Ref<vm::CellSlice> rest1;
   td::Ref<vm::CellSlice> rest2;
 
   struct CreateArgs {
-    td::RefInt256 i32;
+    td::int64 i32;
     td::Ref<vm::CellSlice> rest1;
     td::Ref<vm::CellSlice> rest2;
   };
@@ -501,12 +501,12 @@ struct MsgSinglePrefix32 {
 struct CounterIncrement {
   static constexpr td::uint64 PREFIX = 305419896ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 counter_id;
-  td::RefInt256 inc_by;
+  td::int64 counter_id;
+  td::int64 inc_by;
 
   struct CreateArgs {
-    td::RefInt256 counter_id;
-    td::RefInt256 inc_by;
+    td::int64 counter_id;
+    td::int64 inc_by;
   };
   static CounterIncrement create(CreateArgs args);
   static td::Result<CounterIncrement> from_slice(vm::CellSlice& cs);
@@ -517,12 +517,12 @@ struct CounterIncrement {
 struct CounterDecrement {
   static constexpr td::uint64 PREFIX = 591751049ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 counter_id;
-  td::RefInt256 dec_by;
+  td::int64 counter_id;
+  td::int64 dec_by;
 
   struct CreateArgs {
-    td::RefInt256 counter_id;
-    td::RefInt256 dec_by;
+    td::int64 counter_id;
+    td::int64 dec_by;
   };
   static CounterDecrement create(CreateArgs args);
   static td::Result<CounterDecrement> from_slice(vm::CellSlice& cs);
@@ -533,10 +533,10 @@ struct CounterDecrement {
 struct CounterReset0 {
   static constexpr td::uint64 PREFIX = 878082192ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 counter_id;
+  td::int64 counter_id;
 
   struct CreateArgs {
-    td::RefInt256 counter_id;
+    td::int64 counter_id;
   };
   static CounterReset0 create(CreateArgs args);
   static td::Result<CounterReset0> from_slice(vm::CellSlice& cs);
@@ -547,12 +547,12 @@ struct CounterReset0 {
 struct CounterResetTo {
   static constexpr td::uint64 PREFIX = 1590016ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 counter_id;
-  td::RefInt256 initial_value;
+  td::int64 counter_id;
+  td::int64 initial_value;
 
   struct CreateArgs {
-    td::RefInt256 counter_id;
-    td::RefInt256 initial_value;
+    td::int64 counter_id;
+    td::int64 initial_value;
   };
   static CounterResetTo create(CreateArgs args);
   static td::Result<CounterResetTo> from_slice(vm::CellSlice& cs);
@@ -569,12 +569,12 @@ struct BodyPayload1 {
   static constexpr td::uint64 PREFIX = 1ULL;
   static constexpr int PREFIX_LEN = 3;
   bool should_forward;
-  td::RefInt256 n_times;
+  td::int64 n_times;
   td::Ref<vm::CellSlice> content;
 
   struct CreateArgs {
     bool should_forward;
-    td::RefInt256 n_times;
+    td::int64 n_times;
     td::Ref<vm::CellSlice> content;
   };
   static BodyPayload1 create(CreateArgs args);
@@ -586,11 +586,11 @@ struct BodyPayload1 {
 struct BodyPayload2 {
   static constexpr td::uint64 PREFIX = 1ULL;
   static constexpr int PREFIX_LEN = 2;
-  td::RefInt256 master_id;
+  td::int64 master_id;
   ton_abi::AbiAddress owner_address;
 
   struct CreateArgs {
-    td::RefInt256 master_id;
+    td::int64 master_id;
     ton_abi::AbiAddress owner_address;
   };
   static BodyPayload2 create(CreateArgs args);
@@ -620,11 +620,11 @@ struct TransferParams1 {
 struct TransferParams2 {
   static constexpr td::uint64 PREFIX = 9ULL;
   static constexpr int PREFIX_LEN = 4;
-  std::tuple<td::RefInt256, std::optional<td::RefInt256>, td::RefInt256> intVector;
+  std::tuple<td::int64, std::optional<td::RefInt256>, td::uint64> intVector;
   ton_abi::gen::CellOf<bool> needs_more;
 
   struct CreateArgs {
-    std::tuple<td::RefInt256, std::optional<td::RefInt256>, td::RefInt256> intVector;
+    std::tuple<td::int64, std::optional<td::RefInt256>, td::uint64> intVector;
     ton_abi::gen::CellOf<bool> needs_more;
   };
   static TransferParams2 create(CreateArgs args);
@@ -633,7 +633,7 @@ struct TransferParams2 {
   td::Result<AbiValue> to_abi_value() const;
 };
 
-using MyInt32 = td::RefInt256;
+using MyInt32 = td::int64;
 td::Result<MyInt32> MyInt32_from_slice(vm::CellSlice& cs);
 td::Status MyInt32_store(vm::CellBuilder& cb, const MyInt32& self);
 td::Result<AbiValue> MyInt32_to_abi_value(const MyInt32& self);
@@ -656,12 +656,12 @@ td::Result<AbiValue> EStoredAsUint1_to_abi_value(const td::RefInt256& self);
 struct WithEnums {
   td::RefInt256 e1;
   td::RefInt256 e2;
-  td::RefInt256 rem;
+  td::uint64 rem;
 
   struct CreateArgs {
     td::RefInt256 e1;
     td::RefInt256 e2;
-    td::RefInt256 rem;
+    td::uint64 rem;
   };
   static WithEnums create(CreateArgs args);
   static td::Result<WithEnums> from_slice(vm::CellSlice& cs);
@@ -670,12 +670,12 @@ struct WithEnums {
 };
 
 struct Point {
-  td::RefInt256 x;
-  td::RefInt256 y;
+  td::int64 x;
+  td::int64 y;
 
   struct CreateArgs {
-    std::optional<td::RefInt256> x;
-    std::optional<td::RefInt256> y;
+    std::optional<td::int64> x;
+    std::optional<td::int64> y;
   };
   static Point create(CreateArgs args);
   static td::Result<Point> from_slice(vm::CellSlice& cs);
@@ -684,10 +684,10 @@ struct Point {
 };
 
 struct Test4_8 {
-  td::RefInt256 a;
+  td::int64 a;
 
   struct CreateArgs {
-    td::RefInt256 a;
+    td::int64 a;
   };
   static Test4_8 create(CreateArgs args);
   static td::Result<Test4_8> from_slice(vm::CellSlice& cs);
@@ -696,10 +696,10 @@ struct Test4_8 {
 };
 
 struct Test4_16 {
-  td::RefInt256 a;
+  td::int64 a;
 
   struct CreateArgs {
-    td::RefInt256 a;
+    td::int64 a;
   };
   static Test4_16 create(CreateArgs args);
   static td::Result<Test4_16> from_slice(vm::CellSlice& cs);
@@ -708,10 +708,10 @@ struct Test4_16 {
 };
 
 struct Test4_32 {
-  td::RefInt256 a;
+  td::int64 a;
 
   struct CreateArgs {
-    td::RefInt256 a;
+    td::int64 a;
   };
   static Test4_32 create(CreateArgs args);
   static td::Result<Test4_32> from_slice(vm::CellSlice& cs);
@@ -725,14 +725,14 @@ td::Status TelegramString_store(vm::CellBuilder& cb, const TelegramString& self)
 td::Result<AbiValue> TelegramString_to_abi_value(const TelegramString& self);
 
 struct StorWithStr {
-  td::RefInt256 a;
+  td::int64 a;
   TelegramString str;
-  td::RefInt256 b;
+  td::int64 b;
 
   struct CreateArgs {
-    td::RefInt256 a;
+    td::int64 a;
     TelegramString str;
-    td::RefInt256 b;
+    td::int64 b;
   };
   static StorWithStr create(CreateArgs args);
   static td::Result<StorWithStr> from_slice(vm::CellSlice& cs);
@@ -740,18 +740,18 @@ struct StorWithStr {
   td::Result<AbiValue> to_abi_value() const;
 };
 
-using Custom8 = td::RefInt256;
+using Custom8 = td::uint64;
 td::Result<Custom8> Custom8_from_slice(vm::CellSlice& cs);
 td::Status Custom8_store(vm::CellBuilder& cb, const Custom8& self);
 td::Result<AbiValue> Custom8_to_abi_value(const Custom8& self);
 
 struct PointWithCustomInt {
   Custom8 a;
-  td::RefInt256 b;
+  td::int64 b;
 
   struct CreateArgs {
     Custom8 a;
-    td::RefInt256 b;
+    td::int64 b;
   };
   static PointWithCustomInt create(CreateArgs args);
   static td::Result<PointWithCustomInt> from_slice(vm::CellSlice& cs);
@@ -765,11 +765,11 @@ td::Status MyBorderedInt_store(vm::CellBuilder& cb, const MyBorderedInt& self);
 td::Result<AbiValue> MyBorderedInt_to_abi_value(const MyBorderedInt& self);
 
 struct WithMyBorder {
-  td::RefInt256 a;
+  td::int64 a;
   MyBorderedInt b;
 
   struct CreateArgs {
-    td::RefInt256 a;
+    td::int64 a;
     MyBorderedInt b;
   };
   static WithMyBorder create(CreateArgs args);
@@ -784,14 +784,14 @@ td::Status MyCustomNothing_store(vm::CellBuilder& cb, const MyCustomNothing& sel
 td::Result<AbiValue> MyCustomNothing_to_abi_value(const MyCustomNothing& self);
 
 struct WithFakeWriter {
-  td::RefInt256 a;
+  td::int64 a;
   MyCustomNothing fake;
-  td::RefInt256 b;
+  td::int64 b;
 
   struct CreateArgs {
-    td::RefInt256 a;
+    td::int64 a;
     MyCustomNothing fake;
-    td::RefInt256 b;
+    td::int64 b;
   };
   static WithFakeWriter create(CreateArgs args);
   static td::Result<WithFakeWriter> from_slice(vm::CellSlice& cs);
@@ -799,7 +799,7 @@ struct WithFakeWriter {
   td::Result<AbiValue> to_abi_value() const;
 };
 
-using Tensor3Skipping1 = std::tuple<td::RefInt256, td::RefInt256, td::RefInt256>;
+using Tensor3Skipping1 = std::tuple<td::uint64, td::uint64, td::uint64>;
 td::Result<Tensor3Skipping1> Tensor3Skipping1_from_slice(vm::CellSlice& cs);
 td::Status Tensor3Skipping1_store(vm::CellBuilder& cb, const Tensor3Skipping1& self);
 td::Result<AbiValue> Tensor3Skipping1_to_abi_value(const Tensor3Skipping1& self);
@@ -860,15 +860,15 @@ td::Status ECollisionNames_store(vm::CellBuilder& cb, const td::RefInt256& self)
 td::Result<AbiValue> ECollisionNames_to_abi_value(const td::RefInt256& self);
 
 struct WithMaps0 {
-  std::vector<std::pair<td::RefInt256, td::RefInt256>> m1;
-  std::vector<std::pair<td::RefInt256, std::tuple<td::RefInt256, td::RefInt256>>> m2;
-  std::vector<std::pair<td::RefInt256, ton_abi::AbiAddress>> m3;
+  std::vector<std::pair<td::int64, td::int64>> m1;
+  std::vector<std::pair<td::int64, std::tuple<td::int64, td::int64>>> m2;
+  std::vector<std::pair<td::uint64, ton_abi::AbiAddress>> m3;
   std::vector<std::pair<ton_abi::AbiAddress, td::Ref<vm::CellSlice>>> m4;
 
   struct CreateArgs {
-    std::vector<std::pair<td::RefInt256, td::RefInt256>> m1;
-    std::vector<std::pair<td::RefInt256, std::tuple<td::RefInt256, td::RefInt256>>> m2;
-    std::vector<std::pair<td::RefInt256, ton_abi::AbiAddress>> m3;
+    std::vector<std::pair<td::int64, td::int64>> m1;
+    std::vector<std::pair<td::int64, std::tuple<td::int64, td::int64>>> m2;
+    std::vector<std::pair<td::uint64, ton_abi::AbiAddress>> m3;
     std::vector<std::pair<ton_abi::AbiAddress, td::Ref<vm::CellSlice>>> m4;
   };
   static WithMaps0 create(CreateArgs args);
@@ -878,11 +878,11 @@ struct WithMaps0 {
 };
 
 struct WithRef {
-  std::optional<td::RefInt256> id;
+  std::optional<td::int64> id;
   std::optional<ton_abi::gen::CellOf<ton_abi::AbiAddress>> ref;
 
   struct CreateArgs {
-    std::optional<td::RefInt256> id;
+    std::optional<td::int64> id;
     std::optional<ton_abi::gen::CellOf<ton_abi::AbiAddress>> ref;
   };
   static WithRef create(CreateArgs args);
@@ -892,14 +892,14 @@ struct WithRef {
 };
 
 struct WithArrays {
-  std::vector<td::RefInt256> a1;
-  std::vector<ton_abi::gen::CellOf<td::RefInt256>> a2;
+  std::vector<td::int64> a1;
+  std::vector<ton_abi::gen::CellOf<td::int64>> a2;
   std::vector<td::Ref<vm::CellSlice>> a3;
   bool after;
 
   struct CreateArgs {
-    std::vector<td::RefInt256> a1;
-    std::vector<ton_abi::gen::CellOf<td::RefInt256>> a2;
+    std::vector<td::int64> a1;
+    std::vector<ton_abi::gen::CellOf<td::int64>> a2;
     std::vector<td::Ref<vm::CellSlice>> a3;
     std::optional<bool> after;
   };
@@ -910,10 +910,10 @@ struct WithArrays {
 };
 
 struct WithArrays2 {
-  std::vector<std::vector<td::RefInt256>> a;
+  std::vector<std::vector<td::int64>> a;
 
   struct CreateArgs {
-    std::vector<std::vector<td::RefInt256>> a;
+    std::vector<std::vector<td::int64>> a;
   };
   static WithArrays2 create(CreateArgs args);
   static td::Result<WithArrays2> from_slice(vm::CellSlice& cs);
@@ -922,18 +922,18 @@ struct WithArrays2 {
 };
 
 struct WithArrays4 {
-  std::optional<td::RefInt256> before;
+  std::optional<td::int64> before;
   std::vector<Point> a0;
   std::vector<WithRef> a1;
   std::optional<std::vector<std::optional<bool>>> a2;
-  td::RefInt256 after;
+  td::int64 after;
 
   struct CreateArgs {
-    std::optional<td::RefInt256> before;
+    std::optional<td::int64> before;
     std::vector<Point> a0;
     std::vector<WithRef> a1;
     std::optional<std::vector<std::optional<bool>>> a2;
-    td::RefInt256 after;
+    td::int64 after;
   };
   static WithArrays4 create(CreateArgs args);
   static td::Result<WithArrays4> from_slice(vm::CellSlice& cs);
@@ -975,18 +975,18 @@ td::Result<EmptyShape> EmptyShape_from_slice(vm::CellSlice& cs);
 td::Status EmptyShape_store(vm::CellBuilder& cb, const EmptyShape& self);
 td::Result<AbiValue> EmptyShape_to_abi_value(const EmptyShape& self);
 
-using MyShape1 = std::tuple<std::optional<td::RefInt256>, Point, EmptyShape, EmptyE, std::optional<ton_abi::gen::CellOf<std::tuple<>>>, td::RefInt256>;
+using MyShape1 = std::tuple<std::optional<td::int64>, Point, EmptyShape, EmptyE, std::optional<ton_abi::gen::CellOf<std::tuple<>>>, td::int64>;
 td::Result<MyShape1> MyShape1_from_slice(vm::CellSlice& cs);
 td::Status MyShape1_store(vm::CellBuilder& cb, const MyShape1& self);
 td::Result<AbiValue> MyShape1_to_abi_value(const MyShape1& self);
 
 struct Recurrent {
-  td::RefInt256 value;
-  std::tuple<td::RefInt256, std::optional<ton_abi::gen::CellOf<Recurrent>>> nextSh;
+  td::int64 value;
+  std::tuple<td::int64, std::optional<ton_abi::gen::CellOf<Recurrent>>> nextSh;
 
   struct CreateArgs {
-    td::RefInt256 value;
-    std::tuple<td::RefInt256, std::optional<ton_abi::gen::CellOf<Recurrent>>> nextSh;
+    td::int64 value;
+    std::tuple<td::int64, std::optional<ton_abi::gen::CellOf<Recurrent>>> nextSh;
   };
   static Recurrent create(CreateArgs args);
   static td::Result<Recurrent> from_slice(vm::CellSlice& cs);
@@ -995,14 +995,14 @@ struct Recurrent {
 };
 
 struct WithLispLists1 {
-  std::vector<td::RefInt256> lInt8_1;
-  std::vector<td::RefInt256> lInt8_2;
+  std::vector<td::int64> lInt8_1;
+  std::vector<td::int64> lInt8_2;
   std::vector<Point> lPoint_1;
   std::vector<Point> lPoint_2;
 
   struct CreateArgs {
-    std::vector<td::RefInt256> lInt8_1;
-    std::vector<td::RefInt256> lInt8_2;
+    std::vector<td::int64> lInt8_1;
+    std::vector<td::int64> lInt8_2;
     std::vector<Point> lPoint_1;
     std::vector<Point> lPoint_2;
   };
@@ -1013,18 +1013,18 @@ struct WithLispLists1 {
 };
 
 struct WithLispLists2 {
-  td::RefInt256 before;
-  std::vector<td::RefInt256> lInt8;
-  std::vector<td::RefInt256> lInt32;
+  td::int64 before;
+  std::vector<td::int64> lInt8;
+  std::vector<td::int64> lInt32;
   std::vector<td::RefInt256> lInt256;
-  td::RefInt256 after;
+  td::int64 after;
 
   struct CreateArgs {
-    td::RefInt256 before;
-    std::vector<td::RefInt256> lInt8;
-    std::vector<td::RefInt256> lInt32;
+    td::int64 before;
+    std::vector<td::int64> lInt8;
+    std::vector<td::int64> lInt32;
     std::vector<td::RefInt256> lInt256;
-    td::RefInt256 after;
+    td::int64 after;
   };
   static WithLispLists2 create(CreateArgs args);
   static td::Result<WithLispLists2> from_slice(vm::CellSlice& cs);
@@ -1073,15 +1073,15 @@ struct WithStrings2 {
 };
 
 struct invalid_js_naming_ {
-  td::RefInt256 foo_bar;
-  td::RefInt256 rule__;
-  td::RefInt256 A____B;
+  td::int64 foo_bar;
+  td::int64 rule__;
+  td::int64 A____B;
   std::monostate void_;
 
   struct CreateArgs {
-    td::RefInt256 foo_bar;
-    td::RefInt256 rule__;
-    td::RefInt256 A____B;
+    td::int64 foo_bar;
+    td::int64 rule__;
+    td::int64 A____B;
     std::monostate void_;
   };
   static invalid_js_naming_ create(CreateArgs args);
@@ -1091,10 +1091,10 @@ struct invalid_js_naming_ {
 };
 
 struct NotPackable1 {
-  td::RefInt256 n;
+  td::int64 n;
 
   struct CreateArgs {
-    td::RefInt256 n;
+    td::int64 n;
   };
   static NotPackable1 create(CreateArgs args);
   static td::Result<NotPackable1> from_slice(vm::CellSlice& cs);
@@ -1165,11 +1165,11 @@ struct NotUnpackable1 {
 };
 
 struct WithNotPackable {
-  td::RefInt256 k;
+  td::int64 k;
   NotPackable3 nestedNot;
 
   struct CreateArgs {
-    td::RefInt256 k;
+    td::int64 k;
     NotPackable3 nestedNot;
   };
   static WithNotPackable create(CreateArgs args);
@@ -1191,10 +1191,10 @@ td::Result<AbiValue> NotPackable4Alias_to_abi_value(const NotPackable4Alias& sel
 struct PrefixedSome {
   static constexpr td::uint64 PREFIX = 1ULL;
   static constexpr int PREFIX_LEN = 8;
-  td::RefInt256 x;
+  td::int64 x;
 
   struct CreateArgs {
-    td::RefInt256 x;
+    td::int64 x;
   };
   static PrefixedSome create(CreateArgs args);
   static td::Result<PrefixedSome> from_slice(vm::CellSlice& cs);
@@ -1203,10 +1203,10 @@ struct PrefixedSome {
 };
 
 struct PlainSome {
-  td::RefInt256 x;
+  td::int64 x;
 
   struct CreateArgs {
-    td::RefInt256 x;
+    td::int64 x;
   };
   static PlainSome create(CreateArgs args);
   static td::Result<PlainSome> from_slice(vm::CellSlice& cs);
@@ -1217,10 +1217,10 @@ struct PlainSome {
 struct ThreeP1 {
   static constexpr td::uint64 PREFIX = 0ULL;
   static constexpr int PREFIX_LEN = 2;
-  td::RefInt256 v;
+  td::int64 v;
 
   struct CreateArgs {
-    td::RefInt256 v;
+    td::int64 v;
   };
   static ThreeP1 create(CreateArgs args);
   static td::Result<ThreeP1> from_slice(vm::CellSlice& cs);
@@ -1231,10 +1231,10 @@ struct ThreeP1 {
 struct ThreeP2 {
   static constexpr td::uint64 PREFIX = 1ULL;
   static constexpr int PREFIX_LEN = 2;
-  td::RefInt256 v;
+  td::int64 v;
 
   struct CreateArgs {
-    td::RefInt256 v;
+    td::int64 v;
   };
   static ThreeP2 create(CreateArgs args);
   static td::Result<ThreeP2> from_slice(vm::CellSlice& cs);
@@ -1242,7 +1242,7 @@ struct ThreeP2 {
   td::Result<AbiValue> to_abi_value() const;
 };
 
-using OnlyWithPack = td::RefInt256;
+using OnlyWithPack = td::int64;
 td::Result<OnlyWithPack> OnlyWithPack_from_slice(vm::CellSlice& cs);
 td::Status OnlyWithPack_store(vm::CellBuilder& cb, const OnlyWithPack& self);
 td::Result<AbiValue> OnlyWithPack_to_abi_value(const OnlyWithPack& self);
@@ -1265,10 +1265,10 @@ struct HasOnlyWithUnpack {
 };
 
 struct EitherLeft_int8 {
-  td::RefInt256 value;
+  td::int64 value;
 
   struct CreateArgs {
-    td::RefInt256 value;
+    td::int64 value;
   };
   static EitherLeft_int8 create(CreateArgs args);
   static td::Result<EitherLeft_int8> from_slice(vm::CellSlice& cs);
@@ -1289,10 +1289,10 @@ struct EitherRight_int256 {
 };
 
 struct MaybeJust_int8 {
-  td::RefInt256 value;
+  td::int64 value;
 
   struct CreateArgs {
-    td::RefInt256 value;
+    td::int64 value;
   };
   static MaybeJust_int8 create(CreateArgs args);
   static td::Result<MaybeJust_int8> from_slice(vm::CellSlice& cs);
@@ -1301,12 +1301,12 @@ struct MaybeJust_int8 {
 };
 
 struct ReadWriteRest {
-  td::RefInt256 f1;
+  td::int64 f1;
   td::RefInt256 f2;
   std::tuple<> rest;
 
   struct CreateArgs {
-    td::RefInt256 f1;
+    td::int64 f1;
     td::RefInt256 f2;
     std::tuple<> rest;
   };
@@ -1317,12 +1317,12 @@ struct ReadWriteRest {
 };
 
 struct ReadWriteMid {
-  td::RefInt256 f1;
+  td::int64 f1;
   std::tuple<> mid;
   td::RefInt256 f3;
 
   struct CreateArgs {
-    td::RefInt256 f1;
+    td::int64 f1;
     std::tuple<> mid;
     td::RefInt256 f3;
   };
@@ -1374,12 +1374,12 @@ struct MaybeJust_any_address {
 };
 
 struct ReadWriteRest_RemainingBitsAndRefs {
-  td::RefInt256 f1;
+  td::int64 f1;
   td::RefInt256 f2;
   td::Ref<vm::CellSlice> rest;
 
   struct CreateArgs {
-    td::RefInt256 f1;
+    td::int64 f1;
     td::RefInt256 f2;
     td::Ref<vm::CellSlice> rest;
   };
@@ -1395,10 +1395,10 @@ td::Status ReadRest_Remaining_store(vm::CellBuilder& cb, const ReadRest_Remainin
 td::Result<AbiValue> ReadRest_Remaining_to_abi_value(const ReadRest_Remaining& self);
 
 struct Wrapper_int8 {
-  td::RefInt256 item;
+  td::int64 item;
 
   struct CreateArgs {
-    td::RefInt256 item;
+    td::int64 item;
   };
   static Wrapper_int8 create(CreateArgs args);
   static td::Result<Wrapper_int8> from_slice(vm::CellSlice& cs);
@@ -1419,10 +1419,10 @@ struct Wrapper_any_address {
 };
 
 struct Wrapper_int16 {
-  td::RefInt256 item;
+  td::int64 item;
 
   struct CreateArgs {
-    td::RefInt256 item;
+    td::int64 item;
   };
   static Wrapper_int16 create(CreateArgs args);
   static td::Result<Wrapper_int16> from_slice(vm::CellSlice& cs);
@@ -1435,16 +1435,16 @@ td::Result<ArrayAlias> ArrayAlias_from_slice(vm::CellSlice& cs);
 td::Status ArrayAlias_store(vm::CellBuilder& cb, const ArrayAlias& self);
 td::Result<AbiValue> ArrayAlias_to_abi_value(const ArrayAlias& self);
 
-using AbiUnion_0 = std::variant<td::RefInt256, td::RefInt256>;
+using AbiUnion_0 = std::variant<td::int64, td::RefInt256>;
 td::Result<AbiUnion_0> load_union_0(vm::CellSlice& cs);
 td::Status store_union_0(const AbiUnion_0& u, vm::CellBuilder& cb);
 
 struct IntAndEitherInt8Or256 {
-  td::RefInt256 op;
+  td::int64 op;
   AbiUnion_0 i8or256;
 
   struct CreateArgs {
-    td::RefInt256 op;
+    td::int64 op;
     AbiUnion_0 i8or256;
   };
   static IntAndEitherInt8Or256 create(CreateArgs args);
@@ -1453,17 +1453,17 @@ struct IntAndEitherInt8Or256 {
   td::Result<AbiValue> to_abi_value() const;
 };
 
-using AbiUnion_1 = std::variant<td::RefInt256, ton_abi::gen::CellOf<Inner2>>;
+using AbiUnion_1 = std::variant<td::int64, ton_abi::gen::CellOf<Inner2>>;
 td::Result<AbiUnion_1> load_union_1(vm::CellSlice& cs);
 td::Status store_union_1(const AbiUnion_1& u, vm::CellBuilder& cb);
 
 struct IntAndEither32OrRef64 {
-  td::RefInt256 op;
+  td::int64 op;
   AbiUnion_1 i32orRef;
   std::optional<ton_abi::gen::CellOf<Inner1>> query_id_maybe_ref;
 
   struct CreateArgs {
-    td::RefInt256 op;
+    td::int64 op;
     AbiUnion_1 i32orRef;
     std::optional<ton_abi::gen::CellOf<Inner1>> query_id_maybe_ref;
   };
@@ -1500,11 +1500,11 @@ td::Result<AbiUnion_3> load_union_3(vm::CellSlice& cs);
 td::Status store_union_3(const AbiUnion_3& u, vm::CellBuilder& cb);
 
 struct IntAndRestEitherCellOrRefCell {
-  td::RefInt256 op;
+  td::int64 op;
   AbiUnion_3 rest;
 
   struct CreateArgs {
-    td::RefInt256 op;
+    td::int64 op;
     AbiUnion_3 rest;
   };
   static IntAndRestEitherCellOrRefCell create(CreateArgs args);
@@ -1520,12 +1520,12 @@ td::Status store_union_4(const AbiUnion_4& u, vm::CellBuilder& cb);
 struct DifferentMix3 {
   AbiUnion_4 bod;
   std::optional<TwoInts32AndCoins> tim;
-  std::optional<std::tuple<td::RefInt256, td::RefInt256>> pairm;
+  std::optional<std::tuple<td::int64, td::int64>> pairm;
 
   struct CreateArgs {
     AbiUnion_4 bod;
     std::optional<TwoInts32AndCoins> tim;
-    std::optional<std::optional<std::tuple<td::RefInt256, td::RefInt256>>> pairm;
+    std::optional<std::optional<std::tuple<td::int64, td::int64>>> pairm;
   };
   static DifferentMix3 create(CreateArgs args);
   static td::Result<DifferentMix3> from_slice(vm::CellSlice& cs);
@@ -1565,7 +1565,7 @@ struct WithMoreTrickyAddresses1 {
   td::Result<AbiValue> to_abi_value() const;
 };
 
-using AbiUnion_8 = std::variant<ton_abi::AbiAddress, td::RefInt256, std::monostate>;
+using AbiUnion_8 = std::variant<ton_abi::AbiAddress, td::int64, std::monostate>;
 td::Result<AbiUnion_8> load_union_8(vm::CellSlice& cs);
 td::Status store_union_8(const AbiUnion_8& u, vm::CellBuilder& cb);
 
@@ -1573,7 +1573,7 @@ using AbiUnion_9 = std::variant<ton_abi::AbiAddress, ton_abi::gen::CellOf<ton_ab
 td::Result<AbiUnion_9> load_union_9(vm::CellSlice& cs);
 td::Status store_union_9(const AbiUnion_9& u, vm::CellBuilder& cb);
 
-using AbiUnion_10 = std::variant<ton_abi::AbiAddress, td::RefInt256>;
+using AbiUnion_10 = std::variant<ton_abi::AbiAddress, td::int64>;
 td::Result<AbiUnion_10> load_union_10(vm::CellSlice& cs);
 td::Status store_union_10(const AbiUnion_10& u, vm::CellBuilder& cb);
 
@@ -1581,7 +1581,7 @@ using AbiUnion_11 = std::variant<ton_abi::AbiAddress, ton_abi::AbiAddress>;
 td::Result<AbiUnion_11> load_union_11(vm::CellSlice& cs);
 td::Status store_union_11(const AbiUnion_11& u, vm::CellBuilder& cb);
 
-using AbiUnion_12 = std::variant<td::RefInt256, td::RefInt256>;
+using AbiUnion_12 = std::variant<td::RefInt256, td::uint64>;
 td::Result<AbiUnion_12> load_union_12(vm::CellSlice& cs);
 td::Status store_union_12(const AbiUnion_12& u, vm::CellBuilder& cb);
 
@@ -1691,7 +1691,7 @@ struct EitherRight_Cell_TransferParams {
   td::Result<AbiValue> to_abi_value() const;
 };
 
-using AbiUnion_17 = std::variant<td::RefInt256, td::RefInt256, td::RefInt256>;
+using AbiUnion_17 = std::variant<td::int64, td::int64, td::int64>;
 td::Result<AbiUnion_17> load_union_17(vm::CellSlice& cs);
 td::Status store_union_17(const AbiUnion_17& u, vm::CellBuilder& cb);
 
@@ -1700,7 +1700,7 @@ td::Result<Union_8_16_32> Union_8_16_32_from_slice(vm::CellSlice& cs);
 td::Status Union_8_16_32_store(vm::CellBuilder& cb, const Union_8_16_32& self);
 td::Result<AbiValue> Union_8_16_32_to_abi_value(const Union_8_16_32& self);
 
-using AbiUnion_18 = std::variant<td::RefInt256, td::RefInt256, td::RefInt256, std::monostate>;
+using AbiUnion_18 = std::variant<td::int64, td::int64, td::int64, std::monostate>;
 td::Result<AbiUnion_18> load_union_18(vm::CellSlice& cs);
 td::Status store_union_18(const AbiUnion_18& u, vm::CellBuilder& cb);
 
@@ -1725,7 +1725,7 @@ struct WithEnumsUnion {
   td::Result<AbiValue> to_abi_value() const;
 };
 
-using AbiUnion_20 = std::variant<td::RefInt256, Test4_16, Test4_32>;
+using AbiUnion_20 = std::variant<td::int64, Test4_16, Test4_32>;
 td::Result<AbiUnion_20> load_union_20(vm::CellSlice& cs);
 td::Status store_union_20(const AbiUnion_20& u, vm::CellBuilder& cb);
 
@@ -1734,7 +1734,7 @@ td::Result<UnionStructs_8_16_32> UnionStructs_8_16_32_from_slice(vm::CellSlice& 
 td::Status UnionStructs_8_16_32_store(vm::CellBuilder& cb, const UnionStructs_8_16_32& self);
 td::Result<AbiValue> UnionStructs_8_16_32_to_abi_value(const UnionStructs_8_16_32& self);
 
-using AbiUnion_21 = std::variant<Test4_8, td::RefInt256, td::RefInt256, std::monostate>;
+using AbiUnion_21 = std::variant<Test4_8, td::int64, td::int64, std::monostate>;
 td::Result<AbiUnion_21> load_union_21(vm::CellSlice& cs);
 td::Status store_union_21(const AbiUnion_21& u, vm::CellBuilder& cb);
 
@@ -1743,7 +1743,7 @@ td::Result<UnionStructs_8_16_32_n> UnionStructs_8_16_32_n_from_slice(vm::CellSli
 td::Status UnionStructs_8_16_32_n_store(vm::CellBuilder& cb, const UnionStructs_8_16_32_n& self);
 td::Result<AbiValue> UnionStructs_8_16_32_n_to_abi_value(const UnionStructs_8_16_32_n& self);
 
-using AbiUnion_22 = std::variant<td::RefInt256, td::RefInt256, td::RefInt256>;
+using AbiUnion_22 = std::variant<td::int64, td::int64, td::int64>;
 td::Result<AbiUnion_22> load_union_22(vm::CellSlice& cs);
 td::Status store_union_22(const AbiUnion_22& u, vm::CellBuilder& cb);
 
@@ -1752,7 +1752,7 @@ td::Result<U105> U105_from_slice(vm::CellSlice& cs);
 td::Status U105_store(vm::CellBuilder& cb, const U105& self);
 td::Result<AbiValue> U105_to_abi_value(const U105& self);
 
-using AbiUnion_23 = std::variant<td::RefInt256, td::RefInt256, td::RefInt256, td::RefInt256>;
+using AbiUnion_23 = std::variant<td::int64, td::int64, td::int64, td::int64>;
 td::Result<AbiUnion_23> load_union_23(vm::CellSlice& cs);
 td::Status store_union_23(const AbiUnion_23& u, vm::CellBuilder& cb);
 
@@ -1761,25 +1761,25 @@ td::Result<U106> U106_from_slice(vm::CellSlice& cs);
 td::Status U106_store(vm::CellBuilder& cb, const U106& self);
 td::Result<AbiValue> U106_to_abi_value(const U106& self);
 
-using AbiUnion_24 = std::variant<std::vector<std::pair<td::RefInt256, td::RefInt256>>, td::RefInt256>;
+using AbiUnion_24 = std::variant<std::vector<std::pair<td::int64, td::int64>>, td::int64>;
 td::Result<AbiUnion_24> load_union_24(vm::CellSlice& cs);
 td::Status store_union_24(const AbiUnion_24& u, vm::CellBuilder& cb);
 
-using AbiUnion_25 = std::variant<std::vector<std::pair<td::RefInt256, td::RefInt256>>, std::vector<std::pair<td::RefInt256, td::RefInt256>>, std::vector<std::pair<td::RefInt256, td::RefInt256>>>;
+using AbiUnion_25 = std::variant<std::vector<std::pair<td::int64, td::int64>>, std::vector<std::pair<td::int64, td::int64>>, std::vector<std::pair<td::int64, td::int64>>>;
 td::Result<AbiUnion_25> load_union_25(vm::CellSlice& cs);
 td::Status store_union_25(const AbiUnion_25& u, vm::CellBuilder& cb);
 
 struct WithNullableMaps {
-  std::optional<std::vector<std::pair<td::RefInt256, td::RefInt256>>> m1;
-  std::optional<std::vector<std::pair<td::RefInt256, td::RefInt256>>> m2;
-  std::optional<std::vector<std::pair<td::RefInt256, td::RefInt256>>> m3;
+  std::optional<std::vector<std::pair<td::int64, td::int64>>> m1;
+  std::optional<std::vector<std::pair<td::int64, td::int64>>> m2;
+  std::optional<std::vector<std::pair<td::int64, td::int64>>> m3;
   AbiUnion_24 m4;
   AbiUnion_25 m5;
 
   struct CreateArgs {
-    std::optional<std::vector<std::pair<td::RefInt256, td::RefInt256>>> m1;
-    std::optional<std::vector<std::pair<td::RefInt256, td::RefInt256>>> m2;
-    std::optional<std::vector<std::pair<td::RefInt256, td::RefInt256>>> m3;
+    std::optional<std::vector<std::pair<td::int64, td::int64>>> m1;
+    std::optional<std::vector<std::pair<td::int64, td::int64>>> m2;
+    std::optional<std::vector<std::pair<td::int64, td::int64>>> m3;
     AbiUnion_24 m4;
     AbiUnion_25 m5;
   };
@@ -1789,7 +1789,7 @@ struct WithNullableMaps {
   td::Result<AbiValue> to_abi_value() const;
 };
 
-using AbiUnion_26 = std::variant<std::tuple<td::RefInt256, td::RefInt256>, std::tuple<td::RefInt256, td::RefInt256, td::RefInt256>>;
+using AbiUnion_26 = std::variant<std::tuple<td::int64, td::int64>, std::tuple<td::int64, td::int64, td::int64>>;
 td::Result<AbiUnion_26> load_union_26(vm::CellSlice& cs);
 td::Status store_union_26(const AbiUnion_26& u, vm::CellBuilder& cb);
 
@@ -1806,7 +1806,7 @@ struct WithMoreTrickyTypes {
   ton_abi::gen::CellOf<Wrapper_int8> r1;
   ton_abi::gen::CellOf<AbiUnion_27> r2;
   std::optional<CounterIncrementAlias> nullable1;
-  std::vector<std::pair<td::RefInt256, std::vector<std::pair<td::RefInt256, JustInt32>>>> nestedM;
+  std::vector<std::pair<td::int64, std::vector<std::pair<td::uint64, JustInt32>>>> nestedM;
   AbiUnion_28 uni2;
 
   struct CreateArgs {
@@ -1814,7 +1814,7 @@ struct WithMoreTrickyTypes {
     ton_abi::gen::CellOf<Wrapper_int8> r1;
     ton_abi::gen::CellOf<AbiUnion_27> r2;
     std::optional<CounterIncrementAlias> nullable1;
-    std::vector<std::pair<td::RefInt256, std::vector<std::pair<td::RefInt256, JustInt32>>>> nestedM;
+    std::vector<std::pair<td::int64, std::vector<std::pair<td::uint64, JustInt32>>>> nestedM;
     AbiUnion_28 uni2;
   };
   static WithMoreTrickyTypes create(CreateArgs args);
@@ -1833,11 +1833,11 @@ td::Status PrefixedOrVoid_store(vm::CellBuilder& cb, const PrefixedOrVoid& self)
 td::Result<AbiValue> PrefixedOrVoid_to_abi_value(const PrefixedOrVoid& self);
 
 struct InsideStructWithVoid {
-  td::RefInt256 a;
+  td::int64 a;
   PrefixedOrVoid tail;
 
   struct CreateArgs {
-    td::RefInt256 a;
+    td::int64 a;
     PrefixedOrVoid tail;
   };
   static InsideStructWithVoid create(CreateArgs args);
@@ -1855,7 +1855,7 @@ td::Result<PlainOrVoid> PlainOrVoid_from_slice(vm::CellSlice& cs);
 td::Status PlainOrVoid_store(vm::CellBuilder& cb, const PlainOrVoid& self);
 td::Result<AbiValue> PlainOrVoid_to_abi_value(const PlainOrVoid& self);
 
-using AbiUnion_31 = std::variant<td::RefInt256, std::monostate>;
+using AbiUnion_31 = std::variant<td::int64, std::monostate>;
 td::Result<AbiUnion_31> load_union_31(vm::CellSlice& cs);
 td::Status store_union_31(const AbiUnion_31& u, vm::CellBuilder& cb);
 
@@ -1873,7 +1873,7 @@ td::Result<ThreeWayWithVoid> ThreeWayWithVoid_from_slice(vm::CellSlice& cs);
 td::Status ThreeWayWithVoid_store(vm::CellBuilder& cb, const ThreeWayWithVoid& self);
 td::Result<AbiValue> ThreeWayWithVoid_to_abi_value(const ThreeWayWithVoid& self);
 
-using AbiUnion_33 = std::variant<td::RefInt256, std::monostate, std::monostate>;
+using AbiUnion_33 = std::variant<td::int64, std::monostate, std::monostate>;
 td::Result<AbiUnion_33> load_union_33(vm::CellSlice& cs);
 td::Status store_union_33(const AbiUnion_33& u, vm::CellBuilder& cb);
 
@@ -1882,11 +1882,11 @@ td::Result<Int32OrNullOrVoid> Int32OrNullOrVoid_from_slice(vm::CellSlice& cs);
 td::Status Int32OrNullOrVoid_store(vm::CellBuilder& cb, const Int32OrNullOrVoid& self);
 td::Result<AbiValue> Int32OrNullOrVoid_to_abi_value(const Int32OrNullOrVoid& self);
 
-using AbiUnion_34 = std::variant<td::RefInt256, td::RefInt256>;
+using AbiUnion_34 = std::variant<td::int64, td::int64>;
 td::Result<AbiUnion_34> load_union_34(vm::CellSlice& cs);
 td::Status store_union_34(const AbiUnion_34& u, vm::CellBuilder& cb);
 
-using AbiUnion_36 = std::variant<MaybeJust_int8, td::RefInt256, MaybeNothing>;
+using AbiUnion_36 = std::variant<MaybeJust_int8, td::int64, MaybeNothing>;
 td::Result<AbiUnion_36> load_union_36(vm::CellSlice& cs);
 td::Status store_union_36(const AbiUnion_36& u, vm::CellBuilder& cb);
 
@@ -1913,14 +1913,14 @@ struct MoreTrickyCells_TwoInts32And64_MaybeJust_int8_int16_MaybeNothing {
 };
 
 struct WithMoreTrickyCells {
-  td::RefInt256 before;
+  td::int64 before;
   MoreTrickyCells_TwoInts32And64_MaybeJust_int8_int16_MaybeNothing tricky;
-  td::RefInt256 after;
+  td::int64 after;
 
   struct CreateArgs {
-    td::RefInt256 before;
+    td::int64 before;
     MoreTrickyCells_TwoInts32And64_MaybeJust_int8_int16_MaybeNothing tricky;
-    td::RefInt256 after;
+    td::int64 after;
   };
   static WithMoreTrickyCells create(CreateArgs args);
   static td::Result<WithMoreTrickyCells> from_slice(vm::CellSlice& cs);
@@ -1939,11 +1939,11 @@ td::Result<AbiValue> Either_int8_int256_to_abi_value(const Either_int8_int256& s
 
 struct IntAndEither8OrMaybe256 {
   Either_int8_int256 value;
-  td::RefInt256 op;
+  td::int64 op;
 
   struct CreateArgs {
     Either_int8_int256 value;
-    td::RefInt256 op;
+    td::int64 op;
   };
   static IntAndEither8OrMaybe256 create(CreateArgs args);
   static td::Result<IntAndEither8OrMaybe256> from_slice(vm::CellSlice& cs);
@@ -1983,11 +1983,11 @@ td::Result<AbiValue> Maybe_Maybe_int8_to_abi_value(const Maybe_Maybe_int8& self)
 
 struct IntAndMaybeMaybe8 {
   Maybe_Maybe_int8 value;
-  td::RefInt256 op;
+  td::int64 op;
 
   struct CreateArgs {
     Maybe_Maybe_int8 value;
-    td::RefInt256 op;
+    td::int64 op;
   };
   static IntAndMaybeMaybe8 create(CreateArgs args);
   static td::Result<IntAndMaybeMaybe8> from_slice(vm::CellSlice& cs);

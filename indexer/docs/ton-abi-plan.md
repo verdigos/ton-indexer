@@ -422,6 +422,32 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
 
 ## 6. Wave log (append per wave; status column above updates same commit)
 
+- **W11.5 DONE 2026-07-16** (refinement wave; lead-verified fresh: ctest 2/2 [doctest
+  162 cases / 1579 asserts + gen_check --check], 33 vectors both directions via
+  GENERATED path [368 asserts incl. expect_error], grep AbiInterp clean).
+  **DIRECTION AMENDMENT (user): the interpreter was DEV SCAFFOLDING, never a product
+  feature — end state = PURE CODEGEN.** Supersedes the design doc's "interpreter stays
+  forever as A/B twin" framing (lead's misread of intent; truth was always the TS
+  oracle vectors, and the A/B gate runs generated-vs-vectors directly). Landed:
+  (1) TYPED INT WIDTHS — intN/uintN n≤64 → native td::int64/td::uint64 members
+  (uniformly: fields, container elems, map keys/values); new leaves
+  load/store_{int64,uint64} via native fetch, bit-identical to RefInt256 path (hash-eq
+  units at n=1/32/63/64); coins/varintN/n>64 stay RefInt256 (range-honest); ENUMS stay
+  RefInt256 (bigint-valued free helpers per W11 correction; member shape unaffected);
+  ripple: Custom8 (alias uint8, custom) registry type → td::uint64.
+  (2) INTERPRETER RETIRED — AbiInterp.{h,cpp} + dynamic custom registry + VectorRunner
+  + AbiInterpTest + AbiInterpW9Test DELETED (−3,098 LOC hand-written, net −2,855);
+  single TYPED registry remains; AbiValue RE-SCOPED to test-gate dump + future
+  mch-bridge interchange (not in parse hot path); 2 unique W9 behaviors PORTED to
+  generated path (client_ty_idx cell-side swap incl. static_assert member type;
+  Color declared-not-registered runtime error); all other deletions = dup-of-A/B or
+  interpreter-only concepts (pack-from-AbiValue errors, top-level exotic-reject →
+  bridge concern, noted for W12); ERROR_MAPPING.md re-homed accordingly.
+  (3) to_abi_value slimmed (infallible leaves emit direct add_field, no TRY ceremony).
+  Case count 179→162 with full per-case disposition table in the wave report; usage
+  wart killed: `msg.queryId` is now plain int64 for ≤64-bit fields (was RefInt256
+  ceremony). W11-SHAPE-SPEC §3 amended. STILL PAUSED before W12 per user order.
+
 - **W11 DONE 2026-07-16** (3 sub-stages; final lead-verified: ctest 2/2 [doctest 179
   cases / 2576 asserts + ton_abi_gen_check --check byte-repro of all 17 pairs], all 17
   generated pairs COMPILED into the test exe, 18,308 generated LOC). ton-abi-gen

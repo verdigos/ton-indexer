@@ -36,10 +36,10 @@ td::Status tuple_store(vm::CellBuilder& cb, const tuple& self);
 td::Result<AbiValue> tuple_to_abi_value(const tuple& self);
 
 struct DebugStorage {
-  td::RefInt256 dummy;
+  td::uint64 dummy;
 
   struct CreateArgs {
-    td::RefInt256 dummy;
+    td::uint64 dummy;
   };
   static DebugStorage create(CreateArgs args);
   static td::Result<DebugStorage> from_slice(vm::CellSlice& cs);
@@ -78,14 +78,14 @@ td::Status Sign_store(vm::CellBuilder& cb, const td::RefInt256& self);
 td::Result<AbiValue> Sign_to_abi_value(const td::RefInt256& self);
 
 struct WithCells {
-  std::optional<ton_abi::gen::CellOf<td::RefInt256>> r1;
-  std::optional<ton_abi::gen::CellOf<td::RefInt256>> r2;
+  std::optional<ton_abi::gen::CellOf<td::int64>> r1;
+  std::optional<ton_abi::gen::CellOf<td::int64>> r2;
   ton_abi::gen::CellOf<ton_abi::gen::CellOf<bool>> r3;
   std::vector<ton_abi::gen::CellOf<ton_abi::AbiAddress>> r4;
 
   struct CreateArgs {
-    std::optional<ton_abi::gen::CellOf<td::RefInt256>> r1;
-    std::optional<ton_abi::gen::CellOf<td::RefInt256>> r2;
+    std::optional<ton_abi::gen::CellOf<td::int64>> r1;
+    std::optional<ton_abi::gen::CellOf<td::int64>> r2;
     ton_abi::gen::CellOf<ton_abi::gen::CellOf<bool>> r3;
     std::vector<ton_abi::gen::CellOf<ton_abi::AbiAddress>> r4;
   };
@@ -111,10 +111,10 @@ td::Status ArrayOfInt_store(vm::CellBuilder& cb, const ArrayOfInt& self);
 td::Result<AbiValue> ArrayOfInt_to_abi_value(const ArrayOfInt& self);
 
 struct Wrapper_int32 {
-  td::RefInt256 item;
+  td::int64 item;
 
   struct CreateArgs {
-    td::RefInt256 item;
+    td::int64 item;
   };
   static Wrapper_int32 create(CreateArgs args);
   static td::Result<Wrapper_int32> from_slice(vm::CellSlice& cs);
@@ -176,7 +176,7 @@ struct WithWeirdUnions {
   td::Result<AbiValue> to_abi_value() const;
 };
 
-using AbiUnion_1 = std::variant<td::RefInt256, td::RefInt256>;
+using AbiUnion_1 = std::variant<td::int64, td::int64>;
 td::Result<AbiUnion_1> load_union_1(vm::CellSlice& cs);
 td::Status store_union_1(const AbiUnion_1& u, vm::CellBuilder& cb);
 

@@ -111,6 +111,72 @@ TEST_CASE("uintN: 256-bit max round-trip") {
 }
 
 // ---------------------------------------------------------------------------
+// native int64 / uint64 fast paths (W11.5) -- must be bit-for-bit identical to
+// the RefInt256 path (same wire) at every boundary width the emitter uses.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("load_int64/store_int64: boundaries at n=1,32,63,64, wire == RefInt256 path") {
+  struct Case { int n; long long v; };
+  for (Case c : {Case{1, 0}, Case{1, -1}, Case{8, 127}, Case{8, -128}, Case{32, 2147483647LL},
+                 Case{32, -2147483648LL}, Case{63, (1LL << 62) - 1}, Case{63, -(1LL << 62)},
+                 Case{64, 9223372036854775807LL}, Case{64, -9223372036854775807LL - 1}}) {
+    vm::CellBuilder cb;
+    REQUIRE(store_int64(cb, c.v, c.n).is_ok());
+    auto root = cb.finalize();
+    // wire-identical to the RefInt256 store
+    vm::CellBuilder cb_ref;
+    REQUIRE(store_int(cb_ref, I(c.v), c.n).is_ok());
+    CHECK(root->get_hash() == cb_ref.finalize()->get_hash());
+    auto cs = vm::load_cell_slice(root);
+    auto r = load_int64(cs, c.n);
+    REQUIRE(r.is_ok());
+    CHECK(r.ok() == c.v);
+    CHECK(cs.size() == 0);  // consumed exactly n bits
+  }
+}
+
+TEST_CASE("store_int64: out-of-range rejected, n=1 accepts only {-1,0}") {
+  vm::CellBuilder a; CHECK(store_int64(a, 128, 8).is_error());
+  vm::CellBuilder b; CHECK(store_int64(b, -129, 8).is_error());
+  vm::CellBuilder c; CHECK(store_int64(c, 1, 1).is_error());
+  vm::CellBuilder d; CHECK(store_int64(d, 0, 1).is_ok());
+  vm::CellBuilder e; CHECK(store_int64(e, -1, 1).is_ok());
+}
+
+TEST_CASE("load_int64: truncation and bad width -> error") {
+  vm::CellBuilder cb;
+  REQUIRE(cb.store_long_bool(0, 4));
+  auto cs = vm::load_cell_slice(cb.finalize());
+  CHECK(load_int64(cs, 8).is_error());
+  vm::CellBuilder empty;
+  auto cs2 = vm::load_cell_slice(empty.finalize());
+  CHECK(load_int64(cs2, 65).is_error());  // width out of [1,64]
+}
+
+TEST_CASE("load_uint64/store_uint64: boundaries incl uint64 max, wire == RefInt256 path") {
+  struct Case { int n; unsigned long long v; };
+  for (Case c : {Case{1, 1}, Case{8, 255}, Case{32, 4294967295ULL}, Case{63, (1ULL << 63) - 1},
+                 Case{64, 0xFFFFFFFFFFFFFFFFULL}, Case{64, 0}}) {
+    vm::CellBuilder cb;
+    REQUIRE(store_uint64(cb, c.v, c.n).is_ok());
+    auto root = cb.finalize();
+    vm::CellBuilder cb_ref;
+    REQUIRE(store_uint(cb_ref, Idec(std::to_string(c.v)), c.n).is_ok());
+    CHECK(root->get_hash() == cb_ref.finalize()->get_hash());
+    auto cs = vm::load_cell_slice(root);
+    auto r = load_uint64(cs, c.n);
+    REQUIRE(r.is_ok());
+    CHECK(r.ok() == c.v);
+    CHECK(cs.size() == 0);
+  }
+}
+
+TEST_CASE("store_uint64: overflow rejected") {
+  vm::CellBuilder o; CHECK(store_uint64(o, 256, 8).is_error());
+  vm::CellBuilder p; CHECK(store_uint64(p, (1ULL << 63), 63).is_error());
+}
+
+// ---------------------------------------------------------------------------
 // bool
 // ---------------------------------------------------------------------------
 

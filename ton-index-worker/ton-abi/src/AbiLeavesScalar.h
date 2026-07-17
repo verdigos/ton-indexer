@@ -44,6 +44,17 @@ td::Status store_int(vm::CellBuilder &cb, const td::RefInt256 &v, int n);
 td::Result<td::RefInt256> load_uint(vm::CellSlice &cs, int n);
 td::Status store_uint(vm::CellBuilder &cb, const td::RefInt256 &v, int n);
 
+// Native fast-path overloads for intN/uintN with n in [1,64]: read/write via
+// vm's native fetch_long/store_long (no bignum allocation), bit-for-bit
+// identical to the RefInt256 path above (same wire, same range semantics, same
+// error-text shape). The emitter (ton-abi-gen) maps intN/uintN with n<=64 to
+// td::int64 / td::uint64 struct members and calls these; n>64, varintN,
+// varuintN and coins keep the RefInt256 path.
+td::Result<td::int64> load_int64(vm::CellSlice &cs, int n);
+td::Status store_int64(vm::CellBuilder &cb, td::int64 v, int n);
+td::Result<td::uint64> load_uint64(vm::CellSlice &cs, int n);
+td::Status store_uint64(vm::CellBuilder &cb, td::uint64 v, int n);
+
 // bool: a single bit.
 td::Result<bool> load_bool(vm::CellSlice &cs);
 td::Status store_bool(vm::CellBuilder &cb, bool v);

@@ -21,21 +21,21 @@ NftItemStorageNotInitialized NftItemStorageNotInitialized::create(CreateArgs arg
 
 td::Result<NftItemStorageNotInitialized> NftItemStorageNotInitialized::from_slice(vm::CellSlice& cs) {
   NftItemStorageNotInitialized r;
-  TRY_RESULT_PREFIX_ASSIGN(r.itemIndex, (load_uint(cs, 64)), "NftItemStorageNotInitialized.itemIndex: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.itemIndex, (load_uint64(cs, 64)), "NftItemStorageNotInitialized.itemIndex: ");
   TRY_RESULT_PREFIX_ASSIGN(r.collectionAddress, (load_address(cs)), "NftItemStorageNotInitialized.collectionAddress: ");
   return r;
 }
 
 td::Status NftItemStorageNotInitialized::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_uint(cb, this->itemIndex, 64));
+  TRY_STATUS(store_uint64(cb, this->itemIndex, 64));
   TRY_STATUS(store_address(cb, this->collectionAddress));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> NftItemStorageNotInitialized::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("NftItemStorageNotInitialized");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->itemIndex)))); r.add_field("itemIndex", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->collectionAddress)))); r.add_field("collectionAddress", std::move(__f)); }
+  r.add_field("itemIndex", ton_abi::gen::abi_v_int(this->itemIndex));
+  r.add_field("collectionAddress", ton_abi::gen::abi_v_address(this->collectionAddress));
   return r;
 }
 

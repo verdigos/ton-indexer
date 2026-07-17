@@ -137,7 +137,7 @@ function roundTripCheckOrThrow(ctx, abi, structTyIdx, obj, expectHex) {
 // resolution-aware, unlike the W0 pair above which only ever saw plain
 // scalar-only structs). These mirror the C++ AbiValue::to_json() schema
 // exactly (§0.14) so the golden `value` these vectors carry is what the
-// C++ AbiInterp walker + AbiValue dump must reproduce.
+// C++ generated struct to_abi_value() + AbiValue dump must reproduce.
 //
 // Design choice: `value` is always derived from the ORACLE's OWN unpack of
 // the packed bytes (not from the raw sample fed into pack) -- this sidesteps
@@ -179,7 +179,7 @@ const kMaxDepth = 6;
 // LotsOfWrappers.spec.ts:243-380 (the ones that have a real fixture struct to
 // hang a vector off of -- Tensor3Skipping1/Color/OnlyWithPack/OnlyWithUnpack
 // have no wrapping struct in this fixture and are covered by native C++ units
-// in AbiInterpW9Test.cpp only). Gated BEFORE normal StructRef/AliasRef
+// in test/AbiABGateTest.cpp only). Gated BEFORE normal StructRef/AliasRef
 // resolution in sampleValue/toValueJsonFull/fromValueJsonFull, mirroring the
 // custom-gate-before-resolution invariant (W2 invariant ii) the C++ walker
 // follows.
@@ -714,7 +714,7 @@ async function main() {
         // non-idempotent (pack(20n) -> tag1 -> unpack -> 10n, but
         // pack(10n) -> tag2, NOT tag1 -- 10 is not a fixed point), which
         // breaks the vector harness's own round-trip self-check by design.
-        // Covered correctly by the native unit in AbiInterpW9Test.cpp instead.
+        // Covered correctly by the native unit in test/AbiABGateTest.cpp instead.
         vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'StorWithStr'));    // TelegramString field
         vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'PointWithCustomInt'));  // Custom8 field
         vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'CustomPoint'));    // custom struct itself

@@ -57,10 +57,10 @@ struct Transfer {
 };
 
 struct Out2 {
-  td::RefInt256 v2;
+  td::int64 v2;
 
   struct CreateArgs {
-    td::RefInt256 v2;
+    td::int64 v2;
   };
   static Out2 create(CreateArgs args);
   static td::Result<Out2> from_slice(vm::CellSlice& cs);
@@ -69,10 +69,10 @@ struct Out2 {
 };
 
 struct OutExt4 {
-  td::RefInt256 v4;
+  td::int64 v4;
 
   struct CreateArgs {
-    td::RefInt256 v4;
+    td::int64 v4;
   };
   static OutExt4 create(CreateArgs args);
   static td::Result<OutExt4> from_slice(vm::CellSlice& cs);
@@ -95,11 +95,11 @@ struct MyStorage {
 };
 
 struct ActualExternalShape {
-  td::RefInt256 v;
+  td::int64 v;
   td::Ref<vm::CellSlice> sign;
 
   struct CreateArgs {
-    td::RefInt256 v;
+    td::int64 v;
     td::Ref<vm::CellSlice> sign;
   };
   static ActualExternalShape create(CreateArgs args);
@@ -111,12 +111,12 @@ struct ActualExternalShape {
 struct ResetTo_int32 {
   static constexpr td::uint64 PREFIX = 591751049ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 counter_id;
-  td::RefInt256 reset_to;
+  td::int64 counter_id;
+  td::int64 reset_to;
 
   struct CreateArgs {
-    td::RefInt256 counter_id;
-    td::RefInt256 reset_to;
+    td::int64 counter_id;
+    td::int64 reset_to;
   };
   static ResetTo_int32 create(CreateArgs args);
   static td::Result<ResetTo_int32> from_slice(vm::CellSlice& cs);
@@ -125,10 +125,10 @@ struct ResetTo_int32 {
 };
 
 struct Out3_int8_int16 {
-  std::tuple<td::RefInt256, td::RefInt256> payload;
+  std::tuple<td::int64, td::int64> payload;
 
   struct CreateArgs {
-    std::tuple<td::RefInt256, td::RefInt256> payload;
+    std::tuple<td::int64, td::int64> payload;
   };
   static Out3_int8_int16 create(CreateArgs args);
   static td::Result<Out3_int8_int16> from_slice(vm::CellSlice& cs);

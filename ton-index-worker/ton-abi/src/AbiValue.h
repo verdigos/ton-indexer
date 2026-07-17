@@ -1,9 +1,11 @@
 #pragma once
 
-// AbiValue: the interpreter's value tree (W8, T8.1). A standalone, protocol-
-// agnostic tagged tree that any unpacked message body becomes, and that pack
-// consumes -- the single currency between AbiInterp (W8.2) and callers/tests.
-// Also owns the canonical JSON dump (docs/ton-abi-plan.md §0.14 / W8-HANDOFF.md
+// AbiValue: a standalone, protocol-agnostic tagged value tree. Re-scoped at
+// W11.5 (interpreter removed): it is now (a) the medium every generated
+// struct's to_abi_value() dumps into -- the A/B gate compares that dump against
+// the TS oracle vectors -- and (b) the interchange type the future mch bridge
+// (W12) will adapt into mch::Value. Nothing in the parse hot path.
+// Owns the canonical JSON dump (docs/ton-abi-plan.md §0.14 / W8-HANDOFF.md
 // point 5-9,12), which is the format the conformance vectors compare against.
 //
 // Kind -> payload -> JSON dump:

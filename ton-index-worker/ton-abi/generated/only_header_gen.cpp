@@ -21,19 +21,19 @@ InMsgA InMsgA::create(CreateArgs args) {
 td::Result<InMsgA> InMsgA::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "InMsgA: ");
   InMsgA r;
-  TRY_RESULT_PREFIX_ASSIGN(r.fieldA, (load_int(cs, 32)), "InMsgA.fieldA: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.fieldA, (load_int64(cs, 32)), "InMsgA.fieldA: ");
   return r;
 }
 
 td::Status InMsgA::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_int(cb, this->fieldA, 32));
+  TRY_STATUS(store_int64(cb, this->fieldA, 32));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> InMsgA::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("InMsgA");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->fieldA)))); r.add_field("fieldA", std::move(__f)); }
+  r.add_field("fieldA", ton_abi::gen::abi_v_int(this->fieldA));
   return r;
 }
 
@@ -46,19 +46,19 @@ InMsgB InMsgB::create(CreateArgs args) {
 td::Result<InMsgB> InMsgB::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "InMsgB: ");
   InMsgB r;
-  TRY_RESULT_PREFIX_ASSIGN(r.fieldB, (load_int(cs, 64)), "InMsgB.fieldB: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.fieldB, (load_int64(cs, 64)), "InMsgB.fieldB: ");
   return r;
 }
 
 td::Status InMsgB::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_int(cb, this->fieldB, 64));
+  TRY_STATUS(store_int64(cb, this->fieldB, 64));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> InMsgB::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("InMsgB");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->fieldB)))); r.add_field("fieldB", std::move(__f)); }
+  r.add_field("fieldB", ton_abi::gen::abi_v_int(this->fieldB));
   return r;
 }
 
@@ -71,19 +71,19 @@ OutMsgA OutMsgA::create(CreateArgs args) {
 td::Result<OutMsgA> OutMsgA::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "OutMsgA: ");
   OutMsgA r;
-  TRY_RESULT_PREFIX_ASSIGN(r.fieldA, (load_int(cs, 32)), "OutMsgA.fieldA: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.fieldA, (load_int64(cs, 32)), "OutMsgA.fieldA: ");
   return r;
 }
 
 td::Status OutMsgA::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_int(cb, this->fieldA, 32));
+  TRY_STATUS(store_int64(cb, this->fieldA, 32));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> OutMsgA::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("OutMsgA");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->fieldA)))); r.add_field("fieldA", std::move(__f)); }
+  r.add_field("fieldA", ton_abi::gen::abi_v_int(this->fieldA));
   return r;
 }
 
@@ -96,19 +96,19 @@ OutMsgB OutMsgB::create(CreateArgs args) {
 td::Result<OutMsgB> OutMsgB::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "OutMsgB: ");
   OutMsgB r;
-  TRY_RESULT_PREFIX_ASSIGN(r.fieldB, (load_int(cs, 64)), "OutMsgB.fieldB: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.fieldB, (load_int64(cs, 64)), "OutMsgB.fieldB: ");
   return r;
 }
 
 td::Status OutMsgB::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_int(cb, this->fieldB, 64));
+  TRY_STATUS(store_int64(cb, this->fieldB, 64));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> OutMsgB::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("OutMsgB");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->fieldB)))); r.add_field("fieldB", std::move(__f)); }
+  r.add_field("fieldB", ton_abi::gen::abi_v_int(this->fieldB));
   return r;
 }
 
@@ -144,7 +144,7 @@ td::Status OutMsgExtA::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> OutMsgExtA::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("OutMsgExtA");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_cell(this->value)))); r.add_field("value", std::move(__f)); }
+  r.add_field("value", ton_abi::gen::abi_v_cell(this->value));
   return r;
 }
 
@@ -186,9 +186,9 @@ td::Status CalcSwapCostReply::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> CalcSwapCostReply::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("CalcSwapCostReply");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->from)))); r.add_field("from", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->to)))); r.add_field("to", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->cost)))); r.add_field("cost", std::move(__f)); }
+  r.add_field("from", ton_abi::gen::abi_v_address(this->from));
+  r.add_field("to", ton_abi::gen::abi_v_address(this->to));
+  r.add_field("cost", ton_abi::gen::abi_v_int(this->cost));
   return r;
 }
 

@@ -138,6 +138,61 @@ td::Status store_uint(vm::CellBuilder &cb, const td::RefInt256 &v, int n) {
   return td::Status::OK();
 }
 
+// ---- native int64 / uint64 fast paths (n in [1,64]) ----
+// Bit-for-bit identical to load_int/store_int/load_uint/store_uint above, but
+// over long long / unsigned long long via vm's native fetch_long/store_long --
+// no RefInt256 allocation. Range + error-text semantics mirror the RefInt256
+// path (store_long_rchk_bool / store_ulong_rchk_bool are the signed/unsigned
+// range-checked stores; bits==1 signed accepts only {-1,0}, same as writeInt).
+
+td::Result<td::int64> load_int64(vm::CellSlice &cs, int n) {
+  if (n < 1 || n > 64) {
+    return td::Status::Error(PSLICE() << "intN: width " << n << " out of [1,64]");
+  }
+  if (!cs.have(static_cast<unsigned>(n))) {
+    return td::Status::Error(PSLICE() << "intN: not enough bits for int" << n);
+  }
+  long long v = 0;
+  if (!cs.fetch_long_bool(static_cast<unsigned>(n), v)) {
+    return td::Status::Error(PSLICE() << "intN: failed to fetch int" << n);
+  }
+  return static_cast<td::int64>(v);
+}
+
+td::Status store_int64(vm::CellBuilder &cb, td::int64 v, int n) {
+  if (n < 1 || n > 64) {
+    return td::Status::Error(PSLICE() << "intN: width " << n << " out of [1,64]");
+  }
+  if (!cb.store_long_rchk_bool(static_cast<long long>(v), static_cast<unsigned>(n))) {
+    return td::Status::Error(PSLICE() << "intN: value out of range for int" << n << " (or cell overflow)");
+  }
+  return td::Status::OK();
+}
+
+td::Result<td::uint64> load_uint64(vm::CellSlice &cs, int n) {
+  if (n < 1 || n > 64) {
+    return td::Status::Error(PSLICE() << "uintN: width " << n << " out of [1,64]");
+  }
+  if (!cs.have(static_cast<unsigned>(n))) {
+    return td::Status::Error(PSLICE() << "uintN: not enough bits for uint" << n);
+  }
+  unsigned long long v = 0;
+  if (!cs.fetch_ulong_bool(static_cast<unsigned>(n), v)) {
+    return td::Status::Error(PSLICE() << "uintN: failed to fetch uint" << n);
+  }
+  return static_cast<td::uint64>(v);
+}
+
+td::Status store_uint64(vm::CellBuilder &cb, td::uint64 v, int n) {
+  if (n < 1 || n > 64) {
+    return td::Status::Error(PSLICE() << "uintN: width " << n << " out of [1,64]");
+  }
+  if (!cb.store_ulong_rchk_bool(static_cast<unsigned long long>(v), static_cast<unsigned>(n))) {
+    return td::Status::Error(PSLICE() << "uintN: value out of range for uint" << n << " (or cell overflow)");
+  }
+  return td::Status::OK();
+}
+
 // ---- bool ----
 
 td::Result<bool> load_bool(vm::CellSlice &cs) {

@@ -75,12 +75,12 @@ struct PackOptions {
 };
 
 struct Storage_me {
-  td::RefInt256 id;
-  td::RefInt256 counter;
+  td::uint64 id;
+  td::uint64 counter;
 
   struct CreateArgs {
-    td::RefInt256 id;
-    td::RefInt256 counter;
+    td::uint64 id;
+    td::uint64 counter;
   };
   static Storage_me create(CreateArgs args);
   static td::Result<Storage_me> from_slice(vm::CellSlice& cs);
@@ -91,12 +91,12 @@ struct Storage_me {
 struct IncreaseCounter {
   static constexpr td::uint64 PREFIX = 2122802415ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
-  td::RefInt256 increaseBy;
+  td::uint64 queryId;
+  td::uint64 increaseBy;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
-    td::RefInt256 increaseBy;
+    td::uint64 queryId;
+    td::uint64 increaseBy;
   };
   static IncreaseCounter create(CreateArgs args);
   static td::Result<IncreaseCounter> from_slice(vm::CellSlice& cs);
@@ -158,7 +158,7 @@ td::Result<td::RefInt256> E0Max_from_slice(vm::CellSlice& cs);
 td::Status E0Max_store(vm::CellBuilder& cb, const td::RefInt256& self);
 td::Result<AbiValue> E0Max_to_abi_value(const td::RefInt256& self);
 
-using MyInt32 = td::RefInt256;
+using MyInt32 = td::int64;
 td::Result<MyInt32> MyInt32_from_slice(vm::CellSlice& cs);
 td::Status MyInt32_store(vm::CellBuilder& cb, const MyInt32& self);
 td::Result<AbiValue> MyInt32_to_abi_value(const MyInt32& self);
@@ -198,10 +198,10 @@ td::Result<AbiValue> CrazyUnionN_to_abi_value(const CrazyUnionN& self);
 struct ResetCounter {
   static constexpr td::uint64 PREFIX = 980758278ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
   };
   static ResetCounter create(CreateArgs args);
   static td::Result<ResetCounter> from_slice(vm::CellSlice& cs);
@@ -217,10 +217,10 @@ td::Result<AbiValue> ResetCounterAlias_to_abi_value(const ResetCounterAlias& sel
 struct TransferNotification_uint32 {
   static constexpr td::uint64 PREFIX = 4042322160ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 payload;
+  td::uint64 payload;
 
   struct CreateArgs {
-    td::RefInt256 payload;
+    td::uint64 payload;
   };
   static TransferNotification_uint32 create(CreateArgs args);
   static td::Result<TransferNotification_uint32> from_slice(vm::CellSlice& cs);
@@ -275,10 +275,10 @@ struct WithWrapper_Wrapper_bool {
 };
 
 struct Wrapper_int32 {
-  td::RefInt256 item;
+  td::int64 item;
 
   struct CreateArgs {
-    td::RefInt256 item;
+    td::int64 item;
   };
   static Wrapper_int32 create(CreateArgs args);
   static td::Result<Wrapper_int32> from_slice(vm::CellSlice& cs);
@@ -287,10 +287,10 @@ struct Wrapper_int32 {
 };
 
 struct Wrapper_int64 {
-  td::RefInt256 item;
+  td::int64 item;
 
   struct CreateArgs {
-    td::RefInt256 item;
+    td::int64 item;
   };
   static Wrapper_int64 create(CreateArgs args);
   static td::Result<Wrapper_int64> from_slice(vm::CellSlice& cs);
@@ -369,10 +369,10 @@ struct Wrapper_Point {
 };
 
 struct Wrapper_array_int32 {
-  std::vector<td::RefInt256> item;
+  std::vector<td::int64> item;
 
   struct CreateArgs {
-    std::vector<td::RefInt256> item;
+    std::vector<td::int64> item;
   };
   static Wrapper_array_int32 create(CreateArgs args);
   static td::Result<Wrapper_array_int32> from_slice(vm::CellSlice& cs);
@@ -484,7 +484,7 @@ struct WithWeirdUnions {
   td::Result<AbiValue> to_abi_value() const;
 };
 
-using AbiUnion_1 = std::variant<td::RefInt256, td::RefInt256>;
+using AbiUnion_1 = std::variant<td::int64, td::int64>;
 td::Result<AbiUnion_1> load_union_1(vm::CellSlice& cs);
 td::Status store_union_1(const AbiUnion_1& u, vm::CellBuilder& cb);
 
@@ -510,7 +510,7 @@ struct WithCells {
   td::Result<AbiValue> to_abi_value() const;
 };
 
-using AbiUnion_2 = std::variant<td::RefInt256, td::RefInt256, IncreaseCounter>;
+using AbiUnion_2 = std::variant<td::int64, td::int64, IncreaseCounter>;
 td::Result<AbiUnion_2> load_union_2(vm::CellSlice& cs);
 td::Status store_union_2(const AbiUnion_2& u, vm::CellBuilder& cb);
 

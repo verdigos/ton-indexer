@@ -32,18 +32,18 @@ DebugStorage DebugStorage::create(CreateArgs args) {
 
 td::Result<DebugStorage> DebugStorage::from_slice(vm::CellSlice& cs) {
   DebugStorage r;
-  TRY_RESULT_PREFIX_ASSIGN(r.dummy, (load_uint(cs, 32)), "DebugStorage.dummy: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.dummy, (load_uint64(cs, 32)), "DebugStorage.dummy: ");
   return r;
 }
 
 td::Status DebugStorage::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_uint(cb, this->dummy, 32));
+  TRY_STATUS(store_uint64(cb, this->dummy, 32));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> DebugStorage::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("DebugStorage");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->dummy)))); r.add_field("dummy", std::move(__f)); }
+  r.add_field("dummy", ton_abi::gen::abi_v_int(this->dummy));
   return r;
 }
 
@@ -120,43 +120,43 @@ WithCells WithCells::create(CreateArgs args) {
 
 td::Result<WithCells> WithCells::from_slice(vm::CellSlice& cs) {
   WithCells r;
-  TRY_RESULT_PREFIX_ASSIGN(r.r1, ([&]() -> td::Result<std::optional<ton_abi::gen::CellOf<td::RefInt256>>> {
+  TRY_RESULT_PREFIX_ASSIGN(r.r1, ([&]() -> td::Result<std::optional<ton_abi::gen::CellOf<td::int64>>> {
     auto __rp1 = (load_maybe_prefix(cs));
     if (__rp1.is_error()) { return __rp1.move_as_error(); }
     auto __pres1 = __rp1.move_as_ok();
-    if (!__pres1) { return std::optional<ton_abi::gen::CellOf<td::RefInt256>>(); }
-    auto __r1 = ([&]() -> td::Result<ton_abi::gen::CellOf<td::RefInt256>> {
+    if (!__pres1) { return std::optional<ton_abi::gen::CellOf<td::int64>>(); }
+    auto __r1 = ([&]() -> td::Result<ton_abi::gen::CellOf<td::int64>> {
     auto __rr2 = (load_ref_slice(cs));
     if (__rr2.is_error()) { return __rr2.move_as_error(); }
     auto __rs2 = __rr2.move_as_ok();
     vm::CellSlice __cs2 = *__rs2;
-    auto __rc2 = (load_int(__cs2, 32));
+    auto __rc2 = (load_int64(__cs2, 32));
     if (__rc2.is_error()) { return __rc2.move_as_error(); }
     auto __cv2 = __rc2.move_as_ok();
-    return ton_abi::gen::CellOf<td::RefInt256>{std::make_shared<td::RefInt256>(std::move(__cv2))};
+    return ton_abi::gen::CellOf<td::int64>{std::make_shared<td::int64>(std::move(__cv2))};
   }());
     if (__r1.is_error()) { return __r1.move_as_error(); }
     auto __nv1 = __r1.move_as_ok();
-    return std::optional<ton_abi::gen::CellOf<td::RefInt256>>(std::move(__nv1));
+    return std::optional<ton_abi::gen::CellOf<td::int64>>(std::move(__nv1));
   }()), "WithCells.r1: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.r2, ([&]() -> td::Result<std::optional<ton_abi::gen::CellOf<td::RefInt256>>> {
+  TRY_RESULT_PREFIX_ASSIGN(r.r2, ([&]() -> td::Result<std::optional<ton_abi::gen::CellOf<td::int64>>> {
     auto __rp3 = (load_maybe_prefix(cs));
     if (__rp3.is_error()) { return __rp3.move_as_error(); }
     auto __pres3 = __rp3.move_as_ok();
-    if (!__pres3) { return std::optional<ton_abi::gen::CellOf<td::RefInt256>>(); }
-    auto __r3 = ([&]() -> td::Result<ton_abi::gen::CellOf<td::RefInt256>> {
+    if (!__pres3) { return std::optional<ton_abi::gen::CellOf<td::int64>>(); }
+    auto __r3 = ([&]() -> td::Result<ton_abi::gen::CellOf<td::int64>> {
     auto __rr4 = (load_ref_slice(cs));
     if (__rr4.is_error()) { return __rr4.move_as_error(); }
     auto __rs4 = __rr4.move_as_ok();
     vm::CellSlice __cs4 = *__rs4;
-    auto __rc4 = (load_int(__cs4, 32));
+    auto __rc4 = (load_int64(__cs4, 32));
     if (__rc4.is_error()) { return __rc4.move_as_error(); }
     auto __cv4 = __rc4.move_as_ok();
-    return ton_abi::gen::CellOf<td::RefInt256>{std::make_shared<td::RefInt256>(std::move(__cv4))};
+    return ton_abi::gen::CellOf<td::int64>{std::make_shared<td::int64>(std::move(__cv4))};
   }());
     if (__r3.is_error()) { return __r3.move_as_error(); }
     auto __nv3 = __r3.move_as_ok();
-    return std::optional<ton_abi::gen::CellOf<td::RefInt256>>(std::move(__nv3));
+    return std::optional<ton_abi::gen::CellOf<td::int64>>(std::move(__nv3));
   }()), "WithCells.r2: ");
   TRY_RESULT_PREFIX_ASSIGN(r.r3, ([&]() -> td::Result<ton_abi::gen::CellOf<ton_abi::gen::CellOf<bool>>> {
     auto __rr5 = (load_ref_slice(cs));
@@ -205,7 +205,7 @@ td::Status WithCells::store(vm::CellBuilder& cb) const {
     TRY_STATUS(store_maybe_prefix(cb, true));
     {
     vm::CellBuilder __icb9;
-    TRY_STATUS(store_int(__icb9, (*((*this->r1).ref)), 32));
+    TRY_STATUS(store_int64(__icb9, (*((*this->r1).ref)), 32));
     { auto __cs9 = (store_cell(cb, __icb9.finalize())); if (__cs9.is_error()) { return __cs9; } }
   }
   } else {
@@ -215,7 +215,7 @@ td::Status WithCells::store(vm::CellBuilder& cb) const {
     TRY_STATUS(store_maybe_prefix(cb, true));
     {
     vm::CellBuilder __icb10;
-    TRY_STATUS(store_int(__icb10, (*((*this->r2).ref)), 32));
+    TRY_STATUS(store_int64(__icb10, (*((*this->r2).ref)), 32));
     { auto __cs10 = (store_cell(cb, __icb10.finalize())); if (__cs10.is_error()) { return __cs10; } }
   }
   } else {
@@ -352,18 +352,18 @@ Wrapper_int32 Wrapper_int32::create(CreateArgs args) {
 
 td::Result<Wrapper_int32> Wrapper_int32::from_slice(vm::CellSlice& cs) {
   Wrapper_int32 r;
-  TRY_RESULT_PREFIX_ASSIGN(r.item, (load_int(cs, 32)), "Wrapper.item: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.item, (load_int64(cs, 32)), "Wrapper.item: ");
   return r;
 }
 
 td::Status Wrapper_int32::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_int(cb, this->item, 32));
+  TRY_STATUS(store_int64(cb, this->item, 32));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> Wrapper_int32::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("Wrapper");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->item)))); r.add_field("item", std::move(__f)); }
+  r.add_field("item", ton_abi::gen::abi_v_int(this->item));
   return r;
 }
 
@@ -413,7 +413,7 @@ td::Status Wrapper_bool::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> Wrapper_bool::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("Wrapper");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_bool(this->item)))); r.add_field("item", std::move(__f)); }
+  r.add_field("item", ton_abi::gen::abi_v_bool(this->item));
   return r;
 }
 
@@ -508,13 +508,13 @@ td::Result<AbiUnion_1> load_union_1(vm::CellSlice& cs) {
   const bool __empty = cs.size() == 0 && cs.size_refs() == 0;
   if (lookup_prefix(cs, 0ULL, 1)) {
     if (!cs.advance(1)) { return td::Status::Error("union: truncated implicit prefix"); }
-    TRY_RESULT(__v, (load_int(cs, 8)));
+    TRY_RESULT(__v, (load_int64(cs, 8)));
     __u.emplace<0>(std::move(__v));
     return __u;
   }
   if (lookup_prefix(cs, 1ULL, 1)) {
     if (!cs.advance(1)) { return td::Status::Error("union: truncated implicit prefix"); }
-    TRY_RESULT(__v, (load_int(cs, 16)));
+    TRY_RESULT(__v, (load_int64(cs, 16)));
     __u.emplace<1>(std::move(__v));
     return __u;
   }
@@ -525,12 +525,12 @@ td::Status store_union_1(const AbiUnion_1& u, vm::CellBuilder& cb) {
   switch (u.index()) {
     case 0: {
       TRY_STATUS(store_prefix(cb, 0ULL, 1));
-      TRY_STATUS(store_int(cb, std::get<0>(u), 8));
+      TRY_STATUS(store_int64(cb, std::get<0>(u), 8));
       return td::Status::OK();
     }
     case 1: {
       TRY_STATUS(store_prefix(cb, 1ULL, 1));
-      TRY_STATUS(store_int(cb, std::get<1>(u), 16));
+      TRY_STATUS(store_int64(cb, std::get<1>(u), 16));
       return td::Status::OK();
     }
     default: return td::Status::Error("union: invalid variant index");

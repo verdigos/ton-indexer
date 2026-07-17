@@ -21,21 +21,21 @@ Inner Inner::create(CreateArgs args) {
 
 td::Result<Inner> Inner::from_slice(vm::CellSlice& cs) {
   Inner r;
-  TRY_RESULT_PREFIX_ASSIGN(r.in1, (load_int(cs, 32)), "Inner.in1: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.in1, (load_int64(cs, 32)), "Inner.in1: ");
   TRY_RESULT_PREFIX_ASSIGN(r.in2, (load_bool(cs)), "Inner.in2: ");
   return r;
 }
 
 td::Status Inner::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_int(cb, this->in1, 32));
+  TRY_STATUS(store_int64(cb, this->in1, 32));
   TRY_STATUS(store_bool(cb, this->in2));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> Inner::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("Inner");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->in1)))); r.add_field("in1", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_bool(this->in2)))); r.add_field("in2", std::move(__f)); }
+  r.add_field("in1", ton_abi::gen::abi_v_int(this->in1));
+  r.add_field("in2", ton_abi::gen::abi_v_bool(this->in2));
   return r;
 }
 
@@ -67,13 +67,13 @@ td::Result<AbiValue> E0Max_to_abi_value(const td::RefInt256& self) {
 
 StWithAllDefaults StWithAllDefaults::create(CreateArgs args) {
   StWithAllDefaults r;
-  r.i1 = args.i1 ? std::move(*args.i1) : td::dec_string_to_int256(std::string("0"));
+  r.i1 = args.i1 ? std::move(*args.i1) : static_cast<td::int64>(0LL);
   r.i2 = args.i2 ? std::move(*args.i2) : td::dec_string_to_int256(std::string("50000000"));
-  r.i3 = args.i3 ? std::move(*args.i3) : td::dec_string_to_int256(std::string("1"));
-  r.i4 = args.i4 ? std::move(*args.i4) : td::dec_string_to_int256(std::string("2"));
+  r.i3 = args.i3 ? std::move(*args.i3) : static_cast<td::int64>(1LL);
+  r.i4 = args.i4 ? std::move(*args.i4) : static_cast<td::int64>(2LL);
   r.i5 = args.i5 ? std::move(*args.i5) : td::dec_string_to_int256(std::string("1267650600228229401496703205376"));
   r.i6 = args.i6 ? std::move(*args.i6) : td::dec_string_to_int256(std::string("-1267650600228229401496703205375"));
-  r.i7 = args.i7 ? std::move(*args.i7) : std::optional<td::RefInt256>();
+  r.i7 = args.i7 ? std::move(*args.i7) : std::optional<td::int64>();
   r.e1 = args.e1 ? std::move(*args.e1) : td::dec_string_to_int256(std::string("1"));
   r.e2 = args.e2 ? std::move(*args.e2) : td::dec_string_to_int256(std::string("115792089237316195423570985008687907853269984665640564039457584007913129639935"));
   r.b1 = args.b1 ? std::move(*args.b1) : true;
@@ -89,37 +89,37 @@ StWithAllDefaults StWithAllDefaults::create(CreateArgs args) {
   r.a3 = args.a3 ? std::move(*args.a3) : ton_abi::AbiAddress{};
   r.a4 = args.a4 ? std::move(*args.a4) : ton_abi::gen::address_from_string("EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c");
   r.a5 = args.a5 ? std::move(*args.a5) : std::optional<ton_abi::AbiAddress>();
-  r.t1 = args.t1 ? std::move(*args.t1) : std::optional<std::tuple<td::RefInt256, td::RefInt256, td::RefInt256>>(std::tuple<td::RefInt256, td::RefInt256, td::RefInt256>(td::dec_string_to_int256(std::string("1")), td::dec_string_to_int256(std::string("2")), td::dec_string_to_int256(std::string("3"))));
+  r.t1 = args.t1 ? std::move(*args.t1) : std::optional<std::tuple<td::int64, td::int64, td::int64>>(std::tuple<td::int64, td::int64, td::int64>(static_cast<td::int64>(1LL), static_cast<td::int64>(2LL), static_cast<td::int64>(3LL)));
   r.t2 = args.t2 ? std::move(*args.t2) : std::tuple<td::Ref<vm::CellSlice>, ton_abi::AbiAddress, td::RefInt256>(ton_abi::gen::bits_from_hex(""), ton_abi::gen::address_from_string("9:527964d55cfa6eb731f4bfc07e9d025098097ef8505519e853986279bd8400d8"), td::dec_string_to_int256(std::string("1000000")));
-  r.t3 = args.t3 ? std::move(*args.t3) : std::tuple<std::optional<td::RefInt256>, std::tuple<td::RefInt256, td::RefInt256>>(std::optional<td::RefInt256>(), std::tuple<td::RefInt256, td::RefInt256>(td::dec_string_to_int256(std::string("20")), td::dec_string_to_int256(std::string("30"))));
-  r.t4 = args.t4 ? std::move(*args.t4) : std::tuple<td::RefInt256, td::RefInt256, td::RefInt256, td::RefInt256, td::RefInt256>(td::dec_string_to_int256(std::string("907060870")), td::dec_string_to_int256(std::string("50018")), td::dec_string_to_int256(std::string("20329878786436204988385760252021328656300425018755239228739303522659023427620")), td::dec_string_to_int256(std::string("754077114")), td::dec_string_to_int256(std::string("448378203247")));
-  r.t5 = args.t5 ? std::move(*args.t5) : std::optional<std::tuple<td::RefInt256, td::RefInt256>>();
-  r.sh1 = args.sh1 ? std::move(*args.sh1) : std::tuple<td::RefInt256, std::optional<bool>>(td::dec_string_to_int256(std::string("1")), std::optional<bool>());
-  r.sh2 = args.sh2 ? std::move(*args.sh2) : std::tuple<std::tuple<td::RefInt256, std::optional<bool>>, std::tuple<std::string>>(std::tuple<td::RefInt256, std::optional<bool>>(td::dec_string_to_int256(std::string("1")), std::optional<bool>()), std::tuple<std::string>(std::string("10")));
-  r.arr1 = args.arr1 ? std::move(*args.arr1) : std::tuple<std::vector<td::RefInt256>, std::vector<td::RefInt256>>(std::vector<td::RefInt256>{td::dec_string_to_int256(std::string("1")), td::dec_string_to_int256(std::string("2")), td::dec_string_to_int256(std::string("3"))}, std::vector<td::RefInt256>{td::dec_string_to_int256(std::string("4")), td::dec_string_to_int256(std::string("5")), td::dec_string_to_int256(std::string("6"))});
-  r.o1 = args.o1 ? std::move(*args.o1) : Inner{td::dec_string_to_int256(std::string("1")), false};
-  r.o2 = args.o2 ? std::move(*args.o2) : std::optional<Inner>(Inner{td::dec_string_to_int256(std::string("2")), true});
+  r.t3 = args.t3 ? std::move(*args.t3) : std::tuple<std::optional<td::int64>, std::tuple<td::int64, td::int64>>(std::optional<td::int64>(), std::tuple<td::int64, td::int64>(static_cast<td::int64>(20LL), static_cast<td::int64>(30LL)));
+  r.t4 = args.t4 ? std::move(*args.t4) : std::tuple<td::uint64, td::uint64, td::RefInt256, td::uint64, td::RefInt256>(static_cast<td::uint64>(907060870ULL), static_cast<td::uint64>(50018ULL), td::dec_string_to_int256(std::string("20329878786436204988385760252021328656300425018755239228739303522659023427620")), static_cast<td::uint64>(754077114ULL), td::dec_string_to_int256(std::string("448378203247")));
+  r.t5 = args.t5 ? std::move(*args.t5) : std::optional<std::tuple<td::int64, td::int64>>();
+  r.sh1 = args.sh1 ? std::move(*args.sh1) : std::tuple<td::int64, std::optional<bool>>(static_cast<td::int64>(1LL), std::optional<bool>());
+  r.sh2 = args.sh2 ? std::move(*args.sh2) : std::tuple<std::tuple<td::int64, std::optional<bool>>, std::tuple<std::string>>(std::tuple<td::int64, std::optional<bool>>(static_cast<td::int64>(1LL), std::optional<bool>()), std::tuple<std::string>(std::string("10")));
+  r.arr1 = args.arr1 ? std::move(*args.arr1) : std::tuple<std::vector<td::int64>, std::vector<td::int64>>(std::vector<td::int64>{static_cast<td::int64>(1LL), static_cast<td::int64>(2LL), static_cast<td::int64>(3LL)}, std::vector<td::int64>{static_cast<td::int64>(4LL), static_cast<td::int64>(5LL), static_cast<td::int64>(6LL)});
+  r.o1 = args.o1 ? std::move(*args.o1) : Inner{static_cast<td::int64>(1LL), false};
+  r.o2 = args.o2 ? std::move(*args.o2) : std::optional<Inner>(Inner{static_cast<td::int64>(2LL), true});
   r.o3 = args.o3 ? std::move(*args.o3) : std::optional<Inner>();
   return r;
 }
 
 td::Result<StWithAllDefaults> StWithAllDefaults::from_slice(vm::CellSlice& cs) {
   StWithAllDefaults r;
-  TRY_RESULT_PREFIX_ASSIGN(r.i1, (load_int(cs, 32)), "StWithAllDefaults.i1: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.i1, (load_int64(cs, 32)), "StWithAllDefaults.i1: ");
   TRY_RESULT_PREFIX_ASSIGN(r.i2, (load_coins(cs)), "StWithAllDefaults.i2: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.i3, (load_int(cs, 8)), "StWithAllDefaults.i3: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.i4, (load_int(cs, 32)), "StWithAllDefaults.i4: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.i3, (load_int64(cs, 8)), "StWithAllDefaults.i3: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.i4, (load_int64(cs, 32)), "StWithAllDefaults.i4: ");
   TRY_RESULT_PREFIX_ASSIGN(r.i5, (load_uint(cs, 256)), "StWithAllDefaults.i5: ");
   TRY_RESULT_PREFIX_ASSIGN(r.i6, (load_int(cs, 256)), "StWithAllDefaults.i6: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.i7, ([&]() -> td::Result<std::optional<td::RefInt256>> {
+  TRY_RESULT_PREFIX_ASSIGN(r.i7, ([&]() -> td::Result<std::optional<td::int64>> {
     auto __rp1 = (load_maybe_prefix(cs));
     if (__rp1.is_error()) { return __rp1.move_as_error(); }
     auto __pres1 = __rp1.move_as_ok();
-    if (!__pres1) { return std::optional<td::RefInt256>(); }
-    auto __r1 = (load_int(cs, 8));
+    if (!__pres1) { return std::optional<td::int64>(); }
+    auto __r1 = (load_int64(cs, 8));
     if (__r1.is_error()) { return __r1.move_as_error(); }
     auto __nv1 = __r1.move_as_ok();
-    return std::optional<td::RefInt256>(std::move(__nv1));
+    return std::optional<td::int64>(std::move(__nv1));
   }()), "StWithAllDefaults.i7: ");
   TRY_RESULT_PREFIX_ASSIGN(r.e1, (Color_from_slice(cs)), "StWithAllDefaults.e1: ");
   TRY_RESULT_PREFIX_ASSIGN(r.e2, (E0Max_from_slice(cs)), "StWithAllDefaults.e2: ");
@@ -145,26 +145,26 @@ td::Result<StWithAllDefaults> StWithAllDefaults::from_slice(vm::CellSlice& cs) {
     auto __nv2 = __r2.move_as_ok();
     return std::optional<ton_abi::AbiAddress>(std::move(__nv2));
   }()), "StWithAllDefaults.a5: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.t1, ([&]() -> td::Result<std::optional<std::tuple<td::RefInt256, td::RefInt256, td::RefInt256>>> {
+  TRY_RESULT_PREFIX_ASSIGN(r.t1, ([&]() -> td::Result<std::optional<std::tuple<td::int64, td::int64, td::int64>>> {
     auto __rp3 = (load_maybe_prefix(cs));
     if (__rp3.is_error()) { return __rp3.move_as_error(); }
     auto __pres3 = __rp3.move_as_ok();
-    if (!__pres3) { return std::optional<std::tuple<td::RefInt256, td::RefInt256, td::RefInt256>>(); }
-    auto __r3 = ([&]() -> td::Result<std::tuple<td::RefInt256, td::RefInt256, td::RefInt256>> {
-    auto __rt4_0 = (load_int(cs, 8));
+    if (!__pres3) { return std::optional<std::tuple<td::int64, td::int64, td::int64>>(); }
+    auto __r3 = ([&]() -> td::Result<std::tuple<td::int64, td::int64, td::int64>> {
+    auto __rt4_0 = (load_int64(cs, 8));
     if (__rt4_0.is_error()) { return __rt4_0.move_as_error(); }
     auto __t4_0 = __rt4_0.move_as_ok();
-    auto __rt4_1 = (load_int(cs, 8));
+    auto __rt4_1 = (load_int64(cs, 8));
     if (__rt4_1.is_error()) { return __rt4_1.move_as_error(); }
     auto __t4_1 = __rt4_1.move_as_ok();
-    auto __rt4_2 = (load_int(cs, 8));
+    auto __rt4_2 = (load_int64(cs, 8));
     if (__rt4_2.is_error()) { return __rt4_2.move_as_error(); }
     auto __t4_2 = __rt4_2.move_as_ok();
-    return std::tuple<td::RefInt256, td::RefInt256, td::RefInt256>(std::move(__t4_0), std::move(__t4_1), std::move(__t4_2));
+    return std::tuple<td::int64, td::int64, td::int64>(std::move(__t4_0), std::move(__t4_1), std::move(__t4_2));
   }());
     if (__r3.is_error()) { return __r3.move_as_error(); }
     auto __nv3 = __r3.move_as_ok();
-    return std::optional<std::tuple<td::RefInt256, td::RefInt256, td::RefInt256>>(std::move(__nv3));
+    return std::optional<std::tuple<td::int64, td::int64, td::int64>>(std::move(__nv3));
   }()), "StWithAllDefaults.t1: ");
   TRY_RESULT_PREFIX_ASSIGN(r.t2, ([&]() -> td::Result<std::tuple<td::Ref<vm::CellSlice>, ton_abi::AbiAddress, td::RefInt256>> {
     auto __rt5_0 = (load_remaining(cs));
@@ -178,70 +178,70 @@ td::Result<StWithAllDefaults> StWithAllDefaults::from_slice(vm::CellSlice& cs) {
     auto __t5_2 = __rt5_2.move_as_ok();
     return std::tuple<td::Ref<vm::CellSlice>, ton_abi::AbiAddress, td::RefInt256>(std::move(__t5_0), std::move(__t5_1), std::move(__t5_2));
   }()), "StWithAllDefaults.t2: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.t3, ([&]() -> td::Result<std::tuple<std::optional<td::RefInt256>, std::tuple<td::RefInt256, td::RefInt256>>> {
-    auto __rt6_0 = ([&]() -> td::Result<std::optional<td::RefInt256>> {
+  TRY_RESULT_PREFIX_ASSIGN(r.t3, ([&]() -> td::Result<std::tuple<std::optional<td::int64>, std::tuple<td::int64, td::int64>>> {
+    auto __rt6_0 = ([&]() -> td::Result<std::optional<td::int64>> {
     auto __rp7 = (load_maybe_prefix(cs));
     if (__rp7.is_error()) { return __rp7.move_as_error(); }
     auto __pres7 = __rp7.move_as_ok();
-    if (!__pres7) { return std::optional<td::RefInt256>(); }
-    auto __r7 = (load_int(cs, 8));
+    if (!__pres7) { return std::optional<td::int64>(); }
+    auto __r7 = (load_int64(cs, 8));
     if (__r7.is_error()) { return __r7.move_as_error(); }
     auto __nv7 = __r7.move_as_ok();
-    return std::optional<td::RefInt256>(std::move(__nv7));
+    return std::optional<td::int64>(std::move(__nv7));
   }());
     if (__rt6_0.is_error()) { return __rt6_0.move_as_error(); }
     auto __t6_0 = __rt6_0.move_as_ok();
-    auto __rt6_1 = ([&]() -> td::Result<std::tuple<td::RefInt256, td::RefInt256>> {
-    auto __rt8_0 = (load_int(cs, 8));
+    auto __rt6_1 = ([&]() -> td::Result<std::tuple<td::int64, td::int64>> {
+    auto __rt8_0 = (load_int64(cs, 8));
     if (__rt8_0.is_error()) { return __rt8_0.move_as_error(); }
     auto __t8_0 = __rt8_0.move_as_ok();
-    auto __rt8_1 = (load_int(cs, 8));
+    auto __rt8_1 = (load_int64(cs, 8));
     if (__rt8_1.is_error()) { return __rt8_1.move_as_error(); }
     auto __t8_1 = __rt8_1.move_as_ok();
-    return std::tuple<td::RefInt256, td::RefInt256>(std::move(__t8_0), std::move(__t8_1));
+    return std::tuple<td::int64, td::int64>(std::move(__t8_0), std::move(__t8_1));
   }());
     if (__rt6_1.is_error()) { return __rt6_1.move_as_error(); }
     auto __t6_1 = __rt6_1.move_as_ok();
-    return std::tuple<std::optional<td::RefInt256>, std::tuple<td::RefInt256, td::RefInt256>>(std::move(__t6_0), std::move(__t6_1));
+    return std::tuple<std::optional<td::int64>, std::tuple<td::int64, td::int64>>(std::move(__t6_0), std::move(__t6_1));
   }()), "StWithAllDefaults.t3: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.t4, ([&]() -> td::Result<std::tuple<td::RefInt256, td::RefInt256, td::RefInt256, td::RefInt256, td::RefInt256>> {
-    auto __rt9_0 = (load_uint(cs, 32));
+  TRY_RESULT_PREFIX_ASSIGN(r.t4, ([&]() -> td::Result<std::tuple<td::uint64, td::uint64, td::RefInt256, td::uint64, td::RefInt256>> {
+    auto __rt9_0 = (load_uint64(cs, 32));
     if (__rt9_0.is_error()) { return __rt9_0.move_as_error(); }
     auto __t9_0 = __rt9_0.move_as_ok();
-    auto __rt9_1 = (load_uint(cs, 16));
+    auto __rt9_1 = (load_uint64(cs, 16));
     if (__rt9_1.is_error()) { return __rt9_1.move_as_error(); }
     auto __t9_1 = __rt9_1.move_as_ok();
     auto __rt9_2 = (load_uint(cs, 256));
     if (__rt9_2.is_error()) { return __rt9_2.move_as_error(); }
     auto __t9_2 = __rt9_2.move_as_ok();
-    auto __rt9_3 = (load_uint(cs, 32));
+    auto __rt9_3 = (load_uint64(cs, 32));
     if (__rt9_3.is_error()) { return __rt9_3.move_as_error(); }
     auto __t9_3 = __rt9_3.move_as_ok();
     auto __rt9_4 = (load_int(cs, 256));
     if (__rt9_4.is_error()) { return __rt9_4.move_as_error(); }
     auto __t9_4 = __rt9_4.move_as_ok();
-    return std::tuple<td::RefInt256, td::RefInt256, td::RefInt256, td::RefInt256, td::RefInt256>(std::move(__t9_0), std::move(__t9_1), std::move(__t9_2), std::move(__t9_3), std::move(__t9_4));
+    return std::tuple<td::uint64, td::uint64, td::RefInt256, td::uint64, td::RefInt256>(std::move(__t9_0), std::move(__t9_1), std::move(__t9_2), std::move(__t9_3), std::move(__t9_4));
   }()), "StWithAllDefaults.t4: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.t5, ([&]() -> td::Result<std::optional<std::tuple<td::RefInt256, td::RefInt256>>> {
+  TRY_RESULT_PREFIX_ASSIGN(r.t5, ([&]() -> td::Result<std::optional<std::tuple<td::int64, td::int64>>> {
     auto __rp10 = (load_maybe_prefix(cs));
     if (__rp10.is_error()) { return __rp10.move_as_error(); }
     auto __pres10 = __rp10.move_as_ok();
-    if (!__pres10) { return std::optional<std::tuple<td::RefInt256, td::RefInt256>>(); }
-    auto __r10 = ([&]() -> td::Result<std::tuple<td::RefInt256, td::RefInt256>> {
-    auto __rt11_0 = (load_int(cs, 8));
+    if (!__pres10) { return std::optional<std::tuple<td::int64, td::int64>>(); }
+    auto __r10 = ([&]() -> td::Result<std::tuple<td::int64, td::int64>> {
+    auto __rt11_0 = (load_int64(cs, 8));
     if (__rt11_0.is_error()) { return __rt11_0.move_as_error(); }
     auto __t11_0 = __rt11_0.move_as_ok();
-    auto __rt11_1 = (load_int(cs, 8));
+    auto __rt11_1 = (load_int64(cs, 8));
     if (__rt11_1.is_error()) { return __rt11_1.move_as_error(); }
     auto __t11_1 = __rt11_1.move_as_ok();
-    return std::tuple<td::RefInt256, td::RefInt256>(std::move(__t11_0), std::move(__t11_1));
+    return std::tuple<td::int64, td::int64>(std::move(__t11_0), std::move(__t11_1));
   }());
     if (__r10.is_error()) { return __r10.move_as_error(); }
     auto __nv10 = __r10.move_as_ok();
-    return std::optional<std::tuple<td::RefInt256, td::RefInt256>>(std::move(__nv10));
+    return std::optional<std::tuple<td::int64, td::int64>>(std::move(__nv10));
   }()), "StWithAllDefaults.t5: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.sh1, ([&]() -> td::Result<std::tuple<td::RefInt256, std::optional<bool>>> {
-    auto __rt12_0 = (load_int(cs, 8));
+  TRY_RESULT_PREFIX_ASSIGN(r.sh1, ([&]() -> td::Result<std::tuple<td::int64, std::optional<bool>>> {
+    auto __rt12_0 = (load_int64(cs, 8));
     if (__rt12_0.is_error()) { return __rt12_0.move_as_error(); }
     auto __t12_0 = __rt12_0.move_as_ok();
     auto __rt12_1 = ([&]() -> td::Result<std::optional<bool>> {
@@ -256,11 +256,11 @@ td::Result<StWithAllDefaults> StWithAllDefaults::from_slice(vm::CellSlice& cs) {
   }());
     if (__rt12_1.is_error()) { return __rt12_1.move_as_error(); }
     auto __t12_1 = __rt12_1.move_as_ok();
-    return std::tuple<td::RefInt256, std::optional<bool>>(std::move(__t12_0), std::move(__t12_1));
+    return std::tuple<td::int64, std::optional<bool>>(std::move(__t12_0), std::move(__t12_1));
   }()), "StWithAllDefaults.sh1: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.sh2, ([&]() -> td::Result<std::tuple<std::tuple<td::RefInt256, std::optional<bool>>, std::tuple<std::string>>> {
-    auto __rt14_0 = ([&]() -> td::Result<std::tuple<td::RefInt256, std::optional<bool>>> {
-    auto __rt15_0 = (load_int(cs, 8));
+  TRY_RESULT_PREFIX_ASSIGN(r.sh2, ([&]() -> td::Result<std::tuple<std::tuple<td::int64, std::optional<bool>>, std::tuple<std::string>>> {
+    auto __rt14_0 = ([&]() -> td::Result<std::tuple<td::int64, std::optional<bool>>> {
+    auto __rt15_0 = (load_int64(cs, 8));
     if (__rt15_0.is_error()) { return __rt15_0.move_as_error(); }
     auto __t15_0 = __rt15_0.move_as_ok();
     auto __rt15_1 = ([&]() -> td::Result<std::optional<bool>> {
@@ -275,7 +275,7 @@ td::Result<StWithAllDefaults> StWithAllDefaults::from_slice(vm::CellSlice& cs) {
   }());
     if (__rt15_1.is_error()) { return __rt15_1.move_as_error(); }
     auto __t15_1 = __rt15_1.move_as_ok();
-    return std::tuple<td::RefInt256, std::optional<bool>>(std::move(__t15_0), std::move(__t15_1));
+    return std::tuple<td::int64, std::optional<bool>>(std::move(__t15_0), std::move(__t15_1));
   }());
     if (__rt14_0.is_error()) { return __rt14_0.move_as_error(); }
     auto __t14_0 = __rt14_0.move_as_ok();
@@ -287,13 +287,13 @@ td::Result<StWithAllDefaults> StWithAllDefaults::from_slice(vm::CellSlice& cs) {
   }());
     if (__rt14_1.is_error()) { return __rt14_1.move_as_error(); }
     auto __t14_1 = __rt14_1.move_as_ok();
-    return std::tuple<std::tuple<td::RefInt256, std::optional<bool>>, std::tuple<std::string>>(std::move(__t14_0), std::move(__t14_1));
+    return std::tuple<std::tuple<td::int64, std::optional<bool>>, std::tuple<std::string>>(std::move(__t14_0), std::move(__t14_1));
   }()), "StWithAllDefaults.sh2: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.arr1, ([&]() -> td::Result<std::tuple<std::vector<td::RefInt256>, std::vector<td::RefInt256>>> {
-    auto __rt18_0 = ([&]() -> td::Result<std::vector<td::RefInt256>> {
-    std::vector<td::RefInt256> __out19;
+  TRY_RESULT_PREFIX_ASSIGN(r.arr1, ([&]() -> td::Result<std::tuple<std::vector<td::int64>, std::vector<td::int64>>> {
+    auto __rt18_0 = ([&]() -> td::Result<std::vector<td::int64>> {
+    std::vector<td::int64> __out19;
     { auto __ls19 = (load_array(cs, [&](vm::CellSlice& __e19) -> td::Status {
-      auto __re19 = (load_int(__e19, 32));
+      auto __re19 = (load_int64(__e19, 32));
     if (__re19.is_error()) { return __re19.move_as_error(); }
     auto __ev19 = __re19.move_as_ok();
       __out19.push_back(std::move(__ev19));
@@ -303,10 +303,10 @@ td::Result<StWithAllDefaults> StWithAllDefaults::from_slice(vm::CellSlice& cs) {
   }());
     if (__rt18_0.is_error()) { return __rt18_0.move_as_error(); }
     auto __t18_0 = __rt18_0.move_as_ok();
-    auto __rt18_1 = ([&]() -> td::Result<std::vector<td::RefInt256>> {
-    std::vector<td::RefInt256> __out20;
+    auto __rt18_1 = ([&]() -> td::Result<std::vector<td::int64>> {
+    std::vector<td::int64> __out20;
     { auto __ls20 = (load_lisp_list(cs, [&](vm::CellSlice& __e20) -> td::Status {
-      auto __re20 = (load_int(__e20, 32));
+      auto __re20 = (load_int64(__e20, 32));
     if (__re20.is_error()) { return __re20.move_as_error(); }
     auto __ev20 = __re20.move_as_ok();
       __out20.push_back(std::move(__ev20));
@@ -316,7 +316,7 @@ td::Result<StWithAllDefaults> StWithAllDefaults::from_slice(vm::CellSlice& cs) {
   }());
     if (__rt18_1.is_error()) { return __rt18_1.move_as_error(); }
     auto __t18_1 = __rt18_1.move_as_ok();
-    return std::tuple<std::vector<td::RefInt256>, std::vector<td::RefInt256>>(std::move(__t18_0), std::move(__t18_1));
+    return std::tuple<std::vector<td::int64>, std::vector<td::int64>>(std::move(__t18_0), std::move(__t18_1));
   }()), "StWithAllDefaults.arr1: ");
   TRY_RESULT_PREFIX_ASSIGN(r.o1, (Inner::from_slice(cs)), "StWithAllDefaults.o1: ");
   TRY_RESULT_PREFIX_ASSIGN(r.o2, ([&]() -> td::Result<std::optional<Inner>> {
@@ -343,15 +343,15 @@ td::Result<StWithAllDefaults> StWithAllDefaults::from_slice(vm::CellSlice& cs) {
 }
 
 td::Status StWithAllDefaults::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_int(cb, this->i1, 32));
+  TRY_STATUS(store_int64(cb, this->i1, 32));
   TRY_STATUS(store_coins(cb, this->i2));
-  TRY_STATUS(store_int(cb, this->i3, 8));
-  TRY_STATUS(store_int(cb, this->i4, 32));
+  TRY_STATUS(store_int64(cb, this->i3, 8));
+  TRY_STATUS(store_int64(cb, this->i4, 32));
   TRY_STATUS(store_uint(cb, this->i5, 256));
   TRY_STATUS(store_int(cb, this->i6, 256));
   if (this->i7) {
     TRY_STATUS(store_maybe_prefix(cb, true));
-    TRY_STATUS(store_int(cb, (*this->i7), 8));
+    TRY_STATUS(store_int64(cb, (*this->i7), 8));
   } else {
     TRY_STATUS(store_maybe_prefix(cb, false));
   }
@@ -377,9 +377,9 @@ td::Status StWithAllDefaults::store(vm::CellBuilder& cb) const {
   }
   if (this->t1) {
     TRY_STATUS(store_maybe_prefix(cb, true));
-    TRY_STATUS(store_int(cb, std::get<0>((*this->t1)), 8));
-  TRY_STATUS(store_int(cb, std::get<1>((*this->t1)), 8));
-  TRY_STATUS(store_int(cb, std::get<2>((*this->t1)), 8));
+    TRY_STATUS(store_int64(cb, std::get<0>((*this->t1)), 8));
+  TRY_STATUS(store_int64(cb, std::get<1>((*this->t1)), 8));
+  TRY_STATUS(store_int64(cb, std::get<2>((*this->t1)), 8));
   } else {
     TRY_STATUS(store_maybe_prefix(cb, false));
   }
@@ -388,32 +388,32 @@ td::Status StWithAllDefaults::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_coins(cb, std::get<2>(this->t2)));
   if (std::get<0>(this->t3)) {
     TRY_STATUS(store_maybe_prefix(cb, true));
-    TRY_STATUS(store_int(cb, (*std::get<0>(this->t3)), 8));
+    TRY_STATUS(store_int64(cb, (*std::get<0>(this->t3)), 8));
   } else {
     TRY_STATUS(store_maybe_prefix(cb, false));
   }
-  TRY_STATUS(store_int(cb, std::get<0>(std::get<1>(this->t3)), 8));
-  TRY_STATUS(store_int(cb, std::get<1>(std::get<1>(this->t3)), 8));
-  TRY_STATUS(store_uint(cb, std::get<0>(this->t4), 32));
-  TRY_STATUS(store_uint(cb, std::get<1>(this->t4), 16));
+  TRY_STATUS(store_int64(cb, std::get<0>(std::get<1>(this->t3)), 8));
+  TRY_STATUS(store_int64(cb, std::get<1>(std::get<1>(this->t3)), 8));
+  TRY_STATUS(store_uint64(cb, std::get<0>(this->t4), 32));
+  TRY_STATUS(store_uint64(cb, std::get<1>(this->t4), 16));
   TRY_STATUS(store_uint(cb, std::get<2>(this->t4), 256));
-  TRY_STATUS(store_uint(cb, std::get<3>(this->t4), 32));
+  TRY_STATUS(store_uint64(cb, std::get<3>(this->t4), 32));
   TRY_STATUS(store_int(cb, std::get<4>(this->t4), 256));
   if (this->t5) {
     TRY_STATUS(store_maybe_prefix(cb, true));
-    TRY_STATUS(store_int(cb, std::get<0>((*this->t5)), 8));
-  TRY_STATUS(store_int(cb, std::get<1>((*this->t5)), 8));
+    TRY_STATUS(store_int64(cb, std::get<0>((*this->t5)), 8));
+  TRY_STATUS(store_int64(cb, std::get<1>((*this->t5)), 8));
   } else {
     TRY_STATUS(store_maybe_prefix(cb, false));
   }
-  TRY_STATUS(store_int(cb, std::get<0>(this->sh1), 8));
+  TRY_STATUS(store_int64(cb, std::get<0>(this->sh1), 8));
   if (std::get<1>(this->sh1)) {
     TRY_STATUS(store_maybe_prefix(cb, true));
     TRY_STATUS(store_bool(cb, (*std::get<1>(this->sh1))));
   } else {
     TRY_STATUS(store_maybe_prefix(cb, false));
   }
-  TRY_STATUS(store_int(cb, std::get<0>(std::get<0>(this->sh2)), 8));
+  TRY_STATUS(store_int64(cb, std::get<0>(std::get<0>(this->sh2)), 8));
   if (std::get<1>(std::get<0>(this->sh2))) {
     TRY_STATUS(store_maybe_prefix(cb, true));
     TRY_STATUS(store_bool(cb, (*std::get<1>(std::get<0>(this->sh2)))));
@@ -422,11 +422,11 @@ td::Status StWithAllDefaults::store(vm::CellBuilder& cb) const {
   }
   TRY_STATUS(store_string(cb, std::get<0>(std::get<1>(this->sh2))));
   { auto __as23 = (store_array(cb, std::get<0>(this->arr1).size(), [&](vm::CellBuilder& __e23, std::size_t __i23) -> td::Status {
-    TRY_STATUS(store_int(__e23, (std::get<0>(this->arr1)[__i23]), 32));
+    TRY_STATUS(store_int64(__e23, (std::get<0>(this->arr1)[__i23]), 32));
     return td::Status::OK();
   })); if (__as23.is_error()) { return __as23; } }
   { auto __as24 = (store_lisp_list(cb, std::get<1>(this->arr1).size(), [&](vm::CellBuilder& __e24, std::size_t __i24) -> td::Status {
-    TRY_STATUS(store_int(__e24, (std::get<1>(this->arr1)[__i24]), 32));
+    TRY_STATUS(store_int64(__e24, (std::get<1>(this->arr1)[__i24]), 32));
     return td::Status::OK();
   })); if (__as24.is_error()) { return __as24; } }
   TRY_STATUS(this->o1.store(cb));
@@ -447,30 +447,30 @@ td::Status StWithAllDefaults::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> StWithAllDefaults::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("StWithAllDefaults");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->i1)))); r.add_field("i1", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->i2)))); r.add_field("i2", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->i3)))); r.add_field("i3", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->i4)))); r.add_field("i4", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->i5)))); r.add_field("i5", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->i6)))); r.add_field("i6", std::move(__f)); }
+  r.add_field("i1", ton_abi::gen::abi_v_int(this->i1));
+  r.add_field("i2", ton_abi::gen::abi_v_int(this->i2));
+  r.add_field("i3", ton_abi::gen::abi_v_int(this->i3));
+  r.add_field("i4", ton_abi::gen::abi_v_int(this->i4));
+  r.add_field("i5", ton_abi::gen::abi_v_int(this->i5));
+  r.add_field("i6", ton_abi::gen::abi_v_int(this->i6));
   { TRY_RESULT(__f, ([&]() -> td::Result<AbiValue> {
     if (!(this->i7)) { return AbiValue::make_null(); }
     return td::Result<AbiValue>(ton_abi::gen::abi_v_int((*(this->i7))));
   }())); r.add_field("i7", std::move(__f)); }
   { TRY_RESULT(__f, (Color_to_abi_value(this->e1))); r.add_field("e1", std::move(__f)); }
   { TRY_RESULT(__f, (E0Max_to_abi_value(this->e2))); r.add_field("e2", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_bool(this->b1)))); r.add_field("b1", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_bool(this->b2)))); r.add_field("b2", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_bool(this->b3)))); r.add_field("b3", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_bits(this->s1)))); r.add_field("s1", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_bits(this->s2)))); r.add_field("s2", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_bits(this->s3)))); r.add_field("s3", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_bits(this->s4)))); r.add_field("s4", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_string(this->s5)))); r.add_field("s5", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->a1)))); r.add_field("a1", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->a2)))); r.add_field("a2", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address_opt(this->a3)))); r.add_field("a3", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->a4)))); r.add_field("a4", std::move(__f)); }
+  r.add_field("b1", ton_abi::gen::abi_v_bool(this->b1));
+  r.add_field("b2", ton_abi::gen::abi_v_bool(this->b2));
+  r.add_field("b3", ton_abi::gen::abi_v_bool(this->b3));
+  r.add_field("s1", ton_abi::gen::abi_v_bits(this->s1));
+  r.add_field("s2", ton_abi::gen::abi_v_bits(this->s2));
+  r.add_field("s3", ton_abi::gen::abi_v_bits(this->s3));
+  r.add_field("s4", ton_abi::gen::abi_v_bits(this->s4));
+  r.add_field("s5", ton_abi::gen::abi_v_string(this->s5));
+  r.add_field("a1", ton_abi::gen::abi_v_address(this->a1));
+  r.add_field("a2", ton_abi::gen::abi_v_address(this->a2));
+  r.add_field("a3", ton_abi::gen::abi_v_address_opt(this->a3));
+  r.add_field("a4", ton_abi::gen::abi_v_address(this->a4));
   { TRY_RESULT(__f, ([&]() -> td::Result<AbiValue> {
     if (!(this->a5)) { return AbiValue::make_null(); }
     return td::Result<AbiValue>(ton_abi::gen::abi_v_address((*(this->a5))));

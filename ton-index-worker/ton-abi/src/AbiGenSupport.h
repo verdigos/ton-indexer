@@ -6,12 +6,12 @@
 // custom-serializer registry (plan §0.17 (b) -- runtime, NOT template
 // specializations), and small AbiValue-building helpers used by the baked
 // to_abi_value() bodies. Generated code calls ton_abi leaf functions + these
-// helpers ONLY -- never AbiKernel / AbiLoader / AbiInterp (all dispatch is
-// baked at generation time; the kernel runs only inside ton-abi-gen).
+// helpers ONLY -- never AbiKernel / AbiLoader (all dispatch is baked at
+// generation time; the kernel runs only inside ton-abi-gen).
 //
-// One-semantics rule (plan §D): the leaves called here are the SAME ones the
-// interpreter (AbiInterp) calls, so generated structs and the interpreter are
-// bit-for-bit equivalent (the T11.2 A/B gate).
+// The generated structs are gated against the TS oracle vectors directly
+// (testdata/abi_vectors.json): from_slice -> to_abi_value dump == expected,
+// store/repack == golden hex (test/AbiABGateTest.cpp).
 
 #include "AbiValue.h"
 #include "AbiLeavesAddress.h"
@@ -106,11 +106,16 @@ const AbiCustomEntry<T> *abi_custom_lookup(const std::string &key) {
 // to_abi_value() returns td::Result<AbiValue> so custom hooks can fail.
 // ---------------------------------------------------------------------------
 inline AbiValue abi_v_int(const td::RefInt256 &v) { return AbiValue::make_int(v); }
+// Native-int overloads: intN/uintN fields with n<=64 are td::int64/td::uint64
+// members; their AbiValue Int dump is byte-identical to the RefInt256 form
+// (make_refint -> same decimal string), so vectors are unchanged.
+inline AbiValue abi_v_int(td::int64 v) { return AbiValue::make_int(td::make_refint(v)); }
+inline AbiValue abi_v_int(td::uint64 v) { return AbiValue::make_int(td::make_refint(v)); }
 inline AbiValue abi_v_bool(bool v) { return AbiValue::make_bool(v); }
 inline AbiValue abi_v_address(const AbiAddress &a) { return AbiValue::make_address(a); }
 inline AbiValue abi_v_address_opt(const AbiAddress &a) {
   // addressOpt: a None address dumps as JSON null (NOT "none" -- that is
-  // any_address only), matching AbiInterp's AddressOpt branch.
+  // any_address only), matching the AbiValue AddressOpt dump convention.
   return a.kind == AbiAddressKind::None ? AbiValue::make_null() : AbiValue::make_address(a);
 }
 inline AbiValue abi_v_cell(const td::Ref<vm::Cell> &c) { return AbiValue::make_cell(c); }

@@ -40,10 +40,10 @@ td::Status JettonWalletDataReply::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> JettonWalletDataReply::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("JettonWalletDataReply");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->jettonBalance)))); r.add_field("jettonBalance", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->ownerAddress)))); r.add_field("ownerAddress", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->minterAddress)))); r.add_field("minterAddress", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_cell(this->jettonWalletCode)))); r.add_field("jettonWalletCode", std::move(__f)); }
+  r.add_field("jettonBalance", ton_abi::gen::abi_v_int(this->jettonBalance));
+  r.add_field("ownerAddress", ton_abi::gen::abi_v_address(this->ownerAddress));
+  r.add_field("minterAddress", ton_abi::gen::abi_v_address(this->minterAddress));
+  r.add_field("jettonWalletCode", ton_abi::gen::abi_v_cell(this->jettonWalletCode));
   return r;
 }
 
@@ -75,7 +75,7 @@ AskToTransfer AskToTransfer::create(CreateArgs args) {
 td::Result<AskToTransfer> AskToTransfer::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "AskToTransfer: ");
   AskToTransfer r;
-  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint(cs, 64)), "AskToTransfer.queryId: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint64(cs, 64)), "AskToTransfer.queryId: ");
   TRY_RESULT_PREFIX_ASSIGN(r.jettonAmount, (load_coins(cs)), "AskToTransfer.jettonAmount: ");
   TRY_RESULT_PREFIX_ASSIGN(r.transferRecipient, (load_address(cs)), "AskToTransfer.transferRecipient: ");
   TRY_RESULT_PREFIX_ASSIGN(r.sendExcessesTo, (load_maybe_address(cs)), "AskToTransfer.sendExcessesTo: ");
@@ -96,7 +96,7 @@ td::Result<AskToTransfer> AskToTransfer::from_slice(vm::CellSlice& cs) {
 
 td::Status AskToTransfer::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_uint(cb, this->queryId, 64));
+  TRY_STATUS(store_uint64(cb, this->queryId, 64));
   TRY_STATUS(store_coins(cb, this->jettonAmount));
   TRY_STATUS(store_address(cb, this->transferRecipient));
   TRY_STATUS(store_maybe_address(cb, this->sendExcessesTo));
@@ -113,15 +113,15 @@ td::Status AskToTransfer::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> AskToTransfer::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("AskToTransfer");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->queryId)))); r.add_field("queryId", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->jettonAmount)))); r.add_field("jettonAmount", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->transferRecipient)))); r.add_field("transferRecipient", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address_opt(this->sendExcessesTo)))); r.add_field("sendExcessesTo", std::move(__f)); }
+  r.add_field("queryId", ton_abi::gen::abi_v_int(this->queryId));
+  r.add_field("jettonAmount", ton_abi::gen::abi_v_int(this->jettonAmount));
+  r.add_field("transferRecipient", ton_abi::gen::abi_v_address(this->transferRecipient));
+  r.add_field("sendExcessesTo", ton_abi::gen::abi_v_address_opt(this->sendExcessesTo));
   { TRY_RESULT(__f, ([&]() -> td::Result<AbiValue> {
     if (!(this->customPayload)) { return AbiValue::make_null(); }
     return td::Result<AbiValue>(ton_abi::gen::abi_v_cell((*(this->customPayload))));
   }())); r.add_field("customPayload", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->forwardTonAmount)))); r.add_field("forwardTonAmount", std::move(__f)); }
+  r.add_field("forwardTonAmount", ton_abi::gen::abi_v_int(this->forwardTonAmount));
   { TRY_RESULT(__f, (ForwardPayloadRemainder_to_abi_value(this->forwardPayload))); r.add_field("forwardPayload", std::move(__f)); }
   return r;
 }
@@ -138,7 +138,7 @@ TransferNotificationForRecipient TransferNotificationForRecipient::create(Create
 td::Result<TransferNotificationForRecipient> TransferNotificationForRecipient::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "TransferNotificationForRecipient: ");
   TransferNotificationForRecipient r;
-  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint(cs, 64)), "TransferNotificationForRecipient.queryId: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint64(cs, 64)), "TransferNotificationForRecipient.queryId: ");
   TRY_RESULT_PREFIX_ASSIGN(r.jettonAmount, (load_coins(cs)), "TransferNotificationForRecipient.jettonAmount: ");
   TRY_RESULT_PREFIX_ASSIGN(r.transferInitiator, (load_maybe_address(cs)), "TransferNotificationForRecipient.transferInitiator: ");
   TRY_RESULT_PREFIX_ASSIGN(r.forwardPayload, (ForwardPayloadRemainder_from_slice(cs)), "TransferNotificationForRecipient.forwardPayload: ");
@@ -147,7 +147,7 @@ td::Result<TransferNotificationForRecipient> TransferNotificationForRecipient::f
 
 td::Status TransferNotificationForRecipient::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_uint(cb, this->queryId, 64));
+  TRY_STATUS(store_uint64(cb, this->queryId, 64));
   TRY_STATUS(store_coins(cb, this->jettonAmount));
   TRY_STATUS(store_maybe_address(cb, this->transferInitiator));
   TRY_STATUS(ForwardPayloadRemainder_store(cb, this->forwardPayload));
@@ -156,9 +156,9 @@ td::Status TransferNotificationForRecipient::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> TransferNotificationForRecipient::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("TransferNotificationForRecipient");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->queryId)))); r.add_field("queryId", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->jettonAmount)))); r.add_field("jettonAmount", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address_opt(this->transferInitiator)))); r.add_field("transferInitiator", std::move(__f)); }
+  r.add_field("queryId", ton_abi::gen::abi_v_int(this->queryId));
+  r.add_field("jettonAmount", ton_abi::gen::abi_v_int(this->jettonAmount));
+  r.add_field("transferInitiator", ton_abi::gen::abi_v_address_opt(this->transferInitiator));
   { TRY_RESULT(__f, (ForwardPayloadRemainder_to_abi_value(this->forwardPayload))); r.add_field("forwardPayload", std::move(__f)); }
   return r;
 }
@@ -177,7 +177,7 @@ InternalTransferStep InternalTransferStep::create(CreateArgs args) {
 td::Result<InternalTransferStep> InternalTransferStep::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "InternalTransferStep: ");
   InternalTransferStep r;
-  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint(cs, 64)), "InternalTransferStep.queryId: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint64(cs, 64)), "InternalTransferStep.queryId: ");
   TRY_RESULT_PREFIX_ASSIGN(r.jettonAmount, (load_coins(cs)), "InternalTransferStep.jettonAmount: ");
   TRY_RESULT_PREFIX_ASSIGN(r.transferInitiator, (load_maybe_address(cs)), "InternalTransferStep.transferInitiator: ");
   TRY_RESULT_PREFIX_ASSIGN(r.sendExcessesTo, (load_maybe_address(cs)), "InternalTransferStep.sendExcessesTo: ");
@@ -188,7 +188,7 @@ td::Result<InternalTransferStep> InternalTransferStep::from_slice(vm::CellSlice&
 
 td::Status InternalTransferStep::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_uint(cb, this->queryId, 64));
+  TRY_STATUS(store_uint64(cb, this->queryId, 64));
   TRY_STATUS(store_coins(cb, this->jettonAmount));
   TRY_STATUS(store_maybe_address(cb, this->transferInitiator));
   TRY_STATUS(store_maybe_address(cb, this->sendExcessesTo));
@@ -199,11 +199,11 @@ td::Status InternalTransferStep::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> InternalTransferStep::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("InternalTransferStep");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->queryId)))); r.add_field("queryId", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->jettonAmount)))); r.add_field("jettonAmount", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address_opt(this->transferInitiator)))); r.add_field("transferInitiator", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address_opt(this->sendExcessesTo)))); r.add_field("sendExcessesTo", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->forwardTonAmount)))); r.add_field("forwardTonAmount", std::move(__f)); }
+  r.add_field("queryId", ton_abi::gen::abi_v_int(this->queryId));
+  r.add_field("jettonAmount", ton_abi::gen::abi_v_int(this->jettonAmount));
+  r.add_field("transferInitiator", ton_abi::gen::abi_v_address_opt(this->transferInitiator));
+  r.add_field("sendExcessesTo", ton_abi::gen::abi_v_address_opt(this->sendExcessesTo));
+  r.add_field("forwardTonAmount", ton_abi::gen::abi_v_int(this->forwardTonAmount));
   { TRY_RESULT(__f, (ForwardPayloadRemainder_to_abi_value(this->forwardPayload))); r.add_field("forwardPayload", std::move(__f)); }
   return r;
 }
@@ -217,19 +217,19 @@ ReturnExcessesBack ReturnExcessesBack::create(CreateArgs args) {
 td::Result<ReturnExcessesBack> ReturnExcessesBack::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "ReturnExcessesBack: ");
   ReturnExcessesBack r;
-  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint(cs, 64)), "ReturnExcessesBack.queryId: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint64(cs, 64)), "ReturnExcessesBack.queryId: ");
   return r;
 }
 
 td::Status ReturnExcessesBack::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_uint(cb, this->queryId, 64));
+  TRY_STATUS(store_uint64(cb, this->queryId, 64));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> ReturnExcessesBack::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("ReturnExcessesBack");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->queryId)))); r.add_field("queryId", std::move(__f)); }
+  r.add_field("queryId", ton_abi::gen::abi_v_int(this->queryId));
   return r;
 }
 
@@ -245,7 +245,7 @@ AskToBurn AskToBurn::create(CreateArgs args) {
 td::Result<AskToBurn> AskToBurn::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "AskToBurn: ");
   AskToBurn r;
-  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint(cs, 64)), "AskToBurn.queryId: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint64(cs, 64)), "AskToBurn.queryId: ");
   TRY_RESULT_PREFIX_ASSIGN(r.jettonAmount, (load_coins(cs)), "AskToBurn.jettonAmount: ");
   TRY_RESULT_PREFIX_ASSIGN(r.sendExcessesTo, (load_maybe_address(cs)), "AskToBurn.sendExcessesTo: ");
   TRY_RESULT_PREFIX_ASSIGN(r.customPayload, ([&]() -> td::Result<std::optional<td::Ref<vm::Cell>>> {
@@ -263,7 +263,7 @@ td::Result<AskToBurn> AskToBurn::from_slice(vm::CellSlice& cs) {
 
 td::Status AskToBurn::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_uint(cb, this->queryId, 64));
+  TRY_STATUS(store_uint64(cb, this->queryId, 64));
   TRY_STATUS(store_coins(cb, this->jettonAmount));
   TRY_STATUS(store_maybe_address(cb, this->sendExcessesTo));
   if (this->customPayload) {
@@ -277,9 +277,9 @@ td::Status AskToBurn::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> AskToBurn::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("AskToBurn");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->queryId)))); r.add_field("queryId", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->jettonAmount)))); r.add_field("jettonAmount", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address_opt(this->sendExcessesTo)))); r.add_field("sendExcessesTo", std::move(__f)); }
+  r.add_field("queryId", ton_abi::gen::abi_v_int(this->queryId));
+  r.add_field("jettonAmount", ton_abi::gen::abi_v_int(this->jettonAmount));
+  r.add_field("sendExcessesTo", ton_abi::gen::abi_v_address_opt(this->sendExcessesTo));
   { TRY_RESULT(__f, ([&]() -> td::Result<AbiValue> {
     if (!(this->customPayload)) { return AbiValue::make_null(); }
     return td::Result<AbiValue>(ton_abi::gen::abi_v_cell((*(this->customPayload))));
@@ -299,7 +299,7 @@ BurnNotificationForMinter BurnNotificationForMinter::create(CreateArgs args) {
 td::Result<BurnNotificationForMinter> BurnNotificationForMinter::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "BurnNotificationForMinter: ");
   BurnNotificationForMinter r;
-  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint(cs, 64)), "BurnNotificationForMinter.queryId: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint64(cs, 64)), "BurnNotificationForMinter.queryId: ");
   TRY_RESULT_PREFIX_ASSIGN(r.jettonAmount, (load_coins(cs)), "BurnNotificationForMinter.jettonAmount: ");
   TRY_RESULT_PREFIX_ASSIGN(r.burnInitiator, (load_address(cs)), "BurnNotificationForMinter.burnInitiator: ");
   TRY_RESULT_PREFIX_ASSIGN(r.sendExcessesTo, (load_maybe_address(cs)), "BurnNotificationForMinter.sendExcessesTo: ");
@@ -308,7 +308,7 @@ td::Result<BurnNotificationForMinter> BurnNotificationForMinter::from_slice(vm::
 
 td::Status BurnNotificationForMinter::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_uint(cb, this->queryId, 64));
+  TRY_STATUS(store_uint64(cb, this->queryId, 64));
   TRY_STATUS(store_coins(cb, this->jettonAmount));
   TRY_STATUS(store_address(cb, this->burnInitiator));
   TRY_STATUS(store_maybe_address(cb, this->sendExcessesTo));
@@ -317,10 +317,10 @@ td::Status BurnNotificationForMinter::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> BurnNotificationForMinter::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("BurnNotificationForMinter");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->queryId)))); r.add_field("queryId", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->jettonAmount)))); r.add_field("jettonAmount", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->burnInitiator)))); r.add_field("burnInitiator", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address_opt(this->sendExcessesTo)))); r.add_field("sendExcessesTo", std::move(__f)); }
+  r.add_field("queryId", ton_abi::gen::abi_v_int(this->queryId));
+  r.add_field("jettonAmount", ton_abi::gen::abi_v_int(this->jettonAmount));
+  r.add_field("burnInitiator", ton_abi::gen::abi_v_address(this->burnInitiator));
+  r.add_field("sendExcessesTo", ton_abi::gen::abi_v_address_opt(this->sendExcessesTo));
   return r;
 }
 
@@ -349,9 +349,9 @@ td::Status WalletStorage::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> WalletStorage::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("WalletStorage");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->jettonBalance)))); r.add_field("jettonBalance", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->ownerAddress)))); r.add_field("ownerAddress", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->minterAddress)))); r.add_field("minterAddress", std::move(__f)); }
+  r.add_field("jettonBalance", ton_abi::gen::abi_v_int(this->jettonBalance));
+  r.add_field("ownerAddress", ton_abi::gen::abi_v_address(this->ownerAddress));
+  r.add_field("minterAddress", ton_abi::gen::abi_v_address(this->minterAddress));
   return r;
 }
 

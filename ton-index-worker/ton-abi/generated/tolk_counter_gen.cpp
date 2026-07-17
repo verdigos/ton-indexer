@@ -21,21 +21,21 @@ Storage Storage::create(CreateArgs args) {
 
 td::Result<Storage> Storage::from_slice(vm::CellSlice& cs) {
   Storage r;
-  TRY_RESULT_PREFIX_ASSIGN(r.id, (load_uint(cs, 32)), "Storage.id: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.counter, (load_uint(cs, 32)), "Storage.counter: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.id, (load_uint64(cs, 32)), "Storage.id: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.counter, (load_uint64(cs, 32)), "Storage.counter: ");
   return r;
 }
 
 td::Status Storage::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_uint(cb, this->id, 32));
-  TRY_STATUS(store_uint(cb, this->counter, 32));
+  TRY_STATUS(store_uint64(cb, this->id, 32));
+  TRY_STATUS(store_uint64(cb, this->counter, 32));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> Storage::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("Storage");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->id)))); r.add_field("id", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->counter)))); r.add_field("counter", std::move(__f)); }
+  r.add_field("id", ton_abi::gen::abi_v_int(this->id));
+  r.add_field("counter", ton_abi::gen::abi_v_int(this->counter));
   return r;
 }
 
@@ -49,22 +49,22 @@ IncreaseCounter IncreaseCounter::create(CreateArgs args) {
 td::Result<IncreaseCounter> IncreaseCounter::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "IncreaseCounter: ");
   IncreaseCounter r;
-  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint(cs, 64)), "IncreaseCounter.queryId: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.increaseBy, (load_uint(cs, 32)), "IncreaseCounter.increaseBy: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint64(cs, 64)), "IncreaseCounter.queryId: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.increaseBy, (load_uint64(cs, 32)), "IncreaseCounter.increaseBy: ");
   return r;
 }
 
 td::Status IncreaseCounter::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_uint(cb, this->queryId, 64));
-  TRY_STATUS(store_uint(cb, this->increaseBy, 32));
+  TRY_STATUS(store_uint64(cb, this->queryId, 64));
+  TRY_STATUS(store_uint64(cb, this->increaseBy, 32));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> IncreaseCounter::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("IncreaseCounter");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->queryId)))); r.add_field("queryId", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->increaseBy)))); r.add_field("increaseBy", std::move(__f)); }
+  r.add_field("queryId", ton_abi::gen::abi_v_int(this->queryId));
+  r.add_field("increaseBy", ton_abi::gen::abi_v_int(this->increaseBy));
   return r;
 }
 
@@ -77,19 +77,19 @@ ResetCounter ResetCounter::create(CreateArgs args) {
 td::Result<ResetCounter> ResetCounter::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "ResetCounter: ");
   ResetCounter r;
-  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint(cs, 64)), "ResetCounter.queryId: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.queryId, (load_uint64(cs, 64)), "ResetCounter.queryId: ");
   return r;
 }
 
 td::Status ResetCounter::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_uint(cb, this->queryId, 64));
+  TRY_STATUS(store_uint64(cb, this->queryId, 64));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> ResetCounter::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("ResetCounter");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->queryId)))); r.add_field("queryId", std::move(__f)); }
+  r.add_field("queryId", ton_abi::gen::abi_v_int(this->queryId));
   return r;
 }
 

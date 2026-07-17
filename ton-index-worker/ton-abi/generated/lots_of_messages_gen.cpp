@@ -15,29 +15,29 @@ using namespace ton_abi;
 IncreaseBy IncreaseBy::create(CreateArgs args) {
   IncreaseBy r;
   r.counter_id = std::move(args.counter_id);
-  r.inc_by = args.inc_by ? std::move(*args.inc_by) : td::dec_string_to_int256(std::string("1"));
+  r.inc_by = args.inc_by ? std::move(*args.inc_by) : static_cast<td::int64>(1LL);
   return r;
 }
 
 td::Result<IncreaseBy> IncreaseBy::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "IncreaseBy: ");
   IncreaseBy r;
-  TRY_RESULT_PREFIX_ASSIGN(r.counter_id, (load_int(cs, 32)), "IncreaseBy.counter_id: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.inc_by, (load_int(cs, 32)), "IncreaseBy.inc_by: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.counter_id, (load_int64(cs, 32)), "IncreaseBy.counter_id: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.inc_by, (load_int64(cs, 32)), "IncreaseBy.inc_by: ");
   return r;
 }
 
 td::Status IncreaseBy::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_int(cb, this->counter_id, 32));
-  TRY_STATUS(store_int(cb, this->inc_by, 32));
+  TRY_STATUS(store_int64(cb, this->counter_id, 32));
+  TRY_STATUS(store_int64(cb, this->inc_by, 32));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> IncreaseBy::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("IncreaseBy");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->counter_id)))); r.add_field("counter_id", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->inc_by)))); r.add_field("inc_by", std::move(__f)); }
+  r.add_field("counter_id", ton_abi::gen::abi_v_int(this->counter_id));
+  r.add_field("inc_by", ton_abi::gen::abi_v_int(this->inc_by));
   return r;
 }
 
@@ -72,22 +72,22 @@ ResetTo_int64 ResetTo_int64::create(CreateArgs args) {
 td::Result<ResetTo_int64> ResetTo_int64::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "ResetTo: ");
   ResetTo_int64 r;
-  TRY_RESULT_PREFIX_ASSIGN(r.counter_id, (load_int(cs, 32)), "ResetTo.counter_id: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.reset_to, (load_int(cs, 64)), "ResetTo.reset_to: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.counter_id, (load_int64(cs, 32)), "ResetTo.counter_id: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.reset_to, (load_int64(cs, 64)), "ResetTo.reset_to: ");
   return r;
 }
 
 td::Status ResetTo_int64::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_int(cb, this->counter_id, 32));
-  TRY_STATUS(store_int(cb, this->reset_to, 64));
+  TRY_STATUS(store_int64(cb, this->counter_id, 32));
+  TRY_STATUS(store_int64(cb, this->reset_to, 64));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> ResetTo_int64::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("ResetTo");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->counter_id)))); r.add_field("counter_id", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->reset_to)))); r.add_field("reset_to", std::move(__f)); }
+  r.add_field("counter_id", ton_abi::gen::abi_v_int(this->counter_id));
+  r.add_field("reset_to", ton_abi::gen::abi_v_int(this->reset_to));
   return r;
 }
 
@@ -100,21 +100,21 @@ BasicStorage_int64 BasicStorage_int64::create(CreateArgs args) {
 
 td::Result<BasicStorage_int64> BasicStorage_int64::from_slice(vm::CellSlice& cs) {
   BasicStorage_int64 r;
-  TRY_RESULT_PREFIX_ASSIGN(r.counter_id, (load_int(cs, 32)), "BasicStorage.counter_id: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.counter_value, (load_int(cs, 64)), "BasicStorage.counter_value: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.counter_id, (load_int64(cs, 32)), "BasicStorage.counter_id: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.counter_value, (load_int64(cs, 64)), "BasicStorage.counter_value: ");
   return r;
 }
 
 td::Status BasicStorage_int64::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_int(cb, this->counter_id, 32));
-  TRY_STATUS(store_int(cb, this->counter_value, 64));
+  TRY_STATUS(store_int64(cb, this->counter_id, 32));
+  TRY_STATUS(store_int64(cb, this->counter_value, 64));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> BasicStorage_int64::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("BasicStorage");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->counter_id)))); r.add_field("counter_id", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->counter_value)))); r.add_field("counter_value", std::move(__f)); }
+  r.add_field("counter_id", ton_abi::gen::abi_v_int(this->counter_id));
+  r.add_field("counter_value", ton_abi::gen::abi_v_int(this->counter_value));
   return r;
 }
 

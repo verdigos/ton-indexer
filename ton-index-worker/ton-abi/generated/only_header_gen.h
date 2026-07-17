@@ -29,10 +29,10 @@ struct CalcSwapCostReply;
 struct InMsgA {
   static constexpr td::uint64 PREFIX = 1ULL;
   static constexpr int PREFIX_LEN = 8;
-  td::RefInt256 fieldA;
+  td::int64 fieldA;
 
   struct CreateArgs {
-    td::RefInt256 fieldA;
+    td::int64 fieldA;
   };
   static InMsgA create(CreateArgs args);
   static td::Result<InMsgA> from_slice(vm::CellSlice& cs);
@@ -43,10 +43,10 @@ struct InMsgA {
 struct InMsgB {
   static constexpr td::uint64 PREFIX = 2ULL;
   static constexpr int PREFIX_LEN = 8;
-  td::RefInt256 fieldB;
+  td::int64 fieldB;
 
   struct CreateArgs {
-    td::RefInt256 fieldB;
+    td::int64 fieldB;
   };
   static InMsgB create(CreateArgs args);
   static td::Result<InMsgB> from_slice(vm::CellSlice& cs);
@@ -57,10 +57,10 @@ struct InMsgB {
 struct OutMsgA {
   static constexpr td::uint64 PREFIX = 240ULL;
   static constexpr int PREFIX_LEN = 8;
-  td::RefInt256 fieldA;
+  td::int64 fieldA;
 
   struct CreateArgs {
-    td::RefInt256 fieldA;
+    td::int64 fieldA;
   };
   static OutMsgA create(CreateArgs args);
   static td::Result<OutMsgA> from_slice(vm::CellSlice& cs);
@@ -71,10 +71,10 @@ struct OutMsgA {
 struct OutMsgB {
   static constexpr td::uint64 PREFIX = 241ULL;
   static constexpr int PREFIX_LEN = 8;
-  td::RefInt256 fieldB;
+  td::int64 fieldB;
 
   struct CreateArgs {
-    td::RefInt256 fieldB;
+    td::int64 fieldB;
   };
   static OutMsgB create(CreateArgs args);
   static td::Result<OutMsgB> from_slice(vm::CellSlice& cs);

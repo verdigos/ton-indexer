@@ -28,12 +28,12 @@ td::Status Err_store(vm::CellBuilder& cb, const td::RefInt256& self);
 td::Result<AbiValue> Err_to_abi_value(const td::RefInt256& self);
 
 struct Point {
-  td::RefInt256 x;
-  td::RefInt256 y;
+  td::int64 x;
+  td::int64 y;
 
   struct CreateArgs {
-    td::RefInt256 x;
-    td::RefInt256 y;
+    td::int64 x;
+    td::int64 y;
   };
   static Point create(CreateArgs args);
   static td::Result<Point> from_slice(vm::CellSlice& cs);
@@ -41,7 +41,7 @@ struct Point {
   td::Result<AbiValue> to_abi_value() const;
 };
 
-using AbiUnion_0 = std::variant<td::RefInt256, td::RefInt256>;
+using AbiUnion_0 = std::variant<td::int64, td::int64>;
 td::Result<AbiUnion_0> load_union_0(vm::CellSlice& cs);
 td::Status store_union_0(const AbiUnion_0& u, vm::CellBuilder& cb);
 

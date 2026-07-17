@@ -57,8 +57,8 @@ td::Status Transfer::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> Transfer::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("Transfer");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->owner)))); r.add_field("owner", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_bits(this->forwardPayload)))); r.add_field("forwardPayload", std::move(__f)); }
+  r.add_field("owner", ton_abi::gen::abi_v_address(this->owner));
+  r.add_field("forwardPayload", ton_abi::gen::abi_v_bits(this->forwardPayload));
   return r;
 }
 
@@ -70,18 +70,18 @@ Out2 Out2::create(CreateArgs args) {
 
 td::Result<Out2> Out2::from_slice(vm::CellSlice& cs) {
   Out2 r;
-  TRY_RESULT_PREFIX_ASSIGN(r.v2, (load_int(cs, 8)), "Out2.v2: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.v2, (load_int64(cs, 8)), "Out2.v2: ");
   return r;
 }
 
 td::Status Out2::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_int(cb, this->v2, 8));
+  TRY_STATUS(store_int64(cb, this->v2, 8));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> Out2::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("Out2");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->v2)))); r.add_field("v2", std::move(__f)); }
+  r.add_field("v2", ton_abi::gen::abi_v_int(this->v2));
   return r;
 }
 
@@ -93,18 +93,18 @@ OutExt4 OutExt4::create(CreateArgs args) {
 
 td::Result<OutExt4> OutExt4::from_slice(vm::CellSlice& cs) {
   OutExt4 r;
-  TRY_RESULT_PREFIX_ASSIGN(r.v4, (load_int(cs, 8)), "OutExt4.v4: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.v4, (load_int64(cs, 8)), "OutExt4.v4: ");
   return r;
 }
 
 td::Status OutExt4::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_int(cb, this->v4, 8));
+  TRY_STATUS(store_int64(cb, this->v4, 8));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> OutExt4::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("OutExt4");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->v4)))); r.add_field("v4", std::move(__f)); }
+  r.add_field("v4", ton_abi::gen::abi_v_int(this->v4));
   return r;
 }
 
@@ -130,8 +130,8 @@ td::Status MyStorage::store(vm::CellBuilder& cb) const {
 
 td::Result<AbiValue> MyStorage::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("MyStorage");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_address(this->collectionAddress)))); r.add_field("collectionAddress", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_cell(this->content)))); r.add_field("content", std::move(__f)); }
+  r.add_field("collectionAddress", ton_abi::gen::abi_v_address(this->collectionAddress));
+  r.add_field("content", ton_abi::gen::abi_v_cell(this->content));
   return r;
 }
 
@@ -144,21 +144,21 @@ ActualExternalShape ActualExternalShape::create(CreateArgs args) {
 
 td::Result<ActualExternalShape> ActualExternalShape::from_slice(vm::CellSlice& cs) {
   ActualExternalShape r;
-  TRY_RESULT_PREFIX_ASSIGN(r.v, (load_int(cs, 32)), "ActualExternalShape.v: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.v, (load_int64(cs, 32)), "ActualExternalShape.v: ");
   TRY_RESULT_PREFIX_ASSIGN(r.sign, (load_bits(cs, 512)), "ActualExternalShape.sign: ");
   return r;
 }
 
 td::Status ActualExternalShape::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_int(cb, this->v, 32));
+  TRY_STATUS(store_int64(cb, this->v, 32));
   TRY_STATUS(store_bits(cb, *this->sign, 512));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> ActualExternalShape::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("ActualExternalShape");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->v)))); r.add_field("v", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_bits(this->sign)))); r.add_field("sign", std::move(__f)); }
+  r.add_field("v", ton_abi::gen::abi_v_int(this->v));
+  r.add_field("sign", ton_abi::gen::abi_v_bits(this->sign));
   return r;
 }
 
@@ -172,22 +172,22 @@ ResetTo_int32 ResetTo_int32::create(CreateArgs args) {
 td::Result<ResetTo_int32> ResetTo_int32::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "ResetTo: ");
   ResetTo_int32 r;
-  TRY_RESULT_PREFIX_ASSIGN(r.counter_id, (load_int(cs, 32)), "ResetTo.counter_id: ");
-  TRY_RESULT_PREFIX_ASSIGN(r.reset_to, (load_int(cs, 32)), "ResetTo.reset_to: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.counter_id, (load_int64(cs, 32)), "ResetTo.counter_id: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.reset_to, (load_int64(cs, 32)), "ResetTo.reset_to: ");
   return r;
 }
 
 td::Status ResetTo_int32::store(vm::CellBuilder& cb) const {
   TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
-  TRY_STATUS(store_int(cb, this->counter_id, 32));
-  TRY_STATUS(store_int(cb, this->reset_to, 32));
+  TRY_STATUS(store_int64(cb, this->counter_id, 32));
+  TRY_STATUS(store_int64(cb, this->reset_to, 32));
   return td::Status::OK();
 }
 
 td::Result<AbiValue> ResetTo_int32::to_abi_value() const {
   AbiValue r = AbiValue::make_struct("ResetTo");
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->counter_id)))); r.add_field("counter_id", std::move(__f)); }
-  { TRY_RESULT(__f, (td::Result<AbiValue>(ton_abi::gen::abi_v_int(this->reset_to)))); r.add_field("reset_to", std::move(__f)); }
+  r.add_field("counter_id", ton_abi::gen::abi_v_int(this->counter_id));
+  r.add_field("reset_to", ton_abi::gen::abi_v_int(this->reset_to));
   return r;
 }
 
@@ -199,21 +199,21 @@ Out3_int8_int16 Out3_int8_int16::create(CreateArgs args) {
 
 td::Result<Out3_int8_int16> Out3_int8_int16::from_slice(vm::CellSlice& cs) {
   Out3_int8_int16 r;
-  TRY_RESULT_PREFIX_ASSIGN(r.payload, ([&]() -> td::Result<std::tuple<td::RefInt256, td::RefInt256>> {
-    auto __rt1_0 = (load_int(cs, 8));
+  TRY_RESULT_PREFIX_ASSIGN(r.payload, ([&]() -> td::Result<std::tuple<td::int64, td::int64>> {
+    auto __rt1_0 = (load_int64(cs, 8));
     if (__rt1_0.is_error()) { return __rt1_0.move_as_error(); }
     auto __t1_0 = __rt1_0.move_as_ok();
-    auto __rt1_1 = (load_int(cs, 16));
+    auto __rt1_1 = (load_int64(cs, 16));
     if (__rt1_1.is_error()) { return __rt1_1.move_as_error(); }
     auto __t1_1 = __rt1_1.move_as_ok();
-    return std::tuple<td::RefInt256, td::RefInt256>(std::move(__t1_0), std::move(__t1_1));
+    return std::tuple<td::int64, td::int64>(std::move(__t1_0), std::move(__t1_1));
   }()), "Out3.payload: ");
   return r;
 }
 
 td::Status Out3_int8_int16::store(vm::CellBuilder& cb) const {
-  TRY_STATUS(store_int(cb, std::get<0>(this->payload), 8));
-  TRY_STATUS(store_int(cb, std::get<1>(this->payload), 16));
+  TRY_STATUS(store_int64(cb, std::get<0>(this->payload), 8));
+  TRY_STATUS(store_int64(cb, std::get<1>(this->payload), 16));
   return td::Status::OK();
 }
 

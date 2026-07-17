@@ -24,12 +24,12 @@ struct IncreaseCounter;
 struct ResetCounter;
 
 struct Storage {
-  td::RefInt256 id;
-  td::RefInt256 counter;
+  td::uint64 id;
+  td::uint64 counter;
 
   struct CreateArgs {
-    td::RefInt256 id;
-    td::RefInt256 counter;
+    td::uint64 id;
+    td::uint64 counter;
   };
   static Storage create(CreateArgs args);
   static td::Result<Storage> from_slice(vm::CellSlice& cs);
@@ -40,12 +40,12 @@ struct Storage {
 struct IncreaseCounter {
   static constexpr td::uint64 PREFIX = 2122802415ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
-  td::RefInt256 increaseBy;
+  td::uint64 queryId;
+  td::uint64 increaseBy;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
-    td::RefInt256 increaseBy;
+    td::uint64 queryId;
+    td::uint64 increaseBy;
   };
   static IncreaseCounter create(CreateArgs args);
   static td::Result<IncreaseCounter> from_slice(vm::CellSlice& cs);
@@ -56,10 +56,10 @@ struct IncreaseCounter {
 struct ResetCounter {
   static constexpr td::uint64 PREFIX = 980758278ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
   };
   static ResetCounter create(CreateArgs args);
   static td::Result<ResetCounter> from_slice(vm::CellSlice& cs);

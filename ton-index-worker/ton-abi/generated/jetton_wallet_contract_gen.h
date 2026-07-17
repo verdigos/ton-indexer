@@ -54,7 +54,7 @@ td::Result<AbiValue> ForwardPayloadRemainder_to_abi_value(const ForwardPayloadRe
 struct AskToTransfer {
   static constexpr td::uint64 PREFIX = 260734629ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
   td::RefInt256 jettonAmount;
   ton_abi::AbiAddress transferRecipient;
   ton_abi::AbiAddress sendExcessesTo;
@@ -63,7 +63,7 @@ struct AskToTransfer {
   ForwardPayloadRemainder forwardPayload;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
     td::RefInt256 jettonAmount;
     ton_abi::AbiAddress transferRecipient;
     ton_abi::AbiAddress sendExcessesTo;
@@ -80,13 +80,13 @@ struct AskToTransfer {
 struct TransferNotificationForRecipient {
   static constexpr td::uint64 PREFIX = 1935855772ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
   td::RefInt256 jettonAmount;
   ton_abi::AbiAddress transferInitiator;
   ForwardPayloadRemainder forwardPayload;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
     td::RefInt256 jettonAmount;
     ton_abi::AbiAddress transferInitiator;
     ForwardPayloadRemainder forwardPayload;
@@ -100,7 +100,7 @@ struct TransferNotificationForRecipient {
 struct InternalTransferStep {
   static constexpr td::uint64 PREFIX = 395134233ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
   td::RefInt256 jettonAmount;
   ton_abi::AbiAddress transferInitiator;
   ton_abi::AbiAddress sendExcessesTo;
@@ -108,7 +108,7 @@ struct InternalTransferStep {
   ForwardPayloadRemainder forwardPayload;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
     td::RefInt256 jettonAmount;
     ton_abi::AbiAddress transferInitiator;
     ton_abi::AbiAddress sendExcessesTo;
@@ -124,10 +124,10 @@ struct InternalTransferStep {
 struct ReturnExcessesBack {
   static constexpr td::uint64 PREFIX = 3576854235ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
   };
   static ReturnExcessesBack create(CreateArgs args);
   static td::Result<ReturnExcessesBack> from_slice(vm::CellSlice& cs);
@@ -138,13 +138,13 @@ struct ReturnExcessesBack {
 struct AskToBurn {
   static constexpr td::uint64 PREFIX = 1499400124ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
   td::RefInt256 jettonAmount;
   ton_abi::AbiAddress sendExcessesTo;
   std::optional<td::Ref<vm::Cell>> customPayload;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
     td::RefInt256 jettonAmount;
     ton_abi::AbiAddress sendExcessesTo;
     std::optional<td::Ref<vm::Cell>> customPayload;
@@ -158,13 +158,13 @@ struct AskToBurn {
 struct BurnNotificationForMinter {
   static constexpr td::uint64 PREFIX = 2078119902ULL;
   static constexpr int PREFIX_LEN = 32;
-  td::RefInt256 queryId;
+  td::uint64 queryId;
   td::RefInt256 jettonAmount;
   ton_abi::AbiAddress burnInitiator;
   ton_abi::AbiAddress sendExcessesTo;
 
   struct CreateArgs {
-    td::RefInt256 queryId;
+    td::uint64 queryId;
     td::RefInt256 jettonAmount;
     ton_abi::AbiAddress burnInitiator;
     ton_abi::AbiAddress sendExcessesTo;
