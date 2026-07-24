@@ -14,10 +14,11 @@
 > ton-mch-engine/{W12-BRIDGE-DESIGN.md,T122-CLAIMREWARD-DESIGN.md}. Gates:
 > ton-abi ctest 2/2 (build dir cmake-build-debug-visual-studio/ton-abi, run ctest from
 > that subdir), ctest -R mch 8/8 (…/ton-mch-engine subdir), mch twin gate set =
-> docs/mch-cpp-plan.md §1 (197 actions baseline — DEPENDS on user's uncommitted
-> tests/traces fixture swap: 02kEPzkQ deleted / i-gQwY3n untracked). OPEN ITEMS:
-> fixture-swap commit (user), TON-payout YAML case (fixture fetch needs n2+VPN),
-> merge decision, further protocol migration (§0.6 legacy ages out per-protocol).
+> docs/mch-cpp-plan.md §1 (**baseline = 148 fixtures / 199 actions** — fixture swap
+> RESOLVED 2026-07-24 keep-both: 02kEPzkQ restored + i-gQwY3n committed;
+> classify/actions/match re-verified diff-0 at 148). OPEN ITEMS: TON-payout YAML
+> case (fixture fetch needs n2+VPN), merge decision, further protocol migration
+> (§0.6 legacy ages out per-protocol).
 >
 > Companion design study (historical, partially superseded):
 > docs/tolk-abi-cpp-port-design.md. Review history §R/§R2-R6 (5 rounds, all resolved).
@@ -459,8 +460,9 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
   unit + pipeline). Composite ported both sides (C++ Action field + render columns).
   BARE registry names per §0.16 amendment. TON-payout leg unit-gated only (fixture
   fetch impossible from this tree — no kvrocks-capable save_trace/VPN; YAML case
-  follows when fixture lands). NB: 197 baseline depends on the user's working-tree
-  fixture swap (02kEPzkQ deleted / i-gQwY3n untracked) — committed separately by user.
+  follows when fixture lands). Fixture-swap RESOLVED post-wave (user chose keep-both):
+  02kEPzkQ restored from git + i-gQwY3n COMMITTED → corpus 148, baseline 199 (197 +2
+  from restored fixture), classify/actions/match re-verified diff-0 at 148.
 
 - **W12/T12.1 DONE 2026-07-24** (mch bridge infra; lead-verified fresh: ctest mch 8/8
   incl. new mch_abi_bridge 37 checks, ton-abi 2/2; executor-run full §1 gate set all
