@@ -11,6 +11,7 @@
 #include "td/actor/actor.h"
 #include "crypto/vm/cp0.h"
 
+#include "AbiBridgeTest.h"
 #include "BlockTree.h"
 #include "BuildSmoke.h"
 #include "Classify.h"
@@ -18,6 +19,7 @@
 #include "MsgVectorRunner.h"
 #include "BuildVectorRunner.h"
 #include "MatchRunner.h"
+#include "MsgParse.h"
 #include "ParseDump.h"
 #include "SchemaGate.h"
 #include "ShapeTest.h"
@@ -157,6 +159,7 @@ int main(int argc, char *argv[]) {
   bool shape_test_mode = false;
   bool dexrecords_test_mode = false;
   bool surface_mode = false;
+  bool abi_bridge_test_mode = false;
   std::vector<std::string> trace_paths;
 
   td::OptionParser p;
@@ -213,6 +216,9 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "dexrecords-test",
                "Typed host-seam self-test (DexRecords encoders + HostAdapter + pTON helper)",
                [&]() { dexrecords_test_mode = true; });
+  p.add_option('\0', "abi-bridge-test",
+               "ton-abi bridge self-test (W12: trampoline + AbiValue->Value adapter + registry policy)",
+               [&]() { abi_bridge_test_mode = true; });
   p.add_option('\0', "surface",
                "Dump C++ host/parse registries (parsers/preds/fns/shapers/lookup_kinds/"
                "boc_fields) as stable-sorted JSON for the twins",
@@ -318,9 +324,23 @@ int main(int argc, char *argv[]) {
     return mch::run_dexrecords_test();
   }
 
+  if (abi_bridge_test_mode) {
+    // ton-abi bridge self-test: no actor scheduler needed.
+    return mch::run_abi_bridge_test();
+  }
+
   if (surface_mode) {
     // Registry surface dump: no actor scheduler needed.
     return mch::run_surface();
+  }
+
+  // W12 (design §4): advisory startup consistency check on the merged parser
+  // registry. Silent + no-op on OK (the ABI rows are empty at T12.1, so no
+  // collision exists); a duplicate key across sources aborts startup here rather
+  // than dispatching to an arbitrary first-source parser.
+  if (auto reg_st = mch::validate_registries(); reg_st.is_error()) {
+    LOG(ERROR) << "message parser registry invalid: " << reg_st.message();
+    return 1;
   }
 
   td::actor::Scheduler scheduler({threads});

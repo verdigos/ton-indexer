@@ -136,6 +136,7 @@ add_library(mch-classify STATIC
     src/MchClassifierActor.cpp
     src/MsgParse.cpp
     src/MsgParsersGenerated.cpp
+    src/AbiBridge.cpp
     src/parse/PSlice.cpp
     src/parse/ParseJettons.cpp
     src/parse/ParseDns.cpp
@@ -154,10 +155,22 @@ target_include_directories(mch-classify
 target_compile_features(mch-classify PUBLIC cxx_std_20)
 
 find_package(lz4 CONFIG REQUIRED)
-target_link_libraries(mch-classify PUBLIC tondb-scanner tdactor lz4::lz4)
+# ton-abi (W12 bridge): mch-classify -> ton-abi ONLY (ton-abi stays mch-free).
+target_link_libraries(mch-classify PUBLIC tondb-scanner tdactor lz4::lz4 ton-abi)
 add_dependencies(mch-classify mch_generate_sources)
 
 # The CLI/dev tool: harness TUs (dump/runners/main) over the core lib.
+# W12 bridge self-test (--abi-bridge-test): committed ton-abi generated fixture
+# pairs compiled into the HARNESS EXE ONLY (never the mch-classify prod lib) so
+# the trampoline+adapter run against real generated structs; these are UNDER TEST,
+# not production registry rows (design §6/§7).
+set(TON_ABI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../ton-abi)
+set(ABI_BRIDGE_TEST_FIXTURES
+    ${TON_ABI_DIR}/generated/tolk_counter_gen.cpp
+    ${TON_ABI_DIR}/generated/jetton_wallet_contract_gen.cpp
+    ${TON_ABI_DIR}/generated/lots_of_wrappers_gen.cpp
+)
+
 add_executable(ton-mch-engine
     src/main.cpp
     src/VectorRunner.cpp
@@ -171,8 +184,10 @@ add_executable(ton-mch-engine
     src/ParseDump.cpp
     src/SchemaGate.cpp
     src/Surface.cpp
+    src/AbiBridgeTest.cpp
+    ${ABI_BRIDGE_TEST_FIXTURES}
 )
-target_include_directories(ton-mch-engine PRIVATE src ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(ton-mch-engine PRIVATE src ${CMAKE_CURRENT_BINARY_DIR} ${TON_ABI_DIR}/generated)
 target_compile_features(ton-mch-engine PRIVATE cxx_std_20)
 target_link_libraries(ton-mch-engine mch-classify)
 add_dependencies(ton-mch-engine mch_generate_sources)
@@ -198,3 +213,5 @@ add_test(NAME mch_msg_vectors
     COMMAND ton-mch-engine --msg-vectors ${CMAKE_CURRENT_SOURCE_DIR}/ir/msg_vectors.json)
 add_test(NAME mch_codegen_selftest
     COMMAND mch-codegen --selftest)
+add_test(NAME mch_abi_bridge
+    COMMAND ton-mch-engine --abi-bridge-test)

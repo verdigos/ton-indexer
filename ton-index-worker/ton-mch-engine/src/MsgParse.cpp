@@ -18,6 +18,7 @@
 //  - payload_sum_type is Python hex(): lowercase, no zero padding.
 #include "MsgParse.h"
 
+#include "AbiBridge.h"
 #include "MsgParsersGenerated.h"
 #include "TraceLoader.h"
 #include "parse/PSlice.h"
@@ -41,34 +42,90 @@
 
 namespace mch {
 
-// The registered parser set = the M1 schema-generated rows (14, from
-// mch-msgs.schema via msgs_gen.py) merged with the kept-hand parsers (7). The
-// generated names never collide with the hand ones; the total registered set
-// (and therefore --surface / cpp_surface.json) is byte-identical to the former
-// hand map.
-const std::map<std::string, MsgParserFn> &message_parsers() {
-  static const std::map<std::string, MsgParserFn> parsers = [] {
-    std::map<std::string, MsgParserFn> m = {
-        // Kept hand (irregular / single-use constructs — see mch-msgs.schema):
-        {"JettonTransfer", parse_jetton_transfer},         // forward-payload tail hook
-        {"MinterJettonMint", parse_minter_jetton_mint},    // nested ref-capture
-        {"JettonBurnNotification", parse_never},           // not Slice-constructible
-        {"ChangeDnsRecordMessage", parse_change_dns},
-        {"VestingSendMessage", parse_vesting_send_message},
-        {"EvaaWithdrawFailExcess", parse_evaa_withdraw_fail_excess},  // opcode-enum
-        {"LayerZeroOappExecuteCallback", parse_layerzero_oapp_execute_callback},
-    };
-    for (const auto &row : generated_message_parsers()) {
-      m.emplace(row.first, row.second);
+// The registered parser set = the kept-hand parsers (7) + the M1 schema-generated
+// rows (from mch-msgs.schema via msgs_gen.py) + the W12 ABI-bridge rows (empty at
+// T12.1). First-source-wins on a collision; collisions are recorded (design §4)
+// so validate_registries() can surface them at startup and parse_message_body
+// fails closed on an ambiguous name -- the total registered set (and --surface /
+// cpp_surface.json) is otherwise unchanged.
+namespace {
+
+// Kept hand parsers (irregular / single-use constructs — see mch-msgs.schema).
+const std::vector<std::pair<std::string, MsgParserFn>> &hand_message_parsers() {
+  static const std::vector<std::pair<std::string, MsgParserFn>> rows = {
+      {"JettonTransfer", parse_jetton_transfer},         // forward-payload tail hook
+      {"MinterJettonMint", parse_minter_jetton_mint},    // nested ref-capture
+      {"JettonBurnNotification", parse_never},           // not Slice-constructible
+      {"ChangeDnsRecordMessage", parse_change_dns},
+      {"VestingSendMessage", parse_vesting_send_message},
+      {"EvaaWithdrawFailExcess", parse_evaa_withdraw_fail_excess},  // opcode-enum
+      {"LayerZeroOappExecuteCallback", parse_layerzero_oapp_execute_callback},
+  };
+  return rows;
+}
+
+struct BuiltRegistry {
+  std::map<std::string, MsgParserFn> map;
+  std::vector<std::string> dups;
+};
+
+const BuiltRegistry &built_registry() {
+  static const BuiltRegistry built = [] {
+    BuiltRegistry b;
+    for (const auto *src : {&hand_message_parsers(), &generated_message_parsers(), &abi_message_parsers()}) {
+      for (const auto &row : *src) {
+        b.map.emplace(row.first, row.second);  // first-source-wins
+      }
     }
-    return m;
+    b.dups = duplicate_parser_keys({hand_message_parsers(), generated_message_parsers(), abi_message_parsers()});
+    return b;
   }();
-  return parsers;
+  return built;
+}
+
+}  // namespace
+
+std::vector<std::string> duplicate_parser_keys(
+    const std::vector<std::vector<std::pair<std::string, MsgParserFn>>> &sources) {
+  std::set<std::string> seen;
+  std::set<std::string> dup_set;
+  std::vector<std::string> dups;
+  for (const auto &src : sources) {
+    for (const auto &row : src) {
+      if (!seen.insert(row.first).second && dup_set.insert(row.first).second) {
+        dups.push_back(row.first);
+      }
+    }
+  }
+  return dups;
+}
+
+const std::map<std::string, MsgParserFn> &message_parsers() {
+  return built_registry().map;
+}
+
+td::Status validate_registries() {
+  const auto &dups = built_registry().dups;
+  if (dups.empty()) {
+    return td::Status::OK();
+  }
+  std::string joined;
+  for (std::size_t i = 0; i < dups.size(); ++i) {
+    if (i) {
+      joined += ", ";
+    }
+    joined += dups[i];
+  }
+  return td::Status::Error(PSLICE() << "duplicate message parser keys: " << joined);
 }
 
 td::Result<Value> parse_message_body(const std::string &type_name, const td::Ref<vm::Cell> &body) {
-  auto it = message_parsers().find(type_name);
-  if (it == message_parsers().end()) {
+  const auto &built = built_registry();
+  if (std::find(built.dups.begin(), built.dups.end(), type_name) != built.dups.end()) {
+    return td::Status::Error(PSLICE() << "message type " << type_name << " is ambiguously registered");
+  }
+  auto it = built.map.find(type_name);
+  if (it == built.map.end()) {
     return td::Status::Error(PSLICE() << "message type " << type_name << " is not registered");
   }
   // Soft-parse (§5.4): a malformed body must reduce to a clean parse failure,

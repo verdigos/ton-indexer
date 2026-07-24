@@ -422,6 +422,23 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
 
 ## 6. Wave log (append per wave; status column above updates same commit)
 
+- **W12/T12.1 DONE 2026-07-24** (mch bridge infra; lead-verified fresh: ctest mch 8/8
+  incl. new mch_abi_bridge 37 checks, ton-abi 2/2; executor-run full §1 gate set all
+  diff-0 + Python 1988 pass). Design-first per §0.16 with acked reconciliation doc
+  `ton-mch-engine/W12-BRIDGE-DESIGN.md`: §0.16's interpreter-era machinery DROPPED
+  (std::function migration, abi_bridge_init, ABI-artifact dir, install change — pure
+  codegen made registration compile-time static; `&abi_parse_body<T>` template
+  instantiation IS a raw MsgParserFn, both existing tables untouched); KEPT name
+  identity `<contract>::<Decl>`, dup-key-is-error (reshaped: validate_registries()
+  advisory at CLI startup + fail-closed ambiguous-name error in parse_message_body),
+  exotic-cell reject re-homed to trampoline open. Adapter = total AbiValue→mch::Value,
+  tolk-faithful NEW value universe (Extern→Obj{bits,value}, Bits→Cell, Map→list-of-
+  pairs, String→raw bytes, AddrNone→account_none, struct-labeled unions inline);
+  no new VType. Fixture pairs (tolk_counter, jetton_wallet_contract, lots_of_wrappers)
+  compiled into HARNESS EXE only — prod abi rows EMPTY. mch-classify now PUBLIC-links
+  ton-abi. Bridge ~620 LOC. REMAINING in W12: T12.2 first real protocol row
+  (+ --surface update + embedding-actor validate seam noted).
+
 - **W11.5 DONE 2026-07-16** (refinement wave; lead-verified fresh: ctest 2/2 [doctest
   162 cases / 1579 asserts + gen_check --check], 33 vectors both directions via
   GENERATED path [368 asserts incl. expect_error], grep AbiInterp clean).

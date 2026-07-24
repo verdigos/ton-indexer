@@ -26,6 +26,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace mch {
@@ -33,8 +34,22 @@ namespace mch {
 using MsgParserFn = td::Result<Value> (*)(const td::Ref<vm::Cell> &body);
 
 // Message-type registry: IR `parse.types[]` name -> parser. Names are the
-// Python class names (Registries.message_types keys).
+// Python class names (Registries.message_types keys), plus the ABI-bridge rows
+// (W12, `<contract>::<decl>` keys). First-source-wins on a key collision.
 const std::map<std::string, MsgParserFn> &message_parsers();
+
+// Advisory startup consistency check (W12, design §4): OK unless a key is
+// registered by more than one source (hand / schema-generated / ABI bridge), in
+// which case an error listing the ambiguous names. Called from startup paths;
+// NOT a gate on message_parsers() access (the Meyer's-static map cannot itself
+// surface an error, and the no-abort rule forbids failing inside it).
+td::Status validate_registries();
+
+// Keys appearing in more than one source, first-wins scan order. Exposed for the
+// bridge self-test (W12 --abi-bridge-test) to exercise the dup policy without a
+// production collision.
+std::vector<std::string> duplicate_parser_keys(
+    const std::vector<std::vector<std::pair<std::string, MsgParserFn>>> &sources);
 
 // Parse `body` as the named registered type; error when the name is unknown
 // or the parse fails (caller implements soft-parse alternatives on top).
