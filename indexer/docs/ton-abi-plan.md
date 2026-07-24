@@ -1,8 +1,26 @@
-# ton-abi module — implementation plan (v3, self-contained)
+# ton-abi module — implementation plan (self-contained; PROGRAM COMPLETE through W12)
 
-> **SELF-CONTAINED**: this doc carries all context needed to review or execute it without
-> the originating conversation. Companion (optional depth): docs/tolk-abi-cpp-port-design.md.
-> For reviewers: §R at the end lists what to challenge.
+> **STATUS (2026-07-24): ALL WAVES W0-W12 EXECUTED + COMMITTED on branch `ton-abi`.**
+> This doc = plan AS WRITTEN + wave log AS BUILT. For CURRENT state read `## 6. Wave log`
+> TOP-DOWN (newest first) — later waves AMEND earlier sections: W11.5 retired the
+> interpreter (pure codegen; AbiValue = test-gate + bridge interchange only), W12
+> reconciled §0.16 (see ton-mch-engine/W12-BRIDGE-DESIGN.md + T122-CLAIMREWARD-DESIGN.md
+> — those two are the bridge's as-built truth, §0.16 here is the pre-W11.5 original).
+> §0.16 bare-name amendment + §0.12 array policy are inline-amended and current.
+>
+> **FRESH-SESSION ENTRY MAP**: this file (plan+log) → module docs at
+> ton-index-worker/ton-abi/ (W11-SHAPE-SPEC.md = emitter contract,
+> testdata/{VALUE_SCHEMA.md,ERROR_MAPPING.md}) → bridge docs at
+> ton-mch-engine/{W12-BRIDGE-DESIGN.md,T122-CLAIMREWARD-DESIGN.md}. Gates:
+> ton-abi ctest 2/2 (build dir cmake-build-debug-visual-studio/ton-abi, run ctest from
+> that subdir), ctest -R mch 8/8 (…/ton-mch-engine subdir), mch twin gate set =
+> docs/mch-cpp-plan.md §1 (197 actions baseline — DEPENDS on user's uncommitted
+> tests/traces fixture swap: 02kEPzkQ deleted / i-gQwY3n untracked). OPEN ITEMS:
+> fixture-swap commit (user), TON-payout YAML case (fixture fetch needs n2+VPN),
+> merge decision, further protocol migration (§0.6 legacy ages out per-protocol).
+>
+> Companion design study (historical, partially superseded):
+> docs/tolk-abi-cpp-port-design.md. Review history §R/§R2-R6 (5 rounds, all resolved).
 
 ## A. Background & motivation
 
@@ -288,8 +306,8 @@ teammates never commit. Wave-boundary ops (proven): executor rotation on long co
 | Wave | Task | Content | Diff | Scope | Model | Status |
 |---|---|---|---|---|---|---|
 | **W0 scaffold** | T0.1 | CMake lib+test exe+ctest, vendor doctest, smoke green | LOW | S | haiku/sonnet | **DONE** |
-| | T0.2 | gen_vectors.mjs + committed tools/package{,-lock}.json (§0.15; if the pkg is unpublished use file:/git dep, version = git hash); compile 3 fixtures, emit ABIs + first golden-hex vectors; SELF-VALIDATION REQUIRED (final review F4): (a) every emitted value-JSON re-parsed → dynamicPack → hex must equal the golden hex (lossless-serializer proof); (b) cases transcribed from reference specs assert the spec's LITERAL golden hex at generation time; (c) port the specs' custom-serializer TS impls (LotsOfWrappers.spec.ts:304-380) into gen_vectors. Write testdata/VALUE_SCHEMA.md — documents the serializer's validated output (§0.14), does NOT independently legislate | MED | M | sonnet | pending |
-| | T0.3 | VectorRunner skeleton: one doctest case per vector, vectors carry `enabled_from: <wave>` gating — runner GREEN on empty enabled set (green-at-boundary holds); waves enable their slices | LOW | S | haiku/sonnet | pending |
+| | T0.2 | gen_vectors.mjs + committed tools/package{,-lock}.json (§0.15; if the pkg is unpublished use file:/git dep, version = git hash); compile 3 fixtures, emit ABIs + first golden-hex vectors; SELF-VALIDATION REQUIRED (final review F4): (a) every emitted value-JSON re-parsed → dynamicPack → hex must equal the golden hex (lossless-serializer proof); (b) cases transcribed from reference specs assert the spec's LITERAL golden hex at generation time; (c) port the specs' custom-serializer TS impls (LotsOfWrappers.spec.ts:304-380) into gen_vectors. Write testdata/VALUE_SCHEMA.md — documents the serializer's validated output (§0.14), does NOT independently legislate | MED | M | sonnet | **DONE** |
+| | T0.3 | VectorRunner skeleton: one doctest case per vector, vectors carry `enabled_from: <wave>` gating — runner GREEN on empty enabled set (green-at-boundary holds); waves enable their slices | LOW | S | haiku/sonnet | **DONE** (runner later RETIRED at W11.5 with the interpreter — A/B gate took over) |
 | **W1 model+loader** | T1.1 | AbiModel PODs, all ~30 Ty kinds + ContractABI arrays (mechanical mirror) | LOW | M | sonnet | **DONE** |
 | | T1.2 | AbiLoader TDD: fail-closed walk; reject units — SEMANTIC invariants too: unknown kind, any nested index OOB, missing field, version ≠ "1.0", malformed bigint, duplicate decl names, instantiation arity mismatch, intN/uintN/bitsN width limits, alias cycles, union PREFIX-FREEDOM (no variant prefix strict-prefix of another — makes W2's sorted dispatch provably equal to reference declaration-order first-match), prefix bounds CORRECTED at W1: UNION-VARIANT prefix_len ≤ 32 (float64 rationale holds there), but STRUCT-level prefixes go WIDER (48-bit exists in lots-of-wrappers MsgSinglePrefix48) → struct bound = ≤1023 + uint64 prefix_num | MED→HIGH | M | sonnet (opus if invariant set balloons) | **DONE** |
 | | T1.3 | Loads-all-fixture-ABIs test (full set) | LOW | S | haiku | **DONE** (18/19 compile; small.tolk = upstream compiler error; err-* compile to VALID ABIs → committed as W11 reject-testdata) |
@@ -309,8 +327,8 @@ teammates never commit. Wave-boundary ops (proven): executor rotation on long co
 | **W11 emitter** | T11.1 | ton-abi-gen core per lead shape spec | **HIGH** | **L** | **opus** | **DONE** |
 | | T11.2 | 17 generated pairs (18.3k LOC, all compiled) + --check ctest + FULL A/B (33 vectors, static==dynamic) + default-fill + MyBorderedInt typed | MED | M | opus (continued) | **DONE** |
 | | T11.3 | ErrorsAtCodegen pins (2 hard-fail + 2 emit-cleanly) + Cli-analog | LOW→MED | M | opus (continued) | **DONE** |
-| **W12 mch bridge** (lives in ton-mch-engine; full design section in wave plan per §0.16 BEFORE code) | T12.1 | MsgParserFn → std::function migration (TWO tables: MsgParse.cpp map + MsgParsersGenerated registry vector; NB message_parsers() is a Meyer's-static built on first call — restructure init or add a second registry, AND enforce §0.16 access-before-init error AT THE ACCESSOR: pre-init callers exist — BuildDriver artifact validation, --surface, ParseDump) + AbiValue→mch::Value adapter + registry rows per §0.16; all mch gates untouched | MED→HIGH | M | **opus** | pending |
-| | T12.2 | First new protocol end-to-end: .tolk decl → ABI → classified action. NB --surface/cpp_surface.json UPDATES here (gates-untouched applies to T12.1 only; normal protocol-addition procedure) | MED | M | sonnet | pending |
+| **W12 mch bridge** (lives in ton-mch-engine; full design section in wave plan per §0.16 BEFORE code) | T12.1 | MsgParserFn → std::function migration (TWO tables: MsgParse.cpp map + MsgParsersGenerated registry vector; NB message_parsers() is a Meyer's-static built on first call — restructure init or add a second registry, AND enforce §0.16 access-before-init error AT THE ACCESSOR: pre-init callers exist — BuildDriver artifact validation, --surface, ParseDump) + AbiValue→mch::Value adapter + registry rows per §0.16; all mch gates untouched | MED→HIGH | M | **opus** | **DONE** — BUT NOT AS THIS ROW PRESCRIBES: W11.5 obsoleted the std::function/init machinery; as-built = W12-BRIDGE-DESIGN.md (raw-fn-ptr template trampoline, static rows, validate_registries) |
+| | T12.2 | First new protocol end-to-end: .tolk decl → ABI → classified action. NB --surface/cpp_surface.json UPDATES here (gates-untouched applies to T12.1 only; normal protocol-addition procedure) | MED | M | sonnet | **DONE** (DeDust V2 claim_reward; as-built = T122-CLAIMREWARD-DESIGN.md §10; ran opus) |
 
 ## 4. TDD protocol (every code task)
 

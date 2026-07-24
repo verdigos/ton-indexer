@@ -1,4 +1,13 @@
-# Tolk-ABI → C++ port — design study (2026-07-15)
+# Tolk-ABI → C++ port — design study (2026-07-15) — HISTORICAL, PARTIALLY SUPERSEDED
+
+> **SUPERSESSION NOTE (2026-07-24)**: the port was EXECUTED (W0-W12 on branch ton-abi;
+> current truth = docs/ton-abi-plan.md wave log). Two framings below are DEAD:
+> (1) "interpreter-first / interpreter stays as codegen's A/B twin" — the interpreter
+> was dev scaffolding, RETIRED at W11.5 per user direction; end state = pure codegen,
+> conformance = generated structs vs TS-oracle vectors directly; (2) the L3/mch-bridge
+> sketch — as-built bridge is ton-mch-engine/W12-BRIDGE-DESIGN.md (raw-fn-ptr template
+> trampoline, compile-time static rows, no std::function/init API). L0/L1 leaf analysis,
+> layering, oracle strategy, and D1/D2 conventions remain accurate.
 
 Question: what would a complete C++ port of `S:\Dev\tolk-abi-to-typescript` codegen look
 like, as the eventual replacement for TLB-based message parsing in the indexer?
