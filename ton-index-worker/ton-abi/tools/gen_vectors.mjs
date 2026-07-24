@@ -644,6 +644,24 @@ async function main() {
 
     console.log(`copied 26 .tolk fixtures (19 top-level + 7 imports/), ${loadableCount} compile to a valid ABI`);
 
+    // ---- T12.2: production ABI for the DeDust CPMM V2 claim_reward family.
+    // A hand-authored DECLARATION file (plan §0.11) that lives IN testdata/fixtures
+    // (not copied from the reference repo). Compiled here so the committed
+    // dedust_v2.abi.json regenerates deterministically; the emitter (ton-abi-gen)
+    // consumes it into ton-abi/generated/dedust_v2_gen.{h,cpp} for the mch bridge.
+    {
+        const declFile = path.join(FIXTURES_DIR, 'dedust_v2.tolk');
+        const abi = await compileTolk(declFile);
+        if (abi.abi_schema_version !== '1.0') {
+            throw new Error(`unexpected abi_schema_version '${abi.abi_schema_version}' for dedust_v2`);
+        }
+        fs.writeFileSync(
+            path.join(FIXTURES_DIR, 'dedust_v2.abi.json'),
+            JSON.stringify(abi, null, 2) + '\n',
+        );
+        console.log(`compiled dedust_v2.tolk -> dedust_v2.abi.json (contract_name=${abi.contract_name})`);
+    }
+
     // ---- W8 (T8.3): broaden vector coverage past W0's scalar-only subset.
     // One ctx per fixture, reusing the abi already compiled above.
     const ctxByFixture = {};

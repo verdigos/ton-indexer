@@ -5,6 +5,9 @@
 #include "common/refint.h"
 #include "vm/cells/CellBuilder.h"
 
+// T12.2: first production ABI parser pair (DeDust CPMM V2 claim_reward family).
+#include "dedust_v2_gen.h"
+
 #include <string>
 
 namespace mch {
@@ -125,8 +128,17 @@ Value abi_value_to_mch(const AbiValue &v) {
 }
 
 const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
-  // EMPTY for T12.1 (no production protocol row yet; T12.2 adds the first).
-  static const std::vector<std::pair<std::string, MsgParserFn>> rows = {};
+  // T12.2: first production rows. Keys are BARE decl names (not <contract>::<decl>)
+  // -- the .mch grammar's `parse CAP as Name` reads a bare IDENT, all existing
+  // registry rows are bare, and none of these 3 names collide (validate_registries
+  // is the collision backstop). Acked §0.16 deviation; revisit on a real cross-ABI
+  // name clash. See T122-CLAIMREWARD-DESIGN.md §3.
+  namespace g = ton_abi::gen::dedust_v2;
+  static const std::vector<std::pair<std::string, MsgParserFn>> rows = {
+      {"ClaimRewardMessage", &abi_parse_body<g::ClaimRewardMessage>},
+      {"PayoutRewardMessage", &abi_parse_body<g::PayoutRewardMessage>},
+      {"PayoutMessage", &abi_parse_body<g::PayoutMessage>},
+  };
   return rows;
 }
 

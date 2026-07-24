@@ -40,7 +40,8 @@ from cpp_surface import (  # noqa: E402
 # Combined registries: same factory set as py_match_dump.py.
 from indexer.events.mch.builders import (  # noqa: E402
     coffee_registries, dedust_hybrid_registries, dedust_registries,
-    dedust_withdraw_registries, dns_registries, jetton_decl_registries,
+    dedust_withdraw_registries, dedust_v2_claim_reward_registries,
+    dns_registries, jetton_decl_registries,
     jetton_registries, stonfi_v2_registries,
 )
 from indexer.events.mch.builders.coffee import coffee_liquidity_registries  # noqa: E402
@@ -64,7 +65,8 @@ from indexer.events.mch.builders.vesting import vesting_registries  # noqa: E402
 
 _FACTORIES = [
     coffee_registries, dedust_hybrid_registries, dedust_registries,
-    dedust_withdraw_registries, dns_registries, jetton_decl_registries,
+    dedust_withdraw_registries, dedust_v2_claim_reward_registries,
+    dns_registries, jetton_decl_registries,
     jetton_registries, stonfi_v2_registries, coffee_liquidity_registries,
     dedust_deposit_registries, ethena_registries, evaa_registries,
     getgems_registries, jvault_registries, layerzero_receive_registries,

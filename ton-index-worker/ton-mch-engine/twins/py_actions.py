@@ -39,7 +39,8 @@ from indexer.events.blocks.utils.block_tree_serializer import block_to_action  #
 # Combined registries: same factory set as py_classify.py.
 from indexer.events.mch.builders import (  # noqa: E402
     coffee_registries, dedust_hybrid_registries, dedust_registries,
-    dedust_withdraw_registries, dns_registries, jetton_decl_registries,
+    dedust_withdraw_registries, dedust_v2_claim_reward_registries,
+    dns_registries, jetton_decl_registries,
     jetton_registries, stonfi_v2_registries,
 )
 from indexer.events.mch.builders.coffee import coffee_liquidity_registries  # noqa: E402
@@ -63,7 +64,8 @@ from indexer.events.mch.builders.vesting import vesting_registries  # noqa: E402
 
 _FACTORIES = [
     coffee_registries, dedust_hybrid_registries, dedust_registries,
-    dedust_withdraw_registries, dns_registries, jetton_decl_registries,
+    dedust_withdraw_registries, dedust_v2_claim_reward_registries,
+    dns_registries, jetton_decl_registries,
     jetton_registries, stonfi_v2_registries, coffee_liquidity_registries,
     dedust_deposit_registries, ethena_registries, evaa_registries,
     getgems_registries, jvault_registries, layerzero_receive_registries,
@@ -107,7 +109,7 @@ PORTED_BTYPES = {
     "tonco_deposit_liquidity", "evaa_withdraw", "jvault_stake", "jvault_unstake",
     "jvault_unstake_request", "jvault_claim", "ethena_deposit",
     "layerzero_receive", "coffee_create_vault", "vesting_send_message",
-    "tgbtc_mint",
+    "tgbtc_mint", "dedust_v2_claim_reward",
 }
 
 # The C++ render_action column set (Classify.cpp render_action), in any order —
@@ -118,6 +120,7 @@ ACTION_COLUMNS = [
     "amount", "value", "opcode",
     "ton_transfer_data", "jetton_transfer_data", "jetton_swap_data",
     "nft_transfer_data", "nft_listing_data", "dex_deposit_liquidity_data",
+    "dex_withdraw_liquidity_data",
     "staking_data", "evaa_withdraw_data", "vesting_send_message_data",
     "layerzero_packet_data", "jvault_stake_data", "jvault_claim_data", "extra",
 ]

@@ -8,6 +8,7 @@
     "specs/dedust_deposit.mch",
     "specs/dedust_swap.mch",
     "specs/dedust_withdraw.mch",
+    "specs/dedust_v2_claim_reward.mch",
     "specs/dns.mch",
     "specs/ethena.mch",
     "specs/evaa.mch",

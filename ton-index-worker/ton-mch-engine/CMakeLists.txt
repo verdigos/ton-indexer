@@ -101,6 +101,10 @@ add_custom_target(mch_generate_sources DEPENDS ${MCH_GENERATED_SOURCES} ${MCH_GE
 # 1 is ADDITIVE: identical objects, split into a lib for reuse. (build_action /
 # fill_* Action-row rendering stays with the harness Classify.cpp for now — it
 # moves lib-side in the slice that wires the production actor.)
+# ton-abi generated pairs live here (fixture pairs for the harness test; the
+# dedust_v2 PROD pair compiled into mch-classify below, T12.2).
+set(TON_ABI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../ton-abi)
+
 add_library(mch-classify STATIC
     src/TraceLoader.cpp
     src/BlockTree.cpp
@@ -137,6 +141,8 @@ add_library(mch-classify STATIC
     src/MsgParse.cpp
     src/MsgParsersGenerated.cpp
     src/AbiBridge.cpp
+    # T12.2: first PRODUCTION ABI parser pair (DeDust CPMM V2 claim_reward family).
+    ${TON_ABI_DIR}/generated/dedust_v2_gen.cpp
     src/parse/PSlice.cpp
     src/parse/ParseJettons.cpp
     src/parse/ParseDns.cpp
@@ -151,6 +157,8 @@ target_include_directories(mch-classify
     # MsgParse.cpp includes "generated/mch-msgs-tlb.h" -> resolves into the
     # build tree; nothing generated ever lands under src/.
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
+    # AbiBridge.cpp includes the dedust_v2 generated header (T12.2 prod pair).
+    PRIVATE ${TON_ABI_DIR}/generated
 )
 target_compile_features(mch-classify PUBLIC cxx_std_20)
 
@@ -163,8 +171,7 @@ add_dependencies(mch-classify mch_generate_sources)
 # W12 bridge self-test (--abi-bridge-test): committed ton-abi generated fixture
 # pairs compiled into the HARNESS EXE ONLY (never the mch-classify prod lib) so
 # the trampoline+adapter run against real generated structs; these are UNDER TEST,
-# not production registry rows (design §6/§7).
-set(TON_ABI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../ton-abi)
+# not production registry rows (design §6/§7). TON_ABI_DIR set above.
 set(ABI_BRIDGE_TEST_FIXTURES
     ${TON_ABI_DIR}/generated/tolk_counter_gen.cpp
     ${TON_ABI_DIR}/generated/jetton_wallet_contract_gen.cpp

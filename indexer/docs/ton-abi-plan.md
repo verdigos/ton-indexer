@@ -172,7 +172,11 @@ L0 TON-core vm (have) → L1 leaf runtime (~600-800 LOC, THE correctness-critica
     monomorph name>`; bodies WITHOUT a decl name (inline unions) REQUIRE an explicit
     manifest-supplied name. Duplicate registry keys = startup error. NO prefix-
     uniqueness enforcement (prefix check lives inside each parser only; revisit only if
-    opcode-based dispatch is ever added). **Deployment + init (required in W12 design
+    opcode-based dispatch is ever added). **T12.2 AMENDMENT (acked deviation): registry
+    keys are BARE decl names, not contract::decl — the .mch grammar's parse-as reads a
+    bare IDENT (`::` unlexable without grammar change); all pre-existing rows are bare;
+    validate_registries() is the collision backstop. Revisit trigger = first real
+    cross-ABI name clash.** **Deployment + init (required in W12 design
     section)**: ABI artifacts = committed dir passed via config/CLI arg (same pattern as
     the mch IR artifact; CMake install/packaging updated accordingly — current install
     ships exe only); explicit `abi_bridge_init(path) -> td::Status` called by BOTH the
@@ -421,6 +425,24 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
    walkers ~500, emitter 800-1,200).
 
 ## 6. Wave log (append per wave; status column above updates same commit)
+
+- **W12/T12.2 DONE 2026-07-24** (FIRST REAL PROTOCOL through ABI path: DeDust CPMM V2
+  claim_reward; design doc `ton-mch-engine/T122-CLAIMREWARD-DESIGN.md` + §10 as-built;
+  lead-verified fresh ctest mch 8/8 + ton-abi 2/2; executor full gate run: classify/
+  actions/match/parse-dump/schema/prod ALL diff-0 at **196→197** actions (+1 = resident
+  jetton fixture reclassified unknown→dedust_v2_claim_reward), pytest 1988/2skip).
+  Proven end-to-end: minimal decl `dedust_v2.tolk` (3 structs, plan §0.11 flow — NOT
+  the full 943-line .talk) → committed ABI JSON → generated pair (--check covered) →
+  3 PROD rows in abi_message_parsers() (first non-empty; validate_registries dup-check
+  now live) → spec `dedust_v2_claim_reward.mch` (tolk-universe camelCase captures) →
+  action `dedust_v2_claim_reward` on dex_withdraw_liquidity_data (+reward_index extra).
+  Python twin = hand gate-only parsers in builders/dedust_v2.py mirroring the adapter
+  shape; ADDRESS PARITY PROVEN (AccountId.as_str().upper() == make_account_raw render,
+  unit + pipeline). Composite ported both sides (C++ Action field + render columns).
+  BARE registry names per §0.16 amendment. TON-payout leg unit-gated only (fixture
+  fetch impossible from this tree — no kvrocks-capable save_trace/VPN; YAML case
+  follows when fixture lands). NB: 197 baseline depends on the user's working-tree
+  fixture swap (02kEPzkQ deleted / i-gQwY3n untracked) — committed separately by user.
 
 - **W12/T12.1 DONE 2026-07-24** (mch bridge infra; lead-verified fresh: ctest mch 8/8
   incl. new mch_abi_bridge 37 checks, ton-abi 2/2; executor-run full §1 gate set all

@@ -445,6 +445,33 @@ def _fill_dex_withdraw_liquidity(block: Block, action: Action):
         'lp_tokens_burnt': block.data['lp_tokens_burnt'].value if block.data['lp_tokens_burnt'] is not None else None
     }
 
+def _fill_dedust_v2_claim_reward(block: Block, action: Action):
+    # T12.2: DeDust CPMM V2 reward claim. Reuses the dex_withdraw_liquidity_data
+    # composite (amount1 = PayoutReward.amount, asset1/wallets from the payout leg,
+    # side-2 null, lp_tokens_burnt null). reward_index -> extra.
+    d = block.data
+    asset1_out = _dget(d, 'asset1_out')
+    action.source = _addr(_dget(d, 'sender'))
+    action.destination = _addr(_dget(d, 'pool'))
+    action.asset = _addr(asset1_out)
+    action.dex_withdraw_liquidity_data = {
+        "dex": _dget(d, 'dex'),
+        "amount1": _value(_dget(d, 'amount1_out')),
+        "amount2": None,
+        "asset1_out": _addr(asset1_out),
+        "asset2_out": None,
+        "user_jetton_wallet_1": _addr(_dget(d, 'wallet1')),
+        "user_jetton_wallet_2": None,
+        "dex_jetton_wallet_1": _addr(_dget(d, 'dex_jetton_wallet_1')),
+        "dex_wallet_1": _addr(_dget(d, 'dex_wallet_1')),
+        "dex_wallet_2": None,
+        "dex_jetton_wallet_2": None,
+        "is_refund": False,
+        "lp_tokens_burnt": None,
+    }
+    action.extra = {"reward_index": _dget(d, 'reward_index')}
+
+
 def _fill_tonco_withdraw_liquidity(block: ToncoWithdrawLiquidityBlock, action: Action):
     action.type = 'dex_withdraw_liquidity'
     d = block.data
@@ -732,7 +759,8 @@ def _fill_evaa_liquidate_action(block: EvaaLiquidateBlock, action: Action):
     action.source = str(block.data.liquidator)
     action.destination = str(block.data.borrower)
     action.destination_secondary = str(block.data.borrower_contract) if block.data.borrower_contract else None
-    action.asset = str(block.data.collateral_asset_id)
+    # collateral_asset_id is a 256-bit int, not a TON address; it's already
+    # stored as hex in evaa_liquidate_data.asset_id
     action.amount = block.data.collateral_amount
     action.success = block.data.is_success
     action.evaa_liquidate_data = {
@@ -899,7 +927,8 @@ def _fill_tgbtc_new_key_action(block: TgBTCNewKeyBlock, action: Action):
     if block.data.crippled:
         action.type += '_fallback'
     action.source = _addr(block.data.teleport_contract)
-    action.source_secondary = block.data.pubkey
+    # raw pubkey hex is not a TON address — pgton tonaddr columns reject it
+    action.extra = {"pubkey": block.data.pubkey}
     action.destination = _addr(block.data.coordinator_contract)
     action.destination_secondary = _addr(block.data.pegout_address)
     action.amount = block.data.amount
@@ -908,7 +937,8 @@ def _fill_tgbtc_new_key_action(block: TgBTCNewKeyBlock, action: Action):
 def _fill_tgbtc_dkg_log_action(block: TgBTCDkgLogBlock, action: Action):
     action.type = 'tgbtc_dkg_log_fallback'
     action.source = _addr(block.data.coordinator_contract)
-    action.asset = block.data.internal_pubkey
+    # raw pubkey hex is not a TON address — pgton tonaddr columns reject it
+    action.extra = {"pubkey": block.data.internal_pubkey}
     action.value = block.data.timestamp
 
 
@@ -1377,6 +1407,8 @@ def block_to_action(block: Block, trace_id: str, trace: Trace) -> Action:
             _fill_dex_deposit_liquidity(block, action)
         case 'dex_withdraw_liquidity':
             _fill_dex_withdraw_liquidity(block, action)
+        case 'dedust_v2_claim_reward':
+            _fill_dedust_v2_claim_reward(block, action)
         case 'unsubscribe':
             _fill_unsubscribe_action(block, action)
         case 'election_deposit' | 'election_recover':

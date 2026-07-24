@@ -9,6 +9,7 @@
       "specs/dedust_deposit.mch",
       "specs/dedust_swap.mch",
       "specs/dedust_withdraw.mch",
+      "specs/dedust_v2_claim_reward.mch",
       "specs/dns.mch",
       "specs/ethena.mch",
       "specs/evaa.mch",
@@ -2721,6 +2722,335 @@
       ]
     },
     {
+      "name": "dedust_v2_claim_reward",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          2426395493
+        ]
+      },
+      "root": 101,
+      "produces": [
+        "dedust_v2_claim_reward"
+      ],
+      "captures": [
+        {
+          "name": "claim",
+          "card": "one"
+        },
+        {
+          "name": "cpr",
+          "card": "one"
+        },
+        {
+          "name": "payout_reward",
+          "card": "one"
+        },
+        {
+          "name": "ton",
+          "card": "opt"
+        },
+        {
+          "name": "jt",
+          "card": "opt"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "claim",
+          "types": [
+            "ClaimRewardMessage"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "payout_reward",
+          "types": [
+            "PayoutRewardMessage"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "ton",
+          "types": [
+            "PayoutMessage"
+          ]
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "dex",
+              "expr": {
+                "k": "str",
+                "v": "dedust_v2"
+              }
+            },
+            {
+              "name": "sender",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "claim"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "claim"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "reward_index",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "claim"
+                  },
+                  "name": "body"
+                },
+                "name": "rewardIndex"
+              }
+            },
+            {
+              "name": "amount1_out",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "payout_reward"
+                      },
+                      "name": "body"
+                    },
+                    "name": "amount"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset1_out",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "jt"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt"
+                    },
+                    "name": "data"
+                  },
+                  "name": "asset"
+                },
+                "else": {
+                  "k": "ternary",
+                  "cond": {
+                    "k": "bin",
+                    "op": "!=",
+                    "l": {
+                      "k": "name",
+                      "id": "ton"
+                    },
+                    "r": {
+                      "k": "null"
+                    }
+                  },
+                  "then": {
+                    "k": "call",
+                    "fn": "ton_asset",
+                    "args": []
+                  },
+                  "else": {
+                    "k": "null"
+                  }
+                }
+              }
+            },
+            {
+              "name": "wallet1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "jt"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt"
+                    },
+                    "name": "data"
+                  },
+                  "name": "receiver_wallet"
+                },
+                "else": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "dex_jetton_wallet_1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "jt"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt"
+                    },
+                    "name": "data"
+                  },
+                  "name": "sender_wallet"
+                },
+                "else": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "dex_wallet_1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "jt"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "jt"
+                    },
+                    "name": "data"
+                  },
+                  "name": "sender"
+                },
+                "else": {
+                  "k": "ternary",
+                  "cond": {
+                    "k": "bin",
+                    "op": "!=",
+                    "l": {
+                      "k": "name",
+                      "id": "ton"
+                    },
+                    "r": {
+                      "k": "null"
+                    }
+                  },
+                  "then": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "ton"
+                          },
+                          "name": "msg"
+                        },
+                        "name": "source"
+                      }
+                    ]
+                  },
+                  "else": {
+                    "k": "null"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "change_dns",
       "anchor": {
         "kind": "opcode_set",
@@ -2728,7 +3058,7 @@
           1320284409
         ]
       },
-      "root": 101,
+      "root": 107,
       "produces": [
         "change_dns",
         "renew_dns",
@@ -3076,7 +3406,7 @@
           "jetton_transfer"
         ]
       },
-      "root": 103,
+      "root": 109,
       "produces": [
         "ethena_deposit"
       ],
@@ -3289,7 +3619,7 @@
           2
         ]
       },
-      "root": 105,
+      "root": 111,
       "produces": [
         "evaa_withdraw"
       ],
@@ -3822,7 +4152,7 @@
           "nft_transfer"
         ]
       },
-      "root": 123,
+      "root": 129,
       "produces": [
         "nft_purchase"
       ],
@@ -4081,7 +4411,7 @@
           "jetton_transfer"
         ]
       },
-      "root": 125,
+      "root": 131,
       "produces": [
         "jvault_stake"
       ],
@@ -4360,7 +4690,7 @@
           1234866786
         ]
       },
-      "root": 137,
+      "root": 143,
       "produces": [
         "jvault_unstake"
       ],
@@ -4750,7 +5080,7 @@
           2027548937
         ]
       },
-      "root": 146,
+      "root": 152,
       "produces": [
         "jvault_claim"
       ],
@@ -4913,7 +5243,7 @@
           23647415
         ]
       },
-      "root": 150,
+      "root": 156,
       "produces": [
         "jvault_unstake_request"
       ],
@@ -5231,7 +5561,7 @@
           586394633
         ]
       },
-      "root": 157,
+      "root": 163,
       "produces": [
         "layerzero_receive"
       ],
@@ -5539,7 +5869,7 @@
           1607220500
         ]
       },
-      "root": 166,
+      "root": 172,
       "produces": [
         "nft_transfer"
       ],
@@ -5755,7 +6085,7 @@
           "ton_transfer"
         ]
       },
-      "root": 169,
+      "root": 175,
       "produces": [
         "nominator_pool_withdraw_request"
       ],
@@ -5882,7 +6212,7 @@
           "jetton_transfer"
         ]
       },
-      "root": 170,
+      "root": 176,
       "produces": [
         "jetton_swap"
       ],
@@ -6076,7 +6406,7 @@
           935368415
         ]
       },
-      "root": 174,
+      "root": 180,
       "produces": [
         "dex_deposit_liquidity"
       ],
@@ -6421,7 +6751,7 @@
           935368415
         ]
       },
-      "root": 187,
+      "root": 193,
       "produces": [
         "dex_deposit_liquidity"
       ],
@@ -6701,7 +7031,7 @@
           1717886506
         ]
       },
-      "root": 196,
+      "root": 202,
       "produces": [
         "jetton_swap"
       ],
@@ -6877,7 +7207,7 @@
           "jetton_burn"
         ]
       },
-      "root": 247,
+      "root": 253,
       "produces": [
         "dex_withdraw_liquidity"
       ],
@@ -7310,7 +7640,7 @@
           261677752
         ]
       },
-      "root": 255,
+      "root": 261,
       "produces": [
         "dex_withdraw_liquidity"
       ],
@@ -7722,7 +8052,7 @@
           85167505
         ]
       },
-      "root": 263,
+      "root": 269,
       "produces": [
         "nft_transfer"
       ],
@@ -7980,7 +8310,7 @@
           1064836388
         ]
       },
-      "root": 267,
+      "root": 273,
       "produces": [
         "tgbtc_mint"
       ],
@@ -8152,7 +8482,7 @@
           1052660785
         ]
       },
-      "root": 273,
+      "root": 279,
       "produces": [
         "tonco_deposit_liquidity"
       ],
@@ -8423,7 +8753,7 @@
           2818267384
         ]
       },
-      "root": 287,
+      "root": 293,
       "produces": [
         "jetton_swap"
       ],
@@ -8604,7 +8934,7 @@
           1499400124
         ]
       },
-      "root": 315,
+      "root": 321,
       "produces": [
         "tonstakers_withdraw",
         "tonstakers_withdraw_request"
@@ -8966,7 +9296,7 @@
           2809346765
         ]
       },
-      "root": 321,
+      "root": 327,
       "produces": [
         "vesting_send_message"
       ],
@@ -9750,9 +10080,46 @@
     },
     {
       "kind": "contract",
+      "opcode": 2426395493,
+      "capture": "claim",
+      "child": 102
+    },
+    {
+      "kind": "contract",
+      "opcode": 772590778,
+      "capture": "cpr",
+      "child": 103
+    },
+    {
+      "kind": "contract",
+      "opcode": 2652371902,
+      "capture": "payout_reward",
+      "child": 104
+    },
+    {
+      "kind": "or",
+      "branches": [
+        105,
+        106
+      ],
+      "exclusive": true,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 840354313,
+      "capture": "ton"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "jt"
+    },
+    {
+      "kind": "contract",
       "opcode": 1320284409,
       "capture": "dns",
-      "child": 102
+      "child": 108
     },
     {
       "kind": "contract",
@@ -9763,7 +10130,7 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "transfer",
-      "child": 104
+      "child": 110
     },
     {
       "kind": "block_type",
@@ -9774,20 +10141,20 @@
       "kind": "contract",
       "opcode": 2,
       "capture": "master",
-      "child": 106
+      "child": 112
     },
     {
       "kind": "pred",
       "pred": "evaa_user_withdraw_user",
       "capture": "user",
-      "child": 107
+      "child": 113
     },
     {
       "kind": "or",
       "branches": [
-        108,
-        115,
-        118
+        114,
+        121,
+        124
       ],
       "exclusive": true
     },
@@ -9796,15 +10163,15 @@
       "opcode": 529,
       "capture": "coll_ok",
       "children": [
-        109,
-        113
+        115,
+        119
       ]
     },
     {
       "kind": "or",
       "branches": [
-        110,
-        111
+        116,
+        117
       ],
       "exclusive": true
     },
@@ -9817,7 +10184,7 @@
       "kind": "contract",
       "opcode": 8474,
       "capture": "ton_payout",
-      "child": 112
+      "child": 118
     },
     {
       "kind": "pred",
@@ -9827,7 +10194,7 @@
     {
       "kind": "pred",
       "pred": "evaa_user_withdraw_success",
-      "child": 114
+      "child": 120
     },
     {
       "kind": "block_type",
@@ -9837,12 +10204,12 @@
       "kind": "contract",
       "opcode": 529,
       "capture": "coll_fail",
-      "child": 116
+      "child": 122
     },
     {
       "kind": "pred",
       "pred": "evaa_user_withdraw_fail",
-      "child": 117
+      "child": 123
     },
     {
       "kind": "contract",
@@ -9851,10 +10218,10 @@
     {
       "kind": "or",
       "branches": [
-        119,
-        120,
-        121,
-        122
+        125,
+        126,
+        127,
+        128
       ],
       "exclusive": true
     },
@@ -9883,7 +10250,7 @@
       "btype": "nft_transfer",
       "capture": "nft",
       "where": "getgems_purchase",
-      "child": 124
+      "child": 130
     },
     {
       "kind": "block_type",
@@ -9897,21 +10264,21 @@
       "btype": "jetton_transfer",
       "capture": "transfer",
       "children": [
-        126,
-        136
+        132,
+        142
       ]
     },
     {
       "kind": "contract",
       "opcode": 3599387329,
       "capture": "receive",
-      "child": 127
+      "child": 133
     },
     {
       "kind": "or",
       "branches": [
-        128,
-        134
+        134,
+        140
       ],
       "exclusive": false
     },
@@ -9920,20 +10287,20 @@
       "opcode": 4123376291,
       "capture": "request",
       "children": [
-        129,
-        133
+        135,
+        139
       ]
     },
     {
       "kind": "recursive",
-      "step": 130,
+      "step": 136,
       "optional": true
     },
     {
       "kind": "or",
       "branches": [
-        131,
-        132
+        137,
+        138
       ],
       "exclusive": false
     },
@@ -9956,7 +10323,7 @@
       "kind": "contract",
       "opcode": 2662179289,
       "capture": "cancel",
-      "child": 135
+      "child": 141
     },
     {
       "kind": "block_type",
@@ -9974,7 +10341,7 @@
       "kind": "contract",
       "opcode": 1234866786,
       "capture": "unstake",
-      "child": 138
+      "child": 144
     },
     {
       "kind": "contract",
@@ -9982,22 +10349,22 @@
       "optional": true,
       "capture": "request",
       "children": [
-        139,
-        143,
-        144,
-        145
+        145,
+        149,
+        150,
+        151
       ]
     },
     {
       "kind": "recursive",
-      "step": 140,
+      "step": 146,
       "optional": true
     },
     {
       "kind": "or",
       "branches": [
-        141,
-        142
+        147,
+        148
       ],
       "exclusive": false
     },
@@ -10031,15 +10398,15 @@
       "kind": "contract",
       "opcode": 2027548937,
       "capture": "claim",
-      "child": 147
+      "child": 153
     },
     {
       "kind": "contract",
       "opcode": 1153179619,
       "capture": "send",
       "children": [
-        148,
-        149
+        154,
+        155
       ]
     },
     {
@@ -10056,7 +10423,7 @@
       "kind": "contract",
       "opcode": 23647415,
       "capture": "request_anchor",
-      "child": 151
+      "child": 157
     },
     {
       "kind": "contract",
@@ -10064,20 +10431,20 @@
       "optional": true,
       "capture": "request",
       "children": [
-        152,
-        156
+        158,
+        162
       ]
     },
     {
       "kind": "recursive",
-      "step": 153,
+      "step": 159,
       "optional": true
     },
     {
       "kind": "or",
       "branches": [
-        154,
-        155
+        160,
+        161
       ],
       "exclusive": false
     },
@@ -10101,8 +10468,8 @@
       "opcode": 586394633,
       "capture": "prepare",
       "children": [
-        158,
-        159
+        164,
+        165
       ]
     },
     {
@@ -10113,20 +10480,20 @@
     {
       "kind": "contract",
       "opcode": 2547990604,
-      "child": 160
+      "child": 166
     },
     {
       "kind": "contract",
       "opcode": 3077049286,
-      "child": 161
+      "child": 167
     },
     {
       "kind": "contract",
       "opcode": 209421336,
       "capture": "execute",
       "children": [
-        162,
-        163
+        168,
+        169
       ]
     },
     {
@@ -10139,8 +10506,8 @@
       "opcode": 3400410529,
       "capture": "oapp_callback",
       "children": [
-        164,
-        165
+        170,
+        171
       ]
     },
     {
@@ -10158,8 +10525,8 @@
       "opcode": 1607220500,
       "capture": "transfer",
       "children": [
-        167,
-        168
+        173,
+        174
       ]
     },
     {
@@ -10184,20 +10551,20 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "in_transfer",
-      "child": 171
+      "child": 177
     },
     {
       "kind": "contract",
       "opcode": 630424929,
       "capture": "swap",
-      "child": 172
+      "child": 178
     },
     {
       "kind": "contract",
       "opcode": 4181439551,
       "capture": "req",
       "where": "stonfi_v1_sender_payment",
-      "child": 173
+      "child": 179
     },
     {
       "kind": "block_type",
@@ -10209,27 +10576,27 @@
       "opcode": 935368415,
       "capture": "provide",
       "children": [
-        175
+        181
       ],
-      "parent": 180
+      "parent": 186
     },
     {
       "kind": "contract",
       "opcode": 1355195988,
       "capture": "add",
-      "child": 176
+      "child": 182
     },
     {
       "kind": "contract",
       "opcode": 116184359,
       "capture": "cb",
-      "child": 177
+      "child": 183
     },
     {
       "kind": "or",
       "branches": [
-        178,
-        179
+        184,
+        185
       ],
       "exclusive": true
     },
@@ -10246,9 +10613,9 @@
     {
       "kind": "or",
       "branches": [
-        181,
-        183,
-        184
+        187,
+        189,
+        190
       ],
       "exclusive": false
     },
@@ -10256,7 +10623,7 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "notify_pton",
-      "parent": 182
+      "parent": 188
     },
     {
       "kind": "contract",
@@ -10272,13 +10639,13 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "notify_raw",
-      "parent": 185
+      "parent": 191
     },
     {
       "kind": "contract",
       "opcode": 395134233,
       "capture": "internal_raw",
-      "parent": 186
+      "parent": 192
     },
     {
       "kind": "block_type",
@@ -10290,9 +10657,9 @@
       "opcode": 935368415,
       "capture": "provide",
       "children": [
-        188
+        194
       ],
-      "parent": 189
+      "parent": 195
     },
     {
       "kind": "contract",
@@ -10302,9 +10669,9 @@
     {
       "kind": "or",
       "branches": [
-        190,
-        192,
-        193
+        196,
+        198,
+        199
       ],
       "exclusive": false
     },
@@ -10312,7 +10679,7 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "notify_pton",
-      "parent": 191
+      "parent": 197
     },
     {
       "kind": "contract",
@@ -10328,13 +10695,13 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "notify_raw",
-      "parent": 194
+      "parent": 200
     },
     {
       "kind": "contract",
       "opcode": 395134233,
       "capture": "internal_raw",
-      "parent": 195
+      "parent": 201
     },
     {
       "kind": "block_type",
@@ -10346,22 +10713,22 @@
       "opcode": 1717886506,
       "capture": "swap",
       "children": [
-        197
+        203
       ],
-      "parent": 243
+      "parent": 249
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout",
-      "child": 198
+      "child": 204
     },
     {
       "kind": "or",
       "branches": [
-        199,
-        215,
-        230
+        205,
+        221,
+        236
       ],
       "exclusive": true
     },
@@ -10377,29 +10744,29 @@
           "name": "has_internal_transfer"
         }
       },
-      "child": 200
+      "child": 206
     },
     {
       "kind": "pred",
       "pred": "pton_self_transfer",
-      "child": 201
+      "child": 207
     },
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "child": 202
+      "child": 208
     },
     {
       "kind": "recursive",
-      "step": 203,
+      "step": 209,
       "optional": true
     },
     {
       "kind": "or",
       "branches": [
-        204,
-        209,
-        213
+        210,
+        215,
+        219
       ],
       "exclusive": false
     },
@@ -10407,13 +10774,13 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 205
+      "child": 211
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "peer_payout",
-      "child": 206
+      "child": 212
     },
     {
       "kind": "block_type",
@@ -10427,12 +10794,12 @@
           "name": "has_internal_transfer"
         }
       },
-      "child": 207
+      "child": 213
     },
     {
       "kind": "pred",
       "pred": "pton_self_transfer",
-      "child": 208
+      "child": 214
     },
     {
       "kind": "contract",
@@ -10442,20 +10809,20 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 210
+      "child": 216
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "peer_payout",
-      "child": 211
+      "child": 217
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "peer_out",
       "children": [
-        212
+        218
       ]
     },
     {
@@ -10467,7 +10834,7 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 214
+      "child": 220
     },
     {
       "kind": "contract",
@@ -10478,22 +10845,22 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "out_transfer",
-      "child": 216,
+      "child": 222,
       "children": [
-        229
+        235
       ]
     },
     {
       "kind": "recursive",
-      "step": 217,
+      "step": 223,
       "optional": true
     },
     {
       "kind": "or",
       "branches": [
-        218,
-        223,
-        227
+        224,
+        229,
+        233
       ],
       "exclusive": false
     },
@@ -10501,13 +10868,13 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 219
+      "child": 225
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "peer_payout",
-      "child": 220
+      "child": 226
     },
     {
       "kind": "block_type",
@@ -10521,50 +10888,50 @@
           "name": "has_internal_transfer"
         }
       },
-      "child": 221
+      "child": 227
     },
     {
       "kind": "pred",
       "pred": "pton_self_transfer",
-      "child": 222
-    },
-    {
-      "kind": "contract",
-      "opcode": 1935855772
-    },
-    {
-      "kind": "contract",
-      "opcode": 1717886506,
-      "capture": "peer_swap",
-      "child": 224
-    },
-    {
-      "kind": "contract",
-      "opcode": 1702581493,
-      "capture": "peer_payout",
-      "child": 225
-    },
-    {
-      "kind": "block_type",
-      "btype": "jetton_transfer",
-      "capture": "peer_out",
-      "children": [
-        226
-      ]
-    },
-    {
-      "kind": "contract",
-      "opcode": 32736093,
-      "optional": true
-    },
-    {
-      "kind": "contract",
-      "opcode": 1717886506,
-      "capture": "peer_swap",
       "child": 228
     },
     {
       "kind": "contract",
+      "opcode": 1935855772
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 230
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout",
+      "child": 231
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "peer_out",
+      "children": [
+        232
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 234
+    },
+    {
+      "kind": "contract",
       "opcode": 1702581493,
       "capture": "peer_payout"
     },
@@ -10575,15 +10942,15 @@
     },
     {
       "kind": "recursive",
-      "step": 231,
+      "step": 237,
       "optional": true
     },
     {
       "kind": "or",
       "branches": [
-        232,
-        237,
-        241
+        238,
+        243,
+        247
       ],
       "exclusive": false
     },
@@ -10591,13 +10958,13 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 233
+      "child": 239
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "peer_payout",
-      "child": 234
+      "child": 240
     },
     {
       "kind": "block_type",
@@ -10611,12 +10978,12 @@
           "name": "has_internal_transfer"
         }
       },
-      "child": 235
+      "child": 241
     },
     {
       "kind": "pred",
       "pred": "pton_self_transfer",
-      "child": 236
+      "child": 242
     },
     {
       "kind": "contract",
@@ -10626,20 +10993,20 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 238
+      "child": 244
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "peer_payout",
-      "child": 239
+      "child": 245
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "peer_out",
       "children": [
-        240
+        246
       ]
     },
     {
@@ -10651,7 +11018,7 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 242
+      "child": 248
     },
     {
       "kind": "contract",
@@ -10661,8 +11028,8 @@
     {
       "kind": "or",
       "branches": [
-        244,
-        245
+        250,
+        251
       ],
       "exclusive": true
     },
@@ -10674,7 +11041,7 @@
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "parent": 246
+      "parent": 252
     },
     {
       "kind": "contract",
@@ -10685,28 +11052,28 @@
       "kind": "block_type",
       "btype": "jetton_burn",
       "capture": "burn",
-      "child": 248
+      "child": 254
     },
     {
       "kind": "contract",
       "opcode": 695482319,
       "capture": "router",
       "children": [
-        249,
-        252
+        255,
+        258
       ]
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout_1",
-      "child": 250
+      "child": 256
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "jt_1",
-      "child": 251
+      "child": 257
     },
     {
       "kind": "contract",
@@ -10718,13 +11085,13 @@
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout_2",
-      "child": 253
+      "child": 259
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "jt_2",
-      "child": 254
+      "child": 260
     },
     {
       "kind": "contract",
@@ -10737,22 +11104,22 @@
       "opcode": 261677752,
       "capture": "refund",
       "children": [
-        256,
-        259
+        262,
+        265
       ],
-      "parent": 262
+      "parent": 268
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout_1",
-      "child": 257
+      "child": 263
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "jt_1",
-      "child": 258
+      "child": 264
     },
     {
       "kind": "contract",
@@ -10764,13 +11131,13 @@
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout_2",
-      "child": 260
+      "child": 266
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "jt_2",
-      "child": 261
+      "child": 267
     },
     {
       "kind": "contract",
@@ -10787,15 +11154,15 @@
       "kind": "contract",
       "opcode": 85167505,
       "capture": "assigned",
-      "parent": 264
+      "parent": 270
     },
     {
       "kind": "block_type",
       "btype": "ton_transfer",
       "capture": "payment",
       "children": [
-        265,
-        266
+        271,
+        272
       ]
     },
     {
@@ -10813,12 +11180,12 @@
       "kind": "contract",
       "opcode": 1064836388,
       "capture": "head",
-      "child": 268
+      "child": 274
     },
     {
       "kind": "recursive",
-      "step": 269,
-      "exit": 270,
+      "step": 275,
+      "exit": 276,
       "optional": true
     },
     {
@@ -10830,8 +11197,8 @@
       "opcode": 3827992475,
       "capture": "tail",
       "children": [
-        271,
-        272
+        277,
+        278
       ]
     },
     {
@@ -10849,18 +11216,18 @@
       "opcode": 1052660785,
       "capture": "add_liquidity",
       "children": [
-        274
+        280
       ],
-      "parent": 282
+      "parent": 288
     },
     {
       "kind": "contract",
       "opcode": 2171612920,
       "optional": true,
       "children": [
-        275,
-        280,
-        281
+        281,
+        286,
+        287
       ]
     },
     {
@@ -10869,8 +11236,8 @@
       "optional": true,
       "capture": "refund_router_call",
       "children": [
-        276,
-        278
+        282,
+        284
       ]
     },
     {
@@ -10879,7 +11246,7 @@
       "optional": true,
       "capture": "excess_transfer_0",
       "children": [
-        277
+        283
       ]
     },
     {
@@ -10893,7 +11260,7 @@
       "optional": true,
       "capture": "excess_transfer_1",
       "children": [
-        279
+        285
       ]
     },
     {
@@ -10914,13 +11281,13 @@
     {
       "kind": "contract",
       "opcode": 1147723383,
-      "parent": 283
+      "parent": 289
     },
     {
       "kind": "or",
       "branches": [
-        284,
-        286
+        290,
+        292
       ],
       "exclusive": false
     },
@@ -10928,7 +11295,7 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "ton_input",
-      "parent": 285
+      "parent": 291
     },
     {
       "kind": "contract",
@@ -10945,20 +11312,60 @@
       "opcode": 2818267384,
       "capture": "swap",
       "children": [
-        288
+        294
       ],
-      "parent": 311
+      "parent": 317
     },
     {
       "kind": "contract",
       "opcode": 2715461997,
-      "child": 289
+      "child": 295
     },
     {
       "kind": "or",
       "branches": [
-        290,
-        305,
+        296,
+        311,
+        313,
+        315
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "child": 297
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "child": 298
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "child": 299
+    },
+    {
+      "kind": "recursive",
+      "strategy": "cyclic",
+      "step": 300
+    },
+    {
+      "kind": "contract",
+      "opcode": 2818267384,
+      "child": 301
+    },
+    {
+      "kind": "contract",
+      "opcode": 2715461997,
+      "child": 302
+    },
+    {
+      "kind": "or",
+      "branches": [
+        303,
+        306,
         307,
         309
       ],
@@ -10967,93 +11374,22 @@
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 291
+      "child": 304
     },
     {
       "kind": "contract",
       "opcode": 32736093,
-      "child": 292
+      "child": 305
     },
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "child": 293
-    },
-    {
-      "kind": "recursive",
-      "strategy": "cyclic",
-      "step": 294
-    },
-    {
-      "kind": "contract",
-      "opcode": 2818267384,
-      "child": 295
-    },
-    {
-      "kind": "contract",
-      "opcode": 2715461997,
-      "child": 296
-    },
-    {
-      "kind": "or",
-      "branches": [
-        297,
-        300,
-        301,
-        303
-      ],
-      "exclusive": false
+      "child": 300
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 298
-    },
-    {
-      "kind": "contract",
-      "opcode": 32736093,
-      "child": 299
-    },
-    {
-      "kind": "contract",
-      "opcode": 1935855772,
-      "child": 294
-    },
-    {
-      "kind": "block_type",
-      "btype": "jetton_transfer",
-      "child": 294
-    },
-    {
-      "kind": "contract",
-      "opcode": 260734629,
-      "child": 302
-    },
-    {
-      "kind": "contract",
-      "opcode": 32736093
-    },
-    {
-      "kind": "block_type",
-      "btype": "jetton_transfer",
-      "children": [
-        304
-      ]
-    },
-    {
-      "kind": "contract",
-      "opcode": 32736093,
-      "optional": true
-    },
-    {
-      "kind": "block_type",
-      "btype": "jetton_transfer",
-      "child": 306
-    },
-    {
-      "kind": "recursive",
-      "strategy": "cyclic",
-      "step": 294
+      "child": 300
     },
     {
       "kind": "contract",
@@ -11077,10 +11413,41 @@
       "optional": true
     },
     {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "child": 312
+    },
+    {
+      "kind": "recursive",
+      "strategy": "cyclic",
+      "step": 300
+    },
+    {
+      "kind": "contract",
+      "opcode": 260734629,
+      "child": 314
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "children": [
+        316
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true
+    },
+    {
       "kind": "or",
       "branches": [
-        312,
-        313
+        318,
+        319
       ],
       "exclusive": true
     },
@@ -11092,7 +11459,7 @@
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "parent": 314
+      "parent": 320
     },
     {
       "kind": "contract",
@@ -11103,24 +11470,24 @@
       "kind": "contract",
       "opcode": 1499400124,
       "capture": "burn",
-      "child": 316
+      "child": 322
     },
     {
       "kind": "contract",
       "opcode": 2078119902,
-      "child": 317
+      "child": 323
     },
     {
       "kind": "contract",
       "opcode": 832244956,
       "capture": "request",
-      "child": 318
+      "child": 324
     },
     {
       "kind": "or",
       "branches": [
-        319,
-        320
+        325,
+        326
       ],
       "exclusive": true
     },
@@ -11138,7 +11505,7 @@
       "kind": "contract",
       "opcode": 2809346765,
       "capture": "send",
-      "child": 322
+      "child": 328
     },
     {
       "kind": "contract",
@@ -11178,6 +11545,7 @@
     28,
     29,
     30,
-    31
+    31,
+    32
   ]
 }

@@ -146,9 +146,9 @@ struct Action {
   Value asset, asset_secondary, asset2, asset2_secondary;
   Value amount, value, opcode;
   Value ton_transfer_data, jetton_transfer_data, jetton_swap_data, nft_transfer_data,
-      nft_listing_data, dex_deposit_liquidity_data, staking_data, evaa_withdraw_data,
-      vesting_send_message_data, layerzero_packet_data, jvault_stake_data, jvault_claim_data,
-      extra;
+      nft_listing_data, dex_deposit_liquidity_data, dex_withdraw_liquidity_data, staking_data,
+      evaa_withdraw_data, vesting_send_message_data, layerzero_packet_data, jvault_stake_data,
+      jvault_claim_data, extra;
 };
 
 Value mkdict(Value::Fields f) { return Value::make_dict(std::move(f)); }
@@ -342,6 +342,32 @@ void fill_dedust_deposit_partial(const Value &d, Action &a) {
   f.emplace_back("target_asset_2", av_addr(dg(d, "target_asset_2")));
   f.emplace_back("target_amount_2", av_amount(dg(d, "target_amount_2")));
   a.dex_deposit_liquidity_data = mkdict(std::move(f));
+}
+
+// T12.2: DeDust CPMM V2 reward claim (block_tree_serializer _fill_dedust_v2_claim_reward).
+// Reuses the dex_withdraw_liquidity_data composite; reward_index -> extra.
+void fill_dedust_v2_claim_reward(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.destination = av_addr(dg(d, "pool"));
+  a.asset = av_addr(dg(d, "asset1_out"));
+  Value::Fields f;
+  f.emplace_back("dex", dg(d, "dex"));
+  f.emplace_back("amount1", av_amount(dg(d, "amount1_out")));
+  f.emplace_back("amount2", Value::null());
+  f.emplace_back("asset1_out", av_addr(dg(d, "asset1_out")));
+  f.emplace_back("asset2_out", Value::null());
+  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "wallet1")));
+  f.emplace_back("user_jetton_wallet_2", Value::null());
+  f.emplace_back("dex_jetton_wallet_1", av_addr(dg(d, "dex_jetton_wallet_1")));
+  f.emplace_back("dex_wallet_1", av_addr(dg(d, "dex_wallet_1")));
+  f.emplace_back("dex_wallet_2", Value::null());
+  f.emplace_back("dex_jetton_wallet_2", Value::null());
+  f.emplace_back("is_refund", Value::make_bool(false));
+  f.emplace_back("lp_tokens_burnt", Value::null());
+  a.dex_withdraw_liquidity_data = mkdict(std::move(f));
+  Value::Fields ex;
+  ex.emplace_back("reward_index", dg(d, "reward_index"));
+  a.extra = mkdict(std::move(ex));
 }
 
 void fill_tonco_deposit(const Value &d, Action &a) {
@@ -566,6 +592,7 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "dedust_deposit_liquidity") fill_dedust_deposit(d, a);
   else if (t == "dedust_deposit_liquidity_partial") fill_dedust_deposit_partial(d, a);
   else if (t == "tonco_deposit_liquidity") fill_tonco_deposit(d, a);
+  else if (t == "dedust_v2_claim_reward") fill_dedust_v2_claim_reward(d, a);
   else if (t == "evaa_withdraw") fill_evaa_withdraw(d, a, b->failed);
   else if (t == "jvault_stake") fill_jvault_stake(d, a);
   else if (t == "jvault_unstake") fill_jvault_unstake(d, a);
@@ -693,6 +720,7 @@ std::string render_action(const Action &a) {
   f.emplace_back("nft_transfer_data", a.nft_transfer_data);
   f.emplace_back("nft_listing_data", a.nft_listing_data);
   f.emplace_back("dex_deposit_liquidity_data", a.dex_deposit_liquidity_data);
+  f.emplace_back("dex_withdraw_liquidity_data", a.dex_withdraw_liquidity_data);
   f.emplace_back("staking_data", a.staking_data);
   f.emplace_back("evaa_withdraw_data", a.evaa_withdraw_data);
   f.emplace_back("vesting_send_message_data", a.vesting_send_message_data);

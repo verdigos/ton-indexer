@@ -12,6 +12,7 @@
 #include "tolk_counter_gen.h"
 #include "jetton_wallet_contract_gen.h"
 #include "lots_of_wrappers_gen.h"
+#include "dedust_v2_gen.h"  // T12.2 production pair
 
 #include "common/refint.h"
 #include "vm/cells/CellBuilder.h"
@@ -29,6 +30,7 @@ namespace {
 namespace tc = ton_abi::gen::tolk_counter;
 namespace jw = ton_abi::gen::jetton_wallet_contract;
 namespace lw = ton_abi::gen::lots_of_wrappers;
+namespace dv = ton_abi::gen::dedust_v2;
 using ton_abi::AbiAddress;
 using ton_abi::AbiAddressKind;
 using ton_abi::AbiValue;
@@ -51,6 +53,11 @@ bool is_bool(const Value *v, bool want) {
 }
 bool is_account(const Value *v) {  // non-none Account
   return v && v->t == VType::Account && !v->addr_none && !v->str.empty();
+}
+// Exact canonical raw render (the address-parity proof, T122 design §1): the
+// adapter must yield "WC:HEX_UPPER" == Python AccountId.as_str().upper().
+bool is_account_str(const Value *v, const std::string &want) {
+  return v && v->t == VType::Account && !v->addr_none && v->str == want;
 }
 const Value *fld(const Value &v, const char *name) { return v.field(name); }
 
@@ -218,6 +225,91 @@ void test_registry_policy() {
   check("trampoline/null_body_error", rn.is_error());
 }
 
+// ---- T12.2: the first PRODUCTION protocol pair (DeDust CPMM V2 claim_reward). --
+// Exercises the real registry rows (parse_message_body by BARE name) + the
+// mandatory address-render parity check on ownerAddress/excessesTo.
+void test_dedust_v2_claim_reward() {
+  const std::string A = "0:" + std::string(64, 'A');  // canonical of test_addr()
+
+  // PayoutRewardMessage: the amount-bearing leg. coins -> Int, uint2 -> Int,
+  // two addresses -> Account (exact-string parity).
+  {
+    dv::PayoutRewardMessage::CreateArgs args;
+    args.queryId = 42ULL;
+    args.amount = td::make_refint(150000000);  // 0.15 TON
+    args.rewardIndex = 1ULL;
+    args.ownerAddress = test_addr();
+    args.excessesTo = test_addr();
+    auto r = round_trip(dv::PayoutRewardMessage::create(std::move(args)));
+    bool ok = r.is_ok();
+    check("dedust_v2/payout_reward/parses", ok);
+    if (ok) {
+      const Value &v = r.ok();
+      check("dedust_v2/payout_reward/discriminator",
+            fld(v, "$") && fld(v, "$")->str == "PayoutRewardMessage");
+      check("dedust_v2/payout_reward/queryId", is_int(fld(v, "queryId"), 42));
+      check("dedust_v2/payout_reward/amount", is_int(fld(v, "amount"), 150000000));
+      check("dedust_v2/payout_reward/rewardIndex", is_int(fld(v, "rewardIndex"), 1));
+      // THE address-parity assert (design §1, mandatory #1 verify).
+      check("dedust_v2/payout_reward/owner_addr_parity", is_account_str(fld(v, "ownerAddress"), A));
+      check("dedust_v2/payout_reward/excesses_addr_parity", is_account_str(fld(v, "excessesTo"), A));
+    }
+  }
+
+  // ClaimRewardMessage: prefix check + uint2 + address.
+  {
+    dv::ClaimRewardMessage::CreateArgs args;
+    args.queryId = 7ULL;
+    args.rewardIndex = 2ULL;
+    args.excessesTo = test_addr();
+    auto r = round_trip(dv::ClaimRewardMessage::create(std::move(args)));
+    bool ok = r.is_ok();
+    check("dedust_v2/claim_reward/parses", ok);
+    if (ok) {
+      const Value &v = r.ok();
+      check("dedust_v2/claim_reward/discriminator",
+            fld(v, "$") && fld(v, "$")->str == "ClaimRewardMessage");
+      check("dedust_v2/claim_reward/rewardIndex", is_int(fld(v, "rewardIndex"), 2));
+      check("dedust_v2/claim_reward/excesses_addr_parity", is_account_str(fld(v, "excessesTo"), A));
+    }
+  }
+
+  // PayoutMessage (0x3216ca09): the TON payout leg. int32 exitCode -> Int,
+  // nullable cell (absent) -> Null.
+  {
+    dv::PayoutMessage::CreateArgs args;
+    args.queryId = 9ULL;
+    args.amount = td::make_refint(70400000);
+    args.exitCode = 0;
+    args.payload = std::nullopt;
+    auto r = round_trip(dv::PayoutMessage::create(std::move(args)));
+    bool ok = r.is_ok();
+    check("dedust_v2/payout_msg/parses", ok);
+    if (ok) {
+      const Value &v = r.ok();
+      check("dedust_v2/payout_msg/discriminator",
+            fld(v, "$") && fld(v, "$")->str == "PayoutMessage");
+      check("dedust_v2/payout_msg/amount", is_int(fld(v, "amount"), 70400000));
+      check("dedust_v2/payout_msg/exitCode", is_int(fld(v, "exitCode"), 0));
+      check("dedust_v2/payout_msg/payload_null", fld(v, "payload") && fld(v, "payload")->is_null());
+    }
+  }
+
+  // Real registry dispatch by BARE name (design §3): parse_message_body routes
+  // the production row, not just the direct abi_parse_body<T> call above.
+  {
+    vm::CellBuilder cb;
+    dv::ClaimRewardMessage::CreateArgs args;
+    args.queryId = 1ULL;
+    args.rewardIndex = 0ULL;
+    args.excessesTo = test_addr();
+    auto st = dv::ClaimRewardMessage::create(std::move(args)).store(cb);
+    check("dedust_v2/registry/store_ok", st.is_ok());
+    auto r = parse_message_body("ClaimRewardMessage", cb.finalize());
+    check("dedust_v2/registry/dispatch_by_name", r.is_ok() && r.ok().t == VType::Obj);
+  }
+}
+
 }  // namespace
 
 int run_abi_bridge_test() {
@@ -227,6 +319,7 @@ int run_abi_bridge_test() {
   test_hasvalue_union();
   test_structlabeled_union();
   test_adapter_direct();
+  test_dedust_v2_claim_reward();
   test_registry_policy();
   std::printf("ABI-BRIDGE-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
