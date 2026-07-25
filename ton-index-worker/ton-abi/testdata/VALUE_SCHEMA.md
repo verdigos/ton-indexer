@@ -1,9 +1,20 @@
 # ton-abi value-JSON schema — W0 validated subset
 
-This documents what `tools/gen_vectors.mjs` actually produces and validates at
-W0. It does NOT independently legislate — the full canonical schema is frozen
-in `docs/ton-abi-plan.md` §0.14; this file records what's been PROVEN so far
-by the round-trip self-validation, and what's still open.
+> **HISTORICAL (R1a).** This file records what the W0 oracle had PROVEN at that
+> point, when coverage was scalar-only. It is kept for its provenance notes and
+> its citations into the reference implementation, and it is NOT the place to
+> look up a kind's dump shape today.
+>
+> **AUTHORITATIVE: the kind → payload → JSON-dump table in `src/AbiValue.h:11-35`**
+> (with `docs/ton-abi-plan.md` §0.14 as the frozen canonical schema behind it).
+> That table covers every kind the vectors now exercise — addresses, cells,
+> cellOf, bits, lists, maps, unions, void, null — none of which existed at W0.
+> Same re-homing as `ERROR_MAPPING.md`.
+
+This documents what `tools/gen_vectors.mjs` produced and validated at W0. It does
+NOT independently legislate — the full canonical schema is frozen in
+`docs/ton-abi-plan.md` §0.14; this file records what had been PROVEN at that
+point by the round-trip self-validation, and what was still open then.
 
 ## Validated at W0
 

@@ -1,15 +1,5 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "doctest.h"
-
-// See VectorRunner.cpp for why: td/utils/check.h (pulled in transitively via
-// AbiLoader.h -> Status.h -> logging.h) redefines CHECK(...) as an
-// abort-style macro, shadowing doctest's soft-check CHECK for the rest of
-// this TU unless guarded.
-#pragma push_macro("CHECK")
-#undef CHECK
-#include "AbiLoader.h"
-#include "AbiModel.h"
-#pragma pop_macro("CHECK")
+#include "AbiTestSupport.h"
 
 TEST_CASE("smoke: ton-abi scaffold links and runs") {
   ton_abi::ContractABI abi;

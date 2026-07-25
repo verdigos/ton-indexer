@@ -2,15 +2,7 @@
 // boundary/min/max/truncation per type. Semantics pinned to @ton/core
 // (BitReader.js / BitBuilder.js) -- see AbiLeavesScalar.h for the citations.
 
-#include "doctest.h"
-
-// AbiLeavesScalar.h pulls td/utils/Status.h -> logging.h -> check.h (#defines
-// CHECK). Guard so doctest's CHECK survives (same pattern as the other test TUs).
-#pragma push_macro("CHECK")
-#undef CHECK
-#include "AbiLeavesScalar.h"
-#include "vm/cells/CellSlice.h"
-#pragma pop_macro("CHECK")
+#include "AbiTestSupport.h"
 
 namespace {
 

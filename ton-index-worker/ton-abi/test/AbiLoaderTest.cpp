@@ -4,32 +4,11 @@
 // ABIs from testdata/fixtures/ (W0). See docs/ton-abi-plan.md T1.2 row for
 // the invariant list this mirrors.
 
-#include "doctest.h"
-
-#pragma push_macro("CHECK")
-#undef CHECK
-#include "td/utils/JsonBuilder.h"
-#pragma pop_macro("CHECK")
-
-#include "AbiLoader.h"
-
-#include <fstream>
-#include <sstream>
-#include <string>
-
-#ifndef TON_ABI_FIXTURES_DIR
-#error "TON_ABI_FIXTURES_DIR must be defined by CMake"
-#endif
+#include "AbiTestSupport.h"
 
 namespace {
 
-std::string read_file(const std::string &path) {
-  std::ifstream in(path, std::ios::binary);
-  REQUIRE_MESSAGE(static_cast<bool>(in), "cannot open fixture: " << path);
-  std::stringstream ss;
-  ss << in.rdbuf();
-  return ss.str();
-}
+using ton_abi_test::read_file;
 
 // Minimal ABI skeleton that parses successfully on its own (used as the base
 // for every REJECT test -- exactly one field is broken per test).

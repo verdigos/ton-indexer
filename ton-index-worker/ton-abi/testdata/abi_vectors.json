@@ -10,7 +10,6 @@
     {
       "fixture": "tolk_counter",
       "struct": "IncreaseCounter",
-      "enabled_from": "W8",
       "value": {
         "$": "IncreaseCounter",
         "queryId": "0",
@@ -21,7 +20,6 @@
     {
       "fixture": "tolk_counter",
       "struct": "IncreaseCounter",
-      "enabled_from": "W8",
       "value": {
         "$": "IncreaseCounter",
         "queryId": "123456789",
@@ -32,7 +30,6 @@
     {
       "fixture": "tolk_counter",
       "struct": "ResetCounter",
-      "enabled_from": "W8",
       "value": {
         "$": "ResetCounter",
         "queryId": "0"
@@ -42,7 +39,6 @@
     {
       "fixture": "tolk_counter",
       "struct": "ResetCounter",
-      "enabled_from": "W8",
       "value": {
         "$": "ResetCounter",
         "queryId": "18446744073709551615"
@@ -52,7 +48,6 @@
     {
       "fixture": "lots-of-messages",
       "struct": "IncreaseBy",
-      "enabled_from": "W8",
       "value": {
         "$": "IncreaseBy",
         "counter_id": "0",
@@ -63,7 +58,6 @@
     {
       "fixture": "lots-of-messages",
       "struct": "IncreaseBy",
-      "enabled_from": "W8",
       "value": {
         "$": "IncreaseBy",
         "counter_id": "-5",
@@ -74,7 +68,6 @@
     {
       "fixture": "lots-of-messages",
       "struct": "EmptyMsg",
-      "enabled_from": "W8",
       "value": {
         "$": "EmptyMsg"
       },
@@ -83,7 +76,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "MsgSinglePrefix32",
-      "enabled_from": "W8",
       "value": {
         "$": "MsgSinglePrefix32",
         "amount1": "80",
@@ -95,7 +87,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "CounterIncrement",
-      "enabled_from": "W8",
       "value": {
         "$": "CounterIncrement",
         "counter_id": "123",
@@ -107,7 +98,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "CounterDecrement",
-      "enabled_from": "W8",
       "value": {
         "$": "CounterDecrement",
         "counter_id": "0",
@@ -119,7 +109,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "CounterReset0",
-      "enabled_from": "W8",
       "value": {
         "$": "CounterReset0",
         "counter_id": "0"
@@ -130,7 +119,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "CounterResetTo",
-      "enabled_from": "W8",
       "value": {
         "$": "CounterResetTo",
         "counter_id": "0",
@@ -142,7 +130,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "JustAddress",
-      "enabled_from": "W8",
       "value": {
         "$": "JustAddress",
         "addr": "0:1111111111111111111111111111111111111111111111111111111111111111"
@@ -152,7 +139,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "JustMaybeInt32",
-      "enabled_from": "W8",
       "value": {
         "$": "JustMaybeInt32",
         "value": "5"
@@ -162,7 +148,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "JustMaybeInt32",
-      "enabled_from": "W8",
       "value": {
         "$": "JustMaybeInt32",
         "value": null
@@ -172,7 +157,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "TwoInts32AndRef64",
-      "enabled_from": "W8",
       "value": {
         "$": "TwoInts32AndRef64",
         "op": "5",
@@ -185,7 +169,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "WithArrays2",
-      "enabled_from": "W8",
       "value": {
         "$": "WithArrays2",
         "a": [
@@ -199,7 +182,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "WithLispLists1",
-      "enabled_from": "W8",
       "value": {
         "$": "WithLispLists1",
         "lInt8_1": [
@@ -228,7 +210,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "TransferParams2",
-      "enabled_from": "W8",
       "value": {
         "$": "TransferParams2",
         "intVector": [
@@ -245,7 +226,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "WithMaps0",
-      "enabled_from": "W8",
       "value": {
         "$": "WithMaps0",
         "m1": [
@@ -284,7 +264,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "WithEnums",
-      "enabled_from": "W8",
       "value": {
         "$": "WithEnums",
         "e1": "5",
@@ -296,7 +275,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "WithAnyAddress",
-      "enabled_from": "W8",
       "value": {
         "$": "WithAnyAddress",
         "a1": "none",
@@ -324,7 +302,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "StorWithStr",
-      "enabled_from": "W8",
       "value": {
         "$": "StorWithStr",
         "a": "5",
@@ -339,7 +316,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "PointWithCustomInt",
-      "enabled_from": "W8",
       "value": {
         "$": "PointWithCustomInt",
         "a": "42",
@@ -350,7 +326,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "CustomPoint",
-      "enabled_from": "W8",
       "value": {
         "$": "CustomPoint",
         "x": "3",
@@ -361,7 +336,6 @@
     {
       "fixture": "generic-union-labels",
       "struct": "MsgPair",
-      "enabled_from": "W8",
       "value": {
         "$": "MsgPair",
         "value": {
@@ -377,7 +351,6 @@
     {
       "fixture": "generic-union-labels",
       "struct": "MsgPair",
-      "enabled_from": "W8",
       "value": {
         "$": "MsgPair",
         "value": {
@@ -393,7 +366,6 @@
     {
       "fixture": "generic-union-labels",
       "struct": "MsgOrInt16",
-      "enabled_from": "W8",
       "value": {
         "$": "MsgOrInt16",
         "value": {
@@ -409,7 +381,6 @@
     {
       "fixture": "generic-union-labels",
       "struct": "MsgAliasInt16",
-      "enabled_from": "W8",
       "value": {
         "$": "MsgAliasInt16",
         "value": {
@@ -422,7 +393,6 @@
     {
       "fixture": "lots-of-wrappers",
       "struct": "WithStrings1",
-      "enabled_from": "W8",
       "value": {
         "$": "WithStrings1",
         "s1": "A���B",
@@ -435,7 +405,6 @@
     {
       "fixture": "tolk_counter",
       "struct": "IncreaseCounter",
-      "enabled_from": "W8",
       "expect_error": true,
       "golden_hex": "x{7E8764EF0000000000000000000000}",
       "source": "per-field truncation: IncreaseCounter with its last byte dropped"
@@ -443,7 +412,6 @@
     {
       "fixture": "tolk_counter",
       "struct": "IncreaseCounter",
-      "enabled_from": "W8",
       "expect_error": true,
       "golden_hex": "x{7E8764E0000000000000000000000001}",
       "source": "prefix mismatch: IncreaseCounter opcode nibble flipped"
@@ -451,7 +419,6 @@
     {
       "fixture": "w8-hand-union",
       "struct": "Holder",
-      "enabled_from": "W8",
       "expect_error": true,
       "golden_hex": "x{0C}",
       "source": "hand-authored ABI (not tolk-compiled): explicit-prefix union with a deliberate dispatch gap"

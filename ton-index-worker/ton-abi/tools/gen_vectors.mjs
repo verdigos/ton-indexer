@@ -1,17 +1,18 @@
-// Dev-only oracle (§0.15). Compiles Tolk fixtures via tolk-js, computes ABI JSON
-// + golden pack/unpack vectors via the reference @ton/tolk-abi-to-typescript
-// dynamic-serialization path, and dumps everything byte-stably for the C++
-// VectorRunner (T0.3) to consume later (value/hex vectors enable at wave W8;
-// nothing is enabled yet at W0 — see enabled_from below).
+// Dev-only oracle (§0.15). Copies the reference repo's Tolk fixtures, compiles
+// them via tolk-js into the committed testdata/fixtures/*.abi.json, and computes
+// golden pack/unpack vectors through the reference @ton/tolk-abi-to-typescript
+// dynamic-serialization path, dumped byte-stably to testdata/abi_vectors.json.
 //
-// SCOPE (W0): 3 fixtures (tolk_counter, lots-of-messages, lots-of-wrappers),
-// scalar-only struct vectors (intN/uintN/coins fields). No unions, addresses,
-// cells, arrays, generics or custom serializers are exercised here — those
-// need the full value-JSON codec + registry seam, both out of scope until
-// W1 (loader), W2 (kernel/generics) and W8/W9 (interpreter + custom registry).
+// The vectors are the ORACLE for the C++ side: test/AbiABGateTest.cpp runs every
+// one of them through the generated structs (value dump + repack hash), and its
+// corpus-structure case pins the total count. Coverage spans scalars, addresses,
+// nullables, cellOf, arrays, lisp lists, tensors, maps, enums, strings, unions
+// (incl. generic labels) and custom serializers, plus expect_error vectors.
 //
-// Value-JSON schema: §0.14 of docs/ton-abi-plan.md. This script implements the
-// SUBSET of that schema needed for intN/uintN/coins/bool + plain structs.
+// Value-JSON schema: §0.14 of docs/ton-abi-plan.md.
+//
+// Needs the reference-repo checkout (FIXTURES_SRC below). Production ABI
+// declarations are NOT built here -- see tools/gen_prod_abi.mjs.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -510,7 +511,7 @@ function genW8Vector(ctx, fixture, structName, explicitSample) {
     if (hex2 !== hex) {
         throw new Error(`genW8Vector(${fixture}::${structName}): value-JSON round-trip mismatch: ${hex} vs ${hex2}\n${JSON.stringify(value)}`);
     }
-    return { fixture, struct: structName, enabled_from: 'W8', value, golden_hex: hex };
+    return { fixture, struct: structName, value, golden_hex: hex };
 }
 
 async function main() {
@@ -551,13 +552,13 @@ async function main() {
             ]) {
                 const hex = packHex(ctx, tyIdx, val);
                 const json = roundTripCheckOrThrow(ctx, abi, tyIdx, val, hex);
-                vectors.push({ fixture, struct: 'IncreaseCounter', enabled_from: 'W8', value: json, golden_hex: hex });
+                vectors.push({ fixture, struct: 'IncreaseCounter', value: json, golden_hex: hex });
             }
             const tyIdxReset = ctx.symbols.getStruct('ResetCounter').ty_idx;
             for (const val of [{ queryId: 0n }, { queryId: 18446744073709551615n }]) {
                 const hex = packHex(ctx, tyIdxReset, val);
                 const json = roundTripCheckOrThrow(ctx, abi, tyIdxReset, val, hex);
-                vectors.push({ fixture, struct: 'ResetCounter', enabled_from: 'W8', value: json, golden_hex: hex });
+                vectors.push({ fixture, struct: 'ResetCounter', value: json, golden_hex: hex });
             }
         }
 
@@ -566,12 +567,12 @@ async function main() {
             for (const val of [{ counter_id: 0n, inc_by: 1n }, { counter_id: -5n, inc_by: 100n }]) {
                 const hex = packHex(ctx, tyIdx, val);
                 const json = roundTripCheckOrThrow(ctx, abi, tyIdx, val, hex);
-                vectors.push({ fixture, struct: 'IncreaseBy', enabled_from: 'W8', value: json, golden_hex: hex });
+                vectors.push({ fixture, struct: 'IncreaseBy', value: json, golden_hex: hex });
             }
             const tyIdxEmpty = ctx.symbols.getStruct('EmptyMsg').ty_idx;
             const hexEmpty = packHex(ctx, tyIdxEmpty, {});
             const jsonEmpty = roundTripCheckOrThrow(ctx, abi, tyIdxEmpty, {}, hexEmpty);
-            vectors.push({ fixture, struct: 'EmptyMsg', enabled_from: 'W8', value: jsonEmpty, golden_hex: hexEmpty });
+            vectors.push({ fixture, struct: 'EmptyMsg', value: jsonEmpty, golden_hex: hexEmpty });
         }
 
         if (fixture === 'lots-of-wrappers') {
@@ -586,7 +587,7 @@ async function main() {
             for (const { struct, val, hex } of literalCases) {
                 const tyIdx = ctx.symbols.getStruct(struct).ty_idx;
                 const json = roundTripCheckOrThrow(ctx, abi, tyIdx, val, hex);
-                vectors.push({ fixture, struct, enabled_from: 'W8', value: json, golden_hex: hex, source: 'LotsOfWrappers.spec.ts literal gold' });
+                vectors.push({ fixture, struct, value: json, golden_hex: hex, source: 'LotsOfWrappers.spec.ts literal gold' });
             }
         }
     }
@@ -643,24 +644,6 @@ async function main() {
     }
 
     console.log(`copied 26 .tolk fixtures (19 top-level + 7 imports/), ${loadableCount} compile to a valid ABI`);
-
-    // ---- T12.2: production ABI for the DeDust CPMM V2 claim_reward family.
-    // A hand-authored DECLARATION file (plan §0.11) that lives IN testdata/fixtures
-    // (not copied from the reference repo). Compiled here so the committed
-    // dedust_v2.abi.json regenerates deterministically; the emitter (ton-abi-gen)
-    // consumes it into ton-abi/generated/dedust_v2_gen.{h,cpp} for the mch bridge.
-    {
-        const declFile = path.join(FIXTURES_DIR, 'dedust_v2.tolk');
-        const abi = await compileTolk(declFile);
-        if (abi.abi_schema_version !== '1.0') {
-            throw new Error(`unexpected abi_schema_version '${abi.abi_schema_version}' for dedust_v2`);
-        }
-        fs.writeFileSync(
-            path.join(FIXTURES_DIR, 'dedust_v2.abi.json'),
-            JSON.stringify(abi, null, 2) + '\n',
-        );
-        console.log(`compiled dedust_v2.tolk -> dedust_v2.abi.json (contract_name=${abi.contract_name})`);
-    }
 
     // ---- W8 (T8.3): broaden vector coverage past W0's scalar-only subset.
     // One ctx per fixture, reusing the abi already compiled above.
@@ -772,7 +755,7 @@ async function main() {
         }
         const value = toValueJsonFull(ctx, structTyIdx, unpacked, undefined);
         vectors.push({
-            fixture: 'lots-of-wrappers', struct: 'WithStrings1', enabled_from: 'W8',
+            fixture: 'lots-of-wrappers', struct: 'WithStrings1',
             value, golden_hex: outer.beginParse().toString(), unpack_only: true,
             source: 'hand-built malformed-UTF8 wire bytes (E0 80 80 overlong), golden value = Node Buffer.toString(utf8) oracle decode',
         });
@@ -791,7 +774,7 @@ async function main() {
         const goodBits = goodHex.match(/x\{([0-9A-F_]*)\}/)[1];
         const truncatedHex = `x{${goodBits.slice(0, goodBits.length - 2)}}`;  // drop the last byte (2 hex chars)
         vectors.push({
-            fixture: 'tolk_counter', struct: 'IncreaseCounter', enabled_from: 'W8',
+            fixture: 'tolk_counter', struct: 'IncreaseCounter',
             expect_error: true, golden_hex: truncatedHex,
             source: 'per-field truncation: IncreaseCounter with its last byte dropped',
         });
@@ -800,7 +783,7 @@ async function main() {
         const flippedNibble = (parseInt(goodBits[7], 16) ^ 0xF).toString(16).toUpperCase();
         const badPrefixHex = `x{${goodBits.slice(0, 7)}${flippedNibble}${goodBits.slice(8)}}`;
         vectors.push({
-            fixture: 'tolk_counter', struct: 'IncreaseCounter', enabled_from: 'W8',
+            fixture: 'tolk_counter', struct: 'IncreaseCounter',
             expect_error: true, golden_hex: badPrefixHex,
             source: 'prefix mismatch: IncreaseCounter opcode nibble flipped',
         });
@@ -832,7 +815,7 @@ async function main() {
         };
         fs.writeFileSync(handAbiPath, JSON.stringify(handAbi, null, 2) + '\n');
         vectors.push({
-            fixture: 'w8-hand-union', struct: 'Holder', enabled_from: 'W8',
+            fixture: 'w8-hand-union', struct: 'Holder',
             expect_error: true, golden_hex: 'x{0C}',  // neither 0x0A nor 0x0B
             source: 'hand-authored ABI (not tolk-compiled): explicit-prefix union with a deliberate dispatch gap',
         });

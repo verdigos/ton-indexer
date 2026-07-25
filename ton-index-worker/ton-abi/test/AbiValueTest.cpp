@@ -1,20 +1,10 @@
 // W8 TDD (T8.1): AbiValue tree + canonical JSON dump shapes (§0.14). Units
 // build AbiValue trees by hand (no kernel/walker involved -- that's T8.2) and
 // assert the exact dump string per kind, matching VALUE_SCHEMA.md / the
-// W8-HANDOFF non-obvious points (lowercase hex, cellOf {"ref":...}, union
+// MODULE-NOTES.md semantics points (lowercase hex, cellOf {"ref":...}, union
 // hasValueField wrapper, struct "$" first).
 
-#include "doctest.h"
-
-#pragma push_macro("CHECK")
-#undef CHECK
-#include "AbiValue.h"
-#include "vm/cells/CellSlice.h"
-#include "vm/cells/Cell.h"
-#include "common/refint.h"
-#pragma pop_macro("CHECK")
-
-#include <string>
+#include "AbiTestSupport.h"
 
 namespace {
 

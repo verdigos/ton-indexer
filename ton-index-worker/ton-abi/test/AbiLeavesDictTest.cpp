@@ -3,19 +3,8 @@
 // ascending key order (matching @ton/core's HashmapE order). uint8->uint8
 // key/value callbacks stand in for the W8 walker.
 
-#include "doctest.h"
+#include "AbiTestSupport.h"
 
-#pragma push_macro("CHECK")
-#undef CHECK
-#include "AbiLeavesDict.h"
-#include "AbiLeavesScalar.h"
-#include "vm/cells/CellSlice.h"
-#include "vm/cells/Cell.h"
-#include "vm/boc.h"
-#include "td/utils/base64.h"
-#pragma pop_macro("CHECK")
-
-#include <string>
 #include <utility>
 #include <vector>
 

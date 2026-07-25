@@ -48,9 +48,10 @@ add_executable(ton-abi-test
 )
 target_include_directories(ton-abi-test PRIVATE test generated)
 
-# Committed generated pairs. ALL loadable fixtures' pairs are compiled into the
-# test exe (W11 T11.2): guarantees every emitted file compiles + is the A/B gate
-# input. --check (add_test below) covers byte-repro for all of them.
+# Committed generated pairs. EVERY pair in generated/ is compiled into the test
+# exe (W11 T11.2) -- all loadable fixtures plus the production abi/ pairs:
+# guarantees every emitted file compiles, and gives the A/B gate its input.
+# --check (add_test below) covers byte-repro for all of them.
 file(GLOB TON_ABI_GENERATED CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/generated/*_gen.cpp)
 target_sources(ton-abi-test PRIVATE ${TON_ABI_GENERATED})
 target_compile_features(ton-abi-test PRIVATE cxx_std_20)
@@ -67,9 +68,14 @@ enable_testing()
 add_test(NAME ton_abi_smoke COMMAND ton-abi-test)
 
 # --check byte-repro gate (W11 T11.2): every committed generated/ pair must
-# regenerate byte-identically from its ABI (msgs_gen discipline). Excludes the
-# two err-invalid-map-key fixtures (intentional hard-fail, no committed pair).
-file(GLOB TON_ABI_CHECK_ABIS ${CMAKE_CURRENT_SOURCE_DIR}/testdata/fixtures/*.abi.json)
+# regenerate byte-identically from its ABI (msgs_gen discipline). Two ABI
+# sources: testdata/fixtures/ (reference-repo test fixtures, built by
+# tools/gen_vectors.mjs) and abi/ (PRODUCTION message declarations, built by
+# tools/gen_prod_abi.mjs). Excludes the two err-invalid-map-key fixtures
+# (intentional hard-fail, no committed pair).
+file(GLOB TON_ABI_CHECK_ABIS CONFIGURE_DEPENDS
+     ${CMAKE_CURRENT_SOURCE_DIR}/testdata/fixtures/*.abi.json
+     ${CMAKE_CURRENT_SOURCE_DIR}/abi/*.abi.json)
 list(FILTER TON_ABI_CHECK_ABIS EXCLUDE REGEX "err-invalid-map-key")
 add_test(NAME ton_abi_gen_check
          COMMAND ton-abi-gen ${TON_ABI_CHECK_ABIS} --out-dir ${CMAKE_CURRENT_SOURCE_DIR}/generated --check)

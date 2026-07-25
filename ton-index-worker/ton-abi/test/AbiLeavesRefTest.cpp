@@ -4,18 +4,7 @@
 // the §0.14 BOC serialization mode (vm::std_boc_serialize(_, 2) == @ton/core
 // toBoc() default). See AbiLeavesRef.h for citations.
 
-#include "doctest.h"
-
-#pragma push_macro("CHECK")
-#undef CHECK
-#include "AbiLeavesRef.h"
-#include "vm/cells/CellSlice.h"
-#include "vm/cells/Cell.h"
-#include "vm/boc.h"
-#include "td/utils/base64.h"
-#pragma pop_macro("CHECK")
-
-#include <string>
+#include "AbiTestSupport.h"
 
 namespace {
 

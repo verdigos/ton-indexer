@@ -1,7 +1,5 @@
 #include "AbiEmit.h"
 
-#include "AbiLeavesPrefix.h"  // ResolvedUnion / LabeledVariant shapes at gen time
-
 #include "td/utils/misc.h"
 
 #include <algorithm>
@@ -284,8 +282,8 @@ class Emitter {
       t.cpp_name = uniq_name(mangle_monomorph(inst.struct_name));
       t.self_ty_idx = inst.ty_idx;
       t.is_monomorph = true;
-      // "$" label = plain base struct name (the interpreter make_struct uses it);
-      // generic decl carries prefix / custom.
+      // "$" label = plain base struct name (that is what the value dump carries,
+      // never the mangled monomorph name); generic decl carries prefix / custom.
       std::string base = base_name(inst.struct_name);
       auto rs = kernel_.get_struct(base);
       t.s = rs.is_ok() ? rs.move_as_ok() : nullptr;
@@ -1202,6 +1200,24 @@ class Emitter {
     return pack ? c->pack_to_builder : c->unpack_from_slice;
   }
 
+  // The custom-registry delegation preamble (§0.17), identical at every
+  // direction of every custom decl: look the entry up by "<contract>::<decl>"
+  // and, when that direction was never registered, fail at RUNTIME -- never at
+  // compile/link time. `value_type` is the registry's typed slot: the generated
+  // struct, td::RefInt256, or AbiValue for the type-erased form.
+  enum class CustomDir { Unpack, Pack, ToAbiValue };
+  std::string emit_custom_delegate(const std::string &value_type, const std::string &orig_name, CustomDir dir) {
+    const char *member = dir == CustomDir::Unpack ? "unpack" : dir == CustomDir::Pack ? "pack" : "to_abi_value";
+    const char *fn_name =
+        dir == CustomDir::Unpack ? "unpackFromSlice" : dir == CustomDir::Pack ? "packToBuilder" : "to_abi_value";
+    std::string s;
+    s += "  const auto* __e = ton_abi::gen::abi_custom_lookup<" + value_type + ">(" +
+         cpp_str_lit(abi_.contract_name + "::" + orig_name) + ");\n";
+    s += "  if (__e == nullptr || !__e->" + std::string(member) + ") { return td::Status::Error(" +
+         cpp_str_lit("custom " + std::string(fn_name) + " was not registered for '" + orig_name + "'") + "); }\n";
+    return s;
+  }
+
   // A decl that is custom in EVERY direction it is used carries a value the
   // typed form can't reconstruct (e.g. CustomPoint is an empty ABI struct whose
   // custom (un)pack materialize x/y; TelegramString's target is `slice`). Emit
@@ -1210,7 +1226,6 @@ class Emitter {
   void emit_custom_abivalue(Target &t) {
     t.abi_value_form = true;
     const std::string &N = t.cpp_name;
-    std::string key = abi_.contract_name + "::" + t.orig_name;
     std::string h;
     h += "using " + N + " = AbiValue;\n";
     h += "td::Result<" + N + "> " + N + "_from_slice(vm::CellSlice& cs);\n";
@@ -1220,19 +1235,13 @@ class Emitter {
 
     std::string c;
     c += "td::Result<" + N + "> " + N + "_from_slice(vm::CellSlice& cs) {\n";
-    c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<AbiValue>(" + cpp_str_lit(key) + ");\n";
-    c += "  if (__e == nullptr || !__e->unpack) { return td::Status::Error(" +
-         cpp_str_lit("custom unpackFromSlice was not registered for '" + t.orig_name + "'") + "); }\n";
+    c += emit_custom_delegate("AbiValue", t.orig_name, CustomDir::Unpack);
     c += "  return __e->unpack(cs);\n}\n\n";
     c += "td::Status " + N + "_store(vm::CellBuilder& cb, const " + N + "& self) {\n";
-    c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<AbiValue>(" + cpp_str_lit(key) + ");\n";
-    c += "  if (__e == nullptr || !__e->pack) { return td::Status::Error(" +
-         cpp_str_lit("custom packToBuilder was not registered for '" + t.orig_name + "'") + "); }\n";
+    c += emit_custom_delegate("AbiValue", t.orig_name, CustomDir::Pack);
     c += "  return __e->pack(self, cb);\n}\n\n";
     c += "td::Result<AbiValue> " + N + "_to_abi_value(const " + N + "& self) {\n";
-    c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<AbiValue>(" + cpp_str_lit(key) + ");\n";
-    c += "  if (__e == nullptr || !__e->to_abi_value) { return td::Status::Error(" +
-         cpp_str_lit("custom to_abi_value was not registered for '" + t.orig_name + "'") + "); }\n";
+    c += emit_custom_delegate("AbiValue", t.orig_name, CustomDir::ToAbiValue);
     c += "  return __e->to_abi_value(self);\n}";
     t.cpp_body = c;
   }
@@ -1325,10 +1334,7 @@ class Emitter {
     if (any_omitted) {
       c += "  return td::Status::Error(\"" + N + ": not serializable: " + omitted_reason(finfo) + "\");\n";
     } else if (custom_unpack) {
-      c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<" + N + ">(\"" + abi_.contract_name +
-           "::" + t.orig_name + "\");\n";
-      c += "  if (__e == nullptr || !__e->unpack) { return td::Status::Error(\"custom unpackFromSlice was not "
-           "registered for '" + t.orig_name + "'\"); }\n";
+      c += emit_custom_delegate(N, t.orig_name, CustomDir::Unpack);
       c += "  return __e->unpack(cs);\n";
     } else {
       if (sd && sd->prefix) {
@@ -1351,10 +1357,7 @@ class Emitter {
     if (any_omitted) {
       c += "  return td::Status::Error(\"" + N + ": not serializable: " + omitted_reason(finfo) + "\");\n";
     } else if (custom_pack) {
-      c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<" + N + ">(\"" + abi_.contract_name +
-           "::" + t.orig_name + "\");\n";
-      c += "  if (__e == nullptr || !__e->pack) { return td::Status::Error(\"custom packToBuilder was not "
-           "registered for '" + t.orig_name + "'\"); }\n";
+      c += emit_custom_delegate(N, t.orig_name, CustomDir::Pack);
       c += "  return __e->pack(*this, cb);\n";
     } else {
       if (sd && sd->prefix) {
@@ -1375,10 +1378,7 @@ class Emitter {
     if (any_omitted) {
       c += "  return td::Status::Error(\"" + N + ": not representable as AbiValue\");\n";
     } else if (custom_unpack) {
-      c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<" + N + ">(\"" + abi_.contract_name +
-           "::" + t.orig_name + "\");\n";
-      c += "  if (__e == nullptr || !__e->to_abi_value) { return td::Status::Error(\"custom to_abi_value was not "
-           "registered for '" + t.orig_name + "'\"); }\n";
+      c += emit_custom_delegate(N, t.orig_name, CustomDir::ToAbiValue);
       c += "  return __e->to_abi_value(*this);\n";
     } else {
       c += "  AbiValue r = AbiValue::make_struct(" + cpp_str_lit(t.orig_name) + ");\n";
@@ -1437,10 +1437,7 @@ class Emitter {
     // from_slice
     c += "td::Result<" + N + "> " + N + "_from_slice(vm::CellSlice& cs) {\n";
     if (custom_unpack) {
-      c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<" + N + ">(\"" + abi_.contract_name +
-           "::" + t.orig_name + "\");\n";
-      c += "  if (__e == nullptr || !__e->unpack) { return td::Status::Error(\"custom unpackFromSlice was not "
-           "registered for '" + t.orig_name + "'\"); }\n";
+      c += emit_custom_delegate(N, t.orig_name, CustomDir::Unpack);
       c += "  return __e->unpack(cs);\n";
     } else if (!rep) {
       c += "  return td::Status::Error(\"" + N + ": not serializable (alias target unrepresentable)\");\n";
@@ -1451,10 +1448,7 @@ class Emitter {
     // store
     c += "td::Status " + N + "_store(vm::CellBuilder& cb, const " + N + "& self) {\n";
     if (custom_pack) {
-      c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<" + N + ">(\"" + abi_.contract_name +
-           "::" + t.orig_name + "\");\n";
-      c += "  if (__e == nullptr || !__e->pack) { return td::Status::Error(\"custom packToBuilder was not "
-           "registered for '" + t.orig_name + "'\"); }\n";
+      c += emit_custom_delegate(N, t.orig_name, CustomDir::Pack);
       c += "  return __e->pack(self, cb);\n";
     } else if (!rep) {
       c += "  return td::Status::Error(\"" + N + ": not serializable (alias target unrepresentable)\");\n";
@@ -1466,10 +1460,7 @@ class Emitter {
     // to_abi_value
     c += "td::Result<AbiValue> " + N + "_to_abi_value(const " + N + "& self) {\n";
     if (custom_unpack) {
-      c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<" + N + ">(\"" + abi_.contract_name +
-           "::" + t.orig_name + "\");\n";
-      c += "  if (__e == nullptr || !__e->to_abi_value) { return td::Status::Error(\"custom to_abi_value was not "
-           "registered for '" + t.orig_name + "'\"); }\n";
+      c += emit_custom_delegate(N, t.orig_name, CustomDir::ToAbiValue);
       c += "  return __e->to_abi_value(self);\n";
     } else if (!rep) {
       c += "  return td::Status::Error(\"" + N + ": not representable as AbiValue\");\n";
@@ -1512,10 +1503,7 @@ class Emitter {
     std::string c;
     c += "td::Result<td::RefInt256> " + N + "_from_slice(vm::CellSlice& cs) {\n";
     if (custom_unpack) {
-      c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<td::RefInt256>(\"" + abi_.contract_name +
-           "::" + t.orig_name + "\");\n";
-      c += "  if (__e == nullptr || !__e->unpack) { return td::Status::Error(\"custom unpackFromSlice was not "
-           "registered for '" + t.orig_name + "'\"); }\n";
+      c += emit_custom_delegate("td::RefInt256", t.orig_name, CustomDir::Unpack);
       c += "  return __e->unpack(cs);\n";
     } else {
       c += "  return " + (enc_int ? enc_load : load_expr(enc, "cs", t.orig_name, std::nullopt)) + ";\n";
@@ -1523,10 +1511,7 @@ class Emitter {
     c += "}\n\n";
     c += "td::Status " + N + "_store(vm::CellBuilder& cb, const td::RefInt256& self) {\n";
     if (custom_pack) {
-      c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<td::RefInt256>(\"" + abi_.contract_name +
-           "::" + t.orig_name + "\");\n";
-      c += "  if (__e == nullptr || !__e->pack) { return td::Status::Error(\"custom packToBuilder was not "
-           "registered for '" + t.orig_name + "'\"); }\n";
+      c += emit_custom_delegate("td::RefInt256", t.orig_name, CustomDir::Pack);
       c += "  return __e->pack(self, cb);\n";
     } else {
       c += "  " + (enc_int ? "TRY_STATUS(" + enc_store + ");" : store_stmt(enc, "self", "cb", t.orig_name, std::nullopt)) +
@@ -1536,10 +1521,7 @@ class Emitter {
     c += "}\n\n";
     c += "td::Result<AbiValue> " + N + "_to_abi_value(const td::RefInt256& self) {\n";
     if (custom_unpack) {
-      c += "  const auto* __e = ton_abi::gen::abi_custom_lookup<td::RefInt256>(\"" + abi_.contract_name +
-           "::" + t.orig_name + "\");\n";
-      c += "  if (__e == nullptr || !__e->to_abi_value) { return td::Status::Error(\"custom to_abi_value was not "
-           "registered for '" + t.orig_name + "'\"); }\n";
+      c += emit_custom_delegate("td::RefInt256", t.orig_name, CustomDir::ToAbiValue);
       c += "  return __e->to_abi_value(self);\n";
     } else {
       c += "  return td::Result<AbiValue>(ton_abi::gen::abi_v_int(self));\n";

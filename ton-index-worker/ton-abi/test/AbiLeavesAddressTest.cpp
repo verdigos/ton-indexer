@@ -3,14 +3,7 @@
 // @ton/core-derived REJECT space gets one unit per condition (both directions
 // where applicable). See AbiLeavesAddress.h for the normative citations.
 
-#include "doctest.h"
-
-#pragma push_macro("CHECK")
-#undef CHECK
-#include "AbiLeavesAddress.h"
-#include "vm/cells/CellSlice.h"
-#include "vm/cells/Cell.h"
-#pragma pop_macro("CHECK")
+#include "AbiTestSupport.h"
 
 namespace {
 

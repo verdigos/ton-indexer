@@ -3,20 +3,8 @@
 // 1-elem/ref form and the compiler-chunked form. Element (un)pack is a uint8
 // callback standing in for the W8 walker.
 
-#include "doctest.h"
+#include "AbiTestSupport.h"
 
-#pragma push_macro("CHECK")
-#undef CHECK
-#include "AbiLeavesContainer.h"
-#include "AbiLeavesScalar.h"
-#include "AbiLeavesRef.h"
-#include "vm/cells/CellSlice.h"
-#include "vm/cells/Cell.h"
-#include "vm/boc.h"
-#include "td/utils/base64.h"
-#pragma pop_macro("CHECK")
-
-#include <string>
 #include <vector>
 
 namespace {

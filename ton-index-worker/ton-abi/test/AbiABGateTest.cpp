@@ -1,30 +1,18 @@
-// W11 T11.2: the STATIC-vs-DYNAMIC A/B gate. Every conformance vector is run
-// through the GENERATED typed structs (from_slice -> to_abi_value -> canonical
-// JSON) and the result must byte-match the vector's expected value -- which is
-// exactly the interpreter's validated dump (VectorRunner gates interpreter ==
-// value separately, so generated == value <=> generated == interpreter). Error
-// vectors must make the generated from_slice fail; non-error / non-unpack_only
-// vectors additionally round-trip (generated store hash == golden cell hash).
+// W11 T11.2: the conformance gate. Every vector in testdata/abi_vectors.json is
+// run through the GENERATED typed structs (from_slice -> to_abi_value ->
+// canonical JSON) and the result must byte-match the vector's expected value.
+// The vectors ARE the oracle: tools/gen_vectors.mjs produces them from the
+// reference TS implementation, so generated == vector means generated ==
+// reference. Error vectors must make the generated from_slice fail; non-error /
+// non-unpack_only vectors additionally round-trip (generated store hash ==
+// golden cell hash). Compiling this TU is also what proves every committed
+// generated pair compiles and links.
 //
 // Custom-serializer vectors are driven via the TYPED registry (§0.17 (b)):
 // register_abi_custom<T> in setup, keyed <contract_name>::<decl>. TelegramString
 // and CustomPoint are AbiValue-form (type-erased); Custom8 is td::uint64.
 
-#include "doctest.h"
-
-#pragma push_macro("CHECK")
-#undef CHECK
-#include "td/utils/JsonBuilder.h"
-
-#include "AbiGenSupport.h"
-#include "AbiLeavesScalar.h"
-#include "AbiValue.h"
-#include "common/bitstring.h"
-#include "common/refint.h"
-#include "td/utils/base64.h"
-#include "vm/cells/Cell.h"
-#include "vm/cells/CellBuilder.h"
-#include "vm/cells/CellSlice.h"
+#include "AbiTestSupport.h"
 
 #include "tolk_counter_gen.h"
 #include "lots_of_messages_gen.h"
@@ -33,13 +21,10 @@
 #include "generic_union_labels_gen.h"
 #include "w8_hand_union_gen.h"
 #include "client_type_anno_gen.h"
-#pragma pop_macro("CHECK")
 
-#include <fstream>
 #include <functional>
 #include <map>
-#include <sstream>
-#include <string>
+#include <set>
 #include <type_traits>
 
 #ifndef TON_ABI_VECTORS_FILE
@@ -52,7 +37,7 @@ using namespace ton_abi;
 using Json = td::JsonValue;
 using JType = td::JsonValue::Type;
 
-// -------- JSON helpers (same shapes as VectorRunner) -----------------------
+// -------- JSON helpers ------------------------------------------------------
 const Json *jfield(const Json &e, td::Slice name) {
   if (e.type() != JType::Object) return nullptr;
   for (const auto &kv : e.get_object().field_values_) {
@@ -312,17 +297,11 @@ void ensure_customs() {
   (void)once;
 }
 
-std::string read_file(const std::string &path) {
-  std::ifstream in(path, std::ios::binary);
-  REQUIRE_MESSAGE(static_cast<bool>(in), "cannot open: " << path);
-  std::stringstream ss;
-  ss << in.rdbuf();
-  return ss.str();
-}
+using ton_abi_test::read_file;
 
 }  // namespace
 
-TEST_CASE("A/B gate: generated structs == interpreter dump on every vector") {
+TEST_CASE("A/B gate: generated structs match the oracle vectors, value + repack") {
   ensure_customs();
   auto dispatch = build_dispatch();
 
@@ -381,8 +360,123 @@ TEST_CASE("A/B gate: generated structs == interpreter dump on every vector") {
       ++checked;
     }
   }
-  MESSAGE("A/B gate: ", checked, " vectors checked");
-  CHECK(checked >= 0);
+  MESSAGE("A/B gate: ", checked, " vectors checked (this doctest pass)");
+}
+
+// ---------------------------------------------------------------------------
+// Corpus-structure gate. The per-vector checks above live inside SUBCASEs, so
+// doctest re-enters the case body once per subcase and any counter incremented
+// there is a per-pass fact, never a whole-corpus one. These two asserts are the
+// whole-corpus facts, and they run exactly once:
+//   (a) the vector file still carries the full conformance corpus (a truncated
+//       or partially-regenerated abi_vectors.json must FAIL, not silently
+//       shrink the gate);
+//   (b) every build_dispatch() key is exercised by at least one vector (catches
+//       an entry left behind after its vectors were renamed or dropped).
+// ---------------------------------------------------------------------------
+TEST_CASE("A/B gate corpus: full vector set present, no orphan dispatch entries") {
+  constexpr std::size_t kExpectedVectorCount = 33;
+
+  std::string buf = read_file(TON_ABI_VECTORS_FILE);
+  auto r_root = td::json_decode(td::MutableSlice(buf));
+  REQUIRE(r_root.is_ok());
+  Json root = r_root.move_as_ok();
+  const Json *vectors = jfield(root, "vectors");
+  REQUIRE(vectors != nullptr);
+  REQUIRE(vectors->type() == JType::Array);
+
+  const auto &varr = vectors->get_array();
+  CHECK_MESSAGE(varr.size() == kExpectedVectorCount,
+                "vector corpus size " << varr.size() << " != expected " << kExpectedVectorCount
+                                      << " (regenerate with tools/gen_vectors.mjs, or update the constant "
+                                         "deliberately when the corpus grows)");
+
+  std::set<std::string> vector_keys;
+  for (const auto &v : varr) {
+    vector_keys.insert(jstr(v, "fixture") + "::" + jstr(v, "struct"));
+  }
+  for (const auto &kv : build_dispatch()) {
+    CHECK_MESSAGE(vector_keys.count(kv.first) == 1, "orphan dispatch entry: '" << kv.first
+                                                                              << "' is wired but no vector uses it");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Union dispatch FORMS on the generated path. Ported from the W7-era
+// AbiLeavesPrefixTest cases that drove the interpreter's runtime dispatch_union
+// helper (deleted: pure codegen bakes its own dispatch chain, so the runtime
+// helper had no callers). The semantics still need a home:
+//   - an EXPLICIT prefix is peeked, never eaten (the variant re-reads it);
+//   - exact T|void: an empty slice is the void, anything else is the T;
+//   - a general union with a trailing void matches void LAST, and a non-empty
+//     no-match is an ERROR rather than a silent void.
+// The implicit-prefix EAT form is vector-covered already (generic-union-labels
+// MsgPair exercises both branches of a 1-bit Either), as is no-match-without-
+// void (the w8-hand-union::Holder expect_error vector).
+// ---------------------------------------------------------------------------
+TEST_CASE("union dispatch forms (generated): explicit peek, T|void, void-last") {
+  namespace lw = ton_abi::gen::lots_of_wrappers;
+  namespace whu = ton_abi::gen::w8_hand_union;
+
+  SUBCASE("explicit prefix is peeked, not consumed") {
+    // W8HandUnion::Holder = int8|int8 behind EXPLICIT 8-bit prefixes 10 / 11.
+    // The variant is a bare int8, so it re-reads those very bits as its value:
+    // value == prefix is the proof that dispatch consumed nothing.
+    vm::CellBuilder cb;
+    REQUIRE(cb.store_long_bool(11, 8));
+    auto cs = vm::load_cell_slice(cb.finalize());
+    auto r = whu::Holder::from_slice(cs);
+    REQUIRE(r.is_ok());
+    REQUIRE(r.ok().u.index() == 1);
+    CHECK(std::get<1>(r.ok().u) == 11);
+    CHECK(cs.size() == 0);
+  }
+  SUBCASE("no prefix matches and no void -> error") {
+    vm::CellBuilder cb;
+    REQUIRE(cb.store_long_bool(12, 8));  // neither 10 nor 11
+    auto cs = vm::load_cell_slice(cb.finalize());
+    CHECK(whu::Holder::from_slice(cs).is_error());
+  }
+  SUBCASE("T|void: empty slice is the void") {
+    vm::CellBuilder cb;
+    auto cs = vm::load_cell_slice(cb.finalize());
+    auto r = lw::Int32OrVoid_from_slice(cs);
+    REQUIRE(r.is_ok());
+    CHECK(r.ok().index() == 1);  // std::monostate
+  }
+  SUBCASE("T|void: non-empty slice is the T") {
+    vm::CellBuilder cb;
+    REQUIRE(cb.store_long_bool(0x55, 32));
+    auto cs = vm::load_cell_slice(cb.finalize());
+    auto r = lw::Int32OrVoid_from_slice(cs);
+    REQUIRE(r.is_ok());
+    REQUIRE(r.ok().index() == 0);
+    CHECK(std::get<0>(r.ok()) == 0x55);
+  }
+  SUBCASE("void-last: a matching prefix wins over the void") {
+    vm::CellBuilder cb;
+    REQUIRE(cb.store_long_bool(1, 2));  // ThreeP2's explicit 2-bit prefix
+    REQUIRE(cb.store_long_bool(7, 16));  // ThreeP2.v is int16
+    auto cs = vm::load_cell_slice(cb.finalize());
+    auto r = lw::ThreeWayWithVoid_from_slice(cs);
+    REQUIRE(r.is_ok());
+    REQUIRE(r.ok().index() == 1);
+    CHECK(std::get<1>(r.ok()).v == 7);
+  }
+  SUBCASE("void-last: empty slice is the void, matched after the probes") {
+    vm::CellBuilder cb;
+    auto cs = vm::load_cell_slice(cb.finalize());
+    auto r = lw::ThreeWayWithVoid_from_slice(cs);
+    REQUIRE(r.is_ok());
+    CHECK(r.ok().index() == 2);
+  }
+  SUBCASE("void-last: non-empty no-match errors instead of falling into void") {
+    vm::CellBuilder cb;
+    REQUIRE(cb.store_long_bool(3, 2));  // neither 0b00 nor 0b01
+    REQUIRE(cb.store_long_bool(7, 8));
+    auto cs = vm::load_cell_slice(cb.finalize());
+    CHECK(lw::ThreeWayWithVoid_from_slice(cs).is_error());
+  }
 }
 
 // ---------------------------------------------------------------------------

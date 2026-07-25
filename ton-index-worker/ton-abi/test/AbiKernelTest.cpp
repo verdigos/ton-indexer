@@ -4,45 +4,13 @@
 // generic-union-labels' GenericPair<int32,int64> T1|T2 labelling). See
 // docs/ton-abi-plan.md T2.1/T2.2 and the THREE NAMED INVARIANTS.
 
-#include "doctest.h"
-
-// AbiKernel.h / AbiLoader.h pull td/utils/Status.h -> logging.h -> check.h,
-// which #defines CHECK and would shadow doctest's. Pull them inside the guard
-// (the FIRST include of check.h wins its include guard here) and restore
-// doctest's CHECK afterwards -- same pattern as AbiLoaderTest / VectorRunner.
-#pragma push_macro("CHECK")
-#undef CHECK
-#include "AbiKernel.h"
-#include "AbiLoader.h"
-#pragma pop_macro("CHECK")
-
-#include <fstream>
-#include <sstream>
-#include <string>
-
-#ifndef TON_ABI_FIXTURES_DIR
-#error "TON_ABI_FIXTURES_DIR must be defined by CMake"
-#endif
+#include "AbiTestSupport.h"
 
 namespace {
 
 using ton_abi::AbiKernel;
 using ton_abi::ContractABI;
-
-std::string read_file(const std::string &path) {
-  std::ifstream in(path, std::ios::binary);
-  REQUIRE_MESSAGE(static_cast<bool>(in), "cannot open fixture: " << path);
-  std::stringstream ss;
-  ss << in.rdbuf();
-  return ss.str();
-}
-
-ContractABI load_fixture(const std::string &name) {
-  std::string path = std::string(TON_ABI_FIXTURES_DIR) + "/" + name + ".abi.json";
-  auto r = ton_abi::load_abi_from_json(read_file(path));
-  REQUIRE_MESSAGE(r.is_ok(), name << ": " << (r.is_error() ? r.error().message().str() : ""));
-  return r.move_as_ok();
-}
+using ton_abi_test::load_fixture_abi;
 
 ContractABI load_json(const std::string &json) {
   auto r = ton_abi::load_abi_from_json(json);
@@ -71,7 +39,7 @@ TEST_CASE("AbiKernel create: all committed fixture ABIs build a kernel") {
            "tolk_counter",
        }) {
     CAPTURE(name);
-    ContractABI abi = load_fixture(name);
+    ContractABI abi = load_fixture_abi(name);
     auto kr = AbiKernel::create(abi);
     REQUIRE_MESSAGE(kr.is_ok(), name << ": " << (kr.is_error() ? kr.error().message().str() : ""));
   }
@@ -82,7 +50,7 @@ TEST_CASE("AbiKernel create: all committed fixture ABIs build a kernel") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("AbiKernel SymTable: struct/alias/enum lookup + not-found errors") {
-  ContractABI abi = load_fixture("lots-of-messages");
+  ContractABI abi = load_fixture_abi("lots-of-messages");
   auto k = AbiKernel::create(abi).move_as_ok();
 
   auto s = k.get_struct("IncreaseBy");
@@ -95,7 +63,7 @@ TEST_CASE("AbiKernel SymTable: struct/alias/enum lookup + not-found errors") {
 }
 
 TEST_CASE("AbiKernel ty_by_idx: bounds") {
-  ContractABI abi = load_fixture("lots-of-messages");
+  ContractABI abi = load_fixture_abi("lots-of-messages");
   auto k = AbiKernel::create(abi).move_as_ok();
   CHECK(k.ty_by_idx(0).is_ok());
   CHECK(k.ty_by_idx(-1).is_error());
@@ -107,7 +75,7 @@ TEST_CASE("AbiKernel ty_by_idx: bounds") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("AbiKernel structFieldsOf: non-generic struct -> fields verbatim, no uLabel") {
-  ContractABI abi = load_fixture("lots-of-messages");
+  ContractABI abi = load_fixture_abi("lots-of-messages");
   auto k = AbiKernel::create(abi).move_as_ok();
   // ty_idx 12 = StructRef IncreaseBy (non-generic): counter_id:int32, inc_by:int32.
   auto fr = k.struct_fields_of(12);
@@ -123,7 +91,7 @@ TEST_CASE("AbiKernel structFieldsOf: non-generic struct -> fields verbatim, no u
 }
 
 TEST_CASE("AbiKernel structFieldsOf: generic instantiation swaps ty_idx, keeps original as uLabel") {
-  ContractABI abi = load_fixture("lots-of-messages");
+  ContractABI abi = load_fixture_abi("lots-of-messages");
   auto k = AbiKernel::create(abi).move_as_ok();
   // ty_idx 13 = StructRef ResetTo<int64>; decl fields counter_id:int32(8),
   // reset_to:T(14 genericT); instantiation monomorphic_fields = [8, 10].
@@ -168,7 +136,7 @@ TEST_CASE("AbiKernel structFieldsOf: client_ty_idx swaps to cell type and drops 
 }
 
 TEST_CASE("AbiKernel structFieldsOf: not a StructRef -> error") {
-  ContractABI abi = load_fixture("lots-of-messages");
+  ContractABI abi = load_fixture_abi("lots-of-messages");
   auto k = AbiKernel::create(abi).move_as_ok();
   CHECK(k.struct_fields_of(8).is_error());  // ty 8 = intN, not a StructRef
 }
@@ -178,7 +146,7 @@ TEST_CASE("AbiKernel structFieldsOf: not a StructRef -> error") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("AbiKernel aliasTargetOf: generic instantiation -> monomorph target + uLabel") {
-  ContractABI abi = load_fixture("generic-union-labels");
+  ContractABI abi = load_fixture_abi("generic-union-labels");
   auto k = AbiKernel::create(abi).move_as_ok();
   // ty 47 = AliasRef TlbEither<StateInit, Cell<StateInit>>; decl target 57,
   // instantiation monomorphic_target 53.
@@ -190,7 +158,7 @@ TEST_CASE("AbiKernel aliasTargetOf: generic instantiation -> monomorph target + 
 }
 
 TEST_CASE("AbiKernel aliasTargetOf: non-instantiated alias -> decl target, no uLabel") {
-  ContractABI abi = load_fixture("generic-union-labels");
+  ContractABI abi = load_fixture_abi("generic-union-labels");
   auto k = AbiKernel::create(abi).move_as_ok();
   // ty 29 = AliasRef AliasOrInt8<T> (generic decl form, no instantiation at 29);
   // decl target 26.
@@ -201,7 +169,7 @@ TEST_CASE("AbiKernel aliasTargetOf: non-instantiated alias -> decl target, no uL
 }
 
 TEST_CASE("AbiKernel aliasTargetOf: not an AliasRef -> error") {
-  ContractABI abi = load_fixture("generic-union-labels");
+  ContractABI abi = load_fixture_abi("generic-union-labels");
   auto k = AbiKernel::create(abi).move_as_ok();
   CHECK(k.alias_target_of(8).is_error());  // intN
 }
@@ -211,7 +179,7 @@ TEST_CASE("AbiKernel aliasTargetOf: not an AliasRef -> error") {
 // ---------------------------------------------------------------------------
 
 TEST_CASE("AbiKernel createLabelsForUnion: primitive variants get $ + value labels") {
-  ContractABI abi = load_fixture("generic-union-labels");
+  ContractABI abi = load_fixture_abi("generic-union-labels");
   auto k = AbiKernel::create(abi).move_as_ok();
   // ty 14 = union int32 | int64 (the monomorphic form of GenericPair<int32,int64>).
   const auto &u = union_at(k, 14);
@@ -226,7 +194,7 @@ TEST_CASE("AbiKernel createLabelsForUnion: primitive variants get $ + value labe
 }
 
 TEST_CASE("AbiKernel createLabelsForUnion: uLabel makes generic union label as T1|T2 (invariant i)") {
-  ContractABI abi = load_fixture("generic-union-labels");
+  ContractABI abi = load_fixture_abi("generic-union-labels");
   auto k = AbiKernel::create(abi).move_as_ok();
   // Same interned union ty 14, but arriving from GenericPair<int32,int64>.value
   // whose uLabel back-ref is the generic union ty 18 (T1 | T2). Labels must be
@@ -244,7 +212,7 @@ TEST_CASE("AbiKernel createLabelsForUnion: uLabel makes generic union label as T
 }
 
 TEST_CASE("AbiKernel createLabelsForUnion: struct variants inline (own label, no value)") {
-  ContractABI abi = load_fixture("generic-union-labels");
+  ContractABI abi = load_fixture_abi("generic-union-labels");
   auto k = AbiKernel::create(abi).move_as_ok();
   // ty 53 = union TlbEitherLeft<StateInit> | TlbEitherRight<Cell<StateInit>>.
   const auto &u = union_at(k, 53);
@@ -376,7 +344,7 @@ TEST_CASE("AbiKernel resolve_union: trailing void detected, excluded from dispat
 }
 
 TEST_CASE("AbiKernel resolve_union: not a union -> error") {
-  ContractABI abi = load_fixture("lots-of-messages");
+  ContractABI abi = load_fixture_abi("lots-of-messages");
   auto k = AbiKernel::create(abi).move_as_ok();
   CHECK(k.resolve_union(8, std::nullopt).is_error());  // intN
 }

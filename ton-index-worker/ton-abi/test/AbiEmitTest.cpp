@@ -1,10 +1,13 @@
-// W11 T11.1: ton-abi-gen emitter units.
-//  (A) The emitted output for tolk_counter / lots-of-messages / generic-union-
-//      labels COMPILES (this TU includes the generated headers and links their
-//      committed .cpp) and basic-round-trips: for hand-built cells, the
-//      generated struct's from_slice -> to_abi_value -> to_json equals the
-//      interpreter's dump (a T11.1 slice of the T11.2 A/B gate), and the
-//      generated store round-trips to the same cell hash.
+// W11 T11.1: ton-abi-gen emitter units -- the codegen-level facts that the
+// vector gate structurally CANNOT see, because they are about the emitted TEXT
+// or about generation failing, not about wire behaviour.
+//  (A) create() default materialization (shape spec §8): defaults live only in
+//      the ABI's ConstExprs, never on the wire, so no vector can reach them.
+//      (The wire-behaviour cases that used to sit here -- IncreaseCounter,
+//      IncreaseBy, EmptyMsg, MsgPair, MsgAliasInt16 round-trips and the prefix
+//      mismatch -- were hand-copies of conformance vectors and were deleted;
+//      AbiABGateTest drives those same shapes from testdata/abi_vectors.json,
+//      and it is also where "every generated pair compiles + links" is proven.)
 //  (B) Per-direction custom gate (shape spec §6, plan §0.19 rider): a ONE-SIDED
 //      custom STRUCT delegates ONLY the registered direction to the typed
 //      registry; the other direction keeps the normal baked path. This is the
@@ -13,54 +16,23 @@
 //  (C) Decl-level non-standard map key -> HARD generation failure (§7).
 //  (D) Non-serializable field (callable) -> compiling stubs, both directions.
 
-#include "doctest.h"
+#include "AbiTestSupport.h"
 
-#pragma push_macro("CHECK")
-#undef CHECK
-#include "AbiEmit.h"
-#include "AbiKernel.h"
-#include "AbiLeavesPrefix.h"
-#include "AbiLeavesScalar.h"
-#include "AbiLoader.h"
-#include "AbiValue.h"
-
-#include "common/refint.h"
-#include "vm/cells/Cell.h"
-#include "vm/cells/CellBuilder.h"
-#include "vm/cells/CellSlice.h"
-
-#include "tolk_counter_gen.h"
 #include "lots_of_messages_gen.h"
-#include "generic_union_labels_gen.h"
-#pragma pop_macro("CHECK")
 
 #include <cstdlib>
 #include <filesystem>
-#include <fstream>
 #include <memory>
-#include <sstream>
-#include <string>
-
-#ifndef TON_ABI_FIXTURES_DIR
-#error "TON_ABI_FIXTURES_DIR must be defined by CMake"
-#endif
 
 namespace {
 
 using namespace ton_abi;
-
-std::string read_file(const std::string &path) {
-  std::ifstream in(path, std::ios::binary);
-  REQUIRE_MESSAGE(static_cast<bool>(in), "cannot open: " << path);
-  std::stringstream ss;
-  ss << in.rdbuf();
-  return ss.str();
-}
+using ton_abi_test::fixture_path;
+using ton_abi_test::load_fixture_abi;
+using ton_abi_test::read_file;
 
 std::string emit_source_of(const std::string &fixture) {
-  std::string path = std::string(TON_ABI_FIXTURES_DIR) + "/" + fixture + ".abi.json";
-  auto abi = load_abi_from_json(read_file(path)).move_as_ok();
-  auto box = std::make_unique<ContractABI>(std::move(abi));
+  auto box = std::make_unique<ContractABI>(load_fixture_abi(fixture));
   auto kernel = AbiKernel::create(*box).move_as_ok();
   auto r = emit_abi(*box, kernel);
   REQUIRE_MESSAGE(r.is_ok(), fixture << " emit: " << (r.is_error() ? r.error().message().str() : ""));
@@ -70,111 +42,16 @@ std::string emit_source_of(const std::string &fixture) {
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// (A) generated vs interpreter, tolk_counter scalars + prefix
+// (A) create() default materialization (§8): a defaulted field left out of
+// CreateArgs is filled from the ABI's ConstExpr. Defaults never appear on the
+// wire, so this is unreachable from the vector corpus.
 // ---------------------------------------------------------------------------
-TEST_CASE("emit: tolk_counter IncreaseCounter generated dump + store round-trip") {
-  vm::CellBuilder cb;
-  REQUIRE(store_prefix(cb, 0x7E8764EFULL, 32).is_ok());
-  REQUIRE(store_uint(cb, td::make_refint(123456789), 64).is_ok());
-  REQUIRE(store_uint(cb, td::make_refint(4294967295LL), 32).is_ok());
-  td::Ref<vm::Cell> cell = cb.finalize();
-
-  auto cs = vm::load_cell_slice(cell);
-  auto g = gen::tolk_counter::IncreaseCounter::from_slice(cs);
-  REQUIRE_MESSAGE(g.is_ok(), "gen from_slice: " << (g.is_error() ? g.error().message().str() : ""));
-  auto gv = g.ok().to_abi_value();
-  REQUIRE(gv.is_ok());
-  std::string gen_dump = gv.ok().to_json();
-
-  CHECK(gen_dump == R"({"$":"IncreaseCounter","queryId":"123456789","increaseBy":"4294967295"})");
-
-  // store round-trip: from_slice value re-stored == original cell hash.
-  vm::CellBuilder cb2;
-  REQUIRE(g.ok().store(cb2).is_ok());
-  CHECK(cb2.finalize()->get_hash() == cell->get_hash());
-}
-
-TEST_CASE("emit: tolk_counter IncreaseCounter prefix mismatch fails") {
-  vm::CellBuilder cb;
-  REQUIRE(store_prefix(cb, 0x7E8764E0ULL, 32).is_ok());  // flipped nibble
-  REQUIRE(store_uint(cb, td::make_refint(0), 64).is_ok());
-  REQUIRE(store_uint(cb, td::make_refint(0), 32).is_ok());
-  auto cs = vm::load_cell_slice(cb.finalize());
-  CHECK(gen::tolk_counter::IncreaseCounter::from_slice(cs).is_error());
-}
-
-// ---------------------------------------------------------------------------
-// (A) generated vs interpreter, lots-of-messages: monomorph + empty struct
-// ---------------------------------------------------------------------------
-TEST_CASE("emit: lots-of-messages IncreaseBy negative int + default field") {
-  vm::CellBuilder cb;
-  REQUIRE(store_prefix(cb, 0x12345678ULL, 32).is_ok());
-  REQUIRE(store_int(cb, td::make_refint(-5), 32).is_ok());
-  REQUIRE(store_int(cb, td::make_refint(100), 32).is_ok());
-  td::Ref<vm::Cell> cell = cb.finalize();
-
-  auto cs = vm::load_cell_slice(cell);
-  auto g = gen::lots_of_messages::IncreaseBy::from_slice(cs);
-  REQUIRE(g.is_ok());
-  std::string gen_dump = g.ok().to_abi_value().move_as_ok().to_json();
-  CHECK(gen_dump == R"({"$":"IncreaseBy","counter_id":"-5","inc_by":"100"})");
-}
-
-TEST_CASE("emit: lots-of-messages EmptyMsg + create()-with-default") {
-  vm::CellBuilder cb;
-  REQUIRE(store_prefix(cb, 0x34567890ULL, 32).is_ok());
-  td::Ref<vm::Cell> cell = cb.finalize();
-  auto cs = vm::load_cell_slice(cell);
-  auto g = gen::lots_of_messages::EmptyMsg::from_slice(cs);
-  REQUIRE(g.is_ok());
-  CHECK(g.ok().to_abi_value().move_as_ok().to_json() == R"({"$":"EmptyMsg"})");
-
-  // create() materializes the inc_by=1 default when the optional arg is absent.
+TEST_CASE("emit: lots-of-messages IncreaseBy create()-with-default") {
   gen::lots_of_messages::IncreaseBy::CreateArgs args;
   args.counter_id = 7;  // int8 -> td::int64 (W11.5)
   auto made = gen::lots_of_messages::IncreaseBy::create(args);
-  CHECK(made.inc_by == 1);       // int32 -> td::int64
+  CHECK(made.inc_by == 1);  // int32 -> td::int64, ABI default 1
   CHECK(made.counter_id == 7);
-}
-
-// ---------------------------------------------------------------------------
-// (A) generated vs interpreter, generic-union-labels: struct->generic->union
-// ---------------------------------------------------------------------------
-TEST_CASE("emit: generic-union-labels MsgPair T1 union label round-trip") {
-  // MsgPair(0x10000001) -> GenericPair.value -> union{T1=int32}: implicit bit 0
-  // then int32(5).
-  vm::CellBuilder cb;
-  REQUIRE(store_prefix(cb, 0x10000001ULL, 32).is_ok());
-  REQUIRE(cb.store_long_bool(0, 1));  // union implicit prefix, variant 0 (T1)
-  REQUIRE(store_int(cb, td::make_refint(5), 32).is_ok());
-  td::Ref<vm::Cell> cell = cb.finalize();
-
-  auto cs = vm::load_cell_slice(cell);
-  auto g = gen::generic_union_labels::MsgPair::from_slice(cs);
-  REQUIRE_MESSAGE(g.is_ok(), "gen from_slice: " << (g.is_error() ? g.error().message().str() : ""));
-  std::string gen_dump = g.ok().to_abi_value().move_as_ok().to_json();
-
-  CHECK(gen_dump ==
-        R"({"$":"MsgPair","value":{"$":"GenericPair","value":{"$":"T1","value":"5"}}})");
-
-  vm::CellBuilder cb2;
-  REQUIRE(g.ok().store(cb2).is_ok());
-  CHECK(cb2.finalize()->get_hash() == cell->get_hash());
-}
-
-TEST_CASE("emit: generic-union-labels MsgAliasInt16 T union label round-trip") {
-  // MsgAliasInt16(0x10000005) -> AliasOrInt8_int16 union{T=int16}: implicit bit 0
-  // then int16(5).
-  vm::CellBuilder cb;
-  REQUIRE(store_prefix(cb, 0x10000005ULL, 32).is_ok());
-  REQUIRE(cb.store_long_bool(0, 1));
-  REQUIRE(store_int(cb, td::make_refint(5), 16).is_ok());
-  td::Ref<vm::Cell> cell = cb.finalize();
-  auto cs = vm::load_cell_slice(cell);
-  auto g = gen::generic_union_labels::MsgAliasInt16::from_slice(cs);
-  REQUIRE(g.is_ok());
-  CHECK(g.ok().to_abi_value().move_as_ok().to_json() ==
-        R"({"$":"MsgAliasInt16","value":{"$":"T","value":"5"}})");
 }
 
 // ---------------------------------------------------------------------------
@@ -239,9 +116,7 @@ TEST_CASE("emit: unpack-only custom struct delegates ONLY from_slice, not store"
 // ---------------------------------------------------------------------------
 TEST_CASE("emit: err-invalid-map-key hard-fails with map-key error") {
   for (const char *fx : {"err-invalid-map-key-1", "err-invalid-map-key-2"}) {
-    std::string path = std::string(TON_ABI_FIXTURES_DIR) + "/" + fx + ".abi.json";
-    auto abi = load_abi_from_json(read_file(path)).move_as_ok();
-    auto box = std::make_unique<ContractABI>(std::move(abi));
+    auto box = std::make_unique<ContractABI>(load_fixture_abi(fx));
     auto kernel = AbiKernel::create(*box).move_as_ok();
     auto r = emit_abi(*box, kernel);
     REQUIRE_MESSAGE(r.is_error(), fx << " expected hard failure");
@@ -277,7 +152,7 @@ TEST_CASE("cli: ton-abi-gen writes a header containing the struct signature") {
   std::error_code ec;
   fs::create_directories(out, ec);
 
-  std::string abi = std::string(TON_ABI_FIXTURES_DIR) + "/tolk_counter.abi.json";
+  std::string abi = fixture_path("tolk_counter");
   std::string cmd = "\"\"" + std::string(TON_ABI_GEN_EXE) + "\" \"" + abi + "\" --out-dir \"" + out.string() + "\"\"";
   int rc = std::system(cmd.c_str());
   REQUIRE_MESSAGE(rc == 0, "ton-abi-gen exited " << rc << " for: " << cmd);

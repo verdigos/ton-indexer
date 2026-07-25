@@ -5,7 +5,7 @@
 // struct's to_abi_value() dumps into -- the A/B gate compares that dump against
 // the TS oracle vectors -- and (b) the interchange type the future mch bridge
 // (W12) will adapt into mch::Value. Nothing in the parse hot path.
-// Owns the canonical JSON dump (docs/ton-abi-plan.md §0.14 / W8-HANDOFF.md
+// Owns the canonical JSON dump (docs/ton-abi-plan.md §0.14 / MODULE-NOTES.md
 // point 5-9,12), which is the format the conformance vectors compare against.
 //
 // Kind -> payload -> JSON dump:

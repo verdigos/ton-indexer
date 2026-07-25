@@ -445,6 +445,30 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
 
 ## 6. Wave log (append per wave; status column above updates same commit)
 
+- **R1a (refactor wave, ton-abi module) DONE 2026-07-25** (from 3-reviewer quality pass;
+  lead-verified fresh: ton-abi ctest 2/2, ctest mch 8/8, classify twin diff-0 at 199).
+  Landed: A/B gate HARDENED (vector count==33 + dispatch-key-consumption asserts —
+  previously an empty vector file passed; proven to bite on truncated copy); dead
+  interpreter union-dispatch deleted (dispatch_union/store_union_prefix + UnionDispatch)
+  which was the SOLE edge pulling AbiKernel into generated TUs — include audit via
+  /showIncludes proves generated code now reaches ONLY AbiGenSupport+AbiValue+leaf
+  headers (invariant restored); union-form coverage ported to generated path BEFORE
+  deletion (7 subcases; known gap flagged: emitter's T|void implicit-EAT branch has no
+  fixture — uncovered before too); 6 hand-copied oracle goldens deleted from
+  AbiEmitTest; enabled_from purged from all 33 vectors (dead since VectorRunner
+  retirement); PROD ABI RELOCATED testdata/fixtures/ → ton-abi/abi/ with standalone
+  tools/gen_prod_abi.mjs (tolk-js only — prod ABI regen no longer needs the reference
+  repo checkout; --check covers abi/ + CONFIGURE_DEPENDS); custom-registry emission
+  deduped 12→1 helper with cpp_str_lit escaping (9 unescaped sites fixed; --check
+  byte-identical proof); shared test/AbiTestSupport.h (13 TUs, CHECK-macro dance
+  centralized); doc batch: W11-SHAPE-SPEC §5 enum paragraph rewritten (was mandating
+  member-set validation the REFERENCE DOESN'T DO — oracle-parity trap), 6 spec-vs-code
+  fixes, custom doc-comment requirement dropped, VALUE_SCHEMA marked historical →
+  AbiValue.h table, W8-HANDOFF salvaged into MODULE-NOTES.md + deleted, interpreter
+  framing purged from live comments/test names. Doctest 162→153 cases (net −9, per-case
+  disposition in wave report; every deletion mapped to retained coverage). NB build:
+  never build `all` target (pre-existing protobuf×MSVC C2139); named targets only.
+
 - **W12/T12.2 DONE 2026-07-24** (FIRST REAL PROTOCOL through ABI path: DeDust CPMM V2
   claim_reward; design doc `ton-mch-engine/T122-CLAIMREWARD-DESIGN.md` + §10 as-built;
   lead-verified fresh ctest mch 8/8 + ton-abi 2/2; executor full gate run: classify/
@@ -597,8 +621,9 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
   by cs.size()-unchanged test. (4) Store: union writes prefix ONLY when implicit;
   explicit written by the variant's own store. **W8-HANDOFF.md committed** (inherited
   API surface, W6 callback contract, 12 non-obvious gotchas incl. vm-hex-UPPERCASE-vs-
-  JSON-lowercase). Executor abi-w2 retired after 6 waves (W2-W7), rotation at the
-  clean leaf/walker boundary.
+  JSON-lowercase) — DELETED in R1a once its wave-scoped brief had aged out; the durable
+  parts live on in `ton-index-worker/ton-abi/MODULE-NOTES.md`. Executor abi-w2 retired
+  after 6 waves (W2-W7), rotation at the clean leaf/walker boundary.
 
 - **W6 DONE 2026-07-16** (lead-verified: 103 cases / 620 asserts / ctest 1/1).
   AbiLeavesContainer.{h,cpp} (arrayOf/lispListOf) + AbiLeavesDict.{h,cpp}. Structural-

@@ -19,41 +19,12 @@
 //    SKIPPED, deferred register. Only the pure ABI-parse fact (the
 //    storage_at_deployment_ty_idx points at the right struct) is ported below.
 
-#include "doctest.h"
-
-#pragma push_macro("CHECK")
-#undef CHECK
-#include "AbiKernel.h"
-#include "AbiLoader.h"
-#include "common/refint.h"
-#pragma pop_macro("CHECK")
-
-#include <fstream>
-#include <sstream>
-#include <string>
-
-#ifndef TON_ABI_FIXTURES_DIR
-#error "TON_ABI_FIXTURES_DIR must be defined by CMake"
-#endif
+#include "AbiTestSupport.h"
 
 namespace {
 
 using namespace ton_abi;
-
-std::string read_file(const std::string &path) {
-  std::ifstream in(path, std::ios::binary);
-  REQUIRE_MESSAGE(static_cast<bool>(in), "cannot open: " << path);
-  std::stringstream ss;
-  ss << in.rdbuf();
-  return ss.str();
-}
-
-ContractABI load_fixture(const std::string &name) {
-  std::string path = std::string(TON_ABI_FIXTURES_DIR) + "/" + name + ".abi.json";
-  auto r = load_abi_from_json(read_file(path));
-  REQUIRE_MESSAGE(r.is_ok(), name << ": " << (r.is_error() ? r.error().message().str() : ""));
-  return r.move_as_ok();
-}
+using ton_abi_test::load_fixture_abi;
 
 const ABIStruct *find_struct(const ContractABI &abi, const std::string &name) {
   for (const auto &d : abi.declarations) {
@@ -77,7 +48,7 @@ const ABIEnum *find_enum(const ContractABI &abi, const std::string &name) {
 }  // namespace
 
 TEST_CASE("W10 OnlyHeader: outgoing/emitted/thrown_errors from the contract header (spec :18-54)") {
-  ContractABI abi = load_fixture("only-header");
+  ContractABI abi = load_fixture_abi("only-header");
 
   SUBCASE("outgoing messages: StructRef then AliasRef, descriptions on both sides of the alias") {
     REQUIRE(abi.outgoing_messages.size() == 2);
@@ -125,7 +96,7 @@ TEST_CASE("W10 OnlyHeader: outgoing/emitted/thrown_errors from the contract head
 }
 
 TEST_CASE("W10 LotsOfAnnotations: contract properties, message/getter descriptions (spec :29-85)") {
-  ContractABI abi = load_fixture("lots-of-annotations");
+  ContractABI abi = load_fixture_abi("lots-of-annotations");
 
   SUBCASE("ABI common properties (compiler_version PINNED exact, not the reference's regex)") {
     CHECK(abi.contract_name == "LotsOfAnnotations");
@@ -209,7 +180,7 @@ TEST_CASE("W10 LotsOfAnnotations: contract properties, message/getter descriptio
 }
 
 TEST_CASE("W10 LotsOfThrows: unnamed/plain_int throws, descriptions, external slice type, defaults presence (spec :17-50)") {
-  ContractABI abi = load_fixture("lots-of-throws");
+  ContractABI abi = load_fixture_abi("lots-of-throws");
 
   SUBCASE("unnamed throws (plain_int, no name) -- exactly 3, one at err_code 200, none at 201") {
     int unnamed = 0;
@@ -255,7 +226,7 @@ TEST_CASE("W10 LotsOfThrows: unnamed/plain_int throws, descriptions, external sl
 }
 
 TEST_CASE("W10 LotsOfStorage: default_value ABIConstExpression trees, incl. the big bigint (spec :51-94)") {
-  ContractABI abi = load_fixture("lots-of-storage");
+  ContractABI abi = load_fixture_abi("lots-of-storage");
   const ABIStruct *st = find_struct(abi, "StWithAllDefaults");
   REQUIRE(st != nullptr);
 
@@ -400,7 +371,7 @@ TEST_CASE("W10 LotsOfStorage: default_value ABIConstExpression trees, incl. the 
 }
 
 TEST_CASE("W10 HasNotInitializedStorage: ABI-parse-only fact (spec :62-66); address/shard derivation SKIPPED (see file header)") {
-  ContractABI abi = load_fixture("has-not-init-storage");
+  ContractABI abi = load_fixture_abi("has-not-init-storage");
   REQUIRE(abi.storage.storage_at_deployment_ty_idx.has_value());
   const Ty &t = abi.unique_types[static_cast<std::size_t>(*abi.storage.storage_at_deployment_ty_idx)];
   REQUIRE(t.kind == TyKind::StructRef);
