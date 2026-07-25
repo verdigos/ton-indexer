@@ -303,3 +303,20 @@ All gates green (see §8). Deltas worth recording:
 5. Action count 196 → **197** (the resident jetton fixture reclassifies unknown→dedust_v2_claim_reward,
    a clean +1). `--surface`/`cpp_surface.json` updated (3 parser rows; normal protocol-addition).
 6. Registry keys BARE (acked §3): rows `ClaimRewardMessage` / `PayoutRewardMessage` / `PayoutMessage`.
+7. **No pytest case was added** — §8(d) ("new spec case added") did NOT happen and the
+   W12 wave-log line should not be read as claiming one. The protocol is gated by the
+   TWINS (classify + actions diff-0 over the real jetton fixture, which is the stronger
+   bar: it runs the whole Python engine against the whole C++ engine) plus the
+   `mch_abi_bridge` units. A `tests/mch` spec case would only re-assert what the twin
+   gate already proves end-to-end. R1b added `tests/mch/test_abi_twin_fields.py`, which
+   pins the twin parsers' field names/order against the committed ABI — the one thing
+   the twins cannot catch cheaply (a rename shows up only as a full-corpus diff).
+8. **`out{}` shrank from the §4 sketch**: `position:` and `owner:` were dropped. Neither
+   has a home in `dex_withdraw_liquidity_data`, and the `_fill` never consumed them —
+   `payout_reward.body.ownerAddress` is therefore parsed but unused. Recorded here
+   because §4 still shows them.
+9. **tolk pragma: `tolk 1.0`, not the 1.4.1 §2 specified.** The as-built
+   `abi/dedust_v2.tolk` carries `tolk 1.0` and compiles + `--check`s byte-identically
+   under the pinned `@ton/tolk-js`. Left alone deliberately: bumping the pragma would
+   force a regen of the committed `.abi.json` AND the generated pair for no behavioral
+   gain. `abi/_TEMPLATE.tolk` (R1b) matches the as-built pragma and says so.

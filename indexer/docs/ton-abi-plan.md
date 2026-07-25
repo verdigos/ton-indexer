@@ -445,6 +445,34 @@ abi_custom<T> trait); (5) value-JSON schema frozen at W0 (§0.14 + VALUE_SCHEMA.
 
 ## 6. Wave log (append per wave; status column above updates same commit)
 
+- **R1b (refactor wave, mch engine + bridge) DONE 2026-07-25** (closes the 3-reviewer
+  quality pass; lead-verified fresh: ctest mch 8/8 + ton-abi 2/2 + classify twin diff-0
+  at 199; executor full run: all 4 twins + schema/prod gates diff-0 at 148/199,
+  --surface identical, IR regen diff-0, pytest 2013/0 fail — NB tree baseline is 2006
+  not 1988: +18 from PRE-EXISTING untracked test files, +7 new ABI_FIELDS tests).
+  Landed: validate_registries wired for real (above mode dispatch + TRY_STATUS in
+  load_engine_prep = the ton-index-postgres production entry); Action serializer moved
+  lib-side (src/ActionBuild.{h,cpp} in mch-classify — shadow actor can now emit rows;
+  render stays harness); registry ParserSources single-enumeration (dup scan no longer
+  blind to future 4th source); AbiBridge inner null-guards + append_cellslice_bool
+  (BRIEF PREMISE CORRECTED: append_cellslice returns CellBuilder& and THROWS
+  CellWriteError — which parse_message_body's catches would NOT catch — bool variant +
+  unreachable-overflow reasoning makes totality structural); dispatch-loop test kills
+  typo'd-key hole; T12.1 scaffolding deduped (tolk_counter pair out of harness);
+  .gitignore builders/ DIRECTORY re-included (file-level negation can't work — git
+  never descends excluded dirs; check-ignore proven); BuildSmoke calls prepare_classify;
+  dead IrLoader fields deleted; tier1_kinds dropped (self-gating chain); FailureCategory
+  reduced to the 4 reachable members; IncludedMatcher struct replaces parallel vectors;
+  PROTOCOL-#2 ERGONOMICS: twins/twin_registries.py (3 twins share one registry module —
+  SHA256-proven byte-identical stdout ×4 twins before/after), ABI_PROD_PAIRS cmake var,
+  list-driven gen_prod_abi (PROD_DECLS + existence check), abi/_TEMPLATE.tolk,
+  ton-abi/ABI-PROTOCOL-CHECKLIST.md (full .tolk→gates touch-point list; protocol #2 ≈
+  array entry + rows + twin + spec + checklist); ~25-site stale-doc batch (flow refs,
+  scratchpad paths, shaper claim, schema GRAMMAR +3 leaf rows, key-scheme/empty-rows ×6,
+  op-guard RULE in MsgParse.h + builders docstring, 16-row adapter↔Python shape recipe,
+  ABI_FIELDS machine-check pytest, T122 §10 as-built corrections). Net +290 LOC (−375
+  real deletions, +300 docs/tests, rest = byte-identical C2 move).
+
 - **R1a (refactor wave, ton-abi module) DONE 2026-07-25** (from 3-reviewer quality pass;
   lead-verified fresh: ton-abi ctest 2/2, ctest mch 8/8, classify twin diff-0 at 199).
   Landed: A/B gate HARDENED (vector count==33 + dispatch-key-consumption asserts —

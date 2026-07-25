@@ -23,31 +23,19 @@ namespace mch {
 // Failure/skip taxonomy (additive, Phase G slice 3 review). A shared vocabulary
 // for WHY a matcher/trace did not produce actions; used for shadow-mode
 // telemetry only — rendering-agnostic, no dump/twin sees it, existing gates stay
-// byte-stable. Categories:
-//   - matcher_skip:       matcher excluded at setup (missing pred/parser/lookup/
-//                         fn/shaper) — available from ClassifySetup.skips, a
-//                         setup-level fact, not a per-trace outcome.
-//   - clean_reject:       try_build match/build returned no block (spec §10.7).
-//   - parse_null:         a `parse` soft-parsed to null (all alternatives failed).
-//   - lookup_miss_tier1:  a lookup resolved past the in-block interfaces (tier-1
-//                         miss) — attributed by ParsedBlockLookupSource counters.
-//   - lookup_miss_tier2:  a lookup unresolved after the tier-2 fallback too.
+// byte-stable. TRACE-TERMINAL reasons only:
 //   - lookup_infra_fail:  two-phase lookup did not converge (infra error).
 //   - engine_fault:       a mid-trace exception (Python's per-trace fallback).
 //   - malformed_trace:    the trace could not be loaded into an event tree
 //                         (schema map / empty tree) — set caller/actor-side.
-// clean_reject / parse_null / the per-lookup tier categories are per-(block,
-// matcher, lookup) events on the hot path, NOT trace-terminal outcomes, so they
-// are counted (ParsedBlockLookupSource) or left uncounted rather than stored on
-// the single-valued ClassifyResult field. failure_category names only the
-// trace-terminal reason.
+// Deliberately NOT enumerators: matcher_skip (a setup-level fact, read from
+// ClassifySetup.skips, never a per-trace outcome) and clean_reject / parse_null /
+// the per-lookup tier misses (per-(block, matcher, lookup) events on the hot
+// path — counted in ParsedBlockLookupSource::LookupStats, or left uncounted).
+// None of those can be the single trace-terminal value this field holds, so an
+// enumerator for them would be a state the type never reaches.
 enum class FailureCategory {
   none,
-  matcher_skip,
-  clean_reject,
-  parse_null,
-  lookup_miss_tier1,
-  lookup_miss_tier2,
   lookup_infra_fail,
   engine_fault,
   malformed_trace,
@@ -95,12 +83,18 @@ struct AnchorFilter {
   const std::unordered_set<std::string> *btypes = nullptr;     // BType anchor
 };
 
+// One runnable matcher: its index into LoadedIr.matchers plus the precomputed
+// B1 anchor prefilter (one record, so index and filter cannot desync).
+struct IncludedMatcher {
+  int matcher_index = 0;
+  AnchorFilter filter;
+};
+
 // Trace-independent run prep computed once from the artifact: the runnable
 // matcher set, the SKIP table (name -> reason, sorted), the generated build-fn
 // map, and the union of referenced lookup kinds.
 struct ClassifySetup {
-  std::vector<int> included;
-  std::vector<AnchorFilter> anchor_filters;  // parallel to `included` (B1)
+  std::vector<IncludedMatcher> included;  // priority order
   std::vector<std::pair<std::string, std::string>> skips;
   std::unordered_map<int, BuildOutcome (*)(BuildEnv &)> build_fns;
   std::set<std::string> kinds;

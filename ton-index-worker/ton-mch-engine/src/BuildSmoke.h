@@ -7,7 +7,8 @@
 // -> BuildOutcome dump. NO merge / no produced-block reinsertion / no
 // auto-append — that is Phase B3; this isolates build+lookup parity.
 //
-// DUMP FORMAT CONTRACT (Python twin: scratchpad/py_build_smoke.py):
+// DUMP FORMAT CONTRACT (Python twin: py_build_smoke.py — NOT COMMITTED; this
+// mode has no twin in twins/, so its dump is regression-checked by eye only):
 //   SKIP <matcher> reason=...          # once, sorted: match-phase preds OR
 //                                      # build deps outside the C++ surface
 //   === <fixture-basename>

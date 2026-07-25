@@ -11,7 +11,7 @@
 
 namespace mch {
 
-// NOTE: 14 registered parsers are now schema-generated — their rows come from
+// NOTE: 22 registered parsers are now schema-generated — their rows come from
 // generated_message_parsers() (MsgParsersGenerated.h). Only the kept-hand
 // irregular / single-use parsers are declared below.
 

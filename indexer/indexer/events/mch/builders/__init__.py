@@ -15,7 +15,10 @@ from indexer.events.mch.builders.dedust import (
     register_dedust_hybrid,
     register_dedust_withdraw,
 )
-from indexer.events.mch.builders.dedust_v2 import dedust_v2_claim_reward_registries
+from indexer.events.mch.builders.dedust_v2 import (
+    dedust_v2_claim_reward_registries,
+    register_dedust_v2_claim_reward,
+)
 from indexer.events.mch.builders.dns import dns_registries, register_dns
 from indexer.events.mch.builders.jettons import (
     jetton_decl_registries,
@@ -52,6 +55,7 @@ __all__ = [
     "register_dedust",
     "register_dedust_hybrid",
     "register_dedust_withdraw",
+    "register_dedust_v2_claim_reward",
     "register_dns",
     "register_jettons",
     "register_stonfi_liquidity",

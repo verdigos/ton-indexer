@@ -312,6 +312,12 @@ _deps
 
 # custom
 [Bb][Uu][Ii][Ll][Dd]*
+# ...which also swallows the mch host-builder package, whose directory name
+# starts with "build". Git never descends into an excluded directory, so the
+# directory itself has to be re-included (a negation on the files alone would
+# not fire). Without this, a NEW builders/*.py is silently untracked and the
+# twins/pytest break on a clean checkout (T12.2 as-built §10.4).
+!indexer/indexer/events/mch/builders/
 sandbox/
 .vscode/
 .DS_Store

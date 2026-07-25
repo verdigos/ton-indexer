@@ -9,6 +9,39 @@ TOLK-FAITHFUL: camelCase attribute names matching the ABI fields, coins/uintN ->
 plain int (mirrors adapter Int), address -> AccountId (mirrors adapter Account,
 read UNWRAPPED in the spec), maybe-ref cell -> Cell|None. See
 ton-mch-engine/T122-CLAIMREWARD-DESIGN.md §1.
+
+OP-GUARD RULE (binding for every ABI-path parser, not just these): the C++ side
+CHECKS the struct's opcode prefix inside `from_slice` and fails the parse on a
+mismatch, while these Python twins skip the leading 32 bits unchecked (the
+pytoniq convention the rest of the engine follows). The two sides therefore only
+agree when the body is known to carry the right opcode — so an ABI-path `parse`
+capture MUST sit behind an `op` guard in the .mch spec. An unguarded ABI parse
+yields a C++ error and a Python garbage object on the same body.
+
+ADAPTER SHAPE RECIPE (what `abi_value_to_mch` produces per AbiValueKind, i.e.
+what a Python twin attribute has to look like; full rationale in
+ton-mch-engine/W12-BRIDGE-DESIGN.md §3):
+
+    Int / enum        -> Int              int
+    Bool              -> Bool             bool
+    Address (Std)     -> Account          AccountId(addr)   (uppercase raw render)
+    Address (None)    -> Account, addr_none=True            AccountId(None)
+    Address (Extern)  -> Obj{bits, value} dict(bits=int, value=Cell)
+    Cell              -> Cell             pytoniq Cell
+    CellOf            -> Obj{ref}         dict(ref=<inner>)
+    Bits N            -> Cell             the bits packed into a Cell
+    String            -> Str (RAW bytes; no UTF-8 decode on this path)
+    List              -> List             list  (arrayOf/lispListOf/tensor/tuple)
+    Struct            -> Obj{"$": <StructName>, <fields in decl order>}
+    Union has_value   -> Obj{"$": label, "value": <inner>}
+    Union struct-lbl  -> the inner Struct itself (it already carries its own "$")
+    Void              -> Obj{"$": "void"}
+    Null              -> Null             None
+    Map               -> List of [k, v] pairs in wire order (NOT a dict — keys
+                                          may be ints/addresses)
+
+`ABI_FIELDS` below pins each class's attribute names AND order against the
+committed ABI; tests/mch/test_abi_twin_fields.py enforces it.
 """
 from __future__ import annotations
 
@@ -56,6 +89,16 @@ class PayoutMessage:
         self.exitCode = slice.load_int(32)
         self.payload = slice.load_maybe_ref()
 
+
+# Attribute names, in ABI declaration order, for each twin class. The C++ adapter
+# emits struct fields in decl order under exactly these keys, so a rename or a
+# reorder on either side silently breaks the twin — pinned here and checked
+# against ton-abi/abi/dedust_v2.abi.json by tests/mch/test_abi_twin_fields.py.
+ABI_FIELDS = {
+    "ClaimRewardMessage": ("queryId", "rewardIndex", "excessesTo"),
+    "PayoutRewardMessage": ("queryId", "amount", "rewardIndex", "ownerAddress", "excessesTo"),
+    "PayoutMessage": ("queryId", "amount", "exitCode", "payload"),
+}
 
 CLAIM_REWARD_OPCODES = {
     "ClaimRewardMessage": ClaimRewardMessage.opcode,

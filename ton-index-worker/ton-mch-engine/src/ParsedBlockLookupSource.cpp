@@ -136,15 +136,14 @@ Value ParsedBlockLookupSource::fetch(const std::string &kind, const std::vector<
   if (args.size() != 1 || args[0].t != VType::Str) {
     return Value::null();
   }
-  // Tier-1 kinds resolve from account_interfaces_; a miss falls through to tier 2.
-  static const std::set<std::string> tier1_kinds = {"jetton_wallet", "nft_item", "nft_sale",
-                                                    "nft_auction", "dedust_pool"};
-  if (tier1_kinds.count(kind) != 0) {
-    Value v = tier1(kind, args[0].str);
-    if (!v.is_null()) {
-      stats_.tier1_hits++;
-      return v;
-    }
+  // Tier 1 resolves from account_interfaces_; a miss falls through to tier 2.
+  // No kind whitelist here: tier1() self-gates (every branch tests `kind ==`,
+  // an unhandled kind falls through to null), so a second hand-kept kind list
+  // could only drift out of sync with it.
+  Value v = tier1(kind, args[0].str);
+  if (!v.is_null()) {
+    stats_.tier1_hits++;
+    return v;
   }
   // Tier-2-only kinds (nominator_pool, jvault_assets) and every tier-1 miss.
   Value r = tier2_ ? tier2_(kind, args) : Value::null();

@@ -23,7 +23,6 @@ from indexer.events.blocks.core import Block  # noqa: E402
 from indexer.events.blocks.utils import AccountId, Amount, Asset  # noqa: E402
 from indexer.events.blocks.utils.tree_utils import to_tree  # noqa: E402
 from indexer.events.event_processing import init_block, unwind_deployments  # noqa: E402
-from indexer.events.mch.registry import Registries  # noqa: E402
 from indexer.events.blocks.liquidity import (  # noqa: E402
     post_process_dedust_liquidity, post_process_stonfi_v2_liquidity,
 )
@@ -37,56 +36,9 @@ from cpp_surface import (  # noqa: E402
     BOC_FIELDS, CPP_FNS, CPP_LOOKUP_KINDS, CPP_PARSERS, CPP_PREDS, CPP_SHAPERS,
 )
 
-# Combined registries: same factory set as py_match_dump.py.
-from indexer.events.mch.builders import (  # noqa: E402
-    coffee_registries, dedust_hybrid_registries, dedust_registries,
-    dedust_withdraw_registries, dedust_v2_claim_reward_registries,
-    dns_registries, jetton_decl_registries,
-    jetton_registries, stonfi_v2_registries,
-)
-from indexer.events.mch.builders.coffee import coffee_liquidity_registries  # noqa: E402
-from indexer.events.mch.builders.dedust import dedust_deposit_registries  # noqa: E402
-from indexer.events.mch.builders.ethena import ethena_registries  # noqa: E402
-from indexer.events.mch.builders.evaa import evaa_registries  # noqa: E402
-from indexer.events.mch.builders.getgems import getgems_registries  # noqa: E402
-from indexer.events.mch.builders.jvault import jvault_registries  # noqa: E402
-from indexer.events.mch.builders.layerzero import layerzero_receive_registries  # noqa: E402
-from indexer.events.mch.builders.nft_transfer import nft_transfer_registries  # noqa: E402
-from indexer.events.mch.builders.nominator import nominator_registries  # noqa: E402
-from indexer.events.mch.builders.stonfi_liquidity import stonfi_liquidity_registries  # noqa: E402
-from indexer.events.mch.builders.stonfi_provide import stonfi_provide_registries  # noqa: E402
-from indexer.events.mch.builders.stonfi_v1 import stonfi_v1_registries  # noqa: E402
-from indexer.events.mch.builders.telegram_nft import telegram_nft_registries  # noqa: E402
-from indexer.events.mch.builders.tgbtc import tgbtc_registries  # noqa: E402
-from indexer.events.mch.builders.tonco import tonco_liquidity_registries  # noqa: E402
-from indexer.events.mch.builders.tonco_swap import tonco_swap_registries  # noqa: E402
-from indexer.events.mch.builders.tonstakers import tonstakers_registries  # noqa: E402
-from indexer.events.mch.builders.vesting import vesting_registries  # noqa: E402
-
-_FACTORIES = [
-    coffee_registries, dedust_hybrid_registries, dedust_registries,
-    dedust_withdraw_registries, dedust_v2_claim_reward_registries,
-    dns_registries, jetton_decl_registries,
-    jetton_registries, stonfi_v2_registries, coffee_liquidity_registries,
-    dedust_deposit_registries, ethena_registries, evaa_registries,
-    getgems_registries, jvault_registries, layerzero_receive_registries,
-    nft_transfer_registries,
-    nominator_registries, stonfi_liquidity_registries, stonfi_provide_registries,
-    stonfi_v1_registries, telegram_nft_registries, tgbtc_registries,
-    tonco_liquidity_registries, tonco_swap_registries, tonstakers_registries,
-    vesting_registries,
-]
-_DICTS = ("opcodes", "predicates", "block_types", "builders",
-          "message_types", "lookups", "fns", "shapers")
-
-
-def combined_registries() -> Registries:
-    out = Registries()
-    for f in _FACTORIES:
-        r = f()
-        for d in _DICTS:
-            getattr(out, d).update(getattr(r, d))
-    return out
+# Combined host-builder registries: ONE shared factory list for all three
+# twins (twin_registries.py) — adding a protocol is a single edit there.
+from twin_registries import combined_registries  # noqa: E402
 
 
 # CPP_PARSERS/CPP_LOOKUP_KINDS/CPP_SHAPERS/CPP_PREDS/CPP_FNS come from

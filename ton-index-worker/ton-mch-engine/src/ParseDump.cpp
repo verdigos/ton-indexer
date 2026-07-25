@@ -1,7 +1,7 @@
 // --parse-dump harness (CLI dump adapter), split out of MsgParse.cpp so the
 // message-parsing layer keeps ONLY the registry + dispatch (§11 item 2
 // isolation). Renders each fixture message whose opcode is a registered
-// jetton-family opcode; byte-for-byte twin: scratchpad/py_msg_dump.py.
+// jetton-family opcode; byte-for-byte twin: twins/py_msg_dump.py.
 #include "ParseDump.h"
 
 #include "MsgParse.h"
@@ -24,7 +24,7 @@ namespace mch {
 
 // --- --parse-dump mode -------------------------------------------------------
 //
-// DUMP FORMAT CONTRACT (byte-for-byte twin: scratchpad/py_msg_dump.py):
+// DUMP FORMAT CONTRACT (byte-for-byte twin: twins/py_msg_dump.py):
 //   === <fixture-basename>
 //   <msg_hash> <MsgType> {k=v,...}     # parse ok; keys sorted
 //   <msg_hash> <MsgType> PARSE_FAIL    # any parse/BOC failure

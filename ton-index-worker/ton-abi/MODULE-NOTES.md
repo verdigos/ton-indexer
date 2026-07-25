@@ -7,7 +7,9 @@ doc was a wave-scoped "here is what to build next" brief, long overtaken).
 
 Authoritative docs elsewhere: `indexer/docs/ton-abi-plan.md` (plan + wave log,
 §0.14 value schema), `W11-SHAPE-SPEC.md` (emitter contract), `src/AbiValue.h`
-(value dump table), `testdata/ERROR_MAPPING.md` (error categories).
+(value dump table), `testdata/ERROR_MAPPING.md` (error categories),
+`ABI-PROTOCOL-CHECKLIST.md` (every touch point for putting a NEW protocol through
+the ABI path, end to end — start there, not here, when adding one).
 
 ## Semantics that are easy to get wrong
 

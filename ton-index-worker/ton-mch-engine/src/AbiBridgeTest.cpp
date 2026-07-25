@@ -9,7 +9,6 @@
 #include "AbiValue.h"
 #include "AbiLeavesAddress.h"
 
-#include "tolk_counter_gen.h"
 #include "jetton_wallet_contract_gen.h"
 #include "lots_of_wrappers_gen.h"
 #include "dedust_v2_gen.h"  // T12.2 production pair
@@ -27,7 +26,6 @@ namespace mch {
 
 namespace {
 
-namespace tc = ton_abi::gen::tolk_counter;
 namespace jw = ton_abi::gen::jetton_wallet_contract;
 namespace lw = ton_abi::gen::lots_of_wrappers;
 namespace dv = ton_abi::gen::dedust_v2;
@@ -65,6 +63,8 @@ const Value *fld(const Value &v, const char *name) { return v.field(name); }
 td::Ref<vm::Cell> empty_cell() { return vm::CellBuilder().finalize(); }
 td::Ref<vm::CellSlice> empty_slice() { return vm::load_cell_slice_ref(empty_cell()); }
 AbiAddress test_addr() { return ton_abi::gen::address_from_string("0:" + std::string(64, 'a')); }
+// The canonical render of test_addr(): uppercase raw, == Python AccountId.as_str().
+const std::string kTestAddrCanon = "0:" + std::string(64, 'A');
 
 template <class T>
 td::Result<Value> round_trip(const T &s) {
@@ -77,21 +77,13 @@ td::Result<Value> round_trip(const T &s) {
 }
 
 // ---- full-trampoline-path fixtures ----------------------------------------
-
-// Simple prefixed struct: prefix check + uint64 -> Int + Struct -> Obj("$").
-void test_increase_counter() {
-  auto r = round_trip(tc::IncreaseCounter::create({/*queryId*/ 7ULL, /*increaseBy*/ 42ULL}));
-  bool ok = r.is_ok();
-  check("counter/parses", ok);
-  if (!ok) return;
-  const Value &v = r.ok();
-  check("counter/is_obj", v.t == VType::Obj);
-  check("counter/discriminator", fld(v, "$") && fld(v, "$")->str == "IncreaseCounter");
-  check("counter/queryId", is_int(fld(v, "queryId"), 7));
-  check("counter/increaseBy", is_int(fld(v, "increaseBy"), 42));
-}
+// (The plain prefixed-struct case that tolk_counter's IncreaseCounter used to
+// cover is subsumed by the dedust_v2 ClaimRewardMessage test below, which runs
+// the same prefix-check + uintN -> Int + Struct -> Obj("$") path on a REAL
+// production row; the fixture pair was dropped with it.)
 
 // Jetton fixture: RefInt256 coins -> Int + AbiAddress Std -> Account + Cell.
+// The ONLY case carrying a Cell field through the trampoline.
 void test_jetton_wallet_data() {
   jw::JettonWalletDataReply::CreateArgs args;
   args.jettonBalance = td::make_refint(123456);
@@ -105,8 +97,8 @@ void test_jetton_wallet_data() {
   const Value &v = r.ok();
   check("jetton/discriminator", fld(v, "$") && fld(v, "$")->str == "JettonWalletDataReply");
   check("jetton/balance", is_int(fld(v, "jettonBalance"), 123456));
-  check("jetton/owner_account", is_account(fld(v, "ownerAddress")));
-  check("jetton/minter_account", is_account(fld(v, "minterAddress")));
+  check("jetton/owner_account", is_account_str(fld(v, "ownerAddress"), kTestAddrCanon));
+  check("jetton/minter_account", is_account_str(fld(v, "minterAddress"), kTestAddrCanon));
   check("jetton/code_cell", fld(v, "jettonWalletCode") && fld(v, "jettonWalletCode")->t == VType::Cell);
 }
 
@@ -205,11 +197,10 @@ void test_adapter_direct() {
 // ---- registry / trampoline-guard policy -----------------------------------
 void test_registry_policy() {
   // Duplicate key across sources -> reported (design §4 seam).
-  std::vector<std::vector<std::pair<std::string, MsgParserFn>>> sources = {
-      {{"A", nullptr}, {"B", nullptr}},
-      {{"B", nullptr}, {"C", nullptr}},  // B collides
-  };
-  auto dups = duplicate_parser_keys(sources);
+  const std::vector<std::pair<std::string, MsgParserFn>> src_a = {{"A", nullptr}, {"B", nullptr}};
+  const std::vector<std::pair<std::string, MsgParserFn>> src_b = {{"B", nullptr},
+                                                                 {"C", nullptr}};  // B collides
+  auto dups = duplicate_parser_keys(ParserSources{&src_a, &src_b});
   check("registry/dup_detected", dups.size() == 1 && dups[0] == "B");
 
   // Production registry has no collision.
@@ -221,8 +212,31 @@ void test_registry_policy() {
 
   // Abort-safe open guard: null body -> clean error result (never an abort);
   // the exotic-cell branch shares this code path (special flag).
-  auto rn = abi_parse_body<tc::IncreaseCounter>(td::Ref<vm::Cell>());
+  auto rn = abi_parse_body<dv::ClaimRewardMessage>(td::Ref<vm::Cell>());
   check("trampoline/null_body_error", rn.is_error());
+}
+
+// EVERY production ABI row must be reachable under its OWN key: present in the
+// merged registry with ITS function pointer (not shadowed by an earlier source)
+// and routable through parse_message_body. Closes the typo'd-/shadowed-key hole
+// that per-row hand-written asserts leave open once a row is added but never
+// named in a test.
+void test_abi_rows_dispatch() {
+  const auto &registry = message_parsers();
+  for (const auto &row : abi_message_parsers()) {
+    auto it = registry.find(row.first);
+    check("abi_rows/registered/" + row.first, it != registry.end() && it->second == row.second);
+    // An empty body legitimately fails each row's own prefix check; what must
+    // NOT come back is a registration error (unknown or ambiguous key).
+    auto rr = parse_message_body(row.first, empty_cell());
+    bool routed = true;
+    if (rr.is_error()) {
+      const std::string msg = rr.error().message().str();
+      routed = msg.find("is not registered") == std::string::npos &&
+               msg.find("ambiguously registered") == std::string::npos;
+    }
+    check("abi_rows/dispatch/" + row.first, routed);
+  }
 }
 
 // ---- T12.2: the first PRODUCTION protocol pair (DeDust CPMM V2 claim_reward). --
@@ -314,13 +328,13 @@ void test_dedust_v2_claim_reward() {
 
 int run_abi_bridge_test() {
   g_fail = 0;
-  test_increase_counter();
   test_jetton_wallet_data();
   test_hasvalue_union();
   test_structlabeled_union();
   test_adapter_direct();
   test_dedust_v2_claim_reward();
   test_registry_policy();
+  test_abi_rows_dispatch();
   std::printf("ABI-BRIDGE-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }

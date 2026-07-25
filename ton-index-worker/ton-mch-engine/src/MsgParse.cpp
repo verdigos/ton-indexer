@@ -43,8 +43,9 @@
 namespace mch {
 
 // The registered parser set = the kept-hand parsers (7) + the M1 schema-generated
-// rows (from mch-msgs.schema via msgs_gen.py) + the W12 ABI-bridge rows (empty at
-// T12.1). First-source-wins on a collision; collisions are recorded (design §4)
+// rows (22, from mch-msgs.schema via msgs_gen.py) + the W12 ABI-bridge rows (3:
+// the DeDust CPMM V2 claim_reward family, under BARE decl names).
+// First-source-wins on a collision; collisions are recorded (design §4)
 // so validate_registries() can surface them at startup and parse_message_body
 // fails closed on an ambiguous name -- the total registered set (and --surface /
 // cpp_surface.json) is otherwise unchanged.
@@ -71,13 +72,18 @@ struct BuiltRegistry {
 
 const BuiltRegistry &built_registry() {
   static const BuiltRegistry built = [] {
+    // ONE enumeration of the three sources in first-wins order, shared by the
+    // merge and the duplicate scan (they must never disagree on the source set
+    // or its order).
+    const ParserSources sources = {&hand_message_parsers(), &generated_message_parsers(),
+                                   &abi_message_parsers()};
     BuiltRegistry b;
-    for (const auto *src : {&hand_message_parsers(), &generated_message_parsers(), &abi_message_parsers()}) {
+    for (const auto *src : sources) {
       for (const auto &row : *src) {
         b.map.emplace(row.first, row.second);  // first-source-wins
       }
     }
-    b.dups = duplicate_parser_keys({hand_message_parsers(), generated_message_parsers(), abi_message_parsers()});
+    b.dups = duplicate_parser_keys(sources);
     return b;
   }();
   return built;
@@ -85,13 +91,12 @@ const BuiltRegistry &built_registry() {
 
 }  // namespace
 
-std::vector<std::string> duplicate_parser_keys(
-    const std::vector<std::vector<std::pair<std::string, MsgParserFn>>> &sources) {
+std::vector<std::string> duplicate_parser_keys(const ParserSources &sources) {
   std::set<std::string> seen;
   std::set<std::string> dup_set;
   std::vector<std::string> dups;
-  for (const auto &src : sources) {
-    for (const auto &row : src) {
+  for (const auto *src : sources) {
+    for (const auto &row : *src) {
       if (!seen.insert(row.first).second && dup_set.insert(row.first).second) {
         dups.push_back(row.first);
       }

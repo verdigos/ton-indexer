@@ -253,6 +253,17 @@ int main(int argc, char *argv[]) {
     std::_Exit(2);
   }
 
+  // W12 (design §4): advisory startup consistency check on the merged parser
+  // registry, ahead of the mode dispatch so every mode (including the
+  // early-returning dump/self-test modes) gets it. Silent + no-op on OK; a
+  // duplicate key across the three sources (hand map, schema-generated rows,
+  // ABI rows) stops startup here rather than letting a lookup dispatch to an
+  // arbitrary first-source parser.
+  if (auto reg_st = mch::validate_registries(); reg_st.is_error()) {
+    LOG(ERROR) << "message parser registry invalid: " << reg_st.message();
+    return 1;
+  }
+
   if (!vectors_path.empty()) {
     // Expression-VM conformance mode (interpreter): no actor scheduler needed.
     return mch::run_vectors(vectors_path);
@@ -332,15 +343,6 @@ int main(int argc, char *argv[]) {
   if (surface_mode) {
     // Registry surface dump: no actor scheduler needed.
     return mch::run_surface();
-  }
-
-  // W12 (design §4): advisory startup consistency check on the merged parser
-  // registry. Silent + no-op on OK (the ABI rows are empty at T12.1, so no
-  // collision exists); a duplicate key across sources aborts startup here rather
-  // than dispatching to an arbitrary first-source parser.
-  if (auto reg_st = mch::validate_registries(); reg_st.is_error()) {
-    LOG(ERROR) << "message parser registry invalid: " << reg_st.message();
-    return 1;
   }
 
   td::actor::Scheduler scheduler({threads});

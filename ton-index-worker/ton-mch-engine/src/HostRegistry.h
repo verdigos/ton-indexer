@@ -5,8 +5,9 @@
 // consulted at MATCH time by the walker (pred-kind nodes, node-level named
 // `where` clauses, pred anchors). The IR loader gates matcher runnability on
 // this registry — a matcher whose pred names are all registered is runnable;
-// the missing names become its skip reason. The Python twins mirror the
-// registered-name list as a fixed surface contract (CPP_PREDS).
+// the missing names become its skip reason. The Python twins read the
+// registered-name list from twins/cpp_surface.json (CPP_PREDS), emitted by
+// `ton-mch-engine --surface` off THIS registry — not hand-mirrored.
 #pragma once
 
 #include "ExprRuntime.h"
@@ -44,10 +45,12 @@ const std::map<std::string, HostFn> &host_fns();
 // topology pass (spec §8.7). Python signature is `shaper(produced, match)`;
 // captured blocks are reached by name and an arena is needed to mint proxy
 // blocks (Python EmptyBlock() self-allocates; C++ blocks are arena-owned), so
-// both ride on ShaperMatch. No engine call site invokes shapers yet — no
-// matcher has both a build_program and a `shape` (getgems has a `shape` but is
-// builder-tier). Registered so build_skip_reason stops reporting a registered
-// shaper as a missing binding, and so the --shape-test harness can drive it.
+// both ride on ShaperMatch. The classify pipeline INVOKES them
+// (ClassifyCore.cpp try_build, after merge — the §8.7 last build step); no
+// artifact matcher currently pairs a build_program with a `shape`, so the call
+// site is live but unexercised by the corpus. The --shape-test harness drives
+// them directly, and registration keeps build_skip_reason from reporting a
+// registered shaper as a missing binding.
 struct ShaperMatch {
   std::map<std::string, Block *> captures;  // capture name -> block (or absent)
   std::vector<Block *> consumed;            // match consumed set (`match.consumed`)

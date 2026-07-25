@@ -1,6 +1,7 @@
 #include "MchClassifierActor.h"
 
 #include "BlockTree.h"
+#include "MsgParse.h"
 #include "ParsedBlockLookupSource.h"
 #include "SchemaTraceLoader.h"
 
@@ -16,6 +17,10 @@ namespace mch {
 
 td::Result<std::shared_ptr<const MchEnginePrep>> load_engine_prep(
     const std::string &artifact_path) {
+  // W12 (bridge design §4): the embedding entry point runs the same advisory
+  // registry check the CLI does — with live ABI rows a duplicate name across
+  // the three parser sources must stop startup, not resolve arbitrarily.
+  TRY_STATUS(validate_registries());
   TRY_RESULT(ir, load_ir(artifact_path));
   auto prep = std::make_shared<MchEnginePrep>();
   prep->ir = std::move(ir);
@@ -86,11 +91,6 @@ TraceClassifySummary classify_one(const MchEnginePrep &prep,
 const char *category_name(FailureCategory c) {
   switch (c) {
     case FailureCategory::none: return "none";
-    case FailureCategory::matcher_skip: return "matcher_skip";
-    case FailureCategory::clean_reject: return "clean_reject";
-    case FailureCategory::parse_null: return "parse_null";
-    case FailureCategory::lookup_miss_tier1: return "lookup_miss_tier1";
-    case FailureCategory::lookup_miss_tier2: return "lookup_miss_tier2";
     case FailureCategory::lookup_infra_fail: return "lookup_infra_fail";
     case FailureCategory::engine_fault: return "engine_fault";
     case FailureCategory::malformed_trace: return "malformed_trace";

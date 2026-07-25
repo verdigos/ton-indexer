@@ -470,7 +470,6 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
 
   LoadedIr out;
   out.source_sha256 = source_sha;
-  out.n_nodes = static_cast<int>(pool.size());
 
   std::vector<CompiledMatcher> compiled;
   for (const auto &rec : matchers->get_array()) {
@@ -514,22 +513,6 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
     out.matchers.push_back(std::move(compiled[mi]));
   }
 
-  // Anchor index (priority order preserved by construction).
-  for (int i = 0; i < static_cast<int>(out.matchers.size()); i++) {
-    const CompiledMatcher &m = out.matchers[i];
-    if (m.unrunnable) {
-      out.n_unrunnable++;
-    }
-    if (m.anchor_kind == AnchorKind::OpcodeSet) {
-      for (std::uint32_t op : m.anchor_opcodes) {
-        out.op_index[op].push_back(i);
-      }
-    } else if (m.anchor_kind == AnchorKind::BType) {
-      for (const std::string &bt : m.anchor_btypes) {
-        out.btype_index[bt].push_back(i);
-      }
-    }
-  }
   return out;
 }
 

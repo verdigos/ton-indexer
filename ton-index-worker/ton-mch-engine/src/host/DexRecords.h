@@ -3,12 +3,13 @@
 // owns the output field names + null conventions, instead of assembling generic
 // `Value` dicts and mutating them (the HostCoffee const_cast is gone).
 //
-// ORDER NOTE (W1 pilot = Coffee): the leg / peer / record encoders below emit
-// the COFFEE field order. It is shared by Stonfi v2 and the Stonfi v1 incoming
-// leg, but W4 will find real divergences — Stonfi v2's peer inner leg is
-// {amount, asset} (reversed), the Stonfi v1 outgoing leg reorders its tail, and
-// each DEX's top record has a different field set/order. The encoders will grow
-// per-DEX ordering variants then; W1 keeps them Coffee-exact.
+// ORDER NOTE (as-built): the leg / peer / record encoders emit the COFFEE field
+// order, and that is all any current consumer needs — Coffee and the Stonfi
+// cores (HostCoffee.cpp / HostStonfi.cpp) share one encoder and ONE leg reader
+// (TransferLeg::from_jetton_transfer). The anticipated per-DEX ordering variants
+// (a reversed Stonfi v2 peer inner leg, a reordered Stonfi v1 outgoing tail)
+// never materialised as divergences the encoders had to carry. Add a variant
+// only when a gated diff proves one is needed.
 #pragma once
 
 #include "Value.h"

@@ -1,7 +1,7 @@
 // Match-phase dump runner (`--match` mode) for the MCH IR walker.
 //
 // DUMP FORMAT CONTRACT (must be reproduced byte-for-byte by the Python twin,
-// scratchpad/py_match_dump.py):
+// twins/py_match_dump.py):
 //
 //   SKIP <matcher> reason=<reason>            # once, at top, sorted by matcher name
 //   ...

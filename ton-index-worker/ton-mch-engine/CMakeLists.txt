@@ -97,13 +97,22 @@ add_custom_target(mch_generate_sources DEPENDS ${MCH_GENERATED_SOURCES} ${MCH_GE
 
 # --- mch-classify: the classification CORE static library (Phase G step 3,
 # prod-design §2). The pure pipeline TUs (no CLI/dump/harness) — ton-index-
-# postgres will link THIS; the CLI exe below links it + the harness TUs. Slice
-# 1 is ADDITIVE: identical objects, split into a lib for reuse. (build_action /
-# fill_* Action-row rendering stays with the harness Classify.cpp for now — it
-# moves lib-side in the slice that wires the production actor.)
-# ton-abi generated pairs live here (fixture pairs for the harness test; the
-# dedust_v2 PROD pair compiled into mch-classify below, T12.2).
+# postgres links THIS; the CLI exe below links it + the harness TUs. Action-row
+# construction (Action struct + build_action + the fill_*) lives here in
+# ActionBuild.cpp; only the dump-side render_action + stdout printing stayed
+# with the harness Classify.cpp.
+# ton-abi generated pairs live here (fixture pairs for the harness test below;
+# the PRODUCTION pairs compiled into mch-classify).
 set(TON_ABI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../ton-abi)
+
+# PRODUCTION ABI parser pairs — compiled into mch-classify, their rows
+# registered in AbiBridge.cpp abi_message_parsers(). Adding protocol #2 that
+# needs a NEW .tolk decl file = one line here (a new decl in an EXISTING
+# contract needs no CMake edit at all; see ton-abi/ABI-PROTOCOL-CHECKLIST.md).
+set(ABI_PROD_PAIRS
+    # T12.2: DeDust CPMM V2 claim_reward family.
+    ${TON_ABI_DIR}/generated/dedust_v2_gen.cpp
+)
 
 add_library(mch-classify STATIC
     src/TraceLoader.cpp
@@ -134,6 +143,7 @@ add_library(mch-classify STATIC
     src/host/HostTonco.cpp
     src/BuildRuntime.cpp
     src/BuildDriver.cpp
+    src/ActionBuild.cpp
     src/ClassifyCore.cpp
     src/SchemaTraceLoader.cpp
     src/ParsedBlockLookupSource.cpp
@@ -141,8 +151,7 @@ add_library(mch-classify STATIC
     src/MsgParse.cpp
     src/MsgParsersGenerated.cpp
     src/AbiBridge.cpp
-    # T12.2: first PRODUCTION ABI parser pair (DeDust CPMM V2 claim_reward family).
-    ${TON_ABI_DIR}/generated/dedust_v2_gen.cpp
+    ${ABI_PROD_PAIRS}
     src/parse/PSlice.cpp
     src/parse/ParseJettons.cpp
     src/parse/ParseDns.cpp
@@ -157,7 +166,7 @@ target_include_directories(mch-classify
     # MsgParse.cpp includes "generated/mch-msgs-tlb.h" -> resolves into the
     # build tree; nothing generated ever lands under src/.
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
-    # AbiBridge.cpp includes the dedust_v2 generated header (T12.2 prod pair).
+    # AbiBridge.cpp includes the ABI_PROD_PAIRS generated headers.
     PRIVATE ${TON_ABI_DIR}/generated
 )
 target_compile_features(mch-classify PUBLIC cxx_std_20)
@@ -173,7 +182,8 @@ add_dependencies(mch-classify mch_generate_sources)
 # the trampoline+adapter run against real generated structs; these are UNDER TEST,
 # not production registry rows (design §6/§7). TON_ABI_DIR set above.
 set(ABI_BRIDGE_TEST_FIXTURES
-    ${TON_ABI_DIR}/generated/tolk_counter_gen.cpp
+    # jetton_wallet_contract: the only Cell-through-the-trampoline coverage.
+    # lots_of_wrappers: both union forms + address/optional/list/nested struct.
     ${TON_ABI_DIR}/generated/jetton_wallet_contract_gen.cpp
     ${TON_ABI_DIR}/generated/lots_of_wrappers_gen.cpp
 )

@@ -2,13 +2,13 @@
 # Same collect->pass pipeline as py_classify.py (the classify twin), but each
 # SURVIVING post-pass produced block is rendered as a serialized Action row via
 # the REAL block_tree_serializer.block_to_action (ground truth), then printed in
-# the C++ render_action column set (sorted keys). Scoped to the 18 composite
+# the C++ render_action column set (sorted keys). Scoped to the 19 composite
 # btypes the C++ fill_action ports; other btypes are skipped on both sides.
 #
-# Staged out (matches C++): accounts / role_assignment / the tx_hashes extension
-# by initiating_event_node. tx_hashes here is the BASE set (event_nodes only) —
-# recomputed, NOT read from the mutated action. trace_id / trace_* / finality
-# are constant-per-fixture and not rendered (a stub Trace satisfies the API).
+# Not rendered (matches C++): roles (this branch's action_accounts are
+# role-less) and trace_id / trace_* / finality (constant per fixture; a stub
+# Trace satisfies the API). accounts and the initiating-tx tx_hashes extension
+# ARE rendered — both come straight from the real serializer (Step 2a).
 import asyncio
 import base64
 import os
@@ -29,63 +29,15 @@ from indexer.events.blocks.core import Block  # noqa: E402
 from indexer.events.blocks.utils import AccountId, Amount, Asset  # noqa: E402
 from indexer.events.blocks.utils.tree_utils import to_tree  # noqa: E402
 from indexer.events.event_processing import init_block, unwind_deployments  # noqa: E402
-from indexer.events.mch.registry import Registries  # noqa: E402
 from indexer.events.blocks.liquidity import (  # noqa: E402
     post_process_dedust_liquidity, post_process_stonfi_v2_liquidity,
 )
 from indexer.events.mch_ir import build_matchers, load_artifact  # noqa: E402
 from indexer.events.blocks.utils.block_tree_serializer import block_to_action  # noqa: E402
 
-# Combined registries: same factory set as py_classify.py.
-from indexer.events.mch.builders import (  # noqa: E402
-    coffee_registries, dedust_hybrid_registries, dedust_registries,
-    dedust_withdraw_registries, dedust_v2_claim_reward_registries,
-    dns_registries, jetton_decl_registries,
-    jetton_registries, stonfi_v2_registries,
-)
-from indexer.events.mch.builders.coffee import coffee_liquidity_registries  # noqa: E402
-from indexer.events.mch.builders.dedust import dedust_deposit_registries  # noqa: E402
-from indexer.events.mch.builders.ethena import ethena_registries  # noqa: E402
-from indexer.events.mch.builders.evaa import evaa_registries  # noqa: E402
-from indexer.events.mch.builders.getgems import getgems_registries  # noqa: E402
-from indexer.events.mch.builders.jvault import jvault_registries  # noqa: E402
-from indexer.events.mch.builders.layerzero import layerzero_receive_registries  # noqa: E402
-from indexer.events.mch.builders.nft_transfer import nft_transfer_registries  # noqa: E402
-from indexer.events.mch.builders.nominator import nominator_registries  # noqa: E402
-from indexer.events.mch.builders.stonfi_liquidity import stonfi_liquidity_registries  # noqa: E402
-from indexer.events.mch.builders.stonfi_provide import stonfi_provide_registries  # noqa: E402
-from indexer.events.mch.builders.stonfi_v1 import stonfi_v1_registries  # noqa: E402
-from indexer.events.mch.builders.telegram_nft import telegram_nft_registries  # noqa: E402
-from indexer.events.mch.builders.tgbtc import tgbtc_registries  # noqa: E402
-from indexer.events.mch.builders.tonco import tonco_liquidity_registries  # noqa: E402
-from indexer.events.mch.builders.tonco_swap import tonco_swap_registries  # noqa: E402
-from indexer.events.mch.builders.tonstakers import tonstakers_registries  # noqa: E402
-from indexer.events.mch.builders.vesting import vesting_registries  # noqa: E402
-
-_FACTORIES = [
-    coffee_registries, dedust_hybrid_registries, dedust_registries,
-    dedust_withdraw_registries, dedust_v2_claim_reward_registries,
-    dns_registries, jetton_decl_registries,
-    jetton_registries, stonfi_v2_registries, coffee_liquidity_registries,
-    dedust_deposit_registries, ethena_registries, evaa_registries,
-    getgems_registries, jvault_registries, layerzero_receive_registries,
-    nft_transfer_registries,
-    nominator_registries, stonfi_liquidity_registries, stonfi_provide_registries,
-    stonfi_v1_registries, telegram_nft_registries, tgbtc_registries,
-    tonco_liquidity_registries, tonco_swap_registries, tonstakers_registries,
-    vesting_registries,
-]
-_DICTS = ("opcodes", "predicates", "block_types", "builders",
-          "message_types", "lookups", "fns", "shapers")
-
-
-def combined_registries() -> Registries:
-    out = Registries()
-    for f in _FACTORIES:
-        r = f()
-        for d in _DICTS:
-            getattr(out, d).update(getattr(r, d))
-    return out
+# Combined host-builder registries: ONE shared factory list for all three
+# twins (twin_registries.py) — adding a protocol is a single edit there.
+from twin_registries import combined_registries  # noqa: E402
 
 
 # C++ registry surface (parsers/lookup_kinds/shapers/preds/fns/boc_fields) from
@@ -99,7 +51,7 @@ from cpp_surface import (  # noqa: E402
 BUILTINS = {"account", "amount", "asset", "ton_asset", "addr_none", "b64",
             "first", "last", "len", "sum", "zip", "map"}
 
-# The 18 composite btypes the C++ fill_action ports (Classify.cpp fill_action).
+# The 19 composite btypes the C++ fill_action ports (ActionBuild.cpp fill_action).
 # Gate emit on the BLOCK btype (not the rewritten action.type), matching C++.
 # vesting_send_message + tgbtc_mint re-included after the serializer _dget
 # dual-dispatch flip (both fills now serve the declarative dict block).

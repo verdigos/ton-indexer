@@ -10,7 +10,10 @@
 // ton_abi_gen_check) proves the pair still regenerates byte-identically from
 // it, so this script only has to reproduce the .abi.json itself.
 //
-//   node gen_prod_abi.mjs            # recompile every ton-abi/abi/*.tolk
+// The set of declarations is the explicit PROD_DECLS list below (NOT a glob),
+// so scaffolding files like abi/_TEMPLATE.tolk are never compiled.
+//
+//   node gen_prod_abi.mjs            # recompile every PROD_DECLS entry
 //   node gen_prod_abi.mjs --check    # fail if any committed .abi.json is stale
 
 import fs from 'node:fs';
@@ -35,17 +38,27 @@ async function compileTolk(absFileName) {
     return abiJson;
 }
 
+// The PRODUCTION declaration files, by stem. Adding protocol #2 = ONE entry
+// here. An explicit list (rather than a glob of abi/*.tolk) keeps scaffolding
+// files such as _TEMPLATE.tolk out of the compile+--check set.
+const PROD_DECLS = [
+    'dedust_v2',
+];
+
 async function main() {
     const check = process.argv.includes('--check');
-    const decls = fs.readdirSync(ABI_DIR).filter(f => f.endsWith('.tolk')).sort();
-    if (decls.length === 0) {
-        throw new Error(`no .tolk declarations found in ${ABI_DIR}`);
+    if (PROD_DECLS.length === 0) {
+        throw new Error('PROD_DECLS is empty -- nothing to compile');
     }
 
     let stale = 0;
-    for (const declFile of decls) {
-        const stem = declFile.slice(0, -'.tolk'.length);
-        const abi = await compileTolk(path.join(ABI_DIR, declFile));
+    for (const stem of PROD_DECLS) {
+        const declFile = `${stem}.tolk`;
+        const declPath = path.join(ABI_DIR, declFile);
+        if (!fs.existsSync(declPath)) {
+            throw new Error(`PROD_DECLS lists '${stem}' but ${declPath} does not exist`);
+        }
+        const abi = await compileTolk(declPath);
         // Locked decision 15 pins the schema version exactly.
         if (abi.abi_schema_version !== '1.0') {
             throw new Error(`unexpected abi_schema_version '${abi.abi_schema_version}' for ${stem}`);

@@ -14,7 +14,7 @@
 #   message   := 'message' NAME 'opcode' HEX [policy] '{' field* '}'
 #   policy    := 'skip-opcode'            # (default) skip the leading 32 bits
 #   field     := NAME ':' type
-#   type      := leaf | 'ref' '{' field* '}'
+#   type      := leaf | 'bits' N | 'ref' '{' field* '}'
 #
 # The leading 32 opcode bits are ALWAYS skipped unchecked (every hand parser
 # advance(32)s without validating — soft-parse leniency). The HEX after `opcode`
@@ -22,6 +22,10 @@
 # query_id simply omits the field (e.g. DedustSwapNotification).
 #
 # LEAF TYPES (each maps 1:1 to an existing helper; emitted value in parens):
+#   bits N         have(N) + advance(N)       -> (nothing emitted; a pure skip of
+#                                                 N bits — always used with a `_`
+#                                                 parsed-and-dropped field name)
+#   u32            fetch_ulong(32)            -> Int   (refint_u64)
 #   u64            fetch_ulong(64)            -> Int   (refint_u64)
 #   uint256        fetch_int256(256, false)   -> Int
 #   coins          load_coins_py              -> Int   (VarUInteger 16; len nibble 0 -> 0)
@@ -29,6 +33,9 @@
 #   asset2         2-bit tag (coffee)         -> Asset  (0=TON, 1=jetton wc:HEX)
 #   asset4         4-bit kind (dedust)        -> Asset  (0=TON, else jetton wc:HEX)
 #   ref_cell       mandatory fetch_ref        -> Cell   (kept whole, not descended)
+#   maybe_ref_cell Maybe ^Cell                -> Cell | Null; bit=1 requires the
+#                                                 ref, bit=0 is Null. NO remainder
+#                                                 fallback (unlike fwd_cell_*)
 #   dict_keys267   HashmapE(267) key walk     -> List[Account]  (values ignored)
 #   fwd_cell_bits  maybe-ref-or-remainder     -> Cell | Null; remainder taken when
 #                                                 unconsumed BITS remain (JettonNotify)

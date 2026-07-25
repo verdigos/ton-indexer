@@ -33,6 +33,11 @@ matcher dedust_v2_claim_reward {
 
     parse claim         as ClaimRewardMessage
     parse payout_reward as PayoutRewardMessage
+    # Bound only on the TON-payout arm, and none of its fields are read below —
+    # the leg contributes ton_asset() + the message source, not body data. Kept
+    # so the arm is parsed (and the parser exercised) on both sides; its only
+    # gate today is the mch_abi_bridge unit (no TON-payout fixture in the corpus
+    # yet — T122 design §10.3).
     parse ton           as PayoutMessage
     out {
         dex:                 "dedust_v2"

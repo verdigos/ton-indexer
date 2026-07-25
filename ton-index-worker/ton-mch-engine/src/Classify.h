@@ -24,7 +24,7 @@
 // engine.py try_build lines 443-451 exactly. Flows are recorded on the dump
 // (value_flow application is Phase E).
 //
-// DUMP FORMAT CONTRACT (Python twin: scratchpad/classify/py_classify.py):
+// DUMP FORMAT CONTRACT (Python twin: twins/py_classify.py):
 //   SKIP <matcher> reason=...   # once, sorted (same rules as BuildSmoke.h)
 //   === <fixture-basename>
 //   ACTION <matcher> anchor=<key> btype=<bt> failed=0|1 broken=0|1
@@ -70,12 +70,13 @@ int run_dump(const std::string &artifact_path, const std::vector<std::string> &p
 
 // Phase E part 2 (`--actions`): serialized-Action-row dump. Same collect->pass
 // pipeline as run_classify; each surviving post-pass produced block is rendered
-// as an Action row (block_tree_serializer.py _fill_* port, scoped to the ~18
+// as an Action row (block_tree_serializer.py _fill_* port, scoped to the 19
 // composite btypes that fire in the corpus). Python twin:
-// scratchpad/classify/py_actions.py. Dump line:
+// twins/py_actions.py. Dump line:
 //   ACTION anchor=<key> {id=..,type=..,<directional>,<composite maps>..}
-// Value rendering per BuildDriver render_value (sorted keys). See Classify.cpp
-// header block for the staged-out set (accounts/roles/initiating-tx extension).
+// Value rendering per BuildDriver render_value (sorted keys). Rows are built
+// lib-side by ActionBuild.cpp — see its header block for what is and is not
+// rendered (roles are not; accounts and the initiating-tx extension ARE).
 int run_actions(const std::string &artifact_path, const std::vector<std::string> &paths);
 
 }  // namespace mch

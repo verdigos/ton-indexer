@@ -386,7 +386,6 @@ ClassifySetup prepare_classify(const LoadedIr &ir) {
       s.skips.emplace_back(ir.matchers[i].name, reason);
       continue;
     }
-    s.included.push_back(i);
     s.kinds.insert(ir.matchers[i].ref_lookups.begin(), ir.matchers[i].ref_lookups.end());
     // B1: precompute the anchor prefilter. Only opcode/btype anchors are
     // prefilterable; pred (and never-runnable mixed) anchors stay full-scan.
@@ -399,18 +398,19 @@ ClassifySetup prepare_classify(const LoadedIr &ir) {
       af.prefilter = true;
       af.btypes = &m.anchor_btypes;
     }
-    s.anchor_filters.push_back(af);
+    s.included.push_back(IncludedMatcher{i, af});
   }
   std::sort(s.skips.begin(), s.skips.end());
   for (const GenBuild &g : *table) {
     s.build_fns.emplace(g.id, g.fn);
   }
-  for (int mi : s.included) {
-    if (s.build_fns.find(ir.matchers[mi].artifact_index) == s.build_fns.end()) {
+  for (const IncludedMatcher &im : s.included) {
+    const CompiledMatcher &m = ir.matchers[im.matcher_index];
+    if (s.build_fns.find(m.artifact_index) == s.build_fns.end()) {
       s.fn_missing = true;
       s.error = std::string("generated ") + table_kind + " build table has no fn for matcher '" +
-                ir.matchers[mi].name + "' (artifact index " +
-                std::to_string(ir.matchers[mi].artifact_index) + ") — rebuild ton-mch-engine";
+                m.name + "' (artifact index " + std::to_string(m.artifact_index) +
+                ") — rebuild ton-mch-engine";
       return s;
     }
   }
@@ -464,11 +464,11 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
 
   std::vector<CoreAction> pending;
   try {
-    for (std::size_t k = 0; k < setup.included.size(); k++) {
-      if (!anchor_can_match(setup.anchor_filters[k])) {
+    for (const IncludedMatcher &im : setup.included) {
+      if (!anchor_can_match(im.filter)) {
         continue;  // B1: no spine op/btype can satisfy this anchor — skip traversal
       }
-      const CompiledMatcher &m = ir.matchers[setup.included[k]];
+      const CompiledMatcher &m = ir.matchers[im.matcher_index];
       auto fn = setup.build_fns.at(m.artifact_index);
       std::size_t produced_from = pending.size();
       // Python bfs_iter port: FIFO; cur's next_blocks are read AFTER try_build

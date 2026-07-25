@@ -3,7 +3,7 @@
 #include "BlockTree.h"
 #include "BuildDriver.h"
 #include "BuildRuntime.h"
-#include "GenBuilds.h"
+#include "ClassifyCore.h"
 #include "IrLoader.h"
 #include "Walker.h"
 
@@ -11,9 +11,7 @@
 #include <cstdio>
 #include <deque>
 #include <filesystem>
-#include <set>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -53,51 +51,19 @@ int run_build_smoke(const std::string &artifact_path, const std::vector<std::str
   LoadedIr ir = r_ir.move_as_ok();
   warn_missing_artifact_parsers(ir);
 
-  const char *table_kind = nullptr;
-  const std::vector<GenBuild> *table = select_gen_builds(ir.source_sha256, &table_kind);
-  if (table == nullptr) {
-    std::fprintf(stderr,
-                 "no generated build table matches this artifact (loaded sha %s; ir table %s, "
-                 "testbed table %s) — the CMake build pairs tables with ir/mch_ir.json and the "
-                 "optional -DMCH_TESTBED_IR artifact; rebuild ton-mch-engine or pass a paired "
-                 "artifact\n",
-                 ir.source_sha256.c_str(), gen_builds_ir_source_sha(),
-                 *gen_builds_testbed_source_sha() ? gen_builds_testbed_source_sha() : "(stub)");
+  // Build-table selection + runnable-matcher set + SKIP table + build-fn
+  // coverage: the SAME prepare_classify() the classify path runs (this used to
+  // be a hand-rolled second copy of it). The table/fn-missing diagnostics are
+  // worded slightly differently than the old local strings, but they go to
+  // STDERR — the dump channel (stdout SKIP lines, identical + sorted) is not
+  // affected.
+  ClassifySetup setup = prepare_classify(ir);
+  if (setup.table_missing || setup.fn_missing) {
+    std::fprintf(stderr, "%s\n", setup.error.c_str());
     return 2;
   }
-
-  // Inclusion + SKIP lines (once, sorted by matcher name).
-  std::vector<int> included;  // indices into ir.matchers (priority order)
-  std::vector<std::pair<std::string, std::string>> skips;
-  std::set<std::string> kinds;  // artifact lookup kinds served in this run
-  for (int i = 0; i < static_cast<int>(ir.matchers.size()); i++) {
-    const CompiledMatcher &m = ir.matchers[i];
-    std::string reason = build_skip_reason(m);
-    if (!reason.empty()) {
-      skips.emplace_back(m.name, reason);
-      continue;
-    }
-    included.push_back(i);
-    kinds.insert(m.ref_lookups.begin(), m.ref_lookups.end());
-  }
-  std::sort(skips.begin(), skips.end());
-  for (const auto &s : skips) {
+  for (const auto &s : setup.skips) {
     std::printf("SKIP %s reason=%s\n", s.first.c_str(), s.second.c_str());
-  }
-
-  // Table coverage: every included matcher needs its generated fn.
-  std::unordered_map<int, BuildOutcome (*)(BuildEnv &)> build_fns;
-  for (const GenBuild &g : *table) {
-    build_fns.emplace(g.id, g.fn);
-  }
-  for (int mi : included) {
-    if (build_fns.find(ir.matchers[mi].artifact_index) == build_fns.end()) {
-      std::fprintf(stderr,
-                   "generated %s build table has no fn for matcher '%s' (artifact index %d) — "
-                   "rebuild ton-mch-engine (CMake regenerates the paired tables)\n",
-                   table_kind, ir.matchers[mi].name.c_str(), ir.matchers[mi].artifact_index);
-      return 2;
-    }
   }
 
   namespace fs = std::filesystem;
@@ -129,8 +95,8 @@ int run_build_smoke(const std::string &artifact_path, const std::vector<std::str
     FixtureLookupSource src(&ctx.trace.interfaces);
 
     for (Block *block : gather_blocks(ctx.root)) {
-      for (int mi : included) {
-        const CompiledMatcher &m = ir.matchers[mi];
+      for (const IncludedMatcher &im : setup.included) {
+        const CompiledMatcher &m = ir.matchers[im.matcher_index];
         auto res = matcher_match(m, block);
         if (!res) {
           continue;
@@ -143,8 +109,8 @@ int run_build_smoke(const std::string &artifact_path, const std::vector<std::str
         Value consumed = Value::make_list(std::move(consumed_vals));
 
         bool needs_lookups = !(m.ref_lookups.empty() && m.ref_fns.empty());
-        BuildOutcome o = run_two_phase(build_fns.at(m.artifact_index), block, slots, consumed,
-                                       kinds, src, needs_lookups);
+        BuildOutcome o = run_two_phase(setup.build_fns.at(m.artifact_index), block, slots, consumed,
+                                       setup.kinds, src, needs_lookups);
         if (o.is_rejected) {
           std::printf("BUILD %s anchor=%s rejected\n", m.name.c_str(), block_key(block).c_str());
           continue;

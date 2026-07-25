@@ -108,14 +108,6 @@ struct LoadedIr {
   // SHA-256 (hex) of the artifact file bytes — compared against the generated
   // tables' source shas (gen_builds_source_sha / gen_wheres_source_sha).
   std::string source_sha256;
-
-  // Anchor index (built per §3.1; the walk gates on test_self so this is an
-  // available optimization, reported but not the gating mechanism).
-  std::unordered_map<std::uint32_t, std::vector<int>> op_index;
-  std::unordered_map<std::string, std::vector<int>> btype_index;
-
-  int n_nodes{0};       // total artifact nodes
-  int n_unrunnable{0};
 };
 
 // Load + compile an artifact from a JSON file path.

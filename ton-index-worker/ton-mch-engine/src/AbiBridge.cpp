@@ -1,5 +1,6 @@
-// W12 mch <-> ton-abi bridge: AbiValue -> mch::Value adapter + the (empty for
-// T12.1) production ABI parser rows. See W12-BRIDGE-DESIGN.md §3/§4.
+// W12 mch <-> ton-abi bridge: AbiValue -> mch::Value adapter + the production
+// ABI parser rows (3 live: the DeDust CPMM V2 claim_reward family, BARE decl
+// names). See W12-BRIDGE-DESIGN.md §3/§4 + T122-CLAIMREWARD-DESIGN.md §3.
 #include "AbiBridge.h"
 
 #include "common/refint.h"
@@ -21,10 +22,18 @@ namespace {
 // Build an mch::Value Cell from a bit-slice (bitsN / remaining / external-address
 // value): copy the slice's bits+refs into a fresh cell. Lossless and root-hash
 // comparable; avoids an {bits,refs} Obj shape and a new VType.
+//
+// The _bool overload is deliberate: `append_cellslice` THROWS vm::CellWriteError
+// (ensure_pass) on overflow, and that type is neither vm::VmError nor a
+// std::exception, so parse_message_body's soft-parse guards would NOT catch it --
+// a throw here would break the adapter's totality contract (design §3/§5). The
+// overflow itself is unreachable (a slice spans one cell: <=1023 bits / <=4 refs,
+// exactly an empty builder's capacity); the empty-cell fallback just keeps
+// totality a property of the code rather than of an argument about it.
 Value cell_from_slice(const td::Ref<vm::CellSlice> &slice) {
   vm::CellBuilder cb;
-  if (slice.not_null()) {
-    cb.append_cellslice(*slice);
+  if (slice.not_null() && !cb.append_cellslice_bool(*slice)) {
+    return Value::make_cell(vm::CellBuilder().finalize());
   }
   return Value::make_cell(cb.finalize());
 }
@@ -66,9 +75,11 @@ Value abi_value_to_mch(const AbiValue &v) {
     case AbiValueKind::Cell:
       return Value::make_cell(v.cell_v);
     case AbiValueKind::CellOf: {
-      // Mirror AbiValue dump {"ref": inner}.
+      // Mirror AbiValue dump {"ref": inner}. `inner` is always set by the
+      // emitter for this kind; the guard keeps the adapter total (no UB) if a
+      // future producer ever hands over a moved-from value.
       Value::Fields f;
-      f.emplace_back("ref", abi_value_to_mch(*v.inner));
+      f.emplace_back("ref", v.inner ? abi_value_to_mch(*v.inner) : Value::null());
       return Value::make_obj(std::move(f));
     }
     case AbiValueKind::Bits:
@@ -97,10 +108,11 @@ Value abi_value_to_mch(const AbiValue &v) {
     }
     case AbiValueKind::Union: {
       // has_value_field variants only reach here: {"$":label,"value":inner}.
-      // Struct-labeled variants are Struct-kind (carry their own "$").
+      // Struct-labeled variants are Struct-kind (carry their own "$"). Same
+      // totality guard on `inner` as the CellOf branch.
       Value::Fields f;
       f.emplace_back("$", Value::make_str(v.union_label));
-      f.emplace_back("value", abi_value_to_mch(*v.inner));
+      f.emplace_back("value", v.inner ? abi_value_to_mch(*v.inner) : Value::null());
       return Value::make_obj(std::move(f));
     }
     case AbiValueKind::Void: {

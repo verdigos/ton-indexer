@@ -55,8 +55,10 @@ td::Result<Value> abi_parse_body(const td::Ref<vm::Cell> &body) {
 }
 
 // The ABI-generated parser rows merged into message_parsers() (design §4).
-// EMPTY for T12.1 -- the first production protocol row lands in T12.2. Rows are
-// {"<contract_name>::<decl name>", &abi_parse_body<T>}.
+// Rows are {"<DeclName>", &abi_parse_body<T>} -- BARE decl names, not
+// <contract>::<decl>: the .mch grammar's `parse CAP as Name` reads a bare IDENT
+// (acked deviation, T122-CLAIMREWARD-DESIGN.md §3). 3 live rows today (the
+// DeDust CPMM V2 claim_reward family).
 const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers();
 
 }  // namespace mch

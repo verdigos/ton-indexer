@@ -131,8 +131,9 @@ List/Obj/Null). The only non-obvious calls are Extern (Obj), Bits (Cell), Map
 `generated_message_parsers()` (schema-gen rows) is unchanged. NEW:
 
 ```cpp
-// AbiBridge.cpp — the ABI rows. EMPTY for T12.1 (no production protocol yet;
-// T12.2 adds the first real row). Rows: {"<contract>::<Decl>", &abi_parse_body<T>}.
+// AbiBridge.cpp — the ABI rows. Rows: {"<Decl>", &abi_parse_body<T>}.
+// (As built: EMPTY at T12.1; T12.2 added the 3 dedust_v2 rows under BARE decl
+// names rather than <contract>::<Decl> — acked deviation, T122 design §3.)
 const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers();
 ```
 
