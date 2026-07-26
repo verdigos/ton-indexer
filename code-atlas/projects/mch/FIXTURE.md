@@ -25,4 +25,10 @@ transfers; successful jetton_transfer rows come from swap/mint/other traces.
 
 Historical: v1 of this file pinned the stonfi swap trace
 (`4PNVGQkZJUWAiiPq3rIekA9O5…`) before most chapters landed; superseded by the
-registry above.
+registry above. Verified reason it would have been a BAD spine (a5db audit,
+runs twin-confirmed line-identical): under mch it yields ONE jetton_transfer
+action (payload_opcode=0x25938561) — stonfi_v1_swap never completes because
+the TON out-leg needs PTonTransferMatcher, which the mch baseline deliberately
+lacks (legacy-engine-only). Same ported-vs-production family as the ch.8
+coffee caveat. A jetton→jetton stonfi trace (e.g. `E_ktemwU…`) does complete
+the swap if a future chapter wants one.
