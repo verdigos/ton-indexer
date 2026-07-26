@@ -1,0 +1,809 @@
+{
+  "id": "parse-layer",
+  "title": "Parse layer — 3 parser sources, 2 value universes",
+  "summary": "This layer turns a message body cell into an `mch::Value` that a build program can read as `CAPTURE.body.field`. It is a name -> function-pointer registry fed by three independent sources: 7 hand-written parsers, 22 compiled from `mch-msgs.schema`, and 3 that come out of the Tolk ABI toolchain. The first two sources are pytoniq-parity: they reproduce, deliberately and bug-for-bug, what the Python reference parsers in `indexer/events/blocks/messages/` do — including skipping the leading 32 opcode bits WITHOUT checking them. The third source is tolk-faithful: the generated `from_slice` CHECKS the opcode prefix and models addresses the way `@ton/core` does. Those two conventions are incompatible in observable ways (a missing address is `null` in one and a present-but-empty `Account` in the other), and nothing in the type system keeps them apart — the discipline that does is the op-guard rule at the end of this page. The layer's whole correctness bar is an A/B twin gate: the same corpus through C++ and through the Python engine must produce byte-identical parse dumps.",
+  "diagrams": [
+    {
+      "title": "Three sources, one map",
+      "mermaid": "flowchart LR\n  H[\"hand_message_parsers()<br/>7 rows, irregular constructs\"] --> M\n  G[\"generated_message_parsers()<br/>22 rows from mch-msgs.schema\"] --> M\n  A[\"abi_message_parsers()<br/>3 rows from ton-abi structs\"] --> M\n  M[\"built_registry()<br/>first-source-wins merge\"] --> MAP[\"message_parsers()<br/>name -&gt; MsgParserFn\"]\n  M --> D[\"duplicate_parser_keys()\"]\n  D --> V[\"validate_registries()<br/>startup: any dup =&gt; exit 1\"]\n  MAP --> P[\"parse_message_body(name, body)<br/>dup name =&gt; error; soft-parse guards\"]"
+    },
+    {
+      "title": "Two value universes",
+      "mermaid": "flowchart TD\n  S[\"spec statement: parse CAP as T\"] --> R[\"registry lookup by bare name T\"]\n  R --> U1[\"pytoniq-parity universe<br/>hand + schema-generated\"]\n  R --> U2[\"tolk-faithful universe<br/>ABI bridge\"]\n  U1 --> P1[\"skip 32 opcode bits UNCHECKED\"]\n  P1 --> L1[\"PSlice leaves:<br/>load_address_py / load_coins_py / snake\"]\n  L1 --> V1[\"addr_none =&gt; Null<br/>extern =&gt; 'extern:len:dec' Str<br/>some keys conditionally absent\"]\n  U2 --> P2[\"load_and_check_prefix:<br/>wrong opcode =&gt; parse error\"]\n  P2 --> L2[\"generated from_slice =&gt; AbiValue\"]\n  L2 --> A2[\"abi_value_to_mch adapter\"]\n  A2 --> V2[\"addr_none =&gt; Account(addr_none)<br/>extern =&gt; Obj bits+value<br/>struct =&gt; Obj with '$' first\"]\n  V1 --> B[\"Value bound to CAPTURE.body\"]\n  V2 --> B"
+    }
+  ],
+  "sections": [
+    {
+      "heading": "The registry: three sources, one map, fail-closed",
+      "prose": "`MsgParse.h` is short but it is the contract for the entire layer — read its header comment before any code. The registry itself is a lazily-built `std::map<std::string, MsgParserFn>` where `MsgParserFn` is a plain function pointer (`td::Result<Value>(*)(const td::Ref<vm::Cell>&)`), not a `std::function`. That choice is load-bearing later: it is what lets an ABI parser register as an ordinary row with no closure state and no init API.\n\nThree sources merge in a fixed order. Collisions are possible in principle (all three name-spaces are flat), so they are detected once at build time and refused twice: at startup by `validate_registries()`, and at every lookup by `parse_message_body`.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/MsgParse.h",
+          "lines": [
+            1,
+            25
+          ],
+          "sha8": "35c4a704",
+          "lang": "cpp",
+          "title": "MsgParse.h — the semantics contract",
+          "annotations": [
+            {
+              "lines": [
+                6,
+                11
+              ],
+              "text": "This is the actual specification of the layer, not a courtesy comment. \"no opcode validation: the first 32 bits are skipped unchecked\" is what makes the pytoniq universe lenient: a body carrying the wrong opcode does not fail, it produces a plausible object built from the wrong bits. Safety comes entirely from the matcher having already checked `op` upstream, in the matcher runtime."
+            },
+            {
+              "lines": [
+                12,
+                14
+              ],
+              "text": "`addr_none` becomes a NULL Value — not an empty address. On this path there is no representation for \"present but empty\"; a spec that wants to detect addr_none tests for null. Remember this line; the ABI path does the opposite."
+            },
+            {
+              "lines": [
+                15,
+                17
+              ],
+              "text": "\"conditionally-present keys\" is a real part of the shape: the Python twin sets some attributes only on some code paths, `vars(obj)` is what gets compared, so C++ must omit the key rather than emit a null. The jetton `sum_type` excerpt below is the live case."
+            },
+            {
+              "lines": [
+                19,
+                25
+              ],
+              "text": "The one exception, and the rule it forces. Because ABI parsers validate the prefix and their Python twins do not, an unguarded ABI-path `parse` gives a C++ error and a Python garbage object on the same body — the two sides diverge and the A/B gate fails. Hence: every ABI-path parse capture MUST sit behind an `op` guard."
+            }
+          ]
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/MsgParse.cpp",
+          "lines": [
+            52,
+            92
+          ],
+          "sha8": "3baaddc1",
+          "lang": "cpp",
+          "title": "Source 1 (hand rows) and the merge",
+          "annotations": [
+            {
+              "lines": [
+                55,
+                66
+              ],
+              "text": "Seven survivors. Everything else that used to live here was moved to the schema; each of these stayed for a specific irregularity, listed in `mch-msgs.schema`'s NOT GENERATED block. Note `parse_never`: a registered parser that ALWAYS errors, because Python's `JettonBurnNotification` has no `__init__(Slice)` and parity means the parse must always fail."
+            },
+            {
+              "lines": [
+                73,
+                74
+              ],
+              "text": "Meyer's static: the merged registry is built once on first use and is const forever after. No init call to forget, and no static-init-order hazard between the three source accessors — each is itself a function-local static, forced into existence by being called here."
+            },
+            {
+              "lines": [
+                75,
+                79
+              ],
+              "text": "One enumeration of the sources, shared by the merge and the duplicate scan. If the two had their own lists they could drift, and a collision could be silently merged away while the scan reported nothing."
+            },
+            {
+              "lines": [
+                81,
+                85
+              ],
+              "text": "`emplace` (not `insert_or_assign`) is what makes it first-source-wins, and it is silent about it. That silence is precisely why `dups` is computed on the same pass rather than trusted not to happen."
+            }
+          ]
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/MsgParse.cpp",
+          "lines": [
+            94,
+            125
+          ],
+          "sha8": "20131943",
+          "lang": "cpp",
+          "title": "Duplicate detection and the advisory check",
+          "annotations": [
+            {
+              "lines": [
+                95,
+                104
+              ],
+              "text": "Two sets, not one: `seen` finds a repeat, `dup_set` makes sure a name triple-registered reports once. Output order is first-encounter order, so the startup error message is stable across runs."
+            },
+            {
+              "lines": [
+                112,
+                116
+              ],
+              "text": "Advisory, and deliberately so. The Meyer's-static map cannot itself surface an error, and the engine's no-abort rule forbids dying inside it — so detection lives here while enforcement lives in `parse_message_body` and in `main()`. Nothing on the hot lookup path calls this."
+            }
+          ]
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/MsgParse.cpp",
+          "lines": [
+            127,
+            153
+          ],
+          "sha8": "33a9b442",
+          "lang": "cpp",
+          "title": "Dispatch + the soft-parse boundary",
+          "annotations": [
+            {
+              "lines": [
+                129,
+                131
+              ],
+              "text": "Fail-closed on ambiguity: an ambiguous name errors even though `built.map` does contain an entry for it. The merge resolved the collision by first-wins so the map stays well-formed, but dispatch refuses to act on that arbitrary resolution."
+            },
+            {
+              "lines": [
+                136,
+                141
+              ],
+              "text": "The whole soft-parse contract in one comment: a malformed body must reduce to an ordinary parse failure so the caller can try the next alternative. That is only safe if the catch list is narrow."
+            },
+            {
+              "lines": [
+                142,
+                152
+              ],
+              "text": "And it is narrow on purpose — VM errors plus `std::exception` (what a hand-written tail legitimately throws: out_of_range, logic_error). `bad_alloc` and unknown host faults are NOT caught; they escape to the trace-level handler so an infrastructure failure never masquerades as \"this message just isn't that type\". This list is also why `AbiBridge` had to stop using `append_cellslice` — see the ABI section."
+            }
+          ]
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/main.cpp",
+          "lines": [
+            256,
+            265
+          ],
+          "sha8": "8e3b7daa",
+          "lang": "cpp",
+          "title": "The one enforcement point (main.cpp)",
+          "annotations": [
+            {
+              "lines": [
+                256,
+                262
+              ],
+              "text": "Placed before mode dispatch on purpose, so the early-returning dump and self-test modes are covered too — the check is worthless if only the production path runs it."
+            },
+            {
+              "lines": [
+                263,
+                265
+              ],
+              "text": "A duplicate key stops the process instead of letting lookups dispatch to whichever source happened to be enumerated first. Since prod is clean today, this branch is dead in practice; its value is that adding a colliding name is a hard startup failure rather than a silent behaviour change."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "Universe 1 — pytoniq parity (PSlice and the hand parsers)",
+      "prose": "`parse/PSlice.{h,cpp}` is the leaf layer everything in sources 1 and 2 is built from: address, coins, snake-bytes, to-cell. It is not a thin wrapper over `vm::CellSlice` — it exists because pytoniq's `Slice` has behaviours a `CellSlice` does not, and the twin gate compares rendered output, so those behaviours have to be reproduced rather than corrected.\n\nThe rest of `PSlice.cpp` beyond the excerpt below is the same kind of work: `load_snake_bytes` (byte-aligned, at most one ref per link), `pslice_to_cell`, and a byte-level reimplementation of Python's `bytes.decode(\"utf-8\", errors=\"backslashreplace\")` used for TON-transfer comments. Read those directly if you touch comments; they are mechanical once the principle is clear.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/parse/PSlice.h",
+          "lines": [
+            30,
+            47
+          ],
+          "sha8": "de36af46",
+          "lang": "cpp",
+          "title": "Why PSlice exists at all",
+          "annotations": [
+            {
+              "lines": [
+                32,
+                39
+              ],
+              "text": "The reason a bare `vm::CellSlice` is not enough: pytoniq tracks the ref list separately from the bit cursor, and `copy()` does not preserve ref consumption. So `refs` + `off` are carried alongside `cs` and the two cursors are allowed to disagree — reproducing that disagreement is the point."
+            },
+            {
+              "lines": [
+                43,
+                44
+              ],
+              "text": "`to_cell()` means \"remaining bits + refs from `off`\", i.e. the pytoniq view of what is left, not a copy of the original cell. This is what a `forward_payload` Bytes value is serialized from, so getting `off` wrong changes a payload's root hash."
+            }
+          ]
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/parse/PSlice.cpp",
+          "lines": [
+            35,
+            72
+          ],
+          "sha8": "7d7eff00",
+          "lang": "cpp",
+          "title": "load_address_py — where the universe is defined",
+          "annotations": [
+            {
+              "lines": [
+                42,
+                44
+              ],
+              "text": "`addr_none` -> null Value. One line, and it is the fork in the road for the whole layer: on this path \"no address\" and \"absent field\" are the same value, and a spec cannot tell them apart."
+            },
+            {
+              "lines": [
+                49,
+                52
+              ],
+              "text": "A zero-length external address is an error only because pytoniq's `ba2int('')` raises. Parity means importing the upstream quirk, not fixing it — a \"fix\" here shows up as an A/B diff, not as a bug fix."
+            },
+            {
+              "lines": [
+                56,
+                68
+              ],
+              "text": "Why the hand-rolled 32-bit chunk loop instead of `fetch_int256(len,false)`: for lengths 257..511 that returns an invalid-but-non-null RefInt256 that renders as NaN, diverging from Python's exact bigint. The result is the string `extern:<len>:<decimal>` — an ordinary Str, so a spec comparing it against an address field gets a plain mismatch rather than a type error."
+            },
+            {
+              "lines": [
+                70,
+                71
+              ],
+              "text": "`addr_var` errors because pytoniq raises on it. Just past this excerpt, anycast is consumed but never APPLIED — the address prefix is left un-rewritten, unlike `convert::to_raw_address`, so anycast addresses render differently here than elsewhere in the indexer."
+            }
+          ]
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/parse/ParseJettons.cpp",
+          "lines": [
+            78,
+            94
+          ],
+          "sha8": "d38cfd6e",
+          "lang": "cpp",
+          "title": "The Slice.copy() quirk, reproduced",
+          "annotations": [
+            {
+              "lines": [
+                78,
+                80
+              ],
+              "text": "One bit decides whether `forward_payload` is a ref or the remainder of this same slice. Both branches end up as a `PSlice`, and the difference between them is entirely in what ref list that PSlice carries."
+            },
+            {
+              "lines": [
+                86,
+                92
+              ],
+              "text": "The single strangest parity quirk in the layer. Python's `Slice.copy()` resets ref consumption, so the INLINE branch sees ALL body refs from index 0 — including the `custom_payload` ref already consumed a few lines above. Reproduced by handing over `ctx.all_refs` with `off = 0` rather than the live cursor. Use the live cursor and the payload cell you serialize has the wrong refs, hence a different root hash."
+            }
+          ]
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/parse/ParseJettons.cpp",
+          "lines": [
+            95,
+            139
+          ],
+          "sha8": "29035ab1",
+          "lang": "cpp",
+          "title": "The forward-payload sum-type tail",
+          "annotations": [
+            {
+              "lines": [
+                99,
+                101
+              ],
+              "text": "Fewer than 32 bits left: `sum_type` becomes \"Unknown\" and `payload_sum_type` is never set. Which keys EXIST is part of the compared shape, so an unconditional null here would be a diff."
+            },
+            {
+              "lines": [
+                104,
+                106
+              ],
+              "text": "Python `hex()` formatting: lowercase, no zero padding, so `0x25938561` but also `0x0`. The rendering itself is data that gets compared — `%08x` would be a diff."
+            },
+            {
+              "lines": [
+                110,
+                115
+              ],
+              "text": "A failed snake read downgrades `sum_type` to \"Unknown\" instead of failing the parse, because the enclosing Python `try` swallows it. Failure handling is per-branch, not uniform."
+            },
+            {
+              "lines": [
+                125,
+                133
+              ],
+              "text": "The trap this function exists for: on the stonfi-swap SUCCESS path Python never assigns `sum_type`, but on the failure sub-branch it does. `has_sum_type` is a flag that exists purely to reproduce that asymmetry — there is no cleaner formulation that stays byte-identical."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "Universe 1, continued — the schema-generated middle source",
+      "prose": "Most registered parsers are not written by hand. `mch-msgs.schema` is a small declarative file compiled by `indexer/events/mch/msgs_gen.py` into a committed C++ TU, `MsgParsersGenerated.cpp`. Two constraints make this safe rather than clever: the generator may only emit calls to leaf helpers that already existed and were already A/B-proven, and regeneration must be byte-stable (a pytest re-runs the generator and diffs the committed file).\n\nThe generated code lives in the SAME universe as the hand parsers — same leaves, same unchecked opcode skip. The schema is a compression of hand parsers, not a new semantics.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/mch-msgs.schema",
+          "lines": [
+            19,
+            45
+          ],
+          "sha8": "a6024ac5",
+          "lang": "text",
+          "title": "mch-msgs.schema — the leaf vocabulary",
+          "annotations": [
+            {
+              "lines": [
+                19,
+                22
+              ],
+              "text": "\"ALWAYS skipped unchecked\" and \"never compared\" — the opcode in a schema line is documentation plus test-vector filler. Contrast the ABI path, where the prefix IS the parse. Two of the three sources treat the opcode as something someone else already checked."
+            },
+            {
+              "lines": [
+                24,
+                24
+              ],
+              "text": "The rule that keeps the generator honest: every leaf maps 1:1 onto a helper that already existed. New protocols get new compositions, never new parse semantics — which is why the generator could not silently introduce a divergence from the Python twins."
+            },
+            {
+              "lines": [
+                32,
+                32
+              ],
+              "text": "`addr_py`'s three possible outputs on one line: Account, Null, or an `extern:..` Str. Any spec field fed by an address has to tolerate all three."
+            },
+            {
+              "lines": [
+                40,
+                43
+              ],
+              "text": "`fwd_cell_bits` vs `fwd_cell_refs`: identical TL-B shape, different rule for \"is there a payload in the remainder\" — JettonNotify looks at leftover BITS, PTonTransfer at leftover REFS. The two hand predecessors genuinely differed, so the schema kept both leaves instead of unifying them and breaking one twin."
+            }
+          ]
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/MsgParsersGenerated.cpp",
+          "lines": [
+            107,
+            141
+          ],
+          "sha8": "94e5bf04",
+          "lang": "cpp",
+          "title": "What generated code looks like",
+          "annotations": [
+            {
+              "lines": [
+                107,
+                112
+              ],
+              "text": "The skip is re-stated per message and nothing compares against 0x178d4519 — the opcode appears only in the comment. Underflow on the skip is still a parse failure, so a too-short body fails, a wrong-opcode body does not."
+            },
+            {
+              "lines": [
+                113,
+                129
+              ],
+              "text": "The shape of every generated parser: one braced block per field, explicit error-on-underflow, `emplace_back` into a flat Fields vector. Field ORDER is observable (rendered objects are compared), so the generator emits in schema order and the schema order is kept aligned with the Python `__init__` order."
+            }
+          ]
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/MsgParsersGenerated.cpp",
+          "lines": [
+            852,
+            878
+          ],
+          "sha8": "f6d96b65",
+          "lang": "cpp",
+          "title": "Source 2: the generated rows",
+          "annotations": [
+            {
+              "lines": [
+                852,
+                854
+              ],
+              "text": "Second source, 22 rows, emitted in schema order. Determinism is a gate, not a nicety: `tests/mch/test_msgs_gen.py` re-runs the generator into a temp file and byte-diffs it against this committed one."
+            },
+            {
+              "lines": [
+                854,
+                875
+              ],
+              "text": "These strings are what a spec writes after `parse X as ...`. They are the PYTHON class names, so renaming a message class on the Python side breaks the twin pairing, not just a C++ build — the registry key is the contract between the two engines."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "Universe 2 — the ABI bridge (entry to the tolk world)",
+      "prose": "The third source comes from a completely different toolchain: a `.tolk` declaration is compiled to `dedust_v2.abi.json`, which `ton-abi-gen` turns into C++ structs with `from_slice` / `store` / `to_abi_value`. Those structs know nothing about mch — the dependency runs mch -> ton-abi only, permanently.\n\n`AbiBridge` is the whole seam: a function template that adapts `T::from_slice` to a `MsgParserFn`, plus a total `AbiValue -> mch::Value` adapter. Both halves are worth reading closely, because this is where the second value universe gets its shape.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/AbiBridge.h",
+          "lines": [
+            26,
+            55
+          ],
+          "sha8": "88780183",
+          "lang": "cpp",
+          "title": "The trampoline",
+          "annotations": [
+            {
+              "lines": [
+                26,
+                30
+              ],
+              "text": "Stated outright: this adapter is NOT pytoniq. Both universes produce the same C++ `Value` type, so the compiler will never object to mixing them — the only thing keeping them apart is the op-guard discipline in the next section."
+            },
+            {
+              "lines": [
+                38,
+                43
+              ],
+              "text": "The trampoline, and why there is no registration API: `&abi_parse_body<T>` is a free function-template instantiation, so its address has EXACTLY `MsgParserFn`'s type. No `std::function`, no closure state, no init step — the type parameter carries the dispatch."
+            },
+            {
+              "lines": [
+                47,
+                51
+              ],
+              "text": "Exotic (pruned/library) cells are rejected here rather than deeper: `load_cell_slice_special` reports specialness, and an exotic body must become a clean Error result. The no-abort rule applies inside parsers as much as anywhere else."
+            },
+            {
+              "lines": [
+                52,
+                54
+              ],
+              "text": "Two calls, and the first is the entire divergence from the other two sources: `from_slice` checks its own prefix. Then `to_abi_value()` flattens the struct into the ABI's own dynamic value, and only then does mch see anything."
+            }
+          ]
+        },
+        {
+          "file": "ton-index-worker/ton-abi/generated/dedust_v2_gen.cpp",
+          "lines": [
+            23,
+            30
+          ],
+          "sha8": "29c821ed",
+          "lang": "cpp",
+          "title": "A generated from_slice",
+          "annotations": [
+            {
+              "lines": [
+                24,
+                24
+              ],
+              "text": "`load_and_check_prefix` reads PREFIX_LEN bits and compares them to PREFIX, erroring on mismatch. A wrong-opcode body is a parse ERROR here, exactly where the pytoniq path would have cheerfully returned an object built from the wrong bits."
+            },
+            {
+              "lines": [
+                26,
+                28
+              ],
+              "text": "Straight-line, one field per line, each wrapped by `TRY_RESULT_PREFIX_ASSIGN` so a failure carries `Struct.field:` in the message. Errors name the failing field for free — worth knowing when reading engine logs."
+            },
+            {
+              "lines": [
+                27,
+                27
+              ],
+              "text": "`uint2` is loaded through `load_uint64` with width 2: the generator picks a leaf per C++ storage type and passes the bit width as data, rather than emitting a distinct helper per width."
+            }
+          ]
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/AbiBridge.cpp",
+          "lines": [
+            41,
+            63
+          ],
+          "sha8": "add570fd",
+          "lang": "cpp",
+          "title": "adapt_address — the clearest proof the universes differ",
+          "annotations": [
+            {
+              "lines": [
+                43,
+                47
+              ],
+              "text": "Std addresses converge: uppercase raw `wc:HEX`, the same canonical string `load_address_py` builds via `hex_upper`. So an ordinary address compares equal ACROSS universes — which is exactly what makes the other two cases easy to miss."
+            },
+            {
+              "lines": [
+                49,
+                52
+              ],
+              "text": "Here is the split. `addr_none` is a present-but-empty Account, NOT a null Value as on the pytoniq path. A spec that null-tests an ABI-parsed address field is asking a question that can never be true."
+            },
+            {
+              "lines": [
+                53,
+                59
+              ],
+              "text": "External addresses become `Obj{bits, value}` versus pytoniq's `\"extern:<len>:<dec>\"` string. Same TL-B input, two renderings that will never compare equal — the concrete reason a capture parsed one way cannot be fed to logic written for the other."
+            }
+          ]
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/AbiBridge.cpp",
+          "lines": [
+            99,
+            124
+          ],
+          "sha8": "a2cb7fdd",
+          "lang": "cpp",
+          "title": "Struct / union shapes, and totality",
+          "annotations": [
+            {
+              "lines": [
+                99,
+                106
+              ],
+              "text": "`\"$\"` is emitted FIRST, then declared fields in decl order. Order matters because rendered objects are compared against the Python twin, and the leading `$` gives a consumer a uniform discriminant to switch on."
+            },
+            {
+              "lines": [
+                109,
+                117
+              ],
+              "text": "Only value-carrying union variants reach this branch; struct-labelled variants are Struct-kind and already carry their own `$`. So a union is either `{$, value}` or just the inner struct — two shapes, one discriminant key."
+            },
+            {
+              "lines": [
+                115,
+                115
+              ],
+              "text": "The `v.inner ? ... : null` guard is what makes the adapter TOTAL: no `AbiValue` can drive it into an error or UB. That matters because a throw or error escaping here would be indistinguishable from a parse miss — the adapter is required to be the boring half of the bridge. Same reason `cell_from_slice` (top of the file) uses `append_cellslice_bool`: the throwing overload raises `vm::CellWriteError`, which is neither a `vm::VmError` nor a `std::exception`, so `parse_message_body`'s catch list would NOT have caught it."
+            }
+          ]
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/AbiBridge.cpp",
+          "lines": [
+            142,
+            155
+          ],
+          "sha8": "406a2a98",
+          "lang": "cpp",
+          "title": "Source 3: the ABI rows",
+          "annotations": [
+            {
+              "lines": [
+                143,
+                147
+              ],
+              "text": "BARE decl names, not `<contract>::<decl>` — because the `.mch` grammar's `parse CAP as Name` reads a single IDENT. The price is that every ABI shares one flat key namespace with the other two sources; `validate_registries()` is the backstop, and a real cross-ABI clash is the trigger to revisit this."
+            },
+            {
+              "lines": [
+                148,
+                153
+              ],
+              "text": "Three rows today, all DeDust CPMM V2. Adding an ABI-path protocol is: a line here, plus a Python twin class registered under the same bare name — nothing else in the registry machinery changes."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "Why the universes never mix: the op-guard rule",
+      "prose": "Both universes hand back an `mch::Value`, and the engine has no way to tell which one produced it. The rule that keeps them from colliding is enforced socially, in spec review: an ABI-path `parse` capture must be bound to a capture that is already `op`-guarded.\n\nThe reason is asymmetric failure. The C++ ABI parser CHECKS the prefix and errors on a mismatch; the Python twin skips 32 bits unchecked like everything else in the Python engine. On a body with the right opcode both sides agree. On any other body, C++ produces a parse failure (a Null body, silently) and Python produces a garbage object — and the A/B gate diverges, usually somewhere far away from the parse.",
+      "excerpts": [
+        {
+          "file": "indexer/indexer/events/mch/specs/dedust_v2_claim_reward.mch",
+          "lines": [
+            25,
+            42
+          ],
+          "sha8": "a9491fb9",
+          "lang": "text",
+          "title": "The first ABI-path spec",
+          "annotations": [
+            {
+              "lines": [
+                29,
+                32
+              ],
+              "text": "Every capture that gets ABI-parsed below is bound here by an `op` guard first. That ordering is not stylistic: matching runs before building, so by the time `parse claim as ClaimRewardMessage` executes, the body is already known to carry 0x909fdb65 and both engines are guaranteed to agree."
+            },
+            {
+              "lines": [
+                34,
+                35
+              ],
+              "text": "`as ClaimRewardMessage` is resolved by bare name against the registry — C++ finds the ABI bridge row, Python finds a twin class in `Registries.message_types`. The name is the only thing tying the two implementations together."
+            },
+            {
+              "lines": [
+                36,
+                41
+              ],
+              "text": "A parse kept deliberately even though none of its fields are read: it exercises the third parser on both sides so the twin gate covers it. Worth knowing when you wonder why an apparently unused statement is there."
+            }
+          ]
+        },
+        {
+          "file": "indexer/indexer/events/mch/builders/dedust_v2.py",
+          "lines": [
+            56,
+            78
+          ],
+          "sha8": "3ffe3357",
+          "lang": "python",
+          "title": "The Python twin — tolk-faithful, by hand",
+          "annotations": [
+            {
+              "lines": [
+                61,
+                61
+              ],
+              "text": "The asymmetry in one line: the twin skips the opcode unchecked (the pytoniq convention the rest of the Python engine follows) where the C++ side checks the prefix. Same body, different failure mode — this is why the op guard is mandatory rather than advisory."
+            },
+            {
+              "lines": [
+                62,
+                63
+              ],
+              "text": "camelCase attribute names matching the ABI field names, not the TL-B snake_case in the comment above. The twin is deliberately tolk-faithful rather than pytoniq-faithful, because it has to match what the ADAPTER emits."
+            },
+            {
+              "lines": [
+                64,
+                64
+              ],
+              "text": "`AccountId(...)` wrapping matters: `load_address()` returning None yields `AccountId(None)`, which renders as addr_none — matching `Value::make_account_none()` from the adapter. A bare `None` here would be the pytoniq convention and would diff."
+            },
+            {
+              "lines": [
+                72,
+                78
+              ],
+              "text": "The same recipe on the five-field message: `load_coins()` gives a plain int (mirroring the adapter's Int, not an Amount), and every address is wrapped. Names and their ORDER are pinned in an `ABI_FIELDS` table further down this file and checked against the committed `.abi.json` by a pytest — otherwise a rename or reorder on either side would break the twin silently."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "How a spec's parse statement actually resolves",
+      "prose": "The registry has one real consumer: the build runtime's `parse` statement ([[build-programs]]). Its behaviour explains why a mis-wired ABI parse is quiet rather than loud — a failed parse and a not-this-type parse are the same outcome by design.\n\nThere is also a preflight: `BuildDriver` scans every matcher's referenced message types against the registry and build-skips matchers whose types are missing, printing a warning listing them. So a spec referencing a type nobody registered degrades to \"this matcher never builds\", visible in the skip reasons rather than as a crash ([[ir-artifact]], [[gates]]).",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BuildRuntime.cpp",
+          "lines": [
+            27,
+            47
+          ],
+          "sha8": "f769a178",
+          "lang": "cpp",
+          "title": "soft_parse — first alternative that succeeds wins",
+          "annotations": [
+            {
+              "lines": [
+                32,
+                35
+              ],
+              "text": "An unregistered type name is a FAULT (it rejects the whole match), while a failing parser is merely a miss. The distinction is intentional: a typo'd type name is a broken spec, a body that isn't that type is normal traffic."
+            },
+            {
+              "lines": [
+                36,
+                38
+              ],
+              "text": "A missing or undecodable body does not abort the loop — it behaves like Python's `get_body()` raising inside each alternative's own `try`, so alternatives are still consumed in order."
+            },
+            {
+              "lines": [
+                40,
+                46
+              ],
+              "text": "All alternatives failing leaves the body Null, and downstream `.body.field` accesses null-propagate. This is exactly why an unguarded ABI parse is silent on the C++ side: the prefix-check error is indistinguishable from \"not this type\", and the divergence only surfaces later as a diff against Python."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "to": "ir-artifact",
+      "why": "a matcher's parse statements become ref_msgtypes in the IR artifact; those names are resolved against this registry at load time"
+    },
+    {
+      "to": "matcher-runtime",
+      "why": "the op guard that makes an ABI-path parse safe is evaluated here, before any body is parsed"
+    },
+    {
+      "to": "build-programs",
+      "why": "rt_parse / soft_parse is the registry's only production consumer; it defines the parse-failure-equals-null-body contract"
+    },
+    {
+      "to": "block-tree",
+      "why": "the body cell handed to a parser is the base64 message content decoded by the loader — a missing content row is a parse-alternative failure, not an error"
+    },
+    {
+      "to": "gates",
+      "why": "the --parse-dump A/B twin gate and the --abi-bridge-test self-test are what hold the parity claims on this page"
+    }
+  ],
+  "not_annotated": [
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/parse/Parsers.h",
+      "reason": "declaration-only header for the 7 kept-hand parsers; the useful content is the comment saying WHY each one stayed hand, which the schema's NOT GENERATED block repeats (~36 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/MsgParsersGenerated.h",
+      "reason": "single accessor declaration, no logic (~18 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/parse/ParseEvaa.cpp",
+      "reason": "one parser, EvaaWithdrawFailExcess, and the only hand parser that READS the opcode — it is an enum (4 known values, unknown -> error, mirroring Python's ValueError). Self-contained, read directly (~46 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/parse/ParseDedust.cpp",
+      "reason": "only parse_dedust_steps survives here (a host-fn chain walk over SwapStep, NOT a registered message parser); the DeDust message parsers moved to the schema. Read directly (~52 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/parse/ParseVesting.cpp",
+      "reason": "one parser that fully deserializes an inner int_msg_info header; its only subtlety (a present extra-currency dict ref is consumed but not deep-validated, a documented deviation) is stated in the file header (~79 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/parse/ParseDns.cpp",
+      "reason": "DNS record parsing plus a strict-UTF8 validator reproducing Python's str.decode() raising on invalid bytes; long but mechanical, same parity principle as the excerpted parsers (~186 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/parse/ParseLayerZero.cpp",
+      "reason": "the most literal vars() mirror in the layer — it reproduces every Python attribute including the source cell and the post-load remainder slice, with three different hex renderings. The file header lists them all; read it before the code (~152 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/MsgParsersGenerated.cpp",
+      "reason": "PARTIAL: one generated parser and the row table are excerpted above. The other 21 parsers are the same shape by construction; the file is generated and must not be edited (~880 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/parse/PSlice.cpp",
+      "reason": "PARTIAL: load_address_py is excerpted. The remainder is load_coins_py (len nibble 0 -> 0), load_snake_bytes, pslice_to_cell, and a byte-level reimplementation of Python's backslashreplace UTF-8 decode for comments — each documented at its definition (~307 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/mch-msgs.schema",
+      "reason": "PARTIAL: the grammar and leaf table are excerpted. The remaining ~200 lines are the 22 message declarations themselves — read them as the index of what is parsed, they need no commentary"
+    },
+    {
+      "path": "indexer/indexer/events/mch/msgs_gen.py",
+      "reason": "the schema compiler. Straightforward recursive-descent parse into dataclasses plus string emission; the interesting decisions all live in the schema's own header comment. Only read it if you are adding a LEAF type (~470 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-abi/generated/dedust_v2_gen.h",
+      "reason": "generated struct declarations (fields, PREFIX/PREFIX_LEN constants, CreateArgs); the behaviour is in the .cpp excerpted above (~99 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-abi/abi/dedust_v2.tolk",
+      "reason": "the hand-written Tolk declaration that starts the ABI chain — three message structs and a dummy Storage. Short and readable; the generated C++ is a direct image of it (~59 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-abi/abi/dedust_v2.abi.json",
+      "reason": "the committed intermediate between the .tolk and the generator; machine-written, diffed by a --check gate, not meant to be read (~197 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-abi/src/AbiValue.h",
+      "reason": "the ton-abi dynamic value type the adapter consumes (AbiValueKind enum + dump semantics). Belongs to the ton-abi module rather than this layer; read it if an adapter branch confuses you"
+    },
+    {
+      "path": "ton-index-worker/ton-abi/src/AbiLeaves*.{h,cpp}",
+      "reason": "the tolk-side leaf helpers the generated from_slice calls (prefix / scalar / address / ref / container / dict) — the mirror image of PSlice for the other universe. load_and_check_prefix in AbiLeavesPrefix.cpp is the one worth reading (~88 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/AbiBridgeTest.cpp",
+      "reason": "the --abi-bridge-test self-test: dup-policy exercise, round-trip through real registry dispatch, adapter shape checks. It is the evidence for this page's claims, but it belongs to the gates/harness scope (~342 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/W12-BRIDGE-DESIGN.md, T122-CLAIMREWARD-DESIGN.md",
+      "reason": "the design docs the bridge comments cite by section number (§3 adapter shapes, §4 registry merge). Not code; useful when a comment says \"design §N\" and you want the argument behind it"
+    }
+  ]
+}

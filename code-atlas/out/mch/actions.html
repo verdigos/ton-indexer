@@ -1,0 +1,926 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From blocks to Action rows</title>
+<style>
+:root{--bg:#ffffff;--fg:#1b2026;--mut:#5c6570;--line:#dfe4ea;--line-soft:#edf0f4;--surface:#f8f9fb;--accent:#0b6bcb;--band:#f2f4f7;--band-edge:#b6c0cc;--hot:#cfe4f9;--hot-edge:#0b6bcb;--code-bg:#f6f8fa;--note-bg:#fbfcfe;--drift:#b3261e;--drift-bg:#fdecea;--chip-bg:#0b6bcb;--chip-fg:#ffffff;--tk-k:#b02a37;--tk-s:#1a5f3c;--tk-n:#0550ae;--tk-c:#5c6570}
+@media (prefers-color-scheme: dark){:root{--bg:#0e1116;--fg:#dde3ea;--mut:#949daa;--line:#2a313a;--line-soft:#20262e;--surface:#151b23;--accent:#57a6ea;--band:#191f27;--band-edge:#3a4655;--hot:#17304a;--hot-edge:#57a6ea;--code-bg:#141920;--note-bg:#12171e;--drift:#ef6a5a;--drift-bg:#3a1a15;--chip-bg:#57a6ea;--chip-fg:#08101a;--tk-k:#ff9c92;--tk-s:#7ed8a8;--tk-n:#79c0ff;--tk-c:#949daa}}
+:root[data-theme=light]{--bg:#ffffff;--fg:#1b2026;--mut:#5c6570;--line:#dfe4ea;--line-soft:#edf0f4;--surface:#f8f9fb;--accent:#0b6bcb;--band:#f2f4f7;--band-edge:#b6c0cc;--hot:#cfe4f9;--hot-edge:#0b6bcb;--code-bg:#f6f8fa;--note-bg:#fbfcfe;--drift:#b3261e;--drift-bg:#fdecea;--chip-bg:#0b6bcb;--chip-fg:#ffffff;--tk-k:#b02a37;--tk-s:#1a5f3c;--tk-n:#0550ae;--tk-c:#5c6570}
+:root[data-theme=dark]{--bg:#0e1116;--fg:#dde3ea;--mut:#949daa;--line:#2a313a;--line-soft:#20262e;--surface:#151b23;--accent:#57a6ea;--band:#191f27;--band-edge:#3a4655;--hot:#17304a;--hot-edge:#57a6ea;--code-bg:#141920;--note-bg:#12171e;--drift:#ef6a5a;--drift-bg:#3a1a15;--chip-bg:#57a6ea;--chip-fg:#08101a;--tk-k:#ff9c92;--tk-s:#7ed8a8;--tk-n:#79c0ff;--tk-c:#949daa}
+:root{
+  --ff-sans:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;
+  --ff-mono:ui-monospace,'SF Mono',SFMono-Regular,'Cascadia Mono','Segoe UI Mono',Menlo,Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 16px/1.65 var(--ff-sans);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1360px;margin:0 auto;padding:0 28px 96px}
+
+/* --- chrome ------------------------------------------------------------- */
+.topbar{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);margin:0 -28px 24px;padding:10px 28px;display:flex;gap:9px;align-items:baseline}
+.topbar .crumb{color:var(--mut);font-size:13px;flex:none}
+.topbar .here{font-weight:600;font-size:14px;letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:2px}
+a:focus-visible,.card:focus-within{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+/* --- type scale --------------------------------------------------------- */
+h1{font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-.015em;margin:22px 0 10px;text-wrap:balance}
+h2{font-size:19px;line-height:1.35;font-weight:650;letter-spacing:-.01em;margin:46px 0 12px;padding-left:12px;border-left:3px solid var(--accent);scroll-margin-top:66px;text-wrap:balance}
+p{margin:0 0 .9em}
+.wrap>p,section>p{max-width:72ch}
+.meta{color:var(--mut);font-size:13px;line-height:1.55}
+.meta+p{margin-top:14px}
+.label{margin:0 0 9px;font:650 12px/1.4 var(--ff-sans);color:var(--mut);text-transform:uppercase;letter-spacing:.07em}
+.summary{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 9px 9px 0;padding:13px 18px;margin:16px 0 24px;background:var(--surface);max-width:78ch;font-size:16.5px;line-height:1.62}
+.summary p:last-child{margin-bottom:0}
+.rule{border:none;border-top:1px solid var(--line);margin:48px 0 14px}
+
+/* --- on-this-page ------------------------------------------------------- */
+.toc{margin:0 0 28px;padding:13px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);max-width:78ch}
+.toc ol{margin:0;padding:0;list-style:none}
+.toc li{display:flex;gap:11px;font-size:14.5px;line-height:1.5;margin:5px 0}
+.toc .tn{flex:none;min-width:1.3em;color:var(--mut);font:650 12px/1.7 var(--ff-mono);font-variant-numeric:tabular-nums}
+
+/* --- excerpt shell ------------------------------------------------------ */
+.excerpt{margin:26px 0;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.excerpt.cont{margin-top:-27px;border-top:none;border-top-left-radius:0;border-top-right-radius:0}
+.ex-head{display:flex;gap:12px;align-items:baseline;padding:9px 14px;background:var(--surface);border-bottom:1px solid var(--line);border-radius:9px 9px 0 0;font:500 12.5px/1.5 var(--ff-mono);min-width:0}
+.path{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plines{color:var(--mut);font-weight:400}
+.ex-title{color:var(--mut);font:400 13px/1.5 var(--ff-sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lang{margin-left:auto;flex:none;color:var(--mut);border:1px solid var(--line);border-radius:10px;padding:1px 8px;font-size:11px;letter-spacing:.05em;text-transform:uppercase}
+.sha{flex:none;color:var(--mut);font-size:11px}
+
+/* --- two-pane: code left, note rail right -------------------------------- */
+.ex-grid{display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,30%,420px);align-items:start}
+.excerpt.bare .ex-grid{grid-template-columns:minmax(0,1fr)}
+.ex-code{overflow-x:auto;overscroll-behavior-x:contain;padding:10px 0 12px}
+table.code{border-collapse:collapse;width:100%;font:400 13.5px/1.55 var(--ff-mono);letter-spacing:0;font-variant-ligatures:none;tab-size:4}
+/* keep these at the same specificity as the td reset above, or the reset wins */
+table.code td{padding:0;white-space:pre;vertical-align:baseline}
+table.code td.ln{width:1%;padding:0 8px 0 14px;color:var(--mut);text-align:right;user-select:none;font-size:12.5px;font-variant-numeric:tabular-nums}
+table.code td.mk{width:26px;padding:0 4px;text-align:center;vertical-align:middle;user-select:none}
+.excerpt.bare table.code td.mk{width:0;padding:0}
+table.code td.cd{width:100%;padding:0 12px 0 6px}
+tr.band td{background:var(--band)}
+tr.band td.mk{box-shadow:inset 3px 0 0 var(--band-edge)}
+tr.hot td{background:var(--hot)}
+tr.hot td.mk{box-shadow:inset 3px 0 0 var(--hot-edge)}
+/* text-indent:0 is load-bearing: the note body sets a negative text-indent for
+   its hanging first line, which would otherwise be inherited by the chip's
+   inner text box and fling the digit outside the card. */
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--chip-bg);color:var(--chip-fg);font:700 11px/1 var(--ff-sans);font-variant-numeric:tabular-nums;text-indent:0;flex:none}
+.ex-rail{position:relative;align-self:stretch;min-width:0;border-left:1px solid var(--line)}
+.note{position:absolute;left:14px;right:14px;padding:9px 13px 10px;border:1px solid var(--line);border-radius:8px;background:var(--note-bg);font-size:14px;line-height:1.55;transition:background .12s,border-color .12s,box-shadow .12s}
+.note .nt{padding-left:26px;text-indent:-26px}
+.note .chip{margin-right:7px}
+.note .nl{margin-right:7px;white-space:nowrap;color:var(--mut);font:650 12px/1 var(--ff-mono);letter-spacing:.01em}
+.note .nt code{font-size:12.5px}
+.note.hot{background:var(--hot);border-color:var(--hot-edge);box-shadow:0 0 0 1px var(--hot-edge)}
+@media (max-width: 979px){
+  .ex-grid{grid-template-columns:minmax(0,1fr)}
+  .ex-rail{border-left:none;border-top:1px solid var(--line);padding:12px 0 2px}
+  .note{position:static;margin:0 14px 10px}
+}
+
+/* --- syntax ------------------------------------------------------------- */
+.tk-k{color:var(--tk-k)}.tk-s{color:var(--tk-s)}.tk-n{color:var(--tk-n)}
+.tk-c{color:var(--tk-c);font-style:italic}
+.drift{background:var(--drift-bg);color:var(--drift);border-bottom:1px solid var(--line);padding:8px 14px;font-size:13px;line-height:1.5}
+.run{margin:16px 0;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);overflow:hidden}
+.run .label{padding:6px 14px 0}
+.run-cmd{padding:6px 14px 2px;font:600 12.5px/1.6 ui-monospace,'Cascadia Mono',Consolas,monospace;color:var(--accent);white-space:pre-wrap;word-break:break-all}
+.run-out{margin:0;padding:2px 14px 10px;font:12.5px/1.55 ui-monospace,'Cascadia Mono',Consolas,monospace;overflow-x:auto;color:var(--fg)}
+.run-note{padding:7px 14px 9px;border-top:1px solid var(--line-soft);font-size:13.5px;line-height:1.55;color:var(--mut)}
+
+/* --- blocks ------------------------------------------------------------- */
+.diagram{margin:22px 0;padding:14px 16px;border:1px solid var(--line);border-radius:10px;overflow-x:auto;background:var(--surface)}
+pre.mermaid{margin:0;font:13px/1.5 var(--ff-mono)}
+.edges,.cover{margin:26px 0;padding:14px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.edges ul,.cover ul{margin:0;padding-left:22px}
+.edges li,.cover li{margin:6px 0;font-size:14.5px;line-height:1.55}
+.cover .why{color:var(--mut)}
+.cover .label+ul+.label{margin-top:18px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin:20px 0}
+.card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--surface);transition:border-color .12s}
+.card:hover{border-color:var(--accent)}
+.card b{font-size:15.5px;font-weight:650;line-height:1.35}
+.card .num{margin-bottom:7px;color:var(--mut);font:650 11px/1 var(--ff-mono);letter-spacing:.06em}
+.card .meta{margin-top:5px}
+.card.planned{opacity:.55}
+.card.planned:hover{border-color:var(--line)}
+code{background:var(--code-bg);border:1px solid var(--line-soft);padding:.5px 5px;border-radius:5px;font-family:var(--ff-mono);font-size:.875em}
+.xl{font-weight:600}.xl-missing{color:var(--drift)}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{transition:none!important}}
+</style>
+<div class="wrap">
+<div class="topbar"><a class="crumb" href="index.html">atlas</a><span class="crumb">/</span><span class="here">From blocks to Action rows</span></div>
+<h1>From blocks to Action rows</h1>
+<div class="summary"><p>By the end of <a class="xl" href="build-programs.html">build-programs</a> a matcher has produced a <code>Block</code> carrying a <code>data</code> dict. This chapter is the last leg: how that block becomes an <code>Action</code> row with an id, a time window, a tx-hash set, an accounts set, eight directional columns and one protocol-specific composite. Two files do the work. <code>ClassifyCore.cpp</code> runs the post-pass stage — the host post-processors (<code>post_process_dedust_liquidity</code>, <code>post_process_stonfi_v2_liquidity</code>, <code>unwind_deployments</code>) that mutate the already-matched block set, plus the per-trace exception boundary that decides between &quot;commit these actions&quot; and &quot;throw them all away and fall back to leaf actions&quot;. <code>ActionBuild.{h,cpp}</code> is the <code>block_tree_serializer.py</code> port: <code>build_action</code> fills the universal fields, <code>fill_action</code> dispatches on btype to one of 21 <code>fill_*</code> functions. Rendering is NOT in either — <code>render_action</code> stays harness-side in <code>Classify.cpp</code>, which is the whole point of the core/harness split. Two things will surprise you if you know the Python classifier from another branch: there is NO role system on this branch (<code>action_accounts</code> is role-less by design, not by omission), and the A/B twin gate compares FULL rendered rows, so every field you see below is byte-pinned against the real Python serializer over 148 fixtures.</p></div>
+<nav class="toc"><div class="label">On this page</div><ol><li><span class="tn">1</span><a href="#the-seam-a-coreaction-is-not-a-row">The seam: a CoreAction is not a row</a></li><li><span class="tn">2</span><a href="#the-post-pass-stage-what-survives-becomes-a-row">The post-pass stage: what survives becomes a row</a></li><li><span class="tn">3</span><a href="#the-failure-fork">The failure fork</a></li><li><span class="tn">4</span><a href="#build-action-the-fields-every-row-gets">build_action: the fields every row gets</a></li><li><span class="tn">5</span><a href="#fill-action-dispatch-helpers-and-two-representative-fills">fill_action: dispatch, helpers, and two representative fills</a></li><li><span class="tn">6</span><a href="#the-render-seam-and-the-python-parity-contract">The render seam and the Python parity contract</a></li><li><span class="tn">7</span><a href="#check-yourself">Check yourself</a></li></ol></nav>
+<div class="diagram"><div class="label">CoreAction -&gt; Action row</div><pre class="mermaid">flowchart TD
+  M[&quot;matcher fires (ch.5)&quot;] --&gt; TB[&quot;try_build: produced Block + aux&quot;]
+  TB --&gt; CA[&quot;CoreAction{matcher_name, anchor, produced, aux}&lt;br/&gt;rendering-agnostic, raw pointers&quot;]
+  CA --&gt; PP[&quot;post-pass over the spine:&lt;br/&gt;dedust merge -&gt; stonfi_v2 pair -&gt; unwind_deployments&quot;]
+  PP --&gt; R{&quot;produced in `removed`?&quot;}
+  R -- yes --&gt; DROP[&quot;dropped (merged away)&quot;]
+  R -- no --&gt; RES[&quot;ClassifyResult.actions&quot;]
+  RES --&gt; BA[&quot;build_action(produced, Action&amp;)&quot;]
+  BA --&gt; U[&quot;universal: action_id, lt/utime window,&lt;br/&gt;tx_hashes, accounts&quot;]
+  BA --&gt; FA{&quot;fill_action by btype&quot;}
+  FA -- ported (21) --&gt; F[&quot;fill_*: directional cols + composite&quot;]
+  FA -- not ported --&gt; SKIP[&quot;return false -&gt; row skipped&quot;]
+  F --&gt; RA[&quot;render_action (HARNESS side, Classify.cpp)&quot;]
+  RA --&gt; DIFF[&quot;byte-diff vs twins/py_actions.py&quot;]</pre></div>
+<div class="diagram"><div class="label">The per-trace failure fork</div><pre class="mermaid">flowchart LR
+  C[&quot;classify_trace&quot;] --&gt; T{&quot;throw during&lt;br/&gt;matching or post-pass?&quot;}
+  T -- no --&gt; OK[&quot;actions = surviving CoreActions&quot;]
+  T -- yes --&gt; F1[&quot;actions.clear()&quot;]
+  F1 --&gt; CAT{&quot;reason contains&lt;br/&gt;&#39;two-phase lookup did not converge&#39;?&quot;}
+  CAT -- yes --&gt; LI[&quot;FailureCategory::lookup_infra_fail&quot;]
+  CAT -- no --&gt; EF[&quot;FailureCategory::engine_fault&quot;]
+  LI --&gt; FB[&quot;basic_classify_fallback:&lt;br/&gt;fresh init_block, NO matchers&quot;]
+  EF --&gt; FB
+  FB --&gt; FBA[&quot;fallback_actions (leaf btypes only)&quot;]</pre></div>
+<h2 id="the-seam-a-coreaction-is-not-a-row">The seam: a CoreAction is not a row</h2>
+<section><p>The core deliberately stops one step short of an <code>Action</code>. What the matcher loop collects is a <code>CoreAction</code>: four raw pointers into the caller&#39;s arena, no strings, no rendering, no schema. Everything that turns those pointers into text or into a row happens in an adapter — the CLI dump in <code>Classify.cpp</code>, or the production actor in <a class="xl" href="prod-path.html">prod-path</a>.</p>
+<p>That sounds like ceremony until you notice WHEN a CoreAction is collected versus when it is rendered. It is collected at fire time, mid-walk, while later matchers are still mutating the tree; it is rendered after the post-pass, from the block&#39;s FINAL state. Keeping the two apart is what lets a later merge rewrite <code>produced-&gt;data</code> and have the row reflect it.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.h<span class="plines">:44–71</span></span><span class="ex-title">CoreAction / ClassifyResult — the core&#39;s whole output vocabulary</span><span class="lang">cpp</span><span class="sha" title="span hash at render">5c70ffae</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="44"><td class="ln">44</td><td class="mk"></td><td class="cd"><span class="tk-c">// One produced action, RENDERING-AGNOSTIC: raw block pointers + fire-time aux.</span></td></tr>
+<tr class="cl" data-l="45"><td class="ln">45</td><td class="mk"></td><td class="cd"><span class="tk-c">// The adapter renders block_key(anchor)/data/consumed/aux or builds an Action</span></td></tr>
+<tr class="cl" data-l="46"><td class="ln">46</td><td class="mk"></td><td class="cd"><span class="tk-c">// row from `produced`. Pointers reference the caller&#39;s arena (TraceContext),</span></td></tr>
+<tr class="cl" data-l="47"><td class="ln">47</td><td class="mk"></td><td class="cd"><span class="tk-c">// valid for as long as the caller keeps it alive.</span></td></tr>
+<tr class="cl band nb-0" data-l="48" data-n="0"><td class="ln">48</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-k">struct</span> CoreAction {</td></tr>
+<tr class="cl band nb-0" data-l="49" data-n="0"><td class="ln">49</td><td class="mk"></td><td class="cd">  std::string matcher_name;</td></tr>
+<tr class="cl band nb-0" data-l="50" data-n="0"><td class="ln">50</td><td class="mk"></td><td class="cd">  Block *anchor;</td></tr>
+<tr class="cl band nb-0" data-l="51" data-n="0"><td class="ln">51</td><td class="mk"></td><td class="cd">  Block *produced;</td></tr>
+<tr class="cl band nb-0" data-l="52" data-n="0"><td class="ln">52</td><td class="mk"><span class="chip">2</span></td><td class="cd">  std::vector&lt;Block *&gt; aux;    <span class="tk-c">// fire-time excess/bounce auto-append (anchor)</span></td></tr>
+<tr class="cl band nb-0" data-l="53" data-n="0"><td class="ln">53</td><td class="mk"></td><td class="cd">};</td></tr>
+<tr class="cl" data-l="54"><td class="ln">54</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="55"><td class="ln">55</td><td class="mk"></td><td class="cd"><span class="tk-c">// Buffered ATOMIC per-trace result: on a mid-trace throw the pipeline sets</span></td></tr>
+<tr class="cl band nb-2" data-l="56" data-n="2"><td class="ln">56</td><td class="mk"><span class="chip">3</span></td><td class="cd"><span class="tk-c">// `failure` (+ reason) and returns whatever was collected — NOTHING is emitted</span></td></tr>
+<tr class="cl band nb-2" data-l="57" data-n="2"><td class="ln">57</td><td class="mk"></td><td class="cd"><span class="tk-c">// by the core; the adapter decides (a dump reproduces today&#39;s TRACE_FAIL line,</span></td></tr>
+<tr class="cl band nb-2" data-l="58" data-n="2"><td class="ln">58</td><td class="mk"></td><td class="cd"><span class="tk-c">// production commits only on success).</span></td></tr>
+<tr class="cl" data-l="59"><td class="ln">59</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> ClassifyResult {</td></tr>
+<tr class="cl" data-l="60"><td class="ln">60</td><td class="mk"></td><td class="cd">  std::vector&lt;CoreAction&gt; actions;  <span class="tk-c">// surviving post-pass, in fire order</span></td></tr>
+<tr class="cl" data-l="61"><td class="ln">61</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> failure = <span class="tk-k">false</span>;</td></tr>
+<tr class="cl" data-l="62"><td class="ln">62</td><td class="mk"></td><td class="cd">  std::string failure_reason;</td></tr>
+<tr class="cl" data-l="63"><td class="ln">63</td><td class="mk"></td><td class="cd">  <span class="tk-c">// Trace-terminal failure category (additive telemetry; none unless `failure`).</span></td></tr>
+<tr class="cl" data-l="64"><td class="ln">64</td><td class="mk"></td><td class="cd">  FailureCategory failure_category = FailureCategory::none;</td></tr>
+<tr class="cl band nb-3" data-l="65" data-n="3"><td class="ln">65</td><td class="mk"><span class="chip">4</span></td><td class="cd">  <span class="tk-c">// Step 2c basic-actions fallback (try_classify_basic_actions): populated ONLY</span></td></tr>
+<tr class="cl band nb-3" data-l="66" data-n="3"><td class="ln">66</td><td class="mk"></td><td class="cd">  <span class="tk-c">// when `failure` — a fresh leaf-only classify (no matchers) + the</span></td></tr>
+<tr class="cl band nb-3" data-l="67" data-n="3"><td class="ln">67</td><td class="mk"></td><td class="cd">  <span class="tk-c">// post-processor chain, one CoreAction per surviving spine block of a basic</span></td></tr>
+<tr class="cl band nb-3" data-l="68" data-n="3"><td class="ln">68</td><td class="mk"></td><td class="cd">  <span class="tk-c">// btype (call_contract / contract_deploy / ton_transfer). Production commits</span></td></tr>
+<tr class="cl band nb-3" data-l="69" data-n="3"><td class="ln">69</td><td class="mk"></td><td class="cd">  <span class="tk-c">// these when classification fails. Ungated (corpus has no failing traces).</span></td></tr>
+<tr class="cl band nb-3" data-l="70" data-n="3"><td class="ln">70</td><td class="mk"></td><td class="cd">  std::vector&lt;CoreAction&gt; fallback_actions;</td></tr>
+<tr class="cl" data-l="71"><td class="ln">71</td><td class="mk"></td><td class="cd">};</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="48" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L48–53</span><code>anchor</code> and <code>produced</code> are usually different blocks: the anchor is where the matcher&#39;s <code>test_self</code> hit (the block whose key the dump prints), <code>produced</code> is the new composite block the match built. On the fallback path they are deliberately the SAME pointer — a leaf block is its own anchor.</div></div>
+<div class="note" data-a="52" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L52</span><code>aux</code> is the one piece of fire-time state that cannot be recovered later. It is captured from the anchor&#39;s <code>next_blocks</code> at match time; by the time the post-pass has run, merges may have moved those siblings. Storing them as raw pointers (not rendered strings) is what keeps the core rendering-agnostic while still preserving the fire-time answer.</div></div>
+<div class="note" data-a="56" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L56–58</span>&quot;Buffered ATOMIC&quot; is the contract that makes the failure fork possible: nothing is printed or inserted while the trace is being classified, so a throw halfway through can discard the whole trace&#39;s output without needing to un-emit anything. Python gets this for free by building a list; C++ has to promise it.</div></div>
+<div class="note" data-a="65" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L65–70</span>Two separate action vectors, never both populated. <code>fallback_actions</code> is the Step 2c path and is UNGATED — no corpus trace fails, so the A/B twins never exercise it. Treat any behaviour you read in <code>basic_classify_fallback</code> as unproven-by-gate, unlike everything else on this page.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp<span class="plines">:69–89</span></span><span class="ex-title">Where aux comes from (end of try_build)</span><span class="lang">cpp</span><span class="sha" title="span hash at render">8a7597ba</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="69" data-n="0"><td class="ln">69</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-c">// Root-level excess/bounce auto-append (engine.py try_build): from the</span></td></tr>
+<tr class="cl band nb-0" data-l="70" data-n="0"><td class="ln">70</td><td class="mk"></td><td class="cd">  <span class="tk-c">// ANCHOR&#39;s next_blocks (unchanged by the merge), canonical order.</span></td></tr>
+<tr class="cl band nb-0" data-l="71" data-n="0"><td class="ln">71</td><td class="mk"></td><td class="cd">  std::vector&lt;Block *&gt; aux;</td></tr>
+<tr class="cl band nb-0" data-l="72" data-n="0"><td class="ln">72</td><td class="mk"></td><td class="cd">  {</td></tr>
+<tr class="cl band nb-0" data-l="73" data-n="0"><td class="ln">73</td><td class="mk"></td><td class="cd">    std::vector&lt;Block *&gt; nb = block-&gt;next_blocks;</td></tr>
+<tr class="cl band nb-1" data-l="74" data-n="1"><td class="ln">74</td><td class="mk"><span class="chip">2</span></td><td class="cd">    std::stable_sort(nb.begin(), nb.end(),</td></tr>
+<tr class="cl band nb-1" data-l="75" data-n="1"><td class="ln">75</td><td class="mk"></td><td class="cd">                     [](<span class="tk-k">const</span> Block *a, <span class="tk-k">const</span> Block *b) { <span class="tk-k">return</span> a-&gt;min_lt &lt; b-&gt;min_lt; });</td></tr>
+<tr class="cl band nb-1" data-l="76" data-n="1"><td class="ln">76</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (Block *n : nb) {</td></tr>
+<tr class="cl" data-l="77"><td class="ln">77</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (n-&gt;btype != <span class="tk-s">&quot;call_contract&quot;</span> || !n-&gt;opcode) {</td></tr>
+<tr class="cl" data-l="78"><td class="ln">78</td><td class="mk"></td><td class="cd">        <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl" data-l="79"><td class="ln">79</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-2" data-l="80" data-n="2"><td class="ln">80</td><td class="mk"><span class="chip">3</span></td><td class="cd">      <span class="tk-k">if</span> ((*n-&gt;opcode == kExcessOpcode &amp;&amp; m.include_excess) ||</td></tr>
+<tr class="cl band nb-2" data-l="81" data-n="2"><td class="ln">81</td><td class="mk"></td><td class="cd">          (*n-&gt;opcode == kBounceOpcode &amp;&amp; m.include_bounces)) {</td></tr>
+<tr class="cl band nb-2" data-l="82" data-n="2"><td class="ln">82</td><td class="mk"></td><td class="cd">        aux.push_back(n);</td></tr>
+<tr class="cl" data-l="83"><td class="ln">83</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl" data-l="84"><td class="ln">84</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="85"><td class="ln">85</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="86"><td class="ln">86</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-3" data-l="87" data-n="3"><td class="ln">87</td><td class="mk"><span class="chip">4</span></td><td class="cd">  out.push_back(CoreAction{m.name, block, produced, std::move(aux)});</td></tr>
+<tr class="cl" data-l="88"><td class="ln">88</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> <span class="tk-k">true</span>;</td></tr>
+<tr class="cl" data-l="89"><td class="ln">89</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="69" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L69–73</span>Read from the ANCHOR&#39;s <code>next_blocks</code>, not the produced block&#39;s. The merge just consumed a set of blocks into <code>produced</code>, but the anchor&#39;s sibling list is untouched by that — so excess/bounce messages that trail the matched subtree are still visible here and only here.</div></div>
+<div class="note" data-a="74" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L74–76</span><code>stable_sort</code> by <code>min_lt</code> before scanning: the list is already in canonical order (<a class="xl" href="block-tree.html">block-tree</a>), but the sort is re-asserted because <code>aux</code> order IS rendered and a merge earlier in this same walk could have appended out of order.</div></div>
+<div class="note" data-a="80" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L80–82</span>Two hardcoded opcodes — <code>0xD53276DB</code> (excess) and <code>0xFFFFFFFF</code> (bounce) — gated per matcher by <code>include_excess</code> / <code>include_bounces</code> from the IR (<a class="xl" href="ir-artifact.html">ir-artifact</a>). A matcher that opts out simply gets an empty aux list; the messages stay unconsumed in the tree.</div></div>
+<div class="note" data-a="87" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L87</span>The only place a CoreAction is created on the normal path. Note what is NOT stored: no data snapshot, no rendered strings. <code>produced-&gt;data</code> is read later, after the post-pass may have rewritten it.</div></div></div>
+</div>
+</div>
+<h2 id="the-post-pass-stage-what-survives-becomes-a-row">The post-pass stage: what survives becomes a row</h2>
+<section><p>After every matcher has walked, three host post-processors run over a freshly re-collected spine list. They are ports of <code>blocks/liquidity.py</code> and <code>event_processing.py</code>, and unlike matchers they are imperative surgery on the block graph: they merge two produced blocks into one, re-parent children, and delete blocks that already have a CoreAction pointing at them.</p>
+<p>That last part is the mechanism to understand. A post-processor never touches <code>pending</code>; it inserts into a <code>removed</code> set, and the filter at the end of <code>classify_trace</code> is what actually drops the row. So &quot;this matcher fired but produced no action&quot; has exactly two causes on this branch: a clean rejection inside <code>try_build</code> (<a class="xl" href="matcher-runtime.html">matcher-runtime</a>), or a post-processor merging the produced block away here.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp<span class="plines">:494–511</span></span><span class="ex-title">The pass chain and the survival filter</span><span class="lang">cpp</span><span class="sha" title="span hash at render">0adb35ed</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="494"><td class="ln">494</td><td class="mk"></td><td class="cd">    <span class="tk-c">// Phase E: post-process passes over the flat spine list ([root] + bfs).</span></td></tr>
+<tr class="cl band nb-0" data-l="495" data-n="0"><td class="ln">495</td><td class="mk"><span class="chip">1</span></td><td class="cd">    std::vector&lt;Block *&gt; spine;</td></tr>
+<tr class="cl band nb-0" data-l="496" data-n="0"><td class="ln">496</td><td class="mk"></td><td class="cd">    {</td></tr>
+<tr class="cl band nb-0" data-l="497" data-n="0"><td class="ln">497</td><td class="mk"></td><td class="cd">      std::deque&lt;Block *&gt; q{wrapper};</td></tr>
+<tr class="cl band nb-0" data-l="498" data-n="0"><td class="ln">498</td><td class="mk"></td><td class="cd">      <span class="tk-k">while</span> (!q.empty()) {</td></tr>
+<tr class="cl band nb-0" data-l="499" data-n="0"><td class="ln">499</td><td class="mk"></td><td class="cd">        Block *cur = q.front();</td></tr>
+<tr class="cl band nb-0" data-l="500" data-n="0"><td class="ln">500</td><td class="mk"></td><td class="cd">        q.pop_front();</td></tr>
+<tr class="cl band nb-0" data-l="501" data-n="0"><td class="ln">501</td><td class="mk"></td><td class="cd">        spine.push_back(cur);</td></tr>
+<tr class="cl band nb-0" data-l="502" data-n="0"><td class="ln">502</td><td class="mk"></td><td class="cd">        <span class="tk-k">for</span> (Block *n : cur-&gt;next_blocks) q.push_back(n);</td></tr>
+<tr class="cl band nb-0" data-l="503" data-n="0"><td class="ln">503</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-0" data-l="504" data-n="0"><td class="ln">504</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="505"><td class="ln">505</td><td class="mk"></td><td class="cd">    std::set&lt;Block *&gt; removed;</td></tr>
+<tr class="cl band nb-1" data-l="506" data-n="1"><td class="ln">506</td><td class="mk"><span class="chip">2</span></td><td class="cd">    post_process_dedust_liquidity(spine, removed);</td></tr>
+<tr class="cl band nb-1" data-l="507" data-n="1"><td class="ln">507</td><td class="mk"></td><td class="cd">    post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);</td></tr>
+<tr class="cl band nb-1" data-l="508" data-n="1"><td class="ln">508</td><td class="mk"></td><td class="cd">    unwind_deployments(spine);  <span class="tk-c">// Step 2b (no-op for the dump; production chain parity)</span></td></tr>
+<tr class="cl band nb-2" data-l="509" data-n="2"><td class="ln">509</td><td class="mk"><span class="chip">3</span></td><td class="cd">    <span class="tk-k">for</span> (CoreAction &amp;a : pending) {</td></tr>
+<tr class="cl band nb-2" data-l="510" data-n="2"><td class="ln">510</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (!removed.count(a.produced)) result.actions.push_back(std::move(a));</td></tr>
+<tr class="cl band nb-2" data-l="511" data-n="2"><td class="ln">511</td><td class="mk"></td><td class="cd">    }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="495" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L495–504</span>The spine is re-collected from scratch AFTER matching, not reused from the prefilter inventory at the top of the function. It has to be: matchers rewired <code>next_blocks</code> as they merged, so the pre-match BFS order is stale. Note the walk follows <code>next_blocks</code> only — children of produced composites are not on the spine.</div></div>
+<div class="note" data-a="506" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L506–508</span>Order is load-bearing and mirrors <code>event_processing.py</code> exactly. <code>post_process_stonfi_v2_liquidity</code> pairs blocks that <code>post_process_dedust_liquidity</code> may already have merged; running them the other way round changes which pair survives. <code>unwind_deployments</code> last, and it is a no-op for the dumps (it only appends to the spine, which the dump never re-walks) — ported so the chain matches production, per <a class="xl" href="prod-path.html">prod-path</a>.</div></div>
+<div class="note" data-a="509" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L509–511</span>The whole survival rule in three lines, and it keys on <code>produced</code>, not <code>anchor</code>. A merged-away block&#39;s CoreAction disappears silently — there is no &quot;merged&quot; marker in the output, the row just isn&#39;t there. When a dump has fewer rows than you expect, this filter and <code>try_build</code>&#39;s clean rejection are the two places to look.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp<span class="plines">:168–210</span></span><span class="ex-title">post_process_dedust_liquidity — merge two blocks, delete one</span><span class="lang">cpp</span><span class="sha" title="span hash at render">a06a16bf</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="168"><td class="ln">168</td><td class="mk"></td><td class="cd"><span class="tk-k">void</span> post_process_dedust_liquidity(std::vector&lt;Block *&gt; &amp;blocks, std::set&lt;Block *&gt; &amp;removed) {</td></tr>
+<tr class="cl" data-l="169"><td class="ln">169</td><td class="mk"></td><td class="cd">  std::vector&lt;Block *&gt; firsts, finals;</td></tr>
+<tr class="cl" data-l="170"><td class="ln">170</td><td class="mk"></td><td class="cd">  std::map&lt;std::string, <span class="tk-k">int</span>&gt; used;</td></tr>
+<tr class="cl band nb-0" data-l="171" data-n="0"><td class="ln">171</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">auto</span> contract_key = [](<span class="tk-k">const</span> Block *b) {</td></tr>
+<tr class="cl band nb-0" data-l="172" data-n="0"><td class="ln">172</td><td class="mk"></td><td class="cd">    Value c = pp_field(b-&gt;data, <span class="tk-s">&quot;deposit_contract&quot;</span>);</td></tr>
+<tr class="cl band nb-0" data-l="173" data-n="0"><td class="ln">173</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> c.t == VType::Account ? (c.addr_none ? std::string(<span class="tk-s">&quot;addr_none&quot;</span>) : c.str) : c.describe();</td></tr>
+<tr class="cl band nb-0" data-l="174" data-n="0"><td class="ln">174</td><td class="mk"></td><td class="cd">  };</td></tr>
+<tr class="cl" data-l="175"><td class="ln">175</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (Block *b : blocks) {</td></tr>
+<tr class="cl" data-l="176"><td class="ln">176</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (b-&gt;btype == <span class="tk-s">&quot;dedust_deposit_liquidity_partial&quot;</span>) {</td></tr>
+<tr class="cl" data-l="177"><td class="ln">177</td><td class="mk"></td><td class="cd">      firsts.push_back(b);</td></tr>
+<tr class="cl" data-l="178"><td class="ln">178</td><td class="mk"></td><td class="cd">      used[contract_key(b)]++;</td></tr>
+<tr class="cl" data-l="179"><td class="ln">179</td><td class="mk"></td><td class="cd">    } <span class="tk-k">else</span> <span class="tk-k">if</span> (b-&gt;btype == <span class="tk-s">&quot;dedust_deposit_liquidity&quot;</span>) {</td></tr>
+<tr class="cl" data-l="180"><td class="ln">180</td><td class="mk"></td><td class="cd">      finals.push_back(b);</td></tr>
+<tr class="cl" data-l="181"><td class="ln">181</td><td class="mk"></td><td class="cd">      used[contract_key(b)]++;</td></tr>
+<tr class="cl" data-l="182"><td class="ln">182</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="183"><td class="ln">183</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="184" data-n="1"><td class="ln">184</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> &amp;kv : used) {</td></tr>
+<tr class="cl band nb-1" data-l="185" data-n="1"><td class="ln">185</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (kv.second &gt; <span class="tk-n">2</span>) <span class="tk-k">return</span>;  <span class="tk-c">// logger.warning + skip merging</span></td></tr>
+<tr class="cl band nb-1" data-l="186" data-n="1"><td class="ln">186</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="187"><td class="ln">187</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (Block *first : firsts) {</td></tr>
+<tr class="cl" data-l="188"><td class="ln">188</td><td class="mk"></td><td class="cd">    Block *final_b = <span class="tk-k">nullptr</span>;</td></tr>
+<tr class="cl" data-l="189"><td class="ln">189</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (Block *b : finals) {</td></tr>
+<tr class="cl" data-l="190"><td class="ln">190</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (contract_key(b) == contract_key(first)) { final_b = b; <span class="tk-k">break</span>; }</td></tr>
+<tr class="cl" data-l="191"><td class="ln">191</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="192"><td class="ln">192</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (final_b == <span class="tk-k">nullptr</span>) <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl band nb-2" data-l="193" data-n="2"><td class="ln">193</td><td class="mk"><span class="chip">3</span></td><td class="cd">    Value merged;</td></tr>
+<tr class="cl band nb-2" data-l="194" data-n="2"><td class="ln">194</td><td class="mk"></td><td class="cd">    <span class="tk-k">try</span> {</td></tr>
+<tr class="cl band nb-2" data-l="195" data-n="2"><td class="ln">195</td><td class="mk"></td><td class="cd">      merged = combine_deposits(first-&gt;data, final_b-&gt;data);</td></tr>
+<tr class="cl band nb-2" data-l="196" data-n="2"><td class="ln">196</td><td class="mk"></td><td class="cd">    } <span class="tk-k">catch</span> (<span class="tk-k">const</span> std::exception &amp;) {</td></tr>
+<tr class="cl band nb-2" data-l="197" data-n="2"><td class="ln">197</td><td class="mk"></td><td class="cd">      <span class="tk-k">continue</span>;  <span class="tk-c">// Python raise -&gt; pair unmerged (unreached over corpus)</span></td></tr>
+<tr class="cl band nb-2" data-l="198" data-n="2"><td class="ln">198</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-3" data-l="199" data-n="3"><td class="ln">199</td><td class="mk"><span class="chip">4</span></td><td class="cd">    blocks.erase(std::remove(blocks.begin(), blocks.end(), first), blocks.end());</td></tr>
+<tr class="cl band nb-3" data-l="200" data-n="3"><td class="ln">200</td><td class="mk"></td><td class="cd">    removed.insert(first);</td></tr>
+<tr class="cl band nb-3" data-l="201" data-n="3"><td class="ln">201</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> EventNode *n : first-&gt;event_nodes) final_b-&gt;event_nodes.push_back(n);</td></tr>
+<tr class="cl band nb-3" data-l="202" data-n="3"><td class="ln">202</td><td class="mk"></td><td class="cd">    final_b-&gt;data = std::move(merged);</td></tr>
+<tr class="cl band nb-3" data-l="203" data-n="3"><td class="ln">203</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (Block *cb : first-&gt;children_blocks) final_b-&gt;children_blocks.push_back(cb);</td></tr>
+<tr class="cl band nb-3" data-l="204" data-n="3"><td class="ln">204</td><td class="mk"></td><td class="cd">    std::sort(final_b-&gt;children_blocks.begin(), final_b-&gt;children_blocks.end());</td></tr>
+<tr class="cl band nb-3" data-l="205" data-n="3"><td class="ln">205</td><td class="mk"></td><td class="cd">    final_b-&gt;children_blocks.erase(</td></tr>
+<tr class="cl band nb-3" data-l="206" data-n="3"><td class="ln">206</td><td class="mk"></td><td class="cd">        std::unique(final_b-&gt;children_blocks.begin(), final_b-&gt;children_blocks.end()),</td></tr>
+<tr class="cl band nb-3" data-l="207" data-n="3"><td class="ln">207</td><td class="mk"></td><td class="cd">        final_b-&gt;children_blocks.end());</td></tr>
+<tr class="cl band nb-3" data-l="208" data-n="3"><td class="ln">208</td><td class="mk"></td><td class="cd">    final_b-&gt;calculate_min_max_lt();</td></tr>
+<tr class="cl band nb-3" data-l="209" data-n="3"><td class="ln">209</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="210"><td class="ln">210</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="171" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L171–174</span><code>contract_key</code> deliberately uses <code>describe()</code> (the debug rendering) for anything that is not an Account. That is not sloppiness: the key only needs to group blocks, and Python groups by the raw object&#39;s equality. Using <code>describe()</code> gives a total, deterministic key for the Null / wrong-type cases without adding a branch per Value kind (<a class="xl" href="value.html">value</a>).</div></div>
+<div class="note" data-a="184" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L184–186</span>Python logs a warning and skips merging when a deposit contract appears more than twice; C++ silently returns. The stdout channel is the A/B comparison channel, so a log line here would be a diff — warnings that Python prints to its logger have no C++ counterpart by design.</div></div>
+<div class="note" data-a="193" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L193–198</span><code>combine_deposits</code> signals its consistency failures by throwing, and the catch turns that into &quot;leave the pair unmerged&quot; — the net effect of a Python <code>raise</code> propagating out of the same call. Unreached over the corpus, so this is parity by construction rather than by gate.</div></div>
+<div class="note" data-a="199" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L199–209</span>The merge itself: <code>first</code> is erased from the spine AND inserted into <code>removed</code> (two different jobs — the spine erase affects later passes, the <code>removed</code> insert kills the row), then its event nodes and children are folded into <code>final_b</code> and the lt window recomputed. The <code>sort</code>+<code>unique</code> on <code>children_blocks</code> is a pointer-value dedup, which means child order after a merge is ADDRESS order, not lt order — harmless only because <code>emit_action</code> sorts the rendered child keys.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp<span class="plines">:302–325</span></span><span class="ex-title">unwind_deployments — the loop that must see its own appends</span><span class="lang">cpp</span><span class="sha" title="span hash at render">406c512b</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="302"><td class="ln">302</td><td class="mk"></td><td class="cd"><span class="tk-c">// event_processing.py unwind_deployments (3rd production post-processor, Step</span></td></tr>
+<tr class="cl" data-l="303"><td class="ln">303</td><td class="mk"></td><td class="cd"><span class="tk-c">// 2b): promote ContractDeploy blocks nested in children up to the top-level</span></td></tr>
+<tr class="cl" data-l="304"><td class="ln">304</td><td class="mk"></td><td class="cd"><span class="tk-c">// spine list. The Python `for block in blocks` loop SEES appends (it re-scans</span></td></tr>
+<tr class="cl band nb-0" data-l="305" data-n="0"><td class="ln">305</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// the promoted deploys), so the C++ index loop must too. NOTE: a no-op for the</span></td></tr>
+<tr class="cl band nb-0" data-l="306" data-n="0"><td class="ln">306</td><td class="mk"></td><td class="cd"><span class="tk-c">// classify/actions DUMP — the dump emits matcher-produced blocks (`pending`),</span></td></tr>
+<tr class="cl band nb-0" data-l="307" data-n="0"><td class="ln">307</td><td class="mk"></td><td class="cd"><span class="tk-c">// and this only appends to the spine, which the dump never walks; ported to</span></td></tr>
+<tr class="cl band nb-0" data-l="308" data-n="0"><td class="ln">308</td><td class="mk"></td><td class="cd"><span class="tk-c">// keep the post-processor chain aligned with production for Phase G.</span></td></tr>
+<tr class="cl" data-l="309"><td class="ln">309</td><td class="mk"></td><td class="cd"><span class="tk-k">void</span> unwind_deployments(std::vector&lt;Block *&gt; &amp;blocks) {</td></tr>
+<tr class="cl" data-l="310"><td class="ln">310</td><td class="mk"></td><td class="cd">  std::set&lt;Block *&gt; visited;</td></tr>
+<tr class="cl band nb-1" data-l="311" data-n="1"><td class="ln">311</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">for</span> (std::size_t i = <span class="tk-n">0</span>; i &lt; blocks.size(); i++) {  <span class="tk-c">// index loop: sees appends</span></td></tr>
+<tr class="cl" data-l="312"><td class="ln">312</td><td class="mk"></td><td class="cd">    std::deque&lt;Block *&gt; queue(blocks[i]-&gt;children_blocks.begin(),</td></tr>
+<tr class="cl" data-l="313"><td class="ln">313</td><td class="mk"></td><td class="cd">                              blocks[i]-&gt;children_blocks.end());</td></tr>
+<tr class="cl" data-l="314"><td class="ln">314</td><td class="mk"></td><td class="cd">    <span class="tk-k">while</span> (!queue.empty()) {</td></tr>
+<tr class="cl" data-l="315"><td class="ln">315</td><td class="mk"></td><td class="cd">      Block *child = queue.front();</td></tr>
+<tr class="cl" data-l="316"><td class="ln">316</td><td class="mk"></td><td class="cd">      queue.pop_front();</td></tr>
+<tr class="cl band nb-2" data-l="317" data-n="2"><td class="ln">317</td><td class="mk"><span class="chip">3</span></td><td class="cd">      <span class="tk-k">if</span> (child-&gt;btype == <span class="tk-s">&quot;contract_deploy&quot;</span> &amp;&amp; visited.count(child) == <span class="tk-n">0</span>) {</td></tr>
+<tr class="cl band nb-2" data-l="318" data-n="2"><td class="ln">318</td><td class="mk"></td><td class="cd">        blocks.push_back(child);</td></tr>
+<tr class="cl band nb-2" data-l="319" data-n="2"><td class="ln">319</td><td class="mk"></td><td class="cd">      } <span class="tk-k">else</span> {</td></tr>
+<tr class="cl band nb-2" data-l="320" data-n="2"><td class="ln">320</td><td class="mk"></td><td class="cd">        <span class="tk-k">for</span> (Block *c : child-&gt;children_blocks) queue.push_back(c);</td></tr>
+<tr class="cl band nb-2" data-l="321" data-n="2"><td class="ln">321</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-2" data-l="322" data-n="2"><td class="ln">322</td><td class="mk"></td><td class="cd">      visited.insert(child);</td></tr>
+<tr class="cl" data-l="323"><td class="ln">323</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="324"><td class="ln">324</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="325"><td class="ln">325</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="305" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L305–308</span>The honesty note that matters: this pass is a no-op for both dumps. It appends promoted <code>contract_deploy</code> blocks to the spine, and the dump emits matcher-produced blocks from <code>pending</code>, never the spine. It exists so the pass chain is identical to production, where the spine IS the serialization input.</div></div>
+<div class="note" data-a="311" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L311</span>An index loop, not a range-for, and the comment says why: Python&#39;s <code>for block in blocks</code> over a list being appended to re-scans the appended entries. A range-for (or a cached <code>end()</code>) would silently change the traversal — and because the pass is a dump no-op, the gate would not catch it.</div></div>
+<div class="note" data-a="317" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L317–322</span>Note the else: a promoted deploy&#39;s own children are NOT queued. Promotion terminates the descent on that branch, so a deploy nested inside a deploy is reached on the outer loop&#39;s later pass over the appended entry, not here.</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ # from S:/Dev/ton-indexer-clear/indexer
+&#39;…/ton-mch-engine.exe&#39; --classify -I &#39;…/ir/mch_ir.json&#39; -T tests/traces \
+  | grep &#39;^ACTION&#39; | sed -E &#39;s/.*btype=([a-z_0-9]+) .*/\1/&#39; | sort | uniq -c | sort -rn</div><pre class="run-out">    114 jetton_transfer
+     19 jetton_swap
+     11 jetton_mint
+      7 jetton_burn
+      7 dedust_deposit_liquidity
+      6 evaa_withdraw
+      5 tonco_deposit_liquidity
+      5 jvault_stake
+      4 tgbtc_mint
+      4 nft_transfer
+      4 jvault_unstake_request
+      4 dedust_deposit_liquidity_partial
+      2 layerzero_receive
+      2 jvault_unstake
+      1 vesting_send_message
+      1 jvault_claim
+      1 ethena_deposit
+      1 dedust_v2_claim_reward
+      1 coffee_create_vault</pre><div class="run-note">199 surviving CoreActions across 148 fixtures, spread over 19 distinct produced btypes. Run the same command with <code>--actions</code> and you also get 199 rows — every btype the corpus produces has a <code>fill_*</code>, so today <code>fill_action</code>&#39;s &quot;return false&quot; branch fires zero times. That equality is the cheapest sanity check that the ported fill set still covers the corpus.</div></div>
+<h2 id="the-failure-fork">The failure fork</h2>
+<section><p><code>classify_trace</code> wraps the whole matcher loop and post-pass in one try/catch. This is the C++ image of <code>event_processing.py</code>&#39;s per-trace boundary: a trace that throws anywhere loses ALL its classified actions and is re-run through a leaf-only classification instead.</p>
+<p>The <code>FailureCategory</code> enum next to it is newer and serves a different purpose — shadow-mode telemetry for <a class="xl" href="prod-path.html">prod-path</a>. It is worth reading its comment carefully, because it documents as much by what it refuses to enumerate as by what it does.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.h<span class="plines">:23–42</span></span><span class="ex-title">FailureCategory — four members, and the argument for four</span><span class="lang">cpp</span><span class="sha" title="span hash at render">ba4f1841</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="23"><td class="ln">23</td><td class="mk"></td><td class="cd"><span class="tk-c">// Failure/skip taxonomy (additive, Phase G slice 3 review). A shared vocabulary</span></td></tr>
+<tr class="cl" data-l="24"><td class="ln">24</td><td class="mk"></td><td class="cd"><span class="tk-c">// for WHY a matcher/trace did not produce actions; used for shadow-mode</span></td></tr>
+<tr class="cl" data-l="25"><td class="ln">25</td><td class="mk"></td><td class="cd"><span class="tk-c">// telemetry only — rendering-agnostic, no dump/twin sees it, existing gates stay</span></td></tr>
+<tr class="cl band nb-0" data-l="26" data-n="0"><td class="ln">26</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// byte-stable. TRACE-TERMINAL reasons only:</span></td></tr>
+<tr class="cl band nb-0" data-l="27" data-n="0"><td class="ln">27</td><td class="mk"></td><td class="cd"><span class="tk-c">//   - lookup_infra_fail:  two-phase lookup did not converge (infra error).</span></td></tr>
+<tr class="cl band nb-0" data-l="28" data-n="0"><td class="ln">28</td><td class="mk"></td><td class="cd"><span class="tk-c">//   - engine_fault:       a mid-trace exception (Python&#39;s per-trace fallback).</span></td></tr>
+<tr class="cl band nb-0" data-l="29" data-n="0"><td class="ln">29</td><td class="mk"></td><td class="cd"><span class="tk-c">//   - malformed_trace:    the trace could not be loaded into an event tree</span></td></tr>
+<tr class="cl band nb-0" data-l="30" data-n="0"><td class="ln">30</td><td class="mk"><span class="chip">2</span></td><td class="cd"><span class="tk-c">//                         (schema map / empty tree) — set caller/actor-side.</span></td></tr>
+<tr class="cl band nb-0" data-l="31" data-n="0"><td class="ln">31</td><td class="mk"></td><td class="cd"><span class="tk-c">// Deliberately NOT enumerators: matcher_skip (a setup-level fact, read from</span></td></tr>
+<tr class="cl band nb-2" data-l="32" data-n="2"><td class="ln">32</td><td class="mk"><span class="chip">3</span></td><td class="cd"><span class="tk-c">// ClassifySetup.skips, never a per-trace outcome) and clean_reject / parse_null /</span></td></tr>
+<tr class="cl band nb-2" data-l="33" data-n="2"><td class="ln">33</td><td class="mk"></td><td class="cd"><span class="tk-c">// the per-lookup tier misses (per-(block, matcher, lookup) events on the hot</span></td></tr>
+<tr class="cl band nb-2" data-l="34" data-n="2"><td class="ln">34</td><td class="mk"></td><td class="cd"><span class="tk-c">// path — counted in ParsedBlockLookupSource::LookupStats, or left uncounted).</span></td></tr>
+<tr class="cl band nb-2" data-l="35" data-n="2"><td class="ln">35</td><td class="mk"></td><td class="cd"><span class="tk-c">// None of those can be the single trace-terminal value this field holds, so an</span></td></tr>
+<tr class="cl band nb-2" data-l="36" data-n="2"><td class="ln">36</td><td class="mk"></td><td class="cd"><span class="tk-c">// enumerator for them would be a state the type never reaches.</span></td></tr>
+<tr class="cl" data-l="37"><td class="ln">37</td><td class="mk"></td><td class="cd"><span class="tk-k">enum</span> <span class="tk-k">class</span> FailureCategory {</td></tr>
+<tr class="cl" data-l="38"><td class="ln">38</td><td class="mk"></td><td class="cd">  none,</td></tr>
+<tr class="cl" data-l="39"><td class="ln">39</td><td class="mk"></td><td class="cd">  lookup_infra_fail,</td></tr>
+<tr class="cl" data-l="40"><td class="ln">40</td><td class="mk"></td><td class="cd">  engine_fault,</td></tr>
+<tr class="cl" data-l="41"><td class="ln">41</td><td class="mk"></td><td class="cd">  malformed_trace,</td></tr>
+<tr class="cl" data-l="42"><td class="ln">42</td><td class="mk"></td><td class="cd">};</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="26" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L26–31</span>&quot;TRACE-TERMINAL reasons only&quot; is the type invariant. The field holds ONE value for a whole trace, so anything that can happen many times per trace (a clean reject, a null parse, a lookup tier miss) cannot be a member without making the type lie.</div></div>
+<div class="note" data-a="30" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L30–31</span><code>malformed_trace</code> is the one member <code>classify_trace</code> never sets — the trace never reached it. It is set caller-side by whoever failed to build the event tree (<a class="xl" href="block-tree.html">block-tree</a>), which is why you will not find it assigned anywhere in <code>ClassifyCore.cpp</code>.</div></div>
+<div class="note" data-a="32" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L32–36</span>The deliberately-excluded list. <code>matcher_skip</code> is a SETUP fact (read from <code>ClassifySetup.skips</code>, same for every trace) and would be a category error here; the per-lookup misses are counted separately in <code>LookupStats</code>. This comment is the reason the enum shrank from a larger draft to four.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp<span class="plines">:512–531</span></span><span class="ex-title">The catch and the discard</span><span class="lang">cpp</span><span class="sha" title="span hash at render">a6ff2878</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="512"><td class="ln">512</td><td class="mk"></td><td class="cd">  } <span class="tk-k">catch</span> (<span class="tk-k">const</span> std::exception &amp;e) {</td></tr>
+<tr class="cl" data-l="513"><td class="ln">513</td><td class="mk"></td><td class="cd">    result.failure = <span class="tk-k">true</span>;</td></tr>
+<tr class="cl" data-l="514"><td class="ln">514</td><td class="mk"></td><td class="cd">    result.failure_reason = e.what();</td></tr>
+<tr class="cl" data-l="515"><td class="ln">515</td><td class="mk"></td><td class="cd">    <span class="tk-c">// The two-phase driver throws this exact message on non-convergence — an</span></td></tr>
+<tr class="cl band nb-0" data-l="516" data-n="0"><td class="ln">516</td><td class="mk"><span class="chip">1</span></td><td class="cd">    <span class="tk-c">// infra fault, distinct from a spec/parse engine fault. Everything else is</span></td></tr>
+<tr class="cl band nb-0" data-l="517" data-n="0"><td class="ln">517</td><td class="mk"></td><td class="cd">    <span class="tk-c">// a generic engine_fault (Python&#39;s per-trace fallback boundary).</span></td></tr>
+<tr class="cl band nb-0" data-l="518" data-n="0"><td class="ln">518</td><td class="mk"></td><td class="cd">    result.failure_category =</td></tr>
+<tr class="cl band nb-0" data-l="519" data-n="0"><td class="ln">519</td><td class="mk"></td><td class="cd">        result.failure_reason.find(<span class="tk-s">&quot;two-phase lookup did not converge&quot;</span>) != std::string::npos</td></tr>
+<tr class="cl band nb-0" data-l="520" data-n="0"><td class="ln">520</td><td class="mk"></td><td class="cd">            ? FailureCategory::lookup_infra_fail</td></tr>
+<tr class="cl band nb-0" data-l="521" data-n="0"><td class="ln">521</td><td class="mk"></td><td class="cd">            : FailureCategory::engine_fault;</td></tr>
+<tr class="cl band nb-1" data-l="522" data-n="1"><td class="ln">522</td><td class="mk"><span class="chip">2</span></td><td class="cd">  } <span class="tk-k">catch</span> (...) {</td></tr>
+<tr class="cl band nb-1" data-l="523" data-n="1"><td class="ln">523</td><td class="mk"></td><td class="cd">    result.failure = <span class="tk-k">true</span>;</td></tr>
+<tr class="cl band nb-1" data-l="524" data-n="1"><td class="ln">524</td><td class="mk"></td><td class="cd">    result.failure_reason = <span class="tk-s">&quot;unknown exception&quot;</span>;</td></tr>
+<tr class="cl band nb-1" data-l="525" data-n="1"><td class="ln">525</td><td class="mk"></td><td class="cd">    result.failure_category = FailureCategory::engine_fault;</td></tr>
+<tr class="cl band nb-1" data-l="526" data-n="1"><td class="ln">526</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="527" data-n="2"><td class="ln">527</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">if</span> (result.failure) {</td></tr>
+<tr class="cl band nb-2" data-l="528" data-n="2"><td class="ln">528</td><td class="mk"></td><td class="cd">    result.actions.clear();  <span class="tk-c">// event_processing.py discards the trace&#39;s actions</span></td></tr>
+<tr class="cl band nb-2" data-l="529" data-n="2"><td class="ln">529</td><td class="mk"></td><td class="cd">    result.fallback_actions = basic_classify_fallback(ctx);</td></tr>
+<tr class="cl band nb-2" data-l="530" data-n="2"><td class="ln">530</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="531"><td class="ln">531</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> result;</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="516" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L516–521</span>Categorisation by substring match on the exception message. Fragile-looking, and it is — the string <code>&quot;two-phase lookup did not converge&quot;</code> is thrown by the build driver and matched here by text. It survives because the category is telemetry only: getting it wrong mislabels a metric, it does not change a row. Anything else is <code>engine_fault</code>.</div></div>
+<div class="note" data-a="522" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L522–526</span>The catch-all is NOT redundant. A parser tail can throw something that is neither a <code>std::exception</code> nor a <code>vm::VmError</code> (<a class="xl" href="parse-layer.html">parse-layer</a> covers the narrow catch list one level down); without this the throw would escape into the caller&#39;s loop and take the whole corpus run with it.</div></div>
+<div class="note" data-a="527" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L527–530</span><code>actions.clear()</code> is the atomicity promise being kept: a trace that failed at action 40 does not emit its first 39. Python does the same by letting the list go out of scope. The fallback is then computed from a FRESH block tree, not from the half-mutated one — see the next excerpt.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp<span class="plines">:327–367</span></span><span class="ex-title">basic_classify_fallback — a second classification with no matchers</span><span class="lang">cpp</span><span class="sha" title="span hash at render">95df804c</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="327"><td class="ln">327</td><td class="mk"></td><td class="cd"><span class="tk-c">// try_classify_basic_actions (event_processing.py, Step 2c): a FRESH leaf-only</span></td></tr>
+<tr class="cl" data-l="328"><td class="ln">328</td><td class="mk"></td><td class="cd"><span class="tk-c">// classify (init_block over the same event tree, NO matchers) + the</span></td></tr>
+<tr class="cl" data-l="329"><td class="ln">329</td><td class="mk"></td><td class="cd"><span class="tk-c">// post-processor chain; one CoreAction per surviving spine block of a basic</span></td></tr>
+<tr class="cl" data-l="330"><td class="ln">330</td><td class="mk"></td><td class="cd"><span class="tk-c">// btype. serialize_blocks skip conditions applied: skip root/empty, and</span></td></tr>
+<tr class="cl" data-l="331"><td class="ln">331</td><td class="mk"></td><td class="cd"><span class="tk-c">// call_contract with a null source or destination. Throw-safe (Python&#39;s</span></td></tr>
+<tr class="cl" data-l="332"><td class="ln">332</td><td class="mk"></td><td class="cd"><span class="tk-c">// fallback returns [] on any exception). Ungated (corpus has no failing traces).</span></td></tr>
+<tr class="cl" data-l="333"><td class="ln">333</td><td class="mk"></td><td class="cd">std::vector&lt;CoreAction&gt; basic_classify_fallback(TraceContext &amp;ctx) {</td></tr>
+<tr class="cl" data-l="334"><td class="ln">334</td><td class="mk"></td><td class="cd">  std::vector&lt;CoreAction&gt; out;</td></tr>
+<tr class="cl" data-l="335"><td class="ln">335</td><td class="mk"></td><td class="cd">  <span class="tk-k">try</span> {</td></tr>
+<tr class="cl band nb-0" data-l="336" data-n="0"><td class="ln">336</td><td class="mk"><span class="chip">1</span></td><td class="cd">    Block *root = init_block(ctx.arena, ctx.tree.root);</td></tr>
+<tr class="cl band nb-0" data-l="337" data-n="0"><td class="ln">337</td><td class="mk"></td><td class="cd">    Block *wrap = ctx.arena.make(<span class="tk-s">&quot;root&quot;</span>);</td></tr>
+<tr class="cl band nb-0" data-l="338" data-n="0"><td class="ln">338</td><td class="mk"></td><td class="cd">    wrap-&gt;connect(root);</td></tr>
+<tr class="cl" data-l="339"><td class="ln">339</td><td class="mk"></td><td class="cd">    std::vector&lt;Block *&gt; spine;</td></tr>
+<tr class="cl" data-l="340"><td class="ln">340</td><td class="mk"></td><td class="cd">    {</td></tr>
+<tr class="cl" data-l="341"><td class="ln">341</td><td class="mk"></td><td class="cd">      std::deque&lt;Block *&gt; q{wrap};</td></tr>
+<tr class="cl" data-l="342"><td class="ln">342</td><td class="mk"></td><td class="cd">      <span class="tk-k">while</span> (!q.empty()) {</td></tr>
+<tr class="cl" data-l="343"><td class="ln">343</td><td class="mk"></td><td class="cd">        Block *cur = q.front();</td></tr>
+<tr class="cl" data-l="344"><td class="ln">344</td><td class="mk"></td><td class="cd">        q.pop_front();</td></tr>
+<tr class="cl" data-l="345"><td class="ln">345</td><td class="mk"></td><td class="cd">        spine.push_back(cur);</td></tr>
+<tr class="cl" data-l="346"><td class="ln">346</td><td class="mk"></td><td class="cd">        <span class="tk-k">for</span> (Block *n : cur-&gt;next_blocks) q.push_back(n);</td></tr>
+<tr class="cl" data-l="347"><td class="ln">347</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl" data-l="348"><td class="ln">348</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="349" data-n="1"><td class="ln">349</td><td class="mk"><span class="chip">2</span></td><td class="cd">    std::set&lt;Block *&gt; removed;</td></tr>
+<tr class="cl band nb-1" data-l="350" data-n="1"><td class="ln">350</td><td class="mk"></td><td class="cd">    post_process_dedust_liquidity(spine, removed);</td></tr>
+<tr class="cl band nb-1" data-l="351" data-n="1"><td class="ln">351</td><td class="mk"></td><td class="cd">    post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);</td></tr>
+<tr class="cl band nb-1" data-l="352" data-n="1"><td class="ln">352</td><td class="mk"></td><td class="cd">    unwind_deployments(spine);</td></tr>
+<tr class="cl band nb-2" data-l="353" data-n="2"><td class="ln">353</td><td class="mk"><span class="chip">3</span></td><td class="cd">    <span class="tk-k">for</span> (Block *b : spine) {</td></tr>
+<tr class="cl band nb-2" data-l="354" data-n="2"><td class="ln">354</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (b-&gt;btype == <span class="tk-s">&quot;root&quot;</span> || b-&gt;btype == <span class="tk-s">&quot;empty&quot;</span> || removed.count(b) != <span class="tk-n">0</span>) <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl band nb-2" data-l="355" data-n="2"><td class="ln">355</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (b-&gt;btype == <span class="tk-s">&quot;call_contract&quot;</span>) {</td></tr>
+<tr class="cl band nb-2" data-l="356" data-n="2"><td class="ln">356</td><td class="mk"></td><td class="cd">        <span class="tk-k">if</span> (pp_field(b-&gt;data, <span class="tk-s">&quot;source&quot;</span>).is_null() ||</td></tr>
+<tr class="cl band nb-2" data-l="357" data-n="2"><td class="ln">357</td><td class="mk"></td><td class="cd">            pp_field(b-&gt;data, <span class="tk-s">&quot;destination&quot;</span>).is_null()) {</td></tr>
+<tr class="cl band nb-2" data-l="358" data-n="2"><td class="ln">358</td><td class="mk"></td><td class="cd">          <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl band nb-2" data-l="359" data-n="2"><td class="ln">359</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl band nb-2" data-l="360" data-n="2"><td class="ln">360</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-3" data-l="361" data-n="3"><td class="ln">361</td><td class="mk"><span class="chip">4</span></td><td class="cd">      out.push_back(CoreAction{<span class="tk-s">&quot;basic&quot;</span>, b, b, {}});</td></tr>
+<tr class="cl band nb-3" data-l="362" data-n="3"><td class="ln">362</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-3" data-l="363" data-n="3"><td class="ln">363</td><td class="mk"></td><td class="cd">  } <span class="tk-k">catch</span> (...) {</td></tr>
+<tr class="cl band nb-3" data-l="364" data-n="3"><td class="ln">364</td><td class="mk"></td><td class="cd">    out.clear();  <span class="tk-c">// Python: fallback returns [] on any exception</span></td></tr>
+<tr class="cl band nb-3" data-l="365" data-n="3"><td class="ln">365</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-3" data-l="366" data-n="3"><td class="ln">366</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> out;</td></tr>
+<tr class="cl" data-l="367"><td class="ln">367</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="336" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L336–338</span><code>init_block</code> over <code>ctx.tree.root</code> again: a brand-new spine, allocated from the same arena, sharing nothing mutable with the tree the failed run mangled. That is the only safe thing to do — the failed run threw mid-merge, so the old spine may be half-rewired.</div></div>
+<div class="note" data-a="349" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L349–352</span>The post-processor chain runs here too, over blocks no matcher ever touched. In practice they all no-op (there are no dedust/stonfi composite btypes without matchers), but the chain is kept verbatim because Python&#39;s <code>try_classify_basic_actions</code> calls it.</div></div>
+<div class="note" data-a="353" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L353–360</span>The <code>serialize_blocks</code> skip conditions, inlined: root/empty wrappers out, and a <code>call_contract</code> with a null source OR destination out. That second rule is why a bounced-to-nowhere message never becomes a fallback row.</div></div>
+<div class="note" data-a="361" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L361–366</span><code>CoreAction{&quot;basic&quot;, b, b, {}}</code> — anchor and produced are the same block, matcher_name is the literal <code>&quot;basic&quot;</code>, aux is empty. Downstream <code>build_action</code> cannot tell the difference, which is exactly why the fallback rows render through the same code path. The catch-all <code>out.clear()</code> reproduces Python&#39;s &quot;fallback returns [] on any exception&quot;: a failure to fall back yields no rows at all, never a partial set.</div></div></div>
+</div>
+</div>
+<h2 id="build-action-the-fields-every-row-gets">build_action: the fields every row gets</h2>
+<section><p><code>ActionBuild.{h,cpp}</code> moved out of the harness in R1b so the production actor could call it without dragging stdout printing along. The code is byte-identical to what used to live in <code>Classify.cpp</code> — the twin dumps proved the move.</p>
+<p><code>build_action</code> fills what does not depend on btype: the action id, the lt/utime window, <code>mc_seqno_end</code>, <code>tx_hashes</code>, and <code>accounts</code>. Then it calls <code>fill_action</code>, and only if that succeeds does it assemble accounts — because accounts are derived from the directional fields the fill just wrote.</p>
+<p>One honesty note about the demo trace used below (<code>013-itRDy…</code>): in PRODUCTION this trace is classified as <code>coffee_staking_claim_rewards</code> — the coffee staking protocol is NOT ported to mch specs, so the mch engine (both C++ and its Python twin, identically) classifies the ported jetton_transfer leg instead. The row is real and every column below is exactly what ActionBuild emits; it is just not what the production classifier stores for this trace. The twin gate proves C++ == Python-mch over PORTED specs — not C++ == the production event_classifier. See <a class="xl" href="gates.html">gates</a> for the precise claim.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ActionBuild.h<span class="plines">:18–38</span></span><span class="ex-title">The Action struct — a flat, fixed schema</span><span class="lang">cpp</span><span class="sha" title="span hash at render">7b76667e</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="18"><td class="ln">18</td><td class="mk"></td><td class="cd"><span class="tk-c">// The rendered Action (fixed schema; unset fields are Null, rendered &quot;null&quot;).</span></td></tr>
+<tr class="cl" data-l="19"><td class="ln">19</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> Action {</td></tr>
+<tr class="cl" data-l="20"><td class="ln">20</td><td class="mk"></td><td class="cd">  std::string action_id;</td></tr>
+<tr class="cl" data-l="21"><td class="ln">21</td><td class="mk"></td><td class="cd">  std::string type;</td></tr>
+<tr class="cl" data-l="22"><td class="ln">22</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> success{<span class="tk-k">true</span>};</td></tr>
+<tr class="cl" data-l="23"><td class="ln">23</td><td class="mk"></td><td class="cd">  std::int64_t start_lt{<span class="tk-n">0</span>}, end_lt{<span class="tk-n">0</span>}, start_utime{<span class="tk-n">0</span>}, end_utime{<span class="tk-n">0</span>}, mc_seqno_end{<span class="tk-n">0</span>};</td></tr>
+<tr class="cl" data-l="24"><td class="ln">24</td><td class="mk"></td><td class="cd">  std::vector&lt;std::string&gt; tx_hashes;</td></tr>
+<tr class="cl band nb-0" data-l="25" data-n="0"><td class="ln">25</td><td class="mk"><span class="chip">1</span></td><td class="cd">  std::vector&lt;std::string&gt; accounts;  <span class="tk-c">// Step 2a: role-less action_accounts set</span></td></tr>
+<tr class="cl band nb-1" data-l="26" data-n="1"><td class="ln">26</td><td class="mk"><span class="chip">2</span></td><td class="cd">  Value source, source_secondary, destination, destination_secondary;</td></tr>
+<tr class="cl band nb-1" data-l="27" data-n="1"><td class="ln">27</td><td class="mk"></td><td class="cd">  Value asset, asset_secondary, asset2, asset2_secondary;</td></tr>
+<tr class="cl band nb-1" data-l="28" data-n="1"><td class="ln">28</td><td class="mk"></td><td class="cd">  Value amount, value, opcode;</td></tr>
+<tr class="cl band nb-2" data-l="29" data-n="2"><td class="ln">29</td><td class="mk"><span class="chip">3</span></td><td class="cd">  Value ton_transfer_data, jetton_transfer_data, jetton_swap_data, nft_transfer_data,</td></tr>
+<tr class="cl band nb-2" data-l="30" data-n="2"><td class="ln">30</td><td class="mk"></td><td class="cd">      nft_listing_data, dex_deposit_liquidity_data, dex_withdraw_liquidity_data, staking_data,</td></tr>
+<tr class="cl band nb-2" data-l="31" data-n="2"><td class="ln">31</td><td class="mk"></td><td class="cd">      evaa_withdraw_data, vesting_send_message_data, layerzero_packet_data, jvault_stake_data,</td></tr>
+<tr class="cl band nb-2" data-l="32" data-n="2"><td class="ln">32</td><td class="mk"></td><td class="cd">      jvault_claim_data, extra;</td></tr>
+<tr class="cl" data-l="33"><td class="ln">33</td><td class="mk"></td><td class="cd">};</td></tr>
+<tr class="cl" data-l="34"><td class="ln">34</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="35"><td class="ln">35</td><td class="mk"></td><td class="cd"><span class="tk-c">// _base_block_to_action + block_to_action dispatch, over a produced block.</span></td></tr>
+<tr class="cl" data-l="36"><td class="ln">36</td><td class="mk"></td><td class="cd"><span class="tk-c">// Returns false for a btype outside the ported fill set (skip-table entry).</span></td></tr>
+<tr class="cl" data-l="37"><td class="ln">37</td><td class="mk"></td><td class="cd"><span class="tk-k">bool</span> build_action(Block *b, Action &amp;a);</td></tr>
+<tr class="cl" data-l="38"><td class="ln">38</td><td class="mk"></td><td class="cd">&nbsp;</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="25" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L25</span>THE divergence from the docs you may have read. <code>accounts</code> is a bare <code>vector&lt;string&gt;</code> with no parallel role map, because this branch has no role system: <code>action_accounts</code> in <code>indexer/core/database.py</code> is <code>(action_id, trace_id, account)</code> plus lt/utime denormalisation and NOTHING else, and <code>role_assignment.py</code> does not exist here. CLAUDE.md&#39;s ROLE_SENDER/ROLE_RECEIVER section describes a different branch. Verified in &quot;Check yourself&quot; below.</div></div>
+<div class="note" data-a="26" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L26–28</span>Eight directional columns + <code>amount</code>/<code>value</code>/<code>opcode</code>, all typed <code>Value</code> rather than <code>string</code>/<code>int64</code>. That is not laziness: it gives &quot;unset&quot; a first-class representation (<code>Null</code>) distinct from empty-string, matching Python&#39;s <code>None</code> exactly, so a field the fill never touched renders as <code>null</code> on both sides.</div></div>
+<div class="note" data-a="29" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L29–32</span>Fourteen composite columns, one per protocol family, plus <code>extra</code>. A new action type is supposed to REUSE one of these rather than add a column — <code>fill_dedust_v2_claim_reward</code> below is the worked example of that rule, and it is why the list has stayed this length.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ActionBuild.cpp<span class="plines">:556–594</span></span><span class="ex-title">build_action head — id, time window, tx_hashes</span><span class="lang">cpp</span><span class="sha" title="span hash at render">66b3dd28</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="556"><td class="ln">556</td><td class="mk"></td><td class="cd"><span class="tk-k">bool</span> build_action(Block *b, Action &amp;a) {</td></tr>
+<tr class="cl" data-l="557"><td class="ln">557</td><td class="mk"></td><td class="cd">  a.type = b-&gt;btype;</td></tr>
+<tr class="cl" data-l="558"><td class="ln">558</td><td class="mk"></td><td class="cd">  a.success = !b-&gt;failed;</td></tr>
+<tr class="cl" data-l="559"><td class="ln">559</td><td class="mk"></td><td class="cd">  <span class="tk-c">// action_id: sha256(root_event_node msg_hash|tx_hash + btype), base64.</span></td></tr>
+<tr class="cl band nb-0" data-l="560" data-n="0"><td class="ln">560</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">const</span> EventNode *root = <span class="tk-k">nullptr</span>;</td></tr>
+<tr class="cl band nb-0" data-l="561" data-n="0"><td class="ln">561</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> EventNode *n : b-&gt;event_nodes) {</td></tr>
+<tr class="cl band nb-0" data-l="562" data-n="0"><td class="ln">562</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (root == <span class="tk-k">nullptr</span> || n-&gt;lt() &lt; root-&gt;lt()) root = n;</td></tr>
+<tr class="cl band nb-0" data-l="563" data-n="0"><td class="ln">563</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-0" data-l="564" data-n="0"><td class="ln">564</td><td class="mk"></td><td class="cd">  std::string key;</td></tr>
+<tr class="cl band nb-0" data-l="565" data-n="0"><td class="ln">565</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (root != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-0" data-l="566" data-n="0"><td class="ln">566</td><td class="mk"></td><td class="cd">    key = (root-&gt;msg != <span class="tk-k">nullptr</span>) ? root-&gt;msg-&gt;msg_hash : root-&gt;tx_hash();</td></tr>
+<tr class="cl band nb-0" data-l="567" data-n="0"><td class="ln">567</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-0" data-l="568" data-n="0"><td class="ln">568</td><td class="mk"></td><td class="cd">  key += b-&gt;btype;</td></tr>
+<tr class="cl band nb-0" data-l="569" data-n="0"><td class="ln">569</td><td class="mk"></td><td class="cd">  std::string digest = td::sha256(td::Slice(key));</td></tr>
+<tr class="cl band nb-0" data-l="570" data-n="0"><td class="ln">570</td><td class="mk"></td><td class="cd">  a.action_id = td::base64_encode(td::Slice(digest));</td></tr>
+<tr class="cl band nb-1" data-l="571" data-n="1"><td class="ln">571</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-c">// tx_hashes (base set, event_nodes only) + lt/utime ranges + mc_seqno_end.</span></td></tr>
+<tr class="cl band nb-1" data-l="572" data-n="1"><td class="ln">572</td><td class="mk"></td><td class="cd">  std::set&lt;std::string&gt; ths;</td></tr>
+<tr class="cl band nb-1" data-l="573" data-n="1"><td class="ln">573</td><td class="mk"></td><td class="cd">  std::int64_t maxlt = std::numeric_limits&lt;std::int64_t&gt;::min();</td></tr>
+<tr class="cl band nb-1" data-l="574" data-n="1"><td class="ln">574</td><td class="mk"></td><td class="cd">  std::int64_t minu = std::numeric_limits&lt;std::int64_t&gt;::max();</td></tr>
+<tr class="cl band nb-1" data-l="575" data-n="1"><td class="ln">575</td><td class="mk"></td><td class="cd">  std::int64_t maxu = std::numeric_limits&lt;std::int64_t&gt;::min();</td></tr>
+<tr class="cl band nb-1" data-l="576" data-n="1"><td class="ln">576</td><td class="mk"></td><td class="cd">  std::int64_t seqmax = std::numeric_limits&lt;std::int64_t&gt;::min();</td></tr>
+<tr class="cl band nb-1" data-l="577" data-n="1"><td class="ln">577</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> EventNode *n : b-&gt;event_nodes) {</td></tr>
+<tr class="cl band nb-1" data-l="578" data-n="1"><td class="ln">578</td><td class="mk"></td><td class="cd">    ths.insert(n-&gt;tx_hash());</td></tr>
+<tr class="cl band nb-1" data-l="579" data-n="1"><td class="ln">579</td><td class="mk"></td><td class="cd">    std::int64_t tlt = n-&gt;tx != <span class="tk-k">nullptr</span> ? n-&gt;tx-&gt;lt : <span class="tk-n">0</span>;</td></tr>
+<tr class="cl band nb-1" data-l="580" data-n="1"><td class="ln">580</td><td class="mk"></td><td class="cd">    maxlt = std::max(maxlt, tlt);</td></tr>
+<tr class="cl band nb-1" data-l="581" data-n="1"><td class="ln">581</td><td class="mk"></td><td class="cd">    minu = std::min(minu, node_utime(n));</td></tr>
+<tr class="cl band nb-1" data-l="582" data-n="1"><td class="ln">582</td><td class="mk"></td><td class="cd">    maxu = std::max(maxu, n-&gt;tx != <span class="tk-k">nullptr</span> ? n-&gt;tx-&gt;now : <span class="tk-n">0</span>);</td></tr>
+<tr class="cl band nb-1" data-l="583" data-n="1"><td class="ln">583</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (n-&gt;tx != <span class="tk-k">nullptr</span>) seqmax = std::max(seqmax, n-&gt;tx-&gt;mc_block_seqno);</td></tr>
+<tr class="cl band nb-1" data-l="584" data-n="1"><td class="ln">584</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-3" data-l="585" data-n="3"><td class="ln">585</td><td class="mk"><span class="chip">4</span></td><td class="cd">  <span class="tk-c">// tx_hashes extension by initiating_event_node (block_to_action, Step 2a).</span></td></tr>
+<tr class="cl band nb-3" data-l="586" data-n="3"><td class="ln">586</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (b-&gt;initiating_event_node != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-3" data-l="587" data-n="3"><td class="ln">587</td><td class="mk"></td><td class="cd">    ths.insert(b-&gt;initiating_event_node-&gt;tx_hash());</td></tr>
+<tr class="cl band nb-3" data-l="588" data-n="3"><td class="ln">588</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-3" data-l="589" data-n="3"><td class="ln">589</td><td class="mk"></td><td class="cd">  a.tx_hashes.assign(ths.begin(), ths.end());</td></tr>
+<tr class="cl" data-l="590"><td class="ln">590</td><td class="mk"></td><td class="cd">  a.start_lt = b-&gt;min_lt;</td></tr>
+<tr class="cl" data-l="591"><td class="ln">591</td><td class="mk"></td><td class="cd">  a.end_lt = b-&gt;event_nodes.empty() ? <span class="tk-n">0</span> : maxlt;</td></tr>
+<tr class="cl" data-l="592"><td class="ln">592</td><td class="mk"></td><td class="cd">  a.start_utime = b-&gt;event_nodes.empty() ? <span class="tk-n">0</span> : minu;</td></tr>
+<tr class="cl" data-l="593"><td class="ln">593</td><td class="mk"></td><td class="cd">  a.end_utime = b-&gt;event_nodes.empty() ? <span class="tk-n">0</span> : maxu;</td></tr>
+<tr class="cl" data-l="594"><td class="ln">594</td><td class="mk"></td><td class="cd">  a.mc_seqno_end = b-&gt;event_nodes.empty() ? <span class="tk-n">0</span> : seqmax;</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="560" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L560–570</span>The action id is <code>base64(sha256(msg_hash_or_tx_hash + btype))</code> over the EARLIEST event node. The tie-break is load-bearing: <code>n-&gt;lt() &lt; root-&gt;lt()</code> with strict <code>&lt;</code> keeps the first minimum, which is what Python&#39;s <code>min()</code> returns. Flip it to <code>&lt;=</code> and traces with two nodes at the same lt get a different id — a silent, data-dependent diff.</div></div>
+<div class="note" data-a="571" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L571–584</span><code>end_lt</code> / <code>start_utime</code> / <code>end_utime</code> / <code>mc_seqno_end</code> are recomputed here from <code>event_nodes</code>, whereas Python reads <code>block.max_lt</code> / <code>min_utime</code> / <code>max_utime</code>. They agree because Python&#39;s <code>calculate_min_max_lt</code> computes them from the same node set — but the C++ <code>Block</code> genuinely has no such fields (<a class="xl" href="block-tree.html">block-tree</a>), so this is a re-derivation, not a read. <code>node_utime</code> (above, line 86) reproduces <code>get_utime</code>&#39;s three-way rule: tick_tock -&gt; tx.now, created_lt set -&gt; created_at, else tx.now.</div></div>
+<div class="note" data-a="577" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L577–583</span>Every accumulator is null-guarded on <code>n-&gt;tx</code>. Python is not: <code>max(n.message.transaction.lt ...)</code> would raise on a tick_tock node and <code>max(...)</code> over an empty <code>event_nodes</code> raises ValueError. The guards below (<code>event_nodes.empty() ? 0 : …</code>) make the C++ total where Python would throw — unreachable for the ported btypes, but it means a bug here degrades to a zero rather than to a trace failure.</div></div>
+<div class="note" data-a="585" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L585–589</span>The Step 2a extension: the block&#39;s <code>initiating_event_node</code> contributes its tx hash even though that node is not in <code>event_nodes</code>. <code>std::set</code> gives sorted-unique for free; Python uses <code>set()</code> and gets arbitrary order, which is why BOTH dumps sort <code>tx_hashes</code> before rendering. Do not read meaning into the order.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ActionBuild.cpp<span class="plines">:595–622</span></span><span class="ex-title">build_action tail — the accounts set (no roles)</span><span class="lang">cpp</span><span class="sha" title="span hash at render">b5095d5a</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="595" data-n="0"><td class="ln">595</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">if</span> (!fill_action(b, a)) <span class="tk-k">return</span> <span class="tk-k">false</span>;</td></tr>
+<tr class="cl" data-l="596"><td class="ln">596</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="597"><td class="ln">597</td><td class="mk"></td><td class="cd">  <span class="tk-c">// accounts assembly (block_to_action tail, Step 2a; role-less — no role</span></td></tr>
+<tr class="cl" data-l="598"><td class="ln">598</td><td class="mk"></td><td class="cd">  <span class="tk-c">// system on this branch). base = each event_node&#39;s tx account; + source/</span></td></tr>
+<tr class="cl" data-l="599"><td class="ln">599</td><td class="mk"></td><td class="cd">  <span class="tk-c">// source_secondary; + destination/destination_secondary UNLESS ghost; +</span></td></tr>
+<tr class="cl" data-l="600"><td class="ln">600</td><td class="mk"></td><td class="cd">  <span class="tk-c">// the initiating tx account (non-tick_tock). Dedup, drop nulls. Directional</span></td></tr>
+<tr class="cl" data-l="601"><td class="ln">601</td><td class="mk"></td><td class="cd">  <span class="tk-c">// fields are av_addr Str values (or Null → skipped).</span></td></tr>
+<tr class="cl band nb-1" data-l="602" data-n="1"><td class="ln">602</td><td class="mk"><span class="chip">2</span></td><td class="cd">  std::vector&lt;std::string&gt; accts;</td></tr>
+<tr class="cl band nb-1" data-l="603" data-n="1"><td class="ln">603</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> EventNode *n : b-&gt;event_nodes) {</td></tr>
+<tr class="cl band nb-1" data-l="604" data-n="1"><td class="ln">604</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (n-&gt;tx != <span class="tk-k">nullptr</span>) accts.push_back(n-&gt;tx-&gt;account);</td></tr>
+<tr class="cl band nb-1" data-l="605" data-n="1"><td class="ln">605</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="606" data-n="1"><td class="ln">606</td><td class="mk"></td><td class="cd">  <span class="tk-k">auto</span> push_acc = [&amp;](<span class="tk-k">const</span> Value &amp;v) {</td></tr>
+<tr class="cl band nb-1" data-l="607" data-n="1"><td class="ln">607</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (v.t == VType::Str) accts.push_back(v.str);</td></tr>
+<tr class="cl band nb-1" data-l="608" data-n="1"><td class="ln">608</td><td class="mk"></td><td class="cd">  };</td></tr>
+<tr class="cl" data-l="609"><td class="ln">609</td><td class="mk"></td><td class="cd">  push_acc(a.source);</td></tr>
+<tr class="cl" data-l="610"><td class="ln">610</td><td class="mk"></td><td class="cd">  push_acc(a.source_secondary);</td></tr>
+<tr class="cl band nb-2" data-l="611" data-n="2"><td class="ln">611</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">if</span> (!b-&gt;is_ghost_block) {</td></tr>
+<tr class="cl band nb-2" data-l="612" data-n="2"><td class="ln">612</td><td class="mk"></td><td class="cd">    push_acc(a.destination);</td></tr>
+<tr class="cl band nb-2" data-l="613" data-n="2"><td class="ln">613</td><td class="mk"></td><td class="cd">    push_acc(a.destination_secondary);</td></tr>
+<tr class="cl band nb-2" data-l="614" data-n="2"><td class="ln">614</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-3" data-l="615" data-n="3"><td class="ln">615</td><td class="mk"><span class="chip">4</span></td><td class="cd">  <span class="tk-k">if</span> (b-&gt;initiating_event_node != <span class="tk-k">nullptr</span> &amp;&amp; !b-&gt;initiating_event_node-&gt;is_tick_tock &amp;&amp;</td></tr>
+<tr class="cl band nb-3" data-l="616" data-n="3"><td class="ln">616</td><td class="mk"></td><td class="cd">      b-&gt;initiating_event_node-&gt;tx != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-3" data-l="617" data-n="3"><td class="ln">617</td><td class="mk"></td><td class="cd">    accts.push_back(b-&gt;initiating_event_node-&gt;tx-&gt;account);</td></tr>
+<tr class="cl band nb-3" data-l="618" data-n="3"><td class="ln">618</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-3" data-l="619" data-n="3"><td class="ln">619</td><td class="mk"></td><td class="cd">  std::sort(accts.begin(), accts.end());</td></tr>
+<tr class="cl band nb-3" data-l="620" data-n="3"><td class="ln">620</td><td class="mk"></td><td class="cd">  accts.erase(std::unique(accts.begin(), accts.end()), accts.end());</td></tr>
+<tr class="cl band nb-3" data-l="621" data-n="3"><td class="ln">621</td><td class="mk"></td><td class="cd">  a.accounts = std::move(accts);</td></tr>
+<tr class="cl" data-l="622"><td class="ln">622</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> <span class="tk-k">true</span>;</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="595" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L595</span>Accounts are assembled AFTER the fill, and that ordering is required: three of the four sources below are the directional fields the fill just wrote. A fill that forgets to set <code>source</code> silently shrinks the accounts set — which is a missing <code>action_accounts</code> row in production, not a visibly wrong column.</div></div>
+<div class="note" data-a="602" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L602–608</span><code>push_acc</code> accepts only <code>VType::Str</code>. That works because <code>av_addr</code> has already converted every Account/Asset to a canonical string — a directional field still holding an <code>Account</code> would be silently dropped. The invariant &quot;directional columns are Str or Null&quot; is enforced by convention in the fills, not by the type.</div></div>
+<div class="note" data-a="611" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L611–614</span>The <code>is_ghost_block</code> gate on destinations. On this branch the C++ substrate has no ghost nodes so the flag is always false (see <code>BlockTree.h</code>), meaning this branch is structurally dead — ported anyway because the Python serializer has it and a future ghost-producing matcher would need it.</div></div>
+<div class="note" data-a="615" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L615–621</span>The initiating tx&#39;s account joins the set unless the node is tick_tock. Python logs a debug line when that account was not already present; C++ does not (stdout is the diff channel). <code>sort</code>+<code>unique</code> versus Python&#39;s <code>list(set(...))</code>: the CONTENTS are gated, the order is not — both dumps sort, and <code>action_accounts</code> is a set of rows anyway.</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ # one fixture, one row, universal fields only (top-level keys are sorted by render_value)
+&#39;…/ton-mch-engine.exe&#39; --actions -I &#39;…/ir/mch_ir.json&#39; \
+  -T &#39;tests/traces/013-itRDy37A4DNurC-pFIfagpvLEqH3q_7NU5IGDic=.lz4&#39; \
+  | tr &#39;,&#39; &#39;\n&#39; | grep -E &#39;^(id|type|success|start_lt|end_lt|start_utime|end_utime|mc_seqno_end|source|source_secondary|destination|destination_secondary|asset|amount|value|opcode)=&#39;</div><pre class="run-out">amount=3998849373083
+asset=str:0:157C463688A4A91245218052C5580807792CF6347D9757E32F0EE88A179A6549
+destination=str:0:712CB2B613EDEAFCAC9E7B79B188E3D387EA21C415D6E4E4C0CFBFFA6AB7031D
+destination_secondary=str:0:C33F0AA6D3646D9BE133FCA3B716192309BC0D825CD720D1B5E4F34A4D528247
+end_lt=54593909000001
+end_utime=1741087549
+id=str:6+4/RXw9DqevJzQ2e6aL6NCItumOpEP6VeLwEIwKffA=
+mc_seqno_end=45514143
+opcode=null
+source=str:0:B6725D7A23D406ED2008A537236E5F607D084EA9EFEEBFCA53BF3156B491C8CC
+source_secondary=str:0:0E1F5140AAA6F35F147432FA2AAB8C0FFB66572FDC3B2249A824BD5EEBA8ED7A
+start_lt=54593899000003
+start_utime=1741087525
+success=true
+type=str:jetton_transfer
+value=null</pre><div class="run-note">Field by field. <code>id</code> is base64(sha256(earliest-node msg_hash + &quot;jetton_transfer&quot;)) — stable across runs and across engines, which is what makes rows joinable. <code>type</code> came from <code>b-&gt;btype</code> (the fill did not rewrite it; several fills do). <code>success = !b-&gt;failed</code>. <code>start_lt</code> is <code>Block::min_lt</code> verbatim; <code>end_lt</code>/<code>start_utime</code>/<code>end_utime</code>/<code>mc_seqno_end</code> were re-derived from the four event nodes — note start_utime 1741087525 vs end_utime 1741087549, a 24-second window across the transfer chain. <code>source</code>/<code>source_secondary</code> = sender + sender&#39;s jetton wallet, <code>destination</code>/<code>destination_secondary</code> = receiver + receiver&#39;s jetton wallet: the standard jetton four-address shape. <code>asset</code> is the jetton MASTER (a plain <code>str:</code>, not <code>asset:</code> — <code>av_addr</code> unwrapped the Asset). <code>amount</code> is a bare int because <code>av_amount</code> unwrapped the <code>Amount</code>. <code>value</code> and <code>opcode</code> stay null: those belong to the leaf <code>call_contract</code> fill, not to a jetton transfer. No <code>roles</code> key exists anywhere in the row.</div></div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ # same fixture, the three list/composite fields
+&#39;…/ton-mch-engine.exe&#39; --actions -I &#39;…/ir/mch_ir.json&#39; \
+  -T &#39;tests/traces/013-itRDy37A4DNurC-pFIfagpvLEqH3q_7NU5IGDic=.lz4&#39; \
+  | grep -o -E &#39;(accounts=\[[^]]*\]|tx_hashes=\[[^]]*\]|jetton_transfer_data=\{[^}]*\})&#39;</div><pre class="run-out">accounts=[str:0:0E1F5140AAA6F35F147432FA2AAB8C0FFB66572FDC3B2249A824BD5EEBA8ED7A,str:0:712CB2B613EDEAFCAC9E7B79B188E3D387EA21C415D6E4E4C0CFBFFA6AB7031D,str:0:B6725D7A23D406ED2008A537236E5F607D084EA9EFEEBFCA53BF3156B491C8CC,str:0:C33F0AA6D3646D9BE133FCA3B716192309BC0D825CD720D1B5E4F34A4D528247]
+jetton_transfer_data={comment=null,custom_payload=null,forward_amount=0,forward_payload=null,is_encrypted_comment=false,query_id=21721,response_destination=str:0:712CB2B613EDEAFCAC9E7B79B188E3D387EA21C415D6E4E4C0CFBFFA6AB7031D}
+tx_hashes=[str:OZ1xiTKTH7tm63Gv0lejQ1kUSV/qBGl6IxTnaXlRnH4=,str:gaPa/TambbKHCEfekr7ZojlQt1OQGnr5PGPaivfY9MI=,str:s0baLhSJmpksN858LtB50sfAAnaEEgb06WPbKy6QH4k=,str:wC4djeb4IXT5zPFDGiYf7aPi5HDgQz0S4+nqEBEJMko=]</pre><div class="run-note"><code>accounts</code> has exactly four entries and they are exactly the four directional fields from the previous run — the event-node tx accounts and the initiating tx account all fall inside that set here, so the dedup collapses them. Each entry becomes one role-less <code>action_accounts</code> row. <code>tx_hashes</code> has four entries for a four-transaction chain (the initiating-node extension added nothing new in this trace). In <code>jetton_transfer_data</code>, <code>forward_payload</code> is null and <code>comment</code> is null — a bare transfer with no attached message; <code>response_destination</code> equals <code>destination</code>, which is normal for wallet-initiated transfers.</div></div>
+<h2 id="fill-action-dispatch-helpers-and-two-representative-fills">fill_action: dispatch, helpers, and two representative fills</h2>
+<section><p>Everything btype-specific lives in a <code>fill_*</code>. They all have the same shape: read <code>block.data</code> fields by name, run them through one of three converters, write directional columns and one composite dict. The converters are the interesting part — they are where the engine&#39;s rich <code>Value</code> types (<a class="xl" href="value.html">value</a>) collapse into the flat column types the DB expects.</p>
+<p>One consequence worth internalising before reading any fill: <code>render_value</code> SORTS dict keys, so the order of <code>f.emplace_back(...)</code> calls is invisible to the A/B gate. The names and values are pinned; the emission order is not.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ActionBuild.cpp<span class="plines">:37–63</span></span><span class="ex-title">The three converters every fill runs on</span><span class="lang">cpp</span><span class="sha" title="span hash at render">a987a22a</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="37" data-n="0"><td class="ln">37</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// _addr(): AccountId/Asset/None -&gt; canonical address STRING (Str) or Null.</span></td></tr>
+<tr class="cl band nb-0" data-l="38" data-n="0"><td class="ln">38</td><td class="mk"></td><td class="cd"><span class="tk-c">// Composites and directional fields store addresses as plain strings (Python</span></td></tr>
+<tr class="cl band nb-0" data-l="39" data-n="0"><td class="ln">39</td><td class="mk"></td><td class="cd"><span class="tk-c">// _addr / .as_str()), so they render with the &quot;str:&quot; prefix on both sides.</span></td></tr>
+<tr class="cl band nb-0" data-l="40" data-n="0"><td class="ln">40</td><td class="mk"></td><td class="cd">Value av_addr(<span class="tk-k">const</span> Value &amp;v) {</td></tr>
+<tr class="cl band nb-0" data-l="41" data-n="0"><td class="ln">41</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (v.is_null()) <span class="tk-k">return</span> Value::null();</td></tr>
+<tr class="cl band nb-0" data-l="42" data-n="0"><td class="ln">42</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (v.t == VType::Asset) <span class="tk-k">return</span> v.has_jetton ? Value::make_str(v.str) : Value::null();</td></tr>
+<tr class="cl band nb-0" data-l="43" data-n="0"><td class="ln">43</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (v.t == VType::Account) <span class="tk-k">return</span> v.addr_none ? Value::null() : Value::make_str(v.str);</td></tr>
+<tr class="cl band nb-0" data-l="44" data-n="0"><td class="ln">44</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> Value::null();</td></tr>
+<tr class="cl band nb-0" data-l="45" data-n="0"><td class="ln">45</td><td class="mk"></td><td class="cd">}</td></tr>
+<tr class="cl" data-l="46"><td class="ln">46</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="47" data-n="1"><td class="ln">47</td><td class="mk"><span class="chip">2</span></td><td class="cd"><span class="tk-c">// Amount.value / _value(): Amount -&gt; its underlying Int (or Float / Null);</span></td></tr>
+<tr class="cl band nb-1" data-l="48" data-n="1"><td class="ln">48</td><td class="mk"></td><td class="cd"><span class="tk-c">// a plain Int (jvault/evaa/tgbtc raw amounts) passes through unchanged.</span></td></tr>
+<tr class="cl band nb-1" data-l="49" data-n="1"><td class="ln">49</td><td class="mk"></td><td class="cd">Value av_amount(<span class="tk-k">const</span> Value &amp;v) {</td></tr>
+<tr class="cl band nb-1" data-l="50" data-n="1"><td class="ln">50</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (v.is_null()) <span class="tk-k">return</span> Value::null();</td></tr>
+<tr class="cl band nb-1" data-l="51" data-n="1"><td class="ln">51</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (v.t == VType::Amount) {</td></tr>
+<tr class="cl band nb-1" data-l="52" data-n="1"><td class="ln">52</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (v.amount_float) <span class="tk-k">return</span> Value::make_float(v.dnum);</td></tr>
+<tr class="cl band nb-1" data-l="53" data-n="1"><td class="ln">53</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> v.num.is_null() ? Value::null() : Value::make_int(v.num);</td></tr>
+<tr class="cl band nb-1" data-l="54" data-n="1"><td class="ln">54</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="55" data-n="1"><td class="ln">55</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> v;  <span class="tk-c">// Int / Float passthrough</span></td></tr>
+<tr class="cl band nb-1" data-l="56" data-n="1"><td class="ln">56</td><td class="mk"></td><td class="cd">}</td></tr>
+<tr class="cl" data-l="57"><td class="ln">57</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-2" data-l="58" data-n="2"><td class="ln">58</td><td class="mk"><span class="chip">3</span></td><td class="cd"><span class="tk-c">// data field read (Dict/Obj); missing == Null.</span></td></tr>
+<tr class="cl band nb-2" data-l="59" data-n="2"><td class="ln">59</td><td class="mk"></td><td class="cd">Value dg(<span class="tk-k">const</span> Value &amp;d, <span class="tk-k">const</span> char *k) {</td></tr>
+<tr class="cl band nb-2" data-l="60" data-n="2"><td class="ln">60</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Value *v = d.field(k);</td></tr>
+<tr class="cl band nb-2" data-l="61" data-n="2"><td class="ln">61</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> v != <span class="tk-k">nullptr</span> ? *v : Value::null();</td></tr>
+<tr class="cl band nb-2" data-l="62" data-n="2"><td class="ln">62</td><td class="mk"></td><td class="cd">}</td></tr>
+<tr class="cl band nb-2" data-l="63" data-n="2"><td class="ln">63</td><td class="mk"></td><td class="cd"><span class="tk-k">bool</span> has(<span class="tk-k">const</span> Value &amp;d, <span class="tk-k">const</span> char *k) { <span class="tk-k">return</span> d.field(k) != <span class="tk-k">nullptr</span>; }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="37" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L37–45</span><code>av_addr</code> is the whole reason directional columns render as <code>str:0:ABC…</code> and not <code>asset:…</code> or a raw Account. Note the two null-producing cases: an <code>Asset</code> with no jetton (i.e. TON) becomes Null, and an <code>addr_none</code> Account becomes Null. So &quot;TON&quot; and &quot;no address&quot; are indistinguishable in a column — a fill that needs to say &quot;this leg was TON&quot; has to encode it elsewhere (see <code>fill_jetton_transfer</code>&#39;s asset branch).</div></div>
+<div class="note" data-a="47" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L47–56</span><code>av_amount</code> unwraps <code>Amount</code> to its underlying Int (or Float for the NaN-ish cases), and passes a bare Int through untouched. That passthrough is what lets jvault/evaa/tgbtc fills, whose builders emit raw ints rather than Amounts, share the same converter. It also means you cannot tell from the row whether the builder produced an Amount.</div></div>
+<div class="note" data-a="58" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L58–63</span><code>dg</code> returns Null for a missing key, <code>has</code> distinguishes missing from present-and-null. Several fills need BOTH (<code>has(d,&quot;receiver_wallet&quot;) ? av_addr(...) : Null</code> in the next excerpt) because the Python side reads the key conditionally — the same conditionally-present-key discipline as the parse layer (<a class="xl" href="parse-layer.html">parse-layer</a>), one level up.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ActionBuild.cpp<span class="plines">:97–114</span></span><span class="ex-title">fill_jetton_transfer — the row from the run above</span><span class="lang">cpp</span><span class="sha" title="span hash at render">19fc21ea</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="97"><td class="ln">97</td><td class="mk"></td><td class="cd"><span class="tk-k">void</span> fill_jetton_transfer(<span class="tk-k">const</span> Value &amp;d, Action &amp;a) {</td></tr>
+<tr class="cl" data-l="98"><td class="ln">98</td><td class="mk"></td><td class="cd">  a.source = av_addr(dg(d, <span class="tk-s">&quot;sender&quot;</span>));</td></tr>
+<tr class="cl" data-l="99"><td class="ln">99</td><td class="mk"></td><td class="cd">  a.source_secondary = av_addr(dg(d, <span class="tk-s">&quot;sender_wallet&quot;</span>));</td></tr>
+<tr class="cl" data-l="100"><td class="ln">100</td><td class="mk"></td><td class="cd">  a.destination = av_addr(dg(d, <span class="tk-s">&quot;receiver&quot;</span>));</td></tr>
+<tr class="cl band nb-0" data-l="101" data-n="0"><td class="ln">101</td><td class="mk"><span class="chip">1</span></td><td class="cd">  a.destination_secondary = has(d, <span class="tk-s">&quot;receiver_wallet&quot;</span>) ? av_addr(dg(d, <span class="tk-s">&quot;receiver_wallet&quot;</span>)) : Value::null();</td></tr>
+<tr class="cl" data-l="102"><td class="ln">102</td><td class="mk"></td><td class="cd">  a.amount = av_amount(dg(d, <span class="tk-s">&quot;amount&quot;</span>));</td></tr>
+<tr class="cl band nb-1" data-l="103" data-n="1"><td class="ln">103</td><td class="mk"><span class="chip">2</span></td><td class="cd">  Value asset = dg(d, <span class="tk-s">&quot;asset&quot;</span>);</td></tr>
+<tr class="cl band nb-1" data-l="104" data-n="1"><td class="ln">104</td><td class="mk"></td><td class="cd">  a.asset = (asset.is_null() || (asset.t == VType::Asset &amp;&amp; asset.is_ton)) ? Value::null() : av_addr(asset);</td></tr>
+<tr class="cl band nb-2" data-l="105" data-n="2"><td class="ln">105</td><td class="mk"><span class="chip">3</span></td><td class="cd">  Value::Fields f;</td></tr>
+<tr class="cl band nb-2" data-l="106" data-n="2"><td class="ln">106</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;query_id&quot;</span>, dg(d, <span class="tk-s">&quot;query_id&quot;</span>));</td></tr>
+<tr class="cl band nb-2" data-l="107" data-n="2"><td class="ln">107</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;response_destination&quot;</span>, av_addr(dg(d, <span class="tk-s">&quot;response_address&quot;</span>)));</td></tr>
+<tr class="cl band nb-2" data-l="108" data-n="2"><td class="ln">108</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;forward_amount&quot;</span>, av_amount(dg(d, <span class="tk-s">&quot;forward_amount&quot;</span>)));</td></tr>
+<tr class="cl band nb-2" data-l="109" data-n="2"><td class="ln">109</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;custom_payload&quot;</span>, dg(d, <span class="tk-s">&quot;custom_payload&quot;</span>));</td></tr>
+<tr class="cl band nb-2" data-l="110" data-n="2"><td class="ln">110</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;forward_payload&quot;</span>, dg(d, <span class="tk-s">&quot;forward_payload&quot;</span>));</td></tr>
+<tr class="cl band nb-2" data-l="111" data-n="2"><td class="ln">111</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;comment&quot;</span>, comment_value(d));</td></tr>
+<tr class="cl band nb-2" data-l="112" data-n="2"><td class="ln">112</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;is_encrypted_comment&quot;</span>, dg(d, <span class="tk-s">&quot;encrypted_comment&quot;</span>));</td></tr>
+<tr class="cl band nb-2" data-l="113" data-n="2"><td class="ln">113</td><td class="mk"></td><td class="cd">  a.jetton_transfer_data = mkdict(std::move(f));</td></tr>
+<tr class="cl" data-l="114"><td class="ln">114</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="101" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L101</span><code>has(...)</code> guarding a field that <code>dg</code> would already return Null for. It is not redundant in intent: it documents that Python reads <code>receiver_wallet</code> only when the builder set it. Since both branches produce Null here, this is one of the few places where the C++ is defensive beyond what the gate can prove.</div></div>
+<div class="note" data-a="103" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L103–104</span>The TON-vs-jetton fork. A TON <code>Asset</code> becomes Null explicitly rather than by falling through <code>av_addr</code> — semantically the same result, written out because the reader needs to know that <code>asset=null</code> on a jetton_transfer row means TON, not &quot;unknown&quot;.</div></div>
+<div class="note" data-a="105" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L105–113</span>The composite. Seven keys, and two of them (<code>custom_payload</code>, <code>forward_payload</code>) are Cell-derived — they render as <code>cellhash:HEX</code> rather than as serialized BOC, which is the §12 root-hash bar that makes pytoniq-vs-td serialization differences invisible to the byte diff. <code>comment</code> goes through <code>comment_value</code>, which picks base64 for encrypted comments and UTF-8 backslashreplace otherwise.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ActionBuild.cpp<span class="plines">:286–310</span></span><span class="ex-title">fill_dedust_v2_claim_reward — reusing a composite instead of adding one</span><span class="lang">cpp</span><span class="sha" title="span hash at render">ff360d2c</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="286" data-n="0"><td class="ln">286</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// T12.2: DeDust CPMM V2 reward claim (block_tree_serializer _fill_dedust_v2_claim_reward).</span></td></tr>
+<tr class="cl band nb-0" data-l="287" data-n="0"><td class="ln">287</td><td class="mk"></td><td class="cd"><span class="tk-c">// Reuses the dex_withdraw_liquidity_data composite; reward_index -&gt; extra.</span></td></tr>
+<tr class="cl band nb-0" data-l="288" data-n="0"><td class="ln">288</td><td class="mk"></td><td class="cd"><span class="tk-k">void</span> fill_dedust_v2_claim_reward(<span class="tk-k">const</span> Value &amp;d, Action &amp;a) {</td></tr>
+<tr class="cl" data-l="289"><td class="ln">289</td><td class="mk"></td><td class="cd">  a.source = av_addr(dg(d, <span class="tk-s">&quot;sender&quot;</span>));</td></tr>
+<tr class="cl" data-l="290"><td class="ln">290</td><td class="mk"></td><td class="cd">  a.destination = av_addr(dg(d, <span class="tk-s">&quot;pool&quot;</span>));</td></tr>
+<tr class="cl" data-l="291"><td class="ln">291</td><td class="mk"></td><td class="cd">  a.asset = av_addr(dg(d, <span class="tk-s">&quot;asset1_out&quot;</span>));</td></tr>
+<tr class="cl band nb-1" data-l="292" data-n="1"><td class="ln">292</td><td class="mk"><span class="chip">2</span></td><td class="cd">  Value::Fields f;</td></tr>
+<tr class="cl band nb-1" data-l="293" data-n="1"><td class="ln">293</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;dex&quot;</span>, dg(d, <span class="tk-s">&quot;dex&quot;</span>));</td></tr>
+<tr class="cl band nb-1" data-l="294" data-n="1"><td class="ln">294</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;amount1&quot;</span>, av_amount(dg(d, <span class="tk-s">&quot;amount1_out&quot;</span>)));</td></tr>
+<tr class="cl band nb-1" data-l="295" data-n="1"><td class="ln">295</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;amount2&quot;</span>, Value::null());</td></tr>
+<tr class="cl band nb-1" data-l="296" data-n="1"><td class="ln">296</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;asset1_out&quot;</span>, av_addr(dg(d, <span class="tk-s">&quot;asset1_out&quot;</span>)));</td></tr>
+<tr class="cl band nb-1" data-l="297" data-n="1"><td class="ln">297</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;asset2_out&quot;</span>, Value::null());</td></tr>
+<tr class="cl band nb-1" data-l="298" data-n="1"><td class="ln">298</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;user_jetton_wallet_1&quot;</span>, av_addr(dg(d, <span class="tk-s">&quot;wallet1&quot;</span>)));</td></tr>
+<tr class="cl band nb-1" data-l="299" data-n="1"><td class="ln">299</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;user_jetton_wallet_2&quot;</span>, Value::null());</td></tr>
+<tr class="cl band nb-1" data-l="300" data-n="1"><td class="ln">300</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;dex_jetton_wallet_1&quot;</span>, av_addr(dg(d, <span class="tk-s">&quot;dex_jetton_wallet_1&quot;</span>)));</td></tr>
+<tr class="cl band nb-1" data-l="301" data-n="1"><td class="ln">301</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;dex_wallet_1&quot;</span>, av_addr(dg(d, <span class="tk-s">&quot;dex_wallet_1&quot;</span>)));</td></tr>
+<tr class="cl band nb-1" data-l="302" data-n="1"><td class="ln">302</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;dex_wallet_2&quot;</span>, Value::null());</td></tr>
+<tr class="cl band nb-1" data-l="303" data-n="1"><td class="ln">303</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;dex_jetton_wallet_2&quot;</span>, Value::null());</td></tr>
+<tr class="cl band nb-1" data-l="304" data-n="1"><td class="ln">304</td><td class="mk"><span class="chip">3</span></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;is_refund&quot;</span>, Value::make_bool(<span class="tk-k">false</span>));</td></tr>
+<tr class="cl band nb-1" data-l="305" data-n="1"><td class="ln">305</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;lp_tokens_burnt&quot;</span>, Value::null());</td></tr>
+<tr class="cl band nb-1" data-l="306" data-n="1"><td class="ln">306</td><td class="mk"></td><td class="cd">  a.dex_withdraw_liquidity_data = mkdict(std::move(f));</td></tr>
+<tr class="cl band nb-3" data-l="307" data-n="3"><td class="ln">307</td><td class="mk"><span class="chip">4</span></td><td class="cd">  Value::Fields ex;</td></tr>
+<tr class="cl band nb-3" data-l="308" data-n="3"><td class="ln">308</td><td class="mk"></td><td class="cd">  ex.emplace_back(<span class="tk-s">&quot;reward_index&quot;</span>, dg(d, <span class="tk-s">&quot;reward_index&quot;</span>));</td></tr>
+<tr class="cl band nb-3" data-l="309" data-n="3"><td class="ln">309</td><td class="mk"></td><td class="cd">  a.extra = mkdict(std::move(ex));</td></tr>
+<tr class="cl" data-l="310"><td class="ln">310</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="286" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L286–288</span>The T12.2 protocol from <a class="xl" href="parse-layer.html">parse-layer</a>, arriving at its final destination. Note what it does NOT do: set <code>a.type</code>. The row&#39;s type stays the raw btype <code>dedust_v2_claim_reward</code> — several other fills DO rewrite type (<code>fill_dedust_deposit</code> -&gt; <code>dex_deposit_liquidity</code>, <code>fill_ethena_deposit</code> -&gt; <code>stake_deposit</code>), so the btype and the rendered type are not interchangeable.</div></div>
+<div class="note" data-a="292" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L292–306</span>A reward claim is modelled as a one-sided liquidity withdrawal: every side-2 key is explicitly Null rather than omitted. Emitting the nulls (instead of leaving keys out) is what keeps the composite&#39;s key SET constant across the btypes that share it — the DB composite is positional, so an absent key and a null key are not the same thing downstream.</div></div>
+<div class="note" data-a="304" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L304</span>Worth a look before this reaches production: <code>is_refund</code> is emitted by both engines (Python&#39;s <code>_fill_dedust_v2_claim_reward</code> sets it too, so the A/B gate is satisfied), but the <code>dex_withdraw_liquidity_details</code> CompositeType declared in <code>indexer/core/database.py</code> has no such column. The gate proves the two engines agree on the dict; it says nothing about what Postgres stores.</div></div>
+<div class="note" data-a="307" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L307–309</span><code>extra</code> is the escape hatch for the one field that fits no existing composite. Preferring <code>extra</code> over a new column is a standing rule on this branch — a new composite type means a DDL migration on a table with billions of rows.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ActionBuild.cpp<span class="plines">:519–553</span></span><span class="ex-title">fill_action — the dispatch, and what is deliberately missing</span><span class="lang">cpp</span><span class="sha" title="span hash at render">315f696f</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="519"><td class="ln">519</td><td class="mk"></td><td class="cd"><span class="tk-c">// Dispatch a produced block to its fill (block_to_action match). Returns false</span></td></tr>
+<tr class="cl" data-l="520"><td class="ln">520</td><td class="mk"></td><td class="cd"><span class="tk-c">// for a btype outside the ported set (skip-table entry).</span></td></tr>
+<tr class="cl band nb-0" data-l="521" data-n="0"><td class="ln">521</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-k">bool</span> fill_action(Block *b, Action &amp;a) {</td></tr>
+<tr class="cl band nb-0" data-l="522" data-n="0"><td class="ln">522</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Value &amp;d = b-&gt;data;</td></tr>
+<tr class="cl band nb-0" data-l="523" data-n="0"><td class="ln">523</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> std::string &amp;t = b-&gt;btype;</td></tr>
+<tr class="cl band nb-0" data-l="524" data-n="0"><td class="ln">524</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">if</span> (t == <span class="tk-s">&quot;call_contract&quot;</span> || t == <span class="tk-s">&quot;contract_deploy&quot;</span>) fill_call_contract(d, a);</td></tr>
+<tr class="cl" data-l="525"><td class="ln">525</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;ton_transfer&quot;</span>) fill_ton_transfer(d, a);</td></tr>
+<tr class="cl" data-l="526"><td class="ln">526</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;jetton_transfer&quot;</span>) fill_jetton_transfer(d, a);</td></tr>
+<tr class="cl" data-l="527"><td class="ln">527</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;jetton_burn&quot;</span>) fill_jetton_burn(d, a);</td></tr>
+<tr class="cl" data-l="528"><td class="ln">528</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;jetton_mint&quot;</span>) fill_jetton_mint(d, a);</td></tr>
+<tr class="cl" data-l="529"><td class="ln">529</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;jetton_swap&quot;</span>) fill_jetton_swap(d, a);</td></tr>
+<tr class="cl" data-l="530"><td class="ln">530</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;nft_transfer&quot;</span>) fill_nft_transfer(d, a);</td></tr>
+<tr class="cl" data-l="531"><td class="ln">531</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;dedust_deposit_liquidity&quot;</span>) fill_dedust_deposit(d, a);</td></tr>
+<tr class="cl" data-l="532"><td class="ln">532</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;dedust_deposit_liquidity_partial&quot;</span>) fill_dedust_deposit_partial(d, a);</td></tr>
+<tr class="cl" data-l="533"><td class="ln">533</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;tonco_deposit_liquidity&quot;</span>) fill_tonco_deposit(d, a);</td></tr>
+<tr class="cl" data-l="534"><td class="ln">534</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;dedust_v2_claim_reward&quot;</span>) fill_dedust_v2_claim_reward(d, a);</td></tr>
+<tr class="cl band nb-2" data-l="535" data-n="2"><td class="ln">535</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;evaa_withdraw&quot;</span>) fill_evaa_withdraw(d, a, b-&gt;failed);</td></tr>
+<tr class="cl" data-l="536"><td class="ln">536</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;jvault_stake&quot;</span>) fill_jvault_stake(d, a);</td></tr>
+<tr class="cl" data-l="537"><td class="ln">537</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;jvault_unstake&quot;</span>) fill_jvault_unstake(d, a);</td></tr>
+<tr class="cl" data-l="538"><td class="ln">538</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;jvault_unstake_request&quot;</span>) fill_jvault_unstake_request(d, a);</td></tr>
+<tr class="cl" data-l="539"><td class="ln">539</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;jvault_claim&quot;</span>) fill_jvault_claim(d, a);</td></tr>
+<tr class="cl" data-l="540"><td class="ln">540</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;ethena_deposit&quot;</span>) fill_ethena_deposit(d, a);</td></tr>
+<tr class="cl" data-l="541"><td class="ln">541</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;layerzero_receive&quot;</span>) fill_layerzero_receive(d, a);</td></tr>
+<tr class="cl" data-l="542"><td class="ln">542</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;coffee_create_vault&quot;</span>) fill_coffee_create_vault(d, a);</td></tr>
+<tr class="cl" data-l="543"><td class="ln">543</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;vesting_send_message&quot;</span>) fill_vesting_send_message(d, a);</td></tr>
+<tr class="cl" data-l="544"><td class="ln">544</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">if</span> (t == <span class="tk-s">&quot;tgbtc_mint&quot;</span>) fill_tgbtc_mint(d, a);</td></tr>
+<tr class="cl" data-l="545"><td class="ln">545</td><td class="mk"></td><td class="cd">  <span class="tk-c">// NAMED SKIP — nft_purchase / dns_purchase (getgems_nft_purchase +</span></td></tr>
+<tr class="cl band nb-3" data-l="546" data-n="3"><td class="ln">546</td><td class="mk"><span class="chip">4</span></td><td class="cd">  <span class="tk-c">// telegram_nft_purchase): the Python fill _fill_nft_purchase_action is now</span></td></tr>
+<tr class="cl band nb-3" data-l="547" data-n="3"><td class="ln">547</td><td class="mk"></td><td class="cd">  <span class="tk-c">// _dget-safe (dual-dispatch wave), but nft_purchase has ZERO corpus coverage</span></td></tr>
+<tr class="cl band nb-3" data-l="548" data-n="3"><td class="ln">548</td><td class="mk"></td><td class="cd">  <span class="tk-c">// (no getgems/telegram purchase traces fire), so there is nothing to A/B-gate</span></td></tr>
+<tr class="cl band nb-3" data-l="549" data-n="3"><td class="ln">549</td><td class="mk"></td><td class="cd">  <span class="tk-c">// — deliberately NOT ported. Add a fill here (Python fill already handles the</span></td></tr>
+<tr class="cl band nb-3" data-l="550" data-n="3"><td class="ln">550</td><td class="mk"></td><td class="cd">  <span class="tk-c">// dict) if a purchase trace ever enters the corpus.</span></td></tr>
+<tr class="cl band nb-3" data-l="551" data-n="3"><td class="ln">551</td><td class="mk"></td><td class="cd">  <span class="tk-k">else</span> <span class="tk-k">return</span> <span class="tk-k">false</span>;</td></tr>
+<tr class="cl" data-l="552"><td class="ln">552</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> <span class="tk-k">true</span>;</td></tr>
+<tr class="cl" data-l="553"><td class="ln">553</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="521" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L521–524</span>An if/else-if chain on <code>b-&gt;btype</code>, matching Python&#39;s <code>match block.btype</code>. The Python version has ~90 cases; this has 21. The difference is not a porting backlog — it is the corpus: only btypes that FIRE in the fixture set can be A/B-gated, and an ungated fill is a liability.</div></div>
+<div class="note" data-a="524" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L524</span><code>contract_deploy</code> shares <code>fill_call_contract</code>, exactly as Python&#39;s <code>case &#39;call_contract&#39; | &#39;contract_deploy&#39;</code> does. Both are fallback-only here: the main dump&#39;s blocks are matcher-produced composites, never leaves.</div></div>
+<div class="note" data-a="535" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L535</span>The only fill that takes a third argument. <code>evaa_withdraw</code> derives <code>success</code> from BOTH the data&#39;s <code>is_success</code> field and the block&#39;s <code>failed</code> flag — the one place where a row&#39;s success is not simply <code>!b-&gt;failed</code>.</div></div>
+<div class="note" data-a="546" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L546–551</span>The named skip, and the honest reason: <code>nft_purchase</code>/<code>dns_purchase</code> have zero corpus coverage, so porting the fill would add untested code that the twin gate cannot check. Note the asymmetry this creates — the Python twin&#39;s <code>PORTED_BTYPES</code> set skips the same btypes, so the gate cannot detect a MISSING fill at all. Coverage of the fill set is a human responsibility, not a gated one.</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ &#39;…/ton-mch-engine.exe&#39; --actions -I &#39;…/ir/mch_ir.json&#39; \
+  -T &#39;tests/traces/i-gQwY3nWC6BQx1XOSWliBC-b1Pt7Y-Fn5jphK5uCGk=.lz4&#39; \
+  | grep dedust_v2_claim_reward \
+  | grep -o -E &#39;type=str:dedust_v2_claim_reward|dex_withdraw_liquidity_data=\{[^}]*\}|extra=\{[^}]*\}&#39;</div><pre class="run-out">dex_withdraw_liquidity_data={amount1=7454897358831,amount2=null,asset1_out=str:0:105E5589BC66DB15F13C177A12F2CF3B94881DA2F4B8E7922C58569176625EB5,asset2_out=null,dex=str:dedust_v2,dex_jetton_wallet_1=str:0:50DC3BABDE6F3D2A91CDC874BA110E2F1D6BDDF781AEB9E2149D7160ACC05026,dex_jetton_wallet_2=null,dex_wallet_1=str:0:4E50A518CFFDE030B1E124B2DA8E80EA53BFA3115E1CED345913B100AD8ACAB1,dex_wallet_2=null,is_refund=false,lp_tokens_burnt=null,user_jetton_wallet_1=str:0:360A2F32DDEF2B9622CBAB986B5461338ED3E9179F161E0FD49CEA5CC8447904,user_jetton_wallet_2=null}
+extra={reward_index=0}
+type=str:dedust_v2_claim_reward</pre><div class="run-note">The composite-reuse rule in one row: thirteen keys, seven of them null, because the claim only has a side-1. Keys are alphabetical in the output — that is <code>render_value</code> sorting, not the <code>emplace_back</code> order in the fill. This same fixture also produces a <code>jetton_transfer</code> row (the payout leg), which is why the grep filter is needed.</div></div>
+<h2 id="the-render-seam-and-the-python-parity-contract">The render seam and the Python parity contract</h2>
+<section><p><code>render_action</code> is the piece that did NOT move lib-side, and the split is exactly where you would want it: everything above produces an <code>Action</code> value; this turns one into a line of text for the A/B channel. Production never calls it — it binds the same <code>Action</code> to SQL instead (<a class="xl" href="prod-path.html">prod-path</a>).</p>
+<p>The parity contract is stronger than it is for any other layer in this engine. <code>twins/py_actions.py</code> does not reimplement the serializer — it calls the REAL <code>block_tree_serializer.block_to_action</code> and renders the result in this same column set. So a diff here is a diff against production Python, not against a twin&#39;s approximation.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/Classify.cpp<span class="plines">:63–95</span></span><span class="ex-title">render_action — the column set, harness-side</span><span class="lang">cpp</span><span class="sha" title="span hash at render">a0b8cd1c</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="63"><td class="ln">63</td><td class="mk"></td><td class="cd"><span class="tk-c">// Dump-side render of an Action row (built lib-side by ActionBuild). Fixed</span></td></tr>
+<tr class="cl" data-l="64"><td class="ln">64</td><td class="mk"></td><td class="cd"><span class="tk-c">// column set; unset fields are Null, rendered &quot;null&quot;.</span></td></tr>
+<tr class="cl" data-l="65"><td class="ln">65</td><td class="mk"></td><td class="cd">std::string render_action(<span class="tk-k">const</span> Action &amp;a) {</td></tr>
+<tr class="cl band nb-0" data-l="66" data-n="0"><td class="ln">66</td><td class="mk"><span class="chip">1</span></td><td class="cd">  Value::Fields f;</td></tr>
+<tr class="cl band nb-0" data-l="67" data-n="0"><td class="ln">67</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;id&quot;</span>, Value::make_str(a.action_id));</td></tr>
+<tr class="cl band nb-3" data-l="68" data-n="3"><td class="ln">68</td><td class="mk"><span class="chip">4</span></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;type&quot;</span>, Value::make_str(a.type));</td></tr>
+<tr class="cl band nb-3" data-l="69" data-n="3"><td class="ln">69</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;success&quot;</span>, Value::make_bool(a.success));</td></tr>
+<tr class="cl band nb-3" data-l="70" data-n="3"><td class="ln">70</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;start_lt&quot;</span>, Value::make_int64(a.start_lt));</td></tr>
+<tr class="cl band nb-3" data-l="71" data-n="3"><td class="ln">71</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;end_lt&quot;</span>, Value::make_int64(a.end_lt));</td></tr>
+<tr class="cl band nb-3" data-l="72" data-n="3"><td class="ln">72</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;start_utime&quot;</span>, Value::make_int64(a.start_utime));</td></tr>
+<tr class="cl band nb-3" data-l="73" data-n="3"><td class="ln">73</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;end_utime&quot;</span>, Value::make_int64(a.end_utime));</td></tr>
+<tr class="cl band nb-3" data-l="74" data-n="3"><td class="ln">74</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;mc_seqno_end&quot;</span>, Value::make_int64(a.mc_seqno_end));</td></tr>
+<tr class="cl band nb-1" data-l="75" data-n="1"><td class="ln">75</td><td class="mk"><span class="chip">2</span></td><td class="cd">  std::vector&lt;std::string&gt; th = a.tx_hashes;</td></tr>
+<tr class="cl band nb-1" data-l="76" data-n="1"><td class="ln">76</td><td class="mk"></td><td class="cd">  std::sort(th.begin(), th.end());</td></tr>
+<tr class="cl band nb-1" data-l="77" data-n="1"><td class="ln">77</td><td class="mk"></td><td class="cd">  std::vector&lt;Value&gt; thv;</td></tr>
+<tr class="cl band nb-1" data-l="78" data-n="1"><td class="ln">78</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> std::string &amp;s : th) thv.push_back(Value::make_str(s));</td></tr>
+<tr class="cl band nb-1" data-l="79" data-n="1"><td class="ln">79</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;tx_hashes&quot;</span>, Value::make_list(std::move(thv)));</td></tr>
+<tr class="cl band nb-1" data-l="80" data-n="1"><td class="ln">80</td><td class="mk"></td><td class="cd">  std::vector&lt;std::string&gt; ac = a.accounts;</td></tr>
+<tr class="cl band nb-1" data-l="81" data-n="1"><td class="ln">81</td><td class="mk"></td><td class="cd">  std::sort(ac.begin(), ac.end());</td></tr>
+<tr class="cl band nb-1" data-l="82" data-n="1"><td class="ln">82</td><td class="mk"></td><td class="cd">  std::vector&lt;Value&gt; acv;</td></tr>
+<tr class="cl band nb-1" data-l="83" data-n="1"><td class="ln">83</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> std::string &amp;s : ac) acv.push_back(Value::make_str(s));</td></tr>
+<tr class="cl band nb-1" data-l="84" data-n="1"><td class="ln">84</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;accounts&quot;</span>, Value::make_list(std::move(acv)));</td></tr>
+<tr class="cl band nb-2" data-l="85" data-n="2"><td class="ln">85</td><td class="mk"><span class="chip">3</span></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;source&quot;</span>, a.source);</td></tr>
+<tr class="cl band nb-2" data-l="86" data-n="2"><td class="ln">86</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;source_secondary&quot;</span>, a.source_secondary);</td></tr>
+<tr class="cl band nb-2" data-l="87" data-n="2"><td class="ln">87</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;destination&quot;</span>, a.destination);</td></tr>
+<tr class="cl band nb-2" data-l="88" data-n="2"><td class="ln">88</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;destination_secondary&quot;</span>, a.destination_secondary);</td></tr>
+<tr class="cl band nb-2" data-l="89" data-n="2"><td class="ln">89</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;asset&quot;</span>, a.asset);</td></tr>
+<tr class="cl band nb-2" data-l="90" data-n="2"><td class="ln">90</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;asset_secondary&quot;</span>, a.asset_secondary);</td></tr>
+<tr class="cl band nb-2" data-l="91" data-n="2"><td class="ln">91</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;asset2&quot;</span>, a.asset2);</td></tr>
+<tr class="cl band nb-2" data-l="92" data-n="2"><td class="ln">92</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;asset2_secondary&quot;</span>, a.asset2_secondary);</td></tr>
+<tr class="cl" data-l="93"><td class="ln">93</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;amount&quot;</span>, a.amount);</td></tr>
+<tr class="cl" data-l="94"><td class="ln">94</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;value&quot;</span>, a.value);</td></tr>
+<tr class="cl" data-l="95"><td class="ln">95</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;opcode&quot;</span>, a.opcode);</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="66" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L66–67</span>The row is rendered by building a <code>Value</code> Dict and handing it to the ordinary <code>render_value</code>. That is why an Action row and a block&#39;s <code>data</code> render with identical syntax — one renderer, so a <code>str:</code>/<code>amount:</code>/<code>cellhash:</code> prefix means the same thing everywhere in the dumps.</div></div>
+<div class="note" data-a="75" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L75–84</span><code>tx_hashes</code> and <code>accounts</code> are sorted HERE, at render time, not in <code>build_action</code>. The reason is Python: <code>list(set(...))</code> gives hash order, so neither side has a meaningful order to compare. Sorting at the boundary keeps the diff stable without forcing an order the data model does not have.</div></div>
+<div class="note" data-a="85" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L85–92</span>The eight directional columns pass through as raw <code>Value</code>s — no conversion left to do, because <code>av_addr</code> already ran inside the fill. If one of these ever renders as <code>asset:…</code> or <code>0:ABC…</code> (an Account) instead of <code>str:0:ABC…</code>, a fill skipped its converter.</div></div>
+<div class="note" data-a="68" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L68–74</span>What is absent is as informative as what is present: no <code>trace_id</code>, no <code>trace_end_lt</code>/<code>trace_*</code>, no <code>finality</code>, and no roles. The trace-level fields are constant per fixture (the twin feeds a stub Trace), and roles do not exist on this branch — so neither is gated here, and neither should be inferred from this list.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/Classify.cpp<span class="plines">:176–205</span></span><span class="ex-title">run_dump — where the two dump modes diverge</span><span class="lang">cpp</span><span class="sha" title="span hash at render">303a3f29</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="176"><td class="ln">176</td><td class="mk"></td><td class="cd">    ClassifyResult res = classify_trace(ctx, ir, setup, *src);</td></tr>
+<tr class="cl band nb-0" data-l="177" data-n="0"><td class="ln">177</td><td class="mk"><span class="chip">1</span></td><td class="cd">    <span class="tk-k">if</span> (res.failure) {</td></tr>
+<tr class="cl band nb-0" data-l="178" data-n="0"><td class="ln">178</td><td class="mk"></td><td class="cd">      <span class="tk-c">// Per-trace exception boundary (event_processing.py): buffered — the</span></td></tr>
+<tr class="cl band nb-0" data-l="179" data-n="0"><td class="ln">179</td><td class="mk"></td><td class="cd">      <span class="tk-c">// regular actions are discarded, a single TRACE_FAIL on stdout, the reason</span></td></tr>
+<tr class="cl band nb-0" data-l="180" data-n="0"><td class="ln">180</td><td class="mk"></td><td class="cd">      <span class="tk-c">// on stderr (A/B channel stays byte-comparable). In --actions mode the</span></td></tr>
+<tr class="cl band nb-0" data-l="181" data-n="0"><td class="ln">181</td><td class="mk"></td><td class="cd">      <span class="tk-c">// basic-actions fallback rows (Step 2c) follow behind a FALLBACK tag.</span></td></tr>
+<tr class="cl band nb-0" data-l="182" data-n="0"><td class="ln">182</td><td class="mk"></td><td class="cd">      <span class="tk-c">// No corpus trace triggers this — the fallback path is ungated.</span></td></tr>
+<tr class="cl band nb-0" data-l="183" data-n="0"><td class="ln">183</td><td class="mk"></td><td class="cd">      std::printf(<span class="tk-s">&quot;TRACE_FAIL\n&quot;</span>);</td></tr>
+<tr class="cl band nb-0" data-l="184" data-n="0"><td class="ln">184</td><td class="mk"></td><td class="cd">      std::fprintf(stderr, <span class="tk-s">&quot;TRACE_FAIL %s: %s\n&quot;</span>, fs::path(f).filename().string().c_str(),</td></tr>
+<tr class="cl band nb-0" data-l="185" data-n="0"><td class="ln">185</td><td class="mk"></td><td class="cd">                   res.failure_reason.c_str());</td></tr>
+<tr class="cl band nb-1" data-l="186" data-n="1"><td class="ln">186</td><td class="mk"><span class="chip">2</span></td><td class="cd">      <span class="tk-k">if</span> (actions_mode) {</td></tr>
+<tr class="cl band nb-1" data-l="187" data-n="1"><td class="ln">187</td><td class="mk"></td><td class="cd">        <span class="tk-k">for</span> (<span class="tk-k">const</span> CoreAction &amp;a : res.fallback_actions) {</td></tr>
+<tr class="cl band nb-1" data-l="188" data-n="1"><td class="ln">188</td><td class="mk"></td><td class="cd">          Action act;</td></tr>
+<tr class="cl band nb-1" data-l="189" data-n="1"><td class="ln">189</td><td class="mk"></td><td class="cd">          <span class="tk-k">if</span> (!build_action(a.produced, act)) <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl band nb-1" data-l="190" data-n="1"><td class="ln">190</td><td class="mk"></td><td class="cd">          std::printf(<span class="tk-s">&quot;FALLBACK anchor=%s %s\n&quot;</span>, block_key(a.anchor).c_str(),</td></tr>
+<tr class="cl band nb-1" data-l="191" data-n="1"><td class="ln">191</td><td class="mk"></td><td class="cd">                      render_action(act).c_str());</td></tr>
+<tr class="cl band nb-1" data-l="192" data-n="1"><td class="ln">192</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl band nb-1" data-l="193" data-n="1"><td class="ln">193</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl" data-l="194"><td class="ln">194</td><td class="mk"></td><td class="cd">      <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl" data-l="195"><td class="ln">195</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-2" data-l="196" data-n="2"><td class="ln">196</td><td class="mk"><span class="chip">3</span></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> CoreAction &amp;a : res.actions) {</td></tr>
+<tr class="cl band nb-2" data-l="197" data-n="2"><td class="ln">197</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (actions_mode) {</td></tr>
+<tr class="cl band nb-2" data-l="198" data-n="2"><td class="ln">198</td><td class="mk"></td><td class="cd">        Action act;</td></tr>
+<tr class="cl band nb-2" data-l="199" data-n="2"><td class="ln">199</td><td class="mk"></td><td class="cd">        <span class="tk-k">if</span> (!build_action(a.produced, act)) <span class="tk-k">continue</span>;  <span class="tk-c">// btype outside ported set</span></td></tr>
+<tr class="cl band nb-2" data-l="200" data-n="2"><td class="ln">200</td><td class="mk"></td><td class="cd">        std::printf(<span class="tk-s">&quot;ACTION anchor=%s %s\n&quot;</span>, block_key(a.anchor).c_str(),</td></tr>
+<tr class="cl band nb-2" data-l="201" data-n="2"><td class="ln">201</td><td class="mk"></td><td class="cd">                    render_action(act).c_str());</td></tr>
+<tr class="cl band nb-2" data-l="202" data-n="2"><td class="ln">202</td><td class="mk"></td><td class="cd">      } <span class="tk-k">else</span> {</td></tr>
+<tr class="cl band nb-2" data-l="203" data-n="2"><td class="ln">203</td><td class="mk"></td><td class="cd">        emit_action(a);</td></tr>
+<tr class="cl band nb-2" data-l="204" data-n="2"><td class="ln">204</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-2" data-l="205" data-n="2"><td class="ln">205</td><td class="mk"></td><td class="cd">    }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="177" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L177–185</span>The failure line goes to stdout as a bare <code>TRACE_FAIL</code> while the REASON goes to stderr. That asymmetry is deliberate: stdout is the byte-compared channel, and exception messages are the one thing that will never match between a C++ and a Python engine.</div></div>
+<div class="note" data-a="186" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L186–193</span>Fallback rows are tagged <code>FALLBACK</code> and only exist in <code>--actions</code> mode; <code>--classify</code> prints nothing after a TRACE_FAIL. Since no corpus trace fails, this entire block is dead in every gate run — which is precisely why the tag exists, so that if it ever fires it is unmistakable in a diff.</div></div>
+<div class="note" data-a="196" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L196–205</span>The two modes share everything up to this point and differ only in the per-action render: <code>build_action</code> + <code>render_action</code> for <code>--actions</code>, <code>emit_action</code> (raw block data) for <code>--classify</code>. Note the <code>continue</code> on a false return — an unported btype is skipped SILENTLY, so <code>--classify</code> and <code>--actions</code> row counts can legitimately differ. Today they don&#39;t (199 = 199).</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ # PowerShell, from S:/Dev/ton-indexer-clear/indexer
+$e=&#39;…/ton-mch-engine.exe&#39;; $ir=&#39;…/ir/mch_ir.json&#39;; $py=&#39;S:/Dev/H-dump/tonscan-indexator/venv0/Scripts/python.exe&#39;
+&amp; $e --actions -I $ir -T tests\traces &gt; $env:TEMP\cpp_actions.txt
+&amp; $py ..\ton-index-worker\ton-mch-engine\twins\py_actions.py $ir tests\traces 2&gt;$null &gt; $env:TEMP\py_actions.txt
+&quot;cpp rows: &quot; + (Select-String -Path $env:TEMP\cpp_actions.txt -Pattern &#39;^ACTION&#39;).Count
+&quot;py  rows: &quot; + (Select-String -Path $env:TEMP\py_actions.txt -Pattern &#39;^ACTION&#39;).Count
+&quot;diff lines: &quot; + (Compare-Object (Get-Content $env:TEMP\cpp_actions.txt) (Get-Content $env:TEMP\py_actions.txt) | Measure-Object).Count</div><pre class="run-out">cpp rows: 199
+py  rows: 199
+diff lines: 0</pre><div class="run-note">The gate this whole chapter rests on. Every field of every row above — ids, lt windows, sorted tx_hashes and accounts, every composite key — is byte-identical to what <code>block_tree_serializer.block_to_action</code> produces in the real Python classifier. The mechanics of the gate set (and the other five twins) are <a class="xl" href="gates.html">gates</a>.</div></div>
+<h2 id="check-yourself">Check yourself</h2>
+<section><p>Four things worth doing before moving on to <a class="xl" href="gates.html">gates</a>. The first has its captured output below; the other three you run yourself.</p>
+<p>2. Prove that composite key ORDER is not gated. Swap any two adjacent <code>f.emplace_back(...)</code> lines inside <code>fill_jetton_transfer</code> (<code>ActionBuild.cpp</code> 105-113), rebuild <code>ton-mch-engine</code>, and re-run the twin diff from the previous section. It stays at 0, because <code>render_value</code> sorts keys. Then convince yourself why that is still dangerous: the DB composite in <code>indexer/core/database.py</code> is positional.</p>
+<p>3. Prove that field VALUES are gated, hard. Swap <code>a.source</code> and <code>a.destination</code> in the same fill, rebuild, re-run the diff — you should see roughly 114 changed rows (one per jetton_transfer in the histogram above), and the ids will NOT change, because <code>action_id</code> is derived from the event node and the btype, never from the columns. That is worth seeing once: a corrupted row keeps its identity.</p>
+<p>4. Read <code>block_to_action</code>&#39;s tail in <code>indexer/indexer/events/blocks/utils/block_tree_serializer.py</code> (lines 1519-1541) next to <code>build_action</code>&#39;s tail (<code>ActionBuild.cpp</code> 595-622) and check the four accounts sources line up: event-node tx accounts, source + source_secondary, destination pair gated on <code>is_ghost_block</code>, and the initiating tx&#39;s account gated on <code>is_tick_tock</code>. If you can also say why Python&#39;s <code>list(set(...))</code> there forces both dumps to sort, you have the parity contract.</p></section>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ # 1. The NO-ROLES claim, tested rather than believed (from S:/Dev/ton-indexer-clear/indexer)
+grep -rn &quot;role&quot; indexer/core/database.py | head -5
+ls indexer/events/role_assignment.py</div><pre class="run-out">-- (no hits above = no role column anywhere in the model file)
+ls: cannot access &#39;indexer/events/role_assignment.py&#39;: No such file or directory</pre><div class="run-note">Then read <code>indexer/core/database.py</code> around line 241: <code>ActionAccount</code> is <code>(action_id, trace_id, account)</code> plus four lt/utime denorm columns — no role, no <code>account_roles</code>. If you have read a description of <code>ROLE_SENDER</code>/<code>ROLE_RECEIVER</code> for this codebase, it was about a different branch, and <code>Action.accounts</code> being a bare string list here is the deliberate consequence.</div></div>
+<div class="edges"><div class="label">Connected scopes</div><ul><li><a class="xl" href="matcher-runtime.html">matcher-runtime</a> — try_build collects the CoreAction; a clean rejection there is the OTHER reason a fired matcher yields no row</li><li><a class="xl" href="build-programs.html">build-programs</a> — everything a fill_* reads out of block.data was written by a build program&#39;s captures</li><li><a class="xl" href="block-tree.html">block-tree</a> — min_lt / event_nodes / initiating_event_node / is_ghost_block are the Block fields build_action derives the universal columns from</li><li><a class="xl" href="value.html">value</a> — av_addr / av_amount are the collapse from the engine&#39;s Value universe into flat column types; Null-vs-absent semantics come from there</li><li><a class="xl" href="gates.html">gates</a> — forward: the --actions twin diff, and the other five gates that pin this layer</li><li><a class="xl" href="prod-path.html">prod-path</a> — forward: the same ActionBuild lib, bound to SQL instead of render_action; FailureCategory exists for that path&#39;s telemetry</li></ul></div>
+<div class="cover"><div class="label">Not annotated in this scope — read directly</div><ul><li><code>ton-index-worker/ton-mch-engine/src/Classify.h</code> <span class="why">— declarations only — <code>run_classify</code> / <code>run_actions</code> / <code>run_dump</code> plus the <code>TraceContextLoader</code> and <code>LookupSourceFactory</code> typedefs that let the production actor reuse the dump adapter with its own loaders. Read it if you are wiring a new mode (~80 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/BuildDriver.cpp</code> <span class="why">— contains <code>render_value</code> (lines 52-117), the shared renderer every dump on this page goes through — including the key sort and the <code>is_boc_field</code> -&gt; <code>cellhash:</code> substitution. Belongs to <a class="xl" href="build-programs.html">build-programs</a>, but read those 65 lines if a rendered value surprises you</span></li><li><code>ton-index-worker/ton-mch-engine/twins/py_actions.py</code> <span class="why">— the Python twin for <code>--actions</code>. It is thin on purpose: it calls the REAL <code>block_tree_serializer.block_to_action</code> and reformats into this page&#39;s column set. The only parts worth reading are <code>PORTED_BTYPES</code> (the mirror of <code>fill_action</code>&#39;s case list) and <code>_cellhash</code> (the §12 root-hash bar). Gate mechanics are <a class="xl" href="gates.html">gates</a> (~330 LOC)</span></li><li><code>indexer/indexer/events/blocks/utils/block_tree_serializer.py</code> <span class="why">— the Python original this whole page ports. ~90 btype cases against the C++ 21, plus the spine-walk / child-recursion wrapper (<code>parent_action_id</code>, <code>ancestor_type</code>, <code>v1_ops</code>) that is entirely OUT of C++ scope. Read <code>_calc_action_id</code> (110) and <code>block_to_action</code>&#39;s tail (1519-1541) side by side with <code>build_action</code> — those are the two functions the C++ reproduces line for line (~1700 LOC)</span></li><li><code>indexer/indexer/core/database.py</code> <span class="why">— the <code>Action</code> and <code>ActionAccount</code> SQLAlchemy models — the ground truth for the column set and for the no-roles claim. The composite columns (lines ~330-470) are declared as positional Postgres <code>CompositeType</code>s, which is the detail behind the <code>is_refund</code> note above (~900 LOC)</span></li><li><code>indexer/docs/mch-cpp-prod-design.md</code> <span class="why">— the design doc the code comments cite by section (§6.1 = the no-roles correction, §10 = the leaf-data hazard, §11 item 2 = the core/harness isolation rule, §12 = the root-hash bar). Not code; the place to go when a comment says &quot;design §N&quot;</span></li></ul><div class="label">Partially annotated — remainder is yours</div><ul><li><code>ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp</code> <span class="why">— PARTIAL. Not excerpted: <code>combine_deposits</code> (lines 107-166) — the dedust deposit-record merge arithmetic, mechanical once you know it throws on every consistency check Python raises on; <code>post_process_stonfi_v2_liquidity</code> + its three helpers (212-300) — a full pass with ZERO corpus coverage (the <code>deposits.size() &lt; 2</code> guard returns immediately for every fixture), so read it as unproven code; <code>prepare_classify</code> (371-418) and the B1 anchor prefilter in <code>classify_trace</code> (425-492), both covered in <a class="xl" href="matcher-runtime.html">matcher-runtime</a> and <a class="xl" href="ir-artifact.html">ir-artifact</a> (~534 LOC total)</span></li><li><code>ton-index-worker/ton-mch-engine/src/ClassifyCore.h</code> <span class="why">— PARTIAL. Not excerpted: <code>AnchorFilter</code> / <code>IncludedMatcher</code> / <code>ClassifySetup</code> (lines 76-104) — the trace-independent run prep, which belongs to <a class="xl" href="matcher-runtime.html">matcher-runtime</a>. The file header (1-6) states the core/harness split rule and is worth reading directly (~117 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/ActionBuild.cpp</code> <span class="why">— PARTIAL. Excerpted: the converters, <code>fill_jetton_transfer</code>, <code>fill_dedust_v2_claim_reward</code>, the dispatch, and <code>build_action</code>. The other 18 fills (lines 116-517) are the same shape by construction — read the one for the protocol you care about, they are independent of each other. Two are worth a look for their own reasons: <code>fill_jetton_swap</code> (152-191), the only fill that rewrites <code>asset</code>/<code>asset2</code> conditionally per DEX and converts a nested <code>peer_swaps</code> list; and <code>fill_tonco_deposit</code> (312-370), which picks the first/second PRESENT leg rather than trusting the field numbering (~625 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/ActionBuild.h</code> <span class="why">— PARTIAL. Only the file header (1-6, why the code moved lib-side in R1b) and the <code>build_action</code> declaration (35-38) are outside the excerpt. Both are one-liners (~39 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/Classify.cpp</code> <span class="why">— PARTIAL. Not excerpted: <code>emit_action</code> (34-61), the <code>--classify</code> per-action render — child keys sorted, aux rendered from the raw block list; the artifact-loading and fixture-enumeration preamble of <code>run_dump</code> (121-175); and the two one-line mode entry points (210-216) (~218 LOC)</span></li></ul></div>
+<hr class="rule">
+<div class="meta">mch engine — a guided tutorial — commit ff4135bc — generated 2026-07-26 — code pulled live from repo at render time</div>
+</div>
+<script>
+(function(){
+  var GAP = 10;
+  function layout(){
+    var wide = window.matchMedia('(min-width: 980px)').matches;
+    document.querySelectorAll('.excerpt').forEach(function(ex){
+      var rail = ex.querySelector('.ex-rail');
+      if(!rail) return;
+      var grid = ex.querySelector('.ex-grid');
+      var notes = rail.querySelectorAll('.note');
+      if(!wide){ notes.forEach(function(n){ n.style.top=''; }); rail.style.minHeight=''; return; }
+      var g = grid.getBoundingClientRect(), y = 0, items = [];
+      notes.forEach(function(n){
+        var row = ex.querySelector('tr[data-l="'+n.dataset.a+'"]');
+        var t = Math.max(row ? (row.getBoundingClientRect().top - g.top) : y, y);
+        items.push({ n: n, t: t, h: n.offsetHeight });
+        y = t + n.offsetHeight + GAP;
+      });
+      if(!items.length) return;
+      var limit = ex.querySelector('.ex-code').getBoundingClientRect().height;
+      for(var i = items.length - 1; i >= 0; i--){
+        items[i].t = Math.min(items[i].t, limit - items[i].h);
+        limit = items[i].t - GAP;
+      }
+      var shift = Math.max(0, -items[0].t), maxB = 0;
+      items.forEach(function(it){
+        var t = it.t + shift;
+        it.n.style.top = t + 'px';
+        maxB = Math.max(maxB, t + it.h);
+      });
+      rail.style.minHeight = (maxB + 12) + 'px';
+    });
+  }
+  function hover(){
+    document.querySelectorAll('.excerpt').forEach(function(ex){
+      ex.querySelectorAll('.note').forEach(function(n){
+        var i = n.dataset.n;
+        var rows = ex.querySelectorAll('tr[data-n="'+i+'"]');
+        n.addEventListener('mouseenter', function(){ rows.forEach(function(r){ r.classList.add('hot'); }); });
+        n.addEventListener('mouseleave', function(){ rows.forEach(function(r){ r.classList.remove('hot'); }); });
+        rows.forEach(function(r){
+          r.addEventListener('mouseenter', function(){ n.classList.add('hot'); });
+          r.addEventListener('mouseleave', function(){ n.classList.remove('hot'); });
+        });
+      });
+    });
+  }
+  var t; function relayout(){ clearTimeout(t); t = setTimeout(layout, 60); }
+  window.addEventListener('resize', relayout);
+  window.addEventListener('load', relayout);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ layout(); hover(); });
+  else { layout(); hover(); }
+})();
+</script>

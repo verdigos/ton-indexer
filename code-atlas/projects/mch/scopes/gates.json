@@ -1,0 +1,784 @@
+{
+  "id": "gates",
+  "title": "Gates and twins — verify everything yourself",
+  "summary": "Every claim in the previous eight chapters rests on one bar: run the C++ engine and the Python engine over the same corpus with the same artifact, and the two stdout streams must be byte-identical. Not \"equivalent\", not \"same count\" — `Compare-Object` returns zero lines. This chapter is the empowerment chapter: it shows the four kinds of gate (self-contained ctest modes, differential A/B twins, path-equivalence diffs, and generator repro guards), what each one actually proves, and the exact commands to run them. The twins are real Python — they import the production classifier (`mch_ir` engine, `block_tree_serializer`, the post-process passes), so a twin passing means the C++ engine agrees with the real Python mch runtime and serializer code — over the PORTED spec set. It does NOT mean agreement with the production event_classifier pipeline, whose old-engine matchers cover protocols mch has not ported (see the coffee-trace example in [[actions]]) today, not with a reimplementation of it. Two shared files keep the two sides from drifting silently: `twins/cpp_surface.json` (emitted by the engine itself) and `twins/twin_registries.py` (one factory list for all three twins). After this page you can check any number in this tutorial yourself, and you should — the numbers quoted in `docs/mch-cpp-plan.md` §1 are a dated snapshot and are already stale.",
+  "diagrams": [
+    {
+      "title": "The four kinds of gate",
+      "mermaid": "flowchart TD\n  A[\"self-contained: ctest -R mch<br/>8 tests, no corpus, no Python\"] --> A1[\"expr vectors x2 (interp + generated)<br/>build vectors · msg vectors<br/>shape · dexrecords · codegen selftest · abi bridge\"]\n  B[\"differential A/B twins<br/>engine dump vs Python twin\"] --> B1[\"--parse-dump · --match<br/>--classify · --actions\"]\n  C[\"path-equivalence<br/>engine vs engine\"] --> C1[\"--classify-schema · --actions-schema<br/>--classify-prod · --actions-prod\"]\n  D[\"repro guards<br/>nothing generated is hand-edited\"] --> D1[\"ir_emit manifest byte-repro<br/>msgs_gen byte-repro<br/>ton-abi-gen --check<br/>cpp_surface live-vs-committed\"]"
+    },
+    {
+      "title": "How one A/B gate is wired",
+      "mermaid": "flowchart LR\n  ART[\"ir/mch_ir.json\"] --> CPP[\"ton-mch-engine --classify\"]\n  ART --> PY[\"twins/py_classify.py\"]\n  TR[\"tests/traces/*.lz4<br/>148 fixtures\"] --> CPP\n  TR --> PY\n  SURF[\"twins/cpp_surface.json<br/>(emitted by --surface)\"] --> PY\n  REG[\"twins/twin_registries.py<br/>27 builder factories\"] --> PY\n  CPP --> O1[\"stdout: SKIP / === / ACTION\"]\n  PY --> O2[\"stdout: SKIP / === / ACTION\"]\n  O1 --> D{{\"Compare-Object\"}}\n  O2 --> D\n  D --> Z[\"0 lines = gate green\"]"
+    }
+  ],
+  "sections": [
+    {
+      "heading": "The twin philosophy: byte-diff-0, and why the dump is buffered",
+      "prose": "A twin is not a test fixture. It is a second implementation of a dump mode, written in Python, that imports the REAL classifier — `indexer.events.mch_ir` for the engine, `block_tree_serializer.block_to_action` for Action rows, `post_process_dedust_liquidity` / `unwind_deployments` for the host passes. So the gate is not \"does C++ match a spec I wrote down\" but \"does C++ match the real Python mch engine and the serializer code it shares with production\" — scoped, as always, to the PORTED spec set. That is why the twins were moved out of session scratchpads and committed: they encode gate semantics (canonical sorting, field-keyed cellhash renders, skip tables) that cost more to reconstruct than to keep.\n\nFour twins, four engine modes, one comparison operator. Each twin's module docstring is the format contract from the Python side; the matching C++ header carries the same contract from the other side, and neither may change without the other.\n\nThe dump being byte-comparable at all depends on a property of the core: results are BUFFERED per trace and emitted only after the post-process passes have run. Nothing is printed mid-pipeline, so a trace that faults halfway does not leave half a dump behind — it emits exactly one `TRACE_FAIL` line on both sides. That atomicity is what makes the diff a clean signal instead of a cascade.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/twins/README.md",
+          "lines": [
+            1,
+            24
+          ],
+          "lang": "markdown",
+          "title": "twins/README.md — the four twins and how to invoke them",
+          "annotations": [
+            {
+              "lines": [
+                4,
+                7
+              ],
+              "text": "\"They import the REAL Python classifier\" is the whole argument for this design. A twin that reimplemented the classifier would prove the two reimplementations agree; this one proves C++ agrees with the code the indexer actually runs. The price is that a twin must run from `indexer/` with the project venv — it is not standalone."
+            },
+            {
+              "lines": [
+                11,
+                11
+              ],
+              "text": "The asterisk matters when you copy-paste: `py_msg_dump` takes ONLY the traces dir (parsing does not depend on the IR artifact), the other three take the artifact path first. Getting this wrong gives a confusing \"no such file\" rather than a gate failure."
+            },
+            {
+              "lines": [
+                19,
+                19
+              ],
+              "text": "The entire acceptance criterion in one line. Not a count, not a tolerance — `Compare-Object` must return an empty result. Any single character of divergence anywhere in the corpus is a red gate, which is what makes the gates useful as a refactoring net: you never have to judge whether a diff is benign."
+            },
+            {
+              "lines": [
+                21,
+                23
+              ],
+              "text": "Build discipline lives here rather than in the C++ tree. `build_mch.bat` is the sanctioned entrypoint because the compile must run under `vcvars64` AND be invoked from PowerShell — Bash/cmd.exe wrapping mangles the vcvars call (plan §0.9, first bullet). A SEPARATE rule in the same section: never run cmake *configure* under vcvars (libpqxx `try_compile` breaks); the bat only does `--build`, so it stays on the right side of both. If you are only running gates you do not need it — the exe is already built."
+            }
+          ],
+          "sha8": "ad458ad9"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.h",
+          "lines": [
+            44,
+            71
+          ],
+          "lang": "cpp",
+          "title": "Why a dump can be byte-compared at all: the buffered atomic result",
+          "annotations": [
+            {
+              "lines": [
+                44,
+                47
+              ],
+              "text": "\"RENDERING-AGNOSTIC\" is the split that makes multiple gates possible from one pipeline: the core hands back block POINTERS, and the adapter decides whether to render a `--classify` line, an `--actions` row, or (in production) a DB insert. `--classify` and `--actions` are therefore not two pipelines to keep in sync — they are two renderers over the same `CoreAction` list ([[actions]])."
+            },
+            {
+              "lines": [
+                55,
+                58
+              ],
+              "text": "The atomicity guarantee. A mid-trace throw sets `failure` and returns what was collected; NOTHING has been printed yet. The Python twin mirrors this with a try/except around the whole matcher loop that prints a single `TRACE_FAIL` on stdout — so a fault is one comparable line on both sides rather than a diverging tail of partial output."
+            },
+            {
+              "lines": [
+                65,
+                70
+              ],
+              "text": "`fallback_actions` is populated only on failure and is UNGATED — no corpus trace fails, so no twin ever exercises it. Worth knowing before you trust it: it is the one production behaviour on this page that byte-diff-0 does not cover (named as a gap in prod-design §7.2, see [[prod-path]])."
+            }
+          ],
+          "sha8": "5c70ffae"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/MatchRunner.h",
+          "lines": [
+            1,
+            28
+          ],
+          "lang": "cpp",
+          "title": "A dump-format contract, stated on the C++ side",
+          "annotations": [
+            {
+              "lines": [
+                3,
+                4
+              ],
+              "text": "\"must be reproduced byte-for-byte by the Python twin\" — the header is the specification, not documentation of an implementation. When a dump format needs to change, this comment and the twin's docstring change in the same commit or the gate goes red immediately."
+            },
+            {
+              "lines": [
+                14,
+                16
+              ],
+              "text": "SKIP lines are emitted ONCE before any fixture because the skip set is artifact-global, not per-trace. This is itself A/B'd: the twin computes runnability from the artifact independently (see `skip_reason` below), so the two engines' opinions about which matchers they can run are compared, not assumed."
+            },
+            {
+              "lines": [
+                21,
+                23
+              ],
+              "text": "The block key uses only `btype`/`opcode`/`min_lt` — deliberately NOT `tx_hash`. Rule of thumb for adding anything to a dump: a field may appear only if its cross-language STRING form has itself been A/B-proven. A field that renders differently in Python and C++ turns every gate into noise."
+            },
+            {
+              "lines": [
+                24,
+                27
+              ],
+              "text": "Sorted vs unsorted is semantic, not cosmetic. `consumed` is a SET (§7), so it is sorted to make the render canonical; `captures` is a list in assembly order and must NOT be sorted, because order there carries meaning ([[matcher-runtime]]). Sorting the wrong one would hide a real ordering bug."
+            }
+          ],
+          "sha8": "dc8d306b"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "cd S:\\Dev\\ton-indexer-clear\\indexer\n$O=\"$env:TEMP\\mchgate\"; mkdir $O -Force | Out-Null   # keep the dumps OUT of the repo tree\n$EXE='S:/Dev/ton-indexer-clear/ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe'\n$ART='S:/Dev/ton-indexer-clear/ton-index-worker/ton-mch-engine/ir/mch_ir.json'\n$PY='S:/Dev/H-dump/tonscan-indexator/venv0/Scripts/python.exe'\n& $EXE --classify -I $ART -T tests\\traces > $O\\cpp.txt 2>$null\n& $PY ..\\ton-index-worker\\ton-mch-engine\\twins\\py_classify.py $ART tests\\traces > $O\\py.txt 2>$null\n\"diff lines : \" + @(Compare-Object (gc $O\\cpp.txt) (gc $O\\py.txt)).Count\n\"fixtures   : \" + (sls -Path $O\\cpp.txt -Pattern '^=== ').Count\n\"ACTION rows: \" + (sls -Path $O\\cpp.txt -Pattern '^ACTION ').Count",
+          "output": "diff lines : 0\nfixtures   : 148\nACTION rows: 199",
+          "note": "The headline gate, run for this page. 148 fixtures, 199 actions, zero diff. The `2>$null` matters only for readability: the Python side logs real classifier warnings (dedust merge skips, tonco transfer types) to stderr, which is NOT the comparison channel — stdout is."
+        },
+        {
+          "cmd": "# what one compared line looks like (the shortest ACTION in the corpus;\n# the amount=null filter is what makes this line unique)\n& $EXE --classify -I $ART -T tests\\traces 2>$null | Select-String '^ACTION jetton_mint.*amount=null'",
+          "output": "ACTION jetton_mint anchor=call_contract#642b7d07@63276845000008 btype=jetton_mint failed=1 broken=0 data={amount=null,asset=asset:0:D0E545323C7ACB7102653C073377F7E3C67F122EB94D430A250739F109D4A57D,to=0:28E676CE93E7A0053E408EB9868EFBF20B48F25DBBA6F816B5AD60985F6B743A,to_jetton_wallet=null,ton_amount=amount:35000000} consumed=[call_contract#642b7d07@63276845000008] auto=[]",
+          "note": "Every token here is compared: the anchor key, the failed/broken flags, the sorted data map, the rendered value prefixes (`amount:`, `asset:`, raw `wc:HEX`). `amount=null` next to `ton_amount=amount:35000000` is the kind of distinction the byte bar preserves — a null and a zero Amount are different characters."
+        }
+      ]
+    },
+    {
+      "heading": "One twin up close: py_classify.py",
+      "prose": "`py_classify.py` is 306 lines and worth reading end to end once; it is the shortest complete statement of what the C++ engine is supposed to do. Three parts carry all the subtlety: what it imports (nothing hand-mirrored), how it decides which matchers are runnable, and the loop — which deviates from `event_processing.py` in exactly one documented way.\n\nThe render functions in the middle of the file (`render`, `_cellhash`, `_render_field`) are the value-rendering contract from [[value]] restated in Python; the `cellhash:` treatment of BOC-container fields is the §12 root-hash bar, which exists so that a payload cell compares by its root hash rather than by a serializer-dependent byte encoding.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/twins/py_classify.py",
+          "lines": [
+            1,
+            41
+          ],
+          "lang": "python",
+          "title": "The header: what a twin is allowed to import",
+          "annotations": [
+            {
+              "lines": [
+                1,
+                6
+              ],
+              "text": "Read this docstring as two halves, because only the first is still true. \"the event_processing outer loop VERBATIM\" is the design: the twin does not reimplement matching, it drives the real `IrMatcher.try_build`. But lines 4-6 are STALE — nothing in `twins/` wraps or patches `BuildProgram.run` any more (grep it), and no `BuildOutcome` is captured; the loop just calls `r = await m.try_build(b)` and reads `produced.btype`/`produced.data` off the returned block. Worth knowing as a live example of a comment that outran its code — and as a reminder that a docstring is not gated, while the format contract it states IS."
+            },
+            {
+              "lines": [
+                25,
+                28
+              ],
+              "text": "The post-process passes are imported from production, not copied. This is what makes the Phase E ordering claim checkable: if `post_process_dedust_liquidity` changes upstream, the twin changes with it and the C++ side has to follow or the gate goes red."
+            },
+            {
+              "lines": [
+                35,
+                37
+              ],
+              "text": "R1b's first de-duplication: the C++ registry surface (which parsers/preds/fns/shapers/lookup kinds exist) used to be hand-copied literals in each twin. It now comes from a JSON file the ENGINE emits. A hand-mirrored list drifts silently; a generated one is guarded by a pytest."
+            },
+            {
+              "lines": [
+                39,
+                41
+              ],
+              "text": "R1b's second: the builder-registry factory list. Adding a protocol used to mean editing three twins identically — and forgetting one produced a skip-set difference, i.e. a gate failure that looked like an engine bug. One import now, and `twin_registries.py` is the only place a protocol is registered twin-side."
+            }
+          ],
+          "sha8": "38e801bf"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/twins/py_classify.py",
+          "lines": [
+            184,
+            206
+          ],
+          "lang": "python",
+          "title": "skip_reason — the twin computes runnability from the artifact, independently",
+          "annotations": [
+            {
+              "lines": [
+                185,
+                190
+              ],
+              "text": "Order is load-bearing: a missing PREDICATE short-circuits before anything else is examined, so the reason string is `pred:a,b` and never a mix. The C++ loader computes the same reasons in the same order, and the reasons are printed — so this function is a second implementation of `IrLoader` runnability that gets diffed, not a convenience."
+            },
+            {
+              "lines": [
+                193,
+                203
+              ],
+              "text": "The three reference classes a build program can miss on — parse types, lookup kinds, host fns — checked against the sets loaded from `cpp_surface.json`. This is where the surface file actually bites: if the committed surface says a parser exists and the engine no longer registers it, the twin includes a matcher the engine skips and the diff explodes at the first affected fixture."
+            },
+            {
+              "lines": [
+                206,
+                206
+              ],
+              "text": "`None` means runnable. Today the corpus reports zero SKIP lines (see the run above), so this function is dormant in the current gate — its value is that ADDING a spec that references an unported host fn degrades to a printed SKIP on both sides instead of a crash on one."
+            }
+          ],
+          "sha8": "9d801b47"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/twins/py_classify.py",
+          "lines": [
+            223,
+            257
+          ],
+          "lang": "python",
+          "title": "The one deliberate deviation from event_processing.py",
+          "annotations": [
+            {
+              "lines": [
+                223,
+                228
+              ],
+              "text": "The honest part of the twin. `event_processing.bfs_iter` walks `next_blocks` in raw insertion order; the C++ substrate keeps that list canonical (min_lt asc, stable) at ALL times, so raw insertion order is not even representable there. Rather than fake it, the twin walks canonical order too and says so. Generator semantics — children read AFTER `try_build` ran on the parent — are preserved, because THAT is what changes results."
+            },
+            {
+              "lines": [
+                236,
+                241
+              ],
+              "text": "\"No corpus trace triggers this.\" The per-trace exception boundary mirrors production's fallback-to-basic-actions behaviour, and it prints its detail on STDERR while stdout gets a bare `TRACE_FAIL`. Splitting the channels is what keeps a fault comparable: the message text (a Python exception repr) could never match C++, the fact of the fault must."
+            },
+            {
+              "lines": [
+                243,
+                247
+              ],
+              "text": "Phase E in three lines of comment: COLLECT during the matcher loop, run the passes AFTER, emit from the FINAL state. `aux` is fire-time and never revised; `data`/`consumed` are read post-pass. Get this ordering wrong on either side and the diff shows up as a handful of actions with stale data on otherwise-identical traces."
+            },
+            {
+              "lines": [
+                250,
+                251
+              ],
+              "text": "The `parent is not None` guard is the port of the outer loop's root-only rule — a block that has been absorbed into a parent is never offered to `try_build` again. It is a `continue` inside the BFS rather than a filter on the queue, so the traversal itself still descends through consumed blocks ([[matcher-runtime]])."
+            }
+          ],
+          "sha8": "f43f8314"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/twins/py_classify.py",
+          "lines": [
+            259,
+            279
+          ],
+          "lang": "python",
+          "title": "Post-passes, the survivor test, and the printed line",
+          "annotations": [
+            {
+              "lines": [
+                259,
+                261
+              ],
+              "text": "Survivorship is decided by IDENTITY diff of the spine, not by asking the passes what they merged. A pass that merges two deposit blocks into one removes the losers from the spine; every collected action whose produced block is gone is dropped from the dump. `id()` (not equality) because two structurally identical produced blocks are still two actions."
+            },
+            {
+              "lines": [
+                266,
+                268
+              ],
+              "text": "The production chain, in production order: dedust liquidity, stonfi_v2 liquidity, then `unwind_deployments`. The C++ side runs the same three in the same order inside `classify_trace`; the ordering is part of the contract, since `unwind_deployments` can act on blocks the liquidity passes produced."
+            },
+            {
+              "lines": [
+                274,
+                276
+              ],
+              "text": "`sorted(produced.data)` and `sorted(block_key(c) …)`: the data map is rendered key-sorted and consumed is set-sorted, so neither dict iteration order nor children insertion order can leak into the comparison. `_render_field` (not `render`) is used for data values — that is the hook where BOC-container fields collapse to `cellhash:` ([[value]])."
+            },
+            {
+              "lines": [
+                277,
+                279
+              ],
+              "text": "The literal format contract. Compare this f-string against the ACTION line in the run above and against `Classify.h`'s comment — three statements of one format, and the gate is what keeps them equal."
+            }
+          ],
+          "sha8": "b4cb5c80"
+        }
+      ]
+    },
+    {
+      "heading": "Two shared files: the surface and the registries",
+      "prose": "Both engines have to agree on facts that are not in the IR artifact: which message parsers exist, which host predicates and fns are registered, which lookup kinds are servable, which fields are BOC containers. The C++ side owns those registries. Rather than mirror them by hand in Python (the original design, which drifted), the engine emits them.\n\n`--surface` prints the live registries as stable-sorted JSON; the committed `twins/cpp_surface.json` is that output, and `twins/cpp_surface.py` loads it into the `CPP_*` sets every twin imports. Drift is caught twice: output-affecting drift blows up the A/B gates, and benign-superset drift (which would slip past them) is caught by a pytest that runs `--surface` and compares.\n\nOn the Python side the mirror-image problem is the builder registries. `twin_registries.py` holds one factory list, merged last-wins, imported by all three IR twins.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Surface.cpp",
+          "lines": [
+            70,
+            82
+          ],
+          "lang": "cpp",
+          "title": "--surface: the engine describing itself",
+          "annotations": [
+            {
+              "lines": [
+                71,
+                72
+              ],
+              "text": "Determinism is not achieved by sorting at the end — it falls out of the container choice. Every source here is a `std::map` or `std::set`, whose iteration order IS sorted order, so the emitted JSON is stable across runs and platforms without a sort step to forget."
+            },
+            {
+              "lines": [
+                74,
+                79
+              ],
+              "text": "Six registries, each the live one the engine dispatches through — `message_parsers()` is the same merged map from [[parse-layer]], `host_fns()`/`host_predicates()`/`host_shapers()` the same maps the build runtime calls. There is no separate \"surface list\" to update: adding a parser changes this output automatically, which is the point."
+            },
+            {
+              "lines": [
+                76,
+                76
+              ],
+              "text": "`FixtureLookupSource::kinds()` is an honest SUPERSET: it includes `dedust_pool`, which is fetched by the `dedust_swap_legs` host fn and never appears as a `lookup` node in any build program. Documented rather than trimmed, because it moves no skip decision — and a trimmed list would be a hand-maintained one again."
+            }
+          ],
+          "sha8": "e5c90075"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/twins/twin_registries.py",
+          "lines": [
+            48,
+            72
+          ],
+          "lang": "python",
+          "title": "One factory list for three twins",
+          "annotations": [
+            {
+              "lines": [
+                48,
+                60
+              ],
+              "text": "27 factories, and the ORDER is preserved verbatim from the three twins this file replaced — because the merge is last-wins per dict key, reordering could silently change which builder a name resolves to. It looks like an arbitrarily ordered list; it is a pinned one."
+            },
+            {
+              "lines": [
+                62,
+                63
+              ],
+              "text": "The eight registry dicts a protocol can contribute to. Five of them pair 1:1 with a `--surface` key — `predicates`↔`preds`, `message_types`↔`parsers`, `lookups`↔`lookup_kinds`, `fns`↔`fns`, `shapers`↔`shapers`. The other three have no surface entry: `opcodes` and `block_types` because the C++ engine reads those out of the IR artifact rather than a registry, and `builders` because a C++ builder is a generated build fn, not a registered row. The mapping also runs short the other way — the surface's `boc_fields` is a C++-only set with no Python registry behind it, which the twins import from `cpp_surface.py` for rendering."
+            },
+            {
+              "lines": [
+                66,
+                72
+              ],
+              "text": "A fresh `Registries` per call, merged in factory order. Cheap enough to call per twin invocation, and building it fresh (rather than caching a module-level singleton) means a twin can never be affected by another twin's mutation in the same process."
+            }
+          ],
+          "sha8": "85b5bb66"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "S:/Dev/ton-indexer-clear/ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe --surface",
+          "output": "{\n  \"boc_fields\": [\"custom_payload\", \"forward_payload\", \"message_boc\", \"message_boc_str\", \"order_boc\", \"order_boc_str\", \"stonfi_swap_body\"],\n  \"fns\": [\"coffee_swap_data\", \"dedust_deposit_final_data\", … \"tonstakers_minted_nft\"],\n  \"lookup_kinds\": [\"dedust_pool\", \"jetton_wallet\", \"jvault_assets\", \"nft_auction\", \"nft_item\", \"nft_sale\", \"nominator_pool\"],\n  \"parsers\": [\"ChangeDnsRecordMessage\", \"ClaimRewardMessage\", … \"VestingSendMessage\"],\n  \"preds\": [\"evaa_service_comment\", \"evaa_user_withdraw_fail\", … \"stonfi_v1_sender_payment\"],\n  \"shapers\": [\"getgems_proxy_insert\", \"nft_transfer_parent_absorb\", \"tgbtc_deploy_absorb\"]\n}",
+          "note": "Real output, with the three long arrays elided at the '…'. Live counts today: 7 boc_fields, 16 fns, 7 lookup_kinds, 32 parsers, 9 preds, 3 shapers. Regenerate the committed mirror with `ton-mch-engine --surface > ton-index-worker/ton-mch-engine/twins/cpp_surface.json` after adding any registry row."
+        }
+      ]
+    },
+    {
+      "heading": "Self-contained gates: vectors and ctest",
+      "prose": "The A/B twins need Python, the corpus, and a venv. The gates in this section need none of that — they are engine modes over version-controlled JSON documents, wired into CTest so `ctest -R mch` runs all eight in under a second. That is deliberate: the differential gates stay OUT of ctest precisely because they have external dependencies, and a test suite you cannot run from a cold checkout is a test suite people stop running.\n\nThe three vector families cover the three layers the twins cannot isolate. Expression vectors are run TWICE — once through the tree-walking interpreter and once through the generated C++ — against the same expectations, which is how the \"one semantics\" rule (interpreter and codegen call the same `rt_*` functions) is actually enforced rather than asserted. Build vectors do the same for statements, with expectations GENERATED by running the real Python `BuildProgram.run` rather than hand-authored. Message vectors are boundary cases emitted by the schema compiler next to the parsers it generates.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/VectorRunner.h",
+          "lines": [
+            1,
+            27
+          ],
+          "lang": "cpp",
+          "title": "Expression vectors: two paths, one semantics",
+          "annotations": [
+            {
+              "lines": [
+                5,
+                8
+              ],
+              "text": "The same document, the same expectations, two executors. This is the only gate that can catch codegen diverging from the interpreter — and the plan's ground rule is that when they disagree, CODEGEN is wrong by default (or you found an interpreter bug, in which case stop and report rather than silently fix). Both call into `ExprRuntime`, so a real divergence means one of them stopped doing that ([[build-programs]])."
+            },
+            {
+              "lines": [
+                23,
+                25
+              ],
+              "text": "`decode_vector_value` is shared with the build-vector runner, so both vector families speak the §12 tagged encoding (`$amount`/`$account`/`$asset_*`/`$bytes_b64`/`$cell_b64`/…). One decoder means a vector file cannot mean different things to the two runners."
+            }
+          ],
+          "sha8": "f57456db"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BuildVectorRunner.h",
+          "lines": [
+            1,
+            26
+          ],
+          "lang": "cpp",
+          "title": "Build vectors: expectations nobody typed",
+          "annotations": [
+            {
+              "lines": [
+                6,
+                9
+              ],
+              "text": "\"GENERATED by running the real Python BuildProgram.run … no hand-authored expectations\" — the strongest sentence on this page. A hand-written expectation encodes what the author BELIEVED the semantics were; a generated one encodes what Python actually does. The offline generator is not committed, which is fine: the vectors are, and they are only ever regenerated from Python."
+            },
+            {
+              "lines": [
+                9,
+                12
+              ],
+              "text": "The C++ side runs the GENERATED build fns, and the table is permanently paired with its input document by suffix (`gen_builds_vectors` vs `gen_builds_ir`) plus a sha guard. Running vectors against a table built from a different document is a hard error, not a silent mismatch — see the CMake custom commands that emit both tables."
+            },
+            {
+              "lines": [
+                15,
+                18
+              ],
+              "text": "The `$block` encoding carries a real BOC body, so `parse` inside a build program runs the real `MsgParse` dispatch rather than a stub. That is what makes these vectors cover the parse seam of [[parse-layer]] without needing a trace fixture."
+            }
+          ],
+          "sha8": "176b8d6b"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/CMakeLists.txt",
+          "lines": [
+            214,
+            234
+          ],
+          "lang": "cmake",
+          "title": "CTest wiring — and what is deliberately absent",
+          "annotations": [
+            {
+              "lines": [
+                215,
+                217
+              ],
+              "text": "The stated boundary: only DETERMINISTIC, SELF-CONTAINED modes become ctest tests. The A/B gates need the fixture corpus and Python, so they are run from the harness (the commands on this page) and never from ctest. If you add a mode, this comment tells you which side it belongs on."
+            },
+            {
+              "lines": [
+                219,
+                224
+              ],
+              "text": "Expr vectors twice (interpreter + generated) plus build vectors — the three tests whose input document is ALSO the codegen input. `expr_vectors.json` and `build_vectors.json` are exactly the files the CMake custom commands feed to `mch-codegen` to emit the generated tables, so a table can never be gated against different data than it was built from."
+            },
+            {
+              "lines": [
+                229,
+                230
+              ],
+              "text": "The third vector family, and the exception to the pairing above: `msg_vectors.json` is emitted by the PYTHON schema compiler (`msgs_gen`) alongside `MsgParsersGenerated.cpp`, and `mch-codegen` never touches it. Its input/gate pairing is held by the byte-repro pytest instead — same discipline, different generator."
+            },
+            {
+              "lines": [
+                231,
+                232
+              ],
+              "text": "`mch-codegen --selftest` gates the generator itself (determinism / byte-identical emission), which is why the plan's gate table lists codegen determinism as \"covered by ctest + CMake regen\" rather than as a separate command."
+            },
+            {
+              "lines": [
+                233,
+                234
+              ],
+              "text": "`--abi-bridge-test` is the newest row: dup-policy exercise, round-trip through real registry dispatch, adapter shape checks against real generated ton-abi structs. It is compiled into the harness exe only — the fixture ABI pairs it uses are UNDER TEST and never enter the production `mch-classify` library ([[parse-layer]])."
+            }
+          ],
+          "sha8": "648f111c"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "cd S:/Dev/ton-indexer-clear/ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine\nctest -R mch",
+          "output": "1/8 Test #1: mch_expr_vectors .................   Passed    0.13 sec\n2/8 Test #2: mch_expr_vectors_gen .............   Passed    0.02 sec\n3/8 Test #3: mch_build_vectors ................   Passed    0.04 sec\n4/8 Test #4: mch_shape_test ...................   Passed    0.01 sec\n5/8 Test #5: mch_dexrecords ...................   Passed    0.01 sec\n6/8 Test #6: mch_msg_vectors ..................   Passed    0.02 sec\n7/8 Test #7: mch_codegen_selftest .............   Passed    0.01 sec\n8/8 Test #8: mch_abi_bridge ...................   Passed    0.02 sec\n\n100% tests passed, 0 tests failed out of 8\n\nTotal Test time (real) =   0.29 sec",
+          "note": "Run for this page. Eight tests, 0.29 s, no corpus and no Python — this is the gate you run after every C++ edit before you bother with the twins."
+        },
+        {
+          "cmd": "$EXE='S:/Dev/ton-indexer-clear/ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe'\n$IR='S:/Dev/ton-indexer-clear/ton-index-worker/ton-mch-engine/ir'\n& $EXE --vectors       $IR/expr_vectors.json  | Select-Object -Last 1\n& $EXE --build-vectors $IR/build_vectors.json | Select-Object -Last 1\n& $EXE --msg-vectors   $IR/msg_vectors.json   | Select-Object -Last 1\n& $EXE --shape-test                           | Select-Object -Last 1",
+          "output": "115/115 vectors passed (interpreter)\n38/38 build vectors passed (generated)\nMSG-VECTORS 44/44 ALL PASS\nSHAPE-TEST ALL PASS",
+          "note": "The per-mode summaries behind ctest's green ticks, captured for this page. These counts have grown since the plan's §1 table (97 / 35) — the table's Pass column is a dated snapshot, the runner's output is the truth."
+        }
+      ]
+    },
+    {
+      "heading": "Repro guards: nothing generated is hand-edited",
+      "prose": "Three of the artifacts these gates depend on are generated: the IR artifact (Python `ir_emit`), the message-parser TU plus its vectors (Python `msgs_gen`), and the ton-abi C++ pairs (`ton-abi-gen`). A generated file that someone \"just tweaked\" would make every downstream gate lie — it would still be green, and it would be green about the wrong thing.\n\nSo each generator has a byte-repro guard: regenerate into memory or a temp dir, compare bytes with the committed copy, fail on any difference. Same discipline, three places. The `--surface` mirror gets the same treatment for the same reason.",
+      "excerpts": [
+        {
+          "file": "indexer/tests/mch/test_ir_emit.py",
+          "lines": [
+            31,
+            41
+          ],
+          "lang": "python",
+          "title": "The IR artifact must be reproducible from its manifest",
+          "annotations": [
+            {
+              "lines": [
+                34,
+                35
+              ],
+              "text": "The manifest, not the specs directory: `emit_manifest.json` pins the spec files AND their registration order, so the artifact is reproducible even as new `.mch` files land in the specs dir (conformance-only specs are deliberately excluded from the prod artifact). Emitting from the directory would silently change matcher priority ordering ([[ir-artifact]])."
+            },
+            {
+              "lines": [
+                40,
+                41
+              ],
+              "text": "`render_json(...).encode(\"utf-8\") == committed.read_bytes()` — bytes, not parsed-JSON equality. Key order, separators and float formatting are all part of the contract, because the C++ side pairs its generated build tables to the artifact by SHA of the file."
+            }
+          ],
+          "sha8": "379dad95"
+        },
+        {
+          "file": "indexer/tests/mch/test_msgs_gen.py",
+          "lines": [
+            17,
+            36
+          ],
+          "lang": "python",
+          "title": "The generated parser TU and its vectors, same discipline",
+          "annotations": [
+            {
+              "lines": [
+                17,
+                28
+              ],
+              "text": "Two committed outputs from one schema: `MsgParsersGenerated.cpp` and `msg_vectors.json`. The vectors gate (ctest #6) therefore tests parsers against boundary cases emitted by the same run that emitted the parsers — which is only trustworthy BECAUSE both are byte-pinned to the committed schema."
+            },
+            {
+              "lines": [
+                31,
+                36
+              ],
+              "text": "A separate determinism test: generate twice in one process and compare. Byte-repro against the committed file would already fail on nondeterminism, but only after someone regenerates — this catches a set-iteration or dict-ordering hazard the moment it is introduced."
+            }
+          ],
+          "sha8": "b4433dc8"
+        },
+        {
+          "file": "ton-index-worker/ton-abi/CMakeLists.txt",
+          "lines": [
+            67,
+            81
+          ],
+          "lang": "cmake",
+          "title": "ton-abi: the same guard, as a ctest",
+          "annotations": [
+            {
+              "lines": [
+                70,
+                71
+              ],
+              "text": "\"msgs_gen discipline\" cited by name — the ABI generator adopted the rule rather than inventing one. `--check` regenerates each pair in MEMORY and byte-compares it against the committed file (a missing file counts as drift); nothing is written, which is why the ctest can safely point `--out-dir` at the committed `generated/` dir. A hand-edit to `generated/*_gen.cpp` fails here, not three gates downstream."
+            },
+            {
+              "lines": [
+                76,
+                79
+              ],
+              "text": "The glob covers BOTH ABI sources — reference-repo test fixtures and the production `abi/` declarations — so the DeDust V2 pairs that [[parse-layer]] registers are under the same byte-repro bar as the test fixtures. The `err-invalid-map-key` exclusion is for two fixtures that are supposed to fail generation and therefore have no committed pair."
+            }
+          ],
+          "sha8": "1f92229e"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "cd S:/Dev/ton-indexer-clear/ton-index-worker/cmake-build-debug-visual-studio/ton-abi\nctest",
+          "output": "1/2 Test #1: ton_abi_smoke ....................   Passed    0.36 sec\n2/2 Test #2: ton_abi_gen_check ................   Passed    0.13 sec\n\n100% tests passed, 0 tests failed out of 2",
+          "note": "Run for this page. The ton-abi module has its own ctest project; `mch` and `ton-abi` together are the 8/8 + 2/2 that the commit messages quote."
+        }
+      ]
+    },
+    {
+      "heading": "Path-equivalence gates: engine vs engine",
+      "prose": "The twins prove the C++ pipeline matches Python. They cannot prove that the PRODUCTION entry into that pipeline — a trace arriving as `schema::Transactions` from the indexer, and interfaces arriving from an in-block map plus a DB/kvrocks fallback — reproduces the fixture-driven entry the twins exercise. That needs a different comparison: the same engine, two input paths, diffed against itself.\n\n`SchemaGate.cpp` is that harness. It re-routes each fixture through msgpack -> our structs -> schema -> `SchemaTraceLoader` -> our structs and classifies the result, so a diff against plain `--classify` isolates the loader. The `-prod` variants go further and swap the lookup source too. Because both sides are the same binary, a zero diff here is a statement about the ADAPTERS only — which is exactly the claim [[prod-path]] needs.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/SchemaGate.h",
+          "lines": [
+            1,
+            27
+          ],
+          "lang": "cpp",
+          "title": "Four modes that diff the engine against itself",
+          "annotations": [
+            {
+              "lines": [
+                1,
+                6
+              ],
+              "text": "\"path B\" vs \"path A\": the loader is proven by ROUND-TRIPPING the fixture through the production schema types and re-classifying. Note what this does NOT prove — that the indexer's real schema rows look like the synthesized ones. It proves the loader is lossless for everything the classifier reads, which is the part a fixture can speak to."
+            },
+            {
+              "lines": [
+                15,
+                19
+              ],
+              "text": "The prod variants add `ParsedBlockLookupSource` with its two tiers: a synthesized in-block `account_interfaces_` map (tier 1) and a fixture-backed fallback (tier 2). Diff-0 here means the tiering reproduces the fixture source's shapes exactly — the interesting failure mode being a tier-1 hit that returns a subtly different shape than the tier-2 answer would have."
+            },
+            {
+              "lines": [
+                23,
+                26
+              ],
+              "text": "The `--actions-*` twins of these modes exist because the Action render exercises fields the classify dump does not: the raw-account leak into the accounts set, and `aborted` flipping success/failed. A gate that only diffed `--classify` would miss both ([[actions]])."
+            }
+          ],
+          "sha8": "10ddbefe"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "cd S:\\Dev\\ton-indexer-clear\\indexer\n$O=\"$env:TEMP\\mchgate\"; mkdir $O -Force | Out-Null   # keep the dumps OUT of the repo tree\n$EXE='S:/Dev/ton-indexer-clear/ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe'\n$ART='S:/Dev/ton-indexer-clear/ton-index-worker/ton-mch-engine/ir/mch_ir.json'\n$PY='S:/Dev/H-dump/tonscan-indexator/venv0/Scripts/python.exe'\n& $EXE --parse-dump -T tests\\traces > $O\\cpp_parse.txt 2>$null\n& $PY ..\\ton-index-worker\\ton-mch-engine\\twins\\py_msg_dump.py tests\\traces > $O\\py_parse.txt 2>$null\n& $EXE --actions -I $ART -T tests\\traces > $O\\cpp_act.txt 2>$null\n& $PY ..\\ton-index-worker\\ton-mch-engine\\twins\\py_actions.py $ART tests\\traces > $O\\py_act.txt 2>$null\n& $EXE --classify -I $ART -T tests\\traces > $O\\cpp_cls.txt 2>$null\n& $EXE --classify-prod -I $ART -T tests\\traces > $O\\cpp_prod.txt 2>$null\n\"parse   twin diff: \" + @(Compare-Object (gc $O\\cpp_parse.txt) (gc $O\\py_parse.txt)).Count\n\"actions twin diff: \" + @(Compare-Object (gc $O\\cpp_act.txt)   (gc $O\\py_act.txt)).Count\n\"prod path   diff: \" + @(Compare-Object (gc $O\\cpp_cls.txt)   (gc $O\\cpp_prod.txt)).Count",
+          "output": "parse   twin diff: 0\nactions twin diff: 0\nprod path   diff: 0",
+          "note": "Run for this page: 581 parse-dump lines, 199 Action rows, and the full production path (schema loader + ParsedBlockLookupSource) reproducing `--classify` exactly."
+        }
+      ]
+    },
+    {
+      "heading": "The gate table, and why you should not trust its numbers",
+      "prose": "`indexer/docs/mch-cpp-plan.md` §1 is the canonical list: twelve rows, each a gate with an exact command and a Pass column. It covers the Python suites, the two expression-vector paths, build vectors, the shape/self tests plus ctest, the four A/B twins (msg parsing, match walker, classify, action rows), the schema-loader and prod-path equivalence gates, and codegen determinism. Its ground rules are equally load-bearing: run the full set before starting a task and again after finishing; a task is not done while any gate is red; Python is ground truth; and when codegen disagrees with the interpreter, codegen is wrong.\n\nWhat you should NOT take from that table is its numbers. It is dated 2026-07-11 and says 147 fixtures, 196 classify actions, 196 Action rows, 97 expression vectors, 35 build vectors, ctest 5/5. Every one of those has moved: the corpus is 148 fixtures, classify and actions are 199 each, expression vectors 115, build vectors 38, message vectors 44, ctest 8/8 for `mch` plus 2/2 for `ton-abi`. All verified by the runs above, on this checkout, today. The commands in the table are stable; the counts are a snapshot, and the habit worth forming is to re-derive them rather than quote them.\n\nOne more honest gap, restated: the corpus contains no failing trace, so `ClassifyResult::fallback_actions` and the `TRACE_FAIL` path are exercised by neither twin. Byte-diff-0 is a very strong claim about the paths the corpus reaches, and says nothing about the ones it does not.",
+      "excerpts": []
+    },
+    {
+      "heading": "Check yourself",
+      "prose": "Four things to do before you consider this tutorial verified. Each is a real command; each either reproduces a number quoted somewhere in these ten chapters or tells you the tutorial has drifted.\n\n1. RUN THE FAST GATE. `cd` to `ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine` and run `ctest -R mch`. You should get 8/8 in well under a second. Then `cd ../ton-abi` and run `ctest` for 2/2. If any of the ten fails on an unmodified checkout, nothing else on this page is trustworthy.\n\n2. REPRODUCE THE HEADLINE DIFF YOURSELF. Copy the first runs block in this chapter verbatim. Confirm `diff lines : 0`, and confirm the fixture/action counts match what this chapter and [[actions]] claim (148 / 199). Then break it on purpose: open `twins/py_classify.py`, change `sorted(produced.data)` on line 275 to `produced.data`, re-run, and watch the diff count explode. That is what a real regression looks like, and it is worth seeing once so you recognise it.\n\n3. PROVE THE SURFACE FILE IS NOT DECORATIVE. Run `ton-mch-engine --surface` and diff it against `twins/cpp_surface.json` — `Compare-Object (gc twins/cpp_surface.json) (& $EXE --surface)`, expect 0. Then run `python -m pytest tests/mch/test_cpp_surface.py -q` from `indexer/` and confirm it passes for the same reason. Now reason it through: if you deleted a row from `abi_message_parsers()` without regenerating the mirror, which of the two catches it first, and what would the failure message actually tell you?\n\n4. READ ONE TWIN AGAINST ITS C++ CONTRACT. Open `twins/py_match_dump.py` and `src/MatchRunner.h` side by side. The header's DUMP FORMAT CONTRACT block and the twin's emission code should read as the same sentence in two languages. Any place where you cannot map one onto the other is either a comment that has drifted or a piece of the format that is not actually gated — both are worth reporting.",
+      "excerpts": []
+    }
+  ],
+  "edges": [
+    {
+      "to": "actions",
+      "why": "--actions is the second renderer over the same CoreAction list; its extra fields (accounts, cellhash renders, aborted) are why a separate twin exists"
+    },
+    {
+      "to": "prod-path",
+      "why": "--classify-prod / --actions-prod are the evidence that the schema loader and the two-tier lookup adapter are lossless"
+    },
+    {
+      "to": "parse-layer",
+      "why": "--parse-dump vs py_msg_dump is the parity gate behind every pytoniq-quirk claim there; --abi-bridge-test covers the third parser source"
+    },
+    {
+      "to": "ir-artifact",
+      "why": "the artifact's byte-repro guard (emit_manifest) is what lets generated build tables be sha-paired to it"
+    },
+    {
+      "to": "build-programs",
+      "why": "expr vectors run twice (interpreter + generated) to enforce the one-semantics rule that page depends on"
+    }
+  ],
+  "not_annotated": [
+    {
+      "path": "ton-index-worker/ton-mch-engine/twins/py_classify.py",
+      "partial": true,
+      "reason": "header, skip_reason, the loop and the emit are excerpted. The remainder is the value-rendering half (`render`, `_cellhash`, `_render_field`, `block_key`) — the Python statement of the §12 render contract already covered from the C++ side in [[value]] (~306 LOC total)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/twins/py_actions.py",
+      "reason": "the --actions twin: same collect->pass pipeline as py_classify, then each surviving block through the REAL block_tree_serializer.block_to_action and rendered in the C++ column set. Its docstring lists exactly what is NOT rendered (roles, trace_id/finality) and why; read that, then diff it against py_classify to see the delta (~346 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/twins/py_match_dump.py",
+      "reason": "the --match twin: real mch_ir walker, match path only (no build), plus its own mirror of IrLoader runnability so the skip set is itself A/B'd. Pair it with src/MatchRunner.h — suggested as exercise 4 above (~184 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/twins/py_msg_dump.py",
+      "reason": "the --parse-dump twin: an opcode -> Python message class table over every fixture message, rendered canonically. The only twin that takes no IR artifact. Its CLASSES dict is the readable index of which opcodes the parse gate covers (~189 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/twins/cpp_surface.py",
+      "reason": "33 lines: load cpp_surface.json, expose six sets. The docstring (regeneration command, the dedust_pool superset note) is the whole content; the code is six assignments"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/twins/cpp_surface.json",
+      "reason": "the committed --surface output. Machine-written, guarded by test_cpp_surface.py; read it only to see the current registry inventory at a glance (~9 lines)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/twins/README.md",
+      "partial": true,
+      "reason": "the twin/mode table is excerpted. The remainder is the cpp_surface section (paraphrased in this chapter's third section) and a history note explaining why the twins moved from session scratchpads into the repo (~52 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/twins/build_mch.bat",
+      "reason": "the sanctioned local build entrypoint (vcvars64 + CLion cmake, target ton-mch-engine). Not a gate; you need it only if you edit C++, and the plan's §0.9 rules around it matter more than its contents"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/Surface.cpp",
+      "partial": true,
+      "reason": "run_surface is excerpted. The remainder is a defensive JSON string escaper and two container->vector helpers — no decisions in them (~85 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/SchemaGate.cpp",
+      "reason": "the implementation behind the four path-equivalence modes: synthesizes schema::Transactions from a fixture, drives SchemaTraceLoader, and builds the account_interfaces_ map the prod lookup source reads. It belongs with [[prod-path]], which explains what those structures are (~430 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/VectorRunner.cpp",
+      "reason": "PARTIAL: the header contract is excerpted. The .cpp is JSON decoding of the §12 tagged encoding plus a PASS/FAIL print loop; the semantics it exercises all live in ExprRuntime ([[build-programs]]) (~330 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/BuildVectorRunner.cpp",
+      "reason": "PARTIAL: the header contract is excerpted. The .cpp reconstructs backing Message/Transaction/EventNode/Block objects from the $block encoding so accessors and parse behave like production — mechanical, but the place to look if a vector fails for an env-shape reason (~430 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/MsgVectorRunner.{h,cpp}",
+      "reason": "the smallest gate: decode each vector's body BOC, assert parse_message_body succeeds or fails as declared. Header comment is three lines and says everything (~90 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ShapeTest.{h,cpp}",
+      "reason": "self-contained parity checks for Block::insert_between and the registered shapers, mirroring the Python tests/mch_ir/test_shape.py cases. One PASS line per check; read the Python test first — it is the specification (~200 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/DexRecordsTest.{h,cpp}",
+      "reason": "--dexrecords-test: self-contained checks for the DEX pool/record host helpers. A ctest row on this page, but its subject matter is host functions ([[build-programs]])"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/MatchRunner.cpp",
+      "reason": "PARTIAL: the format contract in the header is excerpted. The .cpp is the walker driver plus line formatting — the walker itself is [[matcher-runtime]] (~200 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ParseDump.{h,cpp}",
+      "reason": "the --parse-dump harness: iterate fixture messages, dispatch registered opcodes, render canonically. Split out of MsgParse so the registry has no CLI dependency; the rendering rules it implements are the parity claims of [[parse-layer]] (~200 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/BuildSmoke.{h,cpp}",
+      "reason": "--build-smoke, the earlier per-matcher build harness that predates --classify. Still useful for isolating one matcher's build program, but no longer a gate row (~250 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/AbiBridgeTest.cpp",
+      "reason": "the --abi-bridge-test body (ctest #8): dup-policy exercise, round-trip through real registry dispatch, adapter shape checks. Listed as out-of-scope in [[parse-layer]] and referenced here only as a gate row (~342 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/CMakeLists.txt",
+      "reason": "PARTIAL: the CTest block is excerpted. The rest is the codegen custom commands, the mch-classify / ton-mch-engine target split and the ABI pair lists — build-system material for [[prod-path]] (~235 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-abi/CMakeLists.txt",
+      "reason": "PARTIAL: the enable_testing/--check block is excerpted. The rest builds the ton-abi library, generator and test exe (~81 LOC)"
+    },
+    {
+      "path": "indexer/tests/mch/test_ir_emit.py",
+      "reason": "PARTIAL: the byte-repro test is excerpted. The remainder asserts IR structural invariants (node-index validity, graph shapes for jetton_transfer and dedust_swap, build-program encoding) — content for [[ir-artifact]] (~240 LOC)"
+    },
+    {
+      "path": "indexer/tests/mch/test_cpp_surface.py",
+      "reason": "46 lines, two tests: the committed cpp_surface.json must be well-formed and SORTED (cheap, runs without the exe — it matters because cpp_surface.py loads these arrays as SETS, so an unsorted file loads fine and drifts invisibly), and it must equal a live `--surface`. The docstring states the reason the second one exists: a benign SUPERSET drift slips past the A/B gates"
+    },
+    {
+      "path": "indexer/tests/mch/ (the other ~20 test modules)",
+      "reason": "the Python-side suite the plan's first gate row runs (lexer/parser/resolver/compiler/codegen/host fns/shape/registry/…). They gate the FRONTEND — the .mch language and its compiler — rather than the C++ engine, and are the subject of the Python-side docs rather than this atlas"
+    },
+    {
+      "path": "indexer/docs/mch-cpp-plan.md",
+      "reason": "not code. §1 is the canonical gate table (quoted in prose above, deliberately not excerpted); §0 the ground rules; §2 the as-built state. Read §0 and §1 once; treat every count in them as a dated snapshot"
+    }
+  ]
+}
