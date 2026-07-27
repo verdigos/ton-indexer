@@ -1,8 +1,8 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 22a8e223..2f6f691f 100644
+index 1274fbca..a224f2e7 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -269,7 +269,7 @@ if (MSVC)
+@@ -381,7 +381,7 @@ if (MSVC)
      string(REPLACE "/RTC1" " " CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
    endif()
    add_definitions(-D_SCL_SECURE_NO_WARNINGS -D_CRT_SECURE_NO_WARNINGS)
@@ -12,7 +12,7 @@ index 22a8e223..2f6f691f 100644
    if (GCC)
      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstrong-eval-order=some")
 diff --git a/tddb/td/db/RocksDbSecondary.cpp b/tddb/td/db/RocksDbSecondary.cpp
-index a6dfca2a..17fa358e 100644
+index 8e135032..d5703287 100644
 --- a/tddb/td/db/RocksDbSecondary.cpp
 +++ b/tddb/td/db/RocksDbSecondary.cpp
 @@ -14,6 +14,8 @@
@@ -22,11 +22,5 @@ index a6dfca2a..17fa358e 100644
 +#include <algorithm>
 +
  #include "rocksdb/db.h"
- #include "rocksdb/table.h"
+ #include "rocksdb/filter_policy.h"
  #include "rocksdb/statistics.h"
-diff --git a/third-party/rocksdb b/third-party/rocksdb
---- a/third-party/rocksdb
-+++ b/third-party/rocksdb
-@@ -1 +1 @@
--Subproject commit cb7a5e02edeb883193eb5b4901d5943f58e9add9
-+Subproject commit cb7a5e02edeb883193eb5b4901d5943f58e9add9-dirty
