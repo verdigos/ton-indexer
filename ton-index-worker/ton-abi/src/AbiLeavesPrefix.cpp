@@ -28,9 +28,13 @@ td::Status fetch_prefix_bits(vm::CellSlice &cs, int len, std::uint64_t &out) {
   int low = len > 64 ? 64 : len;
   out = 0;
   if (low > 0) {
-    if (!cs.fetch_ulong_bool(static_cast<unsigned>(low), out)) {
+    // Local ULL: on LP64 std::uint64_t is unsigned long, which cannot bind to
+    // fetch_ulong_bool's unsigned long long& (fine on Windows where they alias).
+    unsigned long long v = 0;
+    if (!cs.fetch_ulong_bool(static_cast<unsigned>(low), v)) {
       return td::Status::Error("prefix: failed to read prefix bits");
     }
+    out = v;
   }
   return td::Status::OK();
 }
