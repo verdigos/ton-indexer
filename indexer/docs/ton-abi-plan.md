@@ -17,7 +17,10 @@
 > docs/mch-cpp-plan.md §1 (**baseline = 148 fixtures / 199 actions** — fixture swap
 > RESOLVED 2026-07-24 keep-both: 02kEPzkQ restored + i-gQwY3n committed;
 > classify/actions/match re-verified diff-0 at 148). OPEN ITEMS: TON-payout YAML
-> case (fixture fetch needs n2+VPN), merge decision, further protocol migration
+> case (fixture fetch needs n2+VPN), further protocol migration
+> (MERGE RESOLVED 2026-07-27: stack consolidated + upstream v1.2+v1.3 merged →
+> branch **merge-v13** (private/merge-v13); baseline 165 fixtures / 227 actions;
+> catch-up wave 1637253e restored diff-0 — see ton-mch-engine memory / git log)
 > (§0.6 legacy ages out per-protocol).
 >
 > Companion design study (historical, partially superseded):
