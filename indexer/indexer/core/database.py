@@ -39,7 +39,7 @@ settings = Settings()
 
 # async engine
 def get_engine(settings: Settings):
-    logger.critical(settings.pg_dsn)
+    # logger.critical(settings.pg_dsn)
     engine = create_async_engine(settings.pg_dsn,
                                  pool_size=128,
                                  max_overflow=24,
@@ -52,7 +52,7 @@ SessionMaker = sessionmaker(bind=engine, class_=AsyncSession)
 # # async engine
 def get_sync_engine(settings: Settings):
     pg_dsn = settings.pg_dsn.replace('+asyncpg', '')
-    logger.critical(pg_dsn)
+    # logger.critical(pg_dsn)
     engine = create_engine(pg_dsn,
                            pool_size=128,
                            max_overflow=0,
@@ -567,6 +567,12 @@ class Action(Base):
         Column("query_id", Numeric),
         Column("withdraw_amount", Numeric),
     ]))
+    wallet_v5_extension_data = Column(CompositeType("wallet_v5_extension_details", [
+        Column("wallet_id", Numeric),
+        Column("valid_until", Numeric),
+        Column("seqno", Numeric),
+        Column("signature_allowed", Boolean),
+    ]))
     trace_end_lt: int = Column(Numeric)
     trace_end_utime: int = Column(Numeric)
     trace_external_hash: str = Column(String)
@@ -576,6 +582,9 @@ class Action(Base):
     value_extra_currencies: dict = Column(JSONB)
     parent_action_id: str = Column(String)
     ancestor_type: list[str] = Column(ARRAY(String), default=[])
+    # type-specific payloads that don't fit address-typed standard columns
+    # (e.g. tgbtc bitcoin_txid/pubkey)
+    extra: dict = Column(JSONB)
 
     accounts: list[str]
 
