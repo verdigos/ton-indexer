@@ -125,7 +125,7 @@ class MchEngineWorker : public td::actor::Actor {
       LOG(INFO) << "block tree (" << ctx.arena.blocks.size() << " leaf blocks):";
       print_block(ctx.root, 0);
     }
-    td::actor::SchedulerContext::get()->stop();
+    td::actor::SchedulerContext::get().stop();
     stop();
   }
 
