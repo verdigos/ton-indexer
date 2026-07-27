@@ -134,6 +134,7 @@ add_library(mch-classify STATIC
     src/host/HostDedust.cpp
     src/host/HostLayerZero.cpp
     src/host/HostTonstakers.cpp
+    src/host/HostVesting.cpp
     src/host/HostJvault.cpp
     src/host/HostNft.cpp
     src/host/HostTgbtc.cpp

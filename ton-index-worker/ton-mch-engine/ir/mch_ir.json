@@ -2832,6 +2832,42 @@
               }
             },
             {
+              "name": "position",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "payout_reward"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "owner",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "payout_reward"
+                  },
+                  "name": "body"
+                },
+                "name": "ownerAddress"
+              }
+            },
+            {
               "name": "reward_index",
               "expr": {
                 "k": "attr",
@@ -2847,7 +2883,7 @@
               }
             },
             {
-              "name": "amount1_out",
+              "name": "amount",
               "expr": {
                 "k": "call",
                 "fn": "amount",
@@ -2868,7 +2904,7 @@
               }
             },
             {
-              "name": "asset1_out",
+              "name": "asset",
               "expr": {
                 "k": "ternary",
                 "cond": {
@@ -2919,7 +2955,7 @@
               }
             },
             {
-              "name": "wallet1",
+              "name": "user_wallet",
               "expr": {
                 "k": "ternary",
                 "cond": {
@@ -2951,7 +2987,7 @@
               }
             },
             {
-              "name": "dex_jetton_wallet_1",
+              "name": "dex_jetton_wallet",
               "expr": {
                 "k": "ternary",
                 "cond": {
@@ -2983,7 +3019,7 @@
               }
             },
             {
-              "name": "dex_wallet_1",
+              "name": "dex_wallet",
               "expr": {
                 "k": "ternary",
                 "cond": {
@@ -9439,6 +9475,27 @@
                       "name": "body"
                     },
                     "name": "message_value"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "success",
+              "expr": {
+                "k": "call",
+                "fn": "vesting_message_was_sent",
+                "args": [
+                  {
+                    "k": "name",
+                    "id": "send"
+                  },
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "send"
+                    },
+                    "name": "body"
                   }
                 ]
               }

@@ -68,6 +68,9 @@ EvalResult layerzero_dst_oapp_matches(BuildEnv &env, const std::vector<Value> &a
 // Tonstakers (HostTonstakers.cpp).
 EvalResult tonstakers_minted_nft(BuildEnv &env, const std::vector<Value> &args);
 
+// Vesting (HostVesting.cpp).
+EvalResult vesting_message_was_sent(BuildEnv &env, const std::vector<Value> &args);
+
 // JVault (HostJvault.cpp). (jvault_account_list moved to a spec G-LC map in W6.)
 EvalResult jvault_stake_period(BuildEnv &env, const std::vector<Value> &args);
 

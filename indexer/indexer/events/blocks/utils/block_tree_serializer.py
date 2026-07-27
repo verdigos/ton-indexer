@@ -522,33 +522,6 @@ def _fill_dex_withdraw_liquidity(block: Block, action: Action):
         'lp_tokens_burnt': block.data['lp_tokens_burnt'].value if block.data['lp_tokens_burnt'] is not None else None
     }
 
-def _fill_dedust_v2_claim_reward(block: Block, action: Action):
-    # T12.2: DeDust CPMM V2 reward claim. Reuses the dex_withdraw_liquidity_data
-    # composite (amount1 = PayoutReward.amount, asset1/wallets from the payout leg,
-    # side-2 null, lp_tokens_burnt null). reward_index -> extra.
-    d = block.data
-    asset1_out = _dget(d, 'asset1_out')
-    action.source = _addr(_dget(d, 'sender'))
-    action.destination = _addr(_dget(d, 'pool'))
-    action.asset = _addr(asset1_out)
-    action.dex_withdraw_liquidity_data = {
-        "dex": _dget(d, 'dex'),
-        "amount1": _value(_dget(d, 'amount1_out')),
-        "amount2": None,
-        "asset1_out": _addr(asset1_out),
-        "asset2_out": None,
-        "user_jetton_wallet_1": _addr(_dget(d, 'wallet1')),
-        "user_jetton_wallet_2": None,
-        "dex_jetton_wallet_1": _addr(_dget(d, 'dex_jetton_wallet_1')),
-        "dex_wallet_1": _addr(_dget(d, 'dex_wallet_1')),
-        "dex_wallet_2": None,
-        "dex_jetton_wallet_2": None,
-        "is_refund": False,
-        "lp_tokens_burnt": None,
-    }
-    action.extra = {"reward_index": _dget(d, 'reward_index')}
-
-
 def _fill_tonco_withdraw_liquidity(block: ToncoWithdrawLiquidityBlock, action: Action):
     action.type = 'dex_withdraw_liquidity'
     d = block.data
@@ -1493,8 +1466,6 @@ def block_to_action(block: Block, trace_id: str, trace: Trace) -> Action:
             _fill_dedust_v2_claim_reward(block, action)
         case 'dex_withdraw_liquidity':
             _fill_dex_withdraw_liquidity(block, action)
-        case 'dedust_v2_claim_reward':
-            _fill_dedust_v2_claim_reward(block, action)
         case 'unsubscribe':
             _fill_unsubscribe_action(block, action)
         case 'election_deposit' | 'election_recover':

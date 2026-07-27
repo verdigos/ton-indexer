@@ -284,29 +284,27 @@ void fill_dedust_deposit_partial(const Value &d, Action &a) {
 }
 
 // T12.2: DeDust CPMM V2 reward claim (block_tree_serializer _fill_dedust_v2_claim_reward).
-// Reuses the dex_withdraw_liquidity_data composite; reward_index -> extra.
+// Reuses the dex_withdraw_liquidity_data composite; reward_index is carried in
+// the block data but is NOT serialized (upstream v1.3 contract).
 void fill_dedust_v2_claim_reward(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
   a.destination = av_addr(dg(d, "pool"));
-  a.asset = av_addr(dg(d, "asset1_out"));
+  a.destination_secondary = av_addr(dg(d, "position"));
   Value::Fields f;
   f.emplace_back("dex", dg(d, "dex"));
-  f.emplace_back("amount1", av_amount(dg(d, "amount1_out")));
+  f.emplace_back("amount1", av_amount(dg(d, "amount")));
   f.emplace_back("amount2", Value::null());
-  f.emplace_back("asset1_out", av_addr(dg(d, "asset1_out")));
+  f.emplace_back("asset1_out", av_addr(dg(d, "asset")));
   f.emplace_back("asset2_out", Value::null());
-  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "wallet1")));
+  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "user_wallet")));
   f.emplace_back("user_jetton_wallet_2", Value::null());
-  f.emplace_back("dex_jetton_wallet_1", av_addr(dg(d, "dex_jetton_wallet_1")));
-  f.emplace_back("dex_wallet_1", av_addr(dg(d, "dex_wallet_1")));
+  f.emplace_back("dex_wallet_1", av_addr(dg(d, "dex_wallet")));
   f.emplace_back("dex_wallet_2", Value::null());
+  f.emplace_back("dex_jetton_wallet_1", av_addr(dg(d, "dex_jetton_wallet")));
   f.emplace_back("dex_jetton_wallet_2", Value::null());
   f.emplace_back("is_refund", Value::make_bool(false));
   f.emplace_back("lp_tokens_burnt", Value::null());
   a.dex_withdraw_liquidity_data = mkdict(std::move(f));
-  Value::Fields ex;
-  ex.emplace_back("reward_index", dg(d, "reward_index"));
-  a.extra = mkdict(std::move(ex));
 }
 
 void fill_tonco_deposit(const Value &d, Action &a) {
@@ -470,6 +468,8 @@ void fill_vesting_send_message(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "vesting"));
   a.destination_secondary = av_addr(dg(d, "message_destination"));
   a.amount = av_amount(dg(d, "message_value"));
+  Value succ = dg(d, "success");  // the message was actually sent (upstream #430)
+  a.success = succ.t == VType::Bool && succ.boolean;
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("message_boc", dg(d, "message_boc_str"));

@@ -60,6 +60,7 @@ import pytest
 from indexer.events import context
 from indexer.events.blocks.basic_matchers import BlockMatcher
 from indexer.events.blocks.core import Block
+from indexer.events.blocks.dedust_v2.claims import DedustV2ClaimRewardBlockMatcher
 from indexer.events.blocks.dns import ChangeDnsRecordMatcher
 from indexer.events.blocks.ethena_staking import EthenaDepositBlockMatcher
 from indexer.events.blocks.evaa import EvaaWithdrawBlockMatcher
@@ -122,6 +123,7 @@ from indexer.events.mch.builders import (
 # extended per-port; per-spec integration tests import the same way).
 from indexer.events.mch.builders.coffee import coffee_liquidity_registries
 from indexer.events.mch.builders.dedust import dedust_deposit_registries
+from indexer.events.mch.builders.dedust_v2 import dedust_v2_claim_reward_registries
 from indexer.events.mch.builders.ethena import ethena_registries
 from indexer.events.mch.builders.evaa import evaa_registries
 from indexer.events.mch.builders.jvault import jvault_registries
@@ -215,6 +217,11 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
      (VestingSendMessageBlockMatcher,)),
     ("specs/dedust_deposit.mch", _SPECS_DIR / "dedust_deposit.mch", dedust_deposit_registries,
      _PREREQ_SWAP, (DedustDepositBlockMatcher, DedustDepositFirstAssetBlockMatcher)),
+    # T12.2 spec vs the upstream v1.3 reference matcher (merge-v12: the legacy
+    # matcher landed after the spec was written, so the row only became possible
+    # once the spec's `out` keys were aligned to the reference's data keys).
+    ("specs/dedust_v2_claim_reward.mch", _SPECS_DIR / "dedust_v2_claim_reward.mch",
+     dedust_v2_claim_reward_registries, _PREREQ_SWAP, (DedustV2ClaimRewardBlockMatcher,)),
     ("specs/tonco_liquidity.mch", _SPECS_DIR / "tonco_liquidity.mch", tonco_liquidity_registries,
      (NftMintBlockMatcher,) + _PREREQ_SWAP, (ToncoDepositLiquidityMatcher,)),
     ("specs/coffee_liquidity.mch", _SPECS_DIR / "coffee_liquidity.mch", coffee_liquidity_registries, (),

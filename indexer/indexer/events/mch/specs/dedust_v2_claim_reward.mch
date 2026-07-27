@@ -16,6 +16,10 @@
 # the request alone doesn't carry the amount. Action mirrors the reference:
 # type dedust_v2_claim_reward reusing the dex_withdraw_liquidity_data shape,
 # amount1 = PayoutReward.amount, asset1/wallets from the payout leg, side-2 null.
+#
+# `out` keys are the REFERENCE matcher's data keys (blocks/dedust_v2/claims.py
+# DedustV2ClaimRewardBlockMatcher), so the SAME serializer fill
+# (_fill_dedust_v2_claim_reward) serves both the legacy block and this one.
 
 opcode ClaimRewardMessage   = 0x909fdb65
 opcode ClaimPositionReward  = 0x2e0cccba
@@ -40,14 +44,16 @@ matcher dedust_v2_claim_reward {
     # yet — T122 design §10.3).
     parse ton           as PayoutMessage
     out {
-        dex:                 "dedust_v2"
-        sender:              account(claim.msg.source)
-        pool:                account(claim.msg.destination)
-        reward_index:        claim.body.rewardIndex
-        amount1_out:         amount(payout_reward.body.amount)
-        asset1_out:          jt.data.asset if jt != null else (ton_asset() if ton != null else null)
-        wallet1:             jt.data.receiver_wallet if jt != null else null
-        dex_jetton_wallet_1: jt.data.sender_wallet if jt != null else null
-        dex_wallet_1:        jt.data.sender if jt != null else (account(ton.msg.source) if ton != null else null)
+        dex:               "dedust_v2"
+        sender:            account(claim.msg.source)
+        pool:              account(claim.msg.destination)
+        position:          account(payout_reward.msg.source)
+        owner:             payout_reward.body.ownerAddress
+        reward_index:      claim.body.rewardIndex
+        amount:            amount(payout_reward.body.amount)
+        asset:             jt.data.asset if jt != null else (ton_asset() if ton != null else null)
+        user_wallet:       jt.data.receiver_wallet if jt != null else null
+        dex_jetton_wallet: jt.data.sender_wallet if jt != null else null
+        dex_wallet:        jt.data.sender if jt != null else (account(ton.msg.source) if ton != null else null)
     }
 }
