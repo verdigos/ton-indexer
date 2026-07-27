@@ -91,6 +91,9 @@ enum Ticker : uint32_t {
   INSERT_CONFLICT,
   EMULATE_TRACE_ERROR,
 
+  DB_EVENT_MC_BLOCK_APPLIED,
+  DB_EVENT_CATCH_UP,
+
   EMULATE_SRC_REDIS,
   EMULATE_SRC_OVERLAY,
   EMULATE_SRC_BLOCKS,
@@ -118,6 +121,9 @@ enum Histogram : uint32_t {
 
   INSERT_SEQNO,
   INSERT_BATCH_CONNECT,
+  INSERT_BATCH_KVROCKS,
+  INSERT_BATCH_KVROCKS_PREPARE,
+  INSERT_BATCH_KVROCKS_EXEC,
   INSERT_BATCH_EXEC_DATA,
   INSERT_BATCH_EXEC_STATES,
   INSERT_BATCH_COMMIT,
@@ -132,6 +138,8 @@ const std::unordered_map<uint32_t, std::string_view> ticker_names = {
     {SEQNO_FETCH_ERROR, "indexer.seqno.fetch.error"},
     {INSERT_CONFLICT, "indexer.insert.conflict"},
     {EMULATE_TRACE_ERROR, "emulator.emulate.trace.error"},
+    {DB_EVENT_MC_BLOCK_APPLIED, "indexer.db_event.mc_block_applied"},
+    {DB_EVENT_CATCH_UP, "indexer.db_event.catch_up"},
     {EMULATE_SRC_REDIS, "emulator.source.redis"},
     {EMULATE_SRC_OVERLAY, "emulator.source.overlay"},
     {EMULATE_SRC_BLOCKS, "emulator.source.blocks"}
@@ -152,6 +160,9 @@ const std::unordered_map<uint32_t, std::string_view> histogram_names = {
     {DETECT_ACTIONS_SEQNO, "indexer.actions.seqno.micros"},
     {INSERT_SEQNO, "indexer.insert.seqno.millis"},
     {INSERT_BATCH_CONNECT, "indexer.insert.batch.connect.millis"},
+    {INSERT_BATCH_KVROCKS, "indexer.insert.batch.kvrocks.millis"},
+    {INSERT_BATCH_KVROCKS_PREPARE, "indexer.insert.batch.kvrocks_prepare.millis"},
+    {INSERT_BATCH_KVROCKS_EXEC, "indexer.insert.batch.kvrocks_exec.millis"},
     {INSERT_BATCH_EXEC_DATA, "indexer.insert.batch.exec_data.millis"},
     {INSERT_BATCH_EXEC_STATES, "indexer.insert.batch.exec_states.millis"},
     {INSERT_BATCH_COMMIT, "indexer.insert.batch.commit.millis"},

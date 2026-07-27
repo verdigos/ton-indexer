@@ -2,17 +2,26 @@ cmake_minimum_required(VERSION 3.16)
 
 add_executable(ton-index-postgres
     src/main.cpp
+    src/FailoverWatchdog.cpp
     src/InsertManagerPostgres.cpp
-    src/IndexScheduler.cpp
+    src/KvrocksClient.cpp
+    src/KvrocksProgress.cpp
+    src/PartitionManagerPostgres.cpp
 )
 
+target_include_directories(ton-index-postgres
+    PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/../external/redis-plus-plus/src
+)
 target_compile_features(ton-index-postgres PRIVATE cxx_std_20)
 target_link_libraries(
     ton-index-postgres
+    index-engine-core
     tondb-scanner
+    ton-kvrocks-state
     ton-observability
     mch-classify
     pqxx
+    redis++_static
 )
 target_link_options(ton-index-postgres PUBLIC -rdynamic)
 

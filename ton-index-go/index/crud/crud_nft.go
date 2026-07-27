@@ -3,19 +3,21 @@ package crud
 import (
 	"context"
 	"fmt"
+	"log"
+	"strings"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/toncenter/ton-indexer/ton-index-go/index/detect"
 	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
 	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
-	"log"
-	"strings"
 )
 
-func buildNFTCollectionsQuery(nft_req models.NFTCollectionRequest, lim_req models.LimitRequest, settings models.RequestSettings) (string, error) {
+func buildNFTCollectionsQuery(req models.NFTCollectionRequest, settings models.RequestSettings) (string, error) {
+	lim_req := req.GetLimitParams()
 	clmn_query := ` N.address, N.next_item_index, N.owner_address, N.collection_content, 
 				    N.data_hash, N.code_hash, N.last_transaction_lt`
 	from_query := ` nft_collections as N`
-	filter_list := []string{}
+	filter_list := []string{"not N.destroyed"}
 	filter_query := ``
 	orderby_query := ` order by id asc`
 	limit_query, err := limitQuery(lim_req, settings)
@@ -23,14 +25,14 @@ func buildNFTCollectionsQuery(nft_req models.NFTCollectionRequest, lim_req model
 		return "", err
 	}
 
-	if v := nft_req.CollectionAddress; v != nil {
+	if v := req.CollectionAddress; v != nil {
 		filter_str := filterByArray("N.address", v)
 		if len(filter_str) > 0 {
 			filter_list = append(filter_list, filter_str)
 		}
 		orderby_query = ``
 	}
-	if v := nft_req.OwnerAddress; v != nil {
+	if v := req.OwnerAddress; v != nil {
 		filter_str := filterByArray("N.owner_address", v)
 		if len(filter_str) > 0 {
 			filter_list = append(filter_list, filter_str)
@@ -50,7 +52,8 @@ func buildNFTCollectionsQuery(nft_req models.NFTCollectionRequest, lim_req model
 	return query, nil
 }
 
-func buildNFTItemsQuery(nft_req models.NFTItemRequest, lim_req models.LimitRequest, settings models.RequestSettings) (string, []any, error) {
+func buildNFTItemsQuery(req models.NFTItemRequest, settings models.RequestSettings) (string, []any, error) {
+	lim_req := req.GetLimitParams()
 	args := []any{}
 	clmn_query := ` N.address, N.init, N.index, N.collection_address, N.owner_address, N.content, 
                 N.last_transaction_lt, N.code_hash, N.data_hash,
@@ -59,10 +62,10 @@ func buildNFTItemsQuery(nft_req models.NFTItemRequest, lim_req models.LimitReque
                 S.address, S.nft_owner_address,
                 A.address, A.nft_owner`
 	from_query := ` nft_items as N 
-                left join nft_collections as C on N.collection_address = C.address
-                left join getgems_nft_sales as S on N.owner_address = S.address and N.address = S.nft_address
-                left join getgems_nft_auctions as A on N.owner_address = A.address and N.address = A.nft_addr`
-	filter_list := []string{}
+                left join nft_collections as C on N.collection_address = C.address and not C.destroyed
+                left join getgems_nft_sales as S on N.owner_address = S.address and N.address = S.nft_address and not S.destroyed
+                left join getgems_nft_auctions as A on N.owner_address = A.address and N.address = A.nft_addr and not A.destroyed`
+	filter_list := []string{"not N.destroyed"}
 	filter_query := ``
 	orderby_query := ` order by N.id asc`
 	limit_query, err := limitQuery(lim_req, settings)
@@ -70,16 +73,16 @@ func buildNFTItemsQuery(nft_req models.NFTItemRequest, lim_req models.LimitReque
 		return "", nil, err
 	}
 
-	if v := nft_req.Address; v != nil {
+	if v := req.Address; v != nil {
 		filter_str := filterByArray("N.address", v)
 		if len(filter_str) > 0 {
 			filter_list = append(filter_list, filter_str)
 		}
 		orderby_query = ``
 	}
-	if v := nft_req.OwnerAddress; v != nil {
+	if v := req.OwnerAddress; v != nil {
 		var filter_str string
-		if nft_req.IncludeOnSale != nil && *nft_req.IncludeOnSale {
+		if req.IncludeOnSale != nil && *req.IncludeOnSale {
 			filter_str = filterByArray("N.real_owner", v)
 		} else {
 			filter_str = filterByArray("N.owner_address", v)
@@ -89,19 +92,19 @@ func buildNFTItemsQuery(nft_req models.NFTItemRequest, lim_req models.LimitReque
 		}
 		orderby_query = ` order by N.owner_address, N.collection_address, N.index`
 	}
-	if v := nft_req.CollectionAddress; v != nil {
-		if len(nft_req.CollectionAddress) == 1 {
-			filter_list = append(filter_list, fmt.Sprintf("N.collection_address = '%s'", v[0]))
+	if v := req.CollectionAddress; v != nil {
+		if len(req.CollectionAddress) == 1 {
+			filter_list = append(filter_list, fmt.Sprintf("N.collection_address = '%s'", v[0].FilterString()))
 			orderby_query = ` order by N.collection_address, N.index`
-		} else if len(nft_req.CollectionAddress) > 1 {
+		} else if len(req.CollectionAddress) > 1 {
 			filter_str := filterByArray("N.collection_address", v)
 			if len(filter_str) > 0 {
 				filter_list = append(filter_list, filter_str)
 			}
 		}
 	}
-	if v := nft_req.Index; len(v) > 0 {
-		if nft_req.CollectionAddress == nil {
+	if v := req.Index; len(v) > 0 {
+		if req.CollectionAddress == nil {
 			return ``, nil, models.IndexError{Code: 422, Message: "index parameter is not allowed without the collection_address"}
 		}
 		filtered := v[:0]
@@ -115,7 +118,7 @@ func buildNFTItemsQuery(nft_req models.NFTItemRequest, lim_req models.LimitReque
 			filter_list = append(filter_list, fmt.Sprintf("N.index = ANY($%d)", len(args)))
 		}
 	}
-	if v := nft_req.SortByLastTransactionLt; v != nil && *v {
+	if v := req.SortByLastTransactionLt; v != nil && *v {
 		orderby_query = ` order by N.last_transaction_lt desc`
 	}
 
@@ -131,22 +134,27 @@ func buildNFTItemsQuery(nft_req models.NFTItemRequest, lim_req models.LimitReque
 	return query, args, nil
 }
 
-func buildNFTTransfersQuery(transfer_req models.NFTTransferRequest, utime_req models.UtimeRequest,
-	lt_req models.LtRequest, lim_req models.LimitRequest, settings models.RequestSettings) (string, error) {
-	clmn_query := ` T.tx_hash, T.tx_lt, T.tx_now, T.tx_aborted, T.query_id,
-		T.nft_item_address, T.nft_item_index, T.nft_collection_address, T.old_owner, T.new_owner, T.response_destination, T.custom_payload,
-		T.forward_amount, T.forward_payload, T.trace_id`
+const nftTransfersColumns = ` T.tx_hash, T.tx_lt, T.tx_now, T.tx_aborted, T.query_id,
+	T.nft_item_address, T.nft_item_index, coalesce(T.nft_collection_address::text, '') as nft_collection_address, coalesce(T.old_owner::text, '') as old_owner, coalesce(T.new_owner::text, '') as new_owner, T.response_destination, T.custom_payload,
+	T.forward_amount, T.forward_payload, T.trace_id`
+
+// nftTransfersParts holds the shared pieces of an NFT transfers listing query.
+type nftTransfersParts struct {
+	fromQuery  string
+	filterList []string
+	orderBy    string
+	orderByNow bool
+}
+
+func nftTransfersQueryParts(req models.NFTTransferRequest, sortOrder string) nftTransfersParts {
+	utime_req := req.GetUtimeParams()
+	lt_req := req.GetLtParams()
+
 	from_query := ` nft_transfers as T`
 	filter_list := []string{}
-	filter_query := ``
-	orderby_query := ``
-	limit_query, err := limitQuery(lim_req, settings)
-	if err != nil {
-		return "", err
-	}
 
-	if v := transfer_req.OwnerAddress; v != nil {
-		if v1 := transfer_req.Direction; v1 != nil {
+	if v := req.OwnerAddress; v != nil {
+		if v1 := req.Direction; v1 != nil {
 			f_str := ``
 			if *v1 == "in" {
 				f_str = filterByArray("T.new_owner", v)
@@ -164,24 +172,24 @@ func buildNFTTransfersQuery(transfer_req models.NFTTransferRequest, utime_req mo
 			}
 		}
 	}
-	if v := transfer_req.ItemAddress; v != nil {
+	if v := req.ItemAddress; v != nil {
 		filter_str := filterByArray("T.nft_item_address", v)
 		if len(filter_str) > 0 {
 			filter_list = append(filter_list, filter_str)
 		}
 	}
-	if v := transfer_req.CollectionAddress; v != nil {
-		filter_list = append(filter_list, fmt.Sprintf("T.nft_collection_address = '%s'", *v))
+	if v := req.CollectionAddress; v != nil {
+		filter_list = append(filter_list, fmt.Sprintf("T.nft_collection_address = '%s'", v.FilterString()))
 	}
 
-	order_col := "T.tx_lt"
+	orderByNow := false
 	if v := utime_req.StartUtime; v != nil {
 		filter_list = append(filter_list, fmt.Sprintf("T.tx_now >= %d", *v))
-		order_col = "T.tx_now"
+		orderByNow = true
 	}
 	if v := utime_req.EndUtime; v != nil {
 		filter_list = append(filter_list, fmt.Sprintf("T.tx_now <= %d", *v))
-		order_col = "T.tx_now"
+		orderByNow = true
 	}
 	if v := lt_req.StartLt; v != nil {
 		filter_list = append(filter_list, fmt.Sprintf("T.tx_lt >= %d", *v))
@@ -189,29 +197,23 @@ func buildNFTTransfersQuery(transfer_req models.NFTTransferRequest, utime_req mo
 	if v := lt_req.EndLt; v != nil {
 		filter_list = append(filter_list, fmt.Sprintf("T.tx_lt <= %d", *v))
 	}
-	if lim_req.Sort == nil {
-		lim_req.Sort = new(models.SortType)
-		*lim_req.Sort = "desc"
-	}
-	if lim_req.Sort != nil {
-		sort_order, err := getSortOrder(*lim_req.Sort)
-		if err != nil {
-			return "", err
-		}
-		orderby_query = fmt.Sprintf(" order by %s %s", order_col, sort_order)
-	}
 
-	// build query
-	if len(filter_list) > 0 {
-		filter_query = ` where ` + strings.Join(filter_list, " and ")
+	order_col := "T.tx_lt"
+	if orderByNow {
+		order_col = "T.tx_now"
 	}
-	query := `select` + clmn_query
-	query += ` from ` + from_query
-	query += filter_query
-	query += orderby_query
-	query += limit_query
-	// log.Println(query)
-	return query, nil
+	orderby_query := fmt.Sprintf(" order by %s %s", order_col, sortOrder)
+
+	return nftTransfersParts{fromQuery: from_query, filterList: filter_list, orderBy: orderby_query, orderByNow: orderByNow}
+}
+
+func buildNFTTransfersOffsetQuery(p nftTransfersParts, offset, limit int) string {
+	filter_query := ``
+	if len(p.filterList) > 0 {
+		filter_query = ` where ` + strings.Join(p.filterList, " and ")
+	}
+	limit_query := fmt.Sprintf(" limit %d offset %d", max(1, limit), max(0, offset))
+	return `select` + nftTransfersColumns + ` from` + p.fromQuery + filter_query + p.orderBy + limit_query
 }
 
 func queryNFTCollectionsImpl(query string, conn *pgxpool.Conn, settings models.RequestSettings) ([]models.NFTCollection, error) {
@@ -307,12 +309,84 @@ func queryNFTTransfersImpl(query string, conn *pgxpool.Conn, settings models.Req
 	return res, nil
 }
 
+// nftTransferOrderKey returns the row's non-null router sort key.
+func nftTransferOrderKey(orderByNow bool) func(*models.NFTTransfer) *uint64 {
+	if orderByNow {
+		return func(t *models.NFTTransfer) *uint64 {
+			v := uint64(t.TransactionNow)
+			return &v
+		}
+	}
+	return func(t *models.NFTTransfer) *uint64 {
+		v := uint64(t.TransactionLt)
+		return &v
+	}
+}
+
+// queryNFTTransfersRouted fetches one page via the hot/cold router.
+func queryNFTTransfersRouted(
+	fc *fedConns,
+	req models.NFTTransferRequest,
+	parts nftTransfersParts,
+	sortOrder string,
+	offset, limit int,
+	fetch func(query string, conn *pgxpool.Conn) ([]models.NFTTransfer, error),
+) ([]models.NFTTransfer, error) {
+	query := buildNFTTransfersOffsetQuery(parts, offset, limit)
+
+	// Single pool: read cold directly, no classification.
+	dec := routeCold
+	var floor uint64
+	if fc.federated {
+		w := routeWindow{
+			startLt:    req.StartLt,
+			endLt:      req.EndLt,
+			startUtime: (*uint64)(req.StartUtime),
+			endUtime:   (*uint64)(req.EndUtime),
+			orderByNow: parts.orderByNow,
+			sortDesc:   sortOrder == "desc",
+		}
+		dec = classifyRoute(w, fc.split, fc.utimeMargin)
+
+		// Verify against the same floor classifyRoute used.
+		floor = fc.split.Lt
+		if parts.orderByNow {
+			floor = fc.split.Utime + fc.utimeMargin
+		}
+	}
+
+	res, _, err := routedPage(fc, dec,
+		func(conn *pgxpool.Conn) ([]models.NFTTransfer, error) { return fetch(query, conn) },
+		nftTransferOrderKey(parts.orderByNow), limit, floor)
+	return res, err
+}
+
 func (db *DbClient) QueryNFTCollections(
 	nft_req models.NFTCollectionRequest,
-	lim_req models.LimitRequest,
 	settings models.RequestSettings,
 ) ([]models.NFTCollection, models.AddressBook, models.Metadata, error) {
-	query, err := buildNFTCollectionsQuery(nft_req, lim_req, settings)
+	if db.Kvrocks != nil {
+		ctx, cancel_ctx := context.WithTimeout(context.Background(), settings.Timeout)
+		defer cancel_ctx()
+		res, err := db.Kvrocks.QueryNFTCollections(ctx, nft_req, settings)
+		if err != nil {
+			return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+		}
+		addr_list := []models.AccountAddress{}
+		for _, t := range res {
+			addr_list = append(addr_list, t.Address)
+			if t.OwnerAddress != nil {
+				addr_list = append(addr_list, *t.OwnerAddress)
+			}
+		}
+		book, metadata, err := db.queryKvrocksEnrichment(addr_list, settings)
+		if err != nil {
+			return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+		}
+		return res, book, metadata, nil
+	}
+
+	query, err := buildNFTCollectionsQuery(nft_req, settings)
 	if settings.DebugRequest {
 		log.Println("Debug query:", query)
 	}
@@ -321,11 +395,11 @@ func (db *DbClient) QueryNFTCollections(
 	}
 
 	// read data
-	conn, err := db.Pool.Acquire(context.Background())
+	conn, releaseConn, err := acquireConnForRequest(db.Pool, settings)
 	if err != nil {
 		return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
-	defer conn.Release()
+	defer releaseConn()
 
 	res, err := queryNFTCollectionsImpl(query, conn, settings)
 	if err != nil {
@@ -334,24 +408,32 @@ func (db *DbClient) QueryNFTCollections(
 
 	book := models.AddressBook{}
 	metadata := models.Metadata{}
-	addr_list := []string{}
+	addr_list := []models.AccountAddress{}
 	for _, t := range res {
-		addr_list = append(addr_list, string(t.Address))
+		addr_list = append(addr_list, t.Address)
 		if t.OwnerAddress != nil {
-			addr_list = append(addr_list, string(*t.OwnerAddress))
+			addr_list = append(addr_list, *t.OwnerAddress)
 		}
 	}
 	if len(addr_list) > 0 {
-		if !settings.NoAddressBook {
-			book, err = QueryAddressBookImpl(addr_list, conn, settings)
+		if db.Kvrocks != nil {
+			releaseConn()
+			book, metadata, err = db.queryKvrocksEnrichment(addr_list, settings)
 			if err != nil {
 				return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 			}
-		}
-		if !settings.NoMetadata {
-			metadata, err = QueryMetadataImpl(addr_list, conn, settings)
-			if err != nil {
-				return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+		} else {
+			if !settings.NoAddressBook {
+				book, err = QueryAddressBookImpl(addr_list, conn, settings)
+				if err != nil {
+					return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+				}
+			}
+			if !settings.NoMetadata {
+				metadata, err = QueryMetadataImpl(addr_list, conn, settings)
+				if err != nil {
+					return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+				}
 			}
 		}
 	}
@@ -360,10 +442,42 @@ func (db *DbClient) QueryNFTCollections(
 
 func (db *DbClient) QueryNFTItems(
 	nft_req models.NFTItemRequest,
-	lim_req models.LimitRequest,
 	settings models.RequestSettings,
 ) ([]models.NFTItem, models.AddressBook, models.Metadata, error) {
-	query, args, err := buildNFTItemsQuery(nft_req, lim_req, settings)
+	if db.Kvrocks != nil {
+		ctx, cancel_ctx := context.WithTimeout(context.Background(), settings.Timeout)
+		defer cancel_ctx()
+		res, err := db.Kvrocks.QueryNFTItems(ctx, nft_req, settings)
+		if err != nil {
+			return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+		}
+		addr_list := []models.AccountAddress{}
+		for _, t := range res {
+			addr_list = append(addr_list, t.Address)
+			if t.CollectionAddress != nil {
+				addr_list = append(addr_list, *t.CollectionAddress)
+			}
+			if t.OwnerAddress != nil {
+				addr_list = append(addr_list, *t.OwnerAddress)
+			}
+			if t.RealOwner != nil {
+				addr_list = append(addr_list, *t.RealOwner)
+			}
+			if t.SaleContractAddress != nil {
+				addr_list = append(addr_list, *t.SaleContractAddress)
+			}
+			if t.AuctionContractAddress != nil {
+				addr_list = append(addr_list, *t.AuctionContractAddress)
+			}
+		}
+		book, metadata, err := db.queryKvrocksEnrichment(addr_list, settings)
+		if err != nil {
+			return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+		}
+		return res, book, metadata, nil
+	}
+
+	query, args, err := buildNFTItemsQuery(nft_req, settings)
 	if settings.DebugRequest {
 		log.Println("Debug query:", query)
 	}
@@ -372,11 +486,11 @@ func (db *DbClient) QueryNFTItems(
 	}
 
 	// read data
-	conn, err := db.Pool.Acquire(context.Background())
+	conn, releaseConn, err := acquireConnForRequest(db.Pool, settings)
 	if err != nil {
 		return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
-	defer conn.Release()
+	defer releaseConn()
 
 	res, err := queryNFTItemsWithCollectionsImpl(query, conn, settings, args...)
 	if err != nil {
@@ -385,14 +499,14 @@ func (db *DbClient) QueryNFTItems(
 
 	book := models.AddressBook{}
 	metadata := models.Metadata{}
-	addr_list := []string{}
+	addr_list := []models.AccountAddress{}
 	for _, t := range res {
-		addr_list = append(addr_list, string(t.Address))
+		addr_list = append(addr_list, t.Address)
 		if t.CollectionAddress != nil {
-			addr_list = append(addr_list, string(*t.CollectionAddress))
+			addr_list = append(addr_list, *t.CollectionAddress)
 		}
 		if t.OwnerAddress != nil {
-			addr_list = append(addr_list, string(*t.OwnerAddress))
+			addr_list = append(addr_list, *t.OwnerAddress)
 		}
 	}
 	if len(addr_list) > 0 {
@@ -413,55 +527,85 @@ func (db *DbClient) QueryNFTItems(
 }
 
 func (db *DbClient) QueryNFTTransfers(
-	transfer_req models.NFTTransferRequest,
-	utime_req models.UtimeRequest,
-	lt_req models.LtRequest,
-	lim_req models.LimitRequest,
+	req models.NFTTransferRequest,
 	settings models.RequestSettings,
 ) ([]models.NFTTransfer, models.AddressBook, models.Metadata, error) {
-	query, err := buildNFTTransfersQuery(transfer_req, utime_req, lt_req, lim_req, settings)
-	if settings.DebugRequest {
-		log.Println("Debug query:", query)
+	lim_req := req.GetLimitParams()
+	sortOrder := "desc"
+	if v := lim_req.Sort; v != nil {
+		var serr error
+		sortOrder, serr = getSortOrder(*v)
+		if serr != nil {
+			return nil, nil, nil, serr
+		}
 	}
+	limit := int32(settings.DefaultLimit)
+	if lim_req.Limit != nil {
+		limit = max(1, *lim_req.Limit)
+		if limit > int32(settings.MaxLimit) {
+			return nil, nil, nil, models.IndexError{Code: 422, Message: fmt.Sprintf("limit is not allowed: %d > %d", limit, settings.MaxLimit)}
+		}
+	}
+
+	fc, release, err := db.acquireFedForRequest(settings)
 	if err != nil {
 		return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
+	defer release()
 
-	// read data
-	conn, err := db.Pool.Acquire(context.Background())
-	if err != nil {
-		return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+	parts := nftTransfersQueryParts(req, sortOrder)
+	offset := 0
+	if lim_req.Offset != nil {
+		offset = int(max(0, *lim_req.Offset))
 	}
-	defer conn.Release()
 
-	res, err := queryNFTTransfersImpl(query, conn, settings)
+	fetch := func(query string, conn *pgxpool.Conn) ([]models.NFTTransfer, error) {
+		if settings.DebugRequest {
+			log.Println("Debug query:", query)
+		}
+		return queryNFTTransfersImpl(query, conn, settings)
+	}
+
+	res, err := queryNFTTransfersRouted(fc, req, parts, sortOrder, offset, int(limit), fetch)
 	if err != nil {
 		return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
 
 	book := models.AddressBook{}
 	metadata := models.Metadata{}
-	addr_list := []string{}
+	addr_list := []models.AccountAddress{}
 	for _, t := range res {
-		addr_list = append(addr_list, string(t.NftItemAddress))
-		addr_list = append(addr_list, string(t.NftCollectionAddress))
-		addr_list = append(addr_list, string(t.OldOwner))
-		addr_list = append(addr_list, string(t.NewOwner))
+		addr_list = append(addr_list, t.NftItemAddress)
+		addr_list = append(addr_list, t.NftCollectionAddress)
+		addr_list = append(addr_list, t.OldOwner)
+		addr_list = append(addr_list, t.NewOwner)
 		if t.ResponseDestination != nil {
-			addr_list = append(addr_list, string(*t.ResponseDestination))
+			addr_list = append(addr_list, *t.ResponseDestination)
 		}
 	}
 	if len(addr_list) > 0 {
-		if !settings.NoAddressBook {
-			book, err = QueryAddressBookImpl(addr_list, conn, settings)
+		if db.Kvrocks != nil {
+			release()
+			book, metadata, err = db.queryKvrocksEnrichment(addr_list, settings)
 			if err != nil {
 				return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 			}
-		}
-		if !settings.NoMetadata {
-			metadata, err = QueryMetadataImpl(addr_list, conn, settings)
-			if err != nil {
-				return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+		} else {
+			coldConn, cerr := fc.cold()
+			if cerr != nil {
+				return nil, nil, nil, models.IndexError{Code: 500, Message: cerr.Error()}
+			}
+			if !settings.NoAddressBook {
+				book, err = QueryAddressBookImpl(addr_list, coldConn, settings)
+				if err != nil {
+					return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+				}
+			}
+			if !settings.NoMetadata {
+				metadata, err = QueryMetadataImpl(addr_list, coldConn, settings)
+				if err != nil {
+					return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+				}
 			}
 		}
 	}

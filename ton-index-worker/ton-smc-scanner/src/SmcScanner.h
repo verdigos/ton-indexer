@@ -7,7 +7,11 @@
 #   define INTERFACES_DETECTOR_TYPES                                  \
         JettonWalletDetectorR, JettonMasterDetectorR,                 \
         NftItemDetectorR,  NftCollectionDetectorR,                    \
-        MultisigContract,  MultisigOrder,  VestingContract
+        GetGemsNftAuction, GetGemsNftFixPriceSale,                   \
+        GetGemsNftFixPriceSaleV4,                                     \
+        MultisigContract, MultisigOrder,                              \
+        VestingContract, NominatorPoolContract,                       \
+        TelemintContract, DedustPoolDetector
 #endif
 
 
@@ -37,6 +41,8 @@ struct Options {
   bool index_interfaces_{false};
   bool index_account_states_{false};
   std::string working_dir_;
+  // Accounts to scan in targeted mode.
+  std::shared_ptr<const std::vector<block::StdAddress>> account_addresses_;
 };
 
 class ShardStateScanner;

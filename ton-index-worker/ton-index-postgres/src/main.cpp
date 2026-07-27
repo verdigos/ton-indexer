@@ -7,13 +7,16 @@
 
 #include "crypto/vm/cp0.h"
 
-#include "InsertManagerPostgres.h"
+#include "../../index-engine/src/IndexScheduler.h"
 #include "DataParser.h"
 #include "DbScanner.h"
+#include "FailoverWatchdog.h"
+#include "InsertManagerPostgres.h"
+#include "KvrocksClient.h"
 #include "TraceAssembler.h"
-#include "EventProcessor.h"
-#include "IndexScheduler.h"
 
+#include <atomic>
+#include <limits>
 
 int main(int argc, char *argv[]) {
   SET_VERBOSITY_LEVEL(verbosity_INFO);
@@ -25,21 +28,31 @@ int main(int argc, char *argv[]) {
   td::actor::ActorOwn<ParseManager> parse_manager_;
   td::actor::ActorOwn<InsertManagerPostgres> insert_manager_;
   td::actor::ActorOwn<IndexScheduler> index_scheduler_;
+  td::actor::ActorOwn<FailoverWatchdog> failover_watchdog_;
 
   // options
   td::uint32 threads = 7;
   td::uint32 io_workers = 1;
-  td::int32 stats_timeout = 10;
+  td::int32 stats_timeout = 1;
   std::string db_root;
   std::string working_dir;
+  std::string db_event_fifo_path;
   td::uint32 last_known_seqno = 0;
   td::uint32 from_seqno = 0;
   td::uint32 to_seqno = 0;
+  td::uint32 prewarm_count = 50;
   bool force_index = false;
+  bool no_leader = false;
   bool custom_types = false;
   bool create_indexes = true;
   bool run_migrations = true;
+  bool kvrocks_skip_current_tables = false;
+  bool pg_no_copy = false;
+  double failover_check_interval = 10.0;
+  std::uint32_t failover_strikes = 3;
   InsertManagerPostgres::Credential credential;
+  KvrocksConfig kvrocks_config;
+  PartitionManagerConfig partition_config;
   bool testnet = false;
   std::string mch_shadow_artifact;  // Phase G: MCH IR artifact for shadow classification (empty = off)
 
@@ -64,11 +77,17 @@ int main(int argc, char *argv[]) {
   p.add_option('D', "db", "Path to TON DB folder", [&](td::Slice fname) { 
     db_root = fname.str();
   });
-  p.add_option('W', "working-dir", "Path to index working dir for secondary rocksdb logs", [&](td::Slice fname) { 
+  p.add_option('W', "working-dir", "Path to index working dir for secondary rocksdb logs", [&](td::Slice fname) {
     working_dir = fname.str();
+  });
+  p.add_option('\0', "db-event-fifo", "Path to TON node DB events FIFO (validator-engine --db-event-fifo) for low-latency event-driven indexing; polling remains as a fallback", [&](td::Slice fname) {
+    db_event_fifo_path = fname.str();
   });
   p.add_option('\0', "pg", "PostgreSQL connection string", [&](td::Slice value) { 
     credential.conn_str = value.str();
+  });
+  p.add_option('\0', "pg-no-copy", "Use INSERT ... ON CONFLICT instead of COPY for PostgreSQL historical table writes", [&]() {
+    pg_no_copy = true;
   });
   p.add_option('h', "host", "PostgreSQL host address", [&](td::Slice value) { 
     LOG(WARNING) << "Using --host option is deprecated, use --pg with connection string instead";
@@ -100,6 +119,160 @@ int main(int argc, char *argv[]) {
     credential.dbname = value.str();
   });
 
+  p.add_option('\0', "kvrocks", "Kvrocks direct Redis URI, e.g. tcp://127.0.0.1:6666/0", [&](td::Slice value) {
+    kvrocks_config.enabled = true;
+    kvrocks_config.uri = value.str();
+  });
+  p.add_checked_option('\0', "kvrocks-sentinels", "Comma-separated Kvrocks Sentinel nodes, e.g. 127.0.0.1:26379,127.0.0.1:26380", [&](td::Slice value) {
+    try {
+      kvrocks_config.enabled = true;
+      kvrocks_config.sentinel_nodes = parse_kvrocks_sentinel_nodes(value.str());
+    } catch (const std::exception &e) {
+      return td::Status::Error(ton::ErrorCode::error, PSLICE() << "bad value for --kvrocks-sentinels: " << e.what());
+    }
+    return td::Status::OK();
+  });
+  p.add_option('\0', "kvrocks-master", "Kvrocks Sentinel master name", [&](td::Slice value) {
+    kvrocks_config.sentinel_master_name = value.str();
+  });
+  p.add_option('\0', "kvrocks-user", "Kvrocks username", [&](td::Slice value) {
+    kvrocks_config.user = value.str();
+  });
+  p.add_option('\0', "kvrocks-password", "Kvrocks password", [&](td::Slice value) {
+    kvrocks_config.password = value.str();
+  });
+  p.add_option('\0', "kvrocks-skip-current-tables", "Write only Kvrocks lookup tables; skip current/upsert tables", [&]() {
+    kvrocks_skip_current_tables = true;
+  });
+  p.add_checked_option('\0', "kvrocks-db", "Kvrocks logical database number", [&](td::Slice value) {
+    int v;
+    try {
+      v = std::stoi(value.str());
+    } catch (...) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --kvrocks-db: not a number");
+    }
+    if (v < 0) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --kvrocks-db: must be non-negative");
+    }
+    kvrocks_config.db = v;
+    return td::Status::OK();
+  });
+  p.add_option('\0', "kvrocks-sentinel-user", "Kvrocks Sentinel username", [&](td::Slice value) {
+    kvrocks_config.sentinel_user = value.str();
+  });
+  p.add_option('\0', "kvrocks-sentinel-password", "Kvrocks Sentinel password", [&](td::Slice value) {
+    kvrocks_config.sentinel_password = value.str();
+  });
+
+  p.add_option('\0', "pg-manage-partitions", "Manage hot PostgreSQL range partitions for historical tables", [&]() {
+    partition_config.enabled = true;
+  });
+  p.add_checked_option('\0', "pg-partition-size-mc-seqnos", "PostgreSQL partition size in masterchain seqnos", [&](td::Slice value) {
+    std::uint64_t v;
+    std::size_t parsed = 0;
+    auto raw = value.str();
+    if (raw.empty() || raw[0] == '-') {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-size-mc-seqnos: must be positive");
+    }
+    try {
+      v = std::stoull(raw, &parsed);
+    } catch (...) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-size-mc-seqnos: not a number");
+    }
+    if (parsed != raw.size()) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-size-mc-seqnos: not a number");
+    }
+    if (v == 0 || v > std::numeric_limits<std::uint32_t>::max()) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-size-mc-seqnos: must be between 1 and uint32 max");
+    }
+    partition_config.partition_size_mc_seqnos = static_cast<std::uint32_t>(v);
+    return td::Status::OK();
+  });
+  p.add_checked_option('\0', "pg-partition-retention-mc-seqnos", "PostgreSQL hot partition retention in masterchain seqnos; 0 disables dropping", [&](td::Slice value) {
+    std::uint64_t v;
+    std::size_t parsed = 0;
+    auto raw = value.str();
+    if (raw.empty() || raw[0] == '-') {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-retention-mc-seqnos: must be non-negative");
+    }
+    try {
+      v = std::stoull(raw, &parsed);
+    } catch (...) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-retention-mc-seqnos: not a number");
+    }
+    if (parsed != raw.size()) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-retention-mc-seqnos: not a number");
+    }
+    if (v > std::numeric_limits<std::uint32_t>::max()) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-retention-mc-seqnos: must fit uint32");
+    }
+    partition_config.retention_mc_seqnos = static_cast<std::uint32_t>(v);
+    return td::Status::OK();
+  });
+  p.add_checked_option('\0', "pg-partition-precreate-count", "Number of future PostgreSQL partitions to precreate", [&](td::Slice value) {
+    std::uint64_t v;
+    std::size_t parsed = 0;
+    auto raw = value.str();
+    if (raw.empty() || raw[0] == '-') {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-precreate-count: must be non-negative");
+    }
+    try {
+      v = std::stoull(raw, &parsed);
+    } catch (...) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-precreate-count: not a number");
+    }
+    if (parsed != raw.size()) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-precreate-count: not a number");
+    }
+    if (v > std::numeric_limits<std::uint32_t>::max()) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-precreate-count: must fit uint32");
+    }
+    partition_config.precreate_count = static_cast<std::uint32_t>(v);
+    return td::Status::OK();
+  });
+  p.add_checked_option('\0', "pg-partition-before-drop-split-guard-mc-seqnos", "Publish the conservative hot/cold split boundary this many masterchain seqnos before the oldest partition becomes drop-eligible", [&](td::Slice value) {
+    std::uint64_t v;
+    std::size_t parsed = 0;
+    auto raw = value.str();
+    if (raw.empty() || raw[0] == '-') {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-before-drop-split-guard-mc-seqnos: must be non-negative");
+    }
+    try {
+      v = std::stoull(raw, &parsed);
+    } catch (...) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-before-drop-split-guard-mc-seqnos: not a number");
+    }
+    if (parsed != raw.size()) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-before-drop-split-guard-mc-seqnos: not a number");
+    }
+    if (v > std::numeric_limits<std::uint32_t>::max()) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-before-drop-split-guard-mc-seqnos: must fit uint32");
+    }
+    partition_config.before_drop_split_guard = static_cast<std::uint32_t>(v);
+    return td::Status::OK();
+  });
+  p.add_checked_option('\0', "pg-partition-trace-split-safe-guard-mc-seqnos", "Shift the hot/cold split boundary up by this many masterchain seqnos so a hot-served trace keeps its earlier-seqno referenced transactions in present partitions", [&](td::Slice value) {
+    std::uint64_t v;
+    std::size_t parsed = 0;
+    auto raw = value.str();
+    if (raw.empty() || raw[0] == '-') {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-trace-split-safe-guard-mc-seqnos: must be non-negative");
+    }
+    try {
+      v = std::stoull(raw, &parsed);
+    } catch (...) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-trace-split-safe-guard-mc-seqnos: not a number");
+    }
+    if (parsed != raw.size()) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-trace-split-safe-guard-mc-seqnos: not a number");
+    }
+    if (v > std::numeric_limits<std::uint32_t>::max()) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --pg-partition-trace-split-safe-guard-mc-seqnos: must fit uint32");
+    }
+    partition_config.trace_split_safe_guard = static_cast<std::uint32_t>(v);
+    return td::Status::OK();
+  });
+
   p.add_option('\0', "testnet", "Use for testnet. It is used for correct indexing of .ton DNS entries (in testnet .ton collection has a different address)", [&]() {
     testnet = true;
   });
@@ -115,6 +288,9 @@ int main(int argc, char *argv[]) {
     } catch (...) {
       return td::Status::Error(ton::ErrorCode::error, "bad value for --from: not a number");
     }
+    if (v < 0) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --from: must be non-negative");
+    }
     from_seqno = v;
     return td::Status::OK();
   });
@@ -125,6 +301,9 @@ int main(int argc, char *argv[]) {
     } catch (...) {
       return td::Status::Error(ton::ErrorCode::error, "bad value for --to: not a number");
     }
+    if (v < 0) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --to: must be non-negative");
+    }
     to_seqno = v;
     return td::Status::OK();
   });
@@ -132,8 +311,59 @@ int main(int argc, char *argv[]) {
     force_index = true;
     LOG(WARNING) << "Force reindexing enabled";
   });
+  p.add_option('\0', "no-leader", "Disable Postgres leader/standby coordination; only valid with --from and --to", [&]() {
+    no_leader = true;
+  });
+  p.add_checked_option('\0', "prewarm", "Number of masterchain blocks used for TraceAssembler warmup/backtrack", [&](td::Slice value) {
+    std::uint64_t v;
+    std::size_t parsed = 0;
+    auto raw = value.str();
+    if (raw.empty() || raw[0] == '-') {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --prewarm: must be non-negative");
+    }
+    try {
+      v = std::stoull(raw, &parsed);
+    } catch (...) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --prewarm: not a number");
+    }
+    if (parsed != raw.size()) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --prewarm: not a number");
+    }
+    if (v > std::numeric_limits<std::uint32_t>::max()) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --prewarm: must fit uint32");
+    }
+    prewarm_count = static_cast<td::uint32>(v);
+    return td::Status::OK();
+  });
 
-  p.add_checked_option('\0', "max-data-depth", "Max data cell depth to store in latest account states", [&](td::Slice value) { 
+  p.add_checked_option('\0', "failover-check-interval", "Seconds between failover watchdog checks for Postgres/Kvrocks progress regression; 0 disables the watchdog (default: 10)", [&](td::Slice value) {
+    double v;
+    try {
+      v = std::stod(value.str());
+    } catch (...) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --failover-check-interval: not a number");
+    }
+    if (v < 0) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --failover-check-interval: must be non-negative");
+    }
+    failover_check_interval = v;
+    return td::Status::OK();
+  });
+  p.add_checked_option('\0', "failover-strikes", "Consecutive watchdog checks a probed inconsistency (acknowledged block missing from Postgres) must persist before the worker restarts (default: 3)", [&](td::Slice value) {
+    int v;
+    try {
+      v = std::stoi(value.str());
+    } catch (...) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --failover-strikes: not a number");
+    }
+    if (v <= 0) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --failover-strikes: must be positive");
+    }
+    failover_strikes = static_cast<std::uint32_t>(v);
+    return td::Status::OK();
+  });
+
+  p.add_checked_option('\0', "max-data-depth", "Max data cell depth to store in latest account states", [&](td::Slice value) {
     int v;
     try {
       v = std::stoi(value.str());
@@ -288,11 +518,48 @@ int main(int argc, char *argv[]) {
     LOG(ERROR) << "failed to parse options: " << S.move_as_error();
     std::_Exit(2);
   }
+  if (kvrocks_config.enabled) {
+    if (kvrocks_config.use_sentinel() && kvrocks_config.uri.size() > 0) {
+      LOG(ERROR) << "Use either --kvrocks or --kvrocks-sentinels, not both";
+      std::_Exit(2);
+    }
+    if (kvrocks_config.use_sentinel() && kvrocks_config.sentinel_master_name.empty()) {
+      LOG(ERROR) << "--kvrocks-master is required with --kvrocks-sentinels";
+      std::_Exit(2);
+    }
+  }
+  if (kvrocks_skip_current_tables && !kvrocks_config.enabled) {
+    LOG(ERROR) << "--kvrocks-skip-current-tables requires --kvrocks or --kvrocks-sentinels";
+    std::_Exit(2);
+  }
   if (working_dir.size() == 0) {
     LOG(ERROR) << "Please specify working directory with -W or --working-dir";
     std::_Exit(2);
   }
-  td::mkdir(working_dir).ensure();
+  const bool bounded_archive_range = from_seqno > 0 && to_seqno > 0;
+  if (from_seqno > static_cast<td::uint32>(std::numeric_limits<td::int32>::max()) ||
+      to_seqno > static_cast<td::uint32>(std::numeric_limits<td::int32>::max())) {
+    LOG(ERROR) << "--from and --to must fit int32";
+    std::_Exit(2);
+  }
+  if (bounded_archive_range && from_seqno > to_seqno) {
+    LOG(ERROR) << "--from must be less than or equal to --to";
+    std::_Exit(2);
+  }
+  if (no_leader && !bounded_archive_range) {
+    LOG(ERROR) << "--no-leader is only valid when both --from and --to are specified";
+    std::_Exit(2);
+  }
+  if (bounded_archive_range && partition_config.enabled) {
+    LOG(ERROR) << "--pg-manage-partitions cannot be used with bounded archive indexing (--from and --to)";
+    std::_Exit(2);
+  }
+  if (bounded_archive_range && !db_event_fifo_path.empty()) {
+    LOG(WARNING) << "--db-event-fifo is ignored with bounded archive indexing (--from and --to)";
+    db_event_fifo_path.clear();
+  }
+  const float db_catch_up_interval = bounded_archive_range ? 60.0f : 1.0f;
+  td::mkpath(working_dir + "/").ensure();
 
   if (max_queue_size > 0) {
     max_queue.mc_blocks_ = max_queue_size;
@@ -312,18 +579,47 @@ int main(int argc, char *argv[]) {
 
   NftItemDetectorR::is_testnet = testnet;
 
-  auto watcher = td::create_shared_destructor([] {
-    td::actor::SchedulerContext::get().stop();
+  auto finish_requested = std::make_shared<std::atomic_bool>(false);
+  auto watcher = td::create_shared_destructor([finish_requested] {
+    finish_requested->store(true);
   });
+
+  auto failover_baseline = std::make_shared<FailoverBaseline>();
 
   td::actor::Scheduler scheduler({td::actor::Scheduler::NodeInfo{threads, io_workers}});
-  scheduler.run_in_context([&] { insert_manager_ = td::actor::create_actor<InsertManagerPostgres>("insertmanager", credential); });
-  scheduler.run_in_context([&] { parse_manager_ = td::actor::create_actor<ParseManager>("parsemanager"); });
-  scheduler.run_in_context([&] { db_scanner_ = td::actor::create_actor<DbScanner>("scanner", db_root, dbs_secondary, working_dir + "/secondary_logs"); });
-
-  scheduler.run_in_context([&, watcher = std::move(watcher)] { index_scheduler_ = td::actor::create_actor<IndexScheduler>("indexscheduler", db_scanner_.get(), 
-    insert_manager_.get(), parse_manager_.get(), working_dir, from_seqno, to_seqno, force_index, max_active_tasks, max_queue, stats_timeout, watcher); 
+  scheduler.run_in_context([&] {
+    insert_manager_ = td::actor::create_actor<InsertManagerPostgres>(
+        "insertmanager", credential, kvrocks_config, partition_config, no_leader, bounded_archive_range,
+        kvrocks_skip_current_tables, pg_no_copy, failover_baseline);
   });
+  scheduler.run_in_context([&] { parse_manager_ = td::actor::create_actor<ParseManager>("parsemanager"); });
+  scheduler.run_in_context([&] {
+    db_scanner_ = td::actor::create_actor<DbScanner>("scanner", db_root, dbs_secondary,
+                                                     working_dir + "/secondary_logs", db_catch_up_interval,
+                                                     !bounded_archive_range);
+  });
+
+  scheduler.run_in_context([&, watcher = std::move(watcher)] { index_scheduler_ = td::actor::create_actor<IndexScheduler>("indexscheduler", db_scanner_.get(),
+    insert_manager_.get(), parse_manager_.get(), working_dir, from_seqno, to_seqno, force_index, max_active_tasks, max_queue, stats_timeout, watcher, prewarm_count,
+    db_event_fifo_path);
+  });
+  if (!bounded_archive_range && failover_check_interval > 0) {
+    scheduler.run_in_context([&] {
+      std::shared_ptr<sw::redis::Redis> watchdog_kvrocks;
+      if (kvrocks_config.enabled && !kvrocks_skip_current_tables) {
+        auto watchdog_kvrocks_config = kvrocks_config;
+        watchdog_kvrocks_config.pool_size = 2;
+        watchdog_kvrocks = KvrocksClient(watchdog_kvrocks_config).make_redis();
+      }
+      auto scheduler_actor = index_scheduler_.get();
+      FailoverWatchdog::ContiguousIndexedSeqnoGetter getter = [scheduler_actor](td::Promise<std::int32_t> promise) {
+        td::actor::send_closure(scheduler_actor, &IndexScheduler::get_contiguous_indexed_seqno, std::move(promise));
+      };
+      failover_watchdog_ = td::actor::create_actor<FailoverWatchdog>(
+          "failoverwatchdog", credential.get_connection_string(), std::move(watchdog_kvrocks), std::move(getter),
+          failover_baseline, FailoverWatchdog::Options{failover_check_interval, failover_strikes});
+    });
+  }
   scheduler.run_in_context([&] { 
     td::actor::send_closure(insert_manager_, &InsertManagerPostgres::set_parallel_inserts_actors, max_insert_actors);
     td::actor::send_closure(insert_manager_, &InsertManagerPostgres::set_insert_batch_size, batch_size);
@@ -343,8 +639,19 @@ int main(int argc, char *argv[]) {
   }
   scheduler.run_in_context([&] { td::actor::send_closure(index_scheduler_, &IndexScheduler::run); });
   
-  while(scheduler.run(1)) {
+  while(!finish_requested->load() && scheduler.run(1)) {
     // do something
+  }
+  if (finish_requested->load()) {
+    scheduler.run_in_context([&] {
+      failover_watchdog_.reset();
+      index_scheduler_.reset();
+      insert_manager_.reset();
+      parse_manager_.reset();
+      db_scanner_.reset();
+      td::actor::SchedulerContext::get().stop();
+    });
+    scheduler.run();
   }
   LOG(INFO) << "Done!";
   return 0;

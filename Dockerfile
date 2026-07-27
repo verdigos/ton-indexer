@@ -9,25 +9,32 @@ RUN apt-get update -y \
                    automake libjemalloc-dev lsb-release software-properties-common gnupg \
                    autoconf libtool \
     && rm -rf /var/lib/{apt,dpkg,cache,log}/
-COPY ton-index-worker/external/ /app/external/
-COPY ton-index-worker/pgton/ /app/pgton/
-COPY ton-index-worker/celldb-migrate/ /app/celldb-migrate/
-COPY ton-index-worker/ton-index-clickhouse/ /app/ton-index-clickhouse/
-COPY ton-index-worker/ton-index-postgres/ /app/ton-index-postgres/
-COPY ton-index-worker/ton-integrity-checker/ /app/ton-integrity-checker/
-COPY ton-index-worker/ton-smc-scanner/ /app/ton-smc-scanner/
-COPY ton-index-worker/ton-trace-emulator/ /app/ton-trace-emulator/
-COPY ton-index-worker/ton-trace-task-emulator/ /app/ton-trace-task-emulator/
-COPY ton-index-worker/tondb-scanner/ /app/tondb-scanner/
-COPY ton-index-worker/ton-marker/ /app/ton-marker/
-COPY ton-index-worker/ton-observability/ /app/ton-observability/
-COPY ton-index-worker/CMakeLists.txt /app/
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates curl gnupg lsb-release \
+ && install -d /usr/share/postgresql-common/pgdg \
+ && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+      -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+ && . /etc/os-release \
+ && echo "Types: deb" > /etc/apt/sources.list.d/pgdg.sources \
+ && echo "URIs: https://apt.postgresql.org/pub/repos/apt" >> /etc/apt/sources.list.d/pgdg.sources \
+ && echo "Suites: ${VERSION_CODENAME}-pgdg" >> /etc/apt/sources.list.d/pgdg.sources \
+ && echo "Components: main" >> /etc/apt/sources.list.d/pgdg.sources \
+ && echo "Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc" >> /etc/apt/sources.list.d/pgdg.sources \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+      postgresql-18 \
+      postgresql-server-dev-18 \
+      postgresql-client-18 \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY ton-index-worker/ /app/
 
 WORKDIR /app/build
 ENV CC=clang-20
 ENV CXX=clang++-20
-RUN touch /app/suppression_mappings.txt && cmake -DCMAKE_BUILD_TYPE=Release -DPORTABLE=1 .. && make -j$(nproc) ton-index-postgres ton-index-postgres-migrate ton-index-clickhouse ton-smc-scanner \
-     ton-integrity-checker ton-trace-emulator ton-trace-task-emulator ton-marker-cli ton-marker-core ton-marker
+RUN touch /app/suppression_mappings.txt && cmake -DPGTON=1 -DCMAKE_BUILD_TYPE=Release -DPORTABLE=1 .. && make -j$(nproc) ton-index-postgres ton-index-postgres-migrate ton-index-clickhouse ton-smc-scanner \
+     ton-integrity-checker ton-trace-emulator ton-trace-task-emulator ton-marker-cli ton-marker-core ton-marker pgton
 
 
 ## build index api service ton-index-go
@@ -109,7 +116,7 @@ RUN go build -o ton-metadata-fetcher ./*.go
 FROM ubuntu:24.04 AS index-worker
 RUN DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get update -y && apt-get -y install tzdata && rm -rf /var/lib/{apt,dpkg,cache,log}/
 RUN apt-get update -y \
-    && apt install -y dnsutils libpq5 libsecp256k1-1 libsodium23 libhiredis1.1.0 \
+    && apt install -y dnsutils libpq5 libsecp256k1-1 libsodium23 libhiredis1.1.0 libcurl4 \
     && rm -rf /var/lib/{apt,dpkg,cache,log}/
 
 COPY ton-index-worker/scripts/entrypoint.sh /app/entrypoint.sh
@@ -129,7 +136,7 @@ ENTRYPOINT [ "/app/entrypoint.sh" ]
 ## index api service image
 FROM ubuntu:24.04 AS index-api
 RUN apt-get update \
-    && apt install --yes dnsutils libpq5 libsecp256k1-1 libsodium23 libhiredis1.1.0 \
+    && apt install --yes dnsutils libpq5 libsecp256k1-1 libsodium23 libhiredis1.1.0 libcurl4 \
     && rm -rf /var/lib/{apt,dpkg,cache,log}/
 
 COPY --from=core-builder /app/build/ton-marker/libton-marker* /usr/lib/
@@ -185,3 +192,48 @@ COPY indexer/files/* /app
 WORKDIR /app
 ENV C_FORCE_ROOT=1
 ENTRYPOINT [ "/app/entrypoint.sh" ]
+
+
+## pgton extension builder
+FROM postgres:18-bookworm AS pgton-builder
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+         build-essential \
+         cmake \
+         postgresql-server-dev-18 \
+    && rm -rf /var/lib/apt/lists/*
+COPY ton-index-worker/cmake /app/cmake
+COPY ton-index-worker/pgton /app/pgton
+WORKDIR /app/build
+RUN cmake -DCMAKE_BUILD_TYPE=Release ../pgton \
+    && cmake --build . --target pgton
+
+
+## postgresql service image base
+FROM postgres:18-bookworm AS postgres-pgton
+COPY --from=pgton-builder /app/build/pgton.so /usr/lib/postgresql/18/lib/
+COPY --from=pgton-builder /app/build/pgton.control /usr/share/postgresql/18/extension/
+COPY ton-index-worker/pgton/pgton--0.1.sql /usr/share/postgresql/18/extension/
+RUN chmod 0755 /usr/lib/postgresql/18/lib/pgton.so \
+    && chmod 0644 /usr/share/postgresql/18/extension/pgton.control \
+                   /usr/share/postgresql/18/extension/pgton--0.1.sql
+
+
+## patroni postgresql service image
+FROM postgres-pgton AS patroni-postgres
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+         python3 \
+         python3-venv \
+         ca-certificates \
+         curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m venv /opt/patroni \
+    && /opt/patroni/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/patroni/bin/pip install --no-cache-dir "patroni[etcd3]" psycopg2-binary \
+    && ln -s /opt/patroni/bin/patroni /usr/local/bin/patroni \
+    && ln -s /opt/patroni/bin/patronictl /usr/local/bin/patronictl
+
+
+## postgresql service image
+FROM postgres-pgton AS postgres

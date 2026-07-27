@@ -1,10 +1,7 @@
 package models
 
-import (
-	"fmt"
-)
+import "fmt"
 
-// responses
 type MasterchainInfo struct {
 	Last  *Block `json:"last"`
 	First *Block `json:"first"`
@@ -107,6 +104,13 @@ type DNSRecordsResponse struct {
 	Records     []DNSRecord `json:"records"`
 	AddressBook AddressBook `json:"address_book"`
 } // @name DNSRecordsResponse
+
+type DNSAuctionsResponse struct {
+	Auctions    []DNSAuction `json:"auctions"`
+	AddressBook AddressBook  `json:"address_book"`
+	Metadata    Metadata     `json:"metadata"`
+	NextCursor  *string      `json:"next_cursor"`
+} // @name DNSAuctionsResponse
 
 type MultisigResponse struct {
 	Multisigs   []Multisig  `json:"multisigs"`

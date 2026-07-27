@@ -3,15 +3,14 @@ package crud
 import (
 	"context"
 	"fmt"
-	"github.com/toncenter/ton-indexer/ton-index-go/index/detect"
-	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
-	"github.com/toncenter/ton-indexer/ton-index-go/index/services"
 	"log"
 	"net/url"
 	"reflect"
 	"strings"
 
-	"github.com/lib/pq"
+	"github.com/toncenter/ton-indexer/ton-index-go/index/detect"
+	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
+	"github.com/toncenter/ton-indexer/ton-index-go/index/services"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -27,7 +26,7 @@ func getSortOrder(order models.SortType) (string, error) {
 }
 
 // query builders
-func limitQuery(lim models.LimitRequest, settings models.RequestSettings) (string, error) {
+func limitQuery(lim models.LimitParams, settings models.RequestSettings) (string, error) {
 	query := ``
 	if lim.Limit == nil {
 		// set default value
@@ -48,13 +47,68 @@ func limitQuery(lim models.LimitRequest, settings models.RequestSettings) (strin
 	return query, nil
 }
 
+func limitOnlyQuery(limit *int32, settings models.RequestSettings) (string, error) {
+	return limitQuery(models.LimitParams{Limit: limit}, settings)
+}
+
+// limitOffsetQueryWithDefault is limitQuery with a per-endpoint default limit instead of the global one.
+func limitOffsetQueryWithDefault(lim models.LimitParams, defaultLimit int32, settings models.RequestSettings) (string, error) {
+	if lim.Limit == nil {
+		d := defaultLimit
+		lim.Limit = &d
+	}
+	return limitQuery(lim, settings)
+}
+
+func requestContext(settings models.RequestSettings) (context.Context, context.CancelFunc) {
+	if settings.Timeout <= 0 {
+		return context.WithCancel(context.Background())
+	}
+	return context.WithTimeout(context.Background(), settings.Timeout)
+}
+
+func acquireConnForRequest(pool *pgxpool.Pool, settings models.RequestSettings) (*pgxpool.Conn, func(), error) {
+	ctx, cancel := requestContext(settings)
+	conn, err := pool.Acquire(ctx)
+	cancel()
+	if err != nil {
+		return nil, nil, err
+	}
+	released := false
+	release := func() {
+		if released {
+			return
+		}
+		released = true
+		conn.Release()
+	}
+	return conn, release, nil
+}
+
+func (db *DbClient) acquireFedForRequest(settings models.RequestSettings) (*fedConns, func(), error) {
+	ctx, cancel := requestContext(settings)
+	fc, release, err := db.acquireFed(ctx)
+	cancel()
+	if err != nil {
+		return nil, nil, err
+	}
+	fc.ctx = context.Background()
+	fc.acquireTimeout = settings.Timeout
+	return fc, release, nil
+}
+
 func filterByArray[T any](clmn string, values []T) string {
 	filter_list := []string{}
+	filterStringIfaceType := reflect.TypeOf((*models.FilterStringInterface)(nil)).Elem()
 	for _, x := range values {
-		t := reflect.ValueOf(x)
-		switch t.Kind() {
-		case reflect.String:
-			if t.Len() > 0 {
+		v := reflect.ValueOf(x)
+		t := reflect.TypeOf(x)
+		switch {
+		case t.Implements(filterStringIfaceType):
+			xx := v.Interface().(models.FilterStringInterface)
+			filter_list = append(filter_list, fmt.Sprintf(`'%s'`, xx.FilterString()))
+		case t.Kind() == reflect.String:
+			if len(t.String()) > 0 {
 				filter_list = append(filter_list, fmt.Sprintf("'%s'", t.String()))
 			}
 		default:
@@ -71,16 +125,66 @@ func filterByArray[T any](clmn string, values []T) string {
 	return ``
 }
 
-func QueryMetadataImpl(addr_list []string, conn *pgxpool.Conn, settings models.RequestSettings) (models.Metadata, error) {
+func tonaddrArrayParam(addrList []models.AccountAddress) []string {
+	result := make([]string, len(addrList))
+	for i, addr := range addrList {
+		if (&addr).IsAddressNone() {
+			result[i] = "addr_none"
+		} else {
+			result[i] = string(addr)
+		}
+	}
+	return result
+}
+
+func applyNsfwTransform(row models.TokenInfo) models.TokenInfo {
+	if row.Extra == nil {
+		return row
+	}
+
+	fields := []string{"_image_small", "_image_medium", "_image_big"}
+	for _, field := range fields {
+		blurredField := field + "_blur"
+		if row.IsNsfw != nil && *row.IsNsfw {
+			if value, exists := row.Extra[field]; exists {
+				if imageURL, ok := value.(string); ok && imageURL != "" {
+					if blurredURL, exists := row.Extra[blurredField]; exists {
+						row.Extra[field] = blurredURL
+					} else {
+						row.Extra[field] = ""
+					}
+				}
+			}
+		}
+		delete(row.Extra, blurredField)
+	}
+	return row
+}
+
+func applyMetadataImageTransforms(metadata models.Metadata) {
+	for address, addressMetadata := range metadata {
+		for i := range addressMetadata.TokenInfo {
+			row := addressMetadata.TokenInfo[i]
+			if row.Valid == nil || !*row.Valid || row.Type == nil || *row.Type == "jetton_wallets" {
+				continue
+			}
+			addressMetadata.TokenInfo[i] = applyNsfwTransform(row)
+		}
+		metadata[address] = addressMetadata
+	}
+}
+
+func QueryMetadataImpl(addr_list []models.AccountAddress, conn *pgxpool.Conn, settings models.RequestSettings) (models.Metadata, error) {
 	if settings.UseCache {
 		metadata, err := services.AddressInfoCacheClient.GetMetadata(addr_list)
 		if err != nil {
 			log.Println("Error getting metadata from cache: ", err)
 		} else {
+			applyMetadataImageTransforms(metadata)
 			return metadata, nil
 		}
 	}
-	token_info_map := map[string][]models.TokenInfo{}
+	token_info_map := map[models.AccountAddress][]models.TokenInfo{}
 
 	ctx, cancel_ctx := context.WithTimeout(context.Background(), settings.Timeout)
 	defer cancel_ctx()
@@ -97,13 +201,13 @@ func QueryMetadataImpl(addr_list []string, conn *pgxpool.Conn, settings models.R
 		addr_list = append(addr_list, additional_addrs...)
 	}
 
-	query := "select n.address, m.valid, 'nft_items' as type, m.name, m.symbol, m.description, m.image, m.extra, n.index from nft_items n left join address_metadata m on n.address = m.address and m.type = 'nft_items' where n.address = ANY($1)" +
+	query := "select n.address, m.valid, 'nft_items' as type, m.name, m.symbol, m.description, m.image, m.extra, n.index from nft_items n left join address_metadata m on n.address = m.address and m.type = 'nft_items' where n.address = ANY($1::tonaddr[]) and not n.destroyed" +
 		" union all " +
-		"select c.address, m.valid, 'nft_collections' as type, m.name, m.symbol, m.description, m.image, m.extra, null as index from nft_collections c left join address_metadata m on c.address = m.address and m.type = 'nft_collections' where c.address = ANY($1)" +
+		"select c.address, m.valid, 'nft_collections' as type, m.name, m.symbol, m.description, m.image, m.extra, null as index from nft_collections c left join address_metadata m on c.address = m.address and m.type = 'nft_collections' where c.address = ANY($1::tonaddr[]) and not c.destroyed" +
 		" union all " +
-		"select j.address, m.valid, 'jetton_masters' as type, m.name, m.symbol, m.description, m.image, m.extra, null as index from jetton_masters j left join address_metadata m on j.address = m.address and m.type = 'jetton_masters'  where j.address = ANY($1)"
+		"select j.address, m.valid, 'jetton_masters' as type, m.name, m.symbol, m.description, m.image, m.extra, null as index from jetton_masters j left join address_metadata m on j.address = m.address and m.type = 'jetton_masters'  where j.address = ANY($1::tonaddr[]) and not j.destroyed"
 
-	rows, err := conn.Query(ctx, query, pq.Array(addr_list))
+	rows, err := conn.Query(ctx, query, tonaddrArrayParam(addr_list))
 	if err != nil {
 		return nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
@@ -132,8 +236,9 @@ func QueryMetadataImpl(addr_list []string, conn *pgxpool.Conn, settings models.R
 			})
 		} else {
 			row.Indexed = true
+			row = applyNsfwTransform(row)
 
-			if _, ok := token_info_map[*row.Type]; !ok {
+			if _, ok := token_info_map[row.Address]; !ok {
 				token_info_map[row.Address] = []models.TokenInfo{}
 			}
 			if *row.Valid {
@@ -169,6 +274,73 @@ func QueryMetadataImpl(addr_list []string, conn *pgxpool.Conn, settings models.R
 	return metadata, nil
 }
 
+func (db *DbClient) queryKvrocksEnrichment(addrList []models.AccountAddress, settings models.RequestSettings) (models.AddressBook, models.Metadata, error) {
+	book := models.AddressBook{}
+	metadata := models.Metadata{}
+	var err error
+	if len(addrList) == 0 {
+		return book, metadata, nil
+	}
+	if !settings.NoAddressBook {
+		book, err = QueryAddressBookImplKvrocks(addrList, db.Kvrocks, settings)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	if !settings.NoMetadata {
+		metadata, err = QueryMetadataImplKvrocks(addrList, settings, db.Kvrocks)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return book, metadata, nil
+}
+
+func (db *DbClient) queryKvrocksAddressBook(addrList []models.AccountAddress, settings models.RequestSettings) (models.AddressBook, error) {
+	if len(addrList) == 0 || settings.NoAddressBook {
+		return models.AddressBook{}, nil
+	}
+	return QueryAddressBookImplKvrocks(addrList, db.Kvrocks, settings)
+}
+
+func (db *DbClient) QueryAddressBookByAddresses(addrList []models.AccountAddress, settings models.RequestSettings) (models.AddressBook, error) {
+	if len(addrList) == 0 || settings.NoAddressBook {
+		return models.AddressBook{}, nil
+	}
+	if db == nil {
+		return nil, models.IndexError{Code: 500, Message: "address book backend is not configured"}
+	}
+
+	addrSet := make(map[models.AccountAddress]struct{}, len(addrList))
+	uniqueAddrList := make([]models.AccountAddress, 0, len(addrList))
+	for _, addr := range addrList {
+		if addr.IsAddressNone() {
+			continue
+		}
+		if _, ok := addrSet[addr]; ok {
+			continue
+		}
+		addrSet[addr] = struct{}{}
+		uniqueAddrList = append(uniqueAddrList, addr)
+	}
+	if len(uniqueAddrList) == 0 {
+		return models.AddressBook{}, nil
+	}
+
+	if db.Kvrocks != nil {
+		return QueryAddressBookImplKvrocks(uniqueAddrList, db.Kvrocks, settings)
+	}
+	if db.Pool == nil {
+		return nil, models.IndexError{Code: 500, Message: "PostgreSQL address book backend is not configured"}
+	}
+	conn, releaseConn, err := acquireConnForRequest(db.Pool, settings)
+	if err != nil {
+		return nil, models.IndexError{Code: 500, Message: err.Error()}
+	}
+	defer releaseConn()
+	return QueryAddressBookImpl(uniqueAddrList, conn, settings)
+}
+
 func SubstituteImgproxyBaseUrl(metadata *models.Metadata, base_url string) {
 	proxied_fields := []string{"_image_small", "_image_medium", "_image_big"}
 
@@ -180,7 +352,7 @@ func SubstituteImgproxyBaseUrl(metadata *models.Metadata, base_url string) {
 
 			for _, field := range proxied_fields {
 				if val, exists := tokenInfo.Extra[field]; exists {
-					if img_url, ok := val.(string); ok && img_url != "" {
+					if img_url, ok := val.(string); ok && img_url != "" && strings.HasPrefix(img_url, "/") {
 						if result, err := url.JoinPath(base_url, img_url); err == nil {
 							tokenInfo.Extra[field] = result
 						} else {
@@ -193,7 +365,7 @@ func SubstituteImgproxyBaseUrl(metadata *models.Metadata, base_url string) {
 	}
 }
 
-func QueryAddressBookImpl(addr_list []string, conn *pgxpool.Conn, settings models.RequestSettings) (models.AddressBook, error) {
+func QueryAddressBookImpl(addr_list []models.AccountAddress, conn *pgxpool.Conn, settings models.RequestSettings) (models.AddressBook, error) {
 	if settings.UseCache {
 		book, err := services.AddressInfoCacheClient.GetAddressBook(addr_list)
 		if err != nil {
@@ -205,7 +377,7 @@ func QueryAddressBookImpl(addr_list []string, conn *pgxpool.Conn, settings model
 	book := models.AddressBook{}
 	quote_addr_list := []string{}
 	for _, item := range addr_list {
-		quote_addr_list = append(quote_addr_list, fmt.Sprintf("'%s'", item))
+		quote_addr_list = append(quote_addr_list, fmt.Sprintf("'%s'", item.FilterString()))
 	}
 
 	// read address book first
@@ -225,8 +397,8 @@ func QueryAddressBookImpl(addr_list []string, conn *pgxpool.Conn, settings model
 		defer rows.Close()
 
 		for rows.Next() {
-			var account string
-			var code_hash *string
+			var account models.AccountAddress
+			var code_hash *models.HashType
 			var methods *[]uint32
 			if err := rows.Scan(&account, &code_hash, &methods); err == nil {
 				addr_str := models.GetAccountAddressFriendly(account, code_hash, settings.IsTestnet)
@@ -236,7 +408,7 @@ func QueryAddressBookImpl(addr_list []string, conn *pgxpool.Conn, settings model
 				if code_hash != nil || methods != nil {
 					codeHashStr := ""
 					if code_hash != nil {
-						codeHashStr = *code_hash
+						codeHashStr = code_hash.String()
 					}
 					var methodIDs []uint32
 					if methods != nil {
@@ -246,7 +418,7 @@ func QueryAddressBookImpl(addr_list []string, conn *pgxpool.Conn, settings model
 				}
 
 				interfacesPtr := &interfaces
-				book_tmp[strings.Trim(account, " ")] = models.AddressBookRow{
+				book_tmp[account] = models.AddressBookRow{
 					UserFriendly: &addr_str,
 					Domain:       nil,
 					Interfaces:   interfacesPtr,
@@ -265,6 +437,7 @@ func QueryAddressBookImpl(addr_list []string, conn *pgxpool.Conn, settings model
 		query := fmt.Sprintf(`select distinct on(nft_item_owner) nft_item_owner, domain from dns_entries
 			where nft_item_owner in (%s)
 			and nft_item_owner = dns_wallet
+			and not destroyed
 			order by nft_item_owner, length(domain)`, addr_list_str)
 		ctx, cancel_ctx := context.WithTimeout(context.Background(), settings.Timeout)
 		defer cancel_ctx()
@@ -275,7 +448,7 @@ func QueryAddressBookImpl(addr_list []string, conn *pgxpool.Conn, settings model
 		defer rows.Close()
 
 		for rows.Next() {
-			var account string
+			var account models.AccountAddress
 			var domain *string
 			if err := rows.Scan(&account, &domain); err == nil {
 				if book_rec, ok := book_tmp[account]; ok {
@@ -292,16 +465,10 @@ func QueryAddressBookImpl(addr_list []string, conn *pgxpool.Conn, settings model
 	}
 
 	for _, addr := range addr_list {
-		account := ``
-		if addr_val := models.AccountAddressConverter(addr); addr_val.IsValid() {
-			if addr_str, ok := addr_val.Interface().(models.AccountAddress); ok {
-				account = string(addr_str)
-			}
-		}
-		if rec, ok := book_tmp[account]; ok {
+		if rec, ok := book_tmp[addr]; ok {
 			book[addr] = rec
 		} else {
-			addr_str := models.GetAccountAddressFriendly(account, nil, settings.IsTestnet)
+			addr_str := models.GetAccountAddressFriendly(addr, nil, settings.IsTestnet)
 			emptyInterfaces := []string{}
 			book[addr] = models.AddressBookRow{
 				UserFriendly: &addr_str,
@@ -314,55 +481,91 @@ func QueryAddressBookImpl(addr_list []string, conn *pgxpool.Conn, settings model
 }
 
 func (db *DbClient) QueryMetadata(
-	addr_list []string,
+	address_list []string,
 	settings models.RequestSettings,
 ) (models.Metadata, error) {
-	raw_addr_list := []string{}
-	for _, addr := range addr_list {
-		addr_loc := models.AccountAddressConverter(addr)
-		if addr_loc.IsValid() {
-			if v, ok := addr_loc.Interface().(models.AccountAddress); ok {
-				raw_addr_list = append(raw_addr_list, string(v))
-			}
+	addr_list := []models.AccountAddress{}
+	for _, addr := range address_list {
+		addr_loc, err := models.ParseAccountAddress(addr)
+		if err == nil && addr_loc != nil {
+			addr_list = append(addr_list, *addr_loc)
 		}
 	}
-	conn, err := db.Pool.Acquire(context.Background())
+	return db.QueryMetadataByAddresses(addr_list, settings)
+}
+
+func (db *DbClient) QueryMetadataByAddresses(
+	addrList []models.AccountAddress,
+	settings models.RequestSettings,
+) (models.Metadata, error) {
+	if len(addrList) == 0 || settings.NoMetadata {
+		return models.Metadata{}, nil
+	}
+	if db == nil {
+		return nil, models.IndexError{Code: 500, Message: "metadata backend is not configured"}
+	}
+	if db.Kvrocks != nil {
+		return QueryMetadataImplKvrocks(addrList, settings, db.Kvrocks)
+	}
+	if db.Pool == nil {
+		return nil, models.IndexError{Code: 500, Message: "PostgreSQL metadata backend is not configured"}
+	}
+	conn, releaseConn, err := acquireConnForRequest(db.Pool, settings)
 	if err != nil {
 		return nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
-	defer conn.Release()
-	return QueryMetadataImpl(raw_addr_list, conn, settings)
+	defer releaseConn()
+	return QueryMetadataImpl(addrList, conn, settings)
 }
 
 func (db *DbClient) QueryAddressBook(
-	addr_list []string,
+	address_list []string,
 	settings models.RequestSettings,
-) (models.AddressBook, error) {
-	raw_addr_list := []string{}
-	raw_addr_map := map[string]string{}
-	for _, addr := range addr_list {
-		addr_loc := models.AccountAddressConverter(addr)
-		if addr_loc.IsValid() {
-			if v, ok := addr_loc.Interface().(models.AccountAddress); ok {
-				raw_addr_list = append(raw_addr_list, string(v))
-				raw_addr_map[addr] = string(v)
-			}
+) (models.GenericAddressBook, error) {
+	addr_list := []models.AccountAddress{}
+	mapping := map[string]models.AccountAddress{}
+	for _, addr := range address_list {
+		addr_loc, err := models.ParseAccountAddress(addr)
+		if err == nil && addr_loc != nil {
+			addr_list = append(addr_list, *addr_loc)
+			mapping[addr] = *addr_loc
 		} else {
-			raw_addr_map[addr] = ""
+			mapping[addr] = ""
 		}
 	}
-	conn, err := db.Pool.Acquire(context.Background())
+	if db.Kvrocks != nil {
+		book, err := QueryAddressBookImplKvrocks(addr_list, db.Kvrocks, settings)
+		if err != nil {
+			return nil, models.IndexError{Code: 500, Message: err.Error()}
+		}
+
+		new_addr_book := models.GenericAddressBook{}
+		for k, v := range mapping {
+			if vv, ok := book[v]; ok {
+				new_addr_book[k] = vv
+			} else {
+				emptyInterfaces := []string{}
+				new_addr_book[k] = models.AddressBookRow{
+					UserFriendly: nil,
+					Domain:       nil,
+					Interfaces:   &emptyInterfaces,
+				}
+			}
+		}
+		return new_addr_book, nil
+	}
+	conn, releaseConn, err := acquireConnForRequest(db.Pool, settings)
 	if err != nil {
 		return nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
-	defer conn.Release()
-	book, err := QueryAddressBookImpl(raw_addr_list, conn, settings)
+	defer releaseConn()
+	book, err := QueryAddressBookImpl(addr_list, conn, settings)
 	if err != nil {
 		return nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
 
-	new_addr_book := models.AddressBook{}
-	for k, v := range raw_addr_map {
+	new_addr_book := models.GenericAddressBook{}
+	for k, v := range mapping {
 		if vv, ok := book[v]; ok {
 			new_addr_book[k] = vv
 		} else {
@@ -386,30 +589,57 @@ func (db *DbClient) QueryBalanceChanges(
 		return models.BalanceChangesResult{}, models.IndexError{Code: 400, Message: "trace_id or action_id is required"}
 	}
 
-	conn, err := db.Pool.Acquire(context.Background())
+	fc, release, err := db.acquireFedForRequest(settings)
 	if err != nil {
 		return models.BalanceChangesResult{}, models.IndexError{Code: 500, Message: err.Error()}
 	}
-	defer conn.Release()
+	defer release()
 
 	ctx, cancel_ctx := context.WithTimeout(context.Background(), settings.Timeout)
 	defer cancel_ctx()
 
-	if trace_id == nil && req.ActionId != nil {
-		query := "SELECT trace_id FROM actions WHERE action_id = $1"
-		err := conn.QueryRow(ctx, query, *req.ActionId).Scan(&trace_id)
-		if err != nil {
-			return models.BalanceChangesResult{}, models.IndexError{Code: 404, Message: "action_id not found"}
+	// A trace (and its actions) lives wholly in one partition family -> on hot or
+	// cold. Resolve + compute on hot first, fall back to cold if absent there.
+	attempt := func(conn *pgxpool.Conn) (*BalanceChanges, map[models.HashType]*BalanceChanges, bool, error) {
+		trace_id := req.TraceId
+		if trace_id == nil && req.ActionId != nil {
+			if e := conn.QueryRow(ctx, "SELECT trace_id FROM actions WHERE action_id = $1", *req.ActionId).Scan(&trace_id); e != nil {
+				return nil, nil, false, nil // action not on this side
+			}
 		}
+		if trace_id == nil {
+			return nil, nil, false, models.IndexError{Code: 400, Message: "trace_id is required"}
+		}
+		tc, ac, e := CalculateBalanceChanges(models.HashType(*trace_id), conn, db.Kvrocks, settings)
+		if e != nil {
+			if e.Error() == "trace not found" {
+				return nil, nil, false, nil // trace not on this side
+			}
+			return nil, nil, false, e
+		}
+		return tc, ac, true, nil
 	}
 
-	if trace_id == nil {
-		return models.BalanceChangesResult{}, models.IndexError{Code: 400, Message: "trace_id is required"}
-	}
-
-	trace_changes, actions_changes, err := CalculateBalanceChanges(models.HashType(*trace_id), conn)
+	hotConn, err := fc.hot()
 	if err != nil {
 		return models.BalanceChangesResult{}, models.IndexError{Code: 500, Message: err.Error()}
+	}
+	trace_changes, actions_changes, found, err := attempt(hotConn)
+	if err != nil {
+		return models.BalanceChangesResult{}, models.IndexError{Code: 500, Message: err.Error()}
+	}
+	if !found && fc.federated {
+		coldConn, cerr := fc.cold()
+		if cerr != nil {
+			return models.BalanceChangesResult{}, models.IndexError{Code: 500, Message: cerr.Error()}
+		}
+		trace_changes, actions_changes, found, err = attempt(coldConn)
+		if err != nil {
+			return models.BalanceChangesResult{}, models.IndexError{Code: 500, Message: err.Error()}
+		}
+	}
+	if !found {
+		return models.BalanceChangesResult{}, models.IndexError{Code: 404, Message: "trace or action not found"}
 	}
 	var targetChanges *BalanceChanges = trace_changes
 	if req.ActionId != nil {

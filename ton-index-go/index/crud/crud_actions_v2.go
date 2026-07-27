@@ -3,101 +3,256 @@ package crud
 import (
 	"context"
 	"fmt"
-	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
-	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
 	"log"
 	"strings"
+
+	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
+	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func (db *DbClient) QueryActionsV2(
-	act_req models.ActionRequest,
-	utime_req models.UtimeRequest,
-	lt_req models.LtRequest,
-	lim_req models.LimitRequest,
+	req models.ActionRequest,
 	settings models.RequestSettings,
 ) ([]models.Action, models.AddressBook, models.Metadata, error) {
-	if len(act_req.SupportedActionTypes) == 0 {
-		act_req.SupportedActionTypes = []string{"latest"}
+	if len(req.SupportedActionTypes) == 0 {
+		req.SupportedActionTypes = []string{"latest"}
 	}
-	act_req.SupportedActionTypes = models.ExpandActionTypeShortcuts(act_req.SupportedActionTypes)
-	query, args, err := buildActionsQueryV2(act_req, utime_req, lt_req, lim_req, settings)
-	if settings.DebugRequest {
-		log.Println("Debug query:", query, "Args:", args)
+	req.SupportedActionTypes = models.ExpandActionTypeShortcuts(req.SupportedActionTypes)
+
+	lim_req := req.GetLimitParams()
+	sortOrder := "desc"
+	if v := lim_req.Sort; v != nil {
+		var serr error
+		sortOrder, serr = getSortOrder(*v)
+		if serr != nil {
+			return nil, nil, nil, serr
+		}
 	}
+	offset := 0
+	if lim_req.Offset != nil {
+		offset = int(max(0, *lim_req.Offset))
+	}
+	limit := int32(settings.DefaultLimit)
+	if lim_req.Limit != nil {
+		limit = max(1, *lim_req.Limit)
+		if limit > int32(settings.MaxLimit) {
+			return nil, nil, nil, models.IndexError{Code: 422, Message: fmt.Sprintf("limit is not allowed: %d > %d", limit, settings.MaxLimit)}
+		}
+	}
+
+	parts := actionsQueryPartsV2(req, sortOrder)
+
+	fc, release, err := db.acquireFedForRequest(settings)
 	if err != nil {
 		return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
+	defer release()
 
-	// read data
-	conn, err := db.Pool.Acquire(context.Background())
-	if err != nil {
-		return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+	fetch := func(query string, conn *pgxpool.Conn) ([]models.RawAction, error) {
+		if settings.DebugRequest {
+			log.Println("Debug query:", query, "Args:", parts.args)
+		}
+		return queryRawActionsImplV2(query, parts.args, conn, settings)
 	}
-	defer conn.Release()
 
-	// check block
-	if seqno := act_req.McSeqno; seqno != nil {
-		exists, err := queryBlockExists(*seqno, conn, settings)
-		if err != nil {
-			return nil, nil, nil, err
+	var raw_actions []models.RawAction
+	// Router-served pages enrich from the same DB that served the page.
+	routed := false
+	servedCold := false
+	if req.McSeqno != nil {
+		// a masterchain round's actions live wholly in one partition
+		conn, cerr := fc.connForSeqno(uint64(*req.McSeqno))
+		if cerr != nil {
+			return nil, nil, nil, models.IndexError{Code: 500, Message: cerr.Error()}
+		}
+		exists, eerr := queryBlockExists(*req.McSeqno, conn, settings)
+		if eerr != nil {
+			return nil, nil, nil, eerr
 		}
 		if !exists {
-			return nil, nil, nil, models.IndexError{Code: 404, Message: fmt.Sprintf("masterchain block %d not found", *seqno)}
+			return nil, nil, nil, models.IndexError{Code: 404, Message: fmt.Sprintf("masterchain block %d not found", *req.McSeqno)}
 		}
+		raw_actions, err = fetch(buildActionsOffsetQueryV2(parts, offset, int(limit)), conn)
+	} else {
+		routed = true
+		raw_actions, servedCold, err = queryActionsRouted(fc, req, parts, sortOrder, offset, int(limit), fetch)
 	}
-
-	raw_actions, err := queryRawActionsImplV2(query, args, conn, settings)
 	if err != nil {
 		return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
+
 	actions := []models.Action{}
 	book := models.AddressBook{}
 	metadata := models.Metadata{}
-	addr_map := map[string]bool{}
+	addr_map := map[models.AccountAddress]bool{}
 	for idx := range raw_actions {
 		parse.CollectAddressesFromAction(&addr_map, &raw_actions[idx])
-		action, err := parse.ParseRawAction(&raw_actions[idx])
-		if err != nil {
-			return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+		action, perr := parse.ParseRawAction(&raw_actions[idx])
+		if perr != nil {
+			return nil, nil, nil, models.IndexError{Code: 500, Message: perr.Error()}
 		}
 		actions = append(actions, *action)
 	}
-	if act_req.IncludeAccounts != nil && *act_req.IncludeAccounts {
-		actions, err = queryActionsAccountsImpl(actions, conn)
-		if err != nil {
-			return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+	if req.IncludeAccounts != nil && *req.IncludeAccounts {
+		var eerr error
+		if routed {
+			eerr = enrichActionsAccountsRouted(fc, actions, servedCold, settings)
+		} else {
+			eerr = enrichActionsAccounts(fc, actions, settings)
+		}
+		if eerr != nil {
+			return nil, nil, nil, models.IndexError{Code: 500, Message: eerr.Error()}
 		}
 	}
-	if act_req.IncludeTransactions != nil && *act_req.IncludeTransactions {
-		actions, err = queryActionsTransactionsImpl(actions, conn, settings)
+	if req.IncludeTransactions != nil && *req.IncludeTransactions {
+		actions, err = queryActionsTransactionsImpl(fc, release, actions, settings, db.Kvrocks)
 		if err != nil {
 			return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 		}
 	}
 	if len(addr_map) > 0 {
-		addr_list := []string{}
+		addr_list := []models.AccountAddress{}
 		for k := range addr_map {
-			addr_list = append(addr_list, string(k))
+			addr_list = append(addr_list, k)
 		}
-		if !settings.NoAddressBook {
-			book, err = QueryAddressBookImpl(addr_list, conn, settings)
+		if db.Kvrocks != nil {
+			release()
+			book, metadata, err = db.queryKvrocksEnrichment(addr_list, settings)
 			if err != nil {
 				return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 			}
-		}
-		if !settings.NoMetadata {
-			metadata, err = QueryMetadataImpl(addr_list, conn, settings)
-			if err != nil {
-				return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+		} else if !settings.NoAddressBook || !settings.NoMetadata {
+			coldConn, cerr := fc.cold()
+			if cerr != nil {
+				return nil, nil, nil, models.IndexError{Code: 500, Message: cerr.Error()}
+			}
+			if !settings.NoAddressBook {
+				book, err = QueryAddressBookImpl(addr_list, coldConn, settings)
+				if err != nil {
+					return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+				}
+			}
+			if !settings.NoMetadata {
+				metadata, err = QueryMetadataImpl(addr_list, coldConn, settings)
+				if err != nil {
+					return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+				}
 			}
 		}
 	}
 	return actions, book, metadata, nil
 }
 
-func buildActionsQueryV2(act_req models.ActionRequest, utime_req models.UtimeRequest, lt_req models.LtRequest, lim_req models.LimitRequest, settings models.RequestSettings) (string, []any, error) {
+// enrichActionsAccounts batches account enrichment by the action's owning DB.
+func enrichActionsAccounts(fc *fedConns, actions []models.Action, settings models.RequestSettings) error {
+	if len(actions) == 0 {
+		return nil
+	}
+	hotIdx, coldIdx := []int{}, []int{}
+	for i := range actions {
+		if fc.coldForSeqno(uint64(actions[i].TraceMcSeqnoEnd)) {
+			coldIdx = append(coldIdx, i)
+		} else {
+			hotIdx = append(hotIdx, i)
+		}
+	}
+	if len(hotIdx) > 0 {
+		conn, err := fc.hot()
+		if err != nil {
+			return err
+		}
+		if err := queryActionsAccountsImpl(actions, hotIdx, conn, settings); err != nil {
+			return err
+		}
+	}
+	if len(coldIdx) > 0 {
+		conn, err := fc.cold()
+		if err != nil {
+			return err
+		}
+		if err := queryActionsAccountsImpl(actions, coldIdx, conn, settings); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// enrichActionsAccountsRouted uses the one DB that served the routed page.
+func enrichActionsAccountsRouted(fc *fedConns, actions []models.Action, servedCold bool, settings models.RequestSettings) error {
+	if len(actions) == 0 {
+		return nil
+	}
+	idxs := make([]int, len(actions))
+	for i := range actions {
+		idxs[i] = i
+	}
+	conn, err := fc.conn(servedCold)
+	if err != nil {
+		return err
+	}
+	return queryActionsAccountsImpl(actions, idxs, conn, settings)
+}
+
+// actionOrderKey returns the row's router sort key; action keys are non-null.
+func actionOrderKey(orderByNow bool) func(*models.RawAction) *uint64 {
+	if orderByNow {
+		return func(a *models.RawAction) *uint64 {
+			v := uint64(a.TraceEndUtime)
+			return &v
+		}
+	}
+	return func(a *models.RawAction) *uint64 {
+		v := uint64(a.TraceEndLt)
+		return &v
+	}
+}
+
+// queryActionsRouted returns one router-served page plus the side it came from.
+func queryActionsRouted(
+	fc *fedConns,
+	req models.ActionRequest,
+	parts actionsQueryParts,
+	sortOrder string,
+	offset, limit int,
+	fetch func(query string, conn *pgxpool.Conn) ([]models.RawAction, error),
+) ([]models.RawAction, bool, error) {
+	query := buildActionsOffsetQueryV2(parts, offset, limit)
+
+	// Match the sort axis selected by actionsQueryPartsV2.
+	orderByNow := parts.orderKey == "utime"
+
+	// Single pool: read cold directly, no classification.
+	dec := routeCold
+	var floor uint64
+	if fc.federated {
+		w := routeWindow{
+			startLt:    req.StartLt,
+			endLt:      req.EndLt,
+			startUtime: (*uint64)(req.StartUtime),
+			endUtime:   (*uint64)(req.EndUtime),
+			orderByNow: orderByNow,
+			sortDesc:   sortOrder == "desc",
+		}
+		dec = classifyRoute(w, fc.split, fc.utimeMargin)
+
+		// Verify against the same floor classifyRoute used.
+		floor = fc.split.Lt
+		if orderByNow {
+			floor = fc.split.Utime + fc.utimeMargin
+		}
+	}
+
+	return routedPage(fc, dec,
+		func(conn *pgxpool.Conn) ([]models.RawAction, error) { return fetch(query, conn) },
+		actionOrderKey(orderByNow), limit, floor)
+}
+
+func actionsQueryPartsV2(req models.ActionRequest, sort_order string) actionsQueryParts {
+	utime_req := req.GetUtimeParams()
+	lt_req := req.GetLtParams()
+
 	clmn_query_default := `A.trace_id, A.action_id, A.start_lt, A.end_lt, A.start_utime, A.end_utime, 
 		A.trace_end_lt, A.trace_end_utime, A.trace_mc_seqno_end, A.source, A.source_secondary,
 		A.destination, A.destination_secondary, A.asset, A.asset_secondary, A.asset2, A.asset2_secondary, A.opcode, A.tx_hashes,
@@ -282,30 +437,18 @@ func buildActionsQueryV2(act_req models.ActionRequest, utime_req models.UtimeReq
 		(A.cocoon_client_increase_stake_data).new_stake,
 		(A.cocoon_client_withdraw_data).query_id,
 		(A.cocoon_client_withdraw_data).withdraw_amount,
+		A.extra,
 		A.ancestor_type,
 		ARRAY[]::text[]`
 	clmn_query := clmn_query_default
 	from_query := `actions as A`
 	filter_list := []string{}
-	filter_query := ``
 	orderby_query := ``
-	args := []any{act_req.SupportedActionTypes}
-	limit_query, err := limitQuery(lim_req, settings)
-	if err != nil {
-		return "", nil, err
-	}
-
-	sort_order := "desc"
-	if v := lim_req.Sort; v != nil {
-		sort_order, err = getSortOrder(*v)
-		if err != nil {
-			return "", nil, err
-		}
-	}
+	args := []any{req.SupportedActionTypes}
 	// time
 	order_by_now := false
 	join_accounts := false
-	if v := act_req.AccountAddress; v != nil && len(*v) > 0 {
+	if v := req.AccountAddress; v != nil && len(*v) > 0 {
 		join_accounts = true
 	}
 	if v := utime_req.StartUtime; v != nil {
@@ -338,88 +481,85 @@ func buildActionsQueryV2(act_req models.ActionRequest, utime_req models.UtimeReq
 		}
 		filter_list = append(filter_list, fmt.Sprintf("%s <= %d", field, *v))
 	}
-	if v := act_req.AccountAddress; v != nil && len(*v) > 0 {
-		filter_str := fmt.Sprintf("AA.account = '%s'::tonaddr", *v)
+	if v := req.AccountAddress; join_accounts && v != nil {
+		filter_str := fmt.Sprintf("AA.account = '%s'::tonaddr", v.FilterString())
 		filter_list = append(filter_list, filter_str)
 
-		from_query = `action_accounts as AA join actions as A on A.trace_id = AA.trace_id and A.action_id = AA.action_id`
+		action_accounts_from := `action_accounts as AA`
+		if trace_filter := filterByArray("trace_id", req.TraceId); len(trace_filter) > 0 {
+			// Limit action_accounts before the lateral join for account+trace_id.
+			action_accounts_from = fmt.Sprintf("(select * from action_accounts where %s) as AA", trace_filter)
+		}
+		from_query = action_accounts_from + ` join lateral (
+				select *
+				from actions as A
+				where A.trace_id = AA.trace_id
+					and A.action_id = AA.action_id
+					and A.trace_mc_seqno_end = AA.trace_mc_seqno_end
+				limit 1
+			) as A on true`
 		if order_by_now {
-			clmn_query = `distinct on (AA.trace_end_utime, AA.trace_id, AA.action_end_utime, AA.action_id) ` + clmn_query_default
+			clmn_query = `distinct on (AA.account, AA.trace_end_utime, AA.trace_id, AA.action_end_utime, AA.action_id) ` + clmn_query_default
 		} else {
-			clmn_query = `distinct on (AA.trace_end_lt, AA.trace_id, AA.action_end_lt, AA.action_id) ` + clmn_query_default
+			clmn_query = `distinct on (AA.account, AA.trace_end_lt, AA.trace_id, AA.action_end_lt, AA.action_id) ` + clmn_query_default
 		}
 	}
-	if v := act_req.TransactionHash; v != nil {
+	if v := req.TransactionHash; v != nil {
 		filter_str := filterByArray("T.hash", v)
 		if len(filter_str) > 0 {
 			filter_list = append(filter_list, filter_str)
+			from_query += ` join transactions as T on A.trace_id = T.trace_id and A.tx_hashes @> array[T.hash::tonhash]`
 		}
-		from_query = `actions as A join transactions as T on A.trace_id = T.trace_id and A.tx_hashes @> array[T.hash::tonhash]`
-		if order_by_now {
-			clmn_query = `distinct on (A.trace_end_utime, A.trace_id, A.end_utime, A.action_id) ` + clmn_query_default
-		} else {
-			clmn_query = `distinct on (A.trace_end_lt, A.trace_id, A.end_lt, A.action_id) ` + clmn_query_default
+		if len(filter_str) > 0 && !join_accounts {
+			if order_by_now {
+				clmn_query = `distinct on (A.trace_end_utime, A.trace_id, A.end_utime, A.action_id) ` + clmn_query_default
+			} else {
+				clmn_query = `distinct on (A.trace_end_lt, A.trace_id, A.end_lt, A.action_id) ` + clmn_query_default
+			}
 		}
 	}
-	if v := act_req.MessageHash; len(v) > 0 {
+	if v := req.MessageHash; len(v) > 0 {
 		filter_str := fmt.Sprintf("(%s or %s)", filterByArray("M.msg_hash", v), filterByArray("M.msg_hash_norm", v))
 		filter_list = append(filter_list, filter_str)
-
-		from_query = `actions as A join messages as M on A.trace_id = M.trace_id and array[M.tx_hash::tonhash] <@ A.tx_hashes`
-		if order_by_now {
-			clmn_query = `distinct on (A.trace_end_utime, A.trace_id, A.end_utime, A.action_id) ` + clmn_query_default
-		} else {
-			clmn_query = `distinct on (A.trace_end_lt, A.trace_id, A.end_lt, A.action_id) ` + clmn_query_default
+		from_query += ` join messages as M on A.trace_id = M.trace_id and array[M.tx_hash::tonhash] <@ A.tx_hashes`
+		if !join_accounts {
+			if order_by_now {
+				clmn_query = `distinct on (A.trace_end_utime, A.trace_id, A.end_utime, A.action_id) ` + clmn_query_default
+			} else {
+				clmn_query = `distinct on (A.trace_end_lt, A.trace_id, A.end_lt, A.action_id) ` + clmn_query_default
+			}
 		}
 	}
-	if v := act_req.IncludeActionTypes; len(v) > 0 {
+	if v := req.IncludeActionTypes; len(v) > 0 {
 		args = append(args, v)
 		filter_list = append(filter_list, fmt.Sprintf("A.type = ANY($%d)", len(args)))
 	}
-	if v := act_req.ExcludeActionTypes; len(v) > 0 {
+	if v := req.ExcludeActionTypes; len(v) > 0 {
 		args = append(args, v)
 		filter_list = append(filter_list, fmt.Sprintf("NOT (A.type = ANY($%d))", len(args)))
 	}
-	if v := act_req.McSeqno; v != nil {
+	if v := req.McSeqno; v != nil {
 		filter_list = append(filter_list, fmt.Sprintf("A.trace_mc_seqno_end = %d", *v))
-		from_query = `actions as A`
-		clmn_query = clmn_query_default
 	}
-	if v := act_req.ActionId; v != nil {
-		from_query = `actions as A`
+	if v := req.ActionId; v != nil {
 		filter_str := filterByArray("A.action_id", v)
 		if len(filter_str) > 0 {
-			filter_list = []string{filter_str}
+			filter_list = append(filter_list, filter_str)
 		}
-		clmn_query = clmn_query_default
 	}
-	if v := act_req.TraceId; v != nil {
-		trace_filter := filterByArray("trace_id", v)
-		if len(trace_filter) > 0 {
-			joined_accounts := strings.Contains(from_query, "action_accounts")
-			if join_accounts && joined_accounts {
-				// Limit action_accounts before join to keep account+trace_id requests fast.
-				from_query = fmt.Sprintf("(select * from action_accounts where %s) as AA join actions as A on A.trace_id = AA.trace_id and A.action_id = AA.action_id", trace_filter)
-			} else {
-				filter_str := filterByArray("A.trace_id", v)
-				if len(filter_str) > 0 {
-					if join_accounts {
-						filter_list = append(filter_list, filter_str)
-					} else {
-						from_query = `actions as A`
-						filter_list = []string{filter_str}
-					}
-				}
-			}
+	if v := req.TraceId; v != nil {
+		filter_str := filterByArray("A.trace_id", v)
+		if len(filter_str) > 0 {
+			filter_list = append(filter_list, filter_str)
 		}
 	}
 	if strings.Contains(from_query, "action_accounts") {
 		if order_by_now {
-			orderby_query = fmt.Sprintf(" order by AA.trace_end_utime %s, AA.trace_id %s, AA.action_end_utime %s, AA.action_id %s",
-				sort_order, sort_order, sort_order, sort_order)
+			orderby_query = fmt.Sprintf(" order by AA.account %s, AA.trace_end_utime %s, AA.trace_id %s, AA.action_end_utime %s, AA.action_id %s",
+				sort_order, sort_order, sort_order, sort_order, sort_order)
 		} else {
-			orderby_query = fmt.Sprintf(" order by AA.trace_end_lt %s, AA.trace_id %s, AA.action_end_lt %s, AA.action_id %s",
-				sort_order, sort_order, sort_order, sort_order)
+			orderby_query = fmt.Sprintf(" order by AA.account %s, AA.trace_end_lt %s, AA.trace_id %s, AA.action_end_lt %s, AA.action_id %s",
+				sort_order, sort_order, sort_order, sort_order, sort_order)
 		}
 	} else {
 		if order_by_now {
@@ -431,28 +571,51 @@ func buildActionsQueryV2(act_req models.ActionRequest, utime_req models.UtimeReq
 		}
 	}
 	filter_list = append(filter_list, "A.end_lt is not NULL")
-	if v := act_req.IncludeActionTypes; len(v) == 0 {
+	if v := req.IncludeActionTypes; len(v) == 0 {
 		filter_list = append(filter_list, "A.type = ANY($1)")
 	}
 	filter_list = append(filter_list, "NOT(A.ancestor_type && $1::varchar[])")
 
-	// build query
-	if len(filter_list) > 0 {
-		filter_query = ` where ` + strings.Join(filter_list, " and ")
+	// trace_end_lt/utime is the sort axis the router classifies on.
+	orderKey := "lt"
+	if order_by_now {
+		orderKey = "utime"
 	}
-	query := `select ` + clmn_query
-	query += ` from ` + from_query
-	query += filter_query
-	query += orderby_query
-	query += limit_query
 
-	//log.Println(query)
-	return query, args, nil
+	return actionsQueryParts{
+		clmnQuery:  clmn_query,
+		fromQuery:  from_query,
+		filterList: filter_list,
+		args:       args,
+		orderBy:    orderby_query,
+		orderKey:   orderKey,
+	}
+}
+
+// actionsQueryParts holds the shared pieces of an actions listing; orderKey names
+// the sort axis ("lt" or "utime") the router classifies the request window on.
+type actionsQueryParts struct {
+	clmnQuery  string
+	fromQuery  string
+	filterList []string
+	args       []any
+	orderBy    string
+	orderKey   string
+}
+
+func buildActionsOffsetQueryV2(p actionsQueryParts, offset, limit int) string {
+	filter_query := ``
+	if len(p.filterList) > 0 {
+		filter_query = ` where ` + strings.Join(p.filterList, " and ")
+	}
+	limit_query := fmt.Sprintf(" limit %d offset %d", max(1, limit), max(0, offset))
+	return `select ` + p.clmnQuery + ` from ` + p.fromQuery + filter_query + p.orderBy + limit_query
 }
 
 func queryRawActionsImplV2(query string, args []any, conn *pgxpool.Conn, settings models.RequestSettings) ([]models.RawAction, error) {
 	ctx, cancel_ctx := context.WithTimeout(context.Background(), settings.Timeout)
 	defer cancel_ctx()
+
 	rows, err := conn.Query(ctx, query, args...)
 	if err != nil {
 		return nil, models.IndexError{Code: 500, Message: err.Error()}
@@ -463,7 +626,6 @@ func queryRawActionsImplV2(query string, args []any, conn *pgxpool.Conn, setting
 	// default:
 	// }
 	defer rows.Close()
-
 	res := []models.RawAction{}
 	for rows.Next() {
 		if loc, err := parse.ScanRawAction(rows); err == nil {
@@ -478,7 +640,7 @@ func queryRawActionsImplV2(query string, args []any, conn *pgxpool.Conn, setting
 	return res, nil
 }
 
-func queryActionsTransactionsImpl(actions []models.Action, conn *pgxpool.Conn, settings models.RequestSettings) ([]models.Action, error) {
+func queryActionsTransactionsImpl(fc *fedConns, release func(), actions []models.Action, settings models.RequestSettings, store *KvrocksStore) ([]models.Action, error) {
 	if len(actions) == 0 {
 		return actions, nil
 	}
@@ -502,18 +664,27 @@ func queryActionsTransactionsImpl(actions []models.Action, conn *pgxpool.Conn, s
 	}
 
 	// Build query using buildTransactionsQuery with multiple hashes
-	// Only the Hash field of TransactionRequest is needed for this query; other fields are left at their zero values intentionally.
-	tx_req := models.TransactionRequest{Hash: txHashes}
-	query, queryArgs, err := buildTransactionsQuery(
-		models.BlockRequest{}, tx_req, models.MessageRequest{},
-		models.UtimeRequest{}, models.LtRequest{}, models.LimitRequest{}, settings)
+	// Only Hash is relevant here; the rest of TransactionRequest stays zero.
+	tx_req := models.TransactionsRequest{Hash: txHashes}
+	query, queryArgs, err := buildTransactionsQuery(tx_req, settings)
 	if err != nil {
 		return nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
 
-	txs, err := queryTransactionsImpl(query, conn, settings, queryArgs...)
+	// tx hashes across a page of actions can be hot- or cold-only -> consult both
+	txs, err := hotThenCold(fc, len(txHashes),
+		func(conn *pgxpool.Conn) ([]models.Transaction, error) {
+			return queryTransactionsImpl(query, conn, settings, store, queryArgs...)
+		},
+		func(t *models.Transaction) models.HashType { return t.Hash })
 	if err != nil {
 		return nil, models.IndexError{Code: 500, Message: err.Error()}
+	}
+	if store != nil {
+		release()
+		if err := finalizeTransactionSliceFromKvrocks(txs, nil, store, settings); err != nil {
+			return nil, models.IndexError{Code: 500, Message: err.Error()}
+		}
 	}
 
 	// Create a map of transactions by hash

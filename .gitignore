@@ -319,6 +319,7 @@ _deps
 # twins/pytest break on a clean checkout (T12.2 as-built §10.4).
 !indexer/indexer/events/mch/builders/
 sandbox/
+indexer/dedust_pools.json
 .vscode/
 .DS_Store
 ton-index-worker/tondb-scanner/src/tokens-tlb.cpp

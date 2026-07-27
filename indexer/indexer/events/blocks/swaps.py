@@ -56,6 +56,7 @@ from indexer.events.blocks.utils.block_utils import (
     find_messages,
     get_labeled,
 )
+from indexer.events.retryable_errors import raise_if_retryable_data_access_error
 
 
 logger = logging.getLogger(__name__)
@@ -348,7 +349,8 @@ async def _get_stonfi_v2_target_asset_from_notification(message: Message):
         jetton_wallet = await context.interface_repository.get().get_jetton_wallet(address)
         if jetton_wallet is not None:
             return Asset(is_ton=False, jetton_address=jetton_wallet.jetton)
-    except Exception:
+    except Exception as e:
+        raise_if_retryable_data_access_error(e)
         return None
 
 
@@ -841,6 +843,7 @@ async def build_tonco_swap_core(
                     jetton_wallet_asset_map[source_wallet.as_str() or ""] = asset
 
         except Exception as e:
+            raise_if_retryable_data_access_error(e)
             logger.warning(
                 f"Error processing Tonco swap step {i}: {e}", exc_info=True
             )
@@ -1122,6 +1125,7 @@ async def build_tonco_swap_core(
                                     jetton_address=target_wallet.jetton,
                                 )
                     except Exception as e:
+                        raise_if_retryable_data_access_error(e)
                         logger.warning(
                             f"Error determining target asset for failed swap: {e}"
                         )
@@ -1130,6 +1134,7 @@ async def build_tonco_swap_core(
                     destination_asset = target_asset
                     min_out_amount = Amount(min_out_amount or 0)
         except Exception as e:
+            raise_if_retryable_data_access_error(e)
             logger.info(f"Error determining target asset for failed swap: {e}")
 
     # final block

@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/toncenter/ton-indexer/ton-index-go/index/detect"
-	indexModels "github.com/toncenter/ton-indexer/ton-index-go/index/models"
 	"log"
 	"time"
+
+	"github.com/toncenter/ton-indexer/ton-index-go/index/detect"
+	indexModels "github.com/toncenter/ton-indexer/ton-index-go/index/models"
 
 	"ton-metadata-cache/cache"
 	"ton-metadata-cache/models"
@@ -46,14 +47,14 @@ func (l *Loader) LoadContractMethods(ctx context.Context) error {
 	count := 0
 
 	for rows.Next() {
-		var codeHash string
+		var codeHash indexModels.HashType
 		var methods []uint32
 
 		if err := rows.Scan(&codeHash, &methods); err != nil {
 			return fmt.Errorf("scan row: %w", err)
 		}
 
-		batch[codeHash] = methods
+		batch[codeHash.String()] = methods
 		count++
 
 		// Flush batch every 1000 items
@@ -97,7 +98,7 @@ func (l *Loader) LoadDnsEntries(ctx context.Context) error {
 			SELECT nft_item_address, nft_item_owner, domain, dns_next_resolver, 
 			       dns_wallet, dns_site_adnl, dns_storage_bag_id, last_transaction_lt 
 			FROM dns_entries
-			WHERE nft_item_address > $1
+			WHERE nft_item_address > $1 AND NOT destroyed
 			ORDER BY nft_item_address
 			LIMIT $2
 		`, lastKey, batchSize)
@@ -199,7 +200,7 @@ func (l *Loader) LoadJettonMasters(ctx context.Context) error {
 			SELECT j.address, m.valid, m.name, m.symbol, m.description, m.image, m.extra
 			FROM jetton_masters j
 			LEFT JOIN address_metadata m ON j.address = m.address AND m.type = 'jetton_masters'
-			WHERE j.address > $1
+			WHERE j.address > $1 AND NOT j.destroyed
 			ORDER BY j.address
 			LIMIT $2
 		`, lastKey, batchSize)
@@ -465,19 +466,18 @@ func (l *Loader) fetchAddressMetadataFromDBMulti(ctx context.Context, keys []Add
 
 // QueryAddressBook retrieves address book information from cache.
 // Returns account states, detected interfaces, and DNS domains for the given addresses.
-func (l *Loader) QueryAddressBook(ctx context.Context, addrList []string, isTestnet bool) (indexModels.AddressBook, error) {
+func (l *Loader) QueryAddressBook(ctx context.Context, addrList []string, isTestnet bool) (indexModels.GenericAddressBook, error) {
 	if len(addrList) == 0 {
-		return make(indexModels.AddressBook), nil
+		return make(indexModels.GenericAddressBook), nil
 	}
 
 	// Convert input addresses to raw account format
 	accountToInputAddr := make(map[string]string, len(addrList))
 	accounts := make([]string, 0, len(addrList))
 	for _, addr := range addrList {
-		account := accountAddressConverter(addr)
-		if account != "" {
-			accountToInputAddr[account] = addr
-			accounts = append(accounts, account)
+		if account, err := accountAddressConverter(addr); err == nil {
+			accountToInputAddr[account.String()] = addr
+			accounts = append(accounts, account.String())
 		}
 	}
 
@@ -539,12 +539,15 @@ func (l *Loader) QueryAddressBook(ctx context.Context, addrList []string, isTest
 	}
 
 	// Build the address book
-	book := make(indexModels.AddressBook, len(addrList))
+	book := make(indexModels.GenericAddressBook, len(addrList))
 
 	for _, addr := range addrList {
-		account := accountAddressConverter(addr)
-		if account == "" {
-			addrStr := indexModels.GetAccountAddressFriendly(account, nil, isTestnet)
+		account, err := accountAddressConverter(addr)
+		if err != nil || account == nil {
+			continue
+		}
+		if account.IsAddressNone() {
+			addrStr := indexModels.GetAccountAddressFriendly(*account, nil, isTestnet)
 			emptyInterfaces := []string{}
 			book[addr] = indexModels.AddressBookRow{
 				UserFriendly: &addrStr,
@@ -554,12 +557,12 @@ func (l *Loader) QueryAddressBook(ctx context.Context, addrList []string, isTest
 			continue
 		}
 
-		state, hasState := accountStates[account]
+		state, hasState := accountStates[account.String()]
 
-		var codeHash *string
+		var codeHash *indexModels.HashType
 		var methods []uint32
 		if hasState && state.CodeHash != nil {
-			codeHash = state.CodeHash
+			codeHash = new(indexModels.HashType(*state.CodeHash))
 			if m, ok := contractMethods[*state.CodeHash]; ok {
 				methods = m
 			}
@@ -570,7 +573,7 @@ func (l *Loader) QueryAddressBook(ctx context.Context, addrList []string, isTest
 		if codeHash != nil || methods != nil {
 			codeHashStr := ""
 			if codeHash != nil {
-				codeHashStr = *codeHash
+				codeHashStr = codeHash.String()
 			}
 			interfaces = detect.DetectInterface(codeHashStr, methods)
 		} else {
@@ -578,11 +581,11 @@ func (l *Loader) QueryAddressBook(ctx context.Context, addrList []string, isTest
 		}
 
 		// Get friendly address
-		addrStr := indexModels.GetAccountAddressFriendly(account, codeHash, isTestnet)
+		addrStr := indexModels.GetAccountAddressFriendly(*account, codeHash, isTestnet)
 
 		// Get domain if available
 		var domain *string
-		if d, ok := dnsDomains[account]; ok {
+		if d, ok := dnsDomains[account.String()]; ok {
 			domain = &d
 		}
 
@@ -596,14 +599,12 @@ func (l *Loader) QueryAddressBook(ctx context.Context, addrList []string, isTest
 	return book, nil
 }
 
-func accountAddressConverter(addr string) string {
-	account := ``
-	if addr_val := indexModels.AccountAddressConverter(addr); addr_val.IsValid() {
-		if addr_str, ok := addr_val.Interface().(indexModels.AccountAddress); ok {
-			account = string(addr_str)
-		}
+func accountAddressConverter(addr string) (*indexModels.AccountAddress, error) {
+	account := new(indexModels.AccountAddress)
+	if err := account.UnmarshalText([]byte(addr)); err != nil {
+		return nil, fmt.Errorf("unmarshal account address: %w", err)
 	}
-	return account
+	return account, nil
 }
 
 // fetchAddressDataBatch fetches complete data for multiple addresses from DB.
@@ -619,7 +620,7 @@ func (l *Loader) fetchAddressDataBatch(ctx context.Context, addresses []string) 
 
 	// Query 1: Jetton wallets
 	rows, err := l.pool.Query(ctx, `
-		SELECT address, owner, jetton, balance FROM jetton_wallets WHERE address = ANY($1)
+		SELECT address, owner, jetton, balance FROM jetton_wallets WHERE address = ANY($1) AND NOT destroyed
 	`, addresses)
 	if err == nil {
 		for rows.Next() {
@@ -640,17 +641,17 @@ func (l *Loader) fetchAddressDataBatch(ctx context.Context, addresses []string) 
 		SELECT n.address, 'nft_items' as type, m.valid, m.name, m.symbol, m.description, m.image, m.extra, n.index
 		FROM nft_items n 
 		LEFT JOIN address_metadata m ON n.address = m.address AND m.type = 'nft_items'
-		WHERE n.address = ANY($1)
+		WHERE n.address = ANY($1) AND NOT n.destroyed
 		UNION ALL
 		SELECT c.address, 'nft_collections' as type, m.valid, m.name, m.symbol, m.description, m.image, m.extra, null
 		FROM nft_collections c 
 		LEFT JOIN address_metadata m ON c.address = m.address AND m.type = 'nft_collections'
-		WHERE c.address = ANY($1)
+		WHERE c.address = ANY($1) AND NOT c.destroyed
 		UNION ALL
 		SELECT j.address, 'jetton_masters' as type, m.valid, m.name, m.symbol, m.description, m.image, m.extra, null
 		FROM jetton_masters j 
 		LEFT JOIN address_metadata m ON j.address = m.address AND m.type = 'jetton_masters'
-		WHERE j.address = ANY($1)
+		WHERE j.address = ANY($1) AND NOT j.destroyed
 	`, addresses)
 	if err != nil {
 		return result, err
@@ -694,11 +695,11 @@ func (l *Loader) fetchAddressDataBatch(ctx context.Context, addresses []string) 
 }
 
 // buildMetadataResponse converts cached data to API response format.
-func (l *Loader) buildMetadataResponse(cached map[string]models.AddressData, requestedAddrs []string) map[string]indexModels.AddressMetadata {
+func (l *Loader) buildMetadataResponse(cached map[string]models.AddressData, requestedAddrs []indexModels.AccountAddress) map[string]indexModels.AddressMetadata {
 	result := make(map[string]indexModels.AddressMetadata)
 
 	for _, addr := range requestedAddrs {
-		data, ok := cached[addr]
+		data, ok := cached[addr.String()]
 		if !ok {
 			continue
 		}
@@ -745,7 +746,7 @@ func (l *Loader) buildMetadataResponse(cached map[string]models.AddressData, req
 			for _, ti := range tokenInfos {
 				indexed = indexed && ti.Indexed
 			}
-			result[addr] = indexModels.AddressMetadata{
+			result[addr.String()] = indexModels.AddressMetadata{
 				TokenInfo: tokenInfos,
 				IsIndexed: indexed,
 			}
@@ -756,7 +757,7 @@ func (l *Loader) buildMetadataResponse(cached map[string]models.AddressData, req
 }
 
 // buildTokenInfo creates a TokenInfo from metadata.
-func (l *Loader) buildTokenInfo(addr, typ string, metadata map[string]models.MetadataEntry, nftIndex *string) indexModels.TokenInfo {
+func (l *Loader) buildTokenInfo(addr indexModels.AccountAddress, typ string, metadata map[string]models.MetadataEntry, nftIndex *string) indexModels.TokenInfo {
 	typCopy := typ
 	info := indexModels.TokenInfo{
 		Address:  addr,
@@ -789,16 +790,18 @@ func (l *Loader) QueryMetadata(ctx context.Context, addrList []string) (map[stri
 	}
 
 	// Convert addresses to raw account format
-	accounts := make([]string, 0, len(addrList))
+	accounts := make([]indexModels.AccountAddress, 0, len(addrList))
+	accountStrings := make([]string, 0, len(addrList))
 	for _, addr := range addrList {
-		account := accountAddressConverter(addr)
-		if account != "" {
-			accounts = append(accounts, account)
+		account, err := accountAddressConverter(addr)
+		if err == nil && account != nil && account.IsAddressStd() {
+			accounts = append(accounts, *account)
+			accountStrings = append(accountStrings, account.String())
 		}
 	}
 
 	// 1. Batch get from cache
-	cached, err := l.cache.AddressInfo.MGet(ctx, accounts...)
+	cached, err := l.cache.AddressInfo.MGet(ctx, accountStrings...)
 	if err != nil {
 		return nil, fmt.Errorf("cache mget: %w", err)
 	}
@@ -806,8 +809,8 @@ func (l *Loader) QueryMetadata(ctx context.Context, addrList []string) (map[stri
 	// 2. Find missing addresses
 	var missing []string
 	for _, addr := range accounts {
-		if _, ok := cached[addr]; !ok {
-			missing = append(missing, addr)
+		if _, ok := cached[addr.String()]; !ok {
+			missing = append(missing, addr.String())
 		}
 	}
 

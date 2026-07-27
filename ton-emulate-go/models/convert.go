@@ -1,16 +1,16 @@
 package models
 
 import (
-	"context"
 	"fmt"
-	"github.com/toncenter/ton-indexer/ton-index-go/index/crud"
-	indexModels "github.com/toncenter/ton-indexer/ton-index-go/index/models"
-	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
 	"log"
 	"maps"
 	"slices"
 	"strconv"
 	"time"
+
+	"github.com/toncenter/ton-indexer/ton-index-go/index/crud"
+	indexModels "github.com/toncenter/ton-indexer/ton-index-go/index/models"
+	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
 
 	msgpack "github.com/vmihailenco/msgpack/v5"
 )
@@ -66,7 +66,7 @@ func convertToIndexAccountState(hash *indexModels.HashType, accountStates map[Ha
 	return &indexAccountState
 }
 
-func TransformToAPIResponse(hset map[string]string, pool *crud.DbClient,
+func TransformToAPIResponse(hset map[string]string, enrichmentReader crud.EnrichmentReader,
 	isTestnet bool, includeAddressBook bool, includeMetadata bool, supportedActionTypes []string) (*EmulateTraceResponse, error) {
 	emulatedContext := crud.NewEmptyContext(true)
 	raw_traces := make(map[string]map[string]string)
@@ -107,7 +107,7 @@ func TransformToAPIResponse(hset map[string]string, pool *crud.DbClient,
 	for _, rawAction := range emulatedContext.GetActions(supportedActionTypes) {
 		rawActions = append(rawActions, *rawAction)
 	}
-	addr_map := map[string]bool{}
+	addr_map := map[indexModels.AccountAddress]bool{}
 	for idx := range rawActions {
 		rawAction := &rawActions[idx]
 		parse.CollectAddressesFromAction(&addr_map, rawAction)
@@ -133,17 +133,15 @@ func TransformToAPIResponse(hset map[string]string, pool *crud.DbClient,
 		if tx.AccountStateAfter != nil {
 			tx.AccountStateAfter = convertToIndexAccountState(&tx.AccountStateHashAfter, accountStates)
 		}
-		addr_map[string(tx.Account)] = true
+		addr_map[tx.Account] = true
 	}
 
 	var book *indexModels.AddressBook = nil
 	var metadata *indexModels.Metadata = nil
 	if includeAddressBook || includeMetadata {
-		conn, err := pool.Pool.Acquire(context.Background())
-		if err != nil {
-			return nil, fmt.Errorf("failed to acquire connection: %w", err)
+		if enrichmentReader == nil {
+			return nil, fmt.Errorf("address book and metadata are not available")
 		}
-		defer conn.Release()
 
 		settings := indexModels.RequestSettings{
 			Timeout:   3 * time.Second,
@@ -152,7 +150,7 @@ func TransformToAPIResponse(hset map[string]string, pool *crud.DbClient,
 		addr_list := slices.Collect(maps.Keys(addr_map))
 
 		if includeAddressBook {
-			bookVal, err := crud.QueryAddressBookImpl(addr_list, conn, settings)
+			bookVal, err := enrichmentReader.QueryAddressBookByAddresses(addr_list, settings)
 			if err != nil {
 				return nil, fmt.Errorf("failed to query address book: %w", err)
 			}
@@ -160,14 +158,14 @@ func TransformToAPIResponse(hset map[string]string, pool *crud.DbClient,
 		}
 
 		if includeMetadata {
-			metadataVal, err := crud.QueryMetadataImpl(addr_list, conn, settings)
+			metadataVal, err := enrichmentReader.QueryMetadataByAddresses(addr_list, settings)
 			if err != nil {
 				return nil, fmt.Errorf("failed to query metadata: %w", err)
 			}
 
 			// append raw interfaces data to metadata (e.g. token is being deployed in emulated trace)
 			for _, addr := range addr_list {
-				interfacesMsgPacked, hasInterfaces := hset[addr]
+				interfacesMsgPacked, hasInterfaces := hset[addr.String()]
 				if !hasInterfaces {
 					continue
 				}

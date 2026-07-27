@@ -68,7 +68,7 @@ struct TrComputePhase_vm {
   td::Bits256 vm_final_state_hash;
 };
 
-using TrComputePhase = std::variant<TrComputePhase_skipped, 
+using TrComputePhase = std::variant<TrComputePhase_skipped,
                                     TrComputePhase_vm>;
 
 struct StorageUsed {
@@ -107,8 +107,8 @@ struct TrBouncePhase_ok {
   td::RefInt256 fwd_fees;
 };
 
-using TrBouncePhase = std::variant<TrBouncePhase_negfunds, 
-                                   TrBouncePhase_nofunds, 
+using TrBouncePhase = std::variant<TrBouncePhase_negfunds,
+                                   TrBouncePhase_nofunds,
                                    TrBouncePhase_ok>;
 
 struct SplitMergeInfo {
@@ -174,12 +174,12 @@ struct TransactionDescr_merge_install {
   bool destroyed;
 };
 
-using TransactionDescr = std::variant<TransactionDescr_ord, 
-                                       TransactionDescr_storage, 
-                                       TransactionDescr_tick_tock, 
-                                       TransactionDescr_split_prepare, 
-                                       TransactionDescr_split_install, 
-                                       TransactionDescr_merge_prepare, 
+using TransactionDescr = std::variant<TransactionDescr_ord,
+                                       TransactionDescr_storage,
+                                       TransactionDescr_tick_tock,
+                                       TransactionDescr_split_prepare,
+                                       TransactionDescr_split_install,
+                                       TransactionDescr_merge_prepare,
                                        TransactionDescr_merge_install>;
 
 struct Message {
@@ -209,6 +209,7 @@ struct Message {
 };
 
 struct Transaction {
+  td::Ref<vm::Cell> raw;
   td::Bits256 hash;
   block::StdAddress account;
   uint64_t lt;
@@ -248,7 +249,7 @@ struct Block {
   std::optional<int32_t> mc_block_workchain;
   std::optional<int64_t> mc_block_shard;
   std::optional<uint32_t> mc_block_seqno;
-  
+
   int32_t global_id;
   int32_t version;
   bool after_merge;
@@ -279,7 +280,7 @@ struct MasterchainBlockShard {
   uint32_t mc_seqno;
   uint64_t mc_block_start_lt;
   int32_t mc_block_gen_utime;
-  
+
   int32_t workchain;
   int64_t shard;
   uint32_t seqno;
@@ -288,7 +289,6 @@ struct MasterchainBlockShard {
 struct AccountState {
   td::Bits256 hash;           // Note: hash is not unique in case account_status is "nonexist"
   block::StdAddress account;
-  std::string account_friendly;  // TODO: add account friendly
   uint32_t timestamp;
   CurrencyCollection balance;
   std::string account_status; // "uninit", "frozen", "active", "nonexist"
@@ -336,7 +336,7 @@ struct Trace {
   std::optional<td::Bits256> external_hash_norm;
   std::int32_t mc_seqno_start;
   std::int32_t mc_seqno_end;
-  
+
   // meta
   std::uint64_t start_lt;
   std::uint32_t start_utime;
@@ -358,21 +358,6 @@ struct TraceAssemblerState {
   std::vector<Trace> pending_traces_;
 };
 
-struct JettonMasterData {
-  std::string address;
-  td::RefInt256 total_supply;
-  bool mintable;
-  std::optional<std::string> admin_address;
-  std::optional<std::map<std::string, std::string>> jetton_content;
-  vm::CellHash jetton_wallet_code_hash;
-  vm::CellHash data_hash;
-  vm::CellHash code_hash;
-  uint64_t last_transaction_lt;
-  uint32_t last_transaction_now;
-  std::string code_boc;
-  std::string data_boc;
-};
-
 struct JettonMasterDataV2 {
   block::StdAddress address;
   td::RefInt256 total_supply;
@@ -384,17 +369,6 @@ struct JettonMasterDataV2 {
   td::Bits256 code_hash;
   uint64_t last_transaction_lt;
   uint32_t last_transaction_now;
-};
-
-struct JettonWalletData {
-  td::RefInt256 balance;
-  std::string address;
-  std::string owner;
-  std::string jetton;
-  uint64_t last_transaction_lt;
-  uint32_t last_transaction_now;
-  vm::CellHash code_hash;
-  vm::CellHash data_hash;
 };
 
 struct JettonWalletDataV2 {
@@ -420,6 +394,30 @@ struct VestingData
   block::StdAddress vesting_sender_address;
   block::StdAddress owner_address;
   std::vector<block::StdAddress> whitelist;
+  uint64_t last_transaction_lt;
+  uint32_t last_transaction_now;
+  td::Bits256 code_hash;
+  td::Bits256 data_hash;
+};
+
+struct NominatorPoolNominator {
+  block::StdAddress address;
+  td::RefInt256 balance;
+  td::RefInt256 pending_balance;
+};
+
+struct NominatorPoolData {
+  block::StdAddress address;
+  int state;
+  int nominators_count;
+  td::RefInt256 stake_amount_sent;
+  td::RefInt256 validator_amount;
+  block::StdAddress validator_address;
+  int validator_reward_share;
+  int max_nominators_count;
+  td::RefInt256 min_validator_stake;
+  td::RefInt256 min_nominator_stake;
+  std::vector<NominatorPoolNominator> nominators;
   uint64_t last_transaction_lt;
   uint32_t last_transaction_now;
   td::Bits256 code_hash;
@@ -489,17 +487,134 @@ struct JettonBurn {
   td::Ref<vm::Cell> custom_payload;
 };
 
-struct NFTCollectionData {
-  std::string address;
-  td::RefInt256 next_item_index;
-  std::optional<std::string> owner_address;
-  std::optional<std::map<std::string, std::string>> collection_content;
-  vm::CellHash data_hash;
-  vm::CellHash code_hash;
-  uint64_t last_transaction_lt;
-  uint32_t last_transaction_now;
-  std::string code_boc;
-  std::string data_boc;
+struct NominatorPoolEvent {
+  td::Bits256 trace_id;
+  td::Bits256 transaction_hash;
+  uint64_t transaction_lt;
+  uint32_t transaction_now;
+  uint32_t mc_seqno;
+
+  std::string pool_address;
+  std::string nominator_address;
+  uint32_t event_index;
+  std::string event_type;
+  td::RefInt256 amount;
+  td::RefInt256 balance_delta;
+  td::RefInt256 pending_balance_delta;
+  td::RefInt256 balance_before;
+  td::RefInt256 balance_after;
+  td::RefInt256 pending_balance_before;
+  td::RefInt256 pending_balance_after;
+  bool withdraw_request_before;
+  bool withdraw_request_after;
+};
+
+struct NominatorPoolValidatorEvent {
+  td::Bits256 transaction_hash;
+  uint64_t transaction_lt;
+  uint32_t transaction_now;
+  uint32_t mc_seqno;
+
+  std::string pool_address;
+  std::string validator_address;
+  std::string event_type;
+  td::RefInt256 amount;
+  td::RefInt256 balance_delta;
+  td::RefInt256 balance_before;
+  td::RefInt256 balance_after;
+  std::optional<uint64_t> query_id;
+  std::optional<uint32_t> cycle_start;
+  uint32_t validator_reward_share;
+};
+
+struct ValidatorEvent {
+  td::Bits256 transaction_hash;
+  uint64_t transaction_lt;
+  uint32_t transaction_now;
+  uint32_t mc_seqno;
+
+  std::string event_type;
+  std::string stake_holder_address;
+  std::optional<std::string> validator_pubkey;
+  std::optional<std::string> adnl_addr;
+  std::optional<uint32_t> election_id;
+  std::optional<uint64_t> query_id;
+  td::RefInt256 amount;
+  std::optional<int32_t> reason;
+};
+
+struct ValidatorElectionParticipant {
+  uint32_t election_id;
+  std::string validator_pubkey;
+  td::RefInt256 stake;
+  uint32_t max_factor;
+  std::string stake_holder_address;
+  std::string adnl_addr;
+  uint32_t source_mc_seqno;
+};
+
+struct ValidatorElection {
+  uint32_t election_id;
+  uint32_t elect_close;
+  td::RefInt256 min_stake;
+  td::RefInt256 total_stake;
+  bool failed;
+  bool finished;
+  uint32_t source_mc_seqno;
+  std::vector<ValidatorElectionParticipant> participants;
+};
+
+struct ValidatorCycleMember {
+  uint32_t utime_since;
+  uint32_t validator_index;
+  std::string validator_pubkey;
+  std::string adnl_addr;
+  uint64_t weight;
+  std::optional<td::RefInt256> stake;
+  uint32_t source_mc_seqno;
+};
+
+struct ValidatorCycle {
+  std::optional<uint32_t> election_id;
+  uint32_t utime_since;
+  uint32_t utime_until;
+  uint32_t total;
+  uint32_t main;
+  uint64_t total_weight;
+  std::optional<td::RefInt256> total_stake;
+  uint32_t source_mc_seqno;
+  uint32_t validators_elected_for;
+  uint32_t elections_start_before;
+  uint32_t elections_end_before;
+  uint32_t stake_held_for;
+  uint32_t max_validators;
+  uint32_t max_main_validators;
+  uint32_t min_validators;
+  td::RefInt256 min_stake;
+  td::RefInt256 max_stake;
+  td::RefInt256 min_total_stake;
+  uint32_t max_stake_factor;
+  std::vector<ValidatorCycleMember> members;
+};
+
+struct ValidatorComplaint {
+  uint32_t election_id;
+  std::string complaint_hash;
+  std::string validator_pubkey;
+  std::optional<std::string> adnl_addr;
+  std::string description_boc;
+  uint32_t created_at;
+  uint32_t severity;
+  std::string reward_address;
+  td::RefInt256 paid;
+  td::RefInt256 suggested_fine;
+  uint32_t suggested_fine_part;
+  std::string voted_validators;
+  std::string vset_id;
+  int64_t weight_remaining;
+  double approved_percent;
+  bool is_passed;
+  uint32_t source_mc_seqno;
 };
 
 struct NFTCollectionDataV2 {
@@ -513,19 +628,6 @@ struct NFTCollectionDataV2 {
   td::Bits256 code_hash;
 };
 
-struct NFTItemData {
-  std::string address;
-  bool init;
-  td::RefInt256 index;
-  std::string collection_address;
-  std::string owner_address;
-  std::optional<std::map<std::string, std::string>> content;
-  uint64_t last_transaction_lt;
-  uint32_t last_transaction_now;
-  vm::CellHash code_hash;
-  vm::CellHash data_hash;
-};
-
 struct NFTItemDataV2 {
   struct DNSEntry {
     std::string domain;
@@ -533,6 +635,10 @@ struct NFTItemDataV2 {
     std::optional<block::StdAddress> next_resolver;
     std::optional<td::Bits256> site_adnl;
     std::optional<td::Bits256> storage_bag_id;
+    std::optional<block::StdAddress> max_bid_address;
+    td::RefInt256 max_bid_amount;
+    std::optional<uint64_t> auction_end_time;
+    std::optional<uint64_t> last_fill_up_time;
   };
 
   block::StdAddress address;
@@ -558,7 +664,7 @@ struct NFTTransfer {
   uint64_t query_id;
   block::StdAddress nft_item;
   td::RefInt256 nft_item_index;  // ignore
-  std::string nft_collection;  // ignore
+  std::optional<std::string> nft_collection;  // ignore
   std::string old_owner;
   std::string new_owner;
   std::string response_destination;
@@ -697,15 +803,12 @@ struct MasterchainBlockDataState {
   std::shared_ptr<block::ConfigInfo> config_;
 };
 
-using BlockchainEvent = std::variant<JettonTransfer, 
+using BlockchainEvent = std::variant<JettonTransfer,
                                      JettonBurn,
-                                     NFTTransfer>;
-
-using BlockchainInterface = std::variant<JettonMasterData, 
-                                         JettonWalletData, 
-                                         NFTCollectionData, 
-                                         NFTItemData>;
-
+                                     NFTTransfer,
+                                     NominatorPoolEvent,
+                                     NominatorPoolValidatorEvent,
+                                     ValidatorEvent>;
 
 using BlockchainInterfaceV2 = std::variant<JettonWalletDataV2,
                                            JettonMasterDataV2,
@@ -717,6 +820,7 @@ using BlockchainInterfaceV2 = std::variant<JettonWalletDataV2,
                                            MultisigContractData,
                                            MultisigOrderData,
                                            VestingData,
+                                           NominatorPoolData,
                                            TelemintData,
                                            DedustPoolData>;
 }  // namespace schema
@@ -743,6 +847,7 @@ struct hash<block::StdAddress> {
 
 struct ParsedBlock {
   schema::MasterchainBlockDataState mc_block_;
+  std::shared_ptr<vm::CellDbReader> cell_db_reader_;  // for loading previous states
 
   std::vector<schema::Block> blocks_;
   std::vector<schema::AccountState> account_states_;
@@ -751,28 +856,18 @@ struct ParsedBlock {
   std::vector<schema::Trace> traces_;
 
   std::vector<schema::BlockchainEvent> events_;
-  std::vector<schema::BlockchainInterface> interfaces_; // deprecated in favour of account_interfaces_
+  std::vector<schema::ValidatorElection> validator_elections_;
+  std::vector<schema::ValidatorCycle> validator_cycles_;
+  std::vector<schema::ValidatorComplaint> validator_complaints_;
 
   std::unordered_map<block::StdAddress, std::vector<schema::BlockchainInterfaceV2>> account_interfaces_;
-  
+
   template <class T>
   std::vector<T> get_events() {
     std::vector<T> result;
     for (auto& event: events_) {
       if (std::holds_alternative<T>(event)) {
         result.push_back(std::get<T>(event));
-      }
-    }
-    return result;
-  }
-
-  // deprecated
-  template <class T>
-  std::vector<T> get_accounts() {
-    std::vector<T> result;
-    for (auto& interface: interfaces_) {
-      if (std::holds_alternative<T>(interface)) {
-        result.push_back(std::get<T>(interface));
       }
     }
     return result;

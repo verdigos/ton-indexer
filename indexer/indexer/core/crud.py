@@ -78,10 +78,7 @@ def get_masterchain_block_shards(session: Session,
     mc_block_fltr = and_(Block.workchain == MASTERCHAIN_INDEX, 
                          Block.shard == MASTERCHAIN_SHARD, 
                          Block.seqno == seqno)
-    shards_fltr = and_(Block.mc_block_workchain == MASTERCHAIN_INDEX, 
-                       Block.mc_block_shard == MASTERCHAIN_SHARD,
-                       Block.mc_block_seqno == seqno)
-    fltr = or_(mc_block_fltr, shards_fltr)
+    fltr = or_(mc_block_fltr, Block.mc_block_seqno == seqno)
     query = session.query(Block).filter(fltr)
     query = query.order_by(Block.workchain, Block.shard, Block.seqno)
     return query.all()
@@ -520,7 +517,7 @@ def get_nft_collections(session: Session,
                         owner_address: Optional[str]=None,
                         limit: Optional[int]=None,
                         offset: Optional[int]=None):
-    query = session.query(NFTCollection)
+    query = session.query(NFTCollection).filter(NFTCollection.destroyed.is_(False))
     if address is not None:
         query = query.filter(NFTCollection.address == address)  # TODO: index
     if owner_address is not None:
@@ -536,7 +533,7 @@ def get_nft_items(session: Session,
                   owner_address: Optional[str]=None,
                   limit: Optional[int]=None,
                   offset: Optional[int]=None,):
-    query = session.query(NFTItem)
+    query = session.query(NFTItem).filter(NFTItem.destroyed.is_(False))
     if address is not None:
         query = query.filter(NFTItem.address == address)  # TODO: index
     if index is not None:
@@ -594,6 +591,8 @@ def get_account_nft_collections(session: Session,
                                 limit: Optional[int]=None,
                                 offset: Optional[int]=None,):
     query = session.query(NFTCollection).join(NFTCollection.items)
+    query = query.filter(NFTCollection.destroyed.is_(False))
+    query = query.filter(NFTItem.destroyed.is_(False))
     query = query.filter(NFTItem.owner_address == address)
     query = limit_query(query, limit, offset)
     query = query.distinct()
@@ -606,7 +605,7 @@ def get_jetton_masters(session: Session,
                        admin_address: Optional[str]=None,
                        limit: Optional[int]=None,
                        offset: Optional[int]=None):
-    query = session.query(JettonMaster)
+    query = session.query(JettonMaster).filter(JettonMaster.destroyed.is_(False))
     if address is not None:
         query = query.filter(JettonMaster.address == address)
     if admin_address is not None:
@@ -621,7 +620,7 @@ def get_jetton_wallets(session: Session,
                        jetton_address: Optional[str]=None,
                        limit: Optional[int]=None,
                        offset: Optional[int]=None):
-    query = session.query(JettonWallet)
+    query = session.query(JettonWallet).filter(JettonWallet.destroyed.is_(False))
     if address is not None:
         query = query.filter(JettonWallet.address == address)
     if owner_address is not None:

@@ -5,6 +5,7 @@ import logging
 from indexer.events.blocks.basic_blocks import CallContractBlock
 from indexer.events.blocks.core import Block
 from indexer.events.blocks.messages import ExcessMessage
+from indexer.events.retryable_errors import RetryableDataAccessError, is_retryable_data_access_error
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,11 @@ class BlockMatcher:
                             r.append(next_block)
                 return r
             except Exception as e:
+                if is_retryable_data_access_error(e):
+                    raise RetryableDataAccessError(
+                        f"Retryable data access error while building block {block} "
+                        f"with matcher {self.__class__.__name__}: {e}"
+                    ) from e
                 logger.error(f"Error while building block {block} with matcher {self.__class__.__name__}: {e}. Trace id: {block.event_nodes[0].message.trace_id}")
                 return None
         else:
@@ -119,6 +125,23 @@ class BlockMatcher:
 
     async def build_block(self, block: Block, other_blocks: list[Block]) -> list[Block]:
         return [block] + other_blocks
+
+    def bail(self, block: Block, reason: str) -> list:
+        if logger.isEnabledFor(logging.DEBUG):
+            try:
+                trace_id = block.event_nodes[0].message.trace_id
+            except Exception:
+                trace_id = "?"
+            logger.debug("%s bail: %s (trace %s)", type(self).__name__, reason, trace_id)
+        return []
+
+    def bail_none(self, block: Block, reason: str) -> None:
+        self.bail(block, reason)
+        return None
+
+
+def excess_matcher() -> ContractMatcher:
+    return ContractMatcher(opcode=ExcessMessage.opcode, optional=True, include_excess=False)
 
 
 class OrMatcher(BlockMatcher):

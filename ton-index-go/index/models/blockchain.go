@@ -19,8 +19,8 @@ type AccountState struct {
 	FrozenHash             *HashType         `json:"frozen_hash"`
 	DataHash               *HashType         `json:"data_hash"`
 	CodeHash               *HashType         `json:"code_hash"`
-	DataBoc                *string           `json:"data_boc,omitempty"`
-	CodeBoc                *string           `json:"code_boc,omitempty"`
+	DataBoc                *BytesType        `json:"data_boc,omitempty"`
+	CodeBoc                *BytesType        `json:"code_boc,omitempty"`
 } // @name AccountState
 
 type AccountBalance struct {
@@ -39,8 +39,8 @@ type AccountStateFull struct {
 	LastTransactionLt      *int64            `json:"last_transaction_lt,string"`
 	DataHash               *HashType         `json:"data_hash,omitempty"`
 	CodeHash               *HashType         `json:"code_hash,omitempty"`
-	DataBoc                *string           `json:"data_boc,omitempty"`
-	CodeBoc                *string           `json:"code_boc,omitempty"`
+	DataBoc                *BytesType        `json:"data_boc,omitempty"`
+	CodeBoc                *BytesType        `json:"code_boc,omitempty"`
 	ContractMethods        *[]uint32         `json:"contract_methods"`
 	Interfaces             *[]string         `json:"interfaces"`
 } // @name AccountStateFull
@@ -94,7 +94,7 @@ type Block struct {
 
 type MessageContent struct {
 	Hash    *HashType        `json:"hash"`
-	Body    *string          `json:"body"`
+	Body    *BytesType       `json:"body"`
 	Decoded *json.RawMessage `json:"decoded" swaggertype:"object"`
 } // @name MessageContent
 
@@ -189,10 +189,10 @@ type BouncePhase struct {
 } // @name BouncePhase
 
 type SplitInfo struct {
-	CurShardPfxLen *int32          `json:"cur_shard_pfx_len,omitempty"`
-	AccSplitDepth  *int32          `json:"acc_split_depth,omitempty"`
-	ThisAddr       *AccountAddress `json:"this_addr,omitempty"`
-	SiblingAddr    *AccountAddress `json:"sibling_addr,omitempty"`
+	CurShardPfxLen *int32    `json:"cur_shard_pfx_len,omitempty"`
+	AccSplitDepth  *int32    `json:"acc_split_depth,omitempty"`
+	ThisAddr       *HashType `json:"this_addr,omitempty"`
+	SiblingAddr    *HashType `json:"sibling_addr,omitempty"`
 } // @name SplitInfo
 
 type TransactionDescr struct {

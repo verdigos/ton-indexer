@@ -88,6 +88,7 @@ from indexer.events.blocks.messages.coffee import (
 from indexer.events.blocks.utils import AccountId, Amount, Asset
 from indexer.events.blocks.utils.block_utils import find_call_contract, get_labeled, \
     get_multiple_labeled
+from indexer.events.retryable_errors import raise_if_retryable_data_access_error
 
 
 class DedustDepositLiquidity(Block):
@@ -1403,6 +1404,7 @@ async def build_tonco_deposit_liquidity_core(
             )
             first_asset = Asset(is_ton=True, jetton_address=None)
     except Exception as e:
+        raise_if_retryable_data_access_error(e)
         logger.warning(f"Failed to determine first asset: {e}")
         return []
 
@@ -1419,6 +1421,7 @@ async def build_tonco_deposit_liquidity_core(
                     is_ton=False, jetton_address=jetton_wallet.jetton
                 )
     except Exception as e:
+        raise_if_retryable_data_access_error(e)
         logger.warning(f"Error determining second asset for liquidity: {e}")
         return []
 

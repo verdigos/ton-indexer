@@ -5,9 +5,11 @@ import argparse
 import asyncio
 import logging
 import multiprocessing as mp
+import queue
 import sys
 import time
 import traceback
+from collections import deque
 from datetime import datetime
 from datetime import timedelta
 from multiprocessing import Manager
@@ -15,15 +17,21 @@ from typing import List, Tuple
 from typing import Optional
 
 import msgpack
-from sqlalchemy import Column, Integer, String, Boolean, event, delete
-from sqlalchemy import select, and_
+from sqlalchemy import Column, Integer, String, Boolean, event, delete, func
+from sqlalchemy import select, and_, literal, null, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import sessionmaker, selectinload
+from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
+from sqlalchemy.dialects.postgresql import array as pg_array
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.orm import sessionmaker, selectinload, noload
+from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.sql import text
+from sqlalchemy_utils import CompositeType
 
 from indexer.core import redis
-from indexer.core.database import Base, ActionAccount
-from indexer.core.database import engine, Trace, Transaction, Message, Action, SyncSessionMaker
+from indexer.core import kvrocks
+from indexer.core.database import Base, ActionAccount, TonHash
+from indexer.core.database import engine, Trace, Transaction, Message, MessageContent, Action, SyncSessionMaker
 from indexer.core.settings import Settings
 from indexer.events import context
 from indexer.events.blocks.utils.address_selectors import extract_accounts_from_trace
@@ -37,7 +45,7 @@ from indexer.events.event_processing import (
 )
 from indexer.events.interface_repository import (
     EmulatedTransactionsInterfaceRepository, gather_interfaces,
-    RedisInterfaceRepository
+    gather_interfaces_from_kvrocks, KvRocksRepository
 )
 from indexer.events.pendings import start_emulated_traces_processing
 from indexer.events.trace_processor import TraceProcessor
@@ -48,10 +56,76 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger(__name__)
 settings = Settings()
 interface_cache: LRUCache | None = None
+STATS_RATE_WINDOW_SECONDS = 30.0
+
+
+class RollingTraceRate:
+    def __init__(self, window_seconds: float):
+        self.window_seconds = window_seconds
+        self._samples = deque()
+        self._traces_in_window = 0
+
+    def add(self, timestamp: float, traces: int):
+        if traces > 0:
+            self._samples.append((timestamp, traces))
+            self._traces_in_window += traces
+        self.prune(timestamp)
+
+    def prune(self, timestamp: float):
+        cutoff = timestamp - self.window_seconds
+        while self._samples and self._samples[0][0] < cutoff:
+            _, traces = self._samples.popleft()
+            self._traces_in_window -= traces
+
+    def rate(self, timestamp: float, start_time: float) -> float:
+        self.prune(timestamp)
+        elapsed = timestamp - start_time
+        if elapsed <= 0:
+            return 0.0
+        return self._traces_in_window / min(self.window_seconds, elapsed)
+
+
+async def hydrate_message_contents_from_kvrocks(traces: list[Trace]):
+    body_hashes = set()
+    init_state_hashes = set()
+    for trace in traces:
+        for tx in trace.transactions:
+            for msg in tx.messages:
+                if msg.body_hash:
+                    body_hashes.add(msg.body_hash)
+                if msg.init_state_hash:
+                    init_state_hashes.add(msg.init_state_hash)
+
+    hashes = list(body_hashes | init_state_hashes)
+    payloads = await kvrocks.get_payloads("message_contents", hashes)
+
+    for trace in traces:
+        for tx in trace.transactions:
+            for msg in tx.messages:
+                if msg.body_hash in payloads:
+                    payload = payloads[msg.body_hash]
+                    set_committed_value(
+                        msg,
+                        "message_content",
+                        MessageContent(hash=payload.get("hash") or msg.body_hash, body=payload.get("body")),
+                    )
+                else:
+                    set_committed_value(msg, "message_content", None)
+                if msg.init_state_hash in payloads:
+                    payload = payloads[msg.init_state_hash]
+                    set_committed_value(
+                        msg,
+                        "init_state",
+                        MessageContent(hash=payload.get("hash") or msg.init_state_hash, body=payload.get("body")),
+                    )
+                else:
+                    set_committed_value(msg, "init_state", None)
 
 
 def add_on_conflict_ignore(conn, cursor, statement, parameters, context, executemany):
     stipped_statement = statement.lstrip().upper()
+    if ' ON CONFLICT ' in stipped_statement:
+        return statement, parameters
     if stipped_statement.startswith('INSERT INTO ACTIONS'):
         statement += " ON CONFLICT DO NOTHING"
     elif stipped_statement.startswith('INSERT INTO ACTION_ACCOUNTS'):
@@ -60,43 +134,101 @@ def add_on_conflict_ignore(conn, cursor, statement, parameters, context, execute
     return statement, parameters
 
 
+def mapped_non_null_values(model):
+    return {
+        column.key: bind_value(getattr(model, column.key), column.type)
+        for column in model.__mapper__.columns
+        if column.key in model.__dict__ and getattr(model, column.key) is not None
+    }
+
+
+def bind_value(value, type_):
+    if isinstance(type_, CompositeType):
+        return composite_value(value, type_)
+    return value
+
+
+def composite_field_value(value, type_):
+    if isinstance(type_, CompositeType):
+        if value is None:
+            return null().cast(type_)
+        return composite_value(value, type_)
+    if isinstance(type_, PG_ARRAY) and isinstance(type_.item_type, CompositeType):
+        if value is None:
+            return null().cast(type_)
+        return pg_array([composite_value(item, type_.item_type) for item in value]).cast(type_)
+    return literal(value, type_=type_)
+
+
+def composite_value(value, type_):
+    fields = []
+    for i, column in enumerate(type_.columns):
+        if isinstance(value, dict):
+            field_value = value.get(column.name)
+        else:
+            try:
+                field_value = getattr(value, column.name)
+            except AttributeError:
+                field_value = value[i]
+        fields.append(composite_field_value(field_value, column.type))
+    if len(fields) == 1:
+        return func.ROW(*fields).cast(type_)
+    return tuple_(*fields).cast(type_)
+
+
 class ClassifierTask(Base):
     __tablename__ = '_classifier_tasks'
     id: int = Column(Integer, primary_key=True)
     mc_seqno: int = Column(Integer)
-    trace_id: str = Column(String(44))
+    trace_id: str = Column(TonHash)
     pending: bool = Column(Boolean)
 
 
 class ClassifierFailedTrace(Base):
     __tablename__ = '_classifier_failed_traces'
     id: int = Column(Integer, primary_key=True)
-    trace_id: str = Column(String(44))
+    trace_id: str = Column(TonHash)
     error: str = Column(String)
 
 
 # thread procedures
 class UnclassifiedEventsReader(mp.Process):
-    def __init__(self, task_queue: mp.Queue, result_queue: mp.Queue, stats_queue: Optional[mp.Queue]=None, batch_size: int=4096, prefetch_size: int=100000):
+    def __init__(self, task_queue: mp.Queue, result_queue: mp.Queue, stats_queue: Optional[mp.Queue]=None,
+                 batch_size: int=4096, prefetch_size: int=100000, mc_seqno_batch_size: int=4,
+                 mc_seqno_order: str='desc'):
         super().__init__()
         self.task_queue = task_queue
         self.result_queue = result_queue
         self.stats_queue = stats_queue
         self.batch_size = batch_size
         self.prefetch_size = prefetch_size
-        logger.info(f"Reading unclassified tasks with batch size {self.batch_size}")
+        self.mc_seqno_batch_size = max(1, mc_seqno_batch_size)
+        if mc_seqno_order not in ('asc', 'desc'):
+            raise ValueError(f"Unsupported mc_seqno order: {mc_seqno_order}")
+        self.mc_seqno_order = mc_seqno_order
+        logger.info(
+            f"Reading unclassified tasks with batch size {self.batch_size}, "
+            f"mc_seqno batch size {self.mc_seqno_batch_size}, "
+            f"mc_seqno order {self.mc_seqno_order}"
+        )
     
     def read_batch(self):
         rows = []
         with SyncSessionMaker() as session:
             try:
+                session.execute(
+                    text("SELECT drain_classifier_progress(:max_count)"),
+                    {"max_count": max(self.batch_size, 1000)},
+                )
+                mc_seqno_order = self.mc_seqno_order.upper()
+                mc_seqno_nulls_order = 'FIRST' if self.mc_seqno_order == 'desc' else 'LAST'
                 query = f'''
                                WITH A AS (
                                    SELECT id 
                                    FROM _classifier_tasks 
                                    WHERE (claimed_at IS NULL OR claimed_at < NOW() - INTERVAL '5 minutes') 
                                     AND (start_after IS NULL OR start_after <= NOW())
-                                   ORDER BY mc_seqno DESC NULLS FIRST 
+                                   ORDER BY mc_seqno {mc_seqno_order} NULLS {mc_seqno_nulls_order} 
                                    LIMIT {self.batch_size} 
                                    FOR UPDATE SKIP LOCKED
                                )
@@ -123,12 +255,16 @@ class UnclassifiedEventsReader(mp.Process):
 
     def _split_tasks_into_batches(self, tasks: List[ClassifierTask]) -> List[List[ClassifierTask]]:
         trace_tasks_batch = []
-        seqno_tasks_batches = []
+        seqno_tasks = []
         for task in tasks:
             if task.trace_id is not None:
                 trace_tasks_batch.append(task)
             else:
-                seqno_tasks_batches.append([task])
+                seqno_tasks.append(task)
+        seqno_tasks_batches = [
+            seqno_tasks[i:i + self.mc_seqno_batch_size]
+            for i in range(0, len(seqno_tasks), self.mc_seqno_batch_size)
+        ]
         if len(trace_tasks_batch) == 0:
             return seqno_tasks_batches
         else:
@@ -147,55 +283,12 @@ class UnclassifiedEventsReader(mp.Process):
 # end class
 
 
-class FinishedTasksProcessor(mp.Process):
-    def __init__(self, finished_queue: mp.Queue):
-        super().__init__()
-        self.finished_queue = finished_queue
-        self.last_commit = datetime.now()
-        logger.info(f"Reading finished tasks")
-
-    def read_finished_tasks(self):
-        tasks = []
-        while (datetime.now() - self.last_commit).total_seconds() < 10:
-            try:
-                result = self.finished_queue.get(timeout=1)
-                tasks.append(result)
-            except:
-                pass
-        if len(tasks) > 0:
-            with SyncSessionMaker() as session:
-                try:
-                    tasks_str = ','.join([f'{x}' for x in tasks])
-                    sql = f'delete from _classifier_tasks where id in ({tasks_str});'
-                    logger.info(f'sql: {sql}')
-                    logger.info(f'Closed {len(tasks)} finished tasks')
-                    result = session.execute(sql)
-                    session.commit()
-                except Exception as ee:
-                    logger.warning(f'Failed to close tasks: {ee}')
-                    session.rollback()
-                self.last_commit = datetime.now()
-
-    def run(self):
-        try:
-            while True:
-                self.read_finished_tasks()
-        except KeyboardInterrupt:
-            logger.info(f'Gracefully stopped in the FinishedTasksProcessor')
-        except:
-            logger.info(f'Error in FinishedTasksProcessor: {traceback.format_exc()}')
-        logger.info(f'Thread FinishedTasksProcessor finished')
-        return
-# end class
-
-
 class EventClassifierWorker(mp.Process):
-    def __init__(self, id: int, task_queue: mp.Queue, result_queue: mp.Queue, finished_queue: mp.Queue, shared_namespace, big_traces_threshold=4000, force=False):
+    def __init__(self, id: int, task_queue: mp.Queue, result_queue: mp.Queue, shared_namespace, big_traces_threshold=4000, force=False):
         super().__init__()
         self.id = id
         self.task_queue = task_queue
         self.result_queue = result_queue
-        self.finished_queue = finished_queue
         self.shared_namespace = shared_namespace
         self.big_traces_threshold = big_traces_threshold
         self.force = force
@@ -204,7 +297,19 @@ class EventClassifierWorker(mp.Process):
         tasks = self.task_queue.get(True)
         # logger.info(f'Worker #{self.id} accepted batch of {len(tasks)} tasks')
         try:
-            ok, total, failed, broken = asyncio.get_event_loop().run_until_complete(self.process_trace_batch_async(tasks))
+            event_loop = asyncio.get_event_loop()
+            ok, total, failed, broken = event_loop.run_until_complete(self.process_trace_batch_async(tasks))
+            if not ok and len(tasks) > 1 and all(task.trace_id is None for task in tasks):
+                logger.warning(f"Failed to process mc_seqno batch of {len(tasks)} tasks, retrying one by one")
+                ok, total, failed, broken = True, 0, 0, 0
+                for task in tasks:
+                    task_ok, task_total, task_failed, task_broken = event_loop.run_until_complete(
+                        self.process_trace_batch_async([task])
+                    )
+                    ok = ok and task_ok
+                    total += task_total
+                    failed += task_failed
+                    broken += task_broken
         except asyncio.CancelledError:
             logger.info("failed to process one batch: coroutine was cancelled")
             ok, total, failed, broken = False, 0, 0, 0
@@ -246,7 +351,7 @@ class EventClassifierWorker(mp.Process):
                     if task.trace_id is not None:
                         exists = True
                     elif task.mc_seqno is not None:
-                        sql = f'select mc_seqno from blocks_classified where mc_seqno = {task.mc_seqno}'
+                        sql = f'select mc_seqno from _blocks_classified where mc_seqno = {task.mc_seqno}'
                         result = await session.execute(sql)
                         rows = result.fetchall()
                         exists = len(rows) > 0
@@ -274,14 +379,31 @@ class EventClassifierWorker(mp.Process):
                     fltr = and_(Trace.mc_seqno_end.in_(mc_seqnos),
                                 Trace.nodes_ <= self.big_traces_threshold)
                 query = select(Trace).filter(fltr)
-                tx_join = selectinload(Trace.transactions).selectinload(Transaction.messages).selectinload(Message.message_content)
-                init_state_join = selectinload(Trace.transactions).selectinload(Transaction.messages).selectinload(
-                    Message.init_state)
-                query = query.options(tx_join, init_state_join)
+                msg_join = selectinload(Trace.transactions).selectinload(Transaction.messages)
+                if kvrocks.is_enabled():
+                    query = query.options(
+                        selectinload(Trace.transactions).options(
+                            noload(Transaction.account_state_before),
+                            noload(Transaction.account_state_after),
+                            noload(Transaction.account_state_latest),
+                            selectinload(Transaction.messages).options(
+                                noload(Message.message_content),
+                                noload(Message.init_state),
+                                noload(Message.source_account_state),
+                                noload(Message.destination_account_state),
+                            ),
+                        )
+                    )
+                else:
+                    tx_join = msg_join.selectinload(Message.message_content)
+                    init_state_join = msg_join.selectinload(Message.init_state)
+                    query = query.options(tx_join, init_state_join)
 
                 result = await session.execute(query)
                 traces = result.scalars().unique().all()
                 processed = len(traces)
+                if kvrocks.is_enabled():
+                    await hydrate_message_contents_from_kvrocks(traces)
 
                 # Gather interfaces for each account
                 accounts = set()
@@ -291,9 +413,11 @@ class EventClassifierWorker(mp.Process):
                     accounts.update(accs)
                     extra_data_requests.update(req)
                 await get_pools_manager(redis.client).fetch_and_update_context_pools_from_redis()
-                interfaces = await gather_interfaces(accounts, session, extra_requests=extra_data_requests)
-                repository = RedisInterfaceRepository(redis.sync_client)
-                await repository.put_interfaces(interfaces)
+                if kvrocks.is_enabled():
+                    interfaces = await gather_interfaces_from_kvrocks(accounts, extra_requests=extra_data_requests)
+                else:
+                    interfaces = await gather_interfaces(accounts, session, extra_requests=extra_data_requests)
+                repository = KvRocksRepository(interfaces)
                 context.interface_repository.set(repository)
 
                 # Process traces and save actions
@@ -315,8 +439,12 @@ class EventClassifierWorker(mp.Process):
                     #     for aa in action.get_action_accounts():
                     #         await session.execute(insert(ActionAccount).values({k: v for k, v in aa.__dict__.items() if not k.startswith('_')}).on_conflict_do_nothing())
                     #     # session.add_all(action.get_action_accounts())
-                    session.add_all(actions)
                     for action in actions:
+                        await session.execute(
+                            pg_insert(Action)
+                            .values(mapped_non_null_values(action))
+                            .on_conflict_do_nothing()
+                        )
                         concat_key = action.action_id + '_' + action.trace_id
                         if concat_key in inserted_actions:
                             raise Exception(f"Duplicate action: {concat_key}")
@@ -328,14 +456,18 @@ class EventClassifierWorker(mp.Process):
                                 raise Exception(f"Duplicate action account: {account_concat_key}")
                             else:
                                 inserted_action_accounts.add(account_concat_key)
-                        session.add_all(action.get_action_accounts())
+                            await session.execute(
+                                pg_insert(ActionAccount)
+                                .values(mapped_non_null_values(action_account))
+                                .on_conflict_do_nothing()
+                            )
 
                     if state == 'ok':
                         ok_traces.append(trace_id)
                     else:
                         err = f'{exc}' if exc is not None else None
                         sql = text(f"""insert into _classifier_failed_traces(trace_id, broken, error) 
-                                                values (:tid, false, :err) on conflict do nothing;""")
+                                                values (CAST(:tid AS tonhash), false, :err) on conflict do nothing;""")
                         await session.execute(sql.bindparams(tid=trace_id, err=err))
                         if state == 'broken':
                             broken_traces.append(trace_id)
@@ -347,12 +479,10 @@ class EventClassifierWorker(mp.Process):
                 # await session.execute(f"delete from _classifier_tasks where id = {task.id};")
                 if not is_trace_batch:
                     for task in tasks:
-                        await session.execute(f"insert into blocks_classified(mc_seqno) values ({task.mc_seqno}) on conflict do nothing;")
+                        await session.execute(f"insert into _blocks_classified(mc_seqno) values ({task.mc_seqno}) on conflict do nothing;")
                 task_ids = [task.id for task in tasks]
                 await session.execute(f"delete from _classifier_tasks where id in ({','.join(map(str, task_ids))});")
                 await session.commit()
-                # for task in tasks:
-                #     self.finished_queue.put(task.id)
             except Exception as ee:
                 logger.error(f'Failed to process batch: {ee}')
                 await session.rollback()
@@ -397,16 +527,21 @@ async def start_processing_events_from_db(args: argparse.Namespace, shared_names
     task_queue = mp.Queue(args.prefetch_size)
     result_queue = mp.Queue()
     stats_queue = mp.Queue()
-    finished_queue = mp.Queue()
-    thread = UnclassifiedEventsReader(task_queue, result_queue, stats_queue, args.batch_size, args.prefetch_size)
+    thread = UnclassifiedEventsReader(
+        task_queue,
+        result_queue,
+        stats_queue,
+        args.batch_size,
+        args.prefetch_size,
+        args.mc_seqno_batch_size,
+        args.mc_seqno_order,
+    )
     thread.start()
     workers = []
     for id in range(args.pool_size):
-        worker = EventClassifierWorker(id, task_queue, result_queue, finished_queue, shared_namespace, big_traces_threshold=4000)
+        worker = EventClassifierWorker(id, task_queue, result_queue, shared_namespace, big_traces_threshold=4000)
         worker.start()
         workers.append(worker)
-    task_closer = FinishedTasksProcessor(finished_queue)
-    task_closer.start()
 
     # stats
     failed_tasks = 0
@@ -416,22 +551,26 @@ async def start_processing_events_from_db(args: argparse.Namespace, shared_names
     processed_traces = 0
     start_time = time.time()
     last_time = start_time
+    trace_rate = RollingTraceRate(STATS_RATE_WINDOW_SECONDS)
     try:
         while True:
+            cur_time = time.time()
             try:
                 ok, total, failed, broken = result_queue.get(False)
                 processed_traces += total
                 failed_traces += failed
                 broken_traces += broken
+                trace_rate.add(cur_time, total)
 
                 failed_tasks += not ok
                 processed_tasks += 1
-            except:
+            except queue.Empty:
                 await asyncio.sleep(0.5)
-            cur_time = time.time()
+                cur_time = time.time()
+                trace_rate.prune(cur_time)
             if (cur_time - last_time) > 2:
                 elapsed = cur_time - start_time
-                tps = processed_traces / elapsed
+                tps = trace_rate.rate(cur_time, start_time)
                 eta_part = ""
                 if total_traces is not None:
                     eta_sec = min(999999999, max(0, int((total_traces - processed_traces) / max(tps, 1e-9))))
@@ -448,14 +587,17 @@ async def start_processing_events_from_db(args: argparse.Namespace, shared_names
     for worker in workers:
         worker.terminate()
         worker.join()
-    task_closer.terminate()
-    task_closer.join()
     return
 # end def
 
 async def start_emulated_task_traces_processing():
     pubsub = redis.client.pubsub()
-    await start_pools_background_updater(redis.client)
+    use_kvrocks = kvrocks.is_enabled()
+    if use_kvrocks:
+        await kvrocks.check_connection()
+        logger.info("Using Kvrocks for emulated task enrichment")
+    else:
+        await start_pools_background_updater(redis.client)
     await pubsub.subscribe(settings.emulated_traces_redis_channel)
     while True:
         message = await pubsub.get_message(timeout=1)
@@ -472,7 +614,8 @@ async def start_emulated_task_traces_processing():
                 await redis.client.publish("classifier_result_channel_" + task_id, "error")
                 logger.error(f"Failed to process emulated task {task_id}: {e}")
                 logger.exception(e, exc_info=True)
-            await get_pools_manager(redis.client).fetch_and_update_context_pools_from_redis()
+            if not use_kvrocks:
+                await get_pools_manager(redis.client).fetch_and_update_context_pools_from_redis()
 
 async def process_emulated_task_trace(task_id):
     trace_map = await redis.client.hgetall("result_" + task_id)
@@ -490,10 +633,6 @@ async def process_trace(trace: Trace) -> tuple[str, str, list[Action], Exception
     return result.trace_id, result.state, result.actions, result.exception
 
 if __name__ == '__main__':
-    # Create a shared namespace for cross-process data sharing
-    manager = Manager()
-    shared_namespace = manager.Namespace()
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--prefetch-size',
                         help='Number of prefetched tasks',
@@ -503,6 +642,14 @@ if __name__ == '__main__':
                         help='Number of trace-tasks to process in one batch',
                         type=int,
                         default=1000)
+    parser.add_argument('--mc-seqno-batch-size',
+                        help='Number of mc_seqno tasks to process in one worker batch',
+                        type=int,
+                        default=4)
+    parser.add_argument('--mc-seqno-order',
+                        help='Order for reading mc_seqno classifier tasks from the shared DB queue',
+                        choices=['desc', 'asc'],
+                        default='desc')
     parser.add_argument('--pool-size',
                         help='Number of workers to process traces',
                         type=int,
@@ -535,26 +682,84 @@ if __name__ == '__main__':
                         help='Maximum number of enqueued emulated traces for processing',
                         default=100,
                         type=int)
+    parser.add_argument('--kvrocks',
+                        help='Kvrocks address or redis:// URL for point-state reads',
+                        default=settings.kvrocks,
+                        type=str)
+    parser.add_argument('--kvrocks-sentinels',
+                        help='Comma-separated Kvrocks Sentinel addresses',
+                        default=settings.kvrocks_sentinels,
+                        type=str)
+    parser.add_argument('--kvrocks-sentinel-master',
+                        help='Kvrocks Sentinel master name',
+                        default=settings.kvrocks_sentinel_master,
+                        type=str)
+    parser.add_argument('--kvrocks-sentinel-user',
+                        help='Kvrocks Sentinel username',
+                        default=settings.kvrocks_sentinel_user,
+                        type=str)
+    parser.add_argument('--kvrocks-sentinel-password',
+                        help='Kvrocks Sentinel password',
+                        default=settings.kvrocks_sentinel_password,
+                        type=str)
+    parser.add_argument('--kvrocks-user',
+                        help='Kvrocks username',
+                        default=settings.kvrocks_user,
+                        type=str)
+    parser.add_argument('--kvrocks-password',
+                        help='Kvrocks password',
+                        default=settings.kvrocks_password,
+                        type=str)
+    parser.add_argument('--kvrocks-db',
+                        help='Kvrocks DB index',
+                        default=settings.kvrocks_db,
+                        type=int)
+    parser.add_argument('--kvrocks-max-connections',
+                        help='Maximum Kvrocks connections per classifier process',
+                        default=settings.kvrocks_max_connections,
+                        type=int)
+    parser.add_argument('--kvrocks-pool-timeout',
+                        help='Seconds to wait for an available Kvrocks connection in a process pool',
+                        default=settings.kvrocks_pool_timeout,
+                        type=int)
     args = parser.parse_args()
 
     settings.emulated_traces_redis_channel = args.emulated_traces_redis_channel
     settings.emulated_traces_redis_response_channel = args.emulated_traces_redis_response_channel
     settings.emulated_traces = args.emulated_traces
     settings.use_combined_repository = args.use_combined_repository
+    settings.kvrocks = args.kvrocks
+    settings.kvrocks_sentinels = args.kvrocks_sentinels
+    settings.kvrocks_sentinel_master = args.kvrocks_sentinel_master
+    settings.kvrocks_sentinel_user = args.kvrocks_sentinel_user
+    settings.kvrocks_sentinel_password = args.kvrocks_sentinel_password
+    settings.kvrocks_user = args.kvrocks_user
+    settings.kvrocks_password = args.kvrocks_password
+    settings.kvrocks_db = args.kvrocks_db
+    settings.kvrocks_max_connections = args.kvrocks_max_connections
+    settings.kvrocks_pool_timeout = args.kvrocks_pool_timeout
+    kvrocks.configure_from_settings(settings)
 
     if redis.client is None:
         logger.error("Redis client not initialized. Aborting...")
         sys.exit(1)
 
-    # Initialize pools data and store in shared namespace
-    init_pools_data(redis.sync_client)
-    # Save pools data from context to shared namespace
-    shared_namespace.dedust_pools = context.dedust_pools.get()
-
     if args.emulated_trace_tasks:
+        if kvrocks.is_enabled():
+            # Dedust pools are resolved from Kvrocks on demand in this mode.
+            # Do not initialize or refresh the PostgreSQL-backed global cache.
+            context.dedust_pools.set({})
+        else:
+            init_pools_data(redis.sync_client)
         logger.info("Starting processing emulated trace tasks")
         asyncio.run(start_emulated_task_traces_processing())
     elif settings.emulated_traces:
+        if kvrocks.is_enabled():
+            # Pending traces use their emulated interfaces and resolve Dedust
+            # pools from Kvrocks on demand, without a PostgreSQL fallback.
+            context.dedust_pools.set({})
+        else:
+            init_pools_data(redis.sync_client)
         logger.info("Starting processing emulated traces")
         asyncio.run(start_emulated_traces_processing(settings=settings,
                                                      batch_window=args.batch_time_window,
@@ -562,5 +767,10 @@ if __name__ == '__main__':
                                                      pool_size=args.pool_size,
                                                      max_queue_size=args.emulated_traces_queue_size))
     else:
+        # Historical classification uses PostgreSQL-backed worker processes.
+        manager = Manager()
+        shared_namespace = manager.Namespace()
+        init_pools_data(redis.sync_client)
+        shared_namespace.dedust_pools = context.dedust_pools.get()
         logger.info("Starting processing events from db")
         asyncio.run(start_processing_events_from_db(args, shared_namespace))

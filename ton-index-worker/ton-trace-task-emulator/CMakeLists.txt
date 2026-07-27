@@ -10,6 +10,7 @@ add_executable(ton-trace-task-emulator
 target_include_directories(ton-trace-task-emulator
     PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/../external/redis-plus-plus/src
 )
+
 target_compile_features(ton-trace-task-emulator PRIVATE cxx_std_20)
 target_link_libraries(ton-trace-task-emulator ton-trace-emulator-core redis++_static msgpack-cxx)
 target_link_options(ton-trace-task-emulator PUBLIC -rdynamic)

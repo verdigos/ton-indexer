@@ -235,8 +235,10 @@ type RawAction struct {
 	CocoonClientWithdrawQueryId               *string
 	CocoonClientWithdrawWithdrawAmount        *string
 
+	Extra map[string]interface{}
+
 	AncestorType []string
-	Accounts     []string
+	Accounts     []AccountAddress
 } // @name RawAction
 
 type RawActionJettonSwapPeerSwap struct {
@@ -638,6 +640,32 @@ type ActionDetailsDexWithdrawLiquidity struct {
 	TickUpper            *string         `json:"tick_upper"`
 }
 
+type ActionDetailsDedustV2ClaimFees struct {
+	Dex               *string         `json:"dex"`
+	Source            *AccountAddress `json:"source"`
+	Pool              *AccountAddress `json:"pool"`
+	Position          *AccountAddress `json:"position"`
+	Asset1            *AccountAddress `json:"asset_1"`
+	Asset2            *AccountAddress `json:"asset_2"`
+	Amount1           *string         `json:"amount_1"`
+	Amount2           *string         `json:"amount_2"`
+	UserJettonWallet1 *AccountAddress `json:"user_jetton_wallet_1"`
+	UserJettonWallet2 *AccountAddress `json:"user_jetton_wallet_2"`
+	DexJettonWallet1  *AccountAddress `json:"dex_jetton_wallet_1"`
+	DexJettonWallet2  *AccountAddress `json:"dex_jetton_wallet_2"`
+}
+
+type ActionDetailsDedustV2ClaimReward struct {
+	Dex              *string         `json:"dex"`
+	Source           *AccountAddress `json:"source"`
+	Pool             *AccountAddress `json:"pool"`
+	Position         *AccountAddress `json:"position"`
+	Asset            *AccountAddress `json:"asset"`
+	Amount           *string         `json:"amount"`
+	UserJettonWallet *AccountAddress `json:"user_jetton_wallet"`
+	DexJettonWallet  *AccountAddress `json:"dex_jetton_wallet"`
+}
+
 type ActionDetailsToncoDeployPool struct {
 	Source              *AccountAddress `json:"source"`
 	Pool                *AccountAddress `json:"pool"`
@@ -685,26 +713,26 @@ type ActionDetailsWithdrawStakeRequest struct {
 }
 
 type Action struct {
-	TraceId               *HashType      `json:"trace_id"`
-	ActionId              HashType       `json:"action_id"`
-	StartLt               int64          `json:"start_lt,string"`
-	EndLt                 int64          `json:"end_lt,string"`
-	StartUtime            int64          `json:"start_utime"`
-	EndUtime              int64          `json:"end_utime"`
-	TraceEndLt            int64          `json:"trace_end_lt,string"`
-	TraceEndUtime         int64          `json:"trace_end_utime"`
-	TraceMcSeqnoEnd       int32          `json:"trace_mc_seqno_end"`
-	TxHashes              []HashType     `json:"transactions"`
-	Success               *bool          `json:"success"`
-	Type                  string         `json:"type"`
-	Details               interface{}    `json:"details"`
-	RawAction             *RawAction     `json:"raw_action,omitempty" swaggerignore:"true"`
-	TraceExternalHash     *HashType      `json:"trace_external_hash,omitempty"`
-	TraceExternalHashNorm *HashType      `json:"trace_external_hash_norm,omitempty"`
-	AncestorType          []string       `json:"-"`
-	Accounts              []string       `json:"accounts,omitempty"`
-	Transactions          []*Transaction `json:"transactions_full,omitempty"`
-	Finality              FinalityState  `json:"finality"`
+	TraceId               *HashType        `json:"trace_id"`
+	ActionId              HashType         `json:"action_id"`
+	StartLt               int64            `json:"start_lt,string"`
+	EndLt                 int64            `json:"end_lt,string"`
+	StartUtime            int64            `json:"start_utime"`
+	EndUtime              int64            `json:"end_utime"`
+	TraceEndLt            int64            `json:"trace_end_lt,string"`
+	TraceEndUtime         int64            `json:"trace_end_utime"`
+	TraceMcSeqnoEnd       int32            `json:"trace_mc_seqno_end"`
+	TxHashes              []HashType       `json:"transactions"`
+	Success               *bool            `json:"success"`
+	Type                  string           `json:"type"`
+	Details               interface{}      `json:"details"`
+	RawAction             *RawAction       `json:"raw_action,omitempty" swaggerignore:"true"`
+	TraceExternalHash     *HashType        `json:"trace_external_hash,omitempty"`
+	TraceExternalHashNorm *HashType        `json:"trace_external_hash_norm,omitempty"`
+	AncestorType          []string         `json:"-"`
+	Accounts              []AccountAddress `json:"accounts,omitempty"`
+	Transactions          []*Transaction   `json:"transactions_full,omitempty"`
+	Finality              FinalityState    `json:"finality"`
 } // @name Action
 
 type ActionDetailsMultisigCreateOrder struct {

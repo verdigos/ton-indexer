@@ -3,22 +3,28 @@ package crud
 import (
 	"context"
 	"fmt"
-	"github.com/toncenter/ton-indexer/ton-index-go/index/detect"
-	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
-	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
 	"log"
 	"sort"
 	"strings"
+
+	"github.com/toncenter/ton-indexer/ton-index-go/index/detect"
+	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
+	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func (db *DbClient) QueryPendingActions(settings models.RequestSettings, emulatedContext *EmulatedTracesContext, request models.PendingActionsRequest) ([]models.Action, models.AddressBook, models.Metadata, error) {
-	conn, err := db.Pool.Acquire(context.Background())
+	// pending completions are recent -> prefer hot; fall back to the single pool standalone
+	pool := db.Pool
+	if db.HotPool != nil {
+		pool = db.HotPool
+	}
+	conn, releaseConn, err := acquireConnForRequest(pool, settings)
 	if err != nil {
 		return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
-	defer conn.Release()
+	defer releaseConn()
 
 	raw_actions, err := queryPendingActionsImpl(emulatedContext, conn, settings, request)
 	if err != nil {
@@ -27,7 +33,7 @@ func (db *DbClient) QueryPendingActions(settings models.RequestSettings, emulate
 
 	actions := []models.Action{}
 	book := models.AddressBook{}
-	addr_map := map[string]bool{}
+	addr_map := map[models.AccountAddress]bool{}
 	metadata := models.Metadata{}
 
 	for _, raw_action := range raw_actions {
@@ -37,25 +43,6 @@ func (db *DbClient) QueryPendingActions(settings models.RequestSettings, emulate
 			return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 		}
 		actions = append(actions, *action)
-	}
-
-	if len(addr_map) > 0 {
-		var addr_list []string
-		for k := range addr_map {
-			addr_list = append(addr_list, k)
-		}
-		if !settings.NoAddressBook {
-			book, err = QueryAddressBookImpl(addr_list, conn, settings)
-			if err != nil {
-				return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
-			}
-		}
-		if !settings.NoMetadata {
-			metadata, err = QueryMetadataImpl(addr_list, conn, settings)
-			if err != nil {
-				return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
-			}
-		}
 	}
 
 	if request.IncludeTransactions != nil && *request.IncludeTransactions {
@@ -79,15 +66,47 @@ func (db *DbClient) QueryPendingActions(settings models.RequestSettings, emulate
 		}
 	}
 
+	if len(addr_map) > 0 {
+		var addr_list []models.AccountAddress
+		for k := range addr_map {
+			addr_list = append(addr_list, k)
+		}
+		if db.Kvrocks != nil {
+			releaseConn()
+			book, metadata, err = db.queryKvrocksEnrichment(addr_list, settings)
+			if err != nil {
+				return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+			}
+		} else {
+			if !settings.NoAddressBook {
+				book, err = QueryAddressBookImpl(addr_list, conn, settings)
+				if err != nil {
+					return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+				}
+			}
+			if !settings.NoMetadata {
+				metadata, err = QueryMetadataImpl(addr_list, conn, settings)
+				if err != nil {
+					return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+				}
+			}
+		}
+	}
+
 	return actions, book, metadata, nil
 }
 
 func (db *DbClient) QueryPendingTraces(settings models.RequestSettings, emulatedContext *EmulatedTracesContext, request models.PendingTracesRequest) ([]models.Trace, models.AddressBook, models.Metadata, error) {
-	conn, err := db.Pool.Acquire(context.Background())
+	// pending completions are recent -> prefer hot; fall back to the single pool standalone
+	pool := db.Pool
+	if db.HotPool != nil {
+		pool = db.HotPool
+	}
+	conn, releaseConn, err := acquireConnForRequest(pool, settings)
 	if err != nil {
 		return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
-	defer conn.Release()
+	defer releaseConn()
 
 	res, addr_list, err := queryPendingTracesImpl(emulatedContext, conn, settings, request)
 	if err != nil {
@@ -99,16 +118,24 @@ func (db *DbClient) QueryPendingTraces(settings models.RequestSettings, emulated
 	metadata := models.Metadata{}
 
 	if len(addr_list) > 0 {
-		if !settings.NoAddressBook {
-			book, err = QueryAddressBookImpl(addr_list, conn, settings)
+		if db.Kvrocks != nil {
+			releaseConn()
+			book, metadata, err = db.queryKvrocksEnrichment(addr_list, settings)
 			if err != nil {
 				return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 			}
-		}
-		if !settings.NoMetadata {
-			metadata, err = QueryMetadataImpl(addr_list, conn, settings)
-			if err != nil {
-				return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+		} else {
+			if !settings.NoAddressBook {
+				book, err = QueryAddressBookImpl(addr_list, conn, settings)
+				if err != nil {
+					return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+				}
+			}
+			if !settings.NoMetadata {
+				metadata, err = QueryMetadataImpl(addr_list, conn, settings)
+				if err != nil {
+					return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+				}
 			}
 		}
 	}
@@ -125,34 +152,44 @@ func (db *DbClient) QueryPendingTransactions(
 	}
 
 	// read data
-	conn, err := db.Pool.Acquire(context.Background())
+	// pending completions are recent -> prefer hot; fall back to the single pool standalone
+	pool := db.Pool
+	if db.HotPool != nil {
+		pool = db.HotPool
+	}
+	conn, releaseConn, err := acquireConnForRequest(pool, settings)
 	if err != nil {
 		return nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
-	defer conn.Release()
+	defer releaseConn()
 
 	txs, err := QueryPendingTransactionsImpl(emulatedContext, conn, settings, true)
 	if err != nil {
 		return nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
 
-	var addr_list []string
+	var addr_list []models.AccountAddress
 	for _, t := range txs {
-		addr_list = append(addr_list, string(t.Account))
+		addr_list = append(addr_list, t.Account)
 		if t.InMsg != nil {
 			if t.InMsg.Source != nil {
-				addr_list = append(addr_list, string(*t.InMsg.Source))
+				addr_list = append(addr_list, *t.InMsg.Source)
 			}
 		}
 		for _, m := range t.OutMsgs {
 			if m.Destination != nil {
-				addr_list = append(addr_list, string(*m.Destination))
+				addr_list = append(addr_list, *m.Destination)
 			}
 		}
 	}
 	book := models.AddressBook{}
 	if len(addr_list) > 0 {
-		book, err = QueryAddressBookImpl(addr_list, conn, settings)
+		if db.Kvrocks != nil {
+			releaseConn()
+			book, err = QueryAddressBookImplKvrocks(addr_list, db.Kvrocks, settings)
+		} else {
+			book, err = QueryAddressBookImpl(addr_list, conn, settings)
+		}
 		if err != nil {
 			return nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 		}
@@ -176,7 +213,7 @@ func queryCompletedEmulatedTraces(emulatedContext *EmulatedTracesContext,
 		defer cancel_ctx()
 		query := "select DISTINCT M.msg_hash from messages M join traces T on T.trace_id = M.trace_id"
 		if classified_only {
-			query += " join blocks_classified BC on BC.mc_seqno = T.mc_seqno_end"
+			query += " join _blocks_classified BC on BC.mc_seqno = T.mc_seqno_end"
 		}
 		query += fmt.Sprintf(" where M.msg_hash in (%s) and T.state='complete'",
 			strings.Join(trace_external_hashes, ","))
@@ -184,6 +221,7 @@ func queryCompletedEmulatedTraces(emulatedContext *EmulatedTracesContext,
 		if err != nil {
 			return nil, models.IndexError{Code: 500, Message: err.Error()}
 		}
+		defer rows.Close()
 		completed_trace_ids_in_db := make([]string, 0)
 		for rows.Next() {
 			var external_hash string
@@ -191,6 +229,9 @@ func queryCompletedEmulatedTraces(emulatedContext *EmulatedTracesContext,
 				return nil, models.IndexError{Code: 500, Message: err.Error()}
 			}
 			completed_trace_ids_in_db = append(completed_trace_ids_in_db, external_hash_map[external_hash])
+		}
+		if err := rows.Err(); err != nil {
+			return nil, models.IndexError{Code: 500, Message: err.Error()}
 		}
 		return completed_trace_ids_in_db, nil
 	}
@@ -246,7 +287,7 @@ func QueryPendingTransactionsImpl(emulatedContext *EmulatedTracesContext, conn *
 	{
 		emulatedTxs := emulatedContext.GetTransactions()
 		for _, tx := range emulatedTxs {
-			if external_hash, ok := emulatedContext.txHashTraceExternalHash[string(tx.Hash)]; ok {
+			if external_hash, ok := emulatedContext.txHashTraceExternalHash[tx.Hash.String()]; ok {
 				hash := models.HashType(external_hash)
 				tx.TraceExternalHash = &hash
 			}
@@ -257,7 +298,7 @@ func QueryPendingTransactionsImpl(emulatedContext *EmulatedTracesContext, conn *
 
 	var hash_list []string
 	for _, t := range txs {
-		hash_list = append(hash_list, string(t.Hash))
+		hash_list = append(hash_list, t.Hash.String())
 	}
 	if len(txs) == 0 {
 		return txs, nil
@@ -278,7 +319,7 @@ func QueryPendingTransactionsImpl(emulatedContext *EmulatedTracesContext, conn *
 	if err := detect.MarkMessagesByPtr(msgPtrs); err != nil {
 		hashes := make([]string, len(msgPtrs))
 		for i, msg := range msgPtrs {
-			hashes[i] = string(msg.MsgHash)
+			hashes[i] = msg.MsgHash.String()
 		}
 		log.Printf("Error marking messages with hashes %v: %v", hashes, err)
 	}
@@ -297,8 +338,8 @@ func QueryPendingTransactionsImpl(emulatedContext *EmulatedTracesContext, conn *
 	return txs, nil
 }
 
-func queryPendingTracesImpl(emulatedContext *EmulatedTracesContext, conn *pgxpool.Conn, settings models.RequestSettings, request models.PendingTracesRequest) ([]models.Trace, []string, error) {
-	var traces []models.Trace
+func queryPendingTracesImpl(emulatedContext *EmulatedTracesContext, conn *pgxpool.Conn, settings models.RequestSettings, request models.PendingTracesRequest) ([]models.Trace, []models.AccountAddress, error) {
+	traces := []models.Trace{}
 	completed_traces, err := queryCompletedEmulatedTraces(emulatedContext, conn, settings, true)
 	if err != nil {
 		return nil, nil, err
@@ -313,7 +354,7 @@ func queryPendingTracesImpl(emulatedContext *EmulatedTracesContext, conn *pgxpoo
 	}
 	events_map := map[models.HashType]int{}
 	var trace_id_list []models.HashType
-	addr_map := map[string]bool{}
+	addr_map := map[models.AccountAddress]bool{}
 	for idx := range traces {
 		events_map[*traces[idx].ExternalHash] = idx
 		trace_id_list = append(trace_id_list, *traces[idx].ExternalHash)
@@ -353,7 +394,7 @@ func queryPendingTracesImpl(emulatedContext *EmulatedTracesContext, conn *pgxpoo
 			}
 		}
 	}
-	var addr_list []string
+	var addr_list []models.AccountAddress
 	actions := make([]models.RawAction, 0)
 	for _, rawAction := range emulatedContext.GetActions(request.SupportedActionTypes) {
 		actions = append(actions, *rawAction)

@@ -16,6 +16,7 @@ from sqlalchemy.orm import sessionmaker
 import multiprocessing as mp
 
 from indexer.core import redis
+from indexer.core import kvrocks
 from indexer.core.database import engine, FinalityState
 from indexer.core.settings import Settings
 from indexer.events import context
@@ -26,7 +27,7 @@ from indexer.events.blocks.utils.event_deserializer import deserialize_event
 from indexer.events.event_processing import process_event_async_with_postprocessing, try_classify_unknown_trace
 from indexer.events.interface_repository import (
     EmulatedTransactionsInterfaceRepository, gather_interfaces,
-    EmulatedRepositoryWithDbFallback, ExtraAccountRequest
+    gather_interfaces_from_kvrocks, EmulatedRepositoryWithDbFallback, ExtraAccountRequest
 )
 from indexer.observability import otel
 from indexer.events.trace_processor import TraceProcessor
@@ -70,6 +71,7 @@ class PendingTraceClassifierWorker(mp.Process):
                  id,
                  task_queue: mp.Queue,
                  use_combined_repository: bool,
+                 use_kvrocks: bool,
                  emulated_traces_redis_channel,
                  emulated_traces_redis_response_channel,
                  interface_cache_size: int = 1000,
@@ -78,6 +80,7 @@ class PendingTraceClassifierWorker(mp.Process):
         self.id = id
         self.task_queue = task_queue
         self.use_combined_repository = use_combined_repository
+        self.use_kvrocks = use_kvrocks
         self.interface_cache_size = interface_cache_size
         self.interface_cache_ttl = interface_cache_ttl
         self.emulated_traces_redis_channel = emulated_traces_redis_channel
@@ -106,10 +109,12 @@ class PendingTraceClassifierWorker(mp.Process):
                 batch = self.task_queue.get(block=True, timeout=1.0)
                 break  # got a batch, proceed to process
             except Empty:
-                # Worker is idle - attempt pool update (method checks 120s interval internally)
-                asyncio.get_event_loop().run_until_complete(
-                    get_pools_manager(redis.client).fetch_and_update_context_pools_from_redis()
-                )
+                if not self.use_kvrocks:
+                    # Worker is idle - attempt pool update (method checks the
+                    # configured fallback interval internally).
+                    asyncio.get_event_loop().run_until_complete(
+                        get_pools_manager(redis.client).fetch_and_update_context_pools_from_redis()
+                    )
         logger.debug(f"Processing batch of {len(batch)} traces in worker #{self.id}")
         asyncio.get_event_loop().run_until_complete(self._run_batch(batch))
 
@@ -118,8 +123,15 @@ class PendingTraceClassifierWorker(mp.Process):
         try:
             start = time.time()
 
-            async with async_session() as session:
-                results = await self.process_emulated_trace_batch(batch, session, self.use_combined_repository)
+            if self.use_combined_repository and not self.use_kvrocks:
+                async with async_session() as session:
+                    results = await self.process_emulated_trace_batch(
+                        batch, session, self.use_combined_repository
+                    )
+            else:
+                results = await self.process_emulated_trace_batch(
+                    batch, None, self.use_combined_repository
+                )
 
             success_count = sum(1 for _, success in results if success)
             processing_time = time.time() - start
@@ -134,18 +146,20 @@ class PendingTraceClassifierWorker(mp.Process):
     async def process_emulated_trace_batch(
             self,
             trace_keys: List[str],
-            session: AsyncSession,
+            session: Optional[AsyncSession],
             use_combined: bool = False
     ) -> List[Tuple[str, bool]]:
         results = []
 
         all_accounts = set()
+        extra_data_requests = set()
         traces_data = {}
         trace_start_ns: Dict[str, int] = {}
 
-        await get_pools_manager(redis.client).fetch_and_update_context_pools_from_redis(
-            fallback_interval=UPDATE_FALLBACK_INTERVAL
-        )
+        if not self.use_kvrocks:
+            await get_pools_manager(redis.client).fetch_and_update_context_pools_from_redis(
+                fallback_interval=UPDATE_FALLBACK_INTERVAL
+            )
 
         raw_trace_data = {}
         for trace_key in trace_keys:
@@ -167,7 +181,9 @@ class PendingTraceClassifierWorker(mp.Process):
                 trace = deserialize_event(trace_key, trace_map)
                 traces_data[trace_key] = (trace, trace_map)
 
-                all_accounts, extra_data_requests = extract_accounts_from_trace(trace)
+                accounts, requests = extract_accounts_from_trace(trace)
+                all_accounts.update(accounts)
+                extra_data_requests.update(requests)
             except Exception as e:
                 logger.error(f"Failed to extract accounts from trace {trace_key}: {e}")
                 results.append((trace_key, False))
@@ -270,7 +286,7 @@ class PendingTraceClassifierWorker(mp.Process):
 
         return results
 
-    async def get_interfaces_with_cache(self, accounts: Set[str], session: AsyncSession,
+    async def get_interfaces_with_cache(self, accounts: Set[str], session: Optional[AsyncSession],
                                         extra_requests: Set[ExtraAccountRequest]) -> Dict[str, Dict[str, Dict]]:
         if not accounts:
             return {}
@@ -288,8 +304,13 @@ class PendingTraceClassifierWorker(mp.Process):
 
         # Fetch interfaces for accounts not in cache
         if accounts_to_fetch:
-            logger.debug(f"Fetching interfaces for {len(accounts_to_fetch)} accounts from DB")
-            db_interfaces = await gather_interfaces(accounts_to_fetch, session, extra_requests=extra_requests)
+            logger.debug(f"Fetching interfaces for {len(accounts_to_fetch)} accounts")
+            if self.use_kvrocks:
+                db_interfaces = await gather_interfaces_from_kvrocks(accounts_to_fetch, extra_requests=extra_requests)
+            else:
+                if session is None:
+                    raise RuntimeError("PostgreSQL session is required for combined repository mode")
+                db_interfaces = await gather_interfaces(accounts_to_fetch, session, extra_requests=extra_requests)
 
             # Update cache with new interfaces
             for account, interfaces in db_interfaces.items():
@@ -308,15 +329,21 @@ async def start_emulated_traces_processing(settings: Settings,
                                            max_queue_size=10):
     asyncio.create_task(health_heartbeat_loop())
     use_combined = settings.use_combined_repository
+    use_kvrocks = kvrocks.is_enabled()
     if use_combined:
         logger.info("Combined repository mode enabled")
-    await start_pools_background_updater(redis.client)
+    if use_kvrocks:
+        await kvrocks.check_connection()
+        logger.info("Using Kvrocks for pending trace enrichment")
+    else:
+        await start_pools_background_updater(redis.client)
     batch_queue: mp.Queue[list[str]] = mp.Queue(maxsize=max_queue_size)
     workers: List[PendingTraceClassifierWorker] = []
     for id in range(pool_size):
         worker = PendingTraceClassifierWorker(id=id,
                                               task_queue=batch_queue,
                                               use_combined_repository=use_combined,
+                                              use_kvrocks=use_kvrocks,
                                               emulated_traces_redis_channel=settings.emulated_traces_redis_channel,
                                               emulated_traces_redis_response_channel=settings.emulated_traces_redis_response_channel,
                                               interface_cache_size=settings.interfaces_cache_size,

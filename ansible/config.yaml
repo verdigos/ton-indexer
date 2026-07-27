@@ -10,6 +10,12 @@ pg_master_host: postgres-host
 pg_master_user: postgres
 pg_master_password: REPLACEME
 
+clickhouse_host: clickhouse-host
+clickhouse_port: 9000
+clickhouse_database: ton_index
+clickhouse_user: default
+clickhouse_password: REPLACEME
+
 pendings_redis_password: REPLACEME
 
 # deploy config. Adjust this also
@@ -18,11 +24,13 @@ systemd_service_path: /etc/systemd/system
 
 services:
   api:
-    additional_args: -bind ":4100"
+    additional_args: -bind ":4100" -pg postgresql://{{ pg_readonly_user }}:{{ pg_readonly_password }}@localhost:5432/{{ pg_database }}?application_name={{ service_name }} -pg-master postgresql://{{ pg_master_user }}:{{ pg_master_password }}@{{ pg_master_host }}/{{ pg_database }}?application_name={{ service_name }}  
   index_postgres:
     additional_args: --working-dir /var/ton-index/ --db /var/ton-work/db --from 29000000
+  index_clickhouse:
+    additional_args: --working-dir /var/ton-index-clickhouse/ --db /var/ton-work/db --from 29000000
   metadata_fetcher:
-    additional_args:
+    additional_args: -pg postgresql://{{ pg_master_user }}:{{ pg_master_password }}@localhost:5432/{{ pg_database }}?application_name={{ service_name }}
   emulate_api:
     additional_args: -prefork
   trace_task_emulator:

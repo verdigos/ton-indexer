@@ -31,6 +31,20 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 add_subdirectory(external/ton EXCLUDE_FROM_ALL)
 add_subdirectory(external/libpqxx EXCLUDE_FROM_ALL)
 
+find_package(Git REQUIRED)
+set(TON_INDEXER_ROCKSDB_SECONDARY_OPEN_PATCH
+    ${CMAKE_CURRENT_SOURCE_DIR}/patches/fix-secondary-open.patch)
+add_custom_target(apply-rocksdb-secondary-open-patch
+  COMMAND ${CMAKE_COMMAND}
+    -DGIT_EXECUTABLE=${GIT_EXECUTABLE}
+    -DPATCH_FILE=${TON_INDEXER_ROCKSDB_SECONDARY_OPEN_PATCH}
+    -DPATCH_WORKING_DIRECTORY=${CMAKE_CURRENT_SOURCE_DIR}/external/ton/third-party/rocksdb
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ApplyPatch.cmake
+  VERBATIM
+)
+add_dependencies(rocksdb apply-rocksdb-secondary-open-patch)
+
+
 # The TON subtree already provides an lz4 target.  Tell clickhouse-cpp to use
 # that configured library instead of adding its bundled target with the same
 # plain name.
@@ -83,6 +97,7 @@ endfunction()
 add_ton_indexer_opentelemetry_cpp()
 
 add_subdirectory(tondb-scanner)
+add_subdirectory(ton-kvrocks-state)
 add_subdirectory(ton-marker)
 add_subdirectory(ton-observability)
 add_subdirectory(ton-mch-engine)  # defines mch-classify (linked by ton-index-postgres shadow mode)
@@ -95,8 +110,10 @@ add_subdirectory(ton-smc-debug)
 add_subdirectory(ton-trace-emulator)
 add_subdirectory(ton-trace-task-emulator)
 add_subdirectory(celldb-migrate)
+add_subdirectory(index-engine)
 
 if (PGTON)
     message("Building pgton")
     add_subdirectory(pgton)
 endif()
+

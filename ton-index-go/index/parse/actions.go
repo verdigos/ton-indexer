@@ -2,6 +2,7 @@ package parse
 
 import (
 	"fmt"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
 )
@@ -34,6 +35,182 @@ var EVAA_ASSET_ID_MAP_TESTNET = map[string]string{
 	"0x495668e908644f30322b997de8faaafc21f05aa52f8982f042dac1fe0b4d09d0": "0:B70EEC37760F24F7CC5FE52EC19BB60E595279416F219B788BA857C97DAFE0F6",
 	"0xb8a51f42ccbb912d973e58a22dda26decc7dfc83718c325c24432045ad78dc5a": "0:E8CB571401B1AADB9DEFC1FA0F72A4A5A0E0D5016903067891D763C91541E72B",
 	"0xc585bac25948a5feea8f2a9e052eb45995882b15dfb784b37cd271cc163f3aea": "0:5EE20B5240CC4CE51A4C60BAF8C9D358EF617C26463E89C6571B534972C8EEF1",
+}
+
+var stakingProviderAliases = map[string]string{
+	"tonstakers": "liquid_staking",
+}
+
+func preprocessStakingProvider(raw *models.RawAction) *string {
+	if raw.StakingDataProvider == nil {
+		return nil
+	}
+	if mapped, ok := stakingProviderAliases[*raw.StakingDataProvider]; ok {
+		return &mapped
+	}
+	return raw.StakingDataProvider
+}
+
+func ParseEvaaAssetId(assetId string) (*models.AccountAddress, bool) {
+	if assetId == EVAA_TON_ASSET_ID {
+		return nil, true
+	}
+	target_asset_map := &EVAA_ASSET_ID_MAP_MAINNET
+	if IsTestnet {
+		target_asset_map = &EVAA_ASSET_ID_MAP_TESTNET
+	}
+	if address, ok := (*target_asset_map)[assetId]; ok {
+		return new(models.AccountAddress(address)), true
+	}
+	return nil, false
+}
+
+func CollectAddressesFromAction(addr_list *map[models.AccountAddress]bool, raw_action *models.RawAction) bool {
+	success := true
+
+	if v := raw_action.Source; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.SourceSecondary; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.Destination; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.DestinationSecondary; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.Asset; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.AssetSecondary; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.Asset2; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.Asset2Secondary; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.JettonTransferResponseDestination; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.NFTTransferResponseDestination; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.JettonSwapSender; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.JettonSwapDexIncomingTransferAsset; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.JettonSwapDexIncomingTransferSource; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.JettonSwapDexIncomingTransferDestination; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.JettonSwapDexIncomingTransferSourceJettonWallet; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.JettonSwapDexIncomingTransferDestinationJettonWallet; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.JettonSwapDexOutgoingTransferAsset; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.JettonSwapDexOutgoingTransferSource; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.JettonSwapDexOutgoingTransferDestination; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.JettonSwapDexOutgoingTransferSourceJettonWallet; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.JettonSwapDexOutgoingTransferDestinationJettonWallet; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.DexDepositLiquidityDataAsset1; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.DexDepositLiquidityDataAsset2; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.DexDepositLiquidityDataTargetAsset1; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.DexDepositLiquidityDataTargetAsset2; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.DexWithdrawLiquidityDataAsset1Out; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.DexWithdrawLiquidityDataAsset2Out; v != nil {
+		(*addr_list)[*v] = true
+	}
+
+	// Multisig fields
+	if v := raw_action.DestinationSecondary; v != nil {
+		(*addr_list)[*v] = true
+	}
+
+	// EVAA fields
+	if v := raw_action.EvaaSupplySenderJettonWallet; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.EvaaSupplyRecipientJettonWallet; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.EvaaSupplyMasterJettonWallet; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.EvaaSupplyMaster; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.EvaaWithdrawRecipientJettonWallet; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.EvaaWithdrawMasterJettonWallet; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.EvaaWithdrawMaster; v != nil {
+		(*addr_list)[*v] = true
+	}
+
+	// JVault fields
+	if v := raw_action.JvaultStakeStakeWallet; v != nil {
+		(*addr_list)[*v] = true
+	}
+	for _, v := range raw_action.JvaultClaimClaimedJettons {
+		(*addr_list)[v] = true
+	}
+
+	if v := raw_action.EvaaLiquidateAssetId; v != nil {
+		if master, ok := ParseEvaaAssetId(*v); ok && master != nil {
+			(*addr_list)[*master] = true
+		}
+	}
+	// Tonco fields
+	if v := raw_action.DexDepositLiquidityDataNFTAddress; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.DexWithdrawLiquidityDataBurnedNFTAddress; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.ToncoDeployPoolJetton1Minter; v != nil {
+		(*addr_list)[*v] = true
+	}
+	if v := raw_action.ToncoDeployPoolJetton0Minter; v != nil {
+		(*addr_list)[*v] = true
+	}
+
+	// Vesting fields
+	for _, v := range raw_action.VestingAddWhitelistAccountsAdded {
+		(*addr_list)[v] = true
+	}
+
+	return success
 }
 
 func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
@@ -124,7 +301,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 		details.Source = raw.Source
 		details.Dex = raw.DexDepositLiquidityDataDex
 		details.Pool = raw.Destination
-		if raw.DexDepositLiquidityDataDex != nil && *raw.DexDepositLiquidityDataDex == "dedust" {
+		if raw.DexDepositLiquidityDataDex != nil && (*raw.DexDepositLiquidityDataDex == "dedust" || *raw.DexDepositLiquidityDataDex == "dedust_v2") {
 			details.DestinationLiquidity = raw.DestinationSecondary // deposit liquidity contract
 		} else {
 			details.DestinationLiquidity = raw.Destination // liquidity pool
@@ -149,6 +326,32 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 			details.VaultExcesses = append(details.VaultExcesses, models.ActionDetailsLiquidityVaultExcess(excess))
 		}
 		act.Details = &details
+	case "dedust_v2_claim_fees":
+		act.Details = models.ActionDetailsDedustV2ClaimFees{
+			Dex:               raw.DexWithdrawLiquidityDataDex,
+			Source:            raw.Source,
+			Pool:              raw.Destination,
+			Position:          raw.DestinationSecondary,
+			Asset1:            raw.DexWithdrawLiquidityDataAsset1Out,
+			Asset2:            raw.DexWithdrawLiquidityDataAsset2Out,
+			Amount1:           raw.DexWithdrawLiquidityDataAmount1,
+			Amount2:           raw.DexWithdrawLiquidityDataAmount2,
+			UserJettonWallet1: raw.DexWithdrawLiquidityDataUserJettonWallet1,
+			UserJettonWallet2: raw.DexWithdrawLiquidityDataUserJettonWallet2,
+			DexJettonWallet1:  raw.DexWithdrawLiquidityDataDexJettonWallet1,
+			DexJettonWallet2:  raw.DexWithdrawLiquidityDataDexJettonWallet2,
+		}
+	case "dedust_v2_claim_reward":
+		act.Details = models.ActionDetailsDedustV2ClaimReward{
+			Dex:              raw.DexWithdrawLiquidityDataDex,
+			Source:           raw.Source,
+			Pool:             raw.Destination,
+			Position:         raw.DestinationSecondary,
+			Asset:            raw.DexWithdrawLiquidityDataAsset1Out,
+			Amount:           raw.DexWithdrawLiquidityDataAmount1,
+			UserJettonWallet: raw.DexWithdrawLiquidityDataUserJettonWallet1,
+			DexJettonWallet:  raw.DexWithdrawLiquidityDataDexJettonWallet1,
+		}
 	case "dex_withdraw_liquidity":
 		var details models.ActionDetailsDexWithdrawLiquidity
 		details.Source = raw.Source
@@ -222,8 +425,8 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 		for _, peer := range raw.JettonSwapPeerSwaps {
 			details.PeerSwaps = append(details.PeerSwaps, models.ActionDetailsJettonSwapPeerSwap(peer))
 		}
-		// MinOutAmount common field in swaps but for now supported only in tonco swaps, thats why it should appear only for tonco for now
-		if details.Dex != nil && *details.Dex == "tonco" {
+		// MinOutAmount common field in swaps but for now supported only in tonco and dedust_v2 swaps
+		if details.Dex != nil && (*details.Dex == "tonco" || *details.Dex == "dedust_v2") {
 			act.Details = &models.ActionDetailsToncoJettonSwap{
 				Dex:                 details.Dex,
 				Sender:              details.Sender,
@@ -284,6 +487,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 		details.CustomPayload = raw.NFTTransferCustomPayload
 		details.ForwardPayload = raw.NFTTransferForwardPayload
 		details.ForwardAmount = raw.NFTTransferForwardAmount
+
 		if (raw.NFTTransferIsPurchase != nil && *raw.NFTTransferIsPurchase) || raw.Type == "nft_purchase" {
 			if found, marketplaceName := GetMarketplaceName(raw.NFTTransferMarketplaceAddress, raw.Asset); found {
 				details.Marketplace = &marketplaceName
@@ -487,7 +691,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 			Amount:                raw.Amount,
 		}
 	case "evaa_liquidate":
-		var asset *string
+		var asset *models.AccountAddress
 		var knownAsset bool
 		if raw.EvaaLiquidateAssetId != nil {
 			asset, knownAsset = ParseEvaaAssetId(*raw.EvaaLiquidateAssetId)
@@ -501,7 +705,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 			Collateral:       raw.Asset,
 			AssetId:          raw.EvaaLiquidateAssetId,
 			Amount:           raw.Amount,
-			Asset:            (*models.AccountAddress)(asset),
+			Asset:            asset,
 			IsKnownAsset:     knownAsset,
 		}
 	case "jvault_claim":
@@ -564,7 +768,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 		details.Destination = raw.Destination
 		details.Amount = raw.Amount
 		details.Asset = raw.Asset
-		details.BitcoinTxId = (*string)(raw.AssetSecondary)
+		details.BitcoinTxId = extraString(raw.Extra, "btc_txid")
 		details.DestinationWallet = raw.DestinationSecondary
 		act.Details = &details
 	case "tgbtc_burn", "tgbtc_burn_fallback":
@@ -578,7 +782,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 	case "tgbtc_new_key", "tgbtc_new_key_fallback":
 		var details models.ActionDetailsTgbtcNewKey
 		details.Source = raw.Source
-		details.Pubkey = (*string)(raw.SourceSecondary)
+		details.Pubkey = extraString(raw.Extra, "pubkey")
 		details.Coordinator = raw.Destination
 		details.Pegout = raw.DestinationSecondary
 		details.Amount = raw.Amount
@@ -587,7 +791,7 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 	case "tgbtc_dkg_log_fallback":
 		var details models.ActionDetailsDkgLogFallback
 		details.Coordinator = raw.Source
-		details.Pubkey = (*string)(raw.Asset)
+		details.Pubkey = extraString(raw.Extra, "pubkey")
 		details.Timestamp = raw.Value
 		act.Details = &details
 	case "tonco_deploy_pool":
@@ -943,31 +1147,11 @@ func ParseRawAction(raw *models.RawAction) (*models.Action, error) {
 	return &act, nil
 }
 
-var stakingProviderAliases = map[string]string{
-	"tonstakers": "liquid_staking",
-}
-
-func preprocessStakingProvider(raw *models.RawAction) *string {
-	if raw.StakingDataProvider == nil {
-		return nil
+func extraString(extra map[string]interface{}, key string) *string {
+	if v, ok := extra[key].(string); ok {
+		return &v
 	}
-	if mapped, ok := stakingProviderAliases[*raw.StakingDataProvider]; ok {
-		return &mapped
-	}
-	return raw.StakingDataProvider
-}
-func ParseEvaaAssetId(assetId string) (*string, bool) {
-	if assetId == EVAA_TON_ASSET_ID {
-		return nil, true
-	}
-	target_asset_map := &EVAA_ASSET_ID_MAP_MAINNET
-	if IsTestnet {
-		target_asset_map = &EVAA_ASSET_ID_MAP_TESTNET
-	}
-	if address, ok := (*target_asset_map)[assetId]; ok {
-		return &address, true
-	}
-	return nil, false
+	return nil
 }
 
 func ScanRawAction(row pgx.Row) (*models.RawAction, error) {
@@ -1192,6 +1376,7 @@ func ScanRawAction(row pgx.Row) (*models.RawAction, error) {
 		&act.CocoonClientWithdrawQueryId,
 		&act.CocoonClientWithdrawWithdrawAmount,
 
+		&act.Extra,
 		&act.AncestorType,
 		&act.Accounts,
 	)
@@ -1202,150 +1387,7 @@ func ScanRawAction(row pgx.Row) (*models.RawAction, error) {
 	return &act, nil
 }
 
-func CollectAddressesFromAction(addr_list *map[string]bool, raw_action *models.RawAction) bool {
-	success := true
-
-	if v := raw_action.Source; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.SourceSecondary; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.Destination; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.DestinationSecondary; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.Asset; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.AssetSecondary; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.Asset2; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.Asset2Secondary; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.JettonTransferResponseDestination; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.NFTTransferResponseDestination; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.JettonSwapSender; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.JettonSwapDexIncomingTransferAsset; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.JettonSwapDexIncomingTransferSource; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.JettonSwapDexIncomingTransferDestination; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.JettonSwapDexIncomingTransferSourceJettonWallet; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.JettonSwapDexIncomingTransferDestinationJettonWallet; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.JettonSwapDexOutgoingTransferAsset; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.JettonSwapDexOutgoingTransferSource; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.JettonSwapDexOutgoingTransferDestination; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.JettonSwapDexOutgoingTransferSourceJettonWallet; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.JettonSwapDexOutgoingTransferDestinationJettonWallet; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.DexDepositLiquidityDataAsset1; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.DexDepositLiquidityDataAsset2; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.DexDepositLiquidityDataTargetAsset1; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.DexDepositLiquidityDataTargetAsset2; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.DexWithdrawLiquidityDataAsset1Out; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.DexWithdrawLiquidityDataAsset2Out; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-
-	// Multisig fields
-	if v := raw_action.DestinationSecondary; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-
-	// EVAA fields
-	if v := raw_action.EvaaSupplySenderJettonWallet; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.EvaaSupplyRecipientJettonWallet; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.EvaaSupplyMasterJettonWallet; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.EvaaSupplyMaster; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.EvaaWithdrawRecipientJettonWallet; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.EvaaWithdrawMasterJettonWallet; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.EvaaWithdrawMaster; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-
-	// JVault fields
-	if v := raw_action.JvaultStakeStakeWallet; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	for _, v := range raw_action.JvaultClaimClaimedJettons {
-		(*addr_list)[(string)(v)] = true
-	}
-
-	if v := raw_action.EvaaLiquidateAssetId; v != nil {
-		if master, ok := ParseEvaaAssetId(*v); ok && master != nil {
-			(*addr_list)[(string)(*master)] = true
-		}
-	}
-	// Tonco fields
-	if v := raw_action.DexDepositLiquidityDataNFTAddress; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.DexWithdrawLiquidityDataBurnedNFTAddress; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.ToncoDeployPoolJetton1Minter; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-	if v := raw_action.ToncoDeployPoolJetton0Minter; v != nil {
-		(*addr_list)[(string)(*v)] = true
-	}
-
-	// Vesting fields
-	for _, v := range raw_action.VestingAddWhitelistAccountsAdded {
-		(*addr_list)[(string)(v)] = true
-	}
-
-	return success
+func SetIsTestnet(isTestnet bool) error {
+	IsTestnet = isTestnet
+	return nil
 }

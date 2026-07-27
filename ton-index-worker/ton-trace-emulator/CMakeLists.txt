@@ -29,7 +29,6 @@ target_compile_features(ton-trace-emulator-core PRIVATE cxx_std_20)
 
 add_executable(ton-trace-emulator
     src/main.cpp
-    src/DbEventListener.cpp
     src/TraceScheduler.cpp
     src/InvalidatedTraceTracker.cpp
     src/TraceInserter.cpp
@@ -39,6 +38,7 @@ add_executable(ton-trace-emulator
 target_include_directories(ton-trace-emulator
     PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/../external/redis-plus-plus/src
 )
+
 target_compile_features(ton-trace-emulator PRIVATE cxx_std_20)
 target_compile_definitions(ton-trace-emulator PRIVATE -DMSGPACK_USE_DEFINE_MAP)
 target_link_libraries(ton-trace-emulator ton-trace-emulator-core redis++_static msgpack-cxx)

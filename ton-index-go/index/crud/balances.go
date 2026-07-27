@@ -1,9 +1,13 @@
 package crud
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
+	"math"
+	"math/big"
+	"slices"
+	"time"
+
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -11,10 +15,6 @@ import (
 	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-go/ton/jetton"
 	"github.com/xssnick/tonutils-go/tvm/cell"
-	"math"
-	"math/big"
-	"slices"
-	"time"
 )
 
 var timings = make([]time.Duration, 0)
@@ -22,13 +22,14 @@ var timings = make([]time.Duration, 0)
 type ShortMessage struct {
 	Hash            *models.HashType
 	TransactionHash *models.HashType
+	BodyHash        *models.HashType
 	Source          *models.AccountAddress
 	Destination     *models.AccountAddress
 	Opcode          *models.OpcodeType
 	Value           *int64
 	Direction       *string
 	FwdFee          *uint64
-	Body            *string
+	Body            *models.BytesType
 	Transaction     *ShortTransaction
 }
 
@@ -144,8 +145,8 @@ func compare(t1 *ShortTransaction, t2 *ShortTransaction) int {
 	return 0
 }
 
-func CalculateBalanceChanges(traceId models.HashType, conn *pgxpool.Conn) (*BalanceChanges, map[models.HashType]*BalanceChanges, error) {
-	tx_map, err := fetchTrace(traceId, conn)
+func CalculateBalanceChanges(traceId models.HashType, conn *pgxpool.Conn, store *KvrocksStore, settings models.RequestSettings) (*BalanceChanges, map[models.HashType]*BalanceChanges, error) {
+	tx_map, err := fetchTrace(traceId, conn, store, settings)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -161,9 +162,7 @@ func CalculateBalanceChanges(traceId models.HashType, conn *pgxpool.Conn) (*Bala
 	slices.SortFunc(txs, compare)
 
 	var maxInt int32 = math.MaxInt32
-	actionsQuery, actionsArgs, err := buildActionsQuery(models.ActionRequest{TraceId: []models.HashType{traceId}}, models.UtimeRequest{}, models.LtRequest{}, models.LimitRequest{
-		Limit: &maxInt,
-	}, models.RequestSettings{
+	actionsQuery, actionsArgs, err := buildActionsQuery(models.ActionRequest{TraceId: []models.HashType{traceId}, LimitParams: models.LimitParams{Limit: &maxInt}}, models.RequestSettings{
 		MaxLimit: int(maxInt),
 	})
 	if err != nil {
@@ -252,7 +251,7 @@ func CalculateBalanceChanges(traceId models.HashType, conn *pgxpool.Conn) (*Bala
 		}
 	}
 
-	wallet_infos, err := checkJettonWallets(jetton_wallet_candidates, conn)
+	wallet_infos, err := checkJettonWallets(jetton_wallet_candidates, conn, store, settings)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -270,7 +269,7 @@ func CalculateBalanceChanges(traceId models.HashType, conn *pgxpool.Conn) (*Bala
 		queue = queue[1:]
 		if node.Msg != nil {
 			if node.Msg.Opcode != nil && *node.Msg.Opcode == 0x0f8a7ea5 && node.Msg.Body != nil {
-				body, err := base64.StdEncoding.DecodeString(*node.Msg.Body)
+				body, err := base64.StdEncoding.DecodeString(node.Msg.Body.String())
 				if err != nil {
 					log.Error(err)
 					continue
@@ -284,11 +283,9 @@ func CalculateBalanceChanges(traceId models.HashType, conn *pgxpool.Conn) (*Bala
 				err = tlb.LoadFromCell(&transfer, c.BeginParse())
 				destination_raw := transfer.Destination.String()
 				var destination models.AccountAddress
-				addr_loc := models.AccountAddressConverter(destination_raw)
-				if addr_loc.IsValid() {
-					if v, ok := addr_loc.Interface().(models.AccountAddress); ok {
-						destination = v
-					}
+				addr_loc, err := models.ParseAccountAddress(destination_raw)
+				if err == nil && addr_loc != nil {
+					destination = *addr_loc
 				}
 				source := *node.Msg.Source
 				var jetton_master models.AccountAddress
@@ -359,12 +356,32 @@ func (v *walletInfo) Equals(other *walletInfo) bool {
 	return v.address == other.address && v.owner == other.owner && v.jettonMaster == other.jettonMaster
 }
 
-func checkJettonWallets(jetton_wallet_candidates mapset.Set[models.AccountAddress], conn *pgxpool.Conn) (mapset.Set[walletInfo], error) {
+func checkJettonWallets(jetton_wallet_candidates mapset.Set[models.AccountAddress], conn *pgxpool.Conn, store *KvrocksStore, settings models.RequestSettings) (mapset.Set[walletInfo], error) {
+	if store != nil {
+		ctx, cancel := requestContext(settings)
+		defer cancel()
+		wallets, err := store.GetJettonWallets(ctx, jetton_wallet_candidates.ToSlice())
+		if err != nil {
+			return nil, err
+		}
+		jetton_wallets := mapset.NewSet[walletInfo]()
+		for _, wallet := range wallets {
+			jetton_wallets.Add(walletInfo{
+				address:      wallet.Address,
+				owner:        wallet.Owner,
+				jettonMaster: wallet.Jetton,
+			})
+		}
+		return jetton_wallets, nil
+	}
+
 	var query = `
 		SELECT address, owner, jetton
 		FROM jetton_wallets
-		WHERE address = ANY($1)`
-	rows, err := conn.Query(context.Background(), query, jetton_wallet_candidates.ToSlice())
+		WHERE address = ANY($1) AND NOT destroyed`
+	ctx, cancel := requestContext(settings)
+	defer cancel()
+	rows, err := conn.Query(ctx, query, jetton_wallet_candidates.ToSlice())
 	if err != nil {
 		return nil, err
 	}
@@ -387,8 +404,18 @@ func checkJettonWallets(jetton_wallet_candidates mapset.Set[models.AccountAddres
 	return jetton_wallets, nil
 }
 
-func fetchTrace(trace_id models.HashType, conn *pgxpool.Conn) (map[models.HashType]*ShortTransaction, error) {
-	var query = `
+func fetchTrace(trace_id models.HashType, conn *pgxpool.Conn, store *KvrocksStore, settings models.RequestSettings) (map[models.HashType]*ShortTransaction, error) {
+	var query string
+	if store != nil {
+		query = `
+		SELECT T.trace_id, Tx.hash, Tx.account, Tx.lt, Tx.total_fees, M.msg_hash, M.tx_hash,
+		M.source, M.destination, M.opcode, M.value, M.direction, M.fwd_fee, M.body_hash
+		FROM traces T
+		JOIN transactions Tx ON T.trace_id = Tx.trace_id
+		LEFT JOIN messages M ON Tx.hash = M.tx_hash
+		WHERE T.trace_id = $1`
+	} else {
+		query = `
 		SELECT T.trace_id, Tx.hash, Tx.account, Tx.lt, Tx.total_fees, M.msg_hash, M.tx_hash,
 		M.source, M.destination, M.opcode, M.value, M.direction, M.fwd_fee, MC.body
 		FROM traces T
@@ -396,37 +423,70 @@ func fetchTrace(trace_id models.HashType, conn *pgxpool.Conn) (map[models.HashTy
 		LEFT JOIN messages M ON Tx.hash = M.tx_hash
 		LEFT JOIN message_contents MC ON M.body_hash = MC.hash
 		WHERE T.trace_id = $1`
-	rows, err := conn.Query(context.Background(), query, trace_id)
+	}
+	ctx, cancel := requestContext(settings)
+	defer cancel()
+	rows, err := conn.Query(ctx, query, trace_id)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
 	var (
-		txs  = make(map[models.HashType]*ShortTransaction)
-		msgs = make(map[models.HashType]*ShortMessage)
+		txs      = make(map[models.HashType]*ShortTransaction)
+		messages []*ShortMessage
 	)
 	for rows.Next() {
 		var (
 			t = ShortTransaction{}
 			m = ShortMessage{}
 		)
-		if err := rows.Scan(&trace_id, &t.Hash, &t.Account, &t.Lt, &t.TotalFees, &m.Hash, &m.TransactionHash,
-			&m.Source, &m.Destination, &m.Opcode, &m.Value, &m.Direction, &m.FwdFee, &m.Body); err != nil {
-			return nil, err
+		if store != nil {
+			if err := rows.Scan(&trace_id, &t.Hash, &t.Account, &t.Lt, &t.TotalFees, &m.Hash, &m.TransactionHash,
+				&m.Source, &m.Destination, &m.Opcode, &m.Value, &m.Direction, &m.FwdFee, &m.BodyHash); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := rows.Scan(&trace_id, &t.Hash, &t.Account, &t.Lt, &t.TotalFees, &m.Hash, &m.TransactionHash,
+				&m.Source, &m.Destination, &m.Opcode, &m.Value, &m.Direction, &m.FwdFee, &m.Body); err != nil {
+				return nil, err
+			}
 		}
 		if _, ok := txs[t.Hash]; !ok {
 			txs[t.Hash] = &t
 		}
 		if m.Hash != nil {
 			tx := txs[*m.TransactionHash]
-			msgs[*m.Hash] = &m
+			msg := &m
 			if *m.Direction == "out" {
-				tx.OutMsgs = append(tx.OutMsgs, &m)
+				tx.OutMsgs = append(tx.OutMsgs, msg)
 			} else {
-				tx.InMsg = &m
+				tx.InMsg = msg
 			}
-			m.Transaction = tx
+			msg.Transaction = tx
+			messages = append(messages, msg)
+		}
+	}
+	if store != nil && len(messages) > 0 {
+		hashes := make([]models.HashType, 0, len(messages))
+		for _, msg := range messages {
+			if msg.BodyHash != nil {
+				hashes = append(hashes, *msg.BodyHash)
+			}
+		}
+		ctx, cancel := requestContext(settings)
+		defer cancel()
+		contents, err := store.GetMessageContents(ctx, hashes)
+		if err != nil {
+			return nil, err
+		}
+		for _, msg := range messages {
+			if msg.BodyHash == nil {
+				continue
+			}
+			if content, ok := contents[*msg.BodyHash]; ok {
+				msg.Body = content.Body
+			}
 		}
 	}
 	return txs, nil

@@ -2,21 +2,15 @@ package crud
 
 import (
 	"context"
+
 	"github.com/toncenter/ton-indexer/ton-index-go/index/models"
 	"github.com/toncenter/ton-indexer/ton-index-go/index/parse"
-
-	"github.com/lib/pq"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Query GetGems Sales
 func queryGetgemsSalesImpl(addresses []models.AccountAddress, conn *pgxpool.Conn, settings models.RequestSettings) ([]models.RawNFTSale, error) {
-	addrStrings := make([]string, len(addresses))
-	for i, a := range addresses {
-		addrStrings[i] = string(a)
-	}
-
 	query := `
 		SELECT
 			'getgems_sale' as sale_type,
@@ -51,15 +45,15 @@ func queryGetgemsSalesImpl(addresses []models.AccountAddress, conn *pgxpool.Conn
 			C.code_hash as collection_code_hash,
 			C.last_transaction_lt as collection_last_transaction_lt
 		FROM getgems_nft_sales as s
-		LEFT JOIN nft_items N ON s.nft_address = N.address
-		LEFT JOIN nft_collections C ON N.collection_address = C.address
-		WHERE s.address = ANY($1)
+		LEFT JOIN nft_items N ON s.nft_address = N.address AND NOT N.destroyed
+		LEFT JOIN nft_collections C ON N.collection_address = C.address AND NOT C.destroyed
+		WHERE s.address = ANY($1::tonaddr[]) AND NOT s.destroyed
 	`
 
 	ctx, cancel_ctx := context.WithTimeout(context.Background(), settings.Timeout)
 	defer cancel_ctx()
 
-	rows, err := conn.Query(ctx, query, pq.Array(addrStrings))
+	rows, err := conn.Query(ctx, query, tonaddrArrayParam(addresses))
 	if err != nil {
 		return nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
@@ -118,11 +112,6 @@ func queryGetgemsSalesImpl(addresses []models.AccountAddress, conn *pgxpool.Conn
 
 // Query GetGems Auctions
 func queryGetgemsAuctionsImpl(addresses []models.AccountAddress, conn *pgxpool.Conn, settings models.RequestSettings) ([]models.RawNFTSale, error) {
-	addrStrings := make([]string, len(addresses))
-	for i, a := range addresses {
-		addrStrings[i] = string(a)
-	}
-
 	query := `
 		SELECT
 			'getgems_auction' as sale_type,
@@ -166,15 +155,15 @@ func queryGetgemsAuctionsImpl(addresses []models.AccountAddress, conn *pgxpool.C
 			C.code_hash as collection_code_hash,
 			C.last_transaction_lt as collection_last_transaction_lt
 		FROM getgems_nft_auctions as a
-		LEFT JOIN nft_items N ON a.nft_addr = N.address
-		LEFT JOIN nft_collections C ON N.collection_address = C.address
-		WHERE a.address = ANY($1)
+		LEFT JOIN nft_items N ON a.nft_addr = N.address AND NOT N.destroyed
+		LEFT JOIN nft_collections C ON N.collection_address = C.address AND NOT C.destroyed
+		WHERE a.address = ANY($1::tonaddr[]) AND NOT a.destroyed
 	`
 
 	ctx, cancel_ctx := context.WithTimeout(context.Background(), settings.Timeout)
 	defer cancel_ctx()
 
-	rows, err := conn.Query(ctx, query, pq.Array(addrStrings))
+	rows, err := conn.Query(ctx, query, tonaddrArrayParam(addresses))
 	if err != nil {
 		return nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
@@ -242,11 +231,6 @@ func queryGetgemsAuctionsImpl(addresses []models.AccountAddress, conn *pgxpool.C
 
 // Query Telemint NFTs
 func queryTelemintImpl(addresses []models.AccountAddress, conn *pgxpool.Conn, settings models.RequestSettings) ([]models.RawNFTSale, error) {
-	addrStrings := make([]string, len(addresses))
-	for i, a := range addresses {
-		addrStrings[i] = string(a)
-	}
-
 	query := `
 		SELECT
 			'telemint' as sale_type,
@@ -270,13 +254,13 @@ func queryTelemintImpl(addresses []models.AccountAddress, conn *pgxpool.Conn, se
 			t.code_hash,
 			t.data_hash
 		FROM telemint_nft_items as t
-		WHERE t.address = ANY($1)
+		WHERE t.address = ANY($1::tonaddr[]) AND NOT t.destroyed
 	`
 
 	ctx, cancel_ctx := context.WithTimeout(context.Background(), settings.Timeout)
 	defer cancel_ctx()
 
-	rows, err := conn.Query(ctx, query, pq.Array(addrStrings))
+	rows, err := conn.Query(ctx, query, tonaddrArrayParam(addresses))
 	if err != nil {
 		return nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
@@ -335,26 +319,37 @@ func queryTelemintImpl(addresses []models.AccountAddress, conn *pgxpool.Conn, se
 	return results, nil
 }
 
-func queryNFTSalesImpl(addresses []models.AccountAddress, conn *pgxpool.Conn, settings models.RequestSettings) ([]models.NFTSale, error) {
-	// Query all three sources
-	sales, err := queryGetgemsSalesImpl(addresses, conn, settings)
-	if err != nil {
-		return nil, err
-	}
+func queryNFTSalesImpl(addresses []models.AccountAddress, conn *pgxpool.Conn, settings models.RequestSettings, store *KvrocksStore) ([]models.NFTSale, error) {
+	allRaw := []models.RawNFTSale{}
+	if store != nil {
+		ctx, cancel_ctx := context.WithTimeout(context.Background(), settings.Timeout)
+		defer cancel_ctx()
+		var err error
+		allRaw, err = store.GetNFTSales(ctx, addresses)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Query all three sources
+		sales, err := queryGetgemsSalesImpl(addresses, conn, settings)
+		if err != nil {
+			return nil, err
+		}
 
-	auctions, err := queryGetgemsAuctionsImpl(addresses, conn, settings)
-	if err != nil {
-		return nil, err
-	}
+		auctions, err := queryGetgemsAuctionsImpl(addresses, conn, settings)
+		if err != nil {
+			return nil, err
+		}
 
-	telemint, err := queryTelemintImpl(addresses, conn, settings)
-	if err != nil {
-		return nil, err
-	}
+		telemint, err := queryTelemintImpl(addresses, conn, settings)
+		if err != nil {
+			return nil, err
+		}
 
-	// Combine all results
-	allRaw := append(sales, auctions...)
-	allRaw = append(allRaw, telemint...)
+		// Combine all results
+		allRaw = append(sales, auctions...)
+		allRaw = append(allRaw, telemint...)
+	}
 
 	// Parse to NFTSale
 	results := []models.NFTSale{}
@@ -381,32 +376,37 @@ func (db *DbClient) QueryNFTSales(
 		return nil, nil, nil, models.IndexError{Code: 422, Message: "maximum 1000 addresses allowed"}
 	}
 
-	conn, err := db.Pool.Acquire(context.Background())
-	if err != nil {
-		return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+	var conn *pgxpool.Conn
+	releaseConn := func() {}
+	var err error
+	if db.Kvrocks == nil {
+		conn, releaseConn, err = acquireConnForRequest(db.Pool, settings)
+		if err != nil {
+			return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+		}
 	}
-	defer conn.Release()
+	defer releaseConn()
 
-	res, err := queryNFTSalesImpl(sales_req.Address, conn, settings)
+	res, err := queryNFTSalesImpl(sales_req.Address, conn, settings, db.Kvrocks)
 	if err != nil {
 		return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 	}
 
 	book := models.AddressBook{}
 	metadata := models.Metadata{}
-	addr_list := []string{}
+	addr_list := []models.AccountAddress{}
 
 	// Collect all addresses for AddressBook and Metadata
 	for _, sale := range res {
-		addr_list = append(addr_list, string(sale.Address))
+		addr_list = append(addr_list, sale.Address)
 		if sale.NftAddress != nil {
-			addr_list = append(addr_list, string(*sale.NftAddress))
+			addr_list = append(addr_list, *sale.NftAddress)
 		}
 		if sale.NftOwnerAddress != nil {
-			addr_list = append(addr_list, string(*sale.NftOwnerAddress))
+			addr_list = append(addr_list, *sale.NftOwnerAddress)
 		}
 		if sale.MarketplaceAddress != nil {
-			addr_list = append(addr_list, string(*sale.MarketplaceAddress))
+			addr_list = append(addr_list, *sale.MarketplaceAddress)
 		}
 
 		// Collect addresses from Details based on type
@@ -414,61 +414,69 @@ func (db *DbClient) QueryNFTSales(
 		case "getgems_sale":
 			if details, ok := sale.Details.(*models.NFTSaleDetailsGetgemsSale); ok {
 				if details.MarketplaceFeeAddress != nil {
-					addr_list = append(addr_list, string(*details.MarketplaceFeeAddress))
+					addr_list = append(addr_list, *details.MarketplaceFeeAddress)
 				}
 				if details.RoyaltyAddress != nil {
-					addr_list = append(addr_list, string(*details.RoyaltyAddress))
+					addr_list = append(addr_list, *details.RoyaltyAddress)
 				}
 			}
 		case "getgems_auction":
 			if details, ok := sale.Details.(*models.NFTSaleDetailsGetgemsAuction); ok {
 				if details.LastMember != nil {
-					addr_list = append(addr_list, string(*details.LastMember))
+					addr_list = append(addr_list, *details.LastMember)
 				}
 				if details.MpFeeAddress != nil {
-					addr_list = append(addr_list, string(*details.MpFeeAddress))
+					addr_list = append(addr_list, *details.MpFeeAddress)
 				}
 				if details.RoyaltyFeeAddress != nil {
-					addr_list = append(addr_list, string(*details.RoyaltyFeeAddress))
+					addr_list = append(addr_list, *details.RoyaltyFeeAddress)
 				}
 			}
 		case "telemint":
 			if details, ok := sale.Details.(*models.NFTSaleDetailsTeleitem); ok {
 				if details.BidderAddress != nil {
-					addr_list = append(addr_list, string(*details.BidderAddress))
+					addr_list = append(addr_list, *details.BidderAddress)
 				}
 				if details.BeneficiaryAddress != nil {
-					addr_list = append(addr_list, string(*details.BeneficiaryAddress))
+					addr_list = append(addr_list, *details.BeneficiaryAddress)
 				}
 				if details.RoyaltyDestination != nil {
-					addr_list = append(addr_list, string(*details.RoyaltyDestination))
+					addr_list = append(addr_list, *details.RoyaltyDestination)
 				}
 			}
 		}
 
 		// Add NFT item and collection addresses
 		if sale.NftItem != nil {
-			addr_list = append(addr_list, string(sale.NftItem.Address))
+			addr_list = append(addr_list, sale.NftItem.Address)
 			if sale.NftItem.CollectionAddress != nil {
-				addr_list = append(addr_list, string(*sale.NftItem.CollectionAddress))
+				addr_list = append(addr_list, *sale.NftItem.CollectionAddress)
 			}
 			if sale.NftItem.OwnerAddress != nil {
-				addr_list = append(addr_list, string(*sale.NftItem.OwnerAddress))
+				addr_list = append(addr_list, *sale.NftItem.OwnerAddress)
 			}
 		}
 	}
 
 	if len(addr_list) > 0 {
-		if !settings.NoAddressBook {
-			book, err = QueryAddressBookImpl(addr_list, conn, settings)
+		if db.Kvrocks != nil {
+			releaseConn()
+			book, metadata, err = db.queryKvrocksEnrichment(addr_list, settings)
 			if err != nil {
 				return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
 			}
-		}
-		if !settings.NoMetadata {
-			metadata, err = QueryMetadataImpl(addr_list, conn, settings)
-			if err != nil {
-				return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+		} else {
+			if !settings.NoAddressBook {
+				book, err = QueryAddressBookImpl(addr_list, conn, settings)
+				if err != nil {
+					return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+				}
+			}
+			if !settings.NoMetadata {
+				metadata, err = QueryMetadataImpl(addr_list, conn, settings)
+				if err != nil {
+					return nil, nil, nil, models.IndexError{Code: 500, Message: err.Error()}
+				}
 			}
 		}
 	}
