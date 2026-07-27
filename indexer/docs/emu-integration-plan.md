@@ -19,7 +19,14 @@ emulator must run as root; `ulimit -n 99999` before launch; runs indefinitely �
 every test run time-boxed / killable — systemd transient units
 (`systemd-run -p LimitNOFILE=99999 -p RuntimeMaxSec=…`) fit all three constraints).
 
-## 1. Emulator facts (survey 2026-07-30, verified at merge-v12; file:line in repo)
+## 1. Emulator facts (survey 2026-07-30, verified at merge-v12 PRE-v1.3)
+
+> ⚠ STALENESS (2026-07-27 v1.3 merge): upstream/v1.3 touched 10 ton-trace-emulator
+> files incl. Serializer.hpp, TraceInserter.cpp, BlockEmulator.*, DbEventListener.*
+> (new), OverlayListener.cpp, CMakeLists. The facts below (esp. file:line refs, the
+> RedisTraceNode serialization shape, variant indices, and the insert_trace_ seam)
+> MUST be re-verified against the merged tree before EM1 design. Core direction (§0)
+> unaffected.
 
 - Actor tree (`ton-trace-emulator/src/main.cpp:107`): DbScanner (secondary rocksdb on
   the node's work DB) + RedisInsertManager + TraceEmulatorScheduler. Trace sources ×4:

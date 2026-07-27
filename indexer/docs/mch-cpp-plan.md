@@ -21,7 +21,7 @@ parallel by different agents ONLY with the stated file-ownership boundaries.
    stale; when doc and code disagree, code wins and the doc gap gets reported (not silently
    edited).
 4. **A/B discipline.** Every C++ layer is verified by a byte-identical diff against a Python
-   twin over the full fixture corpus (`indexer/tests/traces/*.lz4`, 147 files). Twins live in
+   twin over the full fixture corpus (`indexer/tests/traces/*.lz4`, 165 files as of the v1.3 merge). Twins live in
    `ton-index-worker/ton-mch-engine/twins/` (COMMITTED since 2026-07-11 — they encode gate
    semantics too expensive to reconstruct; see twins/README.md; keep their CPP_* surface
    lists in sync with the C++ registries). Dump formats use only cross-language-proven
@@ -57,7 +57,7 @@ parallel by different agents ONLY with the stated file-ownership boundaries.
 ## 1. Gate set (run all; exact commands) — CURRENT as of 2026-07-11
 
 Paths: `EXE = ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe`,
-`ENG = ton-index-worker/ton-mch-engine`, `TR = indexer/tests/traces` (147 fixtures),
+`ENG = ton-index-worker/ton-mch-engine`, `TR = indexer/tests/traces` (165 fixtures post-v1.3-merge),
 `ART = ENG/ir/mch_ir.json` (the ONE current declarative artifact, 32 matchers all-declarative,
 version "1.0"; REPRODUCIBLE: `python -m indexer.events.mch.ir_emit --manifest ENG/ir/emit_manifest.json`
 — legacy builder-tier jetton specs excluded from prod artifact 2026-07-12, conformance-only).
@@ -76,10 +76,10 @@ CMake-integrated (regenerate automatically from ir/*.json; sha-paired, exit 2 on
 | Shape/self tests | `EXE --shape-test`; `ctest --test-dir <builddir>/ton-mch-engine -R mch` | ALL PASS; 5/5 |
 | Msg parsing | `EXE --parse-dump -T TR` vs `twins/py_msg_dump.py` | diff 0 |
 | Match walker | `EXE --match -I ART -T TR` vs `twins/py_match_dump.py` | diff 0 (328 lines) |
-| Classify | `EXE --classify -I ART -T TR` vs `twins/py_classify.py` | diff 0 (196 ACTIONs) |
-| Action rows | `EXE --actions -I ART -T TR` vs `twins/py_actions.py` | diff 0 (196 rows, accounts + cellhash fields) |
-| Schema loader | `EXE --classify-schema -I ART -T TR` vs `--classify` (and --actions-schema vs --actions) | diff 0 (196) |
-| Prod path (G3) | `EXE --classify-prod -I ART -T TR` vs `--classify` (and --actions-prod vs --actions) | diff 0 (196) |
+| Classify | `EXE --classify -I ART -T TR` vs `twins/py_classify.py` | diff 0 (227 ACTIONs post-v1.3-merge) |
+| Action rows | `EXE --actions -I ART -T TR` vs `twins/py_actions.py` | diff 0 (227 rows post-v1.3-merge, accounts + cellhash fields) |
+| Schema loader | `EXE --classify-schema -I ART -T TR` vs `--classify` (and --actions-schema vs --actions) | diff 0 (227) |
+| Prod path (G3) | `EXE --classify-prod -I ART -T TR` vs `--classify` (and --actions-prod vs --actions) | diff 0 (227) |
 | Codegen determinism | covered by ctest `mch_codegen_selftest` + CMake regen | byte-identical |
 
 Notes: 2 pytest skips = dns + stonfi_v2_provide (anchor opcodes absent from corpus).
