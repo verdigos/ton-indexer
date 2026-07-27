@@ -171,7 +171,21 @@ target_include_directories(mch-classify
 )
 target_compile_features(mch-classify PUBLIC cxx_std_20)
 
-find_package(lz4 CONFIG REQUIRED)
+# lz4: Windows/vcpkg ships an lz4 CONFIG package (lz4::lz4). Linux builds have no
+# such package — external/ton's BuildLZ4 builds third-party lz4 and FORCE-caches
+# LZ4_LIBRARIES / LZ4_INCLUDE_DIRS; wrap those in an imported target.
+if(NOT TARGET lz4::lz4)
+  find_package(lz4 CONFIG QUIET)
+endif()
+if(NOT TARGET lz4::lz4)
+  if(NOT LZ4_LIBRARIES OR NOT LZ4_INCLUDE_DIRS)
+    message(FATAL_ERROR "lz4 not found: no lz4 CONFIG package and ton's LZ4_LIBRARIES/LZ4_INCLUDE_DIRS are unset")
+  endif()
+  add_library(lz4::lz4 UNKNOWN IMPORTED)
+  set_target_properties(lz4::lz4 PROPERTIES
+    IMPORTED_LOCATION "${LZ4_LIBRARIES}"
+    INTERFACE_INCLUDE_DIRECTORIES "${LZ4_INCLUDE_DIRS}")
+endif()
 # ton-abi (W12 bridge): mch-classify -> ton-abi ONLY (ton-abi stays mch-free).
 target_link_libraries(mch-classify PUBLIC tondb-scanner tdactor lz4::lz4 ton-abi)
 add_dependencies(mch-classify mch_generate_sources)
