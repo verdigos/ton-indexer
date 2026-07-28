@@ -5,9 +5,11 @@
 #include "td/utils/JsonBuilder.h"
 #include "td/utils/base64.h"
 #include "td/utils/filesystem.h"
+#include "vm/boc.h"
 
 #include <functional>
 #include <variant>
+#include <vector>
 
 namespace mch {
 
@@ -74,20 +76,20 @@ void put_addr(td::JsonObjectScope &o, td::Slice key, const std::optional<block::
   }
 }
 
-void store_nodes(td::JsonValueScope *scope, const EmuTraceSnapshot &snap) {
+void store_nodes(td::JsonValueScope *scope, const EmuTraceView &view,
+                 const std::vector<std::string> &tx_bocs) {
   auto arr = scope->enter_array();
-  for (const EmuTxRec &n : snap.nodes) {
+  for (std::size_t i = 0; i < view.nodes.size(); i++) {
+    const EmuTxRef &n = view.nodes[i];
     auto value = arr.enter_value();
     auto o = value.enter_object();
     o("account", convert::to_raw_address(n.address));
     o("mc_seqno", static_cast<td::int64>(n.mc_seqno));
     o("finality", td::Slice(finality_name(n.finality)));
-    // The snapshot already carries the BOC bytes convert::to_bytes would have
-    // produced (EmuShadow.cpp), so this is only the base64 half of it.
-    if (n.tx_boc.empty()) {
+    if (tx_bocs[i].empty()) {
       o("tx_boc", td::JsonNull());
     } else {
-      o("tx_boc", td::base64_encode(n.tx_boc.as_slice()));
+      o("tx_boc", tx_bocs[i]);
     }
   }
 }
@@ -132,9 +134,9 @@ void store_one_interface(td::JsonObjectScope &per_addr,
   }
 }
 
-void store_interfaces(td::JsonValueScope *scope, const EmuTraceSnapshot &snap) {
+void store_interfaces(td::JsonValueScope *scope, const EmuTraceView &view) {
   auto root = scope->enter_object();
-  for (const auto &[addr, ifaces] : snap.interfaces) {
+  for (const auto &[addr, ifaces] : view.interfaces) {
     root(convert::to_raw_address(addr), JsonFn([&ifaces](td::JsonValueScope *s) {
            auto per_addr = s->enter_object();
            for (const schema::BlockchainInterfaceV2 &iface : ifaces) {
@@ -146,26 +148,41 @@ void store_interfaces(td::JsonValueScope *scope, const EmuTraceSnapshot &snap) {
 
 }  // namespace
 
-td::Status write_capture(const std::string &dir, const EmuTraceSnapshot &snap,
-                         int global_version) {
+td::Status write_capture(const std::string &dir, const EmuTraceView &view, int global_version) {
   EmuFinality root_finality =
-      snap.nodes.empty() ? EmuFinality::emulated : snap.nodes.front().finality;
+      view.nodes.empty() ? EmuFinality::emulated : view.nodes.front().finality;
+
+  // EM1.5: the view carries live cells, so the BOC bytes the format is built
+  // around are produced HERE — the same call/mode as the emulator's own Redis
+  // path (convert::to_bytes, Serializer.hpp), so the format is unchanged and an
+  // EM1 capture stays replayable.
+  std::vector<std::string> tx_bocs(view.nodes.size());
+  for (std::size_t i = 0; i < view.nodes.size(); i++) {
+    if (view.nodes[i].tx_root.is_null()) {
+      continue;
+    }
+    TRY_RESULT_PREFIX(boc,
+                      vm::std_boc_serialize(view.nodes[i].tx_root,
+                                            vm::BagOfCells::Mode::WithCRC32C),
+                      PSLICE() << "node " << i << ": ");
+    tx_bocs[i] = td::base64_encode(boc.as_slice());
+  }
 
   td::JsonBuilder jb;
   {
     auto root = jb.enter_object();
-    root("trace_id", snap.trace_id);
-    root("tx_limit_exceeded", td::JsonBool(snap.tx_limit_exceeded));
+    root("trace_id", view.trace_id);
+    root("tx_limit_exceeded", td::JsonBool(view.tx_limit_exceeded));
     root("global_version", static_cast<td::int64>(global_version));
-    root("nodes", JsonFn([&snap](td::JsonValueScope *s) { store_nodes(s, snap); }));
-    root("interfaces", JsonFn([&snap](td::JsonValueScope *s) { store_interfaces(s, snap); }));
+    root("nodes", JsonFn([&](td::JsonValueScope *s) { store_nodes(s, view, tx_bocs); }));
+    root("interfaces", JsonFn([&view](td::JsonValueScope *s) { store_interfaces(s, view); }));
   }
   if (jb.string_builder().is_error()) {
     return td::Status::Error("capture JSON buffer overflow");
   }
 
   std::string path =
-      dir + "/" + urlsafe(snap.trace_id) + "." + finality_name(root_finality) + ".json";
+      dir + "/" + urlsafe(view.trace_id) + "." + finality_name(root_finality) + ".json";
   return td::write_file(path, jb.string_builder().as_cslice());
 }
 

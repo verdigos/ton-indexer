@@ -31,6 +31,7 @@ int main(int argc, char *argv[]) {
   std::string mch_artifact;
   std::string mch_capture_dir;
   bool mch_classify_only = false;
+  bool mch_classify_nonblocking = false;
   
   td::OptionParser p;
   p.set_description("Emulate TON traces");
@@ -94,6 +95,10 @@ int main(int argc, char *argv[]) {
     mch_classify_only = true;
   });
 
+  p.add_option('\0', "mch-classify-nonblocking", "Insert traces without waiting for shadow classification (requires --mch-artifact)", [&]() {
+    mch_classify_nonblocking = true;
+  });
+
 
   auto S = p.run(argc, argv);
   if (S.is_error()) {
@@ -116,8 +121,8 @@ int main(int argc, char *argv[]) {
     std::_Exit(2);
   }
 
-  if (mch_artifact.empty() && (!mch_capture_dir.empty() || mch_classify_only)) {
-    std::cerr << "'--mch-capture' and '--mch-classify-only' require '--mch-artifact'" << std::endl;
+  if (mch_artifact.empty() && (!mch_capture_dir.empty() || mch_classify_only || mch_classify_nonblocking)) {
+    std::cerr << "'--mch-capture', '--mch-classify-only' and '--mch-classify-nonblocking' require '--mch-artifact'" << std::endl;
     std::_Exit(2);
   }
 
@@ -131,10 +136,13 @@ int main(int argc, char *argv[]) {
     }
     mch_shadow.prep = r_prep.move_as_ok();
     mch_shadow.capture_dir = mch_capture_dir;
-    mch_shadow.pending = std::make_shared<std::atomic<std::size_t>>(0);
+    mch_shadow.nonblocking = mch_classify_nonblocking;
+    mch_shadow.gate = std::make_shared<mch::EmuGate>();
     LOG(INFO) << "MCH emu shadow ENABLED (artifact " << mch_artifact << ")"
               << (mch_capture_dir.empty() ? "" : ", capture dir " + mch_capture_dir)
-              << (mch_classify_only ? ", classify-only (no Redis writes)" : "");
+              << (mch_classify_only ? ", classify-only (no Redis writes)" : "")
+              << (mch_classify_nonblocking ? ", nonblocking (insert does not wait)"
+                                           : ", insert gated on classification");
   }
 
   td::actor::Scheduler scheduler({threads});

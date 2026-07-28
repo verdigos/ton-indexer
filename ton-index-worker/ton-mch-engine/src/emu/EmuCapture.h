@@ -13,7 +13,9 @@
 namespace mch {
 
 // Writes <dir>/<trace_id_urlsafe>.<root finality>.json. The directory must
-// exist (the actor creates it once at start-up).
-td::Status write_capture(const std::string &dir, const EmuTraceSnapshot &snap, int global_version);
+// exist (the actor creates it once at start-up). Serializes the view's live tx
+// cells — the ONE place that still needs BOC bytes; may throw vm::VmError, so
+// call it inside the actor's guard.
+td::Status write_capture(const std::string &dir, const EmuTraceView &view, int global_version);
 
 }  // namespace mch

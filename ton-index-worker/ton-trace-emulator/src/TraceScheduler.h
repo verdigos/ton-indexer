@@ -117,7 +117,8 @@ class TraceEmulatorScheduler : public td::actor::Actor {
       // the listeners, so a send_closure'd setter would land too late.
       if (mch_shadow_.prep) {
         mch_classifier_ = td::actor::create_actor<mch::EmuClassifierActor>("MchEmuClassifier", mch_shadow_);
-        insert_trace_ = mch::decorate_sink(std::move(insert_trace_), mch_classifier_.get(), mch_shadow_.pending);
+        insert_trace_ = mch::decorate_sink(std::move(insert_trace_), mch_classifier_.get(),
+                                           mch_shadow_.gate, mch_shadow_.nonblocking);
       }
       external_message_admission_ = std::make_shared<ExternalMessageAdmission>();
       invalidated_trace_tracker_ = td::actor::create_actor<InvalidatedTraceTracker>("InvalidatedTraceTracker", redis_dsn_);

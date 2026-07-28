@@ -14,10 +14,10 @@
 
 namespace mch {
 
-// Per node: deserialize tx_boc, ParseQuery::parse_transaction(tx_root,
-// address.workchain, gv), then mc_seqno from the wrapper node. ANY node failing
-// => whole-trace error: a partial tree would classify wrong, never silently.
-td::Result<std::vector<schema::Transaction>> emu_to_schema_txs(const EmuTraceSnapshot &snap,
+// Per node: ParseQuery::parse_transaction(tx_root, address.workchain, gv), then
+// mc_seqno from the wrapper node. ANY node failing => whole-trace error: a
+// partial tree would classify wrong, never silently.
+td::Result<std::vector<schema::Transaction>> emu_to_schema_txs(const EmuTraceView &view,
                                                                int global_version);
 
 }  // namespace mch

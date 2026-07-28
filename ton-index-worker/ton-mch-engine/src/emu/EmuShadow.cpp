@@ -7,9 +7,7 @@
 #include "td/utils/base64.h"
 #include "td/utils/logging.h"
 #include "td/utils/overloaded.h"
-#include "vm/boc.h"
 
-#include <exception>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -27,12 +25,45 @@ EmuFinality to_emu_finality(FinalityState f) {
   return EmuFinality::emulated;
 }
 
+// The gate decision (§16.1/§16.3), taken on the emulator's own thread. False
+// means the emission goes straight to the insert without being classified.
+bool admit(EmuGate &gate, std::int64_t now_us,
+           td::actor::ActorId<EmuClassifierActor> classifier) {
+  if (gate.disabled.load(std::memory_order_relaxed)) {
+    td::actor::send_closure(classifier, &EmuClassifierActor::note_shed,
+                            EmuClassifyOutcome::bypassed_disabled);
+    return false;
+  }
+  if (gate.in_flight.load(std::memory_order_relaxed) < kMaxInFlightClassify) {
+    return true;
+  }
+  // Full AND nothing has come back for kStallFailOpenUs: the one stall neither
+  // the cap nor the deadline can clear by itself (a non-terminating loop inside
+  // the engine wedges the classifier's thread forever). Sticky, and loud.
+  // No zero check — the gate seeds last_response_us at construction, so
+  // staleness is measured from process start and a wedge on the FIRST request
+  // trips this too.
+  std::int64_t last = gate.last_response_us.load(std::memory_order_relaxed);
+  if (now_us - last > kStallFailOpenUs &&
+      !gate.disabled.exchange(true, std::memory_order_relaxed)) {
+    LOG(ERROR) << "[mch-emu] classifier stalled (no response for " << (now_us - last) / 1000
+               << " ms with " << kMaxInFlightClassify
+               << " requests in flight), shadow classification DISABLED";
+  }
+  td::actor::send_closure(classifier, &EmuClassifierActor::note_shed,
+                          EmuClassifyOutcome::shed_admission);
+  return false;
+}
+
 }  // namespace
 
-td::Result<EmuTraceSnapshot> snapshot_trace(const ::Trace &trace) {
-  EmuTraceSnapshot snap;
-  snap.trace_id = td::base64_encode(trace.ext_in_msg_hash_norm.as_slice());
-  snap.tx_limit_exceeded = trace.tx_limit_exceeded;
+EmuTraceView make_view(const ::Trace &trace) {
+  EmuTraceView view;
+  view.trace_id = td::base64_encode(trace.ext_in_msg_hash_norm.as_slice());
+  view.tx_limit_exceeded = trace.tx_limit_exceeded;
+  // Everything the classifier will read off a block's lazy cell store stays
+  // loadable through this handle, whatever the block emulator does next.
+  view.anchor = trace.cell_anchor;
 
   std::vector<const TraceNode *> stack;
   if (trace.root) {
@@ -41,17 +72,12 @@ td::Result<EmuTraceSnapshot> snapshot_trace(const ::Trace &trace) {
   while (!stack.empty()) {
     const TraceNode *node = stack.back();
     stack.pop_back();
-    EmuTxRec rec;
+    EmuTxRef rec;
     rec.address = node->address;
-    // Same call as the Redis path (convert::to_bytes, Serializer.hpp), so the
-    // bytes are the ones the emulator already produces for these cells.
-    if (node->transaction_root.not_null()) {
-      TRY_RESULT_ASSIGN(rec.tx_boc, vm::std_boc_serialize(node->transaction_root,
-                                                          vm::BagOfCells::Mode::WithCRC32C));
-    }
+    rec.tx_root = node->transaction_root;
     rec.mc_seqno = node->mc_block_seqno;
     rec.finality = to_emu_finality(node->finality_state);
-    snap.nodes.push_back(std::move(rec));
+    view.nodes.push_back(std::move(rec));
     for (auto it = node->children.rbegin(); it != node->children.rend(); ++it) {
       if (*it) {
         stack.push_back(it->get());
@@ -75,50 +101,59 @@ td::Result<EmuTraceSnapshot> snapshot_trace(const ::Trace &trace) {
                  iface);
     }
     if (!adapted.empty()) {
-      snap.interfaces.emplace(addr, std::move(adapted));
+      view.interfaces.emplace(addr, std::move(adapted));
     }
   }
-  return snap;
+  return view;
 }
 
 EmuTraceSink decorate_sink(EmuTraceSink inner, td::actor::ActorId<EmuClassifierActor> classifier,
-                           std::shared_ptr<std::atomic<std::size_t>> pending) {
-  return [inner = std::move(inner), classifier, pending = std::move(pending)](
+                           std::shared_ptr<EmuGate> gate, bool nonblocking) {
+  return [inner = std::move(inner), classifier, gate = std::move(gate), nonblocking](
              ::Trace trace, td::Promise<td::Unit> promise, MeasurementPtr measurement) {
-    // Snapshot BEFORE the inner sink consumes the trace.
-    if (pending->fetch_add(1, std::memory_order_relaxed) >= kMaxPendingSnapshots) {
-      pending->fetch_sub(1, std::memory_order_relaxed);
-      td::actor::send_closure(classifier, &EmuClassifierActor::note_dropped);
-    } else {
-      // Serializing the tx cells walks them, so unlike the old Ref copy this CAN
-      // fail and CAN throw (vm::VmError does not derive from std::exception, and
-      // this runs inside the emulator's call stack): nothing may escape.
-      td::Status status;
-      try {
-        auto r_snap = snapshot_trace(trace);
-        if (r_snap.is_error()) {
-          status = r_snap.move_as_error();
-        } else {
-          td::actor::send_closure(classifier, &EmuClassifierActor::classify, r_snap.move_as_ok());
-        }
-      } catch (const vm::VmError &e) {
-        status = td::Status::Error(PSLICE() << "exception (vm): " << e.get_msg());
-      } catch (const std::exception &e) {
-        status = td::Status::Error(PSLICE() << "exception: " << e.what());
-      } catch (...) {
-        status = td::Status::Error("unknown exception");
-      }
-      if (status.is_error()) {
-        // Same rollback as the drop path: the classify that would have
-        // decremented `pending` never ran.
-        pending->fetch_sub(1, std::memory_order_relaxed);
-        td::actor::send_closure(classifier, &EmuClassifierActor::note_snapshot_failed);
-        LOG(WARNING) << "[mch-emu] trace="
-                     << td::base64_encode(trace.ext_in_msg_hash_norm.as_slice())
-                     << " SNAPSHOT FAILED: " << status;
-      }
+    const std::int64_t now_us = emu_now_us();
+    if (!admit(*gate, now_us, classifier)) {
+      inner(std::move(trace), std::move(promise), std::move(measurement));
+      return;
     }
-    inner(std::move(trace), std::move(promise), std::move(measurement));
+
+    // A Ref/POD walk only: nothing here can throw into the emulator's stack.
+    EmuTraceView view = make_view(trace);
+    view.sent_us = now_us;
+    view.deadline_us = now_us + kClassifyDeadlineUs;
+    gate->in_flight.fetch_add(1, std::memory_order_relaxed);
+
+    if (nonblocking) {
+      // --mch-classify-nonblocking: EM1's shape — the insert does not wait, and
+      // the response feeds the counters only.
+      auto P = td::PromiseCreator::lambda([gate](td::Result<EmuClassifyResult>) {
+        gate->in_flight.fetch_sub(1, std::memory_order_relaxed);
+        gate->last_response_us.store(emu_now_us(), std::memory_order_relaxed);
+      });
+      td::actor::send_closure(classifier, &EmuClassifierActor::classify, std::move(view),
+                              std::move(P));
+      inner(std::move(trace), std::move(promise), std::move(measurement));
+      return;
+    }
+
+    // The insert runs in the response continuation, on the classifier's thread.
+    // ~LambdaPromise answers a promise the actor never got to (shutdown) with an
+    // error, so this fires exactly once even then — the insert cannot be lost.
+    auto P = td::PromiseCreator::lambda([gate, inner, trace = std::move(trace),
+                                         promise = std::move(promise),
+                                         measurement = std::move(measurement)](
+                                            td::Result<EmuClassifyResult> R) mutable {
+      gate->in_flight.fetch_sub(1, std::memory_order_relaxed);
+      gate->last_response_us.store(emu_now_us(), std::memory_order_relaxed);
+      if (R.is_error()) {
+        LOG(WARNING) << "[mch-emu] classify response lost: " << R.move_as_error();
+      }
+      // EM2 moves R.ok().actions into the insert here; EM1.5 stops at the
+      // counters the actor already logged.
+      inner(std::move(trace), std::move(promise), std::move(measurement));
+    });
+    td::actor::send_closure(classifier, &EmuClassifierActor::classify, std::move(view),
+                            std::move(P));
   };
 }
 

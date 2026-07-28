@@ -1,7 +1,8 @@
-// EM1 shadow classifier actor (em1-design §5): a sibling of the emulator's
-// insert path that classifies a snapshot of every trace emission and LOGS the
-// outcome. It writes nothing — no Redis, no DB, no promise on the sink path —
-// so with the feature off (cfg.prep == nullptr, i.e. no --mch-artifact) the
+// EM1.5 shadow classifier actor (em1-design §15/§16): a sibling of the
+// emulator's insert path that classifies every trace emission and ANSWERS the
+// decorated sink with the Action rows plus per-trace telemetry. It writes
+// nothing itself — no Redis, no DB (EM2 moves the rows into the insert) — so
+// with the feature off (cfg.prep == nullptr, i.e. no --mch-artifact) the
 // emulator behaves exactly as before.
 #pragma once
 
@@ -21,8 +22,16 @@ namespace mch {
 // Cumulative counters; the periodic log line prints these plus the delta since
 // the previous line.
 struct EmuShadowStats {
-  std::size_t emissions{0}, reemissions{0}, dropped{0}, snapshot_failed{0};
+  std::size_t emissions{0}, reemissions{0};
+  // Gate-side outcomes: the classifier did not run (§16).
+  std::size_t shed_admission{0}, shed_deadline{0}, bypassed_disabled{0};
   std::size_t classified{0}, failed{0}, convert_failed{0}, tx_limit_exceeded{0}, actions{0};
+  // Subset of `actions` that came from the basic-actions fallback of a FAILED
+  // classification, not from matchers: those rows are not equivalent to real
+  // ones, so the totals must stay separable.
+  std::size_t fallback_actions{0};
+  std::size_t unported_btypes{0}, arena_refs_scrubbed{0};
+  std::size_t queue_us_max{0}, classify_us_max{0}, classify_us_total{0}, latency_samples{0};
   std::array<std::size_t, 3> by_finality{};  // root-node EmuFinality of the emission
   std::map<FailureCategory, std::size_t> by_category;
   ParsedBlockLookupSource::LookupStats lookups;  // tier1 / tier2 / miss
@@ -31,16 +40,15 @@ struct EmuShadowStats {
 class EmuClassifierActor : public td::actor::Actor {
  public:
   explicit EmuClassifierActor(EmuShadowConfig cfg) : cfg_(std::move(cfg)) {
-    CHECK(cfg_.pending);  // EmuShadowConfig contract; decorate_sink relies on it too
+    CHECK(cfg_.gate);  // EmuShadowConfig contract; decorate_sink relies on it too
   }
 
-  // Fire-and-forget entry from the decorated sink. Never throws.
-  void classify(EmuTraceSnapshot snap);
-  // The decorator shed a snapshot over kMaxPendingSnapshots.
-  void note_dropped();
-  // The decorator could not serialize an emission's cells, so it never became a
-  // snapshot. Kept apart from `dropped`, which means backpressure only.
-  void note_snapshot_failed();
+  // Request entry from the decorated sink: ALWAYS answers the promise exactly
+  // once, and never throws.
+  void classify(EmuTraceView view, td::Promise<EmuClassifyResult> promise);
+  // The gate turned an emission away before it became a request (admission cap
+  // or the sticky fail-open flag).
+  void note_shed(EmuClassifyOutcome why);
 
   void start_up() override;
   void alarm() override;
