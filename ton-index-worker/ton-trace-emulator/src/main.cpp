@@ -9,6 +9,7 @@
 #include "DbScanner.h"
 #include "TraceScheduler.h"
 #include "TraceInserter.h"
+#include "emu/EmuShadow.h"
 
 
 int main(int argc, char *argv[]) {
@@ -27,6 +28,9 @@ int main(int argc, char *argv[]) {
   std::string global_config_path;
   std::string inet_addr;
   std::string db_event_fifo_path;
+  std::string mch_artifact;
+  std::string mch_capture_dir;
+  bool mch_classify_only = false;
   
   td::OptionParser p;
   p.set_description("Emulate TON traces");
@@ -78,6 +82,18 @@ int main(int argc, char *argv[]) {
     db_event_fifo_path = fname.str();
   });
 
+  p.add_option('\0', "mch-artifact", "Path to the MCH IR artifact; enables in-process shadow classification (log-only)", [&](td::Slice fname) {
+    mch_artifact = fname.str();
+  });
+
+  p.add_option('\0', "mch-capture", "Directory to dump shadow classifier inputs as JSON (requires --mch-artifact)", [&](td::Slice fname) {
+    mch_capture_dir = fname.str();
+  });
+
+  p.add_option('\0', "mch-classify-only", "Do not write emulated traces to Redis (requires --mch-artifact)", [&]() {
+    mch_classify_only = true;
+  });
+
 
   auto S = p.run(argc, argv);
   if (S.is_error()) {
@@ -100,15 +116,40 @@ int main(int argc, char *argv[]) {
     std::_Exit(2);
   }
 
+  if (mch_artifact.empty() && (!mch_capture_dir.empty() || mch_classify_only)) {
+    std::cerr << "'--mch-capture' and '--mch-classify-only' require '--mch-artifact'" << std::endl;
+    std::_Exit(2);
+  }
+
+  mch::EmuShadowConfig mch_shadow;
+  if (!mch_artifact.empty()) {
+    // The artifact and the binary ship together: a mismatch is a build bug, not
+    // a reason to run with shadow classification silently skipped.
+    auto r_prep = mch::load_engine_prep(mch_artifact);
+    if (r_prep.is_error()) {
+      LOG(FATAL) << "failed to load MCH artifact '" << mch_artifact << "': " << r_prep.move_as_error();
+    }
+    mch_shadow.prep = r_prep.move_as_ok();
+    mch_shadow.capture_dir = mch_capture_dir;
+    mch_shadow.pending = std::make_shared<std::atomic<std::size_t>>(0);
+    LOG(INFO) << "MCH emu shadow ENABLED (artifact " << mch_artifact << ")"
+              << (mch_capture_dir.empty() ? "" : ", capture dir " + mch_capture_dir)
+              << (mch_classify_only ? ", classify-only (no Redis writes)" : "");
+  }
+
   td::actor::Scheduler scheduler({threads});
   td::actor::ActorOwn<DbScanner> db_scanner;
   td::actor::ActorOwn<ITraceInsertManager> insert_manager;
 
   scheduler.run_in_context([&] { 
     db_scanner = td::actor::create_actor<DbScanner>("scanner", db_root, dbs_secondary, working_dir, 0.05f);
-    insert_manager = td::actor::create_actor<RedisInsertManager>("RedisInsertManager", redis_dsn);
-    td::actor::create_actor<TraceEmulatorScheduler>("integritychecker", db_scanner.get(), insert_manager.get(), 
-      global_config_path, inet_addr, redis_dsn, redis_channel, working_dir, db_event_fifo_path).release();
+    if (mch_classify_only) {
+      insert_manager = td::actor::create_actor<NullTraceInsertManager>("NullTraceInsertManager");
+    } else {
+      insert_manager = td::actor::create_actor<RedisInsertManager>("RedisInsertManager", redis_dsn);
+    }
+    td::actor::create_actor<TraceEmulatorScheduler>("integritychecker", db_scanner.get(), insert_manager.get(),
+      global_config_path, inet_addr, redis_dsn, redis_channel, working_dir, db_event_fifo_path, mch_shadow).release();
   });
   
   scheduler.run();

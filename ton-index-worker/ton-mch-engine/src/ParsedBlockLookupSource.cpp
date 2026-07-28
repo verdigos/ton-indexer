@@ -151,6 +151,7 @@ Value ParsedBlockLookupSource::fetch(const std::string &kind, const std::vector<
     stats_.tier2_hits++;
   } else {
     stats_.misses++;
+    stats_.misses_by_kind[kind]++;
   }
   return r;
 }

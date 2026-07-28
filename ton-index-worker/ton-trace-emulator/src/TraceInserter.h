@@ -20,3 +20,13 @@ public:
 
     void insert(Trace trace, td::Promise<td::Unit> promise, MeasurementPtr measurement) override;
 };
+
+// --mch-classify-only: removes the per-trace Redis WRITE only. The input channel
+// subscription, health hash and invalidated-trace tracking are scheduler-owned
+// and keep running, so a first shadow run cannot disturb production pending data.
+class NullTraceInsertManager: public ITraceInsertManager {
+public:
+    void insert(Trace trace, td::Promise<td::Unit> promise, MeasurementPtr measurement) override {
+        promise.set_value(td::Unit());
+    }
+};

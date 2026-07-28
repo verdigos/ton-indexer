@@ -20,6 +20,7 @@
 #include "InvalidatedTraceTracker.h"
 #include "auto/tl/ton_api.h"
 #include "DbEventListener.h"
+#include "emu/EmuShadow.h"
 #include <sw/redis++/redis++.h>
 
 
@@ -57,6 +58,8 @@ class TraceEmulatorScheduler : public td::actor::Actor {
     std::shared_ptr<ExternalMessageAdmission> external_message_admission_;
     td::actor::ActorOwn<ITraceInsertManager> insert_manager_;
     td::actor::ActorOwn<InvalidatedTraceTracker> invalidated_trace_tracker_;
+    mch::EmuShadowConfig mch_shadow_;
+    td::actor::ActorOwn<mch::EmuClassifierActor> mch_classifier_;
     std::unique_ptr<sw::redis::Redis> health_redis_;
     td::Timestamp next_health_update_;
     std::uint32_t last_finalized_mc_block_time_{0};
@@ -101,14 +104,21 @@ class TraceEmulatorScheduler : public td::actor::Actor {
     TraceEmulatorScheduler(td::actor::ActorId<DbScanner> db_scanner, td::actor::ActorId<ITraceInsertManager> insert_manager,
                            std::string global_config_path, std::string inet_addr, 
                            std::string redis_dsn, std::string input_redis_channel, std::string working_dir,
-                           std::string db_event_fifo_path) :
+                           std::string db_event_fifo_path, mch::EmuShadowConfig mch_shadow = {}) :
         db_scanner_(db_scanner), insert_manager_(insert_manager), global_config_path_(global_config_path), 
         inet_addr_(inet_addr), redis_dsn_(redis_dsn), input_redis_channel_(input_redis_channel),
-        working_dir_(std::move(working_dir)), db_event_fifo_path_(std::move(db_event_fifo_path)) {
+        working_dir_(std::move(working_dir)), db_event_fifo_path_(std::move(db_event_fifo_path)),
+        mch_shadow_(std::move(mch_shadow)) {
       health_redis_ = std::make_unique<sw::redis::Redis>(redis_dsn_);
       insert_trace_ = [insert_manager = insert_manager_.get()](Trace trace, td::Promise<td::Unit> promise, MeasurementPtr measurement) {
         td::actor::send_closure(insert_manager, &ITraceInsertManager::insert, std::move(trace), std::move(promise), measurement);
       };
+      // Must be here, not a setter: start_up() copies insert_trace_ BY VALUE into
+      // the listeners, so a send_closure'd setter would land too late.
+      if (mch_shadow_.prep) {
+        mch_classifier_ = td::actor::create_actor<mch::EmuClassifierActor>("MchEmuClassifier", mch_shadow_);
+        insert_trace_ = mch::decorate_sink(std::move(insert_trace_), mch_classifier_.get(), mch_shadow_.pending);
+      }
       external_message_admission_ = std::make_shared<ExternalMessageAdmission>();
       invalidated_trace_tracker_ = td::actor::create_actor<InvalidatedTraceTracker>("InvalidatedTraceTracker", redis_dsn_);
     };
