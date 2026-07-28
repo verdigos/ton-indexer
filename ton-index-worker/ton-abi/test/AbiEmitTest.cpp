@@ -153,7 +153,12 @@ TEST_CASE("cli: ton-abi-gen writes a header containing the struct signature") {
   fs::create_directories(out, ec);
 
   std::string abi = fixture_path("tolk_counter");
+#ifdef _WIN32
+  // cmd.exe strips one outer quote pair from the whole command line
   std::string cmd = "\"\"" + std::string(TON_ABI_GEN_EXE) + "\" \"" + abi + "\" --out-dir \"" + out.string() + "\"\"";
+#else
+  std::string cmd = "\"" + std::string(TON_ABI_GEN_EXE) + "\" \"" + abi + "\" --out-dir \"" + out.string() + "\"";
+#endif
   int rc = std::system(cmd.c_str());
   REQUIRE_MESSAGE(rc == 0, "ton-abi-gen exited " << rc << " for: " << cmd);
 

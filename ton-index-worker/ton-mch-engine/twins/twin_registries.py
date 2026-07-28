@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import sys
 
-sys.path.insert(0, r"S:\Dev\ton-indexer-clear\indexer")
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[3] / "indexer"))
 
 from indexer.events.mch.registry import Registries  # noqa: E402
 

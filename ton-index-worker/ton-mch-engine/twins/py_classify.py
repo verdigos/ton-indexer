@@ -12,7 +12,7 @@ import sys
 import lz4.frame
 import msgpack
 
-sys.path.insert(0, r"S:\Dev\ton-indexer-clear\indexer")
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[3] / "indexer"))
 
 import indexer.events.context as context  # noqa: E402
 from pytoniq_core import Address, Cell  # noqa: E402
