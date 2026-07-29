@@ -760,6 +760,16 @@ AddressInterfaces parse_interfaces(std::vector<typename Trace::Detector::Detecte
         schema.is_broken_state = arg.is_broken_state;
         schema.public_key = arg.public_key;
         result.interfaces.push_back(schema);
+      } else if constexpr (std::is_same_v<T, GetGemsNftFixPriceSaleV4::Result> ||
+                           std::is_same_v<T, DedustPoolDetector::Result> ||
+                           std::is_same_v<T, NominatorPoolContract::Result>) {
+        // DELIBERATELY NOT SERIALIZED. These three joined Trace::Detector for the
+        // in-process classifier's tier-1 lookups only. The `interfaces` HSET field
+        // is a wire contract with ton-index-go / ton-emulate-go: giving
+        // AddressInterfaces new variant alternatives changes the msgpack framing
+        // every reader sees, which is a decoder wave of its own and not a side
+        // effect of widening a detector set. Dropping them here keeps the Redis
+        // payload byte-identical to pre-W3.
       } else {
         static_assert(always_false<T>, "non-exhaustive visitor!");
       }

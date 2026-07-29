@@ -24,9 +24,17 @@ public:
 
   void start_up() override;
 
-private:
-  void verify_with_master(td::Ref<vm::Cell> master_code, td::Ref<vm::Cell> master_data, Result jetton_wallet_data);
+  // The detection with no actor around it (start_up() is a one-liner over it):
+  // get_wallet_data + is_claimed on this account, then the jetton master read
+  // back through lookup_account for the get_wallet_address round-trip. Every
+  // step was already synchronous; only the master fetch changes actor -> call.
+  static td::Result<Result> detect(const block::StdAddress& address,
+                                   const td::Ref<vm::Cell>& code_cell,
+                                   const td::Ref<vm::Cell>& data_cell,
+                                   const AllShardStates& shard_states,
+                                   const std::shared_ptr<block::ConfigInfo>& config);
 
+private:
   block::StdAddress address_;
   td::Ref<vm::Cell> code_cell_;
   td::Ref<vm::Cell> data_cell_;
@@ -172,6 +180,16 @@ public:
 
   void start_up() override;
 
+  // The detection with no actor around it (start_up() is a one-liner over it).
+  // V2 is self-contained (one get_pool_data); V1 reads the DeDust factory back
+  // through lookup_account for the get_pool_address round-trip. The asset
+  // decoders and the factory verification moved into Tokens.cpp with it.
+  static td::Result<Result> detect(const block::StdAddress& address,
+                                   const td::Ref<vm::Cell>& code_cell,
+                                   const td::Ref<vm::Cell>& data_cell,
+                                   const AllShardStates& shard_states,
+                                   const std::shared_ptr<block::ConfigInfo>& config);
+
 private:
   block::StdAddress address_;
   td::Ref<vm::Cell> code_cell_;
@@ -179,8 +197,4 @@ private:
   AllShardStates shard_states_;
   std::shared_ptr<block::ConfigInfo> config_;
   td::Promise<Result> promise_;
-
-  static bool get_asset(td::Ref<vm::CellSlice> slice, std::optional<block::StdAddress>& address);
-  static bool get_asset_v2(td::Ref<vm::CellSlice> slice, std::optional<block::StdAddress>& address);
-  void verify_with_factory(td::Ref<vm::Cell> factory_code, td::Ref<vm::Cell> factory_data, Result pool_data);
 };

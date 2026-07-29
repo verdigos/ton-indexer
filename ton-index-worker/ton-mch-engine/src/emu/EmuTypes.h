@@ -6,6 +6,7 @@
 
 #include "ActionBuild.h"             // Action (the rows the classifier hands back)
 #include "EmuActionPayload.h"        // EmuActionPayload (the write-back bytes)
+#include "EmuCelldbLookup.h"         // Tier2Budget, Tier2Stats, AllShardStates
 #include "MchClassifierActor.h"      // MchEnginePrep
 #include "ParsedBlockLookupSource.h" // InterfaceMap, LookupStats
 
@@ -71,6 +72,12 @@ struct EmuTraceView {
   std::vector<EmuTxRef> nodes;
   ParsedBlockLookupSource::InterfaceMap interfaces;  // already V2-adapted
   EmuCellAnchor anchor;
+  // W3 tier-2 inputs: the shard states this trace was emulated against and
+  // their config. Cheap shared handles (a vector of cell Refs, a shared_ptr) —
+  // copying them costs refcounts, not cells. EMPTY for a listener-emulated
+  // trace, which is exactly the "no tier 2" case the hook degrades to.
+  AllShardStates shard_states;
+  std::shared_ptr<block::ConfigInfo> config;
   std::int64_t sent_us{0}, deadline_us{0};  // emu_now_us basis
 };
 
@@ -118,6 +125,7 @@ struct EmuClassifyResult {
   std::string failure_reason;
   FailureCategory failure_category{FailureCategory::none};
   ParsedBlockLookupSource::LookupStats lookup_stats;
+  Tier2Stats tier2_stats;
   // serialize_us is SEPARATE from classify_us on purpose: both land in the same
   // critical section, and folding them together would hide which half a
   // regression came from.
@@ -142,6 +150,10 @@ struct EmuShadowConfig {
   // REQUIRED whenever `prep` is set: both the decorator and the actor
   // dereference it unguarded.
   std::shared_ptr<EmuGate> gate;
+  // W3: celldb tier-2 lookups. On by default wherever the classifier runs;
+  // off degrades to the tier-1-only behaviour that shipped in W1/W2.
+  bool tier2{true};
+  Tier2Budget tier2_budget;
 };
 
 }  // namespace mch

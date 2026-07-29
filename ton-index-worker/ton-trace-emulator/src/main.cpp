@@ -29,6 +29,8 @@ int main(int argc, char *argv[]) {
   std::string inet_addr;
   std::string db_event_fifo_path;
   std::string mch_artifact;
+  bool mch_no_tier2 = false;
+  mch::Tier2Budget mch_tier2_budget;
 
   td::OptionParser p;
   p.set_description("Emulate TON traces");
@@ -84,6 +86,32 @@ int main(int argc, char *argv[]) {
     mch_artifact = fname.str();
   });
 
+  // Tier 2 is ON wherever the classifier runs; these exist to turn it off and to
+  // re-set the two budgets from a live measurement without a rebuild.
+  p.add_option('\0', "mch-no-tier2", "Disable celldb tier-2 lookups (tier-1-only classification)", [&]() {
+    mch_no_tier2 = true;
+  });
+  p.add_checked_option('\0', "mch-tier2-fetches", "Celldb account reads per trace (default: 16)", [&](td::Slice value) {
+    int v;
+    try {
+      v = std::stoi(value.str());
+    } catch (...) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --mch-tier2-fetches: not a number");
+    }
+    mch_tier2_budget.fetches = static_cast<std::size_t>(v < 0 ? 0 : v);
+    return td::Status::OK();
+  });
+  p.add_checked_option('\0', "mch-tier2-ms", "Celldb tier-2 wall-clock budget per trace, ms (default: 20)", [&](td::Slice value) {
+    int v;
+    try {
+      v = std::stoi(value.str());
+    } catch (...) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --mch-tier2-ms: not a number");
+    }
+    mch_tier2_budget.wall_us = static_cast<std::int64_t>(v < 0 ? 0 : v) * 1000;
+    return td::Status::OK();
+  });
+
 
   auto S = p.run(argc, argv);
   if (S.is_error()) {
@@ -116,8 +144,13 @@ int main(int argc, char *argv[]) {
     }
     mch_shadow.prep = r_prep.move_as_ok();
     mch_shadow.gate = std::make_shared<mch::EmuGate>();
+    mch_shadow.tier2 = !mch_no_tier2;
+    mch_shadow.tier2_budget = mch_tier2_budget;
     LOG(INFO) << "MCH classification ENABLED (artifact " << mch_artifact
-              << "), insert gated on classification";
+              << "), insert gated on classification, celldb tier-2 "
+              << (mch_shadow.tier2 ? "ON" : "OFF") << " (budget "
+              << mch_shadow.tier2_budget.fetches << " fetches / "
+              << mch_shadow.tier2_budget.wall_us / 1000 << " ms per trace)";
   }
 
   td::actor::Scheduler scheduler({threads});

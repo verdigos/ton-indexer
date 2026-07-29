@@ -71,19 +71,9 @@ const std::set<std::string> &ParsedBlockLookupSource::kinds() {
   return FixtureLookupSource::kinds();
 }
 
-Value ParsedBlockLookupSource::tier1(const std::string &kind, const std::string &addr) const {
-  if (account_interfaces_ == nullptr) {
-    return Value::null();
-  }
-  auto r_addr = block::StdAddress::parse(td::Slice(addr));
-  if (r_addr.is_error()) {
-    return Value::null();  // malformed key: clean miss
-  }
-  auto it = account_interfaces_->find(r_addr.move_as_ok());
-  if (it == account_interfaces_->end()) {
-    return Value::null();
-  }
-  for (const schema::BlockchainInterfaceV2 &iface : it->second) {
+Value ParsedBlockLookupSource::iface_value(const std::string &kind,
+                                           const schema::BlockchainInterfaceV2 &iface) {
+  {
     if (kind == "jetton_wallet") {
       if (const auto *jw = std::get_if<schema::JettonWalletDataV2>(&iface)) {
         // FixtureLookupSource shape: Obj{balance, address, owner, jetton}.
@@ -151,6 +141,37 @@ Value ParsedBlockLookupSource::tier1(const std::string &kind, const std::string 
         f.emplace_back("assets", Value::make_list(std::move(assets)));
         return Value::make_obj(std::move(f));
       }
+    } else if (kind == "nominator_pool") {
+      if (const auto *p = std::get_if<schema::NominatorPoolData>(&iface)) {
+        // Obj{address}. The whole semantics is set membership: the one spec
+        // that reads this lookup rejects on null and never touches a field
+        // (ir/mch_ir.json nominator_pool_withdraw), which is also why Python's
+        // registered fn just hands back the account's interfaces dict.
+        Value::Fields f;
+        f.emplace_back("address", addr_str(p->address));
+        return Value::make_obj(std::move(f));
+      }
+    }
+  }
+  return Value::null();  // no matching variant for this kind
+}
+
+Value ParsedBlockLookupSource::tier1(const std::string &kind, const std::string &addr) const {
+  if (account_interfaces_ == nullptr) {
+    return Value::null();
+  }
+  auto r_addr = block::StdAddress::parse(td::Slice(addr));
+  if (r_addr.is_error()) {
+    return Value::null();  // malformed key: clean miss
+  }
+  auto it = account_interfaces_->find(r_addr.move_as_ok());
+  if (it == account_interfaces_->end()) {
+    return Value::null();
+  }
+  for (const schema::BlockchainInterfaceV2 &iface : it->second) {
+    Value v = iface_value(kind, iface);
+    if (!v.is_null()) {
+      return v;
     }
   }
   return Value::null();  // account present, no matching variant: miss

@@ -37,6 +37,7 @@ struct EmuShadowStats {
   std::array<std::size_t, 3> by_finality{};  // root-node EmuFinality of the emission
   std::map<FailureCategory, std::size_t> by_category;
   ParsedBlockLookupSource::LookupStats lookups;  // tier1 / tier2 / miss
+  Tier2Stats tier2;  // celldb reads / memo hits / budget refusals
 };
 
 class EmuClassifierActor : public td::actor::Actor {

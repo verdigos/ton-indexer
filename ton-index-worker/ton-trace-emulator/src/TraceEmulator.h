@@ -141,9 +141,25 @@ struct Trace {
     // strongly).
     std::shared_ptr<const std::vector<td::Ref<vm::Cell>>> cell_anchor;
 
-    using Detector = InterfacesDetector<JettonWalletDetectorR, JettonMasterDetectorR, 
+    // Inputs for the classifier's celldb tier-2 lookups: the shard states this
+    // trace was emulated against, and their config. Shared handles, so carrying
+    // them costs refcounts. Empty for listener-emulated traces, which is the
+    // "no tier 2" case the hook degrades to.
+    AllShardStates shard_states;
+    std::shared_ptr<block::ConfigInfo> config;
+
+    // DedustPoolDetector and NominatorPoolContract were added for the classifier
+    // (W3): both gate on the CODE HASH before doing anything, and the nominator
+    // one runs no get-method at all, so the fan-out over every account in every
+    // trace costs a hash compare for non-matching accounts. GetGemsNftFixPriceSaleV4
+    // does run one get-method ungated, like the two GetGems detectors already here.
+    // NOTE: the new results are deliberately NOT serialized to Redis — see
+    // parse_interfaces in Serializer.hpp.
+    using Detector = InterfacesDetector<JettonWalletDetectorR, JettonMasterDetectorR,
                                         NftItemDetectorR, NftCollectionDetectorR,
-                                        GetGemsNftFixPriceSale, GetGemsNftAuction>;
+                                        GetGemsNftFixPriceSale, GetGemsNftAuction,
+                                        GetGemsNftFixPriceSaleV4, DedustPoolDetector,
+                                        NominatorPoolContract>;
 
     std::multimap<block::StdAddress, block::Account, AddrCmp> emulated_accounts;
     

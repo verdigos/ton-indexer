@@ -199,6 +199,8 @@ add_library(mch-emu STATIC
     src/emu/EmuInterfaces.cpp
     src/emu/EmuClassifierActor.cpp
     src/emu/EmuActionSerialize.cpp
+    src/emu/EmuCelldbLookup.cpp
+    src/emu/EmuJvaultChain.cpp
 )
 target_include_directories(mch-emu PUBLIC src)
 target_compile_features(mch-emu PUBLIC cxx_std_20)
@@ -238,6 +240,7 @@ add_executable(ton-mch-engine
     src/Surface.cpp
     src/AbiBridgeTest.cpp
     src/EmuActionSerializeTest.cpp
+    src/EmuCelldbLookupTest.cpp
     ${ABI_BRIDGE_TEST_FIXTURES}
 )
 target_include_directories(ton-mch-engine PRIVATE src ${CMAKE_CURRENT_BINARY_DIR} ${TON_ABI_DIR}/generated)
@@ -273,3 +276,5 @@ add_test(NAME mch_abi_bridge
     COMMAND ton-mch-engine --abi-bridge-test)
 add_test(NAME mch_actions_msgpack
     COMMAND ton-mch-engine --actions-msgpack-test)
+add_test(NAME mch_celldb_tier2
+    COMMAND ton-mch-engine --celldb-tier2-test)

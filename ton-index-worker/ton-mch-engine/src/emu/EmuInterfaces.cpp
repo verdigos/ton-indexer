@@ -77,4 +77,59 @@ schema::GetGemsNftAuctionData to_v2(const GetGemsNftAuction::Result &r) {
   return v;
 }
 
+schema::DedustPoolData to_v2(const DedustPoolDetector::Result &r) {
+  schema::DedustPoolData v{};
+  v.address = r.address;
+  v.asset_1 = r.asset_1;
+  v.asset_2 = r.asset_2;
+  v.reserve_1 = r.reserve_1;
+  v.reserve_2 = r.reserve_2;
+  v.is_stable = r.is_stable;
+  v.fee = r.fee;
+  // asset_*_slice stays behind: it is the factory-verification input, not part
+  // of the V2 struct, and nothing downstream of the lookup reads it.
+  return v;
+}
+
+schema::NominatorPoolData to_v2(const NominatorPoolContract::Result &r) {
+  schema::NominatorPoolData v{};
+  v.address = r.address;
+  v.state = r.state;
+  v.nominators_count = r.nominators_count;
+  v.stake_amount_sent = r.stake_amount_sent;
+  v.validator_amount = r.validator_amount;
+  v.validator_address = r.validator_address;
+  v.validator_reward_share = r.validator_reward_share;
+  v.max_nominators_count = r.max_nominators_count;
+  v.min_validator_stake = r.min_validator_stake;
+  v.min_nominator_stake = r.min_nominator_stake;
+  for (const auto &n : r.nominators) {
+    v.nominators.push_back({
+        .address = n.address,
+        .balance = n.amount,
+        .pending_balance = n.pending_deposit_amount,
+    });
+  }
+  return v;
+}
+
+schema::GetGemsNftFixPriceSaleV4Data to_v2(const GetGemsNftFixPriceSaleV4::Result &r) {
+  schema::GetGemsNftFixPriceSaleV4Data v{};
+  v.address = r.address;
+  v.is_complete = r.is_complete;
+  v.created_at = r.created_at;
+  v.marketplace_address = r.marketplace_address;
+  v.nft_address = r.nft_address;
+  v.nft_owner_address = r.nft_owner_address;
+  v.full_price = r.full_price;
+  v.marketplace_fee_address = r.marketplace_fee_address;
+  v.marketplace_fee = r.marketplace_fee;
+  v.royalty_address = r.royalty_address;
+  v.royalty_amount = r.royalty_amount;
+  v.sold_at = r.sold_at;
+  v.sold_query_id = r.sold_query_id;
+  v.jetton_price_dict = r.jetton_price_dict;
+  return v;
+}
+
 }  // namespace mch

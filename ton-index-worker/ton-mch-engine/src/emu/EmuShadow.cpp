@@ -74,6 +74,10 @@ EmuTraceView make_view(const ::Trace &trace) {
   // Everything the classifier will read off a block's lazy cell store stays
   // loadable through this handle, whatever the block emulator does next.
   view.anchor = trace.cell_anchor;
+  // Tier-2 inputs. Both empty on the listener path; the hook then serves
+  // nothing, which is the pre-W3 behaviour.
+  view.shard_states = trace.shard_states;
+  view.config = trace.config;
 
   std::vector<const TraceNode *> stack;
   if (trace.root) {
@@ -101,14 +105,21 @@ EmuTraceView make_view(const ::Trace &trace) {
   for (const auto &[addr, ifaces] : trace.interfaces) {
     std::vector<schema::BlockchainInterfaceV2> adapted;
     for (const auto &iface : ifaces) {
-      std::visit(td::overloaded(
-                     [&](const JettonWalletDetectorR::Result &r) { adapted.push_back(to_v2(r)); },
-                     [&](const NftItemDetectorR::Result &r) { adapted.push_back(to_v2(r)); },
-                     [&](const GetGemsNftFixPriceSale::Result &r) { adapted.push_back(to_v2(r)); },
-                     [&](const GetGemsNftAuction::Result &r) { adapted.push_back(to_v2(r)); },
-                     [](const JettonMasterDetectorR::Result &) {},
-                     [](const NftCollectionDetectorR::Result &) {}),
-                 iface);
+      std::visit(
+          td::overloaded(
+              [&](const JettonWalletDetectorR::Result &r) { adapted.push_back(to_v2(r)); },
+              [&](const NftItemDetectorR::Result &r) { adapted.push_back(to_v2(r)); },
+              [&](const GetGemsNftFixPriceSale::Result &r) { adapted.push_back(to_v2(r)); },
+              [&](const GetGemsNftAuction::Result &r) { adapted.push_back(to_v2(r)); },
+              // W3 additions: dedust_pool and nominator_pool were tier-2-only
+              // kinds purely because the emulator ran no detector for them, and
+              // nft_sale's tier-1 branch already accepts either sale variant.
+              [&](const GetGemsNftFixPriceSaleV4::Result &r) { adapted.push_back(to_v2(r)); },
+              [&](const DedustPoolDetector::Result &r) { adapted.push_back(to_v2(r)); },
+              [&](const NominatorPoolContract::Result &r) { adapted.push_back(to_v2(r)); },
+              [](const JettonMasterDetectorR::Result &) {},
+              [](const NftCollectionDetectorR::Result &) {}),
+          iface);
     }
     if (!adapted.empty()) {
       view.interfaces.emplace(addr, std::move(adapted));

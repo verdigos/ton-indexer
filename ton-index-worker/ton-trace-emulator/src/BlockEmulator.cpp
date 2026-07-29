@@ -418,6 +418,10 @@ void McBlockEmulator::trace_interfaces_error(td::Bits256 trace_root_tx_hash, td:
 
 void McBlockEmulator::trace_emulated(Trace trace, MeasurementPtr measurement) {
     trace.cell_anchor = cell_anchor_;
+    // The same states TraceInterfaceDetector just ran against, carried on so the
+    // classifier's tier-2 hook can read accounts the trace never touched.
+    trace.shard_states = shard_states_;
+    trace.config = mc_data_state_.config_;
     measurement->end_otel_child_span("detect_interfaces");
     measurement->start_otel_child_span("insert_trace");
     auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), trace_root_tx_hash = trace.root_tx_hash, measurement](td::Result<td::Unit> R) {
@@ -714,6 +718,13 @@ void ConfirmedBlockEmulator::trace_interfaces_error(td::Bits256 trace_root_tx_ha
 
 void ConfirmedBlockEmulator::trace_emulated(Trace trace, MeasurementPtr measurement) {
     trace.cell_anchor = cell_anchor_;
+    // Same states TraceInterfaceDetector ran against (children_emulated builds
+    // the identical vector out of the snapshots), carried on for tier 2.
+    trace.shard_states.reserve(shard_states_snapshot_.size());
+    for (const auto& snapshot : shard_states_snapshot_) {
+        trace.shard_states.push_back(snapshot.state);
+    }
+    trace.config = config_;
     measurement->end_otel_child_span("detect_interfaces");
     measurement->start_otel_child_span("insert_trace");
     auto root_hash = trace.root_tx_hash;

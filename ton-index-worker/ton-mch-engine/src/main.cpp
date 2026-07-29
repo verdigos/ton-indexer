@@ -17,6 +17,7 @@
 #include "Classify.h"
 #include "DexRecordsTest.h"
 #include "EmuActionSerializeTest.h"
+#include "EmuCelldbLookupTest.h"
 #include "MsgVectorRunner.h"
 #include "BuildVectorRunner.h"
 #include "MatchRunner.h"
@@ -162,6 +163,7 @@ int main(int argc, char *argv[]) {
   bool surface_mode = false;
   bool abi_bridge_test_mode = false;
   bool actions_msgpack_test_mode = false;
+  bool celldb_tier2_test_mode = false;
   std::string actions_msgpack_out;
   std::vector<std::string> trace_paths;
 
@@ -225,6 +227,9 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "actions-msgpack-test",
                "Write-back writer self-test (mch::Action -> the msgpack `actions` blob)",
                [&]() { actions_msgpack_test_mode = true; });
+  p.add_option('\0', "celldb-tier2-test",
+               "Celldb tier-2 lookup self-test (W3: tier shape equality, jvault chain, memo/budget)",
+               [&]() { celldb_tier2_test_mode = true; });
   p.add_option('\0', "actions-msgpack-out",
                "Regenerate the cross-language wire fixture the Go round-trip test decodes: "
                "--actions-msgpack-out <path>",
@@ -358,6 +363,11 @@ int main(int argc, char *argv[]) {
   if (actions_msgpack_test_mode) {
     // Write-back writer self-test: no actor scheduler needed.
     return mch::run_action_msgpack_test();
+  }
+
+  if (celldb_tier2_test_mode) {
+    // Celldb tier-2 self-test: no actor scheduler needed.
+    return mch::run_celldb_tier2_test();
   }
 
   if (surface_mode) {

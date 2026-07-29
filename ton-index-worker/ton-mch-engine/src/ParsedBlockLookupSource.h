@@ -68,6 +68,13 @@ class ParsedBlockLookupSource : public LookupSource {
   };
   const LookupStats &stats() const { return stats_; }
 
+  // ONE V2 -> Value shape map, shared by tier 1 and tier 2 (W3 §4d step 6).
+  // Null == this variant does not answer this kind. A tier-2 hook that produces
+  // a schema::*V2 renders it through HERE rather than building a Value of its
+  // own, which is what makes the two tiers shape-identical by construction
+  // instead of by review.
+  static Value iface_value(const std::string &kind, const schema::BlockchainInterfaceV2 &iface);
+
  private:
   // Tier-1 resolve from account_interfaces_ (null == miss). Only the tier-1
   // kinds are handled; everything else returns null so fetch() routes to tier 2.

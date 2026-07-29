@@ -83,14 +83,16 @@ std::size_t scrub_arena_refs(Action &a) {
 }
 
 // Same sequence as MchClassifierActor's per-trace path (schema_to_trace ->
-// to_tree/init_block -> classify_trace over a tier-1-only lookup source), with
+// to_tree/init_block -> classify_trace over the two-tier lookup source), with
 // the same try/catch and FailureCategory mapping, plus build_action run INSIDE
 // the try — while the arena the CoreActions point into is still alive. Never
 // throws.
-void classify_txs(const MchEnginePrep &prep, const ParsedBlockLookupSource::InterfaceMap &ifaces,
+void classify_txs(const EmuShadowConfig &cfg, const EmuTraceView &view,
                   const std::vector<schema::Transaction> &txs, EmuClassifyResult &res,
                   std::vector<Action> &rows, std::vector<std::string> &matcher_names,
                   std::size_t &scrubbed, bool &unknown_row) {
+  const MchEnginePrep &prep = *cfg.prep;
+  const ParsedBlockLookupSource::InterfaceMap &ifaces = view.interfaces;
   try {
     auto r_trace = schema_to_trace(res.trace_id, txs);
     if (r_trace.is_error()) {
@@ -110,12 +112,23 @@ void classify_txs(const MchEnginePrep &prep, const ParsedBlockLookupSource::Inte
     }
     ctx.root = init_block(ctx.arena, ctx.tree.root);
 
-    ParsedBlockLookupSource src(&ifaces);  // tier-2 hook unset: no DB reads here
+    // One tier-2 instance per classify — it IS the scope the memo and both
+    // budgets are measured over. Stack-lived, so it dies with this call and
+    // nothing carries a cell reference past the view's lifetime.
+    EmuCelldbTier2 tier2(&view.shard_states, view.config, cfg.tier2_budget);
+    ParsedBlockLookupSource::Tier2Hook hook;
+    if (cfg.tier2) {
+      hook = [&tier2](const std::string &kind, const std::vector<Value> &args) {
+        return tier2.fetch(kind, args);
+      };
+    }
+    ParsedBlockLookupSource src(&ifaces, std::move(hook));
     ClassifyResult cres = classify_trace(ctx, prep.ir, prep.setup, src);
     res.failure = cres.failure;
     res.failure_reason = cres.failure_reason;
     res.failure_category = cres.failure_category;
     res.lookup_stats = src.stats();
+    res.tier2_stats = tier2.stats();
 
     // On failure the regular actions are discarded and the basic-actions
     // fallback rows are what production commits (Classify.cpp).
@@ -296,8 +309,7 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
       auto txs = r_txs.move_as_ok();
       std::vector<std::string> matcher_names;
       std::size_t scrubbed = 0;
-      classify_txs(*cfg_.prep, view.interfaces, txs, res, rows, matcher_names, scrubbed,
-                   unknown_row);
+      classify_txs(cfg_, view, txs, res, rows, matcher_names, scrubbed, unknown_row);
       // Python's trace.start_lt is the ROOT tx lt (event_deserializer.py:150),
       // which is min(lt) over a well-formed trace — the same value
       // fill_trace_aggregates derives, so the score matches Python's ZADD.
@@ -345,6 +357,9 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
       for (const auto &[kind, n] : res.lookup_stats.misses_by_kind) {
         stats_.lookups.misses_by_kind[kind] += n;
       }
+      stats_.tier2.fetched += res.tier2_stats.fetched;
+      stats_.tier2.memo_hits += res.tier2_stats.memo_hits;
+      stats_.tier2.budget_exhausted += res.tier2_stats.budget_exhausted;
       if (scrubbed > 0) {
         stats_.arena_refs_scrubbed += scrubbed;
         LOG(WARNING) << "[mch-emu] trace=" << view.trace_id << " scrubbed " << scrubbed
@@ -414,9 +429,8 @@ void EmuClassifierActor::alarm() {
     if (!cats.empty()) cats += ",";
     cats += std::string(category_name(cat)) + "=" + std::to_string(n);
   }
-  // Per-kind miss attribution: with no tier 2 wired and no dedust_pool detector
-  // in the emulator, the total alone cannot separate an expected gap from a
-  // real resolution failure.
+  // Per-kind miss attribution: the total alone cannot separate a kind with no
+  // source (an expected gap) from a real resolution failure.
   std::string miss_kinds;
   for (const auto &[kind, n] : stats_.lookups.misses_by_kind) {
     if (!miss_kinds.empty()) miss_kinds += ",";
@@ -443,6 +457,9 @@ void EmuClassifierActor::alarm() {
             << " miss_by_kind={" << miss_kinds << "}"
             << " tier2_rate=" << (resolved ? (100 * stats_.lookups.tier2_hits / resolved) : 0)
             << "%}"
+            << " tier2{fetched=" << stats_.tier2.fetched
+            << " memo_hits=" << stats_.tier2.memo_hits
+            << " budget_exhausted=" << stats_.tier2.budget_exhausted << "}"
             << " shed{admission=" << stats_.shed_admission
             << " deadline=" << stats_.shed_deadline
             << " disabled=" << stats_.bypassed_disabled << "}"
