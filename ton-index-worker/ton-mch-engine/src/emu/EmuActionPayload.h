@@ -3,7 +3,7 @@
 //
 // Deliberately its own file with only the standard-library includes below, so
 // ton-trace-emulator's TraceInserter.h can include it without pulling Value.h /
-// ActionBuild.h / MchClassifierActor.h into the insert TU. Built on the
+// ActionBuild.h / EnginePrep.h into the insert TU. Built on the
 // classifier actor while the cell anchor is still alive; no mch value type
 // survives into the insert.
 #pragma once

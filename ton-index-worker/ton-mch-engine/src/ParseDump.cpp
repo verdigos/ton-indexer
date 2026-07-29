@@ -5,7 +5,7 @@
 #include "ParseDump.h"
 
 #include "MsgParse.h"
-#include "TraceLoader.h"
+#include "fixtures/FixtureLoader.h"
 #include "Value.h"
 #include "parse/PSlice.h"
 

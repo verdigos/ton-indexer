@@ -66,6 +66,9 @@ add_custom_command(
     DEPENDS tlbc ${CMAKE_CURRENT_SOURCE_DIR}/tlb/mch-msgs.tlb
 )
 
+# TODO: remove (harness): the testbed slot is dev-only but cannot leave the prod
+# lib as long as select_gen_builds (BuildDriver.cpp) probes it from ClassifyCore
+# — see the note on gen_builds_testbed in src/GenBuilds.h (audit §5.7 H4).
 # OPTIONAL testbed table (-DMCH_TESTBED_IR=<artifact.json>): lets a phase run
 # classify / build-smoke against an experimental artifact WITHOUT editing the
 # ir/mch_ir.json contract — runners select the table by source sha
@@ -85,15 +88,24 @@ else()
     set(MCH_TESTBED_SOURCE src/BuildsTestbedStub.cpp)
 endif()
 
+# The generated tables split by who may link them. PRODUCT: the artifact build
+# table the classify loop runs, the testbed slot it probes, and the TL-B
+# parsers. TEST: the conformance-vector tables — their gen_* symbols are
+# referenced only from the harness runners (VectorRunner / MatchRunner /
+# BuildVectorRunner), so they belong in mch-fixtures, not in the lib
+# ton-index-postgres links (python-parity-audit §5.7 H3).
 set(MCH_GENERATED_SOURCES
-    ${MCH_GEN_DIR}/vectors_generated.cpp
-    ${MCH_GEN_DIR}/wheres_generated.cpp
     ${MCH_GEN_DIR}/builds_ir_generated.cpp
-    ${MCH_GEN_DIR}/builds_vectors_generated.cpp
     ${MCH_TESTBED_SOURCE}
     ${MCH_GEN_DIR}/mch-msgs-tlb.cpp
 )
-add_custom_target(mch_generate_sources DEPENDS ${MCH_GENERATED_SOURCES} ${MCH_GEN_DIR}/mch-msgs-tlb.h)
+set(MCH_GENERATED_TEST_SOURCES
+    ${MCH_GEN_DIR}/vectors_generated.cpp
+    ${MCH_GEN_DIR}/wheres_generated.cpp
+    ${MCH_GEN_DIR}/builds_vectors_generated.cpp
+)
+add_custom_target(mch_generate_sources
+    DEPENDS ${MCH_GENERATED_SOURCES} ${MCH_GENERATED_TEST_SOURCES} ${MCH_GEN_DIR}/mch-msgs-tlb.h)
 
 # --- mch-classify: the classification CORE static library (Phase G step 3,
 # prod-design §2). The pure pipeline TUs (no CLI/dump/harness) — ton-index-
@@ -115,7 +127,7 @@ set(ABI_PROD_PAIRS
 )
 
 add_library(mch-classify STATIC
-    src/TraceLoader.cpp
+    src/TraceAggregates.cpp
     src/BlockTree.cpp
     src/Value.cpp
     src/ExprRuntime.cpp
@@ -148,7 +160,7 @@ add_library(mch-classify STATIC
     src/ClassifyCore.cpp
     src/SchemaTraceLoader.cpp
     src/ParsedBlockLookupSource.cpp
-    src/MchClassifierActor.cpp
+    src/EnginePrep.cpp
     src/MsgParse.cpp
     src/MsgParsersGenerated.cpp
     src/AbiBridge.cpp
@@ -172,6 +184,27 @@ target_include_directories(mch-classify
 )
 target_compile_features(mch-classify PUBLIC cxx_std_20)
 
+# ton-abi (W12 bridge): mch-classify -> ton-abi ONLY (ton-abi stays mch-free).
+target_link_libraries(mch-classify PUBLIC tondb-scanner tdactor ton-abi)
+add_dependencies(mch-classify mch_generate_sources)
+
+# --- mch-fixtures: the TEST-ONLY static lib (python-parity-audit §5.1).
+#
+# These sources exist to serve the .lz4 fixture corpus and the conformance
+# vectors. They must NEVER reach mch-classify — and therefore never reach
+# ton-index-postgres, index-engine-core or ton-trace-emulator, all of which
+# link the classify lib. Same discipline as ABI_BRIDGE_TEST_FIXTURES below:
+# fixture sources named in one variable, referenced by exactly one target,
+# with the reason stated here.
+#
+# lz4 and msgpack are used by FixtureLoader.cpp and by nothing else in the
+# tree, so the lz4 link edge lives here rather than on the product lib.
+set(MCH_FIXTURE_SOURCES
+    src/fixtures/FixtureLoader.cpp
+    src/fixtures/FixtureLookupSource.cpp
+    ${MCH_GENERATED_TEST_SOURCES}
+)
+
 # lz4: Windows/vcpkg ships an lz4 CONFIG package (lz4::lz4). Linux builds have no
 # such package — external/ton's BuildLZ4 builds third-party lz4 and FORCE-caches
 # LZ4_LIBRARIES / LZ4_INCLUDE_DIRS; wrap those in an imported target.
@@ -187,9 +220,12 @@ if(NOT TARGET lz4::lz4)
     IMPORTED_LOCATION "${LZ4_LIBRARIES}"
     INTERFACE_INCLUDE_DIRECTORIES "${LZ4_INCLUDE_DIRS}")
 endif()
-# ton-abi (W12 bridge): mch-classify -> ton-abi ONLY (ton-abi stays mch-free).
-target_link_libraries(mch-classify PUBLIC tondb-scanner tdactor lz4::lz4 ton-abi)
-add_dependencies(mch-classify mch_generate_sources)
+
+add_library(mch-fixtures STATIC ${MCH_FIXTURE_SOURCES})
+target_include_directories(mch-fixtures PUBLIC src PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_compile_features(mch-fixtures PUBLIC cxx_std_20)
+target_link_libraries(mch-fixtures PUBLIC mch-classify lz4::lz4)
+add_dependencies(mch-fixtures mch_generate_sources)
 
 # --- In-process shadow classifier for ton-trace-emulator (em1-design §8).
 # Split in two so the emulator-free side (converter / interfaces / actor) stays
@@ -247,11 +283,13 @@ target_include_directories(ton-mch-engine PRIVATE src ${CMAKE_CURRENT_BINARY_DIR
 target_compile_features(ton-mch-engine PRIVATE cxx_std_20)
 # mch-emu (not just mch-classify): --actions-msgpack-test gates the write-back
 # writer, which lives there. Still no emulator dependency — mch-emu-bridge is
-# the only target that knows ::Trace.
-target_link_libraries(ton-mch-engine mch-classify mch-emu)
+# the only target that knows ::Trace. mch-fixtures is linked HERE and only here.
+target_link_libraries(ton-mch-engine mch-fixtures mch-classify mch-emu)
 add_dependencies(ton-mch-engine mch_generate_sources)
 
-install(TARGETS ton-mch-engine RUNTIME DESTINATION bin)
+# Deliberately NOT install()ed: this is the gate/dev harness, not a product
+# binary, and it has no place in the production bin dir
+# (python-parity-audit §5.7 H35).
 
 # --- CTest wiring (§10.1) ------------------------------------------------------
 # The deterministic, self-contained gate modes as native tests (`ctest -R mch`).

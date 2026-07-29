@@ -1,9 +1,10 @@
-// Loads an .lz4 trace fixture (LZ4-frame-compressed msgpack) produced by the
-// Python indexer's recorder (tests/traces/*.lz4, schema per
-// tests/utils/trace_deserializer.py). Mirrors mch-go-poc/trace/load.go: only
-// the fields needed for structural matching are decoded; unknown msgpack keys
-// are ignored — plus (B2) the root `interfaces` section: the per-account
-// interface data Python's TestInterfaceRepository serves lookups from.
+// The engine's trace DATA MODEL (MsgContent / Message / Transaction / Trace) —
+// what every loader produces and the whole pipeline consumes.
+//
+// Loaders are elsewhere and are NOT interchangeable in kind: SchemaTraceLoader
+// is the production one (schema::Transaction -> Trace); the .lz4 fixture reader
+// is test-only and lives in fixtures/FixtureLoader.h, in the mch-fixtures
+// target, so that lz4/msgpack never reach a product binary.
 #pragma once
 
 #include "Value.h"
@@ -103,9 +104,6 @@ struct Trace {
   // bin->Bytes, map->Dict, array->List; floats have no Value kind -> Null.
   std::map<std::string, Value> interfaces;
 };
-
-// Reads, decompresses and decodes one fixture file.
-td::Result<Trace> load_trace(const std::string &path);
 
 // Derives Trace's five aggregates from `trace.transactions`: min/max lt, min/max
 // now, max mc_block_seqno. For loaders with no trace header — i.e. the

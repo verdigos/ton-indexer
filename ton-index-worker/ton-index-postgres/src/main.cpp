@@ -54,7 +54,6 @@ int main(int argc, char *argv[]) {
   KvrocksConfig kvrocks_config;
   PartitionManagerConfig partition_config;
   bool testnet = false;
-  std::string mch_shadow_artifact;  // Phase G: MCH IR artifact for shadow classification (empty = off)
 
   std::uint32_t max_active_tasks = 7;
   std::uint32_t max_insert_actors = 12;
@@ -275,10 +274,6 @@ int main(int argc, char *argv[]) {
 
   p.add_option('\0', "testnet", "Use for testnet. It is used for correct indexing of .ton DNS entries (in testnet .ton collection has a different address)", [&]() {
     testnet = true;
-  });
-
-  p.add_option('\0', "mch-shadow", "Phase G shadow mode: path to the MCH IR artifact (json). When set, each seqno is ALSO classified by the C++ MCH engine (log-only, no insert)", [&](td::Slice value) {
-    mch_shadow_artifact = value.str();
   });
 
   p.add_checked_option('f', "from", "Masterchain seqno to start indexing from", [&](td::Slice value) { 
@@ -626,17 +621,6 @@ int main(int argc, char *argv[]) {
     td::actor::send_closure(insert_manager_, &InsertManagerPostgres::set_max_data_depth, max_data_depth);
     td::actor::send_closure(insert_manager_, &InsertManagerPostgres::print_info);
   });
-  if (!mch_shadow_artifact.empty()) {
-    // prod-design §4: an unrunnable/mismatched artifact is a build/config error —
-    // fail closed at startup rather than silently skipping shadow classification.
-    auto r_prep = mch::load_engine_prep(mch_shadow_artifact);
-    if (r_prep.is_error()) {
-      LOG(FATAL) << "failed to load MCH shadow artifact '" << mch_shadow_artifact << "': " << r_prep.move_as_error();
-    }
-    auto prep = r_prep.move_as_ok();
-    LOG(INFO) << "MCH shadow mode ENABLED (artifact " << mch_shadow_artifact << ")";
-    scheduler.run_in_context([&] { td::actor::send_closure(index_scheduler_, &IndexScheduler::set_mch_shadow, prep); });
-  }
   scheduler.run_in_context([&] { td::actor::send_closure(index_scheduler_, &IndexScheduler::run); });
   
   while(!finish_requested->load() && scheduler.run(1)) {

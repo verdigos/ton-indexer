@@ -82,7 +82,7 @@ std::size_t scrub_arena_refs(Action &a) {
   return n;
 }
 
-// Same sequence as MchClassifierActor's per-trace path (schema_to_trace ->
+// Same sequence the deleted Phase-G shadow actor ran (schema_to_trace ->
 // to_tree/init_block -> classify_trace over the two-tier lookup source), with
 // the same try/catch and FailureCategory mapping, plus build_action run INSIDE
 // the try — while the arena the CoreActions point into is still alive. Never

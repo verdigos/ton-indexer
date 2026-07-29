@@ -73,7 +73,7 @@ int run_surface() {
   std::cout << "{\n";
   std::cout << "  \"boc_fields\": " << json_array(to_vec(boc_field_names())) << ",\n";
   std::cout << "  \"fns\": " << json_array(keys(host_fns())) << ",\n";
-  std::cout << "  \"lookup_kinds\": " << json_array(to_vec(FixtureLookupSource::kinds())) << ",\n";
+  std::cout << "  \"lookup_kinds\": " << json_array(to_vec(lookup_kinds())) << ",\n";
   std::cout << "  \"parsers\": " << json_array(keys(message_parsers())) << ",\n";
   std::cout << "  \"preds\": " << json_array(keys(host_predicates())) << ",\n";
   std::cout << "  \"shapers\": " << json_array(keys(host_shapers())) << "\n";

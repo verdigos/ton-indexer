@@ -66,9 +66,9 @@ Value dedust_asset(const std::optional<block::StdAddress> &a) {
 }  // namespace
 
 const std::set<std::string> &ParsedBlockLookupSource::kinds() {
-  // Same set FixtureLookupSource serves — keeps prepare_classify's skip table
+  // The lib-wide kind set — keeps prepare_classify's skip table
   // byte-identical on the production path.
-  return FixtureLookupSource::kinds();
+  return lookup_kinds();
 }
 
 Value ParsedBlockLookupSource::iface_value(const std::string &kind,

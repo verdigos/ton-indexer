@@ -3,6 +3,8 @@
 #include "BlockTree.h"
 #include "BuildDriver.h"
 #include "BuildRuntime.h"
+#include "fixtures/FixtureLoader.h"
+#include "fixtures/FixtureLookupSource.h"
 #include "ClassifyCore.h"
 #include "IrLoader.h"
 #include "Walker.h"

@@ -48,6 +48,11 @@ namespace mch {
 struct CoreAction;  // ClassifyCore.h
 class LookupSource;  // BuildRuntime.h
 
+// TODO: remove (harness): TraceContextLoader and LookupSourceFactory below are
+// injection seams that exist only so the schema A/B gate can substitute a
+// loader and a fixture-backed lookup factory (audit §5.7 H31). They collapse
+// with the A/B gates once the golden gate is the only actions expectation.
+//
 // How run_dump acquires a trace's TraceContext for a fixture path. Path A = the
 // msgpack loader (load_trace_context); the schema A/B gate injects a callback
 // that synthesizes schema::Transactions and runs SchemaTraceLoader (SchemaGate.cpp).
@@ -59,6 +64,9 @@ using TraceContextLoader = std::function<td::Result<TraceContext>(const std::str
 // factory over a synthesized account_interfaces_ map (SchemaGate.cpp).
 using LookupSourceFactory = std::function<std::shared_ptr<LookupSource>(TraceContext &)>;
 
+// TODO: remove (harness): `--classify` renders the INTERMEDIATE block-tree
+// stage, whose only consumer was the Python twin twins/py_classify.py (audit
+// §5.7 H30). The action rows (run_actions below) are the gated stage.
 int run_classify(const std::string &artifact_path, const std::vector<std::string> &paths);
 
 // Shared classify/actions dump over an injectable context loader (the render +

@@ -7,7 +7,7 @@
 #include "ActionBuild.h"             // Action (the rows the classifier hands back)
 #include "EmuActionPayload.h"        // EmuActionPayload (the write-back bytes)
 #include "EmuCelldbLookup.h"         // Tier2Budget, Tier2Stats, AllShardStates
-#include "MchClassifierActor.h"      // MchEnginePrep
+#include "EnginePrep.h"             // MchEnginePrep
 #include "ParsedBlockLookupSource.h" // InterfaceMap, LookupStats
 
 #include "crypto/block/block.h"  // block::StdAddress

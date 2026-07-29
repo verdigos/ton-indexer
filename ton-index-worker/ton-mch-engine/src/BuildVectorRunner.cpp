@@ -2,7 +2,7 @@
 
 #include "BlockTree.h"
 #include "BuildRuntime.h"
-#include "GenBuilds.h"
+#include "fixtures/GenBuildsVectors.h"
 #include "VectorRunner.h"
 
 #include "td/utils/JsonBuilder.h"

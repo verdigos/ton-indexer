@@ -458,17 +458,4 @@ Block *init_block(BlockArena &arena, const EventNode *node) {
   return root;
 }
 
-// --- TraceContext --------------------------------------------------------------
-
-td::Result<TraceContext> load_trace_context(const std::string &path) {
-  TraceContext ctx;
-  TRY_RESULT_ASSIGN(ctx.trace, load_trace(path));
-  ctx.tree = to_tree(ctx.trace);
-  if (ctx.tree.root == nullptr) {
-    return td::Status::Error("empty event tree");
-  }
-  ctx.root = init_block(ctx.arena, ctx.tree.root);
-  return ctx;
-}
-
 }  // namespace mch

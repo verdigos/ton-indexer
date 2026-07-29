@@ -212,8 +212,4 @@ struct TraceContext {
   Block *root{nullptr};
 };
 
-// Loads an .lz4 trace fixture and builds the full block substrate.
-// tree.root == nullptr (empty trace) is an error.
-td::Result<TraceContext> load_trace_context(const std::string &path);
-
 }  // namespace mch

@@ -13,6 +13,7 @@
 
 #include "AbiBridgeTest.h"
 #include "BlockTree.h"
+#include "fixtures/FixtureLoader.h"
 #include "BuildSmoke.h"
 #include "Classify.h"
 #include "DexRecordsTest.h"
@@ -180,6 +181,12 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "msg-vectors",
                "Run M1 message-schema boundary vectors (parse ok/fail) and exit",
                [&](td::Slice value) { msg_vectors_path = value.str(); });
+  // TODO: remove (harness): --match, --match-gen, --build-smoke, --classify,
+  // --classify-schema, --classify-prod, --parse-dump and --surface all render
+  // INTERMEDIATE pipeline stages whose only consumers were the Python twins
+  // (audit §5.7 H33). The gated stage is the action rows: --actions, and the
+  // --actions-schema / --actions-prod A/B pair that cross-checks the
+  // production loader against it.
   p.add_option('\0', "match", "Match-phase dump: -I <artifact> -T <fixture|dir> (repeatable)",
                [&]() { match_mode = true; });
   p.add_option('\0', "match-gen",
@@ -230,6 +237,8 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "celldb-tier2-test",
                "Celldb tier-2 lookup self-test (W3: tier shape equality, jvault chain, memo/budget)",
                [&]() { celldb_tier2_test_mode = true; });
+  // TODO: remove (harness): fixture generator for the Go wire round-trip test;
+  // it belongs with that test, not on the engine CLI (W2 gate machinery).
   p.add_option('\0', "actions-msgpack-out",
                "Regenerate the cross-language wire fixture the Go round-trip test decodes: "
                "--actions-msgpack-out <path>",

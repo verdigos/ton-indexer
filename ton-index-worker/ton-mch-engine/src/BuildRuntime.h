@@ -128,31 +128,11 @@ class LookupSource {
   virtual Value fetch(const std::string &kind, const std::vector<Value> &args) const = 0;
 };
 
-// Offline LookupSource over a fixture's `interfaces` section (Trace.interfaces
-// — the data Python's TestInterfaceRepository serves). Kind semantics mirror
-// the REAL registered Python lookup fns:
-//  - jetton_wallet (registry.default_lookups): key = arg.upper();
-//    account["JettonWallet"] -> Obj{balance, address, owner, jetton}; else null.
-//  - nft_item (builders/dns.py RAW variant — the artifact's only consumer):
-//    key = arg UN-normalized; account["NftItem"] -> Obj{address, init, index,
-//    collection_address, owner_address, content}; else null.
-//  - nominator_pool (builders/nominator.py): key = arg raw; the account's
-//    whole interfaces Dict when it contains "NominatorPool", else null.
-// Deviation note: a non-Str argument yields null here where Python's
-// jetton_wallet would raise (str.upper on a non-str -> EvalError -> same
-// rejection only when the spec null-checks); real specs pass envelope address
-// strings only.
-class FixtureLookupSource : public LookupSource {
- public:
-  explicit FixtureLookupSource(const std::map<std::string, Value> *interfaces)
-      : interfaces_(interfaces) {
-  }
-  static const std::set<std::string> &kinds();
-  Value fetch(const std::string &kind, const std::vector<Value> &args) const override;
-
- private:
-  const std::map<std::string, Value> *interfaces_;
-};
+// Every lookup kind the artifact may reference. Both the runnability gating in
+// BuildDriver and the production ParsedBlockLookupSource key off this set; the
+// fixture-backed source that serves it offline lives in mch-fixtures
+// (fixtures/FixtureLookupSource.h).
+const std::set<std::string> &lookup_kinds();
 
 // Execution environment for one generated build fn (D3).
 struct BuildEnv {

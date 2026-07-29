@@ -3,6 +3,7 @@
 #include "BlockTree.h"
 #include "BuildDriver.h"  // shared block_key (§11 item 2 dedupe)
 #include "GenWheres.h"
+#include "fixtures/FixtureLoader.h"
 #include "IrLoader.h"
 #include "Walker.h"
 

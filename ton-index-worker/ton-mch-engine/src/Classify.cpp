@@ -5,6 +5,8 @@
 #include "BuildDriver.h"
 #include "ClassifyCore.h"
 #include "BuildRuntime.h"
+#include "fixtures/FixtureLoader.h"
+#include "fixtures/FixtureLookupSource.h"
 #include "ExprRuntime.h"
 #include "IrLoader.h"
 #include "MsgParse.h"

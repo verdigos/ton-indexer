@@ -1,3 +1,7 @@
+// TODO: remove (harness): the interpreter is the reference/fallback path kept
+// for differential gating; full codegen retires it (audit §2.5, §5.7 H7). Do
+// not extend it — new semantics go in ExprRuntime, which both paths call.
+//
 // Tree-walking interpreter for MCH IR expressions (docs/mch-ir-spec.md §7).
 //
 // Reference / fallback path. It walks the IR expression encoding (k-tagged

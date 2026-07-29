@@ -1,3 +1,7 @@
+// TODO: remove (harness): runtime IR loading keeps mch_ir.json on the
+// production binaries' startup surface; full codegen retires it together with
+// ExprEval (audit §2.5, §5.7 H8). Do not extend it.
+//
 // MCH IR artifact loader (docs/mch-ir-spec.md §3, §5; docs/mch-engine-v2.md §3.1).
 //
 // Parses the `1.0` artifact JSON into immutable CompiledMatcher /

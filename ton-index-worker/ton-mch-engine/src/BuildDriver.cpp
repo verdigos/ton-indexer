@@ -131,7 +131,7 @@ std::string build_skip_reason(const CompiledMatcher &m) {
   }
   std::vector<std::string> missing_lookups;
   for (const std::string &l : m.ref_lookups) {
-    if (FixtureLookupSource::kinds().count(l) == 0) {
+    if (lookup_kinds().count(l) == 0) {
       missing_lookups.push_back(l);
     }
   }

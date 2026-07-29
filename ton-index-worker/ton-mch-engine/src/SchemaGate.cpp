@@ -10,6 +10,8 @@
 #include "BlockTree.h"
 #include "BuildDriver.h"
 #include "BuildRuntime.h"
+#include "fixtures/FixtureLoader.h"
+#include "fixtures/FixtureLookupSource.h"
 #include "Classify.h"
 #include "ClassifyCore.h"
 #include "IrLoader.h"
