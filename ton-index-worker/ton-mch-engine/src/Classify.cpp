@@ -106,6 +106,7 @@ std::string render_action(const Action &a) {
   f.emplace_back("layerzero_packet_data", a.layerzero_packet_data);
   f.emplace_back("jvault_stake_data", a.jvault_stake_data);
   f.emplace_back("jvault_claim_data", a.jvault_claim_data);
+  f.emplace_back("change_dns_record_data", a.change_dns_record_data);
   f.emplace_back("extra", a.extra);
   return render_value(Value::make_dict(std::move(f)));
 }
@@ -202,6 +203,13 @@ int run_dump(const std::string &artifact_path, const std::vector<std::string> &p
       } else {
         emit_action(a);
       }
+    }
+    // The trace classified cleanly and matched nothing. The synthetic `unknown`
+    // row has no Block, so it prints the literal anchor `unknown` (the twin
+    // prints the same) instead of a block_key.
+    if (actions_mode && res.unknown_trace) {
+      Action act = create_unknown_action(ctx.trace);
+      std::printf("ACTION anchor=unknown %s\n", render_action(act).c_str());
     }
   }
   return 0;

@@ -68,6 +68,18 @@ struct ClassifyResult {
   // btype (call_contract / contract_deploy / ton_transfer). Production commits
   // these when classification fails. Ungated (corpus has no failing traces).
   std::vector<CoreAction> fallback_actions;
+  // Classification SUCCEEDED but matched nothing, over a trace that has
+  // transactions — trace_processor.py:44-46's `len(actions) == 0 and
+  // len(trace.transactions) > 0` branch. The adapter answers it with
+  // create_unknown_action(ctx.trace); that row has no Block, so it cannot be a
+  // CoreAction and the core only raises the flag.
+  //
+  // Why it matters beyond parity: ton-index-go reads `Classified` as "the
+  // `actions` field exists", so an EMPTY array is reported to API consumers as
+  // a successful classification (emulated/models.go:838-844). Without this row,
+  // "we looked and found nothing classifiable" is indistinguishable from "this
+  // trace was never classified".
+  bool unknown_trace = false;
 };
 
 // B1 anchor prefilter: the per-trace opcode/btype inventory an included

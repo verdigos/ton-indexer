@@ -543,6 +543,9 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
   if (result.failure) {
     result.actions.clear();  // event_processing.py discards the trace's actions
     result.fallback_actions = basic_classify_fallback(ctx);
+  } else if (result.actions.empty() && !ctx.trace.transactions.empty()) {
+    // trace_processor.py:44-46 — classification succeeded and matched nothing.
+    result.unknown_trace = true;
   }
   return result;
 }

@@ -493,6 +493,217 @@ void fill_tgbtc_mint(const Value &d, Action &a) {
   a.destination_secondary = av_addr(dg(d, "recipient_wallet"));
 }
 
+// --- W6 bucket-B fills (em2-writeback-design.md §2.4) ------------------------
+// Btypes whose MATCHER runs and produces a block, but which had no fill_action
+// branch — so build_action returned false and the whole row vanished from the
+// payload even though the protocol HAD been recognised. Zero of these fire on
+// the 165-fixture corpus, so the A/B twin cannot cover them; each is gated
+// hermetically instead (--actions-msgpack-test), with the data field names
+// taken from the IR's own `out`/`switch` field lists and the column set from
+// the matching Python _fill_*.
+
+void fill_dns_renew(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "source"));
+  a.destination = av_addr(dg(d, "destination"));
+  a.asset = av_addr(dg(d, "collection_address"));
+}
+
+// Python bytes.hex(): lowercase, unseparated, no 0x prefix. td::buffer_to_hex
+// is UPPERCASE and must NOT be substituted — Go takes both these fields as
+// *string, so the case difference would sail past the decoder and land in front
+// of API consumers as a silently different key.
+Value bytes_hex(const Value &v) {
+  if (v.t != VType::Bytes) {
+    return Value::null();
+  }
+  static const char kHex[] = "0123456789abcdef";
+  std::string out(v.str.size() * 2, '\0');
+  for (std::size_t i = 0; i < v.str.size(); i++) {
+    const auto c = static_cast<unsigned char>(v.str[i]);
+    out[2 * i] = kHex[c >> 4];
+    out[2 * i + 1] = kHex[c & 15];
+  }
+  return Value::make_str(std::move(out));
+}
+
+// _fill_change_dns_record_action. The record dict the parser produces carries
+// {schema, address, flags, dns_text} exactly as Python's does, so the branching
+// is a transcription — but the KEY SET is Python's, not the branch's: it always
+// emits value_schema/flags/address/key and appends `value` only for a schema it
+// recognises. `address` is dead on both sides and stays anyway: VERIFIED at
+// block_tree_serializer.py:563-568 (and :585-591 for delete), where Python seeds
+// the dict with 'address': None and never assigns it, and Go's
+// actionChangeDnsRecordDetails has no such field. Keeping it is what makes the
+// decoded map match Python's key for key.
+void fill_change_dns(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "source"));
+  a.destination = av_addr(dg(d, "destination"));
+  a.asset = av_addr(dg(d, "collection_address"));
+
+  const Value rec = dg(d, "value");  // the parsed dns_record_data
+  const Value schema = dg(rec, "schema");
+  const std::string s = schema.t == VType::Str ? schema.str : std::string();
+
+  Value value_field = Value::null();
+  bool has_value_field = true;
+  Value flags = Value::null();
+  if (s == "DNSNextResolver" || s == "DNSSmcAddress") {
+    value_field = av_addr(dg(rec, "address"));
+  } else if (s == "DNSAdnlAddress") {
+    value_field = bytes_hex(dg(rec, "address"));
+    flags = dg(rec, "flags");
+  } else if (s == "DNSStorageAddress") {
+    value_field = bytes_hex(dg(rec, "address"));
+  } else if (s == "DNSText") {
+    value_field = dg(rec, "dns_text");
+  } else {
+    has_value_field = false;  // "Unknown": Python never creates the key
+  }
+  if (s == "DNSSmcAddress") {
+    flags = dg(rec, "flags");  // a SECOND standalone `if` in Python, not an elif
+  }
+
+  Value::Fields f;
+  f.emplace_back("value_schema", schema);
+  // Int, not Str: the serializer stringifies every non-excluded int inside a
+  // composite, which is what Python does and what Go's *string + ParseInt
+  // expects — this one agrees on both sides, unlike the §2.6 fields.
+  f.emplace_back("flags", flags);
+  f.emplace_back("address", Value::null());
+  f.emplace_back("key", bytes_hex(dg(d, "key")));
+  if (has_value_field) {
+    f.emplace_back("value", value_field);
+  }
+  a.change_dns_record_data = mkdict(std::move(f));
+}
+
+// _fill_delete_dns_record_action: the same column with everything but the key
+// nulled — a deletion names the record it removes and nothing else.
+void fill_delete_dns(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "source"));
+  a.destination = av_addr(dg(d, "destination"));
+  a.asset = av_addr(dg(d, "collection_address"));
+  Value::Fields f;
+  f.emplace_back("value_schema", Value::null());
+  f.emplace_back("flags", Value::null());
+  f.emplace_back("address", Value::null());
+  f.emplace_back("key", bytes_hex(dg(d, "key")));
+  a.change_dns_record_data = mkdict(std::move(f));
+}
+
+void fill_nominator_pool_withdraw_request(const Value &d, Action &a) {
+  // The btype does NOT decide the action type here: a request that already
+  // carries its payout is a COMPLETED withdrawal.
+  Value payout = dg(d, "payout_amount");
+  if (payout.is_null()) {
+    a.type = "stake_withdrawal_request";
+  } else {
+    a.type = "stake_withdrawal";
+    a.amount = av_amount(payout);
+  }
+  Value::Fields f;
+  f.emplace_back("provider", Value::make_str("nominator"));
+  a.staking_data = mkdict(std::move(f));
+  a.source = av_addr(dg(d, "source"));
+  a.destination = av_addr(dg(d, "pool"));
+}
+
+void fill_tonstakers_withdraw(const Value &d, Action &a) {
+  a.type = "stake_withdrawal";
+  a.source = av_addr(dg(d, "stake_holder"));
+  a.destination = av_addr(dg(d, "pool"));
+  a.amount = av_amount(dg(d, "amount"));
+  a.asset = av_addr(dg(d, "asset"));
+  Value::Fields f;
+  f.emplace_back("provider", Value::make_str("liquid_staking"));
+  f.emplace_back("ts_nft", av_addr(dg(d, "burnt_nft")));
+  f.emplace_back("tokens_burnt", av_amount(dg(d, "tokens_burnt")));
+  a.staking_data = mkdict(std::move(f));
+}
+
+void fill_tonstakers_withdraw_request(const Value &d, Action &a) {
+  a.type = "stake_withdrawal_request";
+  a.source = av_addr(dg(d, "source"));
+  a.source_secondary = av_addr(dg(d, "tsTON_wallet"));
+  a.destination = av_addr(dg(d, "pool"));
+  a.amount = av_amount(dg(d, "tokens_burnt"));
+  a.asset = av_addr(dg(d, "asset"));
+  Value::Fields f;
+  f.emplace_back("provider", Value::make_str("liquid_staking"));
+  f.emplace_back("ts_nft", av_addr(dg(d, "minted_nft")));
+  a.staking_data = mkdict(std::move(f));
+}
+
+// The BARE dex_deposit_liquidity (stonfi v2 provide), distinct from the dedust
+// deposit fills above: same composite COLUMN, different producing matcher and a
+// different data field spelling (amount_1 here, amount1 there).
+void fill_dex_deposit_liquidity(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.destination = av_addr(dg(d, "pool"));
+  Value::Fields f;
+  f.emplace_back("dex", dg(d, "dex"));
+  f.emplace_back("amount1", av_amount(dg(d, "amount_1")));
+  f.emplace_back("amount2", av_amount(dg(d, "amount_2")));
+  f.emplace_back("asset1", av_addr(dg(d, "asset_1")));
+  f.emplace_back("asset2", av_addr(dg(d, "asset_2")));
+  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "sender_wallet_1")));
+  f.emplace_back("user_jetton_wallet_2", av_addr(dg(d, "sender_wallet_2")));
+  f.emplace_back("lp_tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
+  a.dex_deposit_liquidity_data = mkdict(std::move(f));
+}
+
+// The BARE dex_withdraw_liquidity (dedust withdraw / stonfi v2 withdraw).
+void fill_dex_withdraw_liquidity(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.source_secondary = av_addr(dg(d, "sender_wallet"));
+  a.destination = av_addr(dg(d, "pool"));
+  a.asset = av_addr(dg(d, "asset"));
+  Value::Fields f;
+  f.emplace_back("dex", dg(d, "dex"));
+  f.emplace_back("amount1", av_amount(dg(d, "amount1_out")));
+  f.emplace_back("amount2", av_amount(dg(d, "amount2_out")));
+  f.emplace_back("asset1_out", av_addr(dg(d, "asset1_out")));
+  f.emplace_back("asset2_out", av_addr(dg(d, "asset2_out")));
+  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "wallet1")));
+  f.emplace_back("user_jetton_wallet_2", av_addr(dg(d, "wallet2")));
+  f.emplace_back("dex_jetton_wallet_1", av_addr(dg(d, "dex_jetton_wallet_1")));
+  f.emplace_back("dex_wallet_1", av_addr(dg(d, "dex_wallet_1")));
+  f.emplace_back("dex_wallet_2", av_addr(dg(d, "dex_wallet_2")));
+  f.emplace_back("dex_jetton_wallet_2", av_addr(dg(d, "dex_jetton_wallet_2")));
+  f.emplace_back("is_refund", dg(d, "is_refund"));
+  f.emplace_back("lp_tokens_burnt", av_amount(dg(d, "lp_tokens_burnt")));
+  a.dex_withdraw_liquidity_data = mkdict(std::move(f));
+}
+
+// getgems / telegram NFT purchase. Sets nft_transfer_data ONLY — unlike
+// fill_nft_transfer, which also writes nft_listing_data.
+void fill_nft_purchase(const Value &d, Action &a) {
+  // Python guards the source assignment on prev_owner being present; av_addr
+  // already answers Null for a missing or addr_none value, so the guard is a
+  // no-op and the unconditional form is equivalent.
+  a.source = av_addr(dg(d, "prev_owner"));
+  a.destination = av_addr(dg(d, "new_owner"));
+  a.asset_secondary = av_addr(dg(d, "nft_address"));
+  a.asset = av_addr(dg(d, "collection_address"));
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("is_purchase", Value::make_bool(true));
+  f.emplace_back("price", av_amount(dg(d, "price")));
+  f.emplace_back("nft_item_index", dg(d, "nft_index"));
+  f.emplace_back("forward_amount", av_amount(dg(d, "forward_amount")));
+  f.emplace_back("custom_payload", dg(d, "custom_payload"));
+  f.emplace_back("forward_payload", dg(d, "forward_payload"));
+  f.emplace_back("response_destination", av_addr(dg(d, "response_destination")));
+  f.emplace_back("marketplace", dg(d, "marketplace"));
+  f.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
+  f.emplace_back("real_prev_owner", av_addr(dg(d, "real_prev_owner")));
+  f.emplace_back("payout_amount", av_amount(dg(d, "payout_amount")));
+  f.emplace_back("payout_comment_encrypted", dg(d, "payout_comment_encrypted"));
+  f.emplace_back("payout_comment_encoded", dg(d, "payout_comment_encoded"));
+  f.emplace_back("payout_comment", dg(d, "payout_comment"));
+  a.nft_transfer_data = mkdict(std::move(f));
+}
+
 // --- basic-actions fallback fills (Step 2c; block_tree_serializer.py) --------
 // Reached ONLY on the FALLBACK path (ClassifyResult.failure) — the main dump's
 // `pending` is matcher-produced composites, never these leaf btypes. Corpus has
@@ -542,12 +753,27 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "coffee_create_vault") fill_coffee_create_vault(d, a);
   else if (t == "vesting_send_message") fill_vesting_send_message(d, a);
   else if (t == "tgbtc_mint") fill_tgbtc_mint(d, a);
-  // NAMED SKIP — nft_purchase / dns_purchase (getgems_nft_purchase +
-  // telegram_nft_purchase): the Python fill _fill_nft_purchase_action is now
-  // _dget-safe (dual-dispatch wave), but nft_purchase has ZERO corpus coverage
-  // (no getgems/telegram purchase traces fire), so there is nothing to A/B-gate
-  // — deliberately NOT ported. Add a fill here (Python fill already handles the
-  // dict) if a purchase trace ever enters the corpus.
+  // W6 bucket B: matcher-produced btypes that used to fall through to `return
+  // false` and lose the whole row.
+  else if (t == "renew_dns") fill_dns_renew(d, a);
+  else if (t == "nominator_pool_withdraw_request") fill_nominator_pool_withdraw_request(d, a);
+  else if (t == "tonstakers_withdraw") fill_tonstakers_withdraw(d, a);
+  else if (t == "tonstakers_withdraw_request") fill_tonstakers_withdraw_request(d, a);
+  else if (t == "dex_deposit_liquidity") fill_dex_deposit_liquidity(d, a);
+  else if (t == "dex_withdraw_liquidity") fill_dex_withdraw_liquidity(d, a);
+  // nft_purchase: the former NAMED SKIP, REVERSED in W6 by the lead.
+  // The old note said nft_purchase had zero corpus coverage and so nothing to
+  // A/B-gate, and left it unported. That reasoning does not survive EM2: the
+  // matcher runs and Python emits the row, so leaving it out does not avoid a
+  // diff — it MANUFACTURES one in `real-mismatch`, the one phase-1 bucket that
+  // must read zero, on traffic (GetGems) that is plentiful live even though the
+  // fixture corpus has none of it. Gated hermetically instead
+  // (--actions-msgpack-test), like the other W6 fills.
+  else if (t == "nft_purchase") fill_nft_purchase(d, a);
+  else if (t == "change_dns") fill_change_dns(d, a);
+  else if (t == "delete_dns") fill_delete_dns(d, a);
+  // STILL UNPORTED, deliberately: dns_purchase is bucket C, not B — NO matcher
+  // in ir/mch_ir.json produces it, so there is nothing to fill.
   else return false;
   return true;
 }
@@ -620,6 +846,34 @@ bool build_action(Block *b, Action &a) {
   accts.erase(std::unique(accts.begin(), accts.end()), accts.end());
   a.accounts = std::move(accts);
   return true;
+}
+
+Action create_unknown_action(const Trace &trace) {
+  Action a;
+  a.type = "unknown";
+  a.action_id = trace.trace_id;
+  // Straight off the Trace, exactly as Python takes them (:1692-1703). Every
+  // loader fills these: the fixture path from the trace header, the PRODUCTION
+  // SchemaTraceLoader by deriving them (fill_trace_aggregates, TraceLoader.h).
+  a.start_lt = trace.start_lt;
+  a.end_lt = trace.end_lt;
+  a.start_utime = trace.start_utime;
+  a.end_utime = trace.end_utime;
+  a.mc_seqno_end = trace.mc_seqno_end;
+  // success = not any(tx.aborted): a property of the whole trace, not a block.
+  bool failed = false;
+  std::set<std::string> accts;
+  for (const auto &tx : trace.transactions) {
+    a.tx_hashes.push_back(tx->hash);
+    accts.insert(tx->account);
+    failed = failed || tx->aborted;
+  }
+  a.success = !failed;
+  // Python builds both from an unordered list/set comprehension; every consumer
+  // and both A/B comparators sort, so the sorted form is the deterministic one.
+  std::sort(a.tx_hashes.begin(), a.tx_hashes.end());
+  a.accounts.assign(accts.begin(), accts.end());
+  return a;
 }
 
 }  // namespace mch

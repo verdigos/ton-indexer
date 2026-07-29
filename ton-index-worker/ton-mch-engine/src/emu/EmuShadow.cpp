@@ -25,17 +25,27 @@ EmuFinality to_emu_finality(FinalityState f) {
   return EmuFinality::emulated;
 }
 
-// The gate decision (§16.1/§16.3), taken on the emulator's own thread. False
-// means the emission goes straight to the insert without being classified.
-bool admit(EmuGate &gate, std::int64_t now_us,
-           td::actor::ActorId<EmuClassifierActor> classifier) {
+// The marker for a gate-side outcome. The classifier never saw the emission, so
+// nothing downstream would set `state`, and leaving it null would make a shed
+// indistinguishable from the feature being off.
+EmuActionPayload shed_payload(const char *state, EmuFinality finality) {
+  EmuActionPayload p;
+  p.state = state;
+  p.finality = static_cast<std::uint8_t>(finality);
+  return p;
+}
+
+// The gate decision (§16.1/§16.3), taken on the emulator's own thread. Returns
+// the state string when the emission is turned away, or nullptr to admit it.
+const char *admit(EmuGate &gate, std::int64_t now_us,
+                  td::actor::ActorId<EmuClassifierActor> classifier) {
   if (gate.disabled.load(std::memory_order_relaxed)) {
     td::actor::send_closure(classifier, &EmuClassifierActor::note_shed,
                             EmuClassifyOutcome::bypassed_disabled);
-    return false;
+    return "disabled";
   }
   if (gate.in_flight.load(std::memory_order_relaxed) < kMaxInFlightClassify) {
-    return true;
+    return nullptr;
   }
   // Full AND nothing has come back for kStallFailOpenUs: the one stall neither
   // the cap nor the deadline can clear by itself (a non-terminating loop inside
@@ -52,7 +62,7 @@ bool admit(EmuGate &gate, std::int64_t now_us,
   }
   td::actor::send_closure(classifier, &EmuClassifierActor::note_shed,
                           EmuClassifyOutcome::shed_admission);
-  return false;
+  return "shed_admission";
 }
 
 }  // namespace
@@ -107,13 +117,16 @@ EmuTraceView make_view(const ::Trace &trace) {
   return view;
 }
 
-EmuTraceSink decorate_sink(EmuTraceSink inner, td::actor::ActorId<EmuClassifierActor> classifier,
+EmuTraceSink decorate_sink(EmuInsertSink inner, td::actor::ActorId<EmuClassifierActor> classifier,
                            std::shared_ptr<EmuGate> gate) {
   return [inner = std::move(inner), classifier, gate = std::move(gate)](
              ::Trace trace, td::Promise<td::Unit> promise, MeasurementPtr measurement) {
     const std::int64_t now_us = emu_now_us();
-    if (!admit(*gate, now_us, classifier)) {
-      inner(std::move(trace), std::move(promise), std::move(measurement));
+    if (const char *shed = admit(*gate, now_us, classifier)) {
+      // The finality is unknown without a view, and building one for a shed
+      // would defeat the valve — `emulated` keeps the guard conservative.
+      inner(std::move(trace), shed_payload(shed, EmuFinality::emulated), std::move(promise),
+            std::move(measurement));
       return;
     }
 
@@ -121,24 +134,31 @@ EmuTraceSink decorate_sink(EmuTraceSink inner, td::actor::ActorId<EmuClassifierA
     EmuTraceView view = make_view(trace);
     view.sent_us = now_us;
     view.deadline_us = now_us + kClassifyDeadlineUs;
+    const EmuFinality finality = view_finality(view);
     gate->in_flight.fetch_add(1, std::memory_order_relaxed);
 
     // The insert runs in the response continuation, on the classifier's thread.
     // ~LambdaPromise answers a promise the actor never got to (shutdown) with an
     // error, so this fires exactly once even then — the insert cannot be lost,
     // and in_flight cannot leak.
-    auto P = td::PromiseCreator::lambda([gate, inner, trace = std::move(trace),
+    auto P = td::PromiseCreator::lambda([gate, inner, finality, trace = std::move(trace),
                                          promise = std::move(promise),
                                          measurement = std::move(measurement)](
                                             td::Result<EmuClassifyResult> R) mutable {
       gate->in_flight.fetch_sub(1, std::memory_order_relaxed);
       gate->last_response_us.store(emu_now_us(), std::memory_order_relaxed);
+      // The payload rides into the MULTI from here. On a lost response there is
+      // no payload to carry, so the insert still runs — suppressing it would
+      // turn a classifier hiccup into a blockchain-data outage — with the
+      // empty-degraded marker instead.
+      EmuActionPayload payload;
       if (R.is_error()) {
         LOG(WARNING) << "[mch-emu] classify response lost: " << R.move_as_error();
+        payload = shed_payload("response_lost", finality);
+      } else {
+        payload = std::move(R.move_as_ok().payload);
       }
-      // The write-back wave moves R.ok().actions into the insert here; W1 stops
-      // at the counters the actor already logged.
-      inner(std::move(trace), std::move(promise), std::move(measurement));
+      inner(std::move(trace), std::move(payload), std::move(promise), std::move(measurement));
     });
     td::actor::send_closure(classifier, &EmuClassifierActor::classify, std::move(view),
                             std::move(P));

@@ -1,6 +1,7 @@
 #include "EmuClassifierActor.h"
 
 #include "BlockTree.h"
+#include "EmuActionSerialize.h"
 #include "EmuTraceConvert.h"
 #include "SchemaTraceLoader.h"
 
@@ -8,8 +9,10 @@
 
 #include "td/utils/logging.h"
 
+#include <algorithm>
 #include <exception>
 #include <set>
+#include <string>
 #include <utility>
 
 namespace mch {
@@ -62,6 +65,8 @@ std::size_t scrub_value(Value &v) {
   return n;
 }
 
+// SAME SET AND ORDER as optional_fields() (EmuActionSerialize.cpp) — two lists
+// that must stay in sync; a field added to Action needs a row in both.
 std::size_t scrub_arena_refs(Action &a) {
   std::size_t n = 0;
   for (Value *v : {&a.source, &a.source_secondary, &a.destination, &a.destination_secondary,
@@ -70,7 +75,8 @@ std::size_t scrub_arena_refs(Action &a) {
                    &a.jetton_swap_data, &a.nft_transfer_data, &a.nft_listing_data,
                    &a.dex_deposit_liquidity_data, &a.dex_withdraw_liquidity_data, &a.staking_data,
                    &a.evaa_withdraw_data, &a.vesting_send_message_data, &a.layerzero_packet_data,
-                   &a.jvault_stake_data, &a.jvault_claim_data, &a.extra}) {
+                   &a.jvault_stake_data, &a.jvault_claim_data, &a.change_dns_record_data,
+                   &a.extra}) {
     n += scrub_value(*v);
   }
   return n;
@@ -83,7 +89,8 @@ std::size_t scrub_arena_refs(Action &a) {
 // throws.
 void classify_txs(const MchEnginePrep &prep, const ParsedBlockLookupSource::InterfaceMap &ifaces,
                   const std::vector<schema::Transaction> &txs, EmuClassifyResult &res,
-                  std::vector<std::string> &matcher_names, std::size_t &scrubbed) {
+                  std::vector<Action> &rows, std::vector<std::string> &matcher_names,
+                  std::size_t &scrubbed, bool &unknown_row) {
   try {
     auto r_trace = schema_to_trace(res.trace_id, txs);
     if (r_trace.is_error()) {
@@ -113,19 +120,30 @@ void classify_txs(const MchEnginePrep &prep, const ParsedBlockLookupSource::Inte
     // On failure the regular actions are discarded and the basic-actions
     // fallback rows are what production commits (Classify.cpp).
     res.used_fallback = cres.failure;
-    const std::vector<CoreAction> &rows = cres.failure ? cres.fallback_actions : cres.actions;
+    const std::vector<CoreAction> &core = cres.failure ? cres.fallback_actions : cres.actions;
     std::set<std::string> names;
-    for (const CoreAction &a : rows) {
+    for (const CoreAction &a : core) {
       Action act;
       if (!build_action(a.produced, act)) {  // btype outside the ported fill set
         res.unported_btypes++;
         continue;
       }
       scrubbed += scrub_arena_refs(act);
-      res.actions.push_back(std::move(act));
+      rows.push_back(std::move(act));
       names.insert(a.matcher_name);
     }
     matcher_names.assign(names.begin(), names.end());
+    // The synthetic row for a trace that classified cleanly and matched
+    // nothing, so the trace ships "we looked and found nothing" instead of an
+    // empty array that ton-index-go reports as a successful classification.
+    // ctx.trace carries the aggregates schema_to_trace derived — the emulator
+    // has no trace-level lt/utime of its own, and neither does Python here
+    // (event_deserializer.py:146-151 takes max over the transactions too), so
+    // the two agree by construction.
+    if (cres.unknown_trace) {
+      rows.push_back(create_unknown_action(ctx.trace));
+      unknown_row = true;
+    }
   } catch (const std::exception &e) {
     res.failure = true;
     res.failure_reason = std::string("exception: ") + e.what();
@@ -135,6 +153,49 @@ void classify_txs(const MchEnginePrep &prep, const ParsedBlockLookupSource::Inte
     res.failure_reason = "unknown exception";
     res.failure_category = FailureCategory::engine_fault;
   }
+}
+
+// "wc:HEXUPPER" — the canonical raw form AccountId.as_str() produces and the
+// one the engine puts in Action::accounts, so the _aai keys and the
+// referenced_accounts payload join against the same strings the actions carry.
+std::string addr_str(const block::StdAddress &a) {
+  return std::to_string(a.workchain) + ":" + a.addr.to_hex();
+}
+
+// Everything the MULTI needs, built here while the view is still alive. The
+// single serialization call site.
+EmuActionPayload build_payload(const EmuTraceView &view, const std::vector<Action> &rows,
+                               std::int64_t aai_score, ActionSerializeStats &st) {
+  EmuActionPayload payload;
+  payload.action_count = rows.size();
+  payload.aai_score = aai_score;
+  payload.actions_blob = serialize_actions(rows, view, &st);
+
+  std::set<std::string> tx_accounts;
+  for (const EmuTxRef &node : view.nodes) {
+    tx_accounts.insert(addr_str(node.address));
+  }
+  std::set<std::string> referenced;
+  for (const Action &a : rows) {
+    // Python's index key: "<trace_key>:<action_id>" (pendings.py:257-263). The
+    // suffix is action_id BYTE FOR BYTE, which is what lets a consumer join a
+    // decoded action against its index member.
+    const std::string member = view.trace_id + ":" + a.action_id;
+    for (const std::string &account : a.accounts) {
+      payload.aai.emplace_back(account, member);
+      if (tx_accounts.count(account) == 0) {
+        referenced.insert(account);
+      }
+    }
+  }
+  // The referenced_accounts channel is an unauthenticated remote-kill surface:
+  // ton-trace-ttl-tracker splits the payload on ';' and indexes [1] with no
+  // length check, and a panic there takes the whole process down. Safe here by
+  // construction — an account is "wc:HEX", which cannot contain a separator —
+  // but the string must stay BUILT, never interpolated from anything less
+  // constrained.
+  payload.referenced_accounts.assign(referenced.begin(), referenced.end());
+  return payload;
 }
 
 }  // namespace
@@ -166,10 +227,10 @@ bool EmuClassifierActor::remember_seen(const std::string &trace_id) {
 void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResult> promise) {
   EmuClassifyResult res;
   res.trace_id = view.trace_id;
-  // HANDED BACK: a VType::Cell inside a returned Action can be an interior cell
-  // of the block boc this anchor holds, and the caller reads it after the block
-  // emulator has stopped.
-  res.anchor = view.anchor;
+  // The payload's finality and the wire `finality` key are the SAME derivation
+  // (view_finality), so the value the insert guards on cannot drift from the
+  // one the blob advertises.
+  res.payload.finality = static_cast<std::uint8_t>(view_finality(view));
 
   const std::int64_t started_us = emu_now_us();
   res.queue_us = started_us - view.sent_us;
@@ -197,9 +258,18 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
   if (started_us > view.deadline_us) {
     stats_.shed_deadline++;
     res.outcome = EmuClassifyOutcome::shed_deadline;
+    // The marker says WHY there is no payload; the blob stays empty, so the
+    // `actions` field is not written and Go reports Classified:false.
+    res.payload.state = "shed_deadline";
     promise.set_value(std::move(res));
     return;
   }
+
+  // The rows this emission produced. They live HERE, not on the result: the
+  // serializer runs below while `view` (and so the cell anchor a VType::Cell
+  // value can point into) is still alive, and only bytes leave this function.
+  std::vector<Action> rows;
+  bool unknown_row = false;
 
   // The TLB parsers throw vm::VmError, which does NOT derive from std::exception
   // (excno.hpp) and which tdactor does not catch anywhere — upstream contains it
@@ -219,16 +289,54 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
       // is its own counter).
       res.failure_category = FailureCategory::malformed_trace;
       res.failure_reason = r_txs.move_as_error().message().str();
+      res.payload.state = "convert_failed";
       LOG(WARNING) << "[mch-emu] trace=" << view.trace_id
                    << " CONVERT FAILED: " << res.failure_reason;
     } else {
       auto txs = r_txs.move_as_ok();
       std::vector<std::string> matcher_names;
       std::size_t scrubbed = 0;
-      classify_txs(*cfg_.prep, view.interfaces, txs, res, matcher_names, scrubbed);
-      stats_.actions += res.actions.size();
+      classify_txs(*cfg_.prep, view.interfaces, txs, res, rows, matcher_names, scrubbed,
+                   unknown_row);
+      // Python's trace.start_lt is the ROOT tx lt (event_deserializer.py:150),
+      // which is min(lt) over a well-formed trace — the same value
+      // fill_trace_aggregates derives, so the score matches Python's ZADD.
+      // (Redis scores are IEEE-754 doubles, so an lt above 2^53 loses
+      // precision — a pre-existing property of the protocol, identical for both
+      // writers.)
+      std::int64_t aai_score = 0;
+      bool first_tx = true;
+      for (const auto &tx : txs) {
+        const auto lt = static_cast<std::int64_t>(tx.lt);
+        aai_score = first_tx ? lt : std::min(aai_score, lt);
+        first_tx = false;
+      }
+      // SERIALIZE HERE, inside the view's (and therefore the anchor's)
+      // lifetime. Timed on its own: it lands in the same critical section as
+      // classify_us but is a different cost with a different fix.
+      const std::int64_t ser_started_us = emu_now_us();
+      ActionSerializeStats ser;
+      const std::uint8_t finality = res.payload.finality;
+      res.payload = build_payload(view, rows, aai_score, ser);
+      res.payload.finality = finality;
+      res.serialize_us = emu_now_us() - ser_started_us;
+      if (res.serialize_us > 0) {
+        auto us = static_cast<std::size_t>(res.serialize_us);
+        stats_.serialize_us_total += us;
+        stats_.serialize_us_max = std::max(stats_.serialize_us_max, us);
+      }
+      stats_.actions_blob_bytes += res.payload.actions_blob.size();
+      stats_.ser_float_values += ser.float_values;
+      stats_.ser_cell_values += ser.cell_values;
+      stats_.ser_unrenderable += ser.unrenderable;
+      if (ser.float_values != 0 || ser.cell_values != 0 || ser.unrenderable != 0) {
+        LOG(WARNING) << "[mch-emu] trace=" << res.trace_id
+                     << " serializer saw float=" << ser.float_values
+                     << " cell=" << ser.cell_values << " unrenderable=" << ser.unrenderable;
+      }
+      stats_.actions += rows.size();
       if (res.used_fallback) {
-        stats_.fallback_actions += res.actions.size();
+        stats_.fallback_actions += rows.size();
       }
       stats_.unported_btypes += res.unported_btypes;
       stats_.lookups.tier1_hits += res.lookup_stats.tier1_hits;
@@ -246,18 +354,26 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
         stats_.failed++;
         stats_.by_category[res.failure_category]++;
         res.outcome = EmuClassifyOutcome::classify_failed;
+        // The blob IS written — it carries the basic-actions fallback rows,
+        // which is the degraded output the policy requires, not silence.
+        res.payload.state = "fallback";
         LOG(WARNING) << "[mch-emu] trace=" << view.trace_id << " FAILED ("
                      << category_name(res.failure_category) << "): " << res.failure_reason;
       } else {
         stats_.classified++;
         res.outcome = EmuClassifyOutcome::classified;
+        // `unknown` marks a clean classification that matched nothing. The row
+        // ships either way, so the state string is the ONLY thing that
+        // separates it from a trace with genuine protocol actions.
+        res.payload.state = unknown_row ? "unknown" : "ok";
         std::string names;
         for (const std::string &n : matcher_names) {
           if (!names.empty()) names += ",";
           names += n;
         }
         LOG(DEBUG) << "[mch-emu] trace=" << view.trace_id << " txs=" << txs.size()
-                   << " actions=" << res.actions.size() << " matchers=[" << names << "]";
+                   << " actions=" << res.payload.action_count
+                   << " serialize_us=" << res.serialize_us << " matchers=[" << names << "]";
       }
     }
   } catch (const vm::VmError &e) {
@@ -266,6 +382,7 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
     res.failure = true;
     res.failure_category = FailureCategory::malformed_trace;
     res.failure_reason = std::string("exception (vm): ") + e.get_msg();
+    res.payload.state = "convert_failed";
     LOG(WARNING) << "[mch-emu] trace=" << view.trace_id << " EXCEPTION (vm): " << e.get_msg();
   } catch (...) {
     stats_.convert_failed++;
@@ -273,6 +390,7 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
     res.failure = true;
     res.failure_category = FailureCategory::malformed_trace;
     res.failure_reason = "unknown exception";
+    res.payload.state = "convert_failed";
     LOG(WARNING) << "[mch-emu] trace=" << view.trace_id << " EXCEPTION";
   }
 
@@ -333,7 +451,13 @@ void EmuClassifierActor::alarm() {
             << " queue_us{max=" << stats_.queue_us_max << "}"
             << " classify_us{avg="
             << (stats_.latency_samples ? stats_.classify_us_total / stats_.latency_samples : 0)
-            << " max=" << stats_.classify_us_max << "}";
+            << " max=" << stats_.classify_us_max << "}"
+            << " serialize_us{avg="
+            << (stats_.latency_samples ? stats_.serialize_us_total / stats_.latency_samples : 0)
+            << " max=" << stats_.serialize_us_max << "}"
+            << " blob_bytes=" << stats_.actions_blob_bytes
+            << " ser{float=" << stats_.ser_float_values << " cell=" << stats_.ser_cell_values
+            << " unrenderable=" << stats_.ser_unrenderable << "}";
   prev_ = stats_;
   alarm_timestamp() = td::Timestamp::in(kStatsIntervalSec);
 }

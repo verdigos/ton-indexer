@@ -5,6 +5,7 @@
 #pragma once
 
 #include "ActionBuild.h"             // Action (the rows the classifier hands back)
+#include "EmuActionPayload.h"        // EmuActionPayload (the write-back bytes)
 #include "MchClassifierActor.h"      // MchEnginePrep
 #include "ParsedBlockLookupSource.h" // InterfaceMap, LookupStats
 
@@ -13,6 +14,7 @@
 
 #include "td/utils/port/Clocks.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -72,6 +74,23 @@ struct EmuTraceView {
   std::int64_t sent_us{0}, deadline_us{0};  // emu_now_us basis
 };
 
+// The emission's finality: Python's min(tx.finality) over the trace. ONE
+// derivation, because the wire `finality` key and the insert's staleness guard
+// must agree — two copies would let the value a trace is guarded on drift from
+// the one its own payload advertises.
+inline EmuFinality view_finality(const EmuTraceView &view) {
+  if (view.nodes.empty()) {
+    // No emission to describe. `emulated` is the least advanced value, so an
+    // empty view loses every guard comparison rather than blocking a real one.
+    return EmuFinality::emulated;
+  }
+  EmuFinality f = EmuFinality::finalized;
+  for (const EmuTxRef &node : view.nodes) {
+    f = std::min(f, node.finality);
+  }
+  return f;
+}
+
 enum class EmuClassifyOutcome : std::uint8_t {
   classified,
   classify_failed,
@@ -84,24 +103,25 @@ enum class EmuClassifyOutcome : std::uint8_t {
 struct EmuClassifyResult {
   std::string trace_id;
   EmuClassifyOutcome outcome{EmuClassifyOutcome::bypassed_disabled};
-  // HANDED BACK: a VType::Cell value inside a returned Action can be an
-  // anchor-backed interior cell (custom_payload / forward_payload fills reach
-  // StaticBocExtCells whose bag only this anchor keeps alive), so the anchor
-  // must outlive the rows, not the request. DECLARED BEFORE `actions` on
-  // purpose: members destruct in reverse declaration order, so the anchor
-  // outlives the rows that point into it. That only covers this struct's own
-  // destruction — a write-back must carry the anchor ALONGSIDE the rows into
-  // the insert; a caller that moves `actions` out and drops the result is back
-  // to a use-after-free, which the ordering alone cannot prevent.
-  EmuCellAnchor anchor;
-  std::vector<Action> actions;
+  // BYTES, not rows. The Action vector and the EmuCellAnchor that used to ride
+  // along here are both gone — serialization now happens inside
+  // EmuClassifierActor::classify, while the view (and therefore the anchor) is
+  // still alive, so nothing anchor-backed survives into the insert. That
+  // deletes a whole use-after-free class rather than documenting it: a
+  // declaration-order rule only protects this struct's own destruction, and a
+  // caller that moved `actions` out was back to a dangling interior cell.
+  // TraceInserter needs no mch value type at all — just these plain strings.
+  EmuActionPayload payload;
   bool used_fallback{false};       // rows came from ClassifyResult::fallback_actions
   std::size_t unported_btypes{0};  // produced blocks build_action() declined
   bool failure{false};
   std::string failure_reason;
   FailureCategory failure_category{FailureCategory::none};
   ParsedBlockLookupSource::LookupStats lookup_stats;
-  std::int64_t queue_us{0}, classify_us{0};
+  // serialize_us is SEPARATE from classify_us on purpose: both land in the same
+  // critical section, and folding them together would hide which half a
+  // regression came from.
+  std::int64_t queue_us{0}, classify_us{0}, serialize_us{0};
 };
 
 // Shared gate state: written by the decorator on the emulator's threads and by

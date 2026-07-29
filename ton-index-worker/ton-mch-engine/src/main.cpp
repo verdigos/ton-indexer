@@ -16,6 +16,7 @@
 #include "BuildSmoke.h"
 #include "Classify.h"
 #include "DexRecordsTest.h"
+#include "EmuActionSerializeTest.h"
 #include "MsgVectorRunner.h"
 #include "BuildVectorRunner.h"
 #include "MatchRunner.h"
@@ -160,6 +161,8 @@ int main(int argc, char *argv[]) {
   bool dexrecords_test_mode = false;
   bool surface_mode = false;
   bool abi_bridge_test_mode = false;
+  bool actions_msgpack_test_mode = false;
+  std::string actions_msgpack_out;
   std::vector<std::string> trace_paths;
 
   td::OptionParser p;
@@ -219,6 +222,13 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "abi-bridge-test",
                "ton-abi bridge self-test (W12: trampoline + AbiValue->Value adapter + registry policy)",
                [&]() { abi_bridge_test_mode = true; });
+  p.add_option('\0', "actions-msgpack-test",
+               "Write-back writer self-test (mch::Action -> the msgpack `actions` blob)",
+               [&]() { actions_msgpack_test_mode = true; });
+  p.add_option('\0', "actions-msgpack-out",
+               "Regenerate the cross-language wire fixture the Go round-trip test decodes: "
+               "--actions-msgpack-out <path>",
+               [&](td::Slice value) { actions_msgpack_out = value.str(); });
   p.add_option('\0', "surface",
                "Dump C++ host/parse registries (parsers/preds/fns/shapers/lookup_kinds/"
                "boc_fields) as stable-sorted JSON for the twins",
@@ -338,6 +348,16 @@ int main(int argc, char *argv[]) {
   if (abi_bridge_test_mode) {
     // ton-abi bridge self-test: no actor scheduler needed.
     return mch::run_abi_bridge_test();
+  }
+
+  if (!actions_msgpack_out.empty()) {
+    // Wire-fixture regeneration: no actor scheduler needed.
+    return mch::write_action_msgpack_fixture(actions_msgpack_out);
+  }
+
+  if (actions_msgpack_test_mode) {
+    // Write-back writer self-test: no actor scheduler needed.
+    return mch::run_action_msgpack_test();
   }
 
   if (surface_mode) {

@@ -110,15 +110,29 @@ class TraceEmulatorScheduler : public td::actor::Actor {
         working_dir_(std::move(working_dir)), db_event_fifo_path_(std::move(db_event_fifo_path)),
         mch_shadow_(std::move(mch_shadow)) {
       health_redis_ = std::make_unique<sw::redis::Redis>(redis_dsn_);
-      insert_trace_ = [insert_manager = insert_manager_.get()](Trace trace, td::Promise<td::Unit> promise, MeasurementPtr measurement) {
-        td::actor::send_closure(insert_manager, &ITraceInsertManager::insert, std::move(trace), std::move(promise), measurement);
+      // The WIDE sink, matching ITraceInsertManager::insert. It is either
+      // decorated (the classifier supplies the payload) or wrapped with an
+      // empty one — either way the 3-arg insert_trace_ the four trace sources
+      // copy stays exactly the type it was, so no listener and no block
+      // emulator changes.
+      auto insert_with = [insert_manager = insert_manager_.get()](Trace trace, mch::EmuActionPayload actions,
+                                                                  td::Promise<td::Unit> promise, MeasurementPtr measurement) {
+        td::actor::send_closure(insert_manager, &ITraceInsertManager::insert, std::move(trace),
+                                std::move(actions), std::move(promise), measurement);
       };
       // Must be here, not a setter: start_up() copies insert_trace_ BY VALUE into
       // the listeners, so a send_closure'd setter would land too late.
       if (mch_shadow_.prep) {
         mch_classifier_ = td::actor::create_actor<mch::EmuClassifierActor>("MchEmuClassifier", mch_shadow_);
-        insert_trace_ = mch::decorate_sink(std::move(insert_trace_), mch_classifier_.get(),
+        insert_trace_ = mch::decorate_sink(std::move(insert_with), mch_classifier_.get(),
                                            mch_shadow_.gate);
+      } else {
+        // Feature off: a DEFAULT payload, whose `state` is null, so the insert
+        // writes no mch_classify_state field at all and the MULTI is
+        // byte-identical to the pre-write-back one.
+        insert_trace_ = [insert_with](Trace trace, td::Promise<td::Unit> promise, MeasurementPtr measurement) {
+          insert_with(std::move(trace), {}, std::move(promise), measurement);
+        };
       }
       external_message_admission_ = std::make_shared<ExternalMessageAdmission>();
       invalidated_trace_tracker_ = td::actor::create_actor<InvalidatedTraceTracker>("InvalidatedTraceTracker", redis_dsn_);

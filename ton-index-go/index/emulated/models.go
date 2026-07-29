@@ -319,11 +319,18 @@ type actionDexWithdrawLiquidityData struct {
 	UserJettonWallet2 *string `msgpack:"user_jetton_wallet_2"`
 	DexJettonWallet1  *string `msgpack:"dex_jetton_wallet_1"`
 	DexJettonWallet2  *string `msgpack:"dex_jetton_wallet_2"`
-	LpTokensBurnt     *string `msgpack:"lp_tokens_burnt"`
-	BurnedNFTIndex    *string `msgpack:"burned_nft_index"`
-	BurnedNFTAddress  *string `msgpack:"burned_nft_address"`
-	TickLower         *string `msgpack:"tick_lower"`
-	TickUpper         *string `msgpack:"tick_upper"`
+	// The pool-side vault/wallet pair. Real columns of Python's
+	// dex_withdraw_liquidity_details composite (core/database.py:463-464), so
+	// Python-written blobs have always carried them and this decoder silently
+	// dropped them; the C++ writer emits them from fill_dex_withdraw_liquidity
+	// and fill_dedust_v2_claim_reward.
+	DexWallet1       *string `msgpack:"dex_wallet_1"`
+	DexWallet2       *string `msgpack:"dex_wallet_2"`
+	LpTokensBurnt    *string `msgpack:"lp_tokens_burnt"`
+	BurnedNFTIndex   *string `msgpack:"burned_nft_index"`
+	BurnedNFTAddress *string `msgpack:"burned_nft_address"`
+	TickLower        *string `msgpack:"tick_lower"`
+	TickUpper        *string `msgpack:"tick_upper"`
 }
 
 type actionStakingData struct {
@@ -1124,6 +1131,8 @@ func (a *Action) ToRawAction() (*models.RawAction, error) {
 		raw.DexWithdrawLiquidityDataUserJettonWallet2 = ptrAccountAddress(a.DexWithdrawLiquidityData.UserJettonWallet2)
 		raw.DexWithdrawLiquidityDataDexJettonWallet1 = ptrAccountAddress(a.DexWithdrawLiquidityData.DexJettonWallet1)
 		raw.DexWithdrawLiquidityDataDexJettonWallet2 = ptrAccountAddress(a.DexWithdrawLiquidityData.DexJettonWallet2)
+		raw.DexWithdrawLiquidityDataDexWallet1 = ptrAccountAddress(a.DexWithdrawLiquidityData.DexWallet1)
+		raw.DexWithdrawLiquidityDataDexWallet2 = ptrAccountAddress(a.DexWithdrawLiquidityData.DexWallet2)
 		raw.DexWithdrawLiquidityDataLpTokensBurnt = a.DexWithdrawLiquidityData.LpTokensBurnt
 		raw.DexWithdrawLiquidityDataBurnedNFTIndex = a.DexWithdrawLiquidityData.BurnedNFTIndex
 		raw.DexWithdrawLiquidityDataBurnedNFTAddress = ptrAccountAddress(a.DexWithdrawLiquidityData.BurnedNFTAddress)

@@ -198,6 +198,7 @@ add_library(mch-emu STATIC
     src/emu/EmuTraceConvert.cpp
     src/emu/EmuInterfaces.cpp
     src/emu/EmuClassifierActor.cpp
+    src/emu/EmuActionSerialize.cpp
 )
 target_include_directories(mch-emu PUBLIC src)
 target_compile_features(mch-emu PUBLIC cxx_std_20)
@@ -236,11 +237,15 @@ add_executable(ton-mch-engine
     src/SchemaGate.cpp
     src/Surface.cpp
     src/AbiBridgeTest.cpp
+    src/EmuActionSerializeTest.cpp
     ${ABI_BRIDGE_TEST_FIXTURES}
 )
 target_include_directories(ton-mch-engine PRIVATE src ${CMAKE_CURRENT_BINARY_DIR} ${TON_ABI_DIR}/generated)
 target_compile_features(ton-mch-engine PRIVATE cxx_std_20)
-target_link_libraries(ton-mch-engine mch-classify)
+# mch-emu (not just mch-classify): --actions-msgpack-test gates the write-back
+# writer, which lives there. Still no emulator dependency — mch-emu-bridge is
+# the only target that knows ::Trace.
+target_link_libraries(ton-mch-engine mch-classify mch-emu)
 add_dependencies(ton-mch-engine mch_generate_sources)
 
 install(TARGETS ton-mch-engine RUNTIME DESTINATION bin)
@@ -266,3 +271,5 @@ add_test(NAME mch_codegen_selftest
     COMMAND mch-codegen --selftest)
 add_test(NAME mch_abi_bridge
     COMMAND ton-mch-engine --abi-bridge-test)
+add_test(NAME mch_actions_msgpack
+    COMMAND ton-mch-engine --actions-msgpack-test)

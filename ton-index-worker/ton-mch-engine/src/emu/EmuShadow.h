@@ -17,7 +17,15 @@ struct Trace;  // ::Trace — the emulator's; mch::Trace also exists
 
 namespace mch {
 
+// What the four trace sources call. UNCHANGED by the write-back on purpose:
+// the payload is bridged inside TraceScheduler, so no listener and no block
+// emulator learns that the write-back exists.
 using EmuTraceSink = std::function<void(::Trace, td::Promise<td::Unit>, MeasurementPtr)>;
+
+// What the INSERT takes. decorate_sink consumes one of these and returns an
+// EmuTraceSink, which is the whole shape of the seam widening.
+using EmuInsertSink =
+    std::function<void(::Trace, EmuActionPayload, td::Promise<td::Unit>, MeasurementPtr)>;
 
 // Copies td::Refs and small PODs plus the trace's cell anchor: NO cell is
 // loaded, so this cannot fail and cannot throw on the emulator's own stack.
@@ -26,8 +34,9 @@ EmuTraceView make_view(const ::Trace &trace);
 // Wraps the emulator's insert sink so every emission is classified first and
 // the inner sink runs in the response continuation. The inner sink is called
 // exactly once on EVERY path — shed, deadline, disabled, failure, success
-// (§16.5).
-EmuTraceSink decorate_sink(EmuTraceSink inner, td::actor::ActorId<EmuClassifierActor> classifier,
+// (§16.5) — carrying the classifier's payload where one was produced and an
+// empty payload (with the state marker) where it was not.
+EmuTraceSink decorate_sink(EmuInsertSink inner, td::actor::ActorId<EmuClassifierActor> classifier,
                            std::shared_ptr<EmuGate> gate);
 
 }  // namespace mch

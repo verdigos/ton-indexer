@@ -33,7 +33,9 @@ from indexer.events.blocks.liquidity import (  # noqa: E402
     post_process_dedust_liquidity, post_process_stonfi_v2_liquidity,
 )
 from indexer.events.mch_ir import build_matchers, load_artifact  # noqa: E402
-from indexer.events.blocks.utils.block_tree_serializer import block_to_action  # noqa: E402
+from indexer.events.blocks.utils.block_tree_serializer import (  # noqa: E402
+    block_to_action, create_unknown_action,
+)
 
 # Combined host-builder registries: ONE shared factory list for all three
 # twins (twin_registries.py) — adding a protocol is a single edit there.
@@ -51,7 +53,7 @@ from cpp_surface import (  # noqa: E402
 BUILTINS = {"account", "amount", "asset", "ton_asset", "addr_none", "b64",
             "first", "last", "len", "sum", "zip", "map"}
 
-# The 19 composite btypes the C++ fill_action ports (ActionBuild.cpp fill_action).
+# The composite btypes the C++ fill_action ports (ActionBuild.cpp fill_action).
 # Gate emit on the BLOCK btype (not the rewritten action.type), matching C++.
 # vesting_send_message + tgbtc_mint re-included after the serializer _dget
 # dual-dispatch flip (both fills now serve the declarative dict block).
@@ -62,6 +64,14 @@ PORTED_BTYPES = {
     "jvault_unstake_request", "jvault_claim", "ethena_deposit",
     "layerzero_receive", "coffee_create_vault", "vesting_send_message",
     "tgbtc_mint", "dedust_v2_claim_reward",
+    # EM2 W6 bucket-B fills. NONE of these fire on the current 165 fixtures, so
+    # widening the set changes no output today — it keeps the twin
+    # correct-by-construction: the day a fixture carrying one is added, Python
+    # emits its row instead of silently skipping it while C++ emits one, which
+    # would read as a bogus cpp-only-row rather than the parity it is.
+    "renew_dns", "change_dns", "delete_dns", "nominator_pool_withdraw_request",
+    "tonstakers_withdraw", "tonstakers_withdraw_request",
+    "dex_deposit_liquidity", "dex_withdraw_liquidity", "nft_purchase",
 }
 
 # The C++ render_action column set (Classify.cpp render_action), in any order —
@@ -74,7 +84,8 @@ ACTION_COLUMNS = [
     "nft_transfer_data", "nft_listing_data", "dex_deposit_liquidity_data",
     "dex_withdraw_liquidity_data",
     "staking_data", "evaa_withdraw_data", "vesting_send_message_data",
-    "layerzero_packet_data", "jvault_stake_data", "jvault_claim_data", "extra",
+    "layerzero_packet_data", "jvault_stake_data", "jvault_claim_data",
+    "change_dns_record_data", "extra",
 ]
 
 # Stub Trace: block_to_action requires a non-None trace and reads these attrs,
@@ -169,9 +180,12 @@ def render(v):
     raise TypeError(f"unrenderable {type(v).__name__}")
 
 
-def render_action_row(block):
-    """block_to_action (real serializer) -> the C++ render_action column dict."""
-    action = block_to_action(block, "twin", _STUB_TRACE)
+def render_action(action):
+    """Action -> the C++ render_action column dict.
+
+    THE render seam: every row kind funnels through here, so py_actions_msgpack
+    swaps the whole dump to msgpack by rebinding this one name.
+    """
     # Step 2a: tx_hashes is the EXTENDED set (block_to_action adds the initiating
     # tx) and accounts is the assembled role-less set — both straight from the
     # real serializer now (no longer staged out).
@@ -190,6 +204,40 @@ def render_action_row(block):
     for col in ACTION_COLUMNS:
         d[col] = getattr(action, col, None)
     return render(d)
+
+
+def render_action_row(block):
+    """A matched produced block -> its rendered row (the real serializer)."""
+    return render_action(block_to_action(block, "twin", _STUB_TRACE))
+
+
+def unknown_trace_stub(data, txs):
+    """The Trace create_unknown_action reads, from the fixture's `trace` record.
+
+    The five lt/utime/seqno values are TRACE-ROW values on both sides (C++:
+    TraceLoader decodes the same record into mch::Trace) — recomputing them off
+    the transactions would be the twin inventing semantics Python does not have.
+    `finality` mirrors the C++ stub emission; `trace_id` must be the REAL id,
+    since create_unknown_action uses it as the action_id.
+    """
+    t = data["trace"]
+    return types.SimpleNamespace(
+        trace_id=t["trace_id"], transactions=txs,
+        start_lt=t["start_lt"], end_lt=t["end_lt"],
+        start_utime=t["start_utime"], end_utime=t["end_utime"],
+        mc_seqno_end=t["mc_seqno_end"], external_hash=t["external_hash"],
+        finality=_STUB_TRACE.finality, external_hash_norm=_STUB_TRACE.external_hash_norm,
+    )
+
+
+def render_unknown_row(trace):
+    """W4: the synthetic `unknown` row for a trace that matched nothing.
+
+    trace_processor.py:44-46 takes this branch when classification SUCCEEDS with
+    zero actions; create_unknown_action is the real serializer's function, called
+    here exactly as production calls it.
+    """
+    return render_action(create_unknown_action(trace))
 
 
 def _refs(rec):
@@ -311,12 +359,20 @@ async def actions_fixture(path, included):
         spine = await unwind_deployments(spine)  # Step 2b (production chain parity)
         removed = before - set(id(x) for x in spine)
 
-        for (anchor_key, produced) in pending:
-            if id(produced) in removed:
-                continue
+        survived = [(k, p) for (k, p) in pending if id(p) not in removed]
+        for (anchor_key, produced) in survived:
             if produced.btype not in PORTED_BTYPES:
                 continue  # btype outside the ported set (C++ build_action -> false)
             print(f"ACTION anchor={anchor_key} {render_action_row(produced)}")
+
+        # W4: trace_processor.py:44-46 — classification succeeded and matched
+        # nothing. Gated on `survived`, NOT on the rows actually printed: the
+        # PORTED_BTYPES filter above is a twin-scoping device with no C++
+        # counterpart (there, build_action simply declines the row after the
+        # fact), so a trace that matched only unported btypes is NOT unknown on
+        # either side.
+        if not survived and txs:
+            print(f"ACTION anchor=unknown {render_unknown_row(unknown_trace_stub(data, txs))}")
     except Exception as e:  # noqa: BLE001
         print("TRACE_FAIL")
         print(f"TRACE_FAIL {os.path.basename(path)}: {type(e).__name__}: {e}", file=sys.stderr)

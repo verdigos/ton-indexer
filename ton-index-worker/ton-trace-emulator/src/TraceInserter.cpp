@@ -11,6 +11,14 @@ constexpr bool kPipelineTransactionCommands = false;
 constexpr bool kCreateDedicatedTransactionConnection = false;
 constexpr const char* kNewTraceChannel = "new_trace"; // for classsifier and others
 constexpr const char* kNewPendingTraceChannel = "new_pending_trace"; // for streaming only
+// The write-back's own key names. Inlined, not configurable: they were only
+// ever parameterised so a phase-2 A/B run could rename them, and there is no
+// A/B run.
+constexpr const char* kActionsField = "actions";
+constexpr const char* kActionsFinalityField = "actions_finality";
+constexpr const char* kActionsStateField = "mch_classify_state";
+constexpr const char* kAaiPrefix = "_aai:";
+constexpr const char* kReferencedAccountsChannel = "referenced_accounts";
 
 std::string finality_name(FinalityState finality) {
     switch (finality) {
@@ -35,12 +43,15 @@ private:
     static constexpr size_t kMaxExistingTraceFields = 1000; // to avoid reading and inserting into unexpectedly large trace
     sw::redis::Transaction transaction_;
     Trace trace_;
+    mch::EmuActionPayload actions_;
     td::Promise<td::Unit> promise_;
     std::string trace_key_;
     MeasurementPtr measurement_;
 public:
-    TraceInserter(sw::redis::Transaction&& transaction, Trace trace, td::Promise<td::Unit> promise, const MeasurementPtr& measurement) :
-        transaction_(std::move(transaction)), trace_(std::move(trace)), promise_(std::move(promise)), measurement_(measurement) {
+    TraceInserter(sw::redis::Transaction&& transaction, Trace trace, mch::EmuActionPayload actions,
+                  td::Promise<td::Unit> promise, const MeasurementPtr& measurement) :
+        transaction_(std::move(transaction)), trace_(std::move(trace)), actions_(std::move(actions)),
+        promise_(std::move(promise)), measurement_(measurement) {
     }
 
     void start_up() override {
@@ -240,6 +251,14 @@ public:
             measurement_->set_out_channel(kNewTraceChannel);
             trace_fields_to_set.emplace_back("root_node", td::base64_encode(trace_.ext_in_msg_hash.as_slice()));
             trace_fields_to_set.emplace_back("depth_limit_exceeded", trace_.tx_limit_exceeded ? "1" : "0");
+
+            // The classifier's rows ride the SAME transaction as the trace they
+            // describe, so a pending trace is never visible without them. This
+            // sits AFTER both early returns (the >1000-field guard and the
+            // empty-flatten short-circuit), which is the correct coupling: a
+            // skipped trace skips its actions too.
+            append_actions(trace_fields_to_set);
+
             auto otel_fields = measurement_->otel_propagation_fields();
             trace_fields_to_set.reserve(trace_fields_to_set.size() + otel_fields.size());
             for (const auto& [field, value] : otel_fields) {
@@ -322,6 +341,80 @@ public:
         }
     }
 
+    // Appends the write-back's hash fields and queues its ZADDs and PUBLISHes
+    // into the same MULTI as the trace.
+    //
+    // THE GUARD is the load-bearing part. Emissions of one trace can reach the
+    // MULTI out of finality order, and the node blobs survive that only because
+    // every node is individually guarded above (:87-95 skips the subtree when
+    // the stored node is more advanced). `actions` had no equivalent: a stale
+    // emulated emission landing after a finalized one would overwrite finalized
+    // actions with emulated ones, silently, while the node blobs in the very
+    // same MULTI correctly refused the downgrade — leaving the trace and its
+    // actions describing different emissions, which is exactly the invariant
+    // the write-back exists to establish.
+    //
+    // Two independent races produce that, and only one is closable upstream.
+    // The classifier-side race (a slower earlier emission answering after a
+    // faster later one) is closed by per-trace ordering. The second is not:
+    // each emission gets its OWN TraceInserter actor, and those contend for a
+    // shared connection pool whose waiters are woken by a bare condition_variable
+    // (redis-plus-plus connection_pool.cpp:220-234) — no FIFO, no fairness — so
+    // two inserters for one trace can exec() in an order unrelated to their
+    // creation order no matter what the classifier did.
+    //
+    // Scope: the guard covers the whole actions AREA, marker included. Writing
+    // mch_classify_state from a stale emission while refusing its actions would
+    // leave the hash claiming e.g. "shed_deadline" over a finalized emission's
+    // rows — the same disagreement, one field over.
+    void append_actions(std::vector<std::pair<std::string, std::string>>& trace_fields_to_set) {
+        if (actions_.state == nullptr) {
+            // Feature off. Return BEFORE the otel attribute and before the
+            // hget, so a build with no --mch-artifact issues exactly the
+            // commands it issued before the write-back and pays no extra round
+            // trip.
+            return;
+        }
+        measurement_->set_otel_attribute("ton.actions.count",
+                                         static_cast<std::int64_t>(actions_.action_count));
+        // One more hget on a path that already performs several. The decision
+        // itself is mch::actions_write_is_stale, gated hermetically by
+        // --actions-msgpack-test.
+        auto stored = transaction_.redis().hget(trace_key_, kActionsFinalityField);
+        if (mch::actions_write_is_stale(stored, actions_.finality)) {
+            LOG(DEBUG) << "skipping stale actions write for " << trace_key_ << ": stored finality "
+                       << *stored << " > emission finality " << static_cast<int>(actions_.finality);
+            return;
+        }
+
+        trace_fields_to_set.emplace_back(kActionsStateField, actions_.state);
+        if (actions_.actions_blob.empty()) {
+            // Empty-degraded: the marker says why, and the `actions` field stays
+            // absent so Go reports Classified:false — which is exactly what a
+            // pending trace looks like before it is classified.
+            return;
+        }
+        trace_fields_to_set.emplace_back(kActionsField, actions_.actions_blob);
+        trace_fields_to_set.emplace_back(kActionsFinalityField,
+                                         std::to_string(static_cast<int>(actions_.finality)));
+        for (const auto& [account, member] : actions_.aai) {
+            transaction_.zadd(kAaiPrefix + account, member,
+                              static_cast<double>(actions_.aai_score));
+        }
+        // referenced_accounts is load-bearing, not decoration: ton-trace-ttl-tracker
+        // subscribes it and uses the accounts it learns to ZREM the trace's members
+        // out of _aai:<addr> at expiry, so an unpublished account leaks its index
+        // entry forever. The payload format is ALSO a remote-kill surface — the
+        // subscriber splits on ';' and indexes [1] with no length check, and there
+        // is no recover() in that module, so a payload without a ';' takes the
+        // whole ttl-tracker process down. Both halves here are BUILT, never
+        // interpolated from anything that could contain a separator: the account is
+        // "wc:HEX" and trace_key_ is base64.
+        for (const auto& account : actions_.referenced_accounts) {
+            transaction_.publish(kReferencedAccountsChannel, account + ";" + trace_key_);
+        }
+    }
+
     std::optional<RedisTraceNode> load_existing_node(const std::string& trace_key, const std::string& node_key) {
         auto existing = transaction_.redis().hget(trace_key, node_key);
         if (!existing) {
@@ -340,11 +433,13 @@ public:
     }
 };
 
-void RedisInsertManager::insert(Trace trace, td::Promise<td::Unit> promise, MeasurementPtr measurement) {
+void RedisInsertManager::insert(Trace trace, mch::EmuActionPayload actions, td::Promise<td::Unit> promise,
+                                MeasurementPtr measurement) {
     td::actor::create_actor<TraceInserter>(
         "TraceInserter",
         redis_.transaction(kPipelineTransactionCommands, kCreateDedicatedTransactionConnection),
         std::move(trace),
+        std::move(actions),
         std::move(promise),
         measurement).release();
 }
