@@ -5,6 +5,26 @@
 #include <msgpack.hpp>
 #include "IndexData.h"
 
+// INBOUND WIRE FORMAT: MAPS, keyed by field name. Stated explicitly on each
+// struct below rather than left to plain MSGPACK_DEFINE, whose meaning depends on
+// whether MSGPACK_USE_DEFINE_MAP happens to be defined for whatever target
+// compiles this header — array without it, map with it. These payloads are a
+// contract with an external producer, so the format belongs in the source, not in
+// a build flag.
+//
+// The producer is ton-emulate-go: it LPushes onto `emulatorqueue`
+// (ton-emulate-go/main.go:154, :245, :364) with an encoder configured
+// `UseArrayEncodedStructs(false)` and commented "map-encoding" (:60, :66, :232,
+// :351). That setting applies to the whole `enc.Encode(env)` call, so the NESTED
+// task payloads decoded here are map-encoded too, with keys from the Go
+// `msgpack:"..."` tags — which match these member names one for one.
+//
+// This is not a change of format: the flag was already set PRIVATE on this
+// executable (git HEAD, CMakeLists.txt:17) long before it became PUBLIC on
+// ton-trace-emulator-core, so these structs have always been maps. Pinning them
+// is a no-op today (MSGPACK_DEFINE expands to MSGPACK_DEFINE_MAP under that flag,
+// define_decl.hpp:191-197) and immunity tomorrow. Do NOT "restore" these to
+// MSGPACK_DEFINE_ARRAY — that would break the producer contract.
 struct TonConnectMessage {
     std::string address;
     std::string amount;
@@ -12,7 +32,7 @@ struct TonConnectMessage {
     std::optional<std::string> state_init;
     // std::optional<std::map<std::string, std::string>> extra_currency;
 
-    MSGPACK_DEFINE(address, amount, payload, state_init/*, extra_currency*/);
+    MSGPACK_DEFINE_MAP(address, amount, payload, state_init/*, extra_currency*/);
 };
 
 struct TonConnectTraceTask {
@@ -24,7 +44,7 @@ struct TonConnectTraceTask {
   bool include_code_data;
   std::optional<uint32_t> mc_block_seqno;
 
-  MSGPACK_DEFINE(id, from, valid_until, messages, detect_interfaces, include_code_data, mc_block_seqno);
+  MSGPACK_DEFINE_MAP(id, from, valid_until, messages, detect_interfaces, include_code_data, mc_block_seqno);
 };
 
 struct TraceTask {
@@ -35,7 +55,7 @@ struct TraceTask {
   bool include_code_data;
   std::optional<uint32_t> mc_block_seqno;
 
-  MSGPACK_DEFINE(id, boc, ignore_chksig, detect_interfaces, include_code_data, mc_block_seqno);
+  MSGPACK_DEFINE_MAP(id, boc, ignore_chksig, detect_interfaces, include_code_data, mc_block_seqno);
 };
 
 struct TaskEnvelope {

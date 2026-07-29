@@ -154,6 +154,24 @@ class FixtureLookupSource : public LookupSource {
   const std::map<std::string, Value> *interfaces_;
 };
 
+// Action-scoped wrong-value guard (em2-tier2-design §8.3). A host fn that
+// answers a lookup MISS by rejecting — rather than by publishing a plausible
+// WRONG value — records the event here, so a reject that silently drops one
+// action is visible in telemetry instead of invisible. Deliberately NOT a
+// FailureCategory: that field holds trace-terminal reasons only (ClassifyCore.h
+// names clean_reject among the values excluded from it), and this reject leaves
+// the trace successful.
+struct WrongValueGuard {
+  std::string matcher;  // set by the classify loop before each try_build
+  std::size_t count{0};
+  std::map<std::string, std::size_t> by_site;  // "<matcher>/<lookup kind>" -> n
+
+  void note(const std::string &kind) {
+    count++;
+    by_site[matcher + "/" + kind]++;
+  }
+};
+
 // Execution environment for one generated build fn (D3).
 struct BuildEnv {
   const Block *anchor{nullptr};
@@ -164,6 +182,11 @@ struct BuildEnv {
   // program.py Evaluator.bodies: block identity -> parsed body (Null == every
   // soft-parse alternative failed). Filled by rt_parse, read by `.body`.
   std::map<const Block *, Value> bodies;
+  // §8.3, attached to the FINAL two-phase pass ONLY: the dry passes run the same
+  // code against a deliberately empty table, so counting them would report one
+  // reject per pass instead of one per action. Null wherever no sink was
+  // supplied (--build-smoke, the vector runners).
+  WrongValueGuard *guard{nullptr};
 };
 
 // `parse TARGET as T1|T2` (program.py _do_parse/_soft_parse): target null ->

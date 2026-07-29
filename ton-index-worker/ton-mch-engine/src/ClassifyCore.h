@@ -12,6 +12,7 @@
 #include "TraceLoader.h"
 
 #include <cstdint>
+#include <map>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -68,6 +69,26 @@ struct ClassifyResult {
   // btype (call_contract / contract_deploy / ton_transfer). Production commits
   // these when classification fails. Ungated (corpus has no failing traces).
   std::vector<CoreAction> fallback_actions;
+  // W4: classification SUCCEEDED but matched nothing, over a trace that has
+  // transactions — trace_processor.py:44-46's `len(actions) == 0 and
+  // len(trace.transactions) > 0` branch. The adapter answers it with
+  // create_unknown_action(ctx.trace); that row has no Block, so it cannot be a
+  // CoreAction and the core only raises the flag.
+  //
+  // Why it matters beyond parity: ton-index-go reads `Classified` as "the
+  // `actions` field exists", so an EMPTY array is reported to API consumers as
+  // a successful classification (emulated/models.go:838-844). Without this row,
+  // "we looked and found nothing classifiable" is indistinguishable from "this
+  // trace was never classified" (em2-writeback-design.md §6, §7 Q4).
+  bool unknown_trace = false;
+  // §8.3 action-scoped wrong-value rejects seen during THIS pass: a host fn
+  // answered a lookup miss by rejecting instead of publishing a plausible WRONG
+  // value, so one action was dropped and the rest of the trace survived. A
+  // per-(block, matcher, lookup) event — which is exactly why it lives here and
+  // not in `failure_category`: the trace is still a success. The tier-2 fixpoint
+  // commits ONE pass, so what reaches telemetry is the committed pass's events.
+  std::size_t wrong_value_guard = 0;
+  std::map<std::string, std::size_t> wrong_value_sites;  // "<matcher>/<kind>" -> n
 };
 
 // B1 anchor prefilter: the per-trace opcode/btype inventory an included

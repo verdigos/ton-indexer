@@ -155,11 +155,16 @@ matcher jvault_unstake_request {
     # Legacy build_jvault_unstake_request_core. Two shapes: early (request never
     # reached the pool → failed, exit code from the anchor, pool+assets from the
     # lookup, rejected if unresolvable) vs full (pool from the request, assets
-    # still from the lookup but NOT reject-gated, failed OR'd from both calls).
+    # still from the lookup, failed OR'd from both calls).
+    # The record gate is UNCONDITIONAL (em2-tier2-design §8.2 Q-C): the non-early
+    # branch also reads assets.asset / assets.jvault_asset, and a null record
+    # propagates to null there instead of rejecting, so an unresolvable stake
+    # wallet would emit an asset-less action rather than none. `.asset` itself
+    # stays gated in the early branch only, as before.
     parse request_anchor as JVaultUnstakeRequest
     let assets = lookup jvault_assets(request_anchor.msg.destination)
     let early  = request == null
-    reject when early and assets == null
+    reject when assets == null
     reject when early and assets.asset == null
     failed when early
     failed when (not early) and (request_anchor.failed or request.failed)

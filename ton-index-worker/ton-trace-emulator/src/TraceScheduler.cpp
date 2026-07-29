@@ -9,6 +9,7 @@
 #include "tl-utils/common-utils.hpp"
 #include "ton/ton-tl.hpp"
 #include "validator/interfaces/block-handle.h"
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <errno.h>
@@ -168,9 +169,19 @@ void TraceEmulatorScheduler::got_last_mc_seqno(ton::BlockSeqno new_last_known_se
     LOG(INFO) << "New masterchain block " << new_last_known_seqno;
 
     if (last_known_seqno_ == 0) {
-        last_known_seqno_ = new_last_known_seqno;
-        last_fetched_seqno_ = new_last_known_seqno;
-        return;
+        // --mch-stress-backfill: start behind the head and fall through, so the loop
+        // below enqueues the skipped seqnos as one catch-up burst.
+        auto backfill = std::min(stress_backfill_, new_last_known_seqno - 1);
+        last_known_seqno_ = new_last_known_seqno - backfill;
+        last_fetched_seqno_ = last_known_seqno_;
+        if (backfill == 0) {
+            return;
+        }
+        // Anchor the emulation cursor here too: fetches complete out of order, so
+        // emulate_blocks()'s own seed from last_fetched_seqno_ would land on the head
+        // and skip the whole backfill as already emulated.
+        last_emulated_seqno_ = last_known_seqno_;
+        LOG(WARNING) << "Stress backfill: emulating " << backfill << " blocks from " << last_known_seqno_ + 1;
     }
 
     if (new_last_known_seqno > last_known_seqno_ + 1) {

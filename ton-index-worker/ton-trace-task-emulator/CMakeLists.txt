@@ -14,5 +14,9 @@ target_include_directories(ton-trace-task-emulator
 target_compile_features(ton-trace-task-emulator PRIVATE cxx_std_20)
 target_link_libraries(ton-trace-task-emulator ton-trace-emulator-core redis++_static msgpack-cxx)
 target_link_options(ton-trace-task-emulator PUBLIC -rdynamic)
-target_compile_definitions(ton-trace-task-emulator PRIVATE -DMSGPACK_USE_DEFINE_MAP)
+# MSGPACK_USE_DEFINE_MAP is INHERITED from ton-trace-emulator-core (PUBLIC), which
+# is also where TaskResultInserter.cpp gets Serializer.hpp from. Do not re-add it.
+# NOTE: TonConnectProcessor.h has MSGPACK_DEFINE structs of its own, and they were
+# already compiled in map mode under the flag this line replaces — inheriting it
+# keeps them byte-identical.
 install(TARGETS ton-trace-task-emulator RUNTIME DESTINATION bin)

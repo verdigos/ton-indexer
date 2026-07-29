@@ -25,7 +25,7 @@ constexpr std::uint32_t kBounceOpcode = 0xFFFFFFFF;
 // NOTHING — aux/flows are stored raw for the adapter (§11 item 2 isolation).
 bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *block,
                BlockArena &arena, const std::set<std::string> &kinds,
-               const LookupSource &src, std::vector<CoreAction> &out) {
+               const LookupSource &src, std::vector<CoreAction> &out, WrongValueGuard *guard) {
   auto res = matcher_match(m, block);  // test_self + walk (root absorb=False)
   if (!res) {
     return false;  // structural mismatch
@@ -38,7 +38,7 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
   bool needs_lookups = !(m.ref_lookups.empty() && m.ref_fns.empty());
   BuildOutcome o = run_two_phase(fn, block, slots,
                                  Value::make_list(std::move(consumed_vals)), kinds, src,
-                                 needs_lookups);
+                                 needs_lookups, guard);
   if (o.is_rejected) {
     return false;  // clean rejection §10.7: no consumption, no aux append
   }
@@ -463,12 +463,16 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
   };
 
   std::vector<CoreAction> pending;
+  // §8.3: one sink for the whole pass; the matcher name it attributes events to
+  // is set right below, before that matcher's traversal.
+  WrongValueGuard guard;
   try {
     for (const IncludedMatcher &im : setup.included) {
       if (!anchor_can_match(im.filter)) {
         continue;  // B1: no spine op/btype can satisfy this anchor — skip traversal
       }
       const CompiledMatcher &m = ir.matchers[im.matcher_index];
+      guard.matcher = m.name;
       auto fn = setup.build_fns.at(m.artifact_index);
       std::size_t produced_from = pending.size();
       // Python bfs_iter port: FIFO; cur's next_blocks are read AFTER try_build
@@ -478,7 +482,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
         Block *cur = queue.front();
         queue.pop_front();
         if (cur->parent == nullptr) {
-          try_build(m, fn, cur, ctx.arena, setup.kinds, src, pending);
+          try_build(m, fn, cur, ctx.arena, setup.kinds, src, pending, &guard);
         }
         for (Block *n : cur->next_blocks) {
           queue.push_back(n);
@@ -524,9 +528,16 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
     result.failure_reason = "unknown exception";
     result.failure_category = FailureCategory::engine_fault;
   }
+  // §8.3: carried out of the pass whatever the outcome — a wrong-value reject is
+  // real telemetry even on a trace that then failed for an unrelated reason.
+  result.wrong_value_guard = guard.count;
+  result.wrong_value_sites = std::move(guard.by_site);
   if (result.failure) {
     result.actions.clear();  // event_processing.py discards the trace's actions
     result.fallback_actions = basic_classify_fallback(ctx);
+  } else if (result.actions.empty() && !ctx.trace.transactions.empty()) {
+    // trace_processor.py:44-46 — classification succeeded and matched nothing.
+    result.unknown_trace = true;
   }
   return result;
 }

@@ -5356,21 +5356,13 @@
           "s": "reject",
           "when": {
             "k": "bin",
-            "op": "and",
+            "op": "==",
             "l": {
               "k": "name",
-              "id": "early"
+              "id": "assets"
             },
             "r": {
-              "k": "bin",
-              "op": "==",
-              "l": {
-                "k": "name",
-                "id": "assets"
-              },
-              "r": {
-                "k": "null"
-              }
+              "k": "null"
             }
           }
         },

@@ -1,6 +1,7 @@
 #include "MchClassifierActor.h"
 
 #include "BlockTree.h"
+#include "ClassifyDriver.h"
 #include "MsgParse.h"
 #include "ParsedBlockLookupSource.h"
 #include "SchemaTraceLoader.h"
@@ -35,10 +36,12 @@ td::Result<std::shared_ptr<const MchEnginePrep>> load_engine_prep(
 
 namespace {
 
-// One assembled trace -> a classify summary (never throws). Builds the engine
-// TraceContext from the schema transactions (SchemaTraceLoader), then classifies
-// with a tier-1-only ParsedBlockLookupSource (tier-2 DB/kvrocks fallback is a
-// later slice — the per-seqno account_interfaces_ map is all we read here).
+// One assembled trace -> a classify summary (never throws). Runs the trace-level
+// fixpoint driver (em2-tier2-design §4) with NO tier-2 fetch, so it commits its
+// single pass: the engine TraceContext is built from the schema transactions
+// (SchemaTraceLoader) and classified with a tier-1-only ParsedBlockLookupSource
+// (the DB/kvrocks resolver behind the driver's Tier2Fetch is a later slice — the
+// per-seqno account_interfaces_ map is all we read here).
 TraceClassifySummary classify_one(const MchEnginePrep &prep,
                                   const ParsedBlockLookupSource::InterfaceMap &ifaces,
                                   const std::string &trace_id,
@@ -46,30 +49,18 @@ TraceClassifySummary classify_one(const MchEnginePrep &prep,
   TraceClassifySummary sum;
   sum.trace_id = trace_id;
   try {
-    auto r_trace = schema_to_trace(trace_id, txs);
-    if (r_trace.is_error()) {
+    DriverResult dr = classify_trace_fixpoint(trace_id, txs, ifaces, prep.ir, prep.setup);
+    if (dr.malformed) {
       sum.failure = true;
-      sum.failure_reason = r_trace.move_as_error().message().str();
+      sum.failure_reason = dr.error;
       sum.failure_category = FailureCategory::malformed_trace;
       return sum;
     }
-    TraceContext ctx;
-    ctx.trace = r_trace.move_as_ok();
-    ctx.tree = to_tree(ctx.trace);
-    if (ctx.tree.root == nullptr) {
-      sum.failure = true;
-      sum.failure_reason = "empty event tree";
-      sum.failure_category = FailureCategory::malformed_trace;
-      return sum;
-    }
-    ctx.root = init_block(ctx.arena, ctx.tree.root);
-
-    ParsedBlockLookupSource src(&ifaces);  // tier-2 hook unset: in-block only
-    ClassifyResult res = classify_trace(ctx, prep.ir, prep.setup, src);
+    const ClassifyResult &res = dr.res;
     sum.failure = res.failure;
     sum.failure_reason = res.failure_reason;
     sum.failure_category = res.failure_category;
-    sum.lookup_stats = src.stats();
+    sum.lookup_stats = dr.lookup_stats;
     sum.action_count = res.actions.size();
     std::set<std::string> names;
     for (const CoreAction &a : res.actions) {

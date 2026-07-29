@@ -59,13 +59,21 @@ using TraceContextLoader = std::function<td::Result<TraceContext>(const std::str
 // factory over a synthesized account_interfaces_ map (SchemaGate.cpp).
 using LookupSourceFactory = std::function<std::shared_ptr<LookupSource>(TraceContext &)>;
 
+// What run_dump renders per surviving action. The pipeline above it is
+// identical for all three; only the per-action line differs.
+enum class DumpMode {
+  classify,         // emit_action: the matcher-level line (twins/py_classify.py)
+  actions,          // render_action: the Action-row text dump (twins/py_actions.py)
+  actions_msgpack,  // EM2 W2: base64 of the write-back blob (twins/py_actions_msgpack.py)
+};
+
 int run_classify(const std::string &artifact_path, const std::vector<std::string> &paths);
 
 // Shared classify/actions dump over an injectable context loader (the render +
 // engine loop live here; only ctx acquisition varies A vs B). Exported so the
 // schema A/B gate reuses the exact rendering, keeping path B byte-comparable.
 int run_dump(const std::string &artifact_path, const std::vector<std::string> &paths,
-             bool actions_mode, const TraceContextLoader &load_ctx,
+             DumpMode mode, const TraceContextLoader &load_ctx,
              const LookupSourceFactory &lookup_factory = {});
 
 // Phase E part 2 (`--actions`): serialized-Action-row dump. Same collect->pass
@@ -78,5 +86,14 @@ int run_dump(const std::string &artifact_path, const std::vector<std::string> &p
 // lib-side by ActionBuild.cpp — see its header block for what is and is not
 // rendered (roles are not; accounts and the initiating-tx extension ARE).
 int run_actions(const std::string &artifact_path, const std::vector<std::string> &paths);
+
+// EM2 W2 (`--actions-msgpack`): the write-back PARITY twin. Same pipeline as
+// --actions, but each row is serialized with the production writer
+// (emu/EmuActionSerialize.h) and printed base64'd. Python twin:
+// twins/py_actions_msgpack.py; comparator: twins/cmp_actions_msgpack.py, which
+// diffs DECODED MAPS (em2-writeback-design.md §2.7 — byte equality is neither
+// achievable nor required). Dump line:
+//   ACTION anchor=<key> <base64(msgpack array of exactly one action map)>
+int run_actions_msgpack(const std::string &artifact_path, const std::vector<std::string> &paths);
 
 }  // namespace mch

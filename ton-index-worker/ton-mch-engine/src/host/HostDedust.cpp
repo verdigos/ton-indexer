@@ -156,9 +156,15 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
   const Block *in_transfer = as_block(args[1]);
   const Block *swap_request = as_block(args[2]);
 
-  // Successful hops, one per DedustSwapNotification, in lt order.
+  // Successful hops, one per DedustSwapNotification, in lt order. Collected
+  // from the ORDERED `consumed` vector, not from the `include` set: the
+  // stable_sort below preserves insertion order for EQUAL min_lt, and an
+  // unordered_set iterates in address-dependent order, so two passes over the
+  // same trace could assign different in_leg/out_leg (em2-tier2-design §4.3
+  // Gap 1 — the trace-level fixpoint re-classifies). `include` stays for the
+  // membership tests further down.
   std::vector<const Block *> notif_blocks;
-  for (const Block *b : include) {
+  for (const Block *b : consumed) {
     if (is_call_op(b, kDedustSwapNotification)) {
       notif_blocks.push_back(b);
     }

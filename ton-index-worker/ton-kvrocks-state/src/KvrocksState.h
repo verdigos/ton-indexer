@@ -483,6 +483,21 @@ StateBatch prepare_point_state_batch(const std::vector<PointStateData>& data,
                                      std::uint32_t source_mc_seqno,
                                      std::int32_t max_data_depth);
 
+// The JSON payload written to `ton-index:v1:<table>:<id>:payload`, per row type.
+// Exported for the tables a READER decodes: ton-mch-engine's tier-2 lookup
+// resolver turns these payloads back into engine values, and its decoder gate
+// generates its vectors from these very functions rather than from a written-down
+// copy of the format — so an encoding change here fails that gate instead of
+// silently mis-classifying in production. Visibility only: the definitions moved
+// out of the anonymous namespace unchanged. The other row types stay internal
+// (nothing outside reads them yet).
+std::string build_payload(const PreparedLatestAccountStateRow& row);
+std::string build_payload(const PreparedJettonWalletRow& row);
+std::string build_payload(const PreparedNftItemRow& row);
+std::string build_payload(const PreparedGetgemsSaleRow& row);
+std::string build_payload(const PreparedGetgemsAuctionRow& row);
+std::string build_payload(const PreparedDedustPoolRow& row);
+
 void load_kvrocks_scripts(sw::redis::Redis& redis);
 bool is_kvrocks_no_script_error(const std::exception& e);
 void repair_nft_real_owners_with_script_reload(sw::redis::Redis& redis, const StateBatch& batch);

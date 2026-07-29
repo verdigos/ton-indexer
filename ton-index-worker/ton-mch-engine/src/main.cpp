@@ -16,6 +16,9 @@
 #include "BuildSmoke.h"
 #include "Classify.h"
 #include "DexRecordsTest.h"
+#include "EmuActionSerializeTest.h"
+#include "KvrocksDecodeTest.h"
+#include "LookupKeyGate.h"
 #include "MsgVectorRunner.h"
 #include "BuildVectorRunner.h"
 #include "MatchRunner.h"
@@ -23,6 +26,7 @@
 #include "ParseDump.h"
 #include "SchemaGate.h"
 #include "ShapeTest.h"
+#include "Tier2SuspendTest.h"
 #include "Surface.h"
 #include "TraceLoader.h"
 #include "VectorRunner.h"
@@ -155,11 +159,16 @@ int main(int argc, char *argv[]) {
   bool actions_mode = false;
   bool actions_schema_mode = false;
   bool actions_prod_mode = false;
+  bool actions_msgpack_mode = false;
+  bool lookup_keys_mode = false;
+  bool kvrocks_decode_test_mode = false;
   bool parse_dump_mode = false;
   bool shape_test_mode = false;
   bool dexrecords_test_mode = false;
   bool surface_mode = false;
   bool abi_bridge_test_mode = false;
+  bool actions_msgpack_test_mode = false;
+  bool tier2_suspend_test_mode = false;
   std::vector<std::string> trace_paths;
 
   td::OptionParser p;
@@ -208,6 +217,18 @@ int main(int argc, char *argv[]) {
                "Action-row dump via the FULL production path (A/B gate vs --actions): "
                "-I <artifact> -T <fixture|dir>",
                [&]() { actions_prod_mode = true; });
+  p.add_option('\0', "actions-msgpack",
+               "EM2 write-back parity dump (base64 msgpack per Action row; twin = "
+               "twins/py_actions_msgpack.py): -I <artifact> -T <fixture|dir>",
+               [&]() { actions_msgpack_mode = true; });
+  p.add_option('\0', "kvrocks-decode-test",
+               "Tier-2 kvrocks decoder self-test (payload vectors built by the interface "
+               "writer's own build_payload)",
+               [&]() { kvrocks_decode_test_mode = true; });
+  p.add_option('\0', "lookup-keys",
+               "Collect-pass key-set gate (EM2 tier-2 W2): per fixture, the lookup keys the engine "
+               "demands vs what the fixture interfaces can answer: -I <artifact> -T <fixture|dir>",
+               [&]() { lookup_keys_mode = true; });
   p.add_option('\0', "parse-dump", "Message-parse dump: -T <fixture|dir> (repeatable)",
                [&]() { parse_dump_mode = true; });
   p.add_option('\0', "shape-test",
@@ -219,6 +240,13 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "abi-bridge-test",
                "ton-abi bridge self-test (W12: trampoline + AbiValue->Value adapter + registry policy)",
                [&]() { abi_bridge_test_mode = true; });
+  p.add_option('\0', "actions-msgpack-test",
+               "EM2 write-back writer self-test (W1: mch::Action -> the msgpack `actions` blob)",
+               [&]() { actions_msgpack_test_mode = true; });
+  p.add_option('\0', "tier2-suspend-test",
+               "Tier-2 suspension self-test (W4/S7: the classifier actor driven with a fake "
+               "tier-2 fetch that answers, errors, delays and never answers)",
+               [&]() { tier2_suspend_test_mode = true; });
   p.add_option('\0', "surface",
                "Dump C++ host/parse registries (parsers/preds/fns/shapers/lookup_kinds/"
                "boc_fields) as stable-sorted JSON for the twins",
@@ -320,6 +348,21 @@ int main(int argc, char *argv[]) {
     return mch::run_actions(ir_path, trace_paths);
   }
 
+  if (actions_msgpack_mode) {
+    // EM2 write-back parity dump: no actor scheduler needed.
+    return mch::run_actions_msgpack(ir_path, trace_paths);
+  }
+
+  if (kvrocks_decode_test_mode) {
+    // Tier-2 decoder self-test: no actor scheduler needed.
+    return mch::run_kvrocks_decode_test();
+  }
+
+  if (lookup_keys_mode) {
+    // Collect-pass key-set gate: no actor scheduler needed.
+    return mch::run_lookup_keys(ir_path, trace_paths);
+  }
+
   if (parse_dump_mode) {
     // Message-parse dump mode: no actor scheduler needed.
     return mch::run_parse_dump(trace_paths);
@@ -338,6 +381,16 @@ int main(int argc, char *argv[]) {
   if (abi_bridge_test_mode) {
     // ton-abi bridge self-test: no actor scheduler needed.
     return mch::run_abi_bridge_test();
+  }
+
+  if (actions_msgpack_test_mode) {
+    // EM2 write-back writer self-test: no actor scheduler needed.
+    return mch::run_action_msgpack_test();
+  }
+
+  if (tier2_suspend_test_mode) {
+    // Drives a REAL classifier actor, so it runs a scheduler of its own.
+    return mch::run_tier2_suspend_test();
   }
 
   if (surface_mode) {

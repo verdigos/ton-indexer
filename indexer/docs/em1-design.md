@@ -684,6 +684,11 @@ increment per shard block per block, and it makes the invariant unconditional.
   `TraceScheduler.cpp` (zero edits in `TraceEmulator.h`/`BlockEmulator.*`)?
 - **Q7 real timer**: accept the residual "≤1024 in-flight requests never answered if the engine
   hangs" (recommended), or build the gate actor with a deadline heap (~80 lines + a hop per trace)?
+  ► **SUPERSEDED (2026-07-29) by `em2-tier2-design.md` §5.5.** The "no timer" answer rested on §16.3's
+  premise that "the classifier does no I/O on this path (tier-2 is unwired)". EM2 wires tier-2, so a
+  suspended trace can wait on a network round and, if the response never comes, pins
+  `finalized_blocks_inflight_` permanently. The timer is back — as an alarm-driven sweep over the
+  suspended-trace map, not a per-request heap.
 - **Q8 `--mch-classify-nonblocking`**: ship the escape hatch for the first live run (recommended) or
   keep the flag surface as-is?
 - **Q9 classifier sharding**: single actor now (recommended) with `queue_us`/`classify_us` telemetry

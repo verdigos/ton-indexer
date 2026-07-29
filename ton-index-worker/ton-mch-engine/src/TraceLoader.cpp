@@ -6,6 +6,8 @@
 #include <lz4frame.h>
 #include <msgpack.hpp>
 
+#include <algorithm>
+
 namespace mch {
 
 namespace {
@@ -236,6 +238,13 @@ td::Result<Trace> load_trace(const std::string &path) {
   const auto *trace_obj = map_get(root, "trace");
   if (!is_nil(trace_obj)) {
     trace.trace_id = get_str(*trace_obj, "trace_id");
+    // The header is authoritative here, exactly as Python's Trace ROW is
+    // (deserialize_trace, tests/utils/trace_deserializer.py:113-129).
+    trace.start_lt = get_i64(*trace_obj, "start_lt");
+    trace.end_lt = get_i64(*trace_obj, "end_lt");
+    trace.start_utime = get_i64(*trace_obj, "start_utime");
+    trace.end_utime = get_i64(*trace_obj, "end_utime");
+    trace.mc_seqno_end = get_i64(*trace_obj, "mc_seqno_end");
   }
   const auto *txs = map_get(root, "transactions");
   if (is_nil(txs) || txs->type != msgpack::type::ARRAY) {
@@ -261,6 +270,19 @@ td::Result<Trace> load_trace(const std::string &path) {
     }
   }
   return trace;
+}
+
+void fill_trace_aggregates(Trace &trace) {
+  bool first = true;
+  for (const auto &tx : trace.transactions) {
+    trace.start_lt = first ? tx->lt : std::min(trace.start_lt, tx->lt);
+    trace.end_lt = first ? tx->lt : std::max(trace.end_lt, tx->lt);
+    trace.start_utime = first ? tx->now : std::min(trace.start_utime, tx->now);
+    trace.end_utime = first ? tx->now : std::max(trace.end_utime, tx->now);
+    trace.mc_seqno_end =
+        first ? tx->mc_block_seqno : std::max(trace.mc_seqno_end, tx->mc_block_seqno);
+    first = false;
+  }
 }
 
 }  // namespace mch

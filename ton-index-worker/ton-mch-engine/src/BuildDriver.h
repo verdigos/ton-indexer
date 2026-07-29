@@ -46,9 +46,12 @@ std::vector<Value> slots_from_captures(const std::vector<Capture> &captures);
 // fetches via the table). When false (12/36 matchers), the collect pass can only
 // ever produce zero misses, so it is skipped: a single final pass against an
 // empty filled table is byte-identical to collect→converge→final. (A2)
+//
+// `guard` (optional, §8.3) is attached to the FINAL pass's env only — see
+// WrongValueGuard.
 BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
                            const std::vector<Value> &slots, const Value &consumed,
                            const std::set<std::string> &kinds, const LookupSource &src,
-                           bool needs_lookups);
+                           bool needs_lookups, WrongValueGuard *guard = nullptr);
 
 }  // namespace mch

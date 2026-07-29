@@ -587,25 +587,6 @@ std::string build_payload(const PreparedAccountStateRow& row) {
   });
 }
 
-std::string build_payload(const PreparedLatestAccountStateRow& row) {
-  return build_json_payload([&](td::JsonObjectScope& obj) {
-    json_put_common(obj, row.source_mc_seqno);
-    json_put_address(obj, "account", row.account);
-    json_put_hash(obj, "hash", row.hash);
-    json_put_int256(obj, "balance", row.balance);
-    json_put_raw_json(obj, "balance_extra_currencies", row.balance_extra_currencies);
-    json_put_string(obj, "account_status", row.account_status);
-    json_put_i64(obj, "timestamp", row.timestamp);
-    json_put_hash(obj, "last_trans_hash", row.last_trans_hash);
-    json_put_u64_string(obj, "last_trans_lt", row.last_trans_lt);
-    json_put_optional_hash(obj, "frozen_hash", row.frozen_hash);
-    json_put_optional_hash(obj, "data_hash", row.data_hash);
-    json_put_optional_hash(obj, "code_hash", row.code_hash);
-    json_put_optional_string(obj, "data_boc", row.data_boc);
-    json_put_optional_string(obj, "code_boc", row.code_boc);
-  });
-}
-
 std::string build_payload(const PreparedJettonMasterRow& row) {
   return build_json_payload([&](td::JsonObjectScope& obj) {
     json_put_common(obj, row.source_mc_seqno);
@@ -618,21 +599,6 @@ std::string build_payload(const PreparedJettonMasterRow& row) {
     json_put_u64_string(obj, "last_transaction_lt", row.last_transaction_lt);
     json_put_hash(obj, "code_hash", row.code_hash);
     json_put_hash(obj, "data_hash", row.data_hash);
-    json_put_bool(obj, "destroyed", row.destroyed);
-  });
-}
-
-std::string build_payload(const PreparedJettonWalletRow& row) {
-  return build_json_payload([&](td::JsonObjectScope& obj) {
-    json_put_common(obj, row.source_mc_seqno);
-    json_put_int256(obj, "balance", row.balance);
-    json_put_address(obj, "address", row.address);
-    json_put_address(obj, "owner", row.owner);
-    json_put_address(obj, "jetton", row.jetton);
-    json_put_u64_string(obj, "last_transaction_lt", row.last_transaction_lt);
-    json_put_hash(obj, "code_hash", row.code_hash);
-    json_put_hash(obj, "data_hash", row.data_hash);
-    json_put_optional_bool(obj, "mintless_is_claimed", row.mintless_is_claimed);
     json_put_bool(obj, "destroyed", row.destroyed);
   });
 }
@@ -660,23 +626,6 @@ std::string build_payload(const PreparedNftCollectionRow& row) {
   });
 }
 
-std::string build_payload(const PreparedNftItemRow& row) {
-  return build_json_payload([&](td::JsonObjectScope& obj) {
-    json_put_common(obj, row.source_mc_seqno);
-    json_put_address(obj, "address", row.address);
-    json_put_bool(obj, "init", row.init);
-    json_put_int256(obj, "index", row.index);
-    json_put_optional_address(obj, "collection_address", row.collection_address);
-    json_put_optional_address(obj, "owner_address", row.owner_address);
-    json_put_optional_raw_json(obj, "content", row.content);
-    json_put_u64_string(obj, "last_transaction_lt", row.last_transaction_lt);
-    json_put_hash(obj, "code_hash", row.code_hash);
-    json_put_hash(obj, "data_hash", row.data_hash);
-    json_put_optional_address(obj, "real_owner", row.real_owner);
-    json_put_bool(obj, "destroyed", row.destroyed);
-  });
-}
-
 std::string build_payload(const PreparedDnsEntryRow& row) {
   return build_json_payload([&](td::JsonObjectScope& obj) {
     json_put_common(obj, row.source_mc_seqno);
@@ -692,67 +641,6 @@ std::string build_payload(const PreparedDnsEntryRow& row) {
     json_put_optional_u64_string(obj, "auction_end_time", row.auction_end_time);
     json_put_optional_u64_string(obj, "last_fill_up_time", row.last_fill_up_time);
     json_put_u64_string(obj, "last_transaction_lt", row.last_transaction_lt);
-    json_put_bool(obj, "destroyed", row.destroyed);
-  });
-}
-
-std::string build_payload(const PreparedGetgemsSaleRow& row) {
-  return build_json_payload([&](td::JsonObjectScope& obj) {
-    json_put_common(obj, row.source_mc_seqno);
-    json_put_address(obj, "address", row.address);
-    json_put_bool(obj, "is_complete", row.is_complete);
-    json_put_i64(obj, "created_at", row.created_at);
-    json_put_address(obj, "marketplace_address", row.marketplace_address);
-    json_put_address(obj, "nft_address", row.nft_address);
-    json_put_optional_address(obj, "nft_owner_address", row.nft_owner_address);
-    json_put_int256(obj, "full_price", row.full_price);
-    json_put_address(obj, "marketplace_fee_address", row.marketplace_fee_address);
-    json_put_int256(obj, "marketplace_fee", row.marketplace_fee);
-    json_put_address(obj, "royalty_address", row.royalty_address);
-    json_put_int256(obj, "royalty_amount", row.royalty_amount);
-    json_put_optional_u32(obj, "sold_at", row.sold_at);
-    json_put_optional_u64_string(obj, "sold_query_id", row.sold_query_id);
-    json_put_optional_raw_json(obj, "jetton_price_dict", row.jetton_price_dict);
-    json_put_u64_string(obj, "last_transaction_lt", row.last_transaction_lt);
-    json_put_hash(obj, "code_hash", row.code_hash);
-    json_put_hash(obj, "data_hash", row.data_hash);
-    json_put_bool(obj, "destroyed", row.destroyed);
-  });
-}
-
-std::string build_payload(const PreparedGetgemsAuctionRow& row) {
-  return build_json_payload([&](td::JsonObjectScope& obj) {
-    json_put_common(obj, row.source_mc_seqno);
-    json_put_address(obj, "address", row.address);
-    json_put_bool(obj, "end_flag", row.end_flag);
-    json_put_i64(obj, "end_time", row.end_time);
-    json_put_address(obj, "mp_addr", row.mp_addr);
-    json_put_address(obj, "nft_addr", row.nft_addr);
-    json_put_optional_address(obj, "nft_owner", row.nft_owner);
-    json_put_int256(obj, "last_bid", row.last_bid);
-    json_put_optional_address(obj, "last_member", row.last_member);
-    json_put_i64(obj, "min_step", row.min_step);
-    json_put_address(obj, "mp_fee_addr", row.mp_fee_addr);
-    json_put_i64(obj, "mp_fee_factor", row.mp_fee_factor);
-    json_put_i64(obj, "mp_fee_base", row.mp_fee_base);
-    json_put_address(obj, "royalty_fee_addr", row.royalty_fee_addr);
-    json_put_i64(obj, "royalty_fee_factor", row.royalty_fee_factor);
-    json_put_i64(obj, "royalty_fee_base", row.royalty_fee_base);
-    json_put_int256(obj, "max_bid", row.max_bid);
-    json_put_int256(obj, "min_bid", row.min_bid);
-    json_put_i64(obj, "created_at", row.created_at);
-    json_put_i64(obj, "last_bid_at", row.last_bid_at);
-    json_put_bool(obj, "is_canceled", row.is_canceled);
-    json_put_optional_bool(obj, "activated", row.activated);
-    json_put_optional_u32(obj, "step_time", row.step_time);
-    json_put_optional_u64_string(obj, "last_query_id", row.last_query_id);
-    json_put_optional_address(obj, "jetton_wallet", row.jetton_wallet);
-    json_put_optional_address(obj, "jetton_master", row.jetton_master);
-    json_put_optional_bool(obj, "is_broken_state", row.is_broken_state);
-    json_put_optional_string(obj, "public_key", row.public_key);
-    json_put_u64_string(obj, "last_transaction_lt", row.last_transaction_lt);
-    json_put_hash(obj, "code_hash", row.code_hash);
-    json_put_hash(obj, "data_hash", row.data_hash);
     json_put_bool(obj, "destroyed", row.destroyed);
   });
 }
@@ -785,24 +673,6 @@ std::string build_payload(const PreparedMultisigOrderRow& row) {
     json_put_int256(obj, "expiration_date", row.expiration_date);
     json_put_optional_string(obj, "order_boc", row.order_boc);
     json_put_raw_json(obj, "signers", address_array_json(row.signers));
-    json_put_u64_string(obj, "last_transaction_lt", row.last_transaction_lt);
-    json_put_hash(obj, "code_hash", row.code_hash);
-    json_put_hash(obj, "data_hash", row.data_hash);
-    json_put_bool(obj, "destroyed", row.destroyed);
-  });
-}
-
-std::string build_payload(const PreparedDedustPoolRow& row) {
-  return build_json_payload([&](td::JsonObjectScope& obj) {
-    json_put_common(obj, row.source_mc_seqno);
-    json_put_address(obj, "address", row.address);
-    json_put_optional_address(obj, "asset_1", row.asset_1);
-    json_put_optional_address(obj, "asset_2", row.asset_2);
-    json_put_int256(obj, "reserve_1", row.reserve_1);
-    json_put_int256(obj, "reserve_2", row.reserve_2);
-    json_put_string(obj, "pool_type", row.pool_type);
-    json_put_string(obj, "dex", row.dex);
-    obj("fee", td::JsonFloat(row.fee));
     json_put_u64_string(obj, "last_transaction_lt", row.last_transaction_lt);
     json_put_hash(obj, "code_hash", row.code_hash);
     json_put_hash(obj, "data_hash", row.data_hash);
@@ -1417,6 +1287,136 @@ void repair_nft_real_owners(sw::redis::Redis& redis, const StateBatch& batch) {
 }
 
 }  // namespace
+
+// Payload builders EXPORTED (declared in KvrocksState.h): visibility only —
+// the bodies are unchanged and still call the anonymous-namespace json_put_*
+// helpers. They are the single source of truth for the kvrocks wire format,
+// and ton-mch-engine's tier-2 decoder gate reads them so a change here breaks
+// the decoder's test instead of production classification.
+std::string build_payload(const PreparedLatestAccountStateRow& row) {
+  return build_json_payload([&](td::JsonObjectScope& obj) {
+    json_put_common(obj, row.source_mc_seqno);
+    json_put_address(obj, "account", row.account);
+    json_put_hash(obj, "hash", row.hash);
+    json_put_int256(obj, "balance", row.balance);
+    json_put_raw_json(obj, "balance_extra_currencies", row.balance_extra_currencies);
+    json_put_string(obj, "account_status", row.account_status);
+    json_put_i64(obj, "timestamp", row.timestamp);
+    json_put_hash(obj, "last_trans_hash", row.last_trans_hash);
+    json_put_u64_string(obj, "last_trans_lt", row.last_trans_lt);
+    json_put_optional_hash(obj, "frozen_hash", row.frozen_hash);
+    json_put_optional_hash(obj, "data_hash", row.data_hash);
+    json_put_optional_hash(obj, "code_hash", row.code_hash);
+    json_put_optional_string(obj, "data_boc", row.data_boc);
+    json_put_optional_string(obj, "code_boc", row.code_boc);
+  });
+}
+std::string build_payload(const PreparedJettonWalletRow& row) {
+  return build_json_payload([&](td::JsonObjectScope& obj) {
+    json_put_common(obj, row.source_mc_seqno);
+    json_put_int256(obj, "balance", row.balance);
+    json_put_address(obj, "address", row.address);
+    json_put_address(obj, "owner", row.owner);
+    json_put_address(obj, "jetton", row.jetton);
+    json_put_u64_string(obj, "last_transaction_lt", row.last_transaction_lt);
+    json_put_hash(obj, "code_hash", row.code_hash);
+    json_put_hash(obj, "data_hash", row.data_hash);
+    json_put_optional_bool(obj, "mintless_is_claimed", row.mintless_is_claimed);
+    json_put_bool(obj, "destroyed", row.destroyed);
+  });
+}
+std::string build_payload(const PreparedNftItemRow& row) {
+  return build_json_payload([&](td::JsonObjectScope& obj) {
+    json_put_common(obj, row.source_mc_seqno);
+    json_put_address(obj, "address", row.address);
+    json_put_bool(obj, "init", row.init);
+    json_put_int256(obj, "index", row.index);
+    json_put_optional_address(obj, "collection_address", row.collection_address);
+    json_put_optional_address(obj, "owner_address", row.owner_address);
+    json_put_optional_raw_json(obj, "content", row.content);
+    json_put_u64_string(obj, "last_transaction_lt", row.last_transaction_lt);
+    json_put_hash(obj, "code_hash", row.code_hash);
+    json_put_hash(obj, "data_hash", row.data_hash);
+    json_put_optional_address(obj, "real_owner", row.real_owner);
+    json_put_bool(obj, "destroyed", row.destroyed);
+  });
+}
+std::string build_payload(const PreparedGetgemsSaleRow& row) {
+  return build_json_payload([&](td::JsonObjectScope& obj) {
+    json_put_common(obj, row.source_mc_seqno);
+    json_put_address(obj, "address", row.address);
+    json_put_bool(obj, "is_complete", row.is_complete);
+    json_put_i64(obj, "created_at", row.created_at);
+    json_put_address(obj, "marketplace_address", row.marketplace_address);
+    json_put_address(obj, "nft_address", row.nft_address);
+    json_put_optional_address(obj, "nft_owner_address", row.nft_owner_address);
+    json_put_int256(obj, "full_price", row.full_price);
+    json_put_address(obj, "marketplace_fee_address", row.marketplace_fee_address);
+    json_put_int256(obj, "marketplace_fee", row.marketplace_fee);
+    json_put_address(obj, "royalty_address", row.royalty_address);
+    json_put_int256(obj, "royalty_amount", row.royalty_amount);
+    json_put_optional_u32(obj, "sold_at", row.sold_at);
+    json_put_optional_u64_string(obj, "sold_query_id", row.sold_query_id);
+    json_put_optional_raw_json(obj, "jetton_price_dict", row.jetton_price_dict);
+    json_put_u64_string(obj, "last_transaction_lt", row.last_transaction_lt);
+    json_put_hash(obj, "code_hash", row.code_hash);
+    json_put_hash(obj, "data_hash", row.data_hash);
+    json_put_bool(obj, "destroyed", row.destroyed);
+  });
+}
+std::string build_payload(const PreparedGetgemsAuctionRow& row) {
+  return build_json_payload([&](td::JsonObjectScope& obj) {
+    json_put_common(obj, row.source_mc_seqno);
+    json_put_address(obj, "address", row.address);
+    json_put_bool(obj, "end_flag", row.end_flag);
+    json_put_i64(obj, "end_time", row.end_time);
+    json_put_address(obj, "mp_addr", row.mp_addr);
+    json_put_address(obj, "nft_addr", row.nft_addr);
+    json_put_optional_address(obj, "nft_owner", row.nft_owner);
+    json_put_int256(obj, "last_bid", row.last_bid);
+    json_put_optional_address(obj, "last_member", row.last_member);
+    json_put_i64(obj, "min_step", row.min_step);
+    json_put_address(obj, "mp_fee_addr", row.mp_fee_addr);
+    json_put_i64(obj, "mp_fee_factor", row.mp_fee_factor);
+    json_put_i64(obj, "mp_fee_base", row.mp_fee_base);
+    json_put_address(obj, "royalty_fee_addr", row.royalty_fee_addr);
+    json_put_i64(obj, "royalty_fee_factor", row.royalty_fee_factor);
+    json_put_i64(obj, "royalty_fee_base", row.royalty_fee_base);
+    json_put_int256(obj, "max_bid", row.max_bid);
+    json_put_int256(obj, "min_bid", row.min_bid);
+    json_put_i64(obj, "created_at", row.created_at);
+    json_put_i64(obj, "last_bid_at", row.last_bid_at);
+    json_put_bool(obj, "is_canceled", row.is_canceled);
+    json_put_optional_bool(obj, "activated", row.activated);
+    json_put_optional_u32(obj, "step_time", row.step_time);
+    json_put_optional_u64_string(obj, "last_query_id", row.last_query_id);
+    json_put_optional_address(obj, "jetton_wallet", row.jetton_wallet);
+    json_put_optional_address(obj, "jetton_master", row.jetton_master);
+    json_put_optional_bool(obj, "is_broken_state", row.is_broken_state);
+    json_put_optional_string(obj, "public_key", row.public_key);
+    json_put_u64_string(obj, "last_transaction_lt", row.last_transaction_lt);
+    json_put_hash(obj, "code_hash", row.code_hash);
+    json_put_hash(obj, "data_hash", row.data_hash);
+    json_put_bool(obj, "destroyed", row.destroyed);
+  });
+}
+std::string build_payload(const PreparedDedustPoolRow& row) {
+  return build_json_payload([&](td::JsonObjectScope& obj) {
+    json_put_common(obj, row.source_mc_seqno);
+    json_put_address(obj, "address", row.address);
+    json_put_optional_address(obj, "asset_1", row.asset_1);
+    json_put_optional_address(obj, "asset_2", row.asset_2);
+    json_put_int256(obj, "reserve_1", row.reserve_1);
+    json_put_int256(obj, "reserve_2", row.reserve_2);
+    json_put_string(obj, "pool_type", row.pool_type);
+    json_put_string(obj, "dex", row.dex);
+    obj("fee", td::JsonFloat(row.fee));
+    json_put_u64_string(obj, "last_transaction_lt", row.last_transaction_lt);
+    json_put_hash(obj, "code_hash", row.code_hash);
+    json_put_hash(obj, "data_hash", row.data_hash);
+    json_put_bool(obj, "destroyed", row.destroyed);
+  });
+}
 
 bool KvrocksConfig::use_sentinel() const {
   return !sentinel_nodes.empty();

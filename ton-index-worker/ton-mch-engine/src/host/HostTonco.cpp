@@ -334,10 +334,23 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   }
   std::string router_wallet = *jnm->source;
 
-  // first asset (router wallet): null lookup -> fallback TON (NOT reject).
+  // first asset (router wallet): null lookup -> REJECT, like the two branches
+  // above. Legacy falls back to TON here, which publishes a missing counterparty
+  // wallet as a TON deposit — the one site in the engine that answers a lookup
+  // miss with a plausible WRONG value (em2-tier2-design §8.2/§8.3). A null
+  // record is what tonco_liquidity.mch:59-60 already gates on, so this drops
+  // only this action and leaves the rest of the trace classified.
   Value first_asset = wallet_asset(env, router_wallet);
   if (first_asset.is_null()) {
-    first_asset = Value::make_asset_ton();
+    // Counted, not silent: this is the ONE site in the engine where a lookup
+    // miss used to become a plausible wrong value, so the reject that replaced
+    // it is the event operators need to see (§8.3). EmuTier2Stats::
+    // wrong_value_guard is where it lands; the kind + matcher ride along in
+    // ClassifyResult::wrong_value_sites for the debug log.
+    if (env.guard != nullptr) {
+      env.guard->note("jetton_wallet");
+    }
+    return rt_ok(Value::null());
   }
   // second asset (other wallet): null lookup -> stays None.
   Value second_asset = wallet_asset(env, other_wallet);

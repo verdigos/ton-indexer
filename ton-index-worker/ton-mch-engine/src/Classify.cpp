@@ -4,10 +4,12 @@
 #include "BlockTree.h"
 #include "BuildDriver.h"
 #include "ClassifyCore.h"
+#include "ClassifyDriver.h"
 #include "BuildRuntime.h"
 #include "ExprRuntime.h"
 #include "IrLoader.h"
 #include "MsgParse.h"
+#include "emu/EmuActionSerialize.h"
 
 #include "td/utils/base64.h"
 #include "td/utils/crypto.h"
@@ -106,8 +108,34 @@ std::string render_action(const Action &a) {
   f.emplace_back("layerzero_packet_data", a.layerzero_packet_data);
   f.emplace_back("jvault_stake_data", a.jvault_stake_data);
   f.emplace_back("jvault_claim_data", a.jvault_claim_data);
+  f.emplace_back("change_dns_record_data", a.change_dns_record_data);
   f.emplace_back("extra", a.extra);
   return render_value(Value::make_dict(std::move(f)));
+}
+
+// EM2 W2: the stub emission the parity twin serializes against. `finality` and
+// `trace_external_hash_norm` are the two wire keys that come from the EMISSION
+// rather than the Action (§2.5), and a fixture is not an emission — so both
+// sides use the same sentinels (mirrored in twins/py_actions_msgpack.py's
+// _STUB_TRACE) and the comparator asserts them like any other key.
+const EmuTraceView &twin_view() {
+  static const EmuTraceView view = [] {
+    EmuTraceView v;
+    v.trace_id = "twin";
+    EmuTxRef node;
+    node.finality = EmuFinality::finalized;
+    v.nodes.push_back(node);
+    return v;
+  }();
+  return view;
+}
+
+// One row, through the PRODUCTION writer, base64'd so it survives a text dump.
+// Serialized one-at-a-time rather than per trace because the comparator joins
+// on the anchor key, exactly like the other twins; the array framing itself is
+// gated by --actions-msgpack-test (multi/array_of_two).
+std::string msgpack_action_row(const Action &a) {
+  return td::base64_encode(serialize_actions({a}, twin_view()));
 }
 
 }  // namespace
@@ -119,7 +147,7 @@ std::string render_action(const Action &a) {
 // Action row (build_action + render_action)). --classify and --actions differ
 // ONLY in the per-action render, so they share this.
 int run_dump(const std::string &artifact_path, const std::vector<std::string> &paths,
-             bool actions_mode, const TraceContextLoader &load_ctx,
+             DumpMode mode, const TraceContextLoader &load_ctx,
              const LookupSourceFactory &lookup_factory) {
   auto r_ir = load_ir(artifact_path);
   if (r_ir.is_error()) {
@@ -158,22 +186,32 @@ int run_dump(const std::string &artifact_path, const std::vector<std::string> &p
 
   for (const std::string &f : fixtures) {
     std::printf("=== %s\n", fs::path(f).filename().string().c_str());
-    auto r_ctx = load_ctx(f);
-    if (r_ctx.is_error()) {
-      std::printf("ERROR: %s\n", r_ctx.error().message().c_str());
+    // Routed through the trace-level driver (em2-tier2-design §10 W1): with no
+    // Tier2Fetch it runs exactly one pass and commits it, so this dump stays
+    // byte-identical while the corpus covers the driver's commit path. The
+    // tier-2 slot here belongs to the gate's fixture fallback (SchemaGate.cpp),
+    // so the driver's recording hook is unused and nothing is ever collected.
+    auto make_ctx = [&]() -> td::Result<std::unique_ptr<TraceContext>> {
+      TRY_RESULT(c, load_ctx(f));
+      return std::make_unique<TraceContext>(std::move(c));
+    };
+    auto make_src = [&](TraceContext &c, ParsedBlockLookupSource::Tier2Hook) {
+      return RoundSource{lookup_factory
+                             ? lookup_factory(c)
+                             : std::make_shared<FixtureLookupSource>(&c.trace.interfaces),
+                         nullptr};
+    };
+    DriverResult dr = run_classify_fixpoint(make_ctx, make_src, ir, setup);
+    if (dr.malformed) {
+      std::printf("ERROR: %s\n", dr.error.c_str());
       continue;
     }
-    auto ctx = r_ctx.move_as_ok();
     // Orphan warning: stderr only (stdout is the A/B channel; never fires on corpus).
-    if (ctx.tree.unlinked != 0) {
+    if (dr.ctx->tree.unlinked != 0) {
       std::fprintf(stderr, "WARN %s: %zu orphan nodes unreachable from root\n",
-                   fs::path(f).filename().string().c_str(), ctx.tree.unlinked);
+                   fs::path(f).filename().string().c_str(), dr.ctx->tree.unlinked);
     }
-    std::shared_ptr<LookupSource> src =
-        lookup_factory ? lookup_factory(ctx)
-                       : std::make_shared<FixtureLookupSource>(&ctx.trace.interfaces);
-
-    ClassifyResult res = classify_trace(ctx, ir, setup, *src);
+    const ClassifyResult &res = dr.res;
     if (res.failure) {
       // Per-trace exception boundary (event_processing.py): buffered — the
       // regular actions are discarded, a single TRACE_FAIL on stdout, the reason
@@ -183,36 +221,51 @@ int run_dump(const std::string &artifact_path, const std::vector<std::string> &p
       std::printf("TRACE_FAIL\n");
       std::fprintf(stderr, "TRACE_FAIL %s: %s\n", fs::path(f).filename().string().c_str(),
                    res.failure_reason.c_str());
-      if (actions_mode) {
+      if (mode != DumpMode::classify) {
         for (const CoreAction &a : res.fallback_actions) {
           Action act;
           if (!build_action(a.produced, act)) continue;
-          std::printf("FALLBACK anchor=%s %s\n", block_key(a.anchor).c_str(),
-                      render_action(act).c_str());
+          std::string row = mode == DumpMode::actions_msgpack ? msgpack_action_row(act)
+                                                              : render_action(act);
+          std::printf("FALLBACK anchor=%s %s\n", block_key(a.anchor).c_str(), row.c_str());
         }
       }
       continue;
     }
     for (const CoreAction &a : res.actions) {
-      if (actions_mode) {
-        Action act;
-        if (!build_action(a.produced, act)) continue;  // btype outside ported set
-        std::printf("ACTION anchor=%s %s\n", block_key(a.anchor).c_str(),
-                    render_action(act).c_str());
-      } else {
+      if (mode == DumpMode::classify) {
         emit_action(a);
+        continue;
       }
+      Action act;
+      if (!build_action(a.produced, act)) continue;  // btype outside ported set
+      std::string row =
+          mode == DumpMode::actions_msgpack ? msgpack_action_row(act) : render_action(act);
+      std::printf("ACTION anchor=%s %s\n", block_key(a.anchor).c_str(), row.c_str());
+    }
+    // W4: the trace classified cleanly and matched nothing. The synthetic
+    // `unknown` row has no Block, so it prints the literal anchor `unknown`
+    // (the twins print the same) instead of a block_key.
+    if (mode != DumpMode::classify && res.unknown_trace) {
+      Action act = create_unknown_action(dr.ctx->trace);
+      std::string row =
+          mode == DumpMode::actions_msgpack ? msgpack_action_row(act) : render_action(act);
+      std::printf("ACTION anchor=unknown %s\n", row.c_str());
     }
   }
   return 0;
 }
 
 int run_classify(const std::string &artifact_path, const std::vector<std::string> &paths) {
-  return run_dump(artifact_path, paths, /*actions_mode=*/false, load_trace_context);
+  return run_dump(artifact_path, paths, DumpMode::classify, load_trace_context);
 }
 
 int run_actions(const std::string &artifact_path, const std::vector<std::string> &paths) {
-  return run_dump(artifact_path, paths, /*actions_mode=*/true, load_trace_context);
+  return run_dump(artifact_path, paths, DumpMode::actions, load_trace_context);
+}
+
+int run_actions_msgpack(const std::string &artifact_path, const std::vector<std::string> &paths) {
+  return run_dump(artifact_path, paths, DumpMode::actions_msgpack, load_trace_context);
 }
 
 }  // namespace mch

@@ -19,8 +19,13 @@ schema::NFTItemDataV2 to_v2(const NftItemDetectorR::Result &r) {
   v.index = r.index;
   v.collection_address = r.collection_address;
   v.owner_address = r.owner_address;
-  // content / dns_entry are not read by tier1 (and dns_entry is a distinct type
-  // on either side) — left unset.
+  // content MUST be carried: get_nft_data faults on a non-Dict, so dropping it
+  // here dropped the nft_transfer row of every EMULATED trace whose NFT the
+  // emulator itself detected (em2-tier2-design §6.1a — a live action loss, not a
+  // replay artefact). Both sides are the same optional<map<string,string>>.
+  v.content = r.content;
+  // dns_entry stays unset: a distinct type on either side, and no lookup kind
+  // reads it.
   return v;
 }
 

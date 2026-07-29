@@ -210,14 +210,18 @@ std::vector<Value> slots_from_captures(const std::vector<Capture> &captures) {
 BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
                            const std::vector<Value> &slots, const Value &consumed,
                            const std::set<std::string> &kinds, const LookupSource &src,
-                           bool needs_lookups) {
-  auto fresh_env = [&](const LookupTable *table) {
+                           bool needs_lookups, WrongValueGuard *guard) {
+  // `sink` is null on the dry passes: they run the same code against a table
+  // that is empty BY DESIGN, so every miss-driven reject fires there too and
+  // counting it would multiply the event by the round count (§8.3).
+  auto fresh_env = [&](const LookupTable *table, WrongValueGuard *sink) {
     BuildEnv env;
     env.anchor = anchor;
     env.slots = slots.data();
     env.n_slots = slots.size();
     env.consumed = consumed;
     env.lookups = table;
+    env.guard = sink;
     return env;
   };
 
@@ -226,7 +230,7 @@ BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
   // result as the loop below (which would converge on round 0 with no fetches).
   if (!needs_lookups) {
     FilledLookupTable filled(kinds, {});
-    BuildEnv env = fresh_env(&filled);
+    BuildEnv env = fresh_env(&filled, guard);
     return fn(env);
   }
 
@@ -234,7 +238,7 @@ BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
   bool converged = false;
   for (int round = 0; round < 8; round++) {
     CollectingLookupTable coll(kinds, fetched);
-    BuildEnv env = fresh_env(&coll);
+    BuildEnv env = fresh_env(&coll, nullptr);
     fn(env);  // dry pass, outcome discarded
     if (coll.misses.empty()) {
       converged = true;
@@ -254,7 +258,7 @@ BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
   }
 
   FilledLookupTable filled(kinds, std::move(fetched));
-  BuildEnv env = fresh_env(&filled);
+  BuildEnv env = fresh_env(&filled, guard);
   return fn(env);
 }
 

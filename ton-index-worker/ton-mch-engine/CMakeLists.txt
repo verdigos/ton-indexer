@@ -146,6 +146,8 @@ add_library(mch-classify STATIC
     src/BuildDriver.cpp
     src/ActionBuild.cpp
     src/ClassifyCore.cpp
+    src/ClassifyDriver.cpp
+    src/KvrocksDecode.cpp
     src/SchemaTraceLoader.cpp
     src/ParsedBlockLookupSource.cpp
     src/MchClassifierActor.cpp
@@ -198,11 +200,19 @@ add_library(mch-emu STATIC
     src/emu/EmuTraceConvert.cpp
     src/emu/EmuInterfaces.cpp
     src/emu/EmuClassifierActor.cpp
+    src/emu/EmuLookupActor.cpp
     src/emu/EmuCapture.cpp
+    # EM2 W1: the mch::Action -> msgpack write-back writer
+    # (em2-writeback-design.md §2). Pure library function, no actor and no
+    # Redis; W3 calls it from EmuClassifierActor, the harness self-test below
+    # and W2's twin gate call it directly.
+    src/emu/EmuActionSerialize.cpp
 )
 target_include_directories(mch-emu PUBLIC src)
 target_compile_features(mch-emu PUBLIC cxx_std_20)
-target_link_libraries(mch-emu PUBLIC mch-classify)
+# ton-kvrocks-state: EmuLookupActor reuses its KvrocksConfig/KvrocksClient (and
+# hence its Sentinel support and connection building) for the tier-2 transport.
+target_link_libraries(mch-emu PUBLIC mch-classify ton-kvrocks-state)
 
 # EmuShadow.cpp is the ONLY TU that includes TraceEmulator.h.
 # ton-trace-emulator-core is add_subdirectory'd after this one; link libraries
@@ -232,19 +242,58 @@ add_executable(ton-mch-engine
     src/Classify.cpp
     src/ShapeTest.cpp
     src/DexRecordsTest.cpp
+    src/EmuActionSerializeTest.cpp
     src/MsgVectorRunner.cpp
     src/ParseDump.cpp
+    src/LookupKeyGate.cpp
+    src/KvrocksDecodeTest.cpp
     src/SchemaGate.cpp
     src/Surface.cpp
+    src/Tier2SuspendTest.cpp
     src/AbiBridgeTest.cpp
     ${ABI_BRIDGE_TEST_FIXTURES}
 )
 target_include_directories(ton-mch-engine PRIVATE src ${CMAKE_CURRENT_BINARY_DIR} ${TON_ABI_DIR}/generated)
 target_compile_features(ton-mch-engine PRIVATE cxx_std_20)
-target_link_libraries(ton-mch-engine mch-classify)
+# mch-emu (not just mch-classify): --actions-msgpack-test gates the EM2 writer,
+# which lives there. Still no emulator dependency — mch-emu-bridge is the only
+# TU that knows TraceEmulator.h.
+# ton-kvrocks-state: --kvrocks-decode-test generates its payload vectors with the
+# interface writer's OWN build_payload, so the tier-2 decoder is gated against the
+# real wire format rather than a copy of it.
+target_link_libraries(ton-mch-engine mch-classify mch-emu ton-kvrocks-state)
 add_dependencies(ton-mch-engine mch_generate_sources)
 
 install(TARGETS ton-mch-engine RUNTIME DESTINATION bin)
+
+# --- mch-ab-replay: EM2 phase-1 A/B replay adapter (em2-writeback-design.md §8,
+# wave W7 item iii). Reads a read-only prod-Redis HGETALL sweep (JSONL,
+# twins/README.md) and emits the `--actions-msgpack` line format, so
+# twins/ab_replay_diff.py compares Python's stored `actions` against ours with no
+# new comparator code. Offline: no Redis client, no DB, no emulator run.
+#
+# A separate exe rather than another ton-mch-engine mode BECAUSE of the link edge
+# below — only this binary needs the emulator's wire structs, and the fixture
+# harness should not grow a dependency on emulator_static.
+add_executable(mch-ab-replay
+    src/abreplay/main.cpp
+    src/abreplay/RedisReplay.cpp
+)
+target_include_directories(mch-ab-replay PRIVATE src ${CMAKE_CURRENT_BINARY_DIR})
+target_compile_features(mch-ab-replay PRIVATE cxx_std_20)
+# MSGPACK_USE_DEFINE_MAP — which makes every MSGPACK_DEFINE struct in Redis a MAP
+# keyed by field name rather than a positional array — is INHERITED from
+# ton-trace-emulator-core, the same target that supplies Serializer.hpp's include
+# path. That pairing is deliberate (see the definition site): a reader cannot
+# obtain the header without also obtaining the format it is written in. Do not
+# re-add the definition here.
+# ton-trace-emulator-core carries Serializer.hpp's include path (and its
+# TraceEmulator.h prerequisite). Same edge mch-emu-bridge has, and it resolves at
+# generate time even though ton-trace-emulator is add_subdirectory'd after this.
+# RedisReplay.cpp is the only TU here that includes either header, and it READS
+# them — nothing under ton-trace-emulator/ or src/emu/ is modified.
+target_link_libraries(mch-ab-replay mch-classify mch-emu ton-trace-emulator-core msgpack-cxx)
+add_dependencies(mch-ab-replay mch_generate_sources)
 
 # --- CTest wiring (§10.1) ------------------------------------------------------
 # The deterministic, self-contained gate modes as native tests (`ctest -R mch`).
@@ -267,3 +316,13 @@ add_test(NAME mch_codegen_selftest
     COMMAND mch-codegen --selftest)
 add_test(NAME mch_abi_bridge
     COMMAND ton-mch-engine --abi-bridge-test)
+add_test(NAME mch_kvrocks_decode
+    COMMAND ton-mch-engine --kvrocks-decode-test)
+add_test(NAME mch_actions_msgpack
+    COMMAND ton-mch-engine --actions-msgpack-test)
+# S7 (W4): the tier-2 suspension loop, driven on a real scheduler with a fake
+# fetch. Hermetic like the rest of this set — no store, no artifact, no corpus —
+# but it WAITS on the sweep, so it is the one test here that takes seconds
+# rather than milliseconds.
+add_test(NAME mch_tier2_suspend
+    COMMAND ton-mch-engine --tier2-suspend-test)

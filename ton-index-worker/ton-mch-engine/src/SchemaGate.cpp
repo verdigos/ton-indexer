@@ -208,9 +208,13 @@ ParsedBlockLookupSource::InterfaceMap synth_account_interfaces(
     // that the nft cores READ AND RENDER but that the integer V2 structs cannot
     // reproduce byte-for-byte offline:
     //   - nft_item.index (float 1.0 in fixtures) -> rendered as nft_item_index;
-    //     NFTItemDataV2.index is RefInt256. Also nft_item.content must be a Dict
-    //     (get_nft_data faults otherwise) and is a nested metadata map, not the
-    //     flat map<string,string> the V2 struct holds.
+    //     NFTItemDataV2.index is RefInt256.
+    //     (`content` USED to be a second reason here — tier 1 hard-coded it Null
+    //     and get_nft_data faults on a non-Dict, which dropped nft_transfer rows
+    //     in PRODUCTION while this routing kept every offline gate blind to it,
+    //     em2-tier2-design §6.1a. Tier 1 now builds the Dict from
+    //     NFTItemDataV2.content, so content no longer blocks synthesis — but the
+    //     float index alone still does, so this routing stands unchanged.)
     //   - nft_sale.full_price / nft_auction.last_bid (floats) -> rendered as the
     //     nft_transfer_data `price`; GetGemsNftFixPriceSale*/AuctionData store
     //     RefInt256. The classify dump masks it (Amount renders int==float for
@@ -288,22 +292,22 @@ LookupSourceFactory prod_lookup_factory() {
 }  // namespace
 
 int run_classify_schema(const std::string &artifact_path, const std::vector<std::string> &paths) {
-  return run_dump(artifact_path, paths, /*actions_mode=*/false, schema_ctx_loader);
+  return run_dump(artifact_path, paths, DumpMode::classify, schema_ctx_loader);
 }
 
 int run_actions_schema(const std::string &artifact_path, const std::vector<std::string> &paths) {
-  return run_dump(artifact_path, paths, /*actions_mode=*/true, schema_ctx_loader);
+  return run_dump(artifact_path, paths, DumpMode::actions, schema_ctx_loader);
 }
 
 int run_classify_prod(const std::string &artifact_path, const std::vector<std::string> &paths) {
   // FULL production path: SchemaTraceLoader trace + ParsedBlockLookupSource
   // lookups (tier-1 synthesized V2 + tier-2 fixture fallback) vs --classify.
-  return run_dump(artifact_path, paths, /*actions_mode=*/false, schema_ctx_loader,
+  return run_dump(artifact_path, paths, DumpMode::classify, schema_ctx_loader,
                   prod_lookup_factory());
 }
 
 int run_actions_prod(const std::string &artifact_path, const std::vector<std::string> &paths) {
-  return run_dump(artifact_path, paths, /*actions_mode=*/true, schema_ctx_loader,
+  return run_dump(artifact_path, paths, DumpMode::actions, schema_ctx_loader,
                   prod_lookup_factory());
 }
 

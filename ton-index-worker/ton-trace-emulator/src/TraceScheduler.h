@@ -39,6 +39,8 @@ class TraceEmulatorScheduler : public td::actor::Actor {
     ton::BlockSeqno last_known_seqno_{0};
     ton::BlockSeqno last_fetched_seqno_{0};
     ton::BlockSeqno last_emulated_seqno_{0};
+    // --mch-stress-backfill: 0 = start at the head, as usual.
+    ton::BlockSeqno stress_backfill_{0};
 
     td::Timestamp next_statistics_flush_;
 
@@ -104,21 +106,37 @@ class TraceEmulatorScheduler : public td::actor::Actor {
     TraceEmulatorScheduler(td::actor::ActorId<DbScanner> db_scanner, td::actor::ActorId<ITraceInsertManager> insert_manager,
                            std::string global_config_path, std::string inet_addr, 
                            std::string redis_dsn, std::string input_redis_channel, std::string working_dir,
-                           std::string db_event_fifo_path, mch::EmuShadowConfig mch_shadow = {}) :
-        db_scanner_(db_scanner), insert_manager_(insert_manager), global_config_path_(global_config_path), 
+                           std::string db_event_fifo_path, mch::EmuShadowConfig mch_shadow = {},
+                           ton::BlockSeqno stress_backfill = 0) :
+        db_scanner_(db_scanner), insert_manager_(insert_manager), global_config_path_(global_config_path),
         inet_addr_(inet_addr), redis_dsn_(redis_dsn), input_redis_channel_(input_redis_channel),
         working_dir_(std::move(working_dir)), db_event_fifo_path_(std::move(db_event_fifo_path)),
-        mch_shadow_(std::move(mch_shadow)) {
+        stress_backfill_(stress_backfill), mch_shadow_(std::move(mch_shadow)) {
       health_redis_ = std::make_unique<sw::redis::Redis>(redis_dsn_);
-      insert_trace_ = [insert_manager = insert_manager_.get()](Trace trace, td::Promise<td::Unit> promise, MeasurementPtr measurement) {
-        td::actor::send_closure(insert_manager, &ITraceInsertManager::insert, std::move(trace), std::move(promise), measurement);
+      // EM2 §4.2: the WIDE sink, matching ITraceInsertManager::insert. It is
+      // either decorated (the classifier supplies the payload) or wrapped with an
+      // empty one — either way the 3-arg insert_trace_ the four trace sources
+      // copy stays exactly the type it was, so no listener and no block emulator
+      // changes.
+      auto insert_with = [insert_manager = insert_manager_.get()](Trace trace, mch::EmuActionPayload actions,
+                                                                  td::Promise<td::Unit> promise, MeasurementPtr measurement) {
+        td::actor::send_closure(insert_manager, &ITraceInsertManager::insert, std::move(trace),
+                                std::move(actions), std::move(promise), measurement);
       };
       // Must be here, not a setter: start_up() copies insert_trace_ BY VALUE into
       // the listeners, so a send_closure'd setter would land too late.
       if (mch_shadow_.prep) {
         mch_classifier_ = td::actor::create_actor<mch::EmuClassifierActor>("MchEmuClassifier", mch_shadow_);
-        insert_trace_ = mch::decorate_sink(std::move(insert_trace_), mch_classifier_.get(),
-                                           mch_shadow_.gate, mch_shadow_.nonblocking);
+        insert_trace_ = mch::decorate_sink(std::move(insert_with), mch_classifier_.get(),
+                                           mch_shadow_.gate, mch_shadow_.nonblocking,
+                                           mch_shadow_.max_nodes);
+      } else {
+        // Feature off: a DEFAULT payload, whose `state` is null, so the insert
+        // writes no mch_classify_state field at all (§7's last row) and the
+        // MULTI is byte-identical to the pre-EM2 one.
+        insert_trace_ = [insert_with](Trace trace, td::Promise<td::Unit> promise, MeasurementPtr measurement) {
+          insert_with(std::move(trace), {}, std::move(promise), measurement);
+        };
       }
       external_message_admission_ = std::make_shared<ExternalMessageAdmission>();
       invalidated_trace_tracker_ = td::actor::create_actor<InvalidatedTraceTracker>("InvalidatedTraceTracker", redis_dsn_);
