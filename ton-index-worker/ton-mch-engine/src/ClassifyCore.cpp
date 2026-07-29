@@ -201,7 +201,23 @@ void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block 
     for (const EventNode *n : first->event_nodes) final_b->event_nodes.push_back(n);
     final_b->data = std::move(merged);
     for (Block *cb : first->children_blocks) final_b->children_blocks.push_back(cb);
-    std::sort(final_b->children_blocks.begin(), final_b->children_blocks.end());
+    // Python does `list(set(children_blocks))` here, i.e. an order nothing
+    // downstream can rely on — but the C++ substrate has to pick SOME order,
+    // and sorting raw Block* sorted by ARENA ADDRESS: run-to-run stable within
+    // one process, arbitrary across processes and across arena layouts. The
+    // order reaches action output (unwind_deployments, the fallback rows), so
+    // it must be a property of the trace, not of the allocator. Key: earliest
+    // event lt, then btype, then the anchor tx hash; the pointer stays as the
+    // final tiebreak so the ordering is total and the std::unique below still
+    // collapses duplicates of the SAME block (identical key -> adjacent).
+    std::sort(final_b->children_blocks.begin(), final_b->children_blocks.end(),
+              [](const Block *a, const Block *b) {
+                if (a->min_lt != b->min_lt) return a->min_lt < b->min_lt;
+                if (a->btype != b->btype) return a->btype < b->btype;
+                std::string ha = a->anchor_tx_hash(), hb = b->anchor_tx_hash();
+                if (ha != hb) return ha < hb;
+                return a < b;
+              });
     final_b->children_blocks.erase(
         std::unique(final_b->children_blocks.begin(), final_b->children_blocks.end()),
         final_b->children_blocks.end());

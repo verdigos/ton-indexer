@@ -191,6 +191,25 @@ endif()
 target_link_libraries(mch-classify PUBLIC tondb-scanner tdactor lz4::lz4 ton-abi)
 add_dependencies(mch-classify mch_generate_sources)
 
+# --- In-process shadow classifier for ton-trace-emulator (em1-design §8).
+# Split in two so the emulator-free side (converter / interfaces / actor) stays
+# linkable without emulator_static.
+add_library(mch-emu STATIC
+    src/emu/EmuTraceConvert.cpp
+    src/emu/EmuInterfaces.cpp
+    src/emu/EmuClassifierActor.cpp
+)
+target_include_directories(mch-emu PUBLIC src)
+target_compile_features(mch-emu PUBLIC cxx_std_20)
+target_link_libraries(mch-emu PUBLIC mch-classify)
+
+# EmuShadow.cpp is the ONLY TU that includes TraceEmulator.h.
+# ton-trace-emulator-core is add_subdirectory'd after this one; link libraries
+# resolve at generate time, and the core lib knows nothing of mch (no cycle).
+add_library(mch-emu-bridge STATIC src/emu/EmuShadow.cpp)
+target_compile_features(mch-emu-bridge PUBLIC cxx_std_20)
+target_link_libraries(mch-emu-bridge PUBLIC mch-emu ton-trace-emulator-core)
+
 # The CLI/dev tool: harness TUs (dump/runners/main) over the core lib.
 # W12 bridge self-test (--abi-bridge-test): committed ton-abi generated fixture
 # pairs compiled into the HARNESS EXE ONLY (never the mch-classify prod lib) so

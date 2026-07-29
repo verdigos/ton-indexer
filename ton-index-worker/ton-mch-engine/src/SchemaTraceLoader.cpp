@@ -138,6 +138,17 @@ td::Result<Trace> schema_to_trace(const std::string &trace_id,
     }
     trace.transactions.push_back(std::move(tx));
   }
+  // There is no trace header on this path, so the aggregates are DERIVED from
+  // the transactions. Not optional: this is the loader BOTH classifier actors
+  // reach, so anything reading Trace's trace-level fields — today
+  // create_unknown_action — would otherwise see zeros in production while the
+  // fixture path saw real values.
+  //
+  // Deriving is also the CORRECT source here, not merely the available one:
+  // the emulator's ::Trace has no trace-level lt/utime, and Python derives the
+  // same values per emission (event_deserializer.py). See TraceLoader.h for the
+  // two accepted differences from Python's exact expressions.
+  fill_trace_aggregates(trace);
   return trace;
 }
 

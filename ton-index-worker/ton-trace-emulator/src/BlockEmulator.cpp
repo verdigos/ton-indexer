@@ -166,6 +166,17 @@ void McBlockEmulator::start_up() {
         shard_states_.push_back(shard_state.block_state);
     }
     auto mc_block_seqno = mc_data_state_.shard_blocks_[0].handle->id().seqno();
+    // Transaction cells BlockParser hands us are interior cells of each block's
+    // lazily deserialized boc, which only the block root cell holds strongly.
+    // Traces carry this anchor so they stay readable after this actor stops.
+    // Built before the parsers are spawned so no later callback can observe it
+    // half-filled.
+    auto cell_anchor = std::make_shared<std::vector<td::Ref<vm::Cell>>>();
+    cell_anchor->reserve(mc_data_state_.shard_blocks_diff_.size());
+    for (auto& block_data : mc_data_state_.shard_blocks_diff_) {
+        cell_anchor->push_back(block_data.block_data->root_cell());
+    }
+    cell_anchor_ = std::move(cell_anchor);
     for (auto& block_data : mc_data_state_.shard_blocks_diff_) {
         LOG(INFO) << "Parsing block " << block_data.block_data->block_id().to_str();
         auto block_measurement = measurement->clone();
@@ -406,6 +417,7 @@ void McBlockEmulator::trace_interfaces_error(td::Bits256 trace_root_tx_hash, td:
 }
 
 void McBlockEmulator::trace_emulated(Trace trace, MeasurementPtr measurement) {
+    trace.cell_anchor = cell_anchor_;
     measurement->end_otel_child_span("detect_interfaces");
     measurement->start_otel_child_span("insert_trace");
     auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), trace_root_tx_hash = trace.root_tx_hash, measurement](td::Result<td::Unit> R) {
@@ -443,6 +455,10 @@ void McBlockEmulator::finish_block_if_done() {
 
 void ConfirmedBlockEmulator::start_up() {
     start_time_ = td::Timestamp::now();
+    // See McBlockEmulator::start_up: this block's traces reference interior cells
+    // of its boc, and only its root cell keeps that boc alive.
+    cell_anchor_ = std::make_shared<std::vector<td::Ref<vm::Cell>>>(
+        std::vector<td::Ref<vm::Cell>>{block_data_state_.block_data->root_cell()});
     auto measurement = std::make_shared<Measurement>();
     measurement->set_finality(finality_ == FinalityState::Confirmed ? "confirmed" : "finalized");
     measurement->set_operation("read_finalized");
@@ -697,6 +713,7 @@ void ConfirmedBlockEmulator::trace_interfaces_error(td::Bits256 trace_root_tx_ha
 }
 
 void ConfirmedBlockEmulator::trace_emulated(Trace trace, MeasurementPtr measurement) {
+    trace.cell_anchor = cell_anchor_;
     measurement->end_otel_child_span("detect_interfaces");
     measurement->start_otel_child_span("insert_trace");
     auto root_hash = trace.root_tx_hash;

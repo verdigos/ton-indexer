@@ -9,6 +9,7 @@
 #include "DbScanner.h"
 #include "TraceScheduler.h"
 #include "TraceInserter.h"
+#include "emu/EmuShadow.h"
 
 
 int main(int argc, char *argv[]) {
@@ -27,7 +28,8 @@ int main(int argc, char *argv[]) {
   std::string global_config_path;
   std::string inet_addr;
   std::string db_event_fifo_path;
-  
+  std::string mch_artifact;
+
   td::OptionParser p;
   p.set_description("Emulate TON traces");
   p.add_option('\0', "help", "prints_help", [&]() {
@@ -78,6 +80,10 @@ int main(int argc, char *argv[]) {
     db_event_fifo_path = fname.str();
   });
 
+  p.add_option('\0', "mch-artifact", "Path to the MCH IR artifact; enables in-process classification", [&](td::Slice fname) {
+    mch_artifact = fname.str();
+  });
+
 
   auto S = p.run(argc, argv);
   if (S.is_error()) {
@@ -100,15 +106,29 @@ int main(int argc, char *argv[]) {
     std::_Exit(2);
   }
 
+  mch::EmuShadowConfig mch_shadow;
+  if (!mch_artifact.empty()) {
+    // The artifact and the binary ship together: a mismatch is a build bug, not
+    // a reason to run with classification silently skipped.
+    auto r_prep = mch::load_engine_prep(mch_artifact);
+    if (r_prep.is_error()) {
+      LOG(FATAL) << "failed to load MCH artifact '" << mch_artifact << "': " << r_prep.move_as_error();
+    }
+    mch_shadow.prep = r_prep.move_as_ok();
+    mch_shadow.gate = std::make_shared<mch::EmuGate>();
+    LOG(INFO) << "MCH classification ENABLED (artifact " << mch_artifact
+              << "), insert gated on classification";
+  }
+
   td::actor::Scheduler scheduler({threads});
   td::actor::ActorOwn<DbScanner> db_scanner;
   td::actor::ActorOwn<ITraceInsertManager> insert_manager;
 
-  scheduler.run_in_context([&] { 
+  scheduler.run_in_context([&] {
     db_scanner = td::actor::create_actor<DbScanner>("scanner", db_root, dbs_secondary, working_dir, 0.05f);
     insert_manager = td::actor::create_actor<RedisInsertManager>("RedisInsertManager", redis_dsn);
-    td::actor::create_actor<TraceEmulatorScheduler>("integritychecker", db_scanner.get(), insert_manager.get(), 
-      global_config_path, inet_addr, redis_dsn, redis_channel, working_dir, db_event_fifo_path).release();
+    td::actor::create_actor<TraceEmulatorScheduler>("integritychecker", db_scanner.get(), insert_manager.get(),
+      global_config_path, inet_addr, redis_dsn, redis_channel, working_dir, db_event_fifo_path, mch_shadow).release();
   });
   
   scheduler.run();

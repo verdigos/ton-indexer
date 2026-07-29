@@ -132,6 +132,15 @@ struct Trace {
     td::Bits256 rand_seed;
     bool tx_limit_exceeded{false};
 
+    // Keeps the block's cell store (StaticBagOfCellsDbLazy behind BlockData)
+    // alive for as long as this trace exists: transaction_root cells taken off
+    // a block are INTERIOR cells whose loader holds that store only weakly,
+    // while the block emulator that owns it stops as soon as every insert
+    // promise has resolved. Empty for listener-emulated traces, whose cells are
+    // either in-memory or celldb-backed (celldb ext cells hold their reader
+    // strongly).
+    std::shared_ptr<const std::vector<td::Ref<vm::Cell>>> cell_anchor;
+
     using Detector = InterfacesDetector<JettonWalletDetectorR, JettonMasterDetectorR, 
                                         NftItemDetectorR, NftCollectionDetectorR,
                                         GetGemsNftFixPriceSale, GetGemsNftAuction>;

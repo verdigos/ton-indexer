@@ -334,10 +334,15 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   }
   std::string router_wallet = *jnm->source;
 
-  // first asset (router wallet): null lookup -> fallback TON (NOT reject).
+  // first asset (router wallet): null lookup -> REJECT, like the two branches
+  // above. Legacy falls back to TON here, which publishes a missing counterparty
+  // wallet as a TON deposit — the one site in the engine that answers a lookup
+  // miss with a plausible WRONG value. A null record is what
+  // tonco_liquidity.mch's `reject when r == null` already gates on, so this
+  // drops only this action and leaves the rest of the trace classified.
   Value first_asset = wallet_asset(env, router_wallet);
   if (first_asset.is_null()) {
-    first_asset = Value::make_asset_ton();
+    return rt_ok(Value::null());
   }
   // second asset (other wallet): null lookup -> stays None.
   Value second_asset = wallet_asset(env, other_wallet);

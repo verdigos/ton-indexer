@@ -26,6 +26,34 @@ Value addr_str_opt(const std::optional<block::StdAddress> &a) {
   return a ? addr_str(*a) : Value::null();
 }
 
+// Python's NftItem.content, as a Dict. NOT cosmetic and NOT optional: the
+// consumer FAULTS on a non-Dict — get_nft_data mirrors Python's `"uri" in
+// nft.content` raising (HostNft.cpp) — and a fault rejects the match, so a Null
+// here drops the whole nft_transfer row. That is a live production action loss,
+// invisible to every offline gate because SchemaGate routes the nft kinds to the
+// fixture tier-2 fallback.
+//
+// A FLAT Str->Str dict is the right shape even though Python's metadata can
+// nest: `content` is observable in exactly two ways, and neither sees the
+// nesting. The fragment.com branch reads the top-level `uri` string, which the
+// flat map carries exactly; the other branch passes the whole dict through as
+// `meta`, which NO action fill and NO spec reads (the IR does not contain the
+// string "meta", and ActionBuild takes only address/collection/index off the nft
+// dict). So this cannot trade a dropped row for a wrong one.
+//
+// nullopt stays Null — an item with no content is the same rejection Python
+// takes, rather than a synthesized empty dict that would fabricate a row.
+Value nft_content(const std::optional<std::map<std::string, std::string>> &content) {
+  if (!content) {
+    return Value::null();
+  }
+  Value::Fields f;
+  for (const auto &[key, val] : *content) {
+    f.emplace_back(key, Value::make_str(val));
+  }
+  return Value::make_dict(std::move(f));
+}
+
 // A dedust pool asset element: {is_ton, address} — the two fields
 // HostDedust.cpp reads. nullopt asset slot == TON.
 Value dedust_asset(const std::optional<block::StdAddress> &a) {
@@ -77,9 +105,7 @@ Value ParsedBlockLookupSource::tier1(const std::string &kind, const std::string 
                        nft->index.is_null() ? Value::null() : Value::make_int(nft->index));
         f.emplace_back("collection_address", addr_str_opt(nft->collection_address));
         f.emplace_back("owner_address", addr_str_opt(nft->owner_address));
-        // content (metadata map) is not modelled as a Value and is never read by
-        // the nft_item consumers (dns reads collection_address only) — Null.
-        f.emplace_back("content", Value::null());
+        f.emplace_back("content", nft_content(nft->content));
         return Value::make_obj(std::move(f));
       }
     } else if (kind == "nft_sale") {
@@ -151,6 +177,7 @@ Value ParsedBlockLookupSource::fetch(const std::string &kind, const std::vector<
     stats_.tier2_hits++;
   } else {
     stats_.misses++;
+    stats_.misses_by_kind[kind]++;
   }
   return r;
 }
