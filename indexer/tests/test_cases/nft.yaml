@@ -181,7 +181,7 @@ cases:
         start_lt: 93507509000017
         end_lt: 93507509000018
         nft_listing_data:
-          nft_item_index: 9.171085514290866e+76
+          nft_item_index: "91710855142908659416955823823288895698544695192795167705337072262071919658826"
           mp_fee_factor: 0
           mp_fee_base: 0
           royalty_fee_base: 0
@@ -276,7 +276,7 @@ cases:
           query_id: 93508041000001
           is_purchase: true
           price: 10000000000
-          nft_item_index: 8.068711604347585e+76
+          nft_item_index: "80687116043475847273716908132340291189938499005198668280813625388822962444673"
           forward_amount: null
           custom_payload: null
           forward_payload: te6cckEBAQEAEAAAGzgSfeFQJUC+QAamIID4KkLsIg==

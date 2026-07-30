@@ -40,7 +40,10 @@ const schema::AccountState *EmuCelldbTier2::account(const block::StdAddress &add
   if (it != account_memo_.end()) {
     return it->second ? &*it->second : nullptr;
   }
-  if (stats_.fetched >= budget_.fetches || emu_now_us() > deadline_us_) {
+  // The wall window is half-open [start, deadline): reaching the deadline
+  // exhausts it. Strict `>` would let a wall_us of 0 serve every read that
+  // lands inside the same microsecond emu_now_us() truncates to.
+  if (stats_.fetched >= budget_.fetches || emu_now_us() >= deadline_us_) {
     stats_.budget_exhausted++;
     // NOT memoized: the budget is a property of the run, not of the account.
     return nullptr;
