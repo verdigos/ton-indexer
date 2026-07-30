@@ -444,6 +444,12 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
   if (assigned == nullptr) {
     return rt_fault("telegram: null assigned");
   }
+  // telegram_nft_assigned passes @payment unbound: its pattern deliberately has
+  // no parent edge (matching one would consume it), but the core still needs the
+  // parent to decide is_mint. Read it where legacy reads it.
+  if (payment == nullptr) {
+    payment = assigned->previous_block;
+  }
   const EventNode *anode = first_node(assigned);
   const Message *amsg = anode != nullptr ? anode->msg : nullptr;
   auto r_body = node_body_cell(anode);
@@ -488,9 +494,9 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
     price = to_amount(Value::make_int(own.bid));
     marketplace = Value::make_str("fragment");
     // real_prev_owner stays null (Python sets it to None explicitly).
-    // is_mint: telemint call (0x299a3e15) or NftMintBlock parent -> not a
-    // purchase. The pattern forces a ton_transfer parent, so this is inert, but
-    // mirror it for fidelity.
+    // is_mint: telemint call (0x299a3e15) or nft_mint parent -> not a purchase.
+    // Live on telegram_nft_assigned (the telemint mint variant); inert on
+    // telegram_nft_purchase, whose pattern forces a ton_transfer/external parent.
     bool is_mint = payment != nullptr &&
                    ((payment->btype == "call_contract" && payment->opcode &&
                      *payment->opcode == 0x299a3e15) ||

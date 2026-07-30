@@ -7,7 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**180 fixtures, 907 ACTION rows** — one per serializable block on each trace's
+**181 fixtures, 911 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus the CHILD rows the serializer expands out of any spine
 block whose btype is outside `v1_ops`, plus 6 synthetic `unknown` rows (the
 fixtures whose spine serializes to nothing at all). Rows are printed **sorted**
@@ -22,7 +22,46 @@ is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
 
-Re-baselined 2026-07-30 (**894 → 907 rows, 176 → 180 fixtures**) by the GETGEMS
+Re-baselined 2026-07-30 (**907 → 911 rows, 180 → 181 fixtures**) by the TELEGRAM
+NFT parent-edge widening (`specs/telegram_nft.mch`). The spec's documented scope
+cut — ton_transfer-funded purchases only — left three legacy shapes
+unclassified; two already had corpus coverage nobody had claimed, and the third
+was recorded for this change.
+
+- **Rows: −2 on two existing fixtures, +6 from one new fixture. No other row
+  touched.**
+- NEW FIXTURE `rV0MIZB9AKrWu2IUpsDnGjiL4SufrJ-g5xbCZFq5KuE=` (+6 rows), the
+  telemint MINT variant and the largest live A/B diff class: the NFT item is
+  deployed by a 0x299a3e15 call and the assignment carries a teleitem bid
+  payload, but the parent is a mint, so `is_purchase` is FALSE, `price` is null
+  (the serializer gates it on `is_purchase`), `marketplace` is `fragment`, and
+  the two `AuctionFillUp` payouts stay their own `call_contract` rows because
+  this branch of legacy absorbs nothing but the anchor. Rows:
+  `nft_transfer` + `nft_mint` + `contract_deploy#299a3e15` +
+  2×`call_contract#370fec51` + `call_contract#4637289b` — all six byte-identical
+  to the legacy matcher.
+- Existing fixtures, **−2**:
+  - `5b-KXr82…` 4 → 2: the external-driven Fragment purchase (an ext-in message
+    drives the NFT item directly, which emits the assignment plus two
+    `AuctionFillUp` payouts). Three `call_contract` rows (`#05138d91` +
+    2×`#370fec51`) collapse into ONE `nft_transfer` (`is_purchase=true`,
+    `marketplace=fragment`, `price=10000000000`, `payout_amount=8496523073`,
+    `royalty_amount=499933333`) — the new
+    `btype call_contract where (.source == null)` parent branch of
+    `telegram_nft_purchase`.
+  - `GO-NI0Ej…` same count: one `call_contract#05138d91` becomes `nft_transfer`
+    (`is_purchase=false`, `marketplace=null`, `price=null`) — an orphan
+    assignment with no forward payload, claimed by the new non-consuming
+    `telegram_nft_assigned` matcher. Its `nft_mint` sibling row survives, which
+    is the whole reason that matcher consumes the anchor alone.
+- All three deltas were checked row-for-row against the legacy
+  `TelegramNftPurchaseBlockMatcher` driven through the same loader and
+  serializer (`twins/py_actions.py` with `event_processing.matchers`): the
+  produced rows are IDENTICAL.
+- Still uncovered by the corpus: a single-payout fragment purchase (the
+  `len(payouts) == 1` core branch).
+
+Previously re-baselined 2026-07-30 (**894 → 907 rows, 176 → 180 fixtures**) by the GETGEMS
 SALE/AUCTION FAMILY port (`specs/nft_sale.mch`). Four fixtures were captured
 from the live A/B windows specifically because the family had ZERO corpus
 coverage — every matcher in the spec fired on nothing before this.

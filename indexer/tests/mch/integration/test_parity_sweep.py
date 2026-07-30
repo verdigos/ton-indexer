@@ -309,12 +309,15 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
      (JVaultStakeBlockMatcher, JVaultUnstakeBlockMatcher, JVaultClaimBlockMatcher,
       JVaultUnstakeRequestBlockMatcher)),
     # Remake wave 1 (2026-07-04): R01/R03/R04/R05.
-    # telegram_nft has NO sweep row: legacy test_self is a bare NftOwnershipAssigned
-    # opcode and over-fires on non-purchase/getgems/tonstakers traces, while the mch
-    # pattern deliberately requires the ton_transfer->AuctionFillUp fragment shape
-    # (documented scope narrowing, spec header). The row only became comparable when
-    # produces normalization un-vacuumed it (2026-07-10) and immediately diverged on
-    # exactly those out-of-scope fixtures. Coverage: test_telegram_nft.py per-spec.
+    # telegram_nft had NO row until 2026-07-30: legacy test_self is a bare
+    # NftOwnershipAssigned opcode that also fires on non-purchase assignments,
+    # while the spec covered only the ton_transfer->AuctionFillUp fragment shape,
+    # so the row diverged on exactly those out-of-scope fixtures. The parent-edge
+    # widening (external-driven parent) plus the non-consuming
+    # telegram_nft_assigned matcher closed both gaps; the two matchers run as one
+    # group, in spec order.
+    ("specs/telegram_nft.mch", _SPECS_DIR / "telegram_nft.mch", telegram_nft_registries, (),
+     (TelegramNftPurchaseBlockMatcher,)),
     ("specs/tgbtc.mch", _SPECS_DIR / "tgbtc.mch", tgbtc_registries, (JettonMintBlockMatcher,),
      (TgBTCMintBlockMatcher,)),
     # stonfi_v2_withdraw is btype-anchored (jetton_burn) — run-on-all row, rejects everywhere off-protocol.

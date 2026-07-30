@@ -53,7 +53,11 @@ def register_telegram_nft(reg: Registries) -> Registries:
     @reg.register_fn("telegram_nft_purchase_data")
     async def telegram_nft_purchase_data(assigned, payment, payout_1, payout_2):
         payouts = [p for p in (payout_1, payout_2) if p is not None]
-        new_block, _extra = await build_telegram_nft_purchase_core(assigned, payment, payouts)
+        # telegram_nft_assigned passes @payment unbound: its pattern deliberately
+        # has no parent edge (matching one would consume it), but the core still
+        # needs the parent to decide is_mint. Read it where legacy reads it.
+        prev = payment if payment is not None else assigned.previous_block
+        new_block, _extra = await build_telegram_nft_purchase_core(assigned, prev, payouts)
         if new_block is None:
             return None
         data = new_block.data

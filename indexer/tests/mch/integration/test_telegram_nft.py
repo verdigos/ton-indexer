@@ -16,12 +16,15 @@ payout, by created_lt). Exercises the two-payout core branch and the full
 `op NftOwnershipAssigned <- btype ton_transfer -> {AuctionFillUp; AuctionFillUp}`
 pattern.
 
-Corpus gaps (no recording per task rules): no single-payout fragment purchase
-(the `maybe op AuctionFillUp @payout_2` / core `len == 1` branch), no
-external-source-call parent (telemint mint variant), no non-teleitem orphan
-NftOwnershipAssigned. All three stay covered by the shared core through the
-legacy wrapper (tests/test_actions.py); the mch pattern targets the
-ton_transfer-funded purchase shape only.
+Three more fixtures joined when the parent edge was widened (2026-07-30), one
+per legacy shape the R01 scope cut had left out:
+  `5b-KXr82wUSLIHPSHkFaW791xTyN0Rmu5h0mFm_4IdQ=`  external-driven purchase
+  `GO-NI0EjOuhj1z4YzHK-VDAAOJsLm710DvyRRRMXhoY=`  orphan assignment, no payload
+  `rV0MIZB9AKrWu2IUpsDnGjiL4SufrJ-g5xbCZFq5KuE=`  telemint MINT variant (recorded)
+
+Corpus gap (no recording per task rules): no single-payout fragment purchase —
+the `maybe op AuctionFillUp @payout_2` / core `len(payouts) == 1` branch. It
+stays covered by the shared core through the legacy wrapper (tests/test_actions.py).
 """
 from __future__ import annotations
 
@@ -63,16 +66,22 @@ def _build_block_tree(trace) -> Block:
     return root
 
 
-async def _run_matcher(matcher: BlockMatcher, trace) -> list:
+async def _run_matchers(matchers: list[BlockMatcher], trace) -> list:
+    """Run `matchers` in order over ONE fresh block tree, legacy-loop style."""
     root = _build_block_tree(trace)
     matches: list = []
-    for b in root.bfs_iter():
-        if b.btype == "root" or b.parent is not None:
-            continue
-        result = await matcher.try_build(b)
-        if result is not None:
-            matches.extend(result)
+    for matcher in matchers:
+        for b in root.bfs_iter():
+            if b.btype == "root" or b.parent is not None:
+                continue
+            result = await matcher.try_build(b)
+            if result is not None:
+                matches.extend(result)
     return [b for b in matches if b.btype == "nft_transfer"]
+
+
+async def _run_matcher(matcher: BlockMatcher, trace) -> list:
+    return await _run_matchers([matcher], trace)
 
 
 def _values_equal(a, b) -> bool:
@@ -132,7 +141,9 @@ def _assert_parity(actual: list[Block], expected: list[Block],
 
 async def _run_parity(trace) -> list[Block]:
     """legacy vs the v2 IR engine (the compiled path is retired — T29). Returns
-    legacy blocks."""
+    legacy blocks. Both mch matchers run, in spec order: the purchase matcher
+    claims the consuming shapes, the assigned matcher takes what is left — one
+    legacy matcher's two consumed sets (spec header)."""
     hw_blocks = await _run_matcher(TelegramNftPurchaseBlockMatcher(), trace)
 
     # Compiling is a frontend-internal step ir_emit needs; no compiled matcher is
@@ -145,8 +156,9 @@ async def _run_parity(trace) -> list[Block]:
         pytest.skip(_SKIP_REASON)
 
     art = _mch_ir.load_artifact(artifact)
-    ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, telegram_nft_registries())}
-    ir_blocks = await _run_matcher(ir_by_name["telegram_nft_purchase"], trace)
+    ir_matchers = _mch_ir.build_matchers(art, telegram_nft_registries())
+    assert [m.name for m in ir_matchers] == ["telegram_nft_purchase", "telegram_nft_assigned"]
+    ir_blocks = await _run_matchers(ir_matchers, trace)
     _assert_parity(ir_blocks, hw_blocks, "ir", "legacy")
     return hw_blocks
 
@@ -161,3 +173,55 @@ async def test_telegram_nft_fragment_purchase_parity(trace_data):
     assert hw[0].data["marketplace"] == "fragment"
     assert hw[0].data["real_prev_owner"] is None
     assert "royalty_amount" in hw[0].data and "payout_amount" in hw[0].data
+
+
+@pytest.mark.asyncio
+@pytest.mark.trace_file("5b-KXr82wUSLIHPSHkFaW791xTyN0Rmu5h0mFm_4IdQ=.lz4")
+async def test_telegram_nft_external_parent_parity(trace_data):
+    """Fragment purchase driven straight at the NFT item by an EXTERNAL message —
+    no funding ton_transfer, so the parent is a call_contract with a null source.
+    Covers the second branch of the purchase matcher's parent alternative."""
+    trace, _ = trace_data
+    hw = await _run_parity(trace)
+    assert hw[0].data["is_purchase"] is True
+    assert hw[0].data["marketplace"] == "fragment"
+    assert "royalty_amount" in hw[0].data and "payout_amount" in hw[0].data
+
+
+@pytest.mark.asyncio
+@pytest.mark.trace_file("rV0MIZB9AKrWu2IUpsDnGjiL4SufrJ-g5xbCZFq5KuE=.lz4")
+async def test_telegram_nft_telemint_mint_parity(trace_data):
+    """Telemint MINT variant: the item is deployed by a 0x299a3e15 call and the
+    assignment carries a teleitem bid payload, so the bid branch runs — but the
+    parent is a mint, which flips is_purchase back to false and leaves the two
+    AuctionFillUp payouts unconsumed (they stay separate call_contract rows, and
+    the sibling nft_mint row survives). The mint test is by BTYPE: under the mch
+    engines nft_mint.mch is declarative, so the parent is a generic Block, not an
+    NftMintBlock — an isinstance check reads false here and yields is_purchase
+    true against legacy.
+
+    This shape is also what forced the assigned matcher onto a `produces switch`:
+    legacy's bid branch carries `real_prev_owner` as a PRESENT key holding None,
+    while the orphan branch omits it entirely, and `?:` (omit-when-null) cannot
+    do both."""
+    trace, _ = trace_data
+    hw = await _run_parity(trace)
+    assert hw[0].data["is_purchase"] is False
+    assert hw[0].data["marketplace"] == "fragment"
+    assert hw[0].data["price"] is not None  # set by the bid branch; serializer nulls it
+    for key in ("payout_amount", "payout_address", "royalty_amount", "royalty_address"):
+        assert key not in hw[0].data, key
+
+
+@pytest.mark.asyncio
+@pytest.mark.trace_file("GO-NI0EjOuhj1z4YzHK-VDAAOJsLm710DvyRRRMXhoY=.lz4")
+async def test_telegram_nft_orphan_assignment_parity(trace_data):
+    """Ownership assignment with NO forward payload and no payouts. Legacy still
+    emits the row and merges the anchor alone — the telegram_nft_assigned shape.
+    None of the teleitem-only keys exist in the data dict."""
+    trace, _ = trace_data
+    hw = await _run_parity(trace)
+    assert hw[0].data["is_purchase"] is False
+    for key in ("marketplace", "price", "real_prev_owner",
+                "payout_amount", "payout_address", "royalty_amount", "royalty_address"):
+        assert key not in hw[0].data, key

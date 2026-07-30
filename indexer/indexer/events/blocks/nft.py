@@ -387,7 +387,10 @@ async def build_telegram_nft_purchase_core(
         is_mint = False
         if isinstance(prev_block, CallContractBlock) and prev_block.opcode == 0x299a3e15: # telemint (currently not supported)
             is_mint = True
-        elif isinstance(prev_block, NftMintBlock):
+        elif prev_block is not None and prev_block.btype == 'nft_mint':
+            # btype, not isinstance(NftMintBlock): specs/nft_mint.mch is declarative,
+            # so under the mch engines the mint parent is a generic Block carrying
+            # that btype. NftMintBlock.btype is 'nft_mint', so legacy is unchanged.
             is_mint = True
         if is_mint:
             data['is_purchase'] = False
