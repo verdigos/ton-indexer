@@ -240,6 +240,16 @@
       "type": "DedustV2SwapEvent",
       "body": "te6ccgEBAQEABgAACHjnm6Q=",
       "expect": "fail"
+    },
+    {
+      "type": "TeleitemStartAuction",
+      "body": "te6ccgEBAgEAHAABGEh6joEAAAAAAAAAAAEAFQAAAAAAAAAAAAAg",
+      "expect": "ok"
+    },
+    {
+      "type": "TeleitemStartAuction",
+      "body": "te6ccgEBAQEABgAACEh6joE=",
+      "expect": "fail"
     }
   ]
 }

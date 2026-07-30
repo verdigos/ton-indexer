@@ -895,6 +895,51 @@ td::Result<Value> gen_parse_dedust_v2_swap_event(const td::Ref<vm::Cell> &body) 
   return Value::make_obj(std::move(f));
 }
 
+// TeleitemStartAuction (opcode 0x487a8e81); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_teleitem_start_auction(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("TeleitemStartAuction: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("TeleitemStartAuction: _query_id underflow"); }
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("TeleitemStartAuction: config ref missing"); }
+    bool sp_config = false;
+    vm::CellSlice rc_config;
+    try { rc_config = vm::load_cell_slice_special(cs.fetch_ref(), sp_config); }
+    catch (...) { return td::Status::Error("TeleitemStartAuction: config ref cell"); }
+    {
+      auto ra = load_address_py(rc_config);
+      if (ra.is_error()) { return ra.move_as_error(); }
+      f.emplace_back("beneficiary_address", ra.move_as_ok());
+    }
+    {
+      auto rc = load_coins_py(rc_config);
+      if (rc.is_error()) { return rc.move_as_error(); }
+      f.emplace_back("initial_min_bid", Value::make_int(rc.move_as_ok()));
+    }
+    {
+      auto rc = load_coins_py(rc_config);
+      if (rc.is_error()) { return rc.move_as_error(); }
+      f.emplace_back("max_bid", Value::make_int(rc.move_as_ok()));
+    }
+    {
+      if (!rc_config.have(8) || !rc_config.advance(8)) { return td::Status::Error("TeleitemStartAuction: _min_bid_step underflow"); }
+    }
+    {
+      if (!rc_config.have(32) || !rc_config.advance(32)) { return td::Status::Error("TeleitemStartAuction: _min_extend_time underflow"); }
+    }
+    {
+      if (!rc_config.have(32) || !rc_config.advance(32)) { return td::Status::Error("TeleitemStartAuction: _duration underflow"); }
+    }
+  }
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parsers() {
@@ -923,6 +968,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"ToncoRouterV3SwapSourceWallet", gen_parse_tonco_router_v3_swap_source_wallet},
       {"DedustV2PayNative", gen_parse_dedust_v2_pay_native},
       {"DedustV2SwapEvent", gen_parse_dedust_v2_swap_event},
+      {"TeleitemStartAuction", gen_parse_teleitem_start_auction},
   };
   return rows;
 }

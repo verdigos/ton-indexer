@@ -704,6 +704,47 @@ void fill_nft_purchase(const Value &d, Action &a) {
   a.nft_transfer_data = mkdict(std::move(f));
 }
 
+// _fill_nft_put_on_auction_action — the `teleitem_start_auction` fill.
+void fill_nft_put_on_auction(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "owner"));
+  a.source_secondary = av_addr(dg(d, "listing_address"));
+  a.destination = av_addr(dg(d, "auction_address"));
+  a.asset = av_addr(dg(d, "nft_collection"));
+  a.asset_secondary = av_addr(dg(d, "nft_address"));
+  Value::Fields t;
+  t.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
+  a.nft_transfer_data = mkdict(std::move(t));
+  Value::Fields l;
+  l.emplace_back("nft_item_index", dg(d, "nft_index"));  // raw passthrough (Str in fixtures)
+  l.emplace_back("mp_fee_factor", av_amount(dg(d, "mp_fee_factor")));
+  l.emplace_back("mp_fee_base", av_amount(dg(d, "mp_fee_base")));
+  l.emplace_back("royalty_fee_base", av_amount(dg(d, "royalty_fee_base")));
+  l.emplace_back("max_bid", av_amount(dg(d, "max_bid")));
+  l.emplace_back("min_bid", av_amount(dg(d, "min_bid")));
+  l.emplace_back("marketplace_fee_address", av_addr(dg(d, "mp_fee_address")));
+  l.emplace_back("marketplace", dg(d, "marketplace"));
+  l.emplace_back("royalty_address", av_addr(dg(d, "royalty_fee_addr")));
+  // Sale fields set to null by the Python fill.
+  l.emplace_back("full_price", Value::null());
+  l.emplace_back("marketplace_fee", Value::null());
+  l.emplace_back("royalty_amount", Value::null());
+  a.nft_listing_data = mkdict(std::move(l));
+}
+
+// _fill_cancel_nft_trade_action — the `teleitem_cancel_auction` fill. Python
+// also appends asset_secondary to `accounts`; for this producer asset_secondary
+// IS the destination, which build_action already pushes, so the generic accounts
+// assembly needs no per-fill hook.
+void fill_cancel_nft_trade(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "owner"));
+  a.destination = av_addr(dg(d, "trade_contract"));
+  a.asset_secondary = av_addr(dg(d, "nft_address"));
+  a.asset = av_addr(dg(d, "nft_collection"));
+  Value::Fields f;
+  f.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
+  a.nft_transfer_data = mkdict(std::move(f));
+}
+
 // --- basic-actions fallback fills (Step 2c; block_tree_serializer.py) --------
 // Reached ONLY on the FALLBACK path (ClassifyResult.failure) — the main dump's
 // `pending` is matcher-produced composites, never these leaf btypes. Corpus has
@@ -772,6 +813,13 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "nft_purchase") fill_nft_purchase(d, a);
   else if (t == "change_dns") fill_change_dns(d, a);
   else if (t == "delete_dns") fill_delete_dns(d, a);
+  // Teleitem auction port (specs/teleitem_auction.mch). The fills are named for
+  // the Python functions they port, which also serve nft_put_on_auction /
+  // nft_cancel_sale / nft_cancel_auction / nft_finish_auction — none of which
+  // any matcher in ir/mch_ir.json produces, so they get no dispatch arm here
+  // (bucket C, same rule as dns_purchase above).
+  else if (t == "teleitem_start_auction") fill_nft_put_on_auction(d, a);
+  else if (t == "teleitem_cancel_auction") fill_cancel_nft_trade(d, a);
   // STILL UNPORTED, deliberately: dns_purchase is bucket C, not B — NO matcher
   // in ir/mch_ir.json produces it, so there is nothing to fill.
   else return false;

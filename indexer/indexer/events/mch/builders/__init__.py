@@ -41,6 +41,10 @@ from indexer.events.mch.builders.stonfi_v1 import (
     register_stonfi_v1,
     stonfi_v1_registries,
 )
+from indexer.events.mch.builders.teleitem_auction import (
+    register_teleitem_auction,
+    teleitem_auction_registries,
+)
 
 __all__ = [
     "coffee_registries",
@@ -62,8 +66,10 @@ __all__ = [
     "register_stonfi_provide",
     "register_stonfi_v1",
     "register_stonfi_v2",
+    "register_teleitem_auction",
     "stonfi_liquidity_registries",
     "stonfi_provide_registries",
     "stonfi_v1_registries",
     "stonfi_v2_registries",
+    "teleitem_auction_registries",
 ]

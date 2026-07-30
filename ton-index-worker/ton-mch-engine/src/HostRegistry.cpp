@@ -20,6 +20,7 @@ const std::map<std::string, HostFn> &host_fns() {
       {"nft_transfer_data", nft_transfer_data},
       {"getgems_nft_purchase_data", getgems_nft_purchase_data},
       {"telegram_nft_purchase_data", telegram_nft_purchase_data},
+      {"is_teleitem", is_teleitem},
       {"tgbtc_mint_data", tgbtc_mint_data},
       {"coffee_swap_data", coffee_swap_data},
       {"stonfi_v1_swap_data", stonfi_v1_swap_data},

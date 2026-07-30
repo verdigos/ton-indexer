@@ -25,6 +25,9 @@ EvalResult getgems_nft_purchase_data(BuildEnv &env, const std::vector<Value> &ar
 EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args);
 void nft_transfer_parent_absorb(Block *produced, const ShaperMatch &m);
 EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &args);
+// specs/teleitem_auction.mch: blocks/auction.py `_is_teleitem` (a substring test
+// the expression language deliberately cannot express — mch-spec §9.6).
+EvalResult is_teleitem(BuildEnv &env, const std::vector<Value> &args);
 
 // tgBTC (HostTgbtc.cpp): mint host fn + deploy-absorb shaper.
 EvalResult tgbtc_mint_data(BuildEnv &env, const std::vector<Value> &args);

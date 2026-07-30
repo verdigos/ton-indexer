@@ -40,6 +40,7 @@ from indexer.events.mch.builders.stonfi_liquidity import stonfi_liquidity_regist
 from indexer.events.mch.builders.stonfi_provide import stonfi_provide_registries  # noqa: E402
 from indexer.events.mch.builders.stonfi_v1 import stonfi_v1_registries  # noqa: E402
 from indexer.events.mch.builders.telegram_nft import telegram_nft_registries  # noqa: E402
+from indexer.events.mch.builders.teleitem_auction import teleitem_auction_registries  # noqa: E402
 from indexer.events.mch.builders.tgbtc import tgbtc_registries  # noqa: E402
 from indexer.events.mch.builders.tonco import tonco_liquidity_registries  # noqa: E402
 from indexer.events.mch.builders.tonco_swap import tonco_swap_registries  # noqa: E402
@@ -56,7 +57,8 @@ _FACTORIES = [
     getgems_registries, jvault_registries, layerzero_receive_registries,
     nft_transfer_registries,
     nominator_registries, stonfi_liquidity_registries, stonfi_provide_registries,
-    stonfi_v1_registries, telegram_nft_registries, tgbtc_registries,
+    stonfi_v1_registries, telegram_nft_registries, teleitem_auction_registries,
+    tgbtc_registries,
     tonco_liquidity_registries, tonco_swap_registries, tonstakers_registries,
     vesting_registries,
 ]

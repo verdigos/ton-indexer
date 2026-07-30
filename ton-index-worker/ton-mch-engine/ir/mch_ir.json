@@ -25,6 +25,7 @@
       "specs/stonfi_v2_swap.mch",
       "specs/stonfi_v2_withdraw.mch",
       "specs/telegram_nft.mch",
+      "specs/teleitem_auction.mch",
       "specs/tgbtc.mch",
       "specs/tonco_liquidity.mch",
       "specs/tonco_swap.mch",
@@ -10936,6 +10937,582 @@
       ]
     },
     {
+      "name": "teleitem_start_auction",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1215991425
+        ]
+      },
+      "root": 298,
+      "produces": [
+        "teleitem_start_auction"
+      ],
+      "captures": [
+        {
+          "name": "auction",
+          "card": "one"
+        },
+        {
+          "name": "ok",
+          "card": "opt"
+        }
+      ],
+      "include_excess": false,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "auction",
+          "types": [
+            "TeleitemStartAuction"
+          ]
+        },
+        {
+          "s": "let",
+          "name": "nft",
+          "expr": {
+            "k": "lookup",
+            "name": "nft_item",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "auction"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "nft"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "unary",
+            "op": "not",
+            "x": {
+              "k": "call",
+              "fn": "is_teleitem",
+              "args": [
+                {
+                  "k": "name",
+                  "id": "nft"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "item",
+          "expr": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "call",
+              "fn": "account",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "auction"
+                    },
+                    "name": "msg"
+                  },
+                  "name": "destination"
+                }
+              ]
+            },
+            "r": {
+              "k": "call",
+              "fn": "addr_none",
+              "args": []
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "owner",
+          "expr": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "call",
+              "fn": "account",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "auction"
+                    },
+                    "name": "msg"
+                  },
+                  "name": "source"
+                }
+              ]
+            },
+            "r": {
+              "k": "call",
+              "fn": "addr_none",
+              "args": []
+            }
+          }
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "auction"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "nft_address",
+              "expr": {
+                "k": "name",
+                "id": "item"
+              }
+            },
+            {
+              "name": "nft_index",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "nft"
+                },
+                "name": "index"
+              }
+            },
+            {
+              "name": "nft_collection",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "nft"
+                    },
+                    "name": "collection_address"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "owner",
+              "expr": {
+                "k": "name",
+                "id": "owner"
+              }
+            },
+            {
+              "name": "listing_address",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "auction_address",
+              "expr": {
+                "k": "name",
+                "id": "item"
+              }
+            },
+            {
+              "name": "marketplace_address",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "marketplace",
+              "expr": {
+                "k": "str",
+                "v": "fragment"
+              }
+            },
+            {
+              "name": "mp_fee_address",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "auction"
+                      },
+                      "name": "body"
+                    },
+                    "name": "beneficiary_address"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "mp_fee_factor",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "int",
+                    "v": 0
+                  }
+                ]
+              }
+            },
+            {
+              "name": "mp_fee_base",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "int",
+                    "v": 0
+                  }
+                ]
+              }
+            },
+            {
+              "name": "royalty_fee_addr",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "royalty_fee_base",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "int",
+                    "v": 0
+                  }
+                ]
+              }
+            },
+            {
+              "name": "max_bid",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "auction"
+                      },
+                      "name": "body"
+                    },
+                    "name": "max_bid"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "min_bid",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "auction"
+                      },
+                      "name": "body"
+                    },
+                    "name": "initial_min_bid"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "teleitem_cancel_auction",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          924203182
+        ]
+      },
+      "root": 300,
+      "produces": [
+        "teleitem_cancel_auction"
+      ],
+      "captures": [
+        {
+          "name": "cancel",
+          "card": "one"
+        },
+        {
+          "name": "ok",
+          "card": "opt"
+        }
+      ],
+      "include_excess": false,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "let",
+          "name": "nft",
+          "expr": {
+            "k": "lookup",
+            "name": "nft_item",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "cancel"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "nft"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "unary",
+            "op": "not",
+            "x": {
+              "k": "call",
+              "fn": "is_teleitem",
+              "args": [
+                {
+                  "k": "name",
+                  "id": "nft"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "item",
+          "expr": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "call",
+              "fn": "account",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "cancel"
+                    },
+                    "name": "msg"
+                  },
+                  "name": "destination"
+                }
+              ]
+            },
+            "r": {
+              "k": "call",
+              "fn": "addr_none",
+              "args": []
+            }
+          }
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "cancel"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "nft_address",
+              "expr": {
+                "k": "name",
+                "id": "item"
+              }
+            },
+            {
+              "name": "nft_collection",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "nft"
+                      },
+                      "name": "collection_address"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "owner",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "cancel"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "source"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "trade_contract",
+              "expr": {
+                "k": "name",
+                "id": "item"
+              }
+            },
+            {
+              "name": "marketplace_address",
+              "expr": {
+                "k": "null"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "tgbtc_mint",
       "anchor": {
         "kind": "opcode_set",
@@ -10943,7 +11520,7 @@
           1064836388
         ]
       },
-      "root": 298,
+      "root": 302,
       "produces": [
         "tgbtc_mint"
       ],
@@ -11115,7 +11692,7 @@
           1052660785
         ]
       },
-      "root": 304,
+      "root": 308,
       "produces": [
         "tonco_deposit_liquidity"
       ],
@@ -11386,7 +11963,7 @@
           2818267384
         ]
       },
-      "root": 318,
+      "root": 322,
       "produces": [
         "jetton_swap"
       ],
@@ -11567,7 +12144,7 @@
           1499400124
         ]
       },
-      "root": 346,
+      "root": 350,
       "produces": [
         "tonstakers_withdraw",
         "tonstakers_withdraw_request"
@@ -11929,7 +12506,7 @@
           2809346765
         ]
       },
-      "root": 352,
+      "root": 356,
       "produces": [
         "vesting_send_message"
       ],
@@ -14026,14 +14603,38 @@
     },
     {
       "kind": "contract",
-      "opcode": 1064836388,
-      "capture": "head",
+      "opcode": 1215991425,
+      "capture": "auction",
       "child": 299
     },
     {
+      "kind": "contract",
+      "opcode": 2742684035,
+      "optional": true,
+      "capture": "ok"
+    },
+    {
+      "kind": "contract",
+      "opcode": 924203182,
+      "capture": "cancel",
+      "child": 301
+    },
+    {
+      "kind": "contract",
+      "opcode": 2742684035,
+      "optional": true,
+      "capture": "ok"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1064836388,
+      "capture": "head",
+      "child": 303
+    },
+    {
       "kind": "recursive",
-      "step": 300,
-      "exit": 301,
+      "step": 304,
+      "exit": 305,
       "optional": true
     },
     {
@@ -14045,8 +14646,8 @@
       "opcode": 3827992475,
       "capture": "tail",
       "children": [
-        302,
-        303
+        306,
+        307
       ]
     },
     {
@@ -14064,18 +14665,18 @@
       "opcode": 1052660785,
       "capture": "add_liquidity",
       "children": [
-        305
+        309
       ],
-      "parent": 313
+      "parent": 317
     },
     {
       "kind": "contract",
       "opcode": 2171612920,
       "optional": true,
       "children": [
-        306,
-        311,
-        312
+        310,
+        315,
+        316
       ]
     },
     {
@@ -14084,8 +14685,8 @@
       "optional": true,
       "capture": "refund_router_call",
       "children": [
-        307,
-        309
+        311,
+        313
       ]
     },
     {
@@ -14094,7 +14695,7 @@
       "optional": true,
       "capture": "excess_transfer_0",
       "children": [
-        308
+        312
       ]
     },
     {
@@ -14108,7 +14709,7 @@
       "optional": true,
       "capture": "excess_transfer_1",
       "children": [
-        310
+        314
       ]
     },
     {
@@ -14129,13 +14730,13 @@
     {
       "kind": "contract",
       "opcode": 1147723383,
-      "parent": 314
+      "parent": 318
     },
     {
       "kind": "or",
       "branches": [
-        315,
-        317
+        319,
+        321
       ],
       "exclusive": false
     },
@@ -14143,7 +14744,7 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "ton_input",
-      "parent": 316
+      "parent": 320
     },
     {
       "kind": "contract",
@@ -14160,64 +14761,79 @@
       "opcode": 2818267384,
       "capture": "swap",
       "children": [
-        319
+        323
       ],
-      "parent": 342
+      "parent": 346
     },
     {
       "kind": "contract",
       "opcode": 2715461997,
-      "child": 320
+      "child": 324
     },
     {
       "kind": "or",
       "branches": [
-        321,
-        336,
-        338,
-        340
+        325,
+        340,
+        342,
+        344
       ],
       "exclusive": false
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 322
-    },
-    {
-      "kind": "contract",
-      "opcode": 32736093,
-      "child": 323
-    },
-    {
-      "kind": "contract",
-      "opcode": 1935855772,
-      "child": 324
-    },
-    {
-      "kind": "recursive",
-      "strategy": "cyclic",
-      "step": 325
-    },
-    {
-      "kind": "contract",
-      "opcode": 2818267384,
       "child": 326
     },
     {
       "kind": "contract",
-      "opcode": 2715461997,
+      "opcode": 32736093,
       "child": 327
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "child": 328
+    },
+    {
+      "kind": "recursive",
+      "strategy": "cyclic",
+      "step": 329
+    },
+    {
+      "kind": "contract",
+      "opcode": 2818267384,
+      "child": 330
+    },
+    {
+      "kind": "contract",
+      "opcode": 2715461997,
+      "child": 331
     },
     {
       "kind": "or",
       "branches": [
-        328,
-        331,
         332,
-        334
+        335,
+        336,
+        338
       ],
       "exclusive": false
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "child": 333
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "child": 334
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "child": 329
     },
     {
       "kind": "block_type",
@@ -14226,23 +14842,8 @@
     },
     {
       "kind": "contract",
-      "opcode": 32736093,
-      "child": 330
-    },
-    {
-      "kind": "contract",
-      "opcode": 1935855772,
-      "child": 325
-    },
-    {
-      "kind": "block_type",
-      "btype": "jetton_transfer",
-      "child": 325
-    },
-    {
-      "kind": "contract",
       "opcode": 260734629,
-      "child": 333
+      "child": 337
     },
     {
       "kind": "contract",
@@ -14252,7 +14853,7 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "children": [
-        335
+        339
       ]
     },
     {
@@ -14263,17 +14864,17 @@
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 337
+      "child": 341
     },
     {
       "kind": "recursive",
       "strategy": "cyclic",
-      "step": 325
+      "step": 329
     },
     {
       "kind": "contract",
       "opcode": 260734629,
-      "child": 339
+      "child": 343
     },
     {
       "kind": "contract",
@@ -14283,7 +14884,7 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "children": [
-        341
+        345
       ]
     },
     {
@@ -14294,8 +14895,8 @@
     {
       "kind": "or",
       "branches": [
-        343,
-        344
+        347,
+        348
       ],
       "exclusive": true
     },
@@ -14307,7 +14908,7 @@
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "parent": 345
+      "parent": 349
     },
     {
       "kind": "contract",
@@ -14318,24 +14919,24 @@
       "kind": "contract",
       "opcode": 1499400124,
       "capture": "burn",
-      "child": 347
+      "child": 351
     },
     {
       "kind": "contract",
       "opcode": 2078119902,
-      "child": 348
+      "child": 352
     },
     {
       "kind": "contract",
       "opcode": 832244956,
       "capture": "request",
-      "child": 349
+      "child": 353
     },
     {
       "kind": "or",
       "branches": [
-        350,
-        351
+        354,
+        355
       ],
       "exclusive": true
     },
@@ -14353,7 +14954,7 @@
       "kind": "contract",
       "opcode": 2809346765,
       "capture": "send",
-      "child": 353
+      "child": 357
     },
     {
       "kind": "contract",
@@ -14397,6 +14998,8 @@
     32,
     33,
     34,
-    35
+    35,
+    36,
+    37
   ]
 }

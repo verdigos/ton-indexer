@@ -76,6 +76,9 @@ PORTED_BTYPES = {
     "renew_dns", "change_dns", "delete_dns", "nominator_pool_withdraw_request",
     "tonstakers_withdraw", "tonstakers_withdraw_request",
     "dex_deposit_liquidity", "dex_withdraw_liquidity", "nft_purchase",
+    # Teleitem auction port (2026-07-30) — both fire on the two (ab-gap)
+    # fixtures; C++ fills them via fill_nft_put_on_auction / fill_cancel_nft_trade.
+    "teleitem_start_auction", "teleitem_cancel_auction",
 }
 
 # The C++ render_action column set (Classify.cpp render_action), in any order —

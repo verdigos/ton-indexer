@@ -267,3 +267,23 @@ message DedustV2SwapEvent opcode 0x78e79ba4 {
   amount_in: coins
   amount_out: coins
 }
+
+# --- specs/teleitem_auction.mch anchor body.
+
+# TeleitemStartAuction (opcode 0x487a8e81). The auction config lives in a
+# mandatory ref; the spec reads beneficiary_address / initial_min_bid / max_bid.
+# The three trailing config fields are parsed-and-dropped so the cursor still
+# validates the full wire shape. DEVIATION (documented in the .mch header): the
+# Python parser wraps the config read in try/except and falls back to
+# beneficiary=None + zero bids, while a truncated ref rejects the match here.
+message TeleitemStartAuction opcode 0x487a8e81 {
+  _query_id: bits 64
+  config: ref {
+    beneficiary_address: addr_py
+    initial_min_bid: coins
+    max_bid: coins
+    _min_bid_step: bits 8
+    _min_extend_time: bits 32
+    _duration: bits 32
+  }
+}

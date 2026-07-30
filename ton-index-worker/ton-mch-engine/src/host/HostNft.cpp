@@ -557,6 +557,28 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
   return rt_ok(Value::make_obj(std::move(ns)));
 }
 
+// --- specs/teleitem_auction.mch: _is_teleitem (blocks/auction.py) ------------
+
+// `is_teleitem(nft)` — the looked-up nft_item Obj in, a Bool out. Mirrors the
+// legacy predicate exactly: a null item or a missing/absent `content` is false,
+// otherwise the metadata `uri` must contain "https://nft.fragment.com" (the same
+// test get_nft_data above already runs on the same field). Unlike get_nft_data
+// this NEVER faults: the legacy `_is_teleitem` returns False for a None content
+// instead of raising, and it is the only caller of this fn.
+EvalResult is_teleitem(BuildEnv &, const std::vector<Value> &args) {
+  if (args.size() != 1) {
+    return rt_fault("is_teleitem: bad arguments");
+  }
+  const Value *content = args[0].is_null() ? nullptr : args[0].field("content");
+  if (content == nullptr || content->t != VType::Dict) {
+    return rt_ok(Value::make_bool(false));
+  }
+  const Value *uri = content->field("uri");
+  bool fragment = uri != nullptr && uri->t == VType::Str &&
+                  uri->str.find("https://nft.fragment.com") != std::string::npos;
+  return rt_ok(Value::make_bool(fragment));
+}
+
 // builders/nft_transfer.py nft_transfer_parent_absorb shaper: purchase branch
 // only — absorb the funding parent (produced.previous_block) unless it is a
 // finish/stop sale-contract ton_transfer.

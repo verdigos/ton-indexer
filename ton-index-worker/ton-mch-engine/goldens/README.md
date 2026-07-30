@@ -103,8 +103,8 @@ them:
   by the same port: 5x`call_contract`+2x`jetton_transfer` -> `call_contract`+`jetton_swap`+`jetton_transfer`, byte-identical to Python.
 - ~~`2UJH7bBZDI4vmFG7O7HgraaQQF0BfjS2Eg5JaY62_Zo=` dedust v2 swap~~ — **FIXED**
   by `specs_decl/dedust_v2_swap.mch`: 2x`call_contract`+`jetton_transfer` -> `call_contract`+`jetton_swap`, byte-identical to Python.
-- `4AAiT_8jTvxhujXOywe0zZv1sylSlAwnZV9stEG3gnM=` teleitem start auction — `call_contract` only, want +`teleitem_start_auction`
-- `rV1gzQRFXipz6XEByCTq_3Q2LZpa4i61aLsvHf1CR1A=` teleitem cancel auction — 2x`call_contract` only, want +`teleitem_cancel_auction`
+- ~~`4AAiT_8jTvxhujXOywe0zZv1sylSlAwnZV9stEG3gnM=` teleitem start auction~~ — FIXED by specs/teleitem_auction.mch: call_contract -> teleitem_start_auction, byte-identical to Python
+- ~~`rV1gzQRFXipz6XEByCTq_3Q2LZpa4i61aLsvHf1CR1A=` teleitem cancel auction~~ — FIXED by specs/teleitem_auction.mch: 2x call_contract -> teleitem_cancel_auction, byte-identical to Python
 - `5b-KXr82wUSLIHPSHkFaW791xTyN0Rmu5h0mFm_4IdQ=` nft transfer — 3x`call_contract`, want 1 `nft_transfer`
 
 The other five **already match Python here**, so their golden rows are correct and

@@ -66,6 +66,10 @@ from indexer.events.blocks.dedust_v2.swaps import (
     DedustV2FailedSwapBlockMatcher,
     DedustV2SwapBlockMatcher,
 )
+from indexer.events.blocks.auction import (
+    TeleitemCancelAuctionMatcher,
+    TeleitemStartAuctionMatcher,
+)
 from indexer.events.blocks.dns import ChangeDnsRecordMatcher
 from indexer.events.blocks.ethena_staking import EthenaDepositBlockMatcher
 from indexer.events.blocks.evaa import EvaaWithdrawBlockMatcher
@@ -143,6 +147,7 @@ from indexer.events.mch.builders.stonfi_liquidity import stonfi_liquidity_regist
 from indexer.events.mch.builders.stonfi_provide import stonfi_provide_registries
 from indexer.events.mch.builders.stonfi_v1 import stonfi_v1_registries
 from indexer.events.mch.builders.telegram_nft import telegram_nft_registries
+from indexer.events.mch.builders.teleitem_auction import teleitem_auction_registries
 from indexer.events.mch.builders.tgbtc import tgbtc_registries
 from indexer.events.mch.builders.tonco import tonco_liquidity_registries
 from indexer.events.mch.builders.tonco_swap import tonco_swap_registries
@@ -311,6 +316,11 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     # Remake wave 4 (2026-07-04): R12 stonfi v1 (consumption surgery killed at match time).
     ("specs/stonfi_v1_swap.mch", _SPECS_DIR / "stonfi_v1_swap.mch", stonfi_v1_registries, _PREREQ_SWAP,
      (StonfiSwapBlockMatcher,)),
+    # Teleitem auction port (2026-07-30): both matchers run as one group, in the
+    # legacy list order (start then cancel). No prereqs — each anchors on its own
+    # raw opcode and reads nothing another matcher builds.
+    ("specs/teleitem_auction.mch", _SPECS_DIR / "teleitem_auction.mch", teleitem_auction_registries,
+     (), (TeleitemStartAuctionMatcher, TeleitemCancelAuctionMatcher)),
 ]
 
 

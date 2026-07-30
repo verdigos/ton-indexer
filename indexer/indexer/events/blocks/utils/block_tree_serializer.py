@@ -331,24 +331,26 @@ def _fill_sale_update_action(block: UpdateSaleBlock, action: Action):
 
 
 def _fill_nft_put_on_auction_action(block: NftPutOnAuctionBlock, action: Action):
-    action.source = _addr(block.data.owner)
-    action.source_secondary = _addr(block.data.listing_address)
-    action.destination = _addr(block.data.auction_address)
-    action.asset = _addr(block.data.nft_collection)
-    action.asset_secondary = _addr(block.data.nft_address)
+    # dual-access via _dget: legacy NftPutOnAuctionBlockData dataclass OR the
+    # declarative specs/teleitem_auction.mch out{} dict (identical key names).
+    action.source = _addr(_dget(block.data, 'owner'))
+    action.source_secondary = _addr(_dget(block.data, 'listing_address'))
+    action.destination = _addr(_dget(block.data, 'auction_address'))
+    action.asset = _addr(_dget(block.data, 'nft_collection'))
+    action.asset_secondary = _addr(_dget(block.data, 'nft_address'))
     action.nft_transfer_data = {
-        'marketplace_address': _addr(block.data.marketplace_address),
+        'marketplace_address': _addr(_dget(block.data, 'marketplace_address')),
     }
     action.nft_listing_data = {
-        'nft_item_index': block.data.nft_index,
-        'mp_fee_factor': _value(block.data.mp_fee_factor),
-        'mp_fee_base': _value(block.data.mp_fee_base),
-        'royalty_fee_base': _value(block.data.royalty_fee_base),
-        'max_bid': _value(block.data.max_bid),
-        'min_bid': _value(block.data.min_bid),
-        'marketplace_fee_address': _addr(block.data.mp_fee_address),  # unified field
-        'marketplace': block.data.marketplace,
-        'royalty_address': _addr(block.data.royalty_fee_addr),  # unified field
+        'nft_item_index': _dget(block.data, 'nft_index'),
+        'mp_fee_factor': _value(_dget(block.data, 'mp_fee_factor')),
+        'mp_fee_base': _value(_dget(block.data, 'mp_fee_base')),
+        'royalty_fee_base': _value(_dget(block.data, 'royalty_fee_base')),
+        'max_bid': _value(_dget(block.data, 'max_bid')),
+        'min_bid': _value(_dget(block.data, 'min_bid')),
+        'marketplace_fee_address': _addr(_dget(block.data, 'mp_fee_address')),  # unified field
+        'marketplace': _dget(block.data, 'marketplace'),
+        'royalty_address': _addr(_dget(block.data, 'royalty_fee_addr')),  # unified field
         # Sale fields set to null
         'full_price': None,
         'marketplace_fee': None,
@@ -679,12 +681,14 @@ def _fill_auction_outbid_action(block: AuctionOutbidBlock, action: Action):
     action.accounts.append(action.asset_secondary)
 
 def _fill_cancel_nft_trade_action(block: NftCancelSaleBlock|NftFinishAuctionBlock|NftCancelAuctionBlock, action: Action):
-    action.source = _addr(block.data.owner)
-    action.destination = _addr(block.data.trade_contract)
-    action.asset_secondary = _addr(block.data.nft_address)
-    action.asset = _addr(block.data.nft_collection)
+    # dual-access via _dget: legacy NftCancelTradeData dataclass OR the
+    # declarative specs/teleitem_auction.mch out{} dict (identical key names).
+    action.source = _addr(_dget(block.data, 'owner'))
+    action.destination = _addr(_dget(block.data, 'trade_contract'))
+    action.asset_secondary = _addr(_dget(block.data, 'nft_address'))
+    action.asset = _addr(_dget(block.data, 'nft_collection'))
     action.nft_transfer_data = {
-        'marketplace_address': _addr(block.data.marketplace_address),
+        'marketplace_address': _addr(_dget(block.data, 'marketplace_address')),
     }
     action.accounts.append(action.asset_secondary)
 
