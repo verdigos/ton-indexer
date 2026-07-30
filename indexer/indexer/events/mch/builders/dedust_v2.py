@@ -45,9 +45,16 @@ committed ABI; tests/mch/test_abi_twin_fields.py enforces it.
 """
 from __future__ import annotations
 
-from pytoniq_core import Slice
+import base64
+from types import SimpleNamespace
+from typing import Any, Awaitable, Callable
+
+from pytoniq_core import Cell, Slice
 
 from indexer.events.blocks.core import Block
+from indexer.events.blocks.dedust_v2.swaps import _final_min_out
+from indexer.events.blocks.messages import DedustV2PayJetton, DedustV2SwapPayload
+from indexer.events.blocks.swaps import JettonSwapBlock
 from indexer.events.blocks.utils import AccountId
 from indexer.events.mch.builders.dedust import default_lookups
 from indexer.events.mch.registry import Registries
@@ -129,3 +136,125 @@ def register_dedust_v2_claim_reward(reg: Registries) -> Registries:
 def dedust_v2_claim_reward_registries() -> Registries:
     """Fresh Registries ready to compile specs/dedust_v2_claim_reward.mch."""
     return register_dedust_v2_claim_reward(Registries())
+
+
+# ---------------------------------------------------------------------------
+# specs_decl/dedust_v2_swap.mch — the CPMM V2 swap family.
+#
+# These two message twins mirror the mch-msgs.schema entries of the same name
+# (the C++ side's generated parsers), NOT the legacy blocks/messages/dedust_v2.py
+# classes: only the fields the spec reads are parsed, and the leading opcode is
+# skipped unchecked exactly like every schema-generated parser.
+# ---------------------------------------------------------------------------
+class DedustV2PayNative:
+    """pay_native#a5a7cbf8 query_id:uint64 amount:Coins payment_payload:^Cell …
+
+    query_id and payout_config are not read by the spec, so they are dropped /
+    left unparsed (the schema twin stops after payment_payload)."""
+
+    opcode = 0xA5A7CBF8
+
+    def __init__(self, slice: Slice):
+        slice.load_uint(32)  # opcode (checked by the matcher's `op`)
+        slice.load_uint(64)  # query_id, parsed-and-dropped
+        self.amount = slice.load_coins()
+        self.payment_payload = slice.load_ref()
+
+
+class DedustV2SwapEvent:
+    """swap#78e79ba4 x_to_y:Bool amount_in:Coins amount_out:Coins …
+
+    The pool's external-out log: the only exact source of the per-hop amounts.
+    x_to_y and everything after amount_out are not read by the spec."""
+
+    opcode = 0x78E79BA4
+
+    def __init__(self, slice: Slice):
+        slice.load_uint(32)
+        slice.load_bit()  # x_to_y, parsed-and-dropped
+        self.amount_in = slice.load_coins()
+        self.amount_out = slice.load_coins()
+
+
+async def dedust_v2_swap_payload(payload: Any) -> SimpleNamespace | None:
+    """The carrier's swap payload, or None when the carrier is not a swap.
+
+    Port of `_swap_payload` + `_final_min_out` (blocks/dedust_v2/swaps.py), with
+    the two carrier shapes the DSL can reach folded into one argument:
+
+      - Cell — a PayNative body's `payment_payload` ref (TON carrier);
+      - str  — a jetton_transfer block's b64 `forward_payload`, i.e. the
+               PayJetton wrapper whose own `payment_payload` holds the payload.
+
+    None mirrors the reference's "not a swap payload" (wrong opcode or an
+    unparseable payload). `min_out` is the FINAL minimal_amount_out: the entry
+    payload only carries hop 1's, the last SwapStep of the route carries the
+    real floor, so the `next` chain is walked (same depth cap as the reference).
+    A payload that parses but whose step chain does not yields min_out=None,
+    where the reference's jetton arm would raise — the only deviation.
+    """
+    if payload is None:
+        return None
+    try:
+        if isinstance(payload, str):
+            wrapper = DedustV2PayJetton(Cell.one_from_boc(base64.b64decode(payload)).begin_parse())
+            if wrapper.payment_payload_opcode != DedustV2SwapPayload.opcode:
+                return None
+            payload_cell = wrapper.payment_payload
+        else:
+            payload_cell = payload
+        if payload_cell.to_slice().load_uint(32) != DedustV2SwapPayload.opcode:
+            return None
+        parsed = DedustV2SwapPayload(payload_cell.begin_parse())
+    except Exception:
+        return None
+    try:
+        min_out = _final_min_out(parsed).value
+    except Exception:
+        min_out = None
+    return SimpleNamespace(min_out=min_out)
+
+
+def dedust_pool_lookup() -> dict[str, Callable[..., Awaitable[Any]]]:
+    """`lookup dedust_pool(addr)` — the pool's asset pair.
+
+    The C++ side serves this kind from the block's own interfaces (tier 1); here
+    it is the same interface repository the reference matcher reads through
+    `_pool_other_asset`. Accepts either an AccountId (a `.data` address field) or
+    a raw string, since both reach the lookup from the spec.
+    """
+    from indexer.events import context
+
+    async def dedust_pool(address: Any) -> Any:
+        repo = context.interface_repository.get()
+        if repo is None:
+            return None
+        key = address.as_str() if isinstance(address, AccountId) else address.upper()
+        return await repo.get_dedust_pool(key)
+
+    return {"dedust_pool": dedust_pool}
+
+
+SWAP_OPCODES = {
+    "DedustV2PayNative": DedustV2PayNative.opcode,
+    "DedustV2SwapEvent": DedustV2SwapEvent.opcode,
+    "PayoutMessage": PayoutMessage.opcode,
+}
+
+SWAP_MESSAGE_TYPES = {
+    "DedustV2PayNative": DedustV2PayNative,
+    "DedustV2SwapEvent": DedustV2SwapEvent,
+    "PayoutMessage": PayoutMessage,
+}
+
+
+def dedust_v2_swap_registries() -> Registries:
+    """Fresh Registries ready to compile specs_decl/dedust_v2_swap.mch."""
+    reg = Registries()
+    reg.opcodes.update(SWAP_OPCODES)
+    reg.block_types["JettonSwapBlock"] = JettonSwapBlock
+    reg.message_types.update(SWAP_MESSAGE_TYPES)
+    reg.lookups.update(default_lookups())
+    reg.lookups.update(dedust_pool_lookup())
+    reg.fns["dedust_v2_swap_payload"] = dedust_v2_swap_payload
+    return reg

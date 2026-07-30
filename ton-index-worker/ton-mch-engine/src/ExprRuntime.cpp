@@ -548,6 +548,20 @@ EvalResult rt_builtin_zip(const Value &a, const Value &b) {
   return rt_ok(Value::make_list(std::move(out)));
 }
 
+EvalResult rt_builtin_concat(const Value &a, const Value &b) {
+  if (rt_is_null(a) || rt_is_null(b)) return rt_ok(Value::null());
+  const std::vector<Value> *xs = nullptr;
+  const std::vector<Value> *ys = nullptr;
+  if (!bi_require_list(a, xs) || !bi_require_list(b, ys)) {
+    return rt_fault("concat expects two lists");
+  }
+  std::vector<Value> out;
+  out.reserve(xs->size() + ys->size());
+  out.insert(out.end(), xs->begin(), xs->end());
+  out.insert(out.end(), ys->begin(), ys->end());
+  return rt_ok(Value::make_list(std::move(out)));
+}
+
 EvalResult rt_builtin_map(const Value &a, const Value &b) {
   if (rt_is_null(a) || rt_is_null(b)) return rt_ok(Value::null());
   const std::vector<Value> *xs = nullptr;
@@ -614,6 +628,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
       {"account", 1}, {"amount", 1},  {"asset", 1}, {"ton_asset", 0},
       {"addr_none", 0}, {"b64", 1},   {"first", 1}, {"last", 1},
       {"len", 1},     {"sum", 1},     {"zip", 2},   {"map", 2},
+      {"concat", 2},
   };
   auto ar = arity.find(name);
   if (ar == arity.end()) {
@@ -635,6 +650,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   if (name == "sum") return rt_builtin_sum(args[0]);
   if (name == "zip") return rt_builtin_zip(args[0], args[1]);
   if (name == "map") return rt_builtin_map(args[0], args[1]);
+  if (name == "concat") return rt_builtin_concat(args[0], args[1]);
   return rt_fault("unreachable builtin " + name);
 }
 

@@ -247,3 +247,23 @@ message ToncoRouterV3SwapSourceWallet opcode 0xa7fb58f8 {
   _owner: addr_py
   source_wallet: addr_py
 }
+
+# --- specs_decl/dedust_v2_swap.mch carriers and log.
+
+# The TON-side swap carrier. The spec reads `amount` (the failed-swap in-leg
+# amount) and hands `payment_payload` — the ref holding the swap payload — to
+# the dedust_v2_swap_payload host fn. The trailing payout_config ref is left
+# unparsed (the cursor simply stops).
+message DedustV2PayNative opcode 0xa5a7cbf8 {
+  _query_id: bits 64
+  amount: coins
+  payment_payload: ref_cell
+}
+
+# The pool's ext-out swap log: the only exact source of the per-hop amounts.
+# x_to_y is dropped and the trailing state/fee refs are left unparsed.
+message DedustV2SwapEvent opcode 0x78e79ba4 {
+  _x_to_y: bits 1
+  amount_in: coins
+  amount_out: coins
+}

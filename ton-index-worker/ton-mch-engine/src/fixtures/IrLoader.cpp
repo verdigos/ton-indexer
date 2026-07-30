@@ -18,7 +18,7 @@ using JType = td::JsonValue::Type;
 
 const std::unordered_set<std::string> kBuiltins = {
     "account", "amount", "asset", "ton_asset", "addr_none", "b64",
-    "first", "last", "len", "sum", "zip", "map"};
+    "first", "last", "len", "sum", "zip", "map", "concat"};
 
 const Json *jfield(const Json &e, td::Slice name) {
   if (e.type() != JType::Object) {
@@ -207,9 +207,21 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     m.anchor_kind = AnchorKind::Mixed;
     if (const Json *br = jfield(*anchor, "branches"); br != nullptr && br->type() == JType::Array) {
       for (const auto &b : br->get_array()) {
-        if (has(b, "where")) {
-          m.ref_preds.insert(jstr(b, "where"));
+        CompiledMatcher::AnchorBranch ab;
+        if (const Json *op = jfield(b, "op"); op != nullptr) {
+          TRY_RESULT(v, num_i64(*op));
+          ab.is_op = true;
+          ab.opcode = static_cast<std::uint32_t>(v & 0xFFFFFFFF);
+          m.anchor_opcodes.insert(ab.opcode);
+        } else {
+          ab.btype = jstr(b, "btype");
+          m.anchor_btypes.insert(ab.btype);
         }
+        if (has(b, "where")) {
+          ab.where = jstr(b, "where");
+          m.ref_preds.insert(ab.where);
+        }
+        m.anchor_branches.push_back(std::move(ab));
       }
     }
   } else {

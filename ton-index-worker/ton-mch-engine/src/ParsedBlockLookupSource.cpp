@@ -179,8 +179,11 @@ Value ParsedBlockLookupSource::tier1(const std::string &kind, const std::string 
 
 Value ParsedBlockLookupSource::fetch(const std::string &kind, const std::vector<Value> &args) const {
   // FixtureLookupSource parity guard: every registered lookup passes exactly one
-  // Str address; anything else is a null result on both sources.
-  if (args.size() != 1 || args[0].t != VType::Str) {
+  // address — Str, or the Account a `.data` address field yields (same raw
+  // uppercase text); anything else is a null result on both sources.
+  if (args.size() != 1 ||
+      !(args[0].t == VType::Str ||
+        (args[0].t == VType::Account && !args[0].addr_none))) {
     return Value::null();
   }
   // Tier 1 resolves from account_interfaces_; a miss falls through to tier 2.

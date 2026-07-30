@@ -52,7 +52,7 @@ from cpp_surface import (  # noqa: E402
 )
 
 BUILTINS = {"account", "amount", "asset", "ton_asset", "addr_none", "b64",
-            "first", "last", "len", "sum", "zip", "map"}
+            "first", "last", "len", "sum", "zip", "map", "concat"}
 
 # The composite btypes the C++ fill_action ports (ActionBuild.cpp fill_action).
 # Gate emit on the BLOCK btype (not the rewritten action.type), matching C++.

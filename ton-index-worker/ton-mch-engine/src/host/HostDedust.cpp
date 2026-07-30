@@ -7,6 +7,7 @@
 #include "BlockTree.h"
 #include "BuildRuntime.h"
 #include "MsgParse.h"
+#include "parse/PSlice.h"
 
 #include "td/utils/base64.h"
 #include "td/utils/misc.h"
@@ -420,6 +421,145 @@ EvalResult dedust_swap_failed(BuildEnv &, const std::vector<Value> &args) {
     }
   }
   return rt_ok(Value::make_bool(false));
+}
+
+namespace {
+
+constexpr std::uint32_t kDedustV2PayJetton = 0xcbc33949;
+constexpr std::uint32_t kDedustV2SwapPayload = 0xc442500f;
+
+// blocks/messages/dedust_v2.py DedustV2SwapPayload: op(32) already consumed,
+// then minimal_amount_out:Coins deadline:uint40 next:(Maybe ^SwapStep)
+// partner:(Maybe (uint256,uint16)) referrer:(Maybe (uint256,uint16)). The
+// trailing configs are read even though nothing uses them — a body too short
+// for them raises in the reference too, which is what makes the whole payload
+// "not a swap payload".
+td::Status dv2_read_payload(vm::CellSlice &cs, td::RefInt256 &min_out,
+                            td::Ref<vm::Cell> &next) {
+  TRY_RESULT(amount, load_coins_py(cs));
+  min_out = std::move(amount);
+  if (!cs.have(40)) {
+    return td::Status::Error("swap payload: deadline underflow");
+  }
+  cs.advance(40);
+  if (!cs.have(1)) {
+    return td::Status::Error("swap payload: next flag underflow");
+  }
+  if (cs.fetch_ulong(1) == 1) {
+    next = cs.fetch_ref();
+    if (next.is_null()) {
+      return td::Status::Error("swap payload: next ref missing");
+    }
+  }
+  for (int i = 0; i < 2; i++) {  // partner_config, referrer_config
+    if (!cs.have(1)) {
+      return td::Status::Error("swap payload: config flag underflow");
+    }
+    if (cs.fetch_ulong(1) == 1 && !(cs.have(256 + 16) && cs.advance(256 + 16))) {
+      return td::Status::Error("swap payload: config underflow");
+    }
+  }
+  return td::Status::OK();
+}
+
+// DedustV2SwapStep: pool:MsgAddressInt minimal_amount_out:Coins deadline:uint40
+// next:(Maybe ^SwapStep) — an inline struct, so no opcode prefix.
+td::Status dv2_read_step(vm::CellSlice &cs, td::RefInt256 &min_out,
+                         td::Ref<vm::Cell> &next) {
+  TRY_RESULT(pool, load_address_py(cs));
+  (void)pool;
+  TRY_RESULT(amount, load_coins_py(cs));
+  min_out = std::move(amount);
+  if (!cs.have(40)) {
+    return td::Status::Error("swap step: deadline underflow");
+  }
+  cs.advance(40);
+  if (!cs.have(1)) {
+    return td::Status::Error("swap step: next flag underflow");
+  }
+  if (cs.fetch_ulong(1) == 1) {
+    next = cs.fetch_ref();
+    if (next.is_null()) {
+      return td::Status::Error("swap step: next ref missing");
+    }
+  }
+  return td::Status::OK();
+}
+
+// The payload cell behind a carrier: the argument is either a PayNative body's
+// payment_payload ref (a Cell) or a jetton carrier's b64 forward_payload (a Str
+// carrying the PayJetton wrapper, whose own payment_payload holds the payload).
+td::Result<td::Ref<vm::Cell>> dv2_payload_cell(const Value &arg) {
+  if (arg.t == VType::Cell) {
+    return arg.cell;
+  }
+  if (arg.t != VType::Str) {
+    return td::Status::Error("dedust_v2 payload: expected a cell or a b64 string");
+  }
+  TRY_RESULT(raw, td::base64_decode(td::Slice(arg.str)));
+  TRY_RESULT(wrapper, vm::std_boc_deserialize(raw));
+  TRY_RESULT(cs, open_ref_cell(wrapper));
+  if (!cs.have(32) || cs.fetch_ulong(32) != kDedustV2PayJetton) {
+    return td::Status::Error("dedust_v2 payload: not a PayJetton wrapper");
+  }
+  td::Ref<vm::Cell> payload = cs.fetch_ref();
+  td::Ref<vm::Cell> payout_config = cs.fetch_ref();  // read like the reference
+  if (payload.is_null() || payout_config.is_null()) {
+    return td::Status::Error("dedust_v2 payload: PayJetton refs missing");
+  }
+  return payload;
+}
+
+}  // namespace
+
+// builders/dedust_v2.py dedust_v2_swap_payload: the carrier's swap payload, or
+// Null when the carrier is not a swap (wrong opcode / unparseable payload —
+// PayNative also carries deposits and fund rewards). `min_out` is the FINAL
+// minimal_amount_out: the entry payload carries only hop 1's, so the SwapStep
+// chain is walked to its last step (same 16-step cap as the reference). A
+// payload that parses but whose chain does not yields min_out=null.
+EvalResult dedust_v2_swap_payload(BuildEnv &, const std::vector<Value> &args) {
+  if (args.size() != 1) {
+    return rt_fault("dedust_v2_swap_payload: bad arguments");
+  }
+  if (args[0].is_null()) {
+    return rt_ok(Value::null());
+  }
+  auto cell = dv2_payload_cell(args[0]);
+  if (cell.is_error()) {
+    return rt_ok(Value::null());
+  }
+  auto payload_cs = open_ref_cell(cell.move_as_ok());
+  if (payload_cs.is_error()) {
+    return rt_ok(Value::null());
+  }
+  vm::CellSlice cs = payload_cs.move_as_ok();
+  if (!cs.have(32) || cs.fetch_ulong(32) != kDedustV2SwapPayload) {
+    return rt_ok(Value::null());
+  }
+  td::RefInt256 min_out;
+  td::Ref<vm::Cell> next;
+  if (dv2_read_payload(cs, min_out, next).is_error()) {
+    return rt_ok(Value::null());
+  }
+  bool chain_ok = true;
+  for (int depth = 0; !next.is_null() && depth < 16; depth++) {
+    auto step_cs = open_ref_cell(next);
+    if (step_cs.is_error()) {
+      chain_ok = false;
+      break;
+    }
+    vm::CellSlice step = step_cs.move_as_ok();
+    next = td::Ref<vm::Cell>{};
+    if (dv2_read_step(step, min_out, next).is_error()) {
+      chain_ok = false;
+      break;
+    }
+  }
+  Value::Fields f;
+  f.emplace_back("min_out",
+                 chain_ok ? Value::make_int(std::move(min_out)) : Value::null());
+  return rt_ok(Value::make_obj(std::move(f)));
 }
 
 }  // namespace mch

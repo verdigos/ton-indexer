@@ -65,6 +65,18 @@ struct CompiledMatcher {
   std::unordered_set<std::string> anchor_btypes;
   std::string anchor_pred;  // Pred-kind anchor's predicate name
 
+  // [M2R, R09] Mixed anchor: the XOR branches in SOURCE order, each an opcode
+  // or a btype head with an optional `where` predicate. test_self takes union
+  // membership and then the matching branch's predicate, so the branch order
+  // (and the head/pred pairing) has to survive into the table.
+  struct AnchorBranch {
+    bool is_op{false};
+    std::uint32_t opcode{0};
+    std::string btype;
+    std::string where;  // host predicate name, empty when the branch has none
+  };
+  std::vector<AnchorBranch> anchor_branches;
+
   std::vector<CompiledNode> nodes;      // local pool, remapped, root == 0
   std::vector<std::string> slot_names;  // slot id -> capture name (decl order)
   std::vector<std::string> cards;       // slot id -> "one"|"opt"|"many"

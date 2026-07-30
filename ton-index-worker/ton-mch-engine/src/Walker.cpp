@@ -396,8 +396,26 @@ bool matcher_test_self(const CompiledMatcher &m, const Block *b) {
       auto it = host_predicates().find(m.anchor_pred);
       return it != host_predicates().end() && it->second(b);
     }
-    case AnchorKind::Mixed:
-      return false;  // branch structure not stored; match_skip_reason skips these
+    case AnchorKind::Mixed: {
+      // engine.py test_self [M2R, R09]: union membership in source order, then
+      // the matching branch's `where` — a head match whose predicate fails
+      // falls through to a later branch sharing the head.
+      for (const auto &br : m.anchor_branches) {
+        bool ok = br.is_op ? (b->btype == "call_contract" && b->opcode && *b->opcode == br.opcode)
+                           : (b->btype == br.btype);
+        if (!ok) {
+          continue;
+        }
+        if (br.where.empty()) {
+          return true;
+        }
+        auto it = host_predicates().find(br.where);
+        if (it != host_predicates().end() && it->second(b)) {
+          return true;
+        }
+      }
+      return false;
+    }
   }
   return false;
 }

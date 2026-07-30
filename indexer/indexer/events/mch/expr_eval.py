@@ -148,6 +148,12 @@ def _builtin_zip(xs: Any, ys: Any) -> list:
     return [[a, b] for a, b in zip(xs, ys)]
 
 
+def _builtin_concat(xs: Any, ys: Any) -> list:
+    xs = _require_list("concat", xs)
+    ys = _require_list("concat", ys)
+    return xs + ys
+
+
 def _builtin_map(xs: Any, field: Any) -> list:
     return [_project(x, field) for x in _require_list("map", xs)]
 
@@ -164,6 +170,7 @@ BUILTINS: dict[str, tuple[Any, int]] = {
     "len":       (_builtin_len, 1),
     "sum":       (_builtin_sum, 1),
     "zip":       (_builtin_zip, 2),
+    "concat":    (_builtin_concat, 2),
     "map":       (_builtin_map, 2),
 }
 

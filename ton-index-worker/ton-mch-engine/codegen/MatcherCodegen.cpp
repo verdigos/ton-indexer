@@ -119,6 +119,22 @@ std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
   set_if(!m.anchor_opcodes.empty(), "anchor_opcodes", opcode_set(m.anchor_opcodes));
   set_if(!m.anchor_btypes.empty(), "anchor_btypes", str_set(m.anchor_btypes));
   set_if(!m.anchor_pred.empty(), "anchor_pred", cstr(m.anchor_pred));
+  for (std::size_t i = 0; i < m.anchor_branches.size(); i++) {
+    const auto &br = m.anchor_branches[i];
+    const std::string b = "m.anchor_branches[" + std::to_string(i) + "]";
+    if (i == 0) {
+      line("m.anchor_branches.resize(" + std::to_string(m.anchor_branches.size()) + ");");
+    }
+    if (br.is_op) {
+      line(b + ".is_op = true;");
+      line(b + ".opcode = " + std::to_string(br.opcode) + "u;");
+    } else {
+      line(b + ".btype = " + cstr(br.btype) + ";");
+    }
+    if (!br.where.empty()) {
+      line(b + ".where = " + cstr(br.where) + ";");
+    }
+  }
   set_if(!m.slot_names.empty(), "slot_names", str_list(m.slot_names));
   set_if(!m.cards.empty(), "cards", str_list(m.cards));
 

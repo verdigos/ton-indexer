@@ -45,7 +45,7 @@ from twin_registries import combined_registries  # noqa: E402
 # cpp_surface (imported above). BUILTINS is not a host registry (it's the fixed
 # expr-builtin set), so it stays inline here.
 BUILTINS = {"account", "amount", "asset", "ton_asset", "addr_none", "b64",
-            "first", "last", "len", "sum", "zip", "map"}
+            "first", "last", "len", "sum", "zip", "map", "concat"}
 
 
 def block_key(b):

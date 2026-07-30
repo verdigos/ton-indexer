@@ -220,6 +220,26 @@
       "type": "ToncoRouterV3SwapSourceWallet",
       "body": "te6ccgEBAQEABgAACKf7WPg=",
       "expect": "fail"
+    },
+    {
+      "type": "DedustV2PayNative",
+      "body": "te6ccgEBAgEAEgABGaWny/gAAAAAAAAAAAgBAAA=",
+      "expect": "ok"
+    },
+    {
+      "type": "DedustV2PayNative",
+      "body": "te6ccgEBAQEABgAACKWny/g=",
+      "expect": "fail"
+    },
+    {
+      "type": "DedustV2SwapEvent",
+      "body": "te6ccgEBAQEACAAAC3jnm6QAQA==",
+      "expect": "ok"
+    },
+    {
+      "type": "DedustV2SwapEvent",
+      "body": "te6ccgEBAQEABgAACHjnm6Q=",
+      "expect": "fail"
     }
   ]
 }

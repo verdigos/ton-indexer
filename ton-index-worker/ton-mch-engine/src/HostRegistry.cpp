@@ -12,6 +12,7 @@ const std::map<std::string, HostFn> &host_fns() {
   static const std::map<std::string, HostFn> fns = {
       {"dedust_swap_legs", dedust_swap_legs},
       {"dedust_swap_failed", dedust_swap_failed},
+      {"dedust_v2_swap_payload", dedust_v2_swap_payload},
       {"layerzero_dst_oapp_matches", layerzero_dst_oapp_matches},
       {"tonstakers_minted_nft", tonstakers_minted_nft},
       {"vesting_message_was_sent", vesting_message_was_sent},

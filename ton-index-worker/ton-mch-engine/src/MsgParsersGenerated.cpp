@@ -847,6 +847,54 @@ td::Result<Value> gen_parse_tonco_router_v3_swap_source_wallet(const td::Ref<vm:
   return Value::make_obj(std::move(f));
 }
 
+// DedustV2PayNative (opcode 0xa5a7cbf8); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_dedust_v2_pay_native(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("DedustV2PayNative: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("DedustV2PayNative: _query_id underflow"); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("DedustV2PayNative: payment_payload ref missing"); }
+    auto rf = cs.fetch_ref();
+    f.emplace_back("payment_payload", Value::make_cell(std::move(rf)));
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// DedustV2SwapEvent (opcode 0x78e79ba4); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_dedust_v2_swap_event(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("DedustV2SwapEvent: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(1) || !cs.advance(1)) { return td::Status::Error("DedustV2SwapEvent: _x_to_y underflow"); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount_in", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount_out", Value::make_int(rc.move_as_ok()));
+  }
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parsers() {
@@ -873,6 +921,8 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"StonfiV2PayTo", gen_parse_stonfi_v2_pay_to},
       {"DedustDepositLiquidityToPool", gen_parse_dedust_deposit_liquidity_to_pool},
       {"ToncoRouterV3SwapSourceWallet", gen_parse_tonco_router_v3_swap_source_wallet},
+      {"DedustV2PayNative", gen_parse_dedust_v2_pay_native},
+      {"DedustV2SwapEvent", gen_parse_dedust_v2_swap_event},
   };
   return rows;
 }

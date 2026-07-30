@@ -20,12 +20,6 @@ std::string match_skip_reason(const CompiledMatcher &m) {
   if (!missing.empty()) {
     return "pred:" + missing;
   }
-  // A mixed anchor stays unrunnable even when its predicates exist: the table
-  // does not store the branch structure matcher_test_self would need (no
-  // current build_program matcher has one — guard, not a plan).
-  if (m.anchor_kind == AnchorKind::Mixed && !m.ref_preds.empty()) {
-    return "mixed_anchor_preds";
-  }
   return "";
 }
 

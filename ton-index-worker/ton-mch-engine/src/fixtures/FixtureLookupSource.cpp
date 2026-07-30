@@ -34,7 +34,12 @@ Value iface_obj(const Value &fields_dict, std::initializer_list<const char *> na
 }  // namespace
 
 Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Value> &args) const {
-  if (interfaces_ == nullptr || args.size() != 1 || args[0].t != VType::Str) {
+  // An Account key (a `.data` address field, e.g. the dedust_v2 failed-swap
+  // pool) carries the same raw-uppercase text as the Str form.
+  const bool addr_arg = args.size() == 1 &&
+                        (args[0].t == VType::Str ||
+                         (args[0].t == VType::Account && !args[0].addr_none));
+  if (interfaces_ == nullptr || !addr_arg) {
     return Value::null();  // see the non-Str deviation note in the header
   }
   const std::string &addr = args[0].str;

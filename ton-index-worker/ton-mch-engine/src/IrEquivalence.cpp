@@ -117,6 +117,21 @@ void compare_node(Diff &d, const std::string &path, const CompiledNode &g, const
   d.eq(path + ".strategy", g.strategy, l.strategy);
 }
 
+// Mixed-anchor branches compare as one rendered string: they are ORDERED
+// (source order decides which branch's `where` runs), so a set/vector compare
+// would either lose the order or need a per-field element diff.
+std::string show_branches(const std::vector<CompiledMatcher::AnchorBranch> &brs) {
+  std::string out = "[";
+  for (std::size_t i = 0; i < brs.size(); i++) {
+    if (i) out += ",";
+    out += brs[i].is_op ? "op:" + std::to_string(brs[i].opcode) : "btype:" + brs[i].btype;
+    if (!brs[i].where.empty()) {
+      out += "/" + brs[i].where;
+    }
+  }
+  return out + "]";
+}
+
 void compare_matcher(Diff &d, const std::string &path, const CompiledMatcher &g,
                      const CompiledMatcher &l) {
   d.eq(path + ".name", g.name, l.name);
@@ -127,6 +142,8 @@ void compare_matcher(Diff &d, const std::string &path, const CompiledMatcher &g,
   d.eq(path + ".anchor_opcodes", g.anchor_opcodes, l.anchor_opcodes);
   d.eq(path + ".anchor_btypes", g.anchor_btypes, l.anchor_btypes);
   d.eq(path + ".anchor_pred", g.anchor_pred, l.anchor_pred);
+  d.eq(path + ".anchor_branches", show_branches(g.anchor_branches),
+       show_branches(l.anchor_branches));
   d.eq(path + ".slot_names", g.slot_names, l.slot_names);
   d.eq(path + ".cards", g.cards, l.cards);
   d.eq(path + ".step_slots", g.step_slots, l.step_slots);

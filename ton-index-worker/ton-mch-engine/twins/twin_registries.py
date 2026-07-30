@@ -28,6 +28,7 @@ from indexer.events.mch.builders import (  # noqa: E402
 )
 from indexer.events.mch.builders.coffee import coffee_liquidity_registries  # noqa: E402
 from indexer.events.mch.builders.dedust import dedust_deposit_registries  # noqa: E402
+from indexer.events.mch.builders.dedust_v2 import dedust_v2_swap_registries  # noqa: E402
 from indexer.events.mch.builders.ethena import ethena_registries  # noqa: E402
 from indexer.events.mch.builders.evaa import evaa_registries  # noqa: E402
 from indexer.events.mch.builders.getgems import getgems_registries  # noqa: E402
@@ -50,7 +51,8 @@ _FACTORIES = [
     dedust_withdraw_registries, dedust_v2_claim_reward_registries,
     dns_registries, jetton_decl_registries,
     jetton_registries, stonfi_v2_registries, coffee_liquidity_registries,
-    dedust_deposit_registries, ethena_registries, evaa_registries,
+    dedust_deposit_registries, dedust_v2_swap_registries, ethena_registries,
+    evaa_registries,
     getgems_registries, jvault_registries, layerzero_receive_registries,
     nft_transfer_registries,
     nominator_registries, stonfi_liquidity_registries, stonfi_provide_registries,

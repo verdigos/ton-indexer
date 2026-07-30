@@ -915,6 +915,133 @@
    }
   },
   {
+   "name": "concat_lists",
+   "src": "concat(xs, ys)",
+   "expr": {
+    "k": "call",
+    "fn": "concat",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     },
+     {
+      "k": "name",
+      "id": "ys"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      1,
+      2
+     ]
+    },
+    "ys": {
+     "$list": [
+      3
+     ]
+    }
+   },
+   "expect": {
+    "$list": [
+     1,
+     2,
+     3
+    ]
+   }
+  },
+  {
+   "name": "concat_empty_left",
+   "src": "concat(xs, ys)",
+   "expr": {
+    "k": "call",
+    "fn": "concat",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     },
+     {
+      "k": "name",
+      "id": "ys"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": []
+    },
+    "ys": {
+     "$list": [
+      7
+     ]
+    }
+   },
+   "expect": {
+    "$list": [
+     7
+    ]
+   }
+  },
+  {
+   "name": "concat_null_arg",
+   "src": "concat(xs, ys)",
+   "expr": {
+    "k": "call",
+    "fn": "concat",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     },
+     {
+      "k": "name",
+      "id": "ys"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      1
+     ]
+    },
+    "ys": null
+   },
+   "expect": null
+  },
+  {
+   "name": "concat_nonlist_fault",
+   "src": "concat(xs, ys)",
+   "expr": {
+    "k": "call",
+    "fn": "concat",
+    "args": [
+     {
+      "k": "name",
+      "id": "xs"
+     },
+     {
+      "k": "name",
+      "id": "ys"
+     }
+    ]
+   },
+   "env": {
+    "xs": {
+     "$list": [
+      1
+     ]
+    },
+    "ys": 5
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
    "name": "map_field",
    "src": "map(xs, \"a\")",
    "expr": {

@@ -7,7 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**176 fixtures, 765 ACTION rows** — one per serializable block on each trace's
+**176 fixtures, 746 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus 6 synthetic `unknown` rows (the fixtures whose spine
 serializes to nothing at all). Rows are printed **sorted** within a fixture,
 because spine order is not a stable property (see below).
@@ -20,6 +20,23 @@ dies with it — and Python's `--emulated-traces` path is being retired. This fi
 is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
+
+Re-baselined 2026-07-30 (**765 → 746 rows**) by the `dedust_v2` swap port
+(`specs_decl/dedust_v2_swap.mch`, the mch counterpart of
+`DedustV2SwapBlockMatcher` + `DedustV2FailedSwapBlockMatcher`). DeDust CPMM V2
+swaps were entirely unclassified: every one of them serialized as its raw legs.
+10 fixtures changed:
+
+- **-14 `call_contract`, -15 `jetton_transfer`, +10 `jetton_swap`** — seven
+  successful swaps (three of them multi-hop, with `peer_swaps` filled from the
+  per-hop Swap events) and three slippage refunds, each absorbing the leg rows
+  that used to stand in for it.
+- **9 of the 10 became byte-identical to the LEGACY Python classifier**
+  (`event_processing.matchers` driven through the twin's renderer), including the
+  `(ab-gap)` fixture below. The tenth (`MZQz_qHLV8Oi…`) matches legacy on its
+  dedust_v2 row and still differs on an unrelated **dedust V1** swap row in the
+  same trace, whose leg wallets the C++ host leaves null — the same pre-existing
+  gap the pton re-baseline recorded, byte-identical to the previous golden.
 
 Re-baselined 2026-07-30 (**818 → 765 rows**) by the `pton_transfer` matcher port
 (`specs_decl/pton_transfer.mch`, the mch counterpart of `PTonTransferMatcher`).
@@ -61,7 +78,7 @@ change, over 143 of the 165 fixtures:
 Verified at each re-baseline (the 165-fixture figures are from the spine-walk one):
 
 - `--actions` vs `twins/py_actions.py` diffed **0 lines** over all 165 fixtures
-  (**176** at the pton re-baseline),
+  (**176** at the pton and dedust_v2 re-baselines),
 - `--actions-schema` and `--actions-prod` were **byte-identical** to `--actions`
   (the cross-check that catches a `fill_trace_aggregates` regression).
 
@@ -76,14 +93,16 @@ Recorded from finalized mainchain blocks 82925391-82931345 with
 `ton-fixture-save`, one per divergence class found in the live emulator A/B run
 (C++ in-process classifier vs Python `event_classifier`). Python's rows are the
 parity target and are asserted by pytest cases named `(ab-gap)` in
-`indexer/tests/test_cases/`. **Two are FIXED**, four still carry a genuine C++ gap
-— those four golden rows are KNOWN-WRONG today and a matcher port should flip them:
+`indexer/tests/test_cases/`. **Three are FIXED**, three still carry a genuine C++
+gap — those three golden rows are KNOWN-WRONG today and a matcher port should flip
+them:
 
 - ~~`mg8sRwic_zM8iy-pZoVdocmQsozeVKNt7G5j_k6nYyc=` pton stonfi v2 swap~~ — **FIXED**
   by `specs_decl/pton_transfer.mch`: 6x`call_contract` -> 1 `jetton_swap`, byte-identical to Python.
 - ~~`2xripwtdxwKPdHABREASj6enBvKBTwsOVJx6YEZfI64=` pton stonfi v1 swap~~ — **FIXED**
   by the same port: 5x`call_contract`+2x`jetton_transfer` -> `call_contract`+`jetton_swap`+`jetton_transfer`, byte-identical to Python.
-- `2UJH7bBZDI4vmFG7O7HgraaQQF0BfjS2Eg5JaY62_Zo=` dedust v2 swap — 2x`call_contract`+`jetton_transfer`, want `call_contract`+`jetton_swap`
+- ~~`2UJH7bBZDI4vmFG7O7HgraaQQF0BfjS2Eg5JaY62_Zo=` dedust v2 swap~~ — **FIXED**
+  by `specs_decl/dedust_v2_swap.mch`: 2x`call_contract`+`jetton_transfer` -> `call_contract`+`jetton_swap`, byte-identical to Python.
 - `4AAiT_8jTvxhujXOywe0zZv1sylSlAwnZV9stEG3gnM=` teleitem start auction — `call_contract` only, want +`teleitem_start_auction`
 - `rV1gzQRFXipz6XEByCTq_3Q2LZpa4i61aLsvHf1CR1A=` teleitem cancel auction — 2x`call_contract` only, want +`teleitem_cancel_auction`
 - `5b-KXr82wUSLIHPSHkFaW791xTyN0Rmu5h0mFm_4IdQ=` nft transfer — 3x`call_contract`, want 1 `nft_transfer`
