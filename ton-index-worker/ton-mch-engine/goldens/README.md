@@ -7,7 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**165 fixtures, 787 ACTION rows** — one per serializable block on each trace's
+**177 fixtures, 819 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus 6 synthetic `unknown` rows (the fixtures whose spine
 serializes to nothing at all). Rows are printed **sorted** within a fixture,
 because spine order is not a stable property (see below).
@@ -49,6 +49,41 @@ Row ORDER is sorted on both sides deliberately: Python's `compact_connections`
 rebuilds `next_blocks` through a `set()`, so its spine order varies run to run,
 and nothing downstream of the serializer depends on row order (they are DB rows
 keyed by `action_id`).
+
+## The 12 A/B-gap fixtures (added 2026-07-30, +32 rows)
+
+Recorded from finalized mainchain blocks 82925391-82931345 with
+`ton-fixture-save`, one per divergence class found in the live emulator A/B run
+(C++ in-process classifier vs Python `event_classifier`). Python's rows are the
+parity target and are asserted by pytest cases named `(ab-gap)` in
+`indexer/tests/test_cases/`. **Six carry a genuine C++ gap** — their golden rows
+are KNOWN-WRONG today and a matcher port should flip them:
+
+- `mg8sRwic_zM8iy-pZoVdocmQsozeVKNt7G5j_k6nYyc=` pton stonfi v2 swap — 6x`call_contract`, want 1 `jetton_swap`
+- `2xripwtdxwKPdHABREASj6enBvKBTwsOVJx6YEZfI64=` pton stonfi v1 swap — 5x`call_contract`+2x`jetton_transfer`, want `call_contract`+`jetton_swap`+`jetton_transfer`
+- `2UJH7bBZDI4vmFG7O7HgraaQQF0BfjS2Eg5JaY62_Zo=` dedust v2 swap — 2x`call_contract`+`jetton_transfer`, want `call_contract`+`jetton_swap`
+- `4AAiT_8jTvxhujXOywe0zZv1sylSlAwnZV9stEG3gnM=` teleitem start auction — `call_contract` only, want +`teleitem_start_auction`
+- `rV1gzQRFXipz6XEByCTq_3Q2LZpa4i61aLsvHf1CR1A=` teleitem cancel auction — 2x`call_contract` only, want +`teleitem_cancel_auction`
+- `5b-KXr82wUSLIHPSHkFaW791xTyN0Rmu5h0mFm_4IdQ=` nft transfer — 3x`call_contract`, want 1 `nft_transfer`
+
+The other six **already match Python here**, so their golden rows are correct and
+they are regression guards, not pending work. Note what that means: the class
+they were recorded for does NOT reproduce in this harness.
+
+- `o6-kGFnpDMI4nMlMH1zrNNijL0taVyegbi2KlWkgJ-8=` stonfi v2, `PdxEcev5rXzXI-fHb1VPfFA1eLcm3n4Mx6NbsuATc3A=` tonco,
+  `Lo6cMzpAr7p5i-abOM_GWuyaADuSy8KmYiAsZ8ZJJr8=` stonfi v1, `YBQYgsltVHCigC9q03KhXnBgho2bsxFuvOD8u6UC_J4=` dedust v1 failed —
+  recorded as **host rejects**. All four emit the right `jetton_swap` off a
+  fixture. The live rejection came from the host lookup tier (celldb/redis
+  interface fetch), which `FixtureLookupSource` serves from the fixture instead,
+  so the fixture cannot reproduce it. Chasing those needs a host-layer test, not
+  this golden. The stonfi v1 one also has a known-wrong `asset2` (see the note on
+  its pytest case): its intended out-asset sits on a pool-side wallet the trace
+  never touches, and fixture interfaces only cover accounts the trace mentions.
+- `TXFkYzpo-8IZvMcy8lhsrKG9QJH73JaYAwsAitgNqdM=` (4x`call_contract`) and
+  `sS0j8bD7JQj7389dsGXLdNUisE6I1ApyvdPM1gkODVc=` (`call_contract`+`ton_transfer`) —
+  recorded because the live A side emitted FEWER basic rows than B. That is the
+  shortfall 362ff33 fixed by moving the row set to the `serialize_blocks` spine
+  walk; the A/B snapshot predates it. Kept as guards for that fix.
 
 ## Using it
 
