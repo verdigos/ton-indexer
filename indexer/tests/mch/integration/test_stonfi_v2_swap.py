@@ -38,16 +38,14 @@ import pytest
 from indexer.events.blocks.basic_blocks import CallContractBlock
 from indexer.events.blocks.basic_matchers import BlockMatcher
 from indexer.events.blocks.core import Block
-from indexer.events.blocks.jettons import (
-    JettonTransferBlockMatcher,
-    PTonTransferMatcher,
-)
+from indexer.events.blocks.jettons import JettonTransferBlockMatcher
 from indexer.events.blocks.messages import PTonTransfer
 from indexer.events.blocks.swaps import JettonSwapBlock, StonfiV2SwapBlockMatcher
 from indexer.events.blocks.utils.tree_utils import to_tree
 from indexer.events.event_processing import init_block
+import indexer.events.mch as mch
 from indexer.events.mch import compile_file
-from indexer.events.mch.builders import stonfi_v2_registries
+from indexer.events.mch.builders import jetton_decl_registries, stonfi_v2_registries
 from indexer.events.mch.ir_emit import emit_ir
 import indexer.events.mch.specs as specs_pkg
 
@@ -64,10 +62,22 @@ except Exception:  # pragma: no cover - import error path
 
 _SKIP_REASON = "indexer.events.mch_ir not importable; the IR engine is the DSL runtime"
 
-_PREREQUISITES: list[BlockMatcher] = [
-    JettonTransferBlockMatcher(),
-    PTonTransferMatcher(),
-]
+PTON_MCH = Path(mch.__file__).parent / "specs_decl" / "pton_transfer.mch"
+
+
+def _prerequisites() -> list[BlockMatcher]:
+    """Tree preparation both legs share: the jetton and pTON transfer blocks the
+    swap pattern binds as `btype jetton_transfer`.
+
+    The pTON leg is built from specs_decl/pton_transfer.mch, not from the legacy
+    `PTonTransferMatcher`. Injecting the legacy matcher here is what let this
+    test pass for months while the spec set — the only thing production runs —
+    had no pton matcher at all, so every pton swap fell out in production.
+    """
+    compiled = compile_file(PTON_MCH, jetton_decl_registries())
+    art = _mch_ir.load_artifact(emit_ir(compiled, [PTON_MCH.name]))
+    (pton,) = _mch_ir.build_matchers(art, jetton_decl_registries())
+    return [JettonTransferBlockMatcher(), pton]
 
 
 def _dsl_matcher() -> BlockMatcher:
@@ -91,7 +101,7 @@ def _build_block_tree(trace) -> Block:
 
 async def _run_matcher(matcher: BlockMatcher, trace) -> list:
     root = _build_block_tree(trace)
-    for pre in _PREREQUISITES:
+    for pre in _prerequisites():
         for b in root.bfs_iter():
             if b.parent is None:
                 await pre.try_build(b)

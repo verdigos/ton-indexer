@@ -7,7 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**176 fixtures, 818 ACTION rows** — one per serializable block on each trace's
+**176 fixtures, 765 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus 6 synthetic `unknown` rows (the fixtures whose spine
 serializes to nothing at all). Rows are printed **sorted** within a fixture,
 because spine order is not a stable property (see below).
@@ -20,6 +20,25 @@ dies with it — and Python's `--emulated-traces` path is being retired. This fi
 is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
+
+Re-baselined 2026-07-30 (**818 → 765 rows**) by the `pton_transfer` matcher port
+(`specs_decl/pton_transfer.mch`, the mch counterpart of `PTonTransferMatcher`).
+pTON wallets speak the jetton transfer interface but emit no internal transfer,
+so until this port every pTON leg stayed an unconsumed `call_contract` and the
+DEX matchers that bind `btype jetton_transfer` lost their TON side. 15 fixtures
+changed:
+
+- **-58 `call_contract`, +10 `jetton_swap`, -5 `jetton_transfer`** — the swaps
+  those legs unblocked (stonfi v1 and v2), each absorbing the call rows that used
+  to stand in for them. The 5 lost `jetton_transfer` rows are pton products a
+  swap now consumes; the surviving ones are pton legs no matcher claims, which
+  Python emits as their own rows too.
+- **11 of the 15 became byte-identical to the LEGACY Python classifier**
+  (`event_processing.matchers` driven through the twin's renderer), including both
+  `(ab-gap)` fixtures below. The other four already diverged from legacy before
+  this change, for reasons it does not touch (matchers absent from the spec set;
+  a dedust swap whose leg wallets the C++ host leaves null) — their diverging rows
+  are byte-identical to the previous golden.
 
 Re-baselined 2026-07-30 (**277 → 787 rows**) when the row set was moved from the
 matcher FIRE list to the `serialize_blocks` SPINE walk, which is what Python
@@ -39,9 +58,10 @@ change, over 143 of the 165 fixtures:
   fire's anchor block to the row's own block for matcher products (a row has no
   fire to name), so composite lines differ in that prefix only.
 
-Verified at re-baseline:
+Verified at each re-baseline (the 165-fixture figures are from the spine-walk one):
 
-- `--actions` vs `twins/py_actions.py` diffed **0 lines** over all 165 fixtures,
+- `--actions` vs `twins/py_actions.py` diffed **0 lines** over all 165 fixtures
+  (**176** at the pton re-baseline),
 - `--actions-schema` and `--actions-prod` were **byte-identical** to `--actions`
   (the cross-check that catches a `fill_trace_aggregates` regression).
 
@@ -56,11 +76,13 @@ Recorded from finalized mainchain blocks 82925391-82931345 with
 `ton-fixture-save`, one per divergence class found in the live emulator A/B run
 (C++ in-process classifier vs Python `event_classifier`). Python's rows are the
 parity target and are asserted by pytest cases named `(ab-gap)` in
-`indexer/tests/test_cases/`. **Six carry a genuine C++ gap** — their golden rows
-are KNOWN-WRONG today and a matcher port should flip them:
+`indexer/tests/test_cases/`. **Two are FIXED**, four still carry a genuine C++ gap
+— those four golden rows are KNOWN-WRONG today and a matcher port should flip them:
 
-- `mg8sRwic_zM8iy-pZoVdocmQsozeVKNt7G5j_k6nYyc=` pton stonfi v2 swap — 6x`call_contract`, want 1 `jetton_swap`
-- `2xripwtdxwKPdHABREASj6enBvKBTwsOVJx6YEZfI64=` pton stonfi v1 swap — 5x`call_contract`+2x`jetton_transfer`, want `call_contract`+`jetton_swap`+`jetton_transfer`
+- ~~`mg8sRwic_zM8iy-pZoVdocmQsozeVKNt7G5j_k6nYyc=` pton stonfi v2 swap~~ — **FIXED**
+  by `specs_decl/pton_transfer.mch`: 6x`call_contract` -> 1 `jetton_swap`, byte-identical to Python.
+- ~~`2xripwtdxwKPdHABREASj6enBvKBTwsOVJx6YEZfI64=` pton stonfi v1 swap~~ — **FIXED**
+  by the same port: 5x`call_contract`+2x`jetton_transfer` -> `call_contract`+`jetton_swap`+`jetton_transfer`, byte-identical to Python.
 - `2UJH7bBZDI4vmFG7O7HgraaQQF0BfjS2Eg5JaY62_Zo=` dedust v2 swap — 2x`call_contract`+`jetton_transfer`, want `call_contract`+`jetton_swap`
 - `4AAiT_8jTvxhujXOywe0zZv1sylSlAwnZV9stEG3gnM=` teleitem start auction — `call_contract` only, want +`teleitem_start_auction`
 - `rV1gzQRFXipz6XEByCTq_3Q2LZpa4i61aLsvHf1CR1A=` teleitem cancel auction — 2x`call_contract` only, want +`teleitem_cancel_auction`

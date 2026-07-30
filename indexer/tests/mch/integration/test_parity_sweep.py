@@ -51,6 +51,7 @@ skips with a reason via `test_ir_engine_available`.
 from __future__ import annotations
 
 import dataclasses
+import functools
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -161,15 +162,36 @@ _DECL_DIR = Path(mch.__file__).parent / "specs_decl"
 _TRACES_DIR = Path(__file__).resolve().parents[2] / "traces"
 
 
+def _pton_prereq() -> BlockMatcher:
+    """The `pton_transfer` prerequisite, built from specs_decl/pton_transfer.mch.
+
+    Every DEX spec binds `btype jetton_transfer` for its TON legs, so the tree it
+    matches against must already carry the blocks the pton matcher builds. That
+    preparation used to be the LEGACY `PTonTransferMatcher` injected here, which
+    is precisely what hid the missing spec from every gate: the sweep stayed
+    green while production (which only ever runs the spec set) dropped the leg.
+    It now comes from the spec, so the prereq is only satisfiable if the spec
+    exists; spec-vs-legacy equivalence is its own row in the table below.
+    """
+    art = _mch_ir.load_artifact(_pton_artifact())
+    (matcher,) = _mch_ir.build_matchers(art, jetton_decl_registries())
+    return matcher
+
+
+@functools.lru_cache(maxsize=1)
+def _pton_artifact() -> dict:
+    path = _DECL_DIR / "pton_transfer.mch"
+    return emit_ir(compile_file(path, jetton_decl_registries()), [path.name])
+
+
 # ---------------------------------------------------------------------------
 # Spec table: (short key, spec path, registries factory, prerequisite matcher
-# classes replayed to prepare the tree, legacy matcher classes the spec ports/
-# remakes). Prereqs are LEGACY tree preparation identical on both paths (there
-# is no pton `.mch` to round-trip), so they stay neutral. The legacy classes are
-# the reference the IR matchers must reproduce — the same classes the per-spec
-# integration tests use.
+# factories replayed to prepare the tree, legacy matcher classes the spec ports/
+# remakes). Prereqs are the tree preparation each leg needs, and the legacy
+# classes are the reference the IR matchers must reproduce — the same classes
+# the per-spec integration tests use.
 # ---------------------------------------------------------------------------
-_PREREQ_SWAP = (JettonTransferBlockMatcher, PTonTransferMatcher)
+_PREREQ_SWAP = (JettonTransferBlockMatcher, _pton_prereq)
 _JETTON_LEGACY = (JettonTransferBlockMatcher, JettonBurnBlockMatcher, JettonMintBlockMatcher)
 
 # A few legacy matchers want a DIFFERENT tree-prep than their IR port. dedust
@@ -181,6 +203,14 @@ _JETTON_LEGACY = (JettonTransferBlockMatcher, JettonBurnBlockMatcher, JettonMint
 _LEGACY_PREREQ_OVERRIDE: dict[str, tuple] = {
     "specs/dedust_deposit.mch": (),
 }
+
+# Per-prereq substitution applied to the LEGACY leg only. `_pton_prereq` builds
+# a declarative (plain `Block`) jetton_transfer, which is what production feeds
+# the IR matchers — but several legacy matchers discriminate on block CLASS
+# (`isinstance(block, JettonTransferBlock)`, swaps.py:228), so the legacy leg
+# would silently stop matching. It preps with the legacy pton matcher instead;
+# the two are proven equivalent by the specs_decl/pton_transfer.mch row below.
+_LEGACY_PREREQ_SUBST: dict[Callable, Callable] = {_pton_prereq: PTonTransferMatcher}
 
 _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     ("specs/jettons.mch", _SPECS_DIR / "jettons.mch", jetton_registries, (), _JETTON_LEGACY),
@@ -202,6 +232,13 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     # of this sweep). It runs alongside the builder spec (specs/jettons.mch) as an
     # independent legacy-vs-IR check on the declarative path.
     ("specs_decl/jettons.mch", _DECL_DIR / "jettons.mch", jetton_decl_registries, (), _JETTON_LEGACY),
+    # specs_decl/pton_transfer.mch — the pTON leg every DEX spec depends on, and
+    # the reference this file's `_pton_prereq` builds. It shares the 0x0f8a7ea5
+    # anchor with jetton_transfer, so the prereq below is what makes a real
+    # (internal-leg) transfer get consumed first, exactly as the registration
+    # order does in production.
+    ("specs_decl/pton_transfer.mch", _DECL_DIR / "pton_transfer.mch", jetton_decl_registries,
+     (JettonTransferBlockMatcher,), (PTonTransferMatcher,)),
     ("specs_decl/dedust_swap_hybrid.mch", _DECL_DIR / "dedust_swap_hybrid.mch", dedust_hybrid_registries,
      _PREREQ_SWAP, (DedustSwapBlockMatcher,)),
     # Port wave (2026-07-04). Prereqs mirror each spec's own integration test.
@@ -241,7 +278,7 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
      (TgBTCMintBlockMatcher,)),
     # stonfi_v2_withdraw is btype-anchored (jetton_burn) — run-on-all row, rejects everywhere off-protocol.
     ("specs/stonfi_v2_withdraw.mch", _SPECS_DIR / "stonfi_v2_withdraw.mch", stonfi_liquidity_registries,
-     (JettonTransferBlockMatcher, PTonTransferMatcher, JettonBurnBlockMatcher),
+     (JettonTransferBlockMatcher, _pton_prereq, JettonBurnBlockMatcher),
      (StonfiV2WithdrawLiquidityMatcher,)),
     # nominator withdraw is btype-anchored (ton_transfer) — run-on-all row.
     ("specs/nominator.mch", _SPECS_DIR / "nominator.mch", nominator_registries, (),
@@ -258,7 +295,7 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     ("specs/nft_transfer.mch", _SPECS_DIR / "nft_transfer.mch", nft_transfer_registries, (),
      (NftTransferBlockMatcher,)),
     ("specs/stonfi_v2_provide.mch", _SPECS_DIR / "stonfi_v2_provide.mch", stonfi_provide_registries,
-     (JettonTransferBlockMatcher, PTonTransferMatcher), (StonfiV2ProvideLiquidityMatcher,)),
+     (JettonTransferBlockMatcher, _pton_prereq), (StonfiV2ProvideLiquidityMatcher,)),
     # Remake wave 4 (2026-07-04): R12 stonfi v1 (consumption surgery killed at match time).
     ("specs/stonfi_v1_swap.mch", _SPECS_DIR / "stonfi_v1_swap.mch", stonfi_v1_registries, _PREREQ_SWAP,
      (StonfiSwapBlockMatcher,)),
@@ -538,7 +575,8 @@ async def test_sweep_parity(entry: _SpecEntry, filename: str):
     legacy_matchers, ir_matchers, btypes = _build_legacy_and_ir(entry)
 
     legacy_blocks = [b for b in await _run_matchers(
-        legacy_matchers, trace, [cls() for cls in entry.legacy_prereqs]) if b.btype in btypes]
+        legacy_matchers, trace,
+        [_LEGACY_PREREQ_SUBST.get(f, f)() for f in entry.legacy_prereqs]) if b.btype in btypes]
     context.interface_repository.set(TestInterfaceRepository(interfaces))
     ir_blocks = [b for b in await _run_matchers(
         ir_matchers, trace, [cls() for cls in entry.prereqs]) if b.btype in btypes]
