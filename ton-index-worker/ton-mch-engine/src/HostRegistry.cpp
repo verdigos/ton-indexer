@@ -66,6 +66,8 @@ const std::map<std::string, HostPredFn> &host_predicates() {
       {"evaa_service_comment", evaa_service_comment},
       {"getgems_purchase", getgems_purchase},
       {"getgems_seller_payout", getgems_seller_payout},
+      // specs/nft_mint.mch's pred ANCHOR (no opcode/btype prefilter, spec R10).
+      {"single_contract_deploy", single_contract_deploy},
       {"stonfi_v1_sender_payment", stonfi_v1_sender_payment},
       // pton_self_transfer gates stonfi_v2_swap. (no_internal_transfer folded
       // into an inline where-expr in W6.)

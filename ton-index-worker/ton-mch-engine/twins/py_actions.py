@@ -55,7 +55,7 @@ from cpp_surface import (  # noqa: E402
 )
 
 BUILTINS = {"account", "amount", "asset", "ton_asset", "addr_none", "b64",
-            "first", "last", "len", "sum", "zip", "map", "concat"}
+            "first", "last", "len", "sum", "zip", "map", "concat", "contains"}
 
 # The composite btypes the C++ fill_action ports (ActionBuild.cpp fill_action).
 # Gate emit on the BLOCK btype (not the rewritten action.type), matching C++.
@@ -82,6 +82,10 @@ PORTED_BTYPES = {
     # Teleitem auction port (2026-07-30) — both fire on the two (ab-gap)
     # fixtures; C++ fills them via fill_nft_put_on_auction / fill_cancel_nft_trade.
     "teleitem_start_auction", "teleitem_cancel_auction",
+    # NFT mint port (2026-07-30) — fires on the six corpus fixtures that deploy
+    # an account carrying an NftItem interface; C++ fill is fill_nft_mint, the
+    # one producer of the nft_mint_data composite.
+    "nft_mint",
 }
 
 # The C++ render_action column set (Classify.cpp render_action), in any order —
@@ -91,7 +95,8 @@ ACTION_COLUMNS = [
     "asset", "asset_secondary", "asset2", "asset2_secondary",
     "amount", "value", "opcode",
     "ton_transfer_data", "jetton_transfer_data", "jetton_swap_data",
-    "nft_transfer_data", "nft_listing_data", "dex_deposit_liquidity_data",
+    "nft_transfer_data", "nft_listing_data", "nft_mint_data",
+    "dex_deposit_liquidity_data",
     "dex_withdraw_liquidity_data",
     "staking_data", "evaa_withdraw_data", "vesting_send_message_data",
     "layerzero_packet_data", "jvault_stake_data", "jvault_claim_data",

@@ -614,4 +614,36 @@ void nft_transfer_parent_absorb(Block *produced, const ShaperMatch &) {
   }
 }
 
+// specs/nft_mint.mch anchor predicate — NftMintBlockMatcher.test_self
+// (blocks/nft.py:442) over blocks/core.py `_find_contract_deployments`: the
+// block's event nodes deploy EXACTLY ONE DISTINCT account. Python holds a
+// `set[AccountId]`, so several nodes deploying the same account still count as
+// one; the accounts compared here are the raw-uppercase `transaction.account`
+// strings the loaders carry, which is the form `AccountId(...).as_str()`
+// produces, so a string compare is the set-membership test.
+//
+// NOTE the deliberate difference from the `contract_deploy` side-effect block
+// (BlockTree.cpp make_leaf_block): that one ALSO excludes `orig_status ==
+// "frozen"`. Python's `_find_contract_deployments` does not, so neither does
+// this — a frozen -> active transaction anchors nft_mint and has no
+// contract_deploy child.
+bool single_contract_deploy(const Block *b) {
+  if (b == nullptr) {
+    return false;
+  }
+  const std::string *deployed = nullptr;
+  for (const EventNode *n : b->event_nodes) {
+    const Transaction *tx = n != nullptr ? n->tx : nullptr;
+    if (tx == nullptr || tx->orig_status == "active" || tx->end_status != "active") {
+      continue;
+    }
+    if (deployed == nullptr) {
+      deployed = &tx->account;
+    } else if (*deployed != tx->account) {
+      return false;  // two distinct deployments — legacy requires exactly one
+    }
+  }
+  return deployed != nullptr;
+}
+
 }  // namespace mch

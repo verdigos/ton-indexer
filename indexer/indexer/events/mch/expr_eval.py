@@ -158,6 +158,21 @@ def _builtin_map(xs: Any, field: Any) -> list:
     return [_project(x, field) for x in _require_list("map", xs)]
 
 
+def _builtin_contains(hay: Any, needle: Any) -> bool:
+    # The ONE string operation in the language (spec §9.6): substring test, no
+    # slicing/case folding/concatenation. Both arguments must be strings — a
+    # non-string is a fault, never a silent False — and the test is
+    # case-SENSITIVE (the URIs and content keys it exists for are exact). An
+    # empty needle is contained in everything, like Python's `in` and C++'s
+    # std::string::find. Nulls never reach here (the call evaluator returns
+    # null first).
+    if not isinstance(hay, str):
+        raise EvalError(f"contains expects a string haystack, got {type(hay).__name__}")
+    if not isinstance(needle, str):
+        raise EvalError(f"contains expects a string needle, got {type(needle).__name__}")
+    return needle in hay
+
+
 BUILTINS: dict[str, tuple[Any, int]] = {
     "account":   (_builtin_account, 1),
     "amount":    (_builtin_amount, 1),
@@ -172,6 +187,7 @@ BUILTINS: dict[str, tuple[Any, int]] = {
     "zip":       (_builtin_zip, 2),
     "concat":    (_builtin_concat, 2),
     "map":       (_builtin_map, 2),
+    "contains":  (_builtin_contains, 2),
 }
 
 

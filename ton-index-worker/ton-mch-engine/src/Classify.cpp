@@ -101,6 +101,7 @@ std::string render_action(const Action &a) {
   f.emplace_back("jetton_swap_data", a.jetton_swap_data);
   f.emplace_back("nft_transfer_data", a.nft_transfer_data);
   f.emplace_back("nft_listing_data", a.nft_listing_data);
+  f.emplace_back("nft_mint_data", a.nft_mint_data);
   f.emplace_back("dex_deposit_liquidity_data", a.dex_deposit_liquidity_data);
   f.emplace_back("dex_withdraw_liquidity_data", a.dex_withdraw_liquidity_data);
   f.emplace_back("staking_data", a.staking_data);

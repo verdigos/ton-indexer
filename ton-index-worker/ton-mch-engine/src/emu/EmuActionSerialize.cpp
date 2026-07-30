@@ -272,6 +272,7 @@ const std::vector<ActionField> &optional_fields() {
       {"jetton_swap_data", &Action::jetton_swap_data},
       {"nft_transfer_data", &Action::nft_transfer_data},
       {"nft_listing_data", &Action::nft_listing_data},
+      {"nft_mint_data", &Action::nft_mint_data},
       {"dex_deposit_liquidity_data", &Action::dex_deposit_liquidity_data},
       {"dex_withdraw_liquidity_data", &Action::dex_withdraw_liquidity_data},
       {"staking_data", &Action::staking_data},

@@ -28,6 +28,9 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
 // specs/teleitem_auction.mch: blocks/auction.py `_is_teleitem` (a substring test
 // the expression language deliberately cannot express — mch-spec §9.6).
 EvalResult is_teleitem(BuildEnv &env, const std::vector<Value> &args);
+// specs/nft_mint.mch anchor: NftMintBlockMatcher.test_self — exactly one
+// distinct contract deployment across the block's event nodes.
+bool single_contract_deploy(const Block *block);
 
 // tgBTC (HostTgbtc.cpp): mint host fn + deploy-absorb shaper.
 EvalResult tgbtc_mint_data(BuildEnv &env, const std::vector<Value> &args);

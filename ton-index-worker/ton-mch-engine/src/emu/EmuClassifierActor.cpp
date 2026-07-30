@@ -73,6 +73,7 @@ std::size_t scrub_arena_refs(Action &a) {
                    &a.asset, &a.asset_secondary, &a.asset2, &a.asset2_secondary, &a.amount,
                    &a.value, &a.opcode, &a.ton_transfer_data, &a.jetton_transfer_data,
                    &a.jetton_swap_data, &a.nft_transfer_data, &a.nft_listing_data,
+                   &a.nft_mint_data,
                    &a.dex_deposit_liquidity_data, &a.dex_withdraw_liquidity_data, &a.staking_data,
                    &a.evaa_withdraw_data, &a.vesting_send_message_data, &a.layerzero_packet_data,
                    &a.jvault_stake_data, &a.jvault_claim_data, &a.change_dns_record_data,

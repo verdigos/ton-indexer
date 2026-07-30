@@ -562,6 +562,21 @@ EvalResult rt_builtin_concat(const Value &a, const Value &b) {
   return rt_ok(Value::make_list(std::move(out)));
 }
 
+// The ONE string operation in the language (spec §9.6): a case-SENSITIVE
+// substring test. Both arguments must be Str — a non-string faults rather than
+// answering false — and an empty needle is contained in everything (npos-free
+// std::string::find semantics, identical to Python's `in`).
+EvalResult rt_builtin_contains(const Value &a, const Value &b) {
+  if (rt_is_null(a) || rt_is_null(b)) return rt_ok(Value::null());
+  if (a.t != VType::Str) {
+    return rt_fault("contains expects a string haystack, got " + a.describe());
+  }
+  if (b.t != VType::Str) {
+    return rt_fault("contains expects a string needle, got " + b.describe());
+  }
+  return rt_ok(Value::make_bool(a.str.find(b.str) != std::string::npos));
+}
+
 EvalResult rt_builtin_map(const Value &a, const Value &b) {
   if (rt_is_null(a) || rt_is_null(b)) return rt_ok(Value::null());
   const std::vector<Value> *xs = nullptr;
@@ -628,7 +643,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
       {"account", 1}, {"amount", 1},  {"asset", 1}, {"ton_asset", 0},
       {"addr_none", 0}, {"b64", 1},   {"first", 1}, {"last", 1},
       {"len", 1},     {"sum", 1},     {"zip", 2},   {"map", 2},
-      {"concat", 2},
+      {"concat", 2}, {"contains", 2},
   };
   auto ar = arity.find(name);
   if (ar == arity.end()) {
@@ -651,6 +666,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   if (name == "zip") return rt_builtin_zip(args[0], args[1]);
   if (name == "map") return rt_builtin_map(args[0], args[1]);
   if (name == "concat") return rt_builtin_concat(args[0], args[1]);
+  if (name == "contains") return rt_builtin_contains(args[0], args[1]);
   return rt_fault("unreachable builtin " + name);
 }
 

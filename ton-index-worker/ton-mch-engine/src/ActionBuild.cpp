@@ -745,6 +745,23 @@ void fill_cancel_nft_trade(const Value &d, Action &a) {
   a.nft_transfer_data = mkdict(std::move(f));
 }
 
+// _fill_nft_mint_action — the `nft_mint` fill (specs/nft_mint.mch). The ONLY
+// producer of the nft_mint_data composite. Python guards the source/collection
+// assignments on the AccountId being present; av_addr already answers Null for a
+// missing or addr_none value, so the unconditional form is equivalent. `opcode`
+// and `nft_item_index` are raw passthroughs (the index is a Float in the fixture
+// corpus, an Int in production — the serializer never coerces it).
+void fill_nft_mint(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "source"));
+  a.destination = av_addr(dg(d, "address"));
+  a.asset_secondary = a.destination;
+  a.opcode = dg(d, "opcode");
+  a.asset = av_addr(dg(d, "collection"));
+  Value::Fields f;
+  f.emplace_back("nft_item_index", dg(d, "index"));
+  a.nft_mint_data = mkdict(std::move(f));
+}
+
 // --- basic-actions fallback fills (Step 2c; block_tree_serializer.py) --------
 // Reached ONLY on the FALLBACK path (ClassifyResult.failure) — the main dump's
 // `pending` is matcher-produced composites, never these leaf btypes. Corpus has
@@ -820,6 +837,8 @@ bool fill_action(Block *b, Action &a) {
   // (bucket C, same rule as dns_purchase above).
   else if (t == "teleitem_start_auction") fill_nft_put_on_auction(d, a);
   else if (t == "teleitem_cancel_auction") fill_cancel_nft_trade(d, a);
+  // NFT mint port (specs/nft_mint.mch).
+  else if (t == "nft_mint") fill_nft_mint(d, a);
   // STILL UNPORTED, deliberately: dns_purchase is bucket C, not B — NO matcher
   // in ir/mch_ir.json produces it, so there is nothing to fill.
   else return false;

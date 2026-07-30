@@ -202,6 +202,7 @@ Expressions are inlined trees tagged by `"k"`. Vocabulary: `int str bool null na
 | `sum(xs)` | 1 | integer sum; each element coerced to int (`Amount`→value, `int`→itself, `bool`/other → fault). Empty → 0. |
 | `zip(xs, ys)` | 2 | list of 2-element lists, truncated to the shorter input. |
 | `map(xs, "f")` | 2 | project field `"f"` (string) from each element (dict key then attribute; missing field → fault). |
+| `contains(s, sub)` | 2 | bool: `sub` occurs in `s`. Both operands must be strings (else fault), case-SENSITIVE, empty `sub` → true. The language's only string operation. |
 
 List combinators require a list argument (else fault). `map`'s field arg is a string literal.
 

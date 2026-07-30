@@ -25,6 +25,10 @@ from indexer.events.mch.builders.jettons import (
     jetton_registries,
     register_jettons,
 )
+from indexer.events.mch.builders.nft_mint import (
+    nft_mint_registries,
+    register_nft_mint,
+)
 from indexer.events.mch.builders.stonfi import (
     register_stonfi_v2,
     stonfi_v2_registries,
@@ -55,6 +59,7 @@ __all__ = [
     "dns_registries",
     "jetton_decl_registries",
     "jetton_registries",
+    "nft_mint_registries",
     "register_coffee",
     "register_dedust",
     "register_dedust_hybrid",
@@ -62,6 +67,7 @@ __all__ = [
     "register_dedust_v2_claim_reward",
     "register_dns",
     "register_jettons",
+    "register_nft_mint",
     "register_stonfi_liquidity",
     "register_stonfi_provide",
     "register_stonfi_v1",

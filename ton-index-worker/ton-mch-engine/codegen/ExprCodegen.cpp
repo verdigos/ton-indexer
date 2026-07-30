@@ -37,7 +37,7 @@ bool is_builtin(const std::string &name) {
   static const std::set<std::string> builtins = {
       "account", "amount", "asset", "ton_asset", "addr_none", "b64",
       "first",   "last",   "len",   "sum",       "zip",       "map",
-      "concat"};
+      "concat",  "contains"};
   return builtins.count(name) != 0;
 }
 

@@ -27,9 +27,9 @@ struct Action {
   Value asset, asset_secondary, asset2, asset2_secondary;
   Value amount, value, opcode;
   Value ton_transfer_data, jetton_transfer_data, jetton_swap_data, nft_transfer_data,
-      nft_listing_data, dex_deposit_liquidity_data, dex_withdraw_liquidity_data, staking_data,
-      evaa_withdraw_data, vesting_send_message_data, layerzero_packet_data, jvault_stake_data,
-      jvault_claim_data, change_dns_record_data, extra;
+      nft_listing_data, nft_mint_data, dex_deposit_liquidity_data, dex_withdraw_liquidity_data,
+      staking_data, evaa_withdraw_data, vesting_send_message_data, layerzero_packet_data,
+      jvault_stake_data, jvault_claim_data, change_dns_record_data, extra;
 };
 
 // _base_block_to_action + block_to_action dispatch, over a produced block.

@@ -113,5 +113,6 @@ EvalResult rt_builtin_sum(const Value &x);
 EvalResult rt_builtin_zip(const Value &a, const Value &b);
 EvalResult rt_builtin_map(const Value &a, const Value &b);
 EvalResult rt_builtin_concat(const Value &a, const Value &b);
+EvalResult rt_builtin_contains(const Value &a, const Value &b);
 
 }  // namespace mch

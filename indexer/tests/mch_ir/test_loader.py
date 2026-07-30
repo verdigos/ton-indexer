@@ -80,6 +80,16 @@ def _stub_registries(artifact) -> Registries:
     lookup_names: set = set()
     fn_names: set = set()
     for m in artifact.matchers:
+        # A `pred` ANCHOR root emits as a permissive `any` node (ir_emit
+        # `_emit_node`) — its predicate lives only in the matcher's anchor
+        # record, so the node walk above never sees it. Mixed-anchor branches
+        # carry per-branch `where` predicates the same way.
+        anchor = m["anchor"]
+        if anchor.get("kind") == "pred":
+            reg.predicates.setdefault(anchor["pred"], lambda _b: True)
+        for br in anchor.get("branches", ()):
+            if "where" in br:
+                reg.predicates.setdefault(br["where"], lambda _b: True)
         if "builder" in m:
             async def _stub(match):
                 return None
@@ -131,10 +141,15 @@ def test_load_specs_artifact_from_dict_and_file(tmp_path):
 def test_build_specs_artifact_registration_order_and_metadata():
     art = load_artifact(emit_dir(SPECS_DIR))
     matchers = build_matchers(art, _stub_registries(art))
-    assert [m.name for m in matchers] == [rec["name"] for rec in art.matchers]
+    # build_matchers registers in (priority, file name, source position) order —
+    # i.e. a STABLE sort of the artifact's own order by ascending priority
+    # (spec §8.6). specs/nft_mint.mch is the first spec in this directory to
+    # declare a non-default priority, so the two orders are no longer identical.
+    expected = sorted(art.matchers, key=lambda rec: rec.get("priority", 100))
+    assert [m.name for m in matchers] == [rec["name"] for rec in expected]
     # Duplicate names are legal (jetton_transfer appears twice) and both run.
     assert [m.name for m in matchers].count("jetton_transfer") == 2
-    for m, rec in zip(matchers, art.matchers):
+    for m, rec in zip(matchers, expected):
         assert m.produces == rec["produces"]
         assert m.produces and all(isinstance(p, str) for p in m.produces)
 

@@ -7,7 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**176 fixtures, 746 ACTION rows** — one per serializable block on each trace's
+**176 fixtures, 731 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus 6 synthetic `unknown` rows (the fixtures whose spine
 serializes to nothing at all). Rows are printed **sorted** within a fixture,
 because spine order is not a stable property (see below).
@@ -20,6 +20,25 @@ dies with it — and Python's `--emulated-traces` path is being retired. This fi
 is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
+
+Re-baselined 2026-07-30 (**745 → 731 rows**, and EVERY row gains one column) by
+the `nft_mint` port (`specs/nft_mint.mch`, the mch counterpart of
+`NftMintBlockMatcher`). Two independent effects:
+
+- **Column**: `nft_mint_data` joins the rendered column set (`Classify.cpp`
+  `render_action` + the twin's `ACTION_COLUMNS`), so all 731 lines carry a new
+  `nft_mint_data=null` between `nft_listing_data` and `opcode` — except the three
+  `nft_mint` rows, which carry `{nft_item_index=…}`. This is the only whole-file
+  churn in the diff.
+- **Rows**, over exactly 6 fixtures (`-13 call_contract`, `-4 jetton_transfer`,
+  `+3 nft_mint`, 3 `tonco_deposit_liquidity` rows rewritten):
+  - three fixtures (`00wjHu7i…`, `GO-NI0Ej…`, `K_PlZB5R…`) swap the deploying
+    `call_contract` leaf for the `nft_mint` row it now builds;
+  - three tonco fixtures (`0--IKFmIb…`, `0GW2kNF4…`, `0_JGy9zy…`) lose the legs
+    that `tonco_deposit_liquidity` can finally absorb — that matcher binds
+    `btype nft_mint`, so until this port it was shipped-but-dead and emitted a
+    row with `nft_address` / `nft_index` / `lp_tokens_minted` all null. Those
+    three rows are now filled (and their tx_hashes/lt ranges widened).
 
 Re-baselined 2026-07-30 (**765 → 746 rows**) by the `dedust_v2` swap port
 (`specs_decl/dedust_v2_swap.mch`, the mch counterpart of

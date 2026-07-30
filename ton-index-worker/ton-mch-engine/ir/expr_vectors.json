@@ -1042,6 +1042,194 @@
    }
   },
   {
+   "name": "contains_true",
+   "src": "contains(s, t)",
+   "expr": {
+    "k": "call",
+    "fn": "contains",
+    "args": [
+     {
+      "k": "name",
+      "id": "s"
+     },
+     {
+      "k": "name",
+      "id": "t"
+     }
+    ]
+   },
+   "env": {
+    "s": "https://nft.fragment.com/x",
+    "t": "fragment.com"
+   },
+   "expect": true
+  },
+  {
+   "name": "contains_false",
+   "src": "contains(s, t)",
+   "expr": {
+    "k": "call",
+    "fn": "contains",
+    "args": [
+     {
+      "k": "name",
+      "id": "s"
+     },
+     {
+      "k": "name",
+      "id": "t"
+     }
+    ]
+   },
+   "env": {
+    "s": "https://getgems.io/x",
+    "t": "fragment.com"
+   },
+   "expect": false
+  },
+  {
+   "name": "contains_empty_needle",
+   "src": "contains(s, t)",
+   "expr": {
+    "k": "call",
+    "fn": "contains",
+    "args": [
+     {
+      "k": "name",
+      "id": "s"
+     },
+     {
+      "k": "name",
+      "id": "t"
+     }
+    ]
+   },
+   "env": {
+    "s": "abc",
+    "t": ""
+   },
+   "expect": true
+  },
+  {
+   "name": "contains_case_sensitive",
+   "src": "contains(s, t)",
+   "expr": {
+    "k": "call",
+    "fn": "contains",
+    "args": [
+     {
+      "k": "name",
+      "id": "s"
+     },
+     {
+      "k": "name",
+      "id": "t"
+     }
+    ]
+   },
+   "env": {
+    "s": "ABC",
+    "t": "abc"
+   },
+   "expect": false
+  },
+  {
+   "name": "contains_null_arg",
+   "src": "contains(s, t)",
+   "expr": {
+    "k": "call",
+    "fn": "contains",
+    "args": [
+     {
+      "k": "name",
+      "id": "s"
+     },
+     {
+      "k": "name",
+      "id": "t"
+     }
+    ]
+   },
+   "env": {
+    "s": null,
+    "t": "a"
+   },
+   "expect": null
+  },
+  {
+   "name": "contains_null_needle",
+   "src": "contains(s, t)",
+   "expr": {
+    "k": "call",
+    "fn": "contains",
+    "args": [
+     {
+      "k": "name",
+      "id": "s"
+     },
+     {
+      "k": "name",
+      "id": "t"
+     }
+    ]
+   },
+   "env": {
+    "s": "abc",
+    "t": null
+   },
+   "expect": null
+  },
+  {
+   "name": "contains_nonstr_fault",
+   "src": "contains(s, t)",
+   "expr": {
+    "k": "call",
+    "fn": "contains",
+    "args": [
+     {
+      "k": "name",
+      "id": "s"
+     },
+     {
+      "k": "name",
+      "id": "t"
+     }
+    ]
+   },
+   "env": {
+    "s": 5,
+    "t": "a"
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "contains_nonstr_needle_fault",
+   "src": "contains(s, t)",
+   "expr": {
+    "k": "call",
+    "fn": "contains",
+    "args": [
+     {
+      "k": "name",
+      "id": "s"
+     },
+     {
+      "k": "name",
+      "id": "t"
+     }
+    ]
+   },
+   "env": {
+    "s": "abc",
+    "t": 5
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
    "name": "map_field",
    "src": "map(xs, \"a\")",
    "expr": {

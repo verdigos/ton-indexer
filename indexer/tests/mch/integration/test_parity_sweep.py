@@ -141,6 +141,7 @@ from indexer.events.mch.builders.evaa import evaa_registries
 from indexer.events.mch.builders.jvault import jvault_registries
 from indexer.events.mch.builders.layerzero import layerzero_receive_registries
 from indexer.events.mch.builders.getgems import getgems_registries
+from indexer.events.mch.builders.nft_mint import nft_mint_registries
 from indexer.events.mch.builders.nft_transfer import nft_transfer_registries
 from indexer.events.mch.builders.nominator import nominator_registries
 from indexer.events.mch.builders.stonfi_liquidity import stonfi_liquidity_registries
@@ -321,6 +322,11 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     # raw opcode and reads nothing another matcher builds.
     ("specs/teleitem_auction.mch", _SPECS_DIR / "teleitem_auction.mch", teleitem_auction_registries,
      (), (TeleitemStartAuctionMatcher, TeleitemCancelAuctionMatcher)),
+    # NFT mint port (2026-07-30): pred-anchored on the deploy test, so it has no
+    # anchor opcode set and is a run-on-all row. No prereqs — the legacy matcher
+    # is FIRST in production order and reads nothing another matcher builds.
+    ("specs/nft_mint.mch", _SPECS_DIR / "nft_mint.mch", nft_mint_registries, (),
+     (NftMintBlockMatcher,)),
 ]
 
 
