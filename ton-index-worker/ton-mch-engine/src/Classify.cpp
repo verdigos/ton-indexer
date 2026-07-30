@@ -112,6 +112,13 @@ std::string render_action(const Action &a) {
   f.emplace_back("jvault_claim_data", a.jvault_claim_data);
   f.emplace_back("change_dns_record_data", a.change_dns_record_data);
   f.emplace_back("extra", a.extra);
+  // Child-action recursion columns: null / empty list on a top-level row.
+  f.emplace_back("parent_action_id", a.parent_action_id.empty()
+                                         ? Value::null()
+                                         : Value::make_str(a.parent_action_id));
+  std::vector<Value> anc;
+  for (const std::string &s : a.ancestor_type) anc.push_back(Value::make_str(s));
+  f.emplace_back("ancestor_type", Value::make_list(std::move(anc)));
   return render_value(Value::make_dict(std::move(f)));
 }
 
@@ -184,10 +191,10 @@ int run_dump(const std::vector<std::string> &paths,
       std::fprintf(stderr, "TRACE_FAIL %s: %s\n", fs::path(f).filename().string().c_str(),
                    res.failure_reason.c_str());
       if (actions_mode) {
-        for (Block *b : res.fallback_rows) {
+        for (const ActionRow &r : res.fallback_rows) {
           Action act;
-          if (!build_action(b, act)) continue;
-          std::printf("FALLBACK anchor=%s %s\n", block_key(b).c_str(),
+          if (!build_action(r, act)) continue;
+          std::printf("FALLBACK anchor=%s %s\n", block_key(r.block).c_str(),
                       render_action(act).c_str());
         }
       }
@@ -200,10 +207,10 @@ int run_dump(const std::vector<std::string> &paths,
       // compact_connections rebuilds next_blocks through a `set()`), and no
       // consumer of the rows depends on their order.
       std::vector<std::string> lines;
-      for (Block *b : res.action_rows) {
+      for (const ActionRow &r : res.action_rows) {
         Action act;
-        if (!build_action(b, act)) continue;  // btype outside ported set
-        lines.push_back("ACTION anchor=" + block_key(b) + " " + render_action(act));
+        if (!build_action(r, act)) continue;  // btype outside ported set
+        lines.push_back("ACTION anchor=" + block_key(r.block) + " " + render_action(act));
       }
       std::sort(lines.begin(), lines.end());
       for (const std::string &line : lines) {

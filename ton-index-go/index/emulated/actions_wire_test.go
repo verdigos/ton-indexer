@@ -68,6 +68,11 @@ func TestActionsWireFixture(t *testing.T) {
 	if len(a.Accounts) != 2 {
 		t.Errorf("accounts = %v", a.Accounts)
 	}
+	// Child-action recursion: the row is a leg some non-v1_ops action absorbed.
+	str("parent_action_id", a.ParentActionId, "QIoX0flkEEHBMhk2Z6QlnxrXlWXACZBCee6T8YKYSKE=")
+	if len(a.AncestorType) != 1 || a.AncestorType[0] != "jvault_stake" {
+		t.Errorf("ancestor_type = %v", a.AncestorType)
+	}
 
 	// --- the natural-types rule --------------------------------------------
 	// opcode is *uint32: a natural msgpack integer.

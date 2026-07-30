@@ -226,7 +226,34 @@ void test_fixed_keys() {
   check("fixed/omits_unfilled_source", absent(m, "source"));
   check("fixed/omits_unfilled_opcode", absent(m, "opcode"));
   check("fixed/omits_unfilled_composite", absent(m, "ton_transfer_data"));
-  check("fixed/exact_key_count", m.via.map.size == 11);
+  // Child-recursion asymmetry (Python's, not ours): parent_action_id is ASSIGNED
+  // on every row so it is always a key, nil on a top-level one; ancestor_type is
+  // assigned only on a child row, so here it is absent.
+  const msgpack::object *pa = at(m, "parent_action_id");
+  check("fixed/parent_action_id_nil", pa != nullptr && pa->type == msgpack::type::NIL);
+  check("fixed/omits_empty_ancestor_type", absent(m, "ancestor_type"));
+  check("fixed/exact_key_count", m.via.map.size == 12);
+}
+
+// A CHILD row: the two fields serialize_blocks hands down when a non-v1_ops
+// block's merged children are expanded into rows of their own.
+void test_child_row_fields() {
+  Action a = base_action();
+  a.parent_action_id = "QIoX0flkEEHBMhk2Z6QlnxrXlWXACZBCee6T8YKYSKE=";
+  a.ancestor_type = {"jvault_stake", "teleitem_start_auction"};
+  Decoded d(serialize_actions({a}, make_view({EmuFinality::finalized})));
+  const msgpack::object *row = first_row(d);
+  check("child/decodes", d.ok() && row != nullptr);
+  if (row == nullptr) {
+    return;
+  }
+  check("child/parent_action_id", is_str(at(*row, "parent_action_id"), a.parent_action_id));
+  const msgpack::object *anc = at(*row, "ancestor_type");
+  check("child/ancestor_type", anc != nullptr && anc->type == msgpack::type::ARRAY &&
+                                   anc->via.array.size == 2 &&
+                                   is_str(elem(anc, 0), "jvault_stake") &&
+                                   is_str(elem(anc, 1), "teleitem_start_auction"));
+  check("child/exact_key_count", row->via.map.size == 13);
 }
 
 // The presence rule for the four "present but means None" Value shapes, plus
@@ -450,6 +477,10 @@ void test_determinism() {
 Action wire_fixture_action() {
   Action a = base_action();
   a.type = "jetton_transfer";
+  // A CHILD row: the serializer's recursion output, so Go's *string /[]string
+  // pair is decoded from real bytes rather than assumed from the struct tags.
+  a.parent_action_id = "QIoX0flkEEHBMhk2Z6QlnxrXlWXACZBCee6T8YKYSKE=";
+  a.ancestor_type = {"jvault_stake"};
   a.source = Value::make_account_raw(kAddrA);
   a.destination = Value::make_account_raw(kAddrB);
   a.asset = Value::make_asset_jetton(kAddrA);
@@ -551,6 +582,9 @@ void test_wire_fixture() {
   check("wire/amount_256bit_str",
         is_str(at(*row, "amount"), "340282366920938463463374607431768211456"));
   check("wire/finality_min", is_uint(at(*row, "finality"), 1));
+  check("wire/parent_action_id",
+        is_str(at(*row, "parent_action_id"), "QIoX0flkEEHBMhk2Z6QlnxrXlWXACZBCee6T8YKYSKE="));
+  check("wire/ancestor_type", is_str(elem(at(*row, "ancestor_type"), 0), "jvault_stake"));
   check("wire/query_id_str",
         is_str(at(*at(*row, "jetton_transfer_data"), "query_id"), "18446744073709551615"));
   check("wire/lz_nonce_int",
@@ -737,7 +771,7 @@ void test_unknown_action() {
         acc != nullptr && acc->type == msgpack::type::ARRAY && acc->via.array.size == 2);
   // It sets no directional or composite field at all, so the row is exactly the
   // fixed key set — the same shape Python's create_unknown_action produces.
-  check("unknown/no_optional_keys", row->via.map.size == 11);
+  check("unknown/no_optional_keys", row->via.map.size == 12);
 }
 
 // The bucket-B fills: btypes whose matcher runs and produces a block but which
@@ -1059,6 +1093,7 @@ int run_action_msgpack_test() {
   g_fail = 0;
   test_empty_actions();
   test_fixed_keys();
+  test_child_row_fields();
   test_null_and_stringify();
   test_natural_types();
   test_string_list_fields();

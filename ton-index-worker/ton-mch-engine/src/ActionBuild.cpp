@@ -23,10 +23,10 @@ namespace {
 //
 // Scope: the composite btypes that FIRE in the corpus classify dump (19 of
 // them), rendered per surviving post-pass PendingAction — the same block set
-// the classify dump emits. The serializer's spine-walk / child-recursion
-// wrapper (parent_action_id, ancestor_type, v1_ops) is OUT of scope; the basic
-// leaf fills (call_contract/ton_transfer/contract_deploy) exist but are reached
-// only on the fallback path, where the C++ leaf .data is a subset (§10 hazard).
+// the classify dump emits. The serializer's spine-walk / child-recursion wrapper
+// (v1_ops) lives in ClassifyCore; this file owns the per-row half of it, i.e.
+// the two fields it hands down (parent_action_id, ancestor_type) and
+// calc_action_id, the pure block->id function the recursion links rows with.
 //
 // NOT rendered: roles (this branch's action_accounts are role-less, prod-design
 // §6.1), trace_id / trace_* / finality (constant per fixture). accounts AND the
@@ -853,10 +853,7 @@ bool fill_action(Block *b, Action &a) {
 }
 }  // namespace
 
-bool build_action(Block *b, Action &a) {
-  a.type = b->btype;
-  a.success = !b->failed;
-  // action_id: sha256(root_event_node msg_hash|tx_hash + btype), base64.
+std::string calc_action_id(const Block *b) {
   const EventNode *root = nullptr;
   for (const EventNode *n : b->event_nodes) {
     if (root == nullptr || n->lt() < root->lt()) root = n;
@@ -866,8 +863,13 @@ bool build_action(Block *b, Action &a) {
     key = (root->msg != nullptr) ? root->msg->msg_hash : root->tx_hash();
   }
   key += b->btype;
-  std::string digest = td::sha256(td::Slice(key));
-  a.action_id = td::base64_encode(td::Slice(digest));
+  return td::base64_encode(td::Slice(td::sha256(td::Slice(key))));
+}
+
+bool build_action(Block *b, Action &a) {
+  a.type = b->btype;
+  a.success = !b->failed;
+  a.action_id = calc_action_id(b);
   // tx_hashes (base set, event_nodes only) + lt/utime ranges + mc_seqno_end.
   std::set<std::string> ths;
   std::int64_t maxlt = std::numeric_limits<std::int64_t>::min();
@@ -919,6 +921,13 @@ bool build_action(Block *b, Action &a) {
   std::sort(accts.begin(), accts.end());
   accts.erase(std::unique(accts.begin(), accts.end()), accts.end());
   a.accounts = std::move(accts);
+  return true;
+}
+
+bool build_action(const ActionRow &row, Action &a) {
+  if (!build_action(row.block, a)) return false;
+  a.parent_action_id = row.parent_action_id;
+  a.ancestor_type = row.ancestor_type;
   return true;
 }
 

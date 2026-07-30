@@ -134,10 +134,10 @@ void classify_txs(const EmuShadowConfig &cfg, const EmuTraceView &view,
     // On failure the regular actions are discarded and the basic-actions
     // fallback rows are what production commits (Classify.cpp).
     res.used_fallback = cres.failure;
-    const std::vector<Block *> &core = cres.failure ? cres.fallback_rows : cres.action_rows;
-    for (Block *b : core) {
+    const std::vector<ActionRow> &core = cres.failure ? cres.fallback_rows : cres.action_rows;
+    for (const ActionRow &r : core) {
       Action act;
-      if (!build_action(b, act)) {  // btype outside the ported fill set
+      if (!build_action(r, act)) {  // btype outside the ported fill set
         res.unported_btypes++;
         continue;
       }

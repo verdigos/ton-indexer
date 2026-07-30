@@ -287,18 +287,19 @@ const std::vector<ActionField> &optional_fields() {
   return fields;
 }
 
-// Number of always-written keys below. Deliberately NOT written: trace_id /
+// Number of always-written keys below (ancestor_type is conditional, so it is
+// NOT in this count). Deliberately NOT written: trace_id /
 // trace_external_hash / trace_end_lt / trace_end_utime / trace_mc_seqno_end,
 // which Go clobbers right after decode (models.go:830-836); trace_start_lt and
 // value_extra_currencies, which Python never assigns on this path and Go has no
 // field for; and mc_seqno_end, which Go has no field for at all. Omitting them
 // also removes eleven chances to get a wire type wrong.
-constexpr std::uint32_t kFixedKeys = 11;
+constexpr std::uint32_t kFixedKeys = 12;
 
 void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std::int64_t finality,
                  ActionSerializeStats &st) {
   const std::vector<ActionField> &opt = optional_fields();
-  std::uint32_t n = kFixedKeys;
+  std::uint32_t n = kFixedKeys + (a.ancestor_type.empty() ? 0 : 1);
   for (const ActionField &f : opt) {
     if (!omitted(a.*f.member)) {
       n++;
@@ -339,6 +340,24 @@ void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std:
   // (models.go:930), so it must be written.
   pack_key(pk, "trace_external_hash_norm");
   pack_text(pk, trace_key);
+  // Child-action recursion. Python's asymmetry, reproduced: serialize_blocks
+  // ASSIGNS parent_action_id on every row (None on a top-level one), so the key
+  // is always in Action.to_dict(); ancestor_type is assigned only when the row
+  // is a child, so a top-level row has no such key at all. Go decodes both into
+  // zero values either way (emulated/models.go:566-567).
+  pack_key(pk, "parent_action_id");
+  if (a.parent_action_id.empty()) {
+    pk.pack_nil();
+  } else {
+    pack_text(pk, a.parent_action_id);
+  }
+  if (!a.ancestor_type.empty()) {
+    pack_key(pk, "ancestor_type");
+    pk.pack_array(static_cast<std::uint32_t>(a.ancestor_type.size()));
+    for (const std::string &t : a.ancestor_type) {
+      pack_text(pk, t);
+    }
+  }
 
   for (const ActionField &f : opt) {
     const Value &v = a.*f.member;

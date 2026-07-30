@@ -7,6 +7,7 @@
 // split; group it with the other core TUs when the library target lands.
 #pragma once
 
+#include "ActionBuild.h"  // ActionRow
 #include "BlockTree.h"
 #include "BuildRuntime.h"
 #include "IrTables.h"
@@ -70,14 +71,18 @@ struct ClassifyResult {
   //     unwind_deployments) — 143 of the 165 corpus fixtures have at least one.
   // THIS is the production / `--actions` row set; `actions` stays the --classify
   // view. A row needs nothing from the fire (no aux, no matcher name), so it is
-  // just the block.
+  // the block plus its place in the CHILD RECURSION: for a block whose btype is
+  // outside v1_ops, serialize_blocks descends into the children a matcher merged
+  // into it and emits those as rows of their own, linked back by
+  // parent_action_id + ancestor_type. Those child rows are here too — they are
+  // off the spine by construction, so they never collide with it.
   //
   // One more source feeds it: when the main spine serializes NOTHING, the
   // ghost-external fallback (GhostExternal.h) may replace the whole set with
   // rows synthesized from a failed wallet external's unsent messages. Those
   // never appear in `actions` — they are not matcher fires, and --classify has
   // no fallback view.
-  std::vector<Block *> action_rows;
+  std::vector<ActionRow> action_rows;
   bool failure = false;
   std::string failure_reason;
   // Trace-terminal failure category (additive telemetry; none unless `failure`).
@@ -88,7 +93,7 @@ struct ClassifyResult {
   // is a basic btype (call_contract / contract_deploy / ton_transfer).
   // Production commits these when classification fails. Ungated (corpus has no
   // failing traces).
-  std::vector<Block *> fallback_rows;
+  std::vector<ActionRow> fallback_rows;
   // Classification SUCCEEDED but serialized nothing AND the ghost-external
   // fallback found nothing either, over a trace that has transactions —
   // trace_processor.py:44-46's `len(actions) == 0 and

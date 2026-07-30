@@ -7,10 +7,11 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**176 fixtures, 731 ACTION rows** — one per serializable block on each trace's
-post-pass spine, plus 6 synthetic `unknown` rows (the fixtures whose spine
-serializes to nothing at all). Rows are printed **sorted** within a fixture,
-because spine order is not a stable property (see below).
+**176 fixtures, 894 ACTION rows** — one per serializable block on each trace's
+post-pass spine, plus the CHILD rows the serializer expands out of any spine
+block whose btype is outside `v1_ops`, plus 6 synthetic `unknown` rows (the
+fixtures whose spine serializes to nothing at all). Rows are printed **sorted**
+within a fixture, because spine order is not a stable property (see below).
 
 ## Why it exists
 
@@ -20,6 +21,31 @@ dies with it — and Python's `--emulated-traces` path is being retired. This fi
 is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
+
+Re-baselined 2026-07-30 (**712 → 894 rows**, and EVERY row gains two columns) by
+the CHILD-ACTION RECURSION port (`serialize_blocks`,
+`block_tree_serializer.py:1645-1681`). Two effects:
+
+- **Columns**: `parent_action_id` and `ancestor_type` join the rendered column
+  set (`Classify.cpp` `render_action` + the twin's `render_action`), so all 894
+  lines carry `parent_action_id=null,ancestor_type=[]` unless they are child
+  rows. Whole-file churn.
+- **Rows**: **+182**, none removed, over **32 fixtures**. A spine block whose
+  btype is NOT in `v1_ops` now re-emits the legs a matcher merged into it as
+  rows of their own, linked back by `parent_action_id`. By parent btype:
+  `tgbtc_mint` 40, `jvault_stake` 35, `evaa_withdraw` 26,
+  `jvault_unstake_request` 20, `layerzero_receive` 18,
+  `dedust_v2_claim_reward` 15, `jvault_unstake` 12, `jvault_claim` 5,
+  `vesting_send_message` 4, `coffee_create_vault` 4,
+  `teleitem_cancel_auction` 2, `teleitem_start_auction` 1. By child btype:
+  160 `call_contract`, 11 `jetton_transfer`, 7 `ton_transfer`, 4 `jetton_mint`.
+  No corpus fixture nests two levels, so every `ancestor_type` here has exactly
+  one element; the recursion itself is unbounded.
+  Spot-verified against the REAL legacy Python classifier (`event_processing
+  .matchers` + `serialize_blocks`) on three fixtures — teleitem
+  (`4AAiT_8j…`), jvault_stake (`-OII6CIr…`), tgbtc_mint (`1OrxQbhi…`) — row
+  sets, action_ids, parent links and ancestor lists all identical, including
+  the `contract_deploy` children that stay TOP-LEVEL rows.
 
 Re-baselined 2026-07-30 (**745 → 731 rows**, and EVERY row gains one column) by
 the `nft_mint` port (`specs/nft_mint.mch`, the mch counterpart of

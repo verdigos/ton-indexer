@@ -37,7 +37,7 @@ from indexer.events.blocks.liquidity import (  # noqa: E402
 )
 from indexer.events.mch_ir import build_matchers, load_artifact  # noqa: E402
 from indexer.events.blocks.utils.block_tree_serializer import (  # noqa: E402
-    block_to_action, create_unknown_action,
+    _calc_action_id, block_to_action, create_unknown_action, v1_ops,
 )
 
 # Combined host-builder registries: ONE shared factory list for all three
@@ -198,11 +198,15 @@ def render(v):
     raise TypeError(f"unrenderable {type(v).__name__}")
 
 
-def render_action(action):
+def render_action(action, parent_id=None, ancestor=()):
     """Action -> the C++ render_action column dict.
 
     THE render seam: every row kind funnels through here, so py_actions_msgpack
     swaps the whole dump to msgpack by rebinding this one name.
+
+    parent_id/ancestor come from the serialize_rows recursion rather than off the
+    Action, because the two row kinds that bypass it (the `unknown` stub and the
+    ghost rows) never assign them — and C++ renders those as null/[] too.
     """
     # Step 2a: tx_hashes is the EXTENDED set (block_to_action adds the initiating
     # tx) and accounts is the assembled role-less set — both straight from the
@@ -221,12 +225,15 @@ def render_action(action):
     }
     for col in ACTION_COLUMNS:
         d[col] = getattr(action, col, None)
+    d["parent_action_id"] = parent_id
+    d["ancestor_type"] = sorted(ancestor)
     return render(d)
 
 
-def render_action_row(block):
-    """A surviving spine block -> its rendered row (the real serializer)."""
-    return render_action(block_to_action(block, "twin", _STUB_TRACE))
+def render_action_row(row):
+    """A surviving serialize_rows row -> its rendered line (the real serializer)."""
+    block, parent_id, ancestor = row
+    return render_action(block_to_action(block, "twin", _STUB_TRACE), parent_id, ancestor)
 
 
 def unknown_trace_stub(data, txs):
@@ -354,6 +361,41 @@ def serializes_to_row(b):
     return True
 
 
+def serialize_rows(blocks, parent_id=None):
+    """serialize_blocks (block_tree_serializer.py:1645-1681) — rows + CHILD RECURSION.
+
+    Mirrors the real serializer rather than calling it, for the same reason
+    serializes_to_row above does: the dump needs the BLOCK behind each row (for
+    the anchor and the PORTED_BTYPES gate), which the Action does not carry.
+    Each element is (block, parent_action_id, ancestor_type).
+
+    v1_ops is imported from the serializer, so the two sets cannot drift; the
+    C++ copy (ClassifyCore.cpp is_v1_op) is the one to keep in step.
+    """
+    out = []
+    ids = []
+    for b in blocks:
+        if not serializes_to_row(b):
+            continue
+        aid = _calc_action_id(b)
+        if parent_id is not None and aid == parent_id:
+            continue
+        out.append((b, parent_id, []))
+        ids.append(aid)
+        if b.btype in v1_ops:
+            continue
+        for cb, cparent, canc in serialize_rows(b.children_blocks, aid):
+            if cb.btype == "contract_deploy":
+                continue
+            canc = sorted(set(canc + [b.btype]))
+            cid = _calc_action_id(cb)
+            if cid in ids:
+                raise Exception(f"Duplicate action id {cid}")
+            ids.append(cid)
+            out.append((cb, cparent, canc))
+    return out
+
+
 async def ghost_external_rows(txs):
     """try_process_unknown_event (event_processing.py:345-366) — the GHOST path.
 
@@ -393,7 +435,9 @@ async def ghost_external_rows(txs):
         spine = await post_process_dedust_liquidity(spine)
         spine = await post_process_stonfi_v2_liquidity(spine)
         spine = await unwind_deployments(spine)
-        return [b2 for b2 in spine if serializes_to_row(b2)]
+        # FLAT: try_classify_unknown_trace open-codes the row filter instead of
+        # calling serialize_blocks, so no child recursion on this path.
+        return [(b2, None, []) for b2 in spine if serializes_to_row(b2)]
     except Exception:  # noqa: BLE001
         return []
 
@@ -432,15 +476,16 @@ async def actions_fixture(path, included):
         # root wrapper, `empty` proxies, and a call_contract with a null source or
         # destination. Everything else is a row — including every basic leaf no
         # matcher consumed, and EXCLUDING a product a later matcher consumed
-        # (that one is off the spine).
-        rows = [b for b in spine if serializes_to_row(b)]
+        # (that one is off the spine) — UNLESS its consumer's btype is outside
+        # v1_ops, which brings it back as a child row carrying parent_action_id.
+        rows = serialize_rows(spine)
 
         # Spine ORDER is not comparable: Python's compact_connections rebuilds
         # next_blocks through a `set()`, so it varies run to run, and nothing
         # downstream of the serializer depends on row order (they are DB rows
         # keyed by action_id). Both sides sort the rendered lines instead.
-        lines = [f"ACTION anchor={block_key(b)} {render_action_row(b)}"
-                 for b in rows if b.btype in PORTED_BTYPES]
+        lines = [f"ACTION anchor={block_key(r[0])} {render_action_row(r)}"
+                 for r in rows if r[0].btype in PORTED_BTYPES]
         for line in sorted(lines):
             print(line)
 
@@ -458,8 +503,8 @@ async def actions_fixture(path, included):
         if not rows and txs:
             ghost = await ghost_external_rows(txs)
             if ghost:
-                lines = [f"ACTION anchor={block_key(b)} {render_action_row(b)}"
-                         for b in ghost if b.btype in PORTED_BTYPES]
+                lines = [f"ACTION anchor={block_key(r[0])} {render_action_row(r)}"
+                         for r in ghost if r[0].btype in PORTED_BTYPES]
                 for line in sorted(lines):
                     print(line)
             else:

@@ -15,6 +15,7 @@
 #include <exception>
 #include <limits>
 #include <map>
+#include <stdexcept>
 #include <unordered_set>
 
 namespace mch {
@@ -381,13 +382,104 @@ bool serializes_to_row(const Block *b) {
   return !pp_field(b->data, "source").is_null() && !pp_field(b->data, "destination").is_null();
 }
 
+// v1_ops (block_tree_serializer.py:1605-1643): the btypes whose merged children
+// stay merged. Every OTHER btype gets its children expanded into rows of their
+// own — the v1 API predates the composite actions, so a consumer that only knows
+// the v1 set still sees the legs a teleitem_start_auction / jvault_stake / …
+// absorbed. Keep in sync with the Python list; a btype missing here silently
+// starts emitting child rows.
+bool is_v1_op(const std::string &t) {
+  static const std::set<std::string> ops{
+      "call_contract",
+      "contract_deploy",
+      "jetton_burn",
+      "tick_tock",
+      "jetton_transfer",
+      "nft_transfer",
+      "nft_mint",
+      "jetton_mint",
+      "ton_transfer",
+      "stake_deposit",
+      "stake_withdrawal",
+      "stake_withdrawal_request",
+      "dex_deposit_liquidity",
+      "jetton_swap",
+      "change_dns",
+      "delete_dns",
+      "renew_dns",
+      "subscribe",
+      "dex_withdraw_liquidity",
+      "unsubscribe",
+      "election_deposit",
+      "election_recover",
+      "auction_bid",
+      "nominator_pool_deposit",
+      "nominator_pool_withdraw_request",
+      "dedust_deposit_liquidity",
+      "dedust_deposit_liquidity_partial",
+      "dedust_v2_deposit_liquidity",
+      "dedust_v2_deposit_liquidity_partial",
+      "tonstakers_deposit",
+      "tonstakers_withdraw_request",
+      "tonstakers_withdraw",
+      "ethena_withdrawal_request",
+      "ethena_deposit",
+      "tonco_deposit_liquidity",
+      "tonco_withdraw_liquidity",
+      "coffee_deposit_liquidity",
+  };
+  return ops.count(t) != 0;
+}
+
+// serialize_blocks (block_tree_serializer.py:1645-1681) in full: the row filter
+// AND the child recursion. `parent_id` is empty at the top level (Python's None).
+//
+// Three rules that are easy to lose:
+//   - a block that does not serialize is skipped WHOLE — its children are never
+//     visited either (Python `continue`s before the recursion);
+//   - a child whose action_id equals its parent's is dropped (:1663) — same
+//     lowest-lt node AND same btype as the block that consumed it, so it would
+//     be a row indistinguishable from its own parent;
+//   - contract_deploy children are dropped (:1673) because unwind_deployments
+//     already promoted them onto the SPINE, where they emit a top-level row.
+// ancestor_type accumulates on the way OUT of the recursion, so a grandchild
+// carries both its parent's and its grandparent's btype (deduped; sorted here
+// because Python's `list(set(...))` order is not a stable property).
+std::vector<ActionRow> serialize_rows(const std::vector<Block *> &blocks,
+                                      const std::string &parent_id) {
+  std::vector<ActionRow> out;
+  std::set<std::string> ids;
+  for (Block *b : blocks) {
+    if (!serializes_to_row(b)) continue;
+    std::string id = calc_action_id(b);
+    if (!parent_id.empty() && id == parent_id) continue;
+    out.push_back(ActionRow{b, parent_id, {}});
+    ids.insert(id);
+    if (is_v1_op(b->btype)) continue;
+    for (ActionRow &c : serialize_rows(b->children_blocks, id)) {
+      if (c.block->btype == "contract_deploy") continue;
+      c.ancestor_type.push_back(b->btype);
+      std::sort(c.ancestor_type.begin(), c.ancestor_type.end());
+      c.ancestor_type.erase(std::unique(c.ancestor_type.begin(), c.ancestor_type.end()),
+                            c.ancestor_type.end());
+      // Python raises here (:1682) rather than dropping the row: two rows with
+      // one action_id would collide on the actions PK, so the trace falls back.
+      if (!ids.insert(calc_action_id(c.block)).second) {
+        throw std::runtime_error("duplicate action id in child recursion");
+      }
+      out.push_back(std::move(c));
+    }
+  }
+  return out;
+}
+
 // try_classify_basic_actions (event_processing.py:397-417, Step 2c): a FRESH
 // leaf-only classify (init_block over the same event tree, NO matchers) + the
 // post-processor chain, then serialize_blocks. Every surviving row is a basic
 // btype since nothing composite was built. Throw-safe (Python's fallback returns
 // [] on any exception). Ungated (corpus has no failing traces).
-std::vector<Block *> basic_classify_fallback(TraceContext &ctx) {
-  std::vector<Block *> out;
+std::vector<ActionRow> basic_classify_fallback(TraceContext &ctx) {
+  std::vector<ActionRow> out;
   try {
     Block *root = init_block(ctx.arena, ctx.tree.root);
     Block *wrap = ctx.arena.make("root");
@@ -397,9 +489,9 @@ std::vector<Block *> basic_classify_fallback(TraceContext &ctx) {
     post_process_dedust_liquidity(spine, removed);
     post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
     unwind_deployments(spine);
-    for (Block *b : spine) {
-      if (serializes_to_row(b)) out.push_back(b);
-    }
+    // The same serialize_blocks Python calls here (event_processing.py:411) —
+    // recursion included, though every basic btype is a v1_op so it never fires.
+    out = serialize_rows(spine, "");
   } catch (...) {
     out.clear();  // Python: fallback returns [] on any exception
   }
@@ -417,8 +509,8 @@ std::vector<Block *> basic_classify_fallback(TraceContext &ctx) {
 // synthesize_ghost_children has hung the ghosts off the root. Throw-safe:
 // Python's own except here falls back to the `unknown` row, never to a trace
 // failure.
-std::vector<Block *> ghost_external_rows(TraceContext &ctx, const LookupSource &src) {
-  std::vector<Block *> out;
+std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource &src) {
+  std::vector<ActionRow> out;
   try {
     EventNode *root_node = ctx.tree.root;
     // "Only external in allowed": a childless root whose message is an ext-in.
@@ -450,8 +542,11 @@ std::vector<Block *> ghost_external_rows(TraceContext &ctx, const LookupSource &
     post_process_dedust_liquidity(spine, removed);
     post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
     unwind_deployments(spine);
+    // FLAT, unlike the other two paths: try_classify_unknown_trace open-codes the
+    // row filter (:370-375) instead of calling serialize_blocks, so a ghost row
+    // never recurses into children and never carries parent_action_id.
     for (Block *sb : spine) {
-      if (serializes_to_row(sb)) out.push_back(sb);
+      if (serializes_to_row(sb)) out.push_back(ActionRow{sb, "", {}});
     }
   } catch (...) {
     out.clear();
@@ -604,10 +699,10 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     }
     // serialize_blocks: the ROW set is the spine, not the fire list. A fire whose
     // product a later matcher consumed is off the spine and emits no row of its
-    // own; a leaf no matcher consumed emits a basic row.
-    for (Block *b : spine) {
-      if (serializes_to_row(b)) result.action_rows.push_back(b);
-    }
+    // own — unless its consumer's btype is outside v1_ops, in which case the
+    // recursion brings it back as a CHILD row; a leaf no matcher consumed emits
+    // a basic row.
+    result.action_rows = serialize_rows(spine, "");
   } catch (const std::exception &e) {
     result.failure = true;
     result.failure_reason = e.what();
