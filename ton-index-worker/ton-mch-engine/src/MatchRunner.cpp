@@ -56,7 +56,7 @@ std::vector<Block *> gather_blocks(Block *root) {
   return out;
 }
 
-void dump_fixture(const LoadedIr &ir, const std::string &path, const WhereTable *gen) {
+void dump_fixture(const LoadedIr &ir, const std::string &path, const WhereTable &gen) {
   auto r_ctx = load_trace_context(path);
   if (r_ctx.is_error()) {
     std::printf("ERROR: %s\n", r_ctx.error().message().c_str());
@@ -99,8 +99,7 @@ void dump_fixture(const LoadedIr &ir, const std::string &path, const WhereTable 
 
 }  // namespace
 
-int run_match(const std::string &artifact_path, const std::vector<std::string> &paths,
-              bool use_gen) {
+int run_match(const std::string &artifact_path, const std::vector<std::string> &paths) {
   auto r_ir = load_ir(artifact_path);
   if (r_ir.is_error()) {
     std::fprintf(stderr, "failed to load IR artifact: %s\n", r_ir.error().message().c_str());
@@ -108,37 +107,36 @@ int run_match(const std::string &artifact_path, const std::vector<std::string> &
   }
   LoadedIr ir = r_ir.move_as_ok();
 
-  WhereTable gen_table;
-  const WhereTable *gen = nullptr;
-  if (use_gen) {
-    if (ir.source_sha256 != gen_wheres_source_sha()) {
-      std::fprintf(stderr,
-                   "generated where table was built from a DIFFERENT artifact (table sha %s, "
-                   "loaded %s) — the CMake build regenerates it from ir/mch_ir.json; rebuild "
-                   "ton-mch-engine or pass that artifact\n",
-                   gen_wheres_source_sha(), ir.source_sha256.c_str());
-      return 2;
+  // The generated where table, selected by artifact sha — the walker's only
+  // where evaluator, same as production classify (GenWheres.h).
+  const std::vector<GenWhere> *table = select_gen_wheres(ir.source_sha256, nullptr);
+  if (table == nullptr) {
+    std::fprintf(stderr,
+                 "no generated where table matches this artifact (loaded sha %s; ir table %s) — "
+                 "the CMake build regenerates it from ir/mch_ir.json; rebuild ton-mch-engine "
+                 "or pass that artifact\n",
+                 ir.source_sha256.c_str(), gen_wheres_ir_source_sha());
+    return 2;
+  }
+  WhereTable gen;
+  for (const GenWhere &g : *table) {
+    gen.emplace(g.node_id, g.fn);
+  }
+  // Coverage safety net: with the sha paired this holds by construction, but a
+  // missing fn would silently fail a node's head test instead of erroring.
+  for (const CompiledMatcher &m : ir.matchers) {
+    if (m.unrunnable) {
+      continue;
     }
-    for (const GenWhere &g : gen_wheres()) {
-      gen_table.emplace(g.node_id, g.fn);
-    }
-    // The table must have been generated from THIS artifact: every runnable
-    // matcher's where_expr node needs a compiled function.
-    for (const CompiledMatcher &m : ir.matchers) {
-      if (m.unrunnable) {
-        continue;
+    for (const CompiledNode &n : m.nodes) {
+      if (n.has_where_expr && gen.find(n.global_id) == gen.end()) {
+        std::fprintf(stderr,
+                     "generated where table has no function for node %d (matcher %s) — "
+                     "rebuild ton-mch-engine (CMake regenerates it from ir/mch_ir.json)\n",
+                     n.global_id, m.name.c_str());
+        return 2;
       }
-      for (const CompiledNode &n : m.nodes) {
-        if (n.has_where_expr && gen_table.find(n.global_id) == gen_table.end()) {
-          std::fprintf(stderr,
-                       "generated where table has no function for node %d (matcher %s) — "
-                       "rebuild ton-mch-engine (CMake regenerates it from ir/mch_ir.json)\n",
-                       n.global_id, m.name.c_str());
-          return 2;
-        }
-      }
     }
-    gen = &gen_table;
   }
 
   // SKIP lines (once, sorted by matcher name).

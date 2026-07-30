@@ -155,7 +155,6 @@ int main(int argc, char *argv[]) {
   std::string build_vectors_path;
   std::string msg_vectors_path;
   bool match_mode = false;
-  bool match_gen = false;
   bool build_smoke_mode = false;
   bool classify_mode = false;
   bool classify_schema_mode = false;
@@ -194,12 +193,10 @@ int main(int argc, char *argv[]) {
   // production loader against it.
   p.add_option('\0', "match", "Match-phase dump: -I <artifact> -T <fixture|dir> (repeatable)",
                [&]() { match_mode = true; });
-  p.add_option('\0', "match-gen",
-               "Match-phase dump using GENERATED where_expr functions (else interpreter)",
-               [&]() {
-                 match_mode = true;
-                 match_gen = true;
-               });
+  // TODO: remove (harness): alias of --match since the walker became
+  // generated-only (there is no interpreter mode left to pick); EM4 drops it.
+  p.add_option('\0', "match-gen", "Alias of --match (kept for gate scripts)",
+               [&]() { match_mode = true; });
   p.add_option('\0', "build-smoke",
                "Build-phase smoke dump (two-phase lookups): -I <artifact> -T <fixture|dir>",
                [&]() { build_smoke_mode = true; });
@@ -315,7 +312,7 @@ int main(int argc, char *argv[]) {
 
   if (match_mode) {
     // Match-phase dump mode: no actor scheduler needed.
-    return mch::run_match(ir_path, trace_paths, match_gen);
+    return mch::run_match(ir_path, trace_paths);
   }
 
   if (build_smoke_mode) {

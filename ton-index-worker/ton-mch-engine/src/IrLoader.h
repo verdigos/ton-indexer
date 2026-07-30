@@ -1,6 +1,11 @@
 // TODO: remove (harness): runtime IR loading keeps mch_ir.json on the
-// production binaries' startup surface; full codegen retires it together with
-// ExprEval (audit §2.5, §5.7 H8). Do not extend it.
+// production binaries' startup surface; full codegen retires it (audit §2.5,
+// §5.7 H8). Do not extend it. ExprEval already left with the where-table flip;
+// what the flip left DEAD in here is WhereExpr itself (`buf` + the decoded
+// `expr`) — no caller reads the tree any more. Still LIVE: `has_where_expr` and
+// `global_id`, the coverage check's input and the generated table's key. EM4
+// deletes the struct, the re-encode dance below, and the JsonBuilder dependency
+// it drags in.
 //
 // MCH IR artifact loader (docs/mch-ir-spec.md §3, §5; docs/mch-engine-v2.md §3.1).
 //
@@ -13,8 +18,8 @@
 // programs): a matcher is `unrunnable` iff its match phase would consult a host
 // PREDICATE the C++ side cannot supply — i.e. a `pred`/`mixed`-with-`where`
 // anchor, or a reachable `pred` node / `where` (named predicate) node. Inline
-// `where_expr` trees ARE runnable: the loader re-encodes each subtree into a
-// self-owned WhereExpr the walker evaluates (interpreter or generated code).
+// `where_expr` trees ARE runnable: the walker evaluates them through the
+// generated where table, keyed by the node's `global_id`.
 // Builders / shapers / lookups / host-fns / message-types are BUILD-phase
 // bindings and do NOT affect matching, so they never make a matcher unrunnable
 // here; their names are only collected for the load report. The walker skips
@@ -47,6 +52,8 @@ enum class AnchorKind { OpcodeSet, BType, Pred, Mixed };
 
 // A node's parsed inline `where (expr)` tree, self-owned: `expr` slices point
 // into `buf`, so the pair lives behind one shared_ptr and never moves.
+// DEAD since the where-table flip — the walker evaluates the generated fn, so
+// nothing reads `expr`. Kept for one wave (EM4 deletes it with the re-encode).
 struct WhereExpr {
   std::string buf;     // re-encoded JSON of the where_expr subtree
   td::JsonValue expr;  // decoded view into buf
@@ -109,8 +116,8 @@ struct CompiledMatcher {
 struct LoadedIr {
   std::vector<CompiledMatcher> matchers;  // priority order (stable by priority)
 
-  // SHA-256 (hex) of the artifact file bytes — compared against the generated
-  // tables' source shas (gen_builds_source_sha / gen_wheres_source_sha).
+  // SHA-256 (hex) of the artifact file bytes — the key select_gen_builds /
+  // select_gen_wheres match against the generated tables' source shas.
   std::string source_sha256;
 };
 

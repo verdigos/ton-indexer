@@ -100,7 +100,7 @@ int run_build_smoke(const std::string &artifact_path, const std::vector<std::str
     for (Block *block : gather_blocks(ctx.root)) {
       for (int idx : setup.included) {
         const CompiledMatcher &m = ir.matchers[idx];
-        auto res = matcher_match(m, block);
+        auto res = matcher_match(m, block, setup.where_fns);
         if (!res) {
           continue;
         }

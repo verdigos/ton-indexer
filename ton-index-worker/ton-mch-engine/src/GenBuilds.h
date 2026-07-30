@@ -10,7 +10,8 @@
 //    a phase's experimental artifact, so classify/build-smoke can run against
 //    a testbed WITHOUT editing the ir/mch_ir.json contract mid-phase. Without
 //    the cache var this resolves to the committed empty stub
-//    (BuildsTestbedStub.cpp; its sha "" never matches a real artifact).
+//    (TestbedStubs.cpp; its sha "" never matches a real artifact). The knob
+//    generates the matching where table too — see GenWheres.h.
 // The *_source_sha() guards stay as a safety net: runners hard-fail when the
 // sha differs from the document they load — with per-document generation the
 // pairing is correct by construction, but a wrong pairing must remain
@@ -43,7 +44,8 @@ const char *gen_builds_ir_source_sha();
 // select_gen_builds (BuildDriver.cpp) is called from ClassifyCore, so
 // mch-classify must resolve gen_builds_testbed on its own; with the stub still
 // lib-side a fixtures-side table would either duplicate-define it or lose to
-// the stub in archive order, silently disabling the knob.
+// the stub in archive order, silently disabling the knob. Same argument now
+// applies to gen_wheres_testbed (select_gen_wheres runs from ClassifyCore too).
 const std::vector<GenBuild> &gen_builds_testbed();
 const char *gen_builds_testbed_source_sha();
 

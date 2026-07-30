@@ -671,7 +671,7 @@ std::string generate_vectors_file(const Json &root, const std::string &header) {
 }
 
 std::string generate_wheres_file(const Json &root, const std::string &header,
-                                 const std::string &source_sha) {
+                                 const std::string &source_sha, const std::string &suffix) {
   const Json *nodes = jfield(root, td::Slice("nodes"));
   if (nodes == nullptr || nodes->type() != JType::Array) {
     throw std::runtime_error("IR artifact has no `nodes` array");
@@ -691,9 +691,10 @@ std::string generate_wheres_file(const Json &root, const std::string &header,
     out.push_back(generate_where_function("where_" + std::to_string(id),
                                           *jfield(arr[id], td::Slice("where_expr"))));
   }
+  const std::string table_fn = "gen_wheres_" + sanitize_ident(suffix);
   out.push_back("}  // namespace");
   out.push_back("");
-  out.push_back("const std::vector<GenWhere> &gen_wheres() {");
+  out.push_back("const std::vector<GenWhere> &" + table_fn + "() {");
   out.push_back("  static const std::vector<GenWhere> table = {");
   for (std::size_t id : where_ids) {
     out.push_back("      {" + std::to_string(id) + ", &where_" + std::to_string(id) + "},");
@@ -702,7 +703,7 @@ std::string generate_wheres_file(const Json &root, const std::string &header,
   out.push_back("  return table;");
   out.push_back("}");
   out.push_back("");
-  out.push_back("const char *gen_wheres_source_sha() { return " + cstr(source_sha) + "; }");
+  out.push_back("const char *" + table_fn + "_source_sha() { return " + cstr(source_sha) + "; }");
   out.push_back("");
   out.push_back("}  // namespace mch");
   out.push_back("");

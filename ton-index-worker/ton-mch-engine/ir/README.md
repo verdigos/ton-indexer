@@ -46,36 +46,35 @@ tree (`<binary-dir>/ton-mch-engine/generated/`) and is NOT in git:
 | input (git)           | generator                              | output (build tree)           | table symbols                                             |
 |-----------------------|----------------------------------------|-------------------------------|-----------------------------------------------------------|
 | ir/expr_vectors.json  | mch-codegen --vectors                  | vectors_generated.cpp         | `gen_vectors()`                                           |
-| ir/mch_ir.json        | mch-codegen --wheres                   | wheres_generated.cpp          | `gen_wheres()`, `gen_wheres_source_sha()`                 |
+| ir/mch_ir.json        | mch-codegen --wheres --suffix ir       | wheres_ir_generated.cpp       | `gen_wheres_ir()`, `gen_wheres_ir_source_sha()`           |
 | ir/mch_ir.json        | mch-codegen --builds --suffix ir       | builds_ir_generated.cpp       | `gen_builds_ir()`, `gen_builds_ir_source_sha()`           |
 | ir/build_vectors.json | mch-codegen --builds --suffix vectors  | builds_vectors_generated.cpp  | `gen_builds_vectors()`, `gen_builds_vectors_source_sha()` |
 | tlb/mch-msgs.tlb      | tlbc                                   | mch-msgs-tlb.{cpp,h}          | `mchmsg::gen::*`                                          |
 
 Editing an input JSON (or the .tlb) and rebuilding `ton-mch-engine` is the
 whole workflow — CMake reruns the affected generator automatically. The
-`--builds` tables carry distinct symbols, so every table links into the one
-binary and each runner is permanently paired with its own document; the
+`--wheres` / `--builds` tables carry distinct symbols, so every table links into
+the one binary and each runner is permanently paired with its own document; the
 runners' sha256 guards remain as a safety net (a mismatch is a hard exit 2,
 but with build-step generation it cannot happen unless a stale binary is run
 against edited inputs without rebuilding).
 
 ## Running against a different artifact
 
-`--classify` / `--build-smoke` / `--match-gen` accept only an artifact whose
-bytes match a table baked at build time. Two ways to run another artifact:
+`--classify` / `--build-smoke` / `--match` accept only an artifact whose bytes
+match the tables baked at build time (`--match` too, since the walker evaluates
+where_exprs through the generated table). Two ways to run another artifact:
 
 - **Contract swap**: overwrite `ir/mch_ir.json` and rebuild (seconds — only
   the affected tables regenerate). Use when the new artifact IS the new
   contract.
-- **Testbed table** (`-DMCH_TESTBED_IR=<path/to/artifact.json>` cache var):
-  generates a THIRD build table (`gen_builds_testbed()`) from an out-of-tree
-  experimental artifact; classify/build-smoke pick the ir or testbed table by
-  the loaded artifact's sha automatically. The contract file stays untouched —
-  intended for phase work that lives off experimental artifacts. Unset the var
-  (default) and the committed empty stub (`src/BuildsTestbedStub.cpp`) is
-  compiled instead. Note: the testbed covers the BUILD tables only; `--match`
-  (interpreter) already accepts any artifact, but `--match-gen` remains paired
-  with `ir/mch_ir.json`.
+- **Testbed tables** (`-DMCH_TESTBED_IR=<path/to/artifact.json>` cache var):
+  generates a testbed build table AND where table (`gen_builds_testbed()`,
+  `gen_wheres_testbed()`) from an out-of-tree experimental artifact; the runners
+  pick the ir or testbed tables by the loaded artifact's sha automatically. The
+  contract file stays untouched — intended for phase work that lives off
+  experimental artifacts. Unset the var (default) and the committed empty stubs
+  (`src/TestbedStubs.cpp`) are compiled instead.
 
 ## Concurrency hazard
 

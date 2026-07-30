@@ -3,6 +3,7 @@
 #include "BuildDriver.h"
 #include "ExprRuntime.h"
 #include "GenBuilds.h"
+#include "GenWheres.h"
 #include "HostRegistry.h"
 #include "Walker.h"
 
@@ -47,8 +48,9 @@ std::vector<Block *> collect_spine(Block *root) {
 // NOTHING — aux/flows are stored raw for the adapter (§11 item 2 isolation).
 bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *block,
                BlockArena &arena, const std::set<std::string> &kinds,
-               const LookupSource &src, std::vector<CoreAction> &out) {
-  auto res = matcher_match(m, block);  // test_self + walk (root absorb=False)
+               const LookupSource &src, const WhereTable &wheres,
+               std::vector<CoreAction> &out) {
+  auto res = matcher_match(m, block, wheres);  // test_self + walk (root absorb=False)
   if (!res) {
     return false;  // structural mismatch
   }
@@ -411,6 +413,21 @@ ClassifySetup prepare_classify(const LoadedIr &ir) {
               ") — rebuild ton-mch-engine or pass a paired artifact";
     return s;
   }
+  // The where table is selected by the SAME sha mechanism: both tables are
+  // generated from the artifact, so a paired build table always comes with a
+  // paired where table (CMake generates the pair per document).
+  const std::vector<GenWhere> *wtable = select_gen_wheres(ir.source_sha256, nullptr);
+  if (wtable == nullptr) {
+    s.table_missing = true;
+    s.error = "no generated where table matches this artifact (loaded sha " + ir.source_sha256 +
+              "; ir table " + gen_wheres_ir_source_sha() + ", testbed table " +
+              (*gen_wheres_testbed_source_sha() ? gen_wheres_testbed_source_sha() : "(stub)") +
+              ") — rebuild ton-mch-engine or pass a paired artifact";
+    return s;
+  }
+  for (const GenWhere &g : *wtable) {
+    s.where_fns.emplace(g.node_id, g.fn);
+  }
   for (int i = 0; i < static_cast<int>(ir.matchers.size()); i++) {
     std::string reason = build_skip_reason(ir.matchers[i]);
     if (!reason.empty()) {
@@ -432,6 +449,17 @@ ClassifySetup prepare_classify(const LoadedIr &ir) {
                 m.name + "' (artifact index " + std::to_string(m.artifact_index) +
                 ") — rebuild ton-mch-engine";
       return s;
+    }
+    // Where coverage: every where_expr node of a matcher the loop will run must
+    // have a compiled fn, or eval_where would silently fail that node's head
+    // test (a wrong match, not a loud error).
+    for (const CompiledNode &n : m.nodes) {
+      if (n.has_where_expr && s.where_fns.find(n.global_id) == s.where_fns.end()) {
+        s.fn_missing = true;
+        s.error = "generated where table has no fn for node " + std::to_string(n.global_id) +
+                  " (matcher '" + m.name + "') — rebuild ton-mch-engine";
+        return s;
+      }
     }
   }
   return s;
@@ -494,7 +522,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
         Block *cur = queue.front();
         queue.pop_front();
         if (cur->parent == nullptr) {
-          try_build(m, fn, cur, ctx.arena, setup.kinds, src, pending);
+          try_build(m, fn, cur, ctx.arena, setup.kinds, src, setup.where_fns, pending);
         }
         for (Block *n : cur->next_blocks) {
           queue.push_back(n);

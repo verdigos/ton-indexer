@@ -20,10 +20,11 @@
 // ARE evaluated, composed onto the head test exactly like the Python engine
 // (§4.1): after the kind test passes, the node's where_expr runs against the
 // candidate block — a fault or a non-true result fails the node (never aborts
-// matching). Two interchangeable evaluation paths share ExprRuntime:
-//   - interpreter (default): ExprEval over the loader's WhereExpr tree;
-//   - generated (pass a WhereTable): compiled functions keyed by the node's
-//     artifact-global id (GenWheres.h, `mch-codegen --wheres`).
+// matching). The evaluator is the GENERATED table (`mch-codegen --wheres`,
+// GenWheres.h): compiled functions keyed by the node's artifact-global id,
+// selected by source sha and coverage-checked at setup. There is no second
+// path — the ExprEval interpreter left this library with the flip and now
+// serves only as the emitter's conformance reference (fixtures/ExprEval.h).
 #pragma once
 
 #include "BlockTree.h"
@@ -38,17 +39,10 @@
 
 namespace mch {
 
-// TODO: remove (harness): the GENERATED where path is harness-only. Production
-// classify (ClassifyCore.cpp try_build) calls matcher_match with no WhereTable,
-// so it runs the ExprEval interpreter; the only caller that passes a table is
-// MatchRunner.cpp (--match-gen), and wheres_generated.cpp is compiled into
-// mch-fixtures, not mch-classify. So WhereTable, the `gen` parameter, and
-// eval_where's two-branch dispatch (Walker.cpp) exist for one gate mode.
-// NOTE: this makes the ExprEval.h harness marker backwards — the interpreter is
-// the PRODUCTION where evaluator, and codegen is the side path. Retiring
-// ExprEval means wiring a WhereTable into classify_trace first, not deleting it.
-//
-// Generated where_expr functions keyed by artifact-global node id.
+// Generated where_expr functions keyed by artifact-global node id. Built once
+// per run by prepare_classify (from select_gen_wheres) and carried in
+// ClassifySetup; matcher_match takes it by reference, so a walk without a table
+// is not representable.
 using WhereFn = EvalResult (*)(const WhereEnv &);
 using WhereTable = std::unordered_map<int, WhereFn>;
 
@@ -77,9 +71,10 @@ struct MatchResult {
 bool matcher_test_self(const CompiledMatcher &m, const Block *b);
 
 // Full match attempt (test_self + walk, no build). nullopt == structural
-// mismatch. Leaves the tree untouched. `gen` selects the generated where_expr
-// path (must cover every where_expr node id of `m`); nullptr == interpreter.
+// mismatch. Leaves the tree untouched. `gen` must cover every where_expr node id
+// of `m` (guaranteed by prepare_classify's coverage check); an uncovered node
+// fails its head test rather than aborting the walk.
 std::optional<MatchResult> matcher_match(const CompiledMatcher &m, Block *anchor,
-                                         const WhereTable *gen = nullptr);
+                                         const WhereTable &gen);
 
 }  // namespace mch

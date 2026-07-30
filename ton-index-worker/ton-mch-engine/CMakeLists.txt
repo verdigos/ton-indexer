@@ -31,11 +31,11 @@ add_custom_command(
     COMMENT "Generate MCH expression conformance functions (mch-codegen --vectors)"
 )
 add_custom_command(
-    OUTPUT ${MCH_GEN_DIR}/wheres_generated.cpp
+    OUTPUT ${MCH_GEN_DIR}/wheres_ir_generated.cpp
     COMMAND mch-codegen --wheres ${CMAKE_CURRENT_SOURCE_DIR}/ir/mch_ir.json
-            -o ${MCH_GEN_DIR}/wheres_generated.cpp
+            --suffix ir -o ${MCH_GEN_DIR}/wheres_ir_generated.cpp
     DEPENDS mch-codegen ${CMAKE_CURRENT_SOURCE_DIR}/ir/mch_ir.json
-    COMMENT "Generate MCH where_expr functions (mch-codegen --wheres)"
+    COMMENT "Generate MCH where_expr functions from the IR artifact (mch-codegen --wheres)"
 )
 add_custom_command(
     OUTPUT ${MCH_GEN_DIR}/builds_ir_generated.cpp
@@ -67,14 +67,17 @@ add_custom_command(
 )
 
 # TODO: remove (harness): the testbed slot is dev-only but cannot leave the prod
-# lib as long as select_gen_builds (BuildDriver.cpp) probes it from ClassifyCore
-# — see the note on gen_builds_testbed in src/GenBuilds.h (audit §5.7 H4).
-# OPTIONAL testbed table (-DMCH_TESTBED_IR=<artifact.json>): lets a phase run
+# lib as long as select_gen_builds (BuildDriver.cpp) / select_gen_wheres
+# (Walker.cpp) probe it from ClassifyCore — see the notes on gen_builds_testbed
+# in src/GenBuilds.h and gen_wheres_testbed in src/GenWheres.h (audit §5.7 H4).
+# OPTIONAL testbed tables (-DMCH_TESTBED_IR=<artifact.json>): let a phase run
 # classify / build-smoke against an experimental artifact WITHOUT editing the
-# ir/mch_ir.json contract — runners select the table by source sha
-# (select_gen_builds). Unset (default): the committed empty stub is compiled.
+# ir/mch_ir.json contract — runners select both tables by source sha. Both the
+# build programs AND the where_exprs come from the artifact, so the knob has to
+# generate the PAIR; a testbed artifact with an unpaired where table would fail
+# prepare_classify's coverage check. Unset (default): the committed empty stubs.
 set(MCH_TESTBED_IR "" CACHE FILEPATH
-    "Optional experimental IR artifact; generates a third build table (gen_builds_testbed)")
+    "Optional experimental IR artifact; generates the gen_builds_testbed / gen_wheres_testbed tables")
 if(MCH_TESTBED_IR)
     add_custom_command(
         OUTPUT ${MCH_GEN_DIR}/builds_testbed_generated.cpp
@@ -83,25 +86,34 @@ if(MCH_TESTBED_IR)
         DEPENDS mch-codegen ${MCH_TESTBED_IR}
         COMMENT "Generate MCH build-program functions from the TESTBED artifact (mch-codegen --builds)"
     )
-    set(MCH_TESTBED_SOURCE ${MCH_GEN_DIR}/builds_testbed_generated.cpp)
+    add_custom_command(
+        OUTPUT ${MCH_GEN_DIR}/wheres_testbed_generated.cpp
+        COMMAND mch-codegen --wheres ${MCH_TESTBED_IR}
+                --suffix testbed -o ${MCH_GEN_DIR}/wheres_testbed_generated.cpp
+        DEPENDS mch-codegen ${MCH_TESTBED_IR}
+        COMMENT "Generate MCH where_expr functions from the TESTBED artifact (mch-codegen --wheres)"
+    )
+    set(MCH_TESTBED_SOURCES
+        ${MCH_GEN_DIR}/builds_testbed_generated.cpp
+        ${MCH_GEN_DIR}/wheres_testbed_generated.cpp)
 else()
-    set(MCH_TESTBED_SOURCE src/BuildsTestbedStub.cpp)
+    set(MCH_TESTBED_SOURCES src/TestbedStubs.cpp)
 endif()
 
 # The generated tables split by who may link them. PRODUCT: the artifact build
-# table the classify loop runs, the testbed slot it probes, and the TL-B
-# parsers. TEST: the conformance-vector tables — their gen_* symbols are
-# referenced only from the harness runners (VectorRunner / MatchRunner /
-# BuildVectorRunner), so they belong in mch-fixtures, not in the lib
-# ton-index-postgres links (python-parity-audit §5.7 H3).
+# AND where tables the classify loop runs, the testbed slot it probes, and the
+# TL-B parsers. TEST: the conformance-vector tables — their gen_* symbols are
+# referenced only from the harness runners (VectorRunner / BuildVectorRunner), so
+# they belong in mch-fixtures, not in the lib ton-index-postgres links
+# (python-parity-audit §5.7 H3).
 set(MCH_GENERATED_SOURCES
     ${MCH_GEN_DIR}/builds_ir_generated.cpp
-    ${MCH_TESTBED_SOURCE}
+    ${MCH_GEN_DIR}/wheres_ir_generated.cpp
+    ${MCH_TESTBED_SOURCES}
     ${MCH_GEN_DIR}/mch-msgs-tlb.cpp
 )
 set(MCH_GENERATED_TEST_SOURCES
     ${MCH_GEN_DIR}/vectors_generated.cpp
-    ${MCH_GEN_DIR}/wheres_generated.cpp
     ${MCH_GEN_DIR}/builds_vectors_generated.cpp
 )
 add_custom_target(mch_generate_sources
@@ -131,7 +143,6 @@ add_library(mch-classify STATIC
     src/BlockTree.cpp
     src/Value.cpp
     src/ExprRuntime.cpp
-    src/ExprEval.cpp
     src/IrLoader.cpp
     src/Walker.cpp
     src/HostRegistry.cpp
@@ -206,6 +217,11 @@ set(MCH_FIXTURE_SOURCES
     # a block key or a cellhash, or compare two Values structurally. See the
     # header for the full argument.
     src/fixtures/Render.cpp
+    # The expression INTERPRETER. It moved here when the generated where table
+    # became the walker's only evaluator: its sole remaining caller is the
+    # mch_expr_vectors ctest, which runs it as the differential reference for the
+    # emitter (mch_expr_vectors_gen runs the same vectors through generated code).
+    src/fixtures/ExprEval.cpp
     ${MCH_GENERATED_TEST_SOURCES}
 )
 

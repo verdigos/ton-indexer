@@ -1,6 +1,6 @@
 #include "Walker.h"
 
-#include "ExprEval.h"
+#include "GenWheres.h"
 #include "HostRegistry.h"
 
 #include <algorithm>
@@ -51,7 +51,7 @@ std::vector<Block *> canonical(const std::vector<Block *> &v) {
 // immutable.
 class MatchState {
  public:
-  MatchState(const CompiledMatcher &m, const WhereTable *gen) : m_(m), gen_(gen) {
+  MatchState(const CompiledMatcher &m, const WhereTable &gen) : m_(m), gen_(gen) {
   }
 
   bool match_node(int nid, Block *block, bool absorb = true) {
@@ -103,23 +103,12 @@ class MatchState {
   // ---- where_expr evaluation (engine.py eval_where_expr rule) ----
   // Never raises/aborts: a fault or a non-bool result is simply False.
   bool eval_where(const CompiledNode &node, Block *block) const {
-    WhereEnv w{block, nullptr, 0};
-    EvalResult r;
-    if (gen_ != nullptr) {
-      auto it = gen_->find(node.global_id);
-      if (it == gen_->end()) {
-        return false;  // guarded against at load (run_match validates coverage)
-      }
-      r = it->second(w);
-    } else {
-      if (!node.where_expr) {
-        return false;
-      }
-      static const Env kEmptyEnv;
-      static const Lookups kEmptyLookups;
-      ExprEval ev(kEmptyEnv, kEmptyLookups, &w);
-      r = ev.evaluate(node.where_expr->expr);
+    auto it = gen_.find(node.global_id);
+    if (it == gen_.end()) {
+      return false;  // coverage is validated at setup (prepare_classify)
     }
+    WhereEnv w{block, nullptr, 0};
+    EvalResult r = it->second(w);
     return !r.faulted && r.value.t == VType::Bool && r.value.boolean;
   }
 
@@ -386,7 +375,7 @@ class MatchState {
   }
 
   const CompiledMatcher &m_;
-  const WhereTable *gen_{nullptr};
+  const WhereTable &gen_;
   std::vector<std::tuple<int, Frame, Block *>> bindings_;
   std::vector<Block *> consumed_;
   std::unordered_set<Block *> visited_;
@@ -414,8 +403,24 @@ bool matcher_test_self(const CompiledMatcher &m, const Block *b) {
   return false;
 }
 
+const std::vector<GenWhere> *select_gen_wheres(const std::string &sha, const char **which) {
+  if (sha == gen_wheres_ir_source_sha()) {
+    if (which != nullptr) {
+      *which = "ir";
+    }
+    return &gen_wheres_ir();
+  }
+  if (sha == gen_wheres_testbed_source_sha()) {
+    if (which != nullptr) {
+      *which = "testbed";
+    }
+    return &gen_wheres_testbed();
+  }
+  return nullptr;
+}
+
 std::optional<MatchResult> matcher_match(const CompiledMatcher &m, Block *anchor,
-                                         const WhereTable *gen) {
+                                         const WhereTable &gen) {
   if (!matcher_test_self(m, anchor)) {
     return std::nullopt;
   }

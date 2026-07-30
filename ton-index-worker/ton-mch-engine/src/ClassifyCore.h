@@ -10,6 +10,7 @@
 #include "BuildRuntime.h"
 #include "IrLoader.h"
 #include "TraceLoader.h"
+#include "Walker.h"  // WhereTable
 
 #include <cstdint>
 #include <set>
@@ -83,20 +84,22 @@ struct ClassifyResult {
 
 // Trace-independent run prep computed once from the artifact: the runnable
 // matcher set, the SKIP table (name -> reason, sorted), the generated build-fn
-// map, and the union of referenced lookup kinds.
+// map, the generated where_expr table the walker evaluates, and the union of
+// referenced lookup kinds.
 struct ClassifySetup {
   std::vector<int> included;  // indices into LoadedIr.matchers, priority order
   std::vector<std::pair<std::string, std::string>> skips;
   std::unordered_map<int, BuildOutcome (*)(BuildEnv &)> build_fns;
+  WhereTable where_fns;  // node global_id -> generated where fn (GenWheres.h)
   std::set<std::string> kinds;
-  bool table_missing = false;  // no generated build table paired with this artifact
+  bool table_missing = false;  // no generated build/where table paired with this artifact
   bool fn_missing = false;     // an included matcher has no generated fn
   std::string error;           // populated when table_missing/fn_missing
 };
 
-// Build the run prep from a loaded artifact (selects the generated build table
-// by source sha). No I/O. On a table/fn mismatch, sets the *_missing flags +
-// error and returns what it has (adapter reports + exits).
+// Build the run prep from a loaded artifact (selects the generated build AND
+// where tables by source sha). No I/O. On a table/fn mismatch, sets the
+// *_missing flags + error and returns what it has (adapter reports + exits).
 ClassifySetup prepare_classify(const LoadedIr &ir);
 
 // Classify ONE trace: the matcher loop (BFS, parent-is-None guard, re-scan

@@ -273,6 +273,12 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     cn.where_name = jstr(nrec, "where");
     if (const Json *wf = jfield(nrec, "where_expr"); wf != nullptr) {
       cn.has_where_expr = true;
+      // TODO: remove (harness): DEAD since the where-table flip — the only
+      // consumer of the re-encoded tree was ExprEval inside the walker, and the
+      // walker now calls the generated fn keyed by cn.global_id. `has_where_expr`
+      // above is the live part (prepare_classify's coverage check). EM4 deletes
+      // everything to the end of this block plus WhereExpr itself.
+      //
       // Re-encode the subtree into a self-owned buffer, decode once: the
       // decoded JsonValue slices point into WhereExpr::buf, which lives (and
       // never moves) behind the shared_ptr, outliving the artifact document.
