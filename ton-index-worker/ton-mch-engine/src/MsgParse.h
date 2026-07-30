@@ -60,6 +60,11 @@ using ParserSources = std::vector<const std::vector<std::pair<std::string, MsgPa
 // Keys appearing in more than one source, first-wins scan order. Exposed for the
 // bridge self-test (W12 --abi-bridge-test) to exercise the dup policy without a
 // production collision.
+// TODO: remove (harness): only the PUBLIC EXPORT is harness-driven -- the sole
+// external caller is AbiBridgeTest.cpp:203 (synthetic colliding sources). The
+// real production use is internal (MsgParse.cpp:86, from built_registry()), so
+// when the self-test retires this declaration and `ParserSources` above drop
+// out of the header and the function moves into MsgParse.cpp's anon namespace.
 std::vector<std::string> duplicate_parser_keys(const ParserSources &sources);
 
 // Parse `body` as the named registered type; error when the name is unknown

@@ -8,6 +8,15 @@
 //
 // Every mode runs as a CMake custom command; outputs land in the build tree
 // (<binary-dir>/generated/), never in the source tree or git.
+//
+// TODO: remove (harness): only ONE of the four invocations feeds production —
+// `--builds ir/mch_ir.json --suffix ir` (gen_builds_ir, the table ClassifyCore
+// runs). `--vectors` and `--builds ir/build_vectors.json --suffix vectors`
+// produce conformance tables that live in mch-fixtures (GenVectors.h,
+// fixtures/GenBuildsVectors.h); `--wheres` produces a table no automated gate
+// ever executes (see src/GenWheres.h). Keep that split in mind before adding a
+// mode: a new mode is production only if a mch-classify TU references its
+// symbols.
 // The `--vectors` mode emits the expression-conformance functions + table.
 // The `--wheres` mode emits one function per artifact node carrying a
 // `where_expr`, keyed by the global node index (consumed by --match-gen).

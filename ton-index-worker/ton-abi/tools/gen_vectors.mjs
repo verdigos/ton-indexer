@@ -626,6 +626,12 @@ async function main() {
         loadableCount++;
     }
 
+    // TODO: remove (harness): porting-era bookkeeping only. This block copies
+    // testdata/fixtures/small.tolk and re-asserts a KNOWN upstream tolk-js
+    // failure; it yields no .abi.json, no vector, no generated pair and has no
+    // C++ consumer (AbiLoaderTest.cpp:46 mentions it in prose only). Delete
+    // together with the fixture, and drop "26" from the log line below.
+    //
     // small.tolk is copied for completeness (the plan's fixture set is "26
     // .tolk files copied from the reference repo") but genuinely fails to
     // compile with tolk-js -- a real Tolk compiler error unrelated to ABI

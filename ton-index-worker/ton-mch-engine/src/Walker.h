@@ -38,6 +38,16 @@
 
 namespace mch {
 
+// TODO: remove (harness): the GENERATED where path is harness-only. Production
+// classify (ClassifyCore.cpp try_build) calls matcher_match with no WhereTable,
+// so it runs the ExprEval interpreter; the only caller that passes a table is
+// MatchRunner.cpp (--match-gen), and wheres_generated.cpp is compiled into
+// mch-fixtures, not mch-classify. So WhereTable, the `gen` parameter, and
+// eval_where's two-branch dispatch (Walker.cpp) exist for one gate mode.
+// NOTE: this makes the ExprEval.h harness marker backwards — the interpreter is
+// the PRODUCTION where evaluator, and codegen is the side path. Retiring
+// ExprEval means wiring a WhereTable into classify_trace first, not deleting it.
+//
 // Generated where_expr functions keyed by artifact-global node id.
 using WhereFn = EvalResult (*)(const WhereEnv &);
 using WhereTable = std::unordered_map<int, WhereFn>;

@@ -1,3 +1,16 @@
+// TODO: remove (harness): this table is generated + compiled on EVERY build and
+// executed by NOTHING automated — no ctest drives `--match-gen` (CMakeLists.txt
+// §CTest wiring) and CI's golden run uses `--actions`, i.e. the interpreter. Its
+// only caller is MatchRunner.cpp (harness exe), so production evaluates
+// where_exprs through ExprEval instead (see Walker.h). Decide, don't leave it
+// here: PROMOTE to production — carry the table in ClassifySetup, sha-selected
+// exactly like build_fns — which is what finally lets ExprEval.cpp leave
+// mch-classify and kills the WhereExpr re-encode in IrLoader.cpp:274-294; or
+// delete this header together with the `mch-codegen --wheres` mode. Current
+// production surface being interpreted: 4 nodes, one distinct expression
+// (`not .has_internal_transfer`, matcher stonfi_v2_swap) — so the argument is
+// architectural, not perf.
+//
 // Stable interface for the generated where_expr functions (produced by
 // `mch-codegen --wheres ir/mch_ir.json` as a CMake build step; build-tree
 // output, not in git). One function per artifact node carrying a `where_expr`,

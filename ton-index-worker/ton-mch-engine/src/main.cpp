@@ -35,6 +35,11 @@
 #include <string>
 #include <vector>
 
+// TODO: remove (harness): print_trace / print_block / MchEngineWorker and the
+// td::actor::Scheduler at the bottom of main() are the Step-1/Step-2 "hello from
+// the actor environment" scaffolding. They run only when NO mode flag is given,
+// no ctest or gate invokes that path, and nothing else in the exe needs a
+// scheduler — the modes all early-return before it.
 namespace {
 
 void print_trace(const mch::Trace &trace) {

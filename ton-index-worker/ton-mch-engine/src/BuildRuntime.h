@@ -63,6 +63,9 @@ class LookupTable {
   virtual Value get(const std::string &kind, const std::vector<Value> &args) const = 0;
 };
 
+// TODO: remove (harness): the only instantiation is DexRecordsTest.cpp:201.
+// Production tables are Collecting/Filled; the B1 stub outlived its phase.
+//
 // B1 stub: every kind registered, every key unknown (returns null) — the
 // same table shape D1's collect pass uses.
 class NullLookupTable : public LookupTable {

@@ -14,6 +14,12 @@
 
 namespace mch {
 
+// TODO: remove (harness): block_key + render_value are the DUMP renderers. Every
+// caller is a harness TU (Classify.cpp, BuildSmoke.cpp, MatchRunner.cpp,
+// ParseDump.cpp); no product path renders a Value or a block key, so this pair
+// (and the boc_field_* trio in Value.h it calls) belongs with the twins, not in
+// mch-classify. They go with the A/B dump gates.
+//
 // `<btype>[#<opcode-hex8>]@<min_lt>` — the cross-language-proven key.
 std::string block_key(const Block *b);
 
@@ -26,6 +32,11 @@ std::string render_value(const Value &v);
 // computes the identical set from the artifact + the same fixed lists.
 std::string build_skip_reason(const CompiledMatcher &m);
 
+// TODO: remove (harness): called only from the CLI dump entry points
+// (Classify.cpp run_dump, BuildSmoke.cpp) and it writes to stderr, which no
+// product binary wants from a library. Production surfaces the same gap through
+// prepare_classify's skip table.
+//
 // One-shot startup diagnostic (§4.4): every message type any matcher's
 // build_program references via `parse` that is ABSENT from message_parsers().
 // Such a gap silently forces a `types:` build skip; surfacing it on stderr
