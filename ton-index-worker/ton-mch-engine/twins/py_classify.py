@@ -34,6 +34,7 @@ from indexer.events.mch_ir import build_matchers, load_artifact  # noqa: E402
 # module docstring.
 from cpp_surface import (  # noqa: E402
     BOC_FIELDS, CPP_FNS, CPP_LOOKUP_KINDS, CPP_PARSERS, CPP_PREDS, CPP_SHAPERS,
+    assert_no_skips,
 )
 
 # Combined host-builder registries: ONE shared factory list for all three
@@ -293,6 +294,9 @@ def main(artifact_path, corpus):
                    for i in range(len(matchers)) if reasons[i] is not None)
     for name, reason in skips:
         print(f"SKIP {name} reason={reason}")
+    # A skip against ir/mch_ir.json is stale-mirror drift, never a run property
+    # — abort instead of silently emitting a smaller row set (cpp_surface.py).
+    assert_no_skips(skips)
     included = [matchers[i] for i in range(len(matchers)) if reasons[i] is None]
 
     names = ([corpus] if not os.path.isdir(corpus) else
