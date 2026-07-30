@@ -81,6 +81,9 @@ jobs:
 
     # The hermetic mch gates. Inputs are the committed JSON under
     # ton-mch-engine/ir/; none of them needs the fixture corpus or Python.
+    # mch_ir_equivalence is the one that keeps ir/mch_ir.json honest: the matcher
+    # table is COMPILED IN, and that test proves the compiled table is what the
+    # committed document says.
     - name: Test mch engine
       working-directory: ${{github.workspace}}/build/ton-index-worker/ton-mch-engine
       run: ctest --output-on-failure
@@ -90,8 +93,7 @@ jobs:
     - name: Action goldens
       run: |
         ./build/ton-index-worker/ton-mch-engine/ton-mch-engine \
-          --actions -I ton-index-worker/ton-mch-engine/ir/mch_ir.json \
-          -T indexer/tests/traces \
+          --actions -T indexer/tests/traces \
           | diff - ton-index-worker/ton-mch-engine/goldens/actions.golden
 
     # G2: the write-back wire contract, run through ton-index-go's REAL decoder

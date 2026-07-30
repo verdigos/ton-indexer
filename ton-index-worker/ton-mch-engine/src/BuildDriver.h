@@ -6,7 +6,7 @@
 #pragma once
 
 #include "BuildRuntime.h"
-#include "IrLoader.h"
+#include "IrTables.h"
 #include "Walker.h"
 
 #include <set>
@@ -15,10 +15,16 @@
 
 namespace mch {
 
+// MATCH-inclusion filter: empty == the linked host supplies every predicate the
+// matcher's match phase consults; else the SKIP reason (`pred:<missing names>`,
+// sorted). This is a property of the LINKED registry, not of the IR document,
+// which is why it is computed at setup time rather than compiled into the table.
+// The Python twin computes the identical set from the artifact + the same list.
+std::string match_skip_reason(const CompiledMatcher &m);
+
 // Build-inclusion filter: empty == runnable end-to-end on the current C++
-// surface; else the SKIP reason (match-phase preds, builder-directive,
-// missing parsers / lookup kinds / host fns / shapers). The Python twin
-// computes the identical set from the artifact + the same fixed lists.
+// surface; else the SKIP reason (builder-directive, missing parsers / lookup
+// kinds / host fns / shapers). Match-phase preds are match_skip_reason's half.
 std::string build_skip_reason(const CompiledMatcher &m);
 
 // MatchResult captures -> slot values in slot-declaration order

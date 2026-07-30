@@ -92,7 +92,9 @@ mch entry = `SchemaTraceLoader::schema_to_trace(trace_id, vector<schema::Transac
 TraceNode→schema::Transaction converter (from raw cells, §2.2); DetectedInterface→V2
 adapter (§2.3); thin classifier actor over `classify_trace` (MchClassifierActor
 sibling, emulator-shaped inputs); `--mch-artifact <mch_ir.json>` flag, startup-fatal
-on bad artifact (mirrors postgres `--mch-shadow`); FailureCategory + lookup-tier
+on bad artifact (mirrors postgres `--mch-shadow`) — *EM4 replaced this with the
+compiled-in matcher table: classification is default-ON, `--mch-disable` turns it
+off*; FailureCategory + lookup-tier
 stats logging (enum + LookupStats already exist from Phase G); tx_limit bucket.
 Redis writes UNCHANGED. Optional but recommended: classify-only mode (Redis fully
 optional) so a test run needs only the node DB — zero risk to prod pending data.

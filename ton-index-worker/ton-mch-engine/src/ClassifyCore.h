@@ -1,5 +1,6 @@
 // Classification CORE (plan §11 item 2 / prod-design §2): the pure pipeline —
-// (TraceContext + LoadedIr + LookupSource + generated build table) → a buffered
+// (TraceContext + the compiled matcher table + LookupSource + generated build
+// table) → a buffered
 // per-trace result. NO stdout/stderr, NO filesystem, NO fixture knowledge, NO
 // rendering. The CLI dumps (Classify.cpp) and the future `mch-classify` library
 // are thin adapters over this. This TU is the "core" side of the core/harness
@@ -8,7 +9,7 @@
 
 #include "BlockTree.h"
 #include "BuildRuntime.h"
-#include "IrLoader.h"
+#include "IrTables.h"
 #include "TraceLoader.h"
 #include "Walker.h"  // WhereTable
 
@@ -82,30 +83,31 @@ struct ClassifyResult {
   bool unknown_trace = false;
 };
 
-// Trace-independent run prep computed once from the artifact: the runnable
+// Trace-independent run prep computed once from the matcher table: the runnable
 // matcher set, the SKIP table (name -> reason, sorted), the generated build-fn
 // map, the generated where_expr table the walker evaluates, and the union of
 // referenced lookup kinds.
 struct ClassifySetup {
-  std::vector<int> included;  // indices into LoadedIr.matchers, priority order
+  std::vector<int> included;  // indices into the matcher table, priority order
   std::vector<std::pair<std::string, std::string>> skips;
   std::unordered_map<int, BuildOutcome (*)(BuildEnv &)> build_fns;
   WhereTable where_fns;  // node global_id -> generated where fn (GenWheres.h)
   std::set<std::string> kinds;
-  bool table_missing = false;  // no generated build/where table paired with this artifact
+  bool table_missing = false;  // the three generated tables disagree on their source
   bool fn_missing = false;     // an included matcher has no generated fn
   std::string error;           // populated when table_missing/fn_missing
 };
 
-// Build the run prep from a loaded artifact (selects the generated build AND
-// where tables by source sha). No I/O. On a table/fn mismatch, sets the
-// *_missing flags + error and returns what it has (adapter reports + exits).
-ClassifySetup prepare_classify(const LoadedIr &ir);
+// Build the run prep from the compiled-in matcher table. No I/O. Pass the SAME
+// table classify_trace will get — `included` indexes into it. On a table/fn
+// mismatch, sets the *_missing flags + error and returns what it has (adapter
+// reports + exits; production is startup-fatal).
+ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers);
 
 // Classify ONE trace: the matcher loop (BFS, parent-is-None guard, re-scan
 // semantics) + Phase E post-process passes, buffered. `arena` is the caller's
 // (usually ctx.arena) — the pipeline allocates produced/proxy blocks from it.
-ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir,
+ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatcher> &matchers,
                               const ClassifySetup &setup, const LookupSource &src);
 
 }  // namespace mch

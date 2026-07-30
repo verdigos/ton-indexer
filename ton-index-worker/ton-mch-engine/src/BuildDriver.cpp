@@ -1,6 +1,5 @@
 #include "BuildDriver.h"
 
-#include "GenBuilds.h"
 #include "HostRegistry.h"
 #include "MsgParse.h"
 
@@ -9,10 +8,28 @@
 
 namespace mch {
 
-std::string build_skip_reason(const CompiledMatcher &m) {
-  if (m.unrunnable) {
-    return m.skip_reason;  // match-phase pred skip
+std::string match_skip_reason(const CompiledMatcher &m) {
+  // The skip reason lists only the MISSING names, sorted (ref_preds is ordered).
+  std::string missing;
+  for (const std::string &p : m.ref_preds) {
+    if (host_predicates().find(p) == host_predicates().end()) {
+      if (!missing.empty()) missing += ",";
+      missing += p;
+    }
   }
+  if (!missing.empty()) {
+    return "pred:" + missing;
+  }
+  // A mixed anchor stays unrunnable even when its predicates exist: the table
+  // does not store the branch structure matcher_test_self would need (no
+  // current build_program matcher has one — guard, not a plan).
+  if (m.anchor_kind == AnchorKind::Mixed && !m.ref_preds.empty()) {
+    return "mixed_anchor_preds";
+  }
+  return "";
+}
+
+std::string build_skip_reason(const CompiledMatcher &m) {
   if (!m.has_build_program) {
     return m.ref_builders.empty() ? "no_build_program" : "builder";
   }
@@ -125,22 +142,6 @@ BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
   FilledLookupTable filled(kinds, std::move(fetched));
   BuildEnv env = fresh_env(&filled);
   return fn(env);
-}
-
-const std::vector<GenBuild> *select_gen_builds(const std::string &sha, const char **which) {
-  if (sha == gen_builds_ir_source_sha()) {
-    if (which != nullptr) {
-      *which = "ir";
-    }
-    return &gen_builds_ir();
-  }
-  if (sha == gen_builds_testbed_source_sha()) {
-    if (which != nullptr) {
-      *which = "testbed";
-    }
-    return &gen_builds_testbed();
-  }
-  return nullptr;
 }
 
 }  // namespace mch

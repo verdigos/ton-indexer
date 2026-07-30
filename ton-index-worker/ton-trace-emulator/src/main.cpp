@@ -9,6 +9,7 @@
 #include "DbScanner.h"
 #include "TraceScheduler.h"
 #include "TraceInserter.h"
+#include "GenMatchers.h"
 #include "emu/EmuShadow.h"
 
 
@@ -28,7 +29,7 @@ int main(int argc, char *argv[]) {
   std::string global_config_path;
   std::string inet_addr;
   std::string db_event_fifo_path;
-  std::string mch_artifact;
+  bool mch_disable = false;
   bool mch_no_tier2 = false;
   mch::Tier2Budget mch_tier2_budget;
 
@@ -82,8 +83,12 @@ int main(int argc, char *argv[]) {
     db_event_fifo_path = fname.str();
   });
 
-  p.add_option('\0', "mch-artifact", "Path to the MCH IR artifact; enables in-process classification", [&](td::Slice fname) {
-    mch_artifact = fname.str();
+  // Classification is ON by default (the matcher tables are compiled into this
+  // binary). This is the ops escape hatch: it produces exactly the behaviour of
+  // a build without the classifier — a null prep, so the shadow decorator is
+  // never installed.
+  p.add_option('\0', "mch-disable", "Disable in-process MCH classification", [&]() {
+    mch_disable = true;
   });
 
   // Tier 2 is ON wherever the classifier runs; these exist to turn it off and to
@@ -135,18 +140,21 @@ int main(int argc, char *argv[]) {
   }
 
   mch::EmuShadowConfig mch_shadow;
-  if (!mch_artifact.empty()) {
-    // The artifact and the binary ship together: a mismatch is a build bug, not
-    // a reason to run with classification silently skipped.
-    auto r_prep = mch::load_engine_prep(mch_artifact);
+  if (mch_disable) {
+    LOG(WARNING) << "MCH classification DISABLED (--mch-disable): traces are inserted unclassified";
+  } else {
+    // The matcher tables are compiled in, so a prep failure is a build bug (a
+    // half-regenerated table or a parser-registry conflict), not a reason to run
+    // with classification silently skipped.
+    auto r_prep = mch::make_engine_prep();
     if (r_prep.is_error()) {
-      LOG(FATAL) << "failed to load MCH artifact '" << mch_artifact << "': " << r_prep.move_as_error();
+      LOG(FATAL) << "MCH engine prep failed: " << r_prep.move_as_error();
     }
     mch_shadow.prep = r_prep.move_as_ok();
     mch_shadow.gate = std::make_shared<mch::EmuGate>();
     mch_shadow.tier2 = !mch_no_tier2;
     mch_shadow.tier2_budget = mch_tier2_budget;
-    LOG(INFO) << "MCH classification ENABLED (artifact " << mch_artifact
+    LOG(INFO) << "MCH classification ENABLED (artifact sha " << mch::gen_matchers_ir_source_sha()
               << "), insert gated on classification, celldb tier-2 "
               << (mch_shadow.tier2 ? "ON" : "OFF") << " (budget "
               << mch_shadow.tier2_budget.fetches << " fetches / "

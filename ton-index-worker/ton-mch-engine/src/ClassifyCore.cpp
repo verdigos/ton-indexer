@@ -3,6 +3,7 @@
 #include "BuildDriver.h"
 #include "ExprRuntime.h"
 #include "GenBuilds.h"
+#include "GenMatchers.h"
 #include "GenWheres.h"
 #include "HostRegistry.h"
 #include "Walker.h"
@@ -401,53 +402,46 @@ std::vector<CoreAction> basic_classify_fallback(TraceContext &ctx) {
 
 }  // namespace
 
-ClassifySetup prepare_classify(const LoadedIr &ir) {
+ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers) {
   ClassifySetup s;
-  const char *table_kind = nullptr;
-  const std::vector<GenBuild> *table = select_gen_builds(ir.source_sha256, &table_kind);
-  if (table == nullptr) {
+  // The matcher / build / where tables are three views of ONE document, wired up
+  // by the same CMake step (MCH_CLASSIFY_ARTIFACT). Three shas that disagree mean
+  // the build regenerated some of them and not others — the tables would then run
+  // matchers against another document's build programs, which is silent
+  // wrongness, so it is a hard setup error.
+  const std::string sha = gen_matchers_ir_source_sha();
+  if (sha != gen_builds_ir_source_sha() || sha != gen_wheres_ir_source_sha()) {
     s.table_missing = true;
-    s.error = "no generated build table matches this artifact (loaded sha " + ir.source_sha256 +
-              "; ir table " + gen_builds_ir_source_sha() + ", testbed table " +
-              (*gen_builds_testbed_source_sha() ? gen_builds_testbed_source_sha() : "(stub)") +
-              ") — rebuild ton-mch-engine or pass a paired artifact";
+    s.error = "generated tables disagree on their source document (matchers " + sha + ", builds " +
+              gen_builds_ir_source_sha() + ", wheres " + gen_wheres_ir_source_sha() +
+              ") — reconfigure and rebuild ton-mch-engine";
     return s;
   }
-  // The where table is selected by the SAME sha mechanism: both tables are
-  // generated from the artifact, so a paired build table always comes with a
-  // paired where table (CMake generates the pair per document).
-  const std::vector<GenWhere> *wtable = select_gen_wheres(ir.source_sha256, nullptr);
-  if (wtable == nullptr) {
-    s.table_missing = true;
-    s.error = "no generated where table matches this artifact (loaded sha " + ir.source_sha256 +
-              "; ir table " + gen_wheres_ir_source_sha() + ", testbed table " +
-              (*gen_wheres_testbed_source_sha() ? gen_wheres_testbed_source_sha() : "(stub)") +
-              ") — rebuild ton-mch-engine or pass a paired artifact";
-    return s;
-  }
-  for (const GenWhere &g : *wtable) {
+  for (const GenWhere &g : gen_wheres_ir()) {
     s.where_fns.emplace(g.node_id, g.fn);
   }
-  for (int i = 0; i < static_cast<int>(ir.matchers.size()); i++) {
-    std::string reason = build_skip_reason(ir.matchers[i]);
+  for (int i = 0; i < static_cast<int>(matchers.size()); i++) {
+    std::string reason = match_skip_reason(matchers[i]);
+    if (reason.empty()) {
+      reason = build_skip_reason(matchers[i]);
+    }
     if (!reason.empty()) {
-      s.skips.emplace_back(ir.matchers[i].name, reason);
+      s.skips.emplace_back(matchers[i].name, reason);
       continue;
     }
-    s.kinds.insert(ir.matchers[i].ref_lookups.begin(), ir.matchers[i].ref_lookups.end());
+    s.kinds.insert(matchers[i].ref_lookups.begin(), matchers[i].ref_lookups.end());
     s.included.push_back(i);
   }
   std::sort(s.skips.begin(), s.skips.end());
-  for (const GenBuild &g : *table) {
+  for (const GenBuild &g : gen_builds_ir()) {
     s.build_fns.emplace(g.id, g.fn);
   }
   for (int idx : s.included) {
-    const CompiledMatcher &m = ir.matchers[idx];
+    const CompiledMatcher &m = matchers[idx];
     if (s.build_fns.find(m.artifact_index) == s.build_fns.end()) {
       s.fn_missing = true;
-      s.error = std::string("generated ") + table_kind + " build table has no fn for matcher '" +
-                m.name + "' (artifact index " + std::to_string(m.artifact_index) +
-                ") — rebuild ton-mch-engine";
+      s.error = "generated build table has no fn for matcher '" + m.name + "' (artifact index " +
+                std::to_string(m.artifact_index) + ") — rebuild ton-mch-engine";
       return s;
     }
     // Where coverage: every where_expr node of a matcher the loop will run must
@@ -465,8 +459,8 @@ ClassifySetup prepare_classify(const LoadedIr &ir) {
   return s;
 }
 
-ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const ClassifySetup &setup,
-                              const LookupSource &src) {
+ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatcher> &matchers,
+                              const ClassifySetup &setup, const LookupSource &src) {
   ClassifyResult result;
 
   // Synthetic root wrapper (process_event_async: Block('root').connect(...)).
@@ -509,7 +503,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
   std::vector<CoreAction> pending;
   try {
     for (int idx : setup.included) {
-      const CompiledMatcher &m = ir.matchers[idx];
+      const CompiledMatcher &m = matchers[idx];
       if (!anchor_can_match(m)) {
         continue;  // B1: no spine op/btype can satisfy this anchor — skip traversal
       }

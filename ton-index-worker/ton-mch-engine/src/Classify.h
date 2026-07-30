@@ -67,12 +67,12 @@ using LookupSourceFactory = std::function<std::shared_ptr<LookupSource>(TraceCon
 // TODO: remove (harness): `--classify` renders the INTERMEDIATE block-tree
 // stage, whose only consumer was the Python twin twins/py_classify.py (audit
 // §5.7 H30). The action rows (run_actions below) are the gated stage.
-int run_classify(const std::string &artifact_path, const std::vector<std::string> &paths);
+int run_classify(const std::vector<std::string> &paths);
 
 // Shared classify/actions dump over an injectable context loader (the render +
 // engine loop live here; only ctx acquisition varies A vs B). Exported so the
 // schema A/B gate reuses the exact rendering, keeping path B byte-comparable.
-int run_dump(const std::string &artifact_path, const std::vector<std::string> &paths,
+int run_dump(const std::vector<std::string> &paths,
              bool actions_mode, const TraceContextLoader &load_ctx,
              const LookupSourceFactory &lookup_factory = {});
 
@@ -85,6 +85,6 @@ int run_dump(const std::string &artifact_path, const std::vector<std::string> &p
 // Value rendering per fixtures/Render.h render_value (sorted keys). Rows are built
 // lib-side by ActionBuild.cpp — see its header block for what is and is not
 // rendered (roles are not; accounts and the initiating-tx extension ARE).
-int run_actions(const std::string &artifact_path, const std::vector<std::string> &paths);
+int run_actions(const std::vector<std::string> &paths);
 
 }  // namespace mch

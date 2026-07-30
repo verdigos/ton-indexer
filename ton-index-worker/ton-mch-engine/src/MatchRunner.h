@@ -33,14 +33,9 @@
 
 namespace mch {
 
-// Load the IR artifact, then dump matches over each path (files or directories
-// of *.lz4). Returns 0 on success, nonzero on load failure. where_exprs are
-// evaluated by the sha-selected generated table (GenWheres.h) — the same
-// evaluator production classify uses; a table that does not cover every
-// where_expr node of the artifact is a hard error.
-// TODO: remove (harness): `--match-gen` used to select that table and `--match`
-// the interpreter. With the walker generated-only the two CLI flags are the same
-// mode, so --match-gen is now a bare alias in main.cpp (EM4 drops it).
-int run_match(const std::string &artifact_path, const std::vector<std::string> &paths);
+// Dump matches over each path (files or directories of *.lz4) using the
+// COMPILED-IN matcher table (GenMatchers.h) and the generated where table
+// (GenWheres.h) — the same match phase production classify runs.
+int run_match(const std::vector<std::string> &paths);
 
 }  // namespace mch

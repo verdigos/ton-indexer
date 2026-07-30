@@ -370,7 +370,7 @@ public:
     void append_actions(std::vector<std::pair<std::string, std::string>>& trace_fields_to_set) {
         if (actions_.state == nullptr) {
             // Feature off. Return BEFORE the otel attribute and before the
-            // hget, so a build with no --mch-artifact issues exactly the
+            // hget, so a run with --mch-disable issues exactly the
             // commands it issued before the write-back and pays no extra round
             // trip.
             return;

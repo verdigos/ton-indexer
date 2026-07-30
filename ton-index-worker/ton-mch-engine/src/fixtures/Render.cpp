@@ -244,10 +244,10 @@ bool structural_equal(const Value &a, const Value &b) {
   return false;
 }
 
-void warn_missing_artifact_parsers(const LoadedIr &ir) {
+void warn_missing_artifact_parsers(const std::vector<CompiledMatcher> &matchers) {
   const auto &parsers = message_parsers();
   std::set<std::string> missing;
-  for (const CompiledMatcher &m : ir.matchers) {
+  for (const CompiledMatcher &m : matchers) {
     for (const std::string &t : m.ref_msgtypes) {
       if (parsers.find(t) == parsers.end()) {
         missing.insert(t);
@@ -263,7 +263,8 @@ void warn_missing_artifact_parsers(const LoadedIr &ir) {
     joined += t;
   }
   std::fprintf(stderr,
-               "WARNING: artifact references %zu message type(s) with no registered C++ parser "
+               "WARNING: the matcher table references %zu message type(s) with no registered C++ "
+               "parser "
                "(matchers that parse them will be build-skipped): %s\n",
                missing.size(), joined.c_str());
 }

@@ -247,7 +247,11 @@ actions* and W2 turns it into a wire-visible one, so it belongs here, before any
   positional-array framing, with **no compile error and no gate failure**. W1 does not move it and
   does not need the flag (the bridge TU includes `TraceEmulator.h`, not `Serializer.hpp`). Out of
   scope per the lead; leave the landmine documented, do not step on it.
-- `--mch-artifact` stays a runtime IR load with a startup-fatal path (EM4 retires it).
+- `--mch-artifact` stays a runtime IR load with a startup-fatal path. **DONE (EM4 "drop runtime IR"):
+  the flag is deleted. `mch-codegen --matchers` compiles the artifact into `gen_matchers_ir()`,
+  classification is ON by default, and `--mch-disable` is the ops escape hatch (null prep = today's
+  no-flag behaviour). The startup-fatal property moved to `make_engine_prep()`, which now fails only on
+  build bugs (parser-registry conflict, half-regenerated tables).**
 - The gate is a *continuation*: `inner(...)` — the real insert — runs only inside the classify
   response promise. `~LambdaPromise` answers with an error on actor death, so `inner` fires exactly
   once on every path including shutdown. Preserve that property; it is the whole safety argument for a
@@ -715,7 +719,7 @@ reach the prod lib*, spliced into exactly one target.
 | `FixtureLookupSource::fetch` + `upper_ascii` + `iface_obj` (`src/BuildRuntime.cpp:196-215, 232-396`) and the decl (`BuildRuntime.h:145-155`) | `mch-classify` | includes the 84-line jvault fixture chain at `:310-394` |
 | `FixtureLookupSource::kinds()` (`BuildRuntime.cpp:219-230`) | **stays lib-side** | called from **production** code: `BuildDriver.cpp:134` (runnability gating) and `ParsedBlockLookupSource.cpp:43` (which literally returns it). Hoist the 7-name set to a free `lookup_kinds()` in the lib and have both classes call it |
 | `vectors_generated.cpp`, `wheres_generated.cpp`, `builds_vectors_generated.cpp` | `MCH_GENERATED_SOURCES` | harness-only, verified: their `gen_*` symbols are referenced only from `VectorRunner.cpp:248`, `MatchRunner.cpp:113-121`, `BuildVectorRunner.cpp:222-242`. Split the variable into prod (`builds_ir_generated`, the testbed slot, `mch-msgs-tlb`) and test sets |
-| `-DMCH_TESTBED_IR` table → `mch-fixtures`; **the knob survives** | `mch-classify` | **DECIDED (lead).** Nobody sets it in-tree, but coffee/tgbtc coverage is testbed-only, so the knob stays usable. Move the generated table to `mch-fixtures`; keep `src/BuildsTestbedStub.cpp` and the `select_gen_builds` probe (`BuildDriver.cpp:261-275`) in the lib — the stub's empty-sha contract (*"never equal to a real artifact's sha256"*) is what lets the probe run unconditionally |
+| `-DMCH_TESTBED_IR` table → `mch-fixtures`; **the knob survives** | `mch-classify` | **SUPERSEDED by EM4 "drop runtime IR".** The knob survives, but the whole sha-probe apparatus is gone: with no artifact loaded at run time there is nothing to probe against, so `MCH_TESTBED_IR` now just swaps the *input document* of the classify tables at configure time (`MCH_CLASSIFY_ARTIFACT`), under unchanged symbols. `select_gen_builds` / `select_gen_wheres` / `TestbedStubs.cpp` deleted; `prepare_classify` cross-checks the three tables' source shas instead |
 | `install(TARGETS ton-mch-engine RUNTIME DESTINATION bin)` (`:227`) | — | drop it: a gate-only harness exe in the production bin dir |
 
 ### 5b. `mch-record` (new small tool)

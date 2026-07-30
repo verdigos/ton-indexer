@@ -1,8 +1,8 @@
 // Shadow classifier actor (em1-design §15/§16): a sibling of the emulator's
 // insert path that classifies every trace emission and ANSWERS the decorated
 // sink with the Action rows plus per-trace telemetry. It writes nothing itself
-// — no Redis, no DB — so with the feature off (cfg.prep == nullptr, i.e. no
-// --mch-artifact) the emulator behaves exactly as before.
+// — no Redis, no DB — so with the feature off (cfg.prep == nullptr, i.e.
+// --mch-disable) the emulator behaves exactly as before.
 #pragma once
 
 #include "EmuTypes.h"

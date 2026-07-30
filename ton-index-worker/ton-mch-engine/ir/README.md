@@ -4,9 +4,11 @@ These JSON files are the cross-language contract consumed by the C++ build
 (mch-codegen reads them; no Python is required to build ton-mch-engine).
 
 - `mch_ir.json` — the compiled matcher IR artifact (currently 33 matchers, all
-  declarative). Input for `--wheres` (where_expr functions) and `--builds
-  --suffix ir` (build-program functions used by `--classify` / `--build-smoke`);
-  loaded at runtime by `--match` / `--build-smoke` / `--classify`. The two
+  declarative). A pure BUILD input: `--matchers`, `--wheres` and `--builds
+  --suffix ir` compile it into the matcher table, the where functions and the
+  build programs, and NOTHING reads it at run time (the `mch_ir_equivalence`
+  ctest is the only remaining reader of the document, and it is a build gate).
+  The two
   legacy builder-tier jetton specs (specs/jetton_transfer.mch, specs/jettons.mch)
   are excluded from this PRODUCTION artifact (A4) — see the manifest's
   `excluded_note`. They stay in specs/ for the Python conformance suite; emitting
@@ -46,43 +48,48 @@ tree (`<binary-dir>/ton-mch-engine/generated/`) and is NOT in git:
 | input (git)           | generator                              | output (build tree)           | table symbols                                             |
 |-----------------------|----------------------------------------|-------------------------------|-----------------------------------------------------------|
 | ir/expr_vectors.json  | mch-codegen --vectors                  | vectors_generated.cpp         | `gen_vectors()`                                           |
-| ir/mch_ir.json        | mch-codegen --wheres --suffix ir       | wheres_ir_generated.cpp       | `gen_wheres_ir()`, `gen_wheres_ir_source_sha()`           |
-| ir/mch_ir.json        | mch-codegen --builds --suffix ir       | builds_ir_generated.cpp       | `gen_builds_ir()`, `gen_builds_ir_source_sha()`           |
+| ir/mch_ir.json†       | mch-codegen --matchers --suffix ir     | matchers_ir_generated.cpp     | `gen_matchers_ir()`, `gen_matchers_ir_source_sha()`       |
+| ir/mch_ir.json†       | mch-codegen --wheres --suffix ir       | wheres_ir_generated.cpp       | `gen_wheres_ir()`, `gen_wheres_ir_source_sha()`           |
+| ir/mch_ir.json†       | mch-codegen --builds --suffix ir       | builds_ir_generated.cpp       | `gen_builds_ir()`, `gen_builds_ir_source_sha()`           |
 | ir/build_vectors.json | mch-codegen --builds --suffix vectors  | builds_vectors_generated.cpp  | `gen_builds_vectors()`, `gen_builds_vectors_source_sha()` |
 | tlb/mch-msgs.tlb      | tlbc                                   | mch-msgs-tlb.{cpp,h}          | `mchmsg::gen::*`                                          |
 
+† the three CLASSIFY tables come from `MCH_CLASSIFY_ARTIFACT`, which is
+`ir/mch_ir.json` unless `-DMCH_TESTBED_IR` overrides it (see below).
+
 Editing an input JSON (or the .tlb) and rebuilding `ton-mch-engine` is the
-whole workflow — CMake reruns the affected generator automatically. The
-`--wheres` / `--builds` tables carry distinct symbols, so every table links into
-the one binary and each runner is permanently paired with its own document; the
-runners' sha256 guards remain as a safety net (a mismatch is a hard exit 2,
-but with build-step generation it cannot happen unless a stale binary is run
-against edited inputs without rebuilding).
+whole workflow — CMake reruns the affected generator automatically. Each table
+carries its own `--suffix` symbols, so tables from several documents link into
+one binary. There is no run-time table SELECTION any more: the classify tables
+are chosen at configure time, and `prepare_classify` only cross-checks that the
+matcher / build / where tables agree on their source sha, which catches a
+half-finished regeneration.
 
 ## Running against a different artifact
 
-`--classify` / `--build-smoke` / `--match` accept only an artifact whose bytes
-match the tables baked at build time (`--match` too, since the walker evaluates
-where_exprs through the generated table). Two ways to run another artifact:
+Every mode runs the tables COMPILED INTO the binary, so "running another
+artifact" means building against it. `-I <path>` still parses on the CLI (the
+gate scripts pass it) but is ignored with a warning. Two ways:
 
 - **Contract swap**: overwrite `ir/mch_ir.json` and rebuild (seconds — only
   the affected tables regenerate). Use when the new artifact IS the new
   contract.
-- **Testbed tables** (`-DMCH_TESTBED_IR=<path/to/artifact.json>` cache var):
-  generates a testbed build table AND where table (`gen_builds_testbed()`,
-  `gen_wheres_testbed()`) from an out-of-tree experimental artifact; the runners
-  pick the ir or testbed tables by the loaded artifact's sha automatically. The
-  contract file stays untouched — intended for phase work that lives off
-  experimental artifacts. Unset the var (default) and the committed empty stubs
-  (`src/TestbedStubs.cpp`) are compiled instead.
+- **Testbed artifact** (`-DMCH_TESTBED_IR=<path/to/artifact.json>` cache var):
+  the classify tables (matchers + builds + wheres) are generated from that
+  document instead, under the SAME symbols — swapping the input is all the knob
+  does. The contract file stays untouched; intended for phase work that lives
+  off experimental artifacts. Note the `mch_ir_equivalence` ctest then runs
+  against the testbed document too (CMake passes it the same
+  `MCH_CLASSIFY_ARTIFACT`), so the gate keeps working.
 
 ## Concurrency hazard
 
 Never share one binary dir across concurrently working agents/sessions: a
 parallel edit of an input JSON mid-build can be captured by one generator run
 and not another (and Syncthing can revert a file with its mtime preserved, so
-ninja may not even rerun the generator). The sha guards catch the resulting
-mismatch at run time, but the fix is isolation: one binary dir per agent.
+ninja may not even rerun the generator). `prepare_classify`'s cross-table sha
+check catches the resulting mismatch at startup, but the fix is isolation: one
+binary dir per agent.
 
 ## Syncing from the frontend
 

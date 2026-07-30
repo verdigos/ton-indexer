@@ -1,6 +1,4 @@
-#include "IrLoader.h"
-
-#include "HostRegistry.h"
+#include "fixtures/IrLoader.h"
 
 #include "td/utils/JsonBuilder.h"
 #include "td/utils/crypto.h"
@@ -271,33 +269,10 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
       cn.pred_name = jstr(nrec, "pred");
     }
     cn.where_name = jstr(nrec, "where");
-    if (const Json *wf = jfield(nrec, "where_expr"); wf != nullptr) {
-      cn.has_where_expr = true;
-      // TODO: remove (harness): DEAD since the where-table flip — the only
-      // consumer of the re-encoded tree was ExprEval inside the walker, and the
-      // walker now calls the generated fn keyed by cn.global_id. `has_where_expr`
-      // above is the live part (prepare_classify's coverage check). EM4 deletes
-      // everything to the end of this block plus WhereExpr itself.
-      //
-      // Re-encode the subtree into a self-owned buffer, decode once: the
-      // decoded JsonValue slices point into WhereExpr::buf, which lives (and
-      // never moves) behind the shared_ptr, outliving the artifact document.
-      auto we = std::make_shared<WhereExpr>();
-      {
-        auto sbuf = td::StackAllocator::alloc(1 << 16);
-        td::JsonBuilder jb(td::StringBuilder(sbuf.as_slice(), true), -1);
-        auto scope = jb.enter_value();
-        wf->store(&scope);
-        we->buf = jb.string_builder().as_cslice().str();
-      }
-      auto r_expr = td::json_decode(td::MutableSlice(we->buf));
-      if (r_expr.is_error()) {
-        return td::Status::Error("matcher " + m.name + ": where_expr re-decode failed: " +
-                                 r_expr.error().message().str());
-      }
-      we->expr = r_expr.move_as_ok();
-      cn.where_expr = std::move(we);
-    }
+    // Only the PRESENCE of an inline where is compiled: the tree itself is
+    // emitted as a generated function keyed by cn.global_id (GenWheres.h), and
+    // nothing reads the JSON subtree any more.
+    cn.has_where_expr = jfield(nrec, "where_expr") != nullptr;
     std::string cap = jstr(nrec, "capture");
     cn.slot = (!cap.empty() && slot_of.count(cap)) ? slot_of[cap] : -1;
     cn.optional = jbool(nrec, "optional");
@@ -382,48 +357,18 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     scan_program(*bp, m);
   }
 
-  // Match-phase runnability: named host predicates (anchor + reachable pred /
-  // `where` nodes) are the only match-time host dependencies. Inline
-  // where_exprs are evaluated by the walker (interpreter or generated code)
-  // and no longer make a matcher unrunnable.
-  std::set<std::string> pred_names;
+  // Match-phase host dependencies: named predicates (the anchor's, already in
+  // ref_preds for pred/mixed anchors, plus every `pred` / named-`where` node).
+  // Whether the linked host supplies them is match_skip_reason()'s call, not the
+  // loader's. Inline where_exprs are evaluated by the generated where table, so
+  // they are not host dependencies at all.
   for (const CompiledNode &n : m.nodes) {
     if (n.kind == NodeKind::Pred && !n.pred_name.empty()) {
-      pred_names.insert(n.pred_name);
+      m.ref_preds.insert(n.pred_name);
     }
     if (!n.where_name.empty()) {
-      pred_names.insert(n.where_name);
+      m.ref_preds.insert(n.where_name);
     }
-  }
-  // Anchor-level predicate names already collected in ref_preds for pred/mixed.
-  if (m.anchor_kind == AnchorKind::Pred || m.anchor_kind == AnchorKind::Mixed) {
-    pred_names.insert(m.ref_preds.begin(), m.ref_preds.end());
-  }
-  m.ref_preds.insert(pred_names.begin(), pred_names.end());
-  // Runnable iff every referenced predicate is in the host registry (Phase D);
-  // the skip reason lists only the MISSING names. A mixed anchor stays
-  // unrunnable even when its predicates exist: the loader does not yet store
-  // the branch structure matcher_test_self would need (no current
-  // build_program matcher has one — guard, not a plan).
-  std::set<std::string> missing;
-  for (const std::string &p : pred_names) {
-    if (host_predicates().find(p) == host_predicates().end()) {
-      missing.insert(p);
-    }
-  }
-  if (!missing.empty()) {
-    m.unrunnable = true;
-    std::string reason = "pred:";
-    bool first = true;
-    for (const std::string &p : missing) {
-      if (!first) reason += ",";
-      first = false;
-      reason += p;
-    }
-    m.skip_reason = reason;
-  } else if (m.anchor_kind == AnchorKind::Mixed && !m.ref_preds.empty()) {
-    m.unrunnable = true;
-    m.skip_reason = "mixed_anchor_preds";
   }
   return td::Status::OK();
 }

@@ -1,13 +1,30 @@
 cmake_minimum_required(VERSION 3.16)
 
+# --- mch-ir-load: the IR artifact PARSER, alone in a target because two very
+# different things need it and NEITHER of them is production:
+#   - mch-codegen (below), which compiles the artifact into the matcher tables;
+#   - the harness exe, whose mch_ir_equivalence ctest uses it as the reference
+#     the generated table is compared against.
+# It links tdutils and nothing else — that is what lets the build-time tool use
+# it, and it is why the runnable/skip decision (which needs the host registry)
+# lives in BuildDriver.cpp instead of in the loader. mch-classify does NOT link
+# it: no production binary parses an IR document any more.
+# TODO: remove (harness): with the tables compiled in, the last thing keeping the
+# parser alive is the equivalence gate.
+add_library(mch-ir-load STATIC src/fixtures/IrLoader.cpp)
+target_include_directories(mch-ir-load PUBLIC src)
+target_compile_features(mch-ir-load PUBLIC cxx_std_20)
+target_link_libraries(mch-ir-load PUBLIC tdutils)
+
 # --- mch-codegen: build-time IR -> C++ source generator (no Python in the build).
 # Reads the version-controlled IR JSON under ir/ and emits deterministic C++.
 add_executable(mch-codegen
     codegen/main.cpp
     codegen/ExprCodegen.cpp
+    codegen/MatcherCodegen.cpp
 )
 target_compile_features(mch-codegen PRIVATE cxx_std_20)
-target_link_libraries(mch-codegen tdutils)
+target_link_libraries(mch-codegen tdutils mch-ir-load)
 
 # --- generated sources ---------------------------------------------------------
 # EVERY generated file (mch-codegen tables + tlbc parsers) is a build step whose
@@ -15,13 +32,28 @@ target_link_libraries(mch-codegen tdutils)
 # in the source tree or git. The ir/*.json inputs and tlb/mch-msgs.tlb ARE the
 # version-controlled contract; the .cpp tables are derived artifacts.
 #
-# Per-document build tables: mch-codegen --builds emits gen_builds_<suffix>()
-# symbols, so the table generated from ir/mch_ir.json (classify / build-smoke)
-# and the one from ir/build_vectors.json (--build-vectors) both link into the
-# binary, each permanently paired with its input document. The runners' sha256
-# guards remain as a safety net but now pass by construction.
+# Per-document tables: mch-codegen emits gen_*_<suffix>() symbols, so the tables
+# generated from the CLASSIFY artifact and the one from ir/build_vectors.json
+# (--build-vectors) both link into the binary, each permanently paired with its
+# input document.
 set(MCH_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${MCH_GEN_DIR})
+
+# The document the CLASSIFY tables (matchers + builds + wheres) are generated
+# from. -DMCH_TESTBED_IR=<artifact.json> lets a phase run classify against an
+# experimental artifact WITHOUT editing the ir/mch_ir.json contract; the table
+# SYMBOLS are unchanged, so swapping the document is all the knob does and no
+# run-time table selection is needed. All three tables come from this one
+# variable, which is why they cannot disagree unless a build is left half-done
+# (prepare_classify cross-checks their source shas for exactly that case).
+set(MCH_TESTBED_IR "" CACHE FILEPATH
+    "Optional experimental IR artifact the classify tables are generated from instead of ir/mch_ir.json")
+if(MCH_TESTBED_IR)
+    set(MCH_CLASSIFY_ARTIFACT ${MCH_TESTBED_IR})
+    message(STATUS "mch: classify tables from TESTBED artifact ${MCH_TESTBED_IR}")
+else()
+    set(MCH_CLASSIFY_ARTIFACT ${CMAKE_CURRENT_SOURCE_DIR}/ir/mch_ir.json)
+endif()
 
 add_custom_command(
     OUTPUT ${MCH_GEN_DIR}/vectors_generated.cpp
@@ -32,17 +64,24 @@ add_custom_command(
 )
 add_custom_command(
     OUTPUT ${MCH_GEN_DIR}/wheres_ir_generated.cpp
-    COMMAND mch-codegen --wheres ${CMAKE_CURRENT_SOURCE_DIR}/ir/mch_ir.json
+    COMMAND mch-codegen --wheres ${MCH_CLASSIFY_ARTIFACT}
             --suffix ir -o ${MCH_GEN_DIR}/wheres_ir_generated.cpp
-    DEPENDS mch-codegen ${CMAKE_CURRENT_SOURCE_DIR}/ir/mch_ir.json
+    DEPENDS mch-codegen ${MCH_CLASSIFY_ARTIFACT}
     COMMENT "Generate MCH where_expr functions from the IR artifact (mch-codegen --wheres)"
 )
 add_custom_command(
     OUTPUT ${MCH_GEN_DIR}/builds_ir_generated.cpp
-    COMMAND mch-codegen --builds ${CMAKE_CURRENT_SOURCE_DIR}/ir/mch_ir.json
+    COMMAND mch-codegen --builds ${MCH_CLASSIFY_ARTIFACT}
             --suffix ir -o ${MCH_GEN_DIR}/builds_ir_generated.cpp
-    DEPENDS mch-codegen ${CMAKE_CURRENT_SOURCE_DIR}/ir/mch_ir.json
+    DEPENDS mch-codegen ${MCH_CLASSIFY_ARTIFACT}
     COMMENT "Generate MCH build-program functions from the IR artifact (mch-codegen --builds)"
+)
+add_custom_command(
+    OUTPUT ${MCH_GEN_DIR}/matchers_ir_generated.cpp
+    COMMAND mch-codegen --matchers ${MCH_CLASSIFY_ARTIFACT}
+            --suffix ir -o ${MCH_GEN_DIR}/matchers_ir_generated.cpp
+    DEPENDS mch-codegen ${MCH_CLASSIFY_ARTIFACT}
+    COMMENT "Generate the MCH matcher table from the IR artifact (mch-codegen --matchers)"
 )
 add_custom_command(
     OUTPUT ${MCH_GEN_DIR}/builds_vectors_generated.cpp
@@ -66,50 +105,16 @@ add_custom_command(
     DEPENDS tlbc ${CMAKE_CURRENT_SOURCE_DIR}/tlb/mch-msgs.tlb
 )
 
-# TODO: remove (harness): the testbed slot is dev-only but cannot leave the prod
-# lib as long as select_gen_builds (BuildDriver.cpp) / select_gen_wheres
-# (Walker.cpp) probe it from ClassifyCore — see the notes on gen_builds_testbed
-# in src/GenBuilds.h and gen_wheres_testbed in src/GenWheres.h (audit §5.7 H4).
-# OPTIONAL testbed tables (-DMCH_TESTBED_IR=<artifact.json>): let a phase run
-# classify / build-smoke against an experimental artifact WITHOUT editing the
-# ir/mch_ir.json contract — runners select both tables by source sha. Both the
-# build programs AND the where_exprs come from the artifact, so the knob has to
-# generate the PAIR; a testbed artifact with an unpaired where table would fail
-# prepare_classify's coverage check. Unset (default): the committed empty stubs.
-set(MCH_TESTBED_IR "" CACHE FILEPATH
-    "Optional experimental IR artifact; generates the gen_builds_testbed / gen_wheres_testbed tables")
-if(MCH_TESTBED_IR)
-    add_custom_command(
-        OUTPUT ${MCH_GEN_DIR}/builds_testbed_generated.cpp
-        COMMAND mch-codegen --builds ${MCH_TESTBED_IR}
-                --suffix testbed -o ${MCH_GEN_DIR}/builds_testbed_generated.cpp
-        DEPENDS mch-codegen ${MCH_TESTBED_IR}
-        COMMENT "Generate MCH build-program functions from the TESTBED artifact (mch-codegen --builds)"
-    )
-    add_custom_command(
-        OUTPUT ${MCH_GEN_DIR}/wheres_testbed_generated.cpp
-        COMMAND mch-codegen --wheres ${MCH_TESTBED_IR}
-                --suffix testbed -o ${MCH_GEN_DIR}/wheres_testbed_generated.cpp
-        DEPENDS mch-codegen ${MCH_TESTBED_IR}
-        COMMENT "Generate MCH where_expr functions from the TESTBED artifact (mch-codegen --wheres)"
-    )
-    set(MCH_TESTBED_SOURCES
-        ${MCH_GEN_DIR}/builds_testbed_generated.cpp
-        ${MCH_GEN_DIR}/wheres_testbed_generated.cpp)
-else()
-    set(MCH_TESTBED_SOURCES src/TestbedStubs.cpp)
-endif()
-
-# The generated tables split by who may link them. PRODUCT: the artifact build
-# AND where tables the classify loop runs, the testbed slot it probes, and the
-# TL-B parsers. TEST: the conformance-vector tables — their gen_* symbols are
+# The generated tables split by who may link them. PRODUCT: the matcher, build
+# and where tables the classify loop runs, plus the TL-B parsers. TEST: the
+# conformance-vector tables — their gen_* symbols are
 # referenced only from the harness runners (VectorRunner / BuildVectorRunner), so
 # they belong in mch-fixtures, not in the lib ton-index-postgres links
 # (python-parity-audit §5.7 H3).
 set(MCH_GENERATED_SOURCES
+    ${MCH_GEN_DIR}/matchers_ir_generated.cpp
     ${MCH_GEN_DIR}/builds_ir_generated.cpp
     ${MCH_GEN_DIR}/wheres_ir_generated.cpp
-    ${MCH_TESTBED_SOURCES}
     ${MCH_GEN_DIR}/mch-msgs-tlb.cpp
 )
 set(MCH_GENERATED_TEST_SOURCES
@@ -143,7 +148,6 @@ add_library(mch-classify STATIC
     src/BlockTree.cpp
     src/Value.cpp
     src/ExprRuntime.cpp
-    src/IrLoader.cpp
     src/Walker.cpp
     src/HostRegistry.cpp
     src/host/HostCommon.cpp
@@ -244,7 +248,9 @@ endif()
 add_library(mch-fixtures STATIC ${MCH_FIXTURE_SOURCES})
 target_include_directories(mch-fixtures PUBLIC src PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_features(mch-fixtures PUBLIC cxx_std_20)
-target_link_libraries(mch-fixtures PUBLIC mch-classify lz4::lz4)
+# mch-ir-load rides in HERE, not on mch-classify: the artifact parser is the
+# equivalence gate's reference, not a production code path.
+target_link_libraries(mch-fixtures PUBLIC mch-classify mch-ir-load lz4::lz4)
 add_dependencies(mch-fixtures mch_generate_sources)
 
 # --- In-process shadow classifier for ton-trace-emulator (em1-design §8).
@@ -287,6 +293,7 @@ add_executable(ton-mch-engine
     src/MatchRunner.cpp
     src/BuildVectorRunner.cpp
     src/BuildSmoke.cpp
+    src/IrEquivalence.cpp
     src/Classify.cpp
     src/ShapeTest.cpp
     src/DexRecordsTest.cpp
@@ -336,3 +343,7 @@ add_test(NAME mch_actions_msgpack
     COMMAND ton-mch-engine --actions-msgpack-test)
 add_test(NAME mch_celldb_tier2
     COMMAND ton-mch-engine --celldb-tier2-test)
+# The compiled-in matcher table vs the artifact parsed at run time: the gate that
+# lets production stop parsing the document (src/IrEquivalence.h).
+add_test(NAME mch_ir_equivalence
+    COMMAND ton-mch-engine --ir-equivalence ${MCH_CLASSIFY_ARTIFACT})

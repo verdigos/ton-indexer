@@ -10,7 +10,7 @@
 // It lives with the fixture loader instead, in mch-fixtures.
 #pragma once
 
-#include "IrLoader.h"
+#include "IrTables.h"
 #include "Value.h"
 
 #include <set>
@@ -50,6 +50,6 @@ bool structural_equal(const Value &a, const Value &b);
 // makes a missing-parser artifact loud. Stderr only — never touches the
 // stdout dump the A/B gate compares. Production surfaces the same gap through
 // prepare_classify's skip table, without writing to stderr from a library.
-void warn_missing_artifact_parsers(const LoadedIr &ir);
+void warn_missing_artifact_parsers(const std::vector<CompiledMatcher> &matchers);
 
 }  // namespace mch

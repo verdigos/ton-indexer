@@ -19,6 +19,8 @@
 #include "DexRecordsTest.h"
 #include "EmuActionSerializeTest.h"
 #include "EmuCelldbLookupTest.h"
+#include "GenMatchers.h"
+#include "IrEquivalence.h"
 #include "MsgVectorRunner.h"
 #include "BuildVectorRunner.h"
 #include "MatchRunner.h"
@@ -31,6 +33,7 @@
 #include "VectorRunner.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -154,6 +157,7 @@ int main(int argc, char *argv[]) {
   std::string vectors_gen_path;
   std::string build_vectors_path;
   std::string msg_vectors_path;
+  std::string ir_equivalence_path;
   bool match_mode = false;
   bool build_smoke_mode = false;
   bool classify_mode = false;
@@ -182,20 +186,20 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "build-vectors",
                "Run build-program conformance vectors through GENERATED build fns and exit",
                [&](td::Slice value) { build_vectors_path = value.str(); });
+  p.add_option('\0', "ir-equivalence",
+               "Compare the compiled-in matcher table against the artifact parsed at run time "
+               "and exit: --ir-equivalence <mch_ir.json>",
+               [&](td::Slice value) { ir_equivalence_path = value.str(); });
   p.add_option('\0', "msg-vectors",
                "Run M1 message-schema boundary vectors (parse ok/fail) and exit",
                [&](td::Slice value) { msg_vectors_path = value.str(); });
-  // TODO: remove (harness): --match, --match-gen, --build-smoke, --classify,
+  // TODO: remove (harness): --match, --build-smoke, --classify,
   // --classify-schema, --classify-prod, --parse-dump and --surface all render
   // INTERMEDIATE pipeline stages whose only consumers were the Python twins
   // (audit §5.7 H33). The gated stage is the action rows: --actions, and the
   // --actions-schema / --actions-prod A/B pair that cross-checks the
   // production loader against it.
   p.add_option('\0', "match", "Match-phase dump: -I <artifact> -T <fixture|dir> (repeatable)",
-               [&]() { match_mode = true; });
-  // TODO: remove (harness): alias of --match since the walker became
-  // generated-only (there is no interpreter mode left to pick); EM4 drops it.
-  p.add_option('\0', "match-gen", "Alias of --match (kept for gate scripts)",
                [&]() { match_mode = true; });
   p.add_option('\0', "build-smoke",
                "Build-phase smoke dump (two-phase lookups): -I <artifact> -T <fixture|dir>",
@@ -266,9 +270,11 @@ int main(int argc, char *argv[]) {
     threads = v;
     return td::Status::OK();
   });
-  p.add_option('I', "ir", "Path to the MCH IR artifact (json)", [&](td::Slice value) {
-    ir_path = value.str();
-  });
+  // TODO: remove (harness): kept so the gate scripts and the CI golden step keep
+  // running unchanged. The IR document is a BUILD input now — every mode runs the
+  // table compiled into this binary — so there is nothing for a path to select.
+  p.add_option('I', "ir", "DEPRECATED, ignored: the IR artifact is compiled in",
+               [&](td::Slice value) { ir_path = value.str(); });
   p.add_option('T', "trace", "Path to an .lz4 trace fixture (repeatable)", [&](td::Slice value) {
     trace_paths.push_back(value.str());
   });
@@ -277,6 +283,13 @@ int main(int argc, char *argv[]) {
   if (S.is_error()) {
     LOG(ERROR) << "failed to parse options: " << S.move_as_error();
     std::_Exit(2);
+  }
+
+  if (!ir_path.empty()) {
+    std::fprintf(stderr,
+                 "WARNING: -I %s is ignored — this binary runs the matcher table compiled in from "
+                 "the artifact with sha %s\n",
+                 ir_path.c_str(), mch::gen_matchers_ir_source_sha());
   }
 
   // W12 (design §4): advisory startup consistency check on the merged parser
@@ -310,40 +323,45 @@ int main(int argc, char *argv[]) {
     return mch::run_msg_vectors(msg_vectors_path);
   }
 
+  if (!ir_equivalence_path.empty()) {
+    // Generated-table vs runtime-loaded-table gate: no scheduler needed.
+    return mch::run_ir_equivalence(ir_equivalence_path);
+  }
+
   if (match_mode) {
     // Match-phase dump mode: no actor scheduler needed.
-    return mch::run_match(ir_path, trace_paths);
+    return mch::run_match(trace_paths);
   }
 
   if (build_smoke_mode) {
     // Build-phase smoke mode (two-phase lookups): no scheduler needed.
-    return mch::run_build_smoke(ir_path, trace_paths);
+    return mch::run_build_smoke(trace_paths);
   }
 
   if (classify_schema_mode) {
-    return mch::run_classify_schema(ir_path, trace_paths);
+    return mch::run_classify_schema(trace_paths);
   }
 
   if (actions_schema_mode) {
-    return mch::run_actions_schema(ir_path, trace_paths);
+    return mch::run_actions_schema(trace_paths);
   }
 
   if (classify_prod_mode) {
-    return mch::run_classify_prod(ir_path, trace_paths);
+    return mch::run_classify_prod(trace_paths);
   }
 
   if (actions_prod_mode) {
-    return mch::run_actions_prod(ir_path, trace_paths);
+    return mch::run_actions_prod(trace_paths);
   }
 
   if (classify_mode) {
     // End-to-end classify mode: no scheduler needed.
-    return mch::run_classify(ir_path, trace_paths);
+    return mch::run_classify(trace_paths);
   }
 
   if (actions_mode) {
     // Serialized-Action-row dump (Phase E part 2): no scheduler needed.
-    return mch::run_actions(ir_path, trace_paths);
+    return mch::run_actions(trace_paths);
   }
 
   if (parse_dump_mode) {

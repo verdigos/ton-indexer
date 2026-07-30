@@ -1,6 +1,5 @@
 #include "Walker.h"
 
-#include "GenWheres.h"
 #include "HostRegistry.h"
 
 #include <algorithm>
@@ -398,25 +397,9 @@ bool matcher_test_self(const CompiledMatcher &m, const Block *b) {
       return it != host_predicates().end() && it->second(b);
     }
     case AnchorKind::Mixed:
-      return false;  // branch structure not stored; loader keeps these unrunnable
+      return false;  // branch structure not stored; match_skip_reason skips these
   }
   return false;
-}
-
-const std::vector<GenWhere> *select_gen_wheres(const std::string &sha, const char **which) {
-  if (sha == gen_wheres_ir_source_sha()) {
-    if (which != nullptr) {
-      *which = "ir";
-    }
-    return &gen_wheres_ir();
-  }
-  if (sha == gen_wheres_testbed_source_sha()) {
-    if (which != nullptr) {
-      *which = "testbed";
-    }
-    return &gen_wheres_testbed();
-  }
-  return nullptr;
 }
 
 std::optional<MatchResult> matcher_match(const CompiledMatcher &m, Block *anchor,

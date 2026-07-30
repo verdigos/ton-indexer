@@ -20,8 +20,7 @@
 // cell:<HASH> | obj{k=v,..} | {k=v,..} (both key-sorted) | [v,..] |
 // block:<block_key>.
 //
-// The gen_builds() table must have been generated from THIS artifact
-// (mch-codegen --builds <artifact>): fns are keyed by artifact matcher index.
+// Runs the COMPILED-IN tables (GenMatchers.h / GenBuilds.h), same as production.
 #pragma once
 
 #include <string>
@@ -29,6 +28,6 @@
 
 namespace mch {
 
-int run_build_smoke(const std::string &artifact_path, const std::vector<std::string> &paths);
+int run_build_smoke(const std::vector<std::string> &paths);
 
 }  // namespace mch

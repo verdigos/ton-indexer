@@ -7,7 +7,7 @@
 #include "fixtures/FixtureLookupSource.h"
 #include "fixtures/Render.h"
 #include "ClassifyCore.h"
-#include "IrLoader.h"
+#include "GenMatchers.h"
 #include "Walker.h"
 
 #include <algorithm>
@@ -45,14 +45,9 @@ std::vector<Block *> gather_blocks(Block *root) {
 
 }  // namespace
 
-int run_build_smoke(const std::string &artifact_path, const std::vector<std::string> &paths) {
-  auto r_ir = load_ir(artifact_path);
-  if (r_ir.is_error()) {
-    std::fprintf(stderr, "failed to load IR artifact: %s\n", r_ir.error().message().c_str());
-    return 2;
-  }
-  LoadedIr ir = r_ir.move_as_ok();
-  warn_missing_artifact_parsers(ir);
+int run_build_smoke(const std::vector<std::string> &paths) {
+  const std::vector<CompiledMatcher> &matchers = gen_matchers_ir();
+  warn_missing_artifact_parsers(matchers);
 
   // Build-table selection + runnable-matcher set + SKIP table + build-fn
   // coverage: the SAME prepare_classify() the classify path runs (this used to
@@ -60,7 +55,7 @@ int run_build_smoke(const std::string &artifact_path, const std::vector<std::str
   // worded slightly differently than the old local strings, but they go to
   // STDERR — the dump channel (stdout SKIP lines, identical + sorted) is not
   // affected.
-  ClassifySetup setup = prepare_classify(ir);
+  ClassifySetup setup = prepare_classify(matchers);
   if (setup.table_missing || setup.fn_missing) {
     std::fprintf(stderr, "%s\n", setup.error.c_str());
     return 2;
@@ -99,7 +94,7 @@ int run_build_smoke(const std::string &artifact_path, const std::vector<std::str
 
     for (Block *block : gather_blocks(ctx.root)) {
       for (int idx : setup.included) {
-        const CompiledMatcher &m = ir.matchers[idx];
+        const CompiledMatcher &m = matchers[idx];
         auto res = matcher_match(m, block, setup.where_fns);
         if (!res) {
           continue;

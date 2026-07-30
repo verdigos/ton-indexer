@@ -14,7 +14,7 @@
 #include "fixtures/FixtureLookupSource.h"
 #include "Classify.h"
 #include "ClassifyCore.h"
-#include "IrLoader.h"
+#include "IrTables.h"
 #include "ParsedBlockLookupSource.h"
 #include "SchemaTraceLoader.h"
 
@@ -289,23 +289,23 @@ LookupSourceFactory prod_lookup_factory() {
 
 }  // namespace
 
-int run_classify_schema(const std::string &artifact_path, const std::vector<std::string> &paths) {
-  return run_dump(artifact_path, paths, /*actions_mode=*/false, schema_ctx_loader);
+int run_classify_schema(const std::vector<std::string> &paths) {
+  return run_dump(paths, /*actions_mode=*/false, schema_ctx_loader);
 }
 
-int run_actions_schema(const std::string &artifact_path, const std::vector<std::string> &paths) {
-  return run_dump(artifact_path, paths, /*actions_mode=*/true, schema_ctx_loader);
+int run_actions_schema(const std::vector<std::string> &paths) {
+  return run_dump(paths, /*actions_mode=*/true, schema_ctx_loader);
 }
 
-int run_classify_prod(const std::string &artifact_path, const std::vector<std::string> &paths) {
+int run_classify_prod(const std::vector<std::string> &paths) {
   // FULL production path: SchemaTraceLoader trace + ParsedBlockLookupSource
   // lookups (tier-1 synthesized V2 + tier-2 fixture fallback) vs --classify.
-  return run_dump(artifact_path, paths, /*actions_mode=*/false, schema_ctx_loader,
+  return run_dump(paths, /*actions_mode=*/false, schema_ctx_loader,
                   prod_lookup_factory());
 }
 
-int run_actions_prod(const std::string &artifact_path, const std::vector<std::string> &paths) {
-  return run_dump(artifact_path, paths, /*actions_mode=*/true, schema_ctx_loader,
+int run_actions_prod(const std::vector<std::string> &paths) {
+  return run_dump(paths, /*actions_mode=*/true, schema_ctx_loader,
                   prod_lookup_factory());
 }
 

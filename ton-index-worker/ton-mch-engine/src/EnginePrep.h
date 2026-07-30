@@ -1,5 +1,9 @@
-// The embedding entry point: load an IR artifact once and prepare the
-// trace-independent classify state shared (const) by every classifier spawn.
+// The embedding entry point: prepare the trace-independent classify state once,
+// shared (const) by every classifier spawn.
+//
+// There is nothing to load — the matcher table is compiled into the binary
+// (GenMatchers.h), so this is the whole startup cost of the engine: an advisory
+// registry check plus prepare_classify().
 //
 // This is all that remains of the Phase-G MchClassifierActor header — the
 // actor itself was shadow-only ("writes NOTHING") and is deleted per
@@ -9,25 +13,27 @@
 #pragma once
 
 #include "ClassifyCore.h"
-#include "IrLoader.h"
+#include "IrTables.h"
 
 #include "td/utils/Status.h"
 
 #include <memory>
-#include <string>
+#include <vector>
 
 namespace mch {
 
-// Trace-independent engine state: the IR artifact + its runnable-matcher setup
-// (skip table, generated build-fn map, referenced lookup kinds).
+// Trace-independent engine state: the compiled matcher table + its setup (skip
+// table, generated build-fn map, referenced lookup kinds). `matchers` points at
+// the process-lifetime generated table, and `setup.included` indexes into it.
 struct MchEnginePrep {
-  LoadedIr ir;
+  const std::vector<CompiledMatcher> *matchers = nullptr;
   ClassifySetup setup;
 };
 
-// Load the artifact and prepare the classify setup. Fails (Result error) on a
-// bad artifact or a table/fn mismatch — the caller decides whether that is fatal
-// (prod-design §4: startup-fatal in production). No I/O beyond reading the file.
-td::Result<std::shared_ptr<const MchEnginePrep>> load_engine_prep(const std::string &artifact_path);
+// Prepare the classify setup over the compiled-in table. Fails (Result error) on
+// a registry conflict or a table/fn mismatch — both are build bugs, and the
+// caller decides whether that is fatal (prod-design §4: startup-fatal in
+// production). No I/O at all.
+td::Result<std::shared_ptr<const MchEnginePrep>> make_engine_prep();
 
 }  // namespace mch

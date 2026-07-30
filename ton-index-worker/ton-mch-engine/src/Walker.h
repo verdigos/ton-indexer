@@ -29,7 +29,7 @@
 
 #include "BlockTree.h"
 #include "ExprRuntime.h"
-#include "IrLoader.h"
+#include "IrTables.h"
 
 #include <optional>
 #include <stdexcept>
@@ -40,7 +40,7 @@
 namespace mch {
 
 // Generated where_expr functions keyed by artifact-global node id. Built once
-// per run by prepare_classify (from select_gen_wheres) and carried in
+// per run by prepare_classify (from gen_wheres_ir) and carried in
 // ClassifySetup; matcher_match takes it by reference, so a walk without a table
 // is not representable.
 using WhereFn = EvalResult (*)(const WhereEnv &);

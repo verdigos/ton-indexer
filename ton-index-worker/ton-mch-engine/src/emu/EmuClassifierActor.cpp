@@ -123,7 +123,7 @@ void classify_txs(const EmuShadowConfig &cfg, const EmuTraceView &view,
       };
     }
     ParsedBlockLookupSource src(&ifaces, std::move(hook));
-    ClassifyResult cres = classify_trace(ctx, prep.ir, prep.setup, src);
+    ClassifyResult cres = classify_trace(ctx, *prep.matchers, prep.setup, src);
     res.failure = cres.failure;
     res.failure_reason = cres.failure_reason;
     res.failure_category = cres.failure_category;

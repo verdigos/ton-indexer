@@ -1,10 +1,11 @@
 #include "MatchRunner.h"
 
 #include "BlockTree.h"
-#include "fixtures/Render.h"  // shared block_key (§11 item 2 dedupe)
-#include "GenWheres.h"
+#include "BuildDriver.h"    // match_skip_reason
+#include "ClassifyCore.h"    // prepare_classify
+#include "GenMatchers.h"
 #include "fixtures/FixtureLoader.h"
-#include "IrLoader.h"
+#include "fixtures/Render.h"  // shared block_key (§11 item 2 dedupe)
 #include "Walker.h"
 
 #include <algorithm>
@@ -56,7 +57,8 @@ std::vector<Block *> gather_blocks(Block *root) {
   return out;
 }
 
-void dump_fixture(const LoadedIr &ir, const std::string &path, const WhereTable &gen) {
+void dump_fixture(const std::vector<const CompiledMatcher *> &runnable, const std::string &path,
+                  const WhereTable &gen) {
   auto r_ctx = load_trace_context(path);
   if (r_ctx.is_error()) {
     std::printf("ERROR: %s\n", r_ctx.error().message().c_str());
@@ -64,10 +66,8 @@ void dump_fixture(const LoadedIr &ir, const std::string &path, const WhereTable 
   }
   auto ctx = r_ctx.move_as_ok();
   for (Block *block : gather_blocks(ctx.root)) {
-    for (const CompiledMatcher &m : ir.matchers) {
-      if (m.unrunnable) {
-        continue;
-      }
+    for (const CompiledMatcher *mp : runnable) {
+      const CompiledMatcher &m = *mp;
       auto res = matcher_match(m, block, gen);
       if (!res) {
         continue;
@@ -99,53 +99,32 @@ void dump_fixture(const LoadedIr &ir, const std::string &path, const WhereTable 
 
 }  // namespace
 
-int run_match(const std::string &artifact_path, const std::vector<std::string> &paths) {
-  auto r_ir = load_ir(artifact_path);
-  if (r_ir.is_error()) {
-    std::fprintf(stderr, "failed to load IR artifact: %s\n", r_ir.error().message().c_str());
+int run_match(const std::vector<std::string> &paths) {
+  // The compiled matcher table + the generated where table, through the SAME
+  // prepare_classify production runs — which is also where the where-coverage
+  // check lives (this mode used to carry its own copy of it).
+  const std::vector<CompiledMatcher> &matchers = gen_matchers_ir();
+  ClassifySetup setup = prepare_classify(matchers);
+  if (setup.table_missing || setup.fn_missing) {
+    std::fprintf(stderr, "%s\n", setup.error.c_str());
     return 2;
   }
-  LoadedIr ir = r_ir.move_as_ok();
 
-  // The generated where table, selected by artifact sha — the walker's only
-  // where evaluator, same as production classify (GenWheres.h).
-  const std::vector<GenWhere> *table = select_gen_wheres(ir.source_sha256, nullptr);
-  if (table == nullptr) {
-    std::fprintf(stderr,
-                 "no generated where table matches this artifact (loaded sha %s; ir table %s) — "
-                 "the CMake build regenerates it from ir/mch_ir.json; rebuild ton-mch-engine "
-                 "or pass that artifact\n",
-                 ir.source_sha256.c_str(), gen_wheres_ir_source_sha());
-    return 2;
-  }
-  WhereTable gen;
-  for (const GenWhere &g : *table) {
-    gen.emplace(g.node_id, g.fn);
-  }
-  // Coverage safety net: with the sha paired this holds by construction, but a
-  // missing fn would silently fail a node's head test instead of erroring.
-  for (const CompiledMatcher &m : ir.matchers) {
-    if (m.unrunnable) {
-      continue;
-    }
-    for (const CompiledNode &n : m.nodes) {
-      if (n.has_where_expr && gen.find(n.global_id) == gen.end()) {
-        std::fprintf(stderr,
-                     "generated where table has no function for node %d (matcher %s) — "
-                     "rebuild ton-mch-engine (CMake regenerates it from ir/mch_ir.json)\n",
-                     n.global_id, m.name.c_str());
-        return 2;
-      }
+  // The match phase runs every matcher whose PREDICATES are available, including
+  // those a missing build binding would skip in classify — this dump is about the
+  // walk, not about producing rows.
+  std::vector<const CompiledMatcher *> runnable;
+  std::vector<std::pair<std::string, std::string>> skips;
+  for (const CompiledMatcher &m : matchers) {
+    std::string reason = match_skip_reason(m);
+    if (reason.empty()) {
+      runnable.push_back(&m);
+    } else {
+      skips.emplace_back(m.name, std::move(reason));
     }
   }
 
   // SKIP lines (once, sorted by matcher name).
-  std::vector<std::pair<std::string, std::string>> skips;
-  for (const CompiledMatcher &m : ir.matchers) {
-    if (m.unrunnable) {
-      skips.emplace_back(m.name, m.skip_reason);
-    }
-  }
   std::sort(skips.begin(), skips.end());
   for (const auto &s : skips) {
     std::printf("SKIP %s reason=%s\n", s.first.c_str(), s.second.c_str());
@@ -172,7 +151,7 @@ int run_match(const std::string &artifact_path, const std::vector<std::string> &
 
   for (const std::string &f : fixtures) {
     std::printf("=== %s\n", fs::path(f).filename().string().c_str());
-    dump_fixture(ir, f, gen);
+    dump_fixture(runnable, f, setup.where_fns);
   }
   return 0;
 }

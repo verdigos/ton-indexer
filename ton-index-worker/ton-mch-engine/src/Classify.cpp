@@ -9,7 +9,7 @@
 #include "fixtures/FixtureLookupSource.h"
 #include "ExprRuntime.h"
 #include "fixtures/Render.h"
-#include "IrLoader.h"
+#include "GenMatchers.h"
 #include "MsgParse.h"
 
 #include "td/utils/base64.h"
@@ -122,18 +122,13 @@ std::string render_action(const Action &a) {
 // per surviving action either the classify line (emit_action) or the serialized
 // Action row (build_action + render_action)). --classify and --actions differ
 // ONLY in the per-action render, so they share this.
-int run_dump(const std::string &artifact_path, const std::vector<std::string> &paths,
+int run_dump(const std::vector<std::string> &paths,
              bool actions_mode, const TraceContextLoader &load_ctx,
              const LookupSourceFactory &lookup_factory) {
-  auto r_ir = load_ir(artifact_path);
-  if (r_ir.is_error()) {
-    std::fprintf(stderr, "failed to load IR artifact: %s\n", r_ir.error().message().c_str());
-    return 2;
-  }
-  LoadedIr ir = r_ir.move_as_ok();
-  warn_missing_artifact_parsers(ir);
+  const std::vector<CompiledMatcher> &matchers = gen_matchers_ir();
+  warn_missing_artifact_parsers(matchers);
 
-  ClassifySetup setup = prepare_classify(ir);
+  ClassifySetup setup = prepare_classify(matchers);
   if (setup.table_missing || setup.fn_missing) {
     std::fprintf(stderr, "%s\n", setup.error.c_str());
     return 2;
@@ -177,7 +172,7 @@ int run_dump(const std::string &artifact_path, const std::vector<std::string> &p
         lookup_factory ? lookup_factory(ctx)
                        : std::make_shared<FixtureLookupSource>(&ctx.trace.interfaces);
 
-    ClassifyResult res = classify_trace(ctx, ir, setup, *src);
+    ClassifyResult res = classify_trace(ctx, matchers, setup, *src);
     if (res.failure) {
       // Per-trace exception boundary (event_processing.py): buffered — the
       // regular actions are discarded, a single TRACE_FAIL on stdout, the reason
@@ -218,12 +213,12 @@ int run_dump(const std::string &artifact_path, const std::vector<std::string> &p
   return 0;
 }
 
-int run_classify(const std::string &artifact_path, const std::vector<std::string> &paths) {
-  return run_dump(artifact_path, paths, /*actions_mode=*/false, load_trace_context);
+int run_classify(const std::vector<std::string> &paths) {
+  return run_dump(paths, /*actions_mode=*/false, load_trace_context);
 }
 
-int run_actions(const std::string &artifact_path, const std::vector<std::string> &paths) {
-  return run_dump(artifact_path, paths, /*actions_mode=*/true, load_trace_context);
+int run_actions(const std::vector<std::string> &paths) {
+  return run_dump(paths, /*actions_mode=*/true, load_trace_context);
 }
 
 }  // namespace mch
