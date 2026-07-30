@@ -5,78 +5,11 @@
 #include "parse/PSlice.h"
 
 #include "common/refint.h"
-#include "vm/cells/CellBuilder.h"
 #include "vm/cellslice.h"
 
 #include <utility>
 
 namespace mch {
-
-namespace {
-
-// pytoniq StateInit.deserialize: split_depth:(Maybe (## 5)) special:(Maybe
-// TickTock) code/data/library:(Maybe ^Cell). Only the cursor matters here, but
-// every field is walked because Python parses (and can raise on) them all.
-td::Status skip_state_init_py(vm::CellSlice &cs) {
-  if (!cs.have(1)) return td::Status::Error("state_init: split_depth underflow");
-  if (cs.fetch_ulong(1)) {
-    if (!cs.have(5)) return td::Status::Error("state_init: split_depth bits underflow");
-    cs.advance(5);
-  }
-  if (!cs.have(1)) return td::Status::Error("state_init: special underflow");
-  if (cs.fetch_ulong(1)) {
-    if (!cs.have(2)) return td::Status::Error("state_init: tick_tock underflow");
-    cs.advance(2);  // TickTock: tick:Bool tock:Bool
-  }
-  for (int i = 0; i < 3; i++) {  // code, data, library
-    if (!cs.have(1)) return td::Status::Error("state_init: maybe-ref underflow");
-    if (cs.fetch_ulong(1)) {
-      if (cs.size_refs() == 0) return td::Status::Error("state_init: ref missing");
-      cs.fetch_ref();
-    }
-  }
-  return td::Status::OK();
-}
-
-// pytoniq Slice.to_cell(): Cell(remaining bits, remaining refs).
-td::Result<td::Ref<vm::Cell>> slice_to_cell(const vm::CellSlice &cs) {
-  try {
-    vm::CellBuilder cb;
-    cb.store_bits(cs.data_bits(), cs.size());
-    for (unsigned i = 0; i < cs.size_refs(); i++) {
-      cb.store_ref(cs.prefetch_ref(i));
-    }
-    return cb.finalize();
-  } catch (...) {
-    return td::Status::Error("to_cell failed");
-  }
-}
-
-// MessageAny.deserialize tail, resumed after CommonMsgInfo (which for an
-// int_msg_info body is bit-for-bit InternalMsgInfo.deserialize):
-//   init:(Maybe (Either StateInit ^StateInit)) body:(Either X ^X)
-// Returns the cell Python reads `msg.body.hash` off.
-td::Result<td::Ref<vm::Cell>> message_any_body(vm::CellSlice &cs) {
-  if (!cs.have(1)) return td::Status::Error("message: init maybe underflow");
-  if (cs.fetch_ulong(1)) {
-    if (!cs.have(1)) return td::Status::Error("message: init either underflow");
-    if (cs.fetch_ulong(1)) {  // right: ^StateInit
-      if (cs.size_refs() == 0) return td::Status::Error("message: init ref missing");
-      TRY_RESULT(inner, open_ref_cell(cs.fetch_ref()));
-      TRY_STATUS(skip_state_init_py(inner));
-    } else {  // left: inline
-      TRY_STATUS(skip_state_init_py(cs));
-    }
-  }
-  if (!cs.have(1)) return td::Status::Error("message: body either underflow");
-  if (cs.fetch_ulong(1)) {  // right: ^X
-    if (cs.size_refs() == 0) return td::Status::Error("message: body ref missing");
-    return cs.fetch_ref();
-  }
-  return slice_to_cell(cs);  // left: the rest of the message cell
-}
-
-}  // namespace
 
 // VestingSendMessage (messages/vesting.py): the inner message cell is read as a
 // full MessageAny (header + init + body), yielding message_body_hash alongside

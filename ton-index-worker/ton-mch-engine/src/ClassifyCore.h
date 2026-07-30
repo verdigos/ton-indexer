@@ -71,6 +71,12 @@ struct ClassifyResult {
   // THIS is the production / `--actions` row set; `actions` stays the --classify
   // view. A row needs nothing from the fire (no aux, no matcher name), so it is
   // just the block.
+  //
+  // One more source feeds it: when the main spine serializes NOTHING, the
+  // ghost-external fallback (GhostExternal.h) may replace the whole set with
+  // rows synthesized from a failed wallet external's unsent messages. Those
+  // never appear in `actions` — they are not matcher fires, and --classify has
+  // no fallback view.
   std::vector<Block *> action_rows;
   bool failure = false;
   std::string failure_reason;
@@ -83,8 +89,9 @@ struct ClassifyResult {
   // Production commits these when classification fails. Ungated (corpus has no
   // failing traces).
   std::vector<Block *> fallback_rows;
-  // Classification SUCCEEDED but serialized nothing, over a trace that has
-  // transactions — trace_processor.py:44-46's `len(actions) == 0 and
+  // Classification SUCCEEDED but serialized nothing AND the ghost-external
+  // fallback found nothing either, over a trace that has transactions —
+  // trace_processor.py:44-46's `len(actions) == 0 and
   // len(trace.transactions) > 0` branch, i.e. `action_rows` empty (Python tests
   // serialize_blocks' output, not the fire list). The adapter answers it with
   // create_unknown_action(ctx.trace); that row has no Block, so it cannot be a

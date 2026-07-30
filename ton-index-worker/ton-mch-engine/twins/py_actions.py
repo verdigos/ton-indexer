@@ -29,7 +29,9 @@ from tests.utils.repository import TestInterfaceRepository  # noqa: E402
 from indexer.events.blocks.core import Block  # noqa: E402
 from indexer.events.blocks.utils import AccountId, Amount, Asset  # noqa: E402
 from indexer.events.blocks.utils.tree_utils import to_tree  # noqa: E402
-from indexer.events.event_processing import init_block, unwind_deployments  # noqa: E402
+from indexer.events.event_processing import (  # noqa: E402
+    init_block, init_from_external, matchers_for_failed_externals, unwind_deployments,
+)
 from indexer.events.blocks.liquidity import (  # noqa: E402
     post_process_dedust_liquidity, post_process_stonfi_v2_liquidity,
 )
@@ -49,6 +51,7 @@ from twin_registries import combined_registries  # noqa: E402
 # registry, so it stays inline.
 from cpp_surface import (  # noqa: E402
     BOC_FIELDS, CPP_FNS, CPP_LOOKUP_KINDS, CPP_PARSERS, CPP_PREDS, CPP_SHAPERS,
+    assert_no_skips,
 )
 
 BUILTINS = {"account", "amount", "asset", "ton_asset", "addr_none", "b64",
@@ -321,6 +324,72 @@ def skip_reason(rec, nodes):
     return ";".join(parts) or None
 
 
+def bfs_canonical(start):
+    queue = [start]
+    while queue:
+        cur = queue.pop(0)
+        yield cur
+        queue.extend(sorted(cur.next_blocks, key=lambda x: x.min_lt))
+
+
+def serializes_to_row(b):
+    """serialize_blocks' row filter (block_tree_serializer.py:1648-1655).
+
+    Also the filter try_classify_unknown_trace applies inline (event_processing.py
+    :370-375) — the same three exclusions, so ONE predicate serves both paths.
+    """
+    if b.btype in ("root", "empty"):
+        return False
+    if b.btype == "call_contract" and (b.event_nodes[0].message.destination is None
+                                       or b.event_nodes[0].message.source is None):
+        return False
+    return True
+
+
+async def ghost_external_rows(txs):
+    """try_process_unknown_event (event_processing.py:345-366) — the GHOST path.
+
+    A trace whose root is a lone ext-in transaction with no children serialized
+    nothing, so Python re-reads the wallet external's body, synthesizes a ghost
+    child node per UNSENT outgoing message (init_from_external, :159-196) and
+    serializes those instead of the `unknown` row.
+
+    The tree is rebuilt from scratch (`to_tree` again) exactly as production
+    does: init_from_external MUTATES the root node (forces failed, appends
+    children), and the caller's tree is already wired into the main block tree.
+
+    Post-pass chain: the twin's three (the C++ ClassifyCore chain), not
+    production's `trace_post_processors` list. Immaterial here — a single-tx
+    trace can carry no dedust/stonfi deposit — and keeping it identical to the
+    main path is what makes this A/B-comparable.
+
+    Any exception = Python's own `except` in try_classify_unknown_trace: the
+    trace falls back to the `unknown` row rather than failing.
+    """
+    try:
+        node = to_tree(txs)
+        if len(node.children) != 0 or node.message is None or node.message.source is not None:
+            return []
+        root = Block("root", [])
+        b = init_from_external(node)
+        if b is None:
+            return []
+        root.connect(b)
+        if len(b.next_blocks) == 0:
+            return []
+        for m in matchers_for_failed_externals:
+            for cur in bfs_canonical(root):
+                if cur.parent is None:
+                    await m.try_build(cur)
+        spine = list(bfs_canonical(root))
+        spine = await post_process_dedust_liquidity(spine)
+        spine = await post_process_stonfi_v2_liquidity(spine)
+        spine = await unwind_deployments(spine)
+        return [b2 for b2 in spine if serializes_to_row(b2)]
+    except Exception:  # noqa: BLE001
+        return []
+
+
 async def actions_fixture(path, included):
     try:
         with open(path, "rb") as f:
@@ -334,13 +403,6 @@ async def actions_fixture(path, included):
 
     root = Block("root", [])
     root.connect(tree_root)
-
-    def bfs_canonical(start):
-        queue = [start]
-        while queue:
-            cur = queue.pop(0)
-            yield cur
-            queue.extend(sorted(cur.next_blocks, key=lambda x: x.min_lt))
 
     try:
         # Phase E: run the matcher loop, then the post-process passes; rows come
@@ -363,14 +425,7 @@ async def actions_fixture(path, included):
         # destination. Everything else is a row — including every basic leaf no
         # matcher consumed, and EXCLUDING a product a later matcher consumed
         # (that one is off the spine).
-        rows = []
-        for b in spine:
-            if b.btype in ("root", "empty"):
-                continue
-            if b.btype == "call_contract" and (b.event_nodes[0].message.destination is None
-                                               or b.event_nodes[0].message.source is None):
-                continue
-            rows.append(b)
+        rows = [b for b in spine if serializes_to_row(b)]
 
         # Spine ORDER is not comparable: Python's compact_connections rebuilds
         # next_blocks through a `set()`, so it varies run to run, and nothing
@@ -387,8 +442,20 @@ async def actions_fixture(path, included):
         # counterpart (there, build_action simply declines the row after the
         # fact), so a trace whose only rows are unported btypes is NOT unknown on
         # either side.
+        #
+        # try_classify_unknown_trace (:367-388) tries the GHOST path FIRST and
+        # only falls back to the `unknown` row when it yields nothing — so the
+        # unknown gate is `ghost`, again the row list rather than the printed
+        # lines.
         if not rows and txs:
-            print(f"ACTION anchor=unknown {render_unknown_row(unknown_trace_stub(data, txs))}")
+            ghost = await ghost_external_rows(txs)
+            if ghost:
+                lines = [f"ACTION anchor={block_key(b)} {render_action_row(b)}"
+                         for b in ghost if b.btype in PORTED_BTYPES]
+                for line in sorted(lines):
+                    print(line)
+            else:
+                print(f"ACTION anchor=unknown {render_unknown_row(unknown_trace_stub(data, txs))}")
     except Exception as e:  # noqa: BLE001
         print("TRACE_FAIL")
         print(f"TRACE_FAIL {os.path.basename(path)}: {type(e).__name__}: {e}", file=sys.stderr)
@@ -405,6 +472,9 @@ def main(artifact_path, corpus):
                    for i in range(len(matchers)) if reasons[i] is not None)
     for name, reason in skips:
         print(f"SKIP {name} reason={reason}")
+    # A skip against ir/mch_ir.json is stale-mirror drift, never a run property
+    # — abort instead of silently emitting a smaller row set (cpp_surface.py).
+    assert_no_skips(skips)
     included = [matchers[i] for i in range(len(matchers)) if reasons[i] is None]
 
     names = ([corpus] if not os.path.isdir(corpus) else

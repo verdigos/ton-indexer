@@ -44,6 +44,17 @@ struct EventNode {
   EventNode *parent{nullptr};
   std::vector<EventNode *> children;
 
+  // --- ghost-external synthesis (GhostExternal.h) ---------------------------
+  // EventNode.ghost_node: an intended-but-never-sent message, decoded out of a
+  // failed wallet external's body. Reaches the row set through
+  // Block::is_ghost_block (the destination is NOT a participating account —
+  // nothing ever ran at it).
+  bool ghost{false};
+  // EventNode.failed, when init_from_external FORCES it True on the external's
+  // own node and every ghost it hangs off it. Everywhere else `failed` is
+  // tx->aborted, which is why node_failed() ORs rather than reads a field.
+  bool forced_failed{false};
+
   std::optional<std::uint32_t> opcode() const {
     return msg != nullptr ? msg->opcode32() : std::nullopt;
   }
@@ -76,6 +87,10 @@ struct EventNode {
 // Owns every EventNode; nodes reference each other by raw pointer.
 struct EventTree {
   std::vector<std::unique_ptr<EventNode>> nodes;
+  // Messages no Transaction in the trace ever carried: the wallet-external
+  // payloads ghost nodes point at (GhostExternal.h). Owned here so a ghost
+  // node's `msg` has the same lifetime as the node itself.
+  std::vector<std::unique_ptr<Message>> synthetic_msgs;
   EventNode *root{nullptr};
   // Nodes not reachable from root (Python asserts a single root; we tolerate
   // and count, so parity harnesses can flag silent loss).
@@ -107,9 +122,9 @@ struct Block {
   // parent; a merged block inherits it from the earliest merged block. Drives
   // the serializer's accounts assembly + tx_hashes extension (Phase G step 2a).
   const EventNode *initiating_event_node{nullptr};
-  // core.py is_ghost_block: the C++ substrate has no ghost nodes (an
-  // intended-but-not-started op), so this stays false — none of the ported
-  // btypes are ghost blocks (A/B-verified). Gate for the destination accounts.
+  // core.py is_ghost_block: true iff a node behind this block is a ghost (an
+  // intended-but-not-started op). Only the ghost-external fallback produces
+  // them; on the main spine it stays false. Gate for the destination accounts.
   bool is_ghost_block{false};
 
   bool failed{false};

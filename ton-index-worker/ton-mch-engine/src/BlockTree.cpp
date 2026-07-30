@@ -305,9 +305,15 @@ bool Block::merge_blocks(const std::vector<Block *> &blocks) {
   }
   previous_block = earliest->previous_block;
   // core.py merge_blocks: the merged block inherits initiating_event_node from
-  // the earliest merged block (Step 2a). is_ghost_block would OR over ghost
-  // nodes, but the C++ substrate has none, so it stays false.
+  // the earliest merged block (Step 2a) and ORs is_ghost_block over the nodes
+  // it absorbed.
   initiating_event_node = earliest->initiating_event_node;
+  for (const EventNode *n : event_nodes) {
+    if (n->ghost) {
+      is_ghost_block = true;
+      break;
+    }
+  }
   calculate_min_max_lt();
   sort_next_blocks();
   if (earliest->previous_block != nullptr) {
@@ -322,11 +328,12 @@ namespace {
 // node: the tick-tock transaction's aborted flag). Our node->tx is exactly
 // that transaction in both cases.
 bool node_failed(const EventNode *node) {
-  return node->tx != nullptr && node->tx->aborted;
+  return node->forced_failed || (node->tx != nullptr && node->tx->aborted);
 }
 
 void init_leaf(Block *b, const EventNode *node) {
   b->event_nodes.push_back(node);
+  b->is_ghost_block = node->ghost;  // core.py: len(nodes) == 1 and nodes[0].ghost_node
   b->min_lt = node->lt();
   b->min_lt_without_initiating_tx = node->tx != nullptr ? node->tx->lt : node->lt();
   // core.py Block.__init__: a single-node block's initiating_event_node is that

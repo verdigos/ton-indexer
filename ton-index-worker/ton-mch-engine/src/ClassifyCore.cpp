@@ -5,6 +5,7 @@
 #include "GenBuilds.h"
 #include "GenMatchers.h"
 #include "GenWheres.h"
+#include "GhostExternal.h"
 #include "HostRegistry.h"
 #include "Walker.h"
 
@@ -405,6 +406,59 @@ std::vector<Block *> basic_classify_fallback(TraceContext &ctx) {
   return out;
 }
 
+// try_process_unknown_event (event_processing.py:345-366) + the row filter
+// try_classify_unknown_trace applies to its output (:370-375, the same three
+// exclusions as serializes_to_row). The GHOST path: a trace that serialized
+// nothing gets one more chance — if it is a lone failed wallet external, the
+// messages it never sent become rows instead of the `unknown` stub.
+//
+// Runs a FRESH init_block over the same event tree (Python rebuilds the tree;
+// identical content, and the main tree's blocks are done with by now) after
+// synthesize_ghost_children has hung the ghosts off the root. Throw-safe:
+// Python's own except here falls back to the `unknown` row, never to a trace
+// failure.
+std::vector<Block *> ghost_external_rows(TraceContext &ctx, const LookupSource &src) {
+  std::vector<Block *> out;
+  try {
+    EventNode *root_node = ctx.tree.root;
+    // "Only external in allowed": a childless root whose message is an ext-in.
+    if (root_node == nullptr || !root_node->children.empty() || root_node->msg == nullptr ||
+        root_node->msg->source) {
+      return out;
+    }
+    if (synthesize_ghost_children(ctx.tree, root_node) == 0) {
+      return out;
+    }
+    Block *b = init_block(ctx.arena, root_node);
+    Block *wrapper = ctx.arena.make("root");
+    wrapper->connect(b);
+    // matchers_for_failed_externals over the same BFS the main loop uses
+    // (next_blocks read AFTER the build, parent-is-None guard).
+    std::deque<Block *> queue{wrapper};
+    while (!queue.empty()) {
+      Block *cur = queue.front();
+      queue.pop_front();
+      if (cur->parent == nullptr) {
+        fallback_jetton_transfer(cur, ctx.arena, src);
+      }
+      for (Block *n : cur->next_blocks) {
+        queue.push_back(n);
+      }
+    }
+    std::vector<Block *> spine = collect_spine(wrapper);
+    std::set<Block *> removed;
+    post_process_dedust_liquidity(spine, removed);
+    post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
+    unwind_deployments(spine);
+    for (Block *sb : spine) {
+      if (serializes_to_row(sb)) out.push_back(sb);
+    }
+  } catch (...) {
+    out.clear();
+  }
+  return out;
+}
+
 }  // namespace
 
 ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers) {
@@ -575,7 +629,10 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     result.fallback_rows = basic_classify_fallback(ctx);
   } else if (result.action_rows.empty() && !ctx.trace.transactions.empty()) {
     // trace_processor.py:44-46 — classification succeeded and serialized nothing.
-    result.unknown_trace = true;
+    // try_classify_unknown_trace tries the GHOST path first and only mints the
+    // `unknown` row when that yields nothing too (event_processing.py:367-388).
+    result.action_rows = ghost_external_rows(ctx, src);
+    result.unknown_trace = result.action_rows.empty();
   }
   return result;
 }

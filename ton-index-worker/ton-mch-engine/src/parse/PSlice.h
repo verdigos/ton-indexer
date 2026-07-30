@@ -58,4 +58,17 @@ td::Result<BodyCtx> open_body(const td::Ref<vm::Cell> &body);
 // helper the stonfi + tonco cores and the dedust step walk each duplicated.
 td::Result<vm::CellSlice> open_ref_cell(const td::Ref<vm::Cell> &c);
 
+// pytoniq StateInit.deserialize: split_depth:(Maybe (## 5)) special:(Maybe
+// TickTock) code/data/library:(Maybe ^Cell). Only the cursor matters, but every
+// field is walked because Python parses (and can raise on) them all.
+td::Status skip_state_init_py(vm::CellSlice &cs);
+
+// pytoniq Slice.to_cell(): Cell(remaining bits, remaining refs).
+td::Result<td::Ref<vm::Cell>> slice_to_cell(const vm::CellSlice &cs);
+
+// The Message/MessageRelaxed tail, resumed after CommonMsgInfo:
+//   init:(Maybe (Either StateInit ^StateInit)) body:(Either X ^X)
+// Returns the body cell (the ref, or the rest of the message cell inline).
+td::Result<td::Ref<vm::Cell>> message_any_body(vm::CellSlice &cs);
+
 }  // namespace mch
