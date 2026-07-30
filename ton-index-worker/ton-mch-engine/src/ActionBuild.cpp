@@ -798,6 +798,13 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "jetton_swap") fill_jetton_swap(d, a);
   else if (t == "nft_transfer") fill_nft_transfer(d, a);
   else if (t == "dedust_deposit_liquidity") fill_dedust_deposit(d, a);
+  // Coffee liquidity port (specs/coffee_liquidity.mch). Python routes this
+  // btype to _fill_dedust_deposit_liquidity_action verbatim
+  // (block_tree_serializer.py `case "coffee_deposit_liquidity"`), and the data
+  // keys are the same DepositLiquidityData field set — so it is one dispatch
+  // arm, no new fill. The withdraw half needs none at all: it produces
+  // `dex_withdraw_liquidity`, already dispatched below.
+  else if (t == "coffee_deposit_liquidity") fill_dedust_deposit(d, a);
   else if (t == "dedust_deposit_liquidity_partial") fill_dedust_deposit_partial(d, a);
   else if (t == "tonco_deposit_liquidity") fill_tonco_deposit(d, a);
   else if (t == "dedust_v2_claim_reward") fill_dedust_v2_claim_reward(d, a);

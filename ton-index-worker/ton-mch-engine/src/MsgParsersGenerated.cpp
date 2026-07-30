@@ -940,6 +940,163 @@ td::Result<Value> gen_parse_teleitem_start_auction(const td::Ref<vm::Cell> &body
   return Value::make_obj(std::move(f));
 }
 
+// CoffeeCreateLiquidityDepositoryRequest (opcode 0xc0ffee27); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_coffee_create_liquidity_depository_request(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CoffeeCreateLiquidityDepositoryRequest: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("CoffeeCreateLiquidityDepositoryRequest: _query_id underflow"); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("CoffeeCreateLiquidityDepositoryRequest: _params ref missing"); }
+    bool sp_params = false;
+    vm::CellSlice rc_params;
+    try { rc_params = vm::load_cell_slice_special(cs.fetch_ref(), sp_params); }
+    catch (...) { return td::Status::Error("CoffeeCreateLiquidityDepositoryRequest: _params ref cell"); }
+    {
+      auto ra = load_address_py(rc_params);
+      if (ra.is_error()) { return ra.move_as_error(); }
+    }
+    {
+      if (!rc_params.have(1) || !rc_params.advance(1)) { return td::Status::Error("CoffeeCreateLiquidityDepositoryRequest: _use_recipient_on_failure underflow"); }
+    }
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("CoffeeCreateLiquidityDepositoryRequest: pool_params ref missing"); }
+    bool sp_pool_params = false;
+    vm::CellSlice rc_pool_params;
+    try { rc_pool_params = vm::load_cell_slice_special(cs.fetch_ref(), sp_pool_params); }
+    catch (...) { return td::Status::Error("CoffeeCreateLiquidityDepositoryRequest: pool_params ref cell"); }
+    {
+      auto rs = gen_load_asset2(rc_pool_params);
+      if (rs.is_error()) { return rs.move_as_error(); }
+      f.emplace_back("pool_first", rs.move_as_ok());
+    }
+    {
+      auto rs = gen_load_asset2(rc_pool_params);
+      if (rs.is_error()) { return rs.move_as_error(); }
+      f.emplace_back("pool_second", rs.move_as_ok());
+    }
+    {
+      if (!rc_pool_params.have(3) || !rc_pool_params.advance(3)) { return td::Status::Error("CoffeeCreateLiquidityDepositoryRequest: _amm underflow"); }
+    }
+    {
+      if (!rc_pool_params.have(1)) { return td::Status::Error("CoffeeCreateLiquidityDepositoryRequest: _amm_settings bit missing"); }
+      Value mc = Value::null();
+      if (rc_pool_params.fetch_ulong(1)) {
+        if (rc_pool_params.size_refs() == 0) { return td::Status::Error("CoffeeCreateLiquidityDepositoryRequest: _amm_settings ref missing"); }
+        mc = Value::make_cell(rc_pool_params.fetch_ref());
+      }
+    }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("sender", ra.move_as_ok());
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("CoffeeCreateLiquidityDepositoryRequest: _proof ref missing"); }
+    auto rf = cs.fetch_ref();
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CoffeeDepositLiquiditySuccessfulEvent (opcode 0xc0ffee33); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_coffee_deposit_liquidity_successful_event(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CoffeeDepositLiquiditySuccessfulEvent: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("CoffeeDepositLiquiditySuccessfulEvent: _query_id underflow"); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("lp_amount", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CoffeeLiquidityWithdrawalEvent (opcode 0xc0ffee35); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_coffee_liquidity_withdrawal_event(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CoffeeLiquidityWithdrawalEvent: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("CoffeeLiquidityWithdrawalEvent: _query_id underflow"); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount1", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount2", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parsers() {
@@ -969,6 +1126,9 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"DedustV2PayNative", gen_parse_dedust_v2_pay_native},
       {"DedustV2SwapEvent", gen_parse_dedust_v2_swap_event},
       {"TeleitemStartAuction", gen_parse_teleitem_start_auction},
+      {"CoffeeCreateLiquidityDepositoryRequest", gen_parse_coffee_create_liquidity_depository_request},
+      {"CoffeeDepositLiquiditySuccessfulEvent", gen_parse_coffee_deposit_liquidity_successful_event},
+      {"CoffeeLiquidityWithdrawalEvent", gen_parse_coffee_liquidity_withdrawal_event},
   };
   return rows;
 }

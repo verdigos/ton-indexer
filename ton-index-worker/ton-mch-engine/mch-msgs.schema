@@ -287,3 +287,54 @@ message TeleitemStartAuction opcode 0x487a8e81 {
     _duration: bits 32
   }
 }
+
+# --- specs/coffee_liquidity.mch + specs/coffee_withdraw.mch bodies.
+
+# The deposit anchor (opcode 0xc0ffee27). The spec reads `amount`, the two POOL
+# assets and `sender`. PoolParams lives in a mandatory ref whose subfields
+# FLATTEN into the parent, so the two asset leaves are named `pool_first` /
+# `pool_second` here and the Python twin (mch/builders/coffee.py) mirrors those
+# names exactly. DepositLiquidityParamsTrimmed and the proof ref are
+# parsed-and-dropped so the cursor still validates the full wire shape.
+message CoffeeCreateLiquidityDepositoryRequest opcode 0xc0ffee27 {
+  _query_id: bits 64
+  amount: coins
+  _params: ref {
+    _recipient: addr_py
+    _use_recipient_on_failure: bits 1
+  }
+  pool_params: ref {
+    pool_first: asset2
+    pool_second: asset2
+    _amm: bits 3
+    _amm_settings: maybe_ref_cell
+  }
+  sender: addr_py
+  _proof: ref_cell
+}
+
+# The depository's success log (opcode 0xc0ffee33). The spec reads only
+# `lp_amount`; the two inline PoolReserves pairs are parsed-and-dropped.
+message CoffeeDepositLiquiditySuccessfulEvent opcode 0xc0ffee33 {
+  _query_id: bits 64
+  _amount1: coins
+  _amount2: coins
+  lp_amount: coins
+  _total_supply_in: coins
+  _total_supply_out: coins
+  _reserves_in: coins
+  _reserves_out: coins
+}
+
+# The pool's withdrawal log (opcode 0xc0ffee35). The spec reads the two payout
+# amounts; lp_amount and the two inline PoolReserves pairs are dropped.
+message CoffeeLiquidityWithdrawalEvent opcode 0xc0ffee35 {
+  _query_id: bits 64
+  amount1: coins
+  amount2: coins
+  _lp_amount: coins
+  _total_supply_in: coins
+  _total_supply_out: coins
+  _reserves_in: coins
+  _reserves_out: coins
+}

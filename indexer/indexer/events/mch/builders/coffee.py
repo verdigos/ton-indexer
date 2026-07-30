@@ -23,18 +23,29 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from pytoniq_core import Slice
+
 from indexer.events.blocks.basic_blocks import CallContractBlock
+from indexer.events.blocks.core import Block
 from indexer.events.blocks.liquidity import CoffeeCreateVaultBlock
 from indexer.events.blocks.messages.coffee import (
     CoffeeCreateVault,
     CoffeeDeploy,
+    CoffeeDepositLiquidityInternal,
+    CoffeeDepositLiquidityNative,
+    CoffeeDepositLiquiditySuccessfulEvent,
+    CoffeeLiquidityWithdrawalEvent,
     CoffeeNotification,
     CoffeePayout,
     CoffeePayoutInternal,
     CoffeeSwapInternal,
     CoffeeSwapNative,
     CoffeeSwapSuccessfulEvent,
+    DepositLiquidityParamsTrimmed,
+    PoolParams,
 )
+from indexer.events.blocks.messages.jettons import JettonInternalTransfer
+from indexer.events.blocks.messages import ExcessMessage
 from indexer.events.blocks.swaps import JettonSwapBlock, build_coffee_swap_core
 from indexer.events.mch.registry import Registries
 
@@ -112,9 +123,45 @@ def coffee_registries() -> Registries:
 
 # --- coffee liquidity/vault (specs/coffee_liquidity.mch) ---------------------
 
+
+class CoffeeCreateLiquidityDepositoryRequest:
+    """create_liquidity_depository_request#c0ffee27 — FLAT twin of the
+    mch-msgs.schema row of the same name.
+
+    The legacy blocks/messages/coffee.py class of this name exposes the pool
+    assets NESTED (`.pool_params.first`), but the C++ schema generator FLATTENS a
+    `ref { … }` group's subfields into the parent object, so the two hosts would
+    disagree on the field path. This twin mirrors the schema exactly — flat
+    `pool_first`/`pool_second`, everything the spec does not read parsed and
+    dropped — the same convention as builders/dedust_v2.py's message twins.
+    """
+
+    opcode = 0xC0FFEE27
+
+    def __init__(self, slice: Slice):
+        slice.load_uint(32)  # opcode (checked by the matcher's `op`)
+        slice.load_uint(64)  # query_id, parsed-and-dropped
+        self.amount = slice.load_coins()
+        DepositLiquidityParamsTrimmed(slice.load_ref().to_slice())  # dropped
+        pool_params = PoolParams(slice.load_ref().to_slice())
+        self.pool_first = pool_params.first
+        self.pool_second = pool_params.second
+        self.sender = slice.load_address()
+        slice.load_ref()  # proof, parsed-and-dropped
+
+
 LIQUIDITY_OPCODES = {
-    "CoffeeCreateVault":    CoffeeCreateVault.opcode,
-    "CoffeeDeploy":         CoffeeDeploy.opcode,
+    "CoffeeDepositLiquidityNative":           CoffeeDepositLiquidityNative.opcode,
+    "CoffeeCreateVault":                      CoffeeCreateVault.opcode,
+    "CoffeePayoutInternal":                   CoffeePayoutInternal.opcode,
+    "CoffeeDeploy":                           CoffeeDeploy.opcode,
+    "CoffeeCreateLiquidityDepositoryRequest": CoffeeCreateLiquidityDepositoryRequest.opcode,
+    "CoffeeDepositLiquidityInternal":         CoffeeDepositLiquidityInternal.opcode,
+    "CoffeePayout":                           CoffeePayout.opcode,
+    "CoffeeDepositLiquiditySuccessfulEvent":  CoffeeDepositLiquiditySuccessfulEvent.opcode,
+    "CoffeeNotification":                     CoffeeNotification.opcode,
+    "JettonInternalTransfer":                 JettonInternalTransfer.opcode,
+    "ExcessMessage":                          ExcessMessage.opcode,
     # TEP-89 jetton-wallet discovery pair — raw literals in the legacy matcher.
     "ProvideWalletAddress": 0x2C76B973,
     "TakeWalletAddress":    0xD1735400,
@@ -122,19 +169,26 @@ LIQUIDITY_OPCODES = {
 
 LIQUIDITY_BLOCK_TYPES = {
     "CoffeeCreateVaultBlock": CoffeeCreateVaultBlock,
+    # The deposit matcher produces the canonical generic Block, exactly like the
+    # legacy one (`Block("coffee_deposit_liquidity", [], data.__dict__)`).
+    "coffee_deposit_liquidity": Block,
 }
 
 LIQUIDITY_MESSAGE_TYPES = {
-    "CoffeeCreateVault": CoffeeCreateVault,
+    "CoffeeCreateVault":                      CoffeeCreateVault,
+    "CoffeeCreateLiquidityDepositoryRequest": CoffeeCreateLiquidityDepositoryRequest,
+    # Already FLAT (lp_amount at the top level), so the legacy class doubles as
+    # its own schema twin.
+    "CoffeeDepositLiquiditySuccessfulEvent":  CoffeeDepositLiquiditySuccessfulEvent,
 }
 
 
 def register_coffee_liquidity(reg: Registries) -> Registries:
     """Register everything specs/coffee_liquidity.mch needs into `reg`.
 
-    specs/coffee_liquidity.mch is FULLY DECLARATIVE: the four fields come from
-    the anchor's envelope + parsed body (asset) and the captured deploy call's
-    envelope, so this registers the message parser (for `parse`) but no builder.
+    Both matchers in that spec are FULLY DECLARATIVE — zero host fns, zero
+    lookups — so this registers only names: opcodes, produced btypes and the
+    message parsers the `parse` statements need.
     """
     reg.opcodes.update(LIQUIDITY_OPCODES)
     reg.block_types.update(LIQUIDITY_BLOCK_TYPES)
@@ -145,3 +199,38 @@ def register_coffee_liquidity(reg: Registries) -> Registries:
 def coffee_liquidity_registries() -> Registries:
     """Fresh Registries ready to compile specs/coffee_liquidity.mch."""
     return register_coffee_liquidity(Registries())
+
+
+# --- coffee withdraw liquidity (specs/coffee_withdraw.mch) -------------------
+
+WITHDRAW_OPCODES = {
+    "CoffeePayoutInternal":           CoffeePayoutInternal.opcode,
+    "CoffeePayout":                   CoffeePayout.opcode,
+    "CoffeeLiquidityWithdrawalEvent": CoffeeLiquidityWithdrawalEvent.opcode,
+    "CoffeeNotification":             CoffeeNotification.opcode,
+}
+
+WITHDRAW_BLOCK_TYPES = {
+    "dex_withdraw_liquidity": Block,
+}
+
+WITHDRAW_MESSAGE_TYPES = {
+    # Already FLAT (amount1/amount2 at the top level) — its own schema twin.
+    "CoffeeLiquidityWithdrawalEvent": CoffeeLiquidityWithdrawalEvent,
+}
+
+
+def register_coffee_withdraw(reg: Registries) -> Registries:
+    """Register everything specs/coffee_withdraw.mch needs into `reg`.
+
+    FULLY DECLARATIVE, like the rest of the coffee liquidity family: names only.
+    """
+    reg.opcodes.update(WITHDRAW_OPCODES)
+    reg.block_types.update(WITHDRAW_BLOCK_TYPES)
+    reg.message_types.update(WITHDRAW_MESSAGE_TYPES)
+    return reg
+
+
+def coffee_withdraw_registries() -> Registries:
+    """Fresh Registries ready to compile specs/coffee_withdraw.mch."""
+    return register_coffee_withdraw(Registries())

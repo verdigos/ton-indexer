@@ -250,6 +250,36 @@
       "type": "TeleitemStartAuction",
       "body": "te6ccgEBAQEABgAACEh6joE=",
       "expect": "fail"
+    },
+    {
+      "type": "CoffeeCreateLiquidityDepositoryRequest",
+      "body": "te6ccgEBBAEAGgADGcD/7icAAAAAAAAAAAIBAgMAARAAAgAAAA==",
+      "expect": "ok"
+    },
+    {
+      "type": "CoffeeCreateLiquidityDepositoryRequest",
+      "body": "te6ccgEBAQEABgAACMD/7ic=",
+      "expect": "fail"
+    },
+    {
+      "type": "CoffeeDepositLiquiditySuccessfulEvent",
+      "body": "te6ccgEBAQEAEgAAH8D/7jMAAAAAAAAAAAAAAAg=",
+      "expect": "ok"
+    },
+    {
+      "type": "CoffeeDepositLiquiditySuccessfulEvent",
+      "body": "te6ccgEBAQEABgAACMD/7jM=",
+      "expect": "fail"
+    },
+    {
+      "type": "CoffeeLiquidityWithdrawalEvent",
+      "body": "te6ccgEBAQEAEgAAH8D/7jUAAAAAAAAAAAAAAAg=",
+      "expect": "ok"
+    },
+    {
+      "type": "CoffeeLiquidityWithdrawalEvent",
+      "body": "te6ccgEBAQEABgAACMD/7jU=",
+      "expect": "fail"
     }
   ]
 }

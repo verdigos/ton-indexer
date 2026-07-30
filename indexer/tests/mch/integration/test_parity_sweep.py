@@ -88,6 +88,7 @@ from indexer.events.blocks.jvault import (
 from indexer.events.blocks.layerzero import LayerZeroReceiveMatcher
 from indexer.events.blocks.liquidity import (
     CoffeeCreateVaultMatcher,
+    CoffeeDepositLiquidityMatcher,
     DedustDepositBlockMatcher,
     DedustDepositFirstAssetBlockMatcher,
     DedustWithdrawBlockMatcher,
@@ -279,8 +280,21 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
      (DedustV2SwapBlockMatcher, DedustV2FailedSwapBlockMatcher)),
     ("specs/tonco_liquidity.mch", _SPECS_DIR / "tonco_liquidity.mch", tonco_liquidity_registries,
      (NftMintBlockMatcher,) + _PREREQ_SWAP, (ToncoDepositLiquidityMatcher,)),
-    ("specs/coffee_liquidity.mch", _SPECS_DIR / "coffee_liquidity.mch", coffee_liquidity_registries, (),
-     (CoffeeCreateVaultMatcher,)),
+    # Coffee liquidity port (2026-07-30): the deposit and create-vault matchers
+    # run as one group, in the legacy matchers-list order. The deposit leg binds
+    # `btype jetton_transfer` for its jetton side, so the transfer prerequisites
+    # are replayed.
+    #
+    # specs/coffee_withdraw.mch has NO row here, deliberately: the legacy
+    # CoffeeWithdrawLiquidityMatcher binds its two payouts in RAW `next_blocks`
+    # order while the engine uses canonical (`min_lt`) order, and on the single
+    # corpus fixture those disagree — with legacy pairing the event's amount1
+    # with the payout that actually moved amount2. The reference is the bug, so
+    # a legacy-vs-IR row cannot be green; see the spec header and
+    # test_coffee_withdraw.py, which pins the canonical pairing instead.
+    ("specs/coffee_liquidity.mch", _SPECS_DIR / "coffee_liquidity.mch", coffee_liquidity_registries,
+     (JettonTransferBlockMatcher, _pton_prereq),
+     (CoffeeDepositLiquidityMatcher, CoffeeCreateVaultMatcher)),
     # R02 remake — jvault family (stake btype-anchored, the other three op-anchored).
     ("specs/jvault.mch", _SPECS_DIR / "jvault.mch", jvault_registries, _PREREQ_SWAP,
      (JVaultStakeBlockMatcher, JVaultUnstakeBlockMatcher, JVaultClaimBlockMatcher,
@@ -453,9 +467,26 @@ async def _run_matchers(matchers: list[BlockMatcher], trace, prereqs=()) -> list
     return produced
 
 
+def _detuple(v):
+    """Recursively rewrite tuples as lists.
+
+    A tuple and a list are the SAME value in this comparison: the expression
+    language has no tuple literal (§9.6 composite literals are lists and
+    records), so a legacy builder's `(asset, amount)` pair and a declarative
+    `[asset, amount]` are the same pair — they index identically in the
+    serializer (`excess[0]`/`excess[1]`) and render identically. Applied to the
+    nested elements too, because the list branch below compares elementwise by
+    `repr`. Case in point: coffee/dedust `vault_excesses`.
+    """
+    if isinstance(v, (list, tuple)):
+        return [_detuple(x) for x in v]
+    return v
+
+
 def _values_equal(a, b) -> bool:
     if a is None and b is None:
         return True
+    a, b = _detuple(a), _detuple(b)
     if type(a) is not type(b):
         return False
     if isinstance(a, list):

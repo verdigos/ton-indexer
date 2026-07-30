@@ -82,6 +82,9 @@ PORTED_BTYPES = {
     # Teleitem auction port (2026-07-30) — both fire on the two (ab-gap)
     # fixtures; C++ fills them via fill_nft_put_on_auction / fill_cancel_nft_trade.
     "teleitem_start_auction", "teleitem_cancel_auction",
+    # Coffee liquidity port (2026-07-30): deposit btype, C++ fills via
+    # fill_dedust_deposit (same routing as Python serializer).
+    "coffee_deposit_liquidity",
     # NFT mint port (2026-07-30) — fires on the six corpus fixtures that deploy
     # an account carrying an NftItem interface; C++ fill is fill_nft_mint, the
     # one producer of the nft_mint_data composite.
