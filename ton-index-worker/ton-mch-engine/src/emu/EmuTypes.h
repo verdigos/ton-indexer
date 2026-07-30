@@ -119,8 +119,8 @@ struct EmuClassifyResult {
   // caller that moved `actions` out was back to a dangling interior cell.
   // TraceInserter needs no mch value type at all — just these plain strings.
   EmuActionPayload payload;
-  bool used_fallback{false};       // rows came from ClassifyResult::fallback_actions
-  std::size_t unported_btypes{0};  // produced blocks build_action() declined
+  bool used_fallback{false};       // rows came from ClassifyResult::fallback_rows
+  std::size_t unported_btypes{0};  // spine blocks build_action() declined
   bool failure{false};
   std::string failure_reason;
   FailureCategory failure_category{FailureCategory::none};

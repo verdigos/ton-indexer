@@ -367,14 +367,23 @@ void unwind_deployments(std::vector<Block *> &blocks) {
   }
 }
 
-// try_classify_basic_actions (event_processing.py, Step 2c): a FRESH leaf-only
-// classify (init_block over the same event tree, NO matchers) + the
-// post-processor chain; one CoreAction per surviving spine block of a basic
-// btype. serialize_blocks skip conditions applied: skip root/empty, and
-// call_contract with a null source or destination. Throw-safe (Python's
-// fallback returns [] on any exception). Ungated (corpus has no failing traces).
-std::vector<CoreAction> basic_classify_fallback(TraceContext &ctx) {
-  std::vector<CoreAction> out;
+// serialize_blocks' row filter (block_tree_serializer.py:1649-1655): a spine
+// block becomes a row UNLESS it is the root wrapper, an `empty` proxy, or a
+// call_contract whose message has a null source (the external-in leaf) or a null
+// destination (the log / notification leaves).
+bool serializes_to_row(const Block *b) {
+  if (b->btype == "root" || b->btype == "empty") return false;
+  if (b->btype != "call_contract") return true;
+  return !pp_field(b->data, "source").is_null() && !pp_field(b->data, "destination").is_null();
+}
+
+// try_classify_basic_actions (event_processing.py:397-417, Step 2c): a FRESH
+// leaf-only classify (init_block over the same event tree, NO matchers) + the
+// post-processor chain, then serialize_blocks. Every surviving row is a basic
+// btype since nothing composite was built. Throw-safe (Python's fallback returns
+// [] on any exception). Ungated (corpus has no failing traces).
+std::vector<Block *> basic_classify_fallback(TraceContext &ctx) {
+  std::vector<Block *> out;
   try {
     Block *root = init_block(ctx.arena, ctx.tree.root);
     Block *wrap = ctx.arena.make("root");
@@ -385,14 +394,7 @@ std::vector<CoreAction> basic_classify_fallback(TraceContext &ctx) {
     post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
     unwind_deployments(spine);
     for (Block *b : spine) {
-      if (b->btype == "root" || b->btype == "empty" || removed.count(b) != 0) continue;
-      if (b->btype == "call_contract") {
-        if (pp_field(b->data, "source").is_null() ||
-            pp_field(b->data, "destination").is_null()) {
-          continue;
-        }
-      }
-      out.push_back(CoreAction{"basic", b, b, {}});
+      if (serializes_to_row(b)) out.push_back(b);
     }
   } catch (...) {
     out.clear();  // Python: fallback returns [] on any exception
@@ -534,9 +536,15 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     std::set<Block *> removed;
     post_process_dedust_liquidity(spine, removed);
     post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
-    unwind_deployments(spine);  // Step 2b (no-op for the dump; production chain parity)
+    unwind_deployments(spine);  // Step 2b: promotes nested ContractDeploy onto the spine
     for (CoreAction &a : pending) {
       if (!removed.count(a.produced)) result.actions.push_back(std::move(a));
+    }
+    // serialize_blocks: the ROW set is the spine, not the fire list. A fire whose
+    // product a later matcher consumed is off the spine and emits no row of its
+    // own; a leaf no matcher consumed emits a basic row.
+    for (Block *b : spine) {
+      if (serializes_to_row(b)) result.action_rows.push_back(b);
     }
   } catch (const std::exception &e) {
     result.failure = true;
@@ -555,9 +563,10 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
   }
   if (result.failure) {
     result.actions.clear();  // event_processing.py discards the trace's actions
-    result.fallback_actions = basic_classify_fallback(ctx);
-  } else if (result.actions.empty() && !ctx.trace.transactions.empty()) {
-    // trace_processor.py:44-46 — classification succeeded and matched nothing.
+    result.action_rows.clear();
+    result.fallback_rows = basic_classify_fallback(ctx);
+  } else if (result.action_rows.empty() && !ctx.trace.transactions.empty()) {
+    // trace_processor.py:44-46 — classification succeeded and serialized nothing.
     result.unknown_trace = true;
   }
   return result;

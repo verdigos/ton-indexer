@@ -183,22 +183,33 @@ int run_dump(const std::vector<std::string> &paths,
       std::fprintf(stderr, "TRACE_FAIL %s: %s\n", fs::path(f).filename().string().c_str(),
                    res.failure_reason.c_str());
       if (actions_mode) {
-        for (const CoreAction &a : res.fallback_actions) {
+        for (Block *b : res.fallback_rows) {
           Action act;
-          if (!build_action(a.produced, act)) continue;
-          std::printf("FALLBACK anchor=%s %s\n", block_key(a.anchor).c_str(),
+          if (!build_action(b, act)) continue;
+          std::printf("FALLBACK anchor=%s %s\n", block_key(b).c_str(),
                       render_action(act).c_str());
         }
       }
       continue;
     }
-    for (const CoreAction &a : res.actions) {
-      if (actions_mode) {
+    // --actions renders the serialize_blocks ROW set (spine); --classify renders
+    // the matcher FIRE list. The two sets differ (ClassifyCore.h action_rows).
+    if (actions_mode) {
+      // SORTED: spine order is not comparable against Python (its
+      // compact_connections rebuilds next_blocks through a `set()`), and no
+      // consumer of the rows depends on their order.
+      std::vector<std::string> lines;
+      for (Block *b : res.action_rows) {
         Action act;
-        if (!build_action(a.produced, act)) continue;  // btype outside ported set
-        std::printf("ACTION anchor=%s %s\n", block_key(a.anchor).c_str(),
-                    render_action(act).c_str());
-      } else {
+        if (!build_action(b, act)) continue;  // btype outside ported set
+        lines.push_back("ACTION anchor=" + block_key(b) + " " + render_action(act));
+      }
+      std::sort(lines.begin(), lines.end());
+      for (const std::string &line : lines) {
+        std::printf("%s\n", line.c_str());
+      }
+    } else {
+      for (const CoreAction &a : res.actions) {
         emit_action(a);
       }
     }

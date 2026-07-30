@@ -1,9 +1,10 @@
 # Python twin of ton-mch-engine's `--actions` (Classify.cpp run_actions).
-# Same collect->pass pipeline as py_classify.py (the classify twin), but each
-# SURVIVING post-pass produced block is rendered as a serialized Action row via
-# the REAL block_tree_serializer.block_to_action (ground truth), then printed in
-# the C++ render_action column set (sorted keys). Scoped to the 19 composite
-# btypes the C++ fill_action ports; other btypes are skipped on both sides.
+# Same collect->pass pipeline as py_classify.py (the classify twin), but the row
+# set is serialize_blocks': every POST-PASS SPINE block (matcher products AND the
+# basic leaves no matcher consumed), rendered via the REAL
+# block_tree_serializer.block_to_action (ground truth), then printed in the C++
+# render_action column set (sorted keys). Scoped to the btypes the C++
+# fill_action ports; other btypes are skipped on both sides.
 #
 # Not rendered (matches C++): roles (this branch's action_accounts are
 # role-less) and trace_id / trace_* / finality (constant per fixture; a stub
@@ -58,6 +59,9 @@ BUILTINS = {"account", "amount", "asset", "ton_asset", "addr_none", "b64",
 # vesting_send_message + tgbtc_mint re-included after the serializer _dget
 # dual-dispatch flip (both fills now serve the declarative dict block).
 PORTED_BTYPES = {
+    # The BASIC leaves serialize_blocks emits for every spine block a matcher did
+    # not consume (fill_call_contract / fill_ton_transfer).
+    "call_contract", "contract_deploy", "ton_transfer",
     "jetton_transfer", "jetton_burn", "jetton_mint", "jetton_swap",
     "nft_transfer", "dedust_deposit_liquidity", "dedust_deposit_liquidity_partial",
     "tonco_deposit_liquidity", "evaa_withdraw", "jvault_stake", "jvault_unstake",
@@ -207,7 +211,7 @@ def render_action(action):
 
 
 def render_action_row(block):
-    """A matched produced block -> its rendered row (the real serializer)."""
+    """A surviving spine block -> its rendered row (the real serializer)."""
     return render_action(block_to_action(block, "twin", _STUB_TRACE))
 
 
@@ -336,42 +340,51 @@ async def actions_fixture(path, included):
             queue.extend(sorted(cur.next_blocks, key=lambda x: x.min_lt))
 
     try:
-        # Phase E: COLLECT produced blocks during the matcher loop; post-process
-        # passes run AFTER, then surviving produced blocks are serialized from
-        # their FINAL state. (Same collect->pass pipeline as py_classify.py.)
-        pending = []  # (anchor_key, produced)
+        # Phase E: run the matcher loop, then the post-process passes; rows come
+        # from the FINAL spine. (Same collect->pass pipeline as py_classify.py.)
         for m in included:
             for b in bfs_canonical(root):
                 if b.parent is not None:
                     continue
-                r = await m.try_build(b)
-                if not r:
-                    continue
-                produced = r[0]
-                pending.append((block_key(b), produced))
+                await m.try_build(b)
 
         spine = [root]
         for cur in bfs_canonical(root):
             spine.append(cur)
-        before = set(id(x) for x in spine)
         spine = await post_process_dedust_liquidity(spine)
         spine = await post_process_stonfi_v2_liquidity(spine)
-        spine = await unwind_deployments(spine)  # Step 2b (production chain parity)
-        removed = before - set(id(x) for x in spine)
+        spine = await unwind_deployments(spine)  # Step 2b: promotes ContractDeploy
 
-        survived = [(k, p) for (k, p) in pending if id(p) not in removed]
-        for (anchor_key, produced) in survived:
-            if produced.btype not in PORTED_BTYPES:
-                continue  # btype outside the ported set (C++ build_action -> false)
-            print(f"ACTION anchor={anchor_key} {render_action_row(produced)}")
+        # serialize_blocks (block_tree_serializer.py:1648-1655) verbatim: skip the
+        # root wrapper, `empty` proxies, and a call_contract with a null source or
+        # destination. Everything else is a row — including every basic leaf no
+        # matcher consumed, and EXCLUDING a product a later matcher consumed
+        # (that one is off the spine).
+        rows = []
+        for b in spine:
+            if b.btype in ("root", "empty"):
+                continue
+            if b.btype == "call_contract" and (b.event_nodes[0].message.destination is None
+                                               or b.event_nodes[0].message.source is None):
+                continue
+            rows.append(b)
 
-        # W4: trace_processor.py:44-46 — classification succeeded and matched
-        # nothing. Gated on `survived`, NOT on the rows actually printed: the
+        # Spine ORDER is not comparable: Python's compact_connections rebuilds
+        # next_blocks through a `set()`, so it varies run to run, and nothing
+        # downstream of the serializer depends on row order (they are DB rows
+        # keyed by action_id). Both sides sort the rendered lines instead.
+        lines = [f"ACTION anchor={block_key(b)} {render_action_row(b)}"
+                 for b in rows if b.btype in PORTED_BTYPES]
+        for line in sorted(lines):
+            print(line)
+
+        # W4: trace_processor.py:44-46 — classification succeeded and serialized
+        # nothing. Gated on `rows`, NOT on the lines actually printed: the
         # PORTED_BTYPES filter above is a twin-scoping device with no C++
         # counterpart (there, build_action simply declines the row after the
-        # fact), so a trace that matched only unported btypes is NOT unknown on
+        # fact), so a trace whose only rows are unported btypes is NOT unknown on
         # either side.
-        if not survived and txs:
+        if not rows and txs:
             print(f"ACTION anchor=unknown {render_unknown_row(unknown_trace_stub(data, txs))}")
     except Exception as e:  # noqa: BLE001
         print("TRACE_FAIL")

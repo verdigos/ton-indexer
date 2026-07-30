@@ -59,19 +59,34 @@ struct CoreAction {
 // production commits only on success).
 struct ClassifyResult {
   std::vector<CoreAction> actions;  // surviving post-pass, in fire order
+  // The blocks serialize_blocks (block_tree_serializer.py:1641-1681) turns into
+  // rows: the POST-PASS SPINE, in spine order. NOT the same set as `actions`,
+  // which is the matcher FIRE list:
+  //   - a composite a later matcher consumed is off the spine — its row belongs
+  //     to the outer block, so Python never emits it (the fire list still has
+  //     it, which is what --classify wants to show);
+  //   - every leaf no matcher consumed is a BASIC row (ton_transfer /
+  //     call_contract / contract_deploy, the last promoted onto the spine by
+  //     unwind_deployments) — 143 of the 165 corpus fixtures have at least one.
+  // THIS is the production / `--actions` row set; `actions` stays the --classify
+  // view. A row needs nothing from the fire (no aux, no matcher name), so it is
+  // just the block.
+  std::vector<Block *> action_rows;
   bool failure = false;
   std::string failure_reason;
   // Trace-terminal failure category (additive telemetry; none unless `failure`).
   FailureCategory failure_category = FailureCategory::none;
   // Step 2c basic-actions fallback (try_classify_basic_actions): populated ONLY
   // when `failure` — a fresh leaf-only classify (no matchers) + the
-  // post-processor chain, one CoreAction per surviving spine block of a basic
-  // btype (call_contract / contract_deploy / ton_transfer). Production commits
-  // these when classification fails. Ungated (corpus has no failing traces).
-  std::vector<CoreAction> fallback_actions;
-  // Classification SUCCEEDED but matched nothing, over a trace that has
+  // post-processor chain, serialized the same way as `action_rows`, so every row
+  // is a basic btype (call_contract / contract_deploy / ton_transfer).
+  // Production commits these when classification fails. Ungated (corpus has no
+  // failing traces).
+  std::vector<Block *> fallback_rows;
+  // Classification SUCCEEDED but serialized nothing, over a trace that has
   // transactions — trace_processor.py:44-46's `len(actions) == 0 and
-  // len(trace.transactions) > 0` branch. The adapter answers it with
+  // len(trace.transactions) > 0` branch, i.e. `action_rows` empty (Python tests
+  // serialize_blocks' output, not the fire list). The adapter answers it with
   // create_unknown_action(ctx.trace); that row has no Block, so it cannot be a
   // CoreAction and the core only raises the flag.
   //

@@ -133,16 +133,20 @@ void classify_txs(const EmuShadowConfig &cfg, const EmuTraceView &view,
     // On failure the regular actions are discarded and the basic-actions
     // fallback rows are what production commits (Classify.cpp).
     res.used_fallback = cres.failure;
-    const std::vector<CoreAction> &core = cres.failure ? cres.fallback_actions : cres.actions;
-    std::set<std::string> names;
-    for (const CoreAction &a : core) {
+    const std::vector<Block *> &core = cres.failure ? cres.fallback_rows : cres.action_rows;
+    for (Block *b : core) {
       Action act;
-      if (!build_action(a.produced, act)) {  // btype outside the ported fill set
+      if (!build_action(b, act)) {  // btype outside the ported fill set
         res.unported_btypes++;
         continue;
       }
       scrubbed += scrub_arena_refs(act);
       rows.push_back(std::move(act));
+    }
+    // Debug-log telemetry: which matchers FIRED, off the fire list — a fire whose
+    // product a later matcher absorbed contributes no row but did run.
+    std::set<std::string> names;
+    for (const CoreAction &a : cres.actions) {
       names.insert(a.matcher_name);
     }
     matcher_names.assign(names.begin(), names.end());
