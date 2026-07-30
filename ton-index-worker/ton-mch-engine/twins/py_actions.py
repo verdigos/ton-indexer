@@ -89,6 +89,15 @@ PORTED_BTYPES = {
     # an account carrying an NftItem interface; C++ fill is fill_nft_mint, the
     # one producer of the nft_mint_data composite.
     "nft_mint",
+    # GetGems sale/auction family (2026-07-30, specs/nft_sale.mch). NONE of
+    # these fires on the 176-fixture corpus — the family has zero fixture
+    # coverage — so widening the set changes no output today. Listed for the
+    # same reason as the bucket-B block above: the day a fixture carrying one
+    # lands, Python must emit its row instead of silently skipping it while C++
+    # emits one. Four of them share a fill with the teleitem pair.
+    "nft_put_on_sale", "nft_put_on_auction", "nft_update_sale", "nft_discovery",
+    "auction_bid", "auction_outbid",
+    "nft_cancel_sale", "nft_cancel_auction", "nft_finish_auction",
 }
 
 # The C++ render_action column set (Classify.cpp render_action), in any order —
@@ -319,8 +328,14 @@ def skip_reason(rec, nodes):
     missing = preds - CPP_PREDS
     if missing:
         return "pred:" + ",".join(sorted(missing))
-    if rec["anchor"]["kind"] == "mixed" and preds:
-        return "mixed_anchor_preds"
+    # (The former `mixed_anchor_preds` skip is RETIRED. It was written 2026-07-11,
+    # when a Mixed anchor could not carry per-branch `where` predicates on the C++
+    # side; b559068 implemented them 2026-07-30 — Walker.cpp matcher_test_self
+    # AnchorKind::Mixed tests union membership then the matching branch's `where`,
+    # and the codegen'd table carries anchor_branches[i].where. The guard never
+    # fired because dedust_v2's mixed anchors have no `where`; specs/nft_sale.mch's
+    # cancel/finish pair is the first to. The `pred:` check above already covers
+    # the only real gap — _preds() includes anchor-branch `where` names.)
     if "build_program" not in rec:
         return "builder" if "builder" in rec else "no_build_program"
     types_, lookups, fns = _refs(rec)

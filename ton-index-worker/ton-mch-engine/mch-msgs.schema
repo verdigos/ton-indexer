@@ -338,3 +338,24 @@ message CoffeeLiquidityWithdrawalEvent opcode 0xc0ffee35 {
   _reserves_in: coins
   _reserves_out: coins
 }
+
+# --- specs/nft_sale.mch bodies.
+
+# UpdateSaleMatcher's anchor (messages/getgems.py SaleUpdateMessage). Field name
+# `new_mp_fee` is the message's, not the block data's (`new_marketplace_fee`);
+# the .mch out{} does the rename, same as the legacy build.
+message SaleUpdateMessage opcode 0x6c6c2080 {
+  _query_id: bits 64
+  new_full_price: coins
+  new_mp_fee: coins
+  new_royalty_amount: coins
+}
+
+# NftDiscoveryBlockMatcher's mandatory child (messages/nft.py
+# NftReportStaticData). Every field of the produced block comes from HERE, not
+# from the discovery anchor — including its query_id.
+message NftReportStaticData opcode 0x8b771735 {
+  query_id: u64
+  index: uint256
+  collection: addr_py
+}

@@ -93,6 +93,15 @@ void map_message(Message *m, const schema::Message &s, const std::string &owner_
   c.hash = b256(s.hash);
   c.body = s.body_boc;
   m->content = c;
+  // Same treatment for the StateInit of a deploying message. This one read
+  // covers BOTH the schema/prod path and the emulator path, which funnels its
+  // re-parsed transactions through this same mapper.
+  if (s.init_state_boc && s.init_state.not_null()) {
+    MsgContent init;
+    init.hash = b256(s.init_state->get_hash().bits());
+    init.body = *s.init_state_boc;
+    m->init_state = std::move(init);
+  }
 }
 
 }  // namespace

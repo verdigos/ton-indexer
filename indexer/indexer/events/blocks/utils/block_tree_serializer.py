@@ -270,11 +270,13 @@ def _fill_nft_purchase_action(block: NftPurchaseBlock, action: Action):
     }
 
 def _fill_nft_discovery_action(block: NftDiscoveryBlock, action: Action):
-    action.source = _addr(block.data.sender)
-    action.asset = _addr(block.data.result_collection)
-    action.asset_secondary = _addr(block.data.nft)
+    # dual-access via _dget: legacy NftDiscoveryBlockData dataclass OR the
+    # declarative specs/nft_sale.mch out{} dict (identical key names).
+    action.source = _addr(_dget(block.data, 'sender'))
+    action.asset = _addr(_dget(block.data, 'result_collection'))
+    action.asset_secondary = _addr(_dget(block.data, 'nft'))
     action.nft_transfer_data = {
-        "nft_item_index": block.data.result_index,
+        "nft_item_index": _dget(block.data, 'result_index'),
     }
 
 def _fill_nft_mint_action(block: NftMintBlock, action: Action):
@@ -291,22 +293,24 @@ def _fill_nft_mint_action(block: NftMintBlock, action: Action):
 
 
 def _fill_nft_put_on_sale_action(block: NftPutOnSaleBlock, action: Action):
-    action.source = _addr(block.data.owner)
-    action.source_secondary = _addr(block.data.listing_address)
-    action.destination = _addr(block.data.sale_address)
+    # dual-access via _dget: legacy NftPutOnSaleBlockData dataclass OR the
+    # declarative specs/nft_sale.mch out{} dict (identical key names).
+    action.source = _addr(_dget(block.data, 'owner'))
+    action.source_secondary = _addr(_dget(block.data, 'listing_address'))
+    action.destination = _addr(_dget(block.data, 'sale_address'))
     action.nft_transfer_data = {
-        'marketplace_address': _addr(block.data.marketplace_address),
+        'marketplace_address': _addr(_dget(block.data, 'marketplace_address')),
     }
-    action.asset = _addr(block.data.nft_collection)
-    action.asset_secondary = _addr(block.data.nft_address)
+    action.asset = _addr(_dget(block.data, 'nft_collection'))
+    action.asset_secondary = _addr(_dget(block.data, 'nft_address'))
     action.nft_listing_data = {
-        'nft_item_index': block.data.nft_index,
-        'full_price': _value(block.data.full_price),
-        'marketplace_fee': _value(block.data.marketplace_fee),
-        'royalty_amount': _value(block.data.royalty_amount),
-        'marketplace_fee_address': _addr(block.data.marketplace_fee_address),
-        'marketplace': block.data.marketplace,
-        'royalty_address': _addr(block.data.royalty_address),
+        'nft_item_index': _dget(block.data, 'nft_index'),
+        'full_price': _value(_dget(block.data, 'full_price')),
+        'marketplace_fee': _value(_dget(block.data, 'marketplace_fee')),
+        'royalty_amount': _value(_dget(block.data, 'royalty_amount')),
+        'marketplace_fee_address': _addr(_dget(block.data, 'marketplace_fee_address')),
+        'marketplace': _dget(block.data, 'marketplace'),
+        'royalty_address': _addr(_dget(block.data, 'royalty_address')),
         # Auction fields set to null
         'mp_fee_factor': None,
         'mp_fee_base': None,
@@ -316,16 +320,18 @@ def _fill_nft_put_on_sale_action(block: NftPutOnSaleBlock, action: Action):
     }
 
 def _fill_sale_update_action(block: UpdateSaleBlock, action: Action):
-    action.source = _addr(block.data.sender)
-    action.destination = _addr(block.data.sale_contract)
-    action.asset_secondary = _addr(block.data.nft_address)
+    # dual-access via _dget: legacy UpdateSaleData dataclass OR the declarative
+    # specs/nft_sale.mch out{} dict (identical key names).
+    action.source = _addr(_dget(block.data, 'sender'))
+    action.destination = _addr(_dget(block.data, 'sale_contract'))
+    action.asset_secondary = _addr(_dget(block.data, 'nft_address'))
     action.nft_listing_data = {
-        'full_price': _value(block.data.new_full_price),
-        'royalty_amount': _value(block.data.new_royalty_amount),
-        'marketplace_fee': _value(block.data.new_marketplace_fee),
+        'full_price': _value(_dget(block.data, 'new_full_price')),
+        'royalty_amount': _value(_dget(block.data, 'new_royalty_amount')),
+        'marketplace_fee': _value(_dget(block.data, 'new_marketplace_fee')),
     }
     action.nft_transfer_data = {
-        'marketplace_address': _addr(block.data.marketplace_address),
+        'marketplace_address': _addr(_dget(block.data, 'marketplace_address')),
     }
     action.accounts.append(action.asset_secondary)
 
@@ -666,17 +672,19 @@ def _fill_auction_bid_action(block: Block, action: Action):
     action.value = block.data['amount'].value
 
 def _fill_auction_outbid_action(block: AuctionOutbidBlock, action: Action):
-    action.source = _addr(block.data.auction_address)
-    action.destination = _addr(block.data.bidder)
-    action.source_secondary = _addr(block.data.new_bidder)
-    action.asset_secondary = _addr(block.data.nft)
-    action.asset = _addr(block.data.nft_collection)
+    # dual-access via _dget: legacy AuctionOutbidData dataclass OR the
+    # declarative specs/nft_sale.mch out{} dict (identical key names).
+    action.source = _addr(_dget(block.data, 'auction_address'))
+    action.destination = _addr(_dget(block.data, 'bidder'))
+    action.source_secondary = _addr(_dget(block.data, 'new_bidder'))
+    action.asset_secondary = _addr(_dget(block.data, 'nft'))
+    action.asset = _addr(_dget(block.data, 'nft_collection'))
     action.nft_transfer_data = {
-        'marketplace': block.data.auction_type
+        'marketplace': _dget(block.data, 'auction_type')
     }
-    action.amount = _value(block.data.amount)
+    action.amount = _value(_dget(block.data, 'amount'))
     action.ton_transfer_data = {
-        'comment': block.data.comment
+        'comment': _dget(block.data, 'comment')
     }
     action.accounts.append(action.asset_secondary)
 

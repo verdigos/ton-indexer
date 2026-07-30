@@ -64,12 +64,12 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
       return Value::null();
     }
     return iface_obj(*nft, {"address", "init", "index", "collection_address",
-                            "owner_address", "content"});
+                            "owner_address", "content", "code_hash"});
   }
   if (kind == "nft_sale") {
     // TestInterfaceRepository.get_nft_sale: interfaces[addr]["NftSale"] (RAW key)
-    // -> NftSale ORM. The nft host fn reads marketplace_address / nft_address /
-    // full_price / nft_owner_address.
+    // -> NftSale ORM. The nft host fns read marketplace_address / nft_address /
+    // full_price / nft_owner_address / code_hash.
     auto it = interfaces_->find(addr);
     if (it == interfaces_->end()) {
       return Value::null();
@@ -79,12 +79,12 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
       return Value::null();
     }
     return iface_obj(*sale, {"marketplace_address", "nft_address", "full_price",
-                             "nft_owner_address"});
+                             "nft_owner_address", "code_hash"});
   }
   if (kind == "nft_auction") {
     // TestInterfaceRepository.get_nft_auction: interfaces[addr]["NftAuction"]
-    // (RAW key) -> NftAuction ORM. The nft host fn reads mp_addr / nft_addr /
-    // last_bid / nft_owner.
+    // (RAW key) -> NftAuction ORM. The nft host fns read mp_addr / nft_addr /
+    // last_bid / nft_owner / code_hash.
     auto it = interfaces_->find(addr);
     if (it == interfaces_->end()) {
       return Value::null();
@@ -93,7 +93,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     if (auc == nullptr) {
       return Value::null();
     }
-    return iface_obj(*auc, {"mp_addr", "nft_addr", "last_bid", "nft_owner"});
+    return iface_obj(*auc, {"mp_addr", "nft_addr", "last_bid", "nft_owner", "code_hash"});
   }
   if (kind == "nominator_pool") {
     auto it = interfaces_->find(addr);

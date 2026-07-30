@@ -26,6 +26,19 @@ Value addr_str_opt(const std::optional<block::StdAddress> &a) {
   return a ? addr_str(*a) : Value::null();
 }
 
+// Python's `code_hash` column: base64 of the account's code cell hash, compared
+// against literal b64 constants (auction.py DNS_CODE_HASH, getgems.py's sale /
+// auction version tables). An all-zero Bits256 is the emulator adapter's
+// value-initialized tail, never a real code hash, so it renders as null — a miss
+// the reader can reject on, not a b64 string that would silently pick the
+// "latest" parser branch.
+Value code_hash_str(const td::Bits256 &h) {
+  if (h.is_zero()) {
+    return Value::null();
+  }
+  return Value::make_str(td::base64_encode(h.as_slice()));
+}
+
 // Python's NftItem.content, as a Dict. NOT cosmetic and NOT optional: the
 // consumer FAULTS on a non-Dict — get_nft_data mirrors Python's `"uri" in
 // nft.content` raising (HostNft.cpp) — and a fault rejects the match, so a Null
@@ -87,7 +100,8 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
       }
     } else if (kind == "nft_item") {
       if (const auto *nft = std::get_if<schema::NFTItemDataV2>(&iface)) {
-        // Obj{address, init, index, collection_address, owner_address, content}.
+        // Obj{address, init, index, collection_address, owner_address, content,
+        // code_hash}.
         Value::Fields f;
         f.emplace_back("address", addr_str(nft->address));
         f.emplace_back("init", Value::make_bool(nft->init));
@@ -96,11 +110,13 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         f.emplace_back("collection_address", addr_str_opt(nft->collection_address));
         f.emplace_back("owner_address", addr_str_opt(nft->owner_address));
         f.emplace_back("content", nft_content(nft->content));
+        f.emplace_back("code_hash", code_hash_str(nft->code_hash));
         return Value::make_obj(std::move(f));
       }
     } else if (kind == "nft_sale") {
-      // Two GetGems sale variants share the fields the nft host fn reads
-      // (marketplace_address / nft_address / full_price / nft_owner_address).
+      // Two GetGems sale variants share the fields the nft host fns read
+      // (marketplace_address / nft_address / full_price / nft_owner_address /
+      // code_hash).
       if (const auto *s = std::get_if<schema::GetGemsNftFixPriceSaleData>(&iface)) {
         Value::Fields f;
         f.emplace_back("marketplace_address", addr_str(s->marketplace_address));
@@ -108,6 +124,7 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         f.emplace_back("full_price",
                        s->full_price.is_null() ? Value::null() : Value::make_int(s->full_price));
         f.emplace_back("nft_owner_address", addr_str_opt(s->nft_owner_address));
+        f.emplace_back("code_hash", code_hash_str(s->code_hash));
         return Value::make_obj(std::move(f));
       }
       if (const auto *s = std::get_if<schema::GetGemsNftFixPriceSaleV4Data>(&iface)) {
@@ -117,17 +134,19 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         f.emplace_back("full_price",
                        s->full_price.is_null() ? Value::null() : Value::make_int(s->full_price));
         f.emplace_back("nft_owner_address", addr_str_opt(s->nft_owner_address));
+        f.emplace_back("code_hash", code_hash_str(s->code_hash));
         return Value::make_obj(std::move(f));
       }
     } else if (kind == "nft_auction") {
       if (const auto *a = std::get_if<schema::GetGemsNftAuctionData>(&iface)) {
-        // Obj{mp_addr, nft_addr, last_bid, nft_owner}.
+        // Obj{mp_addr, nft_addr, last_bid, nft_owner, code_hash}.
         Value::Fields f;
         f.emplace_back("mp_addr", addr_str(a->mp_addr));
         f.emplace_back("nft_addr", addr_str(a->nft_addr));
         f.emplace_back("last_bid",
                        a->last_bid.is_null() ? Value::null() : Value::make_int(a->last_bid));
         f.emplace_back("nft_owner", addr_str_opt(a->nft_owner));
+        f.emplace_back("code_hash", code_hash_str(a->code_hash));
         return Value::make_obj(std::move(f));
       }
     } else if (kind == "dedust_pool") {

@@ -1097,6 +1097,62 @@ td::Result<Value> gen_parse_coffee_liquidity_withdrawal_event(const td::Ref<vm::
   return Value::make_obj(std::move(f));
 }
 
+// SaleUpdateMessage (opcode 0x6c6c2080); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_sale_update_message(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("SaleUpdateMessage: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("SaleUpdateMessage: _query_id underflow"); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("new_full_price", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("new_mp_fee", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("new_royalty_amount", Value::make_int(rc.move_as_ok()));
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// NftReportStaticData (opcode 0x8b771735); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_nft_report_static_data(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("NftReportStaticData: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("NftReportStaticData: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(256)) { return td::Status::Error("NftReportStaticData: index underflow"); }
+    auto iv = cs.fetch_int256(256, false);
+    if (iv.is_null()) { return td::Status::Error("NftReportStaticData: index fetch failed"); }
+    f.emplace_back("index", Value::make_int(std::move(iv)));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("collection", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parsers() {
@@ -1129,6 +1185,8 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"CoffeeCreateLiquidityDepositoryRequest", gen_parse_coffee_create_liquidity_depository_request},
       {"CoffeeDepositLiquiditySuccessfulEvent", gen_parse_coffee_deposit_liquidity_successful_event},
       {"CoffeeLiquidityWithdrawalEvent", gen_parse_coffee_liquidity_withdrawal_event},
+      {"SaleUpdateMessage", gen_parse_sale_update_message},
+      {"NftReportStaticData", gen_parse_nft_report_static_data},
   };
   return rows;
 }

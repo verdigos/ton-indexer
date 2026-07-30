@@ -280,6 +280,26 @@
       "type": "CoffeeLiquidityWithdrawalEvent",
       "body": "te6ccgEBAQEABgAACMD/7jU=",
       "expect": "fail"
+    },
+    {
+      "type": "SaleUpdateMessage",
+      "body": "te6ccgEBAQEAEAAAG2xsIIAAAAAAAAAAAAAI",
+      "expect": "ok"
+    },
+    {
+      "type": "SaleUpdateMessage",
+      "body": "te6ccgEBAQEABgAACGxsIIA=",
+      "expect": "fail"
+    },
+    {
+      "type": "NftReportStaticData",
+      "body": "te6ccgEBAQEALwAAWYt3FzUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA==",
+      "expect": "ok"
+    },
+    {
+      "type": "NftReportStaticData",
+      "body": "te6ccgEBAQEABgAACIt3FzU=",
+      "expect": "fail"
     }
   ]
 }

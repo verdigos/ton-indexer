@@ -92,6 +92,13 @@ std::int64_t node_utime(const EventNode *n) {
 }
 Value mkdict(Value::Fields f) { return Value::make_dict(std::move(f)); }
 
+// Python's `action.accounts.append(x)` inside a fill: a participant the generic
+// source/destination assembly cannot derive. build_action seeds its account list
+// from here, then dedups, so pushing a duplicate is harmless.
+void push_account(Action &a, const Value &v) {
+  if (v.t == VType::Str) a.accounts.push_back(v.str);
+}
+
 // --- per-btype fills (block_tree_serializer.py _fill_*) ---------------------
 
 void fill_jetton_transfer(const Value &d, Action &a) {
@@ -731,10 +738,15 @@ void fill_nft_put_on_auction(const Value &d, Action &a) {
   a.nft_listing_data = mkdict(std::move(l));
 }
 
-// _fill_cancel_nft_trade_action — the `teleitem_cancel_auction` fill. Python
-// also appends asset_secondary to `accounts`; for this producer asset_secondary
-// IS the destination, which build_action already pushes, so the generic accounts
-// assembly needs no per-fill hook.
+// _fill_cancel_nft_trade_action — shared by teleitem_cancel_auction and the
+// three GetGems cancel/finish btypes. Python appends asset_secondary to
+// `accounts` unconditionally. For the teleitem producer that is a no-op
+// (asset_secondary IS the destination there, which build_action already
+// pushes), but for the GetGems trio the destination is the SALE/AUCTION
+// contract and asset_secondary is the NFT — an account the generic assembly
+// cannot reach, because those matchers deliberately do NOT consume the
+// nft_transfer that would otherwise have carried it. push_account + the dedup
+// keeps both cases right.
 void fill_cancel_nft_trade(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "owner"));
   a.destination = av_addr(dg(d, "trade_contract"));
@@ -743,6 +755,99 @@ void fill_cancel_nft_trade(const Value &d, Action &a) {
   Value::Fields f;
   f.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
   a.nft_transfer_data = mkdict(std::move(f));
+  push_account(a, a.asset_secondary);
+}
+
+// _fill_nft_put_on_sale_action — the `nft_put_on_sale` fill. Same two
+// composites as fill_nft_put_on_auction with the sale/auction key groups
+// swapped: the sale carries full_price / marketplace_fee / royalty_amount and
+// nulls the five auction-only keys.
+void fill_nft_put_on_sale(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "owner"));
+  a.source_secondary = av_addr(dg(d, "listing_address"));
+  a.destination = av_addr(dg(d, "sale_address"));
+  a.asset = av_addr(dg(d, "nft_collection"));
+  a.asset_secondary = av_addr(dg(d, "nft_address"));
+  Value::Fields t;
+  t.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
+  a.nft_transfer_data = mkdict(std::move(t));
+  Value::Fields l;
+  l.emplace_back("nft_item_index", dg(d, "nft_index"));  // raw passthrough
+  l.emplace_back("full_price", av_amount(dg(d, "full_price")));
+  l.emplace_back("marketplace_fee", av_amount(dg(d, "marketplace_fee")));
+  l.emplace_back("royalty_amount", av_amount(dg(d, "royalty_amount")));
+  l.emplace_back("marketplace_fee_address", av_addr(dg(d, "marketplace_fee_address")));
+  l.emplace_back("marketplace", dg(d, "marketplace"));
+  l.emplace_back("royalty_address", av_addr(dg(d, "royalty_address")));
+  // Auction fields set to null by the Python fill.
+  l.emplace_back("mp_fee_factor", Value::null());
+  l.emplace_back("mp_fee_base", Value::null());
+  l.emplace_back("royalty_fee_base", Value::null());
+  l.emplace_back("max_bid", Value::null());
+  l.emplace_back("min_bid", Value::null());
+  a.nft_listing_data = mkdict(std::move(l));
+}
+
+// _fill_sale_update_action — the `nft_update_sale` fill. Python also appends
+// asset_secondary to `accounts`; unlike the cancel fill, asset_secondary here is
+// the NFT (neither source nor destination), so it needs the extra push.
+void fill_sale_update(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.destination = av_addr(dg(d, "sale_contract"));
+  a.asset_secondary = av_addr(dg(d, "nft_address"));
+  Value::Fields l;
+  l.emplace_back("full_price", av_amount(dg(d, "new_full_price")));
+  l.emplace_back("royalty_amount", av_amount(dg(d, "new_royalty_amount")));
+  l.emplace_back("marketplace_fee", av_amount(dg(d, "new_marketplace_fee")));
+  a.nft_listing_data = mkdict(std::move(l));
+  Value::Fields t;
+  t.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
+  a.nft_transfer_data = mkdict(std::move(t));
+  push_account(a, a.asset_secondary);
+}
+
+// _fill_auction_bid_action. Python reads `bidder`/`auction`/`nft_address` with a
+// bare `.as_str()` (no null guard), so a null there is a crash Python never
+// reaches — av_addr's Null is the same observable row.
+void fill_auction_bid(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "bidder"));
+  a.destination = av_addr(dg(d, "auction"));
+  a.asset_secondary = av_addr(dg(d, "nft_address"));
+  a.asset = av_addr(dg(d, "nft_collection"));
+  Value::Fields t;
+  t.emplace_back("nft_item_index", dg(d, "nft_item_index"));
+  t.emplace_back("marketplace", dg(d, "auction_type"));
+  a.nft_transfer_data = mkdict(std::move(t));
+  push_account(a, a.asset_secondary);
+  a.value = dg(d, "amount");  // Python takes Amount.value, the raw int
+}
+
+// _fill_auction_outbid_action.
+void fill_auction_outbid(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "auction_address"));
+  a.destination = av_addr(dg(d, "bidder"));
+  a.source_secondary = av_addr(dg(d, "new_bidder"));
+  a.asset_secondary = av_addr(dg(d, "nft"));
+  a.asset = av_addr(dg(d, "nft_collection"));
+  Value::Fields t;
+  t.emplace_back("marketplace", dg(d, "auction_type"));
+  a.nft_transfer_data = mkdict(std::move(t));
+  a.amount = av_amount(dg(d, "amount"));
+  Value::Fields tt;
+  tt.emplace_back("comment", dg(d, "comment"));
+  a.ton_transfer_data = mkdict(std::move(tt));
+  push_account(a, a.asset_secondary);
+}
+
+// _fill_nft_discovery_action — the smallest fill in the family. `destination` is
+// deliberately never set (Python does not set it either).
+void fill_nft_discovery(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.asset = av_addr(dg(d, "result_collection"));
+  a.asset_secondary = av_addr(dg(d, "nft"));
+  Value::Fields t;
+  t.emplace_back("nft_item_index", dg(d, "result_index"));
+  a.nft_transfer_data = mkdict(std::move(t));
 }
 
 // _fill_nft_mint_action — the `nft_mint` fill (specs/nft_mint.mch). The ONLY
@@ -837,13 +942,20 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "nft_purchase") fill_nft_purchase(d, a);
   else if (t == "change_dns") fill_change_dns(d, a);
   else if (t == "delete_dns") fill_delete_dns(d, a);
-  // Teleitem auction port (specs/teleitem_auction.mch). The fills are named for
-  // the Python functions they port, which also serve nft_put_on_auction /
-  // nft_cancel_sale / nft_cancel_auction / nft_finish_auction — none of which
-  // any matcher in ir/mch_ir.json produces, so they get no dispatch arm here
-  // (bucket C, same rule as dns_purchase above).
-  else if (t == "teleitem_start_auction") fill_nft_put_on_auction(d, a);
-  else if (t == "teleitem_cancel_auction") fill_cancel_nft_trade(d, a);
+  // Teleitem auction port (specs/teleitem_auction.mch). The two fills are named
+  // for the Python functions they port, which the GetGems sale/auction family
+  // below shares verbatim — one Python fill, several producing btypes.
+  else if (t == "teleitem_start_auction" || t == "nft_put_on_auction")
+    fill_nft_put_on_auction(d, a);
+  else if (t == "teleitem_cancel_auction" || t == "nft_cancel_sale" ||
+           t == "nft_cancel_auction" || t == "nft_finish_auction")
+    fill_cancel_nft_trade(d, a);
+  // GetGems sale/auction family (specs/nft_sale.mch).
+  else if (t == "nft_put_on_sale") fill_nft_put_on_sale(d, a);
+  else if (t == "nft_update_sale") fill_sale_update(d, a);
+  else if (t == "auction_bid") fill_auction_bid(d, a);
+  else if (t == "auction_outbid") fill_auction_outbid(d, a);
+  else if (t == "nft_discovery") fill_nft_discovery(d, a);
   // NFT mint port (specs/nft_mint.mch).
   else if (t == "nft_mint") fill_nft_mint(d, a);
   // STILL UNPORTED, deliberately: dns_purchase is bucket C, not B — NO matcher
@@ -901,7 +1013,13 @@ bool build_action(Block *b, Action &a) {
   // source_secondary; + destination/destination_secondary UNLESS ghost; +
   // the initiating tx account (non-tick_tock). Dedup, drop nulls. Directional
   // fields are av_addr Str values (or Null → skipped).
-  std::vector<std::string> accts;
+  // Seeded from whatever the fill already pushed (push_account): a handful of
+  // Python fills append a non-directional address — `action.accounts.append(
+  // action.asset_secondary)` in the NFT sale/auction family — which the
+  // source/destination-driven assembly below cannot derive. Empty for every
+  // other fill, so the seed is a no-op there.
+  std::vector<std::string> accts = std::move(a.accounts);
+  a.accounts.clear();
   for (const EventNode *n : b->event_nodes) {
     if (n->tx != nullptr) accts.push_back(n->tx->account);
   }

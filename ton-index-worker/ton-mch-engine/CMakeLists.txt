@@ -164,6 +164,7 @@ add_library(mch-classify STATIC
     src/host/HostVesting.cpp
     src/host/HostJvault.cpp
     src/host/HostNft.cpp
+    src/host/HostNftSale.cpp
     src/host/HostTgbtc.cpp
     src/host/HostCoffee.cpp
     src/host/HostStonfi.cpp

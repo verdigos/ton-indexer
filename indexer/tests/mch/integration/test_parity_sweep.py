@@ -67,8 +67,15 @@ from indexer.events.blocks.dedust_v2.swaps import (
     DedustV2SwapBlockMatcher,
 )
 from indexer.events.blocks.auction import (
+    AuctionBidMatcher,
+    AuctionOutbidMatcher,
+    NftCancelAuctionMatcher,
+    NftCancelSaleMatcher,
+    NftFinishAuctionMatcher,
+    NftPutOnSaleBlockMatcher,
     TeleitemCancelAuctionMatcher,
     TeleitemStartAuctionMatcher,
+    UpdateSaleMatcher,
 )
 from indexer.events.blocks.dns import ChangeDnsRecordMatcher
 from indexer.events.blocks.ethena_staking import EthenaDepositBlockMatcher
@@ -98,6 +105,7 @@ from indexer.events.blocks.liquidity import (
 )
 from indexer.events.blocks.nft import (
     GetgemsNftPurchaseBlockMatcher,
+    NftDiscoveryBlockMatcher,
     NftMintBlockMatcher,
     NftTransferBlockMatcher,
     TelegramNftPurchaseBlockMatcher,
@@ -143,6 +151,7 @@ from indexer.events.mch.builders.jvault import jvault_registries
 from indexer.events.mch.builders.layerzero import layerzero_receive_registries
 from indexer.events.mch.builders.getgems import getgems_registries
 from indexer.events.mch.builders.nft_mint import nft_mint_registries
+from indexer.events.mch.builders.nft_sale import nft_sale_registries
 from indexer.events.mch.builders.nft_transfer import nft_transfer_registries
 from indexer.events.mch.builders.nominator import nominator_registries
 from indexer.events.mch.builders.stonfi_liquidity import stonfi_liquidity_registries
@@ -341,6 +350,23 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     # is FIRST in production order and reads nothing another matcher builds.
     ("specs/nft_mint.mch", _SPECS_DIR / "nft_mint.mch", nft_mint_registries, (),
      (NftMintBlockMatcher,)),
+    # GetGems sale/auction family port (2026-07-30): all eight matchers run as
+    # one group, in the legacy list order. Prereqs are the two specs whose
+    # products they bind — nft_transfer (nft_put_on_sale's anchor, and the
+    # returned item of both cancel matchers) and getgems' nft_purchase
+    # (nft_finish_auction's child). auction_bid is a bare `btype ton_transfer`
+    # anchor so this row runs on ALL fixtures.
+    #
+    # EXPECTED: this row currently fires on nothing. The family has zero corpus
+    # coverage (verified by running the full legacy matcher list over all 176
+    # fixtures — none of the eight btypes is produced), so every pair here is a
+    # "reject identically" check, not a parity assertion. Fixtures captured from
+    # the live A/B windows are what will turn it into a real gate.
+    ("specs/nft_sale.mch", _SPECS_DIR / "nft_sale.mch", nft_sale_registries,
+     (NftTransferBlockMatcher, GetgemsNftPurchaseBlockMatcher),
+     (UpdateSaleMatcher, NftPutOnSaleBlockMatcher, NftDiscoveryBlockMatcher,
+      AuctionBidMatcher, AuctionOutbidMatcher, NftCancelSaleMatcher,
+      NftFinishAuctionMatcher, NftCancelAuctionMatcher)),
 ]
 
 
@@ -448,6 +474,25 @@ def _build_block_tree(trace) -> Block:
     return root
 
 
+def _product_of(block: Block) -> Block:
+    """The block a matcher actually PRODUCED, given one block it returned.
+
+    Almost every `build_block` returns the new block it just built, whose
+    `.parent` is None (merge_blocks sets the parent of the blocks it absorbs,
+    not of itself) — so this is the identity for them.
+
+    `AuctionBidMatcher` (blocks/auction.py:112) is the exception: it builds the
+    `auction_bid`, merges the anchor into it, and then returns the ANCHOR. The
+    return value is only tested for None by the production loop, so the quirk is
+    invisible there — but a harness that reads the return value as "the product"
+    would see a `ton_transfer` and conclude the matcher produced nothing.
+    Walking to the top-most parent recovers the real product in both shapes.
+    """
+    while block.parent is not None:
+        block = block.parent
+    return block
+
+
 async def _run_matchers(matchers: list[BlockMatcher], trace, prereqs=()) -> list[Block]:
     """One fresh tree; prerequisites first, then each matcher in order over a
     full BFS pass (mirrors process_event_async)."""
@@ -457,13 +502,22 @@ async def _run_matchers(matchers: list[BlockMatcher], trace, prereqs=()) -> list
             if b.parent is None:
                 await pre.try_build(b)
     produced: list[Block] = []
+    seen: set[int] = set()
     for matcher in matchers:
         for b in root.bfs_iter():
             if b.btype == "root" or b.parent is not None:
                 continue
             result = await matcher.try_build(b)
-            if result is not None:
-                produced.extend(result)
+            if result is None:
+                continue
+            # Dedup by identity: a matcher whose build_block returns its merged
+            # children (the GenericMatcher default) maps all of them onto the
+            # one product.
+            for got in result:
+                product = _product_of(got)
+                if id(product) not in seen:
+                    seen.add(id(product))
+                    produced.append(product)
     return produced
 
 

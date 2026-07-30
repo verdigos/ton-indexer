@@ -32,6 +32,19 @@ EvalResult is_teleitem(BuildEnv &env, const std::vector<Value> &args);
 // distinct contract deployment across the block's event nodes.
 bool single_contract_deploy(const Block *block);
 
+// GetGems sale/auction family (HostNftSale.cpp), specs/nft_sale.mch.
+bool sale_contract_deploy(const Block *block);
+bool nft_trade_cancel_comment(const Block *block);
+bool nft_trade_finish_comment(const Block *block);
+bool auction_bid_candidate(const Block *block);
+bool auction_outbid_leg(const Block *block);
+EvalResult getgems_sale_init(BuildEnv &env, const std::vector<Value> &args);
+EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args);
+EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args);
+EvalResult nft_trade_is_finish(BuildEnv &env, const std::vector<Value> &args);
+EvalResult nft_trade_returned(BuildEnv &env, const std::vector<Value> &args);
+EvalResult auction_outbid_data(BuildEnv &env, const std::vector<Value> &args);
+
 // tgBTC (HostTgbtc.cpp): mint host fn + deploy-absorb shaper.
 EvalResult tgbtc_mint_data(BuildEnv &env, const std::vector<Value> &args);
 void tgbtc_deploy_absorb(Block *produced, const ShaperMatch &m);

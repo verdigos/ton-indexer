@@ -34,6 +34,14 @@ const std::map<std::string, HostFn> &host_fns() {
       // in_transfer.event_nodes[0].message, so it is deterministic and matches
       // this already-btype-driven port. A/B parity is now achievable.
       {"stonfi_v2_swap_data", stonfi_v2_swap_data},
+      // specs/nft_sale.mch — GetGems StateInit readers, the chained-lookup bid
+      // builder, and the cancel/finish switch discriminator.
+      {"getgems_sale_init", getgems_sale_init},
+      {"getgems_auction_init", getgems_auction_init},
+      {"auction_bid_data", auction_bid_data},
+      {"nft_trade_is_finish", nft_trade_is_finish},
+      {"nft_trade_returned", nft_trade_returned},
+      {"auction_outbid_data", auction_outbid_data},
   };
   return fns;
 }
@@ -72,6 +80,12 @@ const std::map<std::string, HostPredFn> &host_predicates() {
       // pton_self_transfer gates stonfi_v2_swap. (no_internal_transfer folded
       // into an inline where-expr in W6.)
       {"pton_self_transfer", pton_self_transfer},
+      // specs/nft_sale.mch.
+      {"sale_contract_deploy", sale_contract_deploy},
+      {"nft_trade_cancel_comment", nft_trade_cancel_comment},
+      {"nft_trade_finish_comment", nft_trade_finish_comment},
+      {"auction_bid_candidate", auction_bid_candidate},
+      {"auction_outbid_leg", auction_outbid_leg},
   };
   return preds;
 }

@@ -7,7 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**176 fixtures, 894 ACTION rows** — one per serializable block on each trace's
+**180 fixtures, 907 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus the CHILD rows the serializer expands out of any spine
 block whose btype is outside `v1_ops`, plus 6 synthetic `unknown` rows (the
 fixtures whose spine serializes to nothing at all). Rows are printed **sorted**
@@ -21,6 +21,37 @@ dies with it — and Python's `--emulated-traces` path is being retired. This fi
 is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
+
+Re-baselined 2026-07-30 (**894 → 907 rows, 176 → 180 fixtures**) by the GETGEMS
+SALE/AUCTION FAMILY port (`specs/nft_sale.mch`). Four fixtures were captured
+from the live A/B windows specifically because the family had ZERO corpus
+coverage — every matcher in the spec fired on nothing before this.
+
+- **Rows**: **+13, none removed, and not one existing row changed** — the whole
+  delta is the four new fixtures. By fixture: `M2rUrfJX…` 5
+  (`nft_put_on_auction` + 2 `nft_transfer` + `ton_transfer` + `contract_deploy`),
+  `EzvOGPJe…` 3 (`nft_cancel_sale` + `nft_transfer` + `call_contract`),
+  `LQB6Qv2a…` 3 (`nft_cancel_auction` + `nft_transfer` + `ton_transfer`),
+  `_4VnZDY…` 2 (`nft_update_sale` + `call_contract`).
+- **6 of the 13 are CHILD rows** (7 top-level). None of these four btypes is in
+  `v1_ops`, so the P3 recursion re-emits each matcher's merged legs with a
+  `parent_action_id` — the first non-teleitem exercise of that path in the
+  corpus. The returned `nft_transfer` of the two cancel matchers is deliberately
+  NOT among them: legacy gates on that child but merges only the anchor, so it
+  stays a TOP-LEVEL row, and `specs/nft_sale.mch` reaches it through
+  `nft_trade_returned` rather than a pattern edge to reproduce that.
+- `M2rUrfJX…` is the only fixture that exercises `init_state`: its
+  `nft_listing_data` (mp_fee_factor 2, mp_fee_base 100, royalty_fee_base 100,
+  max_bid 0, min_bid 30000000000) is read out of the deploy message's GetGems
+  StateInit by `getgems_auction_init`, and matches the legacy Python
+  `get_auction_data` field for field. Its `NftAuction.code_hash` is null (no
+  detector Result carries one), so both engines take the "latest" → `v3r3`
+  branch; the other six version branches remain unexercised offline.
+- All 13 rows were checked field-for-field against the REAL legacy Python
+  classifier (`process_trace`) — type, accounts, tx_hashes, start/end_lt,
+  `parent_action_id` and `ancestor_type` all identical. That comparison is worth
+  spelling out because neither standing gate makes it: the twin runs the IR
+  engine on BOTH legs, and the parity sweep compares blocks, not action rows.
 
 Re-baselined 2026-07-30 (**712 → 894 rows**, and EVERY row gains two columns) by
 the CHILD-ACTION RECURSION port (`serialize_blocks`,

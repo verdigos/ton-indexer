@@ -99,22 +99,62 @@ EmuTraceView make_view(const ::Trace &trace) {
     }
   }
 
+  // No detector Result carries `code_hash` (it is a property of the account
+  // state cell, not of any get-method), so the three nft shapes' code_hash is
+  // computed here from the same account the detector ran on: emulated state if
+  // this trace produced one (reverse order = last emulated state, mirroring
+  // TraceInterfaceDetector's rbegin walk), otherwise the committed state.
+  // Zero == unknown, which ParsedBlockLookupSource renders as null.
+  auto account_code_hash = [&trace](const block::StdAddress &addr) {
+    td::Bits256 h;
+    h.set_zero();
+    auto range = trace.emulated_accounts.equal_range(addr);
+    if (range.first != range.second) {
+      const block::Account &acc = std::prev(range.second)->second;
+      if (acc.code.not_null()) {
+        return td::Bits256{acc.code->get_hash().bits()};
+      }
+    }
+    auto it = trace.committed_accounts.find(addr);
+    if (it != trace.committed_accounts.end() && it->second.code.not_null()) {
+      return td::Bits256{it->second.code->get_hash().bits()};
+    }
+    return h;
+  };
+
   // trace.interfaces (not committed_interfaces): the trace-final map that goes
   // to Redis, so emulated accounts resolve too. Only the variants with a tier-1
   // kind are carried over; jetton master / nft collection have none.
   for (const auto &[addr, ifaces] : trace.interfaces) {
     std::vector<schema::BlockchainInterfaceV2> adapted;
+    const td::Bits256 code_hash = account_code_hash(addr);
     for (const auto &iface : ifaces) {
       std::visit(
           td::overloaded(
               [&](const JettonWalletDetectorR::Result &r) { adapted.push_back(to_v2(r)); },
-              [&](const NftItemDetectorR::Result &r) { adapted.push_back(to_v2(r)); },
-              [&](const GetGemsNftFixPriceSale::Result &r) { adapted.push_back(to_v2(r)); },
-              [&](const GetGemsNftAuction::Result &r) { adapted.push_back(to_v2(r)); },
+              [&](const NftItemDetectorR::Result &r) {
+                auto v = to_v2(r);
+                v.code_hash = code_hash;
+                adapted.push_back(std::move(v));
+              },
+              [&](const GetGemsNftFixPriceSale::Result &r) {
+                auto v = to_v2(r);
+                v.code_hash = code_hash;
+                adapted.push_back(std::move(v));
+              },
+              [&](const GetGemsNftAuction::Result &r) {
+                auto v = to_v2(r);
+                v.code_hash = code_hash;
+                adapted.push_back(std::move(v));
+              },
               // W3 additions: dedust_pool and nominator_pool were tier-2-only
               // kinds purely because the emulator ran no detector for them, and
               // nft_sale's tier-1 branch already accepts either sale variant.
-              [&](const GetGemsNftFixPriceSaleV4::Result &r) { adapted.push_back(to_v2(r)); },
+              [&](const GetGemsNftFixPriceSaleV4::Result &r) {
+                auto v = to_v2(r);
+                v.code_hash = code_hash;
+                adapted.push_back(std::move(v));
+              },
               [&](const DedustPoolDetector::Result &r) { adapted.push_back(to_v2(r)); },
               [&](const NominatorPoolContract::Result &r) { adapted.push_back(to_v2(r)); },
               [](const JettonMasterDetectorR::Result &) {},

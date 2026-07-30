@@ -28,6 +28,7 @@
       "specs/stonfi_v2_withdraw.mch",
       "specs/telegram_nft.mch",
       "specs/teleitem_auction.mch",
+      "specs/nft_sale.mch",
       "specs/tgbtc.mch",
       "specs/tonco_liquidity.mch",
       "specs/tonco_swap.mch",
@@ -12879,6 +12880,2697 @@
       ]
     },
     {
+      "name": "nft_update_sale",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1819025536
+        ]
+      },
+      "root": 329,
+      "produces": [
+        "nft_update_sale"
+      ],
+      "captures": [
+        {
+          "name": "upd",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "upd",
+          "types": [
+            "SaleUpdateMessage"
+          ]
+        },
+        {
+          "s": "let",
+          "name": "sale",
+          "expr": {
+            "k": "lookup",
+            "name": "nft_sale",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "upd"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "sale"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "upd"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "upd"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "source"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "sale_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "upd"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "nft_address",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "sale"
+                      },
+                      "name": "nft_address"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "new_full_price",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "upd"
+                      },
+                      "name": "body"
+                    },
+                    "name": "new_full_price"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "new_marketplace_fee",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "upd"
+                      },
+                      "name": "body"
+                    },
+                    "name": "new_mp_fee"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "new_royalty_amount",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "upd"
+                      },
+                      "name": "body"
+                    },
+                    "name": "new_royalty_amount"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "marketplace_address",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "sale"
+                      },
+                      "name": "marketplace_address"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nft_put_on_sale",
+      "anchor": {
+        "kind": "btype",
+        "values": [
+          "nft_transfer"
+        ]
+      },
+      "root": 330,
+      "produces": [
+        "nft_put_on_sale",
+        "nft_put_on_auction"
+      ],
+      "captures": [
+        {
+          "name": "listing",
+          "card": "one"
+        },
+        {
+          "name": "sale_init",
+          "card": "one"
+        },
+        {
+          "name": "to_sale",
+          "card": "one"
+        }
+      ],
+      "include_excess": false,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "!=",
+            "l": {
+              "k": "call",
+              "fn": "account",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "to_sale"
+                      },
+                      "name": "data"
+                    },
+                    "name": "nft"
+                  },
+                  "name": "address"
+                }
+              ]
+            },
+            "r": {
+              "k": "call",
+              "fn": "account",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "listing"
+                      },
+                      "name": "data"
+                    },
+                    "name": "nft"
+                  },
+                  "name": "address"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "!=",
+            "l": {
+              "k": "call",
+              "fn": "account",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "to_sale"
+                    },
+                    "name": "data"
+                  },
+                  "name": "new_owner"
+                }
+              ]
+            },
+            "r": {
+              "k": "call",
+              "fn": "account",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "sale_init"
+                    },
+                    "name": "msg"
+                  },
+                  "name": "destination"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "sale",
+          "expr": {
+            "k": "lookup",
+            "name": "nft_sale",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "sale_init"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "let",
+          "name": "auction",
+          "expr": {
+            "k": "lookup",
+            "name": "nft_auction",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "sale_init"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "sale"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "auction"
+              },
+              "r": {
+                "k": "null"
+              }
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "name",
+                "id": "sale"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "to_sale"
+                        },
+                        "name": "data"
+                      },
+                      "name": "nft"
+                    },
+                    "name": "address"
+                  }
+                ]
+              },
+              "r": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "sale"
+                    },
+                    "name": "nft_address"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "name",
+                "id": "sale"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "listing"
+                      },
+                      "name": "data"
+                    },
+                    "name": "prev_owner"
+                  }
+                ]
+              },
+              "r": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "sale"
+                    },
+                    "name": "nft_owner_address"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "sale"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "to_sale"
+                        },
+                        "name": "data"
+                      },
+                      "name": "nft"
+                    },
+                    "name": "address"
+                  }
+                ]
+              },
+              "r": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "auction"
+                    },
+                    "name": "nft_addr"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "sale"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "listing"
+                      },
+                      "name": "data"
+                    },
+                    "name": "prev_owner"
+                  }
+                ]
+              },
+              "r": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "auction"
+                    },
+                    "name": "nft_owner"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "sd",
+          "expr": {
+            "k": "call",
+            "fn": "getgems_sale_init",
+            "args": [
+              {
+                "k": "name",
+                "id": "sale_init"
+              },
+              {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "sale"
+                },
+                "name": "code_hash"
+              }
+            ]
+          }
+        },
+        {
+          "s": "let",
+          "name": "ad",
+          "expr": {
+            "k": "call",
+            "fn": "getgems_auction_init",
+            "args": [
+              {
+                "k": "name",
+                "id": "sale_init"
+              },
+              {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "auction"
+                },
+                "name": "code_hash"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "name",
+                "id": "sale"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "sd"
+              },
+              "r": {
+                "k": "null"
+              }
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "sale"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "ad"
+              },
+              "r": {
+                "k": "null"
+              }
+            }
+          }
+        },
+        {
+          "s": "switch",
+          "branches": [
+            {
+              "btype": "nft_put_on_sale",
+              "fields": [
+                {
+                  "name": "nft_address",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "attr",
+                              "of": {
+                                "k": "name",
+                                "id": "to_sale"
+                              },
+                              "name": "data"
+                            },
+                            "name": "nft"
+                          },
+                          "name": "address"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "nft_index",
+                  "expr": {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "to_sale"
+                        },
+                        "name": "data"
+                      },
+                      "name": "nft"
+                    },
+                    "name": "index"
+                  }
+                },
+                {
+                  "name": "nft_collection",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "attr",
+                              "of": {
+                                "k": "attr",
+                                "of": {
+                                  "k": "name",
+                                  "id": "to_sale"
+                                },
+                                "name": "data"
+                              },
+                              "name": "nft"
+                            },
+                            "name": "collection"
+                          },
+                          "name": "address"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "owner",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "sale"
+                          },
+                          "name": "nft_owner_address"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "listing_address",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "listing"
+                            },
+                            "name": "data"
+                          },
+                          "name": "new_owner"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "sale_address",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "sale_init"
+                            },
+                            "name": "msg"
+                          },
+                          "name": "destination"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "full_price",
+                  "expr": {
+                    "k": "call",
+                    "fn": "amount",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "sd"
+                        },
+                        "name": "full_price"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "marketplace_address",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "sd"
+                          },
+                          "name": "marketplace_address"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "marketplace",
+                  "expr": {
+                    "k": "str",
+                    "v": "getgems"
+                  }
+                },
+                {
+                  "name": "marketplace_fee_address",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "sd"
+                          },
+                          "name": "marketplace_fee_address"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "marketplace_fee",
+                  "expr": {
+                    "k": "call",
+                    "fn": "amount",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "sd"
+                        },
+                        "name": "marketplace_fee"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "royalty_address",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "sd"
+                          },
+                          "name": "royalty_address"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "royalty_amount",
+                  "expr": {
+                    "k": "call",
+                    "fn": "amount",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "sd"
+                        },
+                        "name": "royalty_amount"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "when": {
+                "k": "bin",
+                "op": "!=",
+                "l": {
+                  "k": "name",
+                  "id": "sale"
+                },
+                "r": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "btype": "nft_put_on_auction",
+              "fields": [
+                {
+                  "name": "nft_address",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "attr",
+                              "of": {
+                                "k": "name",
+                                "id": "to_sale"
+                              },
+                              "name": "data"
+                            },
+                            "name": "nft"
+                          },
+                          "name": "address"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "nft_index",
+                  "expr": {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "to_sale"
+                        },
+                        "name": "data"
+                      },
+                      "name": "nft"
+                    },
+                    "name": "index"
+                  }
+                },
+                {
+                  "name": "nft_collection",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "attr",
+                              "of": {
+                                "k": "attr",
+                                "of": {
+                                  "k": "name",
+                                  "id": "to_sale"
+                                },
+                                "name": "data"
+                              },
+                              "name": "nft"
+                            },
+                            "name": "collection"
+                          },
+                          "name": "address"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "owner",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "auction"
+                          },
+                          "name": "nft_owner"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "listing_address",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "listing"
+                            },
+                            "name": "data"
+                          },
+                          "name": "new_owner"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "auction_address",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "sale_init"
+                            },
+                            "name": "msg"
+                          },
+                          "name": "destination"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "marketplace_address",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "auction"
+                          },
+                          "name": "mp_addr"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "marketplace",
+                  "expr": {
+                    "k": "str",
+                    "v": "getgems"
+                  }
+                },
+                {
+                  "name": "mp_fee_address",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "ad"
+                        },
+                        "name": "mp_fee_addr"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "mp_fee_factor",
+                  "expr": {
+                    "k": "call",
+                    "fn": "amount",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "ad"
+                        },
+                        "name": "mp_fee_factor"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "mp_fee_base",
+                  "expr": {
+                    "k": "call",
+                    "fn": "amount",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "ad"
+                        },
+                        "name": "mp_fee_base"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "royalty_fee_addr",
+                  "expr": {
+                    "k": "call",
+                    "fn": "account",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "ad"
+                        },
+                        "name": "royalty_fee_addr"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "royalty_fee_base",
+                  "expr": {
+                    "k": "call",
+                    "fn": "amount",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "ad"
+                        },
+                        "name": "royalty_fee_base"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "max_bid",
+                  "expr": {
+                    "k": "call",
+                    "fn": "amount",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "ad"
+                        },
+                        "name": "max_bid"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "min_bid",
+                  "expr": {
+                    "k": "call",
+                    "fn": "amount",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "ad"
+                        },
+                        "name": "min_bid"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nft_discovery",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          801842850
+        ]
+      },
+      "root": 333,
+      "produces": [
+        "nft_discovery"
+      ],
+      "captures": [
+        {
+          "name": "disc",
+          "card": "one"
+        },
+        {
+          "name": "report",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "report",
+          "types": [
+            "NftReportStaticData"
+          ]
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "disc"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "source"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "nft",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "disc"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "result_collection",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "report"
+                        },
+                        "name": "body"
+                      },
+                      "name": "collection"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "result_index",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "report"
+                  },
+                  "name": "body"
+                },
+                "name": "index"
+              }
+            },
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "report"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "auction_bid",
+      "anchor": {
+        "kind": "btype",
+        "values": [
+          "ton_transfer"
+        ]
+      },
+      "root": 335,
+      "produces": [
+        "auction_bid"
+      ],
+      "captures": [
+        {
+          "name": "bid",
+          "card": "one"
+        }
+      ],
+      "include_excess": false,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "let",
+          "name": "d",
+          "expr": {
+            "k": "call",
+            "fn": "auction_bid_data",
+            "args": [
+              {
+                "k": "name",
+                "id": "bid"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "d"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "attr",
+            "of": {
+              "k": "name",
+              "id": "bid"
+            },
+            "name": "failed"
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "amount",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "amount"
+              }
+            },
+            {
+              "name": "bidder",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "bidder"
+              }
+            },
+            {
+              "name": "auction",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "auction"
+              }
+            },
+            {
+              "name": "nft_address",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "nft_address"
+              }
+            },
+            {
+              "name": "nft_item_index",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "nft_item_index"
+              }
+            },
+            {
+              "name": "nft_collection",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "nft_collection"
+              }
+            },
+            {
+              "name": "auction_type",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "auction_type"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "auction_outbid",
+      "anchor": {
+        "kind": "mixed",
+        "branches": [
+          {
+            "btype": "ton_transfer",
+            "where": "auction_outbid_leg"
+          },
+          {
+            "op": 1434249760,
+            "where": "auction_outbid_leg"
+          }
+        ]
+      },
+      "root": 336,
+      "produces": [
+        "auction_outbid"
+      ],
+      "captures": [
+        {
+          "name": "leg",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "let",
+          "name": "d",
+          "expr": {
+            "k": "call",
+            "fn": "auction_outbid_data",
+            "args": [
+              {
+                "k": "name",
+                "id": "leg"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "d"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "auction_address",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "auction_address"
+              }
+            },
+            {
+              "name": "nft",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "nft"
+              }
+            },
+            {
+              "name": "nft_collection",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "nft_collection"
+              }
+            },
+            {
+              "name": "bidder",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "bidder"
+              }
+            },
+            {
+              "name": "new_bidder",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "new_bidder"
+              }
+            },
+            {
+              "name": "amount",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "amount"
+              }
+            },
+            {
+              "name": "comment",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "comment"
+              }
+            },
+            {
+              "name": "auction_type",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "d"
+                },
+                "name": "auction_type"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nft_cancel_sale",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          3
+        ]
+      },
+      "root": 337,
+      "produces": [
+        "nft_cancel_sale"
+      ],
+      "captures": [
+        {
+          "name": "cancel",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "let",
+          "name": "sale",
+          "expr": {
+            "k": "lookup",
+            "name": "nft_sale",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "cancel"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "sale"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "ret",
+          "expr": {
+            "k": "call",
+            "fn": "nft_trade_returned",
+            "args": [
+              {
+                "k": "name",
+                "id": "cancel"
+              },
+              {
+                "k": "str",
+                "v": "nft_transfer"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "ret"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "!=",
+            "l": {
+              "k": "call",
+              "fn": "account",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "ret"
+                  },
+                  "name": "nft_address"
+                }
+              ]
+            },
+            "r": {
+              "k": "call",
+              "fn": "account",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "sale"
+                  },
+                  "name": "nft_address"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "nft_address",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "ret"
+                },
+                "name": "nft_address"
+              }
+            },
+            {
+              "name": "nft_collection",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "ret"
+                },
+                "name": "nft_collection"
+              }
+            },
+            {
+              "name": "owner",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "ret"
+                },
+                "name": "owner"
+              }
+            },
+            {
+              "name": "trade_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "cancel"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "marketplace_address",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "sale"
+                      },
+                      "name": "marketplace_address"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nft_finish_auction",
+      "anchor": {
+        "kind": "mixed",
+        "branches": [
+          {
+            "btype": "ton_transfer",
+            "where": "nft_trade_finish_comment"
+          },
+          {
+            "op": 3109426870
+          },
+          {
+            "op": 550103832
+          }
+        ]
+      },
+      "root": 338,
+      "produces": [
+        "nft_finish_auction"
+      ],
+      "captures": [
+        {
+          "name": "cancel",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "let",
+          "name": "auction",
+          "expr": {
+            "k": "lookup",
+            "name": "nft_auction",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "cancel"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "auction"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "ret",
+          "expr": {
+            "k": "call",
+            "fn": "nft_trade_returned",
+            "args": [
+              {
+                "k": "name",
+                "id": "cancel"
+              },
+              {
+                "k": "str",
+                "v": "nft_purchase"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "ret"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "!=",
+            "l": {
+              "k": "call",
+              "fn": "account",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "ret"
+                  },
+                  "name": "nft_address"
+                }
+              ]
+            },
+            "r": {
+              "k": "call",
+              "fn": "account",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "auction"
+                  },
+                  "name": "nft_addr"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "nft_address",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "ret"
+                },
+                "name": "nft_address"
+              }
+            },
+            {
+              "name": "nft_collection",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "ret"
+                },
+                "name": "nft_collection"
+              }
+            },
+            {
+              "name": "owner",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "ret"
+                },
+                "name": "owner"
+              }
+            },
+            {
+              "name": "trade_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "cancel"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "marketplace_address",
+              "expr": {
+                "k": "null"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nft_cancel_auction",
+      "anchor": {
+        "kind": "mixed",
+        "branches": [
+          {
+            "btype": "ton_transfer",
+            "where": "nft_trade_cancel_comment"
+          },
+          {
+            "op": 1444332914
+          },
+          {
+            "op": 550103832
+          },
+          {
+            "op": 3109426870
+          }
+        ]
+      },
+      "root": 339,
+      "produces": [
+        "nft_cancel_auction",
+        "nft_finish_auction"
+      ],
+      "captures": [
+        {
+          "name": "cancel",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "let",
+          "name": "auction",
+          "expr": {
+            "k": "lookup",
+            "name": "nft_auction",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "cancel"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "auction"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "ret",
+          "expr": {
+            "k": "call",
+            "fn": "nft_trade_returned",
+            "args": [
+              {
+                "k": "name",
+                "id": "cancel"
+              },
+              {
+                "k": "str",
+                "v": "nft_transfer"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "ret"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "!=",
+            "l": {
+              "k": "call",
+              "fn": "account",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "ret"
+                  },
+                  "name": "nft_address"
+                }
+              ]
+            },
+            "r": {
+              "k": "call",
+              "fn": "account",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "auction"
+                  },
+                  "name": "nft_addr"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "s": "switch",
+          "branches": [
+            {
+              "btype": "nft_finish_auction",
+              "fields": [
+                {
+                  "name": "nft_address",
+                  "expr": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "ret"
+                    },
+                    "name": "nft_address"
+                  }
+                },
+                {
+                  "name": "nft_collection",
+                  "expr": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "ret"
+                    },
+                    "name": "nft_collection"
+                  }
+                },
+                {
+                  "name": "owner",
+                  "expr": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "ret"
+                    },
+                    "name": "owner"
+                  }
+                },
+                {
+                  "name": "trade_contract",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "cancel"
+                            },
+                            "name": "msg"
+                          },
+                          "name": "destination"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "marketplace_address",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "auction"
+                          },
+                          "name": "mp_addr"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                }
+              ],
+              "when": {
+                "k": "call",
+                "fn": "nft_trade_is_finish",
+                "args": [
+                  {
+                    "k": "name",
+                    "id": "cancel"
+                  }
+                ]
+              }
+            },
+            {
+              "btype": "nft_cancel_auction",
+              "fields": [
+                {
+                  "name": "nft_address",
+                  "expr": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "ret"
+                    },
+                    "name": "nft_address"
+                  }
+                },
+                {
+                  "name": "nft_collection",
+                  "expr": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "ret"
+                    },
+                    "name": "nft_collection"
+                  }
+                },
+                {
+                  "name": "owner",
+                  "expr": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "ret"
+                    },
+                    "name": "owner"
+                  }
+                },
+                {
+                  "name": "trade_contract",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "cancel"
+                            },
+                            "name": "msg"
+                          },
+                          "name": "destination"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                },
+                {
+                  "name": "marketplace_address",
+                  "expr": {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "account",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "auction"
+                          },
+                          "name": "mp_addr"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "call",
+                      "fn": "addr_none",
+                      "args": []
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "tgbtc_mint",
       "anchor": {
         "kind": "opcode_set",
@@ -12886,7 +15578,7 @@
           1064836388
         ]
       },
-      "root": 329,
+      "root": 340,
       "produces": [
         "tgbtc_mint"
       ],
@@ -13058,7 +15750,7 @@
           1052660785
         ]
       },
-      "root": 335,
+      "root": 346,
       "produces": [
         "tonco_deposit_liquidity"
       ],
@@ -13329,7 +16021,7 @@
           2818267384
         ]
       },
-      "root": 349,
+      "root": 360,
       "produces": [
         "jetton_swap"
       ],
@@ -13510,7 +16202,7 @@
           1499400124
         ]
       },
-      "root": 377,
+      "root": 388,
       "produces": [
         "tonstakers_withdraw",
         "tonstakers_withdraw_request"
@@ -13872,7 +16564,7 @@
           2809346765
         ]
       },
-      "root": 383,
+      "root": 394,
       "produces": [
         "vesting_send_message"
       ],
@@ -16159,14 +18851,72 @@
     },
     {
       "kind": "contract",
+      "opcode": 1819025536,
+      "capture": "upd"
+    },
+    {
+      "kind": "block_type",
+      "btype": "nft_transfer",
+      "capture": "listing",
+      "children": [
+        331,
+        332
+      ]
+    },
+    {
+      "kind": "pred",
+      "pred": "sale_contract_deploy",
+      "capture": "sale_init"
+    },
+    {
+      "kind": "block_type",
+      "btype": "nft_transfer",
+      "capture": "to_sale"
+    },
+    {
+      "kind": "contract",
+      "opcode": 801842850,
+      "capture": "disc",
+      "child": 334
+    },
+    {
+      "kind": "contract",
+      "opcode": 2339837749,
+      "capture": "report"
+    },
+    {
+      "kind": "block_type",
+      "btype": "ton_transfer",
+      "capture": "bid",
+      "where": "auction_bid_candidate"
+    },
+    {
+      "kind": "any",
+      "capture": "leg"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3,
+      "capture": "cancel"
+    },
+    {
+      "kind": "any",
+      "capture": "cancel"
+    },
+    {
+      "kind": "any",
+      "capture": "cancel"
+    },
+    {
+      "kind": "contract",
       "opcode": 1064836388,
       "capture": "head",
-      "child": 330
+      "child": 341
     },
     {
       "kind": "recursive",
-      "step": 331,
-      "exit": 332,
+      "step": 342,
+      "exit": 343,
       "optional": true
     },
     {
@@ -16178,8 +18928,8 @@
       "opcode": 3827992475,
       "capture": "tail",
       "children": [
-        333,
-        334
+        344,
+        345
       ]
     },
     {
@@ -16197,18 +18947,18 @@
       "opcode": 1052660785,
       "capture": "add_liquidity",
       "children": [
-        336
+        347
       ],
-      "parent": 344
+      "parent": 355
     },
     {
       "kind": "contract",
       "opcode": 2171612920,
       "optional": true,
       "children": [
-        337,
-        342,
-        343
+        348,
+        353,
+        354
       ]
     },
     {
@@ -16217,8 +18967,8 @@
       "optional": true,
       "capture": "refund_router_call",
       "children": [
-        338,
-        340
+        349,
+        351
       ]
     },
     {
@@ -16227,7 +18977,7 @@
       "optional": true,
       "capture": "excess_transfer_0",
       "children": [
-        339
+        350
       ]
     },
     {
@@ -16241,7 +18991,7 @@
       "optional": true,
       "capture": "excess_transfer_1",
       "children": [
-        341
+        352
       ]
     },
     {
@@ -16262,13 +19012,13 @@
     {
       "kind": "contract",
       "opcode": 1147723383,
-      "parent": 345
+      "parent": 356
     },
     {
       "kind": "or",
       "branches": [
-        346,
-        348
+        357,
+        359
       ],
       "exclusive": false
     },
@@ -16276,7 +19026,7 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "ton_input",
-      "parent": 347
+      "parent": 358
     },
     {
       "kind": "contract",
@@ -16293,99 +19043,99 @@
       "opcode": 2818267384,
       "capture": "swap",
       "children": [
-        350
+        361
       ],
-      "parent": 373
+      "parent": 384
     },
     {
       "kind": "contract",
       "opcode": 2715461997,
-      "child": 351
+      "child": 362
     },
     {
       "kind": "or",
       "branches": [
-        352,
-        367,
-        369,
-        371
-      ],
-      "exclusive": false
-    },
-    {
-      "kind": "block_type",
-      "btype": "jetton_transfer",
-      "child": 353
-    },
-    {
-      "kind": "contract",
-      "opcode": 32736093,
-      "child": 354
-    },
-    {
-      "kind": "contract",
-      "opcode": 1935855772,
-      "child": 355
-    },
-    {
-      "kind": "recursive",
-      "strategy": "cyclic",
-      "step": 356
-    },
-    {
-      "kind": "contract",
-      "opcode": 2818267384,
-      "child": 357
-    },
-    {
-      "kind": "contract",
-      "opcode": 2715461997,
-      "child": 358
-    },
-    {
-      "kind": "or",
-      "branches": [
-        359,
-        362,
         363,
-        365
+        378,
+        380,
+        382
       ],
       "exclusive": false
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 360
-    },
-    {
-      "kind": "contract",
-      "opcode": 32736093,
-      "child": 361
-    },
-    {
-      "kind": "contract",
-      "opcode": 1935855772,
-      "child": 356
-    },
-    {
-      "kind": "block_type",
-      "btype": "jetton_transfer",
-      "child": 356
-    },
-    {
-      "kind": "contract",
-      "opcode": 260734629,
       "child": 364
     },
     {
       "kind": "contract",
+      "opcode": 32736093,
+      "child": 365
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "child": 366
+    },
+    {
+      "kind": "recursive",
+      "strategy": "cyclic",
+      "step": 367
+    },
+    {
+      "kind": "contract",
+      "opcode": 2818267384,
+      "child": 368
+    },
+    {
+      "kind": "contract",
+      "opcode": 2715461997,
+      "child": 369
+    },
+    {
+      "kind": "or",
+      "branches": [
+        370,
+        373,
+        374,
+        376
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "child": 371
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "child": 372
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "child": 367
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "child": 367
+    },
+    {
+      "kind": "contract",
+      "opcode": 260734629,
+      "child": 375
+    },
+    {
+      "kind": "contract",
       "opcode": 32736093
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "children": [
-        366
+        377
       ]
     },
     {
@@ -16396,17 +19146,17 @@
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 368
+      "child": 379
     },
     {
       "kind": "recursive",
       "strategy": "cyclic",
-      "step": 356
+      "step": 367
     },
     {
       "kind": "contract",
       "opcode": 260734629,
-      "child": 370
+      "child": 381
     },
     {
       "kind": "contract",
@@ -16416,7 +19166,7 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "children": [
-        372
+        383
       ]
     },
     {
@@ -16427,8 +19177,8 @@
     {
       "kind": "or",
       "branches": [
-        374,
-        375
+        385,
+        386
       ],
       "exclusive": true
     },
@@ -16440,7 +19190,7 @@
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "parent": 376
+      "parent": 387
     },
     {
       "kind": "contract",
@@ -16451,24 +19201,24 @@
       "kind": "contract",
       "opcode": 1499400124,
       "capture": "burn",
-      "child": 378
+      "child": 389
     },
     {
       "kind": "contract",
       "opcode": 2078119902,
-      "child": 379
+      "child": 390
     },
     {
       "kind": "contract",
       "opcode": 832244956,
       "capture": "request",
-      "child": 380
+      "child": 391
     },
     {
       "kind": "or",
       "branches": [
-        381,
-        382
+        392,
+        393
       ],
       "exclusive": true
     },
@@ -16486,7 +19236,7 @@
       "kind": "contract",
       "opcode": 2809346765,
       "capture": "send",
-      "child": 384
+      "child": 395
     },
     {
       "kind": "contract",
@@ -16535,6 +19285,14 @@
     37,
     38,
     39,
-    40
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48
   ]
 }

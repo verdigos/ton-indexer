@@ -138,6 +138,15 @@ std::unique_ptr<Message> parse_message(const msgpack::object &m) {
     c.body = get_str(*content, "body");
     msg->content = std::move(c);
   }
+  // ton-fixture-save writes the StateInit under its own inline key, same
+  // {hash, body} shape as message_content (main.cpp).
+  const auto *init = map_get(m, "init_state");
+  if (!is_nil(init)) {
+    MsgContent c;
+    c.hash = get_str(*init, "hash");
+    c.body = get_str(*init, "body");
+    msg->init_state = std::move(c);
+  }
   return msg;
 }
 

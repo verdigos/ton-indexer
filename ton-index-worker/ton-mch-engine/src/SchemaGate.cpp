@@ -22,6 +22,7 @@
 #include "convert-utils.h"
 
 #include "td/utils/base64.h"
+#include "vm/boc.h"
 
 #include <cstdio>
 #include <cstring>
@@ -95,6 +96,19 @@ schema::Message synth_message(const Message &m) {
   s.bounce = m.bounce;
   s.bounced = m.bounced;
   if (m.content) s.body_boc = m.content->body;
+  // map_message only carries init_state when BOTH the boc and the cell are set,
+  // so the round-trip has to deserialize; a malformed boc drops the field rather
+  // than failing the synth (the gate then sees the same absence on both sides).
+  if (m.init_state) {
+    auto r_raw = td::base64_decode(m.init_state->body);
+    if (r_raw.is_ok()) {
+      auto r_cell = vm::std_boc_deserialize(r_raw.move_as_ok());
+      if (r_cell.is_ok()) {
+        s.init_state = r_cell.move_as_ok();
+        s.init_state_boc = m.init_state->body;
+      }
+    }
+  }
   return s;
 }
 

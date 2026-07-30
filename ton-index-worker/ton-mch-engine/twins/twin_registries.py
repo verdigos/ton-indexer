@@ -37,6 +37,7 @@ from indexer.events.mch.builders.getgems import getgems_registries  # noqa: E402
 from indexer.events.mch.builders.jvault import jvault_registries  # noqa: E402
 from indexer.events.mch.builders.layerzero import layerzero_receive_registries  # noqa: E402
 from indexer.events.mch.builders.nft_mint import nft_mint_registries  # noqa: E402
+from indexer.events.mch.builders.nft_sale import nft_sale_registries  # noqa: E402
 from indexer.events.mch.builders.nft_transfer import nft_transfer_registries  # noqa: E402
 from indexer.events.mch.builders.nominator import nominator_registries  # noqa: E402
 from indexer.events.mch.builders.stonfi_liquidity import stonfi_liquidity_registries  # noqa: E402
@@ -59,7 +60,7 @@ _FACTORIES = [
     dedust_deposit_registries, dedust_v2_swap_registries, ethena_registries,
     evaa_registries,
     getgems_registries, jvault_registries, layerzero_receive_registries,
-    nft_mint_registries, nft_transfer_registries,
+    nft_mint_registries, nft_sale_registries, nft_transfer_registries,
     nominator_registries, stonfi_liquidity_registries, stonfi_provide_registries,
     stonfi_v1_registries, telegram_nft_registries, teleitem_auction_registries,
     tgbtc_registries,
