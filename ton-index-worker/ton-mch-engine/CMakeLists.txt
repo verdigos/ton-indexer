@@ -202,6 +202,10 @@ add_dependencies(mch-classify mch_generate_sources)
 set(MCH_FIXTURE_SOURCES
     src/fixtures/FixtureLoader.cpp
     src/fixtures/FixtureLookupSource.cpp
+    # Dump renderers + the vector comparator: only the A/B gates render a Value,
+    # a block key or a cellhash, or compare two Values structurally. See the
+    # header for the full argument.
+    src/fixtures/Render.cpp
     ${MCH_GENERATED_TEST_SOURCES}
 )
 

@@ -25,7 +25,6 @@
 #include "td/utils/Status.h"
 
 #include <cstdint>
-#include <deque>
 #include <memory>
 #include <optional>
 #include <string>
@@ -153,21 +152,6 @@ struct Block {
   // earliest common block (Python raises -> clean build rejection). Must be
   // called only AFTER a build accepts: merges are never rolled back.
   bool merge_blocks(const std::vector<Block *> &blocks);
-
-  // Ports Block.bfs_iter(include_self=true). The visitor may mutate the tree
-  // (merges): each node's next_blocks are read after the visitor runs on it.
-  template <typename Visitor>
-  void bfs(Visitor &&visit) {
-    std::deque<Block *> queue{this};
-    while (!queue.empty()) {
-      Block *cur = queue.front();
-      queue.pop_front();
-      visit(cur);
-      for (Block *n : cur->next_blocks) {
-        queue.push_back(n);
-      }
-    }
-  }
 
   std::string anchor_tx_hash() const {
     return event_nodes.empty() ? std::string{} : event_nodes.front()->tx_hash();

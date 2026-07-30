@@ -44,16 +44,6 @@ Value account_from_value(const Value &v) {
   return Value::make_account_none();
 }
 
-// AccountId == AccountId (as_str comparison, addr_none-aware).
-bool acc_eq(const Value &a, const Value &b) {
-  bool an = a.t != VType::Account || a.addr_none;
-  bool bn = b.t != VType::Account || b.addr_none;
-  if (an || bn) {
-    return an && bn;
-  }
-  return a.str == b.str;
-}
-
 // Amount(x): int/amount value -> Amount; null -> Amount(None); a fixture float
 // (getgems price) -> Amount-of-float (Python Amount(float), renders %.17g).
 Value amount_or_none(const Value &v) {
@@ -411,9 +401,9 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
       }
     }
 
-    if (have_pd && acc_eq(account_from_value(pd_nft_address), nft_addr)) {
+    if (have_pd && same_account(account_from_value(pd_nft_address), nft_addr)) {
       Value real_owner = account_from_value(pd_real_prev);
-      if (!acc_eq(real_owner, new_owner)) {
+      if (!same_account(real_owner, new_owner)) {
         is_purchase = true;
         marketplace = Value::make_str("getgems");
         marketplace_address = account_from_value(pd_marketplace);

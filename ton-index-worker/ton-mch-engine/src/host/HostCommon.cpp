@@ -44,10 +44,23 @@ Value to_amount(const Value &v) {
                                                      : Value::make_amount_none();
 }
 
+// Amount(x or 0): coins are never None, and `0 or 0 == 0`, so this is just
+// Amount(x) — but keep the null-guard for parse-failure paths that reach here.
+Value amount_or_zero(td::RefInt256 v) {
+  return v.is_null() ? Value::make_amount(td::make_refint(0)) : Value::make_amount(std::move(v));
+}
+
 // Copy a field out of a Block's data Dict (Null when absent).
 Value data_field(const Block *b, const char *name) {
   const Value *f = b->data.field(name);
   return f != nullptr ? *f : Value::null();
+}
+
+// Two Account values are equal iff same addr_none state and canonical string
+// (mirrors AccountId.__eq__ over the canonical "wc:HEX" form).
+bool same_account(const Value &a, const Value &b) {
+  return a.t == VType::Account && b.t == VType::Account && a.addr_none == b.addr_none &&
+         a.str == b.str;
 }
 
 }  // namespace mch

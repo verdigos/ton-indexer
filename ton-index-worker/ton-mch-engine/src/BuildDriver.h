@@ -1,7 +1,8 @@
-// Shared build-phase driver pieces used by `--build-smoke` (B2) and
-// `--classify` (B3): canonical block keys + outcome-value rendering (dump
-// format contract in BuildSmoke.h), the artifact-derived build skip table,
-// capture->slot conversion, and the two-phase lookup execution (D1).
+// Shared build-phase driver pieces: the artifact-derived build skip table,
+// capture->slot conversion, and the two-phase lookup execution (D1). The dump
+// renderers that used to live here (block_key / render_value) and the
+// missing-parser stderr warning are harness-only and now live in
+// fixtures/Render.h.
 #pragma once
 
 #include "BuildRuntime.h"
@@ -14,35 +15,11 @@
 
 namespace mch {
 
-// TODO: remove (harness): block_key + render_value are the DUMP renderers. Every
-// caller is a harness TU (Classify.cpp, BuildSmoke.cpp, MatchRunner.cpp,
-// ParseDump.cpp); no product path renders a Value or a block key, so this pair
-// (and the boc_field_* trio in Value.h it calls) belongs with the twins, not in
-// mch-classify. They go with the A/B dump gates.
-//
-// `<btype>[#<opcode-hex8>]@<min_lt>` — the cross-language-proven key.
-std::string block_key(const Block *b);
-
-// Canonical outcome-value rendering (see BuildSmoke.h contract).
-std::string render_value(const Value &v);
-
 // Build-inclusion filter: empty == runnable end-to-end on the current C++
 // surface; else the SKIP reason (match-phase preds, builder-directive,
 // missing parsers / lookup kinds / host fns / shapers). The Python twin
 // computes the identical set from the artifact + the same fixed lists.
 std::string build_skip_reason(const CompiledMatcher &m);
-
-// TODO: remove (harness): called only from the CLI dump entry points
-// (Classify.cpp run_dump, BuildSmoke.cpp) and it writes to stderr, which no
-// product binary wants from a library. Production surfaces the same gap through
-// prepare_classify's skip table.
-//
-// One-shot startup diagnostic (§4.4): every message type any matcher's
-// build_program references via `parse` that is ABSENT from message_parsers().
-// Such a gap silently forces a `types:` build skip; surfacing it on stderr
-// makes a missing-parser artifact loud. Stderr only — never touches the
-// stdout dump the A/B gate compares.
-void warn_missing_artifact_parsers(const LoadedIr &ir);
 
 // MatchResult captures -> slot values in slot-declaration order
 // (scalar: Block/Null; many: List with Null gaps).

@@ -82,7 +82,7 @@ int run_dump(const std::string &artifact_path, const std::vector<std::string> &p
 // composite btypes that fire in the corpus). Python twin:
 // twins/py_actions.py. Dump line:
 //   ACTION anchor=<key> {id=..,type=..,<directional>,<composite maps>..}
-// Value rendering per BuildDriver render_value (sorted keys). Rows are built
+// Value rendering per fixtures/Render.h render_value (sorted keys). Rows are built
 // lib-side by ActionBuild.cpp — see its header block for what is and is not
 // rendered (roles are not; accounts and the initiating-tx extension ARE).
 int run_actions(const std::string &artifact_path, const std::vector<std::string> &paths);

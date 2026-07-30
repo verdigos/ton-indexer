@@ -5,6 +5,7 @@
 #include "BuildRuntime.h"
 #include "fixtures/FixtureLoader.h"
 #include "fixtures/FixtureLookupSource.h"
+#include "fixtures/Render.h"
 #include "ClassifyCore.h"
 #include "IrLoader.h"
 #include "Walker.h"
@@ -97,8 +98,8 @@ int run_build_smoke(const std::string &artifact_path, const std::vector<std::str
     FixtureLookupSource src(&ctx.trace.interfaces);
 
     for (Block *block : gather_blocks(ctx.root)) {
-      for (const IncludedMatcher &im : setup.included) {
-        const CompiledMatcher &m = ir.matchers[im.matcher_index];
+      for (int idx : setup.included) {
+        const CompiledMatcher &m = ir.matchers[idx];
         auto res = matcher_match(m, block);
         if (!res) {
           continue;

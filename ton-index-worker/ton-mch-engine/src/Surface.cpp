@@ -3,6 +3,7 @@
 #include "BuildRuntime.h"
 #include "HostRegistry.h"
 #include "MsgParse.h"
+#include "fixtures/Render.h"
 #include "Value.h"
 
 #include <iostream>

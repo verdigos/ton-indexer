@@ -29,13 +29,6 @@ namespace mch {
 
 namespace {
 
-// Two Account values are equal iff same addr_none state and canonical string
-// (mirrors AccountId.__eq__ over the canonical "wc:HEX" form).
-bool same_account(const Value &a, const Value &b) {
-  return a.t == VType::Account && b.t == VType::Account && a.addr_none == b.addr_none &&
-         a.str == b.str;
-}
-
 // builders/getgems.py _from_finish_stop_sale: the anchor's parent is a
 // finish/stop ton_transfer (the sale contract finalizing the deal).
 bool from_finish_stop_sale(const Block *nft_block) {

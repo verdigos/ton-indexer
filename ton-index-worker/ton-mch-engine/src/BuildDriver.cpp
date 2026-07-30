@@ -1,120 +1,13 @@
 #include "BuildDriver.h"
 
-#include "BlockTree.h"
 #include "GenBuilds.h"
 #include "HostRegistry.h"
 #include "MsgParse.h"
 
-#include "td/utils/base64.h"
-
-#include <algorithm>
-#include <cstdio>
 #include <map>
 #include <stdexcept>
 
 namespace mch {
-
-namespace {
-
-std::string hex_upper(const unsigned char *p, size_t n) {
-  static const char *digits = "0123456789ABCDEF";
-  std::string out(n * 2, '0');
-  for (size_t i = 0; i < n; i++) {
-    out[2 * i] = digits[p[i] >> 4];
-    out[2 * i + 1] = digits[p[i] & 0xF];
-  }
-  return out;
-}
-
-// Canonical float text shared with the Python twin ("%.17g" both sides). Chosen
-// over shortest-round-trip (repr / to_chars) because those disagree on round
-// numbers (repr keeps a trailing ".0", to_chars drops it); %.17g is one agreed
-// format, byte-verified on the corpus values.
-std::string fmt_g17(double v) {
-  char buf[64];
-  std::snprintf(buf, sizeof(buf), "%.17g", v);
-  return std::string(buf);
-}
-
-}  // namespace
-
-std::string block_key(const Block *b) {
-  std::string key = b->btype;
-  if (b->opcode) {
-    char buf[16];
-    std::snprintf(buf, sizeof(buf), "#%08x", *b->opcode);
-    key += buf;
-  }
-  key += "@" + std::to_string(b->min_lt);
-  return key;
-}
-
-std::string render_value(const Value &v) {
-  switch (v.t) {
-    case VType::Null:
-      return "null";
-    case VType::Bool:
-      return v.boolean ? "true" : "false";
-    case VType::Int:
-      return v.num.is_null() ? "nan" : v.num->to_dec_string();
-    case VType::Float:
-      // Bare Python float: "float:" + shortest-safe %.17g (byte-matched by the
-      // twin's "float:%.17g" % v). Renderable now, so the NFT purchase/shaper
-      // path fires instead of TRACE_FAILing.
-      return "float:" + fmt_g17(v.dnum);
-    case VType::Amount:
-      if (v.amount_float) {
-        return "amount:" + fmt_g17(v.dnum);  // Python Amount(float): str(float)
-      }
-      return "amount:" + (v.num.is_null() ? std::string("nan") : v.num->to_dec_string());
-    case VType::Str:
-      return "str:" + v.str;
-    case VType::Bytes:
-      return "b64:" + td::base64_encode(td::Slice(v.str));
-    case VType::Account:
-      return v.addr_none ? "addr_none" : v.str;
-    case VType::Asset:
-      return v.is_ton ? "asset:TON" : "asset:" + v.str;
-    case VType::Cell: {
-      if (v.cell.is_null()) {
-        return "cell:null";
-      }
-      auto h = v.cell->get_hash();
-      return "cell:" + hex_upper(h.as_slice().ubegin(), h.as_slice().size());
-    }
-    case VType::List: {
-      std::string out = "[";
-      for (std::size_t i = 0; i < v.items->size(); i++) {
-        if (i) out += ",";
-        out += render_value((*v.items)[i]);
-      }
-      return out + "]";
-    }
-    case VType::Dict:
-    case VType::Obj: {
-      std::vector<std::string> keys;
-      for (const auto &kv : *v.fields) {
-        keys.push_back(kv.first);
-      }
-      std::sort(keys.begin(), keys.end());
-      std::string out = v.t == VType::Obj ? "obj{" : "{";
-      bool first = true;
-      for (const auto &k : keys) {
-        if (!first) out += ",";
-        first = false;
-        // §12 root-hash bar: Cell-derived BOC fields render as cellhash.
-        std::string rendered;
-        if (is_boc_field(k)) rendered = boc_field_cellhash(*v.field(k));
-        if (rendered.empty()) rendered = render_value(*v.field(k));
-        out += k + "=" + rendered;
-      }
-      return out + "}";
-    }
-    case VType::Block:
-      return "block:" + (v.block != nullptr ? block_key(v.block) : std::string("null"));
-  }
-  return "?";
-}
 
 std::string build_skip_reason(const CompiledMatcher &m) {
   if (m.unrunnable) {
@@ -164,30 +57,6 @@ std::string build_skip_reason(const CompiledMatcher &m) {
   add("fns", missing_fns);
   add("shaper", missing_shapers);
   return reason;  // empty == included
-}
-
-void warn_missing_artifact_parsers(const LoadedIr &ir) {
-  const auto &parsers = message_parsers();
-  std::set<std::string> missing;
-  for (const CompiledMatcher &m : ir.matchers) {
-    for (const std::string &t : m.ref_msgtypes) {
-      if (parsers.find(t) == parsers.end()) {
-        missing.insert(t);
-      }
-    }
-  }
-  if (missing.empty()) {
-    return;
-  }
-  std::string joined;
-  for (const std::string &t : missing) {
-    if (!joined.empty()) joined += ", ";
-    joined += t;
-  }
-  std::fprintf(stderr,
-               "WARNING: artifact references %zu message type(s) with no registered C++ parser "
-               "(matchers that parse them will be build-skipped): %s\n",
-               missing.size(), joined.c_str());
 }
 
 std::vector<Value> slots_from_captures(const std::vector<Capture> &captures) {

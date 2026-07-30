@@ -24,6 +24,7 @@
 #include "Value.h"
 #include "emu/EmuCelldbLookup.h"
 #include "emu/EmuJvaultChain.h"
+#include "fixtures/Render.h"
 
 #include "common/refint.h"
 #include "vm/cells/CellBuilder.h"

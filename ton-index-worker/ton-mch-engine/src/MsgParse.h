@@ -43,7 +43,11 @@ using MsgParserFn = td::Result<Value> (*)(const td::Ref<vm::Cell> &body);
 
 // Message-type registry: IR `parse.types[]` name -> parser. Names are the
 // Python class names (Registries.message_types keys), plus the ABI-bridge rows
-// (W12, BARE decl names). First-source-wins on a key collision.
+// (W12, BARE decl names). First-source-wins on a key collision, EXCEPT that a
+// key claimed by more than one source maps to a nullptr parser (ambiguous, see
+// validate_registries): the name stays registered, calling it is what fails.
+// Callers that only test membership are unaffected; anyone dereferencing a
+// mapped value directly instead of via parse_message_body must null-check.
 const std::map<std::string, MsgParserFn> &message_parsers();
 
 // Advisory startup consistency check (W12, design §4): OK unless a key is

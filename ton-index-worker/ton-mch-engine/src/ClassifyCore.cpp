@@ -12,6 +12,7 @@
 #include <exception>
 #include <limits>
 #include <map>
+#include <unordered_set>
 
 namespace mch {
 
@@ -19,6 +20,27 @@ namespace {
 
 constexpr std::uint32_t kExcessOpcode = 0xD53276DB;
 constexpr std::uint32_t kBounceOpcode = 0xFFFFFFFF;
+
+// The flat spine list in canonical BFS order: `root` plus everything reachable
+// through next_blocks. Every consumer of "the spine" (prefilter inventory,
+// post-process input, basic-actions fallback) wants exactly this.
+//
+// NOT usable for the matcher walk: that one must read a node's next_blocks AFTER
+// try_build ran on the node, because a merge mutates the tree mid-walk (Python
+// generator resume order).
+std::vector<Block *> collect_spine(Block *root) {
+  std::vector<Block *> out;
+  std::deque<Block *> queue{root};
+  while (!queue.empty()) {
+    Block *cur = queue.front();
+    queue.pop_front();
+    out.push_back(cur);
+    for (Block *n : cur->next_blocks) {
+      queue.push_back(n);
+    }
+  }
+  return out;
+}
 
 // engine.py IrMatcher.try_build ported: returns true iff a block was produced
 // (collects a CoreAction). Rejections and mismatches collect nothing. Renders
@@ -227,6 +249,8 @@ void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block 
 
 // blocks/liquidity.py post_process_stonfi_v2_liquidity (R08 pairing pass). ZERO
 // corpus coverage — the `< 2 legs` guard returns immediately for every trace.
+// KEEP (do not delete as dead): it is the port of a live Python production pass;
+// gating it needs a 2-leg stonfi_v2 deposit fixture the corpus does not have yet.
 bool is_stonfi_v2_leg(const Block *b) {
   if (b->btype != "dex_deposit_liquidity") return false;
   Value dex = pp_field(b->data, "dex");
@@ -352,16 +376,7 @@ std::vector<CoreAction> basic_classify_fallback(TraceContext &ctx) {
     Block *root = init_block(ctx.arena, ctx.tree.root);
     Block *wrap = ctx.arena.make("root");
     wrap->connect(root);
-    std::vector<Block *> spine;
-    {
-      std::deque<Block *> q{wrap};
-      while (!q.empty()) {
-        Block *cur = q.front();
-        q.pop_front();
-        spine.push_back(cur);
-        for (Block *n : cur->next_blocks) q.push_back(n);
-      }
-    }
+    std::vector<Block *> spine = collect_spine(wrap);
     std::set<Block *> removed;
     post_process_dedust_liquidity(spine, removed);
     post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
@@ -403,25 +418,14 @@ ClassifySetup prepare_classify(const LoadedIr &ir) {
       continue;
     }
     s.kinds.insert(ir.matchers[i].ref_lookups.begin(), ir.matchers[i].ref_lookups.end());
-    // B1: precompute the anchor prefilter. Only opcode/btype anchors are
-    // prefilterable; pred (and never-runnable mixed) anchors stay full-scan.
-    AnchorFilter af;
-    const CompiledMatcher &m = ir.matchers[i];
-    if (m.anchor_kind == AnchorKind::OpcodeSet) {
-      af.prefilter = true;
-      af.opcodes = &m.anchor_opcodes;
-    } else if (m.anchor_kind == AnchorKind::BType) {
-      af.prefilter = true;
-      af.btypes = &m.anchor_btypes;
-    }
-    s.included.push_back(IncludedMatcher{i, af});
+    s.included.push_back(i);
   }
   std::sort(s.skips.begin(), s.skips.end());
   for (const GenBuild &g : *table) {
     s.build_fns.emplace(g.id, g.fn);
   }
-  for (const IncludedMatcher &im : s.included) {
-    const CompiledMatcher &m = ir.matchers[im.matcher_index];
+  for (int idx : s.included) {
+    const CompiledMatcher &m = ir.matchers[idx];
     if (s.build_fns.find(m.artifact_index) == s.build_fns.end()) {
       s.fn_missing = true;
       s.error = std::string("generated ") + table_kind + " build table has no fn for matcher '" +
@@ -451,26 +455,22 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
   // a skip only ever fires when the traversal provably matches nothing.
   std::unordered_set<std::uint32_t> inv_opcodes;
   std::unordered_set<std::string> inv_btypes;
-  {
-    std::deque<Block *> q{wrapper};
-    while (!q.empty()) {
-      Block *cur = q.front();
-      q.pop_front();
-      inv_btypes.insert(cur->btype);
-      if (cur->opcode) inv_opcodes.insert(*cur->opcode);
-      for (Block *n : cur->next_blocks) q.push_back(n);
-    }
+  for (Block *b : collect_spine(wrapper)) {
+    inv_btypes.insert(b->btype);
+    if (b->opcode) inv_opcodes.insert(*b->opcode);
   }
-  auto anchor_can_match = [&](const AnchorFilter &af) -> bool {
-    if (!af.prefilter) return true;  // pred/mixed: always full-scan
-    if (af.opcodes != nullptr) {
-      for (std::uint32_t op : *af.opcodes) {
+  // Only opcode/btype anchors are prefilterable (the two anchor kinds
+  // matcher_test_self can decide from the block's own op/btype); pred and
+  // never-runnable mixed anchors stay full-scan.
+  auto anchor_can_match = [&](const CompiledMatcher &m) -> bool {
+    if (m.anchor_kind == AnchorKind::OpcodeSet) {
+      for (std::uint32_t op : m.anchor_opcodes) {
         if (inv_opcodes.count(op)) return true;
       }
       return false;
     }
-    if (af.btypes != nullptr) {
-      for (const std::string &bt : *af.btypes) {
+    if (m.anchor_kind == AnchorKind::BType) {
+      for (const std::string &bt : m.anchor_btypes) {
         if (inv_btypes.count(bt)) return true;
       }
       return false;
@@ -480,11 +480,11 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
 
   std::vector<CoreAction> pending;
   try {
-    for (const IncludedMatcher &im : setup.included) {
-      if (!anchor_can_match(im.filter)) {
+    for (int idx : setup.included) {
+      const CompiledMatcher &m = ir.matchers[idx];
+      if (!anchor_can_match(m)) {
         continue;  // B1: no spine op/btype can satisfy this anchor — skip traversal
       }
-      const CompiledMatcher &m = ir.matchers[im.matcher_index];
       auto fn = setup.build_fns.at(m.artifact_index);
       std::size_t produced_from = pending.size();
       // Python bfs_iter port: FIFO; cur's next_blocks are read AFTER try_build
@@ -508,16 +508,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const LoadedIr &ir, const Class
     }
 
     // Phase E: post-process passes over the flat spine list ([root] + bfs).
-    std::vector<Block *> spine;
-    {
-      std::deque<Block *> q{wrapper};
-      while (!q.empty()) {
-        Block *cur = q.front();
-        q.pop_front();
-        spine.push_back(cur);
-        for (Block *n : cur->next_blocks) q.push_back(n);
-      }
-    }
+    std::vector<Block *> spine = collect_spine(wrapper);
     std::set<Block *> removed;
     post_process_dedust_liquidity(spine, removed);
     post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);

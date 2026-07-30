@@ -37,19 +37,6 @@ constexpr std::uint32_t kPTonTransfer = 0x01f3835d;
 
 // (open_ref moved to parse/PSlice.h as open_ref_cell — shared with stonfi + dedust.)
 
-Value amount_or_zero_t(td::RefInt256 v) {
-  return v.is_null() ? Value::make_amount(td::make_refint(0)) : Value::make_amount(std::move(v));
-}
-
-const Block *find_call_t(const std::vector<Block *> &blocks, std::uint32_t op) {
-  for (const Block *b : blocks) {
-    if (is_call_op(b, op)) {
-      return b;
-    }
-  }
-  return nullptr;
-}
-
 // get_jetton_wallet(addr) -> Asset (pton master -> TON), or Null when the
 // wallet lookup misses (caller decides fallback).
 Value wallet_asset(BuildEnv &env, const std::string &addr) {
@@ -279,7 +266,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   const Block *jetton_notify_block = nullptr;
   Value sender_wallet = Value::null();
   if (input_transfer->btype == "jetton_transfer") {
-    jetton_notify_block = find_call_t(input_transfer->children_blocks, kJettonNotify);
+    jetton_notify_block = find_call(input_transfer->children_blocks, kJettonNotify);
     sender_wallet = data_field(input_transfer, "sender_wallet");
   } else if (is_call_op(input_transfer, kJettonNotify)) {
     jetton_notify_block = input_transfer;
@@ -379,7 +366,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
         if (n >= 2) break;
         if (b->btype != "jetton_transfer" || b->previous_block != pay_to) continue;
         n++;
-        const Block *pton = find_call_t(b->next_blocks, kPTonTransfer);
+        const Block *pton = find_call(b->next_blocks, kPTonTransfer);
         Value ex_amount, ex_asset;
         if (pton != nullptr) {
           td::RefInt256 ta;
@@ -391,7 +378,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
               if (tav != nullptr && (tav->t == VType::Int || tav->t == VType::Amount)) ta = tav->num;
             }
           }
-          ex_amount = amount_or_zero_t(ta);
+          ex_amount = amount_or_zero(ta);
           ex_asset = Value::make_asset_ton();
         } else {
           ex_amount = data_field(b, "amount");
@@ -408,8 +395,8 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   d.emplace_back("pool", account_from_opt(bm != nullptr ? bm->source : std::nullopt));
   d.emplace_back("account_contract",
                  account_from_opt(bm != nullptr ? bm->destination : std::nullopt));
-  d.emplace_back("position_amount_1", amount_or_zero_t(new_enough0));
-  d.emplace_back("position_amount_2", amount_or_zero_t(new_enough1));
+  d.emplace_back("position_amount_1", amount_or_zero(new_enough0));
+  d.emplace_back("position_amount_2", amount_or_zero(new_enough1));
   d.emplace_back("lp_tokens_minted", std::move(lp_tokens_minted));
   d.emplace_back("tick_lower", Value::make_int64(tick_lower));
   d.emplace_back("tick_upper", Value::make_int64(tick_upper));
@@ -584,7 +571,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     }
     sender = account_from_opt(m->source);
     in_asset = Value::make_asset_ton();
-    in_amount = amount_or_zero_t(amt);
+    in_amount = amount_or_zero(amt);
     in_source = account_from_opt(m->source);
     in_source_jw = Value::null();
     const Message *am = block_msg(parts.anchor);
@@ -629,7 +616,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
       auto out_addr = acc_str(a0[0].second).value_or("");
       auto it = jw_asset_map.find(out_addr);
       if (it != jw_asset_map.end()) {
-        Value prev_out = leg(amount_or_zero_t(a0[0].first), it->second);
+        Value prev_out = leg(amount_or_zero(a0[0].first), it->second);
         peer_swap_data.push_back(Value::make_dict(
             Value::Fields{{"in", leg(in_amount, in_asset)}, {"out", prev_out}}));
         for (std::size_t i = 1; i < swap_steps.size(); i++) {
@@ -640,7 +627,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
           auto na = acc_str(an[0].second).value_or("");
           auto nit = jw_asset_map.find(na);
           Value next_asset = nit != jw_asset_map.end() ? nit->second : Value::make_asset_ton();
-          Value next_out = leg(amount_or_zero_t(an[0].first), next_asset);
+          Value next_out = leg(amount_or_zero(an[0].first), next_asset);
           peer_swap_data.push_back(
               Value::make_dict(Value::Fields{{"in", prev_out}, {"out", next_out}}));
           prev_out = next_out;
@@ -670,7 +657,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
       }
       if (!target_asset.is_null()) {
         destination_asset = target_asset;
-        min_out_amount = amount_or_zero_t(targets.back().second);
+        min_out_amount = amount_or_zero(targets.back().second);
       }
     }
   }

@@ -7,6 +7,7 @@
 #include "MsgParse.h"
 #include "fixtures/FixtureLoader.h"
 #include "Value.h"
+#include "fixtures/Render.h"
 #include "parse/PSlice.h"
 
 #include "td/utils/base64.h"
@@ -63,7 +64,7 @@ constexpr DumpType kDumpTypes[] = {
     {0xcaae25a1, "LayerZeroOappExecuteCallback"},
 };
 
-std::string render_value(const Value &v);
+std::string render_parse_value(const Value &v);
 
 std::string render_fields_sorted(const Value::Fields &fields) {
   std::vector<std::pair<std::string, std::string>> kv;
@@ -72,7 +73,7 @@ std::string render_fields_sorted(const Value::Fields &fields) {
     // §12 root-hash bar: Cell-derived BOC fields render as cellhash.
     std::string rendered;
     if (is_boc_field(f.first)) rendered = boc_field_cellhash(f.second);
-    if (rendered.empty()) rendered = render_value(f.second);
+    if (rendered.empty()) rendered = render_parse_value(f.second);
     kv.emplace_back(f.first, rendered);
   }
   std::sort(kv.begin(), kv.end());
@@ -87,7 +88,7 @@ std::string render_fields_sorted(const Value::Fields &fields) {
   return out;
 }
 
-std::string render_value(const Value &v) {
+std::string render_parse_value(const Value &v) {
   switch (v.t) {
     case VType::Null:
       return "null";
@@ -163,7 +164,7 @@ void dump_fixture(const std::string &path) {
           rendered = "PARSE_FAIL";
         } else {
           auto r_val = parse_message_body(type_name, r_roots.ok()[0]);
-          rendered = r_val.is_ok() ? render_value(r_val.ok()) : "PARSE_FAIL";
+          rendered = r_val.is_ok() ? render_parse_value(r_val.ok()) : "PARSE_FAIL";
         }
       }
       lines.push_back(m->msg_hash + " " + type_name + " " + rendered);

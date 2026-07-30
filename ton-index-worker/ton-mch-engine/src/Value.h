@@ -115,38 +115,9 @@ struct Value {
 // exponential-re-walk DoS — is gone).
 td::Result<std::string> td_boc_serialize(const td::Ref<vm::Cell> &root);
 
-// TODO: remove (harness): the root-hash bar exists so the byte-level A/B dumps
-// can ignore BOC serialization provenance. Its only callers are the dump
-// renderers (BuildDriver render_value, ParseDump) and --surface; no product path
-// reaches it. Goes with the dump renderers. (td_boc_serialize above is NOT part
-// of this — host fns and the emu writer use it.)
-//
-// Plan §12 root-hash parity bar. A produced/parsed field whose value is a
-// Cell-derived BOC container (a b64 string from the b64() builtin, or raw BOC
-// Bytes from MsgParse) is rendered in the dumps as the cell's ROOT HASH
-// ("cellhash:HEX-UPPER") instead of its exact bytes, so serialization-order /
-// CRC provenance (pytoniq vs td) is invisible to the byte-level A/B comparison.
-// `is_boc_field` gates the render by field name (comment / bitcoin_txid / pubkey
-// are raw non-BOC bytes and stay as-is). `boc_field_cellhash` returns the
-// cellhash string, or "" if the value is not a decodable BOC (caller falls back
-// to the normal render).
-bool is_boc_field(const std::string &key);
-// The BOC-field name set backing is_boc_field (surfaced by --surface for the twins).
-const std::set<std::string> &boc_field_names();
-std::string boc_field_cellhash(const Value &v);
-
 // Normalize a raw TON address string "wc:hex64" to canonical "wc:HEX64".
 // Returns nullopt for anything that is not a well-formed raw address (the
 // vectors never use user-friendly base64). "addr_none" is NOT handled here.
 std::optional<std::string> normalize_raw_address(const std::string &s);
-
-// TODO: remove (harness): the vector comparator. Callers are VectorRunner,
-// BuildVectorRunner and EmuCelldbLookupTest only — all harness TUs; ExprRuntime
-// deliberately keeps its own rt_eq so this stays harness-only (ExprRuntime.cpp:76).
-// It lives in Value.cpp purely because that is where Value's internals are.
-//
-// Structural equality used by the conformance-vector comparator (mirrors the
-// Python runner's _equal: type-checked + deep). NOT the `==` operator.
-bool structural_equal(const Value &a, const Value &b);
 
 }  // namespace mch

@@ -3,6 +3,7 @@
 #include "BlockTree.h"
 #include "BuildRuntime.h"
 #include "fixtures/GenBuildsVectors.h"
+#include "fixtures/Render.h"
 #include "VectorRunner.h"
 
 #include "td/utils/JsonBuilder.h"

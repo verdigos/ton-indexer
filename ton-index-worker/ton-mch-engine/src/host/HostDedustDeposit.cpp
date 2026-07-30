@@ -38,16 +38,6 @@ constexpr std::uint32_t kDedustPayout = 0x474f86cf;
 constexpr std::uint32_t kRejection = 0xe1a36cd4;
 constexpr std::uint32_t kJettonForwardPayload = 0x40e108d6;
 
-std::string hex_upper_b(const unsigned char *p, std::size_t n) {
-  static const char *d = "0123456789ABCDEF";
-  std::string out(n * 2, '0');
-  for (std::size_t i = 0; i < n; i++) {
-    out[2 * i] = d[p[i] >> 4];
-    out[2 * i + 1] = d[p[i] & 0xF];
-  }
-  return out;
-}
-
 // messages/liquidity.py load_asset: 4-bit kind (0 -> TON, else wc:uint8 +
 // account_id:32 bytes). Advances cs.
 td::Result<Value> load_asset_4(vm::CellSlice &cs) {
@@ -66,23 +56,7 @@ td::Result<Value> load_asset_4(vm::CellSlice &cs) {
   if (!cs.fetch_bytes(id, 32)) {
     return td::Status::Error("asset: id fetch");
   }
-  return Value::make_asset_jetton(std::to_string(wc) + ":" + hex_upper_b(id, 32));
-}
-
-template <typename Vec>
-const Block *find_call(const Vec &blocks, std::uint32_t op) {
-  for (const Block *b : blocks) {
-    if (is_call_op(b, op)) {
-      return b;
-    }
-  }
-  return nullptr;
-}
-
-// Amount(x or 0): coins are never None, and `0 or 0 == 0`, so this is just
-// Amount(x) — but keep the null-guard for parse-failure paths that reach here.
-Value amount_or_zero(td::RefInt256 v) {
-  return v.is_null() ? Value::make_amount(td::make_refint(0)) : Value::make_amount(std::move(v));
+  return Value::make_asset_jetton(std::to_string(wc) + ":" + hex_upper(id, 32));
 }
 
 // _dedust_deposit_leg resolution result.

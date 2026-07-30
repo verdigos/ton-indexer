@@ -8,6 +8,7 @@
 #include "fixtures/FixtureLoader.h"
 #include "fixtures/FixtureLookupSource.h"
 #include "ExprRuntime.h"
+#include "fixtures/Render.h"
 #include "IrLoader.h"
 #include "MsgParse.h"
 

@@ -2,6 +2,7 @@
 
 #include "ExprEval.h"
 #include "GenVectors.h"
+#include "fixtures/Render.h"
 #include "Value.h"
 
 #include "common/refint.h"

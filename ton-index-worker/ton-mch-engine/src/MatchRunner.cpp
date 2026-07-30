@@ -1,7 +1,7 @@
 #include "MatchRunner.h"
 
 #include "BlockTree.h"
-#include "BuildDriver.h"  // shared block_key (§11 item 2 dedupe)
+#include "fixtures/Render.h"  // shared block_key (§11 item 2 dedupe)
 #include "GenWheres.h"
 #include "fixtures/FixtureLoader.h"
 #include "IrLoader.h"
@@ -19,7 +19,7 @@ namespace mch {
 
 namespace {
 
-// block_key is the shared Block dump-key helper (BuildDriver.h) — §11 item 2
+// block_key is the shared Block dump-key helper (fixtures/Render.h) — §11 item 2
 // dedupe removed the local copy that used to live here.
 
 std::string cap_val(const Capture &c) {

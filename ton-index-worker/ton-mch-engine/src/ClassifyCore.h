@@ -15,7 +15,6 @@
 #include <set>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 namespace mch {
@@ -82,31 +81,11 @@ struct ClassifyResult {
   bool unknown_trace = false;
 };
 
-// B1 anchor prefilter: the per-trace opcode/btype inventory an included
-// matcher's anchor must intersect for its outer BFS to have any chance of a
-// match. `prefilter` is true only for opcode/btype anchors (the two anchor kinds
-// matcher_test_self can decide from the block's own op/btype); pred-anchored
-// matchers stay full-scan (their test runs a predicate, not an op/btype check).
-// `opcodes`/`btypes` point into the owning CompiledMatcher's anchor sets (valid
-// for the LoadedIr's lifetime).
-struct AnchorFilter {
-  bool prefilter = false;
-  const std::unordered_set<std::uint32_t> *opcodes = nullptr;  // OpcodeSet anchor
-  const std::unordered_set<std::string> *btypes = nullptr;     // BType anchor
-};
-
-// One runnable matcher: its index into LoadedIr.matchers plus the precomputed
-// B1 anchor prefilter (one record, so index and filter cannot desync).
-struct IncludedMatcher {
-  int matcher_index = 0;
-  AnchorFilter filter;
-};
-
 // Trace-independent run prep computed once from the artifact: the runnable
 // matcher set, the SKIP table (name -> reason, sorted), the generated build-fn
 // map, and the union of referenced lookup kinds.
 struct ClassifySetup {
-  std::vector<IncludedMatcher> included;  // priority order
+  std::vector<int> included;  // indices into LoadedIr.matchers, priority order
   std::vector<std::pair<std::string, std::string>> skips;
   std::unordered_map<int, BuildOutcome (*)(BuildEnv &)> build_fns;
   std::set<std::string> kinds;
