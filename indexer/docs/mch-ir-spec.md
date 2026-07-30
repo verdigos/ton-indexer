@@ -1,8 +1,8 @@
-# MCH IR — Normative Specification (v1.0)
+# MCH IR — Normative Specification (v1.1)
 
 **Status: NORMATIVE.** This document supersedes `docs/mch-ir-poc.md` (kept for history). It is the binding contract between the Python emitter (`indexer/events/mch/ir_emit.py` + `expr_ir.py`), the loader/engine (`indexer/events/mch_ir/`), and any future host (the C++ engine). It documents the artifact **as actually emitted and consumed today** — where wording below says MUST/omitted/rejected, that reflects `ir_emit.py`/`loader.py`/`engine.py`/`program.py`/`expr_eval.py` behavior at the time of writing.
 
-> **Version tag:** the on-the-wire `mch_ir_version` string is `"1.0"` (`loader.IR_VERSION` / `expr_ir.IR_VERSION`), matching this document's spec version; the loader rejects any other value. A host must emit/accept exactly `"1.0"`. (The former `"1.0"` PoC tag was retired in the 1.0 bump, 2026-07-11; artifacts + fixtures regenerated in lockstep.)
+> **Version tag:** the on-the-wire `mch_ir_version` string is `"1.1"` (`loader.IR_VERSION` / `expr_ir.IR_VERSION`), matching this document's spec version; the loader rejects any other value. A host must emit/accept exactly `"1.1"`. (The former `"1.0"` PoC tag was retired in the 1.0 bump, 2026-07-11; artifacts + fixtures regenerated in lockstep.)
 
 ## 1. Container
 
@@ -15,7 +15,7 @@
 
 ```json
 {
-  "mch_ir_version": "1.0",
+  "mch_ir_version": "1.1",
   "frontend": { "generator": "mch-python", "source_files": ["vesting.mch"] },
   "matchers": [ <matcher record>, ... ],
   "nodes":    [ <node record>, ... ],
@@ -23,7 +23,7 @@
 }
 ```
 
-- `mch_ir_version` — MUST equal `"1.0"` (loader hard-rejects otherwise).
+- `mch_ir_version` — MUST equal `"1.1"` (loader hard-rejects otherwise).
 - `frontend` — informational (`generator`, `source_files`). Loader keeps it, does not validate its contents.
 - `matchers` — the matcher table (§3), array (required).
 - `nodes` — the shared, flat node pool (§5), array (required). Node records reference each other by index; cyclic references are legal (see `recursive`/cyclic, §5.5).
@@ -258,7 +258,7 @@ The declarative vesting matcher (`op VestingSendMessage @send -> op VestingSendM
 
 ```json
 {
-  "mch_ir_version": "1.0",
+  "mch_ir_version": "1.1",
   "frontend": { "generator": "mch-python", "source_files": ["vesting.mch"] },
   "matchers": [
     {

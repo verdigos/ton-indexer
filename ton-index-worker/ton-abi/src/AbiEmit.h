@@ -5,8 +5,8 @@
 // (generated/<contract_snake>_gen.{h,cpp}) of typed structs whose from_slice /
 // store / to_abi_value bodies BAKE the kernel's resolution + dispatch tables
 // -- a faithful C++ port of the reference emitter
-// (S:\Dev\tolk-abi-to-typescript\src\generate-ts-wrappers.ts +
-// emit-pack-unpack.ts), governed by ton-abi/W11-SHAPE-SPEC.md.
+// (tolk-abi-to-typescript: src/generate-ts-wrappers.ts +
+// src/emit-pack-unpack.ts), governed by ton-abi/W11-SHAPE-SPEC.md.
 //
 // Fail-closed: a decl-level non-standard map key (mapKV key not
 // intN/uintN/address) is a HARD generation failure (shape spec §7 /

@@ -26,7 +26,11 @@ import { beginCell, Address, ExternalAddress, Dictionary } from '@ton/core';
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const FIXTURES_SRC = 'S:/Dev/tolk-abi-to-typescript/input';
+// The reference repo's input/ (its source .tolk fixtures). This script only runs
+// on a machine that has that checkout, so point TOLK_ABI_INPUT at it; the
+// fallback assumes a sibling checkout next to this repository.
+const FIXTURES_SRC = process.env.TOLK_ABI_INPUT ??
+    path.resolve(ROOT, '..', '..', '..', 'tolk-abi-to-typescript', 'input');
 const FIXTURES_DIR = path.join(ROOT, 'testdata', 'fixtures');
 const VECTORS_FILE = path.join(ROOT, 'testdata', 'abi_vectors.json');
 
@@ -622,7 +626,7 @@ async function main() {
             path.join(FIXTURES_DIR, `${fixture}.abi.json`),
             JSON.stringify(abi, null, 2) + '\n',
         );
-        abiByFixture[fixture] = abi;  // W8 needs generic-union-labels/jetton-* for its coverage vectors
+        abiByFixture[fixture] = abi;  // kept for the W8+ blocks' ctxFor (today only generic-union-labels)
         loadableCount++;
     }
 

@@ -3,10 +3,15 @@
 // AbiValue: a standalone, protocol-agnostic tagged value tree. Re-scoped at
 // W11.5 (interpreter removed): it is now (a) the medium every generated
 // struct's to_abi_value() dumps into -- the A/B gate compares that dump against
-// the TS oracle vectors -- and (b) the interchange type the future mch bridge
-// (W12) will adapt into mch::Value. Nothing in the parse hot path.
+// the TS oracle vectors -- and (b) the interchange type the mch bridge adapts
+// into mch::Value.
 // Owns the canonical JSON dump (docs/ton-abi-plan.md §0.14 / MODULE-NOTES.md
 // point 5-9,12), which is the format the conformance vectors compare against.
+//
+// (b) put it ON the parse hot path as of W12: every ABI-path message parse
+// materializes the body THREE times -- typed struct (from_slice) -> AbiValue
+// (to_abi_value) -> mch::Value (abi_value_to_mch, AbiBridge.h). Known cost,
+// accepted for now: it keeps ton-abi mch-free and the vector gate exact.
 //
 // Kind -> payload -> JSON dump:
 //   Int      RefInt256              decimal STRING (also used for `enum`)

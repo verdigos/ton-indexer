@@ -24,6 +24,10 @@
 #include <filesystem>
 #include <memory>
 
+#ifndef _WIN32
+#include <sys/wait.h>  // std::system() returns a wait status, not an exit code
+#endif
+
 namespace {
 
 using namespace ton_abi;
@@ -160,7 +164,12 @@ TEST_CASE("cli: ton-abi-gen writes a header containing the struct signature") {
   std::string cmd = "\"" + std::string(TON_ABI_GEN_EXE) + "\" \"" + abi + "\" --out-dir \"" + out.string() + "\"";
 #endif
   int rc = std::system(cmd.c_str());
-  REQUIRE_MESSAGE(rc == 0, "ton-abi-gen exited " << rc << " for: " << cmd);
+#ifdef _WIN32
+  int exit_status = rc;
+#else
+  int exit_status = WIFEXITED(rc) ? WEXITSTATUS(rc) : -1;  // -1 == died by signal, see raw
+#endif
+  REQUIRE_MESSAGE(rc == 0, "ton-abi-gen exit status " << exit_status << " (raw " << rc << ") for: " << cmd);
 
   std::string header = read_file((out / "tolk_counter_gen.h").string());
   CHECK(header.find("struct IncreaseCounter {") != std::string::npos);

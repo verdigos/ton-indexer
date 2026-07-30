@@ -1,7 +1,7 @@
 #pragma once
 
 // AbiModel: PODs mirroring the reference Tolk ABI schema exactly
-// (S:\Dev\tolk-abi-to-typescript\src\abi.ts + abi-types.ts). W1 (T1.1).
+// (tolk-abi-to-typescript: src/abi.ts + src/abi-types.ts). W1 (T1.1).
 //
 // Field names/shapes/optionality are a 1:1 mirror of the TS source -- see the
 // citation comment above each struct. Bigints (`bigint_as_string` in TS) are

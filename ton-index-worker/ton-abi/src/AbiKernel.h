@@ -1,7 +1,7 @@
 #pragma once
 
 // AbiKernel: the load-bearing resolution layer (W2). A faithful C++ port of
-// S:\Dev\tolk-abi-to-typescript\src\types-kernel.ts -- SymTable, aliasTargetOf,
+// tolk-abi-to-typescript's src/types-kernel.ts -- SymTable, aliasTargetOf,
 // structFieldsOf (monomorph substitution + cell-side client_ty_idx swap +
 // uLabelTyIdx back-ref), createLabelsForUnion (with isStructWithItsOwnLabel /
 // renderTy dedup rules), plus the LOAD-TIME RESOLUTION PASS the plan asks for

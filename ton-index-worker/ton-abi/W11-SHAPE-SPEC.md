@@ -14,9 +14,11 @@ Shared support header `src/AbiGenSupport.h` (hand-written, T11.1): `CellOf<T>` t
 wrapper (`struct CellOf { std::shared_ptr<T> ref; }` — indirection, so recursive
 cellOf types work and the inner struct need only be forward-declared), typed custom-registry API
 (`register_abi_custom<T>` / lookup, §0.17 — runtime registry, NOT specializations),
-common includes. Generated files include ONLY AbiGenSupport.h + leaf headers + AbiValue.h
-— NEVER AbiKernel/AbiLoader/AbiInterp (kernel runs at GENERATION time; all dispatch
-tables are BAKED into the emitted code).
+common includes. A generated header includes ONLY AbiGenSupport.h, a generated source ONLY
+its own header — the leaf headers, AbiValue.h and the std/ton common includes all arrive
+transitively from AbiGenSupport.h, which is the support contract for emitted code. NEVER
+AbiKernel/AbiLoader/AbiInterp (kernel runs at GENERATION time; all dispatch tables are
+BAKED into the emitted code).
 
 ## 2. Identifier rules
 
