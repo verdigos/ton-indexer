@@ -61,6 +61,9 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
     consumed_vals.push_back(Value::make_block(b));
   }
   bool needs_lookups = !(m.ref_lookups.empty() && m.ref_fns.empty());
+  RejectCtx rctx = reject_ctx();
+  rctx.matcher = &m.name;  // names the matcher on this build's [mch-reject] lines
+  RejectScope reject_scope(rctx);
   BuildOutcome o = run_two_phase(fn, block, slots,
                                  Value::make_list(std::move(consumed_vals)), kinds, src,
                                  needs_lookups);
@@ -464,6 +467,11 @@ ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers) {
 ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatcher> &matchers,
                               const ClassifySetup &setup, const LookupSource &src) {
   ClassifyResult result;
+
+  // Name the trace on every [mch-reject] line this classify emits (BuildRuntime.h).
+  RejectCtx rctx;
+  rctx.trace_id = &ctx.trace.trace_id;
+  RejectScope reject_scope(rctx);
 
   // Synthetic root wrapper (process_event_async: Block('root').connect(...)).
   Block *wrapper = ctx.arena.make("root");

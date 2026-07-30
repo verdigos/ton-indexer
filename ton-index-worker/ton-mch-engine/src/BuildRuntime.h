@@ -182,4 +182,53 @@ EvalResult rt_lookup_build(const BuildEnv &env, const std::string &kind,
 EvalResult rt_call_hostfn(BuildEnv &env, const std::string &name,
                           const std::vector<Value> &args);
 
+// --- host-reject observability ------------------------------------------------
+//
+// A host `fn` that FAULTS, or that returns the Null a `reject when r == null`
+// gates on, is a clean match rejection: the matcher's PATTERN matched but the
+// protocol core refused the data it found. That class is the one offline runs
+// cannot see — it lives in the lookup/host tier, and fixtures serve bundled
+// interfaces — so each occurrence emits ONE grep-able line tagged
+// `[mch-reject]`. Volume is bounded by MATCHES, not by traces.
+//
+// Arming is what makes the line trustworthy: run_two_phase calls the build fn
+// SEVERAL times, and the dry collect passes see an intentionally EMPTY lookup
+// table, so every lookup-dependent fn rejects there BY DESIGN. Only the final
+// pass is a real rejection. Three scopes fill the context — classify_trace
+// names the trace, try_build names the matcher, run_two_phase marks the final
+// pass — and nothing is emitted unless `final_pass` is set.
+struct RejectCtx {
+  const std::string *trace_id{nullptr};
+  const std::string *matcher{nullptr};
+  const std::string *fn{nullptr};  // set by rt_call_hostfn, read by both paths
+  const Block *anchor{nullptr};
+  bool final_pass{false};
+};
+
+// Thread-local (a classify runs on one thread); mutate only through RejectScope.
+RejectCtx &reject_ctx();
+
+// Saves the whole context and restores it on exit, so a mid-build throw can
+// never leave `final_pass` armed over a later dry pass.
+class RejectScope {
+ public:
+  explicit RejectScope(const RejectCtx &c) : saved_(reject_ctx()) { reject_ctx() = c; }
+  ~RejectScope() { reject_ctx() = saved_; }
+  RejectScope(const RejectScope &) = delete;
+  RejectScope &operator=(const RejectScope &) = delete;
+
+ private:
+  RejectCtx saved_;
+};
+
+// Emit the [mch-reject] line for the armed (trace, matcher, fn, anchor). No-op
+// unless the final pass is armed.
+void reject_log(const std::string &reason);
+
+// For a host fn whose Python twin is `try: ... except: return None`: the Null
+// return IS the rejection. rt_call_hostfn cannot log those centrally — it
+// cannot tell them from a legitimately null RESULT (jvault_stake_period,
+// tonstakers_minted_nft) — so such a fn rejects through here, naming its reason.
+EvalResult host_reject(const std::string &reason);
+
 }  // namespace mch

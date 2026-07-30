@@ -42,7 +42,17 @@ EvalResult rt_call_hostfn(BuildEnv &env, const std::string &name,
   if (it == host_fns().end()) {
     return rt_fault("unknown host fn '" + name + "'");
   }
-  return it->second(env, args);
+  // Name the fn (and its anchor) for the [mch-reject] line: the fault below and
+  // any host_reject() inside the fn both read them off the context.
+  RejectCtx ctx = reject_ctx();
+  ctx.fn = &name;
+  ctx.anchor = env.anchor;
+  RejectScope scope(ctx);
+  EvalResult r = it->second(env, args);
+  if (r.faulted) {
+    reject_log(r.message);
+  }
+  return r;
 }
 
 const std::map<std::string, HostPredFn> &host_predicates() {

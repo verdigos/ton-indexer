@@ -5,8 +5,11 @@
 #include "parse/PSlice.h"
 
 #include "td/utils/base64.h"
+#include "td/utils/logging.h"
 #include "vm/boc.h"
 #include "vm/cellslice.h"
+
+#include <cstdio>
 
 namespace mch {
 
@@ -225,6 +228,43 @@ EvalResult rt_lookup_build(const BuildEnv &env, const std::string &kind,
     }
   }
   return rt_ok(env.lookups->get(kind, args));
+}
+
+// --- host-reject observability (see BuildRuntime.h) ---------------------------
+
+RejectCtx &reject_ctx() {
+  static thread_local RejectCtx ctx;
+  return ctx;
+}
+
+void reject_log(const std::string &reason) {
+  const RejectCtx &c = reject_ctx();
+  if (!c.final_pass) {
+    return;  // a dry collect pass: rejects there are the empty table, not the data
+  }
+  const Transaction *tx = nullptr;
+  std::string anchor = "?";
+  if (c.anchor != nullptr) {
+    anchor = c.anchor->btype;
+    if (c.anchor->opcode) {
+      char buf[16];
+      std::snprintf(buf, sizeof(buf), "/0x%08x", *c.anchor->opcode);
+      anchor += buf;
+    }
+    if (!c.anchor->event_nodes.empty()) {
+      tx = c.anchor->event_nodes.front()->tx;
+    }
+  }
+  LOG(WARNING) << "[mch-reject] trace=" << (c.trace_id != nullptr ? *c.trace_id : "?")
+               << " matcher=" << (c.matcher != nullptr ? *c.matcher : "?")
+               << " fn=" << (c.fn != nullptr ? *c.fn : "?") << " anchor=" << anchor
+               << " tx=" << (tx != nullptr ? tx->hash : "?")
+               << " account=" << (tx != nullptr ? tx->account : "?") << " reason=" << reason;
+}
+
+EvalResult host_reject(const std::string &reason) {
+  reject_log(reason);
+  return rt_ok(Value::null());
 }
 
 }  // namespace mch

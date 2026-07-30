@@ -155,7 +155,7 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
 // (input transfer read via btype/children_blocks/data, not event_nodes[0]).
 EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> &args) {
   if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
-    return rt_ok(Value::null());
+    return host_reject("bad arguments");
   }
   std::vector<const Block *> consumed;
   for (const Value &v : *args[0].items) {
@@ -165,7 +165,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
     }
   }
   if (consumed.empty()) {
-    return rt_ok(Value::null());
+    return host_reject("empty consumed");
   }
   const Block *block = consumed.front();
 
@@ -185,30 +185,30 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   // add_liquidity body.
   auto r_body = block_body(block);
   if (r_body.is_error()) {
-    return rt_ok(Value::null());
+    return host_reject("add_liquidity body");
   }
   auto r_ctx = open_body(r_body.move_as_ok());
   if (r_ctx.is_error()) {
-    return rt_ok(Value::null());
+    return host_reject("add_liquidity body open");
   }
   auto add_ctx = r_ctx.move_as_ok();
   auto &acs = add_ctx.cs;
   if (!acs.have(32 + 64) || !acs.advance(32 + 64)) {
-    return rt_ok(Value::null());
+    return host_reject("add_liquidity header short");
   }
   auto r_na0 = load_coins_py(acs);  // new_amount0
   auto r_na1 = load_coins_py(acs);  // new_amount1
   auto r_ne0 = load_coins_py(acs);  // new_enough0
   auto r_ne1 = load_coins_py(acs);  // new_enough1
   if (r_na0.is_error() || r_na1.is_error() || r_ne0.is_error() || r_ne1.is_error()) {
-    return rt_ok(Value::null());
+    return host_reject("add_liquidity amounts parse");
   }
   td::RefInt256 new_amount0 = r_na0.move_as_ok();
   (void)r_na1;
   td::RefInt256 new_enough0 = r_ne0.move_as_ok();
   td::RefInt256 new_enough1 = r_ne1.move_as_ok();
   if (!acs.have(128 + 24 + 24)) {
-    return rt_ok(Value::null());
+    return host_reject("add_liquidity tail short");
   }
   acs.advance(128);  // liquidity
   std::int64_t tick_lower = acs.fetch_long(24);
@@ -222,38 +222,38 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   if (nft_mint != nullptr) {
     auto rb = block_body(nft_mint);
     if (rb.is_error()) {
-      return rt_ok(Value::null());
+      return host_reject("nft_mint body");
     }
     auto rc = open_body(rb.move_as_ok());
     if (rc.is_error()) {
-      return rt_ok(Value::null());
+      return host_reject("nft_mint body open");
     }
     auto pc = rc.move_as_ok();
     auto &pcs = pc.cs;
     // opcode(32) query(64) user(addr) liquidity(128) tick_lower(24) tick_upper(24)
     if (!pcs.have(32 + 64) || !pcs.advance(32 + 64)) {
-      return rt_ok(Value::null());
+      return host_reject("nft_mint header short");
     }
     if (load_address_py(pcs).is_error()) {
-      return rt_ok(Value::null());
+      return host_reject("nft_mint user address parse");
     }
     if (!pcs.have(128 + 24 + 24)) {
-      return rt_ok(Value::null());
+      return host_reject("nft_mint liquidity/ticks short");
     }
     td::RefInt256 liquidity = pcs.fetch_int256(128, false);
     pcs.advance(24 + 24);  // tick_lower + tick_upper
     lp_tokens_minted = Value::make_amount(std::move(liquidity));
     // nft_index lives in the old_fee_cell ref at bit offset 256+256, uint64.
     if (pcs.size_refs() < 1) {
-      return rt_ok(Value::null());
+      return host_reject("nft_mint fee cell ref missing");
     }
     auto rf = open_ref_cell(pcs.fetch_ref());
     if (rf.is_error()) {
-      return rt_ok(Value::null());
+      return host_reject("nft_mint fee cell open");
     }
     auto fcs = rf.move_as_ok();
     if (!fcs.have(256 + 256 + 64) || !fcs.advance(256 + 256)) {
-      return rt_ok(Value::null());
+      return host_reject("nft_mint index field short");
     }
     nft_index = Value::make_int(refint_u64(fcs.fetch_ulong(64)));
     const Message *nm = block_msg(nft_mint);
@@ -261,7 +261,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   }
 
   if (input_transfer == nullptr) {
-    return rt_ok(Value::null());
+    return host_reject("no input transfer");
   }
   const Block *jetton_notify_block = nullptr;
   Value sender_wallet = Value::null();
@@ -272,16 +272,16 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
     jetton_notify_block = input_transfer;
   }
   if (jetton_notify_block == nullptr) {
-    return rt_ok(Value::null());
+    return host_reject("no jetton_notify block");
   }
 
   auto rnb = block_body(jetton_notify_block);
   if (rnb.is_error()) {
-    return rt_ok(Value::null());
+    return host_reject("jetton_notify body");
   }
   auto r_notif = parse_message_body("JettonNotify", rnb.ok());
   if (r_notif.is_error()) {
-    return rt_ok(Value::null());
+    return host_reject("jetton_notify parse");
   }
   Value notif = r_notif.move_as_ok();
   const Value *ja = notif.field("jetton_amount");
@@ -290,34 +290,34 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   Value sent_amount = ja != nullptr ? to_amount(*ja) : Value::make_amount_none();
   Value sender = fu != nullptr ? *fu : Value::make_account_none();
   if (fp == nullptr || fp->t != VType::Cell) {
-    return rt_ok(Value::null());
+    return host_reject("jetton_notify forward_payload not a cell");
   }
   auto rp = open_ref_cell(fp->cell);
   if (rp.is_error()) {
-    return rt_ok(Value::null());
+    return host_reject("forward_payload open");
   }
   auto pcs = rp.move_as_ok();
   if (!pcs.have(32)) {
-    return rt_ok(Value::null());
+    return host_reject("forward_payload short");
   }
   if (static_cast<std::uint32_t>(pcs.prefetch_ulong(32)) != kFundAccountPayload) {
-    return rt_ok(Value::null());
+    return host_reject("forward_payload is not fund_account");
   }
   pcs.advance(32);  // opcode
   auto r_other = load_address_py(pcs);
   if (r_other.is_error()) {
-    return rt_ok(Value::null());
+    return host_reject("fund_account other wallet parse");
   }
   Value other = r_other.move_as_ok();
   // get_other_jetton_wallet(): raises if not an Address -> reject.
   if (other.t != VType::Account || other.addr_none) {
-    return rt_ok(Value::null());
+    return host_reject("fund_account other wallet addr_none");
   }
   std::string other_wallet = other.str;
 
   const Message *jnm = block_msg(jetton_notify_block);
   if (jnm == nullptr || !jnm->source) {
-    return rt_ok(Value::null());
+    return host_reject("jetton_notify has no source");
   }
   std::string router_wallet = *jnm->source;
 
@@ -329,7 +329,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   // drops only this action and leaves the rest of the trace classified.
   Value first_asset = wallet_asset(env, router_wallet);
   if (first_asset.is_null()) {
-    return rt_ok(Value::null());
+    return host_reject("router wallet jetton_wallet lookup miss (jetton_wallet=" + router_wallet + ")");
   }
   // second asset (other wallet): null lookup -> stays None.
   Value second_asset = wallet_asset(env, other_wallet);
@@ -491,14 +491,14 @@ ToncoParts derive_tonco_parts(const std::vector<const Block *> &consumed) {
 // fallback are ported faithfully (no corpus coverage — single-hop only).
 EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   if (args.size() != 1 || args[0].t != VType::List) {
-    return rt_ok(Value::null());
+    return host_reject("bad arguments");
   }
   std::vector<const Block *> consumed;
   for (const Value &v : *args[0].items) {
     const Block *b = as_block(v);
     if (b != nullptr) consumed.push_back(b);
   }
-  if (consumed.empty()) return rt_ok(Value::null());
+  if (consumed.empty()) return host_reject("empty consumed");
   ToncoParts parts = derive_tonco_parts(consumed);
 
   auto by_lt = [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; };
@@ -506,8 +506,14 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   all_swaps.insert(all_swaps.begin(), parts.anchor);
   std::stable_sort(all_swaps.begin(), all_swaps.end(), by_lt);
   const std::vector<const Block *> &all_payouts = parts.payouts;
-  if (parts.in_transfer == nullptr || all_swaps.size() != all_payouts.size()) {
-    return rt_ok(Value::null());
+  // Split for diagnostics: the two halves of this reject are different failures
+  // (an in leg the parts scan could not find vs. an unpaired swap/payout chain).
+  if (parts.in_transfer == nullptr) {
+    return host_reject("no in_transfer");
+  }
+  if (all_swaps.size() != all_payouts.size()) {
+    return host_reject("swap/payout count mismatch (swaps=" + std::to_string(all_swaps.size()) +
+                       " payouts=" + std::to_string(all_payouts.size()) + ")");
   }
   const Block *in_transfer_block = parts.in_transfer;
 
@@ -556,13 +562,13 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     if (fp.t == VType::Cell && fp.cell.not_null()) in_payload = fp.cell;
   } else {
     const Message *m = block_msg(in_transfer_block);
-    if (m == nullptr) return rt_ok(Value::null());  // except -> None
+    if (m == nullptr) return host_reject("in_transfer has no message");  // except -> None
     td::RefInt256 amt = m->value ? td::make_refint(*m->value) : td::RefInt256();
     if (m->opcode32() && *m->opcode32() == kPTonTransfer) {
       auto rb = block_body(in_transfer_block);
-      if (rb.is_error()) return rt_ok(Value::null());
+      if (rb.is_error()) return host_reject("pton in body");
       auto rp = parse_message_body("PTonTransfer", rb.ok());
-      if (rp.is_error()) return rt_ok(Value::null());
+      if (rp.is_error()) return host_reject("pton in parse");
       const Value *ta = rp.ok().field("ton_amount");
       amt = (ta != nullptr && (ta->t == VType::Int || ta->t == VType::Amount)) ? ta->num
                                                                               : td::RefInt256();
@@ -581,9 +587,14 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
 
   // --- outgoing transfer ---
   const Block *out_transfer = parts.out_transfers.empty() ? nullptr : parts.out_transfers.back();
-  if (out_transfer == nullptr) return rt_ok(Value::null());
+  if (out_transfer == nullptr) {
+    return host_reject("no out_transfer (payouts=" + std::to_string(all_payouts.size()) + ")");
+  }
   if (out_transfer->btype != "jetton_transfer") {
-    return rt_ok(Value::null());  // unsupported out type
+    // Unsupported out type. The out leg is found by btype, so a raw
+    // call_contract here means the jetton_transfer matcher rejected that leg
+    // (missing wallet interface) rather than the trace having an odd shape.
+    return host_reject("unsupported out type (out_transfer=" + out_transfer->btype + ")");
   }
   Value out_asset = tonco_leg_asset(data_field(out_transfer, "asset"));
   Value out_receiver_jw = data_field(out_transfer, "receiver_wallet");

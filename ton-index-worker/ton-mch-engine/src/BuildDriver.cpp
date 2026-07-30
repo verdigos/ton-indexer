@@ -110,9 +110,16 @@ BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
   // A2: a matcher with no lookup nodes and no host fns can never miss in the dry
   // pass, so run the final pass directly against an empty filled table. Same
   // result as the loop below (which would converge on round 0 with no fetches).
+  // The final pass is the only one whose rejects are about the DATA (the dry
+  // passes below see an empty table on purpose), so it is the only one that arms
+  // the [mch-reject] log.
+  RejectCtx armed = reject_ctx();
+  armed.final_pass = true;
+
   if (!needs_lookups) {
     FilledLookupTable filled(kinds, {});
     BuildEnv env = fresh_env(&filled);
+    RejectScope scope(armed);
     return fn(env);
   }
 
@@ -141,6 +148,7 @@ BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
 
   FilledLookupTable filled(kinds, std::move(fetched));
   BuildEnv env = fresh_env(&filled);
+  RejectScope scope(armed);
   return fn(env);
 }
 

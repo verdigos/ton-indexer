@@ -45,6 +45,10 @@ constexpr std::uint32_t kV2Swap = 0x6664de2a;       // swap request call
 constexpr std::uint32_t kV2PayTo = 0x657b54f5;      // pay_to call
 constexpr std::uint32_t kV2CrossSwapB = 0x69cf1a5b;
 constexpr std::uint32_t kPTonTransfer = 0x01f3835d;
+// Only used to say, in a [mch-reject] reason, whether an absent out leg was a
+// jetton transfer that never became a jetton_transfer BLOCK (its own matcher
+// rejects on a missing wallet interface) rather than an absent message.
+constexpr std::uint32_t kJettonTransfer = 0x0f8a7ea5;
 
 // (acc_str moved to host/BlockViews.h — shared with the tonco core.)
 
@@ -397,7 +401,9 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   auto s_act = acc_str(actual_out_addr);
   auto s_in = acc_str(sw.token_wallet);
   if (!s_out || !s_act || !s_in) {
-    return rt_fault("stonfi_v1: null address for wallet lookup");
+    return rt_fault(std::string("stonfi_v1: null address for wallet lookup (out=") +
+                    (s_out ? *s_out : "none") + " actual_out=" + (s_act ? *s_act : "none") +
+                    " dex_in=" + (s_in ? *s_in : "none") + ")");
   }
   Value out_wallet = env.lookups->get("jetton_wallet", std::vector<Value>{Value::make_str(*s_out)});
   Value actual_out_wallet =
@@ -407,8 +413,13 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
 
   // dex_in_wallet.owner is dereferenced unconditionally in Python -> a miss
   // raises -> reject; outgoing_jt likewise (its .data is read unguarded).
-  if (dex_in_wallet.is_null()) return rt_fault("stonfi_v1: dex_in wallet lookup miss");
-  if (outgoing_jt == nullptr) return rt_fault("stonfi_v1: no outgoing jetton transfer");
+  if (dex_in_wallet.is_null()) {
+    return rt_fault("stonfi_v1: dex_in wallet lookup miss (jetton_wallet=" + *s_in + ")");
+  }
+  if (outgoing_jt == nullptr) {
+    return rt_fault("stonfi_v1: no outgoing jetton transfer (payment_requests=" +
+                    std::to_string(prs.size()) + ")");
+  }
 
   Value in_source_jw =
       data_truthy(in_jt, "has_internal_transfer") ? data_field(in_jt, "sender_wallet")
@@ -707,7 +718,12 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     // asset.jetton_address.as_str(): a TON asset (jetton_address None) would
     // AttributeError before the pton test -> reject.
     if (asset_v.t != VType::Asset || asset_v.is_ton) {
-      return rt_fault("stonfi_v2: in asset has no jetton_address");
+      // The asset came from the in-leg's own jetton_wallet lookup
+      // (specs_decl/jettons.mch `asset(wallet.jetton)`), so name the wallet:
+      // a TON/absent asset here means that wallet's interface carried no master.
+      return rt_fault("stonfi_v2: in asset has no jetton_address (asset=" + asset_v.describe() +
+                      " receiver_wallet=" +
+                      acc_str(data_field(in_transfer, "receiver_wallet")).value_or("none") + ")");
     }
     Value in_asset = is_pton_master(asset_v.str) ? Value::make_asset_ton() : asset_v;
     sender = data_field(in_transfer, "sender");
@@ -761,7 +777,11 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     auto big = bigger_leg(steps[0].pay_to);
     const Value *oa = map_asset(big.second);
     if (oa == nullptr) {
-      return rt_fault("stonfi_v2: peer out asset missing");  // KeyError / addr_none
+      // KeyError / addr_none. pool_map is short of `steps` when a per-hop
+      // jetton_wallet lookup missed and truncated the fill loop above.
+      return rt_fault("stonfi_v2: peer out asset missing (jetton_wallet=" +
+                      acc_str(big.second).value_or("none") + " pool_map=" +
+                      std::to_string(pool_map.size()) + "/" + std::to_string(steps.size()) + ")");
     }
     Value out_leg = leg_dict(Value::make_amount(big.first.is_null() ? td::make_refint(0)
                                                                      : big.first),
@@ -781,7 +801,10 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
         }
         const Value *oa2 = map_asset(b2.second);
         if (oa2 == nullptr) {
-          return rt_fault("stonfi_v2: peer out asset missing (hop)");
+          return rt_fault("stonfi_v2: peer out asset missing (hop) (jetton_wallet=" +
+                          acc_str(b2.second).value_or("none") + " pool_map=" +
+                          std::to_string(pool_map.size()) + "/" + std::to_string(steps.size()) +
+                          ")");
         }
         const Value *prev_out = peer_swaps.back().field("out");
         Value out2 = leg_dict(Value::make_amount(b2.first.is_null() ? td::make_refint(0)
@@ -795,7 +818,17 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
 
   // out-transfer.
   if (out_transfer == nullptr) {
-    return rt_fault("stonfi_v2: no out_transfer");  // out_transfer.next_blocks
+    // out_transfer.next_blocks. _derive_parts finds it by btype, so a raw
+    // JettonTransfer CALL still in the consumed set means the jetton_transfer
+    // matcher rejected it (missing wallet interface) rather than the trace
+    // lacking an out leg — that distinction is the whole point of the count.
+    std::size_t jt_calls = 0;
+    for (const Block *b : consumed) {
+      if (is_call_op(b, kJettonTransfer)) jt_calls++;
+    }
+    return rt_fault("stonfi_v2: no out_transfer (consumed=" + std::to_string(consumed.size()) +
+                    " steps=" + std::to_string(steps.size()) + " raw_jetton_transfer_calls=" +
+                    std::to_string(jt_calls) + ")");
   }
   const Block *pton_transfer = nullptr;
   for (Block *n : out_transfer->next_blocks) {
@@ -811,7 +844,9 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     // asset.jetton_address.as_str(): a TON asset has jetton_address None ->
     // AttributeError -> reject. Only the non-pton jetton path is live here.
     if (!(asset_f.t == VType::Asset) || asset_f.is_ton) {
-      return rt_fault("stonfi_v2: out asset has no jetton_address");
+      return rt_fault("stonfi_v2: out asset has no jetton_address (asset=" + asset_f.describe() +
+                      " receiver_wallet=" +
+                      acc_str(data_field(out_transfer, "receiver_wallet")).value_or("none") + ")");
     }
     Value out_asset = is_pton_master(asset_f.str) ? Value::make_asset_ton() : asset_f;
     TransferLeg leg = TransferLeg::from_jetton_transfer(out_transfer);
@@ -819,7 +854,10 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     out_data = leg.encode();
   } else {
     if (pton_transfer == nullptr) {
-      return rt_fault("stonfi_v2: pton out missing");  // PTonTransfer(None) -> raise
+      // PTonTransfer(None) -> raise. Reached only when the out leg is NOT an
+      // internal-transfer jetton_transfer, so name what it was instead.
+      return rt_fault("stonfi_v2: pton out missing (out_transfer=" + out_transfer->btype +
+                      " has_internal=" + (out_has_internal ? "1" : "0") + ")");
     }
     auto rb = block_body(pton_transfer);
     if (rb.is_error()) {
