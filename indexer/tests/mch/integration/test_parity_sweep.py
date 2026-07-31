@@ -90,7 +90,10 @@ from indexer.events.blocks.auction import (
 )
 from indexer.events.blocks.dns import ChangeDnsRecordMatcher
 from indexer.events.blocks.ethena_staking import EthenaDepositBlockMatcher
-from indexer.events.blocks.evaa import EvaaWithdrawBlockMatcher
+from indexer.events.blocks.evaa import (
+    EvaaSupplyBlockMatcher,
+    EvaaWithdrawBlockMatcher,
+)
 from indexer.events.blocks.jettons import (
     JettonBurnBlockMatcher,
     JettonMintBlockMatcher,
@@ -113,6 +116,7 @@ from indexer.events.blocks.liquidity import (
     StonfiV2ProvideLiquidityMatcher,
     StonfiV2WithdrawLiquidityMatcher,
     ToncoDepositLiquidityMatcher,
+    ToncoWithdrawLiquidityMatcher,
 )
 from indexer.events.blocks.nft import (
     GetgemsNftPurchaseBlockMatcher,
@@ -281,8 +285,12 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     ("specs_decl/dedust_swap_hybrid.mch", _DECL_DIR / "dedust_swap_hybrid.mch", dedust_hybrid_registries,
      _PREREQ_SWAP, (DedustSwapBlockMatcher,)),
     # Port wave (2026-07-04). Prereqs mirror each spec's own integration test.
+    # Supply + withdraw run as one group, in the legacy matchers-list order
+    # (supply 54, withdraw 55; liquidate 56 is not ported). Both bind prebuilt
+    # `btype jetton_transfer` blocks — supply for its jetton anchor and its
+    # refund leg, withdraw for its jetton payout.
     ("specs/evaa.mch", _SPECS_DIR / "evaa.mch", evaa_registries, (JettonTransferBlockMatcher,),
-     (EvaaWithdrawBlockMatcher,)),
+     (EvaaSupplyBlockMatcher, EvaaWithdrawBlockMatcher)),
     ("specs/layerzero.mch", _SPECS_DIR / "layerzero.mch", layerzero_receive_registries, (),
      (LayerZeroReceiveMatcher,)),
     # The whole tonstakers family runs as one group, in the legacy matchers-list
@@ -325,8 +333,13 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     # checks on whatever fixtures the recover anchor drags in.
     ("specs/elections.mch", _SPECS_DIR / "elections.mch", elections_registries, (),
      (ElectionDepositStakeBlockMatcher, ElectionRecoverStakeBlockMatcher)),
+    # Both tonco liquidity matchers run as one group, in the legacy matchers-list
+    # order (deposit 64, withdraw 66; the deploy-pool matcher between them is not
+    # ported). The withdraw payout legs are `btype jetton_transfer` blocks, so the
+    # transfer prerequisites are load-bearing for it too.
     ("specs/tonco_liquidity.mch", _SPECS_DIR / "tonco_liquidity.mch", tonco_liquidity_registries,
-     (NftMintBlockMatcher,) + _PREREQ_SWAP, (ToncoDepositLiquidityMatcher,)),
+     (NftMintBlockMatcher,) + _PREREQ_SWAP,
+     (ToncoDepositLiquidityMatcher, ToncoWithdrawLiquidityMatcher)),
     # Coffee liquidity port (2026-07-30): the deposit and create-vault matchers
     # run as one group, in the legacy matchers-list order. The deposit leg binds
     # `btype jetton_transfer` for its jetton side, so the transfer prerequisites

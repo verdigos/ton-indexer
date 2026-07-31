@@ -92,6 +92,36 @@
       "expect": "fail"
     },
     {
+      "type": "EvaaSupplyMaster",
+      "body": "te6ccgEBAQEAFwAAKQAAAAEAAAAAAAAAAAAAAAAAAAAACA==",
+      "expect": "ok"
+    },
+    {
+      "type": "EvaaSupplyMaster",
+      "body": "te6ccgEBAQEABgAACAAAAAE=",
+      "expect": "fail"
+    },
+    {
+      "type": "EvaaSupplyJettonForward",
+      "body": "te6ccgEBAQEABwAACQAAAAEI",
+      "expect": "ok"
+    },
+    {
+      "type": "EvaaSupplyJettonForward",
+      "body": "te6ccgEBAQEABgAACAAAAAE=",
+      "expect": "fail"
+    },
+    {
+      "type": "EvaaSupplySuccess",
+      "body": "te6ccgEBAQEANwAAaQAAARoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg",
+      "expect": "ok"
+    },
+    {
+      "type": "EvaaSupplySuccess",
+      "body": "te6ccgEBAQEABgAACAAAARo=",
+      "expect": "fail"
+    },
+    {
       "type": "EvaaWithdrawMaster",
       "body": "te6ccgEBAQEANwAAaQAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg",
       "expect": "ok"
@@ -219,6 +249,36 @@
     {
       "type": "ToncoRouterV3SwapSourceWallet",
       "body": "te6ccgEBAQEABgAACKf7WPg=",
+      "expect": "fail"
+    },
+    {
+      "type": "ToncoPoolV3StartBurn",
+      "body": "te6ccgEBAQEALAAAVFMLXywAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+      "expect": "ok"
+    },
+    {
+      "type": "ToncoPoolV3StartBurn",
+      "body": "te6ccgEBAQEABgAACFMLXyw=",
+      "expect": "fail"
+    },
+    {
+      "type": "ToncoPositionNftV3PositionBurn",
+      "body": "te6ccgEBAgEAaAABRUbKM1oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+      "expect": "ok"
+    },
+    {
+      "type": "ToncoPositionNftV3PositionBurn",
+      "body": "te6ccgEBAQEABgAACEbKM1o=",
+      "expect": "fail"
+    },
+    {
+      "type": "ToncoPoolV3Burn",
+      "body": "te6ccgEBAgEAgQACddc6wJ0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAQEAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "expect": "ok"
+    },
+    {
+      "type": "ToncoPoolV3Burn",
+      "body": "te6ccgEBAQEABgAACNc6wJ0=",
       "expect": "fail"
     },
     {

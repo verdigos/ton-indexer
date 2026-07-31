@@ -105,6 +105,7 @@ std::string render_action(const Action &a) {
   f.emplace_back("dex_deposit_liquidity_data", a.dex_deposit_liquidity_data);
   f.emplace_back("dex_withdraw_liquidity_data", a.dex_withdraw_liquidity_data);
   f.emplace_back("staking_data", a.staking_data);
+  f.emplace_back("evaa_supply_data", a.evaa_supply_data);
   f.emplace_back("evaa_withdraw_data", a.evaa_withdraw_data);
   f.emplace_back("vesting_send_message_data", a.vesting_send_message_data);
   f.emplace_back("layerzero_packet_data", a.layerzero_packet_data);

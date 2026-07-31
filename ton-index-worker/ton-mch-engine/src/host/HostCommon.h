@@ -19,6 +19,10 @@ struct Message;   // TraceLoader.h
 
 td::Result<td::Ref<vm::Cell>> block_body(const Block *b);
 
+// Decode a Python-side BOC string field (jetton forward_payload, custom_payload,
+// ...) into a cell, in pytoniq's Boc(str) order: hex first, base64 fallback.
+td::Result<td::Ref<vm::Cell>> cell_from_pystr(const std::string &s);
+
 const Block *as_block(const Value &v);
 
 bool is_call_op(const Block *b, std::uint32_t op);

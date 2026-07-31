@@ -36,7 +36,13 @@
 #                                                 condition.
 #   u32            fetch_ulong(32)            -> Int   (refint_u64)
 #   u64            fetch_ulong(64)            -> Int   (refint_u64)
+#   uint128        fetch_int256(128, false)   -> Int   (tonco liquidity / share widths)
 #   uint256        fetch_int256(256, false)   -> Int
+#   int24          fetch_int256(24, true)     -> Int, the only SIGNED leaf (tonco
+#                                                 tick indices go negative). Its
+#                                                 twin is pytoniq load_int(24),
+#                                                 already a signed int, so unlike
+#                                                 `bool` it needs no casting twin.
 #   coins          load_coins_py              -> Int   (VarUInteger 16; len nibble 0 -> 0)
 #   addr_py        load_address_py            -> Account | Null | "extern:.." Str
 #   asset2         2-bit tag (coffee)         -> Asset  (0=TON, 1=jetton wc:HEX)
@@ -129,6 +135,40 @@ message DedustSwapNotification opcode 0x9c610de3 {
 message CoffeeCreateVault opcode 0x00000000 {
   query_id: u64
   asset: asset2
+}
+
+# --- specs/evaa.mch `evaa_supply`. Read ONLY by the C++ host fn
+# evaa_supply_data (host/HostEvaa.cpp); the spec never `parse`s them, so unlike
+# the tonco withdraw entries these have no Python twin — the Python host fn uses
+# the legacy classes directly. Narrow on purpose, like
+# ToncoRouterV3SwapSourceWallet: each stops after the last field the core reads.
+#
+# EvaaSupplyUser (0x11) is deliberately absent: the user contract prefixes its
+# opcode with a variable-length header, and the schema always skips exactly 32
+# bits, so it stays a hand walk (shared with the withdraw predicates).
+
+# The TON-side anchor.
+message EvaaSupplyMaster opcode 0x00000001 {
+  _query_id: bits 64
+  _include_user_code: bits 2
+  supply_amount: u64
+  recipient_address: addr_py
+}
+
+# Same 0x1 opcode as EvaaSupplyMaster but a different body: the jetton-side
+# anchor's FORWARD PAYLOAD, which has no query_id. The conditional
+# forward_amount / custom_response_payload tail is unread, so parsing stops.
+message EvaaSupplyJettonForward opcode 0x00000001 {
+  _include_user_code: bits 2
+  recipient_address: addr_py
+}
+
+# Master -> user success report; the core takes the authoritative amount here.
+message EvaaSupplySuccess opcode 0x0000011a {
+  _query_id: bits 64
+  _owner_address: addr_py
+  _asset_id: uint256
+  amount_supplied: u64
 }
 
 message EvaaWithdrawMaster opcode 0x00000002 {
@@ -255,6 +295,60 @@ message ToncoRouterV3SwapSourceWallet opcode 0xa7fb58f8 {
   _query_id: bits 64
   _owner: addr_py
   source_wallet: addr_py
+}
+
+# --- specs/tonco_liquidity.mch `tonco_withdraw_liquidity` chain.
+#
+# All three reuse their LEGACY class as the Python twin unchanged (blocks/
+# messages/liquidity.py), so each entry below covers the WHOLE body even where
+# the spec reads one field: a `_`-dropped tail still advances the cursor, which
+# keeps accept/reject identical to the twin on a truncated body. These are the
+# first users of the uint128 and int24 leaves.
+#
+# ToncoRouterV3PayTo (0xa1daa96d) is deliberately absent — its coinsinfo is a
+# Maybe ^Cell (no `maybe_ref { }` composite exists) and its tail refs are
+# conditional on exit_code, so it stays with the host fn, like the tonco swap.
+
+# Anchor. The spec reads every field but query_id.
+message ToncoPoolV3StartBurn opcode 0x530b5f2c {
+  _query_id: bits 64
+  burned_index: u64
+  liquidity_to_burn: uint128
+  tick_lower: int24
+  tick_upper: int24
+}
+
+# Pool -> position NFT. The spec reads ONLY nft_owner (the withdrawer).
+message ToncoPositionNftV3PositionBurn opcode 0x46ca335a {
+  _query_id: bits 64
+  nft_owner: addr_py
+  _liquidity_to_burn: uint128
+  _tick_lower: int24
+  _tick_upper: int24
+  _old_fee: ref {
+    _fee_growth_inside0_last_x128: uint256
+    _fee_growth_inside1_last_x128: uint256
+  }
+}
+
+# Position NFT -> pool. The spec reads ONLY burned_index, which overrides the
+# anchor's when non-zero.
+message ToncoPoolV3Burn opcode 0xd73ac09d {
+  _query_id: bits 64
+  _recipient: addr_py
+  burned_index: u64
+  _liquidity: uint128
+  _tick_lower: int24
+  _tick_upper: int24
+  _liquidity_to_burn: uint128
+  _old_fee: ref {
+    _fee_growth_inside_0_last_x128: uint256
+    _fee_growth_inside_1_last_x128: uint256
+  }
+  _new_fee: ref {
+    _fee_growth_inside_0_current_x128: uint256
+    _fee_growth_inside_1_current_x128: uint256
+  }
 }
 
 # --- specs_decl/dedust_v2_swap.mch carriers and log.

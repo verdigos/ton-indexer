@@ -36,6 +36,8 @@
 # the wrong one (the v2 IR engine binds during the walk and is unaffected).
 # Same situation as stonfi_v2_swap.mch / dedust_swap.mch.
 
+opcode EvaaSupplySuccess                   = 0x11a
+opcode EvaaSupplyFail                      = 0x11f
 opcode EvaaWithdrawMaster                  = 0x2
 opcode EvaaWithdrawCollateralized          = 0x211
 opcode EvaaWithdrawSuccess                 = 0x211a
@@ -49,6 +51,68 @@ predicate evaa_user_withdraw_user
 predicate evaa_user_withdraw_success
 predicate evaa_user_withdraw_fail
 predicate evaa_service_comment
+predicate evaa_supply_anchor
+predicate evaa_user_supply
+
+# EVAA supply — port of blocks/evaa.py EvaaSupplyBlockMatcher.
+#
+# HYBRID: declarative pattern, one host fn for the build. The shape is small and
+# fully structural, but almost every field of the product is entangled with the
+# TON-vs-jetton discriminator, so the build stays in
+# build_evaa_supply_core — which the legacy matcher also calls, so the two
+# cannot drift.
+#
+# ANCHOR. Supply has TWO wire forms: a plain 0x1 supply_master call (TON), or a
+# jetton transfer whose FORWARD PAYLOAD is a supply_master. A single spec entry
+# can only have one head, and `btype`/`op` cannot see inside a forward payload,
+# so `pred evaa_supply_anchor` covers both exactly as the legacy test_self does
+# (nft_mint.mch's `pred single_contract_deploy` is the same construct). Note the
+# legacy test uses isinstance(JettonTransferBlock), which is dead under the IR
+# engine — the predicate tests btype on both sides instead.
+#
+# `pred evaa_user_supply` is the same variable-header problem the three withdraw
+# predicates have: the user contract prefixes its 32-bit opcode with version
+# coins + a maybe upgrade-info ref + 2 bits, so a plain `op` node cannot see it.
+#
+# The outcome alternative is legacy's OrMatcher order verbatim (success, fail,
+# jetton refund). The three heads are distinct, but the success branch carries a
+# child, so the compiler leaves it an or-node — which is what legacy runs too.
+# `maybe pred evaa_service_comment` under the success arm is the shared
+# evaa_action_comment_matcher, already used by the withdraw matcher below.
+#
+# ORDERING. The 0x1 anchor opcode is claimed by no other spec (grepped over
+# specs/ + specs_decl/), and the jetton arm binds a prebuilt `btype
+# jetton_transfer`, so the default priority 100 — behind the priority-90 jetton
+# specs — is what this needs, matching legacy (jetton matchers 16-19, evaa
+# supply 54).
+
+matcher evaa_supply {
+    produces EvaaSupplyBlock
+    entry    @master
+
+    pred evaa_supply_anchor @master
+      -> pred evaa_user_supply @user
+        -> ( op EvaaSupplySuccess @success -> maybe pred evaa_service_comment
+           | op EvaaSupplyFail @fail
+           | btype jetton_transfer @refund )
+
+    let r = evaa_supply_data(consumed)
+    reject when r == null
+    out {
+        sender:                  r.sender
+        recipient:               r.recipient
+        recipient_contract:      r.recipient_contract
+        amount:                  r.amount
+        is_success:              r.is_success
+        is_ton:                  r.is_ton
+        asset_id:                r.asset_id
+        sender_jetton_wallet:    r.sender_jetton_wallet
+        recipient_jetton_wallet: r.recipient_jetton_wallet
+        master_jetton_wallet:    r.master_jetton_wallet
+        master:                  r.master
+        asset:                   r.asset
+    }
+}
 
 matcher evaa_withdraw {
     produces EvaaWithdrawBlock

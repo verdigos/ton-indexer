@@ -276,6 +276,7 @@ const std::vector<ActionField> &optional_fields() {
       {"dex_deposit_liquidity_data", &Action::dex_deposit_liquidity_data},
       {"dex_withdraw_liquidity_data", &Action::dex_withdraw_liquidity_data},
       {"staking_data", &Action::staking_data},
+      {"evaa_supply_data", &Action::evaa_supply_data},
       {"evaa_withdraw_data", &Action::evaa_withdraw_data},
       {"vesting_send_message_data", &Action::vesting_send_message_data},
       {"layerzero_packet_data", &Action::layerzero_packet_data},

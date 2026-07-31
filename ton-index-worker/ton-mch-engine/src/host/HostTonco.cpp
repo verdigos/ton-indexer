@@ -34,6 +34,10 @@ constexpr std::uint32_t kV3Swap = 0xa7fb58f8;         // POOLV3_SWAP (swap reque
 constexpr std::uint32_t kV3PayTo = 0xa1daa96d;        // ROUTERV3_PAY_TO
 constexpr std::uint32_t kJettonTransfer = 0x0f8a7ea5;
 constexpr std::uint32_t kPTonTransfer = 0x01f3835d;
+// blocks/liquidity.py TONCO_ROUTER_WTTON_WALLET_ADDR — the router's own wTON
+// jetton wallet. A PayTo slot naming it is a native-TON leg, not a jetton one.
+constexpr const char *kRouterWttonWallet =
+    "0:871DA9215B14902166F0EA2A16DB56278D528108377F8158C5F4CCFDFDD22E17";
 
 // (open_ref moved to parse/PSlice.h as open_ref_cell — shared with stonfi + dedust.)
 
@@ -62,6 +66,7 @@ struct RouterPayTo {
   std::uint32_t exit_code{0};
   td::RefInt256 amount0, amount1;  // null == None
   Value jetton0, jetton1;          // account or Null
+  Value receiver0, receiver1;      // account or Null (withdraw fallback legs only)
 };
 td::Result<RouterPayTo> parse_v3_pay_to(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(ctx, open_body(body));
@@ -70,13 +75,13 @@ td::Result<RouterPayTo> parse_v3_pay_to(const td::Ref<vm::Cell> &body) {
     return td::Status::Error("v3 pay_to: header underflow");
   }
   TRY_RESULT(r0, load_address_py(cs));
-  (void)r0;
   TRY_RESULT(r1, load_address_py(cs));
-  (void)r1;
   if (!cs.have(32 + 64)) {
     return td::Status::Error("v3 pay_to: exit/seqno underflow");
   }
   RouterPayTo pt;
+  pt.receiver0 = std::move(r0);
+  pt.receiver1 = std::move(r1);
   pt.exit_code = static_cast<std::uint32_t>(cs.fetch_ulong(32));
   cs.advance(64);  // seqno
   if (!cs.have(1)) {
@@ -409,6 +414,135 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   d.emplace_back("asset_2", std::move(asset_2));
   d.emplace_back("sender_wallet_2", std::move(sw2));
   d.emplace_back("excesses", Value::make_list(std::move(excesses)));
+  return rt_ok(Value::make_obj(std::move(d)));
+}
+
+// builders/tonco.py _tonco_withdraw_payouts -> blocks/liquidity.py
+// resolve_tonco_withdraw_payouts. The payout half of the tonco withdraw build;
+// specs/tonco_liquidity.mch computes the scalar half declaratively from three
+// parsed bodies, so only the three things the DSL cannot express live here: the
+// unparseable-by-schema PayTo body (Maybe ^Cell coinsinfo + exit_code-conditional
+// tails), the jetton-wallet lookup behind a leg with no transfer, and the
+// leg->slot reordering that depends on both. Python wraps the whole body in
+// try/except returning None, so any parse/nav failure is a Null reject here.
+EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args) {
+  if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
+    return host_reject("bad arguments");
+  }
+  std::vector<const Block *> consumed;
+  for (const Value &v : *args[0].items) {
+    const Block *b = as_block(v);
+    if (b != nullptr) {
+      consumed.push_back(b);
+    }
+  }
+  const Block *pay_to = nullptr;
+  for (const Block *b : consumed) {
+    if (is_call_op(b, kV3PayTo)) { pay_to = b; break; }
+  }
+  if (pay_to == nullptr) {
+    return host_reject("no ROUTERV3_PAY_TO in consumed");
+  }
+  auto r_body = block_body(pay_to);
+  if (r_body.is_error()) {
+    return host_reject("pay_to body");
+  }
+  auto r_pt = parse_v3_pay_to(r_body.move_as_ok());
+  if (r_pt.is_error()) {
+    return host_reject("pay_to parse");
+  }
+  RouterPayTo pt = r_pt.move_as_ok();
+
+  // The two slots the pool declares, in asset0/asset1 order. A slot whose jetton
+  // wallet IS the router's wTON wallet is nulled — that leg is native TON. The
+  // legacy loop dereferences the wallet unconditionally, so a slot with no
+  // jetton address raises there; here it rejects.
+  struct Slot { Value amount, wallet, receiver; };
+  Slot slots[2];
+  td::RefInt256 slot_amounts[2] = {pt.amount0, pt.amount1};
+  Value slot_jettons[2] = {pt.jetton0, pt.jetton1};
+  Value slot_receivers[2] = {pt.receiver0, pt.receiver1};
+  for (int i = 0; i < 2; i++) {
+    auto ws = acc_str(slot_jettons[i]);
+    if (!ws) {
+      return host_reject("pay_to slot has no jetton wallet");
+    }
+    slots[i].amount = amount_or_zero(slot_amounts[i]);
+    slots[i].wallet = *ws == kRouterWttonWallet ? Value::null() : slot_jettons[i];
+    slots[i].receiver = acc_str(slot_receivers[i]) ? slot_receivers[i] : Value::null();
+  }
+
+  // The up-to-two jetton_transfer legs hanging off the PayTo, in consumption
+  // order, padded to the legacy fixed arity of two.
+  const Block *legs[2] = {nullptr, nullptr};
+  {
+    int n = 0;
+    for (const Block *b : consumed) {
+      if (n >= 2) break;
+      if (b->btype != "jetton_transfer" || b->previous_block != pay_to) continue;
+      legs[n++] = b;
+    }
+  }
+
+  struct Leg { Value amount, asset, dex_wallet, dex_jetton_wallet, wallet; };
+  Leg out_legs[2];
+  for (int i = 0; i < 2; i++) {
+    if (legs[i] != nullptr) {
+      const Block *pton = find_call(legs[i]->next_blocks, kPTonTransfer);
+      if (pton != nullptr) {
+        td::RefInt256 ta;
+        auto pb = block_body(pton);
+        if (pb.is_ok()) {
+          auto rp = parse_message_body("PTonTransfer", pb.ok());
+          if (rp.is_ok()) {
+            const Value *tav = rp.ok().field("ton_amount");
+            if (tav != nullptr && (tav->t == VType::Int || tav->t == VType::Amount)) ta = tav->num;
+          }
+        }
+        out_legs[i].amount = amount_or_zero(ta);
+        out_legs[i].asset = Value::make_asset_ton();
+      } else {
+        out_legs[i].amount = data_field(legs[i], "amount");
+        out_legs[i].asset = data_field(legs[i], "asset");
+      }
+      out_legs[i].dex_wallet = data_field(legs[i], "sender");  // the router
+      out_legs[i].dex_jetton_wallet = data_field(legs[i], "sender_wallet");
+      out_legs[i].wallet = data_field(legs[i], "receiver_wallet");
+    } else {
+      // No transfer for this slot: take what the router declared and ask the
+      // interface repo whether that wallet is pTON (-> TON) or a jetton. A
+      // lookup miss leaves the asset Null, exactly like the reference.
+      const Message *pm = block_msg(pay_to);
+      out_legs[i].amount = slots[i].amount;
+      out_legs[i].asset = Value::null();
+      if (auto ws = acc_str(slots[i].wallet)) {
+        out_legs[i].asset = wallet_asset(env, *ws);
+      }
+      out_legs[i].dex_wallet = account_from_opt(pm != nullptr ? pm->source : std::nullopt);
+      out_legs[i].dex_jetton_wallet = slots[i].wallet;
+      out_legs[i].wallet = slots[i].receiver;
+    }
+  }
+
+  // Reorder into the pool's asset0/asset1 order: leg 1 is the one whose dex
+  // jetton wallet is the asset0 wallet. (The reference logs when the swap does
+  // not fix it and carries on; nothing observable follows from the log.)
+  if (acc_str(out_legs[0].dex_jetton_wallet) != acc_str(slots[0].wallet)) {
+    std::swap(out_legs[0], out_legs[1]);
+  }
+
+  Value::Fields d;
+  d.emplace_back("amount1_out", std::move(out_legs[0].amount));
+  d.emplace_back("asset1_out", std::move(out_legs[0].asset));
+  d.emplace_back("dex_wallet_1", std::move(out_legs[0].dex_wallet));
+  d.emplace_back("dex_jetton_wallet_1", std::move(out_legs[0].dex_jetton_wallet));
+  d.emplace_back("wallet1", std::move(out_legs[0].wallet));
+  d.emplace_back("amount2_out", std::move(out_legs[1].amount));
+  d.emplace_back("asset2_out", std::move(out_legs[1].asset));
+  d.emplace_back("dex_wallet_2", std::move(out_legs[1].dex_wallet));
+  d.emplace_back("dex_jetton_wallet_2", std::move(out_legs[1].dex_jetton_wallet));
+  d.emplace_back("wallet2", std::move(out_legs[1].wallet));
+  d.emplace_back("failed", Value::make_bool(pt.exit_code != 0 && pt.exit_code != 201));
   return rt_ok(Value::make_obj(std::move(d)));
 }
 

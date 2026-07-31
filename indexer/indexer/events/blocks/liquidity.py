@@ -1520,6 +1520,148 @@ class ToncoWithdrawLiquidityBlock(Block):
         return f"tonco_withdraw_liquidity pool={self.data.pool.address} sender={self.data.sender.address} liquidity={self.data.liquidity_burnt}"
 
 
+async def resolve_tonco_withdraw_payouts(
+    router_payout_call: CallContractBlock,
+    payout_1: Block | None,
+    payout_2: Block | None,
+) -> tuple[list[dict] | None, list[Block], bool]:
+    """Shared payout resolution for tonco_withdraw_liquidity.
+
+    Pairs the router's PayTo message (which declares the pool's asset0/asset1
+    slots) with the two actual payout transfers: a leg that has a transfer takes
+    its asset from the block (unwrapping pTON), a leg that has none falls back
+    to the router message plus a jetton-wallet interface lookup. The result is
+    reordered into the pool's asset0/asset1 order.
+
+    Returns `(processed_payouts, additional_blocks, failed)`; `processed_payouts`
+    is None to reject the match.
+
+    This is the imperative residue specs/tonco_liquidity.mch cannot express — the
+    async interface lookup, the pTON-master classification and the slot pairing —
+    so both ToncoWithdrawLiquidityMatcher.build_block and the mch host fn
+    (mch/builders/tonco.py) call it.
+    """
+    additional_blocks: list[Block] = []
+    router_payout_msg = ToncoRouterV3PayTo(router_payout_call.get_body())
+
+    # determine assets and amounts from router_payout_msg - order matters!
+    asset0_data_from_router = {
+        "amount": Amount(router_payout_msg.amount0 or 0),
+        "wallet_addr": (
+            AccountId(router_payout_msg.jetton0_address)
+            if router_payout_msg.jetton0_address
+            else None
+        ),
+        "receiver": (
+            AccountId(router_payout_msg.receiver0)
+            if router_payout_msg.receiver0
+            else None
+        ),
+    }
+
+    asset1_data_from_router = {
+        "amount": Amount(router_payout_msg.amount1 or 0),
+        "wallet_addr": (
+            AccountId(router_payout_msg.jetton1_address)
+            if router_payout_msg.jetton1_address
+            else None
+        ),
+        "receiver": (
+            AccountId(router_payout_msg.receiver1)
+            if router_payout_msg.receiver1
+            else None
+        ),
+    }
+    router_assets_info = [asset0_data_from_router, asset1_data_from_router]
+
+    # pton check
+    for i in router_assets_info:
+        if i["wallet_addr"].as_str() == TONCO_ROUTER_WTTON_WALLET_ADDR:
+            i["wallet_addr"] = None
+
+    # process actual transfers to extract definitive asset types
+    actual_payout_transfers = [payout_1, payout_2]
+    processed_payouts = []
+
+    for i, payout_transfer_block in enumerate(actual_payout_transfers):
+        temp_processed_payout = {}
+        # Dual dispatch (§11.5): btype covers the legacy JettonTransferBlock and
+        # the declarative jetton leg, which is a plain Block.
+        if (
+            payout_transfer_block is not None
+            and payout_transfer_block.btype == "jetton_transfer"
+        ):
+            pton_transfer_block = find_call_contract(
+                payout_transfer_block.next_blocks, PTonTransfer.opcode
+            )
+            if pton_transfer_block is not None:
+                pton_msg = PTonTransfer(pton_transfer_block.get_body())
+                temp_processed_payout["amount"] = Amount(pton_msg.ton_amount or 0)
+                temp_processed_payout["asset"] = Asset(
+                    is_ton=True, jetton_address=None
+                )
+                additional_blocks.append(pton_transfer_block)
+            else:
+                temp_processed_payout["amount"] = payout_transfer_block.data["amount"]
+                temp_processed_payout["asset"] = payout_transfer_block.data["asset"]
+
+            temp_processed_payout["dex_wallet"] = payout_transfer_block.data[
+                "sender"
+            ]  # router actually
+            temp_processed_payout["dex_jetton_wallet"] = payout_transfer_block.data[
+                "sender_wallet"
+            ]
+            temp_processed_payout["wallet"] = payout_transfer_block.data[
+                "receiver_wallet"
+            ]
+            processed_payouts.append(temp_processed_payout)
+        elif i < len(router_assets_info):  # fallback to router message data
+            router_asset_info = router_assets_info[i]
+            asset = None
+            if router_asset_info["wallet_addr"]:
+                jetton_wallet = (
+                    await context.interface_repository.get().get_jetton_wallet(
+                        router_asset_info["wallet_addr"].as_str()
+                    )
+                )
+                if (
+                    jetton_wallet
+                    and jetton_wallet.jetton in PTonTransferMatcher.pton_masters
+                ):
+                    asset = Asset(is_ton=True, jetton_address=None)
+                elif jetton_wallet:
+                    asset = Asset(is_ton=False, jetton_address=jetton_wallet.jetton)
+            processed_payouts.append(
+                {
+                    "amount": router_asset_info["amount"],
+                    "asset": asset,
+                    "dex_wallet": AccountId(router_payout_call.get_message().source),
+                    "dex_jetton_wallet": router_asset_info["wallet_addr"],
+                    "wallet": router_asset_info["receiver"],
+                }
+            )
+        else:
+            return None, additional_blocks, False
+
+    # sort processed_payouts according to the pool's asset0 and asset1
+    w1 = processed_payouts[0]["dex_jetton_wallet"]
+    w2 = router_assets_info[0]["wallet_addr"]
+    w1 = w1.as_str() if w1 else None
+    w2 = w2.as_str() if w2 else None
+    if w1 != w2:
+        processed_payouts = processed_payouts[::-1]
+        # check result
+        w1_new = processed_payouts[0]["dex_jetton_wallet"]
+        w1_new = w1_new.as_str() if w1_new else None
+        if w1_new != w2:
+            logger.warning(
+                f"Failed to sort Tonco withdraw liquidity: {w1} and {w1_new} != {w2}"
+            )
+
+    failed = router_payout_msg.exit_code != 0 and router_payout_msg.exit_code != 201
+    return processed_payouts, additional_blocks, failed
+
+
 class ToncoWithdrawLiquidityMatcher(BlockMatcher):
     def __init__(self):
         output_ton_or_jetton = BlockTypeMatcher(
@@ -1615,123 +1757,14 @@ class ToncoWithdrawLiquidityMatcher(BlockMatcher):
             )
             return []
 
-        router_payout_msg = ToncoRouterV3PayTo(router_payout_call.get_body())
-
-        # determine assets and amounts from router_payout_msg - order matters!
-        asset0_data_from_router = {
-            "amount": Amount(router_payout_msg.amount0 or 0),
-            "wallet_addr": (
-                AccountId(router_payout_msg.jetton0_address)
-                if router_payout_msg.jetton0_address
-                else None
-            ),
-            "receiver": (
-                AccountId(router_payout_msg.receiver0)
-                if router_payout_msg.receiver0
-                else None
-            ),
-        }
-
-        asset1_data_from_router = {
-            "amount": Amount(router_payout_msg.amount1 or 0),
-            "wallet_addr": (
-                AccountId(router_payout_msg.jetton1_address)
-                if router_payout_msg.jetton1_address
-                else None
-            ),
-            "receiver": (
-                AccountId(router_payout_msg.receiver1)
-                if router_payout_msg.receiver1
-                else None
-            ),
-        }
-        router_assets_info = [asset0_data_from_router, asset1_data_from_router]
-
-        # pton check
-        for i in router_assets_info:
-            if i["wallet_addr"].as_str() == TONCO_ROUTER_WTTON_WALLET_ADDR:
-                i["wallet_addr"] = None
-
-        # process actual transfers to extract definitive asset types
-        actual_payout_transfers = [payout_1, payout_2]
-        processed_payouts = []
-
-        for i, payout_transfer_block in enumerate(actual_payout_transfers):
-            # if payout_transfer_block is None:
-            #     continue
-
-            temp_processed_payout = {}
-            if isinstance(payout_transfer_block, JettonTransferBlock):
-                pton_transfer_block = find_call_contract(
-                    payout_transfer_block.next_blocks, PTonTransfer.opcode
-                )
-                if pton_transfer_block is not None:
-                    pton_msg = PTonTransfer(pton_transfer_block.get_body())
-                    temp_processed_payout["amount"] = Amount(pton_msg.ton_amount or 0)
-                    temp_processed_payout["asset"] = Asset(
-                        is_ton=True, jetton_address=None
-                    )
-                    additional_blocks.append(pton_transfer_block)
-                else:
-                    temp_processed_payout["amount"] = payout_transfer_block.data[
-                        "amount"
-                    ]
-                    temp_processed_payout["asset"] = payout_transfer_block.data["asset"]
-
-                temp_processed_payout["dex_wallet"] = payout_transfer_block.data[
-                    "sender"
-                ]  # router actually
-                temp_processed_payout["dex_jetton_wallet"] = payout_transfer_block.data[
-                    "sender_wallet"
-                ]
-                temp_processed_payout["wallet"] = payout_transfer_block.data[
-                    "receiver_wallet"
-                ]
-                processed_payouts.append(temp_processed_payout)
-            elif i < len(router_assets_info):  # fallback to router message data
-                router_asset_info = router_assets_info[i]
-                asset = None
-                if router_asset_info["wallet_addr"]:
-                    jetton_wallet = (
-                        await context.interface_repository.get().get_jetton_wallet(
-                            router_asset_info["wallet_addr"].as_str()
-                        )
-                    )
-                    if (
-                        jetton_wallet
-                        and jetton_wallet.jetton in PTonTransferMatcher.pton_masters
-                    ):
-                        asset = Asset(is_ton=True, jetton_address=None)
-                    elif jetton_wallet:
-                        asset = Asset(is_ton=False, jetton_address=jetton_wallet.jetton)
-                processed_payouts.append(
-                    {
-                        "amount": router_asset_info["amount"],
-                        "asset": asset,
-                        "dex_wallet": AccountId(
-                            router_payout_call.get_message().source
-                        ),
-                        "dex_jetton_wallet": router_asset_info["wallet_addr"],
-                        "wallet": router_asset_info["receiver"],
-                    }
-                )
-            else:
-                return []
-
-        # sort processed_payouts according to the pool's asset0 and asset1
-        w1 = processed_payouts[0]["dex_jetton_wallet"]
-        w2 = router_assets_info[0]["wallet_addr"]
-        w1 = w1.as_str() if w1 else None
-        w2 = w2.as_str() if w2 else None
-        if w1 != w2:
-            processed_payouts = processed_payouts[::-1]
-            # check result
-            w1_new = processed_payouts[0]["dex_jetton_wallet"]
-            w1_new = w1_new.as_str() if w1_new else None
-            if w1_new != w2:
-                logger.warning(
-                    f"Failed to sort Tonco withdraw liquidity: {w1} and {w1_new} != {w2}"
-                )
+        processed_payouts, payout_extra_blocks, payout_failed = (
+            await resolve_tonco_withdraw_payouts(
+                router_payout_call, payout_1, payout_2
+            )
+        )
+        if processed_payouts is None:
+            return []
+        additional_blocks += payout_extra_blocks
 
         # fill output data class
         data = ToncoWithdrawLiquidityData(
@@ -1802,9 +1835,7 @@ class ToncoWithdrawLiquidityMatcher(BlockMatcher):
                 blocks_to_merge.append(call_block)
 
         new_block.merge_blocks(list(set(blocks_to_merge)))
-        new_block.failed = (
-            router_payout_msg.exit_code != 0 and router_payout_msg.exit_code != 201
-        )
+        new_block.failed = payout_failed
 
         return [new_block]
 

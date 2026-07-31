@@ -410,6 +410,80 @@ td::Result<Value> gen_parse_coffee_create_vault(const td::Ref<vm::Cell> &body) {
   return Value::make_obj(std::move(f));
 }
 
+// EvaaSupplyMaster (opcode 0x00000001); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_evaa_supply_master(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("EvaaSupplyMaster: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("EvaaSupplyMaster: _query_id underflow"); }
+  }
+  {
+    if (!cs.have(2) || !cs.advance(2)) { return td::Status::Error("EvaaSupplyMaster: _include_user_code underflow"); }
+  }
+  {
+    if (!cs.have(64)) { return td::Status::Error("EvaaSupplyMaster: supply_amount underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("supply_amount", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("recipient_address", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// EvaaSupplyJettonForward (opcode 0x00000001); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_evaa_supply_jetton_forward(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("EvaaSupplyJettonForward: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(2) || !cs.advance(2)) { return td::Status::Error("EvaaSupplyJettonForward: _include_user_code underflow"); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("recipient_address", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// EvaaSupplySuccess (opcode 0x0000011a); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_evaa_supply_success(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("EvaaSupplySuccess: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("EvaaSupplySuccess: _query_id underflow"); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+  }
+  {
+    if (!cs.have(256)) { return td::Status::Error("EvaaSupplySuccess: _asset_id underflow"); }
+    auto iv = cs.fetch_int256(256, false);
+    if (iv.is_null()) { return td::Status::Error("EvaaSupplySuccess: _asset_id fetch failed"); }
+  }
+  {
+    if (!cs.have(64)) { return td::Status::Error("EvaaSupplySuccess: amount_supplied underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("amount_supplied", Value::make_int(refint_u64(q)));
+  }
+  return Value::make_obj(std::move(f));
+}
+
 // EvaaWithdrawMaster (opcode 0x00000002); leading opcode skipped unchecked.
 td::Result<Value> gen_parse_evaa_withdraw_master(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(ctx, open_body(body));
@@ -843,6 +917,171 @@ td::Result<Value> gen_parse_tonco_router_v3_swap_source_wallet(const td::Ref<vm:
     auto ra = load_address_py(cs);
     if (ra.is_error()) { return ra.move_as_error(); }
     f.emplace_back("source_wallet", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// ToncoPoolV3StartBurn (opcode 0x530b5f2c); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_tonco_pool_v3_start_burn(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("ToncoPoolV3StartBurn: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("ToncoPoolV3StartBurn: _query_id underflow"); }
+  }
+  {
+    if (!cs.have(64)) { return td::Status::Error("ToncoPoolV3StartBurn: burned_index underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("burned_index", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(128)) { return td::Status::Error("ToncoPoolV3StartBurn: liquidity_to_burn underflow"); }
+    auto iv = cs.fetch_int256(128, false);
+    if (iv.is_null()) { return td::Status::Error("ToncoPoolV3StartBurn: liquidity_to_burn fetch failed"); }
+    f.emplace_back("liquidity_to_burn", Value::make_int(std::move(iv)));
+  }
+  {
+    if (!cs.have(24)) { return td::Status::Error("ToncoPoolV3StartBurn: tick_lower underflow"); }
+    auto iv = cs.fetch_int256(24, true);
+    if (iv.is_null()) { return td::Status::Error("ToncoPoolV3StartBurn: tick_lower fetch failed"); }
+    f.emplace_back("tick_lower", Value::make_int(std::move(iv)));
+  }
+  {
+    if (!cs.have(24)) { return td::Status::Error("ToncoPoolV3StartBurn: tick_upper underflow"); }
+    auto iv = cs.fetch_int256(24, true);
+    if (iv.is_null()) { return td::Status::Error("ToncoPoolV3StartBurn: tick_upper fetch failed"); }
+    f.emplace_back("tick_upper", Value::make_int(std::move(iv)));
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// ToncoPositionNftV3PositionBurn (opcode 0x46ca335a); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_tonco_position_nft_v3_position_burn(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("ToncoPositionNftV3PositionBurn: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("ToncoPositionNftV3PositionBurn: _query_id underflow"); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("nft_owner", ra.move_as_ok());
+  }
+  {
+    if (!cs.have(128)) { return td::Status::Error("ToncoPositionNftV3PositionBurn: _liquidity_to_burn underflow"); }
+    auto iv = cs.fetch_int256(128, false);
+    if (iv.is_null()) { return td::Status::Error("ToncoPositionNftV3PositionBurn: _liquidity_to_burn fetch failed"); }
+  }
+  {
+    if (!cs.have(24)) { return td::Status::Error("ToncoPositionNftV3PositionBurn: _tick_lower underflow"); }
+    auto iv = cs.fetch_int256(24, true);
+    if (iv.is_null()) { return td::Status::Error("ToncoPositionNftV3PositionBurn: _tick_lower fetch failed"); }
+  }
+  {
+    if (!cs.have(24)) { return td::Status::Error("ToncoPositionNftV3PositionBurn: _tick_upper underflow"); }
+    auto iv = cs.fetch_int256(24, true);
+    if (iv.is_null()) { return td::Status::Error("ToncoPositionNftV3PositionBurn: _tick_upper fetch failed"); }
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("ToncoPositionNftV3PositionBurn: _old_fee ref missing"); }
+    bool sp_old_fee = false;
+    vm::CellSlice rc_old_fee;
+    try { rc_old_fee = vm::load_cell_slice_special(cs.fetch_ref(), sp_old_fee); }
+    catch (...) { return td::Status::Error("ToncoPositionNftV3PositionBurn: _old_fee ref cell"); }
+    {
+      if (!rc_old_fee.have(256)) { return td::Status::Error("ToncoPositionNftV3PositionBurn: _fee_growth_inside0_last_x128 underflow"); }
+      auto iv = rc_old_fee.fetch_int256(256, false);
+      if (iv.is_null()) { return td::Status::Error("ToncoPositionNftV3PositionBurn: _fee_growth_inside0_last_x128 fetch failed"); }
+    }
+    {
+      if (!rc_old_fee.have(256)) { return td::Status::Error("ToncoPositionNftV3PositionBurn: _fee_growth_inside1_last_x128 underflow"); }
+      auto iv = rc_old_fee.fetch_int256(256, false);
+      if (iv.is_null()) { return td::Status::Error("ToncoPositionNftV3PositionBurn: _fee_growth_inside1_last_x128 fetch failed"); }
+    }
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// ToncoPoolV3Burn (opcode 0xd73ac09d); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_tonco_pool_v3_burn(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("ToncoPoolV3Burn: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("ToncoPoolV3Burn: _query_id underflow"); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+  }
+  {
+    if (!cs.have(64)) { return td::Status::Error("ToncoPoolV3Burn: burned_index underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("burned_index", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(128)) { return td::Status::Error("ToncoPoolV3Burn: _liquidity underflow"); }
+    auto iv = cs.fetch_int256(128, false);
+    if (iv.is_null()) { return td::Status::Error("ToncoPoolV3Burn: _liquidity fetch failed"); }
+  }
+  {
+    if (!cs.have(24)) { return td::Status::Error("ToncoPoolV3Burn: _tick_lower underflow"); }
+    auto iv = cs.fetch_int256(24, true);
+    if (iv.is_null()) { return td::Status::Error("ToncoPoolV3Burn: _tick_lower fetch failed"); }
+  }
+  {
+    if (!cs.have(24)) { return td::Status::Error("ToncoPoolV3Burn: _tick_upper underflow"); }
+    auto iv = cs.fetch_int256(24, true);
+    if (iv.is_null()) { return td::Status::Error("ToncoPoolV3Burn: _tick_upper fetch failed"); }
+  }
+  {
+    if (!cs.have(128)) { return td::Status::Error("ToncoPoolV3Burn: _liquidity_to_burn underflow"); }
+    auto iv = cs.fetch_int256(128, false);
+    if (iv.is_null()) { return td::Status::Error("ToncoPoolV3Burn: _liquidity_to_burn fetch failed"); }
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("ToncoPoolV3Burn: _old_fee ref missing"); }
+    bool sp_old_fee = false;
+    vm::CellSlice rc_old_fee;
+    try { rc_old_fee = vm::load_cell_slice_special(cs.fetch_ref(), sp_old_fee); }
+    catch (...) { return td::Status::Error("ToncoPoolV3Burn: _old_fee ref cell"); }
+    {
+      if (!rc_old_fee.have(256)) { return td::Status::Error("ToncoPoolV3Burn: _fee_growth_inside_0_last_x128 underflow"); }
+      auto iv = rc_old_fee.fetch_int256(256, false);
+      if (iv.is_null()) { return td::Status::Error("ToncoPoolV3Burn: _fee_growth_inside_0_last_x128 fetch failed"); }
+    }
+    {
+      if (!rc_old_fee.have(256)) { return td::Status::Error("ToncoPoolV3Burn: _fee_growth_inside_1_last_x128 underflow"); }
+      auto iv = rc_old_fee.fetch_int256(256, false);
+      if (iv.is_null()) { return td::Status::Error("ToncoPoolV3Burn: _fee_growth_inside_1_last_x128 fetch failed"); }
+    }
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("ToncoPoolV3Burn: _new_fee ref missing"); }
+    bool sp_new_fee = false;
+    vm::CellSlice rc_new_fee;
+    try { rc_new_fee = vm::load_cell_slice_special(cs.fetch_ref(), sp_new_fee); }
+    catch (...) { return td::Status::Error("ToncoPoolV3Burn: _new_fee ref cell"); }
+    {
+      if (!rc_new_fee.have(256)) { return td::Status::Error("ToncoPoolV3Burn: _fee_growth_inside_0_current_x128 underflow"); }
+      auto iv = rc_new_fee.fetch_int256(256, false);
+      if (iv.is_null()) { return td::Status::Error("ToncoPoolV3Burn: _fee_growth_inside_0_current_x128 fetch failed"); }
+    }
+    {
+      if (!rc_new_fee.have(256)) { return td::Status::Error("ToncoPoolV3Burn: _fee_growth_inside_1_current_x128 underflow"); }
+      auto iv = rc_new_fee.fetch_int256(256, false);
+      if (iv.is_null()) { return td::Status::Error("ToncoPoolV3Burn: _fee_growth_inside_1_current_x128 fetch failed"); }
+    }
   }
   return Value::make_obj(std::move(f));
 }
@@ -1295,6 +1534,9 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"DedustPayoutFromPool", gen_parse_dedust_payout_from_pool},
       {"DedustSwapNotification", gen_parse_dedust_swap_notification},
       {"CoffeeCreateVault", gen_parse_coffee_create_vault},
+      {"EvaaSupplyMaster", gen_parse_evaa_supply_master},
+      {"EvaaSupplyJettonForward", gen_parse_evaa_supply_jetton_forward},
+      {"EvaaSupplySuccess", gen_parse_evaa_supply_success},
       {"EvaaWithdrawMaster", gen_parse_evaa_withdraw_master},
       {"EvaaWithdrawCollateralized", gen_parse_evaa_withdraw_collateralized},
       {"JVaultUnstakeJettons", gen_parse_j_vault_unstake_jettons},
@@ -1308,6 +1550,9 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"StonfiV2PayTo", gen_parse_stonfi_v2_pay_to},
       {"DedustDepositLiquidityToPool", gen_parse_dedust_deposit_liquidity_to_pool},
       {"ToncoRouterV3SwapSourceWallet", gen_parse_tonco_router_v3_swap_source_wallet},
+      {"ToncoPoolV3StartBurn", gen_parse_tonco_pool_v3_start_burn},
+      {"ToncoPositionNftV3PositionBurn", gen_parse_tonco_position_nft_v3_position_burn},
+      {"ToncoPoolV3Burn", gen_parse_tonco_pool_v3_burn},
       {"DedustV2PayNative", gen_parse_dedust_v2_pay_native},
       {"DedustV2SwapEvent", gen_parse_dedust_v2_swap_event},
       {"TeleitemStartAuction", gen_parse_teleitem_start_auction},

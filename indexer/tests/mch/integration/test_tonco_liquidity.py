@@ -42,6 +42,7 @@ from indexer.events.blocks.jettons import (
 from indexer.events.blocks.liquidity import (
     ToncoDepositLiquidityBlock,
     ToncoDepositLiquidityMatcher,
+    ToncoWithdrawLiquidityMatcher,
 )
 from indexer.events.blocks.nft import NftMintBlockMatcher
 from indexer.events.blocks.utils.tree_utils import to_tree
@@ -56,11 +57,18 @@ from tests.utils.trace_deserializer import load_trace_from_file
 
 TONCO_MCH = Path(specs_pkg.__file__).parent / "tonco_liquidity.mch"
 MATCHER_NAME = "tonco_deposit_liquidity"
+WITHDRAW_MATCHER_NAME = "tonco_withdraw_liquidity"
 
 CASES = [
     ("0GW2kNF4nRhw5xA3b5E35-EhF9H25H3Nvm5MJJo2VD0=.lz4", "normal-two-deposits"),
     ("0--IKFmIbKevaBKSEvai2YCm47_coyO30KO1VyYaXvI=.lz4", "one-side-ton"),
     ("0_JGy9zypUz4Br8zqCwx12YnRM-WxcP2MDeYHHDkdwI=.lz4", "two-sides-jetton"),
+]
+
+WITHDRAW_CASES = [
+    ("0JSRYHwEQ6P5aTAh8p8_YgJS5LZlapbc_W4VTjSrshk=.lz4", "ton-plus-jetton"),
+    ("0Jzh0p9LKCaM7xi4yiGWOJEnn9WZ8xKUkTzY30DDQ3Q=.lz4", "one-side"),
+    ("1XI-Ow6YCL6VR21r5rojRYf_G7dwTdv5paVEhJolZB4=.lz4", "two-jettons"),
 ]
 
 
@@ -75,7 +83,7 @@ def _prereqs() -> tuple[BlockMatcher, ...]:
     return (NftMintBlockMatcher(), JettonTransferBlockMatcher(), PTonTransferMatcher())
 
 
-def _ir_matcher() -> BlockMatcher:
+def _ir_matcher(name: str = MATCHER_NAME) -> BlockMatcher:
     # Compiling is a frontend-internal step ir_emit needs; the compiled matcher
     # is never run as a runtime (T29).
     compiled = compile_file(TONCO_MCH, tonco_liquidity_registries())
@@ -84,7 +92,7 @@ def _ir_matcher() -> BlockMatcher:
     ir_by_name = {
         m.name: m for m in mch_ir.build_matchers(art, tonco_liquidity_registries())
     }
-    return ir_by_name[MATCHER_NAME]
+    return ir_by_name[name]
 
 
 def _build_block_tree(trace) -> Block:
@@ -94,7 +102,8 @@ def _build_block_tree(trace) -> Block:
     return root
 
 
-async def _run_matcher(matcher: BlockMatcher, trace, prereqs=()) -> list[Block]:
+async def _run_matcher(matcher: BlockMatcher, trace, prereqs=(),
+                       btype: str = MATCHER_NAME) -> list[Block]:
     root = _build_block_tree(trace)
     for pre in prereqs:
         for b in root.bfs_iter():
@@ -107,7 +116,7 @@ async def _run_matcher(matcher: BlockMatcher, trace, prereqs=()) -> list[Block]:
         result = await matcher.try_build(b)
         if result is not None:
             matches.extend(result)
-    return [b for b in matches if b.btype == "tonco_deposit_liquidity"]
+    return [b for b in matches if b.btype == btype]
 
 
 def _values_equal(a, b) -> bool:
@@ -137,7 +146,7 @@ def _assert_field_parity(
     actual: list[Block], reference: list[Block], label: str
 ) -> None:
     assert len(reference) > 0, (
-        "reference produced no tonco_deposit_liquidity blocks - bad fixture"
+        "reference produced no tonco liquidity blocks - bad fixture"
     )
     assert len(actual) == len(reference), (
         f"{label} count mismatch: actual={len(actual)} reference={len(reference)}"
@@ -148,7 +157,7 @@ def _assert_field_parity(
         # legacy build a ToncoDepositLiquidityBlock carrying a dataclass — btype
         # and per-field data are the parity property (Wave-B). _data_items
         # normalizes dataclass/dict.
-        assert a.btype == r.btype == "tonco_deposit_liquidity"
+        assert a.btype == r.btype
         assert a.failed == r.failed, f"{label} failed flag: {a.failed} vs {r.failed}"
         assert a.broken == r.broken, f"{label} broken flag: {a.broken} vs {r.broken}"
         a_data, r_data = _data_items(a), _data_items(r)
@@ -188,5 +197,38 @@ async def test_tonco_deposit_parity(traces_dir, filename):
 
     hw = await _run_matcher(ToncoDepositLiquidityMatcher(), trace, prereqs=_prereqs())
     ir = await _run_matcher(ir_matcher, trace, prereqs=_prereqs())
+
+    _assert_field_parity(ir, hw, "ir-vs-legacy")
+
+
+# --- withdraw ---------------------------------------------------------------
+#
+# Same bar for the second matcher in the file, `tonco_withdraw_liquidity`
+# (legacy ToncoWithdrawLiquidityMatcher). The legacy block carries a
+# ToncoWithdrawLiquidityData dataclass and the IR block a plain dict, so
+# _data_items() normalizes both before the per-field compare.
+#
+# Fixtures are the three withdraw cases of tests/test_cases/tonco.yaml; no new
+# recording. They cover all three payout shapes the port has to get right:
+# one router-fallback leg beside one real jetton leg (ton-plus-jetton and
+# one-side, which differ in which slot the fallback lands in after the
+# reorder), and two real jetton legs (two-jettons).
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "filename", [c[0] for c in WITHDRAW_CASES], ids=[c[1] for c in WITHDRAW_CASES]
+)
+async def test_tonco_withdraw_parity(traces_dir, filename):
+    trace = _load_trace(traces_dir, filename)
+    ir_matcher = _ir_matcher(WITHDRAW_MATCHER_NAME)
+
+    hw = await _run_matcher(
+        ToncoWithdrawLiquidityMatcher(), trace, prereqs=_prereqs(),
+        btype=WITHDRAW_MATCHER_NAME,
+    )
+    ir = await _run_matcher(
+        ir_matcher, trace, prereqs=_prereqs(), btype=WITHDRAW_MATCHER_NAME,
+    )
 
     _assert_field_parity(ir, hw, "ir-vs-legacy")

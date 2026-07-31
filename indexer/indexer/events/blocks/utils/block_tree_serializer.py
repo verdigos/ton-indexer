@@ -532,28 +532,30 @@ def _fill_dex_withdraw_liquidity(block: Block, action: Action):
 
 def _fill_tonco_withdraw_liquidity(block: ToncoWithdrawLiquidityBlock, action: Action):
     action.type = 'dex_withdraw_liquidity'
-    d = block.data
-    action.source = _addr(d.sender)
+    d = block.data  # dict (declarative build) or ToncoWithdrawLiquidityData (legacy)
+    amount1_out, amount2_out = _dget(d, 'amount1_out'), _dget(d, 'amount2_out')
+    liquidity_burnt = _dget(d, 'liquidity_burnt')
+    action.source = _addr(_dget(d, 'sender'))
     action.source_secondary = None # tonco uses NFT, no LP jetton wallet for sender
-    action.destination = _addr(d.pool)
+    action.destination = _addr(_dget(d, 'pool'))
     action.asset = None # lp asset is nft, not a jetton, so primary asset on action is None
     action.dex_withdraw_liquidity_data = {
         "dex": "tonco",
-        "amount1": d.amount1_out.value if d.amount1_out is not None else None,
-        "amount2": d.amount2_out.value if d.amount2_out is not None else None,
-        'asset1_out': _addr(d.asset1_out),
-        'asset2_out': _addr(d.asset2_out),
-        'user_jetton_wallet_1': _addr(d.wallet1),
-        'user_jetton_wallet_2': _addr(d.wallet2),
-        'dex_jetton_wallet_1': _addr(d.dex_jetton_wallet_1),
-        'dex_wallet_1': _addr(d.dex_wallet_1),
-        'dex_wallet_2': _addr(d.dex_wallet_2),
-        'dex_jetton_wallet_2': _addr(d.dex_jetton_wallet_2),
-        'lp_tokens_burnt': d.liquidity_burnt.value if d.liquidity_burnt is not None else None,
-        'burned_nft_index': d.burned_nft_index,
-        'burned_nft_address': _addr(d.burned_nft_address),
-        'tick_lower': d.tick_lower,
-        'tick_upper': d.tick_upper
+        "amount1": amount1_out.value if amount1_out is not None else None,
+        "amount2": amount2_out.value if amount2_out is not None else None,
+        'asset1_out': _addr(_dget(d, 'asset1_out')),
+        'asset2_out': _addr(_dget(d, 'asset2_out')),
+        'user_jetton_wallet_1': _addr(_dget(d, 'wallet1')),
+        'user_jetton_wallet_2': _addr(_dget(d, 'wallet2')),
+        'dex_jetton_wallet_1': _addr(_dget(d, 'dex_jetton_wallet_1')),
+        'dex_wallet_1': _addr(_dget(d, 'dex_wallet_1')),
+        'dex_wallet_2': _addr(_dget(d, 'dex_wallet_2')),
+        'dex_jetton_wallet_2': _addr(_dget(d, 'dex_jetton_wallet_2')),
+        'lp_tokens_burnt': liquidity_burnt.value if liquidity_burnt is not None else None,
+        'burned_nft_index': _dget(d, 'burned_nft_index'),
+        'burned_nft_address': _addr(_dget(d, 'burned_nft_address')),
+        'tick_lower': _dget(d, 'tick_lower'),
+        'tick_upper': _dget(d, 'tick_upper')
     }
 
 
@@ -780,21 +782,23 @@ def _fill_tick_tock_action(block: Block, action: Action):
     action.source = _addr(block.data['account'])
 
 def _fill_evaa_supply_action(block: EvaaSupplyBlock, action: Action):
-    action.source = _addr(block.data.sender)
-    action.source_secondary = _addr(block.data.sender_jetton_wallet)
-    action.destination = _addr(block.data.recipient)
-    action.destination_secondary = _addr(block.data.recipient_contract)
-    action.amount = block.data.amount
-    action.asset = _addr(block.data.asset)
-    action.success = block.data.is_success
+    data = block.data  # dict (declarative build) or EvaaSupplyData (legacy)
+    action.source = _addr(_dget(data, 'sender'))
+    action.source_secondary = _addr(_dget(data, 'sender_jetton_wallet'))
+    action.destination = _addr(_dget(data, 'recipient'))
+    action.destination_secondary = _addr(_dget(data, 'recipient_contract'))
+    action.amount = _dget(data, 'amount')
+    action.asset = _addr(_dget(data, 'asset'))
+    action.success = _dget(data, 'is_success')
     if block.failed:
         action.success = False
+    asset_id = _dget(data, 'asset_id')
     action.evaa_supply_data = {
-        "is_ton": block.data.is_ton,
-        "asset_id": hex(block.data.asset_id) if block.data.asset_id is not None else None,
-        "master": _addr(block.data.master),
-        "recipient_jetton_wallet": _addr(block.data.recipient_jetton_wallet) if block.data.recipient_jetton_wallet else None,
-        "master_jetton_wallet": _addr(block.data.master_jetton_wallet) if block.data.master_jetton_wallet else None
+        "is_ton": _dget(data, 'is_ton'),
+        "asset_id": hex(asset_id) if asset_id is not None else None,
+        "master": _addr(_dget(data, 'master')),
+        "recipient_jetton_wallet": _addr(_dget(data, 'recipient_jetton_wallet')) if _dget(data, 'recipient_jetton_wallet') else None,
+        "master_jetton_wallet": _addr(_dget(data, 'master_jetton_wallet')) if _dget(data, 'master_jetton_wallet') else None
     }
 
 def _fill_evaa_withdraw_action(block: EvaaWithdrawBlock, action: Action):

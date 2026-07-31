@@ -7,7 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**184 fixtures, 872 ACTION rows** — one per serializable block on each trace's
+**184 fixtures, 859 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus the CHILD rows the serializer expands out of any spine
 block whose btype is outside `v1_ops`, plus 6 synthetic `unknown` rows (the
 fixtures whose spine serializes to nothing at all). Rows are printed **sorted**
@@ -22,7 +22,38 @@ is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
 
-Re-baselined 2026-07-31 (**906 → 872 rows, no fixture added**) by the DEDUST V2
+Re-baselined 2026-07-31 (**872 → 859 rows, no fixture added**) by the TONCO
+WITHDRAW port (`specs/tonco_liquidity.mch`, second matcher) and the EVAA SUPPLY
+port (`specs/evaa.mch`, second matcher). Two independent deltas over six
+fixtures, no overlap, and every touched fixture was checked field-by-field
+against the REAL legacy Python classifier (`event_processing.matchers` +
+`serialize_blocks`): every semantic field of every produced row is equal, and
+the parity sweep compares the consumed event-node multisets with no
+`_AUX_ABSORB_SPECS` waiver for either spec, so neither carries the §4.5
+aux-absorption deviation.
+
+Note the whole file also gains one column, `evaa_supply_data` — the composite the
+supply port adds to the Action struct — so EVERY row differs textually even where
+nothing about it changed.
+
+- **Tonco withdraw, −16 rows over three fixtures, each collapsing to one row.**
+  The `#530b5f2c` / `#46ca335a` / `#d73ac09d` / `#a1daa96d` chain plus its payout
+  legs becomes one `tonco_withdraw_liquidity`, which the fill rewrites to
+  `dex_withdraw_liquidity`. That btype IS in `v1_ops`, so no CHILD rows: the
+  consumed leaves disappear entirely.
+  - `0JSRYHwE…` 7 → 1 (TON + jetton legs; the TON leg's pTON call is consumed too),
+    `0Jzh0p9L…` 6 → 1 (one real jetton leg, one router-fallback leg),
+    `1XI-Ow6Y…` 6 → 1 (two real jetton legs).
+- **EVAA supply, +3 rows over three fixtures.** `evaa_supply` is NOT in `v1_ops`,
+  so — exactly like the `evaa_withdraw` rows already in this file — the parent row
+  is ADDED while its consumed leaves stay as CHILD rows carrying
+  `ancestor_type=[evaa_supply]`. No existing row is removed.
+  - `Pz4XQKMB…` 5 → 6 (TON supply: `#1` master call anchor),
+    `j-5yrT2H…` 4 → 5 and `ww5gZmgo…` 4 → 5 (jetton supply, success and failed:
+    the anchor is the jetton transfer whose forward payload is the `#1` master
+    message, which only the `evaa_supply_anchor` host predicate can see).
+
+Previously re-baselined 2026-07-31 (**906 → 872 rows, no fixture added**) by the DEDUST V2
 WITHDRAW port (`specs/dedust_v2_withdraw.mch`) and the ELECTOR port
 (`specs/elections.mch`). Two independent deltas over nine fixtures, no overlap,
 and every touched fixture was checked row-by-row against the REAL legacy Python

@@ -38,6 +38,7 @@ CLASS_TO_BTYPE: dict[str, str] = {
     "JettonMintBlock": "jetton_mint",
     "JettonSwapBlock": "jetton_swap",
     "LayerZeroReceiveBlock": "layerzero_receive",
+    "EvaaSupplyBlock": "evaa_supply",
     "EvaaWithdrawBlock": "evaa_withdraw",
     "TONStakersWithdrawBlock": "tonstakers_withdraw",
     "TONStakersWithdrawRequestBlock": "tonstakers_withdraw_request",

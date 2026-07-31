@@ -339,6 +339,37 @@ void fill_dedust_v2_claim_reward(const Value &d, Action &a) {
   a.dex_withdraw_liquidity_data = mkdict(std::move(f));
 }
 
+// Tonco withdraw liquidity (block_tree_serializer _fill_tonco_withdraw_liquidity).
+// Reuses dex_withdraw_liquidity_data, whose tonco-only keys (burned_nft_*, the
+// tick range) the composite already carries. Unlike every other producer of this
+// composite it emits NO `is_refund` key and hard-nulls source_secondary/asset:
+// the tonco LP share lives in a position NFT, not an LP jetton.
+void fill_tonco_withdraw(const Value &d, Action &a) {
+  a.type = "dex_withdraw_liquidity";
+  a.source = av_addr(dg(d, "sender"));
+  a.source_secondary = Value::null();
+  a.destination = av_addr(dg(d, "pool"));
+  a.asset = Value::null();
+  Value::Fields f;
+  f.emplace_back("dex", Value::make_str("tonco"));
+  f.emplace_back("amount1", av_amount(dg(d, "amount1_out")));
+  f.emplace_back("amount2", av_amount(dg(d, "amount2_out")));
+  f.emplace_back("asset1_out", av_addr(dg(d, "asset1_out")));
+  f.emplace_back("asset2_out", av_addr(dg(d, "asset2_out")));
+  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "wallet1")));
+  f.emplace_back("user_jetton_wallet_2", av_addr(dg(d, "wallet2")));
+  f.emplace_back("dex_jetton_wallet_1", av_addr(dg(d, "dex_jetton_wallet_1")));
+  f.emplace_back("dex_wallet_1", av_addr(dg(d, "dex_wallet_1")));
+  f.emplace_back("dex_wallet_2", av_addr(dg(d, "dex_wallet_2")));
+  f.emplace_back("dex_jetton_wallet_2", av_addr(dg(d, "dex_jetton_wallet_2")));
+  f.emplace_back("lp_tokens_burnt", av_amount(dg(d, "liquidity_burnt")));
+  f.emplace_back("burned_nft_index", dg(d, "burned_nft_index"));
+  f.emplace_back("burned_nft_address", av_addr(dg(d, "burned_nft_address")));
+  f.emplace_back("tick_lower", dg(d, "tick_lower"));
+  f.emplace_back("tick_upper", dg(d, "tick_upper"));
+  a.dex_withdraw_liquidity_data = mkdict(std::move(f));
+}
+
 void fill_tonco_deposit(const Value &d, Action &a) {
   a.type = "dex_deposit_liquidity";
   a.source = av_addr(dg(d, "sender"));
@@ -397,6 +428,29 @@ void fill_tonco_deposit(const Value &d, Action &a) {
   f.emplace_back("target_asset_2", av_addr(dg(d, "asset_2")));
   f.emplace_back("vault_excesses", Value::make_list(std::move(excesses)));
   a.dex_deposit_liquidity_data = mkdict(std::move(f));
+}
+
+// block_tree_serializer _fill_evaa_supply_action. Key-for-key with the Python
+// fill; note `amount` is a raw Int here (not an Amount), like the withdraw twin.
+void fill_evaa_supply(const Value &d, Action &a, bool block_failed) {
+  a.source = av_addr(dg(d, "sender"));
+  a.source_secondary = av_addr(dg(d, "sender_jetton_wallet"));
+  a.destination = av_addr(dg(d, "recipient"));
+  a.destination_secondary = av_addr(dg(d, "recipient_contract"));
+  a.amount = av_amount(dg(d, "amount"));
+  a.asset = av_addr(dg(d, "asset"));
+  Value succ = dg(d, "is_success");
+  a.success = succ.t == VType::Bool && succ.boolean;
+  if (block_failed) a.success = false;
+  Value::Fields f;
+  f.emplace_back("is_ton", dg(d, "is_ton"));
+  f.emplace_back("asset_id", av_hex(dg(d, "asset_id")));
+  f.emplace_back("master", av_addr(dg(d, "master")));
+  Value rjw = dg(d, "recipient_jetton_wallet");
+  f.emplace_back("recipient_jetton_wallet", rjw.is_null() ? Value::null() : av_addr(rjw));
+  Value mjw = dg(d, "master_jetton_wallet");
+  f.emplace_back("master_jetton_wallet", mjw.is_null() ? Value::null() : av_addr(mjw));
+  a.evaa_supply_data = mkdict(std::move(f));
 }
 
 void fill_evaa_withdraw(const Value &d, Action &a, bool block_failed) {
@@ -959,8 +1013,10 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "coffee_deposit_liquidity") fill_dedust_deposit(d, a);
   else if (t == "dedust_deposit_liquidity_partial") fill_dedust_deposit_partial(d, a);
   else if (t == "tonco_deposit_liquidity") fill_tonco_deposit(d, a);
+  else if (t == "tonco_withdraw_liquidity") fill_tonco_withdraw(d, a);
   else if (t == "dedust_v2_claim_fees") fill_dedust_v2_claim_fees(d, a);
   else if (t == "dedust_v2_claim_reward") fill_dedust_v2_claim_reward(d, a);
+  else if (t == "evaa_supply") fill_evaa_supply(d, a, b->failed);
   else if (t == "evaa_withdraw") fill_evaa_withdraw(d, a, b->failed);
   else if (t == "jvault_stake") fill_jvault_stake(d, a);
   else if (t == "jvault_unstake") fill_jvault_unstake(d, a);

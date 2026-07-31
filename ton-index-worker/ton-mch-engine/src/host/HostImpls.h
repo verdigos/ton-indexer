@@ -62,6 +62,7 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args);
 
 // Tonco (HostTonco.cpp): deposit-liquidity fn + swap fn (always-reject under IR).
 EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> &args);
+EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args);
 EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args);
 
 // Nominator (HostNominator.cpp).
@@ -72,6 +73,9 @@ bool evaa_user_withdraw_user(const Block *b);
 bool evaa_user_withdraw_success(const Block *b);
 bool evaa_user_withdraw_fail(const Block *b);
 bool evaa_service_comment(const Block *b);
+bool evaa_supply_anchor(const Block *b);
+bool evaa_user_supply(const Block *b);
+EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args);
 
 // DeDust (HostDedust.cpp).
 EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args);
