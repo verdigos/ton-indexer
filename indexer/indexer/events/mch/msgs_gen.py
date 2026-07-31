@@ -29,8 +29,16 @@ CPP_OUT = ENG / "src" / "MsgParsersGenerated.cpp"
 VEC_OUT = ENG / "ir" / "msg_vectors.json"
 
 # --- schema model -----------------------------------------------------------
+# Fixed-width integer leaves, table-driven so a new width is ONE row here (the
+# emitter, the leaf set and the boundary-vector builder all read these).
+# UINT_SMALL widths fit fetch_ulong; INT_WIDE ones overflow it or are signed and
+# go through fetch_int256.
+UINT_SMALL = {"u16": 16, "u32": 32, "u64": 64}
+INT_WIDE = {"uint128": (128, False), "uint160": (160, False),
+            "uint256": (256, False), "int24": (24, True)}
+
 LEAVES = {
-    "bool", "u32", "u64", "uint128", "uint256", "int24", "coins", "addr_py",
+    "bool", *UINT_SMALL, *INT_WIDE, "coins", "addr_py",
     "asset2", "asset4", "ref_cell", "maybe_ref_cell", "dict_keys267",
     "fwd_cell_bits", "fwd_cell_refs",
 }
@@ -239,20 +247,16 @@ def emit_field(msg: str, cur: str, f: Field, indent: str) -> list[str]:
         L.append(f"{b}if (!{cur}.have(1)) {{ {err('underflow')} }}")
         L.append(f"{b}bool bv = {cur}.fetch_ulong(1) != 0;")
         emit = "Value::make_bool(bv)"
-    elif f.type == "u32":
-        L.append(f"{b}if (!{cur}.have(32)) {{ {err('underflow')} }}")
-        L.append(f"{b}auto q = {cur}.fetch_ulong(32);")
+    elif f.type in UINT_SMALL:
+        width = UINT_SMALL[f.type]
+        L.append(f"{b}if (!{cur}.have({width})) {{ {err('underflow')} }}")
+        L.append(f"{b}auto q = {cur}.fetch_ulong({width});")
         emit = "Value::make_int(refint_u64(q))"
-    elif f.type == "u64":
-        L.append(f"{b}if (!{cur}.have(64)) {{ {err('underflow')} }}")
-        L.append(f"{b}auto q = {cur}.fetch_ulong(64);")
-        emit = "Value::make_int(refint_u64(q))"
-    elif f.type in ("uint128", "uint256", "int24"):
+    elif f.type in INT_WIDE:
         # Widths that overflow / are signed, so fetch_ulong is not an option.
         # int24 is the only SIGNED leaf: pytoniq's load_int(24) yields a negative
         # Python int for a negative tick, and fetch_int256(24, true) matches it.
-        width, signed = {"uint128": (128, False), "uint256": (256, False),
-                         "int24": (24, True)}[f.type]
+        width, signed = INT_WIDE[f.type]
         L.append(f"{b}if (!{cur}.have({width})) {{ {err('underflow')} }}")
         L.append(f"{b}auto iv = {cur}.fetch_int256({width}, {'true' if signed else 'false'});")
         L.append(f'{b}if (iv.is_null()) {{ {err("fetch failed")} }}')
@@ -411,16 +415,11 @@ def emit_vectors(msgs: list[Message]) -> str:
                 b.store_uint(0, f.bitn)
             elif f.type == "bool":
                 b.store_uint(0, 1)
-            elif f.type == "u32":
-                b.store_uint(0, 32)
-            elif f.type == "u64":
-                b.store_uint(0, 64)
-            elif f.type == "uint128":
-                b.store_uint(0, 128)
-            elif f.type == "uint256":
-                b.store_uint(0, 256)
-            elif f.type == "int24":
-                b.store_int(0, 24)
+            elif f.type in UINT_SMALL:
+                b.store_uint(0, UINT_SMALL[f.type])
+            elif f.type in INT_WIDE:
+                width, signed = INT_WIDE[f.type]
+                b.store_int(0, width) if signed else b.store_uint(0, width)
             elif f.type == "coins":
                 b.store_coins(0)
             elif f.type == "addr_py":

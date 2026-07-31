@@ -539,6 +539,33 @@ Action wire_fixture_action() {
   lzv.emplace_back("uln_connection", Value::null());
   a.layerzero_dvn_verify_data = Value::make_dict(std::move(lzv));
 
+  // The Q64.96 price is a uint160 — far past int64, so it must go out as a
+  // DECIMAL STRING — while the three u16 fee fields and the int24 tick spacing
+  // stay natural integers despite all four being Go *string.
+  Value::Fields tdp;
+  tdp.emplace_back("jetton0_router_wallet", Value::make_str(kAddrA));
+  tdp.emplace_back("jetton1_router_wallet", Value::make_str(kAddrB));
+  tdp.emplace_back("jetton0_minter", Value::make_str(kAddrA));
+  tdp.emplace_back("jetton1_minter", Value::null());
+  tdp.emplace_back("tick_spacing", Value::make_int64(60));
+  tdp.emplace_back("initial_price_x96",
+                   Value::make_int(td::string_to_int256(
+                       std::string("2159938633973433351177391787024"))));
+  tdp.emplace_back("protocol_fee", Value::make_int64(33268));
+  tdp.emplace_back("lp_fee_base", Value::make_int64(15));
+  tdp.emplace_back("lp_fee_current", Value::make_int64(15));
+  tdp.emplace_back("pool_active", Value::make_bool(true));
+  a.tonco_deploy_pool_data = Value::make_dict(std::move(tdp));
+
+  // A Go []string of ADDRESSES: its elements bypass the flexible decoder (the
+  // claimed_amounts rule), so nothing numeric may ever be emitted inside one.
+  Value::Fields vaw;
+  vaw.emplace_back("query_id", Value::make_int(td::make_refint(0)));
+  vaw.emplace_back("accounts_added",
+                   Value::make_list(std::vector<Value>{Value::make_str(kAddrA),
+                                                       Value::make_str(kAddrB)}));
+  a.vesting_add_whitelist_data = Value::make_dict(std::move(vaw));
+
   // *int64 (flags) beside *string keys in one composite.
   Value::Fields dns;
   dns.emplace_back("value_schema", Value::make_str("DNSAdnlAddress"));
@@ -624,6 +651,14 @@ void test_wire_fixture() {
   const msgpack::object *lzv = at(*row, "layerzero_dvn_verify_data");
   check("wire/lz_dvn_nonce_int", is_uint(at(*lzv, "nonce"), 125));
   check("wire/lz_dvn_status_str", is_str(at(*lzv, "status"), "succeeded"));
+  const msgpack::object *tdp = at(*row, "tonco_deploy_pool_data");
+  check("wire/tonco_initial_price_x96_str",
+        is_str(at(*tdp, "initial_price_x96"), "2159938633973433351177391787024"));
+  check("wire/tonco_protocol_fee_int", is_uint(at(*tdp, "protocol_fee"), 33268));
+  check("wire/tonco_tick_spacing_int", is_uint(at(*tdp, "tick_spacing"), 60));
+  const msgpack::object *vaw = at(*row, "vesting_add_whitelist_data");
+  check("wire/whitelist_accounts_added_str",
+        is_str(elem(at(*vaw, "accounts_added"), 1), kAddrB));
   check("wire/dns_flags_int", is_uint(at(*at(*row, "change_dns_record_data"), "flags"), 7));
   check("wire/claimed_amounts_all_str",
         is_str(elem(at(*at(*row, "jvault_claim_data"), "claimed_amounts"), 0), "1000"));

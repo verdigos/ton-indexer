@@ -38,6 +38,8 @@ opcode ToncoRouterV3PayTo              = 0xa1daa96d
 opcode ToncoPoolV3StartBurn            = 0x530b5f2c
 opcode ToncoPositionNftV3PositionBurn  = 0x46ca335a
 opcode ToncoPoolV3Burn                 = 0xd73ac09d
+opcode ToncoRouterV3CreatePool         = 0x2e3034ef
+opcode ToncoPoolV3Init                 = 0x441c39ed
 opcode JettonNotify                    = 0x7362d09c
 opcode PTonTransfer                    = 0x01f3835d
 opcode ExcessMessage                   = 0xd53276db
@@ -83,9 +85,71 @@ matcher tonco_deposit_liquidity {
 }
 
 
+# -----------------------------------------------------------------------------
+# Tonco deploy pool — blocks/liquidity.py:1871 ToncoDeployPoolBlockMatcher.
+#
+# A deployer asks the router to create a concentrated-liquidity pool; the router
+# deploys it and initializes it, and the pool answers with excesses:
+#
+#   0x2e3034ef (deployer -> router)
+#     -> 0x441c39ed (router -> pool)
+#          -> maybe 0xd53276db
+#
+# FULLY DECLARATIVE: every field is an envelope address or a body scalar, so
+# there is no host fn and no build core. `success` is the literal `true` the
+# legacy build hardcodes — reaching the build at all means the init was found.
+#
+# TWO NEW SCHEMA LEAVES, and this matcher is what needed them: `u16` for the
+# three fee basis-point fields and `uint160` for the Q64.96 initial price. Both
+# are table rows in msgs_gen.py (UINT_SMALL / INT_WIDE); both are plain
+# `load_uint` on the Python side, so — like int24, unlike `bool` — they need no
+# casting twin.
+#
+# ToncoPoolV3Init DOES need one (builders/tonco.py ToncoPoolV3InitTwin): its only
+# read field, `pool_active`, is the schema's `bool` leaf, and pytoniq's
+# load_bit() returns an INT. The legacy class is therefore not usable as the
+# twin here, unlike the three withdraw-chain messages above. The twin stops
+# right after `pool_active`, mirroring the schema entry, which also drops the
+# legacy class's unread tail (two content refs and a Maybe ^[minters] cell that
+# has no schema form).
+#
+# ORDERING. 0x2e3034ef and 0x441c39ed are claimed by no other spec. Within this
+# file the matcher sits between deposit and withdraw, exactly where
+# event_processing.matchers puts it (deposit 64, deploy 65, withdraw 66). It
+# binds no prebuilt block, so unlike its two neighbours it does not even depend
+# on the priority-90 jetton specs.
+# -----------------------------------------------------------------------------
+matcher tonco_deploy_pool {
+    produces tonco_deploy_pool
+    entry    @create
+
+    op ToncoRouterV3CreatePool @create
+      -> op ToncoPoolV3Init @init
+        -> maybe op ExcessMessage
+
+    parse create as ToncoRouterV3CreatePool
+    parse init   as ToncoPoolV3Init
+    out {
+        deployer:              account(create.msg.source)
+        router:                account(create.msg.destination)
+        pool:                  account(init.msg.destination)
+        jetton0_router_wallet: account(create.body.jetton_wallet0)
+        jetton1_router_wallet: account(create.body.jetton_wallet1)
+        jetton0_minter:        account(create.body.jetton0_minter)
+        jetton1_minter:        account(create.body.jetton1_minter)
+        tick_spacing:          create.body.tick_spacing
+        initial_price_x96:     create.body.initial_price_x96
+        protocol_fee:          create.body.protocol_fee
+        lp_fee_base:           create.body.lp_fee_base
+        lp_fee_current:        create.body.lp_fee_current
+        pool_active:           init.body.pool_active
+        success:               true
+    }
+}
+
+
 # Tonco withdraw liquidity — ported from blocks/liquidity.py
-# ToncoWithdrawLiquidityMatcher (the third tonco liquidity matcher; the deploy-pool
-# one is not ported).
+# ToncoWithdrawLiquidityMatcher, the third tonco liquidity matcher.
 #
 # Chain, straight off the legacy nested ContractMatchers:
 #   StartBurn 0x530b5f2c (user -> Pool)                       <- anchor

@@ -147,6 +147,13 @@ PORTED_BTYPES = {
     # new_key on two, dkg_log on one. No new composite — all three fills write
     # only directional fields plus `extra` / `value`.
     "tgbtc_burn", "tgbtc_new_key", "tgbtc_dkg_log",
+    # W4 fixtured singles (2026-07-31). All three FIRE, one fixture each:
+    # vesting_add_whitelist and tonco_deploy_pool are the only producers of
+    # their composite (both added to ACTION_COLUMNS below);
+    # ethena_withdrawal_request reuses staking_data and rewrites the row type to
+    # stake_withdrawal_request, exactly like ethena_deposit does for
+    # stake_deposit.
+    "vesting_add_whitelist", "tonco_deploy_pool", "ethena_withdrawal_request",
 }
 
 # The C++ render_action column set (Classify.cpp render_action), in any order —
@@ -161,6 +168,7 @@ ACTION_COLUMNS = [
     "dex_withdraw_liquidity_data",
     "staking_data", "evaa_supply_data", "evaa_withdraw_data",
     "vesting_send_message_data",
+    "vesting_add_whitelist_data", "tonco_deploy_pool_data",
     "layerzero_packet_data", "layerzero_send_data", "layerzero_dvn_verify_data",
     "jvault_stake_data", "jvault_claim_data",
     "change_dns_record_data",

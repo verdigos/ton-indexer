@@ -29,6 +29,7 @@ struct Action {
   Value ton_transfer_data, jetton_transfer_data, jetton_swap_data, nft_transfer_data,
       nft_listing_data, nft_mint_data, dex_deposit_liquidity_data, dex_withdraw_liquidity_data,
       staking_data, evaa_supply_data, evaa_withdraw_data, vesting_send_message_data,
+      vesting_add_whitelist_data, tonco_deploy_pool_data,
       layerzero_packet_data, layerzero_send_data, layerzero_dvn_verify_data,
       jvault_stake_data, jvault_claim_data, change_dns_record_data,
       coffee_create_pool_data, coffee_staking_deposit_data, coffee_staking_withdraw_data,

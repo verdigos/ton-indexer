@@ -1,6 +1,11 @@
-"""mch builder for the tonco deposit-liquidity matcher (specs/tonco_liquidity.mch).
+"""mch registrations for specs/tonco_liquidity.mch (deposit, deploy pool,
+withdraw).
 
-The legacy build (blocks/liquidity.py ToncoDepositLiquidityMatcher.build_block)
+`tonco_deploy_pool` is FULLY DECLARATIVE — it contributes only opcodes, a
+produced block type and the ToncoPoolV3InitTwin casting twin below. The other
+two are hybrid and keep the host fns further down.
+
+The legacy deposit build (blocks/liquidity.py ToncoDepositLiquidityMatcher.build_block)
 works off LabelBlocks, which the mch engine does not emit. This builder derives
 the label roles structurally from `Match._mch_consumed` + tree navigation (the
 tree is intact until the engine merges) and delegates to the shared core
@@ -22,6 +27,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from pytoniq_core import Slice
+
 from indexer.events.blocks.basic_blocks import CallContractBlock
 from indexer.events.blocks.core import Block
 from indexer.events.blocks.liquidity import (
@@ -34,9 +41,11 @@ from indexer.events.blocks.messages import (
     ToncoAccountV3AddLiquidity,
     ToncoPoolV3Burn,
     ToncoPoolV3FundAccount,
+    ToncoPoolV3Init,
     ToncoPoolV3MinAndRefund,
     ToncoPoolV3StartBurn,
     ToncoPositionNftV3PositionBurn,
+    ToncoRouterV3CreatePool,
     ToncoRouterV3PayTo,
 )
 from indexer.events.blocks.messages.jettons import JettonNotify
@@ -50,23 +59,60 @@ OPCODES = {
     "ToncoPoolV3StartBurn":           ToncoPoolV3StartBurn.opcode,
     "ToncoPositionNftV3PositionBurn": ToncoPositionNftV3PositionBurn.opcode,
     "ToncoPoolV3Burn":                ToncoPoolV3Burn.opcode,
+    "ToncoRouterV3CreatePool":        ToncoRouterV3CreatePool.opcode,
+    "ToncoPoolV3Init":                ToncoPoolV3Init.opcode,
     "JettonNotify":                   JettonNotify.opcode,
     "PTonTransfer":                   PTonTransfer.opcode,
     "ExcessMessage":                  ExcessMessage.opcode,
 }
 
-# The withdraw chain's three `parse` targets. Each legacy class is an EXACT twin
-# of its mch-msgs.schema entry (whole body parsed, plain ints throughout), so no
-# purpose-built twin class is needed.
+
+class ToncoPoolV3InitTwin:
+    """POOLV3_INIT#441c39ed — schema twin of mch-msgs.schema `ToncoPoolV3Init`.
+
+    The legacy class cannot serve as the twin: `pool_active` is the schema's
+    `bool` leaf and pytoniq's load_bit() returns an INT, which faults the
+    expression VM wherever the C++ side has a Bool (the CASTING-TWIN RULE stated
+    in mch-msgs.schema, first applied in builders/dedust_v2.py). Stops right
+    after `pool_active`, mirroring the schema entry: everything past it (two
+    content refs and a Maybe ^[minters] cell) is unread by the matcher and has
+    no schema form.
+    """
+
+    opcode = ToncoPoolV3Init.opcode
+
+    def __init__(self, slice: Slice):
+        slice.load_uint(32)   # opcode (checked by the matcher's `op`)
+        slice.load_uint(64)   # query_id, parsed-and-dropped
+        slice.load_bit()      # from_admin
+        slice.load_bit()      # has_admin
+        slice.load_address()  # admin_addr
+        slice.load_bit()      # has_controller
+        slice.load_address()  # controller_addr
+        slice.load_bit()      # set_spacing
+        slice.load_int(24)    # tick_spacing
+        slice.load_bit()      # set_price
+        slice.load_uint(160)  # initial_price_x96
+        slice.load_bit()      # set_active
+        self.pool_active = bool(slice.load_bit())
+
+
+# The `parse` targets. The withdraw chain's three legacy classes are EXACT twins
+# of their mch-msgs.schema entries (whole body parsed, plain ints throughout),
+# and so is ToncoRouterV3CreatePool — its new `u16` / `uint160` leaves are plain
+# load_uint on the Python side, needing no cast. Only ToncoPoolV3Init does.
 MESSAGE_TYPES = {
     "ToncoPoolV3StartBurn":           ToncoPoolV3StartBurn,
     "ToncoPositionNftV3PositionBurn": ToncoPositionNftV3PositionBurn,
     "ToncoPoolV3Burn":                ToncoPoolV3Burn,
+    "ToncoRouterV3CreatePool":        ToncoRouterV3CreatePool,
+    "ToncoPoolV3Init":                ToncoPoolV3InitTwin,
 }
 
 BLOCK_TYPES = {
     "tonco_deposit_liquidity": Block,
     "tonco_withdraw_liquidity": Block,
+    "tonco_deploy_pool": Block,
 }
 
 

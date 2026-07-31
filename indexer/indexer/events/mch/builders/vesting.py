@@ -1,8 +1,9 @@
-"""mch registration for the vesting send-message matcher (specs/vesting.mch).
+"""mch registration for the vesting family (specs/vesting.mch): the
+send-message matcher and the add-whitelist one.
 
 specs/vesting.mch is FULLY DECLARATIVE (build statements + `out {...}`, no
 registered builder): the runtime evaluates it, so this module registers the
-message parser (for `parse`) plus the opcodes and produced block type, plus ONE
+message parsers (for `parse`) plus the opcodes and produced block types, plus ONE
 host fn for the genuinely inexpressible piece:
 
   vesting_message_was_sent — the `success` flag (upstream #430). Deciding
@@ -12,12 +13,22 @@ host fn for the genuinely inexpressible piece:
     language (§15b), so it stays a host fn wrapping the legacy
     _vesting_message_was_sent (blocks/vesting.py) verbatim.
 
-The legacy VestingSendMessageBlockMatcher and its build_vesting_send_message_core
-(blocks/vesting.py) are unchanged and remain the parity reference.
+`vesting_add_whitelist` needs neither a host fn nor a twin class: its `out` is
+four field reads, and the legacy VestingAddWhiteList parser already yields plain
+ints and pytoniq Addresses (the spec's `account(...)` map normalizes those to the
+AccountId list the serializer wants).
+
+The legacy VestingSendMessageBlockMatcher / VestingAddWhiteListBlockMatcher and
+build_vesting_send_message_core (blocks/vesting.py) are unchanged and remain the
+parity reference.
 """
 from __future__ import annotations
 
-from indexer.events.blocks.messages.vesting import VestingSendMessage
+from indexer.events.blocks.core import Block
+from indexer.events.blocks.messages.vesting import (
+    VestingAddWhiteList,
+    VestingSendMessage,
+)
 from indexer.events.blocks.vesting import (
     VestingSendMessageBlock,
     _vesting_message_was_sent,
@@ -27,14 +38,20 @@ from indexer.events.mch.registry import Registries
 OPCODES = {
     "VestingSendMessage":         VestingSendMessage.opcode,
     "VestingSendMessageResponse": VestingSendMessage.response_opcode,
+    "VestingAddWhiteList":         VestingAddWhiteList.opcode,
+    "VestingAddWhiteListResponse": VestingAddWhiteList.response_opcode,
 }
 
 BLOCK_TYPES = {
     "VestingSendMessageBlock": VestingSendMessageBlock,
+    # Declarative producer: snake_case btype, generic Block (the IR engine stamps
+    # the name straight onto the block it constructs).
+    "vesting_add_whitelist": Block,
 }
 
 MESSAGE_TYPES = {
     "VestingSendMessage": VestingSendMessage,
+    "VestingAddWhiteList": VestingAddWhiteList,
 }
 
 

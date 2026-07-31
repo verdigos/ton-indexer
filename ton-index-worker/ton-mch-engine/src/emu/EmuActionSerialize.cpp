@@ -114,6 +114,14 @@ bool decimal_string_key(const std::string &k) {
       // packet's `nonce` / `src_eid` / `dst_eid` are bounded and stay natural
       // integers (see the exclusion list above), as does dvn_verify's `nonce`.
       "send_request_id", "native_fee", "zro_fee",
+      // tonco_deploy_pool_data. All ten Go fields are *string, but only the
+      // Q64.96 sqrt price cannot be an int64 — it is a uint160 by construction.
+      // The three fee fields and `tick_spacing` are u16/int24 and stay natural
+      // integers, like `tick_lower`/`tick_upper` above.
+      "initial_price_x96",
+      // vesting_add_whitelist_data.accounts_added is a Go []string of ADDRESSES
+      // (never numeric), so it needs no entry here; `query_id` above covers the
+      // composite's only integer field.
   };
   return keys.count(k) != 0;
 }
@@ -291,6 +299,8 @@ const std::vector<ActionField> &optional_fields() {
       {"evaa_supply_data", &Action::evaa_supply_data},
       {"evaa_withdraw_data", &Action::evaa_withdraw_data},
       {"vesting_send_message_data", &Action::vesting_send_message_data},
+      {"vesting_add_whitelist_data", &Action::vesting_add_whitelist_data},
+      {"tonco_deploy_pool_data", &Action::tonco_deploy_pool_data},
       {"layerzero_packet_data", &Action::layerzero_packet_data},
       {"layerzero_send_data", &Action::layerzero_send_data},
       {"layerzero_dvn_verify_data", &Action::layerzero_dvn_verify_data},

@@ -26,6 +26,7 @@ td::Result<Value> parse_change_dns(const td::Ref<vm::Cell> &body);
 
 // Vesting family (ParseVesting.cpp).
 td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body);
+td::Result<Value> parse_vesting_add_whitelist(const td::Ref<vm::Cell> &body);
 
 // EVAA withdraw family (ParseEvaa.cpp): opcode-enum fail_excess only.
 td::Result<Value> parse_evaa_withdraw_fail_excess(const td::Ref<vm::Cell> &body);

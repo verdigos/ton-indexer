@@ -936,30 +936,35 @@ def _fill_vesting_send_message(block: VestingSendMessageBlock, action: Action):
 
 
 def _fill_vesting_add_whitelist(block: VestingAddWhiteListBlock, action: Action):
-    action.source = _addr(block.data.adder)
-    action.destination = _addr(block.data.vesting)
+    # dual-access via _dget: legacy VestingAddWhiteListData dataclass OR the
+    # declarative vesting.mch build's dict (identical field names).
+    d = block.data
+    action.source = _addr(_dget(d, 'adder'))
+    action.destination = _addr(_dget(d, 'vesting'))
     action.vesting_add_whitelist_data = {
-        "query_id": block.data.query_id,
-        "accounts_added": list(map(_addr, block.data.accounts_added)),
+        "query_id": _dget(d, 'query_id'),
+        "accounts_added": list(map(_addr, _dget(d, 'accounts_added'))),
     }
 
 def _fill_tonco_deploy_pool(block: ToncoDeployPoolBlock, action: Action):
+    # dual-access via _dget: legacy ToncoDeployPoolData dataclass OR the
+    # declarative tonco_liquidity.mch build's dict (identical field names).
     d = block.data
-    action.success = d.success
-    action.source = _addr(d.deployer)
-    action.destination = _addr(d.router)
-    action.destination_secondary = _addr(d.pool)
+    action.success = _dget(d, 'success')
+    action.source = _addr(_dget(d, 'deployer'))
+    action.destination = _addr(_dget(d, 'router'))
+    action.destination_secondary = _addr(_dget(d, 'pool'))
     action.tonco_deploy_pool_data = {
-        "jetton0_router_wallet": _addr(d.jetton0_router_wallet),
-        "jetton1_router_wallet": _addr(d.jetton1_router_wallet),
-        "jetton0_minter": _addr(d.jetton0_minter),
-        "jetton1_minter": _addr(d.jetton1_minter),
-        "tick_spacing": d.tick_spacing,
-        "initial_price_x96": d.initial_price_x96,
-        "protocol_fee": d.protocol_fee,
-        "lp_fee_base": d.lp_fee_base,
-        "lp_fee_current": d.lp_fee_current,
-        "pool_active": d.pool_active,
+        "jetton0_router_wallet": _addr(_dget(d, 'jetton0_router_wallet')),
+        "jetton1_router_wallet": _addr(_dget(d, 'jetton1_router_wallet')),
+        "jetton0_minter": _addr(_dget(d, 'jetton0_minter')),
+        "jetton1_minter": _addr(_dget(d, 'jetton1_minter')),
+        "tick_spacing": _dget(d, 'tick_spacing'),
+        "initial_price_x96": _dget(d, 'initial_price_x96'),
+        "protocol_fee": _dget(d, 'protocol_fee'),
+        "lp_fee_base": _dget(d, 'lp_fee_base'),
+        "lp_fee_current": _dget(d, 'lp_fee_current'),
+        "pool_active": _dget(d, 'pool_active'),
     }
 
 def _fill_tgbtc_mint_action(block: TgBTCMintBlock, action: Action):
@@ -1409,15 +1414,18 @@ def _fill_dns_release(block: DnsReleaseBlock, action: Action):
     action.value = _value(block.data.value)
 
 def _fill_ethena_withdrawal_request(block: EthenaWithdrawalRequestBlock, action: Action):
+    # dual-access via _dget: legacy EthenaWithdrawalRequestData dataclass OR the
+    # declarative ethena.mch build's dict (identical field names).
+    d = block.data
     action.type = 'stake_withdrawal_request'
-    action.source = _addr(block.data.source)
-    action.source_secondary = _addr(block.data.source_wallet)
-    action.destination = _addr(block.data.pool)
-    action.asset = _addr(block.data.asset)
-    action.amount = block.data.amount.value
+    action.source = _addr(_dget(d, 'source'))
+    action.source_secondary = _addr(_dget(d, 'source_wallet'))
+    action.destination = _addr(_dget(d, 'pool'))
+    action.asset = _addr(_dget(d, 'asset'))
+    action.amount = _value(_dget(d, 'amount'))
     action.staking_data = {
         "provider": "ethena",
-        "tokens_minted": _value(block.data.ts_usde_amount)
+        "tokens_minted": _value(_dget(d, 'ts_usde_amount'))
     }
 
 def _fill_ethena_deposit_action(block: EthenaDepositBlock, action: Action):

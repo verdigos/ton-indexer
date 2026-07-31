@@ -646,3 +646,54 @@ message DedustV2DepositEvent opcode 0x35df2e12 {
   _recipient: addr_py
   _next_state: ref_cell
 }
+
+# --- specs/tonco_liquidity.mch tonco_deploy_pool bodies.
+#
+# FIRST users of the `u16` and `uint160` leaves (msgs_gen.py UINT_SMALL /
+# INT_WIDE): the TONCO pool config packs its three fee basis-point fields as
+# uint16 and the initial sqrt price as a Q64.96 uint160, neither of which any
+# earlier message needed. Both are plain `load_uint` on the Python side, so —
+# like int24 and unlike `bool` — they need no casting twin.
+#
+# Both entries parse to the END of the legacy class's cursor walk (dropping only
+# what the matcher never reads), so accept/reject matches the twin exactly.
+
+# Deployer -> Router. Carries the whole pool config; the matcher reads every
+# scalar plus the two minters behind the trailing ref. `controller_addr` is
+# parsed (it is the third address in that ref) and dropped.
+message ToncoRouterV3CreatePool opcode 0x2e3034ef {
+  _query_id: bits 64
+  jetton_wallet0: addr_py
+  jetton_wallet1: addr_py
+  tick_spacing: int24
+  initial_price_x96: uint160
+  protocol_fee: u16
+  lp_fee_base: u16
+  lp_fee_current: u16
+  _nftv3_content: ref_cell
+  _nftv3item_content: ref_cell
+  minters: ref {
+    jetton0_minter: addr_py
+    jetton1_minter: addr_py
+    _controller_addr: addr_py
+  }
+}
+
+# Router -> Pool, the init that proves the deployment landed. Only `pool_active`
+# is read; everything ahead of it is skipped at its exact wire width, and the
+# trailing content refs + Maybe-ref minter cell are not parsed at all — the
+# legacy class stops mattering there and a Maybe ^[...] has no schema form.
+message ToncoPoolV3Init opcode 0x441c39ed {
+  _query_id: bits 64
+  _from_admin: bits 1
+  _has_admin: bits 1
+  _admin_addr: addr_py
+  _has_controller: bits 1
+  _controller_addr: addr_py
+  _set_spacing: bits 1
+  _tick_spacing: int24
+  _set_price: bits 1
+  _initial_price_x96: uint160
+  _set_active: bits 1
+  pool_active: bool
+}

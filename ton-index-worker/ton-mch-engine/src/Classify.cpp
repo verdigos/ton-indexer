@@ -108,6 +108,8 @@ std::string render_action(const Action &a) {
   f.emplace_back("evaa_supply_data", a.evaa_supply_data);
   f.emplace_back("evaa_withdraw_data", a.evaa_withdraw_data);
   f.emplace_back("vesting_send_message_data", a.vesting_send_message_data);
+  f.emplace_back("vesting_add_whitelist_data", a.vesting_add_whitelist_data);
+  f.emplace_back("tonco_deploy_pool_data", a.tonco_deploy_pool_data);
   f.emplace_back("layerzero_packet_data", a.layerzero_packet_data);
   f.emplace_back("layerzero_send_data", a.layerzero_send_data);
   f.emplace_back("layerzero_dvn_verify_data", a.layerzero_dvn_verify_data);

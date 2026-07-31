@@ -7,7 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**184 fixtures, 823 ACTION rows** — one per serializable block on each trace's
+**184 fixtures, 824 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus the CHILD rows the serializer expands out of any spine
 block whose btype is outside `v1_ops`, plus 6 synthetic `unknown` rows (the
 fixtures whose spine serializes to nothing at all). Rows are printed **sorted**
@@ -21,6 +21,60 @@ dies with it — and Python's `--emulated-traces` path is being retired. This fi
 is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
+
+Re-baselined 2026-07-31 (**823 → 824 rows, no fixture added**) by the W4
+FIXTURED SINGLES port — three unrelated matchers, one fixture each, appended to
+three existing spec files: `vesting_add_whitelist` (`specs/vesting.mch`),
+`tonco_deploy_pool` (`specs/tonco_liquidity.mch`) and
+`ethena_withdrawal_request` (`specs/ethena.mch`).
+
+**Every row differs textually again**, for the same reason as the layerzero
+re-baseline below: two new composite columns (`vesting_add_whitelist_data`,
+`tonco_deploy_pool_data`) joined `Classify.cpp render_action`, which prints the
+full column list on every row, so all 823 pre-existing rows gained two `…=null`
+keys. Re-diffing with those two keys stripped isolates the real delta:
+**24 rows added, 23 removed**, net +1.
+
+- **tonco_deploy_pool, +5 top-level.** All five on `4Zs27oXg…`, the one corpus
+  trace that deploys pools (five in one trace). The 15 calls they consume
+  (5× `0x2e3034ef`, 5× `0x441c39ed`, 5× `0xd53276db`) come BACK as child rows —
+  `tonco_deploy_pool` is not in `v1_ops` — so those 15 rows are removed and
+  re-added carrying `parent_action_id` + `ancestor_type=[tonco_deploy_pool]`.
+- **vesting_add_whitelist, +1 top-level.** `03XZQ1Ck…`; same pattern, its two
+  consumed calls (`0x7258a69b` request, `0xf258a69b` response) re-parented.
+- **ethena_withdrawal_request, +1 and −6.** `_KePnuNG…` gains one
+  `stake_withdrawal_request` row and LOSES the six rows it consumed (five
+  `call_contract` plus one `jetton_mint`). This is the opposite of the two above
+  because `ethena_withdrawal_request` IS in `v1_ops`
+  (`block_tree_serializer.py:1679`), so its consumed blocks are dropped rather
+  than re-parented — exactly what the legacy classifier does on that trace,
+  which produces that single action and nothing else.
+
+Verified beyond the twin diff: all seven new rows were compared field-by-field
+against the REAL legacy Python classifier (production `event_classifier
+.process_trace`, i.e. `event_processing.matchers` + `trace_post_processors`
+through the same serializer) — **7 rows, 161 field comparisons, 0 mismatches**,
+matched BY `action_id`, so these are the same rows and not merely similar ones.
+Every field also matches `tests/test_cases/vesting.yaml`, `tonco.yaml` and
+`ethena.yaml`, which `tests/test_actions.py` asserts against the production
+classifier independently. All three specs have parity-sweep rows and none needs
+an `_AUX_ABSORB_SPECS` waiver.
+
+`ethena_withdrawal_request` carries **`priority 85`**, the one ordering subtlety
+in this wave: it anchors on the RAW `0x0f8a7ea5` call and binds the RAW
+`0x642b7d07` mint, both of which the priority-90 jetton family would otherwise
+turn into blocks first. The legacy list interleaves them (transfer 14, ethena 48,
+mint 49), which one priority per spec file cannot express; 85 puts ethena ahead
+of all three jetton matchers. Unobservable — see the spec header for the
+construction argument (the matcher's guard 3 requires the internal transfer to
+land on a jetton MASTER, which is precisely the shape
+`build_jetton_transfer_core` rejects).
+
+The whitelist's hand parser (`parse_vesting_add_whitelist`, the unbounded
+one-address-per-cell ref chain) is deliberately NOT in the `--parse-dump` A/B
+table: the dump renderer has no List form on either side, the same reason
+`JVaultClaim`'s `dict_keys267` list is absent from it. Its gate is this golden
+plus the parity-sweep row, which compares `accounts_added` element by element.
 
 Re-baselined 2026-07-31 (**816 → 823 rows, no fixture added**) by the LAYERZERO
 COMPLETION port — four matchers appended to `specs/layerzero.mch`, joining the

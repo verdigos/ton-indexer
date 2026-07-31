@@ -1810,6 +1810,141 @@ td::Result<Value> gen_parse_dedust_v2_deposit_event(const td::Ref<vm::Cell> &bod
   return Value::make_obj(std::move(f));
 }
 
+// ToncoRouterV3CreatePool (opcode 0x2e3034ef); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_tonco_router_v3_create_pool(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("ToncoRouterV3CreatePool: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("ToncoRouterV3CreatePool: _query_id underflow"); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("jetton_wallet0", ra.move_as_ok());
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("jetton_wallet1", ra.move_as_ok());
+  }
+  {
+    if (!cs.have(24)) { return td::Status::Error("ToncoRouterV3CreatePool: tick_spacing underflow"); }
+    auto iv = cs.fetch_int256(24, true);
+    if (iv.is_null()) { return td::Status::Error("ToncoRouterV3CreatePool: tick_spacing fetch failed"); }
+    f.emplace_back("tick_spacing", Value::make_int(std::move(iv)));
+  }
+  {
+    if (!cs.have(160)) { return td::Status::Error("ToncoRouterV3CreatePool: initial_price_x96 underflow"); }
+    auto iv = cs.fetch_int256(160, false);
+    if (iv.is_null()) { return td::Status::Error("ToncoRouterV3CreatePool: initial_price_x96 fetch failed"); }
+    f.emplace_back("initial_price_x96", Value::make_int(std::move(iv)));
+  }
+  {
+    if (!cs.have(16)) { return td::Status::Error("ToncoRouterV3CreatePool: protocol_fee underflow"); }
+    auto q = cs.fetch_ulong(16);
+    f.emplace_back("protocol_fee", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(16)) { return td::Status::Error("ToncoRouterV3CreatePool: lp_fee_base underflow"); }
+    auto q = cs.fetch_ulong(16);
+    f.emplace_back("lp_fee_base", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(16)) { return td::Status::Error("ToncoRouterV3CreatePool: lp_fee_current underflow"); }
+    auto q = cs.fetch_ulong(16);
+    f.emplace_back("lp_fee_current", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("ToncoRouterV3CreatePool: _nftv3_content ref missing"); }
+    auto rf = cs.fetch_ref();
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("ToncoRouterV3CreatePool: _nftv3item_content ref missing"); }
+    auto rf = cs.fetch_ref();
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("ToncoRouterV3CreatePool: minters ref missing"); }
+    bool sp_minters = false;
+    vm::CellSlice rc_minters;
+    try { rc_minters = vm::load_cell_slice_special(cs.fetch_ref(), sp_minters); }
+    catch (...) { return td::Status::Error("ToncoRouterV3CreatePool: minters ref cell"); }
+    {
+      auto ra = load_address_py(rc_minters);
+      if (ra.is_error()) { return ra.move_as_error(); }
+      f.emplace_back("jetton0_minter", ra.move_as_ok());
+    }
+    {
+      auto ra = load_address_py(rc_minters);
+      if (ra.is_error()) { return ra.move_as_error(); }
+      f.emplace_back("jetton1_minter", ra.move_as_ok());
+    }
+    {
+      auto ra = load_address_py(rc_minters);
+      if (ra.is_error()) { return ra.move_as_error(); }
+    }
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// ToncoPoolV3Init (opcode 0x441c39ed); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_tonco_pool_v3_init(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("ToncoPoolV3Init: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("ToncoPoolV3Init: _query_id underflow"); }
+  }
+  {
+    if (!cs.have(1) || !cs.advance(1)) { return td::Status::Error("ToncoPoolV3Init: _from_admin underflow"); }
+  }
+  {
+    if (!cs.have(1) || !cs.advance(1)) { return td::Status::Error("ToncoPoolV3Init: _has_admin underflow"); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+  }
+  {
+    if (!cs.have(1) || !cs.advance(1)) { return td::Status::Error("ToncoPoolV3Init: _has_controller underflow"); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+  }
+  {
+    if (!cs.have(1) || !cs.advance(1)) { return td::Status::Error("ToncoPoolV3Init: _set_spacing underflow"); }
+  }
+  {
+    if (!cs.have(24)) { return td::Status::Error("ToncoPoolV3Init: _tick_spacing underflow"); }
+    auto iv = cs.fetch_int256(24, true);
+    if (iv.is_null()) { return td::Status::Error("ToncoPoolV3Init: _tick_spacing fetch failed"); }
+  }
+  {
+    if (!cs.have(1) || !cs.advance(1)) { return td::Status::Error("ToncoPoolV3Init: _set_price underflow"); }
+  }
+  {
+    if (!cs.have(160)) { return td::Status::Error("ToncoPoolV3Init: _initial_price_x96 underflow"); }
+    auto iv = cs.fetch_int256(160, false);
+    if (iv.is_null()) { return td::Status::Error("ToncoPoolV3Init: _initial_price_x96 fetch failed"); }
+  }
+  {
+    if (!cs.have(1) || !cs.advance(1)) { return td::Status::Error("ToncoPoolV3Init: _set_active underflow"); }
+  }
+  {
+    if (!cs.have(1)) { return td::Status::Error("ToncoPoolV3Init: pool_active underflow"); }
+    bool bv = cs.fetch_ulong(1) != 0;
+    f.emplace_back("pool_active", Value::make_bool(bv));
+  }
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parsers() {
@@ -1862,6 +1997,8 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"DedustV2CreditAsset", gen_parse_dedust_v2_credit_asset},
       {"DedustV2JoinLiquidity", gen_parse_dedust_v2_join_liquidity},
       {"DedustV2DepositEvent", gen_parse_dedust_v2_deposit_event},
+      {"ToncoRouterV3CreatePool", gen_parse_tonco_router_v3_create_pool},
+      {"ToncoPoolV3Init", gen_parse_tonco_pool_v3_init},
   };
   return rows;
 }

@@ -480,6 +480,26 @@
       "type": "DedustV2DepositEvent",
       "body": "te6ccgEBAQEABgAACDXfLhI=",
       "expect": "fail"
+    },
+    {
+      "type": "ToncoRouterV3CreatePool",
+      "body": "te6ccgEBAwEANAADUy4wNO8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAEBAgAAAAEC",
+      "expect": "ok"
+    },
+    {
+      "type": "ToncoRouterV3CreatePool",
+      "body": "te6ccgEBAQEABgAACC4wNO8=",
+      "expect": "fail"
+    },
+    {
+      "type": "ToncoPoolV3Init",
+      "body": "te6ccgEBAQEAJwAASUQcOe0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABA=",
+      "expect": "ok"
+    },
+    {
+      "type": "ToncoPoolV3Init",
+      "body": "te6ccgEBAQEABgAACEQcOe0=",
+      "expect": "fail"
     }
   ]
 }

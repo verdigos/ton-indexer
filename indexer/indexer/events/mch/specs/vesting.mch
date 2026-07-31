@@ -2,7 +2,7 @@
 # VestingSendMessageBlockMatcher. Linear two-node chain (M1 shape): the
 # owner->vesting request plus its required response callback. The response is
 # consumed (legacy child_matcher optional=False) but only the request feeds the
-# build. VestingAddWhiteListBlockMatcher stays hand-written (out of scope).
+# build. `vesting_add_whitelist` below reuses that two-node shape 1:1.
 #
 # Fully declarative build (M4 §9): field-for-field parity with
 # build_vesting_send_message_core in blocks/vesting.py. `message_boc_str` uses
@@ -32,5 +32,47 @@ matcher vesting_send_message {
         message_destination: account(send.body.message_destination)
         message_value:       amount(send.body.message_value)
         success:             vesting_message_was_sent(send, send.body)
+    }
+}
+
+# -----------------------------------------------------------------------------
+# vesting_add_whitelist — blocks/vesting.py:141 VestingAddWhiteListBlockMatcher.
+#
+# The vesting creator authorizes destinations the locked wallet may send to.
+# Structurally the same two-node chain as the send above (request + required
+# response callback, both consumed, only the request read), so the whole port is
+# one parser plus one `out` block.
+#
+# THE PARSER stays hand-written (src/parse/ParseVesting.cpp): the whitelist is an
+# UNBOUNDED chain of cells, one address per level, and `ref { }` in
+# mch-msgs.schema is fixed-depth. It is not in the `--parse-dump` A/B table
+# either — the dump renderer has no List form on either side (the same reason
+# JVaultClaim's `dict_keys267` list is absent from it) — so its gate is the
+# actions golden plus the legacy-vs-IR parity-sweep row, which compares
+# `accounts_added` element by element.
+#
+# `?? addr_none()` on each mapped element is REQUIRED, not defensive: an
+# addr_none entry reaches the two engines differently — C++ `load_address_py`
+# yields an addr_none Account while the Python twin's attribute is a plain None,
+# and `account(null)` short-circuits to null (§9.6 null-strict builtins). The
+# legacy build writes `AccountId(None)` for that case, which is addr_none on both
+# sides only with the coalesce. No corpus fixture carries one; the fixture's
+# chain is a single real address.
+# -----------------------------------------------------------------------------
+opcode VestingAddWhiteList         = 0x7258A69B
+opcode VestingAddWhiteListResponse = 0xF258A69B
+
+matcher vesting_add_whitelist {
+    produces vesting_add_whitelist
+    entry    @add
+
+    op VestingAddWhiteList @add -> op VestingAddWhiteListResponse @response
+
+    parse add as VestingAddWhiteList
+    out {
+        adder:          account(add.msg.source)
+        vesting:        account(add.msg.destination)
+        query_id:       add.body.query_id
+        accounts_added: map(add.body.addresses as a => account(a) ?? addr_none())
     }
 }

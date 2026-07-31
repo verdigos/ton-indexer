@@ -126,6 +126,21 @@ func TestActionsWireFixture(t *testing.T) {
 	}
 	str("layerzero_dvn_verify_data.status", a.LayerzeroDvnVerifyData.Status, "succeeded")
 
+	// All ten tonco_deploy_pool fields are *string, but only the Q64.96 price
+	// exceeds int64 and therefore has to travel as a decimal string; the u16
+	// fees and the int24 tick spacing stay natural integers and reach the same
+	// *string field through the flexible decoder.
+	if a.ToncoDeployPoolData == nil {
+		t.Fatal("tonco_deploy_pool_data is nil")
+	}
+	str("tonco_deploy_pool_data.initial_price_x96",
+		a.ToncoDeployPoolData.InitialPriceX96, "2159938633973433351177391787024")
+	str("tonco_deploy_pool_data.protocol_fee", a.ToncoDeployPoolData.ProtocolFee, "33268")
+	str("tonco_deploy_pool_data.tick_spacing", a.ToncoDeployPoolData.TickSpacing, "60")
+	if a.ToncoDeployPoolData.PoolActive == nil || !*a.ToncoDeployPoolData.PoolActive {
+		t.Errorf("pool_active = %v, want true", a.ToncoDeployPoolData.PoolActive)
+	}
+
 	if a.ChangeDnsRecordData == nil {
 		t.Fatal("change_dns_record_data is nil")
 	}
@@ -148,6 +163,22 @@ func TestActionsWireFixture(t *testing.T) {
 	}
 	if len(a.JvaultClaimData.ClaimedJettons) != 2 {
 		t.Errorf("claimed_jettons = %v", a.JvaultClaimData.ClaimedJettons)
+	}
+	// The whitelist's accounts_added is the second []string on the wire, and the
+	// only one carrying ADDRESSES rather than decimal amounts.
+	if a.VestingAddWhitelistData == nil {
+		t.Fatal("vesting_add_whitelist_data is nil")
+	}
+	wantAccounts := []string{"0:" + strings.Repeat("A", 64), "0:" + strings.Repeat("B", 64)}
+	if len(a.VestingAddWhitelistData.AccountsAdded) != len(wantAccounts) {
+		t.Fatalf("accounts_added = %v, want %v",
+			a.VestingAddWhitelistData.AccountsAdded, wantAccounts)
+	}
+	for i, w := range wantAccounts {
+		if a.VestingAddWhitelistData.AccountsAdded[i] != w {
+			t.Errorf("accounts_added[%d] = %q, want %q",
+				i, a.VestingAddWhitelistData.AccountsAdded[i], w)
+		}
 	}
 
 	// --- ints reaching *string fields, via decodeFlexString ------------------

@@ -703,6 +703,60 @@ void fill_vesting_send_message(const Value &d, Action &a) {
   a.vesting_send_message_data = mkdict(std::move(f));
 }
 
+// `accounts_added` is a LIST of addresses (the whitelist's unbounded ref chain),
+// mapped element-wise through av_addr like jvault_claim's claimed_jettons.
+void fill_vesting_add_whitelist(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "adder"));
+  a.destination = av_addr(dg(d, "vesting"));
+  std::vector<Value> added;
+  Value acc = dg(d, "accounts_added");
+  if (acc.items) {
+    for (const Value &x : *acc.items) added.push_back(av_addr(x));
+  }
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("accounts_added", Value::make_list(std::move(added)));
+  a.vesting_add_whitelist_data = mkdict(std::move(f));
+}
+
+// `success` is the literal true the spec writes — reaching the fill means the
+// POOLV3_INIT was found, which is the legacy build's whole success criterion.
+void fill_tonco_deploy_pool(const Value &d, Action &a) {
+  Value succ = dg(d, "success");
+  a.success = succ.t == VType::Bool && succ.boolean;
+  a.source = av_addr(dg(d, "deployer"));
+  a.destination = av_addr(dg(d, "router"));
+  a.destination_secondary = av_addr(dg(d, "pool"));
+  Value::Fields f;
+  f.emplace_back("jetton0_router_wallet", av_addr(dg(d, "jetton0_router_wallet")));
+  f.emplace_back("jetton1_router_wallet", av_addr(dg(d, "jetton1_router_wallet")));
+  f.emplace_back("jetton0_minter", av_addr(dg(d, "jetton0_minter")));
+  f.emplace_back("jetton1_minter", av_addr(dg(d, "jetton1_minter")));
+  f.emplace_back("tick_spacing", dg(d, "tick_spacing"));
+  f.emplace_back("initial_price_x96", dg(d, "initial_price_x96"));
+  f.emplace_back("protocol_fee", dg(d, "protocol_fee"));
+  f.emplace_back("lp_fee_base", dg(d, "lp_fee_base"));
+  f.emplace_back("lp_fee_current", dg(d, "lp_fee_current"));
+  f.emplace_back("pool_active", dg(d, "pool_active"));
+  a.tonco_deploy_pool_data = mkdict(std::move(f));
+}
+
+// Rewrites the row type like the deposit above: the ethena block btype is
+// ethena_withdrawal_request, the ACTION type is the generic
+// stake_withdrawal_request with a provider-tagged staking_data.
+void fill_ethena_withdrawal_request(const Value &d, Action &a) {
+  a.type = "stake_withdrawal_request";
+  a.source = av_addr(dg(d, "source"));
+  a.source_secondary = av_addr(dg(d, "source_wallet"));
+  a.destination = av_addr(dg(d, "pool"));
+  a.asset = av_addr(dg(d, "asset"));
+  a.amount = av_amount(dg(d, "amount"));
+  Value::Fields f;
+  f.emplace_back("provider", Value::make_str("ethena"));
+  f.emplace_back("tokens_minted", av_amount(dg(d, "ts_usde_amount")));
+  a.staking_data = mkdict(std::move(f));
+}
+
 void fill_tgbtc_mint(const Value &d, Action &a) {
   a.type = "tgbtc_mint";
   Value cr = dg(d, "crippled");
@@ -1286,6 +1340,9 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "coffee_staking_withdraw") fill_coffee_staking_withdraw(d, a);
   else if (t == "coffee_staking_claim_rewards") fill_coffee_staking_claim_rewards(d, a);
   else if (t == "vesting_send_message") fill_vesting_send_message(d, a);
+  else if (t == "vesting_add_whitelist") fill_vesting_add_whitelist(d, a);
+  else if (t == "tonco_deploy_pool") fill_tonco_deploy_pool(d, a);
+  else if (t == "ethena_withdrawal_request") fill_ethena_withdrawal_request(d, a);
   else if (t == "tgbtc_mint") fill_tgbtc_mint(d, a);
   else if (t == "tgbtc_burn") fill_tgbtc_burn(d, a);
   else if (t == "tgbtc_new_key") fill_tgbtc_new_key(d, a);

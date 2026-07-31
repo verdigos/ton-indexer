@@ -60,6 +60,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &hand_message_parsers() {
       {"JettonBurnNotification", parse_never},           // not Slice-constructible
       {"ChangeDnsRecordMessage", parse_change_dns},
       {"VestingSendMessage", parse_vesting_send_message},
+      {"VestingAddWhiteList", parse_vesting_add_whitelist},  // unbounded ref chain
       {"EvaaWithdrawFailExcess", parse_evaa_withdraw_fail_excess},  // opcode-enum
       {"LayerZeroOappExecuteCallback", parse_layerzero_oapp_execute_callback},
       {"LayerzeroChannelSendCallback", parse_layerzero_channel_send_callback},
