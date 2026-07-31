@@ -118,6 +118,7 @@ PORTED_BTYPES = {
     # share one C++ fill (fill_election), mirroring the Python serializer's
     # single `case 'election_deposit' | 'election_recover'`.
     "election_deposit", "election_recover",
+    "subscribe", "unsubscribe",
     # Tonco withdraw liquidity (2026-07-31, specs/tonco_liquidity.mch) — fires on
     # the three corpus withdraw fixtures; C++ fill is fill_tonco_withdraw, which
     # rewrites the action type to dex_withdraw_liquidity like the Python one.

@@ -34,6 +34,7 @@ from indexer.events.blocks.messages.liquidity import (  # noqa: E402
     StonfiV2ProvideLiquidity,
 )
 from indexer.events.blocks.messages.coffee import CoffeeCreateVault  # noqa: E402
+from indexer.events.blocks.messages.subscriptions import SubscriptionPaymentRequest  # noqa: E402
 from indexer.events.blocks.messages.evaa import (  # noqa: E402
     EvaaWithdrawCollateralized, EvaaWithdrawFailExcess, EvaaWithdrawMaster,
 )
@@ -66,6 +67,7 @@ CLASSES = {
     0xAD4EB6F5: ("DedustPayoutFromPool", DedustPayoutFromPool),
     0x9C610DE3: ("DedustSwapNotification", DedustSwapNotification),
     0xC0FFEE06: ("CoffeeCreateVault", CoffeeCreateVault),
+    0x706C7567: ("SubscriptionPaymentRequest", SubscriptionPaymentRequest),
     0x00000002: ("EvaaWithdrawMaster", EvaaWithdrawMaster),
     0x00000211: ("EvaaWithdrawCollateralized", EvaaWithdrawCollateralized),
     0x000021E6: ("EvaaWithdrawFailExcess", EvaaWithdrawFailExcess),

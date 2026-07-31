@@ -296,7 +296,7 @@ nine fixtures.
 and 15 `jetton_transfer` leaves; both produced btypes ARE in `v1_ops`, so no
 CHILD rows are expanded and the consumed leaves disappear entirely. Eight
 fixtures collapse to a single `dedust_v2_deposit_liquidity` and the ninth
-(`ZmxsFjYs…`) to a single `dedust_v2_deposit_liquidity_partial` — the one trace
+(`a4iGagV3…`) to a single `dedust_v2_deposit_liquidity_partial` — the one trace
 whose completing leg the matcher does not claim, which is what keeps the partial
 row path covered.
 

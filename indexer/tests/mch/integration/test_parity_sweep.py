@@ -166,6 +166,10 @@ from indexer.events.blocks.staking import (
     TONStakersDepositMatcher,
     TONStakersWithdrawMatcher,
 )
+from indexer.events.blocks.subscriptions import (
+    SubscriptionBlockMatcher,
+    UnsubscribeBlockMatcher,
+)
 from indexer.events.blocks.swaps import (
     CoffeeSwapBlockMatcher,
     DedustSwapBlockMatcher,
@@ -230,6 +234,7 @@ from indexer.events.mch.builders.nominator import nominator_registries
 from indexer.events.mch.builders.stonfi_liquidity import stonfi_liquidity_registries
 from indexer.events.mch.builders.stonfi_provide import stonfi_provide_registries
 from indexer.events.mch.builders.stonfi_v1 import stonfi_v1_registries
+from indexer.events.mch.builders.subscriptions import subscriptions_registries
 from indexer.events.mch.builders.telegram_nft import telegram_nft_registries
 from indexer.events.mch.builders.teleitem_auction import teleitem_auction_registries
 from indexer.events.mch.builders.tgbtc import tgbtc_registries
@@ -424,6 +429,10 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     # checks on whatever fixtures the recover anchor drags in.
     ("specs/elections.mch", _SPECS_DIR / "elections.mch", elections_registries, (),
      (ElectionDepositStakeBlockMatcher, ElectionRecoverStakeBlockMatcher)),
+    # All five fixtures exercise the optional request/destruct leg as present;
+    # the absent branches remain explicit real-fixture coverage gaps.
+    ("specs/subscriptions.mch", _SPECS_DIR / "subscriptions.mch", subscriptions_registries, (),
+     (SubscriptionBlockMatcher, UnsubscribeBlockMatcher)),
     # All three tonco liquidity matchers run as one group, in the legacy
     # matchers-list order (deposit 64, deploy pool 65, withdraw 66) — which is
     # also the spec's source order. The withdraw payout legs are `btype

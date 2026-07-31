@@ -195,6 +195,11 @@ message JVaultUnstakeRequest opcode 0x0168d4b7 {
   jettons_to_unstake: coins
 }
 
+message SubscriptionPaymentRequest opcode 0x706c7567 {
+  query_id: u64
+  grams: coins
+}
+
 message JVaultClaim opcode 0x78d9f109 {
   query_id: u64
   jettons_to_claim: dict_keys267

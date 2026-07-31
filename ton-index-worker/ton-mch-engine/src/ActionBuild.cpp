@@ -1090,6 +1090,19 @@ void fill_election(const Value &d, Action &a) {
   a.amount = av_amount(dg(d, "amount"));
 }
 
+void fill_subscribe(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "subscriber"));
+  a.destination = av_addr(dg(d, "beneficiary"));
+  a.destination_secondary = av_addr(dg(d, "subscription"));
+  a.amount = av_amount(dg(d, "amount"));
+}
+
+void fill_unsubscribe(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "subscriber"));
+  a.destination = av_addr(dg(d, "beneficiary"));
+  a.destination_secondary = av_addr(dg(d, "subscription"));
+}
+
 void fill_tonstakers_deposit(const Value &d, Action &a) {
   a.type = "stake_deposit";
   a.source = av_addr(dg(d, "source"));
@@ -1512,6 +1525,8 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "nominator_pool_deposit") fill_nominator_pool_deposit(d, a);
   else if (t == "nominator_pool_withdraw_request") fill_nominator_pool_withdraw_request(d, a);
   else if (t == "election_deposit" || t == "election_recover") fill_election(d, a);
+  else if (t == "subscribe") fill_subscribe(d, a);
+  else if (t == "unsubscribe") fill_unsubscribe(d, a);
   else if (t == "tonstakers_deposit") fill_tonstakers_deposit(d, a);
   else if (t == "tonstakers_withdraw") fill_tonstakers_withdraw(d, a);
   else if (t == "tonstakers_withdraw_request") fill_tonstakers_withdraw_request(d, a);

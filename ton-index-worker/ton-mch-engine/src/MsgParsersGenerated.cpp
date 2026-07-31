@@ -590,6 +590,27 @@ td::Result<Value> gen_parse_j_vault_unstake_request(const td::Ref<vm::Cell> &bod
   return Value::make_obj(std::move(f));
 }
 
+// SubscriptionPaymentRequest (opcode 0x706c7567); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_subscription_payment_request(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("SubscriptionPaymentRequest: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("SubscriptionPaymentRequest: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("grams", Value::make_int(rc.move_as_ok()));
+  }
+  return Value::make_obj(std::move(f));
+}
+
 // JVaultClaim (opcode 0x78d9f109); leading opcode skipped unchecked.
 td::Result<Value> gen_parse_j_vault_claim(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(ctx, open_body(body));
@@ -2314,6 +2335,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"EvaaWithdrawCollateralized", gen_parse_evaa_withdraw_collateralized},
       {"JVaultUnstakeJettons", gen_parse_j_vault_unstake_jettons},
       {"JVaultUnstakeRequest", gen_parse_j_vault_unstake_request},
+      {"SubscriptionPaymentRequest", gen_parse_subscription_payment_request},
       {"JVaultClaim", gen_parse_j_vault_claim},
       {"CoffeeSwapEvent", gen_parse_coffee_swap_event},
       {"NftOwnershipAssignedPrevOwner", gen_parse_nft_ownership_assigned_prev_owner},

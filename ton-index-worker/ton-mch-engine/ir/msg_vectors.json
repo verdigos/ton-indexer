@@ -162,6 +162,16 @@
       "expect": "fail"
     },
     {
+      "type": "SubscriptionPaymentRequest",
+      "body": "te6ccgEBAQEADwAAGXBsdWcAAAAAAAAAAAg=",
+      "expect": "ok"
+    },
+    {
+      "type": "SubscriptionPaymentRequest",
+      "body": "te6ccgEBAQEABgAACHBsdWc=",
+      "expect": "fail"
+    },
+    {
       "type": "JVaultClaim",
       "body": "te6ccgEBAQEADwAAGXjZ8QkAAAAAAAAAAEA=",
       "expect": "ok"

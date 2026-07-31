@@ -55,6 +55,7 @@ constexpr DumpType kDumpTypes[] = {
     {0xad4eb6f5, "DedustPayoutFromPool"},
     {0x9c610de3, "DedustSwapNotification"},
     {0xc0ffee06, "CoffeeCreateVault"},
+    {0x706c7567, "SubscriptionPaymentRequest"},
     {0x00000002, "EvaaWithdrawMaster"},
     {0x00000211, "EvaaWithdrawCollateralized"},
     {0x000021e6, "EvaaWithdrawFailExcess"},
