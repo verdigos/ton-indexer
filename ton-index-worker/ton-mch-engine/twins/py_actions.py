@@ -76,6 +76,9 @@ PORTED_BTYPES = {
     "layerzero_commit_packet", "layerzero_dvn_verify",
     "coffee_create_vault", "vesting_send_message",
     "tgbtc_mint", "dedust_v2_claim_reward", "dedust_v2_claim_fees",
+    # Nominator deposit (2026-07-31, specs/nominator.mch) — fires on the 4 corpus
+    # deposit fixtures added this wave; C++ fill is fill_nominator_pool_deposit.
+    "nominator_pool_deposit",
     # EM2 W6 bucket-B fills. NONE of these fire on the current 165 fixtures, so
     # widening the set changes no output today — it keeps the twin
     # correct-by-construction: the day a fixture carrying one is added, Python

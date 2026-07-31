@@ -7,7 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**184 fixtures, 838 ACTION rows** — one per serializable block on each trace's
+**197 fixtures, 861 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus the CHILD rows the serializer expands out of any spine
 block whose btype is outside `v1_ops`, plus 6 synthetic `unknown` rows (the
 fixtures whose spine serializes to nothing at all). Rows are printed **sorted**
@@ -21,6 +21,39 @@ dies with it — and Python's `--emulated-traces` path is being retired. This fi
 is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
+
+Re-baselined 2026-07-31 (**838 → 861 rows, 184 → 197 fixtures**) by registering
+13 live nominator-pool fixtures (deposit + withdraw_request + op-0x2
+double-payout), the first fixture coverage for `specs/nominator.mch`'s deposit
+and withdraw_request matchers (previously 0 rows of either). All 23 new rows are
+additive — the pre-existing 838 rows are byte-identical (verified: the diff
+against the old golden contains only pure-addition hunks, no changed lines).
+
+The fixture stems, grouped by live shape, are:
+
+- **deposit:** `1DtgStJMB5JNE8vxQD2SYG1E4DO3a6nsUQlA2y-y_E4=`,
+  `7-PBki6rgQj5bmiG-BxVXPDpkbSM1TucbB83OFr2CC4=`
+- **deposit-bounced:** `XrJ4BgG2rSQyr3vItrDD4kFQZMU0v17UGRD3LQPvuOA=`,
+  `awhk7c9wvvH3jR3PrLJbd4sqrfpRlHRwjvlwuIGtPXk=`
+- **withdraw-request-zero-payout:**
+  `CwcLdAHHpMSrEbbd_9S7YRvBreXTQHSGIov5Mbv39KA=`,
+  `59b4F0GX09WQKfMi2v09JdqqO1eab4fH8YPSrGqujnM=`
+- **withdraw-request-one-payout-consumed:**
+  `4b5NvcGM3iow6o3Qc9ATpQLp9PlPv1Y62XvPTcbzUkQ=`,
+  `9ncN7iBzDJswNbex9fiAbG37vXl9qu6HOrLPe16yp0w=`
+- **immediate-withdraw-two-payout:**
+  `jR18KgOd7Bmlhja1EmBRM_b-bPrdMuJwvsnfwhdYPiY=`,
+  `BGhr3QvCA4-8NaUWkjqMUyEivmDuCF37sGpBS6W0x6w=`
+- **op-0x2-double-payout:**
+  `APpTI_e4-tKeBPZgtCDXmZhharEE-tvVh0tBPoCK6i0=`,
+  `DAL_tL08iL0GO1ZqDkqd6kpl4NNmFurhegqjrKiW0sc=`
+- **mixed-vesting:** `IG3rAERJtYBswEBCpy_3redfrE-4cQS0cAfg1-W1UO8=`
+
+F4 (arity-1 immediate) and F7 (≥3 payouts) were hunted for but not found in 4
+years of mainnet history; those shapes are covered instead by the synthetic
+trees in `indexer/tests/mch/integration/test_nominator_withdraw.py`. The
+`twins/py_actions.py` `PORTED_BTYPES` addition for `nominator_pool_deposit` was
+required for the twins gate to pass with the new deposit fixtures.
 
 Re-baselined 2026-07-31 (**824 → 838 rows, no fixture added**) by the COCOON
 port — the whole twelve-matcher family in one new spec file, `specs/cocoon.mch`,

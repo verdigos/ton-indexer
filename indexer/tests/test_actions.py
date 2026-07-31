@@ -61,6 +61,9 @@ class TestLayerZeroActions(BaseGenericActionTest):
 class TestEthenaActions(BaseGenericActionTest):
     yaml_file = "ethena.yaml"
 
+class TestNominatorActions(BaseGenericActionTest):
+    yaml_file = "nominator.yaml"
+
 class TestCocoonActions(BaseGenericActionTest):
     yaml_file = "cocoon.yaml"
 
