@@ -640,6 +640,16 @@ void fill_nominator_pool_withdraw_request(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "pool"));
 }
 
+// Elector deposit / recover (specs/elections.mch). Python's
+// _fill_election_action serves both btypes: source + amount, and no composite
+// column at all. The recover half OMITS the `amount` key when the elector never
+// confirmed, which the Python fill reads with an `in` test — `dg` answers Null
+// for a missing key, so the unconditional form is equivalent.
+void fill_election(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "stake_holder"));
+  a.amount = av_amount(dg(d, "amount"));
+}
+
 void fill_tonstakers_deposit(const Value &d, Action &a) {
   a.type = "stake_deposit";
   a.source = av_addr(dg(d, "source"));
@@ -965,6 +975,7 @@ bool fill_action(Block *b, Action &a) {
   // false` and lose the whole row.
   else if (t == "renew_dns") fill_dns_renew(d, a);
   else if (t == "nominator_pool_withdraw_request") fill_nominator_pool_withdraw_request(d, a);
+  else if (t == "election_deposit" || t == "election_recover") fill_election(d, a);
   else if (t == "tonstakers_deposit") fill_tonstakers_deposit(d, a);
   else if (t == "tonstakers_withdraw") fill_tonstakers_withdraw(d, a);
   else if (t == "tonstakers_withdraw_request") fill_tonstakers_withdraw_request(d, a);

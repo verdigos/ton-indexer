@@ -30,7 +30,7 @@ VEC_OUT = ENG / "ir" / "msg_vectors.json"
 
 # --- schema model -----------------------------------------------------------
 LEAVES = {
-    "u32", "u64", "uint256", "coins", "addr_py", "asset2", "asset4",
+    "bool", "u32", "u64", "uint256", "coins", "addr_py", "asset2", "asset4",
     "ref_cell", "maybe_ref_cell", "dict_keys267", "fwd_cell_bits", "fwd_cell_refs",
 }
 
@@ -234,6 +234,10 @@ def emit_field(msg: str, cur: str, f: Field, indent: str) -> list[str]:
     emit = None  # C++ expression for the field value, or None for a pure skip
     if f.type == "bits":
         L.append(f"{b}if (!{cur}.have({f.bitn}) || !{cur}.advance({f.bitn})) {{ {err('underflow')} }}")
+    elif f.type == "bool":
+        L.append(f"{b}if (!{cur}.have(1)) {{ {err('underflow')} }}")
+        L.append(f"{b}bool bv = {cur}.fetch_ulong(1) != 0;")
+        emit = "Value::make_bool(bv)"
     elif f.type == "u32":
         L.append(f"{b}if (!{cur}.have(32)) {{ {err('underflow')} }}")
         L.append(f"{b}auto q = {cur}.fetch_ulong(32);")
@@ -399,6 +403,8 @@ def emit_vectors(msgs: list[Message]) -> str:
         for f in fields:  # dropped (_) fields still consume bits, so build them too
             if f.type == "bits":
                 b.store_uint(0, f.bitn)
+            elif f.type == "bool":
+                b.store_uint(0, 1)
             elif f.type == "u32":
                 b.store_uint(0, 32)
             elif f.type == "u64":

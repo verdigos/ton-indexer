@@ -7,7 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**184 fixtures, 906 ACTION rows** — one per serializable block on each trace's
+**184 fixtures, 872 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus the CHILD rows the serializer expands out of any spine
 block whose btype is outside `v1_ops`, plus 6 synthetic `unknown` rows (the
 fixtures whose spine serializes to nothing at all). Rows are printed **sorted**
@@ -22,7 +22,40 @@ is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
 
-Re-baselined 2026-07-31 (**902 → 906 rows, 181 → 184 fixtures**) by three live
+Re-baselined 2026-07-31 (**906 → 872 rows, no fixture added**) by the DEDUST V2
+WITHDRAW port (`specs/dedust_v2_withdraw.mch`) and the ELECTOR port
+(`specs/elections.mch`). Two independent deltas over nine fixtures, no overlap,
+and every touched fixture was checked row-by-row against the REAL legacy Python
+classifier (`twins/py_actions.py` driven with `event_processing.matchers`).
+
+- **DeDust V2 withdraw, −33 rows over eight fixtures.** Each collapses its
+  `#20b5ef89` / `#bc1531a9` / `#f6f6a3aa` chain — plus the payout legs, where
+  there are any — into one `dex_withdraw_liquidity`. `dex_withdraw_liquidity` is
+  in `v1_ops`, so no CHILD rows anywhere in this delta.
+  - Three ABORTED withdraws (no Withdrawal event, hence `is_refund=true` and the
+    burnt amount off the entry message): `-mNf-yQ8…`, `T4FDfsNC…`, `gr3f68A6…`,
+    5 → 2 each (the surviving row is the trace's unrelated second action).
+    **Byte-identical to legacy.**
+  - Five SUCCESSFUL withdraws: `1Q2c26rR…` and `phSM_Wdd…` (two jetton legs),
+    `GsBbieLd…` and `OShVZJVq…` (jetton + TON), `XoYtOPQk…` (TON + jetton).
+    Every semantic field matches legacy; the ONE difference is that the pool's
+    `0xd53276db` excess is absorbed into the row (its tx hash joins `tx_hashes`,
+    and on `phSM_Wdd…` it extends `end_lt`) instead of surviving as a standalone
+    `call_contract`. That is §4.5 nested aux absorption, which is unconditional
+    for a matched non-root node on BOTH engines while the reference turns it off
+    per nested matcher — documented at length in the spec header, not fixed
+    (honouring the flag would move every other include_excess=false spec).
+  - `7rGTg9yc…` is UNCHANGED and correct: its Position never answers with
+    ExitLiquidity, so the chain is truncated and neither engine classifies it —
+    legacy leaves the same three loose `call_contract` rows.
+- **Elector recover, −1 row on one fixture.** `a0rjbO1X…` 11 → 10: the
+  `#47657424` request and its `#f96f7324` confirmation become one
+  `election_recover` (`amount` off the confirmation's value). **Byte-identical
+  to legacy**, including its three `stake_withdrawal` neighbours from the
+  previous wave. `election_deposit` has ZERO corpus coverage — no fixture
+  carries `#4e73744b` — so that half of the port is unexercised here.
+
+Previously re-baselined 2026-07-31 (**902 → 906 rows, 181 → 184 fixtures**) by three live
 tonstakers DEPOSIT fixtures fetched off the cycle-10 A/B window. **No existing
 row changed** — the whole delta is the three new fixtures, and every one of them
 already classified correctly against the spec as committed the day before (the

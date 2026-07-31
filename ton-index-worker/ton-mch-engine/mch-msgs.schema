@@ -25,6 +25,15 @@
 #   bits N         have(N) + advance(N)       -> (nothing emitted; a pure skip of
 #                                                 N bits — always used with a `_`
 #                                                 parsed-and-dropped field name)
+#   bool           fetch_ulong(1) != 0        -> Bool. The EMITTING 1-bit leaf;
+#                                                 `bits 1` is the skipping one.
+#                                                 TWIN RULE: pytoniq's load_bit()
+#                                                 returns an INT, so a bool field's
+#                                                 Python twin must cast — an int
+#                                                 where the C++ side has a Bool
+#                                                 faults the expression VM the
+#                                                 moment the field is used as a
+#                                                 condition.
 #   u32            fetch_ulong(32)            -> Int   (refint_u64)
 #   u64            fetch_ulong(64)            -> Int   (refint_u64)
 #   uint256        fetch_int256(256, false)   -> Int
@@ -384,4 +393,42 @@ message TONStakersNftBurnNotification opcode 0xed58b0b2 {
   query_id: u64
   amount: coins
   owner: addr_py
+}
+
+# --- specs/dedust_v2_withdraw.mch bodies.
+#
+# Both twins are the LEGACY classes (messages/dedust_v2.py DedustV2Withdraw /
+# DedustV2WithdrawalEvent), the DedustV2PayoutPositionFees arrangement — so
+# unlike the two entries above these parse the message to its END rather than
+# stopping at the last field the spec reads. Parsing the full wire shape is what
+# makes the two sides fail on exactly the same truncations; the unread fields
+# carry `_` and are dropped. The other two opcodes of the chain
+# (WithdrawLiquidity 0xbc1531a9, ExitLiquidity 0xf6f6a3aa) are matched by `op`
+# only and have no entry.
+
+# user -> Pool, the withdrawal entry. `liquidity` is the LP SHARE being burned
+# (the share lives in the Position contract, there is no LP jetton) and is the
+# fallback lp_tokens_burnt when the trace carries no Withdrawal event.
+# auto_claim_fees is the FIRST use of the `bool` leaf: it mixes fee payouts into
+# the same pool tx, which the payout slots cannot tell from withdrawn amounts,
+# so the spec rejects on it.
+message DedustV2Withdraw opcode 0x20b5ef89 {
+  _query_id: bits 64
+  liquidity: coins
+  _minimal_x_out: coins
+  _minimal_y_out: coins
+  auto_claim_fees: bool
+  _payout_config: ref_cell
+}
+
+# Pool -> ext-out log of a SUCCESSFUL withdrawal. Its mere presence is the
+# success discriminator (the spec matches it `maybe`); the spec reads only
+# `liquidity`, the exact burned share.
+message DedustV2WithdrawalEvent opcode 0xc0d77b54 {
+  liquidity: coins
+  _amount_x_out: coins
+  _amount_y_out: coins
+  _initiator: addr_py
+  _recipient: addr_py
+  _next_state: ref_cell
 }

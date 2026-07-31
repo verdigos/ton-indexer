@@ -50,6 +50,7 @@ skips with a reason via `test_ir_engine_available`.
 """
 from __future__ import annotations
 
+import collections
 import dataclasses
 import functools
 from dataclasses import dataclass
@@ -65,9 +66,16 @@ from indexer.events.blocks.dedust_v2.claims import (
     DedustV2ClaimFeesBlockMatcher,
     DedustV2ClaimRewardBlockMatcher,
 )
+from indexer.events.blocks.dedust_v2.liquidity import (
+    DedustV2WithdrawBlockMatcher,
+)
 from indexer.events.blocks.dedust_v2.swaps import (
     DedustV2FailedSwapBlockMatcher,
     DedustV2SwapBlockMatcher,
+)
+from indexer.events.blocks.elections import (
+    ElectionDepositStakeBlockMatcher,
+    ElectionRecoverStakeBlockMatcher,
 )
 from indexer.events.blocks.auction import (
     AuctionBidMatcher,
@@ -150,7 +158,9 @@ from indexer.events.mch.builders.dedust_v2 import (
     dedust_v2_claim_fees_registries,
     dedust_v2_claim_reward_registries,
     dedust_v2_swap_registries,
+    dedust_v2_withdraw_registries,
 )
+from indexer.events.mch.builders.elections import elections_registries
 from indexer.events.mch.builders.ethena import ethena_registries
 from indexer.events.mch.builders.evaa import evaa_registries
 from indexer.events.mch.builders.jvault import jvault_registries
@@ -302,6 +312,19 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     ("specs_decl/dedust_v2_swap.mch", _DECL_DIR / "dedust_v2_swap.mch",
      dedust_v2_swap_registries, _PREREQ_SWAP,
      (DedustV2SwapBlockMatcher, DedustV2FailedSwapBlockMatcher)),
+    # The liquidity withdrawal. Nine corpus fixtures: three aborted (no
+    # Withdrawal event), five successful across the jetton/jetton, jetton/TON
+    # and TON/jetton leg pairings, and one truncated chain neither engine
+    # classifies. The five successful ones carry the §4.5 nested-excess
+    # divergence documented in the spec header — see _KNOWN_AUX_DIVERGENCE.
+    ("specs/dedust_v2_withdraw.mch", _SPECS_DIR / "dedust_v2_withdraw.mch",
+     dedust_v2_withdraw_registries, _PREREQ_SWAP, (DedustV2WithdrawBlockMatcher,)),
+    # Elector deposit + recover as one group, mirroring the legacy list order.
+    # Only the recover half has corpus coverage (a0rjbO1X…); the deposit anchor
+    # 0x4e73744b appears in no fixture, so its pairs are reject-identically
+    # checks on whatever fixtures the recover anchor drags in.
+    ("specs/elections.mch", _SPECS_DIR / "elections.mch", elections_registries, (),
+     (ElectionDepositStakeBlockMatcher, ElectionRecoverStakeBlockMatcher)),
     ("specs/tonco_liquidity.mch", _SPECS_DIR / "tonco_liquidity.mch", tonco_liquidity_registries,
      (NftMintBlockMatcher,) + _PREREQ_SWAP, (ToncoDepositLiquidityMatcher,)),
     # Coffee liquidity port (2026-07-30): the deposit and create-vault matchers
@@ -580,6 +603,36 @@ def _node_hashes(block: Block) -> list[str]:
     return sorted(n.message.tx_hash for n in block.event_nodes)
 
 
+# §4.5 nested aux absorption is UNCONDITIONAL for a matched non-root node
+# (mch_ir/engine.py `_absorb_aux`, mirrored in C++), while the reference sets
+# include_excess per NESTED matcher. The DSL's `include_excess` is
+# matcher-level, so a spec whose reference turns nested absorption OFF cannot
+# express that, and its IR consumed set legitimately carries excess/bounce
+# nodes the legacy one leaves loose. Specs listed here opt into ignoring
+# exactly that difference — extra IR-side nodes, aux opcodes only. Every other
+# field, and any non-aux consumed-node difference, still fails.
+_AUX_OPCODES = frozenset({0xD53276DB, 0xFFFFFFFF})
+_AUX_ABSORB_SPECS = frozenset({"specs/dedust_v2_withdraw.mch"})
+
+
+def _strip_extra_aux(legacy_blocks: list[Block], ir_blocks: list[Block]) -> None:
+    """Drop from each IR block the aux event nodes its legacy twin does not
+    carry. Mutates `event_nodes`; the blocks are throwaway per-pair products."""
+    ls = sorted(legacy_blocks, key=_sort_key)
+    irs = sorted(ir_blocks, key=_sort_key)
+    for legacy, ir in zip(ls, irs):
+        keep = collections.Counter(n.message.tx_hash for n in legacy.event_nodes)
+        kept = []
+        for n in ir.event_nodes:
+            op = n.message.opcode
+            aux = op is not None and (op & 0xFFFFFFFF) in _AUX_OPCODES
+            if aux and keep[n.message.tx_hash] <= 0:
+                continue
+            keep[n.message.tx_hash] -= 1
+            kept.append(n)
+        ir.event_nodes = kept
+
+
 def _sort_key(block: Block):
     return (block.min_lt, tuple(_node_hashes(block)))
 
@@ -711,6 +764,9 @@ async def test_sweep_parity(entry: _SpecEntry, filename: str):
     context.interface_repository.set(TestInterfaceRepository(interfaces))
     ir_blocks = [b for b in await _run_matchers(
         ir_matchers, trace, [cls() for cls in entry.prereqs]) if b.btype in btypes]
+
+    if entry.spec_key in _AUX_ABSORB_SPECS:
+        _strip_extra_aux(legacy_blocks, ir_blocks)
 
     divs = _diff_blocks(legacy_blocks, ir_blocks)
     assert not divs, "\n".join(

@@ -1210,6 +1210,78 @@ td::Result<Value> gen_parse_t_o_n_stakers_nft_burn_notification(const td::Ref<vm
   return Value::make_obj(std::move(f));
 }
 
+// DedustV2Withdraw (opcode 0x20b5ef89); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_dedust_v2_withdraw(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("DedustV2Withdraw: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("DedustV2Withdraw: _query_id underflow"); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("liquidity", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    if (!cs.have(1)) { return td::Status::Error("DedustV2Withdraw: auto_claim_fees underflow"); }
+    bool bv = cs.fetch_ulong(1) != 0;
+    f.emplace_back("auto_claim_fees", Value::make_bool(bv));
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("DedustV2Withdraw: _payout_config ref missing"); }
+    auto rf = cs.fetch_ref();
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// DedustV2WithdrawalEvent (opcode 0xc0d77b54); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_dedust_v2_withdrawal_event(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("DedustV2WithdrawalEvent: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("liquidity", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("DedustV2WithdrawalEvent: _next_state ref missing"); }
+    auto rf = cs.fetch_ref();
+  }
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parsers() {
@@ -1246,6 +1318,8 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"NftReportStaticData", gen_parse_nft_report_static_data},
       {"DedustV2PayoutPositionFees", gen_parse_dedust_v2_payout_position_fees},
       {"TONStakersNftBurnNotification", gen_parse_t_o_n_stakers_nft_burn_notification},
+      {"DedustV2Withdraw", gen_parse_dedust_v2_withdraw},
+      {"DedustV2WithdrawalEvent", gen_parse_dedust_v2_withdrawal_event},
   };
   return rows;
 }

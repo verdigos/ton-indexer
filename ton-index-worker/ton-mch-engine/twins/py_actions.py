@@ -104,6 +104,12 @@ PORTED_BTYPES = {
     "nft_put_on_sale", "nft_put_on_auction", "nft_update_sale", "nft_discovery",
     "auction_bid", "auction_outbid",
     "nft_cancel_sale", "nft_cancel_auction", "nft_finish_auction",
+    # Elector port (2026-07-31, specs/elections.mch). Only election_recover
+    # fires on the corpus (a0rjbO1X…); election_deposit has zero fixture
+    # coverage and is listed for the correct-by-construction reason above. Both
+    # share one C++ fill (fill_election), mirroring the Python serializer's
+    # single `case 'election_deposit' | 'election_recover'`.
+    "election_deposit", "election_recover",
 }
 
 # The C++ render_action column set (Classify.cpp render_action), in any order —

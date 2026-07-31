@@ -56,9 +56,13 @@ from indexer.events.blocks.dedust_v2.swaps import _final_min_out
 from indexer.events.blocks.messages import (
     DedustV2ClaimAvailableFees,
     DedustV2ClaimPositionFees,
+    DedustV2ExitLiquidity,
     DedustV2PayJetton,
     DedustV2PayoutPositionFees,
     DedustV2SwapPayload,
+    DedustV2Withdraw,
+    DedustV2WithdrawalEvent,
+    DedustV2WithdrawLiquidity,
 )
 from indexer.events.blocks.swaps import JettonSwapBlock
 from indexer.events.blocks.utils import AccountId
@@ -181,6 +185,76 @@ def register_dedust_v2_claim_fees(reg: Registries) -> Registries:
 def dedust_v2_claim_fees_registries() -> Registries:
     """Fresh Registries ready to compile specs/dedust_v2_claim_fees.mch."""
     return register_dedust_v2_claim_fees(Registries())
+
+
+# ---------------------------------------------------------------------------
+# specs/dedust_v2_withdraw.mch — the liquidity withdrawal.
+#
+# Same mixed-path arrangement as claim_fees above: PayoutMessage is the ABI twin
+# from this module, while DedustV2Withdraw / DedustV2WithdrawalEvent ride their
+# mch-msgs.schema entries. The EVENT reuses the legacy class as its twin
+# (identical field spellings, and the spec guards the capture with an `op` so
+# the class's `assert op == opcode` only ever sees the right body).
+#
+# The ENTRY message cannot: it carries the schema's first `bool` leaf, and the
+# legacy class reads it with pytoniq's `Slice.load_bit()`, which returns an
+# **int** (0/1). The C++ leaf emits a real Bool, and the expression VM faults
+# on a non-bool condition — so `reject when withdraw.body.auto_claim_fees`
+# passes on one engine and blows up on the other. Hence the schema-shaped twin
+# below, whose only job is the `bool(...)` cast. THE RULE FOR EVERY FUTURE
+# `bool` FIELD: the Python twin must yield a real bool, never load_bit()'s int.
+#
+# Unlike the swap family's schema twins, this one still parses the message to
+# its END (it stops nowhere early), because the schema entry does too — that is
+# what makes both sides fail on exactly the same truncated bodies.
+#
+# WithdrawLiquidity 0xbc1531a9 and ExitLiquidity 0xf6f6a3aa are pattern-only:
+# they need an opcode row but no parser, since neither body is ever read.
+# ---------------------------------------------------------------------------
+class DedustV2WithdrawTwin:
+    """withdraw#20b5ef89 — schema twin of mch-msgs.schema `DedustV2Withdraw`.
+
+    Registered under the schema entry's name; the class name differs only to
+    avoid shadowing the legacy import above."""
+
+    opcode = DedustV2Withdraw.opcode
+
+    def __init__(self, slice: Slice):
+        slice.load_uint(32)  # opcode (checked by the matcher's `op`)
+        slice.load_uint(64)  # query_id, parsed-and-dropped
+        self.liquidity = slice.load_coins()
+        slice.load_coins()  # minimal_x_out, parsed-and-dropped
+        slice.load_coins()  # minimal_y_out, parsed-and-dropped
+        self.auto_claim_fees = bool(slice.load_bit())
+        slice.load_ref()  # payout_config, parsed-and-dropped
+
+
+WITHDRAW_OPCODES = {
+    "DedustV2Withdraw": DedustV2Withdraw.opcode,
+    "DedustV2WithdrawLiquidity": DedustV2WithdrawLiquidity.opcode,  # opcode only
+    "DedustV2ExitLiquidity": DedustV2ExitLiquidity.opcode,          # opcode only
+    "DedustV2WithdrawalEvent": DedustV2WithdrawalEvent.opcode,
+    "PayoutMessage": PayoutMessage.opcode,
+}
+
+WITHDRAW_MESSAGE_TYPES = {
+    "DedustV2Withdraw": DedustV2WithdrawTwin,
+    "DedustV2WithdrawalEvent": DedustV2WithdrawalEvent,
+    "PayoutMessage": PayoutMessage,
+}
+
+
+def register_dedust_v2_withdraw(reg: Registries) -> Registries:
+    reg.opcodes.update(WITHDRAW_OPCODES)
+    reg.block_types["dex_withdraw_liquidity"] = Block
+    reg.message_types.update(WITHDRAW_MESSAGE_TYPES)
+    reg.lookups.update(default_lookups())
+    return reg
+
+
+def dedust_v2_withdraw_registries() -> Registries:
+    """Fresh Registries ready to compile specs/dedust_v2_withdraw.mch."""
+    return register_dedust_v2_withdraw(Registries())
 
 
 # ---------------------------------------------------------------------------

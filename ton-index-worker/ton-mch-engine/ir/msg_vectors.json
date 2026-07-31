@@ -320,6 +320,26 @@
       "type": "TONStakersNftBurnNotification",
       "body": "te6ccgEBAQEABgAACO1YsLI=",
       "expect": "fail"
+    },
+    {
+      "type": "DedustV2Withdraw",
+      "body": "te6ccgEBAgEAEwABGyC174kAAAAAAAAAAAAEAQAA",
+      "expect": "ok"
+    },
+    {
+      "type": "DedustV2Withdraw",
+      "body": "te6ccgEBAQEABgAACCC174k=",
+      "expect": "fail"
+    },
+    {
+      "type": "DedustV2WithdrawalEvent",
+      "body": "te6ccgEBAgEACwABDMDXe1QAAAEAAA==",
+      "expect": "ok"
+    },
+    {
+      "type": "DedustV2WithdrawalEvent",
+      "body": "te6ccgEBAQEABgAACMDXe1Q=",
+      "expect": "fail"
     }
   ]
 }
