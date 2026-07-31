@@ -9,6 +9,7 @@
 
 #include "ActionBuild.h"
 #include "BlockTree.h"
+#include "Classify.h"
 #include "Value.h"
 #include "emu/EmuActionSerialize.h"
 #include "emu/EmuTypes.h"  // view_finality, actions_write_is_stale
@@ -1143,6 +1144,54 @@ void test_bucket_b_fills() {
   }
 }
 
+// EVAA liquidation Stage A: exercise the fill and wire surface directly. No
+// matcher or build_action dispatch exists until Stage B.
+void test_evaa_liquidate_surface() {
+  Action a = base_action();
+  Value::Fields data;
+  data.emplace_back("liquidator", Value::make_account_raw(kAddrA));
+  data.emplace_back("borrower", Value::make_account_raw(kAddrB));
+  data.emplace_back("borrower_contract", Value::make_account_raw(kAddrA));
+  data.emplace_back("collateral_asset_id", Value::make_int64(0x1234));
+  data.emplace_back("collateral_amount", Value::make_int64(125));
+  data.emplace_back("debt_amount",
+                    Value::make_int(td::string_to_int256(
+                        std::string("340282366920938463463374607431768211456"))));
+  data.emplace_back("is_success", Value::make_bool(false));
+  data.emplace_back("fail_reason", Value::make_str("master_not_enough_liquidity"));
+  fill_evaa_liquidate(Value::make_dict(std::move(data)), a);
+
+  check("evaa_liquidate/source", a.source.t == VType::Str && a.source.str == kAddrA);
+  check("evaa_liquidate/destination",
+        a.destination.t == VType::Str && a.destination.str == kAddrB);
+  check("evaa_liquidate/borrower_contract",
+        a.destination_secondary.t == VType::Str && a.destination_secondary.str == kAddrA);
+  check("evaa_liquidate/collateral_amount",
+        a.amount.t == VType::Int && a.amount.num->to_dec_string() == "125");
+  check("evaa_liquidate/success", !a.success);
+  const Value *asset_id = a.evaa_liquidate_data.field("asset_id");
+  check("evaa_liquidate/asset_id",
+        asset_id != nullptr && asset_id->t == VType::Str && asset_id->str == "0x1234");
+  check("evaa_liquidate/render_column",
+        render_action(a).find("evaa_liquidate_data={") != std::string::npos);
+
+  Decoded d(serialize_actions({a}, make_view({EmuFinality::finalized})));
+  const msgpack::object *row = first_row(d);
+  check("evaa_liquidate/msgpack_row", d.ok() && row != nullptr);
+  if (row == nullptr) {
+    return;
+  }
+  const msgpack::object *details = at(*row, "evaa_liquidate_data");
+  check("evaa_liquidate/msgpack_details", is_map(details, 3));
+  if (details != nullptr) {
+    check("evaa_liquidate/debt_amount_string",
+          is_str(at(*details, "debt_amount"),
+                 "340282366920938463463374607431768211456"));
+    check("evaa_liquidate/fail_reason",
+          is_str(at(*details, "fail_reason"), "master_not_enough_liquidity"));
+  }
+}
+
 // A view with no nodes degrades to `emulated` — the conservative end, and what
 // ton-index-go reads as FinalityStatePending.
 void test_empty_view_finality() {
@@ -1228,6 +1277,7 @@ int run_action_msgpack_test() {
   test_multiple_actions();
   test_unknown_action();
   test_bucket_b_fills();
+  test_evaa_liquidate_surface();
   test_empty_view_finality();
   test_view_finality();
   test_actions_write_guard();

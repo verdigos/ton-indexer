@@ -37,6 +37,7 @@ const std::map<std::string, HostFn> &host_fns() {
       {"tonco_deposit_liquidity_data", tonco_deposit_liquidity_data},
       {"tonco_withdraw_payouts", tonco_withdraw_payouts},
       {"evaa_supply_data", evaa_supply_data},
+      {"evaa_liquidate_data", evaa_liquidate_data},
       {"tonco_swap_data", tonco_swap_data},
       // stonfi_v2_swap_data: registered by the §11.5 dual-dispatch wave. The
       // Python core (build_stonfi_v2_swap_core) now reads the in-leg by btype
@@ -88,6 +89,10 @@ const std::map<std::string, HostPredFn> &host_predicates() {
       {"evaa_service_comment", evaa_service_comment},
       {"evaa_supply_anchor", evaa_supply_anchor},
       {"evaa_user_supply", evaa_user_supply},
+      {"evaa_liquidate_anchor", evaa_liquidate_anchor},
+      {"evaa_user_liquidate", evaa_user_liquidate},
+      {"evaa_liquidate_success_header", evaa_liquidate_success_header},
+      {"evaa_bounced_call", evaa_bounced_call},
       {"getgems_purchase", getgems_purchase},
       {"getgems_seller_payout", getgems_seller_payout},
       // specs/nft_mint.mch's pred ANCHOR (no opcode/btype prefilter, spec R10).

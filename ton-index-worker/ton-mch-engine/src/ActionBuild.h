@@ -28,7 +28,8 @@ struct Action {
   Value amount, value, opcode;
   Value ton_transfer_data, jetton_transfer_data, jetton_swap_data, nft_transfer_data,
       nft_listing_data, nft_mint_data, dex_deposit_liquidity_data, dex_withdraw_liquidity_data,
-      staking_data, evaa_supply_data, evaa_withdraw_data, vesting_send_message_data,
+      staking_data, evaa_supply_data, evaa_withdraw_data, evaa_liquidate_data,
+      vesting_send_message_data,
       vesting_add_whitelist_data, tonco_deploy_pool_data,
       cocoon_worker_payout_data, cocoon_proxy_payout_data, cocoon_proxy_charge_data,
       cocoon_client_top_up_data, cocoon_register_proxy_data, cocoon_unregister_proxy_data,
@@ -67,6 +68,10 @@ bool build_action(Block *b, Action &a);
 
 // The same, over a serialize_blocks row: fills parent_action_id/ancestor_type too.
 bool build_action(const ActionRow &row, Action &a);
+
+// Stage-A action-surface hook. Kept out of build_action dispatch until the
+// evaa_liquidate matcher lands separately.
+void fill_evaa_liquidate(const Value &data, Action &action);
 
 // create_unknown_action (block_tree_serializer.py:1683-1706): the synthetic row
 // a trace gets when classification SUCCEEDS but produces nothing. Emitted by

@@ -823,18 +823,25 @@ def _fill_evaa_withdraw_action(block: EvaaWithdrawBlock, action: Action):
 
 
 def _fill_evaa_liquidate_action(block: EvaaLiquidateBlock, action: Action):
-    action.source = str(block.data.liquidator)
-    action.destination = str(block.data.borrower)
-    action.destination_secondary = str(block.data.borrower_contract) if block.data.borrower_contract else None
+    data = block.data  # dict (declarative build) or EvaaLiquidateData (legacy)
+    liquidator = _dget(data, 'liquidator')
+    borrower = _dget(data, 'borrower')
+    action.source = str(liquidator) if liquidator is not None else None
+    action.destination = str(borrower) if borrower is not None else None
+    borrower_contract = _dget(data, 'borrower_contract')
+    action.destination_secondary = str(borrower_contract) if borrower_contract else None
     # collateral_asset_id is a 256-bit int, not a TON address; it's already
     # stored as hex in evaa_liquidate_data.asset_id
-    action.amount = block.data.collateral_amount
-    action.success = block.data.is_success
+    action.amount = _dget(data, 'collateral_amount')
+    action.success = _dget(data, 'is_success')
+    collateral_asset_id = _dget(data, 'collateral_asset_id')
     action.evaa_liquidate_data = {
-        'asset_id': hex(block.data.collateral_asset_id) if block.data.collateral_asset_id is not None else None,
-        "fail_reason": block.data.fail_reason,
-        "debt_amount": block.data.debt_amount
+        'asset_id': hex(collateral_asset_id) if collateral_asset_id is not None else None,
+        "fail_reason": _dget(data, 'fail_reason'),
+        "debt_amount": _dget(data, 'debt_amount')
     }
+
+
 def _fill_jvault_stake(block: JVaultStakeBlock, action: Action):
     action.source = _addr(_dget(block.data, 'sender'))
     action.source_secondary = _addr(_dget(block.data, 'sender_wallet'))

@@ -128,6 +128,7 @@ PORTED_BTYPES = {
     # fixtures (TON, jetton, jetton-failed); C++ fill is fill_evaa_supply, the one
     # producer of the evaa_supply_data composite.
     "evaa_supply",
+    "evaa_liquidate",
     # Coffee tail (2026-07-31, specs/coffee_create_pool.mch + coffee_mev.mch +
     # coffee_staking.mch). All six FIRE on the corpus — nine fixtures between
     # them — and three are the only producer of their composite
@@ -179,7 +180,7 @@ ACTION_COLUMNS = [
     "nft_transfer_data", "nft_listing_data", "nft_mint_data",
     "dex_deposit_liquidity_data",
     "dex_withdraw_liquidity_data",
-    "staking_data", "evaa_supply_data", "evaa_withdraw_data",
+    "staking_data", "evaa_supply_data", "evaa_withdraw_data", "evaa_liquidate_data",
     "vesting_send_message_data",
     "vesting_add_whitelist_data", "tonco_deploy_pool_data",
     "cocoon_worker_payout_data", "cocoon_proxy_payout_data",

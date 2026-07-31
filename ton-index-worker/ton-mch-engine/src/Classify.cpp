@@ -63,6 +63,8 @@ void emit_action(const CoreAction &a) {
               aux_s.c_str());
 }
 
+}  // namespace
+
 // Dump-side render of an Action row (built lib-side by ActionBuild). Fixed
 // column set; unset fields are Null, rendered "null".
 std::string render_action(const Action &a) {
@@ -107,6 +109,7 @@ std::string render_action(const Action &a) {
   f.emplace_back("staking_data", a.staking_data);
   f.emplace_back("evaa_supply_data", a.evaa_supply_data);
   f.emplace_back("evaa_withdraw_data", a.evaa_withdraw_data);
+  f.emplace_back("evaa_liquidate_data", a.evaa_liquidate_data);
   f.emplace_back("vesting_send_message_data", a.vesting_send_message_data);
   f.emplace_back("vesting_add_whitelist_data", a.vesting_add_whitelist_data);
   f.emplace_back("tonco_deploy_pool_data", a.tonco_deploy_pool_data);
@@ -141,8 +144,6 @@ std::string render_action(const Action &a) {
   f.emplace_back("ancestor_type", Value::make_list(std::move(anc)));
   return render_value(Value::make_dict(std::move(f)));
 }
-
-}  // namespace
 
 // Shared CLI dump adapter over ClassifyCore (§11 item 2 / prod-design §2). The
 // core computes a buffered per-trace ClassifyResult; this reproduces today's

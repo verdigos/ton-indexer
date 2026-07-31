@@ -100,6 +100,8 @@ bool decimal_string_key(const std::string &k) {
       "target_amount_1", "target_amount_2", "nft_index",
       // staking_data
       "tokens_minted", "tokens_burnt",
+      // evaa_liquidate_data (Go *string)
+      "debt_amount",
       // coffee_create_pool_data (the underscore spelling is this composite's
       // alone; `lp_tokens_minted` above covers its sixth field) /
       // coffee_staking_*_data. All six Go fields are *string; these four are the
@@ -309,6 +311,7 @@ const std::vector<ActionField> &optional_fields() {
       {"staking_data", &Action::staking_data},
       {"evaa_supply_data", &Action::evaa_supply_data},
       {"evaa_withdraw_data", &Action::evaa_withdraw_data},
+      {"evaa_liquidate_data", &Action::evaa_liquidate_data},
       {"vesting_send_message_data", &Action::vesting_send_message_data},
       {"vesting_add_whitelist_data", &Action::vesting_add_whitelist_data},
       {"tonco_deploy_pool_data", &Action::tonco_deploy_pool_data},

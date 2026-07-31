@@ -8,6 +8,7 @@
 #include "BuildRuntime.h"
 #include "MsgParse.h"
 #include "TraceLoader.h"
+#include "parse/PSlice.h"
 
 #include "common/refint.h"
 #include "vm/cellslice.h"
@@ -79,6 +80,122 @@ constexpr td::uint32 kSupplyMaster = 0x1;
 constexpr td::uint32 kSupplyUser = 0x11;
 constexpr td::uint32 kSupplySuccess = 0x11a;
 constexpr td::uint32 kSupplyFail = 0x11f;
+constexpr td::uint32 kLiquidateMaster = 0x3;
+constexpr td::uint32 kLiquidateUser = 0x31;
+constexpr td::uint32 kLiquidateSatisfied = 0x311;
+constexpr td::uint32 kLiquidateUnsatisfied = 0x31f;
+constexpr td::uint32 kLiquidateSuccess = 0x311a;
+constexpr td::uint32 kLiquidateFail = 0x311f;
+const td::RefInt256 kTonAssetId = td::hex_string_to_int256(
+    std::string("1A4219FE5E60D63AF2A3CC7DCE6FEC69B45C6B5718497A6148E7C232AC87BD8A"));
+
+Value as_account_id(Value v) {
+  return v.is_null() ? Value::make_account_none() : std::move(v);
+}
+
+struct LiquidateMasterData {
+  Value borrower;
+  td::RefInt256 collateral_asset_id;
+  td::RefInt256 incoming_amount;
+};
+
+td::Result<LiquidateMasterData> parse_liquidate_master(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
+    return td::Status::Error("liquidate_master header");
+  }
+  TRY_RESULT(borrower, load_address_py(cs));
+  TRY_RESULT(liquidator, load_address_py(cs));
+  (void)liquidator;
+  if (!cs.have(256 + 64 + 2 + 64)) {
+    return td::Status::Error("liquidate_master fields");
+  }
+  auto collateral = cs.fetch_int256(256, false);
+  cs.advance(64 + 2);
+  auto amount = refint_u64(cs.fetch_ulong(64));
+  if (collateral.is_null() || amount.is_null()) {
+    return td::Status::Error("liquidate_master integers");
+  }
+  return LiquidateMasterData{as_account_id(std::move(borrower)), std::move(collateral),
+                             std::move(amount)};
+}
+
+struct LiquidateSatisfiedData {
+  Value owner;
+  td::RefInt256 transferred_asset_id;
+  td::RefInt256 collateral_asset_id;
+  td::RefInt256 collateral_reward;
+  td::RefInt256 liquidatable_amount;
+};
+
+td::Result<LiquidateSatisfiedData> parse_liquidate_satisfied(
+    const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
+    return td::Status::Error("liquidate_satisfied header");
+  }
+  TRY_RESULT(owner, load_address_py(cs));
+  TRY_RESULT(liquidator, load_address_py(cs));
+  (void)liquidator;
+  if (!cs.have(256) || cs.size_refs() == 0) {
+    return td::Status::Error("liquidate_satisfied root");
+  }
+  auto transferred = cs.fetch_int256(256, false);
+  TRY_RESULT(ref, open_ref_cell(cs.fetch_ref()));
+  if (!ref.have(64 + 64 + 64 + 64 + 256 + 64 + 64)) {
+    return td::Status::Error("liquidate_satisfied ref");
+  }
+  ref.advance(64);  // delta_loan_principal
+  auto amount = refint_u64(ref.fetch_ulong(64));
+  ref.advance(64 + 64);  // protocol_gift + new_user_loan_principal
+  auto collateral = ref.fetch_int256(256, false);
+  ref.advance(64);  // delta_collateral_principal
+  auto reward = refint_u64(ref.fetch_ulong(64));
+  if (transferred.is_null() || amount.is_null() || collateral.is_null() || reward.is_null()) {
+    return td::Status::Error("liquidate_satisfied integers");
+  }
+  return LiquidateSatisfiedData{as_account_id(std::move(owner)), std::move(transferred),
+                                std::move(collateral), std::move(reward), std::move(amount)};
+}
+
+td::Result<std::string> parse_liquidation_reason(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
+    return td::Status::Error("liquidate_unsatisfied header");
+  }
+  TRY_RESULT(owner, load_address_py(cs));
+  TRY_RESULT(liquidator, load_address_py(cs));
+  (void)owner;
+  (void)liquidator;
+  if (!cs.have(256) || cs.size_refs() == 0) {
+    return td::Status::Error("liquidate_unsatisfied root");
+  }
+  cs.advance(256);  // transferred_asset_id
+  TRY_RESULT(ref, open_ref_cell(cs.fetch_ref()));
+  if (!ref.have(64 + 256 + 64 + 64) || !ref.advance(64 + 256 + 64 + 64) ||
+      ref.size_refs() == 0) {
+    return td::Status::Error("liquidate_unsatisfied ref");
+  }
+  ref.fetch_ref();  // custom_response_payload
+  if (!ref.have(32)) {
+    return td::Status::Error("liquidation error opcode");
+  }
+  switch (static_cast<td::uint32>(ref.fetch_ulong(32))) {
+    case 0xE001: return std::string("master_liquidating_too_much");
+    case 0xE002: return std::string("user_withdraw_in_progress");
+    case 0xE003: return std::string("not_liquidatable");
+    case 0xE004: return std::string("execution_crashed");
+    case 0xE005: return std::string("min_collateral_not_satisfied");
+    case 0xE006: return std::string("user_not_enough_collateral");
+    case 0xE007: return std::string("user_liquidating_too_much");
+    case 0xE008: return std::string("master_not_enough_liquidity");
+    case 0xE009: return std::string("liquidation_prices_missing");
+    default: return std::string("unknown");
+  }
+}
 
 }  // namespace
 
@@ -117,6 +234,19 @@ bool evaa_user_supply(const Block *b) {
   return opcode_after_user_header(b, kSupplyUser);
 }
 
+bool evaa_user_liquidate(const Block *b) {
+  return opcode_after_user_header(b, kLiquidateUser);
+}
+
+bool evaa_liquidate_success_header(const Block *b) {
+  return opcode_after_user_header(b, kLiquidateSuccess);
+}
+
+bool evaa_bounced_call(const Block *b) {
+  const Message *m = block_msg(b);
+  return b->btype == "call_contract" && m != nullptr && m->bounced;
+}
+
 // EvaaSupplyBlockMatcher.test_self: the 0x1 supply_master call itself (TON side),
 // or a jetton transfer whose FORWARD PAYLOAD starts with the supply_master
 // opcode (jetton side). btype, not isinstance — the legacy JettonTransferBlock
@@ -144,6 +274,30 @@ bool evaa_supply_anchor(const Block *b) {
     return false;
   }
   return cs.have(32) && static_cast<td::uint32>(cs.fetch_ulong(32)) == kSupplyMaster;
+}
+
+bool evaa_liquidate_anchor(const Block *b) {
+  if (is_call_op(b, kLiquidateMaster)) {
+    return true;
+  }
+  if (b->btype != "jetton_transfer") {
+    return false;
+  }
+  Value fp = data_field(b, "forward_payload");
+  if (fp.t != VType::Str) {
+    return false;
+  }
+  auto r_cell = cell_from_pystr(fp.str);
+  if (r_cell.is_error()) {
+    return false;
+  }
+  auto r_ctx = open_body(r_cell.ok());
+  if (r_ctx.is_error()) {
+    return false;
+  }
+  auto ctx = r_ctx.move_as_ok();
+  return ctx.cs.have(32) &&
+         static_cast<td::uint32>(ctx.cs.fetch_ulong(32)) == kLiquidateMaster;
 }
 
 // builders/evaa.py _evaa_supply_data -> blocks/evaa.py build_evaa_supply_core.
@@ -304,6 +458,122 @@ EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args) {
   d.emplace_back("master", std::move(master));
   d.emplace_back("asset", std::move(asset));
   return rt_ok(Value::make_obj(std::move(d)));
+}
+
+EvalResult evaa_liquidate_data(BuildEnv &env, const std::vector<Value> &args) {
+  (void)env;
+  if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
+    return host_reject("bad arguments");
+  }
+  std::vector<const Block *> consumed;
+  for (const Value &v : *args[0].items) {
+    if (const Block *b = as_block(v); b != nullptr) consumed.push_back(b);
+  }
+  if (consumed.empty()) {
+    return host_reject("empty consumed");
+  }
+  const Block *block = consumed.front();
+  const bool is_ton = block->btype == "call_contract";
+  Value liquidator;
+  td::Ref<vm::Cell> master_cell;
+  if (is_ton) {
+    const Message *m = block_msg(block);
+    liquidator = account_from_opt(m != nullptr ? m->source : std::nullopt);
+    auto r_body = block_body(block);
+    if (r_body.is_error()) return host_reject("liquidate_master body");
+    master_cell = r_body.move_as_ok();
+  } else {
+    liquidator = as_account_id(data_field(block, "sender"));
+    Value fp = data_field(block, "forward_payload");
+    if (fp.t != VType::Str) return host_reject("liquidate_master body");
+    auto r_cell = cell_from_pystr(fp.str);
+    if (r_cell.is_error()) return host_reject("liquidate_master body");
+    master_cell = r_cell.move_as_ok();
+  }
+  auto r_master = parse_liquidate_master(master_cell);
+  if (r_master.is_error()) {
+    return host_reject("liquidate_master parse");
+  }
+  LiquidateMasterData master = r_master.move_as_ok();
+  Value anchor_debt_asset_id = is_ton
+      ? Value::make_int(kTonAssetId)
+      : data_field(block, "receiver_wallet");
+
+  const Block *user = nullptr, *satisfied = nullptr, *unsatisfied = nullptr;
+  for (std::size_t i = 1; i < consumed.size(); i++) {
+    const Block *b = consumed[i];
+    if (user == nullptr && evaa_user_liquidate(b)) user = b;
+    if (satisfied == nullptr && is_call_op(b, kLiquidateSatisfied)) satisfied = b;
+    if (unsatisfied == nullptr && is_call_op(b, kLiquidateUnsatisfied)) unsatisfied = b;
+  }
+
+  auto output = [&](Value borrower, Value borrower_contract, td::RefInt256 collateral,
+                    td::RefInt256 collateral_amount, bool success, Value fail_reason,
+                    td::RefInt256 debt_amount, Value debt_asset_id) {
+    Value::Fields d;
+    d.emplace_back("liquidator", liquidator);
+    d.emplace_back("borrower", std::move(borrower));
+    d.emplace_back("borrower_contract", std::move(borrower_contract));
+    d.emplace_back("collateral_asset_id", Value::make_int(std::move(collateral)));
+    d.emplace_back("collateral_amount", Value::make_int(std::move(collateral_amount)));
+    d.emplace_back("is_success", Value::make_bool(success));
+    d.emplace_back("fail_reason", std::move(fail_reason));
+    d.emplace_back("debt_amount", Value::make_int(std::move(debt_amount)));
+    d.emplace_back("debt_asset_id", std::move(debt_asset_id));
+    return rt_ok(Value::make_obj(std::move(d)));
+  };
+
+  if (user == nullptr) {
+    bool immediate = false;
+    for (std::size_t i = 1; i < consumed.size(); i++) {
+      immediate = immediate || evaa_bounced_call(consumed[i]) ||
+                  consumed[i]->btype == "jetton_transfer";
+    }
+    if (!immediate) return host_reject("no immediate refund");
+    return output(master.borrower, Value::null(), master.collateral_asset_id,
+                  td::make_refint(0), false, Value::make_str("immediate_rejection"),
+                  master.incoming_amount, anchor_debt_asset_id);
+  }
+
+  const Message *um = block_msg(user);
+  Value borrower_contract =
+      account_from_opt(um != nullptr ? um->destination : std::nullopt);
+  bool satisfied_success = false, satisfied_fail = false;
+  if (satisfied != nullptr) {
+    for (const Block *child : satisfied->next_blocks) {
+      satisfied_success = satisfied_success || evaa_liquidate_success_header(child);
+      satisfied_fail = satisfied_fail || is_call_op(child, kLiquidateFail);
+    }
+  }
+  if (satisfied_success) {
+    auto r_body = block_body(satisfied);
+    if (r_body.is_error()) return host_reject("liquidate_satisfied body");
+    auto r = parse_liquidate_satisfied(r_body.ok());
+    if (r.is_error()) return host_reject("liquidate_satisfied parse");
+    LiquidateSatisfiedData s = r.move_as_ok();
+    return output(std::move(s.owner), std::move(borrower_contract),
+                  std::move(s.collateral_asset_id), std::move(s.collateral_reward), true,
+                  Value::null(), std::move(s.liquidatable_amount),
+                  Value::make_int(std::move(s.transferred_asset_id)));
+  }
+  if (unsatisfied != nullptr) {
+    std::string reason = "liquidation_error";
+    auto r_body = block_body(unsatisfied);
+    if (r_body.is_ok()) {
+      auto r_reason = parse_liquidation_reason(r_body.ok());
+      if (r_reason.is_ok()) reason = r_reason.move_as_ok();
+    }
+    return output(master.borrower, std::move(borrower_contract), master.collateral_asset_id,
+                  td::make_refint(0), false, Value::make_str(std::move(reason)),
+                  master.incoming_amount, anchor_debt_asset_id);
+  }
+  if (satisfied_fail) {
+    return output(master.borrower, std::move(borrower_contract), master.collateral_asset_id,
+                  td::make_refint(0), false,
+                  Value::make_str("master_not_enough_liquidity"), master.incoming_amount,
+                  anchor_debt_asset_id);
+  }
+  return host_reject("liquidation not completed");
 }
 
 }  // namespace mch

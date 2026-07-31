@@ -30,12 +30,20 @@ from indexer.events.blocks.basic_blocks import CallContractBlock, TonTransferBlo
 from indexer.events.blocks.core import Block
 from indexer.events.blocks.evaa import (
     EVAA_ACTION_COMMENTS,
+    TON_ASSET_ID,
     EvaaSupplyBlock,
     EvaaWithdrawBlock,
     build_evaa_supply_core,
     load_user_header,
 )
 from indexer.events.blocks.messages.evaa import (
+    EvaaLiquidateFail,
+    EvaaLiquidateMaster,
+    EvaaLiquidateSatisfied,
+    EvaaLiquidateSuccess,
+    EvaaLiquidateSuccessReport,
+    EvaaLiquidateUnsatisfied,
+    EvaaLiquidateUser,
     EvaaSupplyFail,
     EvaaSupplyMaster,
     EvaaSupplySuccess,
@@ -48,6 +56,7 @@ from indexer.events.blocks.messages.evaa import (
     EvaaWithdrawSuccess,
     EvaaWithdrawUser,
 )
+from indexer.events.blocks.utils import AccountId
 from indexer.events.mch.registry import Registries
 
 # The four "fail on user contract" error opcodes have no per-opcode message
@@ -67,12 +76,18 @@ OPCODES = {
     "EvaaWithdrawCollateralized": EvaaWithdrawCollateralized.opcode,
     "EvaaWithdrawSuccess":        EvaaWithdrawSuccess.opcode,
     "EvaaWithdrawNoFundsExcess":  EvaaWithdrawNoFundsExcess.opcode,
+    "EvaaLiquidateMaster":        EvaaLiquidateMaster.opcode,
+    "EvaaLiquidateSatisfied":     EvaaLiquidateSatisfied.opcode,
+    "EvaaLiquidateUnsatisfied":   EvaaLiquidateUnsatisfied.opcode,
+    "EvaaLiquidateSuccessReport": EvaaLiquidateSuccessReport.opcode,
+    "EvaaLiquidateFail":          EvaaLiquidateFail.opcode,
     **_FAIL_EXCESS_OPCODES,
 }
 
 BLOCK_TYPES = {
-    "EvaaSupplyBlock":   EvaaSupplyBlock,
-    "EvaaWithdrawBlock": EvaaWithdrawBlock,
+    "EvaaSupplyBlock":    EvaaSupplyBlock,
+    "EvaaWithdrawBlock":  EvaaWithdrawBlock,
+    "evaa_liquidate":     Block,
 }
 
 MESSAGE_TYPES = {
@@ -113,6 +128,108 @@ def _is_supply_anchor(block: Block) -> bool:
         return payload_slice.load_uint(32) == EvaaSupplyMaster.opcode
     except Exception:
         return False
+
+
+def _is_liquidate_anchor(block: Block) -> bool:
+    if isinstance(block, CallContractBlock) and block.opcode == EvaaLiquidateMaster.opcode:
+        return True
+    if block.btype != "jetton_transfer":
+        return False
+    try:
+        payload = block.data.get("forward_payload")
+        if not payload:
+            return False
+        return (Cell.from_boc(payload)[0].begin_parse().load_uint(32)
+                == EvaaLiquidateMaster.opcode)
+    except Exception:
+        return False
+
+
+def _is_bounced_call(block: Block) -> bool:
+    return isinstance(block, CallContractBlock) and block.get_message().bounced
+
+
+def _liquidate_result(liquidator, borrower, borrower_contract, collateral_asset_id,
+                      collateral_amount, is_success, fail_reason, debt_amount,
+                      debt_asset_id):
+    return dict(zip(
+        ("liquidator", "borrower", "borrower_contract", "collateral_asset_id",
+         "collateral_amount", "is_success", "fail_reason", "debt_amount",
+         "debt_asset_id"),
+        (liquidator, borrower, borrower_contract, collateral_asset_id,
+         collateral_amount, is_success, fail_reason, debt_amount, debt_asset_id),
+    ))
+
+
+async def _evaa_liquidate_data(consumed: list[Block]):
+    """Build the four legacy liquidation outcomes from the consumed set."""
+    if not consumed:
+        return None
+    block, rest = consumed[0], consumed[1:]
+    try:
+        is_ton = isinstance(block, CallContractBlock)
+        if is_ton:
+            liquidator = AccountId(block.get_message().source)
+            master = EvaaLiquidateMaster(block.get_body())
+            transferred_asset_id = TON_ASSET_ID
+        else:
+            liquidator = AccountId(block.data["sender"])
+            payload = block.data.get("forward_payload")
+            if not payload:
+                return None
+            master = EvaaLiquidateMaster(Cell.from_boc(payload)[0].begin_parse())
+            transferred_asset_id = block.data["receiver_wallet"].address
+        borrower = AccountId(master.borrower_address)
+
+        user = next((b for b in rest
+                     if _opcode_after_user_header(b, EvaaLiquidateUser.opcode)), None)
+        if user is None:
+            immediate = next((b for b in rest
+                              if _is_bounced_call(b) or b.btype == "jetton_transfer"), None)
+            if immediate is None:
+                return None
+            return _liquidate_result(
+                liquidator, borrower, None, master.collateral_asset_id, 0, False,
+                "immediate_rejection", master.liquidate_incoming_amount,
+                transferred_asset_id)
+
+        borrower_contract = AccountId(user.get_message().destination)
+        satisfied = next((b for b in rest
+                          if isinstance(b, CallContractBlock)
+                          and b.opcode == EvaaLiquidateSatisfied.opcode), None)
+        unsatisfied = next((b for b in rest
+                            if isinstance(b, CallContractBlock)
+                            and b.opcode == EvaaLiquidateUnsatisfied.opcode), None)
+        satisfied_success = satisfied is not None and any(
+            _opcode_after_user_header(c, EvaaLiquidateSuccess.opcode)
+            for c in satisfied.next_blocks)
+        satisfied_fail = satisfied is not None and any(
+            isinstance(c, CallContractBlock) and c.opcode == EvaaLiquidateFail.opcode
+            for c in satisfied.next_blocks)
+
+        if satisfied_success:
+            parsed = EvaaLiquidateSatisfied(satisfied.get_body())
+            return _liquidate_result(
+                liquidator, AccountId(parsed.owner_address), borrower_contract,
+                parsed.collateral_asset_id, parsed.collateral_reward, True, None,
+                parsed.liquidatable_amount, parsed.transferred_asset_id)
+        if unsatisfied is not None:
+            try:
+                reason = EvaaLiquidateUnsatisfied(unsatisfied.get_body()).get_error().reason
+            except Exception:
+                reason = "liquidation_error"
+            return _liquidate_result(
+                liquidator, borrower, borrower_contract, master.collateral_asset_id,
+                0, False, reason, master.liquidate_incoming_amount,
+                transferred_asset_id)
+        if satisfied_fail:
+            return _liquidate_result(
+                liquidator, borrower, borrower_contract, master.collateral_asset_id,
+                0, False, "master_not_enough_liquidity",
+                master.liquidate_incoming_amount, transferred_asset_id)
+        return None
+    except Exception:
+        return None
 
 
 async def _evaa_supply_data(consumed: list[Block]):
@@ -167,7 +284,24 @@ def register_evaa(reg: Registries) -> Registries:
         return (isinstance(block, TonTransferBlock)
                 and block.comment in EVAA_ACTION_COMMENTS)
 
+    @reg.register_predicate("evaa_liquidate_anchor")
+    def evaa_liquidate_anchor(block: Block) -> bool:
+        return _is_liquidate_anchor(block)
+
+    @reg.register_predicate("evaa_user_liquidate")
+    def evaa_user_liquidate(block: Block) -> bool:
+        return _opcode_after_user_header(block, EvaaLiquidateUser.opcode)
+
+    @reg.register_predicate("evaa_liquidate_success_header")
+    def evaa_liquidate_success_header(block: Block) -> bool:
+        return _opcode_after_user_header(block, EvaaLiquidateSuccess.opcode)
+
+    @reg.register_predicate("evaa_bounced_call")
+    def evaa_bounced_call(block: Block) -> bool:
+        return _is_bounced_call(block)
+
     reg.register_fn("evaa_supply_data")(_evaa_supply_data)
+    reg.register_fn("evaa_liquidate_data")(_evaa_liquidate_data)
     return reg
 
 

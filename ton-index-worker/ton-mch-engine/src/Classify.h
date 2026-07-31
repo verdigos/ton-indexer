@@ -46,6 +46,7 @@
 namespace mch {
 
 struct CoreAction;  // ClassifyCore.h
+struct Action;  // ActionBuild.h
 class LookupSource;  // BuildRuntime.h
 
 // TODO: remove (harness): TraceContextLoader and LookupSourceFactory below are
@@ -63,6 +64,10 @@ using TraceContextLoader = std::function<td::Result<TraceContext>(const std::str
 // path gate (--classify-prod / --actions-prod) injects a ParsedBlockLookupSource
 // factory over a synthesized account_interfaces_ map (SchemaGate.cpp).
 using LookupSourceFactory = std::function<std::shared_ptr<LookupSource>(TraceContext &)>;
+
+// Dump-side fixed-column Action renderer, exposed for hermetic action-surface
+// tests that must not enter the matcher pipeline.
+std::string render_action(const Action &action);
 
 // TODO: remove (harness): `--classify` renders the INTERMEDIATE block-tree
 // stage, whose only consumer was the Python twin twins/py_classify.py (audit

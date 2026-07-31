@@ -46,6 +46,11 @@ opcode EvaaWithdrawLockedExcess            = 0x21e6
 opcode EvaaWithdrawNotCollateralizedExcess = 0x21e7
 opcode EvaaWithdrawMissingPricesExcess     = 0x21e8
 opcode EvaaWithdrawExecutionCrashed        = 0x21ec
+opcode EvaaLiquidateMaster                 = 0x3
+opcode EvaaLiquidateSatisfied              = 0x311
+opcode EvaaLiquidateUnsatisfied            = 0x31f
+opcode EvaaLiquidateSuccessReport          = 0x311d
+opcode EvaaLiquidateFail                   = 0x311f
 
 predicate evaa_user_withdraw_user
 predicate evaa_user_withdraw_success
@@ -53,6 +58,10 @@ predicate evaa_user_withdraw_fail
 predicate evaa_service_comment
 predicate evaa_supply_anchor
 predicate evaa_user_supply
+predicate evaa_liquidate_anchor
+predicate evaa_user_liquidate
+predicate evaa_liquidate_success_header
+predicate evaa_bounced_call
 
 # EVAA supply — port of blocks/evaa.py EvaaSupplyBlockMatcher.
 #
@@ -161,5 +170,47 @@ matcher evaa_withdraw {
         recipient_jetton_wallet: account(jetton_payout.data.receiver_wallet) if (success and not is_ton) else null
         master_jetton_wallet:    account(jetton_payout.data.sender_wallet) if (success and not is_ton) else null
         fail_reason:             null if success else ("withdraw_no_funds_excess" if coll_fail != null else fail_excess.body.reason)
+    }
+}
+
+# EVAA liquidation — the legacy structure verbatim. In particular, the two
+# satisfied arms share 0x311, but only the success arm applies the variable
+# user header before testing 0x311a; the fail arm tests plain 0x311f.
+matcher evaa_liquidate {
+    produces evaa_liquidate
+    entry    @master
+
+    pred evaa_liquidate_anchor @master
+      -> ( pred evaa_user_liquidate @user
+             -> ( op EvaaLiquidateSatisfied @satisfied_success
+                    -> { pred evaa_liquidate_success_header
+                           -> maybe pred evaa_service_comment
+                         ( op EvaaLiquidateSuccessReport @finish
+                         ^ op EvaaLiquidateFail @finish
+                         ^ btype jetton_transfer @finish ) }
+                ^ op EvaaLiquidateSatisfied @satisfied_fail
+                    -> { op EvaaLiquidateFail
+                         ( op EvaaLiquidateSuccessReport @finish
+                         ^ op EvaaLiquidateFail @finish
+                         ^ btype jetton_transfer @finish ) }
+                ^ op EvaaLiquidateUnsatisfied @unsatisfied
+                    -> ( op EvaaLiquidateSuccessReport @finish
+                       ^ op EvaaLiquidateFail @finish
+                       ^ btype jetton_transfer @finish ) )
+           ^ ( pred evaa_bounced_call @immediate
+             ^ btype jetton_transfer @immediate ) )
+
+    let r = evaa_liquidate_data(consumed)
+    reject when r == null
+    out {
+        liquidator:          r.liquidator
+        borrower:            r.borrower
+        borrower_contract:   r.borrower_contract
+        collateral_asset_id: r.collateral_asset_id
+        collateral_amount:   r.collateral_amount
+        is_success:           r.is_success
+        fail_reason:          r.fail_reason
+        debt_amount:          r.debt_amount
+        debt_asset_id:        r.debt_asset_id
     }
 }

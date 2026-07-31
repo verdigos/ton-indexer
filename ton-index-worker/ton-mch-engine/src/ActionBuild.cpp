@@ -481,6 +481,29 @@ void fill_evaa_withdraw(const Value &d, Action &a, bool block_failed) {
   a.evaa_withdraw_data = mkdict(std::move(f));
 }
 
+}  // namespace
+
+// block_tree_serializer.py _fill_evaa_liquidate_action.
+void fill_evaa_liquidate(const Value &d, Action &a) {
+  auto addr = [](const Value &v) {
+    if (v.t == VType::Account && v.addr_none) return Value::make_str("addr_none");
+    return av_addr(v);
+  };
+  a.source = addr(dg(d, "liquidator"));
+  a.destination = addr(dg(d, "borrower"));
+  a.destination_secondary = addr(dg(d, "borrower_contract"));
+  a.amount = dg(d, "collateral_amount");
+  Value succ = dg(d, "is_success");
+  a.success = succ.t == VType::Bool && succ.boolean;
+  Value::Fields f;
+  f.emplace_back("fail_reason", dg(d, "fail_reason"));
+  f.emplace_back("debt_amount", dg(d, "debt_amount"));
+  f.emplace_back("asset_id", av_hex(dg(d, "collateral_asset_id")));
+  a.evaa_liquidate_data = mkdict(std::move(f));
+}
+
+namespace {
+
 void fill_jvault_stake(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
   a.source_secondary = av_addr(dg(d, "sender_wallet"));
@@ -1494,6 +1517,7 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "dedust_v2_claim_reward") fill_dedust_v2_claim_reward(d, a);
   else if (t == "evaa_supply") fill_evaa_supply(d, a, b->failed);
   else if (t == "evaa_withdraw") fill_evaa_withdraw(d, a, b->failed);
+  else if (t == "evaa_liquidate") fill_evaa_liquidate(d, a);
   else if (t == "jvault_stake") fill_jvault_stake(d, a);
   else if (t == "jvault_unstake") fill_jvault_unstake(d, a);
   else if (t == "jvault_unstake_request") fill_jvault_unstake_request(d, a);

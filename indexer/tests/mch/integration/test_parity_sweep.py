@@ -113,6 +113,7 @@ from indexer.events.blocks.ethena_staking import (
     EthenaWithdrawalRequestBlockMatcher,
 )
 from indexer.events.blocks.evaa import (
+    EvaaLiquidateBlockMatcher,
     EvaaSupplyBlockMatcher,
     EvaaWithdrawBlockMatcher,
 )
@@ -346,12 +347,11 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     ("specs_decl/dedust_swap_hybrid.mch", _DECL_DIR / "dedust_swap_hybrid.mch", dedust_hybrid_registries,
      _PREREQ_SWAP, (DedustSwapBlockMatcher,)),
     # Port wave (2026-07-04). Prereqs mirror each spec's own integration test.
-    # Supply + withdraw run as one group, in the legacy matchers-list order
-    # (supply 54, withdraw 55; liquidate 56 is not ported). Both bind prebuilt
-    # `btype jetton_transfer` blocks — supply for its jetton anchor and its
-    # refund leg, withdraw for its jetton payout.
+    # Supply + withdraw + liquidate run as one group, in the legacy
+    # matchers-list order (supply 54, withdraw 55, liquidate 56). All bind
+    # prebuilt `btype jetton_transfer` blocks in their jetton paths.
     ("specs/evaa.mch", _SPECS_DIR / "evaa.mch", evaa_registries, (JettonTransferBlockMatcher,),
-     (EvaaSupplyBlockMatcher, EvaaWithdrawBlockMatcher)),
+     (EvaaSupplyBlockMatcher, EvaaWithdrawBlockMatcher, EvaaLiquidateBlockMatcher)),
     # The whole LayerZero family runs as one group, in the legacy matchers-list
     # order (send 75, send_tokens 76, receive 77, commit_packet 78, dvn_verify
     # 79) — send_tokens binds the block send produces, so the pair is

@@ -22,6 +22,20 @@ is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
 
+Re-baselined 2026-07-31 (**886 → 902 rows, 208 → 211 fixtures**) by the EVAA
+liquidation wave. NOT pure-addition this time: Stage A added the
+`evaa_liquidate_data` action composite, which mechanically inserts
+`evaa_liquidate_data=null` into every pre-existing row (verified byte-identical
+modulo that insertion, held-out re-diff on the 208 old fixtures). 3 snapshot-mined
+fixtures (incl. one success=false). Port is bug-for-bug per porting-tail-plan §9
+A3: modern jetton-heavy liquidations stay UNMATCHED on both sides (14 known
+negative dumps verified, 3 spot-checked against both engines) — the legacy
+modern-shape gap is a separate parked product issue. Wave also fixed a real
+parity gap found in verification: `debt_asset_id` never populated by the port's
+first cut, and C++ `rt_access_build` faults (rejects the build) on missing dict
+keys where Python nulls gracefully — silent row-drop until the host fn carried
+the field.
+
 Re-baselined 2026-07-31 (**866 → 886 rows, 202 → 208 fixtures**) by the DNS
 auction tail wave: `dns_purchase` + `dns_release` matchers (specs/dns.mch) with
 6 live fixtures — 3 purchase (snapshot-mined via actions table; opcode-only
