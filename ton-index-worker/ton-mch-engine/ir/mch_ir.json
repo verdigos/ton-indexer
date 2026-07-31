@@ -16,6 +16,7 @@
       "specs/dedust_v2_claim_reward.mch",
       "specs_decl/dedust_v2_swap.mch",
       "specs/dedust_v2_withdraw.mch",
+      "specs/dedust_v2_deposit.mch",
       "specs/dns.mch",
       "specs/elections.mch",
       "specs/ethena.mch",
@@ -8753,6 +8754,1949 @@
       ]
     },
     {
+      "name": "dedust_v2_deposit_final",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          623189728
+        ]
+      },
+      "root": 178,
+      "produces": [
+        "dedust_v2_deposit_liquidity"
+      ],
+      "captures": [
+        {
+          "name": "join",
+          "card": "one"
+        },
+        {
+          "name": "event",
+          "card": "opt"
+        },
+        {
+          "name": "refund_jt_1",
+          "card": "opt"
+        },
+        {
+          "name": "refund_jt_2",
+          "card": "opt"
+        },
+        {
+          "name": "refund_ton",
+          "card": "opt"
+        },
+        {
+          "name": "credit",
+          "card": "one"
+        },
+        {
+          "name": "carrier",
+          "card": "one"
+        }
+      ],
+      "include_excess": false,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "join",
+          "types": [
+            "DedustV2JoinLiquidity"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "event",
+          "types": [
+            "DedustV2DepositEvent"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "credit",
+          "types": [
+            "DedustV2CreditAsset"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "carrier",
+          "types": [
+            "DedustV2PayNative"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "refund_ton",
+          "types": [
+            "PayoutMessage"
+          ]
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "event"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "initiator",
+          "expr": {
+            "k": "call",
+            "fn": "account",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "join"
+                  },
+                  "name": "body"
+                },
+                "name": "initiator"
+              }
+            ]
+          }
+        },
+        {
+          "s": "let",
+          "name": "is_x",
+          "expr": {
+            "k": "attr",
+            "of": {
+              "k": "attr",
+              "of": {
+                "k": "name",
+                "id": "credit"
+              },
+              "name": "body"
+            },
+            "name": "is_x"
+          }
+        },
+        {
+          "s": "let",
+          "name": "jetton_in",
+          "expr": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "name",
+                "id": "carrier"
+              },
+              "name": "btype"
+            },
+            "r": {
+              "k": "str",
+              "v": "jetton_transfer"
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "leg_asset",
+          "expr": {
+            "k": "ternary",
+            "cond": {
+              "k": "name",
+              "id": "jetton_in"
+            },
+            "then": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "carrier"
+                },
+                "name": "data"
+              },
+              "name": "asset"
+            },
+            "else": {
+              "k": "call",
+              "fn": "ton_asset",
+              "args": []
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "leg_wallet",
+          "expr": {
+            "k": "ternary",
+            "cond": {
+              "k": "name",
+              "id": "jetton_in"
+            },
+            "then": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "carrier"
+                },
+                "name": "data"
+              },
+              "name": "sender_wallet"
+            },
+            "else": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "payload",
+          "expr": {
+            "k": "ternary",
+            "cond": {
+              "k": "name",
+              "id": "jetton_in"
+            },
+            "then": {
+              "k": "call",
+              "fn": "dedust_v2_deposit_payload",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "carrier"
+                    },
+                    "name": "data"
+                  },
+                  "name": "forward_payload"
+                }
+              ]
+            },
+            "else": {
+              "k": "call",
+              "fn": "dedust_v2_deposit_payload",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "carrier"
+                    },
+                    "name": "body"
+                  },
+                  "name": "payment_payload"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "name",
+                "id": "refund_jt_1"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "refund_jt_1"
+                  },
+                  "name": "data"
+                },
+                "name": "receiver"
+              },
+              "r": {
+                "k": "name",
+                "id": "initiator"
+              }
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "name",
+                "id": "refund_jt_2"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "refund_jt_2"
+                  },
+                  "name": "data"
+                },
+                "name": "receiver"
+              },
+              "r": {
+                "k": "name",
+                "id": "initiator"
+              }
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "name",
+                "id": "refund_ton"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "refund_ton"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              },
+              "r": {
+                "k": "name",
+                "id": "initiator"
+              }
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "jetton_excesses",
+          "expr": {
+            "k": "call",
+            "fn": "concat",
+            "args": [
+              {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "refund_jt_1"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "list",
+                  "items": [
+                    {
+                      "k": "list",
+                      "items": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "refund_jt_1"
+                            },
+                            "name": "data"
+                          },
+                          "name": "asset"
+                        },
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "refund_jt_1"
+                            },
+                            "name": "data"
+                          },
+                          "name": "amount"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "else": {
+                  "k": "list",
+                  "items": []
+                }
+              },
+              {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "refund_jt_2"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "list",
+                  "items": [
+                    {
+                      "k": "list",
+                      "items": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "refund_jt_2"
+                            },
+                            "name": "data"
+                          },
+                          "name": "asset"
+                        },
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "refund_jt_2"
+                            },
+                            "name": "data"
+                          },
+                          "name": "amount"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "else": {
+                  "k": "list",
+                  "items": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "s": "let",
+          "name": "ton_excesses",
+          "expr": {
+            "k": "ternary",
+            "cond": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "name",
+                "id": "refund_ton"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "then": {
+              "k": "list",
+              "items": [
+                {
+                  "k": "list",
+                  "items": [
+                    {
+                      "k": "call",
+                      "fn": "ton_asset",
+                      "args": []
+                    },
+                    {
+                      "k": "call",
+                      "fn": "amount",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "refund_ton"
+                            },
+                            "name": "body"
+                          },
+                          "name": "amount"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "else": {
+              "k": "list",
+              "items": []
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "dex",
+              "expr": {
+                "k": "str",
+                "v": "dedust_v2"
+              }
+            },
+            {
+              "name": "sender",
+              "expr": {
+                "k": "name",
+                "id": "initiator"
+              }
+            },
+            {
+              "name": "pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "join"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "deposit_contract",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "join"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "amount_1",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "event"
+                      },
+                      "name": "body"
+                    },
+                    "name": "amount_x_in"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset_1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_x"
+                },
+                "then": {
+                  "k": "name",
+                  "id": "leg_asset"
+                },
+                "else": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "sender_wallet_1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_x"
+                },
+                "then": {
+                  "k": "name",
+                  "id": "leg_wallet"
+                },
+                "else": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "amount_2",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "event"
+                      },
+                      "name": "body"
+                    },
+                    "name": "amount_y_in"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset_2",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_x"
+                },
+                "then": {
+                  "k": "null"
+                },
+                "else": {
+                  "k": "name",
+                  "id": "leg_asset"
+                }
+              }
+            },
+            {
+              "name": "sender_wallet_2",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_x"
+                },
+                "then": {
+                  "k": "null"
+                },
+                "else": {
+                  "k": "name",
+                  "id": "leg_wallet"
+                }
+              }
+            },
+            {
+              "name": "target_amount_1",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "payload"
+                    },
+                    "name": "amount_x"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "target_amount_2",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "payload"
+                    },
+                    "name": "amount_y"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "lp_tokens_minted",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "event"
+                      },
+                      "name": "body"
+                    },
+                    "name": "liquidity"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "vault_excesses",
+              "expr": {
+                "k": "call",
+                "fn": "concat",
+                "args": [
+                  {
+                    "k": "name",
+                    "id": "jetton_excesses"
+                  },
+                  {
+                    "k": "name",
+                    "id": "ton_excesses"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "dedust_v2_deposit_rejected",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          623189728
+        ]
+      },
+      "root": 188,
+      "produces": [
+        "dedust_v2_deposit_liquidity"
+      ],
+      "captures": [
+        {
+          "name": "join",
+          "card": "one"
+        },
+        {
+          "name": "refund_jt_1",
+          "card": "opt"
+        },
+        {
+          "name": "refund_jt_2",
+          "card": "opt"
+        },
+        {
+          "name": "refund_ton",
+          "card": "opt"
+        },
+        {
+          "name": "event",
+          "card": "opt"
+        },
+        {
+          "name": "credit",
+          "card": "one"
+        },
+        {
+          "name": "carrier",
+          "card": "one"
+        }
+      ],
+      "include_excess": false,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "join",
+          "types": [
+            "DedustV2JoinLiquidity"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "credit",
+          "types": [
+            "DedustV2CreditAsset"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "carrier",
+          "types": [
+            "DedustV2PayNative"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "refund_ton",
+          "types": [
+            "PayoutMessage"
+          ]
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "!=",
+            "l": {
+              "k": "name",
+              "id": "event"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "initiator",
+          "expr": {
+            "k": "call",
+            "fn": "account",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "join"
+                  },
+                  "name": "body"
+                },
+                "name": "initiator"
+              }
+            ]
+          }
+        },
+        {
+          "s": "let",
+          "name": "is_x",
+          "expr": {
+            "k": "attr",
+            "of": {
+              "k": "attr",
+              "of": {
+                "k": "name",
+                "id": "credit"
+              },
+              "name": "body"
+            },
+            "name": "is_x"
+          }
+        },
+        {
+          "s": "let",
+          "name": "jetton_in",
+          "expr": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "name",
+                "id": "carrier"
+              },
+              "name": "btype"
+            },
+            "r": {
+              "k": "str",
+              "v": "jetton_transfer"
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "leg_asset",
+          "expr": {
+            "k": "ternary",
+            "cond": {
+              "k": "name",
+              "id": "jetton_in"
+            },
+            "then": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "carrier"
+                },
+                "name": "data"
+              },
+              "name": "asset"
+            },
+            "else": {
+              "k": "call",
+              "fn": "ton_asset",
+              "args": []
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "leg_wallet",
+          "expr": {
+            "k": "ternary",
+            "cond": {
+              "k": "name",
+              "id": "jetton_in"
+            },
+            "then": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "carrier"
+                },
+                "name": "data"
+              },
+              "name": "sender_wallet"
+            },
+            "else": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "payload",
+          "expr": {
+            "k": "ternary",
+            "cond": {
+              "k": "name",
+              "id": "jetton_in"
+            },
+            "then": {
+              "k": "call",
+              "fn": "dedust_v2_deposit_payload",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "carrier"
+                    },
+                    "name": "data"
+                  },
+                  "name": "forward_payload"
+                }
+              ]
+            },
+            "else": {
+              "k": "call",
+              "fn": "dedust_v2_deposit_payload",
+              "args": [
+                {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "carrier"
+                    },
+                    "name": "body"
+                  },
+                  "name": "payment_payload"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "name",
+                "id": "refund_jt_1"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "refund_jt_1"
+                  },
+                  "name": "data"
+                },
+                "name": "receiver"
+              },
+              "r": {
+                "k": "name",
+                "id": "initiator"
+              }
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "name",
+                "id": "refund_jt_2"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "refund_jt_2"
+                  },
+                  "name": "data"
+                },
+                "name": "receiver"
+              },
+              "r": {
+                "k": "name",
+                "id": "initiator"
+              }
+            }
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "and",
+            "l": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "name",
+                "id": "refund_ton"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "refund_ton"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              },
+              "r": {
+                "k": "name",
+                "id": "initiator"
+              }
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "jetton_excesses",
+          "expr": {
+            "k": "call",
+            "fn": "concat",
+            "args": [
+              {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "refund_jt_1"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "list",
+                  "items": [
+                    {
+                      "k": "list",
+                      "items": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "refund_jt_1"
+                            },
+                            "name": "data"
+                          },
+                          "name": "asset"
+                        },
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "refund_jt_1"
+                            },
+                            "name": "data"
+                          },
+                          "name": "amount"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "else": {
+                  "k": "list",
+                  "items": []
+                }
+              },
+              {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "!=",
+                  "l": {
+                    "k": "name",
+                    "id": "refund_jt_2"
+                  },
+                  "r": {
+                    "k": "null"
+                  }
+                },
+                "then": {
+                  "k": "list",
+                  "items": [
+                    {
+                      "k": "list",
+                      "items": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "refund_jt_2"
+                            },
+                            "name": "data"
+                          },
+                          "name": "asset"
+                        },
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "refund_jt_2"
+                            },
+                            "name": "data"
+                          },
+                          "name": "amount"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "else": {
+                  "k": "list",
+                  "items": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "s": "let",
+          "name": "ton_excesses",
+          "expr": {
+            "k": "ternary",
+            "cond": {
+              "k": "bin",
+              "op": "!=",
+              "l": {
+                "k": "name",
+                "id": "refund_ton"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "then": {
+              "k": "list",
+              "items": [
+                {
+                  "k": "list",
+                  "items": [
+                    {
+                      "k": "call",
+                      "fn": "ton_asset",
+                      "args": []
+                    },
+                    {
+                      "k": "call",
+                      "fn": "amount",
+                      "args": [
+                        {
+                          "k": "attr",
+                          "of": {
+                            "k": "attr",
+                            "of": {
+                              "k": "name",
+                              "id": "refund_ton"
+                            },
+                            "name": "body"
+                          },
+                          "name": "amount"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "else": {
+              "k": "list",
+              "items": []
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "excesses",
+          "expr": {
+            "k": "call",
+            "fn": "concat",
+            "args": [
+              {
+                "k": "name",
+                "id": "jetton_excesses"
+              },
+              {
+                "k": "name",
+                "id": "ton_excesses"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "call",
+              "fn": "len",
+              "args": [
+                {
+                  "k": "name",
+                  "id": "excesses"
+                }
+              ]
+            },
+            "r": {
+              "k": "int",
+              "v": 0
+            }
+          }
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bool",
+            "v": true
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "dex",
+              "expr": {
+                "k": "str",
+                "v": "dedust_v2"
+              }
+            },
+            {
+              "name": "sender",
+              "expr": {
+                "k": "name",
+                "id": "initiator"
+              }
+            },
+            {
+              "name": "pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "join"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "deposit_contract",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "join"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "amount_1",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "join"
+                      },
+                      "name": "body"
+                    },
+                    "name": "amount_x"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset_1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_x"
+                },
+                "then": {
+                  "k": "name",
+                  "id": "leg_asset"
+                },
+                "else": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "sender_wallet_1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_x"
+                },
+                "then": {
+                  "k": "name",
+                  "id": "leg_wallet"
+                },
+                "else": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "amount_2",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "join"
+                      },
+                      "name": "body"
+                    },
+                    "name": "amount_y"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset_2",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_x"
+                },
+                "then": {
+                  "k": "null"
+                },
+                "else": {
+                  "k": "name",
+                  "id": "leg_asset"
+                }
+              }
+            },
+            {
+              "name": "sender_wallet_2",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_x"
+                },
+                "then": {
+                  "k": "null"
+                },
+                "else": {
+                  "k": "name",
+                  "id": "leg_wallet"
+                }
+              }
+            },
+            {
+              "name": "target_amount_1",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "payload"
+                    },
+                    "name": "amount_x"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "target_amount_2",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "payload"
+                    },
+                    "name": "amount_y"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "lp_tokens_minted",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "vault_excesses",
+              "expr": {
+                "k": "name",
+                "id": "excesses"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "dedust_v2_deposit_partial",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          3697138593
+        ]
+      },
+      "root": 198,
+      "produces": [
+        "dedust_v2_deposit_liquidity_partial"
+      ],
+      "captures": [
+        {
+          "name": "credit",
+          "card": "one"
+        },
+        {
+          "name": "carrier",
+          "card": "one"
+        }
+      ],
+      "include_excess": false,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "credit",
+          "types": [
+            "DedustV2CreditAsset"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "carrier",
+          "types": [
+            "DedustV2PayNative"
+          ]
+        },
+        {
+          "s": "let",
+          "name": "is_x",
+          "expr": {
+            "k": "attr",
+            "of": {
+              "k": "attr",
+              "of": {
+                "k": "name",
+                "id": "credit"
+              },
+              "name": "body"
+            },
+            "name": "is_x"
+          }
+        },
+        {
+          "s": "let",
+          "name": "jetton_in",
+          "expr": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "name",
+                "id": "carrier"
+              },
+              "name": "btype"
+            },
+            "r": {
+              "k": "str",
+              "v": "jetton_transfer"
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "leg_asset",
+          "expr": {
+            "k": "ternary",
+            "cond": {
+              "k": "name",
+              "id": "jetton_in"
+            },
+            "then": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "carrier"
+                },
+                "name": "data"
+              },
+              "name": "asset"
+            },
+            "else": {
+              "k": "call",
+              "fn": "ton_asset",
+              "args": []
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "leg_wallet",
+          "expr": {
+            "k": "ternary",
+            "cond": {
+              "k": "name",
+              "id": "jetton_in"
+            },
+            "then": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "carrier"
+                },
+                "name": "data"
+              },
+              "name": "sender_wallet"
+            },
+            "else": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "leg_amount",
+          "expr": {
+            "k": "call",
+            "fn": "amount",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "credit"
+                  },
+                  "name": "body"
+                },
+                "name": "amount"
+              }
+            ]
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "dex",
+              "expr": {
+                "k": "str",
+                "v": "dedust_v2"
+              }
+            },
+            {
+              "name": "sender",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "jetton_in"
+                },
+                "then": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "carrier"
+                    },
+                    "name": "data"
+                  },
+                  "name": "sender"
+                },
+                "else": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "carrier"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "source"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "credit"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "deposit_contract",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "credit"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "amount_1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_x"
+                },
+                "then": {
+                  "k": "name",
+                  "id": "leg_amount"
+                },
+                "else": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "asset_1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_x"
+                },
+                "then": {
+                  "k": "name",
+                  "id": "leg_asset"
+                },
+                "else": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "sender_wallet_1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_x"
+                },
+                "then": {
+                  "k": "name",
+                  "id": "leg_wallet"
+                },
+                "else": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "amount_2",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_x"
+                },
+                "then": {
+                  "k": "null"
+                },
+                "else": {
+                  "k": "name",
+                  "id": "leg_amount"
+                }
+              }
+            },
+            {
+              "name": "asset_2",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_x"
+                },
+                "then": {
+                  "k": "null"
+                },
+                "else": {
+                  "k": "name",
+                  "id": "leg_asset"
+                }
+              }
+            },
+            {
+              "name": "sender_wallet_2",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_x"
+                },
+                "then": {
+                  "k": "null"
+                },
+                "else": {
+                  "k": "name",
+                  "id": "leg_wallet"
+                }
+              }
+            },
+            {
+              "name": "lp_tokens_minted",
+              "expr": {
+                "k": "null"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "change_dns",
       "anchor": {
         "kind": "opcode_set",
@@ -8760,7 +10704,7 @@
           1320284409
         ]
       },
-      "root": 178,
+      "root": 203,
       "produces": [
         "change_dns",
         "renew_dns",
@@ -9108,7 +11052,7 @@
           1316189259
         ]
       },
-      "root": 180,
+      "root": 205,
       "produces": [
         "election_deposit"
       ],
@@ -9219,7 +11163,7 @@
           1197831204
         ]
       },
-      "root": 182,
+      "root": 207,
       "produces": [
         "election_recover"
       ],
@@ -9331,7 +11275,7 @@
           "jetton_transfer"
         ]
       },
-      "root": 184,
+      "root": 209,
       "produces": [
         "ethena_deposit"
       ],
@@ -9542,7 +11486,7 @@
         "kind": "pred",
         "pred": "evaa_supply_anchor"
       },
-      "root": 186,
+      "root": 211,
       "produces": [
         "evaa_supply"
       ],
@@ -9746,7 +11690,7 @@
           2
         ]
       },
-      "root": 193,
+      "root": 218,
       "produces": [
         "evaa_withdraw"
       ],
@@ -10279,7 +12223,7 @@
           "nft_transfer"
         ]
       },
-      "root": 211,
+      "root": 236,
       "produces": [
         "nft_purchase"
       ],
@@ -10538,7 +12482,7 @@
           "jetton_transfer"
         ]
       },
-      "root": 213,
+      "root": 238,
       "produces": [
         "jvault_stake"
       ],
@@ -10817,7 +12761,7 @@
           1234866786
         ]
       },
-      "root": 225,
+      "root": 250,
       "produces": [
         "jvault_unstake"
       ],
@@ -11207,7 +13151,7 @@
           2027548937
         ]
       },
-      "root": 234,
+      "root": 259,
       "produces": [
         "jvault_claim"
       ],
@@ -11370,7 +13314,7 @@
           23647415
         ]
       },
-      "root": 238,
+      "root": 263,
       "produces": [
         "jvault_unstake_request"
       ],
@@ -11688,7 +13632,7 @@
           586394633
         ]
       },
-      "root": 245,
+      "root": 270,
       "produces": [
         "layerzero_receive"
       ],
@@ -11996,7 +13940,7 @@
           1607220500
         ]
       },
-      "root": 254,
+      "root": 279,
       "produces": [
         "nft_transfer"
       ],
@@ -12212,7 +14156,7 @@
           "ton_transfer"
         ]
       },
-      "root": 257,
+      "root": 282,
       "produces": [
         "nominator_pool_withdraw_request"
       ],
@@ -12339,7 +14283,7 @@
           "jetton_transfer"
         ]
       },
-      "root": 258,
+      "root": 283,
       "produces": [
         "jetton_swap"
       ],
@@ -12533,7 +14477,7 @@
           935368415
         ]
       },
-      "root": 262,
+      "root": 287,
       "produces": [
         "dex_deposit_liquidity"
       ],
@@ -12878,7 +14822,7 @@
           935368415
         ]
       },
-      "root": 275,
+      "root": 300,
       "produces": [
         "dex_deposit_liquidity"
       ],
@@ -13158,7 +15102,7 @@
           1717886506
         ]
       },
-      "root": 284,
+      "root": 309,
       "produces": [
         "jetton_swap"
       ],
@@ -13334,7 +15278,7 @@
           "jetton_burn"
         ]
       },
-      "root": 335,
+      "root": 360,
       "produces": [
         "dex_withdraw_liquidity"
       ],
@@ -13767,7 +15711,7 @@
           261677752
         ]
       },
-      "root": 343,
+      "root": 368,
       "produces": [
         "dex_withdraw_liquidity"
       ],
@@ -14179,7 +16123,7 @@
           85167505
         ]
       },
-      "root": 351,
+      "root": 376,
       "produces": [
         "nft_transfer"
       ],
@@ -14437,7 +16381,7 @@
           85167505
         ]
       },
-      "root": 359,
+      "root": 384,
       "produces": [
         "nft_transfer"
       ],
@@ -14758,7 +16702,7 @@
           1215991425
         ]
       },
-      "root": 360,
+      "root": 385,
       "produces": [
         "teleitem_start_auction"
       ],
@@ -15115,7 +17059,7 @@
           924203182
         ]
       },
-      "root": 362,
+      "root": 387,
       "produces": [
         "teleitem_cancel_auction"
       ],
@@ -15334,7 +17278,7 @@
           1819025536
         ]
       },
-      "root": 364,
+      "root": 389,
       "produces": [
         "nft_update_sale"
       ],
@@ -15607,7 +17551,7 @@
           "nft_transfer"
         ]
       },
-      "root": 365,
+      "root": 390,
       "produces": [
         "nft_put_on_sale",
         "nft_put_on_auction"
@@ -16800,7 +18744,7 @@
           801842850
         ]
       },
-      "root": 368,
+      "root": 393,
       "produces": [
         "nft_discovery"
       ],
@@ -16959,7 +18903,7 @@
           "ton_transfer"
         ]
       },
-      "root": 370,
+      "root": 395,
       "produces": [
         "auction_bid"
       ],
@@ -17110,7 +19054,7 @@
           }
         ]
       },
-      "root": 371,
+      "root": 396,
       "produces": [
         "auction_outbid"
       ],
@@ -17254,7 +19198,7 @@
           3
         ]
       },
-      "root": 372,
+      "root": 397,
       "produces": [
         "nft_cancel_sale"
       ],
@@ -17483,7 +19427,7 @@
           }
         ]
       },
-      "root": 373,
+      "root": 398,
       "produces": [
         "nft_finish_auction"
       ],
@@ -17695,7 +19639,7 @@
           }
         ]
       },
-      "root": 374,
+      "root": 399,
       "produces": [
         "nft_cancel_auction",
         "nft_finish_auction"
@@ -18025,7 +19969,7 @@
           1064836388
         ]
       },
-      "root": 375,
+      "root": 400,
       "produces": [
         "tgbtc_mint"
       ],
@@ -18197,7 +20141,7 @@
           1052660785
         ]
       },
-      "root": 381,
+      "root": 406,
       "produces": [
         "tonco_deposit_liquidity"
       ],
@@ -18468,7 +20412,7 @@
           1393254188
         ]
       },
-      "root": 395,
+      "root": 420,
       "produces": [
         "tonco_withdraw_liquidity"
       ],
@@ -18846,7 +20790,7 @@
           2818267384
         ]
       },
-      "root": 403,
+      "root": 428,
       "produces": [
         "jetton_swap"
       ],
@@ -19027,7 +20971,7 @@
           3678112445
         ]
       },
-      "root": 431,
+      "root": 456,
       "produces": [
         "tonstakers_withdraw"
       ],
@@ -19170,7 +21114,7 @@
           1205158801
         ]
       },
-      "root": 434,
+      "root": 459,
       "produces": [
         "tonstakers_deposit"
       ],
@@ -19391,7 +21335,7 @@
           1499400124
         ]
       },
-      "root": 438,
+      "root": 463,
       "produces": [
         "tonstakers_withdraw",
         "tonstakers_withdraw_request"
@@ -19754,7 +21698,7 @@
           2809346765
         ]
       },
-      "root": 444,
+      "root": 469,
       "produces": [
         "vesting_send_message"
       ],
@@ -19934,7 +21878,7 @@
           3237998115
         ]
       },
-      "root": 446,
+      "root": 471,
       "produces": [
         "coffee_create_pool_creator"
       ],
@@ -20143,7 +22087,7 @@
           "coffee_create_pool_creator"
         ]
       },
-      "root": 451,
+      "root": 476,
       "produces": [
         "coffee_create_pool"
       ],
@@ -20608,7 +22552,7 @@
           1808244350
         ]
       },
-      "root": 459,
+      "root": 484,
       "produces": [
         "coffee_mev_protect_hold_funds"
       ],
@@ -20721,7 +22665,7 @@
           "jetton_transfer"
         ]
       },
-      "root": 462,
+      "root": 487,
       "produces": [
         "coffee_mev_protect_hold_funds"
       ],
@@ -20830,7 +22774,7 @@
           "jetton_transfer"
         ]
       },
-      "root": 465,
+      "root": 490,
       "produces": [
         "coffee_staking_deposit"
       ],
@@ -20998,7 +22942,7 @@
           3406020527
         ]
       },
-      "root": 469,
+      "root": 494,
       "produces": [
         "coffee_staking_withdraw"
       ],
@@ -21233,7 +23177,7 @@
           3003937552
         ]
       },
-      "root": 474,
+      "root": 499,
       "produces": [
         "coffee_staking_claim_rewards"
       ],
@@ -22559,9 +24503,173 @@
     },
     {
       "kind": "contract",
+      "opcode": 623189728,
+      "capture": "join",
+      "children": [
+        179,
+        180,
+        181,
+        182,
+        183
+      ],
+      "parent": 184
+    },
+    {
+      "kind": "contract",
+      "opcode": 903818770,
+      "optional": true,
+      "capture": "event"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2237332669,
+      "optional": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "optional": true,
+      "capture": "refund_jt_1"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "optional": true,
+      "capture": "refund_jt_2"
+    },
+    {
+      "kind": "contract",
+      "opcode": 840354313,
+      "optional": true,
+      "capture": "refund_ton"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3697138593,
+      "capture": "credit",
+      "parent": 185
+    },
+    {
+      "kind": "or",
+      "branches": [
+        186,
+        187
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 2779237368,
+      "capture": "carrier"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "carrier"
+    },
+    {
+      "kind": "contract",
+      "opcode": 623189728,
+      "capture": "join",
+      "children": [
+        189,
+        190,
+        191,
+        192,
+        193
+      ],
+      "parent": 194
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "optional": true,
+      "capture": "refund_jt_1"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "optional": true,
+      "capture": "refund_jt_2"
+    },
+    {
+      "kind": "contract",
+      "opcode": 840354313,
+      "optional": true,
+      "capture": "refund_ton"
+    },
+    {
+      "kind": "contract",
+      "opcode": 903818770,
+      "optional": true,
+      "capture": "event"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3576854235,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 3697138593,
+      "capture": "credit",
+      "parent": 195
+    },
+    {
+      "kind": "or",
+      "branches": [
+        196,
+        197
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 2779237368,
+      "capture": "carrier"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "carrier"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3697138593,
+      "capture": "credit",
+      "children": [
+        199
+      ],
+      "parent": 200
+    },
+    {
+      "kind": "contract",
+      "opcode": 3576854235,
+      "optional": true
+    },
+    {
+      "kind": "or",
+      "branches": [
+        201,
+        202
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 2779237368,
+      "capture": "carrier"
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "carrier"
+    },
+    {
+      "kind": "contract",
       "opcode": 1320284409,
       "capture": "dns",
-      "child": 179
+      "child": 204
     },
     {
       "kind": "contract",
@@ -22572,7 +24680,7 @@
       "kind": "contract",
       "opcode": 1316189259,
       "capture": "req",
-      "child": 181
+      "child": 206
     },
     {
       "kind": "contract",
@@ -22584,7 +24692,7 @@
       "kind": "contract",
       "opcode": 1197831204,
       "capture": "req",
-      "child": 183
+      "child": 208
     },
     {
       "kind": "contract",
@@ -22596,7 +24704,7 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "transfer",
-      "child": 185
+      "child": 210
     },
     {
       "kind": "block_type",
@@ -22606,20 +24714,20 @@
     {
       "kind": "any",
       "capture": "master",
-      "child": 187
+      "child": 212
     },
     {
       "kind": "pred",
       "pred": "evaa_user_supply",
       "capture": "user",
-      "child": 188
+      "child": 213
     },
     {
       "kind": "or",
       "branches": [
-        189,
-        191,
-        192
+        214,
+        216,
+        217
       ],
       "exclusive": false
     },
@@ -22627,7 +24735,7 @@
       "kind": "contract",
       "opcode": 282,
       "capture": "success",
-      "child": 190
+      "child": 215
     },
     {
       "kind": "pred",
@@ -22648,20 +24756,20 @@
       "kind": "contract",
       "opcode": 2,
       "capture": "master",
-      "child": 194
+      "child": 219
     },
     {
       "kind": "pred",
       "pred": "evaa_user_withdraw_user",
       "capture": "user",
-      "child": 195
+      "child": 220
     },
     {
       "kind": "or",
       "branches": [
-        196,
-        203,
-        206
+        221,
+        228,
+        231
       ],
       "exclusive": true
     },
@@ -22670,15 +24778,15 @@
       "opcode": 529,
       "capture": "coll_ok",
       "children": [
-        197,
-        201
+        222,
+        226
       ]
     },
     {
       "kind": "or",
       "branches": [
-        198,
-        199
+        223,
+        224
       ],
       "exclusive": true
     },
@@ -22691,7 +24799,7 @@
       "kind": "contract",
       "opcode": 8474,
       "capture": "ton_payout",
-      "child": 200
+      "child": 225
     },
     {
       "kind": "pred",
@@ -22701,7 +24809,7 @@
     {
       "kind": "pred",
       "pred": "evaa_user_withdraw_success",
-      "child": 202
+      "child": 227
     },
     {
       "kind": "block_type",
@@ -22711,12 +24819,12 @@
       "kind": "contract",
       "opcode": 529,
       "capture": "coll_fail",
-      "child": 204
+      "child": 229
     },
     {
       "kind": "pred",
       "pred": "evaa_user_withdraw_fail",
-      "child": 205
+      "child": 230
     },
     {
       "kind": "contract",
@@ -22725,10 +24833,10 @@
     {
       "kind": "or",
       "branches": [
-        207,
-        208,
-        209,
-        210
+        232,
+        233,
+        234,
+        235
       ],
       "exclusive": true
     },
@@ -22757,7 +24865,7 @@
       "btype": "nft_transfer",
       "capture": "nft",
       "where": "getgems_purchase",
-      "child": 212
+      "child": 237
     },
     {
       "kind": "block_type",
@@ -22771,21 +24879,21 @@
       "btype": "jetton_transfer",
       "capture": "transfer",
       "children": [
-        214,
-        224
+        239,
+        249
       ]
     },
     {
       "kind": "contract",
       "opcode": 3599387329,
       "capture": "receive",
-      "child": 215
+      "child": 240
     },
     {
       "kind": "or",
       "branches": [
-        216,
-        222
+        241,
+        247
       ],
       "exclusive": false
     },
@@ -22794,20 +24902,20 @@
       "opcode": 4123376291,
       "capture": "request",
       "children": [
-        217,
-        221
+        242,
+        246
       ]
     },
     {
       "kind": "recursive",
-      "step": 218,
+      "step": 243,
       "optional": true
     },
     {
       "kind": "or",
       "branches": [
-        219,
-        220
+        244,
+        245
       ],
       "exclusive": false
     },
@@ -22830,7 +24938,7 @@
       "kind": "contract",
       "opcode": 2662179289,
       "capture": "cancel",
-      "child": 223
+      "child": 248
     },
     {
       "kind": "block_type",
@@ -22848,7 +24956,7 @@
       "kind": "contract",
       "opcode": 1234866786,
       "capture": "unstake",
-      "child": 226
+      "child": 251
     },
     {
       "kind": "contract",
@@ -22856,22 +24964,22 @@
       "optional": true,
       "capture": "request",
       "children": [
-        227,
-        231,
-        232,
-        233
+        252,
+        256,
+        257,
+        258
       ]
     },
     {
       "kind": "recursive",
-      "step": 228,
+      "step": 253,
       "optional": true
     },
     {
       "kind": "or",
       "branches": [
-        229,
-        230
+        254,
+        255
       ],
       "exclusive": false
     },
@@ -22905,15 +25013,15 @@
       "kind": "contract",
       "opcode": 2027548937,
       "capture": "claim",
-      "child": 235
+      "child": 260
     },
     {
       "kind": "contract",
       "opcode": 1153179619,
       "capture": "send",
       "children": [
-        236,
-        237
+        261,
+        262
       ]
     },
     {
@@ -22930,7 +25038,7 @@
       "kind": "contract",
       "opcode": 23647415,
       "capture": "request_anchor",
-      "child": 239
+      "child": 264
     },
     {
       "kind": "contract",
@@ -22938,20 +25046,20 @@
       "optional": true,
       "capture": "request",
       "children": [
-        240,
-        244
+        265,
+        269
       ]
     },
     {
       "kind": "recursive",
-      "step": 241,
+      "step": 266,
       "optional": true
     },
     {
       "kind": "or",
       "branches": [
-        242,
-        243
+        267,
+        268
       ],
       "exclusive": false
     },
@@ -22975,8 +25083,8 @@
       "opcode": 586394633,
       "capture": "prepare",
       "children": [
-        246,
-        247
+        271,
+        272
       ]
     },
     {
@@ -22987,20 +25095,20 @@
     {
       "kind": "contract",
       "opcode": 2547990604,
-      "child": 248
+      "child": 273
     },
     {
       "kind": "contract",
       "opcode": 3077049286,
-      "child": 249
+      "child": 274
     },
     {
       "kind": "contract",
       "opcode": 209421336,
       "capture": "execute",
       "children": [
-        250,
-        251
+        275,
+        276
       ]
     },
     {
@@ -23013,8 +25121,8 @@
       "opcode": 3400410529,
       "capture": "oapp_callback",
       "children": [
-        252,
-        253
+        277,
+        278
       ]
     },
     {
@@ -23032,8 +25140,8 @@
       "opcode": 1607220500,
       "capture": "transfer",
       "children": [
-        255,
-        256
+        280,
+        281
       ]
     },
     {
@@ -23058,20 +25166,20 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "in_transfer",
-      "child": 259
+      "child": 284
     },
     {
       "kind": "contract",
       "opcode": 630424929,
       "capture": "swap",
-      "child": 260
+      "child": 285
     },
     {
       "kind": "contract",
       "opcode": 4181439551,
       "capture": "req",
       "where": "stonfi_v1_sender_payment",
-      "child": 261
+      "child": 286
     },
     {
       "kind": "block_type",
@@ -23083,27 +25191,27 @@
       "opcode": 935368415,
       "capture": "provide",
       "children": [
-        263
+        288
       ],
-      "parent": 268
+      "parent": 293
     },
     {
       "kind": "contract",
       "opcode": 1355195988,
       "capture": "add",
-      "child": 264
+      "child": 289
     },
     {
       "kind": "contract",
       "opcode": 116184359,
       "capture": "cb",
-      "child": 265
+      "child": 290
     },
     {
       "kind": "or",
       "branches": [
-        266,
-        267
+        291,
+        292
       ],
       "exclusive": true
     },
@@ -23120,9 +25228,9 @@
     {
       "kind": "or",
       "branches": [
-        269,
-        271,
-        272
+        294,
+        296,
+        297
       ],
       "exclusive": false
     },
@@ -23130,7 +25238,7 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "notify_pton",
-      "parent": 270
+      "parent": 295
     },
     {
       "kind": "contract",
@@ -23146,13 +25254,13 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "notify_raw",
-      "parent": 273
+      "parent": 298
     },
     {
       "kind": "contract",
       "opcode": 395134233,
       "capture": "internal_raw",
-      "parent": 274
+      "parent": 299
     },
     {
       "kind": "block_type",
@@ -23164,9 +25272,9 @@
       "opcode": 935368415,
       "capture": "provide",
       "children": [
-        276
+        301
       ],
-      "parent": 277
+      "parent": 302
     },
     {
       "kind": "contract",
@@ -23176,9 +25284,9 @@
     {
       "kind": "or",
       "branches": [
-        278,
-        280,
-        281
+        303,
+        305,
+        306
       ],
       "exclusive": false
     },
@@ -23186,7 +25294,7 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "notify_pton",
-      "parent": 279
+      "parent": 304
     },
     {
       "kind": "contract",
@@ -23202,13 +25310,13 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "notify_raw",
-      "parent": 282
+      "parent": 307
     },
     {
       "kind": "contract",
       "opcode": 395134233,
       "capture": "internal_raw",
-      "parent": 283
+      "parent": 308
     },
     {
       "kind": "block_type",
@@ -23220,22 +25328,22 @@
       "opcode": 1717886506,
       "capture": "swap",
       "children": [
-        285
+        310
       ],
-      "parent": 331
+      "parent": 356
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout",
-      "child": 286
+      "child": 311
     },
     {
       "kind": "or",
       "branches": [
-        287,
-        303,
-        318
+        312,
+        328,
+        343
       ],
       "exclusive": true
     },
@@ -23251,29 +25359,29 @@
           "name": "has_internal_transfer"
         }
       },
-      "child": 288
+      "child": 313
     },
     {
       "kind": "pred",
       "pred": "pton_self_transfer",
-      "child": 289
+      "child": 314
     },
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "child": 290
+      "child": 315
     },
     {
       "kind": "recursive",
-      "step": 291,
+      "step": 316,
       "optional": true
     },
     {
       "kind": "or",
       "branches": [
-        292,
-        297,
-        301
+        317,
+        322,
+        326
       ],
       "exclusive": false
     },
@@ -23281,13 +25389,13 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 293
+      "child": 318
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "peer_payout",
-      "child": 294
+      "child": 319
     },
     {
       "kind": "block_type",
@@ -23301,12 +25409,12 @@
           "name": "has_internal_transfer"
         }
       },
-      "child": 295
+      "child": 320
     },
     {
       "kind": "pred",
       "pred": "pton_self_transfer",
-      "child": 296
+      "child": 321
     },
     {
       "kind": "contract",
@@ -23316,20 +25424,20 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 298
+      "child": 323
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "peer_payout",
-      "child": 299
+      "child": 324
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "peer_out",
       "children": [
-        300
+        325
       ]
     },
     {
@@ -23341,7 +25449,7 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 302
+      "child": 327
     },
     {
       "kind": "contract",
@@ -23352,22 +25460,22 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "out_transfer",
-      "child": 304,
+      "child": 329,
       "children": [
-        317
+        342
       ]
     },
     {
       "kind": "recursive",
-      "step": 305,
+      "step": 330,
       "optional": true
     },
     {
       "kind": "or",
       "branches": [
-        306,
-        311,
-        315
+        331,
+        336,
+        340
       ],
       "exclusive": false
     },
@@ -23375,13 +25483,13 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 307
+      "child": 332
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "peer_payout",
-      "child": 308
+      "child": 333
     },
     {
       "kind": "block_type",
@@ -23395,12 +25503,12 @@
           "name": "has_internal_transfer"
         }
       },
-      "child": 309
+      "child": 334
     },
     {
       "kind": "pred",
       "pred": "pton_self_transfer",
-      "child": 310
+      "child": 335
     },
     {
       "kind": "contract",
@@ -23410,20 +25518,20 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 312
+      "child": 337
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "peer_payout",
-      "child": 313
+      "child": 338
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "peer_out",
       "children": [
-        314
+        339
       ]
     },
     {
@@ -23435,7 +25543,7 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 316
+      "child": 341
     },
     {
       "kind": "contract",
@@ -23449,15 +25557,15 @@
     },
     {
       "kind": "recursive",
-      "step": 319,
+      "step": 344,
       "optional": true
     },
     {
       "kind": "or",
       "branches": [
-        320,
-        325,
-        329
+        345,
+        350,
+        354
       ],
       "exclusive": false
     },
@@ -23465,13 +25573,13 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 321
+      "child": 346
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "peer_payout",
-      "child": 322
+      "child": 347
     },
     {
       "kind": "block_type",
@@ -23485,12 +25593,12 @@
           "name": "has_internal_transfer"
         }
       },
-      "child": 323
+      "child": 348
     },
     {
       "kind": "pred",
       "pred": "pton_self_transfer",
-      "child": 324
+      "child": 349
     },
     {
       "kind": "contract",
@@ -23500,20 +25608,20 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 326
+      "child": 351
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "peer_payout",
-      "child": 327
+      "child": 352
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "peer_out",
       "children": [
-        328
+        353
       ]
     },
     {
@@ -23525,7 +25633,7 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 330
+      "child": 355
     },
     {
       "kind": "contract",
@@ -23535,8 +25643,8 @@
     {
       "kind": "or",
       "branches": [
-        332,
-        333
+        357,
+        358
       ],
       "exclusive": true
     },
@@ -23548,7 +25656,7 @@
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "parent": 334
+      "parent": 359
     },
     {
       "kind": "contract",
@@ -23559,28 +25667,28 @@
       "kind": "block_type",
       "btype": "jetton_burn",
       "capture": "burn",
-      "child": 336
+      "child": 361
     },
     {
       "kind": "contract",
       "opcode": 695482319,
       "capture": "router",
       "children": [
-        337,
-        340
+        362,
+        365
       ]
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout_1",
-      "child": 338
+      "child": 363
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "jt_1",
-      "child": 339
+      "child": 364
     },
     {
       "kind": "contract",
@@ -23592,13 +25700,13 @@
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout_2",
-      "child": 341
+      "child": 366
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "jt_2",
-      "child": 342
+      "child": 367
     },
     {
       "kind": "contract",
@@ -23611,22 +25719,22 @@
       "opcode": 261677752,
       "capture": "refund",
       "children": [
-        344,
-        347
+        369,
+        372
       ],
-      "parent": 350
+      "parent": 375
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout_1",
-      "child": 345
+      "child": 370
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "jt_1",
-      "child": 346
+      "child": 371
     },
     {
       "kind": "contract",
@@ -23638,13 +25746,13 @@
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout_2",
-      "child": 348
+      "child": 373
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "jt_2",
-      "child": 349
+      "child": 374
     },
     {
       "kind": "contract",
@@ -23661,13 +25769,13 @@
       "kind": "contract",
       "opcode": 85167505,
       "capture": "assigned",
-      "parent": 352
+      "parent": 377
     },
     {
       "kind": "or",
       "branches": [
-        353,
-        356
+        378,
+        381
       ],
       "exclusive": true
     },
@@ -23676,8 +25784,8 @@
       "btype": "ton_transfer",
       "capture": "payment",
       "children": [
-        354,
-        355
+        379,
+        380
       ]
     },
     {
@@ -23707,8 +25815,8 @@
         }
       },
       "children": [
-        357,
-        358
+        382,
+        383
       ]
     },
     {
@@ -23731,7 +25839,7 @@
       "kind": "contract",
       "opcode": 1215991425,
       "capture": "auction",
-      "child": 361
+      "child": 386
     },
     {
       "kind": "contract",
@@ -23743,7 +25851,7 @@
       "kind": "contract",
       "opcode": 924203182,
       "capture": "cancel",
-      "child": 363
+      "child": 388
     },
     {
       "kind": "contract",
@@ -23761,8 +25869,8 @@
       "btype": "nft_transfer",
       "capture": "listing",
       "children": [
-        366,
-        367
+        391,
+        392
       ]
     },
     {
@@ -23779,7 +25887,7 @@
       "kind": "contract",
       "opcode": 801842850,
       "capture": "disc",
-      "child": 369
+      "child": 394
     },
     {
       "kind": "contract",
@@ -23813,12 +25921,12 @@
       "kind": "contract",
       "opcode": 1064836388,
       "capture": "head",
-      "child": 376
+      "child": 401
     },
     {
       "kind": "recursive",
-      "step": 377,
-      "exit": 378,
+      "step": 402,
+      "exit": 403,
       "optional": true
     },
     {
@@ -23830,8 +25938,8 @@
       "opcode": 3827992475,
       "capture": "tail",
       "children": [
-        379,
-        380
+        404,
+        405
       ]
     },
     {
@@ -23849,18 +25957,18 @@
       "opcode": 1052660785,
       "capture": "add_liquidity",
       "children": [
-        382
+        407
       ],
-      "parent": 390
+      "parent": 415
     },
     {
       "kind": "contract",
       "opcode": 2171612920,
       "optional": true,
       "children": [
-        383,
-        388,
-        389
+        408,
+        413,
+        414
       ]
     },
     {
@@ -23869,8 +25977,8 @@
       "optional": true,
       "capture": "refund_router_call",
       "children": [
-        384,
-        386
+        409,
+        411
       ]
     },
     {
@@ -23879,7 +25987,7 @@
       "optional": true,
       "capture": "excess_transfer_0",
       "children": [
-        385
+        410
       ]
     },
     {
@@ -23893,7 +26001,7 @@
       "optional": true,
       "capture": "excess_transfer_1",
       "children": [
-        387
+        412
       ]
     },
     {
@@ -23914,13 +26022,13 @@
     {
       "kind": "contract",
       "opcode": 1147723383,
-      "parent": 391
+      "parent": 416
     },
     {
       "kind": "or",
       "branches": [
-        392,
-        394
+        417,
+        419
       ],
       "exclusive": false
     },
@@ -23928,7 +26036,7 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "ton_input",
-      "parent": 393
+      "parent": 418
     },
     {
       "kind": "contract",
@@ -23944,26 +26052,26 @@
       "kind": "contract",
       "opcode": 1393254188,
       "capture": "start_burn",
-      "child": 396
+      "child": 421
     },
     {
       "kind": "contract",
       "opcode": 1187656538,
       "capture": "position_burn",
-      "child": 397
+      "child": 422
     },
     {
       "kind": "contract",
       "opcode": 3610951837,
       "capture": "pool_burn",
-      "child": 398
+      "child": 423
     },
     {
       "kind": "contract",
       "opcode": 2715461997,
       "children": [
-        399,
-        401
+        424,
+        426
       ]
     },
     {
@@ -23972,7 +26080,7 @@
       "optional": true,
       "capture": "payout_1",
       "children": [
-        400
+        425
       ]
     },
     {
@@ -23986,7 +26094,7 @@
       "optional": true,
       "capture": "payout_2",
       "children": [
-        402
+        427
       ]
     },
     {
@@ -23999,89 +26107,89 @@
       "opcode": 2818267384,
       "capture": "swap",
       "children": [
-        404
+        429
       ],
-      "parent": 427
+      "parent": 452
     },
     {
       "kind": "contract",
       "opcode": 2715461997,
-      "child": 405
+      "child": 430
     },
     {
       "kind": "or",
       "branches": [
-        406,
-        421,
-        423,
-        425
+        431,
+        446,
+        448,
+        450
       ],
       "exclusive": false
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 407
+      "child": 432
     },
     {
       "kind": "contract",
       "opcode": 32736093,
-      "child": 408
+      "child": 433
     },
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "child": 409
+      "child": 434
     },
     {
       "kind": "recursive",
       "strategy": "cyclic",
-      "step": 410
+      "step": 435
     },
     {
       "kind": "contract",
       "opcode": 2818267384,
-      "child": 411
+      "child": 436
     },
     {
       "kind": "contract",
       "opcode": 2715461997,
-      "child": 412
+      "child": 437
     },
     {
       "kind": "or",
       "branches": [
-        413,
-        416,
-        417,
-        419
+        438,
+        441,
+        442,
+        444
       ],
       "exclusive": false
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 414
+      "child": 439
     },
     {
       "kind": "contract",
       "opcode": 32736093,
-      "child": 415
+      "child": 440
     },
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "child": 410
+      "child": 435
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 410
+      "child": 435
     },
     {
       "kind": "contract",
       "opcode": 260734629,
-      "child": 418
+      "child": 443
     },
     {
       "kind": "contract",
@@ -24091,7 +26199,7 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "children": [
-        420
+        445
       ]
     },
     {
@@ -24102,17 +26210,17 @@
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 422
+      "child": 447
     },
     {
       "kind": "recursive",
       "strategy": "cyclic",
-      "step": 410
+      "step": 435
     },
     {
       "kind": "contract",
       "opcode": 260734629,
-      "child": 424
+      "child": 449
     },
     {
       "kind": "contract",
@@ -24122,7 +26230,7 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "children": [
-        426
+        451
       ]
     },
     {
@@ -24133,8 +26241,8 @@
     {
       "kind": "or",
       "branches": [
-        428,
-        429
+        453,
+        454
       ],
       "exclusive": true
     },
@@ -24146,7 +26254,7 @@
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "parent": 430
+      "parent": 455
     },
     {
       "kind": "contract",
@@ -24157,13 +26265,13 @@
       "kind": "contract",
       "opcode": 3678112445,
       "capture": "distributed",
-      "parent": 432
+      "parent": 457
     },
     {
       "kind": "contract",
       "opcode": 3982012594,
       "capture": "notification",
-      "parent": 433
+      "parent": 458
     },
     {
       "kind": "contract",
@@ -24173,18 +26281,18 @@
       "kind": "contract",
       "opcode": 1205158801,
       "capture": "deposit",
-      "child": 435
+      "child": 460
     },
     {
       "kind": "contract",
       "opcode": 376746144,
-      "child": 436
+      "child": 461
     },
     {
       "kind": "contract",
       "opcode": 395134233,
       "capture": "transfer",
-      "child": 437
+      "child": 462
     },
     {
       "kind": "contract",
@@ -24195,24 +26303,24 @@
       "kind": "contract",
       "opcode": 1499400124,
       "capture": "burn",
-      "child": 439
+      "child": 464
     },
     {
       "kind": "contract",
       "opcode": 2078119902,
-      "child": 440
+      "child": 465
     },
     {
       "kind": "contract",
       "opcode": 832244956,
       "capture": "request",
-      "child": 441
+      "child": 466
     },
     {
       "kind": "or",
       "branches": [
-        442,
-        443
+        467,
+        468
       ],
       "exclusive": true
     },
@@ -24230,7 +26338,7 @@
       "kind": "contract",
       "opcode": 2809346765,
       "capture": "send",
-      "child": 445
+      "child": 470
     },
     {
       "kind": "contract",
@@ -24242,9 +26350,9 @@
       "opcode": 3237998115,
       "capture": "request",
       "children": [
-        447
+        472
       ],
-      "parent": 448
+      "parent": 473
     },
     {
       "kind": "contract",
@@ -24254,8 +26362,8 @@
     {
       "kind": "or",
       "branches": [
-        449,
-        450
+        474,
+        475
       ],
       "exclusive": true
     },
@@ -24273,28 +26381,28 @@
       "kind": "block_type",
       "btype": "coffee_create_pool_creator",
       "capture": "creator",
-      "child": 452
+      "child": 477
     },
     {
       "kind": "contract",
       "opcode": 3237998117,
       "capture": "request",
-      "child": 453
+      "child": 478
     },
     {
       "kind": "contract",
       "opcode": 3237998114,
       "capture": "deploy",
       "children": [
-        454,
-        456,
-        457
+        479,
+        481,
+        482
       ]
     },
     {
       "kind": "contract",
       "opcode": 395134233,
-      "child": 455
+      "child": 480
     },
     {
       "kind": "contract",
@@ -24310,7 +26418,7 @@
       "kind": "contract",
       "opcode": 3237998134,
       "optional": true,
-      "child": 458
+      "child": 483
     },
     {
       "kind": "contract",
@@ -24321,13 +26429,13 @@
       "kind": "contract",
       "opcode": 1808244350,
       "capture": "call",
-      "parent": 460
+      "parent": 485
     },
     {
       "kind": "any",
       "optional": true,
       "children": [
-        461
+        486
       ]
     },
     {
@@ -24350,13 +26458,13 @@
           "v": "0x6bc79e7e"
         }
       },
-      "parent": 463
+      "parent": 488
     },
     {
       "kind": "any",
       "optional": true,
       "children": [
-        464
+        489
       ]
     },
     {
@@ -24367,15 +26475,15 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "transfer",
-      "child": 466
+      "child": 491
     },
     {
       "kind": "contract",
       "opcode": 4182184244,
       "capture": "pool_call",
       "children": [
-        467,
-        468
+        492,
+        493
       ]
     },
     {
@@ -24392,22 +26500,22 @@
       "kind": "contract",
       "opcode": 3406020527,
       "capture": "withdraw_1",
-      "child": 470
+      "child": 495
     },
     {
       "kind": "contract",
       "opcode": 3406020527,
       "capture": "withdraw_2",
       "children": [
-        471,
-        473
+        496,
+        498
       ]
     },
     {
       "kind": "contract",
       "opcode": 3406020527,
       "capture": "withdraw_3",
-      "child": 472
+      "child": 497
     },
     {
       "kind": "block_type",
@@ -24424,8 +26532,8 @@
       "opcode": 3003937552,
       "capture": "claim",
       "children": [
-        475,
-        476
+        500,
+        501
       ]
     },
     {
@@ -24504,6 +26612,9 @@
     61,
     62,
     63,
-    64
+    64,
+    65,
+    66,
+    67
   ]
 }

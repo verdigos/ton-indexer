@@ -56,7 +56,12 @@ from indexer.events.blocks.dedust_v2.swaps import _final_min_out
 from indexer.events.blocks.messages import (
     DedustV2ClaimAvailableFees,
     DedustV2ClaimPositionFees,
+    DedustV2CreditAsset,
+    DedustV2CreditLiquidity,
+    DedustV2DepositEvent,
+    DedustV2DepositPayload,
     DedustV2ExitLiquidity,
+    DedustV2JoinLiquidity,
     DedustV2PayJetton,
     DedustV2PayoutPositionFees,
     DedustV2SwapPayload,
@@ -377,3 +382,128 @@ def dedust_v2_swap_registries() -> Registries:
     reg.lookups.update(dedust_pool_lookup())
     reg.fns["dedust_v2_swap_payload"] = dedust_v2_swap_payload
     return reg
+
+
+# ---------------------------------------------------------------------------
+# specs/dedust_v2_deposit.mch — the deposit trio (final / rejected / partial).
+#
+# Three schema twins, all mirroring mch-msgs.schema entries of the same name
+# (not the legacy blocks/messages/dedust_v2.py classes): the leading opcode is
+# skipped unchecked, and — like the withdraw entry — each parses to the END of
+# the wire shape so both engines fail on exactly the same truncations.
+#
+# `is_x` is the second user of the schema's `bool` leaf, so DedustV2CreditAsset
+# obeys the CASTING-TWIN RULE stated above the withdraw twin: pytoniq's
+# `load_bit()` yields an int, the C++ leaf yields a real Bool, and the
+# expression VM faults on a non-bool used as a condition — hence `bool(...)`.
+#
+# DedustV2CreditLiquidity 0x855afcbd is pattern-only (an opcode row, no parser):
+# the reference never reads its body either.
+# ---------------------------------------------------------------------------
+class DedustV2CreditAssetTwin:
+    """credit_asset#dc5ddba1 — schema twin of `DedustV2CreditAsset`."""
+
+    opcode = DedustV2CreditAsset.opcode
+
+    def __init__(self, slice: Slice):
+        slice.load_uint(32)  # opcode (checked by the matcher's `op`)
+        slice.load_uint(64)  # query_id, parsed-and-dropped
+        self.is_x = bool(slice.load_bit())  # casting twin (see header)
+        self.amount = slice.load_coins()
+
+
+class DedustV2JoinLiquidityTwin:
+    """join_liquidity#25251ee0 — schema twin of `DedustV2JoinLiquidity`."""
+
+    opcode = DedustV2JoinLiquidity.opcode
+
+    def __init__(self, slice: Slice):
+        slice.load_uint(32)
+        slice.load_uint(64)  # query_id, parsed-and-dropped
+        slice.load_ref()  # config, parsed-and-dropped
+        self.amount_x = slice.load_coins()
+        self.amount_y = slice.load_coins()
+        self.initiator = slice.load_address()
+
+
+class DedustV2DepositEventTwin:
+    """deposit#35df2e12 — schema twin of `DedustV2DepositEvent`."""
+
+    opcode = DedustV2DepositEvent.opcode
+
+    def __init__(self, slice: Slice):
+        slice.load_uint(32)
+        self.amount_x_in = slice.load_coins()
+        self.amount_y_in = slice.load_coins()
+        self.liquidity = slice.load_coins()
+        slice.load_address()  # initiator, parsed-and-dropped
+        slice.load_address()  # recipient, parsed-and-dropped
+        slice.load_ref()  # next_state, parsed-and-dropped
+
+
+async def dedust_v2_deposit_payload(payload: Any) -> SimpleNamespace | None:
+    """The carrier's DEPOSIT payload (the desired amount_x/amount_y), or None.
+
+    Port of `_deposit_payload` (blocks/dedust_v2/liquidity.py:180), with the two
+    carrier shapes the DSL can reach folded into one argument — the same
+    arrangement as `dedust_v2_swap_payload` above:
+
+      - Cell — a PayNative body's `payment_payload` ref (TON carrier);
+      - str  — a jetton_transfer block's b64 `forward_payload`, i.e. the
+               PayJetton wrapper whose own `payment_payload` holds the payload.
+
+    None mirrors the reference's "not a deposit payload" (a missing carrier
+    payload, the wrong opcode — PayNative also carries swaps and fund rewards —
+    or an unparseable body), which drives both target amounts to null.
+    """
+    if payload is None:
+        return None
+    try:
+        if isinstance(payload, str):
+            wrapper = DedustV2PayJetton(Cell.one_from_boc(base64.b64decode(payload)).begin_parse())
+            payload_cell = wrapper.payment_payload
+        else:
+            payload_cell = payload
+        if payload_cell.to_slice().load_uint(32) != DedustV2DepositPayload.opcode:
+            return None
+        parsed = DedustV2DepositPayload(payload_cell.begin_parse())
+    except Exception:
+        return None
+    return SimpleNamespace(amount_x=parsed.amount_x, amount_y=parsed.amount_y)
+
+
+DEPOSIT_OPCODES = {
+    "DedustV2PayNative": DedustV2PayNative.opcode,
+    "DedustV2CreditAsset": DedustV2CreditAsset.opcode,
+    "DedustV2JoinLiquidity": DedustV2JoinLiquidity.opcode,
+    "DedustV2DepositEvent": DedustV2DepositEvent.opcode,
+    "DedustV2CreditLiquidity": DedustV2CreditLiquidity.opcode,  # opcode only
+    "PayoutMessage": PayoutMessage.opcode,
+}
+
+DEPOSIT_MESSAGE_TYPES = {
+    "DedustV2PayNative": DedustV2PayNative,
+    "DedustV2CreditAsset": DedustV2CreditAssetTwin,
+    "DedustV2JoinLiquidity": DedustV2JoinLiquidityTwin,
+    "DedustV2DepositEvent": DedustV2DepositEventTwin,
+    "PayoutMessage": PayoutMessage,
+}
+
+DEPOSIT_BLOCK_TYPES = {
+    "dedust_v2_deposit_liquidity": Block,
+    "dedust_v2_deposit_liquidity_partial": Block,
+}
+
+
+def register_dedust_v2_deposit(reg: Registries) -> Registries:
+    reg.opcodes.update(DEPOSIT_OPCODES)
+    reg.block_types.update(DEPOSIT_BLOCK_TYPES)
+    reg.message_types.update(DEPOSIT_MESSAGE_TYPES)
+    reg.lookups.update(default_lookups())
+    reg.fns["dedust_v2_deposit_payload"] = dedust_v2_deposit_payload
+    return reg
+
+
+def dedust_v2_deposit_registries() -> Registries:
+    """Fresh Registries ready to compile specs/dedust_v2_deposit.mch."""
+    return register_dedust_v2_deposit(Registries())

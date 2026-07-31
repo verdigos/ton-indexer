@@ -35,6 +35,9 @@ from indexer.events.event_processing import (  # noqa: E402
 from indexer.events.blocks.liquidity import (  # noqa: E402
     post_process_dedust_liquidity, post_process_stonfi_v2_liquidity,
 )
+from indexer.events.blocks.dedust_v2 import (  # noqa: E402
+    post_process_dedust_v2_liquidity,
+)
 from indexer.events.mch_ir import build_matchers, load_artifact  # noqa: E402
 from indexer.events.blocks.utils.block_tree_serializer import (  # noqa: E402
     _calc_action_id, block_to_action, create_unknown_action, v1_ops,
@@ -127,6 +130,15 @@ PORTED_BTYPES = {
     "coffee_mev_protect_hold_funds",
     "coffee_staking_deposit", "coffee_staking_withdraw",
     "coffee_staking_claim_rewards",
+    # DeDust CPMM V2 deposit trio (2026-07-31, specs/dedust_v2_deposit.mch) —
+    # fires on nine corpus fixtures. The PARTIAL btype survives to a row only on
+    # a trace whose completing leg is missing or unmatched; everywhere else the
+    # Phase-E pass post_process_dedust_v2_liquidity folds it into the final
+    # block before serialization, so it is listed for the same
+    # correct-by-construction reason as the bucket-B block above. Both reuse the
+    # dex_deposit_liquidity_data composite (fills fill_dedust_v2_deposit /
+    # fill_dedust_v2_deposit_partial); no new column.
+    "dedust_v2_deposit_liquidity", "dedust_v2_deposit_liquidity_partial",
 }
 
 # The C++ render_action column set (Classify.cpp render_action), in any order —
@@ -456,10 +468,12 @@ async def ghost_external_rows(txs):
     does: init_from_external MUTATES the root node (forces failed, appends
     children), and the caller's tree is already wired into the main block tree.
 
-    Post-pass chain: the twin's three (the C++ ClassifyCore chain), not
-    production's `trace_post_processors` list. Immaterial here — a single-tx
-    trace can carry no dedust/stonfi deposit — and keeping it identical to the
-    main path is what makes this A/B-comparable.
+    Post-pass chain: the twin's four (the C++ ClassifyCore chain), not
+    production's `trace_post_processors` list — the two differ only in the
+    stonfi_v2 pass, which production does not register and C++ keeps as a
+    zero-coverage port. Immaterial here — a single-tx trace can carry no
+    dedust/dedust_v2/stonfi deposit — and keeping it identical to the main path
+    is what makes this A/B-comparable.
 
     Any exception = Python's own `except` in try_classify_unknown_trace: the
     trace falls back to the `unknown` row rather than failing.
@@ -481,6 +495,7 @@ async def ghost_external_rows(txs):
                     await m.try_build(cur)
         spine = list(bfs_canonical(root))
         spine = await post_process_dedust_liquidity(spine)
+        spine = await post_process_dedust_v2_liquidity(spine)
         spine = await post_process_stonfi_v2_liquidity(spine)
         spine = await unwind_deployments(spine)
         # FLAT: try_classify_unknown_trace open-codes the row filter instead of
@@ -517,6 +532,7 @@ async def actions_fixture(path, included):
         for cur in bfs_canonical(root):
             spine.append(cur)
         spine = await post_process_dedust_liquidity(spine)
+        spine = await post_process_dedust_v2_liquidity(spine)
         spine = await post_process_stonfi_v2_liquidity(spine)
         spine = await unwind_deployments(spine)  # Step 2b: promotes ContractDeploy
 

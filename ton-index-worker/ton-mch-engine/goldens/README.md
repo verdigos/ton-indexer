@@ -8,6 +8,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
 **184 fixtures, 872 ACTION rows** — one per serializable block on each trace's
+**184 fixtures, 795 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus the CHILD rows the serializer expands out of any spine
 block whose btype is outside `v1_ops`, plus 6 synthetic `unknown` rows (the
 fixtures whose spine serializes to nothing at all). Rows are printed **sorted**
@@ -54,6 +55,35 @@ each fixture grows by exactly the number of coffee rows it produces.
 - **staking, +7 over five fixtures.** `K_PlZB5R…` and `00wjHu7i…` 4 → 5
   (deposit), `013-itRD…` and `0HIS6vA7…` 2 → 3 (claim rewards), `T-oXSZb9…`
   4 → 5 (withdraw).
+Re-baselined 2026-07-31 (**859 → 795 rows, no fixture added**) by the DEDUST V2
+DEPOSIT port (`specs/dedust_v2_deposit.mch` — the final / rejected / partial
+trio) together with its Phase-E pass `post_process_dedust_v2_liquidity`
+(`ClassifyCore.cpp`, now called at all three post-process sites). One delta over
+nine fixtures.
+
+**−73 loose rows, +9 composite rows.** The removed rows are 58 `call_contract`
+and 15 `jetton_transfer` leaves; both produced btypes ARE in `v1_ops`, so no
+CHILD rows are expanded and the consumed leaves disappear entirely. Eight
+fixtures collapse to a single `dedust_v2_deposit_liquidity` and the ninth
+(`ZmxsFjYs…`) to a single `dedust_v2_deposit_liquidity_partial` — the one trace
+whose completing leg the matcher does not claim, which is what keeps the partial
+row path covered.
+
+The Phase-E pass is why the count is 9 and not 17: a deposit's two asset legs
+are matched separately (only the last-credited one reaches the JoinLiquidity
+anchor through the parent chain), and the pass folds the partial into the
+completing block, keyed on the Deposit escrow address, before serialization.
+
+Verified beyond the twin diff: for all nine fixtures the produced
+`dex_deposit_liquidity` rows were compared field-by-field against the REAL
+legacy Python classifier (production `event_processing.matchers` +
+`trace_post_processors`, rendered through the same serializer) — 0 mismatches,
+one row per fixture on both sides. The parity sweep compares the consumed
+event-node multisets with **no** `_AUX_ABSORB_SPECS` waiver, so unlike the
+sibling withdraw spec this family carries no §4.5 aux-absorption deviation.
+
+No new composite column: both fills reuse `dex_deposit_liquidity_data`, so rows
+outside the nine touched fixtures are textually unchanged.
 
 Previously re-baselined 2026-07-31 (**872 → 859 rows, no fixture added**) by the TONCO
 WITHDRAW port (`specs/tonco_liquidity.mch`, second matcher) and the EVAA SUPPLY

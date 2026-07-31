@@ -67,6 +67,9 @@ from indexer.events.blocks.dedust_v2.claims import (
     DedustV2ClaimRewardBlockMatcher,
 )
 from indexer.events.blocks.dedust_v2.liquidity import (
+    DedustV2DepositBlockMatcher,
+    DedustV2DepositPartialBlockMatcher,
+    DedustV2RejectedDepositBlockMatcher,
     DedustV2WithdrawBlockMatcher,
 )
 from indexer.events.blocks.dedust_v2.swaps import (
@@ -172,6 +175,7 @@ from indexer.events.mch.builders.dedust import dedust_deposit_registries
 from indexer.events.mch.builders.dedust_v2 import (
     dedust_v2_claim_fees_registries,
     dedust_v2_claim_reward_registries,
+    dedust_v2_deposit_registries,
     dedust_v2_swap_registries,
     dedust_v2_withdraw_registries,
 )
@@ -338,6 +342,18 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     # divergence documented in the spec header — see _KNOWN_AUX_DIVERGENCE.
     ("specs/dedust_v2_withdraw.mch", _SPECS_DIR / "dedust_v2_withdraw.mch",
      dedust_v2_withdraw_registries, _PREREQ_SWAP, (DedustV2WithdrawBlockMatcher,)),
+    # The deposit trio (final / rejected / partial) as one group, mirroring the
+    # production order — final and rejected must claim their CreditAsset parent
+    # before the partial matcher can take it. Nine corpus fixtures: four asserted
+    # in dedust-liquidities.yaml (jetton/jetton, TON/jetton, jetton/TON with a
+    # refund, and a rejected join) plus five unasserted ones that ride along.
+    # NOT in _AUX_ABSORB_SPECS, unlike the withdrawal above: the only excess in
+    # this chain is bound explicitly on both sides, so the consumed sets match
+    # with no waiver (see the spec header).
+    ("specs/dedust_v2_deposit.mch", _SPECS_DIR / "dedust_v2_deposit.mch",
+     dedust_v2_deposit_registries, _PREREQ_SWAP,
+     (DedustV2DepositBlockMatcher, DedustV2RejectedDepositBlockMatcher,
+      DedustV2DepositPartialBlockMatcher)),
     # Elector deposit + recover as one group, mirroring the legacy list order.
     # Only the recover half has corpus coverage (a0rjbO1X…); the deposit anchor
     # 0x4e73744b appears in no fixture, so its pairs are reject-identically

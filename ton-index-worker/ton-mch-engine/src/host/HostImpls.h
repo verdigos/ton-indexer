@@ -81,6 +81,7 @@ EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args);
 EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args);
 EvalResult dedust_swap_failed(BuildEnv &env, const std::vector<Value> &args);
 EvalResult dedust_v2_swap_payload(BuildEnv &env, const std::vector<Value> &args);
+EvalResult dedust_v2_deposit_payload(BuildEnv &env, const std::vector<Value> &args);
 
 // DeDust liquidity deposit (HostDedustDeposit.cpp).
 EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &args);

@@ -1715,6 +1715,101 @@ td::Result<Value> gen_parse_coffee_staking_position_withdraw3(const td::Ref<vm::
   return Value::make_obj(std::move(f));
 }
 
+// DedustV2CreditAsset (opcode 0xdc5ddba1); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_dedust_v2_credit_asset(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("DedustV2CreditAsset: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("DedustV2CreditAsset: _query_id underflow"); }
+  }
+  {
+    if (!cs.have(1)) { return td::Status::Error("DedustV2CreditAsset: is_x underflow"); }
+    bool bv = cs.fetch_ulong(1) != 0;
+    f.emplace_back("is_x", Value::make_bool(bv));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount", Value::make_int(rc.move_as_ok()));
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// DedustV2JoinLiquidity (opcode 0x25251ee0); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_dedust_v2_join_liquidity(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("DedustV2JoinLiquidity: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("DedustV2JoinLiquidity: _query_id underflow"); }
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("DedustV2JoinLiquidity: _config ref missing"); }
+    auto rf = cs.fetch_ref();
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount_x", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount_y", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("initiator", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// DedustV2DepositEvent (opcode 0x35df2e12); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_dedust_v2_deposit_event(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("DedustV2DepositEvent: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount_x_in", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount_y_in", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("liquidity", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("DedustV2DepositEvent: _next_state ref missing"); }
+    auto rf = cs.fetch_ref();
+  }
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parsers() {
@@ -1764,6 +1859,9 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"CoffeeStakingClaimRewards", gen_parse_coffee_staking_claim_rewards},
       {"CoffeeStakingPositionWithdraw2", gen_parse_coffee_staking_position_withdraw2},
       {"CoffeeStakingPositionWithdraw3", gen_parse_coffee_staking_position_withdraw3},
+      {"DedustV2CreditAsset", gen_parse_dedust_v2_credit_asset},
+      {"DedustV2JoinLiquidity", gen_parse_dedust_v2_join_liquidity},
+      {"DedustV2DepositEvent", gen_parse_dedust_v2_deposit_event},
   };
   return rows;
 }

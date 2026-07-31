@@ -255,6 +255,121 @@ void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block 
   }
 }
 
+// blocks/dedust_v2/liquidity.py post_process_dedust_v2_liquidity (:465) — the
+// CPMM V2 twin of the pass above, and like it a Phase-E pairing pass keyed on
+// the Deposit ESCROW address. Only one of a deposit's two asset legs reaches
+// the completing block (the join hangs off the last-credited leg's CreditAsset);
+// the other is matched on its own as a partial and folded in here.
+//
+// Two things keep it a separate function rather than a parameterization of the
+// V1 pass:
+//   - the merge is a SLOT FILL, not combine_deposits arithmetic. Whichever
+//     asset_N slot the completing block left null is taken from the partial
+//     together with that slot's wallet — and that slot's amount, but ONLY if
+//     the final left it null too, which the V2 builds never do (both amount
+//     slots always come off the Deposit event or the JoinLiquidity body). That
+//     arm is ported anyway because it is what the reference does;
+//   - it walks FINALS and looks up the partial, where V1 walks partials. Under
+//     the >2 guard that is the same pairing, but the iteration order decides
+//     which duplicate wins, so it is kept as written.
+//
+// Dispatch is by btype: the legacy block classes tag their output with exactly
+// these two btypes, so a single test covers the hand-written matchers and
+// specs/dedust_v2_deposit.mch alike (the Python side is btype-only for the same
+// reason). There is no exception path — nothing here can throw, unlike V1's
+// combine_deposits.
+void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
+                                      std::set<Block *> &removed) {
+  std::vector<Block *> partials, finals;
+  std::map<std::string, int> used;
+  auto contract_key = [](const Block *b) {
+    Value c = pp_field(b->data, "deposit_contract");
+    return c.t == VType::Account ? (c.addr_none ? std::string("addr_none") : c.str) : c.describe();
+  };
+  for (Block *b : blocks) {
+    if (b->btype == "dedust_v2_deposit_liquidity_partial") {
+      partials.push_back(b);
+      used[contract_key(b)]++;
+    } else if (b->btype == "dedust_v2_deposit_liquidity") {
+      finals.push_back(b);
+      used[contract_key(b)]++;
+    }
+  }
+  if (partials.empty()) return;
+  for (const auto &kv : used) {
+    if (kv.second > 2) return;  // logger.warning + skip merging
+  }
+  for (Block *final_b : finals) {
+    Block *partial = nullptr;
+    for (Block *p : partials) {
+      // Python's `p in blocks`: a partial already folded into an earlier final
+      // is gone from the spine and must not be paired a second time.
+      if (std::find(blocks.begin(), blocks.end(), p) == blocks.end()) continue;
+      if (contract_key(p) == contract_key(final_b)) { partial = p; break; }
+    }
+    if (partial == nullptr) continue;
+
+    Value::Fields out;
+    if (final_b->data.fields) out = *final_b->data.fields;
+    auto set_field = [&](const std::string &k, Value v) {
+      for (auto &kv : out) {
+        if (kv.first == k) { kv.second = std::move(v); return; }
+      }
+      out.emplace_back(k, std::move(v));
+    };
+    for (int i = 1; i <= 2; i++) {
+      const std::string si = std::to_string(i);
+      if (!pp_field(final_b->data, "asset_" + si).is_null()) continue;
+      Value partial_asset = pp_field(partial->data, "asset_" + si);
+      if (partial_asset.is_null()) continue;
+      set_field("asset_" + si, std::move(partial_asset));
+      set_field("sender_wallet_" + si, pp_field(partial->data, "sender_wallet_" + si));
+      if (pp_field(final_b->data, "amount_" + si).is_null()) {
+        set_field("amount_" + si, pp_field(partial->data, "amount_" + si));
+      }
+    }
+    final_b->data = Value::make_dict(std::move(out));
+
+    blocks.erase(std::remove(blocks.begin(), blocks.end(), partial), blocks.end());
+    removed.insert(partial);
+    // event_nodes: a plain extend, deliberately dropping the reference's two
+    // extra steps (liquidity.py:499-501) — the conditional
+    // `append(partial.initiating_event_node)` and the `list(set(...))` dedup.
+    // Byte-for-byte the SAME omission the V1 pass above makes, kept identical on
+    // purpose rather than "fixed" here, because the two are not free:
+    // initiating_event_node is a block's tree PARENT (BlockTree.cpp:341), i.e. a
+    // node NOT otherwise in event_nodes, so appending it would ADD a node — and
+    // without Python's set() dedup that add is not idempotent.
+    // What makes the omission safe is the gate, not an argument: tx_hashes and
+    // accounts on the rendered row are derived from event_nodes, the actions
+    // twin runs the REFERENCE Python pass (which does both steps) against this
+    // one, and the diff is 0 over all 184 fixtures — including the nine on which
+    // this merge actually fires. Restoring either step must be done together
+    // with the V1 pass and re-gated, not piecemeal.
+    for (const EventNode *n : partial->event_nodes) final_b->event_nodes.push_back(n);
+    for (Block *cb : partial->children_blocks) final_b->children_blocks.push_back(cb);
+    // Same determinism argument as the V1 pass: Python's
+    // `list(set(children_blocks))` leaves an order nothing downstream may rely
+    // on, but a raw Block* sort would key on the ARENA ADDRESS — stable within
+    // a process, arbitrary across processes. Key on trace properties (earliest
+    // event lt, btype, anchor tx hash) with the pointer only as the final
+    // tiebreak, so the order is total and std::unique still collapses
+    // duplicates of the SAME block.
+    std::sort(final_b->children_blocks.begin(), final_b->children_blocks.end(),
+              [](const Block *a, const Block *b) {
+                if (a->min_lt != b->min_lt) return a->min_lt < b->min_lt;
+                if (a->btype != b->btype) return a->btype < b->btype;
+                std::string ha = a->anchor_tx_hash(), hb = b->anchor_tx_hash();
+                if (ha != hb) return ha < hb;
+                return a < b;
+              });
+    final_b->children_blocks.erase(
+        std::unique(final_b->children_blocks.begin(), final_b->children_blocks.end()),
+        final_b->children_blocks.end());
+    final_b->calculate_min_max_lt();
+  }
+}
+
 // blocks/liquidity.py post_process_stonfi_v2_liquidity (R08 pairing pass). ZERO
 // corpus coverage — the `< 2 legs` guard returns immediately for every trace.
 // KEEP (do not delete as dead): it is the port of a live Python production pass;
@@ -487,6 +602,7 @@ std::vector<ActionRow> basic_classify_fallback(TraceContext &ctx) {
     std::vector<Block *> spine = collect_spine(wrap);
     std::set<Block *> removed;
     post_process_dedust_liquidity(spine, removed);
+    post_process_dedust_v2_liquidity(spine, removed);
     post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
     unwind_deployments(spine);
     // The same serialize_blocks Python calls here (event_processing.py:411) —
@@ -540,6 +656,7 @@ std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource
     std::vector<Block *> spine = collect_spine(wrapper);
     std::set<Block *> removed;
     post_process_dedust_liquidity(spine, removed);
+    post_process_dedust_v2_liquidity(spine, removed);
     post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
     unwind_deployments(spine);
     // FLAT, unlike the other two paths: try_classify_unknown_trace open-codes the
@@ -692,6 +809,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     std::vector<Block *> spine = collect_spine(wrapper);
     std::set<Block *> removed;
     post_process_dedust_liquidity(spine, removed);
+    post_process_dedust_v2_liquidity(spine, removed);
     post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
     unwind_deployments(spine);  // Step 2b: promotes nested ContractDeploy onto the spine
     for (CoreAction &a : pending) {

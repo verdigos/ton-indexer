@@ -603,3 +603,46 @@ message CoffeeStakingPositionWithdraw3 opcode 0xcb03bfaf {
   jetton_wallet: addr_py
   jetton_amount: coins
 }
+
+# --- specs/dedust_v2_deposit.mch bodies.
+#
+# Like the withdraw trio above, these parse to the END of the wire shape so both
+# sides fail on exactly the same truncations. The fourth opcode of the family
+# (CreditLiquidity 0x855afcbd) is matched by `op` only and has no entry — the
+# reference never parses it either. The DEPOSIT PAYLOAD (0xc9a015da, the desired
+# amount_x/amount_y) is deliberately absent: it sits behind a ref on the TON
+# carrier and inside a b64 forward payload on the jetton carrier, and it is only
+# ours when its own opcode matches — a conditional descent the schema cannot
+# express, so it goes through the dedust_v2_deposit_payload host fn instead.
+
+# Pool -> Deposit escrow, one per credited asset leg. `is_x` (the second `bool`
+# leaf user) says whether the leg is pool asset X or Y, which is what picks the
+# 1/2 slot the leg's asset and wallet are written into.
+message DedustV2CreditAsset opcode 0xdc5ddba1 {
+  _query_id: bits 64
+  is_x: bool
+  amount: coins
+}
+
+# Deposit escrow -> Pool, fired once both legs are credited: the completion
+# anchor. `amount_x`/`amount_y` are the ATTEMPTED amounts, used only when the
+# join is rejected (no Deposit event, so no realized amounts exist).
+message DedustV2JoinLiquidity opcode 0x25251ee0 {
+  _query_id: bits 64
+  _config: ref_cell
+  amount_x: coins
+  amount_y: coins
+  initiator: addr_py
+}
+
+# Pool -> ext-out log of a SUCCESSFUL deposit. Presence is the success
+# discriminator; it is also the only exact source of the consumed amounts and of
+# the minted LP.
+message DedustV2DepositEvent opcode 0x35df2e12 {
+  amount_x_in: coins
+  amount_y_in: coins
+  liquidity: coins
+  _initiator: addr_py
+  _recipient: addr_py
+  _next_state: ref_cell
+}

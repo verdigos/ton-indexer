@@ -450,6 +450,36 @@
       "type": "CoffeeStakingPositionWithdraw3",
       "body": "te6ccgEBAQEABgAACMsDv68=",
       "expect": "fail"
+    },
+    {
+      "type": "DedustV2CreditAsset",
+      "body": "te6ccgEBAQEADwAAGdxd26EAAAAAAAAAAAQ=",
+      "expect": "ok"
+    },
+    {
+      "type": "DedustV2CreditAsset",
+      "body": "te6ccgEBAQEABgAACNxd26E=",
+      "expect": "fail"
+    },
+    {
+      "type": "DedustV2JoinLiquidity",
+      "body": "te6ccgEBAgEAEwABGyUlHuAAAAAAAAAAAAAgAQAA",
+      "expect": "ok"
+    },
+    {
+      "type": "DedustV2JoinLiquidity",
+      "body": "te6ccgEBAQEABgAACCUlHuA=",
+      "expect": "fail"
+    },
+    {
+      "type": "DedustV2DepositEvent",
+      "body": "te6ccgEBAgEACwABDDXfLhIAAAEAAA==",
+      "expect": "ok"
+    },
+    {
+      "type": "DedustV2DepositEvent",
+      "body": "te6ccgEBAQEABgAACDXfLhI=",
+      "expect": "fail"
     }
   ]
 }

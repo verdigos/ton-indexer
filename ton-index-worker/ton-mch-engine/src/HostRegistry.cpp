@@ -13,6 +13,7 @@ const std::map<std::string, HostFn> &host_fns() {
       {"dedust_swap_legs", dedust_swap_legs},
       {"dedust_swap_failed", dedust_swap_failed},
       {"dedust_v2_swap_payload", dedust_v2_swap_payload},
+      {"dedust_v2_deposit_payload", dedust_v2_deposit_payload},
       {"layerzero_dst_oapp_matches", layerzero_dst_oapp_matches},
       {"tonstakers_minted_nft", tonstakers_minted_nft},
       {"tonstakers_pool_addr", tonstakers_pool_addr},

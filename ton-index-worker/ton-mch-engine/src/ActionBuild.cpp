@@ -844,6 +844,69 @@ void fill_dex_deposit_liquidity(const Value &d, Action &a) {
   a.dex_deposit_liquidity_data = mkdict(std::move(f));
 }
 
+// block_tree_serializer.py _fill_dedust_v2_deposit_liquidity (:421). Reuses the
+// dex_deposit_liquidity_data composite, so no new column.
+//
+// Two things differ from the V1 fill above and are NOT typos: the pool address
+// lives under `pool` (V1 uses `pool_address`) and the user wallets under
+// `sender_wallet_N` (V1 uses `user_jetton_wallet_N`); and the two
+// `target_asset_*` output keys ALIAS asset_1/asset_2 — the V2 build carries no
+// separate target asset, only target AMOUNTS, and the reference passes the same
+// data key twice. `destination_secondary` is written only when the deposit
+// contract is present, mirroring the reference's `is not None` guard.
+void fill_dedust_v2_deposit(const Value &d, Action &a) {
+  a.type = "dex_deposit_liquidity";
+  a.source = av_addr(dg(d, "sender"));
+  a.destination = av_addr(dg(d, "pool"));
+  Value deposit_contract = dg(d, "deposit_contract");
+  if (!deposit_contract.is_null()) {
+    a.destination_secondary = av_addr(deposit_contract);
+  }
+  std::vector<Value> excesses;
+  Value ve = dg(d, "vault_excesses");
+  if (ve.items) {
+    for (const Value &e : *ve.items) {
+      Value::Fields ef;
+      Value a0 = Value::null(), a1 = Value::null();
+      if (e.items && e.items->size() >= 2) {
+        a0 = (*e.items)[0];
+        a1 = (*e.items)[1];
+      }
+      ef.emplace_back("asset", av_addr(a0));
+      ef.emplace_back("amount", av_amount(a1));
+      excesses.push_back(mkdict(std::move(ef)));
+    }
+  }
+  Value::Fields f;
+  f.emplace_back("dex", dg(d, "dex"));
+  f.emplace_back("asset1", av_addr(dg(d, "asset_1")));
+  f.emplace_back("amount1", av_amount(dg(d, "amount_1")));
+  f.emplace_back("asset2", av_addr(dg(d, "asset_2")));
+  f.emplace_back("amount2", av_amount(dg(d, "amount_2")));
+  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "sender_wallet_1")));
+  f.emplace_back("user_jetton_wallet_2", av_addr(dg(d, "sender_wallet_2")));
+  f.emplace_back("lp_tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
+  f.emplace_back("target_asset_1", av_addr(dg(d, "asset_1")));
+  f.emplace_back("target_amount_1", av_amount(dg(d, "target_amount_1")));
+  f.emplace_back("target_asset_2", av_addr(dg(d, "asset_2")));
+  f.emplace_back("target_amount_2", av_amount(dg(d, "target_amount_2")));
+  f.emplace_back("vault_excesses", Value::make_list(std::move(excesses)));
+  a.dex_deposit_liquidity_data = mkdict(std::move(f));
+}
+
+// block_tree_serializer.py _fill_dedust_v2_deposit_liquidity_partial (:452):
+// the BARE dex_deposit_liquidity fill plus the deposit contract. A partial
+// carries no target amounts and no vault excesses, so its composite is the
+// eight-key one — deliberately NOT the twelve-key shape of the fill above.
+void fill_dedust_v2_deposit_partial(const Value &d, Action &a) {
+  a.type = "dex_deposit_liquidity";
+  fill_dex_deposit_liquidity(d, a);
+  Value deposit_contract = dg(d, "deposit_contract");
+  if (!deposit_contract.is_null()) {
+    a.destination_secondary = av_addr(deposit_contract);
+  }
+}
+
 // The BARE dex_withdraw_liquidity (dedust withdraw / stonfi v2 withdraw).
 void fill_dex_withdraw_liquidity(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
@@ -1096,6 +1159,8 @@ bool fill_action(Block *b, Action &a) {
   // `dex_withdraw_liquidity`, already dispatched below.
   else if (t == "coffee_deposit_liquidity") fill_dedust_deposit(d, a);
   else if (t == "dedust_deposit_liquidity_partial") fill_dedust_deposit_partial(d, a);
+  else if (t == "dedust_v2_deposit_liquidity") fill_dedust_v2_deposit(d, a);
+  else if (t == "dedust_v2_deposit_liquidity_partial") fill_dedust_v2_deposit_partial(d, a);
   else if (t == "tonco_deposit_liquidity") fill_tonco_deposit(d, a);
   else if (t == "tonco_withdraw_liquidity") fill_tonco_withdraw(d, a);
   else if (t == "dedust_v2_claim_fees") fill_dedust_v2_claim_fees(d, a);

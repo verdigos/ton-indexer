@@ -26,6 +26,9 @@ from indexer.events.event_processing import init_block, unwind_deployments  # no
 from indexer.events.blocks.liquidity import (  # noqa: E402
     post_process_dedust_liquidity, post_process_stonfi_v2_liquidity,
 )
+from indexer.events.blocks.dedust_v2 import (  # noqa: E402
+    post_process_dedust_v2_liquidity,
+)
 from indexer.events.mch_ir import build_matchers, load_artifact  # noqa: E402
 
 # C++ registry surface (parsers/lookup_kinds/shapers/preds/fns/boc_fields),
@@ -271,6 +274,7 @@ async def classify_fixture(path, included):
             spine.append(cur)
         before = set(id(x) for x in spine)
         spine = await post_process_dedust_liquidity(spine)
+        spine = await post_process_dedust_v2_liquidity(spine)
         spine = await post_process_stonfi_v2_liquidity(spine)
         spine = await unwind_deployments(spine)  # Step 2b (production chain parity)
         removed = before - set(id(x) for x in spine)
