@@ -1355,14 +1355,15 @@ def _fill_layerzero_dvn_verify_action(block: LayerZeroDvnVerifyBlock, action: Ac
     }
 
 def _fill_dns_release(block: DnsReleaseBlock, action: Action):
-    action.source = _addr(block.data.source)
-    action.destination = _addr(block.data.nft_address)
-    action.asset = _addr(block.data.nft_collection)
+    data = block.data
+    action.source = _addr(_dget(data, 'source'))
+    action.destination = _addr(_dget(data, 'nft_address'))
+    action.asset = _addr(_dget(data, 'nft_collection'))
     action.nft_transfer_data = {
-        'query_id': block.data.query_id,
-        'nft_item_index': block.data.nft_index,
+        'query_id': _dget(data, 'query_id'),
+        'nft_item_index': _dget(data, 'nft_index'),
     }
-    action.value = _value(block.data.value)
+    action.value = _value(_dget(data, 'value'))
 
 def _fill_ethena_withdrawal_request(block: EthenaWithdrawalRequestBlock, action: Action):
     # dual-access via _dget: legacy EthenaWithdrawalRequestData dataclass OR the

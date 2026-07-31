@@ -161,6 +161,7 @@ add_library(mch-classify STATIC
     src/host/HostDedust.cpp
     src/host/HostLayerZero.cpp
     src/host/HostTonstakers.cpp
+    src/host/HostDns.cpp
     src/host/HostVesting.cpp
     src/host/HostCocoon.cpp
     src/host/HostJvault.cpp

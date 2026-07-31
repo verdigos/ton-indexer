@@ -102,6 +102,9 @@ EvalResult layerzero_dst_oapp_matches(BuildEnv &env, const std::vector<Value> &a
 EvalResult tonstakers_minted_nft(BuildEnv &env, const std::vector<Value> &args);
 EvalResult tonstakers_pool_addr(BuildEnv &env, const std::vector<Value> &args);
 
+// DNS auction tail (HostDns.cpp).
+EvalResult dns_purchase_buyer(BuildEnv &env, const std::vector<Value> &args);
+
 // Vesting (HostVesting.cpp).
 EvalResult vesting_message_was_sent(BuildEnv &env, const std::vector<Value> &args);
 

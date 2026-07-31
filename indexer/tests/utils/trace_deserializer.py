@@ -139,6 +139,7 @@ def deserialize_nft_item(data: Dict[str, Any]) -> NFTItem:
         collection_address=data['collection_address'],
         owner_address=data['owner_address'],
         content=data['content'],
+        code_hash=data.get('code_hash'),
     )
 
 
@@ -160,6 +161,7 @@ def deserialize_nft_item(data: Dict[str, Any]) -> NFTItem:
         collection_address=data['collection_address'],
         owner_address=data['owner_address'],
         content=data['content'],
+        code_hash=data.get('code_hash'),
     )
 
 

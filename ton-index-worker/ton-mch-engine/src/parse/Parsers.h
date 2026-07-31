@@ -23,6 +23,8 @@ td::Result<Value> parse_never(const td::Ref<vm::Cell> &body);
 
 // DNS family (ParseDns.cpp).
 td::Result<Value> parse_change_dns(const td::Ref<vm::Cell> &body);
+td::Result<Value> parse_auction_fill_up(const td::Ref<vm::Cell> &body);
+td::Result<Value> parse_dns_release_balance(const td::Ref<vm::Cell> &body);
 
 // Vesting family (ParseVesting.cpp).
 td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body);

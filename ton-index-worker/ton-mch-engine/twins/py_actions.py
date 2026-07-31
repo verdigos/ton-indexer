@@ -84,7 +84,8 @@ PORTED_BTYPES = {
     # correct-by-construction: the day a fixture carrying one is added, Python
     # emits its row instead of silently skipping it while C++ emits one, which
     # would read as a bogus cpp-only-row rather than the parity it is.
-    "renew_dns", "change_dns", "delete_dns", "nominator_pool_withdraw_request",
+    "renew_dns", "change_dns", "delete_dns", "dns_purchase", "dns_release",
+    "nominator_pool_withdraw_request",
     "tonstakers_withdraw", "tonstakers_withdraw_request",
     "dex_deposit_liquidity", "dex_withdraw_liquidity", "nft_purchase",
     # Tonstakers deposit + delayed-withdrawal port (2026-07-30,

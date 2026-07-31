@@ -49,6 +49,8 @@ constexpr DumpType kDumpTypes[] = {
     {0x642b7d07, "JettonMint"},
     {0x00000015, "MinterJettonMint"},
     {0x4eb1f0f9, "ChangeDnsRecordMessage"},
+    {0x370fec51, "AuctionFillUpMessage"},
+    {0x4ed14b65, "DnsReleaseBalanceMessage"},
     {0xa7733acd, "VestingSendMessage"},
     {0x01f3835d, "PTonTransfer"},
     {0x37c096df, "StonfiV2ProvideLiquidity"},

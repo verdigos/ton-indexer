@@ -650,6 +650,26 @@
       "type": "CocoonOwnerClientWithdraw",
       "body": "te6ccgEBAQEABgAACNoGjng=",
       "expect": "fail"
+    },
+    {
+      "type": "AuctionFillUpMessage",
+      "body": "te6ccgEBAQEABgAACDcP7FE=",
+      "expect": "ok"
+    },
+    {
+      "type": "AuctionFillUpMessage",
+      "body": "te6ccgEBAQEADgAAGDcP7FEAAAAAAAAABw==",
+      "expect": "ok"
+    },
+    {
+      "type": "DnsReleaseBalanceMessage",
+      "body": "te6ccgEBAQEABgAACE7RS2U=",
+      "expect": "ok"
+    },
+    {
+      "type": "DnsReleaseBalanceMessage",
+      "body": "te6ccgEBAQEADgAAGE7RS2UAAAAAAAAABw==",
+      "expect": "ok"
     }
   ]
 }

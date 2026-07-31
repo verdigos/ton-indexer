@@ -183,4 +183,31 @@ td::Result<Value> parse_change_dns(const td::Ref<vm::Cell> &body) {
   return Value::make_obj(std::move(f));
 }
 
+namespace {
+
+td::Result<Value> parse_conditional_query_id(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("dns: opcode underflow");
+  }
+  Value query_id = Value::null();
+  if (cs.have(64)) {
+    query_id = Value::make_int(refint_u64(cs.fetch_ulong(64)));
+  }
+  Value::Fields f;
+  f.emplace_back("query_id", std::move(query_id));
+  return Value::make_obj(std::move(f));
+}
+
+}  // namespace
+
+td::Result<Value> parse_auction_fill_up(const td::Ref<vm::Cell> &body) {
+  return parse_conditional_query_id(body);
+}
+
+td::Result<Value> parse_dns_release_balance(const td::Ref<vm::Cell> &body) {
+  return parse_conditional_query_id(body);
+}
+
 }  // namespace mch

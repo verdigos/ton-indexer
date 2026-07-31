@@ -70,6 +70,9 @@ class TestCocoonActions(BaseGenericActionTest):
 class TestSubscriptionActions(BaseGenericActionTest):
     yaml_file = "subscriptions.yaml"
 
+class TestDnsActions(BaseGenericActionTest):
+    yaml_file = "dns.yaml"
+
 class TestClassificationCommon:
 
     def load_trace(self, trace_id, traces_dir) -> Trace:

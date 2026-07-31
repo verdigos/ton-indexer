@@ -20,11 +20,16 @@ from indexer.events.blocks.dns import (
     DeleteDnsRecordBlock,
     DnsRenewBlock,
 )
+from indexer.events.blocks.auction import DnsPurchaseBlock, DnsReleaseBlock
 from indexer.events.blocks.messages.dns import ChangeDnsRecordMessage
+from indexer.events.blocks.messages.nft import AuctionFillUp, DnsReleaseBalance
+from indexer.events.blocks.utils import AccountId
 from indexer.events.mch.registry import Registries
 
 OPCODES = {
     "ChangeDnsRecord": ChangeDnsRecordMessage.opcode,
+    "AuctionFillUp": AuctionFillUp.opcode,
+    "DnsReleaseBalance": DnsReleaseBalance.opcode,
 }
 
 # Registry keys are the produce-union / `produces switch` btypes in specs/dns.mch.
@@ -32,10 +37,14 @@ BLOCK_TYPES = {
     "change_dns": ChangeDnsRecordBlock,
     "renew_dns":  DnsRenewBlock,
     "delete_dns": DeleteDnsRecordBlock,
+    "dns_purchase": DnsPurchaseBlock,
+    "dns_release": DnsReleaseBlock,
 }
 
 MESSAGE_TYPES = {
     "ChangeDnsRecordMessage": ChangeDnsRecordMessage,
+    "AuctionFillUpMessage": AuctionFillUp,
+    "DnsReleaseBalanceMessage": DnsReleaseBalance,
 }
 
 
@@ -44,6 +53,13 @@ def register_dns(reg: Registries) -> Registries:
     reg.opcodes.update(OPCODES)
     reg.block_types.update(BLOCK_TYPES)
     reg.message_types.update(MESSAGE_TYPES)
+
+    @reg.register_fn("dns_purchase_buyer")
+    async def dns_purchase_buyer(anchor):
+        parent = anchor.previous_block if anchor is not None else None
+        if parent is None or parent.btype != "call_contract":
+            return None
+        return AccountId(parent.get_message().source)
 
     @reg.register_lookup("nft_item")
     async def nft_item(address: str) -> Any:

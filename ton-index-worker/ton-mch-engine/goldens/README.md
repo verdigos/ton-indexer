@@ -22,6 +22,24 @@ is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
 
+Re-baselined 2026-07-31 (**866 → 886 rows, 202 → 208 fixtures**) by the DNS
+auction tail wave: `dns_purchase` + `dns_release` matchers (specs/dns.mch) with
+6 live fixtures — 3 purchase (snapshot-mined via actions table; opcode-only
+hunts surface teleitem look-alikes since `AuctionFillUp` 0x370FEC51 is shared,
+gated here by the nft_item code-hash/collection guard) and 3 release. All 20 new
+rows additive; teleitem negative-check verified (look-alike trace emits no
+dns_purchase). Includes legacy `_fill_dns_release` dual-access (`_dget`) fix —
+the fill was unreachable via dict-shaped data until the declarative producer
+landed.
+
+Re-baselined 2026-07-31 (**861 → 866 rows, 197 → 202 fixtures**) by the
+subscriptions wave (35af75d): `subscribe` + `unsubscribe` matchers
+(specs/subscriptions.mch, fully declarative) with 5 live fixtures — 3 subscribe,
+2 unsubscribe, hunted by wallet-plugin opcodes from cold prod. All 5 new rows
+additive. Uncovered branches (no live specimen found): subscribe `failed=true`,
+unsubscribe null-beneficiary.
+
+
 Re-baselined 2026-07-31 (**838 → 861 rows, 184 → 197 fixtures**) by registering
 13 live nominator-pool fixtures (deposit + withdraw_request + op-0x2
 double-payout), the first fixture coverage for `specs/nominator.mch`'s deposit

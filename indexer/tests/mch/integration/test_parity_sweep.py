@@ -97,6 +97,8 @@ from indexer.events.blocks.elections import (
 from indexer.events.blocks.auction import (
     AuctionBidMatcher,
     AuctionOutbidMatcher,
+    DnsPurchaseMatcher,
+    DnsReleaseMatcher,
     NftCancelAuctionMatcher,
     NftCancelSaleMatcher,
     NftFinishAuctionMatcher,
@@ -323,7 +325,8 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
      (DedustSwapBlockMatcher,)),
     ("specs/dedust_withdraw.mch", _SPECS_DIR / "dedust_withdraw.mch", dedust_withdraw_registries,
      _PREREQ_SWAP, (DedustWithdrawBlockMatcher,)),
-    ("specs/dns.mch", _SPECS_DIR / "dns.mch", dns_registries, (), (ChangeDnsRecordMatcher,)),
+    ("specs/dns.mch", _SPECS_DIR / "dns.mch", dns_registries, (),
+     (ChangeDnsRecordMatcher, DnsPurchaseMatcher, DnsReleaseMatcher)),
     ("specs/stonfi_v2_swap.mch", _SPECS_DIR / "stonfi_v2_swap.mch", stonfi_v2_registries,
      _PREREQ_SWAP, (StonfiV2SwapBlockMatcher,)),
     # specs_decl/jettons.mch is the fully declarative jetton family. It is now

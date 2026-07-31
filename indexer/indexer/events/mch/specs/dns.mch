@@ -43,3 +43,60 @@ matcher change_dns {
         }
     }
 }
+
+opcode AuctionFillUp      = 0x370fec51
+opcode DnsReleaseBalance = 0x4ed14b65
+
+matcher dns_purchase {
+    produces dns_purchase
+    entry    @anchor
+
+    op AuctionFillUp @anchor
+
+    parse anchor as AuctionFillUpMessage
+    let buyer = dns_purchase_buyer(anchor)
+    reject when buyer == null
+    let nft = lookup nft_item(anchor.msg.source)
+    reject when nft == null or (nft.code_hash != "i1/8nr/TkGTY1fVuRlnIJrt1k5I/XKSHKL5NYK9vUfk=" and nft.collection_address != "0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF")
+    failed when anchor.failed
+    out {
+        nft_address:              account(anchor.msg.source)
+        collection_address:       account(nft.collection_address)
+        nft_index:                nft.index
+        prev_owner:               null
+        new_owner:                buyer
+        query_id:                 anchor.body.query_id
+        forward_amount:           null
+        response_destination:     null
+        custom_payload:           null
+        forward_payload:          null
+        payout_amount:            amount(anchor.msg.value)
+        payout_comment_encrypted: null
+        payout_comment_encoded:   null
+        payout_comment:           null
+        price:                    amount(anchor.msg.value)
+        real_prev_owner:          null
+        marketplace:              null
+        marketplace_address:      null
+    }
+}
+
+matcher dns_release {
+    produces dns_release
+    entry    @anchor
+
+    op DnsReleaseBalance @anchor
+
+    parse anchor as DnsReleaseBalanceMessage
+    let nft = lookup nft_item(anchor.msg.destination)
+    reject when nft == null or (nft.code_hash != "i1/8nr/TkGTY1fVuRlnIJrt1k5I/XKSHKL5NYK9vUfk=" and nft.collection_address != "0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF")
+    failed when anchor.failed
+    out {
+        query_id:      anchor.body.query_id
+        nft_address:   account(anchor.msg.destination)
+        nft_collection: account(nft.collection_address)
+        nft_index:     nft.index
+        source:        account(anchor.msg.source)
+        value:         amount(anchor.msg.value)
+    }
+}

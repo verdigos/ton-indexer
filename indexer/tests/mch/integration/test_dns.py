@@ -1,16 +1,10 @@
-"""T14 — field-level parity between the legacy DNS matcher and specs/dns.mch.
+"""Synthetic field and branch coverage for specs/dns.mch.
 
-Unlike test_jettons_family.py, this suite does NOT load recorded trace fixtures:
-the entire tests/traces corpus contains zero messages carrying the ChangeDnsRecord
-opcode (0x4eb1f0f9) — verified by scanning every fixture's raw message opcodes and
-by running the legacy ChangeDnsRecordMatcher across all 147 traces (0 hits). No YAML
-test case references change_dns / renew_dns / delete_dns either. Recording new traces
-is out of scope for T14, so instead we construct minimal but faithful block trees the
-same way the production pipeline does: real Transaction/Message DB models carrying a
-genuine ChangeDnsRecord BOC body -> to_tree() -> init_block(). Both the legacy matcher
-and the mch-compiled matcher run on two independently built trees; produced blocks are
-compared field by field (btype, deep `data`, failed/broken, value_flow, consumed
-event-node set), at the same depth as test_jettons_family.py.
+Minimal real Transaction/Message DB models carrying genuine BOC bodies are lowered
+through to_tree() -> init_block(), matching the production pipeline. Recorded action
+coverage for the auction tail lives in test_cases/dns.yaml; these synthetic trees pin
+the OR guard, lookup misses, the purchase parent's non-consumption, and both legal
+conditional-query-id lengths.
 
 Coverage (one synthetic fixture per outcome + a bounce variant + a failed variant):
 - change_dns  : has_value=True  (DNSNextResolver value cell)
@@ -30,6 +24,8 @@ from indexer.core.database import Message, MessageContent, Transaction
 from indexer.events import context
 from indexer.events.blocks.core import Block
 from indexer.events.blocks.dns import ChangeDnsRecordMatcher
+from indexer.events.blocks.messages.nft import AuctionFillUp, DnsReleaseBalance
+from indexer.events.blocks.utils import AccountId
 from indexer.events.blocks.utils.tree_utils import to_tree
 from indexer.events.event_processing import init_block
 from indexer.events.mch import compile_file
@@ -52,6 +48,9 @@ except Exception:  # pragma: no cover - import error path
 _SKIP_REASON = "indexer.events.mch_ir not importable; the IR engine is the DSL runtime"
 
 DNS_OPCODE = 0x4eb1f0f9
+AUCTION_FILL_UP_OPCODE = 0x370fec51
+DNS_RELEASE_OPCODE = 0x4ed14b65
+PARENT_OPCODE = 0x12345678
 BOUNCE_OPCODE = 0xffffffff
 ZERO_KEY = b"\x00" * 32
 NONZERO_KEY = bytes(range(1, 33))
@@ -60,6 +59,10 @@ SENDER = Address("0:" + "a1" * 32).to_str(False)
 DNS_ITEM = Address("0:" + "b2" * 32).to_str(False)
 COLLECTION = Address("0:" + "c3" * 32).to_str(False)
 RESOLVER = Address("0:" + "d4" * 32)
+BUYER = Address("0:" + "e5" * 32).to_str(False)
+AUCTION = Address("0:" + "f6" * 32).to_str(False)
+DNS_COLLECTION = "0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF"
+DNS_CODE_HASH = "i1/8nr/TkGTY1fVuRlnIJrt1k5I/XKSHKL5NYK9vUfk="
 
 
 # --- synthetic DNS BOC bodies -------------------------------------------------
@@ -81,6 +84,13 @@ def _delete_body() -> bytes:
 
 
 _BODY_FOR = {"change_dns": _change_body, "renew_dns": _renew_body, "delete_dns": _delete_body}
+
+
+def _query_body(opcode: int, query_id: int | None = 7) -> bytes:
+    b = begin_cell().store_uint(opcode, 32)
+    if query_id is not None:
+        b.store_uint(query_id, 64)
+    return b.end_cell().to_boc()
 
 
 # --- synthetic trace construction (mirrors the real pipeline path) ------------
@@ -138,6 +148,26 @@ def _build_dns_transactions(outcome: str, with_bounce: bool, aborted: bool) -> l
     return txs
 
 
+def _build_auction_transactions(matcher_name: str) -> list[Transaction]:
+    if matcher_name == "dns_release":
+        tx = _tx("TXANCHOR", 400, DNS_ITEM)
+        tx.messages = [_msg("RELEASE", tx, "in", DNS_RELEASE_OPCODE, SENDER,
+                            DNS_ITEM, _query_body(DNS_RELEASE_OPCODE), value=123)]
+        return [tx]
+
+    parent_tx = _tx("TXPARENT", 400, DNS_ITEM)
+    anchor_tx = _tx("TXANCHOR", 500, AUCTION)
+    parent = _msg("PARENT", parent_tx, "in", PARENT_OPCODE, BUYER, DNS_ITEM,
+                  _query_body(PARENT_OPCODE), value=456)
+    anchor_out = _msg("ANCHOR", parent_tx, "out", AUCTION_FILL_UP_OPCODE,
+                      DNS_ITEM, AUCTION, _query_body(AUCTION_FILL_UP_OPCODE), value=123)
+    anchor_in = _msg("ANCHOR", anchor_tx, "in", AUCTION_FILL_UP_OPCODE,
+                     DNS_ITEM, AUCTION, _query_body(AUCTION_FILL_UP_OPCODE), value=123)
+    parent_tx.messages = [parent, anchor_out]
+    anchor_tx.messages = [anchor_in]
+    return [parent_tx, anchor_tx]
+
+
 def _interfaces() -> dict:
     return {
         DNS_ITEM: {
@@ -149,9 +179,17 @@ def _interfaces() -> dict:
     }
 
 
+def _auction_interfaces(*, code_hash: str, collection: str) -> dict:
+    return {DNS_ITEM: {"NftItem": {
+        "address": DNS_ITEM, "init": True, "index": 42.0,
+        "collection_address": collection, "owner_address": SENDER,
+        "content": None, "code_hash": code_hash,
+    }}}
+
+
 # --- harness (mirrors test_jettons_family.py) ---------------------------------
 
-def _dsl_matcher():
+def _dsl_matchers():
     """Build the DSL matcher through the v2 IR engine (compile is a frontend-
     internal step ir_emit needs; no compiled matcher is run as a runtime)."""
     if not _HAVE_IR:
@@ -159,7 +197,11 @@ def _dsl_matcher():
     compiled = compile_file(DNS_MCH, dns_registries())
     artifact = emit_ir(compiled, [DNS_MCH.name])
     art = _mch_ir.load_artifact(artifact)
-    return list(_mch_ir.build_matchers(art, dns_registries()))[0]
+    return {m.name: m for m in _mch_ir.build_matchers(art, dns_registries())}
+
+
+def _dsl_matcher():
+    return _dsl_matchers()["change_dns"]
 
 
 def _build_block_tree(txs) -> Block:
@@ -268,3 +310,62 @@ async def test_change_dns_parity_failed():
     """Aborted DNS tx - exercises the failed-flag path of the shared build core."""
     hw_blocks, _ = await _run_parity("change_dns", with_bounce=True, aborted=True)
     assert hw_blocks[0].failed is True
+
+
+@pytest.mark.asyncio
+async def test_dns_purchase_reads_but_does_not_consume_parent():
+    context.interface_repository.set(TestInterfaceRepository(
+        _auction_interfaces(code_hash=DNS_CODE_HASH, collection=DNS_COLLECTION)))
+    root = _build_block_tree(_build_auction_transactions("dns_purchase"))
+    anchor = next(
+        b for b in root.bfs_iter()
+        if getattr(b, "opcode", None) == AUCTION_FILL_UP_OPCODE
+    )
+    parent = anchor.previous_block
+    result = await _dsl_matchers()["dns_purchase"].try_build(anchor)
+    product = next(b for b in result if b.btype == "dns_purchase")
+    assert _node_hashes(product) == ["TXANCHOR"]
+    assert product.data["new_owner"] == AccountId(BUYER)
+    assert product.previous_block is parent
+    assert parent.btype == "call_contract" and parent.parent is None
+    assert _node_hashes(parent) == ["TXPARENT"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("matcher_name", ["dns_purchase", "dns_release"])
+@pytest.mark.parametrize(
+    ("code_hash", "collection"),
+    [(DNS_CODE_HASH, COLLECTION), ("different", DNS_COLLECTION)],
+    ids=["code-hash-only", "collection-only"],
+)
+async def test_dns_auction_guard_is_or(matcher_name, code_hash, collection):
+    context.interface_repository.set(TestInterfaceRepository(
+        _auction_interfaces(code_hash=code_hash, collection=collection)))
+    blocks = await _run_matcher(
+        _dsl_matchers()[matcher_name], _build_auction_transactions(matcher_name))
+    assert [b.btype for b in blocks] == [matcher_name]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("matcher_name", ["dns_purchase", "dns_release"])
+async def test_dns_auction_lookup_miss_rejects(matcher_name):
+    context.interface_repository.set(TestInterfaceRepository({}))
+    opcode = (AUCTION_FILL_UP_OPCODE if matcher_name == "dns_purchase"
+              else DNS_RELEASE_OPCODE)
+    root = _build_block_tree(_build_auction_transactions(matcher_name))
+    anchor = next(b for b in root.bfs_iter() if getattr(b, "opcode", None) == opcode)
+    assert not await _dsl_matchers()[matcher_name].try_build(anchor)
+    assert anchor.btype == "call_contract" and anchor.parent is None
+
+
+@pytest.mark.parametrize(
+    ("message_type", "opcode"),
+    [(AuctionFillUp, AUCTION_FILL_UP_OPCODE), (DnsReleaseBalance, DNS_RELEASE_OPCODE)],
+)
+@pytest.mark.parametrize("query_id", [None, 0x123456789ABCDEF0])
+def test_dns_auction_query_id_lengths(message_type, opcode, query_id):
+    body = begin_cell().store_uint(opcode, 32)
+    if query_id is not None:
+        body.store_uint(query_id, 64)
+    parsed = message_type(body.end_cell().begin_parse())
+    assert parsed.query_id == query_id

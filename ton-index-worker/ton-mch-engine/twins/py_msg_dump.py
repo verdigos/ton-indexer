@@ -26,6 +26,7 @@ from indexer.events.blocks.messages.jettons import (  # noqa: E402
     JettonTransfer, MinterJettonMint,
 )
 from indexer.events.blocks.messages.dns import ChangeDnsRecordMessage  # noqa: E402
+from indexer.events.blocks.messages.nft import AuctionFillUp, DnsReleaseBalance  # noqa: E402
 from indexer.events.blocks.messages.vesting import VestingSendMessage  # noqa: E402
 from indexer.events.blocks.messages.swaps import (  # noqa: E402
     DedustPayoutFromPool, DedustSwapNotification, PTonTransfer,
@@ -61,6 +62,8 @@ CLASSES = {
     0x642B7D07: ("JettonMint", JettonMint),
     0x00000015: ("MinterJettonMint", MinterJettonMint),
     0x4EB1F0F9: ("ChangeDnsRecordMessage", ChangeDnsRecordMessage),
+    0x370FEC51: ("AuctionFillUpMessage", AuctionFillUp),
+    0x4ED14B65: ("DnsReleaseBalanceMessage", DnsReleaseBalance),
     0xA7733ACD: ("VestingSendMessage", VestingSendMessage),
     0x01F3835D: ("PTonTransfer", PTonTransfer),
     0x37C096DF: ("StonfiV2ProvideLiquidity", StonfiV2ProvideLiquidity),

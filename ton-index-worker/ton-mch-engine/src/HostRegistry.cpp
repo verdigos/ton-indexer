@@ -17,6 +17,7 @@ const std::map<std::string, HostFn> &host_fns() {
       {"layerzero_dst_oapp_matches", layerzero_dst_oapp_matches},
       {"tonstakers_minted_nft", tonstakers_minted_nft},
       {"tonstakers_pool_addr", tonstakers_pool_addr},
+      {"dns_purchase_buyer", dns_purchase_buyer},
       {"vesting_message_was_sent", vesting_message_was_sent},
       {"jvault_stake_period", jvault_stake_period},
       {"nominator_withdraw_payout_amount", nominator_withdraw_payout_amount},

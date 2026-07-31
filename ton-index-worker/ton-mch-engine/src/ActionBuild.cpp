@@ -1274,6 +1274,18 @@ void fill_nft_purchase(const Value &d, Action &a) {
   a.nft_transfer_data = mkdict(std::move(f));
 }
 
+// _fill_dns_release.
+void fill_dns_release(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "source"));
+  a.destination = av_addr(dg(d, "nft_address"));
+  a.asset = av_addr(dg(d, "nft_collection"));
+  Value::Fields t;
+  t.emplace_back("query_id", dg(d, "query_id"));
+  t.emplace_back("nft_item_index", dg(d, "nft_index"));
+  a.nft_transfer_data = mkdict(std::move(t));
+  a.value = av_amount(dg(d, "value"));
+}
+
 // _fill_nft_put_on_auction_action — the `teleitem_start_auction` fill.
 void fill_nft_put_on_auction(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "owner"));
@@ -1541,6 +1553,8 @@ bool fill_action(Block *b, Action &a) {
   // fixture corpus has none of it. Gated hermetically instead
   // (--actions-msgpack-test), like the other W6 fills.
   else if (t == "nft_purchase") fill_nft_purchase(d, a);
+  else if (t == "dns_purchase") fill_nft_purchase(d, a);
+  else if (t == "dns_release") fill_dns_release(d, a);
   else if (t == "change_dns") fill_change_dns(d, a);
   else if (t == "delete_dns") fill_delete_dns(d, a);
   // Teleitem auction port (specs/teleitem_auction.mch). The two fills are named
@@ -1559,8 +1573,6 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "nft_discovery") fill_nft_discovery(d, a);
   // NFT mint port (specs/nft_mint.mch).
   else if (t == "nft_mint") fill_nft_mint(d, a);
-  // STILL UNPORTED, deliberately: dns_purchase is bucket C, not B — NO matcher
-  // in ir/mch_ir.json produces it, so there is nothing to fill.
   else return false;
   return true;
 }

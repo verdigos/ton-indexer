@@ -41,7 +41,7 @@
 
 namespace mch {
 
-// The registered parser set = the kept-hand parsers (7) + the M1 schema-generated
+// The registered parser set = the kept-hand parsers (13) + the M1 schema-generated
 // rows (22, from mch-msgs.schema via msgs_gen.py) + the W12 ABI-bridge rows (3:
 // the DeDust CPMM V2 claim_reward family, under BARE decl names).
 // First-source-wins on a collision; a key claimed by more than one source is
@@ -59,6 +59,8 @@ const std::vector<std::pair<std::string, MsgParserFn>> &hand_message_parsers() {
       {"MinterJettonMint", parse_minter_jetton_mint},    // nested ref-capture
       {"JettonBurnNotification", parse_never},           // not Slice-constructible
       {"ChangeDnsRecordMessage", parse_change_dns},
+      {"AuctionFillUpMessage", parse_auction_fill_up},
+      {"DnsReleaseBalanceMessage", parse_dns_release_balance},
       {"VestingSendMessage", parse_vesting_send_message},
       {"VestingAddWhiteList", parse_vesting_add_whitelist},  // unbounded ref chain
       {"EvaaWithdrawFailExcess", parse_evaa_withdraw_fail_excess},  // opcode-enum
