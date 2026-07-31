@@ -109,7 +109,13 @@ from indexer.events.blocks.jvault import (
     JVaultUnstakeBlockMatcher,
     JVaultUnstakeRequestBlockMatcher,
 )
-from indexer.events.blocks.layerzero import LayerZeroReceiveMatcher
+from indexer.events.blocks.layerzero import (
+    LayerZeroCommitPacketMatcher,
+    LayerZeroDvnVerifyMatcher,
+    LayerZeroReceiveMatcher,
+    LayerZeroSendMatcher,
+    LayerZeroSendTokensMatcher,
+)
 from indexer.events.blocks.liquidity import (
     CoffeeCreatePoolCreatorMatcher,
     CoffeeCreatePoolMatcher,
@@ -191,7 +197,7 @@ from indexer.events.mch.builders.elections import elections_registries
 from indexer.events.mch.builders.ethena import ethena_registries
 from indexer.events.mch.builders.evaa import evaa_registries
 from indexer.events.mch.builders.jvault import jvault_registries
-from indexer.events.mch.builders.layerzero import layerzero_receive_registries
+from indexer.events.mch.builders.layerzero import layerzero_registries
 from indexer.events.mch.builders.getgems import getgems_registries
 from indexer.events.mch.builders.nft_mint import nft_mint_registries
 from indexer.events.mch.builders.nft_sale import nft_sale_registries
@@ -314,8 +320,15 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     # refund leg, withdraw for its jetton payout.
     ("specs/evaa.mch", _SPECS_DIR / "evaa.mch", evaa_registries, (JettonTransferBlockMatcher,),
      (EvaaSupplyBlockMatcher, EvaaWithdrawBlockMatcher)),
-    ("specs/layerzero.mch", _SPECS_DIR / "layerzero.mch", layerzero_receive_registries, (),
-     (LayerZeroReceiveMatcher,)),
+    # The whole LayerZero family runs as one group, in the legacy matchers-list
+    # order (send 75, send_tokens 76, receive 77, commit_packet 78, dvn_verify
+    # 79) — send_tokens binds the block send produces, so the pair is
+    # order-bearing on BOTH legs. The prebuilt `jetton_transfer` prereq is what
+    # send_tokens' parent edge binds.
+    ("specs/layerzero.mch", _SPECS_DIR / "layerzero.mch", layerzero_registries,
+     (JettonTransferBlockMatcher,),
+     (LayerZeroSendMatcher, LayerZeroSendTokensMatcher, LayerZeroReceiveMatcher,
+      LayerZeroCommitPacketMatcher, LayerZeroDvnVerifyMatcher)),
     # The whole tonstakers family runs as one group, in the legacy matchers-list
     # order (delayed withdrawal idx 1, deposit idx 4, withdraw idx 5) — which is
     # also the spec's source order, the tie-break for their shared `priority 85`.
@@ -660,10 +673,34 @@ def _detuple(v):
     return v
 
 
+def _as_record(v):
+    """`v` as a string-keyed mapping if it is one, else None.
+
+    A RECORD is a record whichever way it was built: the declarative `out`
+    emits record literals as plain dicts (matching the C++ engine's
+    `map<string, Value>`), while legacy build cores nest dataclasses
+    (LayerZeroSendData, LayerZeroPacketData). Only nested records hit this —
+    a top-level dataclass `data` is already flattened by `_data_items`.
+    """
+    if isinstance(v, dict):
+        return v
+    if dataclasses.is_dataclass(v) and not isinstance(v, type):
+        return vars(v)
+    return None
+
+
 def _values_equal(a, b) -> bool:
     if a is None and b is None:
         return True
     a, b = _detuple(a), _detuple(b)
+    if isinstance(a, dict) != isinstance(b, dict):
+        # Exactly one side is a dict: the only way this can be equal is the
+        # dict-vs-dataclass record pair above (every other mixed pair falls
+        # through to the type check and stays a divergence, as before).
+        ra, rb = _as_record(a), _as_record(b)
+        if ra is None or rb is None:
+            return False
+        return ra.keys() == rb.keys() and all(_values_equal(ra[k], rb[k]) for k in ra)
     if type(a) is not type(b):
         return False
     if isinstance(a, list):

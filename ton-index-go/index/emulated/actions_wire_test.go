@@ -99,6 +99,33 @@ func TestActionsWireFixture(t *testing.T) {
 	if a.LayerzeroPacketData.Nonce == nil || *a.LayerzeroPacketData.Nonce != 1234567890123 {
 		t.Errorf("nonce = %v, want 1234567890123", a.LayerzeroPacketData.Nonce)
 	}
+
+	// *uint64 keys fed as DECIMAL STRINGS: send_request_id sits above 2^63 and
+	// the fees are uint128-domain, so the writer cannot emit them as integers.
+	if a.LayerzeroSendData == nil {
+		t.Fatal("layerzero_send_data is nil")
+	}
+	if a.LayerzeroSendData.SendRequestId == nil ||
+		*a.LayerzeroSendData.SendRequestId != 18446744073709551614 {
+		t.Errorf("send_request_id = %v, want 18446744073709551614", a.LayerzeroSendData.SendRequestId)
+	}
+	if a.LayerzeroSendData.NativeFee == nil || *a.LayerzeroSendData.NativeFee != 14835102020 {
+		t.Errorf("native_fee = %v, want 14835102020", a.LayerzeroSendData.NativeFee)
+	}
+	if a.LayerzeroSendData.ZroFee == nil || *a.LayerzeroSendData.ZroFee != 0 {
+		t.Errorf("zro_fee = %v, want 0", a.LayerzeroSendData.ZroFee)
+	}
+	str("layerzero_send_data.msglib", a.LayerzeroSendData.Msglib, "0x63bdfbf347f883dd")
+
+	// A bounded *int64 beside the status STRING the parser maps from the code.
+	if a.LayerzeroDvnVerifyData == nil {
+		t.Fatal("layerzero_dvn_verify_data is nil")
+	}
+	if a.LayerzeroDvnVerifyData.Nonce == nil || *a.LayerzeroDvnVerifyData.Nonce != 125 {
+		t.Errorf("dvn nonce = %v, want 125", a.LayerzeroDvnVerifyData.Nonce)
+	}
+	str("layerzero_dvn_verify_data.status", a.LayerzeroDvnVerifyData.Status, "succeeded")
+
 	if a.ChangeDnsRecordData == nil {
 		t.Fatal("change_dns_record_data is nil")
 	}

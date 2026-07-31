@@ -62,6 +62,9 @@ const std::vector<std::pair<std::string, MsgParserFn>> &hand_message_parsers() {
       {"VestingSendMessage", parse_vesting_send_message},
       {"EvaaWithdrawFailExcess", parse_evaa_withdraw_fail_excess},  // opcode-enum
       {"LayerZeroOappExecuteCallback", parse_layerzero_oapp_execute_callback},
+      {"LayerzeroChannelSendCallback", parse_layerzero_channel_send_callback},
+      {"ChannelCommitPacket", parse_layerzero_channel_commit_packet},
+      {"UlnConnectionVerifyCallbackParser", parse_uln_connection_verify_callback},
   };
   return rows;
 }

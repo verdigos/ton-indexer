@@ -1,15 +1,28 @@
-// LayerZero message parser (messages/layerzero.py:149-208, 1377-1383). See
-// parse/PSlice.h for shared machinery and MsgParse.cpp's header for the
-// pytoniq-parity catalogue.
+// LayerZero message parsers (messages/layerzero.py). See parse/PSlice.h for
+// shared machinery and MsgParse.cpp's header for the pytoniq-parity catalogue.
 //
-// LayerZeroOappExecuteCallback: cell = slice.to_cell(); packet =
-// LayerZeroPacket(cell.refs[0].refs[0]). The twin dumps vars() recursively, so
-// the Obj mirrors EVERY Python attribute, incl. b (the source cell), s (the
-// slice AFTER all loads -> remainder rebuilt as a cell) and the asserted
-// header ints. guid/src_oapp/dst_oapp are Python hex(): "0x" + lowercase
+// The twin dumps vars() recursively, so every Obj here mirrors EVERY Python
+// attribute of its class, incl. b/cell (the source cell), s (the slice AFTER
+// all loads -> remainder rebuilt as a cell) and the asserted header ints.
+// guid / src_oapp / dst_oapp / send_msglib* are Python hex(): "0x" + lowercase
 // MINIMAL digits (leading zeros stripped — unlike the 64-digit account form).
 // message is '0x' + bits.tobytes().hex(): bit-level bytes, right-padded to a
 // byte boundary, leading zeros KEPT.
+//
+// Four entry points, all four in the --parse-dump A/B table (ParseDump.cpp):
+//
+//   LayerZeroOappExecuteCallback (0xcaae25a1, py:1378) — receive. cell =
+//     slice.to_cell(); packet = LayerZeroPacket(cell.refs[0].refs[0]).
+//   LayerzeroChannelSendCallback (0xa2b5fbae, py:593)  — send. Reads the
+//     opcode off the body, then lz_send = LayerZeroMDLzSend(
+//     cell.refs[0].refs[0].refs[0]) — "got it experimentally" per the source.
+//   ChannelCommitPacket (0x5388cd88, py:384)           — commit. Two refs deep
+//     to the packet; no opcode read at all (refs are prefix-independent).
+//   UlnConnectionVerifyCallbackParser (0x3cb38090, py:913) — dvn verify. MdObj
+//     ref[0] = md::VerificationStatus (u116 header + i234 filler, then
+//     nonce:u64 + status:u32). The status CODE becomes the status STRING here:
+//     the expression language has no string operations, so the mapping lives
+//     in the parser on both sides.
 #include "parse/Parsers.h"
 
 #include "parse/PSlice.h"
@@ -128,6 +141,71 @@ td::Result<Value> lz_parse_packet(const td::Ref<vm::Cell> &c) {
   return Value::make_obj(std::move(f));
 }
 
+// md::LzSend (py:87 LayerZeroMDLzSend). 80-bit NAME ("lzSend" big-endian,
+// zero-padded), 180-bit header info, 90 filler ones, then the scalar prefix and
+// three refs; the third ref carries the fee block. Every assert in the Python
+// __init__ is a hard check here — a mismatch rejects the whole parse, exactly
+// as the raised AssertionError does.
+td::Result<Value> lz_parse_md_lz_send(const td::Ref<vm::Cell> &c) {
+  PSlice ps = pslice_from_cell(c);
+  auto name = ps.cs.fetch_int256(80, false);
+  if (name.is_null() || td::dec_string(name) != "119272640966244") {
+    return td::Status::Error("lz lzSend: wrong name");
+  }
+  auto hi = ps.cs.fetch_int256(180, false);
+  if (hi.is_null() ||
+      td::dec_string(hi) != "582890735024998957421269964955452773563747974476099581") {
+    return td::Status::Error("lz lzSend: header info mismatch");
+  }
+  auto hf = ps.cs.fetch_int256(90, true);
+  if (hf.is_null() || td::dec_string(hf) != "-1") {
+    return td::Status::Error("lz lzSend: header filler mismatch");
+  }
+  if (!ps.cs.have(64)) {
+    return td::Status::Error("lz lzSend: send_request_id underflow");
+  }
+  auto send_request_id = ps.cs.fetch_ulong(64);
+  TRY_RESULT(send_msglib_manager, lz_hex_min(ps.cs, 256));
+  TRY_RESULT(send_msglib, lz_hex_min(ps.cs, 256));
+  if (ps.off + 2 >= ps.refs.size()) {
+    return td::Status::Error("lz lzSend: packet/options/fee refs missing");
+  }
+  TRY_RESULT(packet, lz_parse_packet(ps.refs[ps.off++]));
+  auto extra_options = ps.refs[ps.off++];
+  auto fee_ref = ps.refs[ps.off++];
+  PSlice fs = pslice_from_cell(fee_ref);
+  auto conn = fs.cs.fetch_int256(256, false);
+  auto native_fee = fs.cs.fetch_int256(128, false);
+  auto zro_fee = fs.cs.fetch_int256(128, false);
+  if (conn.is_null() || native_fee.is_null() || zro_fee.is_null()) {
+    return td::Status::Error("lz lzSend: fee block underflow");
+  }
+  if (fs.off + 1 >= fs.refs.size()) {
+    return td::Status::Error("lz lzSend: enforced_options/callback_data refs missing");
+  }
+  auto enforced_options = fs.refs[fs.off++];
+  auto callback_data = fs.refs[fs.off++];
+  TRY_RESULT(rem, pslice_to_cell(ps));
+  Value::Fields f;
+  f.emplace_back("b", Value::make_cell(c));
+  f.emplace_back("s", Value::make_cell(std::move(rem)));
+  f.emplace_back("name", Value::make_int(std::move(name)));
+  f.emplace_back("header_info", Value::make_int(std::move(hi)));
+  f.emplace_back("header_filler", Value::make_int(std::move(hf)));
+  f.emplace_back("send_request_id", Value::make_int(td::make_refint(send_request_id)));
+  f.emplace_back("send_msglib_manager", Value::make_str(std::move(send_msglib_manager)));
+  f.emplace_back("send_msglib", Value::make_str(std::move(send_msglib)));
+  f.emplace_back("packet", std::move(packet));
+  f.emplace_back("extra_options", Value::make_cell(std::move(extra_options)));
+  f.emplace_back("ref", Value::make_cell(std::move(fee_ref)));
+  f.emplace_back("send_msglib_connection", Value::make_int(std::move(conn)));
+  f.emplace_back("native_fee", Value::make_int(std::move(native_fee)));
+  f.emplace_back("zro_fee", Value::make_int(std::move(zro_fee)));
+  f.emplace_back("enforced_options", Value::make_cell(std::move(enforced_options)));
+  f.emplace_back("callback_data", Value::make_cell(std::move(callback_data)));
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 td::Result<Value> parse_layerzero_oapp_execute_callback(const td::Ref<vm::Cell> &body) {
@@ -146,6 +224,112 @@ td::Result<Value> parse_layerzero_oapp_execute_callback(const td::Ref<vm::Cell> 
   Value::Fields f;
   f.emplace_back("cell", Value::make_cell(std::move(cell0)));
   f.emplace_back("packet", std::move(packet));
+  return Value::make_obj(std::move(f));
+}
+
+td::Result<Value> parse_layerzero_channel_send_callback(const td::Ref<vm::Cell> &body) {
+  // py:600. `self.cell = s.to_cell()` runs on the FRESH slice (the whole body),
+  // then `self.opcode = self.s.load_uint(32)` advances the SAME slice — so `s`
+  // is the body minus 32 bits with every ref still on it.
+  PSlice ps = pslice_from_cell(body);
+  TRY_RESULT(cell0, pslice_to_cell(ps));
+  if (!ps.cs.have(32)) {
+    return td::Status::Error("lz send callback: opcode underflow");
+  }
+  auto opcode = ps.cs.fetch_ulong(32);
+  TRY_RESULT(rem, pslice_to_cell(ps));
+  if (ps.refs.empty()) {
+    return td::Status::Error("lz send callback: refs[0] missing");
+  }
+  PSlice r0 = pslice_from_cell(ps.refs[0]);
+  if (r0.refs.empty()) {
+    return td::Status::Error("lz send callback: refs[0].refs[0] missing");
+  }
+  PSlice r1 = pslice_from_cell(r0.refs[0]);
+  if (r1.refs.empty()) {
+    return td::Status::Error("lz send callback: refs[0].refs[0].refs[0] missing");
+  }
+  TRY_RESULT(lz_send, lz_parse_md_lz_send(r1.refs[0]));
+  Value::Fields f;
+  f.emplace_back("cell", Value::make_cell(std::move(cell0)));
+  f.emplace_back("s", Value::make_cell(std::move(rem)));
+  f.emplace_back("opcode", Value::make_int64(static_cast<std::int64_t>(opcode)));
+  f.emplace_back("lz_send", std::move(lz_send));
+  return Value::make_obj(std::move(f));
+}
+
+td::Result<Value> parse_layerzero_channel_commit_packet(const td::Ref<vm::Cell> &body) {
+  // py:384. Pure ref walk — the 32 opcode bits are never read, so nothing is
+  // skipped here either.
+  PSlice ps = pslice_from_cell(body);
+  if (ps.refs.empty()) {
+    return td::Status::Error("lz commit packet: extended md ref missing");
+  }
+  auto extended_md_cell = ps.refs[0];
+  PSlice md = pslice_from_cell(extended_md_cell);
+  if (md.refs.empty()) {
+    return td::Status::Error("lz commit packet: packet ref missing");
+  }
+  auto packet_cell = md.refs[0];
+  TRY_RESULT(packet, lz_parse_packet(packet_cell));
+  Value::Fields f;
+  f.emplace_back("extended_md_cell", Value::make_cell(std::move(extended_md_cell)));
+  f.emplace_back("packet_cell", Value::make_cell(std::move(packet_cell)));
+  f.emplace_back("packet", std::move(packet));
+  return Value::make_obj(std::move(f));
+}
+
+td::Result<Value> parse_uln_connection_verify_callback(const td::Ref<vm::Cell> &body) {
+  // py:913. md::MdObj ref[0] = md::VerificationStatus. Python checks the FILLER
+  // first and the INFO second (both raise ValueError); order is immaterial to
+  // the outcome but kept for readability against the source.
+  PSlice ps = pslice_from_cell(body);
+  if (ps.refs.empty()) {
+    return td::Status::Error("uln verify callback: md obj ref missing");
+  }
+  auto md_obj_cell = ps.refs[0];
+  PSlice md = pslice_from_cell(md_obj_cell);
+  if (md.refs.empty()) {
+    return td::Status::Error("uln verify callback: verification status ref missing");
+  }
+  auto status_cell = md.refs[0];
+  PSlice vs = pslice_from_cell(status_cell);
+  auto hi = vs.cs.fetch_int256(116, false);
+  auto hf = vs.cs.fetch_int256(234, true);
+  if (hf.is_null() || td::dec_string(hf) != "-1") {
+    return td::Status::Error("uln verify callback: header filler is not 0");
+  }
+  if (hi.is_null() || td::dec_string(hi) != "38421788582694199859296615363593851") {
+    return td::Status::Error("uln verify callback: header info mismatch");
+  }
+  if (!vs.cs.have(96)) {
+    return td::Status::Error("uln verify callback: nonce/status underflow");
+  }
+  auto nonce = vs.cs.fetch_ulong(64);
+  auto status_code = vs.cs.fetch_ulong(32);
+  // md::VerificationStatus codes (py:936-947). Anything else renders the raw
+  // DECIMAL code, matching Python's f"unknown_{self.status_code}".
+  std::string status;
+  switch (status_code) {
+    case 0x3bbc306bu:
+      status = "succeeded";
+      break;
+    case 0x7fcbb4acu:
+      status = "nonce_out_of_range";
+      break;
+    case 0x29c53fabu:
+      status = "dvn_not_configured";
+      break;
+    default:
+      status = "unknown_" + std::to_string(status_code);
+      break;
+  }
+  Value::Fields f;
+  f.emplace_back("md_obj_cell", Value::make_cell(std::move(md_obj_cell)));
+  f.emplace_back("verification_status_cell", Value::make_cell(std::move(status_cell)));
+  f.emplace_back("nonce", Value::make_int(td::make_refint(nonce)));
+  f.emplace_back("status_code", Value::make_int64(static_cast<std::int64_t>(status_code)));
+  f.emplace_back("status", Value::make_str(std::move(status)));
   return Value::make_obj(std::move(f));
 }
 

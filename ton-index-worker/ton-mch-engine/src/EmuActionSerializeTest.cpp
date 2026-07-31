@@ -513,6 +513,32 @@ Action wire_fixture_action() {
   lz.emplace_back("message", Value::null());
   a.layerzero_packet_data = Value::make_dict(std::move(lz));
 
+  // Go *uint64 keys fed as DECIMAL STRINGS: send_request_id sits above 2^63
+  // (the case a signed naturalization would nil out) and the two fees are
+  // uint128-domain. The hex ids beside them are plain *string.
+  Value::Fields lzs;
+  lzs.emplace_back("send_request_id",
+                   Value::make_int(td::string_to_int256(std::string("18446744073709551614"))));
+  lzs.emplace_back("msglib_manager", Value::make_str("0x150645746e25be54"));
+  lzs.emplace_back("msglib", Value::make_str("0x63bdfbf347f883dd"));
+  lzs.emplace_back("uln", Value::make_str(kAddrA));
+  lzs.emplace_back("native_fee", Value::make_int(td::make_refint(14835102020LL)));
+  lzs.emplace_back("zro_fee", Value::make_int(td::make_refint(0)));
+  lzs.emplace_back("endpoint", Value::make_str(kAddrB));
+  lzs.emplace_back("channel", Value::null());
+  a.layerzero_send_data = Value::make_dict(std::move(lzs));
+
+  // A bounded *int64 nonce beside a mapped status STRING (the PARSER, not the
+  // expression language, produces that string — see specs/layerzero.mch).
+  Value::Fields lzv;
+  lzv.emplace_back("nonce", Value::make_int64(125));
+  lzv.emplace_back("status", Value::make_str("succeeded"));
+  lzv.emplace_back("dvn", Value::make_str(kAddrA));
+  lzv.emplace_back("proxy", Value::make_str(kAddrB));
+  lzv.emplace_back("uln", Value::make_str(kAddrA));
+  lzv.emplace_back("uln_connection", Value::null());
+  a.layerzero_dvn_verify_data = Value::make_dict(std::move(lzv));
+
   // *int64 (flags) beside *string keys in one composite.
   Value::Fields dns;
   dns.emplace_back("value_schema", Value::make_str("DNSAdnlAddress"));
@@ -589,6 +615,15 @@ void test_wire_fixture() {
         is_str(at(*at(*row, "jetton_transfer_data"), "query_id"), "18446744073709551615"));
   check("wire/lz_nonce_int",
         is_uint(at(*at(*row, "layerzero_packet_data"), "nonce"), 1234567890123ULL));
+  const msgpack::object *lzs = at(*row, "layerzero_send_data");
+  check("wire/lz_send_request_id_str",
+        is_str(at(*lzs, "send_request_id"), "18446744073709551614"));
+  check("wire/lz_native_fee_str", is_str(at(*lzs, "native_fee"), "14835102020"));
+  check("wire/lz_zro_fee_str", is_str(at(*lzs, "zro_fee"), "0"));
+  check("wire/lz_msglib_str", is_str(at(*lzs, "msglib"), "0x63bdfbf347f883dd"));
+  const msgpack::object *lzv = at(*row, "layerzero_dvn_verify_data");
+  check("wire/lz_dvn_nonce_int", is_uint(at(*lzv, "nonce"), 125));
+  check("wire/lz_dvn_status_str", is_str(at(*lzv, "status"), "succeeded"));
   check("wire/dns_flags_int", is_uint(at(*at(*row, "change_dns_record_data"), "flags"), 7));
   check("wire/claimed_amounts_all_str",
         is_str(elem(at(*at(*row, "jvault_claim_data"), "claimed_amounts"), 0), "1000"));

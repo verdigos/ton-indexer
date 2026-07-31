@@ -1330,63 +1330,72 @@ def _fill_cocoon_client_withdraw_action(block, action: Action):
     }
 
 
+def _packet_dict(packet_data):
+    # Declarative build emits packet_data as a plain dict (record literal); the
+    # legacy build cores construct a LayerZeroPacketData dataclass (receive
+    # builds a dict already). Normalize to a dict.
+    if packet_data is None or isinstance(packet_data, dict):
+        return packet_data
+    return packet_data.__dict__
+
+
 def _fill_layerzero_send_action(data: LayerZeroSendData, action: Action):
     # use `data` instead of `block`, because thus `_fill_layerzero_send_action`
-    # may be easily called from `_fill_layerzero_send_tokens_action`
-    action.source = _addr(data.initiator)  # initiator goes to source
+    # may be easily called from `_fill_layerzero_send_tokens_action`.
+    # dual-access via _dget: legacy LayerZeroSendData dataclass OR the
+    # declarative build's dict.
+    action.source = _addr(_dget(data, 'initiator'))  # initiator goes to source
     action.type = 'layerzero_send'
     action.layerzero_send_data = {
-        "send_request_id": data.send_request_id,
-        "msglib_manager": data.msglib_manager,
-        "msglib": data.msglib,
-        "uln": _addr(data.uln),
-        "native_fee": data.native_fee,
-        "zro_fee": data.zro_fee,
-        "endpoint": _addr(data.endpoint),
-        "channel": _addr(data.channel)
+        "send_request_id": _dget(data, 'send_request_id'),
+        "msglib_manager": _dget(data, 'msglib_manager'),
+        "msglib": _dget(data, 'msglib'),
+        "uln": _addr(_dget(data, 'uln')),
+        "native_fee": _dget(data, 'native_fee'),
+        "zro_fee": _dget(data, 'zro_fee'),
+        "endpoint": _addr(_dget(data, 'endpoint')),
+        "channel": _addr(_dget(data, 'channel'))
     }
-    action.layerzero_packet_data = data.packet_data.__dict__ # fields names are identical and no _addr() needed
+    # fields names are identical and no _addr() needed
+    action.layerzero_packet_data = _packet_dict(_dget(data, 'packet_data'))
 
 def _fill_layerzero_send_tokens_action(block: LayerZeroSendTokensBlock, action: Action):
     # fill basic transfer data
-    action.source_secondary = _addr(block.data.sender_wallet)
-    action.destination = _addr(block.data.oapp)
-    action.destination_secondary = _addr(block.data.oapp_wallet)
-    action.amount = block.data.amount.value
-    action.asset = _addr(block.data.asset)
+    action.source_secondary = _addr(_dget(block.data, 'sender_wallet'))
+    action.destination = _addr(_dget(block.data, 'oapp'))
+    action.destination_secondary = _addr(_dget(block.data, 'oapp_wallet'))
+    action.amount = _value(_dget(block.data, 'amount'))
+    action.asset = _addr(_dget(block.data, 'asset'))
     # fill data related to basic send
-    _fill_layerzero_send_action(block.data.layerzero_send_data, action)
+    _fill_layerzero_send_action(_dget(block.data, 'layerzero_send_data'), action)
     # overwrite some fields
     action.type = 'layerzero_send_tokens'
-    action.source = _addr(block.data.sender)
+    action.source = _addr(_dget(block.data, 'sender'))
 
 def _fill_layerzero_receive_action(block: LayerZeroReceiveBlock, action: Action):
     action.source = _addr(_dget(block.data, 'sender'))
     action.destination = _addr(_dget(block.data, 'oapp'))
     action.destination_secondary = _addr(_dget(block.data, 'channel'))
-    packet_data = _dget(block.data, 'packet_data')
-    # Declarative build emits packet_data as a plain dict (record literal); the
-    # legacy core builds a LayerZeroPacketData dataclass. Normalize to a dict.
-    action.layerzero_packet_data = packet_data if isinstance(packet_data, dict) else packet_data.__dict__
+    action.layerzero_packet_data = _packet_dict(_dget(block.data, 'packet_data'))
 
 def _fill_layerzero_commit_packet_action(block: LayerZeroCommitPacketBlock, action: Action):
-    action.source = _addr(block.data.sender)
-    action.source_secondary = _addr(block.data.endpoint)
-    action.destination = _addr(block.data.uln)
-    action.destination_secondary = _addr(block.data.uln_connection)
-    action.asset = _addr(block.data.channel)
-    action.asset_secondary = _addr(block.data.msglib_connection)
-    action.layerzero_packet_data = block.data.packet_data.__dict__
+    action.source = _addr(_dget(block.data, 'sender'))
+    action.source_secondary = _addr(_dget(block.data, 'endpoint'))
+    action.destination = _addr(_dget(block.data, 'uln'))
+    action.destination_secondary = _addr(_dget(block.data, 'uln_connection'))
+    action.asset = _addr(_dget(block.data, 'channel'))
+    action.asset_secondary = _addr(_dget(block.data, 'msglib_connection'))
+    action.layerzero_packet_data = _packet_dict(_dget(block.data, 'packet_data'))
 
 def _fill_layerzero_dvn_verify_action(block: LayerZeroDvnVerifyBlock, action: Action):
-    action.source = _addr(block.data.sender)
+    action.source = _addr(_dget(block.data, 'sender'))
     action.layerzero_dvn_verify_data = {
-        "nonce": block.data.nonce,
-        "status": block.data.status,
-        "dvn": _addr(block.data.dvn),
-        "proxy": _addr(block.data.proxy),
-        "uln": _addr(block.data.uln),
-        "uln_connection": _addr(block.data.uln_connection),
+        "nonce": _dget(block.data, 'nonce'),
+        "status": _dget(block.data, 'status'),
+        "dvn": _addr(_dget(block.data, 'dvn')),
+        "proxy": _addr(_dget(block.data, 'proxy')),
+        "uln": _addr(_dget(block.data, 'uln')),
+        "uln_connection": _addr(_dget(block.data, 'uln_connection')),
     }
 
 def _fill_dns_release(block: DnsReleaseBlock, action: Action):

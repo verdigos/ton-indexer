@@ -542,6 +542,63 @@ void fill_layerzero_receive(const Value &d, Action &a) {
   a.layerzero_packet_data = dg(d, "packet_data");  // record dict passthrough
 }
 
+// The layerzero_send composite, shared by `layerzero_send` and — through the
+// nested `layerzero_send_data` record — by `layerzero_send_tokens`. The split
+// mirrors _fill_layerzero_send_action taking `data` rather than the block so
+// the tokens fill can reuse it. `msglib_manager`/`msglib` are hex STRINGS off
+// the lzSend payload, not accounts.
+void fill_layerzero_send_from(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "initiator"));
+  Value::Fields f;
+  f.emplace_back("send_request_id", dg(d, "send_request_id"));
+  f.emplace_back("msglib_manager", dg(d, "msglib_manager"));
+  f.emplace_back("msglib", dg(d, "msglib"));
+  f.emplace_back("uln", av_addr(dg(d, "uln")));
+  f.emplace_back("native_fee", dg(d, "native_fee"));
+  f.emplace_back("zro_fee", dg(d, "zro_fee"));
+  f.emplace_back("endpoint", av_addr(dg(d, "endpoint")));
+  f.emplace_back("channel", av_addr(dg(d, "channel")));
+  a.layerzero_send_data = mkdict(std::move(f));
+  a.layerzero_packet_data = dg(d, "packet_data");  // record dict passthrough
+}
+
+// SOURCE DOUBLE-WRITE, reproduced from _fill_layerzero_send_tokens_action: the
+// nested send fill writes `source` from the LayerZero initiator (the OApp) and
+// the jetton sender then overwrites it. The write order IS the behaviour.
+void fill_layerzero_send_tokens(const Value &d, Action &a) {
+  a.source_secondary = av_addr(dg(d, "sender_wallet"));
+  a.destination = av_addr(dg(d, "oapp"));
+  a.destination_secondary = av_addr(dg(d, "oapp_wallet"));
+  a.amount = av_amount(dg(d, "amount"));
+  a.asset = av_addr(dg(d, "asset"));
+  fill_layerzero_send_from(dg(d, "layerzero_send_data"), a);
+  a.source = av_addr(dg(d, "sender"));
+}
+
+// `uln` and `uln_connection` both carry the ULN CONNECTION's address — the
+// legacy build assigns the same local to both (layerzero.py:506-507).
+void fill_layerzero_commit_packet(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.source_secondary = av_addr(dg(d, "endpoint"));
+  a.destination = av_addr(dg(d, "uln"));
+  a.destination_secondary = av_addr(dg(d, "uln_connection"));
+  a.asset = av_addr(dg(d, "channel"));
+  a.asset_secondary = av_addr(dg(d, "msglib_connection"));
+  a.layerzero_packet_data = dg(d, "packet_data");  // record dict passthrough
+}
+
+void fill_layerzero_dvn_verify(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  Value::Fields f;
+  f.emplace_back("nonce", dg(d, "nonce"));
+  f.emplace_back("status", dg(d, "status"));
+  f.emplace_back("dvn", av_addr(dg(d, "dvn")));
+  f.emplace_back("proxy", av_addr(dg(d, "proxy")));
+  f.emplace_back("uln", av_addr(dg(d, "uln")));
+  f.emplace_back("uln_connection", av_addr(dg(d, "uln_connection")));
+  a.layerzero_dvn_verify_data = mkdict(std::move(f));
+}
+
 void fill_coffee_create_vault(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
   a.destination = av_addr(dg(d, "vault"));
@@ -1217,6 +1274,10 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "jvault_claim") fill_jvault_claim(d, a);
   else if (t == "ethena_deposit") fill_ethena_deposit(d, a);
   else if (t == "layerzero_receive") fill_layerzero_receive(d, a);
+  else if (t == "layerzero_send") fill_layerzero_send_from(d, a);
+  else if (t == "layerzero_send_tokens") fill_layerzero_send_tokens(d, a);
+  else if (t == "layerzero_commit_packet") fill_layerzero_commit_packet(d, a);
+  else if (t == "layerzero_dvn_verify") fill_layerzero_dvn_verify(d, a);
   else if (t == "coffee_create_vault") fill_coffee_create_vault(d, a);
   else if (t == "coffee_create_pool_creator") fill_coffee_create_pool_creator(d, a);
   else if (t == "coffee_create_pool") fill_coffee_create_pool(d, a);

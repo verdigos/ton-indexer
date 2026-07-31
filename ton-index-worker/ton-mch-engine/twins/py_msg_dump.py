@@ -38,7 +38,9 @@ from indexer.events.blocks.messages.evaa import (  # noqa: E402
     EvaaWithdrawCollateralized, EvaaWithdrawFailExcess, EvaaWithdrawMaster,
 )
 from indexer.events.blocks.messages.layerzero import (  # noqa: E402
-    LayerZeroOappExecuteCallback, LayerZeroPacket, LayerZeroPath,
+    ChannelCommitPacket, LayerZeroMDLzSend, LayerZeroOappExecuteCallback,
+    LayerZeroPacket, LayerZeroPath, LayerzeroChannelSendCallback,
+    UlnConnectionVerifyCallbackParser,
 )
 from indexer.events.blocks.utils import AccountId, Asset  # noqa: E402
 
@@ -63,6 +65,9 @@ CLASSES = {
     0x000021E8: ("EvaaWithdrawFailExcess", EvaaWithdrawFailExcess),
     0x000021EC: ("EvaaWithdrawFailExcess", EvaaWithdrawFailExcess),
     0xCAAE25A1: ("LayerZeroOappExecuteCallback", LayerZeroOappExecuteCallback),
+    0xA2B5FBAE: ("LayerzeroChannelSendCallback", LayerzeroChannelSendCallback),
+    0x5388CD88: ("ChannelCommitPacket", ChannelCommitPacket),
+    0x3CB38090: ("UlnConnectionVerifyCallbackParser", UlnConnectionVerifyCallbackParser),
 }
 
 
@@ -132,7 +137,7 @@ def render(v):
         return "cell:" + v.to_cell().hash.hex().upper()
     if isinstance(v, dict):
         return "{" + ",".join(f"{k}={_render_field(k, v[k])}" for k in sorted(v)) + "}"
-    if isinstance(v, (LayerZeroPacket, LayerZeroPath)):
+    if isinstance(v, (LayerZeroPacket, LayerZeroPath, LayerZeroMDLzSend)):
         # Nested parser objects render like the C++ Obj: vars(), keys sorted.
         fields = vars(v)
         return "{" + ",".join(f"{k}={_render_field(k, fields[k])}" for k in sorted(fields)) + "}"

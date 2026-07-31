@@ -108,6 +108,12 @@ bool decimal_string_key(const std::string &k) {
       "amount_1", "amount_2", "minted_item_index", "points",
       // jvault_claim_data — a Go []string, see above
       "claimed_amounts",
+      // layerzero_send_data. `native_fee`/`zro_fee` are uint128 off the lzSend
+      // payload and `send_request_id` is a u64 counter — none of the three fits
+      // a signed int64 by construction, and all three are Go *uint64. The
+      // packet's `nonce` / `src_eid` / `dst_eid` are bounded and stay natural
+      // integers (see the exclusion list above), as does dvn_verify's `nonce`.
+      "send_request_id", "native_fee", "zro_fee",
   };
   return keys.count(k) != 0;
 }
@@ -286,6 +292,8 @@ const std::vector<ActionField> &optional_fields() {
       {"evaa_withdraw_data", &Action::evaa_withdraw_data},
       {"vesting_send_message_data", &Action::vesting_send_message_data},
       {"layerzero_packet_data", &Action::layerzero_packet_data},
+      {"layerzero_send_data", &Action::layerzero_send_data},
+      {"layerzero_dvn_verify_data", &Action::layerzero_dvn_verify_data},
       {"jvault_stake_data", &Action::jvault_stake_data},
       {"jvault_claim_data", &Action::jvault_claim_data},
       {"change_dns_record_data", &Action::change_dns_record_data},

@@ -7,7 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**184 fixtures, 816 ACTION rows** — one per serializable block on each trace's
+**184 fixtures, 823 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus the CHILD rows the serializer expands out of any spine
 block whose btype is outside `v1_ops`, plus 6 synthetic `unknown` rows (the
 fixtures whose spine serializes to nothing at all). Rows are printed **sorted**
@@ -21,6 +21,50 @@ dies with it — and Python's `--emulated-traces` path is being retired. This fi
 is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
+
+Re-baselined 2026-07-31 (**816 → 823 rows, no fixture added**) by the LAYERZERO
+COMPLETION port — four matchers appended to `specs/layerzero.mch`, joining the
+already-shipped `layerzero_receive`: `layerzero_send`, `layerzero_send_tokens`,
+`layerzero_commit_packet` and `layerzero_dvn_verify`. Six touched fixtures.
+
+**EVERY row differs textually, and almost none of that is a content change.**
+Two new composite columns (`layerzero_send_data`, `layerzero_dvn_verify_data`)
+joined `Classify.cpp render_action`, which prints the full column list on every
+row, so all 816 pre-existing rows gained two `…=null` keys. Re-diffing with those
+two keys stripped isolates the real delta: **7 rows added, 0 removed, and on
+pre-existing rows the ONLY fields that changed are `parent_action_id` and
+`ancestor_type`** — the 60 child rows (42 `call_contract`, 17 `ton_transfer`,
+1 `jetton_transfer`) the four new matchers now consume. Same pattern as
+`evaa_supply` and tgbtc: none of the four new btypes is in `v1_ops`, so a
+consumed block is never dropped, only re-parented.
+
+**+7 rows, all added, all parents except one.**
+
+- **send, +2 top-level.** `01yfeTlz…` (msg to Tron, request 90) and
+  `0_AQj88L…` (TON→TON self-send, request 5).
+- **send_tokens, +1 parent AND +1 child.** `KEbatIe0…` gains the
+  `layerzero_send_tokens` row plus a `layerzero_send` CHILD row: the tokens
+  matcher consumes the send block, `layerzero_send_tokens` is not in `v1_ops`,
+  so the consumed product comes back as a child carrying `parent_action_id` +
+  `ancestor_type=[layerzero_send_tokens]` — the `evaa_supply` pattern.
+- **commit_packet, +2.** `0vFe6hsN…` (TON→TON, nonce 1) and `12Jtky5t…`
+  (ETH→TON, nonce 194).
+- **dvn_verify, +1.** `0IpCwGaM…`, status `succeeded`, nonce 125.
+
+Verified beyond the twin diff: all seven fixtures were rendered through the REAL
+legacy Python classifier (production `event_processing.matchers` +
+post-process passes, through the same serializer) and compared row-by-row —
+**81 rows, 3645 field comparisons, 0 mismatches**, action_ids included, so the
+C++ rows are the same rows and not merely similar ones. Every field also matches
+`tests/test_cases/layerzero.yaml`, which `tests/test_actions.py` asserts against
+the production classifier independently. The spec has a parity-sweep row running
+all 184 fixtures and needs no `_AUX_ABSORB_SPECS` waiver, so it carries no §4.5
+aux-absorption deviation.
+
+The three new hand parsers (`LayerzeroChannelSendCallback`,
+`ChannelCommitPacket`, `UlnConnectionVerifyCallbackParser`) were added to the
+`--parse-dump` A/B table as well, so they are gated field-for-field against
+their Python classes over the whole corpus (diff 0, 714 lines, 6 new rows).
 
 Re-baselined 2026-07-31 (**808 → 816 rows, no fixture added**) by the TGBTC
 COMPLETION port — five matchers appended to `specs/tgbtc.mch`, joining the

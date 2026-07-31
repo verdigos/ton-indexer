@@ -109,6 +109,8 @@ std::string render_action(const Action &a) {
   f.emplace_back("evaa_withdraw_data", a.evaa_withdraw_data);
   f.emplace_back("vesting_send_message_data", a.vesting_send_message_data);
   f.emplace_back("layerzero_packet_data", a.layerzero_packet_data);
+  f.emplace_back("layerzero_send_data", a.layerzero_send_data);
+  f.emplace_back("layerzero_dvn_verify_data", a.layerzero_dvn_verify_data);
   f.emplace_back("jvault_stake_data", a.jvault_stake_data);
   f.emplace_back("jvault_claim_data", a.jvault_claim_data);
   f.emplace_back("change_dns_record_data", a.change_dns_record_data);

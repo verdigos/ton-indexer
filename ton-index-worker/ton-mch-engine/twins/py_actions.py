@@ -72,7 +72,9 @@ PORTED_BTYPES = {
     "nft_transfer", "dedust_deposit_liquidity", "dedust_deposit_liquidity_partial",
     "tonco_deposit_liquidity", "evaa_withdraw", "jvault_stake", "jvault_unstake",
     "jvault_unstake_request", "jvault_claim", "ethena_deposit",
-    "layerzero_receive", "coffee_create_vault", "vesting_send_message",
+    "layerzero_receive", "layerzero_send", "layerzero_send_tokens",
+    "layerzero_commit_packet", "layerzero_dvn_verify",
+    "coffee_create_vault", "vesting_send_message",
     "tgbtc_mint", "dedust_v2_claim_reward", "dedust_v2_claim_fees",
     # EM2 W6 bucket-B fills. NONE of these fire on the current 165 fixtures, so
     # widening the set changes no output today — it keeps the twin
@@ -159,7 +161,8 @@ ACTION_COLUMNS = [
     "dex_withdraw_liquidity_data",
     "staking_data", "evaa_supply_data", "evaa_withdraw_data",
     "vesting_send_message_data",
-    "layerzero_packet_data", "jvault_stake_data", "jvault_claim_data",
+    "layerzero_packet_data", "layerzero_send_data", "layerzero_dvn_verify_data",
+    "jvault_stake_data", "jvault_claim_data",
     "change_dns_record_data",
     "coffee_create_pool_data", "coffee_staking_deposit_data",
     "coffee_staking_withdraw_data",

@@ -62,6 +62,9 @@ constexpr DumpType kDumpTypes[] = {
     {0x000021e8, "EvaaWithdrawFailExcess"},
     {0x000021ec, "EvaaWithdrawFailExcess"},
     {0xcaae25a1, "LayerZeroOappExecuteCallback"},
+    {0xa2b5fbae, "LayerzeroChannelSendCallback"},
+    {0x5388cd88, "ChannelCommitPacket"},
+    {0x3cb38090, "UlnConnectionVerifyCallbackParser"},
 };
 
 std::string render_parse_value(const Value &v);

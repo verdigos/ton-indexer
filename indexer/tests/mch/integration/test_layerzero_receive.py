@@ -39,7 +39,7 @@ from indexer.events.blocks.layerzero import (
 from indexer.events.blocks.utils.tree_utils import to_tree
 from indexer.events.event_processing import init_block
 from indexer.events.mch import compile_file
-from indexer.events.mch.builders.layerzero import layerzero_receive_registries
+from indexer.events.mch.builders.layerzero import layerzero_registries
 from indexer.events.mch.ir_emit import emit_ir, render_json
 import indexer.events.mch.specs as specs_pkg
 
@@ -66,11 +66,11 @@ def _build_ir_matcher() -> BlockMatcher:
     """Compile (frontend-internal) -> emit IR -> load -> build; return the IR
     matcher. Also renders the artifact to JSON (must not raise) so a break in the
     emit plumbing ERRORS here rather than silently skipping. Assumes _HAVE_IR."""
-    compiled = compile_file(LAYERZERO_MCH, layerzero_receive_registries())
+    compiled = compile_file(LAYERZERO_MCH, layerzero_registries())
     artifact = emit_ir(compiled, [LAYERZERO_MCH.name])
     render_json(artifact)
     art = _mch_ir.load_artifact(artifact)
-    ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, layerzero_receive_registries())}
+    ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, layerzero_registries())}
     assert "layerzero_receive" in ir_by_name, "layerzero_receive not built by the IR engine"
     return ir_by_name["layerzero_receive"]
 
