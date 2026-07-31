@@ -80,9 +80,6 @@ from indexer.events.blocks.messages.coffee import (
     CoffeePayout,
     CoffeePayoutInternal,
     CoffeeServiceFee,
-    PoolCreationParams,
-    PoolParams,
-    PublicPoolCreationParams,
     CoffeeCreatePoolRequest,
 )
 from indexer.events.blocks.utils import AccountId, Amount, Asset
@@ -2383,8 +2380,13 @@ class CoffeeCreatePoolCreatorData:
     provided_asset: Asset
     pool_creator_contract: AccountId
     deposit_recipient: AccountId
-    pool_params: PoolParams
-    pool_creation_params: PublicPoolCreationParams
+    # The pool's declared asset order. Flat rather than the whole PoolParams
+    # parser object: these two are all any reader ever touched, and a
+    # declarative build (specs/coffee_create_pool.mch) can only emit language
+    # values. `pool_creation_params` used to sit here too and was never read —
+    # its one consumer, `.public.recipient`, already has `deposit_recipient`.
+    pool_first: Asset
+    pool_second: Asset
 
 
 class CoffeeCreatePoolCreatorBlock(Block):
@@ -2463,8 +2465,8 @@ class CoffeeCreatePoolCreatorMatcher(BlockMatcher):
             amount=amount,
             pool_creator_contract=AccountId(deploy_block.get_message().destination),
             deposit_recipient=AccountId(pool_creation_params.public.recipient),
-            pool_params=pool_params,
-            pool_creation_params=pool_creation_params.public,
+            pool_first=pool_params.first,
+            pool_second=pool_params.second,
         )
         new_block = CoffeeCreatePoolCreatorBlock(data)
         new_block.merge_blocks([block] + other_blocks)
@@ -2486,8 +2488,6 @@ class CoffeeCreatePoolData:
     amount_1: Amount
     amount_2: Amount
     lp_tokens_minted: Amount
-    pool_params: PoolParams
-    pool_creation_params: PublicPoolCreationParams
     pool_creator_contract: AccountId
 
 
@@ -2555,8 +2555,8 @@ class CoffeeCreatePoolMatcher(BlockMatcher):
         creator_block = block
         initiator_1 = creator_block.data.sender
         asset_1 = creator_block.data.provided_asset
-        pool_params = creator_block.data.pool_params
-        pool_creation_params = creator_block.data.pool_creation_params
+        pool_first = creator_block.data.pool_first
+        pool_second = creator_block.data.pool_second
 
         # find the pool request block
         pool_request_block = get_labeled(
@@ -2591,17 +2591,17 @@ class CoffeeCreatePoolMatcher(BlockMatcher):
 
         # determine asset order from pool params
         asset_2 = None
-        if str(asset_1) == str(pool_params.first):
-            asset_2 = pool_params.second
-        elif str(asset_1) == str(pool_params.second):
-            asset_2 = pool_params.first
+        if str(asset_1) == str(pool_first):
+            asset_2 = pool_second
+        elif str(asset_1) == str(pool_second):
+            asset_2 = pool_first
             # swap amounts and creators to maintain consistent ordering
             amount_1, amount_2 = amount_2, amount_1
             initiator_1, initiator_2 = initiator_2, initiator_1
         else:
             # fallback - use pool params order
-            asset_1 = pool_params.first
-            asset_2 = pool_params.second
+            asset_1 = pool_first
+            asset_2 = pool_second
 
         data = CoffeeCreatePoolData(
             source=creator_block.data.sender,
@@ -2616,8 +2616,6 @@ class CoffeeCreatePoolMatcher(BlockMatcher):
             amount_1=amount_1,
             amount_2=amount_2,
             lp_tokens_minted=lp_tokens_minted,
-            pool_params=pool_params,
-            pool_creation_params=pool_creation_params,
             pool_creator_contract=creator_block.data.pool_creator_contract,
         )
 

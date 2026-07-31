@@ -549,6 +549,90 @@ void fill_coffee_create_vault(const Value &d, Action &a) {
   a.value = av_amount(dg(d, "amount"));
 }
 
+// --- Coffee tail (specs/coffee_create_pool.mch, coffee_mev.mch,
+// coffee_staking.mch): six btypes, three of them the only producer of their
+// composite. `pool_first`/`pool_second` are the flat pool-asset pair the legacy
+// CoffeeCreatePoolCreatorData now carries in place of a live PoolParams parser
+// object — see the create-pool spec header.
+
+void fill_coffee_create_pool_creator(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.source_secondary = av_addr(dg(d, "sender_jetton_wallet"));
+  a.destination = av_addr(dg(d, "deposit_recipient"));
+  a.destination_secondary = av_addr(dg(d, "pool_creator_contract"));
+  a.asset = av_addr(dg(d, "provided_asset"));
+  a.asset2 = av_addr(dg(d, "pool_first"));
+  a.asset2_secondary = av_addr(dg(d, "pool_second"));
+  a.amount = av_amount(dg(d, "amount"));
+}
+
+void fill_coffee_create_pool(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "source"));
+  a.source_secondary = av_addr(dg(d, "source_jetton_wallet"));
+  a.amount = av_amount(dg(d, "amount"));
+  a.asset = av_addr(dg(d, "asset_1"));
+  a.asset2 = av_addr(dg(d, "asset_2"));
+  a.destination = av_addr(dg(d, "pool"));
+  a.destination_secondary = av_addr(dg(d, "pool_creator_contract"));
+  Value::Fields f;
+  f.emplace_back("amount_1", av_amount(dg(d, "amount_1")));
+  f.emplace_back("amount_2", av_amount(dg(d, "amount_2")));
+  f.emplace_back("initiator_1", av_addr(dg(d, "initiator_1")));
+  f.emplace_back("initiator_2", av_addr(dg(d, "initiator_2")));
+  f.emplace_back("provided_asset", av_addr(dg(d, "provided_asset")));
+  f.emplace_back("lp_tokens_minted", av_amount(dg(d, "lp_tokens_minted")));
+  a.coffee_create_pool_data = mkdict(std::move(f));
+}
+
+void fill_coffee_mev_protect_hold_funds(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.source_secondary = av_addr(dg(d, "sender_wallet"));
+  a.destination = av_addr(dg(d, "mev_contract"));
+  a.destination_secondary = av_addr(dg(d, "mev_contract_wallet"));
+  a.asset = av_addr(dg(d, "asset"));
+  a.amount = av_amount(dg(d, "amount"));
+}
+
+void fill_coffee_staking_deposit(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "source"));
+  a.source_secondary = av_addr(dg(d, "user_jetton_wallet"));
+  a.destination = av_addr(dg(d, "pool"));
+  a.destination_secondary = av_addr(dg(d, "pool_jetton_wallet"));
+  a.asset = av_addr(dg(d, "asset"));
+  a.amount = av_amount(dg(d, "value"));
+  Value::Fields f;
+  f.emplace_back("minted_item_address", av_addr(dg(d, "minted_item_address")));
+  // Raw passthrough, like the Python fill: the index comes off the nft-item
+  // interface record, where it can be a float.
+  f.emplace_back("minted_item_index", dg(d, "minted_item_index"));
+  a.coffee_staking_deposit_data = mkdict(std::move(f));
+}
+
+void fill_coffee_staking_withdraw(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "source"));
+  a.source_secondary = av_addr(dg(d, "user_jetton_wallet"));
+  a.destination = av_addr(dg(d, "pool"));
+  a.destination_secondary = av_addr(dg(d, "pool_jetton_wallet"));
+  a.asset = av_addr(dg(d, "asset"));
+  a.amount = av_amount(dg(d, "amount"));
+  Value::Fields f;
+  f.emplace_back("nft_address", av_addr(dg(d, "nft_address")));
+  f.emplace_back("nft_index", dg(d, "nft_index"));
+  f.emplace_back("points", dg(d, "points"));
+  a.coffee_staking_withdraw_data = mkdict(std::move(f));
+}
+
+void fill_coffee_staking_claim_rewards(const Value &d, Action &a) {
+  // `admin` is deliberately dropped by the Python fill (always the same highload
+  // wallet, and no directional field fits it); the block still carries it.
+  a.source = av_addr(dg(d, "pool"));
+  a.source_secondary = av_addr(dg(d, "pool_jetton_wallet"));
+  a.destination = av_addr(dg(d, "recipient"));
+  a.destination_secondary = av_addr(dg(d, "recipient_jetton_wallet"));
+  a.asset = av_addr(dg(d, "asset"));
+  a.amount = av_amount(dg(d, "amount"));
+}
+
 void fill_vesting_send_message(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
   a.destination = av_addr(dg(d, "vesting"));
@@ -1025,6 +1109,12 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "ethena_deposit") fill_ethena_deposit(d, a);
   else if (t == "layerzero_receive") fill_layerzero_receive(d, a);
   else if (t == "coffee_create_vault") fill_coffee_create_vault(d, a);
+  else if (t == "coffee_create_pool_creator") fill_coffee_create_pool_creator(d, a);
+  else if (t == "coffee_create_pool") fill_coffee_create_pool(d, a);
+  else if (t == "coffee_mev_protect_hold_funds") fill_coffee_mev_protect_hold_funds(d, a);
+  else if (t == "coffee_staking_deposit") fill_coffee_staking_deposit(d, a);
+  else if (t == "coffee_staking_withdraw") fill_coffee_staking_withdraw(d, a);
+  else if (t == "coffee_staking_claim_rewards") fill_coffee_staking_claim_rewards(d, a);
   else if (t == "vesting_send_message") fill_vesting_send_message(d, a);
   else if (t == "tgbtc_mint") fill_tgbtc_mint(d, a);
   // W6 bucket B: matcher-produced btypes that used to fall through to `return

@@ -7,7 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**184 fixtures, 859 ACTION rows** — one per serializable block on each trace's
+**184 fixtures, 872 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus the CHILD rows the serializer expands out of any spine
 block whose btype is outside `v1_ops`, plus 6 synthetic `unknown` rows (the
 fixtures whose spine serializes to nothing at all). Rows are printed **sorted**
@@ -22,7 +22,40 @@ is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
 
-Re-baselined 2026-07-31 (**872 → 859 rows, no fixture added**) by the TONCO
+Re-baselined 2026-07-31 (**859 → 872 rows, no fixture added**) by the COFFEE
+TAIL port — six matchers over three new specs: `specs/coffee_create_pool.mch`
+(`coffee_create_pool_creator` + `coffee_create_pool`), `specs/coffee_mev.mch`
+(`coffee_mev_protect_hold_funds`, split into a TON arm and a jetton arm) and
+`specs/coffee_staking.mch` (`coffee_staking_deposit` / `_withdraw` /
+`_claim_rewards`). Nine touched fixtures, no overlap between the three specs,
+and each was checked field-by-field against the REAL legacy Python classifier
+(`event_processing.matchers` + `serialize_blocks`) — 188 field comparisons over
+13 rows, all equal, script `legacy_verify_coffee_tail.py`. All three specs have
+a parity-sweep row and none needs an `_AUX_ABSORB_SPECS` waiver, so none carries
+the §4.5 aux-absorption deviation.
+
+Note the whole file also gains THREE columns — `coffee_create_pool_data`,
+`coffee_staking_deposit_data`, `coffee_staking_withdraw_data`, the composites
+these fills add to the Action struct — so EVERY row differs textually even where
+nothing about it changed.
+
+**+13 rows, and every one of them is an ADDED parent row.** None of the six
+btypes is in `v1_ops`, so the pattern is the `evaa_supply` one below: the
+protocol row is added and the blocks it consumed STAY as CHILD rows carrying
+`parent_action_id` + `ancestor_type=[<the new btype>]`. No row is ever removed;
+each fixture grows by exactly the number of coffee rows it produces.
+
+- **create pool, +5 over three fixtures.** `1TUCte7d…` 6 → 7 (a single jetton
+  leg, so one `coffee_create_pool_creator` and no pool yet), `1VcQkyvd…` 15 → 18
+  and `3uecEX5T…` 18 → 21 (both legs land: two creators plus the
+  `coffee_create_pool` that consumes the second one).
+- **mev protect, +1 on one fixture.** `11WhhXiP…` 2 → 3 — the TON arm; the
+  `#6bc79e7e` call and the `#c0ffeea0` service fee become its children.
+- **staking, +7 over five fixtures.** `K_PlZB5R…` and `00wjHu7i…` 4 → 5
+  (deposit), `013-itRD…` and `0HIS6vA7…` 2 → 3 (claim rewards), `T-oXSZb9…`
+  4 → 5 (withdraw).
+
+Previously re-baselined 2026-07-31 (**872 → 859 rows, no fixture added**) by the TONCO
 WITHDRAW port (`specs/tonco_liquidity.mch`, second matcher) and the EVAA SUPPLY
 port (`specs/evaa.mch`, second matcher). Two independent deltas over six
 fixtures, no overlap, and every touched fixture was checked field-by-field

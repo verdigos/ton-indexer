@@ -400,6 +400,56 @@
       "type": "DedustV2WithdrawalEvent",
       "body": "te6ccgEBAQEABgAACMDXe1Q=",
       "expect": "fail"
+    },
+    {
+      "type": "CoffeeCreatePoolCreatorRequest",
+      "body": "te6ccgEBAwEAFwACG8D/7iMAAAAAAAAAAAACAQIAAQIAAA==",
+      "expect": "ok"
+    },
+    {
+      "type": "CoffeeCreatePoolCreatorRequest",
+      "body": "te6ccgEBAQEABgAACMD/7iM=",
+      "expect": "fail"
+    },
+    {
+      "type": "CoffeeCreatePoolRequest",
+      "body": "te6ccgEBAQEAEAAAG8D/7iUAAAAAAAAAAAAg",
+      "expect": "ok"
+    },
+    {
+      "type": "CoffeeCreatePoolRequest",
+      "body": "te6ccgEBAQEABgAACMD/7iU=",
+      "expect": "fail"
+    },
+    {
+      "type": "CoffeeStakingClaimRewards",
+      "body": "te6ccgEBAQEADwAAGrMMcxAAAAAAAAAAAAA=",
+      "expect": "ok"
+    },
+    {
+      "type": "CoffeeStakingClaimRewards",
+      "body": "te6ccgEBAQEABgAACLMMcxA=",
+      "expect": "fail"
+    },
+    {
+      "type": "CoffeeStakingPositionWithdraw2",
+      "body": "te6ccgEBAQEAFwAAKcsDv68AAAAAAAAAAAAAAAAAAAAAAg==",
+      "expect": "ok"
+    },
+    {
+      "type": "CoffeeStakingPositionWithdraw2",
+      "body": "te6ccgEBAQEABgAACMsDv68=",
+      "expect": "fail"
+    },
+    {
+      "type": "CoffeeStakingPositionWithdraw3",
+      "body": "te6ccgEBAQEADwAAGcsDv68AAAAAAAAAAAI=",
+      "expect": "ok"
+    },
+    {
+      "type": "CoffeeStakingPositionWithdraw3",
+      "body": "te6ccgEBAQEABgAACMsDv68=",
+      "expect": "fail"
     }
   ]
 }

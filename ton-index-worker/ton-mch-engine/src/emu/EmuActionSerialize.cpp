@@ -100,6 +100,12 @@ bool decimal_string_key(const std::string &k) {
       "target_amount_1", "target_amount_2", "nft_index",
       // staking_data
       "tokens_minted", "tokens_burnt",
+      // coffee_create_pool_data (the underscore spelling is this composite's
+      // alone; `lp_tokens_minted` above covers its sixth field) /
+      // coffee_staking_*_data. All six Go fields are *string; these four are the
+      // ones that can exceed int64 — two Coins amounts, an nft index and a
+      // Coins-width points balance. `nft_index` above covers the withdraw side.
+      "amount_1", "amount_2", "minted_item_index", "points",
       // jvault_claim_data — a Go []string, see above
       "claimed_amounts",
   };
@@ -283,6 +289,9 @@ const std::vector<ActionField> &optional_fields() {
       {"jvault_stake_data", &Action::jvault_stake_data},
       {"jvault_claim_data", &Action::jvault_claim_data},
       {"change_dns_record_data", &Action::change_dns_record_data},
+      {"coffee_create_pool_data", &Action::coffee_create_pool_data},
+      {"coffee_staking_deposit_data", &Action::coffee_staking_deposit_data},
+      {"coffee_staking_withdraw_data", &Action::coffee_staking_withdraw_data},
       {"extra", &Action::extra},
   };
   return fields;

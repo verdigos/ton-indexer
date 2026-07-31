@@ -30,7 +30,9 @@ struct Action {
       nft_listing_data, nft_mint_data, dex_deposit_liquidity_data, dex_withdraw_liquidity_data,
       staking_data, evaa_supply_data, evaa_withdraw_data, vesting_send_message_data,
       layerzero_packet_data,
-      jvault_stake_data, jvault_claim_data, change_dns_record_data, extra;
+      jvault_stake_data, jvault_claim_data, change_dns_record_data,
+      coffee_create_pool_data, coffee_staking_deposit_data, coffee_staking_withdraw_data,
+      extra;
   // Child-action recursion (serialize_blocks, block_tree_serializer.py:1668-1682).
   // Empty on a top-level row; on a child row, the action_id of the block that
   // consumed it and the btypes of every ancestor up the consumption chain.

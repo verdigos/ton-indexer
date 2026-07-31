@@ -36,7 +36,10 @@
       "specs/tonco_liquidity.mch",
       "specs/tonco_swap.mch",
       "specs/tonstakers.mch",
-      "specs/vesting.mch"
+      "specs/vesting.mch",
+      "specs/coffee_create_pool.mch",
+      "specs/coffee_mev.mch",
+      "specs/coffee_staking.mch"
     ]
   },
   "matchers": [
@@ -19922,6 +19925,1487 @@
           ]
         }
       ]
+    },
+    {
+      "name": "coffee_create_pool_creator",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          3237998115
+        ]
+      },
+      "root": 446,
+      "produces": [
+        "coffee_create_pool_creator"
+      ],
+      "captures": [
+        {
+          "name": "request",
+          "card": "one"
+        },
+        {
+          "name": "deploy",
+          "card": "one"
+        },
+        {
+          "name": "in_jt",
+          "card": "one"
+        },
+        {
+          "name": "in_native",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "request",
+          "types": [
+            "CoffeeCreatePoolCreatorRequest"
+          ]
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "request"
+                      },
+                      "name": "body"
+                    },
+                    "name": "sender"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "sender_jetton_wallet",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "in_jt"
+                    },
+                    "name": "data"
+                  },
+                  "name": "sender_wallet"
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "amount",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "request"
+                      },
+                      "name": "body"
+                    },
+                    "name": "amount"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "provided_asset",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "in_jt"
+                    },
+                    "name": "data"
+                  },
+                  "name": "asset"
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "ton_asset",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "pool_creator_contract",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "deploy"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "deposit_recipient",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "request"
+                      },
+                      "name": "body"
+                    },
+                    "name": "recipient"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "pool_first",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "request"
+                  },
+                  "name": "body"
+                },
+                "name": "pool_first"
+              }
+            },
+            {
+              "name": "pool_second",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "request"
+                  },
+                  "name": "body"
+                },
+                "name": "pool_second"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "coffee_create_pool",
+      "anchor": {
+        "kind": "btype",
+        "values": [
+          "coffee_create_pool_creator"
+        ]
+      },
+      "root": 451,
+      "produces": [
+        "coffee_create_pool"
+      ],
+      "captures": [
+        {
+          "name": "creator",
+          "card": "one"
+        },
+        {
+          "name": "request",
+          "card": "one"
+        },
+        {
+          "name": "deploy",
+          "card": "one"
+        },
+        {
+          "name": "success",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "request",
+          "types": [
+            "CoffeeCreatePoolRequest"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "success",
+          "types": [
+            "CoffeeDepositLiquiditySuccessfulEvent"
+          ]
+        },
+        {
+          "s": "let",
+          "name": "provided",
+          "expr": {
+            "k": "attr",
+            "of": {
+              "k": "attr",
+              "of": {
+                "k": "name",
+                "id": "creator"
+              },
+              "name": "data"
+            },
+            "name": "provided_asset"
+          }
+        },
+        {
+          "s": "let",
+          "name": "pool_1",
+          "expr": {
+            "k": "attr",
+            "of": {
+              "k": "attr",
+              "of": {
+                "k": "name",
+                "id": "creator"
+              },
+              "name": "data"
+            },
+            "name": "pool_first"
+          }
+        },
+        {
+          "s": "let",
+          "name": "pool_2",
+          "expr": {
+            "k": "attr",
+            "of": {
+              "k": "attr",
+              "of": {
+                "k": "name",
+                "id": "creator"
+              },
+              "name": "data"
+            },
+            "name": "pool_second"
+          }
+        },
+        {
+          "s": "let",
+          "name": "is_first",
+          "expr": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "provided"
+            },
+            "r": {
+              "k": "name",
+              "id": "pool_1"
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "is_second",
+          "expr": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "provided"
+            },
+            "r": {
+              "k": "name",
+              "id": "pool_2"
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "initiator",
+          "expr": {
+            "k": "call",
+            "fn": "account",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "request"
+                  },
+                  "name": "body"
+                },
+                "name": "tx_initiator"
+              }
+            ]
+          }
+        },
+        {
+          "s": "let",
+          "name": "a_1",
+          "expr": {
+            "k": "call",
+            "fn": "amount",
+            "args": [
+              {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "request"
+                    },
+                    "name": "body"
+                  },
+                  "name": "amount1"
+                },
+                "r": {
+                  "k": "int",
+                  "v": 0
+                }
+              }
+            ]
+          }
+        },
+        {
+          "s": "let",
+          "name": "a_2",
+          "expr": {
+            "k": "call",
+            "fn": "amount",
+            "args": [
+              {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "request"
+                    },
+                    "name": "body"
+                  },
+                  "name": "amount2"
+                },
+                "r": {
+                  "k": "int",
+                  "v": 0
+                }
+              }
+            ]
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "source",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "creator"
+                  },
+                  "name": "data"
+                },
+                "name": "sender"
+              }
+            },
+            {
+              "name": "source_jetton_wallet",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "creator"
+                  },
+                  "name": "data"
+                },
+                "name": "sender_jetton_wallet"
+              }
+            },
+            {
+              "name": "provided_asset",
+              "expr": {
+                "k": "name",
+                "id": "provided"
+              }
+            },
+            {
+              "name": "amount",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "creator"
+                  },
+                  "name": "data"
+                },
+                "name": "amount"
+              }
+            },
+            {
+              "name": "initiator_1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_second"
+                },
+                "then": {
+                  "k": "name",
+                  "id": "initiator"
+                },
+                "else": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "creator"
+                    },
+                    "name": "data"
+                  },
+                  "name": "sender"
+                }
+              }
+            },
+            {
+              "name": "initiator_2",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_second"
+                },
+                "then": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "creator"
+                    },
+                    "name": "data"
+                  },
+                  "name": "sender"
+                },
+                "else": {
+                  "k": "name",
+                  "id": "initiator"
+                }
+              }
+            },
+            {
+              "name": "pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "deploy"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset_1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "or",
+                  "l": {
+                    "k": "name",
+                    "id": "is_first"
+                  },
+                  "r": {
+                    "k": "name",
+                    "id": "is_second"
+                  }
+                },
+                "then": {
+                  "k": "name",
+                  "id": "provided"
+                },
+                "else": {
+                  "k": "name",
+                  "id": "pool_1"
+                }
+              }
+            },
+            {
+              "name": "asset_2",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_second"
+                },
+                "then": {
+                  "k": "name",
+                  "id": "pool_1"
+                },
+                "else": {
+                  "k": "name",
+                  "id": "pool_2"
+                }
+              }
+            },
+            {
+              "name": "amount_1",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_second"
+                },
+                "then": {
+                  "k": "name",
+                  "id": "a_2"
+                },
+                "else": {
+                  "k": "name",
+                  "id": "a_1"
+                }
+              }
+            },
+            {
+              "name": "amount_2",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "name",
+                  "id": "is_second"
+                },
+                "then": {
+                  "k": "name",
+                  "id": "a_1"
+                },
+                "else": {
+                  "k": "name",
+                  "id": "a_2"
+                }
+              }
+            },
+            {
+              "name": "lp_tokens_minted",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "success"
+                        },
+                        "name": "body"
+                      },
+                      "name": "lp_amount"
+                    },
+                    "r": {
+                      "k": "int",
+                      "v": 0
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "pool_creator_contract",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "creator"
+                  },
+                  "name": "data"
+                },
+                "name": "pool_creator_contract"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "coffee_mev_protect_hold_funds",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1808244350
+        ]
+      },
+      "root": 459,
+      "produces": [
+        "coffee_mev_protect_hold_funds"
+      ],
+      "captures": [
+        {
+          "name": "call",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "call"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "mev_contract",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "call"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "call",
+                "fn": "ton_asset",
+                "args": []
+              }
+            },
+            {
+              "name": "sender_wallet",
+              "expr": {
+                "k": "call",
+                "fn": "addr_none",
+                "args": []
+              }
+            },
+            {
+              "name": "mev_contract_wallet",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "amount",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "call"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "value"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "coffee_mev_protect_hold_funds_jetton",
+      "anchor": {
+        "kind": "btype",
+        "values": [
+          "jetton_transfer"
+        ]
+      },
+      "root": 462,
+      "produces": [
+        "coffee_mev_protect_hold_funds"
+      ],
+      "captures": [
+        {
+          "name": "transfer",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "sender"
+              }
+            },
+            {
+              "name": "mev_contract",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "receiver"
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "asset"
+              }
+            },
+            {
+              "name": "sender_wallet",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "sender_wallet"
+              }
+            },
+            {
+              "name": "mev_contract_wallet",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "amount",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "amount"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "coffee_staking_deposit",
+      "anchor": {
+        "kind": "btype",
+        "values": [
+          "jetton_transfer"
+        ]
+      },
+      "root": 465,
+      "produces": [
+        "coffee_staking_deposit"
+      ],
+      "captures": [
+        {
+          "name": "transfer",
+          "card": "one"
+        },
+        {
+          "name": "pool_call",
+          "card": "one"
+        },
+        {
+          "name": "nft",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "source",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "sender"
+              }
+            },
+            {
+              "name": "user_jetton_wallet",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "sender_wallet"
+              }
+            },
+            {
+              "name": "pool_jetton_wallet",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "receiver_wallet"
+              }
+            },
+            {
+              "name": "pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "pool_call"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "value",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "transfer"
+                      },
+                      "name": "data"
+                    },
+                    "name": "amount"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "minted_item_address",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "nft"
+                  },
+                  "name": "data"
+                },
+                "name": "address"
+              }
+            },
+            {
+              "name": "minted_item_index",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "nft"
+                  },
+                  "name": "data"
+                },
+                "name": "index"
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "asset"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "coffee_staking_withdraw",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          3406020527
+        ]
+      },
+      "root": 469,
+      "produces": [
+        "coffee_staking_withdraw"
+      ],
+      "captures": [
+        {
+          "name": "withdraw_1",
+          "card": "one"
+        },
+        {
+          "name": "withdraw_2",
+          "card": "one"
+        },
+        {
+          "name": "withdraw_3",
+          "card": "one"
+        },
+        {
+          "name": "transfer",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "withdraw_2",
+          "types": [
+            "CoffeeStakingPositionWithdraw2"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "withdraw_3",
+          "types": [
+            "CoffeeStakingPositionWithdraw3"
+          ]
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "source",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "withdraw_2"
+                      },
+                      "name": "body"
+                    },
+                    "name": "owner"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "withdraw_2"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "asset"
+              }
+            },
+            {
+              "name": "amount",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "withdraw_3"
+                        },
+                        "name": "body"
+                      },
+                      "name": "jetton_amount"
+                    },
+                    "r": {
+                      "k": "int",
+                      "v": 0
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "user_jetton_wallet",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "receiver_wallet"
+              }
+            },
+            {
+              "name": "pool_jetton_wallet",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "withdraw_3"
+                      },
+                      "name": "body"
+                    },
+                    "name": "jetton_wallet"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "nft_address",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "withdraw_1"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "nft_index",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "withdraw_2"
+                  },
+                  "name": "body"
+                },
+                "name": "nft_id"
+              }
+            },
+            {
+              "name": "points",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "withdraw_2"
+                    },
+                    "name": "body"
+                  },
+                  "name": "points"
+                },
+                "r": {
+                  "k": "int",
+                  "v": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "coffee_staking_claim_rewards",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          3003937552
+        ]
+      },
+      "root": 474,
+      "produces": [
+        "coffee_staking_claim_rewards"
+      ],
+      "captures": [
+        {
+          "name": "claim",
+          "card": "one"
+        },
+        {
+          "name": "transfer",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "claim",
+          "types": [
+            "CoffeeStakingClaimRewards"
+          ]
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "admin",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "claim"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "recipient",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "claim"
+                      },
+                      "name": "body"
+                    },
+                    "name": "receiver"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "pool",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "claim"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "asset"
+              }
+            },
+            {
+              "name": "amount",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "claim"
+                        },
+                        "name": "body"
+                      },
+                      "name": "jetton_amount"
+                    },
+                    "r": {
+                      "k": "int",
+                      "v": 0
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "pool_jetton_wallet",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "claim"
+                      },
+                      "name": "body"
+                    },
+                    "name": "jetton_wallet"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "recipient_jetton_wallet",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "transfer"
+                  },
+                  "name": "data"
+                },
+                "name": "receiver_wallet"
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "nodes": [
@@ -22752,6 +24236,207 @@
       "kind": "contract",
       "opcode": 4151524045,
       "capture": "response"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998115,
+      "capture": "request",
+      "children": [
+        447
+      ],
+      "parent": 448
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998114,
+      "capture": "deploy"
+    },
+    {
+      "kind": "or",
+      "branches": [
+        449,
+        450
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "in_jt"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998082,
+      "capture": "in_native"
+    },
+    {
+      "kind": "block_type",
+      "btype": "coffee_create_pool_creator",
+      "capture": "creator",
+      "child": 452
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998117,
+      "capture": "request",
+      "child": 453
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998114,
+      "capture": "deploy",
+      "children": [
+        454,
+        456,
+        457
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 395134233,
+      "child": 455
+    },
+    {
+      "kind": "contract",
+      "opcode": 3576854235,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998131,
+      "capture": "success"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998134,
+      "optional": true,
+      "child": 458
+    },
+    {
+      "kind": "contract",
+      "opcode": 2987840287,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1808244350,
+      "capture": "call",
+      "parent": 460
+    },
+    {
+      "kind": "any",
+      "optional": true,
+      "children": [
+        461
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998240
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "transfer",
+      "where_expr": {
+        "k": "bin",
+        "op": "==",
+        "l": {
+          "k": "dotfield",
+          "name": "payload_opcode"
+        },
+        "r": {
+          "k": "str",
+          "v": "0x6bc79e7e"
+        }
+      },
+      "parent": 463
+    },
+    {
+      "kind": "any",
+      "optional": true,
+      "children": [
+        464
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 3237998240
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "transfer",
+      "child": 466
+    },
+    {
+      "kind": "contract",
+      "opcode": 4182184244,
+      "capture": "pool_call",
+      "children": [
+        467,
+        468
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 4182184244,
+      "optional": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "nft_mint",
+      "capture": "nft"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3406020527,
+      "capture": "withdraw_1",
+      "child": 470
+    },
+    {
+      "kind": "contract",
+      "opcode": 3406020527,
+      "capture": "withdraw_2",
+      "children": [
+        471,
+        473
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 3406020527,
+      "capture": "withdraw_3",
+      "child": 472
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3406020527,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 3003937552,
+      "capture": "claim",
+      "children": [
+        475,
+        476
+      ]
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "transfer"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3003937552,
+      "optional": true
     }
   ],
   "registration_order": [
@@ -22812,6 +24497,13 @@
     54,
     55,
     56,
-    57
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64
   ]
 }

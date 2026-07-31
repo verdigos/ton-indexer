@@ -1066,30 +1066,32 @@ def _fill_coffee_create_vault(block: CoffeeCreateVaultBlock, action: Action):
     action.value = _value(_dget(block.data, 'amount'))
 
 def _fill_coffee_create_pool_creator(block: CoffeeCreatePoolCreatorBlock, action: Action):
-    action.source = _addr(block.data.sender)
-    action.source_secondary = _addr(block.data.sender_jetton_wallet)
-    action.destination = _addr(block.data.deposit_recipient)
-    action.destination_secondary = _addr(block.data.pool_creator_contract)
-    action.asset = _addr(block.data.provided_asset)
-    action.asset2 = _addr(block.data.pool_params.first)
-    action.asset2_secondary = _addr(block.data.pool_params.second)
-    action.amount = block.data.amount.value
+    d = block.data
+    action.source = _addr(_dget(d, 'sender'))
+    action.source_secondary = _addr(_dget(d, 'sender_jetton_wallet'))
+    action.destination = _addr(_dget(d, 'deposit_recipient'))
+    action.destination_secondary = _addr(_dget(d, 'pool_creator_contract'))
+    action.asset = _addr(_dget(d, 'provided_asset'))
+    action.asset2 = _addr(_dget(d, 'pool_first'))
+    action.asset2_secondary = _addr(_dget(d, 'pool_second'))
+    action.amount = _dget(d, 'amount').value
 
 def _fill_coffee_create_pool(block: CoffeeCreatePoolBlock, action: Action):
-    action.source = _addr(block.data.source)
-    action.source_secondary = _addr(block.data.source_jetton_wallet)
-    action.amount = block.data.amount.value
-    action.asset = _addr(block.data.asset_1)
-    action.asset2 = _addr(block.data.asset_2)
-    action.destination = _addr(block.data.pool)
-    action.destination_secondary = _addr(block.data.pool_creator_contract)
+    d = block.data
+    action.source = _addr(_dget(d, 'source'))
+    action.source_secondary = _addr(_dget(d, 'source_jetton_wallet'))
+    action.amount = _dget(d, 'amount').value
+    action.asset = _addr(_dget(d, 'asset_1'))
+    action.asset2 = _addr(_dget(d, 'asset_2'))
+    action.destination = _addr(_dget(d, 'pool'))
+    action.destination_secondary = _addr(_dget(d, 'pool_creator_contract'))
     action.coffee_create_pool_data = {
-        "amount_1": block.data.amount_1.value if block.data.amount_1 else None,
-        "amount_2": block.data.amount_2.value if block.data.amount_2 else None,
-        "initiator_1": _addr(block.data.initiator_1),
-        "initiator_2": _addr(block.data.initiator_2),
-        "provided_asset": _addr(block.data.provided_asset),
-        "lp_tokens_minted": block.data.lp_tokens_minted.value if block.data.lp_tokens_minted else None,
+        "amount_1": _value(_dget(d, 'amount_1')),
+        "amount_2": _value(_dget(d, 'amount_2')),
+        "initiator_1": _addr(_dget(d, 'initiator_1')),
+        "initiator_2": _addr(_dget(d, 'initiator_2')),
+        "provided_asset": _addr(_dget(d, 'provided_asset')),
+        "lp_tokens_minted": _value(_dget(d, 'lp_tokens_minted')),
     }
 
 def _fill_coffee_mev_protect_hold_funds(block: Block, action: Action):
@@ -1098,46 +1100,49 @@ def _fill_coffee_mev_protect_hold_funds(block: Block, action: Action):
     action.destination = _addr(block.data['mev_contract'])
     action.destination_secondary = _addr(block.data['mev_contract_wallet'])
     action.asset = _addr(block.data['asset'])
-    action.amount = block.data['amount'].value
+    action.amount = _value(block.data['amount'])
 
 def _fill_coffee_mev_protect_failed_swap(block: Block, action: Action):
     action.destination = _addr(block.data['recipient'])
     action.asset = _addr(block.data['asset'])
 
 def _fill_coffee_staking_deposit(block: CoffeeStakingDepositBlock, action: Action):
-    action.source = _addr(block.data.source)
-    action.source_secondary = _addr(block.data.user_jetton_wallet)
-    action.destination = _addr(block.data.pool)
-    action.destination_secondary = _addr(block.data.pool_jetton_wallet)
-    action.asset = _addr(block.data.asset)
-    action.amount = block.data.value.value
+    d = block.data
+    action.source = _addr(_dget(d, 'source'))
+    action.source_secondary = _addr(_dget(d, 'user_jetton_wallet'))
+    action.destination = _addr(_dget(d, 'pool'))
+    action.destination_secondary = _addr(_dget(d, 'pool_jetton_wallet'))
+    action.asset = _addr(_dget(d, 'asset'))
+    action.amount = _value(_dget(d, 'value'))
     action.coffee_staking_deposit_data = {
-        "minted_item_address": _addr(block.data.minted_item_address),
-        "minted_item_index": block.data.minted_item_index,
+        "minted_item_address": _addr(_dget(d, 'minted_item_address')),
+        "minted_item_index": _dget(d, 'minted_item_index'),
     }
 
 def _fill_coffee_staking_withdraw(block: CoffeeStakingWithdrawBlock, action: Action):
-    action.source = _addr(block.data.source)
-    action.source_secondary = _addr(block.data.user_jetton_wallet)
-    action.destination = _addr(block.data.pool)
-    action.destination_secondary = _addr(block.data.pool_jetton_wallet)
-    action.asset = _addr(block.data.asset)
-    action.amount = block.data.amount.value
+    d = block.data
+    action.source = _addr(_dget(d, 'source'))
+    action.source_secondary = _addr(_dget(d, 'user_jetton_wallet'))
+    action.destination = _addr(_dget(d, 'pool'))
+    action.destination_secondary = _addr(_dget(d, 'pool_jetton_wallet'))
+    action.asset = _addr(_dget(d, 'asset'))
+    action.amount = _value(_dget(d, 'amount'))
     action.coffee_staking_withdraw_data = {
-        "nft_address": _addr(block.data.nft_address),
-        "nft_index": block.data.nft_index,
-        "points": block.data.points,
+        "nft_address": _addr(_dget(d, 'nft_address')),
+        "nft_index": _dget(d, 'nft_index'),
+        "points": _dget(d, 'points'),
     }
 
 def _fill_coffee_staking_claim_rewards(block: CoffeeStakingClaimRewardsBlock, action: Action):
     # don't store admin since it's always the same highload
     #  and we don't have a basic field for it
-    action.source = _addr(block.data.pool)
-    action.source_secondary = _addr(block.data.pool_jetton_wallet)
-    action.destination = _addr(block.data.recipient)
-    action.destination_secondary = _addr(block.data.recipient_jetton_wallet)
-    action.asset = _addr(block.data.asset)
-    action.amount = block.data.amount.value
+    d = block.data
+    action.source = _addr(_dget(d, 'pool'))
+    action.source_secondary = _addr(_dget(d, 'pool_jetton_wallet'))
+    action.destination = _addr(_dget(d, 'recipient'))
+    action.destination_secondary = _addr(_dget(d, 'recipient_jetton_wallet'))
+    action.asset = _addr(_dget(d, 'asset'))
+    action.amount = _value(_dget(d, 'amount'))
 
 
 def _fill_cocoon_worker_payout_action(block, action: Action):

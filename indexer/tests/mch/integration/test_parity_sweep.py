@@ -108,8 +108,11 @@ from indexer.events.blocks.jvault import (
 )
 from indexer.events.blocks.layerzero import LayerZeroReceiveMatcher
 from indexer.events.blocks.liquidity import (
+    CoffeeCreatePoolCreatorMatcher,
+    CoffeeCreatePoolMatcher,
     CoffeeCreateVaultMatcher,
     CoffeeDepositLiquidityMatcher,
+    CoffeeMevProtectHoldFundsMatcher,
     DedustDepositBlockMatcher,
     DedustDepositFirstAssetBlockMatcher,
     DedustWithdrawBlockMatcher,
@@ -126,6 +129,9 @@ from indexer.events.blocks.nft import (
     TelegramNftPurchaseBlockMatcher,
 )
 from indexer.events.blocks.staking import (
+    CoffeeStakingClaimRewardsMatcher,
+    CoffeeStakingDepositMatcher,
+    CoffeeStakingWithdrawMatcher,
     NominatorPoolWithdrawMatcher,
     TONStakersDelayedWithdrawalMatcher,
     TONStakersDepositMatcher,
@@ -156,7 +162,12 @@ from indexer.events.mch.builders import (
 )
 # Port-wave factories live in their own modules (builders/__init__.py is not
 # extended per-port; per-spec integration tests import the same way).
-from indexer.events.mch.builders.coffee import coffee_liquidity_registries
+from indexer.events.mch.builders.coffee import (
+    coffee_create_pool_registries,
+    coffee_liquidity_registries,
+    coffee_mev_registries,
+    coffee_staking_registries,
+)
 from indexer.events.mch.builders.dedust import dedust_deposit_registries
 from indexer.events.mch.builders.dedust_v2 import (
     dedust_v2_claim_fees_registries,
@@ -355,6 +366,28 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     ("specs/coffee_liquidity.mch", _SPECS_DIR / "coffee_liquidity.mch", coffee_liquidity_registries,
      (JettonTransferBlockMatcher, _pton_prereq),
      (CoffeeDepositLiquidityMatcher, CoffeeCreateVaultMatcher)),
+    # Coffee tail port (2026-07-31), three files, one row each.
+    #
+    # create pool: the two matchers are SERIAL (coffee_create_pool anchors on the
+    # btype the creator produces) and run as one group in the legacy list order.
+    # The jetton leg of the creator's parent alternative is a prebuilt
+    # jetton_transfer, hence the prerequisite.
+    ("specs/coffee_create_pool.mch", _SPECS_DIR / "coffee_create_pool.mch",
+     coffee_create_pool_registries, (JettonTransferBlockMatcher,),
+     (CoffeeCreatePoolCreatorMatcher, CoffeeCreatePoolMatcher)),
+    # mev protect: ONE legacy matcher, TWO mch matchers (the TON arm and the
+    # jetton arm — see the spec header for why the anchor could not stay mixed).
+    # The jetton arm is btype-anchored, so this is a run-on-all row.
+    ("specs/coffee_mev.mch", _SPECS_DIR / "coffee_mev.mch", coffee_mev_registries,
+     (JettonTransferBlockMatcher,), (CoffeeMevProtectHoldFundsMatcher,)),
+    # staking: all three matchers as one group, in the legacy list order (deposit,
+    # withdraw, claim rewards). The deposit anchor is a bare `btype
+    # jetton_transfer` — run-on-all — and it binds an `nft_mint` block, so the
+    # mint matcher is replayed first exactly as production order does it.
+    ("specs/coffee_staking.mch", _SPECS_DIR / "coffee_staking.mch", coffee_staking_registries,
+     (NftMintBlockMatcher, JettonTransferBlockMatcher),
+     (CoffeeStakingDepositMatcher, CoffeeStakingWithdrawMatcher,
+      CoffeeStakingClaimRewardsMatcher)),
     # R02 remake — jvault family (stake btype-anchored, the other three op-anchored).
     ("specs/jvault.mch", _SPECS_DIR / "jvault.mch", jvault_registries, _PREREQ_SWAP,
      (JVaultStakeBlockMatcher, JVaultUnstakeBlockMatcher, JVaultClaimBlockMatcher,

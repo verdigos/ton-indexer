@@ -118,6 +118,15 @@ PORTED_BTYPES = {
     # fixtures (TON, jetton, jetton-failed); C++ fill is fill_evaa_supply, the one
     # producer of the evaa_supply_data composite.
     "evaa_supply",
+    # Coffee tail (2026-07-31, specs/coffee_create_pool.mch + coffee_mev.mch +
+    # coffee_staking.mch). All six FIRE on the corpus — nine fixtures between
+    # them — and three are the only producer of their composite
+    # (coffee_create_pool_data / coffee_staking_deposit_data /
+    # coffee_staking_withdraw_data, all three added to ACTION_COLUMNS below).
+    "coffee_create_pool_creator", "coffee_create_pool",
+    "coffee_mev_protect_hold_funds",
+    "coffee_staking_deposit", "coffee_staking_withdraw",
+    "coffee_staking_claim_rewards",
 }
 
 # The C++ render_action column set (Classify.cpp render_action), in any order —
@@ -133,7 +142,10 @@ ACTION_COLUMNS = [
     "staking_data", "evaa_supply_data", "evaa_withdraw_data",
     "vesting_send_message_data",
     "layerzero_packet_data", "jvault_stake_data", "jvault_claim_data",
-    "change_dns_record_data", "extra",
+    "change_dns_record_data",
+    "coffee_create_pool_data", "coffee_staking_deposit_data",
+    "coffee_staking_withdraw_data",
+    "extra",
 ]
 
 # Stub Trace: block_to_action requires a non-None trace and reads these attrs,

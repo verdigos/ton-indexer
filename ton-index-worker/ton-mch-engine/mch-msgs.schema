@@ -526,3 +526,80 @@ message DedustV2WithdrawalEvent opcode 0xc0d77b54 {
   _recipient: addr_py
   _next_state: ref_cell
 }
+
+# --- specs/coffee_create_pool.mch bodies.
+
+# The pool-creator request (opcode 0xc0ffee23), the create_pool_creator anchor.
+# `params:PoolParams` is INLINE here (unlike the depository request's ref), so
+# its two assets are read straight off the cursor and named `pool_first` /
+# `pool_second` to match that sibling's spelling. `creation_params` IS a ref;
+# only the recipient of its public half is read, but the whole
+# PublicPoolCreationParams + PrivatePoolCreationParams pair is walked so the ref
+# cursor validates the same wire shape both hosts see.
+#
+# The legacy class of this name (messages/coffee.py:713) parses creation_params
+# INLINE and therefore throws on a real body; nothing calls it, so the bug is
+# invisible in production. mch/builders/coffee.py carries the correct flat twin.
+message CoffeeCreatePoolCreatorRequest opcode 0xc0ffee23 {
+  _query_id: bits 64
+  amount: coins
+  pool_first: asset2
+  pool_second: asset2
+  _amm: bits 3
+  _amm_settings: maybe_ref_cell
+  creation_params: ref {
+    recipient: addr_py
+    _use_recipient_on_failure: bits 1
+    _notification_data: maybe_ref_cell
+    _is_active: bits 1
+    _extra_settings: maybe_ref_cell
+  }
+  sender: addr_py
+  _proof: ref_cell
+}
+
+# The creator's ask to the factory (opcode 0xc0ffee25), fired once BOTH legs
+# have landed: the two realized amounts in the pool's own asset order plus the
+# initiator of the leg that completed the pair. Stops after tx_initiator — the
+# creation_params ref and the proof ref are unread.
+message CoffeeCreatePoolRequest opcode 0xc0ffee25 {
+  _query_id: bits 64
+  amount1: coins
+  amount2: coins
+  tx_initiator: addr_py
+}
+
+# --- specs/coffee_staking.mch bodies.
+
+# The pool's reward payout order (opcode 0xb30c7310), the claim_rewards anchor.
+# The trailing `payload:(Maybe ^CoffeeStakingForwardData)` is unread and left
+# unparsed.
+message CoffeeStakingClaimRewards opcode 0xb30c7310 {
+  _query_id: bits 64
+  jetton_wallet: addr_py
+  jetton_amount: coins
+  receiver: addr_py
+}
+
+# staking_position_withdraw_2, position -> master. THREE message types share the
+# opcode 0xcb03bfaf (withdraw_1/2/3); the registry keys on the NAME, and the hex
+# after `opcode` is documentation only — so all three may carry it. Only 2 and 3
+# have an entry: withdraw_1's body is never read.
+#
+# Stops after `points`: the mandatory `jetton_data` ref that follows carries the
+# same wallet/amount pair withdraw_3 states again, and the legacy build reads
+# them from withdraw_3.
+message CoffeeStakingPositionWithdraw2 opcode 0xcb03bfaf {
+  _query_id: bits 64
+  nft_id: u64
+  owner: addr_py
+  points: coins
+}
+
+# staking_position_withdraw_3, master -> jetton wallet: the payout instruction.
+# `owner` trails and is unread.
+message CoffeeStakingPositionWithdraw3 opcode 0xcb03bfaf {
+  _query_id: bits 64
+  jetton_wallet: addr_py
+  jetton_amount: coins
+}

@@ -6,7 +6,16 @@ spec file in `indexer/events/mch/specs/`).
 """
 from __future__ import annotations
 
-from indexer.events.mch.builders.coffee import coffee_registries, register_coffee
+from indexer.events.mch.builders.coffee import (
+    coffee_create_pool_registries,
+    coffee_mev_registries,
+    coffee_registries,
+    coffee_staking_registries,
+    register_coffee,
+    register_coffee_create_pool,
+    register_coffee_mev,
+    register_coffee_staking,
+)
 from indexer.events.mch.builders.dedust import (
     dedust_hybrid_registries,
     dedust_registries,
@@ -55,7 +64,10 @@ from indexer.events.mch.builders.teleitem_auction import (
 )
 
 __all__ = [
+    "coffee_create_pool_registries",
+    "coffee_mev_registries",
     "coffee_registries",
+    "coffee_staking_registries",
     "dedust_hybrid_registries",
     "dedust_registries",
     "dedust_withdraw_registries",
@@ -66,6 +78,9 @@ __all__ = [
     "nft_mint_registries",
     "nft_sale_registries",
     "register_coffee",
+    "register_coffee_create_pool",
+    "register_coffee_mev",
+    "register_coffee_staking",
     "register_dedust",
     "register_dedust_hybrid",
     "register_dedust_withdraw",

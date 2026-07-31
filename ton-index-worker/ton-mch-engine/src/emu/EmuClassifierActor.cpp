@@ -78,6 +78,8 @@ std::size_t scrub_arena_refs(Action &a) {
                    &a.evaa_supply_data, &a.evaa_withdraw_data, &a.vesting_send_message_data,
                    &a.layerzero_packet_data,
                    &a.jvault_stake_data, &a.jvault_claim_data, &a.change_dns_record_data,
+                   &a.coffee_create_pool_data, &a.coffee_staking_deposit_data,
+                   &a.coffee_staking_withdraw_data,
                    &a.extra}) {
     n += scrub_value(*v);
   }

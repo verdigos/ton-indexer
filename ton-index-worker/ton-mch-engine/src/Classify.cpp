@@ -112,6 +112,9 @@ std::string render_action(const Action &a) {
   f.emplace_back("jvault_stake_data", a.jvault_stake_data);
   f.emplace_back("jvault_claim_data", a.jvault_claim_data);
   f.emplace_back("change_dns_record_data", a.change_dns_record_data);
+  f.emplace_back("coffee_create_pool_data", a.coffee_create_pool_data);
+  f.emplace_back("coffee_staking_deposit_data", a.coffee_staking_deposit_data);
+  f.emplace_back("coffee_staking_withdraw_data", a.coffee_staking_withdraw_data);
   f.emplace_back("extra", a.extra);
   // Child-action recursion columns: null / empty list on a top-level row.
   f.emplace_back("parent_action_id", a.parent_action_id.empty()

@@ -1521,6 +1521,200 @@ td::Result<Value> gen_parse_dedust_v2_withdrawal_event(const td::Ref<vm::Cell> &
   return Value::make_obj(std::move(f));
 }
 
+// CoffeeCreatePoolCreatorRequest (opcode 0xc0ffee23); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_coffee_create_pool_creator_request(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CoffeeCreatePoolCreatorRequest: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("CoffeeCreatePoolCreatorRequest: _query_id underflow"); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rs = gen_load_asset2(cs);
+    if (rs.is_error()) { return rs.move_as_error(); }
+    f.emplace_back("pool_first", rs.move_as_ok());
+  }
+  {
+    auto rs = gen_load_asset2(cs);
+    if (rs.is_error()) { return rs.move_as_error(); }
+    f.emplace_back("pool_second", rs.move_as_ok());
+  }
+  {
+    if (!cs.have(3) || !cs.advance(3)) { return td::Status::Error("CoffeeCreatePoolCreatorRequest: _amm underflow"); }
+  }
+  {
+    if (!cs.have(1)) { return td::Status::Error("CoffeeCreatePoolCreatorRequest: _amm_settings bit missing"); }
+    Value mc = Value::null();
+    if (cs.fetch_ulong(1)) {
+      if (cs.size_refs() == 0) { return td::Status::Error("CoffeeCreatePoolCreatorRequest: _amm_settings ref missing"); }
+      mc = Value::make_cell(cs.fetch_ref());
+    }
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("CoffeeCreatePoolCreatorRequest: creation_params ref missing"); }
+    bool sp_creation_params = false;
+    vm::CellSlice rc_creation_params;
+    try { rc_creation_params = vm::load_cell_slice_special(cs.fetch_ref(), sp_creation_params); }
+    catch (...) { return td::Status::Error("CoffeeCreatePoolCreatorRequest: creation_params ref cell"); }
+    {
+      auto ra = load_address_py(rc_creation_params);
+      if (ra.is_error()) { return ra.move_as_error(); }
+      f.emplace_back("recipient", ra.move_as_ok());
+    }
+    {
+      if (!rc_creation_params.have(1) || !rc_creation_params.advance(1)) { return td::Status::Error("CoffeeCreatePoolCreatorRequest: _use_recipient_on_failure underflow"); }
+    }
+    {
+      if (!rc_creation_params.have(1)) { return td::Status::Error("CoffeeCreatePoolCreatorRequest: _notification_data bit missing"); }
+      Value mc = Value::null();
+      if (rc_creation_params.fetch_ulong(1)) {
+        if (rc_creation_params.size_refs() == 0) { return td::Status::Error("CoffeeCreatePoolCreatorRequest: _notification_data ref missing"); }
+        mc = Value::make_cell(rc_creation_params.fetch_ref());
+      }
+    }
+    {
+      if (!rc_creation_params.have(1) || !rc_creation_params.advance(1)) { return td::Status::Error("CoffeeCreatePoolCreatorRequest: _is_active underflow"); }
+    }
+    {
+      if (!rc_creation_params.have(1)) { return td::Status::Error("CoffeeCreatePoolCreatorRequest: _extra_settings bit missing"); }
+      Value mc = Value::null();
+      if (rc_creation_params.fetch_ulong(1)) {
+        if (rc_creation_params.size_refs() == 0) { return td::Status::Error("CoffeeCreatePoolCreatorRequest: _extra_settings ref missing"); }
+        mc = Value::make_cell(rc_creation_params.fetch_ref());
+      }
+    }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("sender", ra.move_as_ok());
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("CoffeeCreatePoolCreatorRequest: _proof ref missing"); }
+    auto rf = cs.fetch_ref();
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CoffeeCreatePoolRequest (opcode 0xc0ffee25); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_coffee_create_pool_request(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CoffeeCreatePoolRequest: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("CoffeeCreatePoolRequest: _query_id underflow"); }
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount1", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount2", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("tx_initiator", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CoffeeStakingClaimRewards (opcode 0xb30c7310); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_coffee_staking_claim_rewards(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CoffeeStakingClaimRewards: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("CoffeeStakingClaimRewards: _query_id underflow"); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("jetton_wallet", ra.move_as_ok());
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("jetton_amount", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("receiver", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CoffeeStakingPositionWithdraw2 (opcode 0xcb03bfaf); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_coffee_staking_position_withdraw2(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CoffeeStakingPositionWithdraw2: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("CoffeeStakingPositionWithdraw2: _query_id underflow"); }
+  }
+  {
+    if (!cs.have(64)) { return td::Status::Error("CoffeeStakingPositionWithdraw2: nft_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("nft_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("owner", ra.move_as_ok());
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("points", Value::make_int(rc.move_as_ok()));
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CoffeeStakingPositionWithdraw3 (opcode 0xcb03bfaf); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_coffee_staking_position_withdraw3(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CoffeeStakingPositionWithdraw3: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("CoffeeStakingPositionWithdraw3: _query_id underflow"); }
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("jetton_wallet", ra.move_as_ok());
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("jetton_amount", Value::make_int(rc.move_as_ok()));
+  }
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parsers() {
@@ -1565,6 +1759,11 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"TONStakersNftBurnNotification", gen_parse_t_o_n_stakers_nft_burn_notification},
       {"DedustV2Withdraw", gen_parse_dedust_v2_withdraw},
       {"DedustV2WithdrawalEvent", gen_parse_dedust_v2_withdrawal_event},
+      {"CoffeeCreatePoolCreatorRequest", gen_parse_coffee_create_pool_creator_request},
+      {"CoffeeCreatePoolRequest", gen_parse_coffee_create_pool_request},
+      {"CoffeeStakingClaimRewards", gen_parse_coffee_staking_claim_rewards},
+      {"CoffeeStakingPositionWithdraw2", gen_parse_coffee_staking_position_withdraw2},
+      {"CoffeeStakingPositionWithdraw3", gen_parse_coffee_staking_position_withdraw3},
   };
   return rows;
 }
