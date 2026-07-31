@@ -1053,6 +1053,16 @@ void fill_delete_dns(const Value &d, Action &a) {
   a.change_dns_record_data = mkdict(std::move(f));
 }
 
+void fill_nominator_pool_deposit(const Value &d, Action &a) {
+  a.type = "stake_deposit";
+  a.source = av_addr(dg(d, "source"));
+  a.destination = av_addr(dg(d, "pool"));
+  a.amount = av_amount(dg(d, "value"));
+  Value::Fields f;
+  f.emplace_back("provider", Value::make_str("nominator"));
+  a.staking_data = mkdict(std::move(f));
+}
+
 void fill_nominator_pool_withdraw_request(const Value &d, Action &a) {
   // The btype does NOT decide the action type here: a request that already
   // carries its payout is a COMPLETED withdrawal.
@@ -1499,6 +1509,7 @@ bool fill_action(Block *b, Action &a) {
   // W6 bucket B: matcher-produced btypes that used to fall through to `return
   // false` and lose the whole row.
   else if (t == "renew_dns") fill_dns_renew(d, a);
+  else if (t == "nominator_pool_deposit") fill_nominator_pool_deposit(d, a);
   else if (t == "nominator_pool_withdraw_request") fill_nominator_pool_withdraw_request(d, a);
   else if (t == "election_deposit" || t == "election_recover") fill_election(d, a);
   else if (t == "tonstakers_deposit") fill_tonstakers_deposit(d, a);

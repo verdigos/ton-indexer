@@ -159,6 +159,8 @@ from indexer.events.blocks.staking import (
     CoffeeStakingClaimRewardsMatcher,
     CoffeeStakingDepositMatcher,
     CoffeeStakingWithdrawMatcher,
+    NominatorPoolDepositMatcher,
+    NominatorPoolWithdrawRequestMatcher,
     NominatorPoolWithdrawMatcher,
     TONStakersDelayedWithdrawalMatcher,
     TONStakersDepositMatcher,
@@ -500,9 +502,10 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     ("specs/stonfi_v2_withdraw.mch", _SPECS_DIR / "stonfi_v2_withdraw.mch", stonfi_liquidity_registries,
      (JettonTransferBlockMatcher, _pton_prereq, JettonBurnBlockMatcher),
      (StonfiV2WithdrawLiquidityMatcher,)),
-    # nominator withdraw is btype-anchored (ton_transfer) — run-on-all row.
+    # All nominator matchers are btype-anchored (ton_transfer) — run-on-all row.
     ("specs/nominator.mch", _SPECS_DIR / "nominator.mch", nominator_registries, (),
-     (NominatorPoolWithdrawMatcher,)),
+     (NominatorPoolDepositMatcher, NominatorPoolWithdrawRequestMatcher,
+      NominatorPoolWithdrawMatcher)),
     # Remake wave 2 (2026-07-04): R11/T28 cyclic recursion.
     ("specs/tonco_swap.mch", _SPECS_DIR / "tonco_swap.mch", tonco_swap_registries, _PREREQ_SWAP,
      (ToncoSwapBlockMatcher,)),

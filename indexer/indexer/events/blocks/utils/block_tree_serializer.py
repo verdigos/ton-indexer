@@ -758,9 +758,9 @@ def _fill_jetton_mint_action(block: JettonMintBlock, action: Action):
 
 def _fill_nominator_pool_deposit_action(block: NominatorPoolDepositBlock, action: Action):
     action.type = 'stake_deposit'
-    action.source = block.data.source.as_str()
-    action.destination = block.data.pool.as_str()
-    action.amount = block.data.value.value
+    action.source = _dget(block.data, 'source').as_str()
+    action.destination = _dget(block.data, 'pool').as_str()
+    action.amount = _dget(block.data, 'value').value
     action.staking_data = {
         'provider': 'nominator'
     }

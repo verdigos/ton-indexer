@@ -73,6 +73,8 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args);
 
 // Nominator (HostNominator.cpp).
 bool nominator_pool_withdraw_parent(const Block *b);
+EvalResult nominator_withdraw_payout_amount(BuildEnv &env, const std::vector<Value> &args);
+void nominator_withdraw_absorb_payouts(Block *produced, const ShaperMatch &m);
 
 // EVAA (HostEvaa.cpp).
 bool evaa_user_withdraw_user(const Block *b);

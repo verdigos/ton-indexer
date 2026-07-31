@@ -1,6 +1,5 @@
-"""R05 — field-level parity between the legacy NominatorPoolWithdrawMatcher and
-specs/nominator.mch, plus the IR round trip (compile -> emit_ir -> load_artifact
--> build_matchers).
+"""Nominator-pool parity against specs/nominator.mch, including synthetic
+coverage for withdraw fan-out, comment-triggered deposits, and request payouts.
 
 This is a REMAKE, not a port (see specs/nominator.mch header for why): legacy
 anchors on the NominatorPoolProcessWithdrawRequests call and fans out one
@@ -11,12 +10,9 @@ node), so the engine's normal per-block loop reproduces the fan-out without
 needing multi-block builder returns (which the compiled build path does not
 support - see the spec header).
 
-No nominator YAML fixture exists in the corpus, and the flow needs no
-text-comment trigger (unlike NominatorPoolDepositMatcher / withdraw-request,
-which key off ton_transfer comments 'd'/'w' - out of scope here): the target
-matcher is a plain opcode-anchored call -> ton_transfer fan-out, so synthetic-
-but-faithful trees (real Transaction/Message -> to_tree -> init_block) fully
-exercise it, same convention as test_dns.py / test_evaa_withdraw.py.
+No nominator YAML fixture exists in the corpus, so synthetic-but-faithful trees
+(real Transaction/Message -> to_tree -> init_block) exercise all three matchers,
+the same convention as test_dns.py / test_evaa_withdraw.py.
 """
 from __future__ import annotations
 
@@ -28,7 +24,13 @@ from pytoniq_core import Address, begin_cell
 from indexer.core.database import Message, MessageContent, Transaction
 from indexer.events import context
 from indexer.events.blocks.core import Block
-from indexer.events.blocks.staking import NominatorPoolWithdrawMatcher, NominatorPoolWithdrawRequestData
+from indexer.events.blocks.staking import (
+    NominatorPoolDepositData,
+    NominatorPoolDepositMatcher,
+    NominatorPoolWithdrawMatcher,
+    NominatorPoolWithdrawRequestData,
+    NominatorPoolWithdrawRequestMatcher,
+)
 from indexer.events.blocks.utils.tree_utils import to_tree
 from indexer.events.event_processing import init_block
 from indexer.events.mch import compile_file
@@ -60,6 +62,10 @@ NOMINATOR_1 = Address("0:" + "b2" * 32).to_str(False)
 NOMINATOR_2 = Address("0:" + "c3" * 32).to_str(False)
 
 _EMPTY_BODY = begin_cell().end_cell().to_boc()
+
+
+def _comment_body(comment: str) -> bytes:
+    return begin_cell().store_uint(0, 32).store_bytes(comment.encode()).end_cell().to_boc()
 
 
 # --- synthetic trace construction (mirrors test_dns.py) ---------------------
@@ -111,6 +117,30 @@ def _build_withdraw_transactions(payout_values: list[int], *, payout_aborted: bo
         payout_txs.append(payout_tx)
 
     root_tx.messages = [call_msg] + payout_msgs
+    return [root_tx] + payout_txs
+
+
+def _build_request_transactions(comment: str, payout_values: list[int],
+                                request_value: int = 1000) -> list[Transaction]:
+    root_tx = _tx("TXREQUEST", 100, POOL_ADDR)
+    request = _msg("REQUEST", root_tx, "in", 0, NOMINATOR_1, POOL_ADDR,
+                   _comment_body(comment), value=request_value)
+    payout_msgs = []
+    payout_txs = []
+    for i, value in enumerate(payout_values):
+        recipient = Address("0:" + f"{0xd0 + i:02x}" * 32).to_str(False)
+        msg_hash = f"REQUESTPAYOUT{i}"
+        payout_tx = _tx(f"TXREQUESTPAYOUT{i}", 200 + i * 100, recipient)
+        payout_msgs.append(
+            _msg(msg_hash, root_tx, "out", None, POOL_ADDR, recipient,
+                 _EMPTY_BODY, value=value)
+        )
+        payout_tx.messages = [
+            _msg(msg_hash, payout_tx, "in", None, POOL_ADDR, recipient,
+                 _EMPTY_BODY, value=value)
+        ]
+        payout_txs.append(payout_tx)
+    root_tx.messages = [request] + payout_msgs
     return [root_tx] + payout_txs
 
 
@@ -191,6 +221,16 @@ def _assert_field_parity(actual: list[Block], expected: list[Block],
         )
 
 
+def _load_ir_matchers() -> dict:
+    compiled = compile_file(NOMINATOR_MCH, nominator_registries())
+    artifact = emit_ir(compiled, [NOMINATOR_MCH.name])
+    render_json(artifact)
+    if not _HAVE_IR:
+        pytest.skip(_SKIP_REASON)
+    art = _mch_ir.load_artifact(artifact)
+    return {m.name: m for m in _mch_ir.build_matchers(art, nominator_registries())}
+
+
 async def _run_parity(txs, *, interfaces: dict) -> tuple[list[Block], list[Block]]:
     """legacy vs the v2 IR engine (the compiled path is retired — T29). Returns
     (legacy blocks, IR blocks)."""
@@ -200,18 +240,20 @@ async def _run_parity(txs, *, interfaces: dict) -> tuple[list[Block], list[Block
     # Compiling is a frontend-internal step ir_emit needs; no compiled matcher is
     # run as a runtime. IR emit + JSON render always run (a break here must error,
     # not skip).
-    compiled = compile_file(NOMINATOR_MCH, nominator_registries())
-    artifact = emit_ir(compiled, [NOMINATOR_MCH.name])
-    render_json(artifact)
-    if not _HAVE_IR:
-        pytest.skip(_SKIP_REASON)
-
-    art = _mch_ir.load_artifact(artifact)
-    ir_by_name = {m.name: m for m in _mch_ir.build_matchers(art, nominator_registries())}
+    ir_by_name = _load_ir_matchers()
     context.interface_repository.set(TestInterfaceRepository(interfaces))
     ir_blocks = await _run_matcher(ir_by_name["nominator_pool_withdraw"], txs)
     _assert_field_parity(ir_blocks, hw_blocks, "ir", "legacy")
     return hw_blocks, ir_blocks
+
+
+async def _run_comment_parity(name: str, legacy_matcher, txs) -> tuple[list[Block], list[Block]]:
+    context.interface_repository.set(TestInterfaceRepository(_interfaces()))
+    legacy_blocks = await _run_matcher(legacy_matcher, txs)
+    ir_matcher = _load_ir_matchers()[name]
+    context.interface_repository.set(TestInterfaceRepository(_interfaces()))
+    ir_blocks = await _run_matcher(ir_matcher, txs)
+    return legacy_blocks, ir_blocks
 
 
 @pytest.mark.asyncio
@@ -253,3 +295,42 @@ async def test_failed_flag_never_set_even_on_aborted_payout_tx():
     hw_blocks, ir_blocks = await _run_parity(txs, interfaces=_interfaces())
     assert hw_blocks[0].failed is False
     assert ir_blocks[0].failed is False
+
+
+@pytest.mark.asyncio
+async def test_deposit_comment_parity():
+    txs = _build_request_transactions("d", [])
+    legacy, ir = await _run_comment_parity(
+        "nominator_pool_deposit", NominatorPoolDepositMatcher(), txs
+    )
+    assert len(legacy) == len(ir) == 1
+    assert type(legacy[0].data) is NominatorPoolDepositData
+    assert ir[0].btype == legacy[0].btype == "nominator_pool_deposit"
+    assert ir[0].failed == legacy[0].failed
+    for field in ("source", "pool", "value"):
+        assert _values_equal(ir[0].data[field], getattr(legacy[0].data, field))
+    assert _node_hashes(ir[0]) == _node_hashes(legacy[0]) == ["TXREQUEST"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("payout_values", "expected_amount", "consumed_payouts"),
+    [
+        ([], None, 0),
+        ([1001], 1001, 1),
+        ([1000], None, 1),
+        ([1300, 1700], 1300, 2),
+        ([1300, 1700, 1900], None, 0),
+    ],
+)
+async def test_withdraw_request_payout_arity_parity(
+        payout_values, expected_amount, consumed_payouts):
+    txs = _build_request_transactions("w", payout_values)
+    legacy, ir = await _run_comment_parity(
+        "nominator_pool_withdraw_request", NominatorPoolWithdrawRequestMatcher(), txs
+    )
+    _assert_field_parity(ir, legacy, "ir", "legacy")
+    assert len(legacy) == len(ir) == 1
+    payout = ir[0].data["payout_amount"]
+    assert (None if payout is None else payout.value) == expected_amount
+    assert len(_node_hashes(ir[0])) == 1 + consumed_payouts

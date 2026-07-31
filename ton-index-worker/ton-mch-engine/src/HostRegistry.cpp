@@ -19,6 +19,7 @@ const std::map<std::string, HostFn> &host_fns() {
       {"tonstakers_pool_addr", tonstakers_pool_addr},
       {"vesting_message_was_sent", vesting_message_was_sent},
       {"jvault_stake_period", jvault_stake_period},
+      {"nominator_withdraw_payout_amount", nominator_withdraw_payout_amount},
       {"nft_transfer_data", nft_transfer_data},
       {"getgems_nft_purchase_data", getgems_nft_purchase_data},
       {"telegram_nft_purchase_data", telegram_nft_purchase_data},
@@ -108,6 +109,7 @@ const std::map<std::string, HostShaperFn> &host_shapers() {
   static const std::map<std::string, HostShaperFn> shapers = {
       {"getgems_proxy_insert", getgems_proxy_insert},
       {"nft_transfer_parent_absorb", nft_transfer_parent_absorb},
+      {"nominator_withdraw_absorb_payouts", nominator_withdraw_absorb_payouts},
       {"tgbtc_deploy_absorb", tgbtc_deploy_absorb},
   };
   return shapers;
