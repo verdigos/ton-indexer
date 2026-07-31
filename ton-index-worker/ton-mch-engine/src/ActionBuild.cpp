@@ -290,6 +290,31 @@ void fill_dedust_deposit_partial(const Value &d, Action &a) {
   a.dex_deposit_liquidity_data = mkdict(std::move(f));
 }
 
+// DeDust CPMM V2 LP trading-fees claim (block_tree_serializer
+// _fill_dedust_v2_claim_fees). Reuses the dex_withdraw_liquidity_data composite,
+// both slots populated; like the reward claim it leaves a.type at the block's
+// btype (dedust_v2_claim_fees).
+void fill_dedust_v2_claim_fees(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.destination = av_addr(dg(d, "pool"));
+  a.destination_secondary = av_addr(dg(d, "position"));
+  Value::Fields f;
+  f.emplace_back("dex", dg(d, "dex"));
+  f.emplace_back("amount1", av_amount(dg(d, "amount_x")));
+  f.emplace_back("amount2", av_amount(dg(d, "amount_y")));
+  f.emplace_back("asset1_out", av_addr(dg(d, "asset_x")));
+  f.emplace_back("asset2_out", av_addr(dg(d, "asset_y")));
+  f.emplace_back("user_jetton_wallet_1", av_addr(dg(d, "user_wallet_x")));
+  f.emplace_back("user_jetton_wallet_2", av_addr(dg(d, "user_wallet_y")));
+  f.emplace_back("dex_wallet_1", av_addr(dg(d, "dex_wallet_x")));
+  f.emplace_back("dex_wallet_2", av_addr(dg(d, "dex_wallet_y")));
+  f.emplace_back("dex_jetton_wallet_1", av_addr(dg(d, "dex_jetton_wallet_x")));
+  f.emplace_back("dex_jetton_wallet_2", av_addr(dg(d, "dex_jetton_wallet_y")));
+  f.emplace_back("is_refund", Value::make_bool(false));
+  f.emplace_back("lp_tokens_burnt", Value::null());
+  a.dex_withdraw_liquidity_data = mkdict(std::move(f));
+}
+
 // T12.2: DeDust CPMM V2 reward claim (block_tree_serializer _fill_dedust_v2_claim_reward).
 // Reuses the dex_withdraw_liquidity_data composite; reward_index is carried in
 // the block data but is NOT serialized (upstream v1.3 contract).
@@ -615,6 +640,18 @@ void fill_nominator_pool_withdraw_request(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "pool"));
 }
 
+void fill_tonstakers_deposit(const Value &d, Action &a) {
+  a.type = "stake_deposit";
+  a.source = av_addr(dg(d, "source"));
+  a.destination = av_addr(dg(d, "pool"));
+  a.amount = av_amount(dg(d, "value"));
+  a.asset = av_addr(dg(d, "asset"));
+  Value::Fields f;
+  f.emplace_back("provider", Value::make_str("liquid_staking"));
+  f.emplace_back("tokens_minted", av_amount(dg(d, "tokens_minted")));
+  a.staking_data = mkdict(std::move(f));
+}
+
 void fill_tonstakers_withdraw(const Value &d, Action &a) {
   a.type = "stake_withdrawal";
   a.source = av_addr(dg(d, "stake_holder"));
@@ -912,6 +949,7 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "coffee_deposit_liquidity") fill_dedust_deposit(d, a);
   else if (t == "dedust_deposit_liquidity_partial") fill_dedust_deposit_partial(d, a);
   else if (t == "tonco_deposit_liquidity") fill_tonco_deposit(d, a);
+  else if (t == "dedust_v2_claim_fees") fill_dedust_v2_claim_fees(d, a);
   else if (t == "dedust_v2_claim_reward") fill_dedust_v2_claim_reward(d, a);
   else if (t == "evaa_withdraw") fill_evaa_withdraw(d, a, b->failed);
   else if (t == "jvault_stake") fill_jvault_stake(d, a);
@@ -927,6 +965,7 @@ bool fill_action(Block *b, Action &a) {
   // false` and lose the whole row.
   else if (t == "renew_dns") fill_dns_renew(d, a);
   else if (t == "nominator_pool_withdraw_request") fill_nominator_pool_withdraw_request(d, a);
+  else if (t == "tonstakers_deposit") fill_tonstakers_deposit(d, a);
   else if (t == "tonstakers_withdraw") fill_tonstakers_withdraw(d, a);
   else if (t == "tonstakers_withdraw_request") fill_tonstakers_withdraw_request(d, a);
   else if (t == "dex_deposit_liquidity") fill_dex_deposit_liquidity(d, a);

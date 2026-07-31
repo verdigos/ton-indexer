@@ -602,13 +602,14 @@ def _fill_delete_dns_record_action(block: DeleteDnsRecordBlock, action: Action):
 
 def _fill_tonstakers_deposit_action(block: TONStakersDepositBlock, action: Action):
     action.type = 'stake_deposit'
-    action.source = _addr(block.data.source)
-    action.destination = _addr(block.data.pool)
-    action.amount = block.data.value.value
-    action.asset = _addr(block.data.asset)
+    action.source = _addr(_dget(block.data, 'source'))
+    action.destination = _addr(_dget(block.data, 'pool'))
+    action.amount = _dget(block.data, 'value').value
+    action.asset = _addr(_dget(block.data, 'asset'))
+    tokens_minted = _dget(block.data, 'tokens_minted')
     action.staking_data = {
         'provider': 'liquid_staking',
-        'tokens_minted': block.data.tokens_minted.value if block.data.tokens_minted else None
+        'tokens_minted': tokens_minted.value if tokens_minted else None
     }
 
 def _fill_dns_renew_action(block: DnsRenewBlock, action: Action):

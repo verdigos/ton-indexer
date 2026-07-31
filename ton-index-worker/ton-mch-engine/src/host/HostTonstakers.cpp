@@ -1,4 +1,4 @@
-// Tonstakers host fn (builders/tonstakers.py). See host/HostImpls.h for the
+// Tonstakers host fns (builders/tonstakers.py). See host/HostImpls.h for the
 // internal registry surface and HostRegistry.h for the public one.
 #include "host/HostImpls.h"
 
@@ -14,10 +14,14 @@
 namespace mch {
 
 // builders/tonstakers.py _tonstakers_minted_nft(delayed): the minted request
-// NFT's address off delayed.next_blocks. The isinstance(NftMintBlock) probe is
-// DEAD under the IR engine (legacy class; nft matchers are builder-tier and
-// never run here), so only the TONStakersInitNFT call_contract fallback is
-// live. None/absent -> null (the delayed arm then marks the block failed).
+// NFT's address off delayed.next_blocks. The btype probe is the LIVE arm since
+// specs/nft_mint.mch landed: nft_mint carries priority 80, so it consumes the
+// TONStakersInitNFT call into a generic nft_mint block before this matcher runs
+// and the call_contract fallback below finds nothing. (It was a dead
+// isinstance(NftMintBlock) check until 2026-07-30; the parity sweep could not
+// see the gap because its prereq is the LEGACY NftMintBlockMatcher, whose
+// product does satisfy an isinstance.) None/absent -> null, and the delayed arm
+// then marks the block failed.
 EvalResult tonstakers_minted_nft(BuildEnv &, const std::vector<Value> &args) {
   if (args.size() != 1) {
     return rt_fault("tonstakers_minted_nft: bad arguments");
@@ -28,10 +32,62 @@ EvalResult tonstakers_minted_nft(BuildEnv &, const std::vector<Value> &args) {
   }
   constexpr std::uint32_t kTonstakersInitNft = 0x132F9A45;
   for (const Block *n : delayed->next_blocks) {
+    if (n->btype == "nft_mint") {
+      const Message *m = block_msg(n);
+      return rt_ok(account_from_opt(m != nullptr ? m->destination : std::nullopt));
+    }
+  }
+  for (const Block *n : delayed->next_blocks) {
     if (is_call_op(n, kTonstakersInitNft)) {
       const Message *m = block_msg(n);
       return rt_ok(account_from_opt(m != nullptr ? m->destination : std::nullopt));
     }
+  }
+  return rt_ok(Value::null());
+}
+
+// blocks/staking.py find_tonstakers_pool_addr(notification), reached through
+// builders/tonstakers.py _tonstakers_pool_addr: walk `previous_block` upward
+// from the NFT-burn notification until the "start asset distribution" call or an
+// already-built tonstakers_withdraw block is hit. Unbounded topology navigation,
+// hence a host fn (§15b). Any other block type stops the walk -> null.
+//
+// The tonstakers_withdraw arm is a BTYPE test, not an isinstance one: the .mch
+// build is declarative, so the block is a generic Block carrying that btype and
+// a dict `data` (legacy's TONStakersWithdrawBlock.btype is the same string, so
+// the shared Python core is unchanged). It is unreachable in practice on both
+// engines — tonstakers_delayed_withdrawal registers ahead of tonstakers_withdraw
+// — and is mirrored only for fidelity.
+EvalResult tonstakers_pool_addr(BuildEnv &, const std::vector<Value> &args) {
+  if (args.size() != 1) {
+    return rt_fault("tonstakers_pool_addr: bad arguments");
+  }
+  const Block *notification = as_block(args[0]);
+  if (notification == nullptr) {
+    return rt_ok(Value::null());
+  }
+  constexpr std::uint32_t kStartAssetDistribution = 0x1140A64F;
+  constexpr std::uint32_t kNftBurnNotification = 0xED58B0B2;
+  constexpr std::uint32_t kNftBurn = 0xF127FE4E;
+  constexpr std::uint32_t kDistributedAsset = 0xDB3B8ABD;
+  const Block *current = notification;
+  while (true) {
+    current = current->previous_block;
+    if (current == nullptr) {
+      break;
+    }
+    if (is_call_op(current, kStartAssetDistribution)) {
+      const Message *m = block_msg(current);
+      return rt_ok(account_from_opt(m != nullptr ? m->source : std::nullopt));
+    }
+    if (current->btype == "tonstakers_withdraw") {
+      return rt_ok(data_field(current, "pool"));
+    }
+    if (is_call_op(current, kNftBurnNotification) || is_call_op(current, kNftBurn) ||
+        is_call_op(current, kDistributedAsset)) {
+      continue;
+    }
+    break;
   }
   return rt_ok(Value::null());
 }

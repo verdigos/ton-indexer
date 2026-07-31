@@ -1153,6 +1153,63 @@ td::Result<Value> gen_parse_nft_report_static_data(const td::Ref<vm::Cell> &body
   return Value::make_obj(std::move(f));
 }
 
+// DedustV2PayoutPositionFees (opcode 0x29ff1bcf); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_dedust_v2_payout_position_fees(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("DedustV2PayoutPositionFees: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("DedustV2PayoutPositionFees: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("x_fees", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("y_fees", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("owner", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// TONStakersNftBurnNotification (opcode 0xed58b0b2); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_t_o_n_stakers_nft_burn_notification(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("TONStakersNftBurnNotification: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("TONStakersNftBurnNotification: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("amount", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("owner", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parsers() {
@@ -1187,6 +1244,8 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"CoffeeLiquidityWithdrawalEvent", gen_parse_coffee_liquidity_withdrawal_event},
       {"SaleUpdateMessage", gen_parse_sale_update_message},
       {"NftReportStaticData", gen_parse_nft_report_static_data},
+      {"DedustV2PayoutPositionFees", gen_parse_dedust_v2_payout_position_fees},
+      {"TONStakersNftBurnNotification", gen_parse_t_o_n_stakers_nft_burn_notification},
   };
   return rows;
 }

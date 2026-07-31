@@ -300,6 +300,26 @@
       "type": "NftReportStaticData",
       "body": "te6ccgEBAQEABgAACIt3FzU=",
       "expect": "fail"
+    },
+    {
+      "type": "DedustV2PayoutPositionFees",
+      "body": "te6ccgEBAQEAEAAAGyn/G88AAAAAAAAAAAAg",
+      "expect": "ok"
+    },
+    {
+      "type": "DedustV2PayoutPositionFees",
+      "body": "te6ccgEBAQEABgAACCn/G88=",
+      "expect": "fail"
+    },
+    {
+      "type": "TONStakersNftBurnNotification",
+      "body": "te6ccgEBAQEADwAAGe1YsLIAAAAAAAAAAAI=",
+      "expect": "ok"
+    },
+    {
+      "type": "TONStakersNftBurnNotification",
+      "body": "te6ccgEBAQEABgAACO1YsLI=",
+      "expect": "fail"
     }
   ]
 }

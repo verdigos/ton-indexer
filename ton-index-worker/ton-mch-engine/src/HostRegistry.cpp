@@ -15,6 +15,7 @@ const std::map<std::string, HostFn> &host_fns() {
       {"dedust_v2_swap_payload", dedust_v2_swap_payload},
       {"layerzero_dst_oapp_matches", layerzero_dst_oapp_matches},
       {"tonstakers_minted_nft", tonstakers_minted_nft},
+      {"tonstakers_pool_addr", tonstakers_pool_addr},
       {"vesting_message_was_sent", vesting_message_was_sent},
       {"jvault_stake_period", jvault_stake_period},
       {"nft_transfer_data", nft_transfer_data},

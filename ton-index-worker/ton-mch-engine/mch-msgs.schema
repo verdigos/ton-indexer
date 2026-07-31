@@ -359,3 +359,29 @@ message NftReportStaticData opcode 0x8b771735 {
   index: uint256
   collection: addr_py
 }
+
+# --- specs/dedust_v2_claim_fees.mch body.
+
+# The ONE body the LP fees claim parses (messages/dedust_v2.py
+# DedustV2PayoutPositionFees): the exact accrued x/y fees + the LP owner. The
+# trailing excesses_to address is not read, so the parser stops at `owner`. The
+# other three opcodes in the chain are matched by `op` only.
+message DedustV2PayoutPositionFees opcode 0x29ff1bcf {
+  query_id: u64
+  x_fees: coins
+  y_fees: coins
+  owner: addr_py
+}
+
+# --- specs/tonstakers.mch bodies.
+
+# The tonstakers family's ONLY message with a real body (messages/staking.py
+# TONStakersNftBurnNotification). Anchor of the delayed withdrawal's payout leg:
+# every field of the produced block that is not a message envelope comes from
+# here. The other eight TONStakers* opcodes are bare markers and are never
+# parsed.
+message TONStakersNftBurnNotification opcode 0xed58b0b2 {
+  query_id: u64
+  amount: coins
+  owner: addr_py
+}

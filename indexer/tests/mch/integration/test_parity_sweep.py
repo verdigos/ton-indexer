@@ -61,7 +61,10 @@ import pytest
 from indexer.events import context
 from indexer.events.blocks.basic_matchers import BlockMatcher
 from indexer.events.blocks.core import Block
-from indexer.events.blocks.dedust_v2.claims import DedustV2ClaimRewardBlockMatcher
+from indexer.events.blocks.dedust_v2.claims import (
+    DedustV2ClaimFeesBlockMatcher,
+    DedustV2ClaimRewardBlockMatcher,
+)
 from indexer.events.blocks.dedust_v2.swaps import (
     DedustV2FailedSwapBlockMatcher,
     DedustV2SwapBlockMatcher,
@@ -112,6 +115,8 @@ from indexer.events.blocks.nft import (
 )
 from indexer.events.blocks.staking import (
     NominatorPoolWithdrawMatcher,
+    TONStakersDelayedWithdrawalMatcher,
+    TONStakersDepositMatcher,
     TONStakersWithdrawMatcher,
 )
 from indexer.events.blocks.swaps import (
@@ -142,6 +147,7 @@ from indexer.events.mch.builders import (
 from indexer.events.mch.builders.coffee import coffee_liquidity_registries
 from indexer.events.mch.builders.dedust import dedust_deposit_registries
 from indexer.events.mch.builders.dedust_v2 import (
+    dedust_v2_claim_fees_registries,
     dedust_v2_claim_reward_registries,
     dedust_v2_swap_registries,
 )
@@ -269,8 +275,11 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
      (EvaaWithdrawBlockMatcher,)),
     ("specs/layerzero.mch", _SPECS_DIR / "layerzero.mch", layerzero_receive_registries, (),
      (LayerZeroReceiveMatcher,)),
+    # The whole tonstakers family runs as one group, in the legacy matchers-list
+    # order (delayed withdrawal idx 1, deposit idx 4, withdraw idx 5) — which is
+    # also the spec's source order, the tie-break for their shared `priority 85`.
     ("specs/tonstakers.mch", _SPECS_DIR / "tonstakers.mch", tonstakers_registries, (NftMintBlockMatcher,),
-     (TONStakersWithdrawMatcher,)),
+     (TONStakersDelayedWithdrawalMatcher, TONStakersDepositMatcher, TONStakersWithdrawMatcher)),
     ("specs/ethena.mch", _SPECS_DIR / "ethena.mch", ethena_registries,
      (JettonTransferBlockMatcher, JettonMintBlockMatcher), (EthenaDepositBlockMatcher,)),
     ("specs/vesting.mch", _SPECS_DIR / "vesting.mch", vesting_registries, (),
@@ -282,6 +291,12 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     # once the spec's `out` keys were aligned to the reference's data keys).
     ("specs/dedust_v2_claim_reward.mch", _SPECS_DIR / "dedust_v2_claim_reward.mch",
      dedust_v2_claim_reward_registries, _PREREQ_SWAP, (DedustV2ClaimRewardBlockMatcher,)),
+    # The LP trading-fees claim, sibling of the reward claim above. Four corpus
+    # fixtures (dedust-liquidities.yaml): TON-only, TON+jetton, jetton+jetton,
+    # zero-fees — which between them exercise both payout-slot arms plus the
+    # no-leg shape.
+    ("specs/dedust_v2_claim_fees.mch", _SPECS_DIR / "dedust_v2_claim_fees.mch",
+     dedust_v2_claim_fees_registries, _PREREQ_SWAP, (DedustV2ClaimFeesBlockMatcher,)),
     # The dedust_v2 swap family: both matchers run as one group, mirroring the
     # production order (success first, failure only where it bailed).
     ("specs_decl/dedust_v2_swap.mch", _DECL_DIR / "dedust_v2_swap.mch",

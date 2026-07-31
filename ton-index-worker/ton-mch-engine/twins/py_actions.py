@@ -70,7 +70,7 @@ PORTED_BTYPES = {
     "tonco_deposit_liquidity", "evaa_withdraw", "jvault_stake", "jvault_unstake",
     "jvault_unstake_request", "jvault_claim", "ethena_deposit",
     "layerzero_receive", "coffee_create_vault", "vesting_send_message",
-    "tgbtc_mint", "dedust_v2_claim_reward",
+    "tgbtc_mint", "dedust_v2_claim_reward", "dedust_v2_claim_fees",
     # EM2 W6 bucket-B fills. NONE of these fire on the current 165 fixtures, so
     # widening the set changes no output today — it keeps the twin
     # correct-by-construction: the day a fixture carrying one is added, Python
@@ -79,6 +79,12 @@ PORTED_BTYPES = {
     "renew_dns", "change_dns", "delete_dns", "nominator_pool_withdraw_request",
     "tonstakers_withdraw", "tonstakers_withdraw_request",
     "dex_deposit_liquidity", "dex_withdraw_liquidity", "nft_purchase",
+    # Tonstakers deposit + delayed-withdrawal port (2026-07-30,
+    # specs/tonstakers.mch). All three tonstakers btypes now FIRE on the corpus
+    # (rbzKlyNg… deposit, a0rjbO1X… delayed withdrawal, GO-NI0Ej…/oND3Z5gM…
+    # withdraw) — the withdraw pair only after `priority 85` stopped the
+    # priority-90 jetton family from eating their JettonBurn anchor.
+    "tonstakers_deposit",
     # Teleitem auction port (2026-07-30) — both fire on the two (ab-gap)
     # fixtures; C++ fills them via fill_nft_put_on_auction / fill_cancel_nft_trade.
     "teleitem_start_auction", "teleitem_cancel_auction",

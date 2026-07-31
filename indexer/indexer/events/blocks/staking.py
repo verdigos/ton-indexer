@@ -212,7 +212,10 @@ def build_tonstakers_withdraw_core(
             )
         )
     else:
-        nft_mint_block = next((b for b in delayed_withdrawal.next_blocks if isinstance(b, NftMintBlock)), None)
+        # btype, not isinstance(NftMintBlock): specs/nft_mint.mch is declarative,
+        # so under the mch engines the minted NFT is a generic Block carrying
+        # that btype. NftMintBlock.btype is 'nft_mint', so legacy is unchanged.
+        nft_mint_block = next((b for b in delayed_withdrawal.next_blocks if b.btype == 'nft_mint'), None)
         if nft_mint_block is None:
             nft_mint_block = find_call_contract(delayed_withdrawal.next_blocks, TONStakersInitNFT.opcode)
         minted_nft = None
@@ -266,6 +269,48 @@ class TONStakersWithdrawMatcher(BlockMatcher):
         new_block.merge_blocks([block] + other_blocks)
         return [new_block]
 
+def find_tonstakers_pool_addr(block: Block) -> AccountId | None:
+    """Pool address of a delayed withdrawal, found by walking `previous_block`
+    upward from the NFT-burn notification until the "start asset distribution"
+    call (0x1140a64f) or an already-built tonstakers_withdraw block is hit.
+
+    Shared build core: the legacy TONStakersDelayedWithdrawalMatcher and the
+    `tonstakers_pool_addr` host fn of specs/tonstakers.mch both call this, so the
+    two engines cannot drift. The walk is unbounded block-topology navigation,
+    deliberately outside the .mch language (§15b).
+    """
+    try:
+        supported_opcodes = {
+            TONStakersNftBurnNotification.opcode,
+            TONStakersNftBurn.opcode,
+            TONStakersDistributedAsset.opcode
+        }
+
+        current_block = block
+        while True:
+            current_block = current_block.previous_block
+            if current_block is None:
+                break
+            is_call = current_block.btype == 'call_contract'
+            opcode = getattr(current_block, 'opcode', None)
+            # if it is start asset distribution call
+            if is_call and opcode == 0x1140a64f:
+                return AccountId(current_block.get_message().source)
+            # btype, not isinstance(TONStakersWithdrawBlock): the .mch build is
+            # declarative, so under the mch engines this is a generic Block
+            # carrying that btype (and a dict `data`). TONStakersWithdrawBlock's
+            # btype is 'tonstakers_withdraw', so legacy is unchanged.
+            if current_block.btype == 'tonstakers_withdraw':
+                data = current_block.data
+                return data['pool'] if isinstance(data, dict) else data.pool
+            if is_call and opcode in supported_opcodes:
+                continue
+            break
+        return None
+    except Exception:
+        return None
+
+
 class TONStakersDelayedWithdrawalMatcher(BlockMatcher):
     def __init__(self):
         super().__init__(
@@ -288,7 +333,7 @@ class TONStakersDelayedWithdrawalMatcher(BlockMatcher):
             data=TONStakersWithdrawData(
                 stake_holder=AccountId(notification_msg.owner),
                 burnt_nft=AccountId(notification.get_message().source),
-                pool=self._try_find_pool_addr(notification),
+                pool=find_tonstakers_pool_addr(notification),
                 amount=Amount(block.get_message().value),
                 tokens_burnt=Amount(notification_msg.amount),
                 asset=None
@@ -296,31 +341,6 @@ class TONStakersDelayedWithdrawalMatcher(BlockMatcher):
         )
         new_block.merge_blocks([block] + other_blocks)
         return [new_block]
-
-    def _try_find_pool_addr(self, block: Block) -> AccountId | None:
-        try:
-            supported_opcodes = {
-                TONStakersNftBurnNotification.opcode,
-                TONStakersNftBurn.opcode,
-                TONStakersDistributedAsset.opcode
-            }
-
-            current_block = block
-            while True:
-                current_block = current_block.previous_block
-                if current_block is None:
-                    break
-                # if it is start asset distribution call
-                if isinstance(current_block, CallContractBlock) and current_block.opcode == 0x1140a64f:
-                    return AccountId(current_block.get_message().source)
-                if isinstance(current_block, TONStakersWithdrawBlock):
-                    return current_block.data.pool
-                if isinstance(current_block, CallContractBlock) and current_block.opcode in supported_opcodes:
-                    continue
-                break
-            return None
-        except Exception as e:
-            return None
 
 
 class NominatorPoolDepositMatcher(BlockMatcher):

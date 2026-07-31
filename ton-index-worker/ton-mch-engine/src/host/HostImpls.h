@@ -87,6 +87,7 @@ EvalResult layerzero_dst_oapp_matches(BuildEnv &env, const std::vector<Value> &a
 
 // Tonstakers (HostTonstakers.cpp).
 EvalResult tonstakers_minted_nft(BuildEnv &env, const std::vector<Value> &args);
+EvalResult tonstakers_pool_addr(BuildEnv &env, const std::vector<Value> &args);
 
 // Vesting (HostVesting.cpp).
 EvalResult vesting_message_was_sent(BuildEnv &env, const std::vector<Value> &args);

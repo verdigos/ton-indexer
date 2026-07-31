@@ -7,7 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**181 fixtures, 911 ACTION rows** — one per serializable block on each trace's
+**184 fixtures, 906 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus the CHILD rows the serializer expands out of any spine
 block whose btype is outside `v1_ops`, plus 6 synthetic `unknown` rows (the
 fixtures whose spine serializes to nothing at all). Rows are printed **sorted**
@@ -22,7 +22,74 @@ is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
 
-Re-baselined 2026-07-30 (**907 → 911 rows, 180 → 181 fixtures**) by the TELEGRAM
+Re-baselined 2026-07-31 (**902 → 906 rows, 181 → 184 fixtures**) by three live
+tonstakers DEPOSIT fixtures fetched off the cycle-10 A/B window. **No existing
+row changed** — the whole delta is the three new fixtures, and every one of them
+already classified correctly against the spec as committed the day before (the
+cycle-10 "stake_deposit missed ×3" class is NOT reproducible from these traces).
+They are kept as regression coverage because they are the only deposit traces in
+the corpus besides `rbzKlyNg…`.
+
+- `fyrdkfqB…` (+1) and `rU8BN41C…` (+1): one `stake_deposit` each.
+- `7Rgomgm…` (+2): `stake_deposit` plus a `contract_deploy#178d4519` — the only
+  corpus deposit where the internal transfer DEPLOYS the user's tsTON wallet.
+- All three are structurally identical to `rbzKlyNg…`: DepositRequest
+  0x47d54391 one hop under an external-in wallet op, then MintJettons ->
+  InternalTransfer -> Notify + excess. They differ only in the driving wallet
+  opcode (0x9fb53633 / 0x7369676e / 0x339d6469), which no matcher looks at.
+- All 4 rows verified byte-identical against the REAL legacy Python classifier,
+  and identical across the fixture, `--actions-schema` and `--actions-prod`
+  loader paths.
+
+Previously re-baselined 2026-07-30 (**911 → 902 rows, no fixture added**) by the TONSTAKERS
+family completion (`specs/tonstakers.mch`) and the DEDUST V2 CLAIM_FEES port
+(`specs/dedust_v2_claim_fees.mch`). Two independent deltas, no overlap, and every
+touched row was checked against the REAL legacy Python classifier
+(`twins/py_actions.py` driven with `event_processing.matchers`) — all 48 rows on
+the nine affected fixtures come out byte-identical.
+
+- **Tonstakers, −14 rows over four fixtures.** The spec gained
+  `tonstakers_deposit` and `tonstakers_delayed_withdrawal`, and all three of its
+  matchers gained `priority 85`.
+  - The **priority** is the bigger half. `tonstakers_withdraw` anchors on
+    JettonBurn 0x595f07bc, which is also the anchor of the priority-90
+    `jetton_burn` in `specs_decl/jettons.mch`. Legacy registers
+    TONStakersWithdrawMatcher (idx 5) well ahead of JettonBurnBlockMatcher (idx
+    17); the artifact had it at 100, so the jetton family ate the anchor and the
+    entire withdraw family was suppressed. `GO-NI0Ej…` 6 → 4 (a `jetton_burn`
+    plus two `call_contract` collapse into one `stake_withdrawal_request`, ts_nft
+    `0:7ABD…3025`; its `nft_mint` / `nft_transfer` / `contract_deploy` siblings
+    are untouched) and `oND3Z5gM…` 3 → 1 (`jetton_burn` + `#319b0cdc` +
+    `#0a77535c` → one `stake_withdrawal`). Neither the parity sweep nor any
+    per-protocol test could see this: both run one spec's matchers in isolation,
+    never the registered set against each other.
+  - `rbzKlyNg…` 6 → 2: five `call_contract` (`#47d54391`, `#1674b0a0`,
+    `#178d4519`, `#7362d09c`, and the `#d53276db` excess the internal-transfer
+    node absorbs) become one `stake_deposit`; the `contract_deploy#178d4519` row
+    the deployment unwind adds survives.
+  - `a0rjbO1X…` 17 → 11: three independent NFT-burn payout chains
+    (`#f127fe4e` → `#ed58b0b2` → `#db3b8abd`) each collapse into a
+    `stake_withdrawal` with `burnt_nft` set and `asset` null. The two elector
+    rows on that fixture (`#47657424`, `#f96f7324`) stay loose — ElectionRecover
+    is still unported, unrelated to this change.
+  - One real bug fell out and is fixed on both engines: `tonstakers_minted_nft`
+    looked for its minted NFT with `isinstance(NftMintBlock)` plus a
+    TONStakersInitNFT `call_contract` fallback, and BOTH arms were dead in
+    production once `specs/nft_mint.mch` (priority 80) started consuming the
+    InitNFT call into a generic `nft_mint` block. It now probes the btype. The
+    sweep hid it because its prerequisite is the LEGACY NftMintBlockMatcher,
+    whose product does satisfy an isinstance.
+  - No CHILD rows anywhere in this delta: all three tonstakers btypes are in
+    `v1_ops`.
+- **DeDust V2 claim_fees, +5 rows over five fixtures, 25 rows rewritten.** The
+  five `call_contract`/`jetton_transfer` legs of each claim keep their rows but
+  become CHILD rows (`dedust_v2_claim_fees` is outside `v1_ops`, same as
+  `dedust_v2_claim_reward`), and each fixture gains one top-level
+  `dedust_v2_claim_fees`. Fixtures: `846TnKmL…` (single TON leg matching y_fees,
+  x empty), `t3w52NsD…` (TON + jetton), `fjQUb23k…` and `cymBOUsf…` (two jetton
+  legs), `tJchcmap…` (both fees zero, no payout leg at all).
+
+Previously re-baselined 2026-07-30 (**907 → 911 rows, 180 → 181 fixtures**) by the TELEGRAM
 NFT parent-edge widening (`specs/telegram_nft.mch`). The spec's documented scope
 cut — ton_transfer-funded purchases only — left three legacy shapes
 unclassified; two already had corpus coverage nobody had claimed, and the third

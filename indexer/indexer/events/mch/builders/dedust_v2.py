@@ -53,7 +53,13 @@ from pytoniq_core import Cell, Slice
 
 from indexer.events.blocks.core import Block
 from indexer.events.blocks.dedust_v2.swaps import _final_min_out
-from indexer.events.blocks.messages import DedustV2PayJetton, DedustV2SwapPayload
+from indexer.events.blocks.messages import (
+    DedustV2ClaimAvailableFees,
+    DedustV2ClaimPositionFees,
+    DedustV2PayJetton,
+    DedustV2PayoutPositionFees,
+    DedustV2SwapPayload,
+)
 from indexer.events.blocks.swaps import JettonSwapBlock
 from indexer.events.blocks.utils import AccountId
 from indexer.events.mch.builders.dedust import default_lookups
@@ -136,6 +142,45 @@ def register_dedust_v2_claim_reward(reg: Registries) -> Registries:
 def dedust_v2_claim_reward_registries() -> Registries:
     """Fresh Registries ready to compile specs/dedust_v2_claim_reward.mch."""
     return register_dedust_v2_claim_reward(Registries())
+
+
+# ---------------------------------------------------------------------------
+# specs/dedust_v2_claim_fees.mch — the LP trading-fees claim, sibling of the
+# reward claim above.
+#
+# MIXED parser paths: PayoutMessage is the ABI-bridge twin from this module
+# (camelCase), while DedustV2PayoutPositionFees rides the mch-msgs.schema entry
+# of the same name — and its Python twin is the LEGACY class itself. Reusing the
+# legacy class (rather than writing a schema-shaped twin like the swap family
+# does) is safe here and strictly better for the sweep: the fields the spec reads
+# are spelled identically on both sides, and the class's `assert op == opcode`
+# only ever sees the right body because the spec guards the capture with
+# `op DedustV2PayoutPositionFees`.
+# ---------------------------------------------------------------------------
+CLAIM_FEES_OPCODES = {
+    "ClaimPositionFees": DedustV2ClaimPositionFees.opcode,
+    "ClaimAvailableFees": DedustV2ClaimAvailableFees.opcode,  # matched by opcode only
+    "DedustV2PayoutPositionFees": DedustV2PayoutPositionFees.opcode,
+    "PayoutMessage": PayoutMessage.opcode,
+}
+
+CLAIM_FEES_MESSAGE_TYPES = {
+    "DedustV2PayoutPositionFees": DedustV2PayoutPositionFees,
+    "PayoutMessage": PayoutMessage,
+}
+
+
+def register_dedust_v2_claim_fees(reg: Registries) -> Registries:
+    reg.opcodes.update(CLAIM_FEES_OPCODES)
+    reg.block_types["dedust_v2_claim_fees"] = Block
+    reg.message_types.update(CLAIM_FEES_MESSAGE_TYPES)
+    reg.lookups.update(default_lookups())
+    return reg
+
+
+def dedust_v2_claim_fees_registries() -> Registries:
+    """Fresh Registries ready to compile specs/dedust_v2_claim_fees.mch."""
+    return register_dedust_v2_claim_fees(Registries())
 
 
 # ---------------------------------------------------------------------------
