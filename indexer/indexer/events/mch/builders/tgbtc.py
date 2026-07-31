@@ -1,4 +1,4 @@
-"""mch host fn + shaper for the tgbtc_mint matcher (specs/tgbtc.mch).
+"""mch host fns + shaper for the tgBTC family (specs/tgbtc.mch).
 
 HYBRID declarative build (C++-runnable): the matcher has no `build` directive —
 the produced btype, the reject decision and the out-field mapping live in the
@@ -27,6 +27,39 @@ produced block; to stay byte-identical (ContractDeploy as a direct child) the
 shaper collects them from the consumed set's `children_blocks` and merges them as
 the last build step, after the wrapper's consumed-merge. `unwind_deployments`
 still surfaces them as their own `contract_deploy` actions.
+
+W2 — the four EVENT-LOG parsers
+-------------------------------
+The other five matchers in the spec (`tgbtc_burn`, `tgbtc_new_key` and the four
+`*_log_only` fallbacks) are otherwise fully declarative; their only imperative
+residue is reading one external-out log body. That residue is factored into FOUR
+pure parse fns, one per event opcode, each taking the log block and returning a
+namespace of its fields (or `null` when the body is unreadable — the caller's
+`reject when` turns that into "no match", exactly like the legacy `try_build`
+swallowing the parser exception). Each is shared by the full matcher and its
+log-only twin, so a burn parsed through the chain and a burn parsed from a naked
+log go through the same code:
+
+    tgbtc_mint_log           0x77A80EF3   -> amount, recipient, bitcoin_txid
+    tgbtc_burn_log           0xCA444CE6   -> amount, sender, pegout
+    tgbtc_new_key_log        0x27756729   -> amount, pubkey, pegout
+    tgbtc_dkg_completed_log  0x453443A6   -> timestamp, pubkey
+
+(the last one is not called `tgbtc_dkg_log` only because that name is taken by
+the btype the dkg fallback matcher produces.)
+
+They are parse fns and NOTHING else — no tree navigation, no field selection —
+so every produced field is mapped in the `.mch` `out{}`.
+
+Why fns and not `mch-msgs.schema` rows: `TgBTCBurnEvent` is deliberately
+TOLERANT (`blocks/messages/tgbtc.py:41` wraps both `load_address` calls in
+`try/except`, yielding `AccountId(None)` for a truncated body — the
+`35MtsOa0…` fixture is exactly that), and the schema's `addr_py` leaf hard-fails
+instead, which would reject the whole match. The other three also need the two
+hex renderings Python does at the call site (`hex(x)[2:]` min-hex and the
+little-endian 32-byte txid), and the expression language has no string ops. One
+parse fn per event body keeps both concerns in the one place that already has to
+be dual-implemented.
 """
 from __future__ import annotations
 
@@ -40,7 +73,13 @@ from indexer.events.blocks.tgbtc import (
     TgBTCMintBlock,
     build_tgbtc_mint_core,
 )
-from indexer.events.blocks.messages.tgbtc import TgBTCMintEvent
+from indexer.events.blocks.messages.jettons import JettonBurnNotification
+from indexer.events.blocks.messages.tgbtc import (
+    TgBTCBurnEvent,
+    TgBTCDkgCompletedEvent,
+    TgBTCMintEvent,
+    TgBTCNewKeyEvent,
+)
 from indexer.events.mch.registry import Registries
 
 _HEAD_OPCODE = 0x3F781D24
@@ -50,12 +89,41 @@ OPCODES = {
     "TgBTCMintHead":       _HEAD_OPCODE,
     "TgBTCMintTail":       _TAIL_OPCODE,
     "TgBTCMintSuccessLog": TgBTCMintEvent.opcode,
+    # W2: the rest of the family. The two "notify" heads a burn can arrive
+    # through, the new-key request, the shared payout tail, and the three
+    # remaining event-log opcodes.
+    "JettonBurnNotify":    JettonBurnNotification.opcode,   # 0x7BDD97DE
+    "TgBTCBurnNotify":     0x587643A2,
+    "TgBTCNewKeyRequest":  0x690F357A,
+    "TgBTCPayout":         0xBE44E7A6,
+    "TgBTCPayoutNotify":   0x1A84C0E0,
+    "TgBTCBurnLog":        TgBTCBurnEvent.opcode,           # 0xCA444CE6
+    "TgBTCNewKeyLog":      TgBTCNewKeyEvent.opcode,         # 0x27756729
+    "TgBTCDkgCompletedLog": TgBTCDkgCompletedEvent.opcode,  # 0x453443A6
 }
 
 BLOCK_TYPES = {
     "TgBTCMintBlock": TgBTCMintBlock,
     "jetton_mint":    JettonMintBlock,
+    # Declarative producers: snake_case btypes, generic Block (the IR engine
+    # stamps the name straight onto the block it constructs).
+    "tgbtc_burn":     Block,
+    "tgbtc_new_key":  Block,
+    "tgbtc_dkg_log":  Block,
 }
+
+
+def _parse_log(cls: type, log: Block):
+    """Parse a log block's body with `cls`, or None if the body is unreadable.
+
+    None is how each parse fn signals "reject", which is what the legacy
+    matchers do implicitly: `build_block` calls the parser bare, and a raised
+    exception is caught by `BlockMatcher.try_build` and turned into no-match.
+    """
+    try:
+        return cls(log.get_body())
+    except Exception:  # noqa: BLE001 - any malformed body is a reject
+        return None
 
 
 def _first_call(consumed: list[Block], opcode: int) -> Block | None:
@@ -83,6 +151,55 @@ def register_tgbtc(reg: Registries) -> Registries:
             return None
         return SimpleNamespace(
             **{f.name: getattr(produced.data, f.name) for f in dc_fields(produced.data)}
+        )
+
+    # --- W2 event-log parse fns (see the module docstring) -------------------
+    # `hex(x)[2:]`: Python's minimal-length lowercase hex, no leading zeros.
+    # Reproduced verbatim rather than zero-padded to 64 — the legacy fills write
+    # it straight into `extra.pubkey` and the yaml cases pin the short form.
+
+    @reg.register_fn("tgbtc_mint_log")
+    async def tgbtc_mint_log(log):
+        d = _parse_log(TgBTCMintEvent, log)
+        if d is None:
+            return None
+        return SimpleNamespace(
+            amount=d.amount,
+            recipient=d.recipient_address,
+            # int -> 32 LITTLE-endian bytes -> hex (the on-wire bitcoin txid
+            # byte order; the misleading legacy local name says big_endian).
+            bitcoin_txid=d.bitcoin_txid.to_bytes(32, byteorder="little").hex(),
+        )
+
+    @reg.register_fn("tgbtc_burn_log")
+    async def tgbtc_burn_log(log):
+        d = _parse_log(TgBTCBurnEvent, log)
+        if d is None:
+            return None
+        # Both addresses are ALWAYS an AccountId here — TgBTCBurnEvent swallows a
+        # truncated body and yields AccountId(None) (addr_none), never raises.
+        return SimpleNamespace(
+            amount=d.amount, sender=d.sender_address, pegout=d.pegout_address
+        )
+
+    @reg.register_fn("tgbtc_new_key_log")
+    async def tgbtc_new_key_log(log):
+        d = _parse_log(TgBTCNewKeyEvent, log)
+        if d is None:
+            return None
+        return SimpleNamespace(
+            amount=d.amount,
+            pubkey=hex(d.new_internal_pubkey)[2:],
+            pegout=d.pegout_address,
+        )
+
+    @reg.register_fn("tgbtc_dkg_completed_log")
+    async def tgbtc_dkg_completed_log(log):
+        d = _parse_log(TgBTCDkgCompletedEvent, log)
+        if d is None:
+            return None
+        return SimpleNamespace(
+            timestamp=d.timestamp, pubkey=hex(d.internal_pubkey)[2:]
         )
 
     @reg.register_shaper("tgbtc_deploy_absorb")

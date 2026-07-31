@@ -147,7 +147,15 @@ from indexer.events.blocks.swaps import (
     StonfiV2SwapBlockMatcher,
     ToncoSwapBlockMatcher,
 )
-from indexer.events.blocks.tgbtc import TgBTCMintBlockMatcher
+from indexer.events.blocks.tgbtc import (
+    TgBTCBurnBlockMatcher,
+    TgBTCBurnLogOnlyMatcher,
+    TgBTCDkgLogOnlyMatcher,
+    TgBTCMintBlockMatcher,
+    TgBTCMintLogOnlyMatcher,
+    TgBTCNewKeyBlockMatcher,
+    TgBTCNewKeyLogOnlyMatcher,
+)
 from indexer.events.blocks.vesting import VestingSendMessageBlockMatcher
 from indexer.events.blocks.utils.tree_utils import to_tree
 from indexer.events.event_processing import init_block
@@ -418,8 +426,20 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     # group, in spec order.
     ("specs/telegram_nft.mch", _SPECS_DIR / "telegram_nft.mch", telegram_nft_registries, (),
      (TelegramNftPurchaseBlockMatcher,)),
-    ("specs/tgbtc.mch", _SPECS_DIR / "tgbtc.mch", tgbtc_registries, (JettonMintBlockMatcher,),
-     (TgBTCMintBlockMatcher,)),
+    # The whole tgBTC family as one group, in the legacy matchers-list order
+    # (mint, burn, new_key, then the four log-only fallbacks) — which is also the
+    # spec's source order, and load-bearing: each fallback anchors on an opcode
+    # its full sibling consumes. `tgbtc_burn` binds `btype jetton_burn`, hence
+    # the JettonBurnBlockMatcher prereq alongside the mint's JettonMint one.
+    # Twelve corpus fixtures; the two log-only shapes with no fixture of their
+    # own (mint-log, new-key-log) still ride the six mint/new_key fixtures as
+    # REJECT-identical rows — both legs must leave the log consumed by the full
+    # matcher and emit no `_fallback` block.
+    ("specs/tgbtc.mch", _SPECS_DIR / "tgbtc.mch", tgbtc_registries,
+     (JettonMintBlockMatcher, JettonBurnBlockMatcher),
+     (TgBTCMintBlockMatcher, TgBTCBurnBlockMatcher, TgBTCNewKeyBlockMatcher,
+      TgBTCMintLogOnlyMatcher, TgBTCBurnLogOnlyMatcher,
+      TgBTCNewKeyLogOnlyMatcher, TgBTCDkgLogOnlyMatcher)),
     # stonfi_v2_withdraw is btype-anchored (jetton_burn) — run-on-all row, rejects everywhere off-protocol.
     ("specs/stonfi_v2_withdraw.mch", _SPECS_DIR / "stonfi_v2_withdraw.mch", stonfi_liquidity_registries,
      (JettonTransferBlockMatcher, _pton_prereq, JettonBurnBlockMatcher),

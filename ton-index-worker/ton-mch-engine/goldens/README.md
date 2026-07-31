@@ -7,8 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**184 fixtures, 872 ACTION rows** — one per serializable block on each trace's
-**184 fixtures, 795 ACTION rows** — one per serializable block on each trace's
+**184 fixtures, 816 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus the CHILD rows the serializer expands out of any spine
 block whose btype is outside `v1_ops`, plus 6 synthetic `unknown` rows (the
 fixtures whose spine serializes to nothing at all). Rows are printed **sorted**
@@ -22,6 +21,58 @@ dies with it — and Python's `--emulated-traces` path is being retired. This fi
 is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
+
+Re-baselined 2026-07-31 (**808 → 816 rows, no fixture added**) by the TGBTC
+COMPLETION port — five matchers appended to `specs/tgbtc.mch`, joining the
+already-shipped `tgbtc_mint`: `tgbtc_burn`, `tgbtc_new_key`, and the four
+log-only fallbacks (`tgbtc_mint_log_only`, `tgbtc_burn_log_only`,
+`tgbtc_new_key_log_only`, `tgbtc_dkg_log_only`). Eight touched fixtures, no
+new column, no new composite.
+
+**Header note:** the "184 fixtures, N ACTION rows" line above had TWO
+conflicting values (872 and 795) — a merge collision between the coffee-tail and
+dedust-v2-deposit waves, each of which landed its own headline count. Collapsed
+to the one measured value.
+
+**+8 rows, every one of them an ADDED parent row.** None of `tgbtc_burn` /
+`tgbtc_new_key` / `tgbtc_dkg_log` is in `v1_ops`, so the pattern is the
+`evaa_supply` one below: the protocol row is added and the blocks it consumed
+STAY as CHILD rows carrying `parent_action_id` + `ancestor_type=[<the new
+btype>]`. No row is ever removed; the 26 rows that differ textually without
+being added are exactly those child rows gaining their two new fields
+(18 `call_contract`, 4 `jetton_burn`, 4 `ton_transfer`).
+
+- **burn, +5 over five fixtures.** `xBl_8BTU…`, `Ez03fWgL…`, `TDsLHsBM…`
+  (the "strange notification" `0x587643A2` head) and `2yH8U5KF…` (the "weird
+  schema" body — the one that pins the `min`/zero-fallback amount ternary, yaml:
+  "amount: 93066 # from burn msg") each gain one `tgbtc_burn`; `35MtsOa0…` gains
+  one `tgbtc_burn_fallback` from the log-only matcher, its truncated log body
+  yielding addr_none for both addresses.
+- **new key, +2 over two fixtures.** `XbaXJMw3…` and `SSUQR8t_…`.
+- **dkg log, +1 on one fixture.** `_6GHAnnp8…` — a dkg log the new-key matcher
+  could not claim (the `0x690F357A` request is present but emits no new-key
+  log), so `tgbtc_new_key` rejects and the fallback takes the leftover log.
+
+Verified beyond the twin diff: all 8 rows were compared field-by-field against
+the REAL legacy Python classifier (production `event_processing.matchers` +
+`trace_post_processors`, rendered through the same serializer) — 72 field
+comparisons over 8 rows, 0 mismatches, script `legacy_verify_tgbtc.py`. The
+action_ids match too, so the C++ rows are the same rows, not merely similar
+ones. The spec has a parity-sweep row (running on all 184 fixtures, since
+`tgbtc_burn` is btype-anchored) and needs no `_AUX_ABSORB_SPECS` waiver, so it
+carries no §4.5 aux-absorption deviation.
+
+TWO of the six matchers have NO fixture of their own: `tgbtc_mint_log_only` and
+`tgbtc_new_key_log_only` would need a trace where the mint / new-key chain is
+absent but its log survives. They ride the six mint/new_key fixtures as
+REJECT-identical sweep rows (both legs must leave the log consumed by the full
+matcher and emit no `_fallback` block) and share their fill with a fixtured
+sibling. Their POSITIVE path is pinned instead by a synthetic legacy-vs-IR test,
+`indexer/tests/mch/integration/test_tgbtc_log_only.py` (real
+Transaction/Message models carrying a genuine event BOC, the test_dns.py
+pattern) — so the only thing a real fixture would add is C++ coverage of the
+`tgbtc_mint_log` parse fn, the one host fn in the family no corpus trace
+reaches (`tgbtc_new_key_log` is covered via the full new_key matcher).
 
 Re-baselined 2026-07-31 (**859 → 872 rows, no fixture added**) by the COFFEE
 TAIL port — six matchers over three new specs: `specs/coffee_create_pool.mch`

@@ -1,11 +1,21 @@
-// tgBTC host fn + shaper (builders/tgbtc.py + blocks/tgbtc.py). See
+// tgBTC host fns + shaper (builders/tgbtc.py + blocks/tgbtc.py). See
 // host/HostImpls.h for the internal registry surface.
 //
-// Consumed-set-driven: head = sole 0x3F781D24 call, success log = sole
-// 0x77A80EF3 call, jetton_mint = sole `jetton_mint` block. The jetton_mint
-// block is builder-tier (not produced under the IR-only engine today), so this
-// fn rejects on the current corpus — but it is a faithful port for when that
-// block is available (and both twins reject identically meanwhile).
+// tgbtc_mint_data is consumed-set-driven: head = sole 0x3F781D24 call, success
+// log = sole 0x77A80EF3 call, jetton_mint = sole `jetton_mint` block.
+//
+// The other four fns are the shared EVENT-LOG PARSER SET (W2): one per event
+// opcode, each taking the log block and returning a namespace of its fields, or
+// Null when the body is unreadable — which the spec turns into `reject when
+// … == null`, matching legacy's try_build swallowing the parser exception.
+// They are parse fns and NOTHING else; field selection lives in the .mch. Each
+// is shared by a full matcher and its `*_log_only` fallback twin.
+//
+// Why fns and not mch-msgs.schema rows: TgBTCBurnEvent is deliberately TOLERANT
+// (blocks/messages/tgbtc.py:41 wraps both load_address calls in try/except and
+// yields addr_none on a truncated body — the 35MtsOa0… fixture), where the
+// schema's addr_py leaf hard-fails and would reject the whole match; and the
+// other three need hex renderings the expression language cannot express.
 #include "host/HostImpls.h"
 
 #include "host/HostCommon.h"
@@ -50,6 +60,67 @@ std::string txid_le_hex(const td::RefInt256 &v) {
     out[2 * i + 1] = hexd[le[i] & 0xF];
   }
   return out;
+}
+
+// hex(x)[2:]: Python's minimal-length lowercase hex, no leading zeros, "0" for
+// zero (to_hex_string(false, 0), bigint.hpp:2333). Used for both tgBTC pubkeys.
+Value hex_min(const td::RefInt256 &v) {
+  return Value::make_str(td::hex_string(v, /*upcase=*/false));
+}
+
+// `AccountId(x)` where x came straight out of pytoniq load_address(): an
+// Account passes through, addr_none (a NULL Value, MsgParse.h contract) becomes
+// AccountId(None), and an ExternalAddress (a Str) RAISES in Python
+// (ton_utils.py AccountId.__init__) — so `ok` clears and the caller rejects.
+Value account_id_of(const Value &v, bool &ok) {
+  if (v.t == VType::Account) {
+    return v;
+  }
+  if (v.is_null()) {
+    return Value::make_account_none();
+  }
+  ok = false;
+  return Value::null();
+}
+
+// TgBTCBurnEvent's GUARDED form, `AccountId(x) if isinstance(x, Address) else
+// AccountId(None)`: an extern address is addr_none here, never a raise.
+Value account_id_or_none(const Value &v) {
+  return v.t == VType::Account ? v : Value::make_account_none();
+}
+
+// The single argument every parse fn below takes: a log Block whose body is
+// opened and positioned past the 32 opcode bits (skipped unchecked, like every
+// Python parser's leading load_uint(32)). Absent/unreadable -> no context.
+struct LogCursor {
+  BodyCtx ctx;
+  bool ok{false};
+};
+
+LogCursor open_log(const std::vector<Value> &args) {
+  LogCursor lc;
+  if (args.size() != 1) {
+    return lc;
+  }
+  const Block *b = as_block(args[0]);
+  if (b == nullptr) {
+    return lc;
+  }
+  auto r_body = block_body(b);
+  if (r_body.is_error()) {
+    return lc;
+  }
+  auto r_ctx = open_body(r_body.ok());
+  if (r_ctx.is_error()) {
+    return lc;
+  }
+  lc.ctx = r_ctx.move_as_ok();
+  if (!lc.ctx.cs.have(32)) {
+    return lc;
+  }
+  lc.ctx.cs.advance(32);
+  lc.ok = true;
+  return lc;
 }
 
 }  // namespace
@@ -106,8 +177,9 @@ EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
   if (r_rcpt.is_error()) {
     return rt_ok(Value::null());
   }
-  Value recipient = r_rcpt.move_as_ok();
-  if (!cs.have(256)) {
+  bool rcpt_ok = true;
+  Value recipient = account_id_of(r_rcpt.ok(), rcpt_ok);
+  if (!rcpt_ok || !cs.have(256)) {
     return rt_ok(Value::null());
   }
   auto txid = cs.fetch_int256(256, false);
@@ -137,6 +209,120 @@ EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
   ns.emplace_back("recipient_wallet", std::move(recipient_wallet));
   ns.emplace_back("teleport_contract", std::move(teleport_contract));
   ns.emplace_back("crippled", Value::make_bool(false));
+  return rt_ok(Value::make_obj(std::move(ns)));
+}
+
+// --- W2 event-log parse fns (builders/tgbtc.py, same names) -----------------
+
+// TgBTCMintEvent 0x77A80EF3: coins amount, MsgAddress recipient, uint256 txid.
+EvalResult tgbtc_mint_log(BuildEnv &, const std::vector<Value> &args) {
+  LogCursor lc = open_log(args);
+  if (!lc.ok) {
+    return rt_ok(Value::null());
+  }
+  auto &cs = lc.ctx.cs;
+  auto r_amt = load_coins_py(cs);
+  if (r_amt.is_error()) {
+    return rt_ok(Value::null());
+  }
+  auto r_rcpt = load_address_py(cs);
+  if (r_rcpt.is_error()) {
+    return rt_ok(Value::null());
+  }
+  bool rcpt_ok = true;
+  Value recipient = account_id_of(r_rcpt.ok(), rcpt_ok);
+  auto txid = cs.have(256) ? cs.fetch_int256(256, false) : td::RefInt256{};
+  if (!rcpt_ok || txid.is_null()) {
+    return rt_ok(Value::null());
+  }
+  Value::Fields ns;
+  ns.emplace_back("amount", Value::make_int(r_amt.move_as_ok()));
+  ns.emplace_back("recipient", std::move(recipient));
+  ns.emplace_back("bitcoin_txid", Value::make_str(txid_le_hex(txid)));
+  return rt_ok(Value::make_obj(std::move(ns)));
+}
+
+// TgBTCBurnEvent 0xCA444CE6: coins amount, then TWO MsgAddresses parsed
+// TOLERANTLY. The Python parser assigns both locals to None up front and wraps
+// the pair in one try/except, so a body that runs out mid-address leaves the
+// already-read one set and the rest addr_none — reproduced exactly: on the
+// first load_address error, everything from there on stays addr_none.
+EvalResult tgbtc_burn_log(BuildEnv &, const std::vector<Value> &args) {
+  LogCursor lc = open_log(args);
+  if (!lc.ok) {
+    return rt_ok(Value::null());
+  }
+  auto &cs = lc.ctx.cs;
+  auto r_amt = load_coins_py(cs);
+  if (r_amt.is_error()) {
+    return rt_ok(Value::null());  // the one failure the Python try does NOT cover
+  }
+  Value sender = Value::make_account_none();
+  Value pegout = Value::make_account_none();
+  auto r_sender = load_address_py(cs);
+  if (r_sender.is_ok()) {
+    sender = account_id_or_none(r_sender.ok());
+    auto r_pegout = load_address_py(cs);
+    if (r_pegout.is_ok()) {
+      pegout = account_id_or_none(r_pegout.ok());
+    }
+  }
+  Value::Fields ns;
+  ns.emplace_back("amount", Value::make_int(r_amt.move_as_ok()));
+  ns.emplace_back("sender", std::move(sender));
+  ns.emplace_back("pegout", std::move(pegout));
+  return rt_ok(Value::make_obj(std::move(ns)));
+}
+
+// TgBTCNewKeyEvent 0x27756729: coins amount, uint256 pubkey, MsgAddress pegout.
+EvalResult tgbtc_new_key_log(BuildEnv &, const std::vector<Value> &args) {
+  LogCursor lc = open_log(args);
+  if (!lc.ok) {
+    return rt_ok(Value::null());
+  }
+  auto &cs = lc.ctx.cs;
+  auto r_amt = load_coins_py(cs);
+  if (r_amt.is_error()) {
+    return rt_ok(Value::null());
+  }
+  auto pubkey = cs.have(256) ? cs.fetch_int256(256, false) : td::RefInt256{};
+  if (pubkey.is_null()) {
+    return rt_ok(Value::null());
+  }
+  auto r_pegout = load_address_py(cs);
+  if (r_pegout.is_error()) {
+    return rt_ok(Value::null());
+  }
+  bool pegout_ok = true;
+  Value pegout = account_id_of(r_pegout.ok(), pegout_ok);
+  if (!pegout_ok) {
+    return rt_ok(Value::null());
+  }
+  Value::Fields ns;
+  ns.emplace_back("amount", Value::make_int(r_amt.move_as_ok()));
+  ns.emplace_back("pubkey", hex_min(pubkey));
+  ns.emplace_back("pegout", std::move(pegout));
+  return rt_ok(Value::make_obj(std::move(ns)));
+}
+
+// TgBTCDkgCompletedEvent 0x453443A6: u64 timestamp, uint256 pubkey.
+EvalResult tgbtc_dkg_completed_log(BuildEnv &, const std::vector<Value> &args) {
+  LogCursor lc = open_log(args);
+  if (!lc.ok) {
+    return rt_ok(Value::null());
+  }
+  auto &cs = lc.ctx.cs;
+  if (!cs.have(64)) {
+    return rt_ok(Value::null());
+  }
+  td::RefInt256 timestamp = refint_u64(cs.fetch_ulong(64));
+  auto pubkey = cs.have(256) ? cs.fetch_int256(256, false) : td::RefInt256{};
+  if (pubkey.is_null()) {
+    return rt_ok(Value::null());
+  }
+  Value::Fields ns;
+  ns.emplace_back("timestamp", Value::make_int(std::move(timestamp)));
+  ns.emplace_back("pubkey", hex_min(pubkey));
   return rt_ok(Value::make_obj(std::move(ns)));
 }
 

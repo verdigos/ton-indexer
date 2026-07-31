@@ -663,6 +663,50 @@ void fill_tgbtc_mint(const Value &d, Action &a) {
   a.destination_secondary = av_addr(dg(d, "recipient_wallet"));
 }
 
+// block_tree_serializer.py _fill_tgbtc_burn_action (:982). `crippled` (set by
+// tgbtc_burn_log_only) appends the `_fallback` suffix, same pattern as the mint.
+void fill_tgbtc_burn(const Value &d, Action &a) {
+  a.type = "tgbtc_burn";
+  Value cr = dg(d, "crippled");
+  if (cr.t == VType::Bool && cr.boolean) a.type += "_fallback";
+  a.source = av_addr(dg(d, "sender"));
+  a.source_secondary = av_addr(dg(d, "jetton_wallet"));
+  a.destination = av_addr(dg(d, "pegout_address"));
+  a.amount = av_amount(dg(d, "amount"));
+  a.asset = av_addr(dg(d, "asset"));
+}
+
+// block_tree_serializer.py _fill_tgbtc_new_key_action (:995). `amount` is a RAW
+// int on this action type (TgBTCNewKeyData declares `amount: int`); av_amount
+// is the Int passthrough. `value` carries the DKG timestamp and `extra.pubkey`
+// the raw hex — neither is a TON address.
+void fill_tgbtc_new_key(const Value &d, Action &a) {
+  a.type = "tgbtc_new_key";
+  Value cr = dg(d, "crippled");
+  if (cr.t == VType::Bool && cr.boolean) a.type += "_fallback";
+  a.source = av_addr(dg(d, "teleport_contract"));
+  Value::Fields ex;
+  ex.emplace_back("pubkey", dg(d, "pubkey"));
+  a.extra = mkdict(std::move(ex));
+  a.destination = av_addr(dg(d, "coordinator_contract"));
+  a.destination_secondary = av_addr(dg(d, "pegout_address"));
+  a.amount = av_amount(dg(d, "amount"));
+  a.value = dg(d, "timestamp");
+}
+
+// block_tree_serializer.py _fill_tgbtc_dkg_log_action (:1009). The type is
+// hardcoded `_fallback` — this btype has no non-fallback producer at all — so
+// the block carries no `crippled` field. Note the extra key is `pubkey` while
+// the data field is `internal_pubkey`; reproduced, not renamed.
+void fill_tgbtc_dkg_log(const Value &d, Action &a) {
+  a.type = "tgbtc_dkg_log_fallback";
+  a.source = av_addr(dg(d, "coordinator_contract"));
+  Value::Fields ex;
+  ex.emplace_back("pubkey", dg(d, "internal_pubkey"));
+  a.extra = mkdict(std::move(ex));
+  a.value = dg(d, "timestamp");
+}
+
 // --- W6 bucket-B fills (em2-writeback-design.md §2.4) ------------------------
 // Btypes whose MATCHER runs and produces a block, but which had no fill_action
 // branch — so build_action returned false and the whole row vanished from the
@@ -1182,6 +1226,9 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "coffee_staking_claim_rewards") fill_coffee_staking_claim_rewards(d, a);
   else if (t == "vesting_send_message") fill_vesting_send_message(d, a);
   else if (t == "tgbtc_mint") fill_tgbtc_mint(d, a);
+  else if (t == "tgbtc_burn") fill_tgbtc_burn(d, a);
+  else if (t == "tgbtc_new_key") fill_tgbtc_new_key(d, a);
+  else if (t == "tgbtc_dkg_log") fill_tgbtc_dkg_log(d, a);
   // W6 bucket B: matcher-produced btypes that used to fall through to `return
   // false` and lose the whole row.
   else if (t == "renew_dns") fill_dns_renew(d, a);

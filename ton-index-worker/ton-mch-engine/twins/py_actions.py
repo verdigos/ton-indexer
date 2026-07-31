@@ -139,6 +139,12 @@ PORTED_BTYPES = {
     # dex_deposit_liquidity_data composite (fills fill_dedust_v2_deposit /
     # fill_dedust_v2_deposit_partial); no new column.
     "dedust_v2_deposit_liquidity", "dedust_v2_deposit_liquidity_partial",
+    # tgBTC completion (2026-07-31, specs/tgbtc.mch — burn, new_key and the four
+    # log-only fallbacks joining the already-ported mint). All three btypes FIRE
+    # on the corpus: burn on five fixtures (four full + one `_fallback`),
+    # new_key on two, dkg_log on one. No new composite — all three fills write
+    # only directional fields plus `extra` / `value`.
+    "tgbtc_burn", "tgbtc_new_key", "tgbtc_dkg_log",
 }
 
 # The C++ render_action column set (Classify.cpp render_action), in any order —

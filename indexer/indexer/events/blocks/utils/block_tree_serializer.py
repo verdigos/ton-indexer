@@ -980,34 +980,40 @@ def _fill_tgbtc_mint_action(block: TgBTCMintBlock, action: Action):
 
 
 def _fill_tgbtc_burn_action(block: TgBTCBurnBlock, action: Action):
+    # dual-access via _dget: legacy TgBTCBurnData dataclass OR the declarative
+    # tgbtc.mch build's dict (identical field names).
+    d = block.data
     action.type = 'tgbtc_burn'
-    if block.data.crippled:
+    if _dget(d, 'crippled'):
         action.type += '_fallback'
-    action.source = _addr(block.data.sender)
-    action.source_secondary = _addr(block.data.jetton_wallet)
-    action.destination = _addr(block.data.pegout_address)
-    action.amount = block.data.amount.value
-    action.asset = _addr(block.data.asset)
+    action.source = _addr(_dget(d, 'sender'))
+    action.source_secondary = _addr(_dget(d, 'jetton_wallet'))
+    action.destination = _addr(_dget(d, 'pegout_address'))
+    action.amount = _value(_dget(d, 'amount'))
+    action.asset = _addr(_dget(d, 'asset'))
 
 
 def _fill_tgbtc_new_key_action(block: TgBTCNewKeyBlock, action: Action):
+    d = block.data
     action.type = 'tgbtc_new_key'
-    if block.data.crippled:
+    if _dget(d, 'crippled'):
         action.type += '_fallback'
-    action.source = _addr(block.data.teleport_contract)
+    action.source = _addr(_dget(d, 'teleport_contract'))
     # raw pubkey hex is not a TON address — pgton tonaddr columns reject it
-    action.extra = {"pubkey": block.data.pubkey}
-    action.destination = _addr(block.data.coordinator_contract)
-    action.destination_secondary = _addr(block.data.pegout_address)
-    action.amount = block.data.amount
-    action.value = block.data.timestamp
+    action.extra = {"pubkey": _dget(d, 'pubkey')}
+    action.destination = _addr(_dget(d, 'coordinator_contract'))
+    action.destination_secondary = _addr(_dget(d, 'pegout_address'))
+    # amount is a RAW int on this action type, not an Amount
+    action.amount = _dget(d, 'amount')
+    action.value = _dget(d, 'timestamp')
 
 def _fill_tgbtc_dkg_log_action(block: TgBTCDkgLogBlock, action: Action):
+    d = block.data
     action.type = 'tgbtc_dkg_log_fallback'
-    action.source = _addr(block.data.coordinator_contract)
+    action.source = _addr(_dget(d, 'coordinator_contract'))
     # raw pubkey hex is not a TON address — pgton tonaddr columns reject it
-    action.extra = {"pubkey": block.data.internal_pubkey}
-    action.value = block.data.timestamp
+    action.extra = {"pubkey": _dget(d, 'internal_pubkey')}
+    action.value = _dget(d, 'timestamp')
 
 
 def _fill_tonco_deposit_liquidity_action(block: ToncoDepositLiquidityBlock, action: Action):

@@ -20134,6 +20134,929 @@
       "shape": "tgbtc_deploy_absorb"
     },
     {
+      "name": "tgbtc_burn",
+      "anchor": {
+        "kind": "btype",
+        "values": [
+          "jetton_burn"
+        ]
+      },
+      "root": 406,
+      "produces": [
+        "tgbtc_burn"
+      ],
+      "captures": [
+        {
+          "name": "burn",
+          "card": "one"
+        },
+        {
+          "name": "notify",
+          "card": "one"
+        },
+        {
+          "name": "log",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "let",
+          "name": "b",
+          "expr": {
+            "k": "call",
+            "fn": "tgbtc_burn_log",
+            "args": [
+              {
+                "k": "name",
+                "id": "log"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "b"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "chain_amount",
+          "expr": {
+            "k": "attr",
+            "of": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "burn"
+                },
+                "name": "data"
+              },
+              "name": "amount"
+            },
+            "name": "value"
+          }
+        },
+        {
+          "s": "let",
+          "name": "use_log",
+          "expr": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "bin",
+              "op": "??",
+              "l": {
+                "k": "name",
+                "id": "chain_amount"
+              },
+              "r": {
+                "k": "int",
+                "v": 0
+              }
+            },
+            "r": {
+              "k": "int",
+              "v": 0
+            }
+          }
+        },
+        {
+          "s": "let",
+          "name": "min_amount",
+          "expr": {
+            "k": "ternary",
+            "cond": {
+              "k": "bin",
+              "op": "<",
+              "l": {
+                "k": "name",
+                "id": "chain_amount"
+              },
+              "r": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "b"
+                },
+                "name": "amount"
+              }
+            },
+            "then": {
+              "k": "name",
+              "id": "chain_amount"
+            },
+            "else": {
+              "k": "attr",
+              "of": {
+                "k": "name",
+                "id": "b"
+              },
+              "name": "amount"
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "burn"
+                  },
+                  "name": "data"
+                },
+                "name": "owner"
+              }
+            },
+            {
+              "name": "jetton_wallet",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "burn"
+                  },
+                  "name": "data"
+                },
+                "name": "jetton_wallet"
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "burn"
+                  },
+                  "name": "data"
+                },
+                "name": "asset"
+              }
+            },
+            {
+              "name": "amount",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "ternary",
+                    "cond": {
+                      "k": "name",
+                      "id": "use_log"
+                    },
+                    "then": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "b"
+                      },
+                      "name": "amount"
+                    },
+                    "else": {
+                      "k": "name",
+                      "id": "min_amount"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "pegout_address",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "b"
+                },
+                "name": "pegout"
+              }
+            },
+            {
+              "name": "crippled",
+              "expr": {
+                "k": "bool",
+                "v": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tgbtc_new_key",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1762604410
+        ]
+      },
+      "root": 418,
+      "produces": [
+        "tgbtc_new_key"
+      ],
+      "captures": [
+        {
+          "name": "k",
+          "card": "one"
+        },
+        {
+          "name": "log",
+          "card": "one"
+        },
+        {
+          "name": "p",
+          "card": "one"
+        },
+        {
+          "name": "dkg",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "let",
+          "name": "n",
+          "expr": {
+            "k": "call",
+            "fn": "tgbtc_new_key_log",
+            "args": [
+              {
+                "k": "name",
+                "id": "log"
+              }
+            ]
+          }
+        },
+        {
+          "s": "let",
+          "name": "g",
+          "expr": {
+            "k": "call",
+            "fn": "tgbtc_dkg_completed_log",
+            "args": [
+              {
+                "k": "name",
+                "id": "dkg"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "or",
+            "l": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "n"
+              },
+              "r": {
+                "k": "null"
+              }
+            },
+            "r": {
+              "k": "bin",
+              "op": "==",
+              "l": {
+                "k": "name",
+                "id": "g"
+              },
+              "r": {
+                "k": "null"
+              }
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "coordinator_contract",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "log"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "pubkey",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "n"
+                },
+                "name": "pubkey"
+              }
+            },
+            {
+              "name": "pegout_address",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "n"
+                },
+                "name": "pegout"
+              }
+            },
+            {
+              "name": "amount",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "n"
+                },
+                "name": "amount"
+              }
+            },
+            {
+              "name": "teleport_contract",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "dkg"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "timestamp",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "g"
+                },
+                "name": "timestamp"
+              }
+            },
+            {
+              "name": "crippled",
+              "expr": {
+                "k": "bool",
+                "v": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tgbtc_mint_log_only",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          2007502579
+        ]
+      },
+      "root": 425,
+      "produces": [
+        "tgbtc_mint"
+      ],
+      "captures": [
+        {
+          "name": "log",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "let",
+          "name": "m",
+          "expr": {
+            "k": "call",
+            "fn": "tgbtc_mint_log",
+            "args": [
+              {
+                "k": "name",
+                "id": "log"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "m"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "log"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "recipient",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "m"
+                },
+                "name": "recipient"
+              }
+            },
+            {
+              "name": "amount",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "m"
+                },
+                "name": "amount"
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "bitcoin_txid",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "m"
+                },
+                "name": "bitcoin_txid"
+              }
+            },
+            {
+              "name": "success",
+              "expr": {
+                "k": "bool",
+                "v": true
+              }
+            },
+            {
+              "name": "recipient_wallet",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "teleport_contract",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "log"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "crippled",
+              "expr": {
+                "k": "bool",
+                "v": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tgbtc_burn_log_only",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          3393473766
+        ]
+      },
+      "root": 426,
+      "produces": [
+        "tgbtc_burn"
+      ],
+      "captures": [
+        {
+          "name": "log",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "let",
+          "name": "b",
+          "expr": {
+            "k": "call",
+            "fn": "tgbtc_burn_log",
+            "args": [
+              {
+                "k": "name",
+                "id": "log"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "b"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "sender",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "b"
+                },
+                "name": "sender"
+              }
+            },
+            {
+              "name": "jetton_wallet",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "asset",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "amount",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "b"
+                    },
+                    "name": "amount"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "pegout_address",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "b"
+                },
+                "name": "pegout"
+              }
+            },
+            {
+              "name": "crippled",
+              "expr": {
+                "k": "bool",
+                "v": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tgbtc_new_key_log_only",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          662005545
+        ]
+      },
+      "root": 427,
+      "produces": [
+        "tgbtc_new_key"
+      ],
+      "captures": [
+        {
+          "name": "log",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "let",
+          "name": "n",
+          "expr": {
+            "k": "call",
+            "fn": "tgbtc_new_key_log",
+            "args": [
+              {
+                "k": "name",
+                "id": "log"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "n"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "coordinator_contract",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "log"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "pubkey",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "n"
+                },
+                "name": "pubkey"
+              }
+            },
+            {
+              "name": "pegout_address",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "n"
+                },
+                "name": "pegout"
+              }
+            },
+            {
+              "name": "amount",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "n"
+                },
+                "name": "amount"
+              }
+            },
+            {
+              "name": "teleport_contract",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "timestamp",
+              "expr": {
+                "k": "null"
+              }
+            },
+            {
+              "name": "crippled",
+              "expr": {
+                "k": "bool",
+                "v": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tgbtc_dkg_log_only",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1161053094
+        ]
+      },
+      "root": 428,
+      "produces": [
+        "tgbtc_dkg_log"
+      ],
+      "captures": [
+        {
+          "name": "log",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "let",
+          "name": "g",
+          "expr": {
+            "k": "call",
+            "fn": "tgbtc_dkg_completed_log",
+            "args": [
+              {
+                "k": "name",
+                "id": "log"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "g"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "coordinator_contract",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "log"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "timestamp",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "g"
+                },
+                "name": "timestamp"
+              }
+            },
+            {
+              "name": "internal_pubkey",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "g"
+                },
+                "name": "pubkey"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "tonco_deposit_liquidity",
       "anchor": {
         "kind": "opcode_set",
@@ -20141,7 +21064,7 @@
           1052660785
         ]
       },
-      "root": 406,
+      "root": 429,
       "produces": [
         "tonco_deposit_liquidity"
       ],
@@ -20412,7 +21335,7 @@
           1393254188
         ]
       },
-      "root": 420,
+      "root": 443,
       "produces": [
         "tonco_withdraw_liquidity"
       ],
@@ -20790,7 +21713,7 @@
           2818267384
         ]
       },
-      "root": 428,
+      "root": 451,
       "produces": [
         "jetton_swap"
       ],
@@ -20971,7 +21894,7 @@
           3678112445
         ]
       },
-      "root": 456,
+      "root": 479,
       "produces": [
         "tonstakers_withdraw"
       ],
@@ -21114,7 +22037,7 @@
           1205158801
         ]
       },
-      "root": 459,
+      "root": 482,
       "produces": [
         "tonstakers_deposit"
       ],
@@ -21335,7 +22258,7 @@
           1499400124
         ]
       },
-      "root": 463,
+      "root": 486,
       "produces": [
         "tonstakers_withdraw",
         "tonstakers_withdraw_request"
@@ -21698,7 +22621,7 @@
           2809346765
         ]
       },
-      "root": 469,
+      "root": 492,
       "produces": [
         "vesting_send_message"
       ],
@@ -21878,7 +22801,7 @@
           3237998115
         ]
       },
-      "root": 471,
+      "root": 494,
       "produces": [
         "coffee_create_pool_creator"
       ],
@@ -22087,7 +23010,7 @@
           "coffee_create_pool_creator"
         ]
       },
-      "root": 476,
+      "root": 499,
       "produces": [
         "coffee_create_pool"
       ],
@@ -22552,7 +23475,7 @@
           1808244350
         ]
       },
-      "root": 484,
+      "root": 507,
       "produces": [
         "coffee_mev_protect_hold_funds"
       ],
@@ -22665,7 +23588,7 @@
           "jetton_transfer"
         ]
       },
-      "root": 487,
+      "root": 510,
       "produces": [
         "coffee_mev_protect_hold_funds"
       ],
@@ -22774,7 +23697,7 @@
           "jetton_transfer"
         ]
       },
-      "root": 490,
+      "root": 513,
       "produces": [
         "coffee_staking_deposit"
       ],
@@ -22942,7 +23865,7 @@
           3406020527
         ]
       },
-      "root": 494,
+      "root": 517,
       "produces": [
         "coffee_staking_withdraw"
       ],
@@ -23177,7 +24100,7 @@
           3003937552
         ]
       },
-      "root": 499,
+      "root": 522,
       "produces": [
         "coffee_staking_claim_rewards"
       ],
@@ -25953,22 +26876,168 @@
       "capture": "mint"
     },
     {
+      "kind": "block_type",
+      "btype": "jetton_burn",
+      "capture": "burn",
+      "child": 407
+    },
+    {
+      "kind": "or",
+      "branches": [
+        408,
+        413
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 2078119902,
+      "capture": "notify",
+      "children": [
+        409,
+        410
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 3393473766,
+      "capture": "log"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3192186790,
+      "optional": true,
+      "children": [
+        411,
+        412
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 444907744,
+      "optional": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "ton_transfer",
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1484145570,
+      "capture": "notify",
+      "children": [
+        414,
+        415
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 3393473766,
+      "capture": "log"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3192186790,
+      "optional": true,
+      "children": [
+        416,
+        417
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 444907744,
+      "optional": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "ton_transfer",
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1762604410,
+      "capture": "k",
+      "children": [
+        419,
+        420
+      ],
+      "parent": 423
+    },
+    {
+      "kind": "contract",
+      "opcode": 662005545,
+      "capture": "log"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3192186790,
+      "optional": true,
+      "children": [
+        421,
+        422
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 444907744,
+      "optional": true
+    },
+    {
+      "kind": "block_type",
+      "btype": "ton_transfer",
+      "optional": true
+    },
+    {
+      "kind": "any",
+      "capture": "p",
+      "children": [
+        424
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 1161053094,
+      "capture": "dkg"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2007502579,
+      "capture": "log"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3393473766,
+      "capture": "log"
+    },
+    {
+      "kind": "contract",
+      "opcode": 662005545,
+      "capture": "log"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1161053094,
+      "capture": "log"
+    },
+    {
       "kind": "contract",
       "opcode": 1052660785,
       "capture": "add_liquidity",
       "children": [
-        407
+        430
       ],
-      "parent": 415
+      "parent": 438
     },
     {
       "kind": "contract",
       "opcode": 2171612920,
       "optional": true,
       "children": [
-        408,
-        413,
-        414
+        431,
+        436,
+        437
       ]
     },
     {
@@ -25977,8 +27046,8 @@
       "optional": true,
       "capture": "refund_router_call",
       "children": [
-        409,
-        411
+        432,
+        434
       ]
     },
     {
@@ -25987,7 +27056,7 @@
       "optional": true,
       "capture": "excess_transfer_0",
       "children": [
-        410
+        433
       ]
     },
     {
@@ -26001,7 +27070,7 @@
       "optional": true,
       "capture": "excess_transfer_1",
       "children": [
-        412
+        435
       ]
     },
     {
@@ -26022,13 +27091,13 @@
     {
       "kind": "contract",
       "opcode": 1147723383,
-      "parent": 416
+      "parent": 439
     },
     {
       "kind": "or",
       "branches": [
-        417,
-        419
+        440,
+        442
       ],
       "exclusive": false
     },
@@ -26036,7 +27105,7 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "ton_input",
-      "parent": 418
+      "parent": 441
     },
     {
       "kind": "contract",
@@ -26052,26 +27121,26 @@
       "kind": "contract",
       "opcode": 1393254188,
       "capture": "start_burn",
-      "child": 421
+      "child": 444
     },
     {
       "kind": "contract",
       "opcode": 1187656538,
       "capture": "position_burn",
-      "child": 422
+      "child": 445
     },
     {
       "kind": "contract",
       "opcode": 3610951837,
       "capture": "pool_burn",
-      "child": 423
+      "child": 446
     },
     {
       "kind": "contract",
       "opcode": 2715461997,
       "children": [
-        424,
-        426
+        447,
+        449
       ]
     },
     {
@@ -26080,7 +27149,7 @@
       "optional": true,
       "capture": "payout_1",
       "children": [
-        425
+        448
       ]
     },
     {
@@ -26094,7 +27163,7 @@
       "optional": true,
       "capture": "payout_2",
       "children": [
-        427
+        450
       ]
     },
     {
@@ -26107,89 +27176,89 @@
       "opcode": 2818267384,
       "capture": "swap",
       "children": [
-        429
+        452
       ],
-      "parent": 452
+      "parent": 475
     },
     {
       "kind": "contract",
       "opcode": 2715461997,
-      "child": 430
+      "child": 453
     },
     {
       "kind": "or",
       "branches": [
-        431,
-        446,
-        448,
-        450
+        454,
+        469,
+        471,
+        473
       ],
       "exclusive": false
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 432
+      "child": 455
     },
     {
       "kind": "contract",
       "opcode": 32736093,
-      "child": 433
+      "child": 456
     },
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "child": 434
+      "child": 457
     },
     {
       "kind": "recursive",
       "strategy": "cyclic",
-      "step": 435
+      "step": 458
     },
     {
       "kind": "contract",
       "opcode": 2818267384,
-      "child": 436
+      "child": 459
     },
     {
       "kind": "contract",
       "opcode": 2715461997,
-      "child": 437
+      "child": 460
     },
     {
       "kind": "or",
       "branches": [
-        438,
-        441,
-        442,
-        444
+        461,
+        464,
+        465,
+        467
       ],
       "exclusive": false
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 439
+      "child": 462
     },
     {
       "kind": "contract",
       "opcode": 32736093,
-      "child": 440
+      "child": 463
     },
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "child": 435
+      "child": 458
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 435
+      "child": 458
     },
     {
       "kind": "contract",
       "opcode": 260734629,
-      "child": 443
+      "child": 466
     },
     {
       "kind": "contract",
@@ -26199,7 +27268,7 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "children": [
-        445
+        468
       ]
     },
     {
@@ -26210,17 +27279,17 @@
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 447
+      "child": 470
     },
     {
       "kind": "recursive",
       "strategy": "cyclic",
-      "step": 435
+      "step": 458
     },
     {
       "kind": "contract",
       "opcode": 260734629,
-      "child": 449
+      "child": 472
     },
     {
       "kind": "contract",
@@ -26230,7 +27299,7 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "children": [
-        451
+        474
       ]
     },
     {
@@ -26241,8 +27310,8 @@
     {
       "kind": "or",
       "branches": [
-        453,
-        454
+        476,
+        477
       ],
       "exclusive": true
     },
@@ -26254,7 +27323,7 @@
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "parent": 455
+      "parent": 478
     },
     {
       "kind": "contract",
@@ -26265,13 +27334,13 @@
       "kind": "contract",
       "opcode": 3678112445,
       "capture": "distributed",
-      "parent": 457
+      "parent": 480
     },
     {
       "kind": "contract",
       "opcode": 3982012594,
       "capture": "notification",
-      "parent": 458
+      "parent": 481
     },
     {
       "kind": "contract",
@@ -26281,18 +27350,18 @@
       "kind": "contract",
       "opcode": 1205158801,
       "capture": "deposit",
-      "child": 460
+      "child": 483
     },
     {
       "kind": "contract",
       "opcode": 376746144,
-      "child": 461
+      "child": 484
     },
     {
       "kind": "contract",
       "opcode": 395134233,
       "capture": "transfer",
-      "child": 462
+      "child": 485
     },
     {
       "kind": "contract",
@@ -26303,24 +27372,24 @@
       "kind": "contract",
       "opcode": 1499400124,
       "capture": "burn",
-      "child": 464
+      "child": 487
     },
     {
       "kind": "contract",
       "opcode": 2078119902,
-      "child": 465
+      "child": 488
     },
     {
       "kind": "contract",
       "opcode": 832244956,
       "capture": "request",
-      "child": 466
+      "child": 489
     },
     {
       "kind": "or",
       "branches": [
-        467,
-        468
+        490,
+        491
       ],
       "exclusive": true
     },
@@ -26338,7 +27407,7 @@
       "kind": "contract",
       "opcode": 2809346765,
       "capture": "send",
-      "child": 470
+      "child": 493
     },
     {
       "kind": "contract",
@@ -26350,9 +27419,9 @@
       "opcode": 3237998115,
       "capture": "request",
       "children": [
-        472
+        495
       ],
-      "parent": 473
+      "parent": 496
     },
     {
       "kind": "contract",
@@ -26362,8 +27431,8 @@
     {
       "kind": "or",
       "branches": [
-        474,
-        475
+        497,
+        498
       ],
       "exclusive": true
     },
@@ -26381,28 +27450,28 @@
       "kind": "block_type",
       "btype": "coffee_create_pool_creator",
       "capture": "creator",
-      "child": 477
+      "child": 500
     },
     {
       "kind": "contract",
       "opcode": 3237998117,
       "capture": "request",
-      "child": 478
+      "child": 501
     },
     {
       "kind": "contract",
       "opcode": 3237998114,
       "capture": "deploy",
       "children": [
-        479,
-        481,
-        482
+        502,
+        504,
+        505
       ]
     },
     {
       "kind": "contract",
       "opcode": 395134233,
-      "child": 480
+      "child": 503
     },
     {
       "kind": "contract",
@@ -26418,7 +27487,7 @@
       "kind": "contract",
       "opcode": 3237998134,
       "optional": true,
-      "child": 483
+      "child": 506
     },
     {
       "kind": "contract",
@@ -26429,13 +27498,13 @@
       "kind": "contract",
       "opcode": 1808244350,
       "capture": "call",
-      "parent": 485
+      "parent": 508
     },
     {
       "kind": "any",
       "optional": true,
       "children": [
-        486
+        509
       ]
     },
     {
@@ -26458,13 +27527,13 @@
           "v": "0x6bc79e7e"
         }
       },
-      "parent": 488
+      "parent": 511
     },
     {
       "kind": "any",
       "optional": true,
       "children": [
-        489
+        512
       ]
     },
     {
@@ -26475,15 +27544,15 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "transfer",
-      "child": 491
+      "child": 514
     },
     {
       "kind": "contract",
       "opcode": 4182184244,
       "capture": "pool_call",
       "children": [
-        492,
-        493
+        515,
+        516
       ]
     },
     {
@@ -26500,22 +27569,22 @@
       "kind": "contract",
       "opcode": 3406020527,
       "capture": "withdraw_1",
-      "child": 495
+      "child": 518
     },
     {
       "kind": "contract",
       "opcode": 3406020527,
       "capture": "withdraw_2",
       "children": [
-        496,
-        498
+        519,
+        521
       ]
     },
     {
       "kind": "contract",
       "opcode": 3406020527,
       "capture": "withdraw_3",
-      "child": 497
+      "child": 520
     },
     {
       "kind": "block_type",
@@ -26532,8 +27601,8 @@
       "opcode": 3003937552,
       "capture": "claim",
       "children": [
-        500,
-        501
+        523,
+        524
       ]
     },
     {
@@ -26615,6 +27684,12 @@
     64,
     65,
     66,
-    67
+    67,
+    68,
+    69,
+    70,
+    71,
+    72,
+    73
   ]
 }
