@@ -9,7 +9,9 @@
 //    fails the WHOLE parse — the soft-parse machinery then tries the next
 //    alternative / yields null (engine's _soft_parse contract);
 //  - addr_none parses to a NULL Value (pytoniq load_address returns None),
-//    addr_extern to a "extern:<len>:<value>" Str, addr_std to an Account;
+//    addr_extern to a "extern:<len>:<HEX>" Str (hex, not decimal: a 511-bit
+//    extern address does not fit td::RefInt256 — see PSlice.cpp), addr_std to
+//    an Account;
 //  - Maybe ^Cell payloads become Bytes (BOC with CRC32C, mirroring
 //    pytoniq to_boc(hash_crc32=True)); absent -> null;
 //  - integers (uint64 / VarUInteger 16) become Int (RefInt256);

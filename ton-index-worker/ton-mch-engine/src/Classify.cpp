@@ -110,6 +110,18 @@ std::string render_action(const Action &a) {
   f.emplace_back("vesting_send_message_data", a.vesting_send_message_data);
   f.emplace_back("vesting_add_whitelist_data", a.vesting_add_whitelist_data);
   f.emplace_back("tonco_deploy_pool_data", a.tonco_deploy_pool_data);
+  f.emplace_back("cocoon_worker_payout_data", a.cocoon_worker_payout_data);
+  f.emplace_back("cocoon_proxy_payout_data", a.cocoon_proxy_payout_data);
+  f.emplace_back("cocoon_proxy_charge_data", a.cocoon_proxy_charge_data);
+  f.emplace_back("cocoon_client_top_up_data", a.cocoon_client_top_up_data);
+  f.emplace_back("cocoon_register_proxy_data", a.cocoon_register_proxy_data);
+  f.emplace_back("cocoon_unregister_proxy_data", a.cocoon_unregister_proxy_data);
+  f.emplace_back("cocoon_client_register_data", a.cocoon_client_register_data);
+  f.emplace_back("cocoon_client_change_secret_hash_data", a.cocoon_client_change_secret_hash_data);
+  f.emplace_back("cocoon_client_request_refund_data", a.cocoon_client_request_refund_data);
+  f.emplace_back("cocoon_grant_refund_data", a.cocoon_grant_refund_data);
+  f.emplace_back("cocoon_client_increase_stake_data", a.cocoon_client_increase_stake_data);
+  f.emplace_back("cocoon_client_withdraw_data", a.cocoon_client_withdraw_data);
   f.emplace_back("layerzero_packet_data", a.layerzero_packet_data);
   f.emplace_back("layerzero_send_data", a.layerzero_send_data);
   f.emplace_back("layerzero_dvn_verify_data", a.layerzero_dvn_verify_data);

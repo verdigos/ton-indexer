@@ -76,6 +76,20 @@ from indexer.events.blocks.dedust_v2.swaps import (
     DedustV2FailedSwapBlockMatcher,
     DedustV2SwapBlockMatcher,
 )
+from indexer.events.blocks.cocoon import (
+    CocoonClientChangeSecretHashMatcher,
+    CocoonClientIncreaseStakeMatcher,
+    CocoonClientRegisterMatcher,
+    CocoonClientRequestRefundMatcher,
+    CocoonClientTopUpMatcher,
+    CocoonClientWithdrawMatcher,
+    CocoonGrantRefundMatcher,
+    CocoonProxyChargeMatcher,
+    CocoonProxyPayoutMatcher,
+    CocoonRegisterProxyMatcher,
+    CocoonUnregisterProxyMatcher,
+    CocoonWorkerPayoutMatcher,
+)
 from indexer.events.blocks.elections import (
     ElectionDepositStakeBlockMatcher,
     ElectionRecoverStakeBlockMatcher,
@@ -200,6 +214,7 @@ from indexer.events.mch.builders.dedust_v2 import (
     dedust_v2_swap_registries,
     dedust_v2_withdraw_registries,
 )
+from indexer.events.mch.builders.cocoon import cocoon_registries
 from indexer.events.mch.builders.elections import elections_registries
 from indexer.events.mch.builders.ethena import ethena_registries
 from indexer.events.mch.builders.evaa import evaa_registries
@@ -531,6 +546,19 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
      (UpdateSaleMatcher, NftPutOnSaleBlockMatcher, NftDiscoveryBlockMatcher,
       AuctionBidMatcher, AuctionOutbidMatcher, NftCancelSaleMatcher,
       NftFinishAuctionMatcher, NftCancelAuctionMatcher)),
+    # Cocoon port (2026-07-31): all twelve matchers as one group, in the legacy
+    # matchers-list order (which is also the spec's source order). No prereqs —
+    # every anchor is a raw opcode and no cocoon matcher binds a block any other
+    # matcher builds. Twelve corpus fixtures, one per matcher plus the second
+    # request-refund shape; the two anchor SETS mean the group runs on any trace
+    # carrying one of nineteen opcodes, so the off-protocol pairs it drags in are
+    # reject-identical checks.
+    ("specs/cocoon.mch", _SPECS_DIR / "cocoon.mch", cocoon_registries, (),
+     (CocoonWorkerPayoutMatcher, CocoonProxyPayoutMatcher, CocoonProxyChargeMatcher,
+      CocoonClientTopUpMatcher, CocoonRegisterProxyMatcher, CocoonUnregisterProxyMatcher,
+      CocoonClientRegisterMatcher, CocoonClientChangeSecretHashMatcher,
+      CocoonClientRequestRefundMatcher, CocoonGrantRefundMatcher,
+      CocoonClientIncreaseStakeMatcher, CocoonClientWithdrawMatcher)),
 ]
 
 

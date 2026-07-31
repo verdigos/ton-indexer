@@ -106,4 +106,9 @@ EvalResult vesting_message_was_sent(BuildEnv &env, const std::vector<Value> &arg
 // JVault (HostJvault.cpp). (jvault_account_list moved to a spec G-LC map in W6.)
 EvalResult jvault_stake_period(BuildEnv &env, const std::vector<Value> &args);
 
+// Cocoon (HostCocoon.cpp): the shared expectedMyAddress renderer and the nested
+// ClientProxyRequest.payload -> ClientProxyRefundGranted coins read.
+EvalResult cocoon_expected_address(BuildEnv &env, const std::vector<Value> &args);
+EvalResult cocoon_withdraw_amount(BuildEnv &env, const std::vector<Value> &args);
+
 }  // namespace mch

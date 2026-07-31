@@ -50,6 +50,10 @@ const std::map<std::string, HostFn> &host_fns() {
       {"nft_trade_is_finish", nft_trade_is_finish},
       {"nft_trade_returned", nft_trade_returned},
       {"auction_outbid_data", auction_outbid_data},
+      // specs/cocoon.mch — the expectedMyAddress string renderer (shared by
+      // three matchers) and the nested withdraw-payload coins read.
+      {"cocoon_expected_address", cocoon_expected_address},
+      {"cocoon_withdraw_amount", cocoon_withdraw_amount},
   };
   return fns;
 }

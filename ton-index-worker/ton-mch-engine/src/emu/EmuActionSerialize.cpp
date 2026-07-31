@@ -80,7 +80,7 @@ bool omitted(const Value &v) {
 //
 // Deliberately NOT here, i.e. emitted as natural msgpack integers: `opcode`
 // (Go *uint32), `flags` (uint8 DNS record flags, Go *int64), `period` (Go
-// *int64), `src_eid`/`dst_eid` (int32), `nonce`, `tick_lower`/`tick_upper`
+// *int64), `src_eid`/`dst_eid` (int32), `tick_lower`/`tick_upper`
 // (int24), `exit_code`, and the already-native start_lt / end_lt / start_utime
 // / end_utime / finality. `evaa_withdraw_data.asset_id` is a hex STRING built
 // by av_hex and must not be renaturalized.
@@ -122,6 +122,17 @@ bool decimal_string_key(const std::string &k) {
       // vesting_add_whitelist_data.accounts_added is a Go []string of ADDRESSES
       // (never numeric), so it needs no entry here; `query_id` above covers the
       // composite's only integer field.
+      // The cocoon composites. Six unbounded u64/coins fields, all Go *string.
+      // `nonce` MOVED here from the exclusion list above when cocoon landed:
+      // cocoon_client_register's nonce is a raw u64 that routinely exceeds
+      // int64 (the 5B6Ex8kv fixture carries 11924145372215500834), so it cannot
+      // stay a natural integer. LayerZero's bounded `nonce` (Go *int64) now
+      // travels as a decimal string too — lossless, since decodeFlexInt parses
+      // it back. `worker_state` (u2) and `seqno` (u32) stay natural integers,
+      // and `payout_type` / `expected_address` / `new_secret_hash` /
+      // `via_wallet` are not integers at all.
+      "nonce", "new_tokens", "worker_tokens", "new_tokens_used", "new_stake",
+      "withdraw_amount",
   };
   return keys.count(k) != 0;
 }
@@ -301,6 +312,18 @@ const std::vector<ActionField> &optional_fields() {
       {"vesting_send_message_data", &Action::vesting_send_message_data},
       {"vesting_add_whitelist_data", &Action::vesting_add_whitelist_data},
       {"tonco_deploy_pool_data", &Action::tonco_deploy_pool_data},
+      {"cocoon_worker_payout_data", &Action::cocoon_worker_payout_data},
+      {"cocoon_proxy_payout_data", &Action::cocoon_proxy_payout_data},
+      {"cocoon_proxy_charge_data", &Action::cocoon_proxy_charge_data},
+      {"cocoon_client_top_up_data", &Action::cocoon_client_top_up_data},
+      {"cocoon_register_proxy_data", &Action::cocoon_register_proxy_data},
+      {"cocoon_unregister_proxy_data", &Action::cocoon_unregister_proxy_data},
+      {"cocoon_client_register_data", &Action::cocoon_client_register_data},
+      {"cocoon_client_change_secret_hash_data", &Action::cocoon_client_change_secret_hash_data},
+      {"cocoon_client_request_refund_data", &Action::cocoon_client_request_refund_data},
+      {"cocoon_grant_refund_data", &Action::cocoon_grant_refund_data},
+      {"cocoon_client_increase_stake_data", &Action::cocoon_client_increase_stake_data},
+      {"cocoon_client_withdraw_data", &Action::cocoon_client_withdraw_data},
       {"layerzero_packet_data", &Action::layerzero_packet_data},
       {"layerzero_send_data", &Action::layerzero_send_data},
       {"layerzero_dvn_verify_data", &Action::layerzero_dvn_verify_data},

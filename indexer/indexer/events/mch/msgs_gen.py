@@ -33,7 +33,7 @@ VEC_OUT = ENG / "ir" / "msg_vectors.json"
 # emitter, the leaf set and the boundary-vector builder all read these).
 # UINT_SMALL widths fit fetch_ulong; INT_WIDE ones overflow it or are signed and
 # go through fetch_int256.
-UINT_SMALL = {"u16": 16, "u32": 32, "u64": 64}
+UINT_SMALL = {"u2": 2, "u16": 16, "u32": 32, "u64": 64}
 INT_WIDE = {"uint128": (128, False), "uint160": (160, False),
             "uint256": (256, False), "int24": (24, True)}
 

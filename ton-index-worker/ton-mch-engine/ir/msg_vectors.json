@@ -500,6 +500,146 @@
       "type": "ToncoPoolV3Init",
       "body": "te6ccgEBAQEABgAACEQcOe0=",
       "expect": "fail"
+    },
+    {
+      "type": "CocoonPayoutPayload",
+      "body": "te6ccgEBAQEAFwAAKaBArSgAAAAAAAAAAAAAAAAAAAAAIA==",
+      "expect": "ok"
+    },
+    {
+      "type": "CocoonPayoutPayload",
+      "body": "te6ccgEBAQEABgAACKBArSg=",
+      "expect": "fail"
+    },
+    {
+      "type": "CocoonLastPayoutPayload",
+      "body": "te6ccgEBAQEAFwAAKfXyajYAAAAAAAAAAAAAAAAAAAAAIA==",
+      "expect": "ok"
+    },
+    {
+      "type": "CocoonLastPayoutPayload",
+      "body": "te6ccgEBAQEABgAACPXyajY=",
+      "expect": "fail"
+    },
+    {
+      "type": "CocoonWorkerProxyRequest",
+      "body": "te6ccgEBAQEAFwAAKU1yXSwAAAAAAAAAAAAAAAAAAAAABA==",
+      "expect": "ok"
+    },
+    {
+      "type": "CocoonWorkerProxyRequest",
+      "body": "te6ccgEBAQEABgAACE1yXSw=",
+      "expect": "fail"
+    },
+    {
+      "type": "CocoonExtProxyPayoutRequest",
+      "body": "te6ccgEBAQEADwAAGXYQ5usAAAAAAAAAACA=",
+      "expect": "ok"
+    },
+    {
+      "type": "CocoonExtProxyPayoutRequest",
+      "body": "te6ccgEBAQEABgAACHYQ5us=",
+      "expect": "fail"
+    },
+    {
+      "type": "CocoonChargePayload",
+      "body": "te6ccgEBAQEAFwAAKbtj/5MAAAAAAAAAAAAAAAAAAAAAIA==",
+      "expect": "ok"
+    },
+    {
+      "type": "CocoonChargePayload",
+      "body": "te6ccgEBAQEABgAACLtj/5M=",
+      "expect": "fail"
+    },
+    {
+      "type": "CocoonGrantRefundPayload",
+      "body": "te6ccgEBAQEAFwAAKe/XEeEAAAAAAAAAAAAAAAAAAAAAIA==",
+      "expect": "ok"
+    },
+    {
+      "type": "CocoonGrantRefundPayload",
+      "body": "te6ccgEBAQEABgAACO/XEeE=",
+      "expect": "fail"
+    },
+    {
+      "type": "CocoonExtClientTopUp",
+      "body": "te6ccgEBAQEADwAAGfFy5sIAAAAAAAAAAAI=",
+      "expect": "ok"
+    },
+    {
+      "type": "CocoonExtClientTopUp",
+      "body": "te6ccgEBAQEABgAACPFy5sI=",
+      "expect": "fail"
+    },
+    {
+      "type": "CocoonRegisterProxy",
+      "body": "te6ccgEBAQEADgAAGJJ8fLUAAAAAAAAAAA==",
+      "expect": "ok"
+    },
+    {
+      "type": "CocoonRegisterProxy",
+      "body": "te6ccgEBAQEABgAACJJ8fLU=",
+      "expect": "fail"
+    },
+    {
+      "type": "CocoonUnregisterProxy",
+      "body": "te6ccgEBAQEAEgAAIG1J6vIAAAAAAAAAAAAAAAA=",
+      "expect": "ok"
+    },
+    {
+      "type": "CocoonUnregisterProxy",
+      "body": "te6ccgEBAQEABgAACG1J6vI=",
+      "expect": "fail"
+    },
+    {
+      "type": "CocoonOwnerClientRegister",
+      "body": "te6ccgEBAQEAFwAAKcRfnzsAAAAAAAAAAAAAAAAAAAAAIA==",
+      "expect": "ok"
+    },
+    {
+      "type": "CocoonOwnerClientRegister",
+      "body": "te6ccgEBAQEABgAACMRfnzs=",
+      "expect": "fail"
+    },
+    {
+      "type": "CocoonOwnerClientChangeSecretHash",
+      "body": "te6ccgEBAQEALwAAWak1cDQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA==",
+      "expect": "ok"
+    },
+    {
+      "type": "CocoonOwnerClientChangeSecretHash",
+      "body": "te6ccgEBAQEABgAACKk1cDQ=",
+      "expect": "fail"
+    },
+    {
+      "type": "CocoonOwnerClientRequestRefund",
+      "body": "te6ccgEBAQEADwAAGfr6bMEAAAAAAAAAACA=",
+      "expect": "ok"
+    },
+    {
+      "type": "CocoonOwnerClientRequestRefund",
+      "body": "te6ccgEBAQEABgAACPr6bME=",
+      "expect": "fail"
+    },
+    {
+      "type": "CocoonOwnerClientIncreaseStake",
+      "body": "te6ccgEBAQEADwAAGWofamAAAAAAAAAAAAI=",
+      "expect": "ok"
+    },
+    {
+      "type": "CocoonOwnerClientIncreaseStake",
+      "body": "te6ccgEBAQEABgAACGofamA=",
+      "expect": "fail"
+    },
+    {
+      "type": "CocoonOwnerClientWithdraw",
+      "body": "te6ccgEBAQEADwAAGdoGjngAAAAAAAAAACA=",
+      "expect": "ok"
+    },
+    {
+      "type": "CocoonOwnerClientWithdraw",
+      "body": "te6ccgEBAQEABgAACNoGjng=",
+      "expect": "fail"
     }
   ]
 }

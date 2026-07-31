@@ -40,7 +40,8 @@
       "specs/vesting.mch",
       "specs/coffee_create_pool.mch",
       "specs/coffee_mev.mch",
-      "specs/coffee_staking.mch"
+      "specs/coffee_staking.mch",
+      "specs/cocoon.mch"
     ]
   },
   "matchers": [
@@ -26215,6 +26216,2166 @@
           ]
         }
       ]
+    },
+    {
+      "name": "cocoon_worker_payout",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          2688593192,
+          4126304822
+        ]
+      },
+      "root": 566,
+      "produces": [
+        "cocoon_worker_payout"
+      ],
+      "captures": [
+        {
+          "name": "start",
+          "card": "one"
+        },
+        {
+          "name": "wreq",
+          "card": "one"
+        },
+        {
+          "name": "payout",
+          "card": "one"
+        },
+        {
+          "name": "excesses",
+          "card": "opt"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "start",
+          "types": [
+            "CocoonLastPayoutPayload",
+            "CocoonPayoutPayload"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "wreq",
+          "types": [
+            "CocoonWorkerProxyRequest"
+          ]
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "payout"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "proxy_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "start"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "source"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "worker_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "start"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "worker_owner",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "wreq"
+                        },
+                        "name": "body"
+                      },
+                      "name": "owner_address"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "payout_type",
+              "expr": {
+                "k": "ternary",
+                "cond": {
+                  "k": "bin",
+                  "op": "==",
+                  "l": {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "start"
+                      },
+                      "name": "data"
+                    },
+                    "name": "opcode"
+                  },
+                  "r": {
+                    "k": "int",
+                    "v": 4126304822
+                  }
+                },
+                "then": {
+                  "k": "str",
+                  "v": "last"
+                },
+                "else": {
+                  "k": "str",
+                  "v": "regular"
+                }
+              }
+            },
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "start"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            },
+            {
+              "name": "new_tokens",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "start"
+                  },
+                  "name": "body"
+                },
+                "name": "new_tokens"
+              }
+            },
+            {
+              "name": "expected_address",
+              "expr": {
+                "k": "call",
+                "fn": "cocoon_expected_address",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "start"
+                      },
+                      "name": "body"
+                    },
+                    "name": "expected_my_address"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "payout_amount",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "payout"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "value"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "worker_state",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "wreq"
+                  },
+                  "name": "body"
+                },
+                "name": "state"
+              }
+            },
+            {
+              "name": "worker_tokens",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "wreq"
+                  },
+                  "name": "body"
+                },
+                "name": "tokens"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cocoon_proxy_payout",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1980819179
+        ]
+      },
+      "root": 570,
+      "produces": [
+        "cocoon_proxy_payout"
+      ],
+      "captures": [
+        {
+          "name": "req",
+          "card": "one"
+        },
+        {
+          "name": "payout",
+          "card": "one"
+        },
+        {
+          "name": "excesses",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "req",
+          "types": [
+            "CocoonExtProxyPayoutRequest"
+          ]
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "payout"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "proxy_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "req"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "proxy_owner",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "payout"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "excesses_recipient",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "req"
+                        },
+                        "name": "body"
+                      },
+                      "name": "send_excesses_to"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "req"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cocoon_proxy_charge",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          3143892883
+        ]
+      },
+      "root": 573,
+      "produces": [
+        "cocoon_proxy_charge"
+      ],
+      "captures": [
+        {
+          "name": "charge",
+          "card": "one"
+        },
+        {
+          "name": "excesses",
+          "card": "one"
+        },
+        {
+          "name": "client_request",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "charge",
+          "types": [
+            "CocoonChargePayload"
+          ]
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "charge"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "proxy_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "charge"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "client_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "client_request"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "charge"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            },
+            {
+              "name": "new_tokens_used",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "charge"
+                  },
+                  "name": "body"
+                },
+                "name": "new_tokens_used"
+              }
+            },
+            {
+              "name": "expected_address",
+              "expr": {
+                "k": "call",
+                "fn": "cocoon_expected_address",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "charge"
+                      },
+                      "name": "body"
+                    },
+                    "name": "expected_my_address"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cocoon_client_top_up",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          4050839234
+        ]
+      },
+      "root": 576,
+      "produces": [
+        "cocoon_client_top_up"
+      ],
+      "captures": [
+        {
+          "name": "topup",
+          "card": "one"
+        },
+        {
+          "name": "preq",
+          "card": "one"
+        },
+        {
+          "name": "excesses",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "topup",
+          "types": [
+            "CocoonExtClientTopUp"
+          ]
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "topup"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "client_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "topup"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "proxy_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "preq"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "sender",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "topup"
+                        },
+                        "name": "body"
+                      },
+                      "name": "send_excesses_to"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "topup"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            },
+            {
+              "name": "top_up_amount",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "topup"
+                      },
+                      "name": "body"
+                    },
+                    "name": "top_up_amount"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cocoon_register_proxy",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          2457631925
+        ]
+      },
+      "root": 579,
+      "produces": [
+        "cocoon_register_proxy"
+      ],
+      "captures": [
+        {
+          "name": "reg",
+          "card": "one"
+        },
+        {
+          "name": "excesses",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "reg",
+          "types": [
+            "CocoonRegisterProxy"
+          ]
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "reg"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "root_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "reg"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "reg"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cocoon_unregister_proxy",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1833560818
+        ]
+      },
+      "root": 581,
+      "produces": [
+        "cocoon_unregister_proxy"
+      ],
+      "captures": [
+        {
+          "name": "unreg",
+          "card": "one"
+        },
+        {
+          "name": "excesses",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "unreg",
+          "types": [
+            "CocoonUnregisterProxy"
+          ]
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "unreg"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "root_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "unreg"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "unreg"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            },
+            {
+              "name": "seqno",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "unreg"
+                  },
+                  "name": "body"
+                },
+                "name": "seqno"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cocoon_client_register",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          3294601019
+        ]
+      },
+      "root": 583,
+      "produces": [
+        "cocoon_client_register"
+      ],
+      "captures": [
+        {
+          "name": "reg",
+          "card": "one"
+        },
+        {
+          "name": "excesses",
+          "card": "one"
+        },
+        {
+          "name": "client_request",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "reg",
+          "types": [
+            "CocoonOwnerClientRegister"
+          ]
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "reg"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "client_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "reg"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "owner",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "reg"
+                        },
+                        "name": "body"
+                      },
+                      "name": "send_excesses_to"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "reg"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            },
+            {
+              "name": "nonce",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "reg"
+                  },
+                  "name": "body"
+                },
+                "name": "nonce"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cocoon_client_change_secret_hash",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          2838851636
+        ]
+      },
+      "root": 586,
+      "produces": [
+        "cocoon_client_change_secret_hash"
+      ],
+      "captures": [
+        {
+          "name": "chg",
+          "card": "one"
+        },
+        {
+          "name": "excesses",
+          "card": "one"
+        },
+        {
+          "name": "client_request",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "chg",
+          "types": [
+            "CocoonOwnerClientChangeSecretHash"
+          ]
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "chg"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "client_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "chg"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "owner",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "chg"
+                        },
+                        "name": "body"
+                      },
+                      "name": "send_excesses_to"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "chg"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            },
+            {
+              "name": "new_secret_hash",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "chg"
+                  },
+                  "name": "body"
+                },
+                "name": "new_secret_hash"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cocoon_client_request_refund",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          2624189302,
+          4210715841
+        ]
+      },
+      "root": 589,
+      "produces": [
+        "cocoon_client_request_refund"
+      ],
+      "captures": [
+        {
+          "name": "refund",
+          "card": "one"
+        },
+        {
+          "name": "excesses",
+          "card": "one"
+        },
+        {
+          "name": "client_request",
+          "card": "one"
+        },
+        {
+          "name": "wallet",
+          "card": "opt"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "refund",
+          "types": [
+            "CocoonOwnerClientRequestRefund"
+          ]
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "refund"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "client_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "refund"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "owner",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "refund"
+                        },
+                        "name": "body"
+                      },
+                      "name": "send_excesses_to"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "refund"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            },
+            {
+              "name": "via_wallet",
+              "expr": {
+                "k": "bin",
+                "op": "!=",
+                "l": {
+                  "k": "name",
+                  "id": "wallet"
+                },
+                "r": {
+                  "k": "null"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cocoon_grant_refund",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          4023849441
+        ]
+      },
+      "root": 593,
+      "produces": [
+        "cocoon_grant_refund"
+      ],
+      "captures": [
+        {
+          "name": "grant",
+          "card": "one"
+        },
+        {
+          "name": "client_request",
+          "card": "one"
+        },
+        {
+          "name": "payout",
+          "card": "one"
+        },
+        {
+          "name": "excesses",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "grant",
+          "types": [
+            "CocoonGrantRefundPayload"
+          ]
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "payout"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "proxy_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "grant"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "client_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "client_request"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "refund_recipient",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "payout"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "grant"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            },
+            {
+              "name": "new_tokens_used",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "grant"
+                  },
+                  "name": "body"
+                },
+                "name": "new_tokens_used"
+              }
+            },
+            {
+              "name": "expected_address",
+              "expr": {
+                "k": "call",
+                "fn": "cocoon_expected_address",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "grant"
+                      },
+                      "name": "body"
+                    },
+                    "name": "expected_my_address"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "payout_amount",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "payout"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "value"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cocoon_client_increase_stake",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1780443744
+        ]
+      },
+      "root": 597,
+      "produces": [
+        "cocoon_client_increase_stake"
+      ],
+      "captures": [
+        {
+          "name": "inc",
+          "card": "one"
+        },
+        {
+          "name": "excesses",
+          "card": "one"
+        },
+        {
+          "name": "client_request",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "inc",
+          "types": [
+            "CocoonOwnerClientIncreaseStake"
+          ]
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "inc"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "owner",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "inc"
+                        },
+                        "name": "body"
+                      },
+                      "name": "send_excesses_to"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "client_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "inc"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "inc"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            },
+            {
+              "name": "new_stake",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "inc"
+                      },
+                      "name": "body"
+                    },
+                    "name": "new_stake"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cocoon_client_withdraw",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          3657862776
+        ]
+      },
+      "root": 600,
+      "produces": [
+        "cocoon_client_withdraw"
+      ],
+      "captures": [
+        {
+          "name": "wd",
+          "card": "one"
+        },
+        {
+          "name": "client_request",
+          "card": "one"
+        },
+        {
+          "name": "excesses",
+          "card": "opt"
+        },
+        {
+          "name": "payout",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "wd",
+          "types": [
+            "CocoonOwnerClientWithdraw"
+          ]
+        },
+        {
+          "s": "failed",
+          "when": {
+            "k": "bin",
+            "op": "??",
+            "l": {
+              "k": "attr",
+              "of": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "wd"
+                  },
+                  "name": "msg"
+                },
+                "name": "transaction"
+              },
+              "name": "aborted"
+            },
+            "r": {
+              "k": "bool",
+              "v": false
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "owner",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "wd"
+                        },
+                        "name": "body"
+                      },
+                      "name": "send_excesses_to"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "client_contract",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "call",
+                  "fn": "account",
+                  "args": [
+                    {
+                      "k": "attr",
+                      "of": {
+                        "k": "attr",
+                        "of": {
+                          "k": "name",
+                          "id": "wd"
+                        },
+                        "name": "msg"
+                      },
+                      "name": "destination"
+                    }
+                  ]
+                },
+                "r": {
+                  "k": "call",
+                  "fn": "addr_none",
+                  "args": []
+                }
+              }
+            },
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "wd"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            },
+            {
+              "name": "withdraw_amount",
+              "expr": {
+                "k": "call",
+                "fn": "amount",
+                "args": [
+                  {
+                    "k": "bin",
+                    "op": "??",
+                    "l": {
+                      "k": "call",
+                      "fn": "cocoon_withdraw_amount",
+                      "args": [
+                        {
+                          "k": "name",
+                          "id": "client_request"
+                        }
+                      ]
+                    },
+                    "r": {
+                      "k": "int",
+                      "v": 0
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "nodes": [
@@ -29802,6 +31963,243 @@
       "kind": "contract",
       "opcode": 3003937552,
       "optional": true
+    },
+    {
+      "kind": "any",
+      "capture": "start",
+      "child": 567
+    },
+    {
+      "kind": "contract",
+      "opcode": 1299340588,
+      "capture": "wreq",
+      "children": [
+        568,
+        569
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 3315236051,
+      "capture": "payout"
+    },
+    {
+      "kind": "contract",
+      "opcode": 627413836,
+      "optional": true,
+      "capture": "excesses"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1980819179,
+      "capture": "req",
+      "children": [
+        571,
+        572
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 3315236051,
+      "capture": "payout"
+    },
+    {
+      "kind": "contract",
+      "opcode": 627413836,
+      "capture": "excesses"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3143892883,
+      "capture": "charge",
+      "children": [
+        574,
+        575
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 627413836,
+      "capture": "excesses"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1698992116,
+      "capture": "client_request"
+    },
+    {
+      "kind": "contract",
+      "opcode": 4050839234,
+      "capture": "topup",
+      "child": 577
+    },
+    {
+      "kind": "contract",
+      "opcode": 1698992116,
+      "capture": "preq",
+      "children": [
+        578
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 627413836,
+      "capture": "excesses"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2457631925,
+      "capture": "reg",
+      "child": 580
+    },
+    {
+      "kind": "contract",
+      "opcode": 627413836,
+      "capture": "excesses"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1833560818,
+      "capture": "unreg",
+      "child": 582
+    },
+    {
+      "kind": "contract",
+      "opcode": 627413836,
+      "capture": "excesses"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3294601019,
+      "capture": "reg",
+      "children": [
+        584,
+        585
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 627413836,
+      "capture": "excesses"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1698992116,
+      "capture": "client_request"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2838851636,
+      "capture": "chg",
+      "children": [
+        587,
+        588
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 627413836,
+      "capture": "excesses"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1698992116,
+      "capture": "client_request"
+    },
+    {
+      "kind": "any",
+      "capture": "refund",
+      "children": [
+        590,
+        591
+      ],
+      "parent": 592
+    },
+    {
+      "kind": "contract",
+      "opcode": 627413836,
+      "capture": "excesses"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1698992116,
+      "capture": "client_request"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2624189302,
+      "optional": true,
+      "capture": "wallet"
+    },
+    {
+      "kind": "contract",
+      "opcode": 4023849441,
+      "capture": "grant",
+      "child": 594
+    },
+    {
+      "kind": "contract",
+      "opcode": 1698992116,
+      "capture": "client_request",
+      "children": [
+        595,
+        596
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 3315236051,
+      "capture": "payout"
+    },
+    {
+      "kind": "contract",
+      "opcode": 627413836,
+      "capture": "excesses"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1780443744,
+      "capture": "inc",
+      "children": [
+        598,
+        599
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 627413836,
+      "capture": "excesses"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1698992116,
+      "capture": "client_request"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3657862776,
+      "capture": "wd",
+      "child": 601
+    },
+    {
+      "kind": "contract",
+      "opcode": 1698992116,
+      "capture": "client_request",
+      "children": [
+        602,
+        603
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 627413836,
+      "optional": true,
+      "capture": "excesses"
+    },
+    {
+      "kind": "contract",
+      "opcode": 3315236051,
+      "capture": "payout"
     }
   ],
   "registration_order": [
@@ -29885,6 +32283,18 @@
     77,
     78,
     79,
-    80
+    80,
+    81,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    92
   ]
 }

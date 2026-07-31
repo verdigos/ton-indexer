@@ -7,7 +7,7 @@ ton-mch-engine --actions -T indexer/tests/traces
 ```
 
 run from the repo root (no `-I`: the matcher table is compiled in since EM4).
-**184 fixtures, 824 ACTION rows** — one per serializable block on each trace's
+**184 fixtures, 838 ACTION rows** — one per serializable block on each trace's
 post-pass spine, plus the CHILD rows the serializer expands out of any spine
 block whose btype is outside `v1_ops`, plus 6 synthetic `unknown` rows (the
 fixtures whose spine serializes to nothing at all). Rows are printed **sorted**
@@ -21,6 +21,55 @@ dies with it — and Python's `--emulated-traces` path is being retired. This fi
 is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
+
+Re-baselined 2026-07-31 (**824 → 838 rows, no fixture added**) by the COCOON
+port — the whole twelve-matcher family in one new spec file, `specs/cocoon.mch`,
+landing last in `ir/emit_manifest.json` exactly as the twelve legacy matchers sit
+last in `event_processing.matchers`. Thirteen touched fixtures (the family has
+100 % fixture coverage and zero live volume — see the port audit).
+
+**Every row differs textually again**, for the same reason as the two
+re-baselines below: TWELVE new composite columns (one per matcher) joined
+`Classify.cpp render_action`, which prints the full column list on every row, so
+all 824 pre-existing rows gained twelve `…=null` keys. Re-diffing with those
+twelve keys stripped isolates the real delta: **14 rows added, 0 removed**, and
+on pre-existing rows the ONLY fields that changed are `parent_action_id` and
+`ancestor_type` — the 45 `call_contract` children the twelve new matchers now
+consume. None of the twelve btypes is in `v1_ops`, so a consumed block is never
+dropped, only re-parented (the tgbtc / layerzero / evaa_supply pattern).
+
+**+14, not +12**: two matchers fire on two fixtures each — `cocoon_worker_payout`
+on the regular (`1LzTIRFP…`) and last (`1gnDaOa5…`) payout shapes, and
+`cocoon_client_request_refund` on the direct (`AMdf-I0N…`) and via-wallet
+(`A88GSRUq…`) shapes. The other ten fire once each.
+
+Beyond the golden, every one of the 14 rows is gated three ways: the actions
+twin diff is 0 (C++ == the Python IR engine), the parity-sweep row
+`specs/cocoon.mch` is green on all 13 fixtures (Python IR == the twelve legacy
+`BlockMatcher`s, compared field by field), and `tests/test_cases/cocoon.yaml`
+(13 cases, pre-existing) asserts the production Python classifier independently.
+
+Two things about this wave are worth remembering.
+
+**A 260-bit external address used to render `NaN`.** `load_address_py`
+(`parse/PSlice.cpp`) built the addr_extern value into a `td::RefInt256`, which is
+a signed 257-bit BigInt — so anything past 256 bits became an
+invalid-but-non-null value. Cocoon is the first family to read an
+`expectedMyAddress`, and the corpus ones are 260 bits. The Str payload is now
+`extern:<len>:<HEX>` rather than `<decimal>`, assembled nibble by nibble off the
+wire (exact to 511 bits) and twinned by Python's `f"{int:x}"`. Nothing else in
+the engine reads an extern address, so the contract change is contained to
+`PSlice.cpp`, `twins/py_msg_dump.py`, four doc comments and the one host fn that
+wants it — which now just swaps the second colon for the semicolon legacy uses.
+
+**`nonce` moved into `decimal_string_key`** (`emu/EmuActionSerialize.cpp`).
+`cocoon_client_register`'s nonce is a raw u64 that routinely exceeds int64
+(`11924145372215500834` on the `5B6Ex8kv…` fixture), so packing it as a natural
+integer would have nil'd it out. The key table is flat by key NAME, so
+LayerZero's bounded `nonce` — previously an explicit exclusion — now travels as
+a decimal string too. Lossless: both Go fields are `*int64` and `decodeFlexInt`
+parses the string back. The three affected msgpack self-test assertions were
+flipped from `is_uint` to `is_str`.
 
 Re-baselined 2026-07-31 (**823 → 824 rows, no fixture added**) by the W4
 FIXTURED SINGLES port — three unrelated matchers, one fixture each, appended to

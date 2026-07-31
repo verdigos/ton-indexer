@@ -32,7 +32,7 @@ namespace mch {
 // Messages deduped by msg_hash within a fixture, lines sorted bytewise.
 // Value rendering: null | true/false | decimal int | wc:HEX account |
 // str:<s> | b64:<base64 raw bytes> | cell:<HASH-hex-upper> | {k=v,...} dict
-// with sorted keys | extern:<len>:<value> external address (as Str).
+// with sorted keys | extern:<len>:<hex> external address (as Str).
 
 namespace {
 
@@ -65,6 +65,22 @@ constexpr DumpType kDumpTypes[] = {
     {0xa2b5fbae, "LayerzeroChannelSendCallback"},
     {0x5388cd88, "ChannelCommitPacket"},
     {0x3cb38090, "UlnConnectionVerifyCallbackParser"},
+    // Cocoon. RegisterProxy (0x927c7cb5) is deliberately absent: its Python
+    // class binds the RESIDUAL SLICE as `proxy_info`, which no schema leaf can
+    // emit, so the dump would diverge on that key alone (mch-msgs.schema).
+    {0xa040ad28, "CocoonPayoutPayload"},
+    {0xf5f26a36, "CocoonLastPayoutPayload"},
+    {0x4d725d2c, "CocoonWorkerProxyRequest"},
+    {0x7610e6eb, "CocoonExtProxyPayoutRequest"},
+    {0xbb63ff93, "CocoonChargePayload"},
+    {0xefd711e1, "CocoonGrantRefundPayload"},
+    {0xf172e6c2, "CocoonExtClientTopUp"},
+    {0x6d49eaf2, "CocoonUnregisterProxy"},
+    {0xc45f9f3b, "CocoonOwnerClientRegister"},
+    {0xa9357034, "CocoonOwnerClientChangeSecretHash"},
+    {0xfafa6cc1, "CocoonOwnerClientRequestRefund"},
+    {0x6a1f6a60, "CocoonOwnerClientIncreaseStake"},
+    {0xda068e78, "CocoonOwnerClientWithdraw"},
 };
 
 std::string render_parse_value(const Value &v);

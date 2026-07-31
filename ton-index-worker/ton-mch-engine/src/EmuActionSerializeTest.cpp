@@ -358,7 +358,10 @@ void test_natural_types() {
   const msgpack::object *lzd = at(*row, "layerzero_packet_data");
   check("natural/lz_src_eid_int", is_uint(at(*lzd, "src_eid"), 30101));
   check("natural/lz_dst_eid_int", is_uint(at(*lzd, "dst_eid"), 30343));
-  check("natural/lz_nonce_int", is_uint(at(*lzd, "nonce"), 1234567890123ULL));
+  // `nonce` became a decimal-string key when cocoon landed (cocoon_client_register
+  // carries a u64 nonce past int64); LayerZero's bounded one rides along, which
+  // its Go *int64 decodes losslessly through decodeFlexInt.
+  check("natural/lz_nonce_str", is_str(at(*lzd, "nonce"), "1234567890123"));
   check("natural/lz_guid_str", is_str(at(*lzd, "guid"), "0xdeadbeef"));
 
   const msgpack::object *jtd = at(*row, "jetton_transfer_data");
@@ -566,6 +569,41 @@ Action wire_fixture_action() {
                                                        Value::make_str(kAddrB)}));
   a.vesting_add_whitelist_data = Value::make_dict(std::move(vaw));
 
+  // Cocoon: four of the twelve composites, chosen for wire SHAPES rather than
+  // coverage — between them they carry every type the family emits.
+  //  - worker payout: a *string payout_type, two u64 amounts past int64, and a
+  //    u2 `worker_state` that must stay a NATURAL integer beside them;
+  //  - client register: the `nonce` that forced `nonce` into
+  //    decimal_string_key at all (11924145372215500834 > 2^63, from the
+  //    5B6Ex8kv fixture);
+  //  - request refund: the family's only BOOL;
+  //  - unregister proxy: a u32 `seqno`, natural beside a stringified query_id.
+  Value::Fields cwp;
+  cwp.emplace_back("payout_type", Value::make_str("last"));
+  cwp.emplace_back("query_id",
+                   Value::make_int(td::string_to_int256(std::string("10553886210694500674"))));
+  cwp.emplace_back("new_tokens",
+                   Value::make_int(td::string_to_int256(std::string("9229614747703451079"))));
+  cwp.emplace_back("worker_state", Value::make_int64(2));
+  cwp.emplace_back("worker_tokens", Value::make_int64(73063940556LL));
+  a.cocoon_worker_payout_data = Value::make_dict(std::move(cwp));
+
+  Value::Fields ccr;
+  ccr.emplace_back("query_id", Value::make_int64(1821011912409218354LL));
+  ccr.emplace_back("nonce",
+                   Value::make_int(td::string_to_int256(std::string("11924145372215500834"))));
+  a.cocoon_client_register_data = Value::make_dict(std::move(ccr));
+
+  Value::Fields crr;
+  crr.emplace_back("query_id", Value::make_int64(0));
+  crr.emplace_back("via_wallet", Value::make_bool(true));
+  a.cocoon_client_request_refund_data = Value::make_dict(std::move(crr));
+
+  Value::Fields cup;
+  cup.emplace_back("query_id", Value::make_int64(0));
+  cup.emplace_back("seqno", Value::make_int64(1));
+  a.cocoon_unregister_proxy_data = Value::make_dict(std::move(cup));
+
   // *int64 (flags) beside *string keys in one composite.
   Value::Fields dns;
   dns.emplace_back("value_schema", Value::make_str("DNSAdnlAddress"));
@@ -640,8 +678,8 @@ void test_wire_fixture() {
   check("wire/ancestor_type", is_str(elem(at(*row, "ancestor_type"), 0), "jvault_stake"));
   check("wire/query_id_str",
         is_str(at(*at(*row, "jetton_transfer_data"), "query_id"), "18446744073709551615"));
-  check("wire/lz_nonce_int",
-        is_uint(at(*at(*row, "layerzero_packet_data"), "nonce"), 1234567890123ULL));
+  check("wire/lz_nonce_str",
+        is_str(at(*at(*row, "layerzero_packet_data"), "nonce"), "1234567890123"));
   const msgpack::object *lzs = at(*row, "layerzero_send_data");
   check("wire/lz_send_request_id_str",
         is_str(at(*lzs, "send_request_id"), "18446744073709551614"));
@@ -649,7 +687,7 @@ void test_wire_fixture() {
   check("wire/lz_zro_fee_str", is_str(at(*lzs, "zro_fee"), "0"));
   check("wire/lz_msglib_str", is_str(at(*lzs, "msglib"), "0x63bdfbf347f883dd"));
   const msgpack::object *lzv = at(*row, "layerzero_dvn_verify_data");
-  check("wire/lz_dvn_nonce_int", is_uint(at(*lzv, "nonce"), 125));
+  check("wire/lz_dvn_nonce_str", is_str(at(*lzv, "nonce"), "125"));
   check("wire/lz_dvn_status_str", is_str(at(*lzv, "status"), "succeeded"));
   const msgpack::object *tdp = at(*row, "tonco_deploy_pool_data");
   check("wire/tonco_initial_price_x96_str",
@@ -659,6 +697,21 @@ void test_wire_fixture() {
   const msgpack::object *vaw = at(*row, "vesting_add_whitelist_data");
   check("wire/whitelist_accounts_added_str",
         is_str(elem(at(*vaw, "accounts_added"), 1), kAddrB));
+  const msgpack::object *cwp = at(*row, "cocoon_worker_payout_data");
+  check("wire/cocoon_new_tokens_str", is_str(at(*cwp, "new_tokens"), "9229614747703451079"));
+  check("wire/cocoon_worker_tokens_str", is_str(at(*cwp, "worker_tokens"), "73063940556"));
+  check("wire/cocoon_worker_state_int", is_uint(at(*cwp, "worker_state"), 2));
+  check("wire/cocoon_payout_type_str", is_str(at(*cwp, "payout_type"), "last"));
+  // The u64 nonce past int64 — a natural pack would have nil'd it out.
+  check("wire/cocoon_nonce_str",
+        is_str(at(*at(*row, "cocoon_client_register_data"), "nonce"),
+               "11924145372215500834"));
+  check("wire/cocoon_via_wallet_bool",
+        at(*at(*row, "cocoon_client_request_refund_data"), "via_wallet") != nullptr &&
+            at(*at(*row, "cocoon_client_request_refund_data"), "via_wallet")->type ==
+                msgpack::type::BOOLEAN);
+  check("wire/cocoon_seqno_int",
+        is_uint(at(*at(*row, "cocoon_unregister_proxy_data"), "seqno"), 1));
   check("wire/dns_flags_int", is_uint(at(*at(*row, "change_dns_record_data"), "flags"), 7));
   check("wire/claimed_amounts_all_str",
         is_str(elem(at(*at(*row, "jvault_claim_data"), "claimed_amounts"), 0), "1000"));

@@ -117,6 +117,12 @@ func TestActionsWireFixture(t *testing.T) {
 	}
 	str("layerzero_send_data.msglib", a.LayerzeroSendData.Msglib, "0x63bdfbf347f883dd")
 
+	// Both LayerZero nonces now arrive as DECIMAL STRINGS (the cocoon wave moved
+	// `nonce` into decimal_string_key for cocoon_client_register's above-int64
+	// one, and that table is keyed by name at every depth). Both fields are
+	// *int64 and decodeFlexInt parses the string back, so the assertions are
+	// unchanged - which is the point of checking them here.
+
 	// A bounded *int64 beside the status STRING the parser maps from the code.
 	if a.LayerzeroDvnVerifyData == nil {
 		t.Fatal("layerzero_dvn_verify_data is nil")
@@ -139,6 +145,41 @@ func TestActionsWireFixture(t *testing.T) {
 	str("tonco_deploy_pool_data.tick_spacing", a.ToncoDeployPoolData.TickSpacing, "60")
 	if a.ToncoDeployPoolData.PoolActive == nil || !*a.ToncoDeployPoolData.PoolActive {
 		t.Errorf("pool_active = %v, want true", a.ToncoDeployPoolData.PoolActive)
+	}
+
+	// Cocoon: four of the twelve composites, covering every wire shape the family
+	// emits. The nonce is the load-bearing one - it exceeds int64, so a natural
+	// pack would have nil'd it out, and it is why `nonce` is a decimal-string key.
+	if a.CocoonWorkerPayoutData == nil {
+		t.Fatal("cocoon_worker_payout_data is nil")
+	}
+	str("cocoon_worker_payout_data.payout_type", a.CocoonWorkerPayoutData.PayoutType, "last")
+	str("cocoon_worker_payout_data.new_tokens",
+		a.CocoonWorkerPayoutData.NewTokens, "9229614747703451079")
+	str("cocoon_worker_payout_data.worker_tokens",
+		a.CocoonWorkerPayoutData.WorkerTokens, "73063940556")
+	// *int64 beside those *string amounts: the u2 worker state stays an integer.
+	if a.CocoonWorkerPayoutData.WorkerState == nil || *a.CocoonWorkerPayoutData.WorkerState != 2 {
+		t.Errorf("worker_state = %v, want 2", a.CocoonWorkerPayoutData.WorkerState)
+	}
+	if a.CocoonClientRegisterData == nil {
+		t.Fatal("cocoon_client_register_data is nil")
+	}
+	str("cocoon_client_register_data.nonce",
+		a.CocoonClientRegisterData.Nonce, "11924145372215500834")
+	// The family's only *bool, and its only u32 reaching a *int64.
+	if a.CocoonClientRequestRefundData == nil {
+		t.Fatal("cocoon_client_request_refund_data is nil")
+	}
+	if a.CocoonClientRequestRefundData.ViaWallet == nil ||
+		!*a.CocoonClientRequestRefundData.ViaWallet {
+		t.Errorf("via_wallet = %v, want true", a.CocoonClientRequestRefundData.ViaWallet)
+	}
+	if a.CocoonUnregisterProxyData == nil {
+		t.Fatal("cocoon_unregister_proxy_data is nil")
+	}
+	if a.CocoonUnregisterProxyData.Seqno == nil || *a.CocoonUnregisterProxyData.Seqno != 1 {
+		t.Errorf("seqno = %v, want 1", a.CocoonUnregisterProxyData.Seqno)
 	}
 
 	if a.ChangeDnsRecordData == nil {

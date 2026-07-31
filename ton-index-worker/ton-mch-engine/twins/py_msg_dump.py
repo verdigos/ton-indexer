@@ -7,7 +7,7 @@
 #   <msg_hash> <MsgType> PARSE_FAIL
 # Value rendering: null | true/false | decimal int | wc:HEX account |
 # str:<s> | b64:<base64 bytes> | cell:<HASH hex upper> | {k=v,...} sorted dict |
-# extern:<len>:<value>. Slice values render as their to_cell() hash.
+# extern:<len>:<hex>. Slice values render as their to_cell() hash.
 import base64
 import os
 import sys
@@ -42,6 +42,14 @@ from indexer.events.blocks.messages.layerzero import (  # noqa: E402
     LayerZeroPacket, LayerZeroPath, LayerzeroChannelSendCallback,
     UlnConnectionVerifyCallbackParser,
 )
+from indexer.events.blocks.messages.cocoon import (  # noqa: E402
+    CocoonChargePayload, CocoonExtClientTopUp, CocoonExtProxyPayoutRequest,
+    CocoonGrantRefundPayload, CocoonLastPayoutPayload,
+    CocoonOwnerClientChangeSecretHash, CocoonOwnerClientIncreaseStake,
+    CocoonOwnerClientRegister, CocoonOwnerClientRequestRefund,
+    CocoonOwnerClientWithdraw, CocoonPayoutPayload, CocoonUnregisterProxy,
+    CocoonWorkerProxyRequest,
+)
 from indexer.events.blocks.utils import AccountId, Asset  # noqa: E402
 
 CLASSES = {
@@ -68,6 +76,21 @@ CLASSES = {
     0xA2B5FBAE: ("LayerzeroChannelSendCallback", LayerzeroChannelSendCallback),
     0x5388CD88: ("ChannelCommitPacket", ChannelCommitPacket),
     0x3CB38090: ("UlnConnectionVerifyCallbackParser", UlnConnectionVerifyCallbackParser),
+    # Cocoon. RegisterProxy (0x927C7CB5) is deliberately absent — its class binds
+    # the residual slice as `proxy_info`, which the schema cannot emit.
+    0xA040AD28: ("CocoonPayoutPayload", CocoonPayoutPayload),
+    0xF5F26A36: ("CocoonLastPayoutPayload", CocoonLastPayoutPayload),
+    0x4D725D2C: ("CocoonWorkerProxyRequest", CocoonWorkerProxyRequest),
+    0x7610E6EB: ("CocoonExtProxyPayoutRequest", CocoonExtProxyPayoutRequest),
+    0xBB63FF93: ("CocoonChargePayload", CocoonChargePayload),
+    0xEFD711E1: ("CocoonGrantRefundPayload", CocoonGrantRefundPayload),
+    0xF172E6C2: ("CocoonExtClientTopUp", CocoonExtClientTopUp),
+    0x6D49EAF2: ("CocoonUnregisterProxy", CocoonUnregisterProxy),
+    0xC45F9F3B: ("CocoonOwnerClientRegister", CocoonOwnerClientRegister),
+    0xA9357034: ("CocoonOwnerClientChangeSecretHash", CocoonOwnerClientChangeSecretHash),
+    0xFAFA6CC1: ("CocoonOwnerClientRequestRefund", CocoonOwnerClientRequestRefund),
+    0x6A1F6A60: ("CocoonOwnerClientIncreaseStake", CocoonOwnerClientIncreaseStake),
+    0xDA068E78: ("CocoonOwnerClientWithdraw", CocoonOwnerClientWithdraw),
 }
 
 
@@ -130,7 +153,9 @@ def render(v):
         return "asset:TON" if v.is_ton else "asset:" + v.jetton_address.as_str()
     if isinstance(v, ExternalAddress):
         # The C++ adapter carries external addresses as a Str Value.
-        return f"str:extern:{v.len}:{v.external_address}"
+        # HEX, not decimal: the C++ Value carries hex because a 511-bit
+        # extern address overflows td::RefInt256 (PSlice.cpp).
+        return f"str:extern:{v.len}:{v.external_address:x}"
     if isinstance(v, Cell):
         return "cell:" + v.hash.hex().upper()
     if isinstance(v, Slice):

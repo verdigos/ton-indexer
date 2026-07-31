@@ -69,6 +69,13 @@ Value av_hex(const Value &v) {
   return Value::make_str("0x" + td::hex_string(v.num, false));
 }
 
+// Python hex(int)[2:]: the same lowercase magnitude as av_hex, WITHOUT the "0x".
+// Cocoon's `new_secret_hash` is the only user (block_tree_serializer.py:1273).
+Value av_hex_bare(const Value &v) {
+  if (v.is_null() || v.t != VType::Int || v.num.is_null()) return Value::null();
+  return Value::make_str(td::hex_string(v.num, false));
+}
+
 // jetton/nft `comment`: produced field is RAW bytes (Bytes) or Null. encrypted
 // -> base64; else utf-8 backslashreplace + U+0000 strip (decode_comment_bytes).
 Value comment_value(const Value &d) {
@@ -757,6 +764,136 @@ void fill_ethena_withdrawal_request(const Value &d, Action &a) {
   a.staking_data = mkdict(std::move(f));
 }
 
+// --- Cocoon (block_tree_serializer.py:1159-1335) -----------------------------
+// Twelve fills, each a handful of directional fields plus its own composite. The
+// legacy bodies are `block.data.<attr>` reads off a dataclass; the declarative
+// build hands the same names in a dict, which is what `_dget` bridges on the
+// Python side and what `dg` has always done here.
+
+void fill_cocoon_worker_payout(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "proxy_contract"));
+  a.source_secondary = av_addr(dg(d, "worker_contract"));
+  a.destination = av_addr(dg(d, "worker_owner"));
+  a.amount = av_amount(dg(d, "payout_amount"));
+  Value::Fields f;
+  f.emplace_back("payout_type", dg(d, "payout_type"));
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("new_tokens", dg(d, "new_tokens"));
+  f.emplace_back("worker_state", dg(d, "worker_state"));
+  f.emplace_back("worker_tokens", dg(d, "worker_tokens"));
+  a.cocoon_worker_payout_data = mkdict(std::move(f));
+}
+
+void fill_cocoon_proxy_payout(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "proxy_contract"));
+  a.destination = av_addr(dg(d, "proxy_owner"));
+  a.destination_secondary = av_addr(dg(d, "excesses_recipient"));
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  a.cocoon_proxy_payout_data = mkdict(std::move(f));
+}
+
+// `amount = 0` is a LITERAL in the legacy fill ("no actual transfer"), not a
+// value read off the block.
+void fill_cocoon_proxy_charge(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "proxy_contract"));
+  a.destination = av_addr(dg(d, "client_contract"));
+  a.amount = Value::make_int64(0);
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("new_tokens_used", dg(d, "new_tokens_used"));
+  f.emplace_back("expected_address", dg(d, "expected_address"));
+  a.cocoon_proxy_charge_data = mkdict(std::move(f));
+}
+
+void fill_cocoon_client_top_up(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "sender"));
+  a.destination = av_addr(dg(d, "client_contract"));
+  a.destination_secondary = av_addr(dg(d, "proxy_contract"));
+  a.amount = av_amount(dg(d, "top_up_amount"));
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  a.cocoon_client_top_up_data = mkdict(std::move(f));
+}
+
+void fill_cocoon_register_proxy(const Value &d, Action &a) {
+  a.destination = av_addr(dg(d, "root_contract"));
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  a.cocoon_register_proxy_data = mkdict(std::move(f));
+}
+
+void fill_cocoon_unregister_proxy(const Value &d, Action &a) {
+  a.destination = av_addr(dg(d, "root_contract"));
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("seqno", dg(d, "seqno"));
+  a.cocoon_unregister_proxy_data = mkdict(std::move(f));
+}
+
+void fill_cocoon_client_register(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "owner"));
+  a.destination = av_addr(dg(d, "client_contract"));
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("nonce", dg(d, "nonce"));
+  a.cocoon_client_register_data = mkdict(std::move(f));
+}
+
+// The composite stores the uint256 as `hex(int(...))[2:]`, so the spec keeps the
+// raw integer in the block data and the rendering happens here.
+void fill_cocoon_client_change_secret_hash(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "owner"));
+  a.destination = av_addr(dg(d, "client_contract"));
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("new_secret_hash", av_hex_bare(dg(d, "new_secret_hash")));
+  a.cocoon_client_change_secret_hash_data = mkdict(std::move(f));
+}
+
+void fill_cocoon_client_request_refund(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "owner"));
+  a.destination = av_addr(dg(d, "client_contract"));
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("via_wallet", dg(d, "via_wallet"));
+  a.cocoon_client_request_refund_data = mkdict(std::move(f));
+}
+
+void fill_cocoon_grant_refund(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "proxy_contract"));
+  a.source_secondary = av_addr(dg(d, "client_contract"));
+  a.destination = av_addr(dg(d, "refund_recipient"));
+  a.amount = av_amount(dg(d, "payout_amount"));
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("new_tokens_used", dg(d, "new_tokens_used"));
+  f.emplace_back("expected_address", dg(d, "expected_address"));
+  a.cocoon_grant_refund_data = mkdict(std::move(f));
+}
+
+// `new_stake` / `withdraw_amount` below are each written TWICE by the legacy
+// fill — once as the row-level `amount`, once inside the composite.
+void fill_cocoon_client_increase_stake(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "owner"));
+  a.destination = av_addr(dg(d, "client_contract"));
+  a.amount = av_amount(dg(d, "new_stake"));
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("new_stake", av_amount(dg(d, "new_stake")));
+  a.cocoon_client_increase_stake_data = mkdict(std::move(f));
+}
+
+void fill_cocoon_client_withdraw(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "owner"));
+  a.destination = av_addr(dg(d, "client_contract"));
+  a.amount = av_amount(dg(d, "withdraw_amount"));
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("withdraw_amount", av_amount(dg(d, "withdraw_amount")));
+  a.cocoon_client_withdraw_data = mkdict(std::move(f));
+}
+
 void fill_tgbtc_mint(const Value &d, Action &a) {
   a.type = "tgbtc_mint";
   Value cr = dg(d, "crippled");
@@ -1343,6 +1480,18 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "vesting_add_whitelist") fill_vesting_add_whitelist(d, a);
   else if (t == "tonco_deploy_pool") fill_tonco_deploy_pool(d, a);
   else if (t == "ethena_withdrawal_request") fill_ethena_withdrawal_request(d, a);
+  else if (t == "cocoon_worker_payout") fill_cocoon_worker_payout(d, a);
+  else if (t == "cocoon_proxy_payout") fill_cocoon_proxy_payout(d, a);
+  else if (t == "cocoon_proxy_charge") fill_cocoon_proxy_charge(d, a);
+  else if (t == "cocoon_client_top_up") fill_cocoon_client_top_up(d, a);
+  else if (t == "cocoon_register_proxy") fill_cocoon_register_proxy(d, a);
+  else if (t == "cocoon_unregister_proxy") fill_cocoon_unregister_proxy(d, a);
+  else if (t == "cocoon_client_register") fill_cocoon_client_register(d, a);
+  else if (t == "cocoon_client_change_secret_hash") fill_cocoon_client_change_secret_hash(d, a);
+  else if (t == "cocoon_client_request_refund") fill_cocoon_client_request_refund(d, a);
+  else if (t == "cocoon_grant_refund") fill_cocoon_grant_refund(d, a);
+  else if (t == "cocoon_client_increase_stake") fill_cocoon_client_increase_stake(d, a);
+  else if (t == "cocoon_client_withdraw") fill_cocoon_client_withdraw(d, a);
   else if (t == "tgbtc_mint") fill_tgbtc_mint(d, a);
   else if (t == "tgbtc_burn") fill_tgbtc_burn(d, a);
   else if (t == "tgbtc_new_key") fill_tgbtc_new_key(d, a);

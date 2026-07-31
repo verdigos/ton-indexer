@@ -1945,6 +1945,355 @@ td::Result<Value> gen_parse_tonco_pool_v3_init(const td::Ref<vm::Cell> &body) {
   return Value::make_obj(std::move(f));
 }
 
+// CocoonPayoutPayload (opcode 0xa040ad28); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_cocoon_payout_payload(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CocoonPayoutPayload: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonPayoutPayload: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonPayoutPayload: new_tokens underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("new_tokens", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("expected_my_address", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CocoonLastPayoutPayload (opcode 0xf5f26a36); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_cocoon_last_payout_payload(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CocoonLastPayoutPayload: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonLastPayoutPayload: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonLastPayoutPayload: new_tokens underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("new_tokens", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("expected_my_address", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CocoonWorkerProxyRequest (opcode 0x4d725d2c); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_cocoon_worker_proxy_request(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CocoonWorkerProxyRequest: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonWorkerProxyRequest: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("owner_address", ra.move_as_ok());
+  }
+  {
+    if (!cs.have(2)) { return td::Status::Error("CocoonWorkerProxyRequest: state underflow"); }
+    auto q = cs.fetch_ulong(2);
+    f.emplace_back("state", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonWorkerProxyRequest: tokens underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("tokens", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(1)) { return td::Status::Error("CocoonWorkerProxyRequest: payload bit missing"); }
+    Value mc = Value::null();
+    if (cs.fetch_ulong(1)) {
+      if (cs.size_refs() == 0) { return td::Status::Error("CocoonWorkerProxyRequest: payload ref missing"); }
+      mc = Value::make_cell(cs.fetch_ref());
+    }
+    f.emplace_back("payload", std::move(mc));
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CocoonExtProxyPayoutRequest (opcode 0x7610e6eb); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_cocoon_ext_proxy_payout_request(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CocoonExtProxyPayoutRequest: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonExtProxyPayoutRequest: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("send_excesses_to", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CocoonChargePayload (opcode 0xbb63ff93); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_cocoon_charge_payload(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CocoonChargePayload: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonChargePayload: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonChargePayload: new_tokens_used underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("new_tokens_used", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("expected_my_address", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CocoonGrantRefundPayload (opcode 0xefd711e1); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_cocoon_grant_refund_payload(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CocoonGrantRefundPayload: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonGrantRefundPayload: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonGrantRefundPayload: new_tokens_used underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("new_tokens_used", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("expected_my_address", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CocoonExtClientTopUp (opcode 0xf172e6c2); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_cocoon_ext_client_top_up(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CocoonExtClientTopUp: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonExtClientTopUp: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("top_up_amount", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("send_excesses_to", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CocoonRegisterProxy (opcode 0x927c7cb5); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_cocoon_register_proxy(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CocoonRegisterProxy: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonRegisterProxy: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CocoonUnregisterProxy (opcode 0x6d49eaf2); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_cocoon_unregister_proxy(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CocoonUnregisterProxy: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonUnregisterProxy: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(32)) { return td::Status::Error("CocoonUnregisterProxy: seqno underflow"); }
+    auto q = cs.fetch_ulong(32);
+    f.emplace_back("seqno", Value::make_int(refint_u64(q)));
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CocoonOwnerClientRegister (opcode 0xc45f9f3b); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_cocoon_owner_client_register(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CocoonOwnerClientRegister: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonOwnerClientRegister: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonOwnerClientRegister: nonce underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("nonce", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("send_excesses_to", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CocoonOwnerClientChangeSecretHash (opcode 0xa9357034); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_cocoon_owner_client_change_secret_hash(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CocoonOwnerClientChangeSecretHash: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonOwnerClientChangeSecretHash: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(256)) { return td::Status::Error("CocoonOwnerClientChangeSecretHash: new_secret_hash underflow"); }
+    auto iv = cs.fetch_int256(256, false);
+    if (iv.is_null()) { return td::Status::Error("CocoonOwnerClientChangeSecretHash: new_secret_hash fetch failed"); }
+    f.emplace_back("new_secret_hash", Value::make_int(std::move(iv)));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("send_excesses_to", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CocoonOwnerClientRequestRefund (opcode 0xfafa6cc1); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_cocoon_owner_client_request_refund(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CocoonOwnerClientRequestRefund: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonOwnerClientRequestRefund: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("send_excesses_to", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CocoonOwnerClientIncreaseStake (opcode 0x6a1f6a60); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_cocoon_owner_client_increase_stake(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CocoonOwnerClientIncreaseStake: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonOwnerClientIncreaseStake: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto rc = load_coins_py(cs);
+    if (rc.is_error()) { return rc.move_as_error(); }
+    f.emplace_back("new_stake", Value::make_int(rc.move_as_ok()));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("send_excesses_to", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// CocoonOwnerClientWithdraw (opcode 0xda068e78); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_cocoon_owner_client_withdraw(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("CocoonOwnerClientWithdraw: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("CocoonOwnerClientWithdraw: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    auto ra = load_address_py(cs);
+    if (ra.is_error()) { return ra.move_as_error(); }
+    f.emplace_back("send_excesses_to", ra.move_as_ok());
+  }
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parsers() {
@@ -1999,6 +2348,20 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"DedustV2DepositEvent", gen_parse_dedust_v2_deposit_event},
       {"ToncoRouterV3CreatePool", gen_parse_tonco_router_v3_create_pool},
       {"ToncoPoolV3Init", gen_parse_tonco_pool_v3_init},
+      {"CocoonPayoutPayload", gen_parse_cocoon_payout_payload},
+      {"CocoonLastPayoutPayload", gen_parse_cocoon_last_payout_payload},
+      {"CocoonWorkerProxyRequest", gen_parse_cocoon_worker_proxy_request},
+      {"CocoonExtProxyPayoutRequest", gen_parse_cocoon_ext_proxy_payout_request},
+      {"CocoonChargePayload", gen_parse_cocoon_charge_payload},
+      {"CocoonGrantRefundPayload", gen_parse_cocoon_grant_refund_payload},
+      {"CocoonExtClientTopUp", gen_parse_cocoon_ext_client_top_up},
+      {"CocoonRegisterProxy", gen_parse_cocoon_register_proxy},
+      {"CocoonUnregisterProxy", gen_parse_cocoon_unregister_proxy},
+      {"CocoonOwnerClientRegister", gen_parse_cocoon_owner_client_register},
+      {"CocoonOwnerClientChangeSecretHash", gen_parse_cocoon_owner_client_change_secret_hash},
+      {"CocoonOwnerClientRequestRefund", gen_parse_cocoon_owner_client_request_refund},
+      {"CocoonOwnerClientIncreaseStake", gen_parse_cocoon_owner_client_increase_stake},
+      {"CocoonOwnerClientWithdraw", gen_parse_cocoon_owner_client_withdraw},
   };
   return rows;
 }

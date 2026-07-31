@@ -697,3 +697,103 @@ message ToncoPoolV3Init opcode 0x441c39ed {
   _set_active: bits 1
   pool_active: bool
 }
+
+# ---------------------------------------------------------------------------
+# Cocoon (specs/cocoon.mch). Thirteen bodies, all flat, all mirroring the
+# pytoniq classes in blocks/messages/cocoon.py field for field.
+#
+# `state: u2` is the first sub-byte emitting integer leaf (PREP-1) — one row in
+# msgs_gen.py's UINT_SMALL table, no new leaf semantics.
+#
+# NOT here, deliberately:
+#  - ClientProxyRequest / ClientProxyRefundGranted. Only cocoon_client_withdraw
+#    reads them, through the nested-payload host fn (host/HostCocoon.cpp), which
+#    parses both by hand exactly as the legacy build does inside its try/except.
+#  - RegisterProxy is here but is NOT in the --parse-dump A/B table: its legacy
+#    class binds `proxy_info = body`, the RESIDUAL SLICE after the query_id, and
+#    no schema leaf emits "whatever is left" (the closest, fwd_cell_*, reads a
+#    tag bit first). The generated parser stops at query_id, which is the only
+#    field any build reads; the dump would diverge on the extra key alone.
+# ---------------------------------------------------------------------------
+
+# PayoutPayload and LastPayoutPayload are LAYOUT-IDENTICAL (both wrap the same
+# PayoutPayloadData) — the spec's alternative parse relies on exactly that.
+message CocoonPayoutPayload opcode 0xa040ad28 {
+  query_id: u64
+  new_tokens: u64
+  expected_my_address: addr_py
+}
+
+message CocoonLastPayoutPayload opcode 0xf5f26a36 {
+  query_id: u64
+  new_tokens: u64
+  expected_my_address: addr_py
+}
+
+message CocoonWorkerProxyRequest opcode 0x4d725d2c {
+  query_id: u64
+  owner_address: addr_py
+  state: u2
+  tokens: u64
+  payload: maybe_ref_cell
+}
+
+message CocoonExtProxyPayoutRequest opcode 0x7610e6eb {
+  query_id: u64
+  send_excesses_to: addr_py
+}
+
+message CocoonChargePayload opcode 0xbb63ff93 {
+  query_id: u64
+  new_tokens_used: u64
+  expected_my_address: addr_py
+}
+
+message CocoonGrantRefundPayload opcode 0xefd711e1 {
+  query_id: u64
+  new_tokens_used: u64
+  expected_my_address: addr_py
+}
+
+message CocoonExtClientTopUp opcode 0xf172e6c2 {
+  query_id: u64
+  top_up_amount: coins
+  send_excesses_to: addr_py
+}
+
+message CocoonRegisterProxy opcode 0x927c7cb5 {
+  query_id: u64
+}
+
+message CocoonUnregisterProxy opcode 0x6d49eaf2 {
+  query_id: u64
+  seqno: u32
+}
+
+message CocoonOwnerClientRegister opcode 0xc45f9f3b {
+  query_id: u64
+  nonce: u64
+  send_excesses_to: addr_py
+}
+
+message CocoonOwnerClientChangeSecretHash opcode 0xa9357034 {
+  query_id: u64
+  new_secret_hash: uint256
+  send_excesses_to: addr_py
+}
+
+message CocoonOwnerClientRequestRefund opcode 0xfafa6cc1 {
+  query_id: u64
+  send_excesses_to: addr_py
+}
+
+message CocoonOwnerClientIncreaseStake opcode 0x6a1f6a60 {
+  query_id: u64
+  new_stake: coins
+  send_excesses_to: addr_py
+}
+
+message CocoonOwnerClientWithdraw opcode 0xda068e78 {
+  query_id: u64
+  send_excesses_to: addr_py
+}

@@ -35,6 +35,7 @@ from indexer.events.mch.builders.dedust_v2 import (  # noqa: E402
     dedust_v2_claim_fees_registries, dedust_v2_deposit_registries,
     dedust_v2_swap_registries, dedust_v2_withdraw_registries,
 )
+from indexer.events.mch.builders.cocoon import cocoon_registries  # noqa: E402
 from indexer.events.mch.builders.elections import elections_registries  # noqa: E402
 from indexer.events.mch.builders.ethena import ethena_registries  # noqa: E402
 from indexer.events.mch.builders.evaa import evaa_registries  # noqa: E402
@@ -75,6 +76,7 @@ _FACTORIES = [
     tonco_liquidity_registries, tonco_swap_registries, tonstakers_registries,
     vesting_registries,
     coffee_create_pool_registries, coffee_mev_registries, coffee_staking_registries,
+    cocoon_registries,
 ]
 
 _DICTS = ("opcodes", "predicates", "block_types", "builders",

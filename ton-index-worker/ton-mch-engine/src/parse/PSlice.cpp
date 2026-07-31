@@ -54,18 +54,27 @@ td::Result<Value> load_address_py(vm::CellSlice &cs) {
       return td::Status::Error("address: extern underflow");
     }
     // pytoniq addr_extern: ba2int(bits, signed=False) — an unsigned big-endian
-    // integer of exactly `len` bits (1..511). fetch_int256(len, false) returns
-    // an invalid-but-non-null RefInt256 for len in 257..511 (renders as NaN),
-    // diverging from Python's exact bigint; build the value by 32-bit chunks so
-    // every length up to 511 is exact. For len <= 256 this yields the identical
-    // decimal fetch_int256 produced.
-    td::RefInt256 acc = td::make_refint(0);
-    for (int rem = len; rem > 0;) {
-      int k = rem < 32 ? rem : 32;
-      acc = (acc << k) + td::make_refint(static_cast<long long>(cs.fetch_ulong(k)));
-      rem -= k;
+    // integer of exactly `len` bits (1..511). NO td::RefInt256 CAN HOLD IT: that
+    // type is a signed 257-bit BigInt, so anything past 256 bits is an
+    // invalid-but-non-null value that renders "NaN" (which is what a 260-bit
+    // cocoon expectedMyAddress did until 2026-07-31, both in --parse-dump and
+    // through to the cocoon_expected_address host fn). The Str therefore carries
+    // the value in HEX, assembled nibble by nibble straight off the wire — exact
+    // for every length up to 511 and the direct twin of Python's `f"{int:x}"`:
+    // lowercase, no leading zeros, "0" for zero.
+    static const char kHexDigits[] = "0123456789abcdef";
+    std::string hex;
+    hex.reserve(static_cast<size_t>(len) / 4 + 1);
+    int head = len % 4;  // the top group is short when len is not a multiple of 4
+    if (head != 0) {
+      hex.push_back(kHexDigits[cs.fetch_ulong(head)]);
     }
-    return Value::make_str("extern:" + std::to_string(len) + ":" + acc->to_dec_string());
+    for (int rem = len - head; rem > 0; rem -= 4) {
+      hex.push_back(kHexDigits[cs.fetch_ulong(4)]);
+    }
+    size_t first = hex.find_first_not_of('0');
+    hex = first == std::string::npos ? std::string("0") : hex.substr(first);
+    return Value::make_str("extern:" + std::to_string(len) + ":" + hex);
   }
   if (tag == 3) {
     return td::Status::Error("address: addr_var unsupported");  // pytoniq raises

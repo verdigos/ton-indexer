@@ -10,7 +10,7 @@
 //  - JettonTransfer.sum_type is a conditionally-present key (Python only sets
 //    the attribute on some paths; notably NOT on stonfi-swap success and NOT
 //    when the body has no payload bits);
-//  - load_address: addr_none -> null, addr_extern -> "extern:<len>:<value>"
+//  - load_address: addr_none -> null, addr_extern -> "extern:<len>:<hex>"
 //    Str (len 0 fails: pytoniq ba2int on an empty bitarray raises), addr_var
 //    fails, anycast is consumed but NOT applied (pytoniq stores it without
 //    rewriting the address prefix, unlike convert::to_raw_address);
