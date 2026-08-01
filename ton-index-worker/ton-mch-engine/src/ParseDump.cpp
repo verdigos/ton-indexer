@@ -6,9 +6,7 @@
 
 #include "MsgParse.h"
 #include "fixtures/FixtureLoader.h"
-#include "Value.h"
 #include "fixtures/Render.h"
-#include "parse/PSlice.h"
 
 #include "td/utils/base64.h"
 #include "vm/boc.h"
@@ -16,7 +14,6 @@
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
-#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -89,65 +86,6 @@ constexpr DumpType kDumpTypes[] = {
     {0x6a1f6a60, "CocoonOwnerClientIncreaseStake"},
     {0xda068e78, "CocoonOwnerClientWithdraw"},
 };
-
-std::string render_parse_value(const Value &v);
-
-std::string render_fields_sorted(const Value::Fields &fields) {
-  std::vector<std::pair<std::string, std::string>> kv;
-  kv.reserve(fields.size());
-  for (const auto &f : fields) {
-    // §12 root-hash bar: Cell-derived BOC fields render as cellhash.
-    std::string rendered;
-    if (is_boc_field(f.first)) rendered = boc_field_cellhash(f.second);
-    if (rendered.empty()) rendered = render_parse_value(f.second);
-    kv.emplace_back(f.first, rendered);
-  }
-  std::sort(kv.begin(), kv.end());
-  std::string out = "{";
-  for (size_t i = 0; i < kv.size(); i++) {
-    if (i) {
-      out += ",";
-    }
-    out += kv[i].first + "=" + kv[i].second;
-  }
-  out += "}";
-  return out;
-}
-
-std::string render_parse_value(const Value &v) {
-  switch (v.t) {
-    case VType::Null:
-      return "null";
-    case VType::Bool:
-      return v.boolean ? "true" : "false";
-    case VType::Int:
-    case VType::Amount:
-      return v.num->to_dec_string();
-    case VType::Str:
-      return "str:" + v.str;
-    case VType::Bytes:
-      // FULL raw bytes (B0/D4 verification): pytoniq and td produce
-      // byte-identical BOC containers for the same cell tree and flag set,
-      // so payload bytes render as their exact base64 and are compared raw.
-      return "b64:" + td::base64_encode(td::Slice(v.str));
-    case VType::Account:
-      return v.addr_none ? "addr_none" : v.str;
-    case VType::Cell: {
-      if (v.cell.is_null()) {
-        return "cell:null";
-      }
-      auto h = v.cell->get_hash();
-      return "cell:" + hex_upper(h.as_slice().ubegin(), h.as_slice().size());
-    }
-    case VType::Asset:
-      return v.is_ton ? "asset:TON" : "asset:" + v.str;
-    case VType::Dict:
-    case VType::Obj:
-      return render_fields_sorted(*v.fields);
-    default:
-      return v.describe();
-  }
-}
 
 const char *dump_type_for_opcode(td::uint32 op) {
   for (const auto &t : kDumpTypes) {

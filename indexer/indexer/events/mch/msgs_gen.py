@@ -1,16 +1,16 @@
 """M1 message-schema compiler (program doc §3.2).
 
 Compiles ``ton-mch-engine/mch-msgs.schema`` into a committed C++ TU of per-message
-body parsers plus a boundary-coverage vectors JSON. The parsers call ONLY the
-existing PSlice leaf helpers (zero new leaf semantics); each reproduces its hand
-predecessor byte-for-byte, guarded by the parse-dump A/B twin gate.
+body parsers. ``emit_vectors()`` remains available to callers as the historical
+boundary-vector seed, but the enriched committed fixture is independently owned
+and is neither written nor checked by this driver.
 
 Determinism: output order = schema order; regeneration is byte-stable, guarded by
 tests/mch/test_msgs_gen.py (repro guard, the A1 discipline).
 
 Usage (from the indexer/ dir, venv python):
-    python -m indexer.events.mch.msgs_gen            # write cpp + vectors
-    python -m indexer.events.mch.msgs_gen --check    # write to temp, diff committed
+    python -m indexer.events.mch.msgs_gen            # write cpp
+    python -m indexer.events.mch.msgs_gen --check    # compare committed cpp
 """
 from __future__ import annotations
 
@@ -469,22 +469,19 @@ def generate() -> tuple[str, str]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true",
-                    help="verify committed outputs are byte-identical (no write)")
+                    help="verify committed C++ output is byte-identical (no write)")
     args = ap.parse_args(argv)
-    cpp, vec = generate()
+    messages = parse_schema(SCHEMA.read_text(encoding="utf-8"))
+    cpp = emit_cpp(messages)
     if args.check:
-        ok = True
-        for path, gen in ((CPP_OUT, cpp), (VEC_OUT, vec)):
-            cur = path.read_text(encoding="utf-8") if path.is_file() else None
-            if cur != gen:
-                print(f"DRIFT: {path}")
-                ok = False
+        cur = CPP_OUT.read_text(encoding="utf-8") if CPP_OUT.is_file() else None
+        ok = cur == cpp
+        if not ok:
+            print(f"DRIFT: {CPP_OUT}")
         print("msgs_gen: OK" if ok else "msgs_gen: DRIFT")
         return 0 if ok else 1
     CPP_OUT.write_text(cpp, encoding="utf-8", newline="\n")
-    VEC_OUT.write_text(vec, encoding="utf-8", newline="\n")
     print(f"wrote {CPP_OUT}")
-    print(f"wrote {VEC_OUT}")
     return 0
 
 

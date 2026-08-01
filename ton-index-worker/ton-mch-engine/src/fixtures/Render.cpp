@@ -107,6 +107,60 @@ std::string render_value(const Value &v) {
   return "?";
 }
 
+std::string render_parse_fields_sorted(const Value::Fields &fields) {
+  std::vector<std::pair<std::string, std::string>> kv;
+  kv.reserve(fields.size());
+  for (const auto &f : fields) {
+    // §12 root-hash bar: Cell-derived BOC fields render as cellhash.
+    std::string rendered;
+    if (is_boc_field(f.first)) rendered = boc_field_cellhash(f.second);
+    if (rendered.empty()) rendered = render_parse_value(f.second);
+    kv.emplace_back(f.first, rendered);
+  }
+  std::sort(kv.begin(), kv.end());
+  std::string out = "{";
+  for (size_t i = 0; i < kv.size(); i++) {
+    if (i) {
+      out += ",";
+    }
+    out += kv[i].first + "=" + kv[i].second;
+  }
+  out += "}";
+  return out;
+}
+
+std::string render_parse_value(const Value &v) {
+  switch (v.t) {
+    case VType::Null:
+      return "null";
+    case VType::Bool:
+      return v.boolean ? "true" : "false";
+    case VType::Int:
+    case VType::Amount:
+      return v.num->to_dec_string();
+    case VType::Str:
+      return "str:" + v.str;
+    case VType::Bytes:
+      return "b64:" + td::base64_encode(td::Slice(v.str));
+    case VType::Account:
+      return v.addr_none ? "addr_none" : v.str;
+    case VType::Cell: {
+      if (v.cell.is_null()) {
+        return "cell:null";
+      }
+      auto h = v.cell->get_hash();
+      return "cell:" + hex_upper(h.as_slice().ubegin(), h.as_slice().size());
+    }
+    case VType::Asset:
+      return v.is_ton ? "asset:TON" : "asset:" + v.str;
+    case VType::Dict:
+    case VType::Obj:
+      return render_parse_fields_sorted(*v.fields);
+    default:
+      return v.describe();
+  }
+}
+
 const std::set<std::string> &boc_field_names() {
   // Cell-derived BOC container fields (plan §12). `comment` / `bitcoin_txid` /
   // `pubkey` are raw non-BOC bytes and are DELIBERATELY excluded.

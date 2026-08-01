@@ -79,3 +79,10 @@ file(GLOB TON_ABI_CHECK_ABIS CONFIGURE_DEPENDS
 list(FILTER TON_ABI_CHECK_ABIS EXCLUDE REGEX "err-invalid-map-key")
 add_test(NAME ton_abi_gen_check
          COMMAND ton-abi-gen ${TON_ABI_CHECK_ABIS} --out-dir ${CMAKE_CURRENT_SOURCE_DIR}/generated --check)
+
+# Source-declaration repro gate: compile every production .tolk declaration and
+# byte-compare its committed .abi.json before ton_abi_gen_check consumes it.
+add_test(NAME ton_abi_prod_json_check
+         COMMAND node tools/gen_prod_abi.mjs --check)
+set_tests_properties(ton_abi_prod_json_check PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

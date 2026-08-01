@@ -1,31 +1,42 @@
 """Repro guard for the M1 message-schema compiler (indexer/events/mch/msgs_gen.py).
 
-The committed generated TU + vectors must be byte-reproducible from the committed
-schema — the A1 discipline (test_ir_emit.py), extended to the parser generator.
+The committed generated TU must be byte-reproducible from the committed schema.
+The enriched message vectors are a frozen, independently owned fixture.
 """
 from __future__ import annotations
+
+import json
 
 import pytest
 
 from indexer.events.mch import msgs_gen
 
 
-def _outputs_present() -> bool:
-    return msgs_gen.SCHEMA.is_file() and msgs_gen.CPP_OUT.is_file() and msgs_gen.VEC_OUT.is_file()
+def _cpp_inputs_present() -> bool:
+    return msgs_gen.SCHEMA.is_file() and msgs_gen.CPP_OUT.is_file()
 
 
 def test_generated_cpp_reproduces_committed():
-    if not _outputs_present():
+    if not _cpp_inputs_present():
         pytest.skip("C++ engine ton-mch-engine/ tree not present in this checkout")
-    cpp, _ = msgs_gen.generate()
+    messages = msgs_gen.parse_schema(msgs_gen.SCHEMA.read_text(encoding="utf-8"))
+    cpp = msgs_gen.emit_cpp(messages)
     assert cpp == msgs_gen.CPP_OUT.read_text(encoding="utf-8")
 
 
-def test_generated_vectors_reproduce_committed():
-    if not _outputs_present():
+def test_frozen_vectors_cover_every_schema_message():
+    if not msgs_gen.SCHEMA.is_file() or not msgs_gen.VEC_OUT.is_file():
         pytest.skip("C++ engine ton-mch-engine/ tree not present in this checkout")
-    _, vec = msgs_gen.generate()
-    assert vec == msgs_gen.VEC_OUT.read_text(encoding="utf-8")
+    messages = msgs_gen.parse_schema(msgs_gen.SCHEMA.read_text(encoding="utf-8"))
+    cases = json.loads(msgs_gen.VEC_OUT.read_text(encoding="utf-8"))["cases"]
+    assert len(cases) == 140
+    exact_ok = {
+        case["type"]
+        for case in cases
+        if case.get("expect") == "ok" and isinstance(case.get("expect_value"), str)
+    }
+    assert sum("expect_value" in case for case in cases) == 70
+    assert exact_ok == {message.name for message in messages}
 
 
 def test_generation_deterministic():

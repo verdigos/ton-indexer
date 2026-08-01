@@ -1,10 +1,11 @@
 {
-  "note": "M1 boundary-coverage vectors (msgs_gen.py). ok=parses, fail=parse error.",
+  "note": "Frozen message boundary vectors. ok=parses and exact expect_value; fail=parse error.",
   "cases": [
     {
       "type": "JettonInternalTransfer",
       "body": "te6ccgEBAQEAEAAAGxeNRRkAAAAAAAAAAAAI",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount=0,forward_ton_amount=0,from_address=null,query_id=0,response_address=null}"
     },
     {
       "type": "JettonInternalTransfer",
@@ -14,7 +15,8 @@
     {
       "type": "JettonBurn",
       "body": "te6ccgEBAQEADwAAGVlfB7wAAAAAAAAAAAI=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount=0,query_id=0,response_destination=null}"
     },
     {
       "type": "JettonBurn",
@@ -24,7 +26,8 @@
     {
       "type": "JettonNotify",
       "body": "te6ccgEBAQEADwAAGXNi0JwAAAAAAAAAAAE=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{forward_payload_cell=null,from_user=null,jetton_amount=0,query_id=0}"
     },
     {
       "type": "JettonNotify",
@@ -34,7 +37,8 @@
     {
       "type": "JettonMint",
       "body": "te6ccgEBAQEADwAAGWQrfQcAAAAAAAAAAAI=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{query_id=0,to_address=null,ton_amount=0}"
     },
     {
       "type": "JettonMint",
@@ -44,7 +48,8 @@
     {
       "type": "MultisigNewOrder",
       "body": "te6ccgEBAgEAOQABZ/cYUQ8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEABAAA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{expiration_date=0,is_signer=false,order=cell:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7,order_seqno=0,query_id=0,singer_index=0}"
     },
     {
       "type": "MultisigNewOrder",
@@ -54,7 +59,8 @@
     {
       "type": "MultisigInitOrder",
       "body": "te6ccgEBAgEAGQABJ5xz+6IAAAAAAAAAAAAAAAAAAAAgAQAA",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{approve_on_init=false,order=cell:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7}"
     },
     {
       "type": "MultisigInitOrder",
@@ -64,7 +70,8 @@
     {
       "type": "MultisigApprove",
       "body": "te6ccgEBAQEADwAAGqdiIw8AAAAAAAAAAAA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{query_id=0,signer_index=0}"
     },
     {
       "type": "MultisigApprove",
@@ -74,7 +81,8 @@
     {
       "type": "MultisigApproveRejected",
       "body": "te6ccgEBAQEAEgAAIK+vKD4AAAAAAAAAAAAAAAA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{exit_code=0}"
     },
     {
       "type": "MultisigApproveRejected",
@@ -84,7 +92,8 @@
     {
       "type": "MultisigExecute",
       "body": "te6ccgEBAgEAWAABpnUJf10AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{approvals_num=0,expiration_date=0,order=cell:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7,order_seqno=0,query_id=0,signers_hash=b64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}"
     },
     {
       "type": "MultisigExecute",
@@ -94,7 +103,8 @@
     {
       "type": "PTonTransfer",
       "body": "te6ccgEBAQEADwAAGQHzg10AAAAAAAAAAAE=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{forward_payload=null,query_id=0,refund_address=null,ton_amount=0}"
     },
     {
       "type": "PTonTransfer",
@@ -104,7 +114,8 @@
     {
       "type": "StonfiV2ProvideLiquidity",
       "body": "te6ccgEBAQEAEAAAGzfAlt8AAAAAAAAAAAAg",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount1=0,amount2=0,from_user=null,query_id=0}"
     },
     {
       "type": "StonfiV2ProvideLiquidity",
@@ -114,7 +125,8 @@
     {
       "type": "DedustPayoutFromPool",
       "body": "te6ccgEBAgEAEgABGUdPhs8AAAAAAAAAAAgBAAA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount=0,proof=cell:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7,query_id=0}"
     },
     {
       "type": "DedustPayoutFromPool",
@@ -124,7 +136,8 @@
     {
       "type": "DedustSwapNotification",
       "body": "te6ccgEBAgEADQABDJxhDeMAAAEAAwAI",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount_in=0,amount_out=0,asset_in=asset:TON,asset_out=asset:TON,ref_address=null,reserve_0=0,reserve_1=0,sender_address=null}"
     },
     {
       "type": "DedustSwapNotification",
@@ -134,7 +147,8 @@
     {
       "type": "CoffeeCreateVault",
       "body": "te6ccgEBAQEADwAAGQAAAAAAAAAAAAAAACA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{asset=asset:TON,query_id=0}"
     },
     {
       "type": "CoffeeCreateVault",
@@ -144,7 +158,8 @@
     {
       "type": "EvaaSupplyMaster",
       "body": "te6ccgEBAQEAFwAAKQAAAAEAAAAAAAAAAAAAAAAAAAAACA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{recipient_address=null,supply_amount=0}"
     },
     {
       "type": "EvaaSupplyMaster",
@@ -154,7 +169,8 @@
     {
       "type": "EvaaSupplyJettonForward",
       "body": "te6ccgEBAQEABwAACQAAAAEI",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{recipient_address=null}"
     },
     {
       "type": "EvaaSupplyJettonForward",
@@ -164,7 +180,8 @@
     {
       "type": "EvaaSupplySuccess",
       "body": "te6ccgEBAQEANwAAaQAAARoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount_supplied=0}"
     },
     {
       "type": "EvaaSupplySuccess",
@@ -174,7 +191,8 @@
     {
       "type": "EvaaWithdrawMaster",
       "body": "te6ccgEBAQEANwAAaQAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount=0,asset_id=0,query_id=0,recipient_address=null}"
     },
     {
       "type": "EvaaWithdrawMaster",
@@ -184,7 +202,8 @@
     {
       "type": "EvaaWithdrawCollateralized",
       "body": "te6ccgEBAQEANwAAaQAAAhEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAg",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{asset_id=0,owner_address=null,query_id=0,withdraw_amount_current=0}"
     },
     {
       "type": "EvaaWithdrawCollateralized",
@@ -194,7 +213,8 @@
     {
       "type": "JVaultUnstakeJettons",
       "body": "te6ccgEBAQEADwAAGUmakmIAAAAAAAAAAAg=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{jettons_to_unstake=0,query_id=0}"
     },
     {
       "type": "JVaultUnstakeJettons",
@@ -204,7 +224,8 @@
     {
       "type": "JVaultUnstakeRequest",
       "body": "te6ccgEBAQEADwAAGQFo1LcAAAAAAAAAAAg=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{jettons_to_unstake=0,query_id=0}"
     },
     {
       "type": "JVaultUnstakeRequest",
@@ -214,7 +235,8 @@
     {
       "type": "SubscriptionPaymentRequest",
       "body": "te6ccgEBAQEADwAAGXBsdWcAAAAAAAAAAAg=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{grams=0,query_id=0}"
     },
     {
       "type": "SubscriptionPaymentRequest",
@@ -224,7 +246,8 @@
     {
       "type": "JVaultClaim",
       "body": "te6ccgEBAQEADwAAGXjZ8QkAAAAAAAAAAEA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{jettons_to_claim=[],query_id=0}"
     },
     {
       "type": "JVaultClaim",
@@ -234,7 +257,8 @@
     {
       "type": "CoffeeSwapEvent",
       "body": "te6ccgEBAQEAEAAAG8D/7jAAAAAAAAAAAAAg",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount_in=0,amount_out=0,asset=asset:TON}"
     },
     {
       "type": "CoffeeSwapEvent",
@@ -244,7 +268,8 @@
     {
       "type": "NftOwnershipAssignedPrevOwner",
       "body": "te6ccgEBAQEADwAAGQUTjZEAAAAAAAAAACA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{prev_owner=null}"
     },
     {
       "type": "NftOwnershipAssignedPrevOwner",
@@ -254,7 +279,8 @@
     {
       "type": "JVaultStakePeriodPayload",
       "body": "te6ccgEBAQEACgAAEAAAAAAAAAAA",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{stake_period=0}"
     },
     {
       "type": "JVaultStakePeriodPayload",
@@ -264,7 +290,8 @@
     {
       "type": "StonfiPaymentRequest",
       "body": "te6ccgEBAgEAGAABIfk7tD8AAAAAAAAAAAAAAAAgAQADAAg=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount0_out=0,amount1_out=0,exit_code=0,token0=null,token1=null}"
     },
     {
       "type": "StonfiPaymentRequest",
@@ -274,7 +301,8 @@
     {
       "type": "StonfiSwapMessage",
       "body": "te6ccgEBAgEAFAABGyWThWEAAAAAAAAAAAAEAQABIA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount=0,from_real_user=null,from_user_address=null,token_wallet=null}"
     },
     {
       "type": "StonfiSwapMessage",
@@ -284,7 +312,8 @@
     {
       "type": "StonfiV2PayTo",
       "body": "te6ccgEBAgEAGAABIWV7VPUAAAAAAAAAAAAAAAABAQAEAAA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount0_out=0,amount1_out=0,exit_code=0,token0=null,token1=null}"
     },
     {
       "type": "StonfiV2PayTo",
@@ -294,7 +323,8 @@
     {
       "type": "DedustDepositLiquidityToPool",
       "body": "te6ccgEBAwEAFwACGbVrlZgAAAAAAAAAAAIBAgAAAAQAAA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{asset0=asset:TON,asset0_amount=0,asset1=asset:TON,asset1_amount=0,owner=null}"
     },
     {
       "type": "DedustDepositLiquidityToPool",
@@ -304,7 +334,8 @@
     {
       "type": "ToncoRouterV3SwapSourceWallet",
       "body": "te6ccgEBAQEADwAAGaf7WPgAAAAAAAAAAAg=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{source_wallet=null}"
     },
     {
       "type": "ToncoRouterV3SwapSourceWallet",
@@ -314,7 +345,8 @@
     {
       "type": "ToncoPoolV3StartBurn",
       "body": "te6ccgEBAQEALAAAVFMLXywAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{burned_index=0,liquidity_to_burn=0,tick_lower=0,tick_upper=0}"
     },
     {
       "type": "ToncoPoolV3StartBurn",
@@ -324,7 +356,8 @@
     {
       "type": "ToncoPositionNftV3PositionBurn",
       "body": "te6ccgEBAgEAaAABRUbKM1oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{nft_owner=null}"
     },
     {
       "type": "ToncoPositionNftV3PositionBurn",
@@ -334,7 +367,8 @@
     {
       "type": "ToncoPoolV3Burn",
       "body": "te6ccgEBAgEAgQACddc6wJ0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAQEAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{burned_index=0}"
     },
     {
       "type": "ToncoPoolV3Burn",
@@ -344,7 +378,8 @@
     {
       "type": "DedustV2PayNative",
       "body": "te6ccgEBAgEAEgABGaWny/gAAAAAAAAAAAgBAAA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount=0,payment_payload=cell:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7}"
     },
     {
       "type": "DedustV2PayNative",
@@ -354,7 +389,8 @@
     {
       "type": "DedustV2SwapEvent",
       "body": "te6ccgEBAQEACAAAC3jnm6QAQA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount_in=0,amount_out=0}"
     },
     {
       "type": "DedustV2SwapEvent",
@@ -364,7 +400,8 @@
     {
       "type": "TeleitemStartAuction",
       "body": "te6ccgEBAgEAHAABGEh6joEAAAAAAAAAAAEAFQAAAAAAAAAAAAAg",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{beneficiary_address=null,initial_min_bid=0,max_bid=0}"
     },
     {
       "type": "TeleitemStartAuction",
@@ -374,7 +411,8 @@
     {
       "type": "CoffeeCreateLiquidityDepositoryRequest",
       "body": "te6ccgEBBAEAGgADGcD/7icAAAAAAAAAAAIBAgMAARAAAgAAAA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount=0,pool_first=asset:TON,pool_second=asset:TON,sender=null}"
     },
     {
       "type": "CoffeeCreateLiquidityDepositoryRequest",
@@ -384,7 +422,8 @@
     {
       "type": "CoffeeDepositLiquiditySuccessfulEvent",
       "body": "te6ccgEBAQEAEgAAH8D/7jMAAAAAAAAAAAAAAAg=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{lp_amount=0}"
     },
     {
       "type": "CoffeeDepositLiquiditySuccessfulEvent",
@@ -394,7 +433,8 @@
     {
       "type": "CoffeeLiquidityWithdrawalEvent",
       "body": "te6ccgEBAQEAEgAAH8D/7jUAAAAAAAAAAAAAAAg=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount1=0,amount2=0}"
     },
     {
       "type": "CoffeeLiquidityWithdrawalEvent",
@@ -404,7 +444,8 @@
     {
       "type": "SaleUpdateMessage",
       "body": "te6ccgEBAQEAEAAAG2xsIIAAAAAAAAAAAAAI",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{new_full_price=0,new_mp_fee=0,new_royalty_amount=0}"
     },
     {
       "type": "SaleUpdateMessage",
@@ -414,7 +455,8 @@
     {
       "type": "NftReportStaticData",
       "body": "te6ccgEBAQEALwAAWYt3FzUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{collection=null,index=0,query_id=0}"
     },
     {
       "type": "NftReportStaticData",
@@ -424,7 +466,8 @@
     {
       "type": "DedustV2PayoutPositionFees",
       "body": "te6ccgEBAQEAEAAAGyn/G88AAAAAAAAAAAAg",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{owner=null,query_id=0,x_fees=0,y_fees=0}"
     },
     {
       "type": "DedustV2PayoutPositionFees",
@@ -434,7 +477,8 @@
     {
       "type": "TONStakersNftBurnNotification",
       "body": "te6ccgEBAQEADwAAGe1YsLIAAAAAAAAAAAI=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount=0,owner=null,query_id=0}"
     },
     {
       "type": "TONStakersNftBurnNotification",
@@ -444,7 +488,8 @@
     {
       "type": "DedustV2Withdraw",
       "body": "te6ccgEBAgEAEwABGyC174kAAAAAAAAAAAAEAQAA",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{auto_claim_fees=false,liquidity=0}"
     },
     {
       "type": "DedustV2Withdraw",
@@ -454,7 +499,8 @@
     {
       "type": "DedustV2WithdrawalEvent",
       "body": "te6ccgEBAgEACwABDMDXe1QAAAEAAA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{liquidity=0}"
     },
     {
       "type": "DedustV2WithdrawalEvent",
@@ -464,7 +510,8 @@
     {
       "type": "CoffeeCreatePoolCreatorRequest",
       "body": "te6ccgEBAwEAFwACG8D/7iMAAAAAAAAAAAACAQIAAQIAAA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount=0,pool_first=asset:TON,pool_second=asset:TON,recipient=null,sender=null}"
     },
     {
       "type": "CoffeeCreatePoolCreatorRequest",
@@ -474,7 +521,8 @@
     {
       "type": "CoffeeCreatePoolRequest",
       "body": "te6ccgEBAQEAEAAAG8D/7iUAAAAAAAAAAAAg",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount1=0,amount2=0,tx_initiator=null}"
     },
     {
       "type": "CoffeeCreatePoolRequest",
@@ -484,7 +532,8 @@
     {
       "type": "CoffeeStakingClaimRewards",
       "body": "te6ccgEBAQEADwAAGrMMcxAAAAAAAAAAAAA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{jetton_amount=0,jetton_wallet=null,receiver=null}"
     },
     {
       "type": "CoffeeStakingClaimRewards",
@@ -494,7 +543,8 @@
     {
       "type": "CoffeeStakingPositionWithdraw2",
       "body": "te6ccgEBAQEAFwAAKcsDv68AAAAAAAAAAAAAAAAAAAAAAg==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{nft_id=0,owner=null,points=0}"
     },
     {
       "type": "CoffeeStakingPositionWithdraw2",
@@ -504,7 +554,8 @@
     {
       "type": "CoffeeStakingPositionWithdraw3",
       "body": "te6ccgEBAQEADwAAGcsDv68AAAAAAAAAAAI=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{jetton_amount=0,jetton_wallet=null}"
     },
     {
       "type": "CoffeeStakingPositionWithdraw3",
@@ -514,7 +565,8 @@
     {
       "type": "DedustV2CreditAsset",
       "body": "te6ccgEBAQEADwAAGdxd26EAAAAAAAAAAAQ=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount=0,is_x=false}"
     },
     {
       "type": "DedustV2CreditAsset",
@@ -524,7 +576,8 @@
     {
       "type": "DedustV2JoinLiquidity",
       "body": "te6ccgEBAgEAEwABGyUlHuAAAAAAAAAAAAAgAQAA",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount_x=0,amount_y=0,initiator=null}"
     },
     {
       "type": "DedustV2JoinLiquidity",
@@ -534,7 +587,8 @@
     {
       "type": "DedustV2DepositEvent",
       "body": "te6ccgEBAgEACwABDDXfLhIAAAEAAA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{amount_x_in=0,amount_y_in=0,liquidity=0}"
     },
     {
       "type": "DedustV2DepositEvent",
@@ -544,7 +598,8 @@
     {
       "type": "ToncoRouterV3CreatePool",
       "body": "te6ccgEBAwEANAADUy4wNO8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAEBAgAAAAEC",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{initial_price_x96=0,jetton0_minter=null,jetton1_minter=null,jetton_wallet0=null,jetton_wallet1=null,lp_fee_base=0,lp_fee_current=0,protocol_fee=0,tick_spacing=0}"
     },
     {
       "type": "ToncoRouterV3CreatePool",
@@ -554,7 +609,8 @@
     {
       "type": "ToncoPoolV3Init",
       "body": "te6ccgEBAQEAJwAASUQcOe0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{pool_active=false}"
     },
     {
       "type": "ToncoPoolV3Init",
@@ -564,7 +620,8 @@
     {
       "type": "CocoonPayoutPayload",
       "body": "te6ccgEBAQEAFwAAKaBArSgAAAAAAAAAAAAAAAAAAAAAIA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{expected_my_address=null,new_tokens=0,query_id=0}"
     },
     {
       "type": "CocoonPayoutPayload",
@@ -574,7 +631,8 @@
     {
       "type": "CocoonLastPayoutPayload",
       "body": "te6ccgEBAQEAFwAAKfXyajYAAAAAAAAAAAAAAAAAAAAAIA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{expected_my_address=null,new_tokens=0,query_id=0}"
     },
     {
       "type": "CocoonLastPayoutPayload",
@@ -584,7 +642,8 @@
     {
       "type": "CocoonWorkerProxyRequest",
       "body": "te6ccgEBAQEAFwAAKU1yXSwAAAAAAAAAAAAAAAAAAAAABA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{owner_address=null,payload=null,query_id=0,state=0,tokens=0}"
     },
     {
       "type": "CocoonWorkerProxyRequest",
@@ -594,7 +653,8 @@
     {
       "type": "CocoonExtProxyPayoutRequest",
       "body": "te6ccgEBAQEADwAAGXYQ5usAAAAAAAAAACA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{query_id=0,send_excesses_to=null}"
     },
     {
       "type": "CocoonExtProxyPayoutRequest",
@@ -604,7 +664,8 @@
     {
       "type": "CocoonChargePayload",
       "body": "te6ccgEBAQEAFwAAKbtj/5MAAAAAAAAAAAAAAAAAAAAAIA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{expected_my_address=null,new_tokens_used=0,query_id=0}"
     },
     {
       "type": "CocoonChargePayload",
@@ -614,7 +675,8 @@
     {
       "type": "CocoonGrantRefundPayload",
       "body": "te6ccgEBAQEAFwAAKe/XEeEAAAAAAAAAAAAAAAAAAAAAIA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{expected_my_address=null,new_tokens_used=0,query_id=0}"
     },
     {
       "type": "CocoonGrantRefundPayload",
@@ -624,7 +686,8 @@
     {
       "type": "CocoonExtClientTopUp",
       "body": "te6ccgEBAQEADwAAGfFy5sIAAAAAAAAAAAI=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{query_id=0,send_excesses_to=null,top_up_amount=0}"
     },
     {
       "type": "CocoonExtClientTopUp",
@@ -634,7 +697,8 @@
     {
       "type": "CocoonRegisterProxy",
       "body": "te6ccgEBAQEADgAAGJJ8fLUAAAAAAAAAAA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{query_id=0}"
     },
     {
       "type": "CocoonRegisterProxy",
@@ -644,7 +708,8 @@
     {
       "type": "CocoonUnregisterProxy",
       "body": "te6ccgEBAQEAEgAAIG1J6vIAAAAAAAAAAAAAAAA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{query_id=0,seqno=0}"
     },
     {
       "type": "CocoonUnregisterProxy",
@@ -654,7 +719,8 @@
     {
       "type": "CocoonOwnerClientRegister",
       "body": "te6ccgEBAQEAFwAAKcRfnzsAAAAAAAAAAAAAAAAAAAAAIA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{nonce=0,query_id=0,send_excesses_to=null}"
     },
     {
       "type": "CocoonOwnerClientRegister",
@@ -664,7 +730,8 @@
     {
       "type": "CocoonOwnerClientChangeSecretHash",
       "body": "te6ccgEBAQEALwAAWak1cDQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIA==",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{new_secret_hash=0,query_id=0,send_excesses_to=null}"
     },
     {
       "type": "CocoonOwnerClientChangeSecretHash",
@@ -674,7 +741,8 @@
     {
       "type": "CocoonOwnerClientRequestRefund",
       "body": "te6ccgEBAQEADwAAGfr6bMEAAAAAAAAAACA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{query_id=0,send_excesses_to=null}"
     },
     {
       "type": "CocoonOwnerClientRequestRefund",
@@ -684,7 +752,8 @@
     {
       "type": "CocoonOwnerClientIncreaseStake",
       "body": "te6ccgEBAQEADwAAGWofamAAAAAAAAAAAAI=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{new_stake=0,query_id=0,send_excesses_to=null}"
     },
     {
       "type": "CocoonOwnerClientIncreaseStake",
@@ -694,7 +763,8 @@
     {
       "type": "CocoonOwnerClientWithdraw",
       "body": "te6ccgEBAQEADwAAGdoGjngAAAAAAAAAACA=",
-      "expect": "ok"
+      "expect": "ok",
+      "expect_value": "{query_id=0,send_excesses_to=null}"
     },
     {
       "type": "CocoonOwnerClientWithdraw",

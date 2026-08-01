@@ -26,6 +26,13 @@ std::string block_key(const Block *b);
 // Canonical outcome-value rendering (see BuildSmoke.h contract).
 std::string render_value(const Value &v);
 
+// Canonical message-parse rendering (byte-for-byte twin of py_msg_dump.py).
+// Unlike render_value(), objects have no `obj` prefix and integers/amounts
+// share their bare decimal spelling. Message-vector exact-value fixtures use
+// this same renderer so parse-dump and vector comparison cannot drift.
+std::string render_parse_value(const Value &v);
+std::string render_parse_fields_sorted(const Value::Fields &fields);
+
 // Plan §12 root-hash parity bar. A produced/parsed field whose value is a
 // Cell-derived BOC container (a b64 string from the b64() builtin, or raw BOC
 // Bytes from MsgParse) is rendered in the dumps as the cell's ROOT HASH

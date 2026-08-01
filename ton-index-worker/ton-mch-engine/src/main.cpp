@@ -157,6 +157,7 @@ int main(int argc, char *argv[]) {
   std::string vectors_gen_path;
   std::string build_vectors_path;
   std::string msg_vectors_path;
+  std::string msg_vectors_regen_path;
   std::string ir_equivalence_path;
   bool match_mode = false;
   bool build_smoke_mode = false;
@@ -191,8 +192,11 @@ int main(int argc, char *argv[]) {
                "and exit: --ir-equivalence <mch_ir.json>",
                [&](td::Slice value) { ir_equivalence_path = value.str(); });
   p.add_option('\0', "msg-vectors",
-               "Run M1 message-schema boundary vectors (parse ok/fail) and exit",
+               "Run frozen message boundary vectors (parse status/value) and exit",
                [&](td::Slice value) { msg_vectors_path = value.str(); });
+  p.add_option('\0', "msg-vectors-regen",
+               "Regenerate exact values in frozen message boundary vectors and exit",
+               [&](td::Slice value) { msg_vectors_regen_path = value.str(); });
   // TODO: remove (harness): --match, --build-smoke, --classify,
   // --classify-schema, --classify-prod, --parse-dump and --surface all render
   // INTERMEDIATE pipeline stages whose only consumers were the Python twins
@@ -319,8 +323,13 @@ int main(int argc, char *argv[]) {
   }
 
   if (!msg_vectors_path.empty()) {
-    // M1 message-schema boundary vectors: no scheduler needed.
+    // Frozen message boundary vectors: no scheduler needed.
     return mch::run_msg_vectors(msg_vectors_path);
+  }
+
+  if (!msg_vectors_regen_path.empty()) {
+    // One-shot exact-value snapshot mode: no scheduler needed.
+    return mch::regen_msg_vectors(msg_vectors_regen_path);
   }
 
   if (!ir_equivalence_path.empty()) {
