@@ -132,4 +132,19 @@ schema::GetGemsNftFixPriceSaleV4Data to_v2(const GetGemsNftFixPriceSaleV4::Resul
   return v;
 }
 
+schema::MultisigOrderData to_v2(const MultisigOrder::Result &r) {
+  schema::MultisigOrderData v{};
+  v.address = r.address;
+  v.multisig_address = r.multisig_address;
+  v.order_seqno = r.order_seqno;
+  v.threshold = r.threshold;
+  v.sent_for_execution = r.sent_for_execution;
+  v.approvals_mask = r.approvals_mask;
+  v.approvals_num = r.approvals_num;
+  v.expiration_date = r.expiration_date;
+  v.order = r.order;
+  v.signers = r.signers;
+  return v;
+}
+
 }  // namespace mch

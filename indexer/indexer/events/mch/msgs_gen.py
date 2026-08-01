@@ -33,12 +33,12 @@ VEC_OUT = ENG / "ir" / "msg_vectors.json"
 # emitter, the leaf set and the boundary-vector builder all read these).
 # UINT_SMALL widths fit fetch_ulong; INT_WIDE ones overflow it or are signed and
 # go through fetch_int256.
-UINT_SMALL = {"u2": 2, "u16": 16, "u32": 32, "u64": 64}
+UINT_SMALL = {"u2": 2, "u8": 8, "u16": 16, "u32": 32, "u48": 48, "u64": 64}
 INT_WIDE = {"uint128": (128, False), "uint160": (160, False),
             "uint256": (256, False), "int24": (24, True)}
 
 LEAVES = {
-    "bool", *UINT_SMALL, *INT_WIDE, "coins", "addr_py",
+    "bool", "bytes32", *UINT_SMALL, *INT_WIDE, "coins", "addr_py",
     "asset2", "asset4", "ref_cell", "maybe_ref_cell", "dict_keys267",
     "fwd_cell_bits", "fwd_cell_refs",
 }
@@ -247,6 +247,11 @@ def emit_field(msg: str, cur: str, f: Field, indent: str) -> list[str]:
         L.append(f"{b}if (!{cur}.have(1)) {{ {err('underflow')} }}")
         L.append(f"{b}bool bv = {cur}.fetch_ulong(1) != 0;")
         emit = "Value::make_bool(bv)"
+    elif f.type == "bytes32":
+        L.append(f"{b}if (!{cur}.have(256)) {{ {err('underflow')} }}")
+        L.append(f"{b}unsigned char raw[32];")
+        L.append(f"{b}if (!{cur}.fetch_bytes(raw, 32)) {{ {err('fetch failed')} }}")
+        emit = "Value::make_bytes(std::string(reinterpret_cast<const char *>(raw), 32))"
     elif f.type in UINT_SMALL:
         width = UINT_SMALL[f.type]
         L.append(f"{b}if (!{cur}.have({width})) {{ {err('underflow')} }}")
@@ -415,6 +420,8 @@ def emit_vectors(msgs: list[Message]) -> str:
                 b.store_uint(0, f.bitn)
             elif f.type == "bool":
                 b.store_uint(0, 1)
+            elif f.type == "bytes32":
+                b.store_uint(0, 256)
             elif f.type in UINT_SMALL:
                 b.store_uint(0, UINT_SMALL[f.type])
             elif f.type in INT_WIDE:

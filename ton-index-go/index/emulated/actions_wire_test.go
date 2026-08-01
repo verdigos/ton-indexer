@@ -222,6 +222,25 @@ func TestActionsWireFixture(t *testing.T) {
 		}
 	}
 
+	if a.MultisigCreateOrderData == nil || a.MultisigApproveData == nil ||
+		a.MultisigExecuteData == nil {
+		t.Fatal("multisig wire composites are nil")
+	}
+	str("multisig_create_order_data.query_id",
+		a.MultisigCreateOrderData.QueryId, "18446744073709551615")
+	str("multisig_create_order_data.order_seqno", a.MultisigCreateOrderData.OrderSeqno,
+		"115792089237316195423570985008687907853269984665640564039457584007913129639935")
+	if a.MultisigCreateOrderData.IsCreatedBySigner == nil ||
+		!*a.MultisigCreateOrderData.IsCreatedBySigner {
+		t.Errorf("is_created_by_signer = %v, want true", a.MultisigCreateOrderData.IsCreatedBySigner)
+	}
+	if a.MultisigApproveData.SignerIndex == nil || *a.MultisigApproveData.SignerIndex != -1 {
+		t.Errorf("signer_index = %v, want -1", a.MultisigApproveData.SignerIndex)
+	}
+	str("multisig_execute_data.order_seqno", a.MultisigExecuteData.OrderSeqno, "899")
+	str("multisig_execute_data.signers_hash", a.MultisigExecuteData.SignersHash,
+		"C32M4/TYDdcDTvMVw09kw5jnsfQJaZGrLCsRJuShiZQ=")
+
 	// --- ints reaching *string fields, via decodeFlexString ------------------
 	if a.NftTransferData == nil {
 		t.Fatal("nft_transfer_data is nil")

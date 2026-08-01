@@ -44,6 +44,9 @@ from indexer.events.blocks.messages.layerzero import (  # noqa: E402
     LayerZeroPacket, LayerZeroPath, LayerzeroChannelSendCallback,
     UlnConnectionVerifyCallbackParser,
 )
+from indexer.events.blocks.messages.multisig import (  # noqa: E402
+    MultisigApprove, MultisigApproveRejected, MultisigExecute, MultisigNewOrder,
+)
 from indexer.events.blocks.messages.cocoon import (  # noqa: E402
     CocoonChargePayload, CocoonExtClientTopUp, CocoonExtProxyPayoutRequest,
     CocoonGrantRefundPayload, CocoonLastPayoutPayload,
@@ -81,6 +84,10 @@ CLASSES = {
     0xA2B5FBAE: ("LayerzeroChannelSendCallback", LayerzeroChannelSendCallback),
     0x5388CD88: ("ChannelCommitPacket", ChannelCommitPacket),
     0x3CB38090: ("UlnConnectionVerifyCallbackParser", UlnConnectionVerifyCallbackParser),
+    0xF718510F: ("MultisigNewOrder", MultisigNewOrder),
+    0xA762230F: ("MultisigApprove", MultisigApprove),
+    0xAFAF283E: ("MultisigApproveRejected", MultisigApproveRejected),
+    0x75097F5D: ("MultisigExecute", MultisigExecute),
     # Cocoon. RegisterProxy (0x927C7CB5) is deliberately absent — its class binds
     # the residual slice as `proxy_info`, which the schema cannot emit.
     0xA040AD28: ("CocoonPayoutPayload", CocoonPayoutPayload),

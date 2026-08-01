@@ -22,6 +22,39 @@ is the last snapshot taken while both engines could still be compared.
 
 ## Provenance
 
+Also folded into this rebaseline: evaa_liquidate parity cleanup found during
+multisig verification — `_fill_evaa_liquidate_action` now uses `_addr()` (was
+`str()`, leaking lowercase dict-path addresses into accounts), and the C++ fill
+dropped its deliberate `addr_none` string (legacy emits null and omits the
+account; the 9010172 golden briefly carried both artifacts). Action twin now
+0-diff over the full 218-fixture corpus.
+
+Re-baselined 2026-08-01 (**902 → 967 rows, 211 → 218 fixtures**) by the MULTISIG
+wave: `multisig_create_order` + `multisig_approve` (opcode arm + comment arm,
+split matchers) + `multisig_execute` (`specs/multisig.mch`, fully declarative).
+NOT pure-addition textually: three new action composites
+(`multisig_create_order_data`, `multisig_approve_data`, `multisig_execute_data`)
+joined `Classify.cpp render_action`, mechanically inserting three `…_data=null`
+keys into every pre-existing row. Verified byte-identical modulo that insertion
+(re-diff with the three keys stripped isolates the real delta: 65 rows added
+across the 7 new fixtures, 0 removed, 0 changed on the pre-existing 211). 7
+snapshot-mined fixtures: 3 create_order (one with a uint256-range `order_seqno`
+near 2^256, one create+execute pair, one create-only), 2 approve (opcode arm
+accepted, comment arm accepted + its paired execute), plus 2 more create+execute
+pairs whose stray comment-arm approve leg has no structural response in the
+fixture window and stays correctly UNMATCHED (bug-for-bug: legacy's required
+OrMatcher child is likewise absent, so it also leaves those as `call_contract`).
+No rejected-approve (`0xAFAF283E`) specimen was available this wave, so
+`multisig_approve_data.exit_code != 0` has no fixture coverage — the `?? 0`
+default path is exercised, the nonzero literal path is not. Also required a
+`_dget` compatibility fix in `block_tree_serializer.py`'s three legacy
+`_fill_multisig_*` functions (attribute access -> dict/attribute-tolerant
+`_dget()`), the same fix independently needed by the EVAA wave above, since
+`multisig_create_order`/`multisig_approve`/`multisig_execute` had a **pre-existing**
+legacy Python matcher (`blocks/multisig.py`) sharing the same btypes as the new
+declarative spec -- the first multisig-wave case of that dual-producer shape in
+this port effort.
+
 Re-baselined 2026-07-31 (**886 → 902 rows, 208 → 211 fixtures**) by the EVAA
 liquidation wave. NOT pure-addition this time: Stage A added the
 `evaa_liquidate_data` action composite, which mechanically inserts

@@ -81,6 +81,19 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     return iface_obj(*sale, {"marketplace_address", "nft_address", "full_price",
                              "nft_owner_address", "code_hash"});
   }
+  if (kind == "multisig_order") {
+    // TestInterfaceRepository.get_multisig_order: interfaces[addr]["MultisigOrder"]
+    // (RAW key) -> MultisigOrder ORM. Only `signers` is read.
+    auto it = interfaces_->find(addr);
+    if (it == interfaces_->end()) {
+      return Value::null();
+    }
+    const Value *o = it->second.field("MultisigOrder");
+    if (o == nullptr) {
+      return Value::null();
+    }
+    return iface_obj(*o, {"signers"});
+  }
   if (kind == "nft_auction") {
     // TestInterfaceRepository.get_nft_auction: interfaces[addr]["NftAuction"]
     // (RAW key) -> NftAuction ORM. The nft host fns read mp_addr / nft_addr /

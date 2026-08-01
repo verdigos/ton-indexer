@@ -42,6 +42,56 @@
       "expect": "fail"
     },
     {
+      "type": "MultisigNewOrder",
+      "body": "te6ccgEBAgEAOQABZ/cYUQ8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEABAAA=",
+      "expect": "ok"
+    },
+    {
+      "type": "MultisigNewOrder",
+      "body": "te6ccgEBAQEABgAACPcYUQ8=",
+      "expect": "fail"
+    },
+    {
+      "type": "MultisigInitOrder",
+      "body": "te6ccgEBAgEAGQABJ5xz+6IAAAAAAAAAAAAAAAAAAAAgAQAA",
+      "expect": "ok"
+    },
+    {
+      "type": "MultisigInitOrder",
+      "body": "te6ccgEBAQEABgAACJxz+6I=",
+      "expect": "fail"
+    },
+    {
+      "type": "MultisigApprove",
+      "body": "te6ccgEBAQEADwAAGqdiIw8AAAAAAAAAAAA=",
+      "expect": "ok"
+    },
+    {
+      "type": "MultisigApprove",
+      "body": "te6ccgEBAQEABgAACKdiIw8=",
+      "expect": "fail"
+    },
+    {
+      "type": "MultisigApproveRejected",
+      "body": "te6ccgEBAQEAEgAAIK+vKD4AAAAAAAAAAAAAAAA=",
+      "expect": "ok"
+    },
+    {
+      "type": "MultisigApproveRejected",
+      "body": "te6ccgEBAQEABgAACK+vKD4=",
+      "expect": "fail"
+    },
+    {
+      "type": "MultisigExecute",
+      "body": "te6ccgEBAgEAWAABpnUJf10AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA",
+      "expect": "ok"
+    },
+    {
+      "type": "MultisigExecute",
+      "body": "te6ccgEBAQEABgAACHUJf10=",
+      "expect": "fail"
+    },
+    {
       "type": "PTonTransfer",
       "body": "te6ccgEBAQEADwAAGQHzg10AAAAAAAAAAAE=",
       "expect": "ok"
@@ -650,26 +700,6 @@
       "type": "CocoonOwnerClientWithdraw",
       "body": "te6ccgEBAQEABgAACNoGjng=",
       "expect": "fail"
-    },
-    {
-      "type": "AuctionFillUpMessage",
-      "body": "te6ccgEBAQEABgAACDcP7FE=",
-      "expect": "ok"
-    },
-    {
-      "type": "AuctionFillUpMessage",
-      "body": "te6ccgEBAQEADgAAGDcP7FEAAAAAAAAABw==",
-      "expect": "ok"
-    },
-    {
-      "type": "DnsReleaseBalanceMessage",
-      "body": "te6ccgEBAQEABgAACE7RS2U=",
-      "expect": "ok"
-    },
-    {
-      "type": "DnsReleaseBalanceMessage",
-      "body": "te6ccgEBAQEADgAAGE7RS2UAAAAAAAAABw==",
-      "expect": "ok"
     }
   ]
 }

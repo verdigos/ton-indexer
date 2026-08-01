@@ -160,6 +160,8 @@ PORTED_BTYPES = {
     # stake_withdrawal_request, exactly like ethena_deposit does for
     # stake_deposit.
     "vesting_add_whitelist", "tonco_deploy_pool", "ethena_withdrawal_request",
+    # Multisig port: four declarative matchers producing these three action rows.
+    "multisig_create_order", "multisig_approve", "multisig_execute",
     # Cocoon (2026-07-31). All twelve FIRE — the family has 100% fixture
     # coverage (13 cases across 12 traces) and each is the only producer of its
     # own composite, so all twelve columns join ACTION_COLUMNS below.
@@ -183,6 +185,7 @@ ACTION_COLUMNS = [
     "staking_data", "evaa_supply_data", "evaa_withdraw_data", "evaa_liquidate_data",
     "vesting_send_message_data",
     "vesting_add_whitelist_data", "tonco_deploy_pool_data",
+    "multisig_create_order_data", "multisig_approve_data", "multisig_execute_data",
     "cocoon_worker_payout_data", "cocoon_proxy_payout_data",
     "cocoon_proxy_charge_data", "cocoon_client_top_up_data",
     "cocoon_register_proxy_data", "cocoon_unregister_proxy_data",

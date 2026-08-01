@@ -150,16 +150,20 @@ struct Trace {
 
     // DedustPoolDetector and NominatorPoolContract were added for the classifier
     // (W3): both gate on the CODE HASH before doing anything, and the nominator
-    // one runs no get-method at all, so the fan-out over every account in every
-    // trace costs a hash compare for non-matching accounts. GetGemsNftFixPriceSaleV4
-    // does run one get-method ungated, like the two GetGems detectors already here.
+    // one runs no get-method at all. GetGemsNftFixPriceSaleV4 and the two GetGems
+    // detectors already here run one get-method ungated. MultisigOrder likewise
+    // attempts get_order_data for every account. With no acc_active guard here,
+    // destroyed accounts get a detector that immediately fails on null code. Only
+    // a successful parse asynchronously fetches the parent multisig, then runs
+    // get_order_address to verify the address round-trip. This accepted cost
+    // matches committed detection.
     // NOTE: the new results are deliberately NOT serialized to Redis — see
     // parse_interfaces in Serializer.hpp.
     using Detector = InterfacesDetector<JettonWalletDetectorR, JettonMasterDetectorR,
                                         NftItemDetectorR, NftCollectionDetectorR,
                                         GetGemsNftFixPriceSale, GetGemsNftAuction,
                                         GetGemsNftFixPriceSaleV4, DedustPoolDetector,
-                                        NominatorPoolContract>;
+                                        NominatorPoolContract, MultisigOrder>;
 
     std::multimap<block::StdAddress, block::Account, AddrCmp> emulated_accounts;
     

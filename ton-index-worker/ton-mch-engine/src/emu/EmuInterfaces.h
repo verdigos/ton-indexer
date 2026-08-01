@@ -19,5 +19,6 @@ schema::GetGemsNftAuctionData to_v2(const GetGemsNftAuction::Result &r);
 schema::DedustPoolData to_v2(const DedustPoolDetector::Result &r);
 schema::NominatorPoolData to_v2(const NominatorPoolContract::Result &r);
 schema::GetGemsNftFixPriceSaleV4Data to_v2(const GetGemsNftFixPriceSaleV4::Result &r);
+schema::MultisigOrderData to_v2(const MultisigOrder::Result &r);
 
 }  // namespace mch

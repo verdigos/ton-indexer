@@ -824,12 +824,9 @@ def _fill_evaa_withdraw_action(block: EvaaWithdrawBlock, action: Action):
 
 def _fill_evaa_liquidate_action(block: EvaaLiquidateBlock, action: Action):
     data = block.data  # dict (declarative build) or EvaaLiquidateData (legacy)
-    liquidator = _dget(data, 'liquidator')
-    borrower = _dget(data, 'borrower')
-    action.source = str(liquidator) if liquidator is not None else None
-    action.destination = str(borrower) if borrower is not None else None
-    borrower_contract = _dget(data, 'borrower_contract')
-    action.destination_secondary = str(borrower_contract) if borrower_contract else None
+    action.source = _addr(_dget(data, 'liquidator'))
+    action.destination = _addr(_dget(data, 'borrower'))
+    action.destination_secondary = _addr(_dget(data, 'borrower_contract'))
     # collateral_asset_id is a 256-bit int, not a TON address; it's already
     # stored as hex in evaa_liquidate_data.asset_id
     action.amount = _dget(data, 'collateral_amount')
@@ -885,45 +882,45 @@ def _fill_jvault_unstake_request(block: JVaultUnstakeRequestBlock, action: Actio
 
 
 def _fill_multisig_create_order(block: MultisigCreateOrderBlock, action: Action):
-    action.source = _addr(block.data.created_by)
-    action.destination = _addr(block.data.multisig)
-    action.destination_secondary = _addr(block.data.order_contract_address)
+    action.source = _addr(_dget(block.data, 'created_by'))
+    action.destination = _addr(_dget(block.data, 'multisig'))
+    action.destination_secondary = _addr(_dget(block.data, 'order_contract_address'))
     action.multisig_create_order_data = {
-        "query_id": block.data.query_id,
-        "order_seqno": block.data.order_seqno,
-        "is_created_by_signer": block.data.is_created_by_signer,
-        "is_signed_by_creator": block.data.creator_approved,
-        "creator_index": block.data.creator_index,
-        "expiration_date": block.data.expiration_date,
-        "order_boc": block.data.order_boc_str,
+        "query_id": _dget(block.data, 'query_id'),
+        "order_seqno": _dget(block.data, 'order_seqno'),
+        "is_created_by_signer": _dget(block.data, 'is_created_by_signer'),
+        "is_signed_by_creator": _dget(block.data, 'creator_approved'),
+        "creator_index": _dget(block.data, 'creator_index'),
+        "expiration_date": _dget(block.data, 'expiration_date'),
+        "order_boc": _dget(block.data, 'order_boc_str'),
     }
-    action.accounts.extend(block.data.signers)
+    action.accounts.extend(_dget(block.data, 'signers'))
 
 
 def _fill_multisig_approve(block: MultisigApproveBlock, action: Action):
-    action.source = _addr(block.data.signer)
-    action.destination = _addr(block.data.order)
-    action.success = block.data.success
+    action.source = _addr(_dget(block.data, 'signer'))
+    action.destination = _addr(_dget(block.data, 'order'))
+    action.success = _dget(block.data, 'success')
     action.multisig_approve_data = {
-        "signer_index": block.data.signer_index,
-        "exit_code": block.data.exit_code,
+        "signer_index": _dget(block.data, 'signer_index'),
+        "exit_code": _dget(block.data, 'exit_code'),
     }
-    action.accounts.extend(block.data.signers)
+    action.accounts.extend(_dget(block.data, 'signers'))
 
 
 def _fill_multisig_execute(block: MultisigExecuteBlock, action: Action):
-    action.source = _addr(block.data.order_contract_address)
-    action.destination = _addr(block.data.multisig)
-    action.success = block.data.success
+    action.source = _addr(_dget(block.data, 'order_contract_address'))
+    action.destination = _addr(_dget(block.data, 'multisig'))
+    action.success = _dget(block.data, 'success')
     action.multisig_execute_data = {
-        "query_id": block.data.query_id,
-        "order_seqno": block.data.order_seqno,
-        "expiration_date": block.data.expiration_date,
-        "approvals_num": block.data.approvals_num,
-        "signers_hash": block.data.signers_hash_str,
-        "order_boc": block.data.order_boc_str,
+        "query_id": _dget(block.data, 'query_id'),
+        "order_seqno": _dget(block.data, 'order_seqno'),
+        "expiration_date": _dget(block.data, 'expiration_date'),
+        "approvals_num": _dget(block.data, 'approvals_num'),
+        "signers_hash": _dget(block.data, 'signers_hash_str'),
+        "order_boc": _dget(block.data, 'order_boc_str'),
     }
-    action.accounts.extend(block.data.signers)
+    action.accounts.extend(_dget(block.data, 'signers'))
 
 
 def _fill_vesting_send_message(block: VestingSendMessageBlock, action: Action):

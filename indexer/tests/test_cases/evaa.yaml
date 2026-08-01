@@ -178,9 +178,9 @@ cases:
       - type: evaa_liquidate
         values:
           success: false
-          source: 0:fed2dae52c20dffa3089febb3f95dab0d6cf1d656db6611a40f8b444ff970a91
-          destination: addr_none
-          destination_secondary: 0:cbb3b4378d1dc4cf7d80d9b33c8f50d80c4d20dbe96f0902db78627300ce5e11
+          source: 0:FED2DAE52C20DFFA3089FEBB3F95DAB0D6CF1D656DB6611A40F8B444FF970A91
+          destination: null
+          destination_secondary: 0:CBB3B4378D1DC4CF7D80D9B33C8F50D80C4D20DBE96F0902DB78627300CE5E11
           amount: 0
           evaa_liquidate_data:
             asset_id: "0x117c66cb95754d4"
@@ -192,9 +192,9 @@ cases:
       - type: evaa_liquidate
         values:
           success: false
-          source: 0:fed2dae52c20dffa3089febb3f95dab0d6cf1d656db6611a40f8b444ff970a91
-          destination: addr_none
-          destination_secondary: 0:cbb3b4378d1dc4cf7d80d9b33c8f50d80c4d20dbe96f0902db78627300ce5e11
+          source: 0:FED2DAE52C20DFFA3089FEBB3F95DAB0D6CF1D656DB6611A40F8B444FF970A91
+          destination: null
+          destination_secondary: 0:CBB3B4378D1DC4CF7D80D9B33C8F50D80C4D20DBE96F0902DB78627300CE5E11
           amount: 0
           evaa_liquidate_data:
             asset_id: "0x1c1163e125ce481"
@@ -206,9 +206,9 @@ cases:
       - type: evaa_liquidate
         values:
           success: false
-          source: 0:fed2dae52c20dffa3089febb3f95dab0d6cf1d656db6611a40f8b444ff970a91
-          destination: addr_none
-          destination_secondary: 0:cbb3b4378d1dc4cf7d80d9b33c8f50d80c4d20dbe96f0902db78627300ce5e11
+          source: 0:FED2DAE52C20DFFA3089FEBB3F95DAB0D6CF1D656DB6611A40F8B444FF970A91
+          destination: null
+          destination_secondary: 0:CBB3B4378D1DC4CF7D80D9B33C8F50D80C4D20DBE96F0902DB78627300CE5E11
           amount: 0
           evaa_liquidate_data:
             asset_id: "0x1c1163e125ce481"

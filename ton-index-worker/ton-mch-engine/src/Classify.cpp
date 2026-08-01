@@ -113,6 +113,9 @@ std::string render_action(const Action &a) {
   f.emplace_back("vesting_send_message_data", a.vesting_send_message_data);
   f.emplace_back("vesting_add_whitelist_data", a.vesting_add_whitelist_data);
   f.emplace_back("tonco_deploy_pool_data", a.tonco_deploy_pool_data);
+  f.emplace_back("multisig_create_order_data", a.multisig_create_order_data);
+  f.emplace_back("multisig_approve_data", a.multisig_approve_data);
+  f.emplace_back("multisig_execute_data", a.multisig_execute_data);
   f.emplace_back("cocoon_worker_payout_data", a.cocoon_worker_payout_data);
   f.emplace_back("cocoon_proxy_payout_data", a.cocoon_proxy_payout_data);
   f.emplace_back("cocoon_proxy_charge_data", a.cocoon_proxy_charge_data);

@@ -31,6 +31,7 @@ struct Action {
       staking_data, evaa_supply_data, evaa_withdraw_data, evaa_liquidate_data,
       vesting_send_message_data,
       vesting_add_whitelist_data, tonco_deploy_pool_data,
+      multisig_create_order_data, multisig_approve_data, multisig_execute_data,
       cocoon_worker_payout_data, cocoon_proxy_payout_data, cocoon_proxy_charge_data,
       cocoon_client_top_up_data, cocoon_register_proxy_data, cocoon_unregister_proxy_data,
       cocoon_client_register_data, cocoon_client_change_secret_hash_data,

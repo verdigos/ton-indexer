@@ -73,6 +73,9 @@ class TestSubscriptionActions(BaseGenericActionTest):
 class TestDnsActions(BaseGenericActionTest):
     yaml_file = "dns.yaml"
 
+class TestMultisigActions(BaseGenericActionTest):
+    yaml_file = "multisig.yaml"
+
 class TestClassificationCommon:
 
     def load_trace(self, trace_id, traces_dir) -> Trace:

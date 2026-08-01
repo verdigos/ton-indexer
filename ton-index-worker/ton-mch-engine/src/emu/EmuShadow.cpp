@@ -156,6 +156,7 @@ EmuTraceView make_view(const ::Trace &trace) {
                 adapted.push_back(std::move(v));
               },
               [&](const DedustPoolDetector::Result &r) { adapted.push_back(to_v2(r)); },
+              [&](const MultisigOrder::Result &r) { adapted.push_back(to_v2(r)); },
               [&](const NominatorPoolContract::Result &r) { adapted.push_back(to_v2(r)); },
               [](const JettonMasterDetectorR::Result &) {},
               [](const NftCollectionDetectorR::Result &) {}),

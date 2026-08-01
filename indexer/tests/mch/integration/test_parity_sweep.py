@@ -151,6 +151,11 @@ from indexer.events.blocks.liquidity import (
     ToncoDepositLiquidityMatcher,
     ToncoWithdrawLiquidityMatcher,
 )
+from indexer.events.blocks.multisig import (
+    MultisigApproveBlockMatcher,
+    MultisigCreateOrderBlockMatcher,
+    MultisigExecuteBlockMatcher,
+)
 from indexer.events.blocks.nft import (
     GetgemsNftPurchaseBlockMatcher,
     NftDiscoveryBlockMatcher,
@@ -229,6 +234,7 @@ from indexer.events.mch.builders.ethena import ethena_registries
 from indexer.events.mch.builders.evaa import evaa_registries
 from indexer.events.mch.builders.jvault import jvault_registries
 from indexer.events.mch.builders.layerzero import layerzero_registries
+from indexer.events.mch.builders.multisig import multisig_registries
 from indexer.events.mch.builders.getgems import getgems_registries
 from indexer.events.mch.builders.nft_mint import nft_mint_registries
 from indexer.events.mch.builders.nft_sale import nft_sale_registries
@@ -561,6 +567,9 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
      (UpdateSaleMatcher, NftPutOnSaleBlockMatcher, NftDiscoveryBlockMatcher,
       AuctionBidMatcher, AuctionOutbidMatcher, NftCancelSaleMatcher,
       NftFinishAuctionMatcher, NftCancelAuctionMatcher)),
+    ("specs/multisig.mch", _SPECS_DIR / "multisig.mch", multisig_registries, (),
+     (MultisigCreateOrderBlockMatcher, MultisigApproveBlockMatcher,
+      MultisigExecuteBlockMatcher)),
     # Cocoon port (2026-07-31): all twelve matchers as one group, in the legacy
     # matchers-list order (which is also the spec's source order). No prereqs —
     # every anchor is a raw opcode and no cocoon matcher binds a block any other

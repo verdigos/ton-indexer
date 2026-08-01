@@ -99,6 +99,43 @@ message JettonMint opcode 0x642b7d07 {
   ton_amount: coins
 }
 
+message MultisigNewOrder opcode 0xf718510f {
+  query_id: u64
+  order_seqno: uint256
+  is_signer: bool
+  singer_index: u8
+  expiration_date: u48
+  order: ref_cell
+}
+
+message MultisigInitOrder opcode 0x9c73fba2 {
+  _query_id: bits 64
+  _threshold: bits 8
+  _signers: maybe_ref_cell
+  _expiration_date: bits 48
+  order: ref_cell
+  approve_on_init: bool
+}
+
+message MultisigApprove opcode 0xa762230f {
+  query_id: u64
+  signer_index: u8
+}
+
+message MultisigApproveRejected opcode 0xafaf283e {
+  _query_id: bits 64
+  exit_code: u32
+}
+
+message MultisigExecute opcode 0x75097f5d {
+  query_id: u64
+  order_seqno: uint256
+  expiration_date: u48
+  approvals_num: u8
+  signers_hash: bytes32
+  order: ref_cell
+}
+
 message PTonTransfer opcode 0x01f3835d {
   query_id: u64
   ton_amount: coins

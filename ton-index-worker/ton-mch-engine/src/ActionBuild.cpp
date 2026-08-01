@@ -485,13 +485,9 @@ void fill_evaa_withdraw(const Value &d, Action &a, bool block_failed) {
 
 // block_tree_serializer.py _fill_evaa_liquidate_action.
 void fill_evaa_liquidate(const Value &d, Action &a) {
-  auto addr = [](const Value &v) {
-    if (v.t == VType::Account && v.addr_none) return Value::make_str("addr_none");
-    return av_addr(v);
-  };
-  a.source = addr(dg(d, "liquidator"));
-  a.destination = addr(dg(d, "borrower"));
-  a.destination_secondary = addr(dg(d, "borrower_contract"));
+  a.source = av_addr(dg(d, "liquidator"));
+  a.destination = av_addr(dg(d, "borrower"));
+  a.destination_secondary = av_addr(dg(d, "borrower_contract"));
   a.amount = dg(d, "collateral_amount");
   Value succ = dg(d, "is_success");
   a.success = succ.t == VType::Bool && succ.boolean;
@@ -747,6 +743,53 @@ void fill_vesting_add_whitelist(const Value &d, Action &a) {
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("accounts_added", Value::make_list(std::move(added)));
   a.vesting_add_whitelist_data = mkdict(std::move(f));
+}
+
+void fill_multisig_create_order(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "created_by"));
+  a.destination = av_addr(dg(d, "multisig"));
+  a.destination_secondary = av_addr(dg(d, "order_contract_address"));
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("order_seqno", dg(d, "order_seqno"));
+  f.emplace_back("is_created_by_signer", dg(d, "is_created_by_signer"));
+  f.emplace_back("is_signed_by_creator", dg(d, "creator_approved"));
+  f.emplace_back("creator_index", dg(d, "creator_index"));
+  f.emplace_back("expiration_date", dg(d, "expiration_date"));
+  f.emplace_back("order_boc", dg(d, "order_boc_str"));
+  a.multisig_create_order_data = mkdict(std::move(f));
+  Value sg = dg(d, "signers");
+  if (sg.items) { for (const Value &x : *sg.items) push_account(a, x); }
+}
+
+void fill_multisig_approve(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "signer"));
+  a.destination = av_addr(dg(d, "order"));
+  Value success = dg(d, "success");
+  a.success = success.t == VType::Bool && success.boolean;
+  Value::Fields f;
+  f.emplace_back("signer_index", dg(d, "signer_index"));
+  f.emplace_back("exit_code", dg(d, "exit_code"));
+  a.multisig_approve_data = mkdict(std::move(f));
+  Value sg = dg(d, "signers");
+  if (sg.items) { for (const Value &x : *sg.items) push_account(a, x); }
+}
+
+void fill_multisig_execute(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "order_contract_address"));
+  a.destination = av_addr(dg(d, "multisig"));
+  Value success = dg(d, "success");
+  a.success = success.t == VType::Bool && success.boolean;
+  Value::Fields f;
+  f.emplace_back("query_id", dg(d, "query_id"));
+  f.emplace_back("order_seqno", dg(d, "order_seqno"));
+  f.emplace_back("expiration_date", dg(d, "expiration_date"));
+  f.emplace_back("approvals_num", dg(d, "approvals_num"));
+  f.emplace_back("signers_hash", dg(d, "signers_hash_str"));
+  f.emplace_back("order_boc", dg(d, "order_boc_str"));
+  a.multisig_execute_data = mkdict(std::move(f));
+  Value sg = dg(d, "signers");
+  if (sg.items) { for (const Value &x : *sg.items) push_account(a, x); }
 }
 
 // `success` is the literal true the spec writes — reaching the fill means the
@@ -1537,6 +1580,9 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "coffee_staking_claim_rewards") fill_coffee_staking_claim_rewards(d, a);
   else if (t == "vesting_send_message") fill_vesting_send_message(d, a);
   else if (t == "vesting_add_whitelist") fill_vesting_add_whitelist(d, a);
+  else if (t == "multisig_create_order") fill_multisig_create_order(d, a);
+  else if (t == "multisig_approve") fill_multisig_approve(d, a);
+  else if (t == "multisig_execute") fill_multisig_execute(d, a);
   else if (t == "tonco_deploy_pool") fill_tonco_deploy_pool(d, a);
   else if (t == "ethena_withdrawal_request") fill_ethena_withdrawal_request(d, a);
   else if (t == "cocoon_worker_payout") fill_cocoon_worker_payout(d, a);

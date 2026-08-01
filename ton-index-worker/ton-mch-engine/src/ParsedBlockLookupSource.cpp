@@ -170,6 +170,16 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         f.emplace_back("address", addr_str(p->address));
         return Value::make_obj(std::move(f));
       }
+    } else if (kind == "multisig_order") {
+      if (const auto *p = std::get_if<schema::MultisigOrderData>(&iface)) {
+        std::vector<Value> signers;
+        for (const auto &s : p->signers) {
+          signers.push_back(addr_str(s));
+        }
+        Value::Fields f;
+        f.emplace_back("signers", Value::make_list(std::move(signers)));
+        return Value::make_obj(std::move(f));
+      }
     }
   }
   return Value::null();  // no matching variant for this kind

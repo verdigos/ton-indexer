@@ -25,6 +25,7 @@
       "specs/getgems.mch",
       "specs/jvault.mch",
       "specs/layerzero.mch",
+      "specs/multisig.mch",
       "specs/nft_transfer.mch",
       "specs/nominator.mch",
       "specs/stonfi_v1_swap.mch",
@@ -16484,6 +16485,909 @@
       ]
     },
     {
+      "name": "multisig_create_order",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          4145565967
+        ]
+      },
+      "root": 347,
+      "produces": [
+        "multisig_create_order"
+      ],
+      "captures": [
+        {
+          "name": "new",
+          "card": "one"
+        },
+        {
+          "name": "init",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "new",
+          "types": [
+            "MultisigNewOrder"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "init",
+          "types": [
+            "MultisigInitOrder"
+          ]
+        },
+        {
+          "s": "let",
+          "name": "order",
+          "expr": {
+            "k": "lookup",
+            "name": "multisig_order",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "init"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "order"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "new"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            },
+            {
+              "name": "multisig",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "new"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "order_seqno",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "new"
+                  },
+                  "name": "body"
+                },
+                "name": "order_seqno"
+              }
+            },
+            {
+              "name": "created_by",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "new"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "is_created_by_signer",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "new"
+                  },
+                  "name": "body"
+                },
+                "name": "is_signer"
+              }
+            },
+            {
+              "name": "creator_index",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "new"
+                  },
+                  "name": "body"
+                },
+                "name": "singer_index"
+              }
+            },
+            {
+              "name": "order_contract_address",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "init"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "creator_approved",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "init"
+                  },
+                  "name": "body"
+                },
+                "name": "approve_on_init"
+              }
+            },
+            {
+              "name": "expiration_date",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "new"
+                  },
+                  "name": "body"
+                },
+                "name": "expiration_date"
+              }
+            },
+            {
+              "name": "order_boc_str",
+              "expr": {
+                "k": "call",
+                "fn": "b64",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "init"
+                      },
+                      "name": "body"
+                    },
+                    "name": "order"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "signers",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "name",
+                  "id": "order"
+                },
+                "name": "signers"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "multisig_approve",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          2808226575
+        ]
+      },
+      "root": 349,
+      "produces": [
+        "multisig_approve"
+      ],
+      "captures": [
+        {
+          "name": "vote",
+          "card": "one"
+        },
+        {
+          "name": "accepted",
+          "card": "one"
+        },
+        {
+          "name": "rejected",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "vote",
+          "types": [
+            "MultisigApprove"
+          ]
+        },
+        {
+          "s": "parse",
+          "target": "rejected",
+          "types": [
+            "MultisigApproveRejected"
+          ]
+        },
+        {
+          "s": "let",
+          "name": "order",
+          "expr": {
+            "k": "lookup",
+            "name": "multisig_order",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "vote"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "order"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "signer",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "vote"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "order",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "vote"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "success",
+              "expr": {
+                "k": "bin",
+                "op": "!=",
+                "l": {
+                  "k": "name",
+                  "id": "accepted"
+                },
+                "r": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "signer_index",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "vote"
+                  },
+                  "name": "body"
+                },
+                "name": "signer_index"
+              }
+            },
+            {
+              "name": "exit_code",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "rejected"
+                    },
+                    "name": "body"
+                  },
+                  "name": "exit_code"
+                },
+                "r": {
+                  "k": "int",
+                  "v": 0
+                }
+              }
+            },
+            {
+              "name": "signers",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "order"
+                  },
+                  "name": "signers"
+                },
+                "r": {
+                  "k": "list",
+                  "items": []
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "multisig_approve_comment",
+      "anchor": {
+        "kind": "btype",
+        "values": [
+          "ton_transfer"
+        ]
+      },
+      "root": 353,
+      "produces": [
+        "multisig_approve"
+      ],
+      "captures": [
+        {
+          "name": "vote",
+          "card": "one"
+        },
+        {
+          "name": "accepted",
+          "card": "one"
+        },
+        {
+          "name": "rejected",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "rejected",
+          "types": [
+            "MultisigApproveRejected"
+          ]
+        },
+        {
+          "s": "let",
+          "name": "order",
+          "expr": {
+            "k": "lookup",
+            "name": "multisig_order",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "vote"
+                  },
+                  "name": "msg"
+                },
+                "name": "destination"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "order"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "signer",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "vote"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "order",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "vote"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "success",
+              "expr": {
+                "k": "bin",
+                "op": "!=",
+                "l": {
+                  "k": "name",
+                  "id": "accepted"
+                },
+                "r": {
+                  "k": "null"
+                }
+              }
+            },
+            {
+              "name": "signer_index",
+              "expr": {
+                "k": "unary",
+                "op": "-",
+                "x": {
+                  "k": "int",
+                  "v": 1
+                }
+              }
+            },
+            {
+              "name": "exit_code",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "name",
+                      "id": "rejected"
+                    },
+                    "name": "body"
+                  },
+                  "name": "exit_code"
+                },
+                "r": {
+                  "k": "int",
+                  "v": 0
+                }
+              }
+            },
+            {
+              "name": "signers",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "order"
+                  },
+                  "name": "signers"
+                },
+                "r": {
+                  "k": "list",
+                  "items": []
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "multisig_execute",
+      "anchor": {
+        "kind": "opcode_set",
+        "values": [
+          1963556701
+        ]
+      },
+      "root": 357,
+      "produces": [
+        "multisig_execute"
+      ],
+      "captures": [
+        {
+          "name": "exec",
+          "card": "one"
+        }
+      ],
+      "include_excess": true,
+      "include_bounces": true,
+      "build_program": [
+        {
+          "s": "parse",
+          "target": "exec",
+          "types": [
+            "MultisigExecute"
+          ]
+        },
+        {
+          "s": "let",
+          "name": "order",
+          "expr": {
+            "k": "lookup",
+            "name": "multisig_order",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "exec"
+                  },
+                  "name": "msg"
+                },
+                "name": "source"
+              }
+            ]
+          }
+        },
+        {
+          "s": "reject",
+          "when": {
+            "k": "bin",
+            "op": "==",
+            "l": {
+              "k": "name",
+              "id": "order"
+            },
+            "r": {
+              "k": "null"
+            }
+          }
+        },
+        {
+          "s": "out",
+          "fields": [
+            {
+              "name": "query_id",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "exec"
+                  },
+                  "name": "body"
+                },
+                "name": "query_id"
+              }
+            },
+            {
+              "name": "multisig",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "exec"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "destination"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "success",
+              "expr": {
+                "k": "unary",
+                "op": "not",
+                "x": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "exec"
+                  },
+                  "name": "failed"
+                }
+              }
+            },
+            {
+              "name": "order_contract_address",
+              "expr": {
+                "k": "call",
+                "fn": "account",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "exec"
+                      },
+                      "name": "msg"
+                    },
+                    "name": "source"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "order_seqno",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "exec"
+                  },
+                  "name": "body"
+                },
+                "name": "order_seqno"
+              }
+            },
+            {
+              "name": "expiration_date",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "exec"
+                  },
+                  "name": "body"
+                },
+                "name": "expiration_date"
+              }
+            },
+            {
+              "name": "approvals_num",
+              "expr": {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "exec"
+                  },
+                  "name": "body"
+                },
+                "name": "approvals_num"
+              }
+            },
+            {
+              "name": "signers_hash_str",
+              "expr": {
+                "k": "call",
+                "fn": "b64",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "exec"
+                      },
+                      "name": "body"
+                    },
+                    "name": "signers_hash"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "order_boc_str",
+              "expr": {
+                "k": "call",
+                "fn": "b64",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "exec"
+                      },
+                      "name": "body"
+                    },
+                    "name": "order"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "signers",
+              "expr": {
+                "k": "bin",
+                "op": "??",
+                "l": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "order"
+                  },
+                  "name": "signers"
+                },
+                "r": {
+                  "k": "list",
+                  "items": []
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "nft_transfer",
       "anchor": {
         "kind": "opcode_set",
@@ -16491,7 +17395,7 @@
           1607220500
         ]
       },
-      "root": 347,
+      "root": 358,
       "produces": [
         "nft_transfer"
       ],
@@ -16707,7 +17611,7 @@
           "ton_transfer"
         ]
       },
-      "root": 350,
+      "root": 361,
       "produces": [
         "nominator_pool_withdraw_request"
       ],
@@ -16834,7 +17738,7 @@
           "ton_transfer"
         ]
       },
-      "root": 351,
+      "root": 362,
       "produces": [
         "nominator_pool_deposit"
       ],
@@ -16980,7 +17884,7 @@
           "ton_transfer"
         ]
       },
-      "root": 354,
+      "root": 365,
       "produces": [
         "nominator_pool_withdraw_request"
       ],
@@ -17119,7 +18023,7 @@
           "jetton_transfer"
         ]
       },
-      "root": 357,
+      "root": 368,
       "produces": [
         "jetton_swap"
       ],
@@ -17313,7 +18217,7 @@
           935368415
         ]
       },
-      "root": 361,
+      "root": 372,
       "produces": [
         "dex_deposit_liquidity"
       ],
@@ -17658,7 +18562,7 @@
           935368415
         ]
       },
-      "root": 374,
+      "root": 385,
       "produces": [
         "dex_deposit_liquidity"
       ],
@@ -17938,7 +18842,7 @@
           1717886506
         ]
       },
-      "root": 383,
+      "root": 394,
       "produces": [
         "jetton_swap"
       ],
@@ -18114,7 +19018,7 @@
           "jetton_burn"
         ]
       },
-      "root": 434,
+      "root": 445,
       "produces": [
         "dex_withdraw_liquidity"
       ],
@@ -18547,7 +19451,7 @@
           261677752
         ]
       },
-      "root": 442,
+      "root": 453,
       "produces": [
         "dex_withdraw_liquidity"
       ],
@@ -18959,7 +19863,7 @@
           85167505
         ]
       },
-      "root": 450,
+      "root": 461,
       "produces": [
         "nft_transfer"
       ],
@@ -19217,7 +20121,7 @@
           85167505
         ]
       },
-      "root": 458,
+      "root": 469,
       "produces": [
         "nft_transfer"
       ],
@@ -19538,7 +20442,7 @@
           1215991425
         ]
       },
-      "root": 459,
+      "root": 470,
       "produces": [
         "teleitem_start_auction"
       ],
@@ -19895,7 +20799,7 @@
           924203182
         ]
       },
-      "root": 461,
+      "root": 472,
       "produces": [
         "teleitem_cancel_auction"
       ],
@@ -20114,7 +21018,7 @@
           1819025536
         ]
       },
-      "root": 463,
+      "root": 474,
       "produces": [
         "nft_update_sale"
       ],
@@ -20387,7 +21291,7 @@
           "nft_transfer"
         ]
       },
-      "root": 464,
+      "root": 475,
       "produces": [
         "nft_put_on_sale",
         "nft_put_on_auction"
@@ -21580,7 +22484,7 @@
           801842850
         ]
       },
-      "root": 467,
+      "root": 478,
       "produces": [
         "nft_discovery"
       ],
@@ -21739,7 +22643,7 @@
           "ton_transfer"
         ]
       },
-      "root": 469,
+      "root": 480,
       "produces": [
         "auction_bid"
       ],
@@ -21890,7 +22794,7 @@
           }
         ]
       },
-      "root": 470,
+      "root": 481,
       "produces": [
         "auction_outbid"
       ],
@@ -22034,7 +22938,7 @@
           3
         ]
       },
-      "root": 471,
+      "root": 482,
       "produces": [
         "nft_cancel_sale"
       ],
@@ -22263,7 +23167,7 @@
           }
         ]
       },
-      "root": 472,
+      "root": 483,
       "produces": [
         "nft_finish_auction"
       ],
@@ -22475,7 +23379,7 @@
           }
         ]
       },
-      "root": 473,
+      "root": 484,
       "produces": [
         "nft_cancel_auction",
         "nft_finish_auction"
@@ -22805,7 +23709,7 @@
           1064836388
         ]
       },
-      "root": 474,
+      "root": 485,
       "produces": [
         "tgbtc_mint"
       ],
@@ -22977,7 +23881,7 @@
           "jetton_burn"
         ]
       },
-      "root": 480,
+      "root": 491,
       "produces": [
         "tgbtc_burn"
       ],
@@ -23211,7 +24115,7 @@
           1762604410
         ]
       },
-      "root": 492,
+      "root": 503,
       "produces": [
         "tgbtc_new_key"
       ],
@@ -23401,7 +24305,7 @@
           2007502579
         ]
       },
-      "root": 499,
+      "root": 510,
       "produces": [
         "tgbtc_mint"
       ],
@@ -23558,7 +24462,7 @@
           3393473766
         ]
       },
-      "root": 500,
+      "root": 511,
       "produces": [
         "tgbtc_burn"
       ],
@@ -23672,7 +24576,7 @@
           662005545
         ]
       },
-      "root": 501,
+      "root": 512,
       "produces": [
         "tgbtc_new_key"
       ],
@@ -23801,7 +24705,7 @@
           1161053094
         ]
       },
-      "root": 502,
+      "root": 513,
       "produces": [
         "tgbtc_dkg_log"
       ],
@@ -23900,7 +24804,7 @@
           1052660785
         ]
       },
-      "root": 503,
+      "root": 514,
       "produces": [
         "tonco_deposit_liquidity"
       ],
@@ -24171,7 +25075,7 @@
           774911215
         ]
       },
-      "root": 517,
+      "root": 528,
       "produces": [
         "tonco_deploy_pool"
       ],
@@ -24461,7 +25365,7 @@
           1393254188
         ]
       },
-      "root": 520,
+      "root": 531,
       "produces": [
         "tonco_withdraw_liquidity"
       ],
@@ -24839,7 +25743,7 @@
           2818267384
         ]
       },
-      "root": 528,
+      "root": 539,
       "produces": [
         "jetton_swap"
       ],
@@ -25020,7 +25924,7 @@
           3678112445
         ]
       },
-      "root": 556,
+      "root": 567,
       "produces": [
         "tonstakers_withdraw"
       ],
@@ -25163,7 +26067,7 @@
           1205158801
         ]
       },
-      "root": 559,
+      "root": 570,
       "produces": [
         "tonstakers_deposit"
       ],
@@ -25384,7 +26288,7 @@
           1499400124
         ]
       },
-      "root": 563,
+      "root": 574,
       "produces": [
         "tonstakers_withdraw",
         "tonstakers_withdraw_request"
@@ -25747,7 +26651,7 @@
           2809346765
         ]
       },
-      "root": 569,
+      "root": 580,
       "produces": [
         "vesting_send_message"
       ],
@@ -25927,7 +26831,7 @@
           1918412443
         ]
       },
-      "root": 571,
+      "root": 582,
       "produces": [
         "vesting_add_whitelist"
       ],
@@ -26061,7 +26965,7 @@
           3237998115
         ]
       },
-      "root": 573,
+      "root": 584,
       "produces": [
         "coffee_create_pool_creator"
       ],
@@ -26270,7 +27174,7 @@
           "coffee_create_pool_creator"
         ]
       },
-      "root": 578,
+      "root": 589,
       "produces": [
         "coffee_create_pool"
       ],
@@ -26735,7 +27639,7 @@
           1808244350
         ]
       },
-      "root": 586,
+      "root": 597,
       "produces": [
         "coffee_mev_protect_hold_funds"
       ],
@@ -26848,7 +27752,7 @@
           "jetton_transfer"
         ]
       },
-      "root": 589,
+      "root": 600,
       "produces": [
         "coffee_mev_protect_hold_funds"
       ],
@@ -26957,7 +27861,7 @@
           "jetton_transfer"
         ]
       },
-      "root": 592,
+      "root": 603,
       "produces": [
         "coffee_staking_deposit"
       ],
@@ -27125,7 +28029,7 @@
           3406020527
         ]
       },
-      "root": 596,
+      "root": 607,
       "produces": [
         "coffee_staking_withdraw"
       ],
@@ -27360,7 +28264,7 @@
           3003937552
         ]
       },
-      "root": 601,
+      "root": 612,
       "produces": [
         "coffee_staking_claim_rewards"
       ],
@@ -27543,7 +28447,7 @@
           4126304822
         ]
       },
-      "root": 604,
+      "root": 615,
       "produces": [
         "cocoon_worker_payout"
       ],
@@ -27851,7 +28755,7 @@
           1980819179
         ]
       },
-      "root": 608,
+      "root": 619,
       "produces": [
         "cocoon_proxy_payout"
       ],
@@ -28026,7 +28930,7 @@
           3143892883
         ]
       },
-      "root": 611,
+      "root": 622,
       "produces": [
         "cocoon_proxy_charge"
       ],
@@ -28207,7 +29111,7 @@
           4050839234
         ]
       },
-      "root": 614,
+      "root": 625,
       "produces": [
         "cocoon_client_top_up"
       ],
@@ -28403,7 +29307,7 @@
           2457631925
         ]
       },
-      "root": 617,
+      "root": 628,
       "produces": [
         "cocoon_register_proxy"
       ],
@@ -28514,7 +29418,7 @@
           1833560818
         ]
       },
-      "root": 619,
+      "root": 630,
       "produces": [
         "cocoon_unregister_proxy"
       ],
@@ -28640,7 +29544,7 @@
           3294601019
         ]
       },
-      "root": 621,
+      "root": 632,
       "produces": [
         "cocoon_client_register"
       ],
@@ -28800,7 +29704,7 @@
           2838851636
         ]
       },
-      "root": 624,
+      "root": 635,
       "produces": [
         "cocoon_client_change_secret_hash"
       ],
@@ -28961,7 +29865,7 @@
           4210715841
         ]
       },
-      "root": 627,
+      "root": 638,
       "produces": [
         "cocoon_client_request_refund"
       ],
@@ -29124,7 +30028,7 @@
           4023849441
         ]
       },
-      "root": 631,
+      "root": 642,
       "produces": [
         "cocoon_grant_refund"
       ],
@@ -29360,7 +30264,7 @@
           1780443744
         ]
       },
-      "root": 635,
+      "root": 646,
       "produces": [
         "cocoon_client_increase_stake"
       ],
@@ -29526,7 +30430,7 @@
           3657862776
         ]
       },
-      "root": 638,
+      "root": 649,
       "produces": [
         "cocoon_client_withdraw"
       ],
@@ -31896,11 +32800,87 @@
     },
     {
       "kind": "contract",
+      "opcode": 4145565967,
+      "capture": "new",
+      "child": 348
+    },
+    {
+      "kind": "contract",
+      "opcode": 2624846754,
+      "capture": "init"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2808226575,
+      "capture": "vote",
+      "child": 350
+    },
+    {
+      "kind": "or",
+      "branches": [
+        351,
+        352
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 2187369462,
+      "capture": "accepted"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2947491902,
+      "capture": "rejected"
+    },
+    {
+      "kind": "block_type",
+      "btype": "ton_transfer",
+      "capture": "vote",
+      "where_expr": {
+        "k": "bin",
+        "op": "==",
+        "l": {
+          "k": "dotfield",
+          "name": "comment"
+        },
+        "r": {
+          "k": "str",
+          "v": "approve"
+        }
+      },
+      "child": 354
+    },
+    {
+      "kind": "or",
+      "branches": [
+        355,
+        356
+      ],
+      "exclusive": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 2187369462,
+      "capture": "accepted"
+    },
+    {
+      "kind": "contract",
+      "opcode": 2947491902,
+      "capture": "rejected"
+    },
+    {
+      "kind": "contract",
+      "opcode": 1963556701,
+      "capture": "exec"
+    },
+    {
+      "kind": "contract",
       "opcode": 1607220500,
       "capture": "transfer",
       "children": [
-        348,
-        349
+        359,
+        360
       ]
     },
     {
@@ -31938,8 +32918,8 @@
         }
       },
       "children": [
-        352,
-        353
+        363,
+        364
       ]
     },
     {
@@ -31971,8 +32951,8 @@
         }
       },
       "children": [
-        355,
-        356
+        366,
+        367
       ]
     },
     {
@@ -31991,20 +32971,20 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "in_transfer",
-      "child": 358
+      "child": 369
     },
     {
       "kind": "contract",
       "opcode": 630424929,
       "capture": "swap",
-      "child": 359
+      "child": 370
     },
     {
       "kind": "contract",
       "opcode": 4181439551,
       "capture": "req",
       "where": "stonfi_v1_sender_payment",
-      "child": 360
+      "child": 371
     },
     {
       "kind": "block_type",
@@ -32016,27 +32996,27 @@
       "opcode": 935368415,
       "capture": "provide",
       "children": [
-        362
+        373
       ],
-      "parent": 367
+      "parent": 378
     },
     {
       "kind": "contract",
       "opcode": 1355195988,
       "capture": "add",
-      "child": 363
+      "child": 374
     },
     {
       "kind": "contract",
       "opcode": 116184359,
       "capture": "cb",
-      "child": 364
+      "child": 375
     },
     {
       "kind": "or",
       "branches": [
-        365,
-        366
+        376,
+        377
       ],
       "exclusive": true
     },
@@ -32053,9 +33033,9 @@
     {
       "kind": "or",
       "branches": [
-        368,
-        370,
-        371
+        379,
+        381,
+        382
       ],
       "exclusive": false
     },
@@ -32063,7 +33043,7 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "notify_pton",
-      "parent": 369
+      "parent": 380
     },
     {
       "kind": "contract",
@@ -32079,13 +33059,13 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "notify_raw",
-      "parent": 372
+      "parent": 383
     },
     {
       "kind": "contract",
       "opcode": 395134233,
       "capture": "internal_raw",
-      "parent": 373
+      "parent": 384
     },
     {
       "kind": "block_type",
@@ -32097,9 +33077,9 @@
       "opcode": 935368415,
       "capture": "provide",
       "children": [
-        375
+        386
       ],
-      "parent": 376
+      "parent": 387
     },
     {
       "kind": "contract",
@@ -32109,9 +33089,9 @@
     {
       "kind": "or",
       "branches": [
-        377,
-        379,
-        380
+        388,
+        390,
+        391
       ],
       "exclusive": false
     },
@@ -32119,7 +33099,7 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "notify_pton",
-      "parent": 378
+      "parent": 389
     },
     {
       "kind": "contract",
@@ -32135,13 +33115,13 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "notify_raw",
-      "parent": 381
+      "parent": 392
     },
     {
       "kind": "contract",
       "opcode": 395134233,
       "capture": "internal_raw",
-      "parent": 382
+      "parent": 393
     },
     {
       "kind": "block_type",
@@ -32153,22 +33133,22 @@
       "opcode": 1717886506,
       "capture": "swap",
       "children": [
-        384
+        395
       ],
-      "parent": 430
+      "parent": 441
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout",
-      "child": 385
+      "child": 396
     },
     {
       "kind": "or",
       "branches": [
-        386,
-        402,
-        417
+        397,
+        413,
+        428
       ],
       "exclusive": true
     },
@@ -32184,29 +33164,29 @@
           "name": "has_internal_transfer"
         }
       },
-      "child": 387
+      "child": 398
     },
     {
       "kind": "pred",
       "pred": "pton_self_transfer",
-      "child": 388
+      "child": 399
     },
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "child": 389
+      "child": 400
     },
     {
       "kind": "recursive",
-      "step": 390,
+      "step": 401,
       "optional": true
     },
     {
       "kind": "or",
       "branches": [
-        391,
-        396,
-        400
+        402,
+        407,
+        411
       ],
       "exclusive": false
     },
@@ -32214,13 +33194,13 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 392
+      "child": 403
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "peer_payout",
-      "child": 393
+      "child": 404
     },
     {
       "kind": "block_type",
@@ -32234,12 +33214,12 @@
           "name": "has_internal_transfer"
         }
       },
-      "child": 394
+      "child": 405
     },
     {
       "kind": "pred",
       "pred": "pton_self_transfer",
-      "child": 395
+      "child": 406
     },
     {
       "kind": "contract",
@@ -32249,20 +33229,20 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 397
+      "child": 408
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "peer_payout",
-      "child": 398
+      "child": 409
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "peer_out",
       "children": [
-        399
+        410
       ]
     },
     {
@@ -32274,7 +33254,7 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 401
+      "child": 412
     },
     {
       "kind": "contract",
@@ -32285,171 +33265,81 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "out_transfer",
-      "child": 403,
-      "children": [
-        416
-      ]
-    },
-    {
-      "kind": "recursive",
-      "step": 404,
-      "optional": true
-    },
-    {
-      "kind": "or",
-      "branches": [
-        405,
-        410,
-        414
-      ],
-      "exclusive": false
-    },
-    {
-      "kind": "contract",
-      "opcode": 1717886506,
-      "capture": "peer_swap",
-      "child": 406
-    },
-    {
-      "kind": "contract",
-      "opcode": 1702581493,
-      "capture": "peer_payout",
-      "child": 407
-    },
-    {
-      "kind": "block_type",
-      "btype": "jetton_transfer",
-      "capture": "peer_out",
-      "where_expr": {
-        "k": "unary",
-        "op": "not",
-        "x": {
-          "k": "dotfield",
-          "name": "has_internal_transfer"
-        }
-      },
-      "child": 408
-    },
-    {
-      "kind": "pred",
-      "pred": "pton_self_transfer",
-      "child": 409
-    },
-    {
-      "kind": "contract",
-      "opcode": 1935855772
-    },
-    {
-      "kind": "contract",
-      "opcode": 1717886506,
-      "capture": "peer_swap",
-      "child": 411
-    },
-    {
-      "kind": "contract",
-      "opcode": 1702581493,
-      "capture": "peer_payout",
-      "child": 412
-    },
-    {
-      "kind": "block_type",
-      "btype": "jetton_transfer",
-      "capture": "peer_out",
-      "children": [
-        413
-      ]
-    },
-    {
-      "kind": "contract",
-      "opcode": 32736093,
-      "optional": true
-    },
-    {
-      "kind": "contract",
-      "opcode": 1717886506,
-      "capture": "peer_swap",
-      "child": 415
-    },
-    {
-      "kind": "contract",
-      "opcode": 1702581493,
-      "capture": "peer_payout"
-    },
-    {
-      "kind": "contract",
-      "opcode": 32736093,
-      "optional": true
-    },
-    {
-      "kind": "recursive",
-      "step": 418,
-      "optional": true
-    },
-    {
-      "kind": "or",
-      "branches": [
-        419,
-        424,
-        428
-      ],
-      "exclusive": false
-    },
-    {
-      "kind": "contract",
-      "opcode": 1717886506,
-      "capture": "peer_swap",
-      "child": 420
-    },
-    {
-      "kind": "contract",
-      "opcode": 1702581493,
-      "capture": "peer_payout",
-      "child": 421
-    },
-    {
-      "kind": "block_type",
-      "btype": "jetton_transfer",
-      "capture": "peer_out",
-      "where_expr": {
-        "k": "unary",
-        "op": "not",
-        "x": {
-          "k": "dotfield",
-          "name": "has_internal_transfer"
-        }
-      },
-      "child": 422
-    },
-    {
-      "kind": "pred",
-      "pred": "pton_self_transfer",
-      "child": 423
-    },
-    {
-      "kind": "contract",
-      "opcode": 1935855772
-    },
-    {
-      "kind": "contract",
-      "opcode": 1717886506,
-      "capture": "peer_swap",
-      "child": 425
-    },
-    {
-      "kind": "contract",
-      "opcode": 1702581493,
-      "capture": "peer_payout",
-      "child": 426
-    },
-    {
-      "kind": "block_type",
-      "btype": "jetton_transfer",
-      "capture": "peer_out",
+      "child": 414,
       "children": [
         427
       ]
     },
     {
+      "kind": "recursive",
+      "step": 415,
+      "optional": true
+    },
+    {
+      "kind": "or",
+      "branches": [
+        416,
+        421,
+        425
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 417
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout",
+      "child": 418
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "peer_out",
+      "where_expr": {
+        "k": "unary",
+        "op": "not",
+        "x": {
+          "k": "dotfield",
+          "name": "has_internal_transfer"
+        }
+      },
+      "child": 419
+    },
+    {
+      "kind": "pred",
+      "pred": "pton_self_transfer",
+      "child": 420
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 422
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout",
+      "child": 423
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "peer_out",
+      "children": [
+        424
+      ]
+    },
+    {
       "kind": "contract",
       "opcode": 32736093,
       "optional": true
@@ -32458,7 +33348,97 @@
       "kind": "contract",
       "opcode": 1717886506,
       "capture": "peer_swap",
-      "child": 429
+      "child": 426
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout"
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true
+    },
+    {
+      "kind": "recursive",
+      "step": 429,
+      "optional": true
+    },
+    {
+      "kind": "or",
+      "branches": [
+        430,
+        435,
+        439
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 431
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout",
+      "child": 432
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "peer_out",
+      "where_expr": {
+        "k": "unary",
+        "op": "not",
+        "x": {
+          "k": "dotfield",
+          "name": "has_internal_transfer"
+        }
+      },
+      "child": 433
+    },
+    {
+      "kind": "pred",
+      "pred": "pton_self_transfer",
+      "child": 434
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 436
+    },
+    {
+      "kind": "contract",
+      "opcode": 1702581493,
+      "capture": "peer_payout",
+      "child": 437
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "capture": "peer_out",
+      "children": [
+        438
+      ]
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "optional": true
+    },
+    {
+      "kind": "contract",
+      "opcode": 1717886506,
+      "capture": "peer_swap",
+      "child": 440
     },
     {
       "kind": "contract",
@@ -32468,8 +33448,8 @@
     {
       "kind": "or",
       "branches": [
-        431,
-        432
+        442,
+        443
       ],
       "exclusive": true
     },
@@ -32481,7 +33461,7 @@
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "parent": 433
+      "parent": 444
     },
     {
       "kind": "contract",
@@ -32492,28 +33472,28 @@
       "kind": "block_type",
       "btype": "jetton_burn",
       "capture": "burn",
-      "child": 435
+      "child": 446
     },
     {
       "kind": "contract",
       "opcode": 695482319,
       "capture": "router",
       "children": [
-        436,
-        439
+        447,
+        450
       ]
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout_1",
-      "child": 437
+      "child": 448
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "jt_1",
-      "child": 438
+      "child": 449
     },
     {
       "kind": "contract",
@@ -32525,13 +33505,13 @@
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout_2",
-      "child": 440
+      "child": 451
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "jt_2",
-      "child": 441
+      "child": 452
     },
     {
       "kind": "contract",
@@ -32544,22 +33524,22 @@
       "opcode": 261677752,
       "capture": "refund",
       "children": [
-        443,
-        446
+        454,
+        457
       ],
-      "parent": 449
+      "parent": 460
     },
     {
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout_1",
-      "child": 444
+      "child": 455
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "jt_1",
-      "child": 445
+      "child": 456
     },
     {
       "kind": "contract",
@@ -32571,13 +33551,13 @@
       "kind": "contract",
       "opcode": 1702581493,
       "capture": "payout_2",
-      "child": 447
+      "child": 458
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "jt_2",
-      "child": 448
+      "child": 459
     },
     {
       "kind": "contract",
@@ -32594,13 +33574,13 @@
       "kind": "contract",
       "opcode": 85167505,
       "capture": "assigned",
-      "parent": 451
+      "parent": 462
     },
     {
       "kind": "or",
       "branches": [
-        452,
-        455
+        463,
+        466
       ],
       "exclusive": true
     },
@@ -32609,8 +33589,8 @@
       "btype": "ton_transfer",
       "capture": "payment",
       "children": [
-        453,
-        454
+        464,
+        465
       ]
     },
     {
@@ -32640,8 +33620,8 @@
         }
       },
       "children": [
-        456,
-        457
+        467,
+        468
       ]
     },
     {
@@ -32664,7 +33644,7 @@
       "kind": "contract",
       "opcode": 1215991425,
       "capture": "auction",
-      "child": 460
+      "child": 471
     },
     {
       "kind": "contract",
@@ -32676,7 +33656,7 @@
       "kind": "contract",
       "opcode": 924203182,
       "capture": "cancel",
-      "child": 462
+      "child": 473
     },
     {
       "kind": "contract",
@@ -32694,8 +33674,8 @@
       "btype": "nft_transfer",
       "capture": "listing",
       "children": [
-        465,
-        466
+        476,
+        477
       ]
     },
     {
@@ -32712,7 +33692,7 @@
       "kind": "contract",
       "opcode": 801842850,
       "capture": "disc",
-      "child": 468
+      "child": 479
     },
     {
       "kind": "contract",
@@ -32746,12 +33726,12 @@
       "kind": "contract",
       "opcode": 1064836388,
       "capture": "head",
-      "child": 475
+      "child": 486
     },
     {
       "kind": "recursive",
-      "step": 476,
-      "exit": 477,
+      "step": 487,
+      "exit": 488,
       "optional": true
     },
     {
@@ -32763,8 +33743,8 @@
       "opcode": 3827992475,
       "capture": "tail",
       "children": [
-        478,
-        479
+        489,
+        490
       ]
     },
     {
@@ -32781,13 +33761,13 @@
       "kind": "block_type",
       "btype": "jetton_burn",
       "capture": "burn",
-      "child": 481
+      "child": 492
     },
     {
       "kind": "or",
       "branches": [
-        482,
-        487
+        493,
+        498
       ],
       "exclusive": true
     },
@@ -32796,8 +33776,8 @@
       "opcode": 2078119902,
       "capture": "notify",
       "children": [
-        483,
-        484
+        494,
+        495
       ]
     },
     {
@@ -32810,8 +33790,8 @@
       "opcode": 3192186790,
       "optional": true,
       "children": [
-        485,
-        486
+        496,
+        497
       ]
     },
     {
@@ -32829,8 +33809,8 @@
       "opcode": 1484145570,
       "capture": "notify",
       "children": [
-        488,
-        489
+        499,
+        500
       ]
     },
     {
@@ -32843,8 +33823,8 @@
       "opcode": 3192186790,
       "optional": true,
       "children": [
-        490,
-        491
+        501,
+        502
       ]
     },
     {
@@ -32862,10 +33842,10 @@
       "opcode": 1762604410,
       "capture": "k",
       "children": [
-        493,
-        494
+        504,
+        505
       ],
-      "parent": 497
+      "parent": 508
     },
     {
       "kind": "contract",
@@ -32877,8 +33857,8 @@
       "opcode": 3192186790,
       "optional": true,
       "children": [
-        495,
-        496
+        506,
+        507
       ]
     },
     {
@@ -32895,7 +33875,7 @@
       "kind": "any",
       "capture": "p",
       "children": [
-        498
+        509
       ]
     },
     {
@@ -32928,18 +33908,18 @@
       "opcode": 1052660785,
       "capture": "add_liquidity",
       "children": [
-        504
+        515
       ],
-      "parent": 512
+      "parent": 523
     },
     {
       "kind": "contract",
       "opcode": 2171612920,
       "optional": true,
       "children": [
-        505,
-        510,
-        511
+        516,
+        521,
+        522
       ]
     },
     {
@@ -32948,8 +33928,8 @@
       "optional": true,
       "capture": "refund_router_call",
       "children": [
-        506,
-        508
+        517,
+        519
       ]
     },
     {
@@ -32958,7 +33938,7 @@
       "optional": true,
       "capture": "excess_transfer_0",
       "children": [
-        507
+        518
       ]
     },
     {
@@ -32972,7 +33952,7 @@
       "optional": true,
       "capture": "excess_transfer_1",
       "children": [
-        509
+        520
       ]
     },
     {
@@ -32993,13 +33973,13 @@
     {
       "kind": "contract",
       "opcode": 1147723383,
-      "parent": 513
+      "parent": 524
     },
     {
       "kind": "or",
       "branches": [
-        514,
-        516
+        525,
+        527
       ],
       "exclusive": false
     },
@@ -33007,7 +33987,7 @@
       "kind": "contract",
       "opcode": 1935855772,
       "capture": "ton_input",
-      "parent": 515
+      "parent": 526
     },
     {
       "kind": "contract",
@@ -33023,13 +34003,13 @@
       "kind": "contract",
       "opcode": 774911215,
       "capture": "create",
-      "child": 518
+      "child": 529
     },
     {
       "kind": "contract",
       "opcode": 1142700525,
       "capture": "init",
-      "child": 519
+      "child": 530
     },
     {
       "kind": "contract",
@@ -33040,26 +34020,26 @@
       "kind": "contract",
       "opcode": 1393254188,
       "capture": "start_burn",
-      "child": 521
+      "child": 532
     },
     {
       "kind": "contract",
       "opcode": 1187656538,
       "capture": "position_burn",
-      "child": 522
+      "child": 533
     },
     {
       "kind": "contract",
       "opcode": 3610951837,
       "capture": "pool_burn",
-      "child": 523
+      "child": 534
     },
     {
       "kind": "contract",
       "opcode": 2715461997,
       "children": [
-        524,
-        526
+        535,
+        537
       ]
     },
     {
@@ -33068,7 +34048,7 @@
       "optional": true,
       "capture": "payout_1",
       "children": [
-        525
+        536
       ]
     },
     {
@@ -33082,7 +34062,7 @@
       "optional": true,
       "capture": "payout_2",
       "children": [
-        527
+        538
       ]
     },
     {
@@ -33095,99 +34075,99 @@
       "opcode": 2818267384,
       "capture": "swap",
       "children": [
-        529
+        540
       ],
-      "parent": 552
+      "parent": 563
     },
     {
       "kind": "contract",
       "opcode": 2715461997,
-      "child": 530
+      "child": 541
     },
     {
       "kind": "or",
       "branches": [
-        531,
-        546,
-        548,
-        550
-      ],
-      "exclusive": false
-    },
-    {
-      "kind": "block_type",
-      "btype": "jetton_transfer",
-      "child": 532
-    },
-    {
-      "kind": "contract",
-      "opcode": 32736093,
-      "child": 533
-    },
-    {
-      "kind": "contract",
-      "opcode": 1935855772,
-      "child": 534
-    },
-    {
-      "kind": "recursive",
-      "strategy": "cyclic",
-      "step": 535
-    },
-    {
-      "kind": "contract",
-      "opcode": 2818267384,
-      "child": 536
-    },
-    {
-      "kind": "contract",
-      "opcode": 2715461997,
-      "child": 537
-    },
-    {
-      "kind": "or",
-      "branches": [
-        538,
-        541,
         542,
-        544
+        557,
+        559,
+        561
       ],
       "exclusive": false
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 539
-    },
-    {
-      "kind": "contract",
-      "opcode": 32736093,
-      "child": 540
-    },
-    {
-      "kind": "contract",
-      "opcode": 1935855772,
-      "child": 535
-    },
-    {
-      "kind": "block_type",
-      "btype": "jetton_transfer",
-      "child": 535
-    },
-    {
-      "kind": "contract",
-      "opcode": 260734629,
       "child": 543
     },
     {
       "kind": "contract",
+      "opcode": 32736093,
+      "child": 544
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "child": 545
+    },
+    {
+      "kind": "recursive",
+      "strategy": "cyclic",
+      "step": 546
+    },
+    {
+      "kind": "contract",
+      "opcode": 2818267384,
+      "child": 547
+    },
+    {
+      "kind": "contract",
+      "opcode": 2715461997,
+      "child": 548
+    },
+    {
+      "kind": "or",
+      "branches": [
+        549,
+        552,
+        553,
+        555
+      ],
+      "exclusive": false
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "child": 550
+    },
+    {
+      "kind": "contract",
+      "opcode": 32736093,
+      "child": 551
+    },
+    {
+      "kind": "contract",
+      "opcode": 1935855772,
+      "child": 546
+    },
+    {
+      "kind": "block_type",
+      "btype": "jetton_transfer",
+      "child": 546
+    },
+    {
+      "kind": "contract",
+      "opcode": 260734629,
+      "child": 554
+    },
+    {
+      "kind": "contract",
       "opcode": 32736093
     },
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
       "children": [
-        545
+        556
       ]
     },
     {
@@ -33198,17 +34178,17 @@
     {
       "kind": "block_type",
       "btype": "jetton_transfer",
-      "child": 547
+      "child": 558
     },
     {
       "kind": "recursive",
       "strategy": "cyclic",
-      "step": 535
+      "step": 546
     },
     {
       "kind": "contract",
       "opcode": 260734629,
-      "child": 549
+      "child": 560
     },
     {
       "kind": "contract",
@@ -33218,7 +34198,7 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "children": [
-        551
+        562
       ]
     },
     {
@@ -33229,8 +34209,8 @@
     {
       "kind": "or",
       "branches": [
-        553,
-        554
+        564,
+        565
       ],
       "exclusive": true
     },
@@ -33242,7 +34222,7 @@
     {
       "kind": "contract",
       "opcode": 1935855772,
-      "parent": 555
+      "parent": 566
     },
     {
       "kind": "contract",
@@ -33253,13 +34233,13 @@
       "kind": "contract",
       "opcode": 3678112445,
       "capture": "distributed",
-      "parent": 557
+      "parent": 568
     },
     {
       "kind": "contract",
       "opcode": 3982012594,
       "capture": "notification",
-      "parent": 558
+      "parent": 569
     },
     {
       "kind": "contract",
@@ -33269,18 +34249,18 @@
       "kind": "contract",
       "opcode": 1205158801,
       "capture": "deposit",
-      "child": 560
+      "child": 571
     },
     {
       "kind": "contract",
       "opcode": 376746144,
-      "child": 561
+      "child": 572
     },
     {
       "kind": "contract",
       "opcode": 395134233,
       "capture": "transfer",
-      "child": 562
+      "child": 573
     },
     {
       "kind": "contract",
@@ -33291,24 +34271,24 @@
       "kind": "contract",
       "opcode": 1499400124,
       "capture": "burn",
-      "child": 564
+      "child": 575
     },
     {
       "kind": "contract",
       "opcode": 2078119902,
-      "child": 565
+      "child": 576
     },
     {
       "kind": "contract",
       "opcode": 832244956,
       "capture": "request",
-      "child": 566
+      "child": 577
     },
     {
       "kind": "or",
       "branches": [
-        567,
-        568
+        578,
+        579
       ],
       "exclusive": true
     },
@@ -33326,7 +34306,7 @@
       "kind": "contract",
       "opcode": 2809346765,
       "capture": "send",
-      "child": 570
+      "child": 581
     },
     {
       "kind": "contract",
@@ -33337,7 +34317,7 @@
       "kind": "contract",
       "opcode": 1918412443,
       "capture": "add",
-      "child": 572
+      "child": 583
     },
     {
       "kind": "contract",
@@ -33349,9 +34329,9 @@
       "opcode": 3237998115,
       "capture": "request",
       "children": [
-        574
+        585
       ],
-      "parent": 575
+      "parent": 586
     },
     {
       "kind": "contract",
@@ -33361,8 +34341,8 @@
     {
       "kind": "or",
       "branches": [
-        576,
-        577
+        587,
+        588
       ],
       "exclusive": true
     },
@@ -33380,28 +34360,28 @@
       "kind": "block_type",
       "btype": "coffee_create_pool_creator",
       "capture": "creator",
-      "child": 579
+      "child": 590
     },
     {
       "kind": "contract",
       "opcode": 3237998117,
       "capture": "request",
-      "child": 580
+      "child": 591
     },
     {
       "kind": "contract",
       "opcode": 3237998114,
       "capture": "deploy",
       "children": [
-        581,
-        583,
-        584
+        592,
+        594,
+        595
       ]
     },
     {
       "kind": "contract",
       "opcode": 395134233,
-      "child": 582
+      "child": 593
     },
     {
       "kind": "contract",
@@ -33417,7 +34397,7 @@
       "kind": "contract",
       "opcode": 3237998134,
       "optional": true,
-      "child": 585
+      "child": 596
     },
     {
       "kind": "contract",
@@ -33428,13 +34408,13 @@
       "kind": "contract",
       "opcode": 1808244350,
       "capture": "call",
-      "parent": 587
+      "parent": 598
     },
     {
       "kind": "any",
       "optional": true,
       "children": [
-        588
+        599
       ]
     },
     {
@@ -33457,13 +34437,13 @@
           "v": "0x6bc79e7e"
         }
       },
-      "parent": 590
+      "parent": 601
     },
     {
       "kind": "any",
       "optional": true,
       "children": [
-        591
+        602
       ]
     },
     {
@@ -33474,15 +34454,15 @@
       "kind": "block_type",
       "btype": "jetton_transfer",
       "capture": "transfer",
-      "child": 593
+      "child": 604
     },
     {
       "kind": "contract",
       "opcode": 4182184244,
       "capture": "pool_call",
       "children": [
-        594,
-        595
+        605,
+        606
       ]
     },
     {
@@ -33499,22 +34479,22 @@
       "kind": "contract",
       "opcode": 3406020527,
       "capture": "withdraw_1",
-      "child": 597
+      "child": 608
     },
     {
       "kind": "contract",
       "opcode": 3406020527,
       "capture": "withdraw_2",
       "children": [
-        598,
-        600
+        609,
+        611
       ]
     },
     {
       "kind": "contract",
       "opcode": 3406020527,
       "capture": "withdraw_3",
-      "child": 599
+      "child": 610
     },
     {
       "kind": "block_type",
@@ -33531,8 +34511,8 @@
       "opcode": 3003937552,
       "capture": "claim",
       "children": [
-        602,
-        603
+        613,
+        614
       ]
     },
     {
@@ -33548,15 +34528,15 @@
     {
       "kind": "any",
       "capture": "start",
-      "child": 605
+      "child": 616
     },
     {
       "kind": "contract",
       "opcode": 1299340588,
       "capture": "wreq",
       "children": [
-        606,
-        607
+        617,
+        618
       ]
     },
     {
@@ -33575,8 +34555,8 @@
       "opcode": 1980819179,
       "capture": "req",
       "children": [
-        609,
-        610
+        620,
+        621
       ]
     },
     {
@@ -33594,8 +34574,8 @@
       "opcode": 3143892883,
       "capture": "charge",
       "children": [
-        612,
-        613
+        623,
+        624
       ]
     },
     {
@@ -33612,14 +34592,14 @@
       "kind": "contract",
       "opcode": 4050839234,
       "capture": "topup",
-      "child": 615
+      "child": 626
     },
     {
       "kind": "contract",
       "opcode": 1698992116,
       "capture": "preq",
       "children": [
-        616
+        627
       ]
     },
     {
@@ -33631,7 +34611,7 @@
       "kind": "contract",
       "opcode": 2457631925,
       "capture": "reg",
-      "child": 618
+      "child": 629
     },
     {
       "kind": "contract",
@@ -33642,7 +34622,7 @@
       "kind": "contract",
       "opcode": 1833560818,
       "capture": "unreg",
-      "child": 620
+      "child": 631
     },
     {
       "kind": "contract",
@@ -33654,8 +34634,8 @@
       "opcode": 3294601019,
       "capture": "reg",
       "children": [
-        622,
-        623
+        633,
+        634
       ]
     },
     {
@@ -33673,8 +34653,8 @@
       "opcode": 2838851636,
       "capture": "chg",
       "children": [
-        625,
-        626
+        636,
+        637
       ]
     },
     {
@@ -33691,10 +34671,10 @@
       "kind": "any",
       "capture": "refund",
       "children": [
-        628,
-        629
+        639,
+        640
       ],
-      "parent": 630
+      "parent": 641
     },
     {
       "kind": "contract",
@@ -33716,15 +34696,15 @@
       "kind": "contract",
       "opcode": 4023849441,
       "capture": "grant",
-      "child": 632
+      "child": 643
     },
     {
       "kind": "contract",
       "opcode": 1698992116,
       "capture": "client_request",
       "children": [
-        633,
-        634
+        644,
+        645
       ]
     },
     {
@@ -33742,8 +34722,8 @@
       "opcode": 1780443744,
       "capture": "inc",
       "children": [
-        636,
-        637
+        647,
+        648
       ]
     },
     {
@@ -33760,15 +34740,15 @@
       "kind": "contract",
       "opcode": 3657862776,
       "capture": "wd",
-      "child": 639
+      "child": 650
     },
     {
       "kind": "contract",
       "opcode": 1698992116,
       "capture": "client_request",
       "children": [
-        640,
-        641
+        651,
+        652
       ]
     },
     {
@@ -33883,6 +34863,10 @@
     96,
     97,
     98,
-    99
+    99,
+    100,
+    101,
+    102,
+    103
   ]
 }

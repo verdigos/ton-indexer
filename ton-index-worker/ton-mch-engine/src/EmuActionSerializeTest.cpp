@@ -570,6 +570,27 @@ Action wire_fixture_action() {
                                                        Value::make_str(kAddrB)}));
   a.vesting_add_whitelist_data = Value::make_dict(std::move(vaw));
 
+  a.multisig_create_order_data = Value::make_dict({
+      {"query_id", Value::make_int(td::string_to_int256(std::string("18446744073709551615")))},
+      {"order_seqno", Value::make_int(td::string_to_int256(std::string(
+                            "115792089237316195423570985008687907853269984665640564039457584007913129639935")))},
+      {"is_created_by_signer", Value::make_bool(true)},
+      {"is_signed_by_creator", Value::make_bool(false)},
+      {"creator_index", Value::make_int64(2)},
+      {"expiration_date", Value::make_int64(1785595662)},
+      {"order_boc", Value::make_str("te6ccgEBAQEA")},
+  });
+  a.multisig_approve_data = Value::make_dict({
+      {"signer_index", Value::make_int64(-1)}, {"exit_code", Value::make_int64(0)}});
+  a.multisig_execute_data = Value::make_dict({
+      {"query_id", Value::make_int64(93734614000003)},
+      {"order_seqno", Value::make_int64(899)},
+      {"expiration_date", Value::make_int64(1788095979)},
+      {"approvals_num", Value::make_int64(1)},
+      {"signers_hash", Value::make_str("C32M4/TYDdcDTvMVw09kw5jnsfQJaZGrLCsRJuShiZQ=")},
+      {"order_boc", Value::make_str("te6ccgEBBwEA")},
+  });
+
   // Cocoon: four of the twelve composites, chosen for wire SHAPES rather than
   // coverage — between them they carry every type the family emits.
   //  - worker payout: a *string payout_type, two u64 amounts past int64, and a
@@ -698,6 +719,13 @@ void test_wire_fixture() {
   const msgpack::object *vaw = at(*row, "vesting_add_whitelist_data");
   check("wire/whitelist_accounts_added_str",
         is_str(elem(at(*vaw, "accounts_added"), 1), kAddrB));
+  const msgpack::object *mco = at(*row, "multisig_create_order_data");
+  check("wire/multisig_order_seqno_str", is_str(at(*mco, "order_seqno"),
+        "115792089237316195423570985008687907853269984665640564039457584007913129639935"));
+  check("wire/multisig_signer_index_int",
+        is_int(at(*at(*row, "multisig_approve_data"), "signer_index"), -1));
+  check("wire/multisig_approvals_num_int",
+        is_uint(at(*at(*row, "multisig_execute_data"), "approvals_num"), 1));
   const msgpack::object *cwp = at(*row, "cocoon_worker_payout_data");
   check("wire/cocoon_new_tokens_str", is_str(at(*cwp, "new_tokens"), "9229614747703451079"));
   check("wire/cocoon_worker_tokens_str", is_str(at(*cwp, "worker_tokens"), "73063940556"));

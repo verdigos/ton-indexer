@@ -124,6 +124,8 @@ bool decimal_string_key(const std::string &k) {
       // vesting_add_whitelist_data.accounts_added is a Go []string of ADDRESSES
       // (never numeric), so it needs no entry here; `query_id` above covers the
       // composite's only integer field.
+      // multisig create/execute order sequence numbers are uint256 and Go *string.
+      "order_seqno",
       // The cocoon composites. Six unbounded u64/coins fields, all Go *string.
       // `nonce` MOVED here from the exclusion list above when cocoon landed:
       // cocoon_client_register's nonce is a raw u64 that routinely exceeds
@@ -315,6 +317,9 @@ const std::vector<ActionField> &optional_fields() {
       {"vesting_send_message_data", &Action::vesting_send_message_data},
       {"vesting_add_whitelist_data", &Action::vesting_add_whitelist_data},
       {"tonco_deploy_pool_data", &Action::tonco_deploy_pool_data},
+      {"multisig_create_order_data", &Action::multisig_create_order_data},
+      {"multisig_approve_data", &Action::multisig_approve_data},
+      {"multisig_execute_data", &Action::multisig_execute_data},
       {"cocoon_worker_payout_data", &Action::cocoon_worker_payout_data},
       {"cocoon_proxy_payout_data", &Action::cocoon_proxy_payout_data},
       {"cocoon_proxy_charge_data", &Action::cocoon_proxy_charge_data},

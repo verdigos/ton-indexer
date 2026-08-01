@@ -233,6 +233,169 @@ td::Result<Value> gen_parse_jetton_mint(const td::Ref<vm::Cell> &body) {
   return Value::make_obj(std::move(f));
 }
 
+// MultisigNewOrder (opcode 0xf718510f); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_multisig_new_order(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("MultisigNewOrder: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("MultisigNewOrder: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(256)) { return td::Status::Error("MultisigNewOrder: order_seqno underflow"); }
+    auto iv = cs.fetch_int256(256, false);
+    if (iv.is_null()) { return td::Status::Error("MultisigNewOrder: order_seqno fetch failed"); }
+    f.emplace_back("order_seqno", Value::make_int(std::move(iv)));
+  }
+  {
+    if (!cs.have(1)) { return td::Status::Error("MultisigNewOrder: is_signer underflow"); }
+    bool bv = cs.fetch_ulong(1) != 0;
+    f.emplace_back("is_signer", Value::make_bool(bv));
+  }
+  {
+    if (!cs.have(8)) { return td::Status::Error("MultisigNewOrder: singer_index underflow"); }
+    auto q = cs.fetch_ulong(8);
+    f.emplace_back("singer_index", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(48)) { return td::Status::Error("MultisigNewOrder: expiration_date underflow"); }
+    auto q = cs.fetch_ulong(48);
+    f.emplace_back("expiration_date", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("MultisigNewOrder: order ref missing"); }
+    auto rf = cs.fetch_ref();
+    f.emplace_back("order", Value::make_cell(std::move(rf)));
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// MultisigInitOrder (opcode 0x9c73fba2); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_multisig_init_order(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("MultisigInitOrder: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("MultisigInitOrder: _query_id underflow"); }
+  }
+  {
+    if (!cs.have(8) || !cs.advance(8)) { return td::Status::Error("MultisigInitOrder: _threshold underflow"); }
+  }
+  {
+    if (!cs.have(1)) { return td::Status::Error("MultisigInitOrder: _signers bit missing"); }
+    Value mc = Value::null();
+    if (cs.fetch_ulong(1)) {
+      if (cs.size_refs() == 0) { return td::Status::Error("MultisigInitOrder: _signers ref missing"); }
+      mc = Value::make_cell(cs.fetch_ref());
+    }
+  }
+  {
+    if (!cs.have(48) || !cs.advance(48)) { return td::Status::Error("MultisigInitOrder: _expiration_date underflow"); }
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("MultisigInitOrder: order ref missing"); }
+    auto rf = cs.fetch_ref();
+    f.emplace_back("order", Value::make_cell(std::move(rf)));
+  }
+  {
+    if (!cs.have(1)) { return td::Status::Error("MultisigInitOrder: approve_on_init underflow"); }
+    bool bv = cs.fetch_ulong(1) != 0;
+    f.emplace_back("approve_on_init", Value::make_bool(bv));
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// MultisigApprove (opcode 0xa762230f); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_multisig_approve(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("MultisigApprove: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("MultisigApprove: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(8)) { return td::Status::Error("MultisigApprove: signer_index underflow"); }
+    auto q = cs.fetch_ulong(8);
+    f.emplace_back("signer_index", Value::make_int(refint_u64(q)));
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// MultisigApproveRejected (opcode 0xafaf283e); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_multisig_approve_rejected(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("MultisigApproveRejected: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64) || !cs.advance(64)) { return td::Status::Error("MultisigApproveRejected: _query_id underflow"); }
+  }
+  {
+    if (!cs.have(32)) { return td::Status::Error("MultisigApproveRejected: exit_code underflow"); }
+    auto q = cs.fetch_ulong(32);
+    f.emplace_back("exit_code", Value::make_int(refint_u64(q)));
+  }
+  return Value::make_obj(std::move(f));
+}
+
+// MultisigExecute (opcode 0x75097f5d); leading opcode skipped unchecked.
+td::Result<Value> gen_parse_multisig_execute(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("MultisigExecute: opcode underflow");
+  }
+  Value::Fields f;
+  {
+    if (!cs.have(64)) { return td::Status::Error("MultisigExecute: query_id underflow"); }
+    auto q = cs.fetch_ulong(64);
+    f.emplace_back("query_id", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(256)) { return td::Status::Error("MultisigExecute: order_seqno underflow"); }
+    auto iv = cs.fetch_int256(256, false);
+    if (iv.is_null()) { return td::Status::Error("MultisigExecute: order_seqno fetch failed"); }
+    f.emplace_back("order_seqno", Value::make_int(std::move(iv)));
+  }
+  {
+    if (!cs.have(48)) { return td::Status::Error("MultisigExecute: expiration_date underflow"); }
+    auto q = cs.fetch_ulong(48);
+    f.emplace_back("expiration_date", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(8)) { return td::Status::Error("MultisigExecute: approvals_num underflow"); }
+    auto q = cs.fetch_ulong(8);
+    f.emplace_back("approvals_num", Value::make_int(refint_u64(q)));
+  }
+  {
+    if (!cs.have(256)) { return td::Status::Error("MultisigExecute: signers_hash underflow"); }
+    unsigned char raw[32];
+    if (!cs.fetch_bytes(raw, 32)) { return td::Status::Error("MultisigExecute: signers_hash fetch failed"); }
+    f.emplace_back("signers_hash", Value::make_bytes(std::string(reinterpret_cast<const char *>(raw), 32)));
+  }
+  {
+    if (cs.size_refs() == 0) { return td::Status::Error("MultisigExecute: order ref missing"); }
+    auto rf = cs.fetch_ref();
+    f.emplace_back("order", Value::make_cell(std::move(rf)));
+  }
+  return Value::make_obj(std::move(f));
+}
+
 // PTonTransfer (opcode 0x01f3835d); leading opcode skipped unchecked.
 td::Result<Value> gen_parse_p_ton_transfer(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(ctx, open_body(body));
@@ -2323,6 +2486,11 @@ const std::vector<std::pair<std::string, MsgParserFn>> &generated_message_parser
       {"JettonBurn", gen_parse_jetton_burn},
       {"JettonNotify", gen_parse_jetton_notify},
       {"JettonMint", gen_parse_jetton_mint},
+      {"MultisigNewOrder", gen_parse_multisig_new_order},
+      {"MultisigInitOrder", gen_parse_multisig_init_order},
+      {"MultisigApprove", gen_parse_multisig_approve},
+      {"MultisigApproveRejected", gen_parse_multisig_approve_rejected},
+      {"MultisigExecute", gen_parse_multisig_execute},
       {"PTonTransfer", gen_parse_p_ton_transfer},
       {"StonfiV2ProvideLiquidity", gen_parse_stonfi_v2_provide_liquidity},
       {"DedustPayoutFromPool", gen_parse_dedust_payout_from_pool},

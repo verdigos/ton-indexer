@@ -78,6 +78,8 @@ std::size_t scrub_arena_refs(Action &a) {
                    &a.evaa_supply_data, &a.evaa_withdraw_data, &a.evaa_liquidate_data,
                    &a.vesting_send_message_data,
                    &a.vesting_add_whitelist_data, &a.tonco_deploy_pool_data,
+                   &a.multisig_create_order_data, &a.multisig_approve_data,
+                   &a.multisig_execute_data,
                    &a.cocoon_worker_payout_data, &a.cocoon_proxy_payout_data,
                    &a.cocoon_proxy_charge_data, &a.cocoon_client_top_up_data,
                    &a.cocoon_register_proxy_data, &a.cocoon_unregister_proxy_data,

@@ -68,6 +68,10 @@ constexpr DumpType kDumpTypes[] = {
     {0xa2b5fbae, "LayerzeroChannelSendCallback"},
     {0x5388cd88, "ChannelCommitPacket"},
     {0x3cb38090, "UlnConnectionVerifyCallbackParser"},
+    {0xf718510f, "MultisigNewOrder"},
+    {0xa762230f, "MultisigApprove"},
+    {0xafaf283e, "MultisigApproveRejected"},
+    {0x75097f5d, "MultisigExecute"},
     // Cocoon. RegisterProxy (0x927c7cb5) is deliberately absent: its Python
     // class binds the RESIDUAL SLICE as `proxy_info`, which no schema leaf can
     // emit, so the dump would diverge on that key alone (mch-msgs.schema).
