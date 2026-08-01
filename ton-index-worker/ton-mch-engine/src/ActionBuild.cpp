@@ -1531,6 +1531,10 @@ void fill_ton_transfer(const Value &d, Action &a) {
   a.ton_transfer_data = mkdict(std::move(f));
 }
 
+void fill_tick_tock(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "account"));
+}
+
 // Dispatch a produced block to its fill (block_to_action match). Returns false
 // for a btype outside the ported set (skip-table entry).
 bool fill_action(Block *b, Action &a) {
@@ -1538,6 +1542,7 @@ bool fill_action(Block *b, Action &a) {
   const std::string &t = b->btype;
   if (t == "call_contract" || t == "contract_deploy") fill_call_contract(d, a);
   else if (t == "ton_transfer") fill_ton_transfer(d, a);
+  else if (t == "tick_tock") fill_tick_tock(d, a);
   else if (t == "jetton_transfer") fill_jetton_transfer(d, a);
   else if (t == "jetton_burn") fill_jetton_burn(d, a);
   else if (t == "jetton_mint") fill_jetton_mint(d, a);

@@ -957,6 +957,13 @@ void test_bucket_b_fills() {
     check("bucketB/renew_dns/asset", is_str_v(a.asset, kAddrA));
   }
   {
+    Action a = row("tick_tock", {{"account", Value::make_account_raw(kAddrA)}});
+    check("bucketB/tick_tock/type", a.type == "tick_tock");
+    check("bucketB/tick_tock/source", is_str_v(a.source, kAddrA));
+    check("bucketB/tick_tock/no_destination", a.destination.is_null());
+    check("bucketB/tick_tock/no_amount", a.amount.is_null());
+  }
+  {
     // No payout yet -> still a REQUEST.
     Action a = row("nominator_pool_withdraw_request",
                    {{"source", Value::make_account_raw(kAddrA)},
