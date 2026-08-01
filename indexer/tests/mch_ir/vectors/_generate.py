@@ -28,6 +28,22 @@ _SOME_BYTES_B64 = base64.b64encode(_SOME_BYTES).decode()
 # A small cell; b64(Cell) must BOC-encode it first.
 _CELL = begin_cell().store_uint(0xDEADBEEF, 32).store_uint(7, 8).end_cell()
 _CELL_BOC_B64 = base64.b64encode(_CELL.to_boc()).decode()
+_CELL_BYTES_B64 = base64.b64encode(b"\xDE\xAD\xBE\xEF\x07").decode()
+_EMPTY_CELL = begin_cell().end_cell()
+_EMPTY_CELL_BOC_B64 = base64.b64encode(_EMPTY_CELL.to_boc()).decode()
+_REF_ONLY_CELL = begin_cell().store_ref(_EMPTY_CELL).end_cell()
+_REF_ONLY_CELL_BOC_B64 = base64.b64encode(_REF_ONLY_CELL.to_boc()).decode()
+_BIT_ONLY_CELL = begin_cell().store_uint(1, 1).end_cell()
+_BIT_ONLY_CELL_BOC_B64 = base64.b64encode(_BIT_ONLY_CELL.to_boc()).decode()
+_HASH_CELL = begin_cell().store_bytes(bytes.fromhex("ab" * 32)).end_cell()
+_HASH_CELL_BOC_B64 = base64.b64encode(_HASH_CELL.to_boc()).decode()
+_SHORT_HASH_CELL = begin_cell().store_uint(0, 255).end_cell()
+_SHORT_HASH_CELL_BOC_B64 = base64.b64encode(_SHORT_HASH_CELL.to_boc()).decode()
+_REF_HASH_CELL = begin_cell().store_bytes(bytes.fromhex("ab" * 32)).store_ref(_EMPTY_CELL).end_cell()
+_REF_HASH_CELL_BOC_B64 = base64.b64encode(_REF_HASH_CELL.to_boc()).decode()
+_ALIGNED_REF_CELL = begin_cell().store_uint(0xAB, 8).store_ref(_EMPTY_CELL).end_cell()
+_ALIGNED_REF_CELL_BOC_B64 = base64.b64encode(_ALIGNED_REF_CELL.to_boc()).decode()
+_JETTON_RAW = "-1:" + "AB" * 32
 
 
 def _ir(src: str) -> dict:
@@ -90,6 +106,64 @@ _V: list[tuple] = [
     ("ton_asset", "ton_asset()", {}, {"$asset_ton": True}),
     ("b64_bytes", "b64(a)", {"a": {"$bytes_b64": _SOME_BYTES_B64}}, _SOME_BYTES_B64),
     ("b64_cell", "b64(a)", {"a": {"$cell_b64": _CELL_BOC_B64}}, _CELL_BOC_B64),
+    # --- ABI-faithful conversion builtins (F0; production specs do not use these yet) ---
+    ("asset_of_ton", "asset_of(x)",
+     {"x": {"$obj": {"$": "AssetTon"}}}, {"$asset_ton": True}),
+    ("asset_of_jetton", "asset_of(x)",
+     {"x": {"$obj": {"$": "AssetJetton", "workchain": -1,
+                       "hash": {"$cell_b64": _HASH_CELL_BOC_B64}}}},
+     {"$asset_jetton": _JETTON_RAW}),
+    ("asset_of_null", "asset_of(x)", {"x": None}, None),
+    ("asset_of_bad_tag_fault", "asset_of(x)",
+     {"x": {"$obj": {"$": "UnknownAsset"}}}, FAULT),
+    ("asset_of_nonobj_fault", "asset_of(x)", {"x": 7}, FAULT),
+    ("asset_of_short_hash_fault", "asset_of(x)",
+     {"x": {"$obj": {"$": "AssetJetton", "workchain": 0,
+                       "hash": {"$cell_b64": _SHORT_HASH_CELL_BOC_B64}}}}, FAULT),
+    ("asset_of_ref_hash_fault", "asset_of(x)",
+     {"x": {"$obj": {"$": "AssetJetton", "workchain": 0,
+                       "hash": {"$cell_b64": _REF_HASH_CELL_BOC_B64}}}}, FAULT),
+    ("tail_unwrap_jetton_ref", "tail_unwrap(x)",
+     {"x": {"$obj": {"$": "JettonForwardPayloadRef",
+                       "value": {"$cell_b64": _EMPTY_CELL_BOC_B64}}}},
+     {"$cell_b64": _EMPTY_CELL_BOC_B64}),
+    ("tail_unwrap_jetton_inline_nonempty", "tail_unwrap(x)",
+     {"x": {"$obj": {"$": "JettonForwardPayloadInline",
+                       "value": {"$cell_b64": _BIT_ONLY_CELL_BOC_B64}}}},
+     {"$cell_b64": _BIT_ONLY_CELL_BOC_B64}),
+    ("tail_unwrap_jetton_inline_empty", "tail_unwrap(x)",
+     {"x": {"$obj": {"$": "JettonForwardPayloadInline",
+                       "value": {"$cell_b64": _REF_ONLY_CELL_BOC_B64}}}}, None),
+    ("tail_unwrap_pton_ref", "tail_unwrap(x)",
+     {"x": {"$obj": {"$": "PTonForwardPayloadRef",
+                       "value": {"$cell_b64": _EMPTY_CELL_BOC_B64}}}},
+     {"$cell_b64": _EMPTY_CELL_BOC_B64}),
+    ("tail_unwrap_pton_inline_nonempty", "tail_unwrap(x)",
+     {"x": {"$obj": {"$": "PTonForwardPayloadInline",
+                       "value": {"$cell_b64": _REF_ONLY_CELL_BOC_B64}}}},
+     {"$cell_b64": _REF_ONLY_CELL_BOC_B64}),
+    ("tail_unwrap_pton_inline_empty", "tail_unwrap(x)",
+     {"x": {"$obj": {"$": "PTonForwardPayloadInline",
+                       "value": {"$cell_b64": _BIT_ONLY_CELL_BOC_B64}}}}, None),
+    ("tail_unwrap_null", "tail_unwrap(x)", {"x": None}, None),
+    ("tail_unwrap_bad_tag_fault", "tail_unwrap(x)",
+     {"x": {"$obj": {"$": "UnknownTail", "value": {"$cell_b64": _CELL_BOC_B64}}}},
+     FAULT),
+    ("tail_unwrap_nonobj_fault", "tail_unwrap(x)", {"x": 7}, FAULT),
+    ("tail_unwrap_missing_value_fault", "tail_unwrap(x)",
+     {"x": {"$obj": {"$": "JettonForwardPayloadRef"}}}, FAULT),
+    ("tail_unwrap_noncell_value_fault", "tail_unwrap(x)",
+     {"x": {"$obj": {"$": "PTonForwardPayloadInline", "value": 7}}}, FAULT),
+    ("bytes_of_bytes", "bytes_of(x)",
+     {"x": {"$bytes_b64": _SOME_BYTES_B64}}, {"$bytes_b64": _SOME_BYTES_B64}),
+    ("bytes_of_aligned_cell", "bytes_of(x)",
+     {"x": {"$cell_b64": _CELL_BOC_B64}}, {"$bytes_b64": _CELL_BYTES_B64}),
+    ("bytes_of_null", "bytes_of(x)", {"x": None}, None),
+    ("bytes_of_wrong_type_fault", "bytes_of(x)", {"x": 7}, FAULT),
+    ("bytes_of_unaligned_cell_fault", "bytes_of(x)",
+     {"x": {"$cell_b64": _BIT_ONLY_CELL_BOC_B64}}, FAULT),
+    ("bytes_of_ref_cell_fault", "bytes_of(x)",
+     {"x": {"$cell_b64": _ALIGNED_REF_CELL_BOC_B64}}, FAULT),
     # --- list combinators ---
     ("first_nonempty", "first(xs)", {"xs": {"$list": [10, 20]}}, 10),
     ("first_empty", "first(xs)", {"xs": {"$list": []}}, None),

@@ -3,7 +3,9 @@
 #include "BlockTree.h"
 
 #include "td/utils/base64.h"
+#include "td/utils/misc.h"
 #include "vm/boc.h"
+#include "vm/cellslice.h"
 
 #include <algorithm>
 #include <cctype>
@@ -452,6 +454,16 @@ static bool bi_require_list(const Value &v, const std::vector<Value> *&out) {
   return true;
 }
 
+static bool bi_open_cell(const Value &v, vm::CellSlice &out) {
+  if (v.t != VType::Cell || v.cell.is_null()) return false;
+  try {
+    out = vm::load_cell_slice(v.cell);
+  } catch (...) {
+    return false;
+  }
+  return true;
+}
+
 EvalResult rt_builtin_account(const Value &x) {
   if (rt_is_null(x)) return rt_ok(Value::null());
   if (x.t == VType::Account) return rt_ok(x);
@@ -497,6 +509,97 @@ EvalResult rt_builtin_b64(const Value &x) {
     return rt_ok(Value::make_str(td::base64_encode(r.move_as_ok())));
   }
   return rt_fault("b64: expects bytes or a cell, got " + x.describe());
+}
+
+EvalResult rt_builtin_asset_of(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  if (x.t != VType::Obj) return rt_fault("asset_of: expects an ABI object, got " + x.describe());
+  const Value *tag = x.field("$");
+  if (tag == nullptr || tag->t != VType::Str) {
+    return rt_fault("asset_of: ABI object '$' tag must be a string");
+  }
+
+  // PLACEHOLDER, not yet authored by F1 — see schema-to-abi-faithful-plan.md F1.
+  static const std::string ton_tag = "AssetTon";
+  static const std::string jetton_tag = "AssetJetton";
+  if (tag->str == ton_tag) return rt_ok(Value::make_asset_ton());
+  if (tag->str != jetton_tag) return rt_fault("asset_of: unknown ABI arm '" + tag->str + "'");
+
+  const Value *workchain = x.field("workchain");
+  const Value *hash = x.field("hash");
+  if (workchain == nullptr || workchain->t != VType::Int || workchain->num.is_null()) {
+    return rt_fault("asset_of: jetton workchain must be an integer");
+  }
+  vm::CellSlice hash_slice;
+  if (hash == nullptr || !bi_open_cell(*hash, hash_slice)) {
+    return rt_fault("asset_of: jetton hash must be a cell");
+  }
+  if (hash_slice.size() != 256 || hash_slice.size_refs() != 0) {
+    return rt_fault("asset_of: jetton hash cell must have exactly 256 bits and no refs");
+  }
+  std::string hash_raw(32, '\0');
+  if (!hash_slice.fetch_bytes(reinterpret_cast<unsigned char *>(hash_raw.data()), 32)) {
+    return rt_fault("asset_of: jetton hash fetch failed");
+  }
+  std::string raw = workchain->num->to_dec_string() + ":" + td::hex_encode(td::Slice(hash_raw));
+  auto canonical = normalize_raw_address(raw);
+  if (!canonical) return rt_fault("asset_of: invalid jetton address " + raw);
+  return rt_ok(Value::make_asset_jetton(*canonical));
+}
+
+EvalResult rt_builtin_tail_unwrap(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  if (x.t != VType::Obj) return rt_fault("tail_unwrap: expects an ABI object, got " + x.describe());
+  const Value *tag = x.field("$");
+  if (tag == nullptr || tag->t != VType::Str) {
+    return rt_fault("tail_unwrap: ABI object '$' tag must be a string");
+  }
+
+  enum class TailPolicy { Ref, Bits, Refs };
+  // PLACEHOLDER, not yet authored by F1 — see schema-to-abi-faithful-plan.md F1.
+  static const std::map<std::string, TailPolicy> tail_tags = {
+      {"JettonForwardPayloadRef", TailPolicy::Ref},
+      {"JettonForwardPayloadInline", TailPolicy::Bits},
+      {"PTonForwardPayloadRef", TailPolicy::Ref},
+      {"PTonForwardPayloadInline", TailPolicy::Refs},
+  };
+  auto policy = tail_tags.find(tag->str);
+  if (policy == tail_tags.end()) return rt_fault("tail_unwrap: unknown ABI arm '" + tag->str + "'");
+
+  const Value *value = x.field("value");
+  if (value == nullptr || value->t != VType::Cell || value->cell.is_null()) {
+    return rt_fault("tail_unwrap: ABI arm value must be a cell");
+  }
+  if (policy->second == TailPolicy::Ref) return rt_ok(*value);
+
+  vm::CellSlice value_slice;
+  if (!bi_open_cell(*value, value_slice)) return rt_fault("tail_unwrap: cannot open value cell");
+  if (policy->second == TailPolicy::Bits && value_slice.size() == 0) {
+    return rt_ok(Value::null());
+  }
+  if (policy->second == TailPolicy::Refs && value_slice.size_refs() == 0) {
+    return rt_ok(Value::null());
+  }
+  return rt_ok(*value);
+}
+
+EvalResult rt_builtin_bytes_of(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  if (x.t == VType::Bytes) return rt_ok(x);
+  vm::CellSlice cell_slice;
+  if (!bi_open_cell(x, cell_slice)) {
+    return rt_fault("bytes_of: expects bytes or a cell, got " + x.describe());
+  }
+  if (cell_slice.size() % 8 != 0 || cell_slice.size_refs() != 0) {
+    return rt_fault("bytes_of: cell must be byte-aligned and have no refs");
+  }
+  std::string raw(cell_slice.size() / 8, '\0');
+  if (!raw.empty() &&
+      !cell_slice.fetch_bytes(reinterpret_cast<unsigned char *>(raw.data()),
+                              static_cast<int>(raw.size()))) {
+    return rt_fault("bytes_of: cell byte fetch failed");
+  }
+  return rt_ok(Value::make_bytes(std::move(raw)));
 }
 
 EvalResult rt_builtin_first(const Value &x) {
@@ -642,6 +745,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   static const std::map<std::string, int> arity = {
       {"account", 1}, {"amount", 1},  {"asset", 1}, {"ton_asset", 0},
       {"addr_none", 0}, {"b64", 1},   {"first", 1}, {"last", 1},
+      {"asset_of", 1}, {"tail_unwrap", 1}, {"bytes_of", 1},
       {"len", 1},     {"sum", 1},     {"zip", 2},   {"map", 2},
       {"concat", 2}, {"contains", 2},
   };
@@ -659,6 +763,9 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   if (name == "ton_asset") return rt_builtin_ton_asset();
   if (name == "addr_none") return rt_builtin_addr_none();
   if (name == "b64") return rt_builtin_b64(args[0]);
+  if (name == "asset_of") return rt_builtin_asset_of(args[0]);
+  if (name == "tail_unwrap") return rt_builtin_tail_unwrap(args[0]);
+  if (name == "bytes_of") return rt_builtin_bytes_of(args[0]);
   if (name == "first") return rt_builtin_first(args[0]);
   if (name == "last") return rt_builtin_last(args[0]);
   if (name == "len") return rt_builtin_len(args[0]);

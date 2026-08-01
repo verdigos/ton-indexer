@@ -563,6 +563,574 @@
    "expect": "te6ccgEBAQEABwAACt6tvu8H"
   },
   {
+   "name": "asset_of_ton",
+   "src": "asset_of(x)",
+   "expr": {
+    "k": "call",
+    "fn": "asset_of",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$obj": {
+      "$": "AssetTon"
+     }
+    }
+   },
+   "expect": {
+    "$asset_ton": true
+   }
+  },
+  {
+   "name": "asset_of_jetton",
+   "src": "asset_of(x)",
+   "expr": {
+    "k": "call",
+    "fn": "asset_of",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$obj": {
+      "$": "AssetJetton",
+      "workchain": -1,
+      "hash": {
+       "$cell_b64": "te6ccgEBAQEAIgAAQKurq6urq6urq6urq6urq6urq6urq6urq6urq6urq6ur"
+      }
+     }
+    }
+   },
+   "expect": {
+    "$asset_jetton": "-1:ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB"
+   }
+  },
+  {
+   "name": "asset_of_null",
+   "src": "asset_of(x)",
+   "expr": {
+    "k": "call",
+    "fn": "asset_of",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": null
+   },
+   "expect": null
+  },
+  {
+   "name": "asset_of_bad_tag_fault",
+   "src": "asset_of(x)",
+   "expr": {
+    "k": "call",
+    "fn": "asset_of",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$obj": {
+      "$": "UnknownAsset"
+     }
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "asset_of_nonobj_fault",
+   "src": "asset_of(x)",
+   "expr": {
+    "k": "call",
+    "fn": "asset_of",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": 7
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "asset_of_short_hash_fault",
+   "src": "asset_of(x)",
+   "expr": {
+    "k": "call",
+    "fn": "asset_of",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$obj": {
+      "$": "AssetJetton",
+      "workchain": 0,
+      "hash": {
+       "$cell_b64": "te6ccgEBAQEAIgAAPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB"
+      }
+     }
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "asset_of_ref_hash_fault",
+   "src": "asset_of(x)",
+   "expr": {
+    "k": "call",
+    "fn": "asset_of",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$obj": {
+      "$": "AssetJetton",
+      "workchain": 0,
+      "hash": {
+       "$cell_b64": "te6ccgEBAgEAJQABQKurq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urAQAA"
+      }
+     }
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "tail_unwrap_jetton_ref",
+   "src": "tail_unwrap(x)",
+   "expr": {
+    "k": "call",
+    "fn": "tail_unwrap",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$obj": {
+      "$": "JettonForwardPayloadRef",
+      "value": {
+       "$cell_b64": "te6ccgEBAQEAAgAAAA=="
+      }
+     }
+    }
+   },
+   "expect": {
+    "$cell_b64": "te6ccgEBAQEAAgAAAA=="
+   }
+  },
+  {
+   "name": "tail_unwrap_jetton_inline_nonempty",
+   "src": "tail_unwrap(x)",
+   "expr": {
+    "k": "call",
+    "fn": "tail_unwrap",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$obj": {
+      "$": "JettonForwardPayloadInline",
+      "value": {
+       "$cell_b64": "te6ccgEBAQEAAwAAAcA="
+      }
+     }
+    }
+   },
+   "expect": {
+    "$cell_b64": "te6ccgEBAQEAAwAAAcA="
+   }
+  },
+  {
+   "name": "tail_unwrap_jetton_inline_empty",
+   "src": "tail_unwrap(x)",
+   "expr": {
+    "k": "call",
+    "fn": "tail_unwrap",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$obj": {
+      "$": "JettonForwardPayloadInline",
+      "value": {
+       "$cell_b64": "te6ccgEBAgEABQABAAEAAA=="
+      }
+     }
+    }
+   },
+   "expect": null
+  },
+  {
+   "name": "tail_unwrap_pton_ref",
+   "src": "tail_unwrap(x)",
+   "expr": {
+    "k": "call",
+    "fn": "tail_unwrap",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$obj": {
+      "$": "PTonForwardPayloadRef",
+      "value": {
+       "$cell_b64": "te6ccgEBAQEAAgAAAA=="
+      }
+     }
+    }
+   },
+   "expect": {
+    "$cell_b64": "te6ccgEBAQEAAgAAAA=="
+   }
+  },
+  {
+   "name": "tail_unwrap_pton_inline_nonempty",
+   "src": "tail_unwrap(x)",
+   "expr": {
+    "k": "call",
+    "fn": "tail_unwrap",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$obj": {
+      "$": "PTonForwardPayloadInline",
+      "value": {
+       "$cell_b64": "te6ccgEBAgEABQABAAEAAA=="
+      }
+     }
+    }
+   },
+   "expect": {
+    "$cell_b64": "te6ccgEBAgEABQABAAEAAA=="
+   }
+  },
+  {
+   "name": "tail_unwrap_pton_inline_empty",
+   "src": "tail_unwrap(x)",
+   "expr": {
+    "k": "call",
+    "fn": "tail_unwrap",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$obj": {
+      "$": "PTonForwardPayloadInline",
+      "value": {
+       "$cell_b64": "te6ccgEBAQEAAwAAAcA="
+      }
+     }
+    }
+   },
+   "expect": null
+  },
+  {
+   "name": "tail_unwrap_null",
+   "src": "tail_unwrap(x)",
+   "expr": {
+    "k": "call",
+    "fn": "tail_unwrap",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": null
+   },
+   "expect": null
+  },
+  {
+   "name": "tail_unwrap_bad_tag_fault",
+   "src": "tail_unwrap(x)",
+   "expr": {
+    "k": "call",
+    "fn": "tail_unwrap",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$obj": {
+      "$": "UnknownTail",
+      "value": {
+       "$cell_b64": "te6ccgEBAQEABwAACt6tvu8H"
+      }
+     }
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "tail_unwrap_nonobj_fault",
+   "src": "tail_unwrap(x)",
+   "expr": {
+    "k": "call",
+    "fn": "tail_unwrap",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": 7
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "tail_unwrap_missing_value_fault",
+   "src": "tail_unwrap(x)",
+   "expr": {
+    "k": "call",
+    "fn": "tail_unwrap",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$obj": {
+      "$": "JettonForwardPayloadRef"
+     }
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "tail_unwrap_noncell_value_fault",
+   "src": "tail_unwrap(x)",
+   "expr": {
+    "k": "call",
+    "fn": "tail_unwrap",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$obj": {
+      "$": "PTonForwardPayloadInline",
+      "value": 7
+     }
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "bytes_of_bytes",
+   "src": "bytes_of(x)",
+   "expr": {
+    "k": "call",
+    "fn": "bytes_of",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$bytes_b64": "AQIDaGVsbG8="
+    }
+   },
+   "expect": {
+    "$bytes_b64": "AQIDaGVsbG8="
+   }
+  },
+  {
+   "name": "bytes_of_aligned_cell",
+   "src": "bytes_of(x)",
+   "expr": {
+    "k": "call",
+    "fn": "bytes_of",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$cell_b64": "te6ccgEBAQEABwAACt6tvu8H"
+    }
+   },
+   "expect": {
+    "$bytes_b64": "3q2+7wc="
+   }
+  },
+  {
+   "name": "bytes_of_null",
+   "src": "bytes_of(x)",
+   "expr": {
+    "k": "call",
+    "fn": "bytes_of",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": null
+   },
+   "expect": null
+  },
+  {
+   "name": "bytes_of_wrong_type_fault",
+   "src": "bytes_of(x)",
+   "expr": {
+    "k": "call",
+    "fn": "bytes_of",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": 7
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "bytes_of_unaligned_cell_fault",
+   "src": "bytes_of(x)",
+   "expr": {
+    "k": "call",
+    "fn": "bytes_of",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$cell_b64": "te6ccgEBAQEAAwAAAcA="
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
+   "name": "bytes_of_ref_cell_fault",
+   "src": "bytes_of(x)",
+   "expr": {
+    "k": "call",
+    "fn": "bytes_of",
+    "args": [
+     {
+      "k": "name",
+      "id": "x"
+     }
+    ]
+   },
+   "env": {
+    "x": {
+     "$cell_b64": "te6ccgEBAgEABgABAqsBAAA="
+    }
+   },
+   "expect": {
+    "$fault": true
+   }
+  },
+  {
    "name": "first_nonempty",
    "src": "first(xs)",
    "expr": {

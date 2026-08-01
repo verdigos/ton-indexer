@@ -36,8 +36,8 @@ std::string jstr(const Json &e, const char *name) {
 bool is_builtin(const std::string &name) {
   static const std::set<std::string> builtins = {
       "account", "amount", "asset", "ton_asset", "addr_none", "b64",
-      "first",   "last",   "len",   "sum",       "zip",       "map",
-      "concat",  "contains"};
+      "asset_of", "tail_unwrap", "bytes_of", "first", "last", "len",
+      "sum", "zip", "map", "concat", "contains"};
   return builtins.count(name) != 0;
 }
 

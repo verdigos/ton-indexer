@@ -27,6 +27,7 @@ the async build-program evaluator (mch_ir/expr.py Evaluator) shares them.
 from __future__ import annotations
 
 import base64
+from types import SimpleNamespace
 from typing import Any
 
 from pytoniq_core import Cell
@@ -77,6 +78,81 @@ def _builtin_b64(x: Any) -> str:
     if isinstance(x, Cell):
         x = x.to_boc()
     return base64.b64encode(x).decode("utf-8")
+
+
+# PLACEHOLDER, not yet authored by F1 — see schema-to-abi-faithful-plan.md F1.
+_ASSET_TON_TAG = "AssetTon"
+_ASSET_JETTON_TAG = "AssetJetton"
+
+# PLACEHOLDER, not yet authored by F1 — see schema-to-abi-faithful-plan.md F1.
+_TAIL_TAGS = {
+    "JettonForwardPayloadRef": "ref",
+    "JettonForwardPayloadInline": "bits",
+    "PTonForwardPayloadRef": "ref",
+    "PTonForwardPayloadInline": "refs",
+}
+
+
+def _faithful_obj_tag(name: str, x: Any) -> str:
+    if not isinstance(x, SimpleNamespace):
+        raise EvalError(f"{name} expects an ABI object, got {type(x).__name__}")
+    try:
+        tag = getattr(x, "$")
+    except AttributeError:
+        raise EvalError(f"{name}: ABI object has no '$' tag") from None
+    if not isinstance(tag, str):
+        raise EvalError(f"{name}: ABI object '$' tag must be a string")
+    return tag
+
+
+def _builtin_asset_of(x: Any) -> Asset:
+    tag = _faithful_obj_tag("asset_of", x)
+    if tag == _ASSET_TON_TAG:
+        return Asset(is_ton=True)
+    if tag != _ASSET_JETTON_TAG:
+        raise EvalError(f"asset_of: unknown ABI arm {tag!r}")
+    try:
+        workchain = getattr(x, "workchain")
+        hash_cell = getattr(x, "hash")
+    except AttributeError as ex:
+        raise EvalError(f"asset_of: jetton arm has no {ex.name!r} field") from None
+    if isinstance(workchain, bool) or not isinstance(workchain, int):
+        raise EvalError("asset_of: jetton workchain must be an integer")
+    if not isinstance(hash_cell, Cell):
+        raise EvalError("asset_of: jetton hash must be a cell")
+    if len(hash_cell.bits) != 256 or len(hash_cell.refs) != 0:
+        raise EvalError("asset_of: jetton hash cell must have exactly 256 bits and no refs")
+    hash_bytes = hash_cell.begin_parse().load_bytes(32)
+    raw = f"{workchain}:{hash_bytes.hex().upper()}"
+    return Asset(is_ton=False, jetton_address=raw)
+
+
+def _builtin_tail_unwrap(x: Any) -> Cell | None:
+    tag = _faithful_obj_tag("tail_unwrap", x)
+    policy = _TAIL_TAGS.get(tag)
+    if policy is None:
+        raise EvalError(f"tail_unwrap: unknown ABI arm {tag!r}")
+    try:
+        value = getattr(x, "value")
+    except AttributeError:
+        raise EvalError("tail_unwrap: ABI arm has no 'value' field") from None
+    if not isinstance(value, Cell):
+        raise EvalError("tail_unwrap: ABI arm value must be a cell")
+    if policy == "bits" and len(value.bits) == 0:
+        return None
+    if policy == "refs" and len(value.refs) == 0:
+        return None
+    return value
+
+
+def _builtin_bytes_of(x: Any) -> bytes:
+    if isinstance(x, bytes):
+        return x
+    if not isinstance(x, Cell):
+        raise EvalError(f"bytes_of expects bytes or a cell, got {type(x).__name__}")
+    if len(x.bits) % 8 != 0 or len(x.refs) != 0:
+        raise EvalError("bytes_of: cell must be byte-aligned and have no refs")
+    return x.begin_parse().load_bytes(len(x.bits) // 8)
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +256,9 @@ BUILTINS: dict[str, tuple[Any, int]] = {
     "ton_asset": (_builtin_ton_asset, 0),
     "addr_none": (_builtin_addr_none, 0),
     "b64":       (_builtin_b64, 1),
+    "asset_of":  (_builtin_asset_of, 1),
+    "tail_unwrap": (_builtin_tail_unwrap, 1),
+    "bytes_of":  (_builtin_bytes_of, 1),
     "first":     (_builtin_first, 1),
     "last":      (_builtin_last, 1),
     "len":       (_builtin_len, 1),
