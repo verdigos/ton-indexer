@@ -69,13 +69,13 @@ matcher teleitem_start_auction {
         auction_address:     item
         marketplace_address: null
         marketplace:         "fragment"
-        mp_fee_address:      account(auction.body.beneficiary_address)
+        mp_fee_address:      account(auction.body.config.ref.beneficiary_address)
         mp_fee_factor:       amount(0)
         mp_fee_base:         amount(0)
         royalty_fee_addr:    null
         royalty_fee_base:    amount(0)
-        max_bid:             amount(auction.body.max_bid)
-        min_bid:             amount(auction.body.initial_min_bid)
+        max_bid:             amount(auction.body.config.ref.max_bid)
+        min_bid:             amount(auction.body.config.ref.initial_min_bid)
     }
 }
 

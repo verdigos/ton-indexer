@@ -63,7 +63,7 @@
 #
 # WHAT IS NOT HERE: the `state_data` ref and the `payload` maybe-ref of
 # ClientProxyRequest are never read by any legacy build, so ClientProxyRequest
-# has no mch-msgs.schema entry at all; the one build that needs its payload goes
+# has no registered ABI row at all; the one build that needs its payload goes
 # through the host fn above, which parses the body by hand exactly as legacy does.
 
 opcode CocoonPayoutPayload              = 0xA040AD28
@@ -201,7 +201,7 @@ matcher cocoon_proxy_charge {
 #                    -> { excesses }
 #
 # Depth 3. The ClientProxyRequest body is NEVER parsed by the legacy build (only
-# its envelope destination is read), so no schema entry is needed for it.
+# its envelope destination is read), so no ABI row is needed for it.
 # -----------------------------------------------------------------------------
 matcher cocoon_client_top_up {
     produces cocoon_client_top_up
@@ -333,8 +333,8 @@ matcher cocoon_client_change_secret_hash {
 #      OwnerClientRequestRefund unconditionally, and that class asserts its own
 #      opcode, so a wallet body raises and the build returns [].
 # Only (1) is reproduced here — (2) is unreachable, and note it would NOT be
-# reproduced by the parse, because the generated C++ parsers skip the opcode
-# unchecked (mch-msgs.schema soft-parse leniency). Do not "fix" the dead arm by
+# reached by the parse because the required children reject it before build.
+# Do not "fix" the dead arm by
 # dropping it: keeping it is the faithful transcription, and (1) makes it inert.
 #
 # EDGE ORDER IS LOAD-BEARING (compiler trap T04 / §6.5): the children block must

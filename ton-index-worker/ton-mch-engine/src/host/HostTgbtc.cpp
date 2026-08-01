@@ -11,7 +11,7 @@
 // They are parse fns and NOTHING else; field selection lives in the .mch. Each
 // is shared by a full matcher and its `*_log_only` fallback twin.
 //
-// Why fns and not mch-msgs.schema rows: TgBTCBurnEvent is deliberately TOLERANT
+// Why fns and not ABI rows: TgBTCBurnEvent is deliberately TOLERANT
 // (blocks/messages/tgbtc.py:41 wraps both load_address calls in try/except and
 // yields addr_none on a truncated body — the 35MtsOa0… fixture), where the
 // schema's addr_py leaf hard-fails and would reject the whole match; and the

@@ -15,6 +15,7 @@
 
 #include "BlockTree.h"
 #include "BuildRuntime.h"
+#include "ExprRuntime.h"
 #include "MsgParse.h"
 #include "parse/PSlice.h"
 
@@ -102,7 +103,7 @@ R coffee_swap(HostContext &, const ConsumedBlocks &consumed) {
       ok = false;
       continue;
     }
-    // W3: event body decode moved to the mch-msgs.schema CoffeeSwapEvent parser.
+    // Decode the event body through the ABI-faithful CoffeeSwapEvent parser.
     auto r_body = block_body(event);
     if (r_body.is_error()) {
       return R::fault("event body");
@@ -112,8 +113,16 @@ R coffee_swap(HostContext &, const ConsumedBlocks &consumed) {
       return R::fault("event parse");
     }
     Value ev = r_ev.move_as_ok();
+    const Value *asset = ev.field("asset");
+    if (asset == nullptr) {
+      return R::fault("event asset missing");
+    }
+    EvalResult converted = rt_builtin_asset_of(*asset);
+    if (converted.faulted) {
+      return R::fault(converted.message);
+    }
     PeerSwap p;
-    p.in.asset = *ev.field("asset");
+    p.in.asset = std::move(converted.value);
     p.in.amount = to_amount(*ev.field("amount_in"));
     p.out.asset = Value::null();  // filled after all hops (fill_peer_out_assets)
     p.out.amount = to_amount(*ev.field("amount_out"));

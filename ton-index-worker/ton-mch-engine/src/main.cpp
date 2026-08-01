@@ -21,7 +21,6 @@
 #include "EmuCelldbLookupTest.h"
 #include "GenMatchers.h"
 #include "IrEquivalence.h"
-#include "MsgVectorRunner.h"
 #include "BuildVectorRunner.h"
 #include "MatchRunner.h"
 #include "MsgParse.h"
@@ -156,8 +155,6 @@ int main(int argc, char *argv[]) {
   std::string vectors_path;
   std::string vectors_gen_path;
   std::string build_vectors_path;
-  std::string msg_vectors_path;
-  std::string msg_vectors_regen_path;
   std::string ir_equivalence_path;
   bool match_mode = false;
   bool build_smoke_mode = false;
@@ -191,12 +188,6 @@ int main(int argc, char *argv[]) {
                "Compare the compiled-in matcher table against the artifact parsed at run time "
                "and exit: --ir-equivalence <mch_ir.json>",
                [&](td::Slice value) { ir_equivalence_path = value.str(); });
-  p.add_option('\0', "msg-vectors",
-               "Run frozen message boundary vectors (parse status/value) and exit",
-               [&](td::Slice value) { msg_vectors_path = value.str(); });
-  p.add_option('\0', "msg-vectors-regen",
-               "Regenerate exact values in frozen message boundary vectors and exit",
-               [&](td::Slice value) { msg_vectors_regen_path = value.str(); });
   // TODO: remove (harness): --match, --build-smoke, --classify,
   // --classify-schema, --classify-prod, --parse-dump and --surface all render
   // INTERMEDIATE pipeline stages whose only consumers were the Python twins
@@ -299,8 +290,8 @@ int main(int argc, char *argv[]) {
   // W12 (design §4): advisory startup consistency check on the merged parser
   // registry, ahead of the mode dispatch so every mode (including the
   // early-returning dump/self-test modes) gets it. Silent + no-op on OK; a
-  // duplicate key across the three sources (hand map, schema-generated rows,
-  // ABI rows) stops startup here rather than letting a lookup dispatch to an
+  // duplicate key across the hand and ABI sources stops startup here rather
+  // than letting a lookup dispatch to an
   // arbitrary first-source parser.
   if (auto reg_st = mch::validate_registries(); reg_st.is_error()) {
     LOG(ERROR) << "message parser registry invalid: " << reg_st.message();
@@ -320,16 +311,6 @@ int main(int argc, char *argv[]) {
   if (!build_vectors_path.empty()) {
     // Build-program conformance mode (generated build fns): no scheduler needed.
     return mch::run_build_vectors(build_vectors_path);
-  }
-
-  if (!msg_vectors_path.empty()) {
-    // Frozen message boundary vectors: no scheduler needed.
-    return mch::run_msg_vectors(msg_vectors_path);
-  }
-
-  if (!msg_vectors_regen_path.empty()) {
-    // One-shot exact-value snapshot mode: no scheduler needed.
-    return mch::regen_msg_vectors(msg_vectors_regen_path);
   }
 
   if (!ir_equivalence_path.empty()) {

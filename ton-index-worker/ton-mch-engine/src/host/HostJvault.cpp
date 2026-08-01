@@ -41,8 +41,7 @@ EvalResult jvault_stake_period(BuildEnv &, const std::vector<Value> &args) {
   if (cell.is_error()) {
     return rt_fault("jvault_stake_period: BOC deserialize failed");
   }
-  // W3 shim: forward_payload decode moved to the mch-msgs.schema
-  // JVaultStakePeriodPayload parser.
+  // Decode through the prefixless ABI-faithful JVaultStakePeriodPayload parser.
   auto r = parse_message_body("JVaultStakePeriodPayload", cell.move_as_ok());
   if (r.is_error()) {
     return rt_fault("jvault_stake_period: forward_payload underflow");

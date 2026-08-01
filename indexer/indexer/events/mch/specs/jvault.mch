@@ -139,7 +139,7 @@ matcher jvault_claim {
         sender:          account(claim.msg.source)
         stake_wallet:    account(claim.msg.destination)
         staking_pool:    account(send.msg.destination)
-        claimed_jettons: map(claim.body.jettons_to_claim as jw => account(jw))
+        claimed_jettons: map(claim.body.jettons_to_claim as kv => account(first(kv)))
         claimed_amounts: [ withdraw.data.desired_amount.value ]
     }
 }

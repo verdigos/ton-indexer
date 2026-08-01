@@ -68,12 +68,12 @@ OPCODES = {
 
 
 class ToncoPoolV3InitTwin:
-    """POOLV3_INIT#441c39ed — schema twin of mch-msgs.schema `ToncoPoolV3Init`.
+    """POOLV3_INIT#441c39ed — Python twin of ABI row `ToncoPoolV3Init`.
 
     The legacy class cannot serve as the twin: `pool_active` is the schema's
     `bool` leaf and pytoniq's load_bit() returns an INT, which faults the
     expression VM wherever the C++ side has a Bool (the CASTING-TWIN RULE stated
-    in mch-msgs.schema, first applied in builders/dedust_v2.py). Stops right
+    in the ABI declaration, first applied in builders/dedust_v2.py). Stops right
     after `pool_active`, mirroring the schema entry: everything past it (two
     content refs and a Maybe ^[minters] cell) is unread by the matcher and has
     no schema form.
@@ -97,15 +97,27 @@ class ToncoPoolV3InitTwin:
         self.pool_active = bool(slice.load_bit())
 
 
+class ToncoRouterV3CreatePoolTwin(ToncoRouterV3CreatePool):
+    """Expose the minters cell through the ABI ``CellOf`` ref wrapper."""
+
+    def __init__(self, slice: Slice):
+        super().__init__(slice)
+        self.minters = SimpleNamespace(
+            ref=SimpleNamespace(
+                jetton0_minter=self.jetton0_minter,
+                jetton1_minter=self.jetton1_minter,
+            )
+        )
+
+
 # The `parse` targets. The withdraw chain's three legacy classes are EXACT twins
-# of their mch-msgs.schema entries (whole body parsed, plain ints throughout),
-# and so is ToncoRouterV3CreatePool — its new `u16` / `uint160` leaves are plain
-# load_uint on the Python side, needing no cast. Only ToncoPoolV3Init does.
+# of their ABI entries (whole body parsed, plain ints throughout). The two twins
+# below add the ABI-only bool cast and CellOf wrapper respectively.
 MESSAGE_TYPES = {
     "ToncoPoolV3StartBurn":           ToncoPoolV3StartBurn,
     "ToncoPositionNftV3PositionBurn": ToncoPositionNftV3PositionBurn,
     "ToncoPoolV3Burn":                ToncoPoolV3Burn,
-    "ToncoRouterV3CreatePool":        ToncoRouterV3CreatePool,
+    "ToncoRouterV3CreatePool":        ToncoRouterV3CreatePoolTwin,
     "ToncoPoolV3Init":                ToncoPoolV3InitTwin,
 }
 

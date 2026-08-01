@@ -68,7 +68,7 @@ enable_testing()
 add_test(NAME ton_abi_smoke COMMAND ton-abi-test)
 
 # --check byte-repro gate (W11 T11.2): every committed generated/ pair must
-# regenerate byte-identically from its ABI (msgs_gen discipline). Two ABI
+# regenerate byte-identically from its ABI (committed-codegen discipline). Two ABI
 # sources: testdata/fixtures/ (reference-repo test fixtures, built by
 # tools/gen_vectors.mjs) and abi/ (PRODUCTION message declarations, built by
 # tools/gen_prod_abi.mjs). Excludes the two err-invalid-map-key fixtures

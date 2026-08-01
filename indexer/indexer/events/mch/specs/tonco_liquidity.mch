@@ -99,9 +99,9 @@ matcher tonco_deposit_liquidity {
 # there is no host fn and no build core. `success` is the literal `true` the
 # legacy build hardcodes — reaching the build at all means the init was found.
 #
-# TWO NEW SCHEMA LEAVES, and this matcher is what needed them: `u16` for the
+# TWO ABI LEAF TYPES, and this matcher is what needed them: `u16` for the
 # three fee basis-point fields and `uint160` for the Q64.96 initial price. Both
-# are table rows in msgs_gen.py (UINT_SMALL / INT_WIDE); both are plain
+# are native ABI scalar widths; both are plain
 # `load_uint` on the Python side, so — like int24, unlike `bool` — they need no
 # casting twin.
 #
@@ -109,7 +109,7 @@ matcher tonco_deposit_liquidity {
 # read field, `pool_active`, is the schema's `bool` leaf, and pytoniq's
 # load_bit() returns an INT. The legacy class is therefore not usable as the
 # twin here, unlike the three withdraw-chain messages above. The twin stops
-# right after `pool_active`, mirroring the schema entry, which also drops the
+# right after `pool_active`, mirroring the ABI entry, which also drops the
 # legacy class's unread tail (two content refs and a Maybe ^[minters] cell that
 # has no schema form).
 #
@@ -135,8 +135,8 @@ matcher tonco_deploy_pool {
         pool:                  account(init.msg.destination)
         jetton0_router_wallet: account(create.body.jetton_wallet0)
         jetton1_router_wallet: account(create.body.jetton_wallet1)
-        jetton0_minter:        account(create.body.jetton0_minter)
-        jetton1_minter:        account(create.body.jetton1_minter)
+        jetton0_minter:        account(create.body.minters.ref.jetton0_minter)
+        jetton1_minter:        account(create.body.minters.ref.jetton1_minter)
         tick_spacing:          create.body.tick_spacing
         initial_price_x96:     create.body.initial_price_x96
         protocol_fee:          create.body.protocol_fee
@@ -163,10 +163,10 @@ matcher tonco_deploy_pool {
 #
 # DECLARATIVE (the scalar half): sender / pool / burned-nft index+address /
 # liquidity_burnt / tick range all come off the three `parse`d bodies. These are
-# the FIRST users of the schema's uint128 and int24 leaves (mch-msgs.schema) —
+# the FIRST users of the ABI declaration's uint128 and int24 leaves —
 # tick indices are signed and go negative, share amounts overflow 64 bits, so
 # before this port neither field was reachable. All three messages reuse their
-# LEGACY class as the Python twin unchanged: the schema entries cover the whole
+# LEGACY class as the Python twin unchanged: the ABI entries cover the whole
 # body (dropping what is unread), so accept/reject matches the twin exactly, and
 # every leaf is a plain int on both sides — no casting twin (contrast the `bool`
 # rule the dedust_v2 withdraw port had to follow).
@@ -192,7 +192,7 @@ matcher tonco_deploy_pool {
 # DEVIATION (one, documented not worked around): the legacy build wraps the
 # PoolV3Burn parse in try/except and keeps the anchor's burned_index when it
 # throws, whereas a declarative `parse` REJECTS the whole match on a parse
-# failure. The schema entry parses the full contract-fixed body, so this can only
+# failure. The ABI entry parses the full contract-fixed body, so this can only
 # diverge on a malformed 0xd73ac09d body, of which the corpus has none.
 #
 # ANCHOR / ORDERING. 0x530b5f2c, 0x46ca335a and 0xd73ac09d are claimed by no

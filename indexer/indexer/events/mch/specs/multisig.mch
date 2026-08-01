@@ -139,7 +139,7 @@ matcher multisig_execute {
         order_seqno:            exec.body.order_seqno
         expiration_date:        exec.body.expiration_date
         approvals_num:          exec.body.approvals_num
-        signers_hash_str:       b64(exec.body.signers_hash)
+        signers_hash_str:       b64(bytes_of(exec.body.signers_hash))
         order_boc_str:          b64(exec.body.order)
         signers:                order.signers ?? []
     }

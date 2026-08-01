@@ -11,9 +11,8 @@
 
 namespace mch {
 
-// NOTE: 22 registered parsers are now schema-generated — their rows come from
-// generated_message_parsers() (MsgParsersGenerated.h). Only the kept-hand
-// irregular / single-use parsers are declared below.
+// Only the kept-hand irregular / single-use parsers are declared below. The
+// protocol-owned generated ABI parsers are registered by AbiBridge.cpp.
 
 // Jetton family (ParseJettons.cpp): forward-payload-tail transfer, nested-capture
 // minter mint, and the non-constructible burn-notification.

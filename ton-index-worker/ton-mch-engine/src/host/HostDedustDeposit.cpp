@@ -13,6 +13,7 @@
 
 #include "BlockTree.h"
 #include "BuildRuntime.h"
+#include "ExprRuntime.h"
 #include "MsgParse.h"
 #include "parse/PSlice.h"
 
@@ -94,16 +95,30 @@ struct PoolDeposit {
   Value asset0, asset1;
   td::RefInt256 asset0_amount, asset1_amount;
 };
-// W3 shim: cursor-walk moved to the mch-msgs.schema DedustDepositLiquidityToPool
-// parser (proof + min_lp dropped there; owner + the field4-ref assets kept).
+// ABI-faithful DedustDepositLiquidityToPool unpacker.
 td::Result<PoolDeposit> parse_pool_deposit(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(v, parse_message_body("DedustDepositLiquidityToPool", body));
+  const Value *field4_cell = v.field("field4");
+  const Value *field4 = field4_cell != nullptr ? field4_cell->field("ref") : nullptr;
+  if (field4 == nullptr) {
+    return td::Status::Error("pool deposit: field4.ref missing");
+  }
+  const Value *asset0 = field4->field("asset0");
+  const Value *asset1 = field4->field("asset1");
+  if (asset0 == nullptr || asset1 == nullptr) {
+    return td::Status::Error("pool deposit: asset missing");
+  }
+  EvalResult converted0 = rt_builtin_asset_of(*asset0);
+  EvalResult converted1 = rt_builtin_asset_of(*asset1);
+  if (converted0.faulted || converted1.faulted) {
+    return td::Status::Error(converted0.faulted ? converted0.message : converted1.message);
+  }
   PoolDeposit pd;
   pd.owner = *v.field("owner");
-  pd.asset0 = *v.field("asset0");
-  pd.asset0_amount = v.field("asset0_amount")->num;
-  pd.asset1 = *v.field("asset1");
-  pd.asset1_amount = v.field("asset1_amount")->num;
+  pd.asset0 = std::move(converted0.value);
+  pd.asset0_amount = field4->field("asset0_amount")->num;
+  pd.asset1 = std::move(converted1.value);
+  pd.asset1_amount = field4->field("asset1_amount")->num;
   return pd;
 }
 
@@ -465,13 +480,17 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
     const Value *fp = notif.field("forward_payload_cell");
     sender = fu != nullptr ? *fu : Value::make_account_none();
     actual_amount = ja != nullptr ? to_amount(*ja) : Value::make_amount_none();
-    if (fp == nullptr || fp->t != VType::Cell) {
+    if (fp == nullptr) {
       return rt_ok(Value::null());  // load_ref().begin_parse() on None -> except
+    }
+    EvalResult unwrapped = rt_builtin_tail_unwrap(*fp);
+    if (unwrapped.faulted || unwrapped.value.t != VType::Cell) {
+      return rt_ok(Value::null());
     }
     bool special = false;
     vm::CellSlice cs;
     try {
-      cs = vm::load_cell_slice_special(fp->cell, special);
+      cs = vm::load_cell_slice_special(unwrapped.value.cell, special);
     } catch (...) {
       return rt_ok(Value::null());
     }

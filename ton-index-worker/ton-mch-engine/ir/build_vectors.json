@@ -4143,16 +4143,22 @@
          "fn": "b64",
          "args": [
           {
-           "k": "attr",
-           "of": {
-            "k": "attr",
-            "of": {
-             "k": "name",
-             "id": "t"
-            },
-            "name": "body"
-           },
-           "name": "forward_payload"
+           "k": "call",
+           "fn": "tail_unwrap",
+           "args": [
+            {
+             "k": "attr",
+             "of": {
+              "k": "attr",
+              "of": {
+               "k": "name",
+               "id": "t"
+              },
+              "name": "body"
+             },
+             "name": "forward_payload"
+            }
+           ]
           }
          ]
         }
@@ -4399,16 +4405,22 @@
        {
         "name": "a",
         "expr": {
-         "k": "attr",
-         "of": {
-          "k": "attr",
-          "of": {
-           "k": "name",
-           "id": "t"
-          },
-          "name": "body"
-         },
-         "name": "asset"
+         "k": "call",
+         "fn": "asset_of",
+         "args": [
+          {
+           "k": "attr",
+           "of": {
+            "k": "attr",
+            "of": {
+             "k": "name",
+             "id": "t"
+            },
+            "name": "body"
+           },
+           "name": "asset"
+          }
+         ]
         }
        },
        {
@@ -4417,20 +4429,27 @@
          "k": "bin",
          "op": "==",
          "l": {
-          "k": "attr",
-          "of": {
-           "k": "attr",
-           "of": {
-            "k": "name",
-            "id": "t"
-           },
-           "name": "body"
-          },
-          "name": "asset"
+          "k": "call",
+          "fn": "asset_of",
+          "args": [
+           {
+            "k": "attr",
+            "of": {
+             "k": "attr",
+             "of": {
+              "k": "name",
+              "id": "t"
+             },
+             "name": "body"
+            },
+            "name": "asset"
+           }
+          ]
          },
          "r": {
-          "k": "str",
-          "v": "ton"
+          "k": "call",
+          "fn": "ton_asset",
+          "args": []
          }
         }
        }
@@ -4493,7 +4512,16 @@
     ]
    },
    "expect": {
-    "rejected": true
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "a": {
+      "$asset_ton": true
+     },
+     "is_ton": true
+    },
+    "failed": false,
+    "broken": false
    }
   },
   {
@@ -4520,16 +4548,22 @@
        {
         "name": "a",
         "expr": {
-         "k": "attr",
-         "of": {
-          "k": "attr",
-          "of": {
-           "k": "name",
-           "id": "t"
-          },
-          "name": "body"
-         },
-         "name": "asset"
+         "k": "call",
+         "fn": "asset_of",
+         "args": [
+          {
+           "k": "attr",
+           "of": {
+            "k": "attr",
+            "of": {
+             "k": "name",
+             "id": "t"
+            },
+            "name": "body"
+           },
+           "name": "asset"
+          }
+         ]
         }
        }
       ]

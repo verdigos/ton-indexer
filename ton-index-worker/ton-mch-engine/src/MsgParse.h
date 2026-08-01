@@ -1,9 +1,8 @@
-// TL-B message-parsing layer: per-family adapters that parse a message body
-// cell into a Value map (VType::Obj) whose keys match EXACTLY the attribute
-// set the Python reference parser exposes (vars(obj) after __init__), so a
-// build program's `CAPTURE.body.field` accesses resolve identically.
+// Message-parsing layer. Kept-hand adapters expose their historical Value
+// objects; protocol-generated ABI parsers expose faithful structs, Cell<T>
+// boundaries, unions, maps, and bits through AbiBridge.
 //
-// Semantics contract (mirrors indexer/events/blocks/messages/jettons.py):
+// Kept-hand semantics (mirror indexer/events/blocks/messages/jettons.py):
 //  - no opcode validation: the first 32 bits are skipped unchecked;
 //  - a parse failure anywhere (bit underflow, missing ref, bad address)
 //    fails the WHOLE parse — the soft-parse machinery then tries the next
@@ -18,13 +17,10 @@
 //  - conditionally-set Python attributes (JettonTransfer.sum_type) are
 //    conditionally-present keys.
 //
-// ONE EXCEPTION, for the ABI-bridge rows (AbiBridge.h): those parsers DO
-// validate the opcode prefix — a generated `from_slice` checks its struct's own
-// prefix and errors on a mismatch — while their Python twins skip the 32 bits
-// unchecked like everything else here. Consequence, and it is a RULE for every
-// future ABI-path protocol: an ABI-path `parse` capture MUST be behind an `op`
-// guard in the .mch spec. Unguarded, the same body gives a C++ parse error and
-// a Python garbage object, and the A/B gate diverges.
+// ABI rows validate their authored opcode prefix (except the intentionally
+// prefixless JVault payload). Consumers therefore either dominate a parse with
+// the matching `op`/host guard or deliberately tolerate parse-null in a lazy
+// branch, as the DeDust V2 multi-context carriers do.
 #pragma once
 
 #include "Value.h"
@@ -53,7 +49,7 @@ using MsgParserFn = td::Result<Value> (*)(const td::Ref<vm::Cell> &body);
 const std::map<std::string, MsgParserFn> &message_parsers();
 
 // Advisory startup consistency check (W12, design §4): OK unless a key is
-// registered by more than one source (hand / schema-generated / ABI bridge), in
+// registered by more than one source (kept-hand / ABI bridge), in
 // which case an error listing the ambiguous names. Called from startup paths;
 // NOT a gate on message_parsers() access (the Meyer's-static map cannot itself
 // surface an error, and the no-abort rule forbids failing inside it).

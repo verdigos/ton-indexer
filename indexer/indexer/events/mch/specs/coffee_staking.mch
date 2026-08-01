@@ -16,9 +16,9 @@
 # --------
 # THREE MESSAGE TYPES, ONE OPCODE. staking_position_withdraw_1/2/3 all ride
 # 0xcb03bfaf, so the pattern is a chain of three identical `op` nodes and the
-# three schema rows are told apart by NAME (mch-msgs.schema is keyed by name;
-# the `opcode` after the name is documentation only). Only w2 and w3 have a
-# schema row — w1's body is never read, the legacy build takes only
+# three graph roles are told apart by NAME. Separate protocol-local ABI files
+# keep the distinct w2/w3 layouts under the shared prefix. Only w2 and w3 have
+# ABI rows — w1's body is never read, the legacy build takes only
 # `get_message().destination` from it.
 #
 # The w2 children set is `[w3, maybe log]` where BOTH items share the head

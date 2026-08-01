@@ -6,9 +6,8 @@ USDe/tsUSDe asset gate is `reject when` clauses over the composed
 jetton_transfer / jetton_mint blocks' `data`; the withdrawal request's four
 identity guards are `reject when`s over two `lookup jetton_wallet(...)` records
 (the first interface lookups in this spec), and its two body reads reuse the
-JettonInternalTransfer schema entry — including for the 0xb2583ed5 timelocked
-transfer, whose body IS an internal transfer (every parser skips its leading
-opcode unchecked, and `parse` is keyed by registry NAME, not opcode).
+single logical JettonInternalTransfer ABI row — including the honest
+0xb2583ed5 timelocked arm. `parse` remains keyed by registry NAME.
 
 So this module only registers opcodes, message types and produced block types.
 """

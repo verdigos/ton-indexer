@@ -45,7 +45,7 @@ matcher vesting_send_message {
 #
 # THE PARSER stays hand-written (src/parse/ParseVesting.cpp): the whitelist is an
 # UNBOUNDED chain of cells, one address per level, and `ref { }` in
-# mch-msgs.schema is fixed-depth. It is not in the `--parse-dump` A/B table
+# the protocol ABI rows are fixed-depth. It is not in the `--parse-dump` A/B table
 # either — the dump renderer has no List form on either side (the same reason
 # JVaultClaim's `dict_keys267` list is absent from it) — so its gate is the
 # actions golden plus the legacy-vs-IR parity-sweep row, which compares

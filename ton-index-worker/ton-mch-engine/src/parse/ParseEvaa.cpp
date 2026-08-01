@@ -12,9 +12,8 @@
 
 namespace mch {
 
-// NOTE: withdraw_master and withdraw_collateralized are now schema-generated
-// (mch-msgs.schema -> MsgParsersGenerated.cpp). Only the opcode-enum fail_excess
-// (a single-use construct not in the DSL) stays hand.
+// WithdrawMaster and WithdrawCollateralized now use protocol ABI rows. Only
+// the opcode-enum fail_excess (a single-use construct not in the DSL) stays hand.
 
 // EvaaWithdrawFailExcess: opcode-tagged reason; an unknown opcode raises in
 // Python (ValueError) -> soft-parse failure.

@@ -66,8 +66,8 @@ matcher ethena_deposit {
 # the jetton family matched — exactly where this matcher's guards do not hold.
 #
 # 0xb2583ed5 is a timelocked-transfer opcode whose BODY is an ordinary
-# JettonInternalTransfer — `parse` is registry-keyed by NAME and every parser
-# skips its leading opcode unchecked, so both legs reuse the one schema entry
+# JettonInternalTransfer. `parse` is registry-keyed by NAME, and the single
+# logical ABI row dispatches honestly across 0x178d4519 and 0xb2583ed5
 # (verified against the corpus body: amount/from/response all read correctly).
 #
 # THE FOUR GUARDS are the legacy build's identity checks, one `reject when` each:

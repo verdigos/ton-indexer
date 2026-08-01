@@ -80,11 +80,11 @@ def _builtin_b64(x: Any) -> str:
     return base64.b64encode(x).decode("utf-8")
 
 
-# PLACEHOLDER, not yet authored by F1 — see schema-to-abi-faithful-plan.md F1.
+# Frozen F1 declaration arm names.
 _ASSET_TON_TAG = "AssetTon"
 _ASSET_JETTON_TAG = "AssetJetton"
 
-# PLACEHOLDER, not yet authored by F1 — see schema-to-abi-faithful-plan.md F1.
+# Frozen F1 declaration arm names and empty-inline policies.
 _TAIL_TAGS = {
     "JettonForwardPayloadRef": "ref",
     "JettonForwardPayloadInline": "bits",

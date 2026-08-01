@@ -11,8 +11,8 @@
 #         excess 0xd53276db                              # auto-absorbed (§4.5)
 #
 # PARSER PATHS, mixed in one spec (legal; specs_decl/dedust_v2_swap.mch does the
-# same): PayoutPositionFees comes from the mch-msgs.schema entry of the same name
-# (snake_case, opcode skipped unchecked) with the LEGACY class as the Python twin,
+# same): PayoutPositionFees comes from the protocol ABI entry of the same name
+# (snake_case, ABI prefix checked) with the LEGACY class as the Python twin,
 # while PayoutMessage rides the existing ton-abi bridge row (camelCase). Both sit
 # behind an `op` guard, which the ABI path requires.
 #

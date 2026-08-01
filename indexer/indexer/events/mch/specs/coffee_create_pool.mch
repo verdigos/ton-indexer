@@ -103,15 +103,17 @@ matcher coffee_create_pool_creator {
       <- ( btype jetton_transfer @in_jt ^ op CoffeeCreatePoolNative @in_native )
 
     parse request as CoffeeCreatePoolCreatorRequest
+    let pool_first  = asset_of(request.body.pool_first)
+    let pool_second = asset_of(request.body.pool_second)
     out {
         sender:                account(request.body.sender)
         sender_jetton_wallet:  in_jt.data.sender_wallet ?? addr_none()
         amount:                amount(request.body.amount)
         provided_asset:        in_jt.data.asset ?? ton_asset()
         pool_creator_contract: account(deploy.msg.destination)
-        deposit_recipient:     account(request.body.recipient)
-        pool_first:            request.body.pool_first
-        pool_second:           request.body.pool_second
+        deposit_recipient:     account(request.body.creation_params.ref.recipient)
+        pool_first:            pool_first
+        pool_second:           pool_second
     }
 }
 
