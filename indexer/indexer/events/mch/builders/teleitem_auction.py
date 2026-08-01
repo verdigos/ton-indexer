@@ -23,6 +23,7 @@ The legacy TeleitemStartAuctionMatcher / TeleitemCancelAuctionMatcher
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 from indexer.events import context
@@ -48,8 +49,23 @@ BLOCK_TYPES = {
     "teleitem_cancel_auction": TeleitemCancelAuctionBlock,
 }
 
+
+class TeleitemStartAuctionTwin(TeleitemStartAuction):
+    """Expose the auction config through the ABI ``CellOf`` ref wrapper."""
+
+    def __init__(self, slice):
+        super().__init__(slice)
+        self.config = SimpleNamespace(
+            ref=SimpleNamespace(
+                beneficiary_address=self.beneficiary_address,
+                initial_min_bid=self.initial_min_bid,
+                max_bid=self.max_bid,
+            )
+        )
+
+
 MESSAGE_TYPES = {
-    "TeleitemStartAuction": TeleitemStartAuction,
+    "TeleitemStartAuction": TeleitemStartAuctionTwin,
 }
 
 

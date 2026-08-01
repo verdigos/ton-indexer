@@ -71,7 +71,7 @@ BLOCK_TYPES = {
 }
 
 # TONStakersNftBurnNotification is the family's only message with a real body
-# (query_id / amount / owner); the C++ twin is the mch-msgs.schema entry of the
+# (query_id / amount / owner); the C++ twin is the protocol ABI entry of the
 # same name. The rest are opcode-only markers and are never `parse`d.
 MESSAGE_TYPES = {
     "TONStakersNftBurnNotification": TONStakersNftBurnNotification,

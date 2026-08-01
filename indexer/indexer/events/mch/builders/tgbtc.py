@@ -51,7 +51,7 @@ the btype the dkg fallback matcher produces.)
 They are parse fns and NOTHING else — no tree navigation, no field selection —
 so every produced field is mapped in the `.mch` `out{}`.
 
-Why fns and not `mch-msgs.schema` rows: `TgBTCBurnEvent` is deliberately
+Why fns and not protocol ABI rows: `TgBTCBurnEvent` is deliberately
 TOLERANT (`blocks/messages/tgbtc.py:41` wraps both `load_address` calls in
 `try/except`, yielding `AccountId(None)` for a truncated body — the
 `35MtsOa0…` fixture is exactly that), and the schema's `addr_py` leaf hard-fails

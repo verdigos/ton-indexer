@@ -4,7 +4,7 @@ The thinnest builder in the tree: the two matchers never parse a body, never
 look anything up and have no host residue, so all this registers is the four
 elector opcodes and the two produced block types. The reference classes
 (blocks/messages/staking.py Elector*) are bare opcode constants with no parser
-at all, which is why there is no `message_types` row and no mch-msgs.schema
+at all, which is why there is no `message_types` row and no protocol ABI
 entry — the spec matches them with `op` and reads only message envelopes.
 """
 from __future__ import annotations

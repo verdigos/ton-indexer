@@ -9,6 +9,7 @@
 
 #include "BlockTree.h"
 #include "BuildRuntime.h"
+#include "ExprRuntime.h"
 #include "MsgParse.h"
 #include "parse/PSlice.h"
 
@@ -52,8 +53,7 @@ Value wallet_asset(BuildEnv &env, const std::string &addr) {
 
 // messages/swaps.py ToncoPoolV3Swap: the core reads only source_wallet (the
 // two ref cells carry amounts/payloads the core does not touch here).
-// W3 shim: cursor-walk moved to the mch-msgs.schema ToncoRouterV3SwapSourceWallet
-// parser (owner dropped; only source_wallet kept).
+// ABI-faithful ToncoRouterV3SwapSourceWallet parser (only source_wallet is used).
 td::Result<Value> parse_v3_swap_source_wallet(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(v, parse_message_body("ToncoRouterV3SwapSourceWallet", body));
   return *v.field("source_wallet");
@@ -294,10 +294,14 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   const Value *fp = notif.field("forward_payload_cell");
   Value sent_amount = ja != nullptr ? to_amount(*ja) : Value::make_amount_none();
   Value sender = fu != nullptr ? *fu : Value::make_account_none();
-  if (fp == nullptr || fp->t != VType::Cell) {
+  if (fp == nullptr) {
     return host_reject("jetton_notify forward_payload not a cell");
   }
-  auto rp = open_ref_cell(fp->cell);
+  EvalResult unwrapped = rt_builtin_tail_unwrap(*fp);
+  if (unwrapped.faulted || unwrapped.value.t != VType::Cell) {
+    return host_reject("jetton_notify forward_payload not a cell");
+  }
+  auto rp = open_ref_cell(unwrapped.value.cell);
   if (rp.is_error()) {
     return host_reject("forward_payload open");
   }
@@ -707,7 +711,13 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
       amt = (ta != nullptr && (ta->t == VType::Int || ta->t == VType::Amount)) ? ta->num
                                                                               : td::RefInt256();
       const Value *fpv = rp.ok().field("forward_payload");
-      if (fpv != nullptr && fpv->t == VType::Cell && fpv->cell.not_null()) in_payload = fpv->cell;
+      if (fpv != nullptr) {
+        EvalResult unwrapped = rt_builtin_tail_unwrap(*fpv);
+        if (unwrapped.faulted) return host_reject("pton forward_payload malformed");
+        if (unwrapped.value.t == VType::Cell && unwrapped.value.cell.not_null()) {
+          in_payload = unwrapped.value.cell;
+        }
+      }
     }
     sender = account_from_opt(m->source);
     in_asset = Value::make_asset_ton();

@@ -18,7 +18,8 @@ using JType = td::JsonValue::Type;
 
 const std::unordered_set<std::string> kBuiltins = {
     "account", "amount", "asset", "ton_asset", "addr_none", "b64",
-    "first", "last", "len", "sum", "zip", "map", "concat", "contains"};
+    "asset_of", "tail_unwrap", "bytes_of", "first", "last", "len", "sum",
+    "zip", "map", "concat", "contains"};
 
 const Json *jfield(const Json &e, td::Slice name) {
   if (e.type() != JType::Object) {

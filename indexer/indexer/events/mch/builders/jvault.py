@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import base64
 
-from pytoniq_core import Cell
+from pytoniq_core import Builder, Cell, Slice
 
 from indexer.events.blocks.core import Block
 from indexer.events.blocks.jvault import (
@@ -63,8 +63,30 @@ BLOCK_TYPES = {
 MESSAGE_TYPES = {
     "JVaultUnstakeJettons": JVaultUnstakeJettons,
     "JVaultUnstakeRequest": JVaultUnstakeRequest,
-    "JVaultClaim": JVaultClaim,
 }
+
+
+class JVaultClaimTwin:
+    """ABI-shaped twin whose map is a list of ``[key, value]`` pairs."""
+
+    opcode = JVaultClaim.opcode
+
+    def __init__(self, slice: Slice):
+        slice.load_uint(32)  # opcode (checked by the matcher's `op`)
+        self.query_id = slice.load_uint(64)
+        entries = slice.load_dict(
+            267,
+            key_deserializer=lambda key: (
+                Builder().store_bits(key).end_cell().to_slice().load_address()
+            ),
+            value_deserializer=lambda remaining: remaining,
+        ) or {}
+        self.jettons_to_claim = [
+            [address, remaining] for address, remaining in entries.items()
+        ]
+
+
+MESSAGE_TYPES["JVaultClaim"] = JVaultClaimTwin
 
 
 def register_jvault(reg: Registries) -> Registries:

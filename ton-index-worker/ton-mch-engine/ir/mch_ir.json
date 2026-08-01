@@ -1895,6 +1895,66 @@
         },
         {
           "s": "let",
+          "name": "pool_first",
+          "expr": {
+            "k": "call",
+            "fn": "asset_of",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "request"
+                      },
+                      "name": "body"
+                    },
+                    "name": "pool_params"
+                  },
+                  "name": "ref"
+                },
+                "name": "pool_first"
+              }
+            ]
+          }
+        },
+        {
+          "s": "let",
+          "name": "pool_second",
+          "expr": {
+            "k": "call",
+            "fn": "asset_of",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "request"
+                      },
+                      "name": "body"
+                    },
+                    "name": "pool_params"
+                  },
+                  "name": "ref"
+                },
+                "name": "pool_second"
+              }
+            ]
+          }
+        },
+        {
+          "s": "let",
           "name": "is_first",
           "expr": {
             "k": "bin",
@@ -1904,16 +1964,8 @@
               "id": "in_asset"
             },
             "r": {
-              "k": "attr",
-              "of": {
-                "k": "attr",
-                "of": {
-                  "k": "name",
-                  "id": "request"
-                },
-                "name": "body"
-              },
-              "name": "pool_first"
+              "k": "name",
+              "id": "pool_first"
             }
           }
         },
@@ -1937,16 +1989,8 @@
                   "id": "in_asset"
                 },
                 "r": {
-                  "k": "attr",
-                  "of": {
-                    "k": "attr",
-                    "of": {
-                      "k": "name",
-                      "id": "request"
-                    },
-                    "name": "body"
-                  },
-                  "name": "pool_second"
+                  "k": "name",
+                  "id": "pool_second"
                 }
               }
             }
@@ -2324,28 +2368,12 @@
                   "id": "is_first"
                 },
                 "then": {
-                  "k": "attr",
-                  "of": {
-                    "k": "attr",
-                    "of": {
-                      "k": "name",
-                      "id": "request"
-                    },
-                    "name": "body"
-                  },
-                  "name": "pool_first"
+                  "k": "name",
+                  "id": "pool_first"
                 },
                 "else": {
-                  "k": "attr",
-                  "of": {
-                    "k": "attr",
-                    "of": {
-                      "k": "name",
-                      "id": "request"
-                    },
-                    "name": "body"
-                  },
-                  "name": "pool_second"
+                  "k": "name",
+                  "id": "pool_second"
                 }
               }
             },
@@ -2364,28 +2392,12 @@
                   "id": "is_first"
                 },
                 "then": {
-                  "k": "attr",
-                  "of": {
-                    "k": "attr",
-                    "of": {
-                      "k": "name",
-                      "id": "request"
-                    },
-                    "name": "body"
-                  },
-                  "name": "pool_second"
+                  "k": "name",
+                  "id": "pool_second"
                 },
                 "else": {
-                  "k": "attr",
-                  "of": {
-                    "k": "attr",
-                    "of": {
-                      "k": "name",
-                      "id": "request"
-                    },
-                    "name": "body"
-                  },
-                  "name": "pool_first"
+                  "k": "name",
+                  "id": "pool_first"
                 }
               }
             },
@@ -2517,16 +2529,22 @@
             {
               "name": "asset",
               "expr": {
-                "k": "attr",
-                "of": {
-                  "k": "attr",
-                  "of": {
-                    "k": "name",
-                    "id": "create"
-                  },
-                  "name": "body"
-                },
-                "name": "asset"
+                "k": "call",
+                "fn": "asset_of",
+                "args": [
+                  {
+                    "k": "attr",
+                    "of": {
+                      "k": "attr",
+                      "of": {
+                        "k": "name",
+                        "id": "create"
+                      },
+                      "name": "body"
+                    },
+                    "name": "asset"
+                  }
+                ]
               }
             },
             {
@@ -14725,14 +14743,20 @@
                   },
                   "name": "jettons_to_claim"
                 },
-                "var": "jw",
+                "var": "kv",
                 "body": {
                   "k": "call",
                   "fn": "account",
                   "args": [
                     {
-                      "k": "name",
-                      "id": "jw"
+                      "k": "call",
+                      "fn": "first",
+                      "args": [
+                        {
+                          "k": "name",
+                          "id": "kv"
+                        }
+                      ]
                     }
                   ]
                 }
@@ -17329,16 +17353,22 @@
                 "fn": "b64",
                 "args": [
                   {
-                    "k": "attr",
-                    "of": {
-                      "k": "attr",
-                      "of": {
-                        "k": "name",
-                        "id": "exec"
-                      },
-                      "name": "body"
-                    },
-                    "name": "signers_hash"
+                    "k": "call",
+                    "fn": "bytes_of",
+                    "args": [
+                      {
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "exec"
+                          },
+                          "name": "body"
+                        },
+                        "name": "signers_hash"
+                      }
+                    ]
                   }
                 ]
               }
@@ -20690,10 +20720,18 @@
                     "of": {
                       "k": "attr",
                       "of": {
-                        "k": "name",
-                        "id": "auction"
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "auction"
+                          },
+                          "name": "body"
+                        },
+                        "name": "config"
                       },
-                      "name": "body"
+                      "name": "ref"
                     },
                     "name": "beneficiary_address"
                   }
@@ -20756,10 +20794,18 @@
                     "of": {
                       "k": "attr",
                       "of": {
-                        "k": "name",
-                        "id": "auction"
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "auction"
+                          },
+                          "name": "body"
+                        },
+                        "name": "config"
                       },
-                      "name": "body"
+                      "name": "ref"
                     },
                     "name": "max_bid"
                   }
@@ -20777,10 +20823,18 @@
                     "of": {
                       "k": "attr",
                       "of": {
-                        "k": "name",
-                        "id": "auction"
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "auction"
+                          },
+                          "name": "body"
+                        },
+                        "name": "config"
                       },
-                      "name": "body"
+                      "name": "ref"
                     },
                     "name": "initial_min_bid"
                   }
@@ -25225,10 +25279,18 @@
                     "of": {
                       "k": "attr",
                       "of": {
-                        "k": "name",
-                        "id": "create"
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "create"
+                          },
+                          "name": "body"
+                        },
+                        "name": "minters"
                       },
-                      "name": "body"
+                      "name": "ref"
                     },
                     "name": "jetton0_minter"
                   }
@@ -25246,10 +25308,18 @@
                     "of": {
                       "k": "attr",
                       "of": {
-                        "k": "name",
-                        "id": "create"
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "create"
+                          },
+                          "name": "body"
+                        },
+                        "name": "minters"
                       },
-                      "name": "body"
+                      "name": "ref"
                     },
                     "name": "jetton1_minter"
                   }
@@ -26998,6 +27068,50 @@
           ]
         },
         {
+          "s": "let",
+          "name": "pool_first",
+          "expr": {
+            "k": "call",
+            "fn": "asset_of",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "request"
+                  },
+                  "name": "body"
+                },
+                "name": "pool_first"
+              }
+            ]
+          }
+        },
+        {
+          "s": "let",
+          "name": "pool_second",
+          "expr": {
+            "k": "call",
+            "fn": "asset_of",
+            "args": [
+              {
+                "k": "attr",
+                "of": {
+                  "k": "attr",
+                  "of": {
+                    "k": "name",
+                    "id": "request"
+                  },
+                  "name": "body"
+                },
+                "name": "pool_second"
+              }
+            ]
+          }
+        },
+        {
           "s": "out",
           "fields": [
             {
@@ -27122,10 +27236,18 @@
                     "of": {
                       "k": "attr",
                       "of": {
-                        "k": "name",
-                        "id": "request"
+                        "k": "attr",
+                        "of": {
+                          "k": "attr",
+                          "of": {
+                            "k": "name",
+                            "id": "request"
+                          },
+                          "name": "body"
+                        },
+                        "name": "creation_params"
                       },
-                      "name": "body"
+                      "name": "ref"
                     },
                     "name": "recipient"
                   }
@@ -27135,31 +27257,15 @@
             {
               "name": "pool_first",
               "expr": {
-                "k": "attr",
-                "of": {
-                  "k": "attr",
-                  "of": {
-                    "k": "name",
-                    "id": "request"
-                  },
-                  "name": "body"
-                },
-                "name": "pool_first"
+                "k": "name",
+                "id": "pool_first"
               }
             },
             {
               "name": "pool_second",
               "expr": {
-                "k": "attr",
-                "of": {
-                  "k": "attr",
-                  "of": {
-                    "k": "name",
-                    "id": "request"
-                  },
-                  "name": "body"
-                },
-                "name": "pool_second"
+                "k": "name",
+                "id": "pool_second"
               }
             }
           ]

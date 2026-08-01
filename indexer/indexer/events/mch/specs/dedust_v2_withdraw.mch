@@ -10,7 +10,7 @@
 #         payout leg 2 (same)                                        # optional
 #
 # WithdrawLiquidity and ExitLiquidity are matched by `op` only — the reference
-# never parses either body, so neither gets an mch-msgs.schema entry.
+# never parses either body, so neither gets a registered ABI row.
 #
 # LP IS NOT A JETTON. The share lives in the Position contract and there is no
 # LP-jetton burn, so `asset` and `sender_wallet` are hard nulls (the reference
@@ -25,14 +25,13 @@
 # autoClaimFees is REJECTED, exactly as the reference bails: with the flag set
 # the pool mixes fee payouts into the same transaction and the two payout slots
 # can no longer be told apart from the withdrawn amounts. This is the first user
-# of the schema's `bool` leaf (mch-msgs.schema) — the flag is one wire bit and
+# of the ABI declaration's `bool` leaf — the flag is one wire bit and
 # was previously unreachable, since `bits 1` only skips.
 #
 # PARSER PATHS, mixed in one spec (legal; the sibling dedust_v2_claim_fees.mch
-# does the same): DedustV2Withdraw and DedustV2WithdrawalEvent come from
-# mch-msgs.schema with the LEGACY classes as their Python twins, while
-# PayoutMessage rides the ton-abi bridge row (camelCase, hence `.body.amount`
-# on the schema side vs the ABI twin's own spelling). Both sit behind an `op`
+# does the same): DedustV2Withdraw, DedustV2WithdrawalEvent, and PayoutMessage
+# all ride protocol ABI bridge rows, with their authored field spellings. All
+# sit behind an `op`
 # guard, which the ABI path requires and the legacy-class twins want anyway
 # (they `assert op == opcode`).
 #

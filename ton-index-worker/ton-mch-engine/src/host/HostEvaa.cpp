@@ -409,7 +409,7 @@ EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args) {
   Value recipient_contract =
       account_from_opt(um != nullptr ? um->destination : std::nullopt);
 
-  // The user's asset_id sits behind the variable header, so no schema entry.
+  // The user's asset_id sits behind the variable header, so no ABI row exists.
   td::RefInt256 asset_id;
   {
     vm::CellSlice cs;

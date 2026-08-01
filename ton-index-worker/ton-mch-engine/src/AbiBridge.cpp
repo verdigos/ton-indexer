@@ -1,13 +1,29 @@
 // W12 mch <-> ton-abi bridge: AbiValue -> mch::Value adapter + the production
-// ABI parser rows (3 live: the DeDust CPMM V2 claim_reward family, BARE decl
-// names). See W12-BRIDGE-DESIGN.md §3/§4 + T122-CLAIMREWARD-DESIGN.md §3.
+// ABI parser rows. Registry keys are the stable, bare spec-facing declaration
+// names. See W12-BRIDGE-DESIGN.md §3/§4.
 #include "AbiBridge.h"
 
 #include "common/refint.h"
 #include "vm/cells/CellBuilder.h"
 
-// T12.2: first production ABI parser pair (DeDust CPMM V2 claim_reward family).
+#include "cocoon_gen.h"
+#include "coffee_gen.h"
+#include "coffee_staking_withdraw3_gen.h"
+#include "dedust_gen.h"
 #include "dedust_v2_gen.h"
+#include "evaa_gen.h"
+#include "evaa_supply_forward_gen.h"
+#include "jetton_gen.h"
+#include "jvault_gen.h"
+#include "jvault_payload_gen.h"
+#include "multisig_gen.h"
+#include "nft_sale_gen.h"
+#include "pton_gen.h"
+#include "stonfi_gen.h"
+#include "subscriptions_gen.h"
+#include "teleitem_gen.h"
+#include "tonco_gen.h"
+#include "tonstakers_gen.h"
 
 #include <string>
 
@@ -139,17 +155,132 @@ Value abi_value_to_mch(const AbiValue &v) {
   return Value::null();  // unreachable
 }
 
+namespace {
+
+// One public logical parser, two honest wire prefixes. The generated API is
+// per-struct, so retry the Ethena arm with a fresh slice when the standard
+// arm's from_slice rejects its prefix.
+td::Result<Value> abi_parse_jetton_internal_transfer(const td::Ref<vm::Cell> &body) {
+  auto standard = abi_parse_body<ton_abi::gen::jetton::JettonInternalTransfer>(body);
+  if (standard.is_ok()) {
+    return standard;
+  }
+  auto error = standard.move_as_error();
+  if (error.message().str().find("JettonInternalTransfer: prefix:") == std::string::npos) {
+    return std::move(error);
+  }
+  return abi_parse_body<ton_abi::gen::jetton::JettonInternalTransferEthena>(body);
+}
+
+}  // namespace
+
 const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
-  // T12.2: first production rows. Keys are BARE decl names (not <contract>::<decl>)
-  // -- the .mch grammar's `parse CAP as Name` reads a bare IDENT, all existing
-  // registry rows are bare, and none of these 3 names collide (validate_registries
-  // is the collision backstop). Acked §0.16 deviation; revisit on a real cross-ABI
-  // name clash. See T122-CLAIMREWARD-DESIGN.md §3.
-  namespace g = ton_abi::gen::dedust_v2;
+  namespace cocoon = ton_abi::gen::cocoon;
+  namespace coffee = ton_abi::gen::coffee;
+  namespace coffee_w3 = ton_abi::gen::coffee_staking_withdraw3;
+  namespace dedust = ton_abi::gen::dedust;
+  namespace dedust_v2 = ton_abi::gen::dedust_v2;
+  namespace evaa = ton_abi::gen::evaa;
+  namespace evaa_forward = ton_abi::gen::evaa_supply_forward;
+  namespace jetton = ton_abi::gen::jetton;
+  namespace jvault = ton_abi::gen::jvault;
+  namespace jvault_payload = ton_abi::gen::jvault_payload;
+  namespace multisig = ton_abi::gen::multisig;
+  namespace nft_sale = ton_abi::gen::nft_sale;
+  namespace pton = ton_abi::gen::pton;
+  namespace stonfi = ton_abi::gen::stonfi;
+  namespace subscriptions = ton_abi::gen::subscriptions;
+  namespace teleitem = ton_abi::gen::teleitem;
+  namespace tonco = ton_abi::gen::tonco;
+  namespace tonstakers = ton_abi::gen::tonstakers;
+
   static const std::vector<std::pair<std::string, MsgParserFn>> rows = {
-      {"ClaimRewardMessage", &abi_parse_body<g::ClaimRewardMessage>},
-      {"PayoutRewardMessage", &abi_parse_body<g::PayoutRewardMessage>},
-      {"PayoutMessage", &abi_parse_body<g::PayoutMessage>},
+      {"ClaimRewardMessage", &abi_parse_body<dedust_v2::ClaimRewardMessage>},
+      {"PayoutRewardMessage", &abi_parse_body<dedust_v2::PayoutRewardMessage>},
+      {"PayoutMessage", &abi_parse_body<dedust_v2::PayoutMessage>},
+      {"JettonInternalTransfer", &abi_parse_jetton_internal_transfer},
+      {"JettonBurn", &abi_parse_body<jetton::JettonBurn>},
+      {"JettonNotify", &abi_parse_body<jetton::JettonNotify>},
+      {"JettonMint", &abi_parse_body<jetton::JettonMint>},
+      {"MultisigNewOrder", &abi_parse_body<multisig::MultisigNewOrder>},
+      {"MultisigInitOrder", &abi_parse_body<multisig::MultisigInitOrder>},
+      {"MultisigApprove", &abi_parse_body<multisig::MultisigApprove>},
+      {"MultisigApproveRejected", &abi_parse_body<multisig::MultisigApproveRejected>},
+      {"MultisigExecute", &abi_parse_body<multisig::MultisigExecute>},
+      {"PTonTransfer", &abi_parse_body<pton::PTonTransfer>},
+      {"StonfiV2ProvideLiquidity", &abi_parse_body<stonfi::StonfiV2ProvideLiquidity>},
+      {"StonfiPaymentRequest", &abi_parse_body<stonfi::StonfiPaymentRequest>},
+      {"StonfiSwapMessage", &abi_parse_body<stonfi::StonfiSwapMessage>},
+      {"StonfiV2PayTo", &abi_parse_body<stonfi::StonfiV2PayTo>},
+      {"DedustPayoutFromPool", &abi_parse_body<dedust::DedustPayoutFromPool>},
+      {"DedustSwapNotification", &abi_parse_body<dedust::DedustSwapNotification>},
+      {"DedustDepositLiquidityToPool", &abi_parse_body<dedust::DedustDepositLiquidityToPool>},
+      {"DedustV2PayNative", &abi_parse_body<dedust_v2::DedustV2PayNative>},
+      {"DedustV2SwapEvent", &abi_parse_body<dedust_v2::DedustV2SwapEvent>},
+      {"DedustV2PayoutPositionFees", &abi_parse_body<dedust_v2::DedustV2PayoutPositionFees>},
+      {"DedustV2Withdraw", &abi_parse_body<dedust_v2::DedustV2Withdraw>},
+      {"DedustV2WithdrawalEvent", &abi_parse_body<dedust_v2::DedustV2WithdrawalEvent>},
+      {"DedustV2CreditAsset", &abi_parse_body<dedust_v2::DedustV2CreditAsset>},
+      {"DedustV2JoinLiquidity", &abi_parse_body<dedust_v2::DedustV2JoinLiquidity>},
+      {"DedustV2DepositEvent", &abi_parse_body<dedust_v2::DedustV2DepositEvent>},
+      {"CoffeeCreateVault", &abi_parse_body<coffee::CoffeeCreateVault>},
+      {"CoffeeSwapEvent", &abi_parse_body<coffee::CoffeeSwapEvent>},
+      {"CoffeeCreateLiquidityDepositoryRequest",
+       &abi_parse_body<coffee::CoffeeCreateLiquidityDepositoryRequest>},
+      {"CoffeeDepositLiquiditySuccessfulEvent",
+       &abi_parse_body<coffee::CoffeeDepositLiquiditySuccessfulEvent>},
+      {"CoffeeLiquidityWithdrawalEvent", &abi_parse_body<coffee::CoffeeLiquidityWithdrawalEvent>},
+      {"CoffeeCreatePoolCreatorRequest", &abi_parse_body<coffee::CoffeeCreatePoolCreatorRequest>},
+      {"CoffeeCreatePoolRequest", &abi_parse_body<coffee::CoffeeCreatePoolRequest>},
+      {"CoffeeStakingClaimRewards", &abi_parse_body<coffee::CoffeeStakingClaimRewards>},
+      {"CoffeeStakingPositionWithdraw2",
+       &abi_parse_body<coffee::CoffeeStakingPositionWithdraw2>},
+      {"CoffeeStakingPositionWithdraw3",
+       &abi_parse_body<coffee_w3::CoffeeStakingPositionWithdraw3>},
+      {"EvaaSupplyMaster", &abi_parse_body<evaa::EvaaSupplyMaster>},
+      {"EvaaSupplySuccess", &abi_parse_body<evaa::EvaaSupplySuccess>},
+      {"EvaaWithdrawMaster", &abi_parse_body<evaa::EvaaWithdrawMaster>},
+      {"EvaaWithdrawCollateralized", &abi_parse_body<evaa::EvaaWithdrawCollateralized>},
+      {"EvaaSupplyJettonForward", &abi_parse_body<evaa_forward::EvaaSupplyJettonForward>},
+      {"JVaultUnstakeJettons", &abi_parse_body<jvault::JVaultUnstakeJettons>},
+      {"JVaultUnstakeRequest", &abi_parse_body<jvault::JVaultUnstakeRequest>},
+      {"JVaultClaim", &abi_parse_body<jvault::JVaultClaim>},
+      {"JVaultStakePeriodPayload",
+       &abi_parse_body<jvault_payload::JVaultStakePeriodPayload>},
+      {"SubscriptionPaymentRequest",
+       &abi_parse_body<subscriptions::SubscriptionPaymentRequest>},
+      {"ToncoRouterV3SwapSourceWallet",
+       &abi_parse_body<tonco::ToncoRouterV3SwapSourceWallet>},
+      {"ToncoPoolV3StartBurn", &abi_parse_body<tonco::ToncoPoolV3StartBurn>},
+      {"ToncoPositionNftV3PositionBurn",
+       &abi_parse_body<tonco::ToncoPositionNftV3PositionBurn>},
+      {"ToncoPoolV3Burn", &abi_parse_body<tonco::ToncoPoolV3Burn>},
+      {"ToncoRouterV3CreatePool", &abi_parse_body<tonco::ToncoRouterV3CreatePool>},
+      {"ToncoPoolV3Init", &abi_parse_body<tonco::ToncoPoolV3Init>},
+      {"TeleitemStartAuction", &abi_parse_body<teleitem::TeleitemStartAuction>},
+      {"NftOwnershipAssignedPrevOwner",
+       &abi_parse_body<nft_sale::NftOwnershipAssignedPrevOwner>},
+      {"SaleUpdateMessage", &abi_parse_body<nft_sale::SaleUpdateMessage>},
+      {"NftReportStaticData", &abi_parse_body<nft_sale::NftReportStaticData>},
+      {"TONStakersNftBurnNotification",
+       &abi_parse_body<tonstakers::TONStakersNftBurnNotification>},
+      {"CocoonPayoutPayload", &abi_parse_body<cocoon::CocoonPayoutPayload>},
+      {"CocoonLastPayoutPayload", &abi_parse_body<cocoon::CocoonLastPayoutPayload>},
+      {"CocoonWorkerProxyRequest", &abi_parse_body<cocoon::CocoonWorkerProxyRequest>},
+      {"CocoonExtProxyPayoutRequest", &abi_parse_body<cocoon::CocoonExtProxyPayoutRequest>},
+      {"CocoonChargePayload", &abi_parse_body<cocoon::CocoonChargePayload>},
+      {"CocoonGrantRefundPayload", &abi_parse_body<cocoon::CocoonGrantRefundPayload>},
+      {"CocoonExtClientTopUp", &abi_parse_body<cocoon::CocoonExtClientTopUp>},
+      {"CocoonRegisterProxy", &abi_parse_body<cocoon::CocoonRegisterProxy>},
+      {"CocoonUnregisterProxy", &abi_parse_body<cocoon::CocoonUnregisterProxy>},
+      {"CocoonOwnerClientRegister", &abi_parse_body<cocoon::CocoonOwnerClientRegister>},
+      {"CocoonOwnerClientChangeSecretHash",
+       &abi_parse_body<cocoon::CocoonOwnerClientChangeSecretHash>},
+      {"CocoonOwnerClientRequestRefund",
+       &abi_parse_body<cocoon::CocoonOwnerClientRequestRefund>},
+      {"CocoonOwnerClientIncreaseStake",
+       &abi_parse_body<cocoon::CocoonOwnerClientIncreaseStake>},
+      {"CocoonOwnerClientWithdraw", &abi_parse_body<cocoon::CocoonOwnerClientWithdraw>},
   };
   return rows;
 }

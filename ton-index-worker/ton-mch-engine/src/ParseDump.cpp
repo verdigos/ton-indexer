@@ -70,8 +70,8 @@ constexpr DumpType kDumpTypes[] = {
     {0xafaf283e, "MultisigApproveRejected"},
     {0x75097f5d, "MultisigExecute"},
     // Cocoon. RegisterProxy (0x927c7cb5) is deliberately absent: its Python
-    // class binds the RESIDUAL SLICE as `proxy_info`, which no schema leaf can
-    // emit, so the dump would diverge on that key alone (mch-msgs.schema).
+    // class binds the RESIDUAL SLICE as `proxy_info`, which no ABI leaf emits,
+    // so the dump would diverge on that key alone.
     {0xa040ad28, "CocoonPayoutPayload"},
     {0xf5f26a36, "CocoonLastPayoutPayload"},
     {0x4d725d2c, "CocoonWorkerProxyRequest"},

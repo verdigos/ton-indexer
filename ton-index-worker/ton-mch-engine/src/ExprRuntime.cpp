@@ -519,7 +519,7 @@ EvalResult rt_builtin_asset_of(const Value &x) {
     return rt_fault("asset_of: ABI object '$' tag must be a string");
   }
 
-  // PLACEHOLDER, not yet authored by F1 — see schema-to-abi-faithful-plan.md F1.
+  // Frozen F1 declaration arm names.
   static const std::string ton_tag = "AssetTon";
   static const std::string jetton_tag = "AssetJetton";
   if (tag->str == ton_tag) return rt_ok(Value::make_asset_ton());
@@ -556,7 +556,7 @@ EvalResult rt_builtin_tail_unwrap(const Value &x) {
   }
 
   enum class TailPolicy { Ref, Bits, Refs };
-  // PLACEHOLDER, not yet authored by F1 — see schema-to-abi-faithful-plan.md F1.
+  // Frozen F1 declaration arm names and empty-inline policies.
   static const std::map<std::string, TailPolicy> tail_tags = {
       {"JettonForwardPayloadRef", TailPolicy::Ref},
       {"JettonForwardPayloadInline", TailPolicy::Bits},

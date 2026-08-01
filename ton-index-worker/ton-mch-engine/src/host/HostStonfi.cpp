@@ -10,6 +10,7 @@
 
 #include "BlockTree.h"
 #include "BuildRuntime.h"
+#include "ExprRuntime.h"
 #include "MsgParse.h"
 #include "parse/PSlice.h"
 
@@ -65,17 +66,22 @@ struct PaymentReq {
   td::RefInt256 amount0_out, amount1_out;
   Value token0, token1;  // account values
 };
-// W3 shim: the cursor-walk moved to the mch-msgs.schema StonfiPaymentRequest
-// parser (MsgParsersGenerated.cpp); unpack its Obj into the struct. A parse
-// failure propagates the same td::Status the hand walk raised.
+// The body is parsed by the ABI-faithful StonfiPaymentRequest declaration;
+// unpack its Obj into the host struct. A parse failure propagates the same
+// td::Status the hand walk raised.
 td::Result<PaymentReq> parse_payment_request(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(v, parse_message_body("StonfiPaymentRequest", body));
+  const Value *info_cell = v.field("info");
+  const Value *info = info_cell != nullptr ? info_cell->field("ref") : nullptr;
+  if (info == nullptr) {
+    return td::Status::Error("payment request: info.ref missing");
+  }
   PaymentReq pr;
   pr.exit_code = static_cast<std::uint32_t>(v.field("exit_code")->num->to_long());
-  pr.amount0_out = v.field("amount0_out")->num;
-  pr.token0 = *v.field("token0");
-  pr.amount1_out = v.field("amount1_out")->num;
-  pr.token1 = *v.field("token1");
+  pr.amount0_out = info->field("amount0_out")->num;
+  pr.token0 = *info->field("token0");
+  pr.amount1_out = info->field("amount1_out")->num;
+  pr.token1 = *info->field("token1");
   return pr;
 }
 
@@ -92,14 +98,19 @@ struct SwapV1 {
   td::RefInt256 amount;
   Value from_real_user;
 };
-// W3 shim: cursor-walk moved to the mch-msgs.schema StonfiSwapMessage parser.
+// ABI-faithful StonfiSwapMessage unpacker.
 td::Result<SwapV1> parse_swap_v1(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(v, parse_message_body("StonfiSwapMessage", body));
+  const Value *info_cell = v.field("info");
+  const Value *info = info_cell != nullptr ? info_cell->field("ref") : nullptr;
+  if (info == nullptr) {
+    return td::Status::Error("stonfi swap: info.ref missing");
+  }
   SwapV1 sw;
   sw.from_user_address = *v.field("from_user_address");
   sw.token_wallet = *v.field("token_wallet");
   sw.amount = v.field("amount")->num;
-  sw.from_real_user = *v.field("from_real_user");
+  sw.from_real_user = *info->field("from_real_user");
   return sw;
 }
 
@@ -119,15 +130,20 @@ struct PayTo {
   td::RefInt256 amount0_out, amount1_out;
   Value token0, token1;  // account values
 };
-// W3 shim: cursor-walk moved to the mch-msgs.schema StonfiV2PayTo parser.
+// ABI-faithful StonfiV2PayTo unpacker.
 td::Result<PayTo> parse_pay_to(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(v, parse_message_body("StonfiV2PayTo", body));
+  const Value *info_cell = v.field("info");
+  const Value *info = info_cell != nullptr ? info_cell->field("ref") : nullptr;
+  if (info == nullptr) {
+    return td::Status::Error("stonfi pay_to: info.ref missing");
+  }
   PayTo pt;
   pt.exit_code = static_cast<std::uint32_t>(v.field("exit_code")->num->to_long());
-  pt.amount0_out = v.field("amount0_out")->num;
-  pt.token0 = *v.field("token0");
-  pt.amount1_out = v.field("amount1_out")->num;
-  pt.token1 = *v.field("token1");
+  pt.amount0_out = info->field("amount0_out")->num;
+  pt.token0 = *info->field("token0");
+  pt.amount1_out = info->field("amount1_out")->num;
+  pt.token1 = *info->field("token1");
   return pt;
 }
 
@@ -505,6 +521,9 @@ bool pton_self_transfer(const Block *block) {
   }
   Value recv = data_field(prev, "receiver");
   const Message *m = block_msg(block);
+  if (m == nullptr || !m->opcode32() || *m->opcode32() != kPTonTransfer) {
+    return false;
+  }
   std::optional<std::string> dst = m != nullptr ? m->destination : std::nullopt;
   Value dst_acc = account_from_opt(dst);
   // AccountId(receiver) != message.destination -> canonical compare.
@@ -521,10 +540,14 @@ bool pton_self_transfer(const Block *block) {
     return false;
   }
   const Value *fp = r.ok().field("forward_payload");
-  if (fp == nullptr || fp->t != VType::Cell) {
+  if (fp == nullptr) {
     return false;
   }
-  auto r_cs = open_ref_cell(fp->cell);
+  EvalResult unwrapped = rt_builtin_tail_unwrap(*fp);
+  if (unwrapped.faulted || unwrapped.value.t != VType::Cell) {
+    return false;
+  }
+  auto r_cs = open_ref_cell(unwrapped.value.cell);
   if (r_cs.is_error()) {
     return false;
   }

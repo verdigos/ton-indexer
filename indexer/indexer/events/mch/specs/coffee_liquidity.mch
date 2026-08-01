@@ -7,9 +7,8 @@
 # divergence recorded in that file's header.
 #
 # Both builds here are FULLY DECLARATIVE: zero host fns, zero lookups. Coffee is
-# the one family in the backlog with no parser gaps — the 2-bit coffee asset is
-# the `asset2` schema leaf and every 1-bit flag it carries is dropped unread, so
-# `bits N` covers the rest.
+# the one family in the backlog with no parser gaps: its 2-bit asset stays an
+# honest ABI union and the real ref groups remain visible to consumers.
 #
 # Anchor claims: 0xc0ffee27 (deposit) and 0xc0ffee06 (create vault) are claimed
 # by no other spec, so this file's position in ir/emit_manifest.json carries no
@@ -85,10 +84,12 @@ matcher coffee_deposit_liquidity {
     parse request as CoffeeCreateLiquidityDepositoryRequest
     parse success as CoffeeDepositLiquiditySuccessfulEvent
 
-    let in_asset  = ton_asset() if in_jt == null else in_jt.data.asset
-    let in_wallet = null if in_jt == null else in_jt.data.sender_wallet
-    let is_first  = in_asset == request.body.pool_first
-    reject when not (is_first or in_asset == request.body.pool_second)
+    let in_asset   = ton_asset() if in_jt == null else in_jt.data.asset
+    let in_wallet  = null if in_jt == null else in_jt.data.sender_wallet
+    let pool_first = asset_of(request.body.pool_params.ref.pool_first)
+    let pool_second = asset_of(request.body.pool_params.ref.pool_second)
+    let is_first   = in_asset == pool_first
+    reject when not (is_first or in_asset == pool_second)
 
     let in_amount = amount(request.body.amount)
     # The vault's excess refund — whichever arm of the payout terminal bound.
@@ -108,9 +109,9 @@ matcher coffee_deposit_liquidity {
         asset_2:              null if is_first else in_asset
         amount_2:             null if is_first else in_amount
         user_jetton_wallet_2: null if is_first else in_wallet
-        target_asset_1:       request.body.pool_first if is_first else request.body.pool_second
+        target_asset_1:       pool_first if is_first else pool_second
         target_amount_1:      null
-        target_asset_2:       request.body.pool_second if is_first else request.body.pool_first
+        target_asset_2:       pool_second if is_first else pool_first
         target_amount_2:      null
         lp_tokens_minted:     amount(success.body.lp_amount) if success != null else null
     }
@@ -141,7 +142,7 @@ matcher coffee_create_vault {
     out {
         sender: account(create.msg.source)
         vault:  account(deploy.msg.destination)
-        asset:  create.body.asset
+        asset:  asset_of(create.body.asset)
         amount: amount(create.msg.value)
     }
 }

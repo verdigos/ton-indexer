@@ -158,7 +158,7 @@ def dedust_v2_claim_reward_registries() -> Registries:
 # reward claim above.
 #
 # MIXED parser paths: PayoutMessage is the ABI-bridge twin from this module
-# (camelCase), while DedustV2PayoutPositionFees rides the mch-msgs.schema entry
+# (camelCase), while DedustV2PayoutPositionFees rides its protocol ABI entry
 # of the same name — and its Python twin is the LEGACY class itself. Reusing the
 # legacy class (rather than writing a schema-shaped twin like the swap family
 # does) is safe here and strictly better for the sweep: the fields the spec reads
@@ -197,7 +197,7 @@ def dedust_v2_claim_fees_registries() -> Registries:
 #
 # Same mixed-path arrangement as claim_fees above: PayoutMessage is the ABI twin
 # from this module, while DedustV2Withdraw / DedustV2WithdrawalEvent ride their
-# mch-msgs.schema entries. The EVENT reuses the legacy class as its twin
+# protocol ABI entries. The EVENT reuses the legacy class as its twin
 # (identical field spellings, and the spec guards the capture with an `op` so
 # the class's `assert op == opcode` only ever sees the right body).
 #
@@ -217,7 +217,7 @@ def dedust_v2_claim_fees_registries() -> Registries:
 # they need an opcode row but no parser, since neither body is ever read.
 # ---------------------------------------------------------------------------
 class DedustV2WithdrawTwin:
-    """withdraw#20b5ef89 — schema twin of mch-msgs.schema `DedustV2Withdraw`.
+    """withdraw#20b5ef89 — Python twin of ABI row `DedustV2Withdraw`.
 
     Registered under the schema entry's name; the class name differs only to
     avoid shadowing the legacy import above."""
@@ -265,10 +265,10 @@ def dedust_v2_withdraw_registries() -> Registries:
 # ---------------------------------------------------------------------------
 # specs_decl/dedust_v2_swap.mch — the CPMM V2 swap family.
 #
-# These two message twins mirror the mch-msgs.schema entries of the same name
+# These two message twins mirror the protocol ABI entries of the same name
 # (the C++ side's generated parsers), NOT the legacy blocks/messages/dedust_v2.py
 # classes: only the fields the spec reads are parsed, and the leading opcode is
-# skipped unchecked exactly like every schema-generated parser.
+# handled by the C++ ABI parser's own prefix check.
 # ---------------------------------------------------------------------------
 class DedustV2PayNative:
     """pay_native#a5a7cbf8 query_id:uint64 amount:Coins payment_payload:^Cell …
@@ -387,7 +387,7 @@ def dedust_v2_swap_registries() -> Registries:
 # ---------------------------------------------------------------------------
 # specs/dedust_v2_deposit.mch — the deposit trio (final / rejected / partial).
 #
-# Three schema twins, all mirroring mch-msgs.schema entries of the same name
+# Three Python twins, all mirroring protocol ABI entries of the same name
 # (not the legacy blocks/messages/dedust_v2.py classes): the leading opcode is
 # skipped unchecked, and — like the withdraw entry — each parses to the END of
 # the wire shape so both engines fail on exactly the same truncations.

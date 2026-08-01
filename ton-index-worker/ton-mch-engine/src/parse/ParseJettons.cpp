@@ -157,9 +157,9 @@ td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body) {
   return Value::make_obj(std::move(f));
 }
 
-// NOTE: jetton_internal_transfer / jetton_burn / jetton_notify / jetton_mint are
-// now schema-generated (mch-msgs.schema -> MsgParsersGenerated.cpp). Only the
-// forward-payload-tail transfer and the nested-capture minter mint stay hand.
+// JettonInternalTransfer / JettonBurn / JettonNotify / JettonMint now use
+// protocol ABI rows. Only the forward-payload-tail transfer and the
+// nested-capture minter mint stay hand.
 
 td::Result<Value> parse_minter_jetton_mint(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(ctx, open_body(body));

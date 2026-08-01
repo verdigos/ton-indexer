@@ -134,9 +134,8 @@ add_custom_target(mch_generate_sources
 # the PRODUCTION pairs compiled into mch-classify).
 set(TON_ABI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../ton-abi)
 
-# PRODUCTION ABI parser pairs — compiled into mch-classify. Registration is a
-# separate explicit step in AbiBridge.cpp; the F1 pairs below are deliberately
-# linked but unregistered. Adding a NEW .tolk declaration file = one line here
+# PRODUCTION ABI parser pairs — compiled into mch-classify and explicitly
+# registered in AbiBridge.cpp. Adding a NEW .tolk declaration file = one line here
 # (a new decl in an EXISTING contract needs no CMake edit at all; see
 # ton-abi/ABI-PROTOCOL-CHECKLIST.md).
 set(ABI_PROD_PAIRS
@@ -199,7 +198,6 @@ add_library(mch-classify STATIC
     src/ParsedBlockLookupSource.cpp
     src/EnginePrep.cpp
     src/MsgParse.cpp
-    src/MsgParsersGenerated.cpp
     src/AbiBridge.cpp
     ${ABI_PROD_PAIRS}
     src/parse/PSlice.cpp
@@ -213,8 +211,8 @@ add_library(mch-classify STATIC
 )
 target_include_directories(mch-classify
     PUBLIC src
-    # MsgParse.cpp includes "generated/mch-msgs-tlb.h" -> resolves into the
-    # build tree; nothing generated ever lands under src/.
+    # Kept-hand parser TUs include "generated/mch-msgs-tlb.h" -> resolves into
+    # the build tree; nothing generated ever lands under src/.
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
     # AbiBridge.cpp includes the ABI_PROD_PAIRS generated headers.
     PRIVATE ${TON_ABI_DIR}/generated
@@ -319,7 +317,6 @@ add_executable(ton-mch-engine
     src/Classify.cpp
     src/ShapeTest.cpp
     src/DexRecordsTest.cpp
-    src/MsgVectorRunner.cpp
     src/ParseDump.cpp
     src/SchemaGate.cpp
     src/Surface.cpp
@@ -355,8 +352,6 @@ add_test(NAME mch_shape_test
     COMMAND ton-mch-engine --shape-test)
 add_test(NAME mch_dexrecords
     COMMAND ton-mch-engine --dexrecords-test)
-add_test(NAME mch_msg_vectors
-    COMMAND ton-mch-engine --msg-vectors ${CMAKE_CURRENT_SOURCE_DIR}/ir/msg_vectors.json)
 add_test(NAME mch_codegen_selftest
     COMMAND mch-codegen --selftest)
 add_test(NAME mch_abi_bridge

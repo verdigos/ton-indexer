@@ -6,6 +6,7 @@
 
 #include "BlockTree.h"
 #include "BuildRuntime.h"
+#include "ExprRuntime.h"
 #include "MsgParse.h"
 #include "parse/PSlice.h"
 
@@ -169,10 +170,14 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
         asset_out_f == nullptr) {
       return rt_fault("dedust notify: missing leg field");
     }
+    EvalResult asset_in = rt_builtin_asset_of(*asset_in_f);
+    EvalResult asset_out = rt_builtin_asset_of(*asset_out_f);
+    if (asset_in.faulted) return asset_in;
+    if (asset_out.faulted) return asset_out;
     Value in_leg = Value::make_dict(Value::Fields{
-        {"amount", to_amount(*amount_in_f)}, {"asset", *asset_in_f}});
+        {"amount", to_amount(*amount_in_f)}, {"asset", std::move(asset_in.value)}});
     Value out_leg = Value::make_dict(Value::Fields{
-        {"amount", to_amount(*amount_out_f)}, {"asset", *asset_out_f}});
+        {"amount", to_amount(*amount_out_f)}, {"asset", std::move(asset_out.value)}});
     peer_swaps.push_back(Value::make_dict(Value::Fields{
         {"in", std::move(in_leg)}, {"out", std::move(out_leg)}}));
   }

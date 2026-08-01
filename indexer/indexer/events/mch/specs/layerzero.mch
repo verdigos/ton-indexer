@@ -58,7 +58,7 @@
 #
 # THE THREE NEW HAND PARSERS. `LayerzeroChannelSendCallback`,
 # `ChannelCommitPacket` and `UlnConnectionVerifyCallbackParser` are all
-# irreducible for mch-msgs.schema: each emits a NESTED named object
+# kept hand-side because each emits a NESTED named object
 # (LayerZeroPacket / LayerZeroPath / LayerZeroMDLzSend), reaches its payload
 # through a raw `refs[0].refs[0].refs[0]` walk, and formats 256-bit fields as
 # Python `hex()` minimal-digit strings. They join the hand table in

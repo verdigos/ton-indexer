@@ -40,6 +40,40 @@ Value extern_address_string(const std::string &s) {
   return Value::make_str(std::move(out));
 }
 
+// The ABI bridge represents addr_extern as
+//   obj{bits: Int, value: Cell(bits)}
+// rather than MsgParse's legacy "extern:<len>:<hex>" sentinel. Render the
+// value directly from the cell so widths above RefInt256's limit stay exact.
+Value extern_address_object(const Value &v) {
+  const Value *bits = v.field("bits");
+  const Value *value = v.field("value");
+  if (v.t != VType::Obj || bits == nullptr || bits->t != VType::Int || bits->num.is_null() ||
+      bits->num->sgn() < 0 || td::cmp(bits->num, td::make_refint(511)) > 0 || value == nullptr ||
+      value->t != VType::Cell || value->cell.is_null()) {
+    return Value::null();
+  }
+
+  int len = static_cast<int>(bits->num->to_long());
+  vm::CellSlice cs = vm::load_cell_slice(value->cell);
+  if (cs.size() != static_cast<unsigned>(len) || cs.size_refs() != 0) {
+    return Value::null();
+  }
+
+  static const char kHexDigits[] = "0123456789abcdef";
+  std::string hex;
+  hex.reserve(static_cast<std::size_t>(len) / 4 + 1);
+  int head = len % 4;
+  if (head != 0) {
+    hex.push_back(kHexDigits[cs.fetch_ulong(head)]);
+  }
+  for (int rem = len - head; rem > 0; rem -= 4) {
+    hex.push_back(kHexDigits[cs.fetch_ulong(4)]);
+  }
+  std::size_t first = hex.find_first_not_of('0');
+  hex = first == std::string::npos ? std::string("0") : hex.substr(first);
+  return Value::make_str(std::to_string(len) + ";" + hex);
+}
+
 }  // namespace
 
 // `expected_address` for cocoon_worker_payout / cocoon_proxy_charge /
@@ -58,6 +92,9 @@ EvalResult cocoon_expected_address(BuildEnv &, const std::vector<Value> &args) {
   }
   if (v.t == VType::Str) {
     return rt_ok(extern_address_string(v.str));
+  }
+  if (v.t == VType::Obj) {
+    return rt_ok(extern_address_object(v));
   }
   return rt_ok(Value::null());
 }

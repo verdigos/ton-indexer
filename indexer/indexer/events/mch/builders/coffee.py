@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from pytoniq_core import Slice
+from pytoniq_core import Builder, Slice
 
 from indexer.events.blocks.basic_blocks import CallContractBlock
 from indexer.events.blocks.core import Block
@@ -47,7 +47,6 @@ from indexer.events.blocks.messages.coffee import (
     CoffeeSwapSuccessfulEvent,
     DepositLiquidityParamsTrimmed,
     PoolCreationParams,
-    PoolParams,
 )
 from indexer.events.blocks.messages.jettons import JettonInternalTransfer
 from indexer.events.blocks.messages import ExcessMessage
@@ -129,17 +128,30 @@ def coffee_registries() -> Registries:
 # --- coffee liquidity/vault (specs/coffee_liquidity.mch) ---------------------
 
 
-class CoffeeCreateLiquidityDepositoryRequest:
-    """create_liquidity_depository_request#c0ffee27 — FLAT twin of the
-    mch-msgs.schema row of the same name.
+def _load_coffee_asset_abi(slice: Slice) -> SimpleNamespace:
+    """Read Coffee's Asset union without converting it to the legacy Asset."""
+    tag = slice.load_uint(2)
+    if tag == 0b00:
+        return SimpleNamespace(**{"$": "AssetTon"})
+    if tag == 0b01:
+        workchain = slice.load_uint(8)
+        hash_cell = Builder().store_bytes(slice.load_bytes(32)).end_cell()
+        return SimpleNamespace(
+            **{"$": "AssetJetton", "workchain": workchain, "hash": hash_cell}
+        )
+    raise ValueError(f"Invalid Coffee Asset tag: {tag}")
 
-    The legacy blocks/messages/coffee.py class of this name exposes the pool
-    assets NESTED (`.pool_params.first`), but the C++ schema generator FLATTENS a
-    `ref { … }` group's subfields into the parent object, so the two hosts would
-    disagree on the field path. This twin mirrors the schema exactly — flat
-    `pool_first`/`pool_second`, everything the spec does not read parsed and
-    dropped — the same convention as builders/dedust_v2.py's message twins.
-    """
+
+def _load_coffee_pool_params_abi(slice: Slice) -> SimpleNamespace:
+    pool_first = _load_coffee_asset_abi(slice)
+    pool_second = _load_coffee_asset_abi(slice)
+    slice.load_uint(3)  # amm, parsed-and-dropped
+    slice.load_maybe_ref()  # amm_settings, parsed-and-dropped
+    return SimpleNamespace(pool_first=pool_first, pool_second=pool_second)
+
+
+class CoffeeCreateLiquidityDepositoryRequest:
+    """ABI-shaped twin of create_liquidity_depository_request#c0ffee27."""
 
     opcode = 0xC0FFEE27
 
@@ -148,11 +160,21 @@ class CoffeeCreateLiquidityDepositoryRequest:
         slice.load_uint(64)  # query_id, parsed-and-dropped
         self.amount = slice.load_coins()
         DepositLiquidityParamsTrimmed(slice.load_ref().to_slice())  # dropped
-        pool_params = PoolParams(slice.load_ref().to_slice())
-        self.pool_first = pool_params.first
-        self.pool_second = pool_params.second
+        pool_params = _load_coffee_pool_params_abi(slice.load_ref().to_slice())
+        self.pool_params = SimpleNamespace(ref=pool_params)
         self.sender = slice.load_address()
         slice.load_ref()  # proof, parsed-and-dropped
+
+
+class CoffeeCreateVaultTwin:
+    """ABI-shaped twin that preserves the raw Asset union for asset_of()."""
+
+    opcode = CoffeeCreateVault.opcode
+
+    def __init__(self, slice: Slice):
+        slice.load_uint(32)  # opcode (checked by the matcher's `op`)
+        self.query_id = slice.load_uint(64)
+        self.asset = _load_coffee_asset_abi(slice)
 
 
 LIQUIDITY_OPCODES = {
@@ -180,7 +202,7 @@ LIQUIDITY_BLOCK_TYPES = {
 }
 
 LIQUIDITY_MESSAGE_TYPES = {
-    "CoffeeCreateVault":                      CoffeeCreateVault,
+    "CoffeeCreateVault":                      CoffeeCreateVaultTwin,
     "CoffeeCreateLiquidityDepositoryRequest": CoffeeCreateLiquidityDepositoryRequest,
     # Already FLAT (lp_amount at the top level), so the legacy class doubles as
     # its own schema twin.
@@ -275,7 +297,7 @@ STAKING_BLOCK_TYPES = {
 
 STAKING_MESSAGE_TYPES = {
     # All three legacy classes are already FLAT in the fields the spec reads, so
-    # each doubles as its own mch-msgs.schema twin. CoffeeStakingPositionWithdraw2
+    # each doubles as its own protocol ABI twin. CoffeeStakingPositionWithdraw2
     # additionally flattens its mandatory `jetton_data` ref into
     # jetton_wallet/jetton_amount, which the schema row does not walk at all —
     # harmless, the spec reads neither from withdraw_2.
@@ -300,9 +322,8 @@ def coffee_staking_registries() -> Registries:
 # --- coffee pool creation (specs/coffee_create_pool.mch) ---------------------
 
 
-class CoffeeCreatePoolCreatorRequestFlat:
-    """create_pool_creator_request#c0ffee23 — FLAT twin of the mch-msgs.schema
-    row `CoffeeCreatePoolCreatorRequest`.
+class CoffeeCreatePoolCreatorRequestTwin:
+    """ABI-shaped twin of create_pool_creator_request#c0ffee23.
 
     Two reasons this cannot be the legacy class of that name
     (messages/coffee.py:713):
@@ -313,12 +334,8 @@ class CoffeeCreatePoolCreatorRequestFlat:
        body (IndexError on the first bit past PoolParams). Nothing calls it —
        CoffeeCreatePoolCreatorMatcher only reads its `.opcode`, and the legacy
        build parses the LEG instead — which is why the bug never surfaced.
-    2. Even fixed, it would expose the pool assets NESTED
-       (`.params.first`), while the C++ schema generator FLATTENS a `ref { … }`
-       group and reads an inline `asset2` straight into the parent object. This
-       twin mirrors the schema exactly — `pool_first` / `pool_second` /
-       `recipient` — the same convention as the
-       CoffeeCreateLiquidityDepositoryRequest twin above.
+    2. Even fixed, it would eagerly convert its assets to legacy Asset values
+       instead of preserving the ABI union objects consumed by asset_of().
     """
 
     opcode = 0xC0FFEE23
@@ -327,11 +344,13 @@ class CoffeeCreatePoolCreatorRequestFlat:
         slice.load_uint(32)  # opcode (checked by the matcher's `op`)
         slice.load_uint(64)  # query_id, parsed-and-dropped
         self.amount = slice.load_coins()
-        pool_params = PoolParams(slice)  # INLINE, not a ref
-        self.pool_first = pool_params.first
-        self.pool_second = pool_params.second
+        pool_params = _load_coffee_pool_params_abi(slice)  # INLINE, not a ref
+        self.pool_first = pool_params.pool_first
+        self.pool_second = pool_params.pool_second
         creation_params = PoolCreationParams(slice.load_ref().to_slice())
-        self.recipient = creation_params.public.recipient
+        self.creation_params = SimpleNamespace(
+            ref=SimpleNamespace(recipient=creation_params.public.recipient)
+        )
         self.sender = slice.load_address()
         slice.load_ref()  # proof, parsed-and-dropped
 
@@ -342,7 +361,7 @@ CREATE_POOL_BLOCK_TYPES = {
 }
 
 CREATE_POOL_MESSAGE_TYPES = {
-    "CoffeeCreatePoolCreatorRequest": CoffeeCreatePoolCreatorRequestFlat,
+    "CoffeeCreatePoolCreatorRequest": CoffeeCreatePoolCreatorRequestTwin,
     # Already flat in amount1/amount2/tx_initiator — its own schema twin.
     "CoffeeCreatePoolRequest": CoffeeCreatePoolRequest,
     "CoffeeDepositLiquiditySuccessfulEvent": CoffeeDepositLiquiditySuccessfulEvent,

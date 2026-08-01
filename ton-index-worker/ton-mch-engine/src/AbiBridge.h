@@ -1,7 +1,7 @@
 // W12 mch <-> ton-abi bridge (design: W12-BRIDGE-DESIGN.md). Turns a Tolk-ABI
 // generated struct (ton-abi-gen output) into an mch::Value so ABI-parsed message
-// bodies plug into the existing message_parsers() registry alongside the hand and
-// schema-generated parsers. Pure codegen (W11.5): no runtime ABI loading, no
+// bodies plug into the existing message_parsers() registry alongside the kept
+// hand parsers. Pure codegen (W11.5): no runtime ABI loading, no
 // AbiModel, no init API -- registration is compile-time static rows.
 //
 // Dependency direction: mch -> ton-abi ONLY (ton-abi stays mch-free forever,
@@ -57,8 +57,7 @@ td::Result<Value> abi_parse_body(const td::Ref<vm::Cell> &body) {
 // The ABI-generated parser rows merged into message_parsers() (design §4).
 // Rows are {"<DeclName>", &abi_parse_body<T>} -- BARE decl names, not
 // <contract>::<decl>: the .mch grammar's `parse CAP as Name` reads a bare IDENT
-// (acked deviation, T122-CLAIMREWARD-DESIGN.md §3). 3 live rows today (the
-// DeDust CPMM V2 claim_reward family).
+// (acked deviation, T122-CLAIMREWARD-DESIGN.md §3).
 const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers();
 
 }  // namespace mch

@@ -19,7 +19,6 @@
 #include "MsgParse.h"
 
 #include "AbiBridge.h"
-#include "MsgParsersGenerated.h"
 #include "TraceLoader.h"
 #include "parse/PSlice.h"
 #include "parse/Parsers.h"
@@ -41,9 +40,8 @@
 
 namespace mch {
 
-// The registered parser set = the kept-hand parsers (13) + the M1 schema-generated
-// rows (22, from mch-msgs.schema via msgs_gen.py) + the W12 ABI-bridge rows (3:
-// the DeDust CPMM V2 claim_reward family, under BARE decl names).
+// The registered parser set = the kept-hand parsers (13) + ABI-generated rows
+// (73, under stable BARE declaration names).
 // First-source-wins on a collision; a key claimed by more than one source is
 // instead poisoned to a nullptr parser at merge time, so parse_message_body
 // fails closed on an ambiguous name with the same map lookup it already does.
@@ -52,7 +50,7 @@ namespace mch {
 // --surface / cpp_surface.json) is unchanged either way.
 namespace {
 
-// Kept hand parsers (irregular / single-use constructs — see mch-msgs.schema).
+// Kept hand parsers (irregular / single-use constructs).
 const std::vector<std::pair<std::string, MsgParserFn>> &hand_message_parsers() {
   static const std::vector<std::pair<std::string, MsgParserFn>> rows = {
       {"JettonTransfer", parse_jetton_transfer},         // forward-payload tail hook
@@ -79,11 +77,10 @@ struct BuiltRegistry {
 
 const BuiltRegistry &built_registry() {
   static const BuiltRegistry built = [] {
-    // ONE enumeration of the three sources in first-wins order, shared by the
+    // ONE enumeration of the two sources in first-wins order, shared by the
     // merge and the duplicate scan (they must never disagree on the source set
     // or its order).
-    const ParserSources sources = {&hand_message_parsers(), &generated_message_parsers(),
-                                   &abi_message_parsers()};
+    const ParserSources sources = {&hand_message_parsers(), &abi_message_parsers()};
     BuiltRegistry b;
     for (const auto *src : sources) {
       for (const auto &row : *src) {
