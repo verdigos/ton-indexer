@@ -134,13 +134,31 @@ add_custom_target(mch_generate_sources
 # the PRODUCTION pairs compiled into mch-classify).
 set(TON_ABI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../ton-abi)
 
-# PRODUCTION ABI parser pairs — compiled into mch-classify, their rows
-# registered in AbiBridge.cpp abi_message_parsers(). Adding protocol #2 that
-# needs a NEW .tolk decl file = one line here (a new decl in an EXISTING
-# contract needs no CMake edit at all; see ton-abi/ABI-PROTOCOL-CHECKLIST.md).
+# PRODUCTION ABI parser pairs — compiled into mch-classify. Registration is a
+# separate explicit step in AbiBridge.cpp; the F1 pairs below are deliberately
+# linked but unregistered. Adding a NEW .tolk declaration file = one line here
+# (a new decl in an EXISTING contract needs no CMake edit at all; see
+# ton-abi/ABI-PROTOCOL-CHECKLIST.md).
 set(ABI_PROD_PAIRS
+    ${TON_ABI_DIR}/generated/jetton_gen.cpp
+    ${TON_ABI_DIR}/generated/multisig_gen.cpp
+    ${TON_ABI_DIR}/generated/pton_gen.cpp
+    ${TON_ABI_DIR}/generated/stonfi_gen.cpp
+    ${TON_ABI_DIR}/generated/dedust_gen.cpp
     # T12.2: DeDust CPMM V2 claim_reward family.
     ${TON_ABI_DIR}/generated/dedust_v2_gen.cpp
+    ${TON_ABI_DIR}/generated/coffee_gen.cpp
+    ${TON_ABI_DIR}/generated/coffee_staking_withdraw3_gen.cpp
+    ${TON_ABI_DIR}/generated/evaa_gen.cpp
+    ${TON_ABI_DIR}/generated/evaa_supply_forward_gen.cpp
+    ${TON_ABI_DIR}/generated/jvault_gen.cpp
+    ${TON_ABI_DIR}/generated/jvault_payload_gen.cpp
+    ${TON_ABI_DIR}/generated/subscriptions_gen.cpp
+    ${TON_ABI_DIR}/generated/tonco_gen.cpp
+    ${TON_ABI_DIR}/generated/teleitem_gen.cpp
+    ${TON_ABI_DIR}/generated/nft_sale_gen.cpp
+    ${TON_ABI_DIR}/generated/tonstakers_gen.cpp
+    ${TON_ABI_DIR}/generated/cocoon_gen.cpp
 )
 
 add_library(mch-classify STATIC

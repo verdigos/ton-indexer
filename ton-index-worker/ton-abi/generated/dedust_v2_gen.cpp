@@ -133,6 +133,318 @@ td::Result<AbiValue> PayoutMessage::to_abi_value() const {
   return r;
 }
 
+DedustV2PayNative DedustV2PayNative::create(CreateArgs args) {
+  DedustV2PayNative r;
+  r._query_id = std::move(args._query_id);
+  r.amount = std::move(args.amount);
+  r.payment_payload = std::move(args.payment_payload);
+  return r;
+}
+
+td::Result<DedustV2PayNative> DedustV2PayNative::from_slice(vm::CellSlice& cs) {
+  TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "DedustV2PayNative: ");
+  DedustV2PayNative r;
+  TRY_RESULT_PREFIX_ASSIGN(r._query_id, (load_bits(cs, 64)), "DedustV2PayNative._query_id: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.amount, (load_coins(cs)), "DedustV2PayNative.amount: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.payment_payload, (load_cell(cs)), "DedustV2PayNative.payment_payload: ");
+  return r;
+}
+
+td::Status DedustV2PayNative::store(vm::CellBuilder& cb) const {
+  TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
+  TRY_STATUS(store_bits(cb, *this->_query_id, 64));
+  TRY_STATUS(store_coins(cb, this->amount));
+  TRY_STATUS(store_cell(cb, this->payment_payload));
+  return td::Status::OK();
+}
+
+td::Result<AbiValue> DedustV2PayNative::to_abi_value() const {
+  AbiValue r = AbiValue::make_struct("DedustV2PayNative");
+  r.add_field("_query_id", ton_abi::gen::abi_v_bits(this->_query_id));
+  r.add_field("amount", ton_abi::gen::abi_v_int(this->amount));
+  r.add_field("payment_payload", ton_abi::gen::abi_v_cell(this->payment_payload));
+  return r;
+}
+
+DedustV2SwapEvent DedustV2SwapEvent::create(CreateArgs args) {
+  DedustV2SwapEvent r;
+  r._x_to_y = std::move(args._x_to_y);
+  r.amount_in = std::move(args.amount_in);
+  r.amount_out = std::move(args.amount_out);
+  return r;
+}
+
+td::Result<DedustV2SwapEvent> DedustV2SwapEvent::from_slice(vm::CellSlice& cs) {
+  TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "DedustV2SwapEvent: ");
+  DedustV2SwapEvent r;
+  TRY_RESULT_PREFIX_ASSIGN(r._x_to_y, (load_bits(cs, 1)), "DedustV2SwapEvent._x_to_y: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.amount_in, (load_coins(cs)), "DedustV2SwapEvent.amount_in: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.amount_out, (load_coins(cs)), "DedustV2SwapEvent.amount_out: ");
+  return r;
+}
+
+td::Status DedustV2SwapEvent::store(vm::CellBuilder& cb) const {
+  TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
+  TRY_STATUS(store_bits(cb, *this->_x_to_y, 1));
+  TRY_STATUS(store_coins(cb, this->amount_in));
+  TRY_STATUS(store_coins(cb, this->amount_out));
+  return td::Status::OK();
+}
+
+td::Result<AbiValue> DedustV2SwapEvent::to_abi_value() const {
+  AbiValue r = AbiValue::make_struct("DedustV2SwapEvent");
+  r.add_field("_x_to_y", ton_abi::gen::abi_v_bits(this->_x_to_y));
+  r.add_field("amount_in", ton_abi::gen::abi_v_int(this->amount_in));
+  r.add_field("amount_out", ton_abi::gen::abi_v_int(this->amount_out));
+  return r;
+}
+
+DedustV2PayoutPositionFees DedustV2PayoutPositionFees::create(CreateArgs args) {
+  DedustV2PayoutPositionFees r;
+  r.query_id = std::move(args.query_id);
+  r.x_fees = std::move(args.x_fees);
+  r.y_fees = std::move(args.y_fees);
+  r.owner = std::move(args.owner);
+  return r;
+}
+
+td::Result<DedustV2PayoutPositionFees> DedustV2PayoutPositionFees::from_slice(vm::CellSlice& cs) {
+  TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "DedustV2PayoutPositionFees: ");
+  DedustV2PayoutPositionFees r;
+  TRY_RESULT_PREFIX_ASSIGN(r.query_id, (load_uint64(cs, 64)), "DedustV2PayoutPositionFees.query_id: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.x_fees, (load_coins(cs)), "DedustV2PayoutPositionFees.x_fees: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.y_fees, (load_coins(cs)), "DedustV2PayoutPositionFees.y_fees: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.owner, (load_address_any(cs)), "DedustV2PayoutPositionFees.owner: ");
+  return r;
+}
+
+td::Status DedustV2PayoutPositionFees::store(vm::CellBuilder& cb) const {
+  TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
+  TRY_STATUS(store_uint64(cb, this->query_id, 64));
+  TRY_STATUS(store_coins(cb, this->x_fees));
+  TRY_STATUS(store_coins(cb, this->y_fees));
+  TRY_STATUS(store_address_any(cb, this->owner));
+  return td::Status::OK();
+}
+
+td::Result<AbiValue> DedustV2PayoutPositionFees::to_abi_value() const {
+  AbiValue r = AbiValue::make_struct("DedustV2PayoutPositionFees");
+  r.add_field("query_id", ton_abi::gen::abi_v_int(this->query_id));
+  r.add_field("x_fees", ton_abi::gen::abi_v_int(this->x_fees));
+  r.add_field("y_fees", ton_abi::gen::abi_v_int(this->y_fees));
+  r.add_field("owner", ton_abi::gen::abi_v_address(this->owner));
+  return r;
+}
+
+DedustV2Withdraw DedustV2Withdraw::create(CreateArgs args) {
+  DedustV2Withdraw r;
+  r._query_id = std::move(args._query_id);
+  r.liquidity = std::move(args.liquidity);
+  r._minimal_x_out = std::move(args._minimal_x_out);
+  r._minimal_y_out = std::move(args._minimal_y_out);
+  r.auto_claim_fees = std::move(args.auto_claim_fees);
+  r._payout_config = std::move(args._payout_config);
+  return r;
+}
+
+td::Result<DedustV2Withdraw> DedustV2Withdraw::from_slice(vm::CellSlice& cs) {
+  TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "DedustV2Withdraw: ");
+  DedustV2Withdraw r;
+  TRY_RESULT_PREFIX_ASSIGN(r._query_id, (load_bits(cs, 64)), "DedustV2Withdraw._query_id: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.liquidity, (load_coins(cs)), "DedustV2Withdraw.liquidity: ");
+  TRY_RESULT_PREFIX_ASSIGN(r._minimal_x_out, (load_coins(cs)), "DedustV2Withdraw._minimal_x_out: ");
+  TRY_RESULT_PREFIX_ASSIGN(r._minimal_y_out, (load_coins(cs)), "DedustV2Withdraw._minimal_y_out: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.auto_claim_fees, (load_bool(cs)), "DedustV2Withdraw.auto_claim_fees: ");
+  TRY_RESULT_PREFIX_ASSIGN(r._payout_config, (load_cell(cs)), "DedustV2Withdraw._payout_config: ");
+  return r;
+}
+
+td::Status DedustV2Withdraw::store(vm::CellBuilder& cb) const {
+  TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
+  TRY_STATUS(store_bits(cb, *this->_query_id, 64));
+  TRY_STATUS(store_coins(cb, this->liquidity));
+  TRY_STATUS(store_coins(cb, this->_minimal_x_out));
+  TRY_STATUS(store_coins(cb, this->_minimal_y_out));
+  TRY_STATUS(store_bool(cb, this->auto_claim_fees));
+  TRY_STATUS(store_cell(cb, this->_payout_config));
+  return td::Status::OK();
+}
+
+td::Result<AbiValue> DedustV2Withdraw::to_abi_value() const {
+  AbiValue r = AbiValue::make_struct("DedustV2Withdraw");
+  r.add_field("_query_id", ton_abi::gen::abi_v_bits(this->_query_id));
+  r.add_field("liquidity", ton_abi::gen::abi_v_int(this->liquidity));
+  r.add_field("_minimal_x_out", ton_abi::gen::abi_v_int(this->_minimal_x_out));
+  r.add_field("_minimal_y_out", ton_abi::gen::abi_v_int(this->_minimal_y_out));
+  r.add_field("auto_claim_fees", ton_abi::gen::abi_v_bool(this->auto_claim_fees));
+  r.add_field("_payout_config", ton_abi::gen::abi_v_cell(this->_payout_config));
+  return r;
+}
+
+DedustV2WithdrawalEvent DedustV2WithdrawalEvent::create(CreateArgs args) {
+  DedustV2WithdrawalEvent r;
+  r.liquidity = std::move(args.liquidity);
+  r._amount_x_out = std::move(args._amount_x_out);
+  r._amount_y_out = std::move(args._amount_y_out);
+  r._initiator = std::move(args._initiator);
+  r._recipient = std::move(args._recipient);
+  r._next_state = std::move(args._next_state);
+  return r;
+}
+
+td::Result<DedustV2WithdrawalEvent> DedustV2WithdrawalEvent::from_slice(vm::CellSlice& cs) {
+  TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "DedustV2WithdrawalEvent: ");
+  DedustV2WithdrawalEvent r;
+  TRY_RESULT_PREFIX_ASSIGN(r.liquidity, (load_coins(cs)), "DedustV2WithdrawalEvent.liquidity: ");
+  TRY_RESULT_PREFIX_ASSIGN(r._amount_x_out, (load_coins(cs)), "DedustV2WithdrawalEvent._amount_x_out: ");
+  TRY_RESULT_PREFIX_ASSIGN(r._amount_y_out, (load_coins(cs)), "DedustV2WithdrawalEvent._amount_y_out: ");
+  TRY_RESULT_PREFIX_ASSIGN(r._initiator, (load_address_any(cs)), "DedustV2WithdrawalEvent._initiator: ");
+  TRY_RESULT_PREFIX_ASSIGN(r._recipient, (load_address_any(cs)), "DedustV2WithdrawalEvent._recipient: ");
+  TRY_RESULT_PREFIX_ASSIGN(r._next_state, (load_cell(cs)), "DedustV2WithdrawalEvent._next_state: ");
+  return r;
+}
+
+td::Status DedustV2WithdrawalEvent::store(vm::CellBuilder& cb) const {
+  TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
+  TRY_STATUS(store_coins(cb, this->liquidity));
+  TRY_STATUS(store_coins(cb, this->_amount_x_out));
+  TRY_STATUS(store_coins(cb, this->_amount_y_out));
+  TRY_STATUS(store_address_any(cb, this->_initiator));
+  TRY_STATUS(store_address_any(cb, this->_recipient));
+  TRY_STATUS(store_cell(cb, this->_next_state));
+  return td::Status::OK();
+}
+
+td::Result<AbiValue> DedustV2WithdrawalEvent::to_abi_value() const {
+  AbiValue r = AbiValue::make_struct("DedustV2WithdrawalEvent");
+  r.add_field("liquidity", ton_abi::gen::abi_v_int(this->liquidity));
+  r.add_field("_amount_x_out", ton_abi::gen::abi_v_int(this->_amount_x_out));
+  r.add_field("_amount_y_out", ton_abi::gen::abi_v_int(this->_amount_y_out));
+  r.add_field("_initiator", ton_abi::gen::abi_v_address(this->_initiator));
+  r.add_field("_recipient", ton_abi::gen::abi_v_address(this->_recipient));
+  r.add_field("_next_state", ton_abi::gen::abi_v_cell(this->_next_state));
+  return r;
+}
+
+DedustV2CreditAsset DedustV2CreditAsset::create(CreateArgs args) {
+  DedustV2CreditAsset r;
+  r._query_id = std::move(args._query_id);
+  r.is_x = std::move(args.is_x);
+  r.amount = std::move(args.amount);
+  return r;
+}
+
+td::Result<DedustV2CreditAsset> DedustV2CreditAsset::from_slice(vm::CellSlice& cs) {
+  TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "DedustV2CreditAsset: ");
+  DedustV2CreditAsset r;
+  TRY_RESULT_PREFIX_ASSIGN(r._query_id, (load_bits(cs, 64)), "DedustV2CreditAsset._query_id: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.is_x, (load_bool(cs)), "DedustV2CreditAsset.is_x: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.amount, (load_coins(cs)), "DedustV2CreditAsset.amount: ");
+  return r;
+}
+
+td::Status DedustV2CreditAsset::store(vm::CellBuilder& cb) const {
+  TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
+  TRY_STATUS(store_bits(cb, *this->_query_id, 64));
+  TRY_STATUS(store_bool(cb, this->is_x));
+  TRY_STATUS(store_coins(cb, this->amount));
+  return td::Status::OK();
+}
+
+td::Result<AbiValue> DedustV2CreditAsset::to_abi_value() const {
+  AbiValue r = AbiValue::make_struct("DedustV2CreditAsset");
+  r.add_field("_query_id", ton_abi::gen::abi_v_bits(this->_query_id));
+  r.add_field("is_x", ton_abi::gen::abi_v_bool(this->is_x));
+  r.add_field("amount", ton_abi::gen::abi_v_int(this->amount));
+  return r;
+}
+
+DedustV2JoinLiquidity DedustV2JoinLiquidity::create(CreateArgs args) {
+  DedustV2JoinLiquidity r;
+  r._query_id = std::move(args._query_id);
+  r._config = std::move(args._config);
+  r.amount_x = std::move(args.amount_x);
+  r.amount_y = std::move(args.amount_y);
+  r.initiator = std::move(args.initiator);
+  return r;
+}
+
+td::Result<DedustV2JoinLiquidity> DedustV2JoinLiquidity::from_slice(vm::CellSlice& cs) {
+  TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "DedustV2JoinLiquidity: ");
+  DedustV2JoinLiquidity r;
+  TRY_RESULT_PREFIX_ASSIGN(r._query_id, (load_bits(cs, 64)), "DedustV2JoinLiquidity._query_id: ");
+  TRY_RESULT_PREFIX_ASSIGN(r._config, (load_cell(cs)), "DedustV2JoinLiquidity._config: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.amount_x, (load_coins(cs)), "DedustV2JoinLiquidity.amount_x: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.amount_y, (load_coins(cs)), "DedustV2JoinLiquidity.amount_y: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.initiator, (load_address_any(cs)), "DedustV2JoinLiquidity.initiator: ");
+  return r;
+}
+
+td::Status DedustV2JoinLiquidity::store(vm::CellBuilder& cb) const {
+  TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
+  TRY_STATUS(store_bits(cb, *this->_query_id, 64));
+  TRY_STATUS(store_cell(cb, this->_config));
+  TRY_STATUS(store_coins(cb, this->amount_x));
+  TRY_STATUS(store_coins(cb, this->amount_y));
+  TRY_STATUS(store_address_any(cb, this->initiator));
+  return td::Status::OK();
+}
+
+td::Result<AbiValue> DedustV2JoinLiquidity::to_abi_value() const {
+  AbiValue r = AbiValue::make_struct("DedustV2JoinLiquidity");
+  r.add_field("_query_id", ton_abi::gen::abi_v_bits(this->_query_id));
+  r.add_field("_config", ton_abi::gen::abi_v_cell(this->_config));
+  r.add_field("amount_x", ton_abi::gen::abi_v_int(this->amount_x));
+  r.add_field("amount_y", ton_abi::gen::abi_v_int(this->amount_y));
+  r.add_field("initiator", ton_abi::gen::abi_v_address(this->initiator));
+  return r;
+}
+
+DedustV2DepositEvent DedustV2DepositEvent::create(CreateArgs args) {
+  DedustV2DepositEvent r;
+  r.amount_x_in = std::move(args.amount_x_in);
+  r.amount_y_in = std::move(args.amount_y_in);
+  r.liquidity = std::move(args.liquidity);
+  r._initiator = std::move(args._initiator);
+  r._recipient = std::move(args._recipient);
+  r._next_state = std::move(args._next_state);
+  return r;
+}
+
+td::Result<DedustV2DepositEvent> DedustV2DepositEvent::from_slice(vm::CellSlice& cs) {
+  TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "DedustV2DepositEvent: ");
+  DedustV2DepositEvent r;
+  TRY_RESULT_PREFIX_ASSIGN(r.amount_x_in, (load_coins(cs)), "DedustV2DepositEvent.amount_x_in: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.amount_y_in, (load_coins(cs)), "DedustV2DepositEvent.amount_y_in: ");
+  TRY_RESULT_PREFIX_ASSIGN(r.liquidity, (load_coins(cs)), "DedustV2DepositEvent.liquidity: ");
+  TRY_RESULT_PREFIX_ASSIGN(r._initiator, (load_address_any(cs)), "DedustV2DepositEvent._initiator: ");
+  TRY_RESULT_PREFIX_ASSIGN(r._recipient, (load_address_any(cs)), "DedustV2DepositEvent._recipient: ");
+  TRY_RESULT_PREFIX_ASSIGN(r._next_state, (load_cell(cs)), "DedustV2DepositEvent._next_state: ");
+  return r;
+}
+
+td::Status DedustV2DepositEvent::store(vm::CellBuilder& cb) const {
+  TRY_STATUS(store_prefix(cb, PREFIX, PREFIX_LEN));
+  TRY_STATUS(store_coins(cb, this->amount_x_in));
+  TRY_STATUS(store_coins(cb, this->amount_y_in));
+  TRY_STATUS(store_coins(cb, this->liquidity));
+  TRY_STATUS(store_address_any(cb, this->_initiator));
+  TRY_STATUS(store_address_any(cb, this->_recipient));
+  TRY_STATUS(store_cell(cb, this->_next_state));
+  return td::Status::OK();
+}
+
+td::Result<AbiValue> DedustV2DepositEvent::to_abi_value() const {
+  AbiValue r = AbiValue::make_struct("DedustV2DepositEvent");
+  r.add_field("amount_x_in", ton_abi::gen::abi_v_int(this->amount_x_in));
+  r.add_field("amount_y_in", ton_abi::gen::abi_v_int(this->amount_y_in));
+  r.add_field("liquidity", ton_abi::gen::abi_v_int(this->liquidity));
+  r.add_field("_initiator", ton_abi::gen::abi_v_address(this->_initiator));
+  r.add_field("_recipient", ton_abi::gen::abi_v_address(this->_recipient));
+  r.add_field("_next_state", ton_abi::gen::abi_v_cell(this->_next_state));
+  return r;
+}
+
 Storage Storage::create(CreateArgs args) {
   Storage r;
   r.dummy = std::move(args.dummy);

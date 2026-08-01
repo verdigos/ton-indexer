@@ -42,7 +42,24 @@ async function compileTolk(absFileName) {
 // here. An explicit list (rather than a glob of abi/*.tolk) keeps scaffolding
 // files such as _TEMPLATE.tolk out of the compile+--check set.
 const PROD_DECLS = [
+    'jetton',
+    'multisig',
+    'pton',
+    'stonfi',
+    'dedust',
     'dedust_v2',
+    'coffee',
+    'coffee_staking_withdraw3',
+    'evaa',
+    'evaa_supply_forward',
+    'jvault',
+    'jvault_payload',
+    'subscriptions',
+    'tonco',
+    'teleitem',
+    'nft_sale',
+    'tonstakers',
+    'cocoon',
 ];
 
 async function main() {
