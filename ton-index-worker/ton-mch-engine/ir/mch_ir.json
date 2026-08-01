@@ -1793,7 +1793,7 @@
         },
         {
           "name": "out_jt",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "out_call",
@@ -1801,11 +1801,11 @@
         },
         {
           "name": "in_native",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "in_jt",
-          "card": "one"
+          "card": "opt"
         }
       ],
       "include_excess": true,
@@ -2767,11 +2767,11 @@
         },
         {
           "name": "jt_1",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "ton_1",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "payout_2",
@@ -2779,11 +2779,11 @@
         },
         {
           "name": "jt_2",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "ton_2",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "event",
@@ -3750,11 +3750,11 @@
         },
         {
           "name": "out_jetton",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "out_ton",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "peer",
@@ -3770,11 +3770,11 @@
         },
         {
           "name": "in_transfer",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "swap_request",
-          "card": "one"
+          "card": "opt"
         }
       ],
       "include_excess": true,
@@ -4009,11 +4009,11 @@
         },
         {
           "name": "ton_1",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "jt_1",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "req_2",
@@ -4021,11 +4021,11 @@
         },
         {
           "name": "ton_2",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "jt_2",
-          "card": "one"
+          "card": "opt"
         }
       ],
       "include_excess": true,
@@ -7166,11 +7166,11 @@
         },
         {
           "name": "refund_ton",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "refund_jt",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "swapped",
@@ -12988,19 +12988,19 @@
         },
         {
           "name": "coll_ok",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "jetton_payout",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "ton_payout",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "coll_fail",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "fail_excess",
@@ -13515,11 +13515,11 @@
         },
         {
           "name": "user",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "satisfied_success",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "finish",
@@ -13527,11 +13527,11 @@
         },
         {
           "name": "satisfied_fail",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "unsatisfied",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "immediate",
@@ -16770,11 +16770,11 @@
         },
         {
           "name": "accepted",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "rejected",
-          "card": "one"
+          "card": "opt"
         }
       ],
       "include_excess": true,
@@ -16969,11 +16969,11 @@
         },
         {
           "name": "accepted",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "rejected",
-          "card": "one"
+          "card": "opt"
         }
       ],
       "include_excess": true,
@@ -18236,11 +18236,11 @@
         },
         {
           "name": "lp_transfer",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "refund",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "notify_pton",
@@ -26304,11 +26304,11 @@
         },
         {
           "name": "immediate_withdrawal",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "delayed_withdrawal",
-          "card": "one"
+          "card": "opt"
         }
       ],
       "include_excess": true,
@@ -26980,11 +26980,11 @@
         },
         {
           "name": "in_jt",
-          "card": "one"
+          "card": "opt"
         },
         {
           "name": "in_native",
-          "card": "one"
+          "card": "opt"
         }
       ],
       "include_excess": true,

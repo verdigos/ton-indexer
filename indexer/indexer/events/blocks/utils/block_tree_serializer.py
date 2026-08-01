@@ -162,10 +162,8 @@ def _fill_call_contract_action(block: CallContractBlock, action: Action):
 
 def _fill_ton_transfer_action(block: TonTransferBlock, action: Action):
     action.value = block.value
-    action.source = block.data['source'].as_str()
-    if block.data['destination'] is None:
-        print("Something very wrong", block.event_nodes[0].message.trace_id)
-    action.destination = block.data['destination'].as_str()
+    action.source = block.data['source'].as_str() if block.data['source'] is not None else None
+    action.destination = block.data['destination'].as_str() if block.data['destination'] is not None else None
     content = block.data['comment'].replace("\u0000", "") if block.data['comment'] is not None else None
     action.ton_transfer_data = {'content': content, 'encrypted': block.data['encrypted']}
     extra_currencies = block.data['extra_currencies'] if 'extra_currencies' in block.data else None

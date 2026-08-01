@@ -582,7 +582,7 @@ def _resolve_matcher(
             captures[cap_name] = CaptureInfo(
                 name=cap_name,
                 head=o.node.head,
-                optional=o.under_maybe,
+                optional=o.under_maybe or bool(o.branch_path),
                 list_binding=o.under_recursive,
                 source=o.node,
             )

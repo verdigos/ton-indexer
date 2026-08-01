@@ -83,6 +83,19 @@ def test_duplicate_shape_directive_is_parse_error():
     assert any(d.code == "P011_DUPLICATE_DIRECTIVE" for d in ei.value.bag.items)
 
 
+@pytest.mark.parametrize("lines", [
+    "produces MB",
+    "build build_shaped",
+    "entry @a",
+    "include_excess true\n        include_excess false",
+    "include_bounces true\n        include_bounces false",
+])
+def test_duplicate_matcher_directive_is_parse_error(lines):
+    with pytest.raises(CompileError) as ei:
+        _parse(_src(lines))
+    assert any(d.code == "P011_DUPLICATE_DIRECTIVE" for d in ei.value.bag.items)
+
+
 def test_unknown_shaper_is_compile_error():
     reg = _registries()
     with pytest.raises(CompileError) as ei:

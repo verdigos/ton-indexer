@@ -211,11 +211,19 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
     priority: int | None = None
     include_excess  = True
     include_bounces = True
+    seen_include_directives: set[str] = set()
 
     while not s.at(TokenKind.EOF):
         s.skip_newlines()
         t = s.peek()
         if t.kind is TokenKind.KW_PRODUCES:
+            if produces is not None:
+                s.bag.error(
+                    "P011_DUPLICATE_DIRECTIVE",
+                    f"matcher {name_tok.text!r} declares more than one `produces` directive",
+                    t.span,
+                )
+                raise CompileError(s.bag)
             s.i += 1
             names = [s.eat(TokenKind.IDENT).text]
             while s.at(TokenKind.PIPE):
@@ -223,9 +231,23 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
                 names.append(s.eat(TokenKind.IDENT).text)
             produces = tuple(names)
         elif t.kind is TokenKind.KW_BUILD:
+            if build is not None:
+                s.bag.error(
+                    "P011_DUPLICATE_DIRECTIVE",
+                    f"matcher {name_tok.text!r} declares more than one `build` directive",
+                    t.span,
+                )
+                raise CompileError(s.bag)
             s.i += 1
             build = s.eat(TokenKind.IDENT).text
         elif t.kind is TokenKind.KW_ENTRY:
+            if entry is not None:
+                s.bag.error(
+                    "P011_DUPLICATE_DIRECTIVE",
+                    f"matcher {name_tok.text!r} declares more than one `entry` directive",
+                    t.span,
+                )
+                raise CompileError(s.bag)
             s.i += 1
             s.eat(TokenKind.AT)
             entry = s.eat_name().text
@@ -250,9 +272,25 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
             s.i += 1
             priority = int(s.eat(TokenKind.DEC).text)
         elif t.kind is TokenKind.KW_INCLUDE_EXCESS:
+            if "include_excess" in seen_include_directives:
+                s.bag.error(
+                    "P011_DUPLICATE_DIRECTIVE",
+                    f"matcher {name_tok.text!r} declares more than one `include_excess` directive",
+                    t.span,
+                )
+                raise CompileError(s.bag)
+            seen_include_directives.add("include_excess")
             s.i += 1
             include_excess = _parse_bool_literal(s)
         elif t.kind is TokenKind.KW_INCLUDE_BOUNCES:
+            if "include_bounces" in seen_include_directives:
+                s.bag.error(
+                    "P011_DUPLICATE_DIRECTIVE",
+                    f"matcher {name_tok.text!r} declares more than one `include_bounces` directive",
+                    t.span,
+                )
+                raise CompileError(s.bag)
+            seen_include_directives.add("include_bounces")
             s.i += 1
             include_bounces = _parse_bool_literal(s)
         else:
