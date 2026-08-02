@@ -155,10 +155,19 @@ EmuTraceView make_view(const ::Trace &trace) {
   return view;
 }
 
-EmuTraceSink decorate_sink(EmuInsertSink inner, td::actor::ActorId<EmuClassifierActor> classifier,
-                           std::shared_ptr<EmuGate> gate) {
+namespace {
+
+template <typename PromiseValue>
+std::function<void(::Trace, td::Promise<PromiseValue>, MeasurementPtr)> decorate_sink_impl(
+    std::function<void(
+        ::Trace,
+        EmuActionPayload,
+        td::Promise<PromiseValue>,
+        MeasurementPtr)> inner,
+    td::actor::ActorId<EmuClassifierActor> classifier,
+    std::shared_ptr<EmuGate> gate) {
   return [inner = std::move(inner), classifier, gate = std::move(gate)](
-             ::Trace trace, td::Promise<td::Unit> promise, MeasurementPtr measurement) {
+             ::Trace trace, td::Promise<PromiseValue> promise, MeasurementPtr measurement) {
     const std::int64_t now_us = emu_now_us();
     if (const char *shed = admit(*gate, now_us, classifier)) {
       // A shed has no view, so use the least-advanced finality.
@@ -196,6 +205,21 @@ EmuTraceSink decorate_sink(EmuInsertSink inner, td::actor::ActorId<EmuClassifier
     td::actor::send_closure(classifier, &EmuClassifierActor::classify, std::move(view),
                             std::move(P));
   };
+}
+
+}  // namespace
+
+EmuTraceSink decorate_sink(EmuInsertSink inner, td::actor::ActorId<EmuClassifierActor> classifier,
+                           std::shared_ptr<EmuGate> gate) {
+  return decorate_sink_impl<td::Unit>(std::move(inner), classifier, std::move(gate));
+}
+
+EmuConfirmedTraceSink decorate_confirmed_sink(
+    EmuConfirmedInsertSink inner,
+    td::actor::ActorId<EmuClassifierActor> classifier,
+    std::shared_ptr<EmuGate> gate) {
+  return decorate_sink_impl<ConfirmedTraceSnapshot>(
+      std::move(inner), classifier, std::move(gate));
 }
 
 }  // namespace mch

@@ -13,6 +13,9 @@
 #include <memory>
 
 struct Trace;  // Emulator ::Trace; mch::Trace also exists.
+struct ConfirmedTraceSnapshotData;
+using ConfirmedTraceSnapshot =
+    std::shared_ptr<const ConfirmedTraceSnapshotData>;
 
 namespace mch {
 
@@ -23,12 +26,24 @@ using EmuTraceSink = std::function<void(::Trace, td::Promise<td::Unit>, Measurem
 using EmuInsertSink =
     std::function<void(::Trace, EmuActionPayload, td::Promise<td::Unit>, MeasurementPtr)>;
 
+using EmuConfirmedTraceSink =
+    std::function<void(::Trace, td::Promise<ConfirmedTraceSnapshot>, MeasurementPtr)>;
+using EmuConfirmedInsertSink = std::function<void(
+    ::Trace,
+    EmuActionPayload,
+    td::Promise<ConfirmedTraceSnapshot>,
+    MeasurementPtr)>;
+
 // Copies references, PODs, and the cell anchor without loading cells.
 EmuTraceView make_view(const ::Trace &trace);
 
-// Classifies each emission before invoking the inner sink exactly once. Failure
-// paths carry an empty payload with an outcome marker.
+// Both decorators classify each emission before invoking the inner sink exactly
+// once. Failure paths carry an empty payload with an outcome marker.
 EmuTraceSink decorate_sink(EmuInsertSink inner, td::actor::ActorId<EmuClassifierActor> classifier,
                            std::shared_ptr<EmuGate> gate);
+EmuConfirmedTraceSink decorate_confirmed_sink(
+    EmuConfirmedInsertSink inner,
+    td::actor::ActorId<EmuClassifierActor> classifier,
+    std::shared_ptr<EmuGate> gate);
 
 }  // namespace mch

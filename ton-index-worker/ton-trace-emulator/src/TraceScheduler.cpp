@@ -775,9 +775,7 @@ void TraceEmulatorScheduler::process_confirmed_trace(
             block_id, trace.ext_in_msg_hash_norm);
     }
 
-    td::actor::send_closure(
-        insert_manager_,
-        &ITraceInsertManager::insert_confirmed,
+    insert_confirmed_trace_(
         std::move(trace),
         std::move(promise),
         std::move(measurement));

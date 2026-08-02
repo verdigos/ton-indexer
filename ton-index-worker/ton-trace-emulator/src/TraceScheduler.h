@@ -36,6 +36,10 @@ class TraceEmulatorScheduler : public td::actor::Actor {
     std::string working_dir_;
     std::string db_event_fifo_path_;
     std::function<void(Trace, td::Promise<td::Unit>, MeasurementPtr)> insert_trace_;
+    std::function<void(
+        Trace,
+        td::Promise<ConfirmedTraceSnapshot>,
+        MeasurementPtr)> insert_confirmed_trace_;
     td::actor::ActorOwn<DbEventListener> db_event_listener_;
 
     ton::BlockSeqno last_known_seqno_{0};
@@ -161,18 +165,32 @@ class TraceEmulatorScheduler : public td::actor::Actor {
         working_dir_(std::move(working_dir)), db_event_fifo_path_(std::move(db_event_fifo_path)),
         mch_shadow_(std::move(mch_shadow)) {
       health_redis_ = std::make_unique<sw::redis::Redis>(redis_dsn_);
-      auto insert_with = [insert_manager = insert_manager_.get()](Trace trace, mch::EmuActionPayload,
+      auto insert_with = [insert_manager = insert_manager_.get()](Trace trace, mch::EmuActionPayload payload,
                                                                   td::Promise<td::Unit> promise, MeasurementPtr measurement) {
-        td::actor::send_closure(insert_manager, &ITraceInsertManager::insert, std::move(trace), std::move(promise), measurement);
+        td::actor::send_closure(insert_manager, &ITraceInsertManager::insert, std::move(trace), std::move(payload),
+                                std::move(promise), std::move(measurement));
+      };
+      auto insert_confirmed_with = [insert_manager = insert_manager_.get()](
+                                       Trace trace, mch::EmuActionPayload payload,
+                                       td::Promise<ConfirmedTraceSnapshot> promise, MeasurementPtr measurement) {
+        td::actor::send_closure(insert_manager, &ITraceInsertManager::insert_confirmed, std::move(trace),
+                                std::move(payload), std::move(promise), std::move(measurement));
       };
       // Configure before start_up() copies the sink into listeners.
       if (mch_shadow_.prep) {
         mch_classifier_ = td::actor::create_actor<mch::EmuClassifierActor>("MchEmuClassifier", mch_shadow_);
         insert_trace_ = mch::decorate_sink(std::move(insert_with), mch_classifier_.get(),
                                            mch_shadow_.gate);
+        insert_confirmed_trace_ = mch::decorate_confirmed_sink(
+            std::move(insert_confirmed_with), mch_classifier_.get(), mch_shadow_.gate);
       } else {
         insert_trace_ = [insert_with](Trace trace, td::Promise<td::Unit> promise, MeasurementPtr measurement) {
           insert_with(std::move(trace), {}, std::move(promise), measurement);
+        };
+        insert_confirmed_trace_ = [insert_confirmed_with](
+                                      Trace trace, td::Promise<ConfirmedTraceSnapshot> promise,
+                                      MeasurementPtr measurement) {
+          insert_confirmed_with(std::move(trace), {}, std::move(promise), measurement);
         };
       }
       external_message_admission_ = std::make_shared<ExternalMessageAdmission>();

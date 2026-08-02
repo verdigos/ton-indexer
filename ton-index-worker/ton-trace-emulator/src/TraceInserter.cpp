@@ -300,6 +300,7 @@ struct InsertCompletion {
 
 struct InsertRequest {
     Trace trace;
+    mch::EmuActionPayload payload;
     InsertCompletion completion;
     MeasurementPtr measurement;
     td::Timer timer;
@@ -1372,10 +1373,12 @@ void RedisInsertManager::update_lifecycle(const std::string& trace_key) {
 }
 
 void RedisInsertManager::insert(Trace trace,
+                                mch::EmuActionPayload payload,
                                 td::Promise<td::Unit> promise,
                                 MeasurementPtr measurement) {
     insert_impl(
         std::move(trace),
+        std::move(payload),
         false,
         std::move(promise),
         {},
@@ -1384,10 +1387,12 @@ void RedisInsertManager::insert(Trace trace,
 
 void RedisInsertManager::insert_confirmed(
     Trace trace,
+    mch::EmuActionPayload payload,
     td::Promise<ConfirmedTraceSnapshot> promise,
     MeasurementPtr measurement) {
     insert_impl(
         std::move(trace),
+        std::move(payload),
         true,
         {},
         std::move(promise),
@@ -1396,6 +1401,7 @@ void RedisInsertManager::insert_confirmed(
 
 void RedisInsertManager::insert_impl(
     Trace trace,
+    mch::EmuActionPayload payload,
     bool confirmed,
     td::Promise<td::Unit> regular_promise,
     td::Promise<ConfirmedTraceSnapshot> confirmed_promise,
@@ -1443,6 +1449,7 @@ void RedisInsertManager::insert_impl(
     }
     slot.queued.push_back(InsertRequest{
         .trace = std::move(trace),
+        .payload = std::move(payload),
         .completion = std::move(completion),
         .measurement = std::move(measurement),
         .timer = td::Timer(),
