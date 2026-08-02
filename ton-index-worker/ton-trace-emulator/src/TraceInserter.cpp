@@ -22,6 +22,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -187,6 +188,9 @@ struct AcceptedNode {
 using TraceMetadata = std::map<std::string, std::string>;
 
 struct ActionState {
+    // Opaque, cell-free action data retained for confirmed promotion.
+    std::optional<std::string> blob;
+    std::optional<std::string> classify_state;
     // Finality of the last *blob-bearing* write. nullopt means no blob has ever
     // been written for this trace, so the finality guard passes unconditionally.
     std::optional<std::uint8_t> blob_finality;
@@ -609,6 +613,7 @@ PreparedActionUpdate prepare_action_update(
     }
 
     prepared.fields_to_set.emplace_back(kActionsStateField, payload.state);
+    prepared.state.classify_state = payload.state;
     if (payload.actions_blob.empty()) {
         return prepared;
     }
@@ -616,6 +621,7 @@ PreparedActionUpdate prepare_action_update(
     prepared.fields_to_set.emplace_back(kActionsField, payload.actions_blob);
     prepared.fields_to_set.emplace_back(
         kActionsFinalityField, std::to_string(static_cast<int>(payload.finality)));
+    prepared.state.blob = payload.actions_blob;
 
     std::vector<TraceStateIndexRef> resulting_refs;
     resulting_refs.reserve(payload.aai.size());
@@ -639,6 +645,93 @@ PreparedActionUpdate prepare_action_update(
                         std::back_inserter(prepared.added_index_refs));
     prepared.state.blob_finality = payload.finality;
     prepared.state.aai_refs = std::move(resulting_refs);
+    return prepared;
+}
+
+td::Result<std::string> rewrite_actions_finality(
+    std::string_view blob,
+    std::uint8_t finality) {
+    try {
+        auto unpacked = msgpack::unpack(blob.data(), blob.size());
+        const auto& actions = unpacked.get();
+        if (actions.type != msgpack::type::ARRAY) {
+            return td::Status::Error("Actions payload is not a msgpack array");
+        }
+
+        for (std::uint32_t row_index = 0;
+             row_index < actions.via.array.size;
+             ++row_index) {
+            auto& row = actions.via.array.ptr[row_index];
+            if (row.type != msgpack::type::MAP) {
+                return td::Status::Error(
+                    "Actions payload row is not a msgpack map");
+            }
+
+            bool found_finality = false;
+            for (std::uint32_t field_index = 0;
+                 field_index < row.via.map.size;
+                 ++field_index) {
+                auto& field = row.via.map.ptr[field_index];
+                if (field.key.type != msgpack::type::STR ||
+                    std::string_view(field.key.via.str.ptr,
+                                     field.key.via.str.size) != "finality") {
+                    continue;
+                }
+                if (field.val.type != msgpack::type::POSITIVE_INTEGER &&
+                    field.val.type != msgpack::type::NEGATIVE_INTEGER) {
+                    return td::Status::Error(
+                        "Actions payload finality is not a msgpack integer");
+                }
+                field.val = msgpack::object(finality);
+                found_finality = true;
+            }
+            if (!found_finality) {
+                return td::Status::Error(
+                    "Actions payload row has no finality field");
+            }
+        }
+
+        std::stringstream buffer;
+        msgpack::pack(buffer, actions);
+        return buffer.str();
+    } catch (const std::exception& error) {
+        return td::Status::Error(
+            "Failed to rewrite actions finality: " +
+            std::string(error.what()));
+    }
+}
+
+struct PreparedActionPromotion {
+    std::vector<std::pair<std::string, std::string>> fields_to_set;
+};
+
+td::Result<PreparedActionPromotion> prepare_promoted_action_update(
+    const ActionState& current,
+    ActionState& next,
+    std::uint8_t finality,
+    const std::string& trace_key) {
+    PreparedActionPromotion prepared;
+    if (!current.blob_finality) {
+        return prepared;
+    }
+    if (*current.blob_finality > finality) {
+        LOG(DEBUG) << "skipping stale promoted actions write for " << trace_key
+                   << ": stored finality "
+                   << static_cast<int>(*current.blob_finality)
+                   << " > promoted trace finality "
+                   << static_cast<int>(finality);
+        return prepared;
+    }
+    if (!current.blob) {
+        return prepared;
+    }
+
+    TRY_RESULT(rewritten, rewrite_actions_finality(*current.blob, finality));
+    prepared.fields_to_set.emplace_back(kActionsField, rewritten);
+    prepared.fields_to_set.emplace_back(
+        kActionsFinalityField, std::to_string(static_cast<int>(finality)));
+    next.blob = std::move(rewritten);
+    next.blob_finality = finality;
     return prepared;
 }
 
@@ -1089,6 +1182,13 @@ td::Result<PreparedTraceUpdate> prepare_confirmed_promotion(
         }
     }
 
+    const auto promoted_finality = trace_finality(prepared.next_trace);
+    TRY_RESULT(action_update,
+               prepare_promoted_action_update(current.actions,
+                                              prepared.next_trace.actions,
+                                              promoted_finality,
+                                              trace_key));
+
     auto& plan = prepared.redis;
     plan.trace_key = trace_key;
     plan.raw_external_message_hash =
@@ -1102,6 +1202,13 @@ td::Result<PreparedTraceUpdate> prepare_confirmed_promotion(
     if (materialize_full_state) {
         TRY_STATUS(append_full_trace_state(
             plan, prepared.next_trace));
+        if (current.actions.classify_state) {
+            plan.fields_to_set.emplace_back(
+                kActionsStateField, *current.actions.classify_state);
+        }
+        plan.indexes_to_add.insert(plan.indexes_to_add.end(),
+                                   current.actions.aai_refs.begin(),
+                                   current.actions.aai_refs.end());
     } else {
         plan.node_fields_to_delete = node_delta.removed_node_keys;
         plan.indexes_to_remove = node_delta.removed_index_refs;
@@ -1119,6 +1226,9 @@ td::Result<PreparedTraceUpdate> prepare_confirmed_promotion(
                 std::to_string(prepared.next_trace.update_seq));
         }
     }
+    plan.fields_to_set.insert(plan.fields_to_set.end(),
+                              action_update.fields_to_set.begin(),
+                              action_update.fields_to_set.end());
 
     TRY_STATUS(append_promoted_account_states(plan, cached));
     append_promoted_publications(
