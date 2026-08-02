@@ -358,6 +358,3 @@ add_test(NAME mch_ir_equivalence
     COMMAND "${CMAKE_COMMAND}" -E compare_files
             "${MCH_GENERATED_IR}" "${MCH_GENERATED_IR_SECOND}")
 
-if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/devtools/CMakeLists.txt)
-    add_subdirectory(devtools)  # local-only dev engine + tools (devtools overlay)
-endif()
