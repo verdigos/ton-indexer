@@ -11,13 +11,11 @@
 
 namespace mch {
 
+// Source of truth also consumed by the local dev-engine's
+// --actions-msgpack-out fixture regeneration path.
+std::string wire_fixture_bytes();
+
 // Returns 0 on all-pass, 1 on any failure.
 int run_action_msgpack_test();
-
-// --actions-msgpack-out: regenerates the cross-language wire fixture the Go
-// round-trip test consumes (ton-index-go/index/emulated/testdata/). The bytes
-// are the ones test_wire_fixture asserts on, so the two halves of the contract
-// cannot drift. Returns 0 on success.
-int write_action_msgpack_fixture(const std::string &path);
 
 }  // namespace mch

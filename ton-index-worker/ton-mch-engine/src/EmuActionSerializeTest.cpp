@@ -23,7 +23,6 @@
 
 #include <cstdio>
 #include <cstring>
-#include <fstream>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -475,6 +474,8 @@ void test_determinism() {
 // bytes. `--actions-msgpack-out <path>` regenerates the committed fixture; a
 // C++-side mirror of Go's expectations is strictly weaker than running Go's own
 // decoder over it, because only the real decoder knows its struct field types.
+}  // namespace
+
 Action wire_fixture_action() {
   Action a = base_action();
   a.type = "jetton_transfer";
@@ -678,6 +679,8 @@ std::string wire_fixture_bytes() {
   return serialize_actions({wire_fixture_action()},
                            make_view({EmuFinality::confirmed, EmuFinality::finalized}));
 }
+
+namespace {
 
 // The C++ half of G2: the fixture must at least decode and carry the types the
 // Go test then checks against real struct fields.
@@ -1310,23 +1313,6 @@ int run_action_msgpack_test() {
   test_actions_write_guard();
   std::printf("ACTIONS-MSGPACK-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
-}
-
-int write_action_msgpack_fixture(const std::string &path) {
-  const std::string bytes = wire_fixture_bytes();
-  std::ofstream out(path, std::ios::binary | std::ios::trunc);
-  if (!out) {
-    std::fprintf(stderr, "cannot open %s for writing\n", path.c_str());
-    return 1;
-  }
-  out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-  out.close();
-  if (!out) {
-    std::fprintf(stderr, "write to %s failed\n", path.c_str());
-    return 1;
-  }
-  std::printf("wrote %zu bytes to %s\n", bytes.size(), path.c_str());
-  return 0;
 }
 
 }  // namespace mch

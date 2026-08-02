@@ -60,9 +60,9 @@ sha, which catches a half-finished regeneration.
 ## Running against a different artifact
 
 Every mode runs the tables COMPILED INTO the binary, so "running another
-artifact" means building against it. `-I <path>` still parses on the CLI (the
-gate scripts pass it) but is ignored with a warning. Use the **testbed
-artifact** option (`-DMCH_TESTBED_IR=<path/to/artifact.json>` cache var):
+artifact" means building against it. The engine CLIs do not accept `-I`; use
+the **testbed artifact** option
+(`-DMCH_TESTBED_IR=<path/to/artifact.json>` cache variable):
 
 The classify tables (matchers + builds + wheres) are generated from that
 document instead, under the SAME symbols — swapping the input is all the knob

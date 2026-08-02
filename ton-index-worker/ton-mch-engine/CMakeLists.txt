@@ -103,13 +103,6 @@ else()
 endif()
 
 add_custom_command(
-    OUTPUT ${MCH_GEN_DIR}/vectors_generated.cpp
-    COMMAND mch-codegen --vectors ${CMAKE_CURRENT_SOURCE_DIR}/ir/expr_vectors.json
-            -o ${MCH_GEN_DIR}/vectors_generated.cpp
-    DEPENDS mch-codegen ${CMAKE_CURRENT_SOURCE_DIR}/ir/expr_vectors.json
-    COMMENT "Generate MCH expression conformance functions (mch-codegen --vectors)"
-)
-add_custom_command(
     OUTPUT ${MCH_GEN_DIR}/wheres_ir_generated.cpp
     COMMAND mch-codegen --wheres ${MCH_CLASSIFY_ARTIFACT}
             --suffix ir -o ${MCH_GEN_DIR}/wheres_ir_generated.cpp
@@ -130,14 +123,6 @@ add_custom_command(
     DEPENDS mch-codegen ${MCH_CLASSIFY_ARTIFACT}
     COMMENT "Generate the MCH matcher table from the IR artifact (mch-codegen --matchers)"
 )
-add_custom_command(
-    OUTPUT ${MCH_GEN_DIR}/builds_vectors_generated.cpp
-    COMMAND mch-codegen --builds ${CMAKE_CURRENT_SOURCE_DIR}/ir/build_vectors.json
-            --suffix vectors -o ${MCH_GEN_DIR}/builds_vectors_generated.cpp
-    DEPENDS mch-codegen ${CMAKE_CURRENT_SOURCE_DIR}/ir/build_vectors.json
-    COMMENT "Generate MCH build-program functions from the build vectors (mch-codegen --builds)"
-)
-
 # TL-B jetton-family parsers from tlb/mch-msgs.tlb via tlbc (same build-tree
 # discipline as the mch-codegen outputs above).
 set(MCH_MSGS_TLB
@@ -152,25 +137,17 @@ add_custom_command(
     DEPENDS tlbc ${CMAKE_CURRENT_SOURCE_DIR}/tlb/mch-msgs.tlb
 )
 
-# The generated tables split by who may link them. PRODUCT: the matcher, build
-# and where tables the classify loop runs, plus the TL-B parsers. TEST: the
-# conformance-vector tables — their gen_* symbols are
-# referenced only from the harness runners (VectorRunner / BuildVectorRunner), so
-# they belong in mch-fixtures, not in the lib ton-index-postgres links
-# (python-parity-audit §5.7 H3).
+# The generated matcher, build and where tables are linked by the classify loop;
+# the generated TL-B parsers are linked by the retained hand parser registry.
 set(MCH_GENERATED_SOURCES
     ${MCH_GEN_DIR}/matchers_ir_generated.cpp
     ${MCH_GEN_DIR}/builds_ir_generated.cpp
     ${MCH_GEN_DIR}/wheres_ir_generated.cpp
     ${MCH_GEN_DIR}/mch-msgs-tlb.cpp
 )
-set(MCH_GENERATED_TEST_SOURCES
-    ${MCH_GEN_DIR}/vectors_generated.cpp
-    ${MCH_GEN_DIR}/builds_vectors_generated.cpp
-)
 add_custom_target(mch_generate_sources
     DEPENDS ${MCH_GENERATED_IR} ${MCH_GENERATED_IR_SECOND}
-            ${MCH_GENERATED_SOURCES} ${MCH_GENERATED_TEST_SOURCES}
+            ${MCH_GENERATED_SOURCES}
             ${MCH_GEN_DIR}/mch-msgs-tlb.h)
 
 # --- mch-classify: the classification CORE static library (Phase G step 3,
@@ -274,8 +251,8 @@ add_dependencies(mch-classify mch_generate_sources)
 
 # --- mch-fixtures: the TEST-ONLY static lib (python-parity-audit §5.1).
 #
-# These sources exist to serve the .lz4 fixture corpus and the conformance
-# vectors. They must NEVER reach mch-classify — and therefore never reach
+# These sources serve the .lz4 fixture corpus. They must NEVER reach
+# mch-classify — and therefore never reach
 # ton-index-postgres, index-engine-core or ton-trace-emulator, all of which
 # link the classify lib. Same discipline as ABI_BRIDGE_TEST_FIXTURES below:
 # fixture sources named in one variable, referenced by exactly one target,
@@ -286,16 +263,8 @@ add_dependencies(mch-classify mch_generate_sources)
 set(MCH_FIXTURE_SOURCES
     src/fixtures/FixtureLoader.cpp
     src/fixtures/FixtureLookupSource.cpp
-    # Dump renderers + the vector comparator: only the A/B gates render a Value,
-    # a block key or a cellhash, or compare two Values structurally. See the
-    # header for the full argument.
+    # Dump renderers used by the action corpus and local A/B gates.
     src/fixtures/Render.cpp
-    # The expression INTERPRETER. It moved here when the generated where table
-    # became the walker's only evaluator: its sole remaining caller is the
-    # mch_expr_vectors ctest, which runs it as the differential reference for the
-    # emitter (mch_expr_vectors_gen runs the same vectors through generated code).
-    src/fixtures/ExprEval.cpp
-    ${MCH_GENERATED_TEST_SOURCES}
 )
 
 # lz4: Windows/vcpkg ships an lz4 CONFIG package (lz4::lz4). Linux builds have no
@@ -342,7 +311,7 @@ add_library(mch-emu-bridge STATIC src/emu/EmuShadow.cpp)
 target_compile_features(mch-emu-bridge PUBLIC cxx_std_20)
 target_link_libraries(mch-emu-bridge PUBLIC mch-emu ton-trace-emulator-core)
 
-# The CLI/dev tool: harness TUs (dump/runners/main) over the core lib.
+# The upstream CLI/gate executable over the product boundary.
 # W12 bridge self-test (--abi-bridge-test): committed ton-abi generated fixture
 # pairs compiled into the HARNESS EXE ONLY (never the mch-classify prod lib) so
 # the trampoline+adapter run against real generated structs; these are UNDER TEST,
@@ -356,16 +325,7 @@ set(ABI_BRIDGE_TEST_FIXTURES
 
 add_executable(ton-mch-engine
     src/main.cpp
-    src/VectorRunner.cpp
-    src/MatchRunner.cpp
-    src/BuildVectorRunner.cpp
-    src/BuildSmoke.cpp
     src/Classify.cpp
-    src/ShapeTest.cpp
-    src/DexRecordsTest.cpp
-    src/ParseDump.cpp
-    src/SchemaGate.cpp
-    src/Surface.cpp
     src/AbiBridgeTest.cpp
     src/EmuActionSerializeTest.cpp
     src/EmuCelldbLookupTest.cpp
@@ -379,19 +339,6 @@ target_compile_features(ton-mch-engine PRIVATE cxx_std_20)
 target_link_libraries(ton-mch-engine mch-fixtures mch-classify mch-emu)
 add_dependencies(ton-mch-engine mch_generate_sources)
 
-set(MCH_GENERATED_SURFACE "${MCH_GEN_DIR}/cpp_surface.json")
-add_custom_command(
-    OUTPUT "${MCH_GENERATED_SURFACE}"
-    COMMAND "${CMAKE_COMMAND}"
-            "-DMCH_ENGINE_EXECUTABLE=$<TARGET_FILE:ton-mch-engine>"
-            "-DMCH_SURFACE_OUTPUT=${MCH_GENERATED_SURFACE}"
-            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CaptureCppSurface.cmake"
-    DEPENDS ton-mch-engine "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CaptureCppSurface.cmake"
-    COMMENT "Generate C++ registry surface for the MCH twins"
-    VERBATIM
-)
-add_custom_target(mch_generate_surface DEPENDS "${MCH_GENERATED_SURFACE}")
-
 # Deliberately NOT install()ed: this is the gate/dev harness, not a product
 # binary, and it has no place in the production bin dir
 # (python-parity-audit §5.7 H35).
@@ -401,18 +348,6 @@ add_custom_target(mch_generate_surface DEPENDS "${MCH_GENERATED_SURFACE}")
 # The differential A/B gates (parse-dump / classify vs the Python twins) stay
 # OUT — they need the fixture corpus and Python and are run from the harness.
 enable_testing()
-add_test(NAME mch_expr_vectors
-    COMMAND ton-mch-engine --vectors ${CMAKE_CURRENT_SOURCE_DIR}/ir/expr_vectors.json)
-add_test(NAME mch_expr_vectors_gen
-    COMMAND ton-mch-engine --vectors-gen ${CMAKE_CURRENT_SOURCE_DIR}/ir/expr_vectors.json)
-add_test(NAME mch_build_vectors
-    COMMAND ton-mch-engine --build-vectors ${CMAKE_CURRENT_SOURCE_DIR}/ir/build_vectors.json)
-add_test(NAME mch_shape_test
-    COMMAND ton-mch-engine --shape-test)
-add_test(NAME mch_dexrecords
-    COMMAND ton-mch-engine --dexrecords-test)
-add_test(NAME mch_codegen_selftest
-    COMMAND mch-codegen --selftest)
 add_test(NAME mch_abi_bridge
     COMMAND ton-mch-engine --abi-bridge-test)
 add_test(NAME mch_actions_msgpack
@@ -422,3 +357,7 @@ add_test(NAME mch_celldb_tier2
 add_test(NAME mch_ir_equivalence
     COMMAND "${CMAKE_COMMAND}" -E compare_files
             "${MCH_GENERATED_IR}" "${MCH_GENERATED_IR_SECOND}")
+
+if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/devtools/CMakeLists.txt)
+    add_subdirectory(devtools)  # local-only dev engine + tools (devtools overlay)
+endif()

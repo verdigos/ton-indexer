@@ -12,7 +12,7 @@ import (
 //
 // Generate testdata/actions_wire.msgpack with:
 //
-//	ton-mch-engine --actions-msgpack-out ton-index-go/index/emulated/testdata/actions_wire.msgpack
+//	ton-mch-dev-engine --actions-msgpack-out ton-index-go/index/emulated/testdata/actions_wire.msgpack
 //
 // The fixture covers every writer wire type. Regenerate it when
 // wire_fixture_action changes.
