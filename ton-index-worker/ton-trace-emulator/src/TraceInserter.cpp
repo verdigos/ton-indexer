@@ -62,6 +62,7 @@ struct RedisWritePlan {
 
 struct RedisWriteBatch {
     std::vector<RedisWritePlan> plans;
+    bool data_phase_completed{false};
 
     void discard_trace_publications() {
         for (auto& plan : plans) {
@@ -405,6 +406,11 @@ enum class InFlightKind {
     Cleanup,
 };
 
+constexpr bool cleanup_is_terminal(TraceCleanupMode mode) {
+    return mode == TraceCleanupMode::Invalidation ||
+           mode == TraceCleanupMode::Oversized;
+}
+
 struct InFlightWork {
     InFlightKind kind{InFlightKind::Update};
     ActiveTrace next_trace;
@@ -412,6 +418,12 @@ struct InFlightWork {
     TraceCleanupMode cleanup_mode{TraceCleanupMode::Retention};
     bool contains_real_root{false};
     std::optional<CachedConfirmedTrace> confirmed_trace;
+};
+
+struct CleanupRetry {
+    RedisWriteBatch batch;
+    TraceCleanupMode mode{TraceCleanupMode::Retention};
+    bool ready{false};
 };
 
 struct TraceSlot {
@@ -423,11 +435,55 @@ struct TraceSlot {
     std::optional<InFlightWork> in_flight;
     bool scheduled{false};
     bool cleanup_requested{false};
+    std::optional<CleanupRetry> cleanup_retry;
 
     TraceLifecycle lifecycle{TraceLifecycle::UnknownRoot};
     td::Timestamp deadline;
     TraceCleanupMode cleanup_mode{TraceCleanupMode::Retention};
 };
+
+bool terminal_cleanup_pending(const TraceSlot& slot) {
+    if (cleanup_is_terminal(slot.cleanup_mode)) {
+        return true;
+    }
+    if (slot.in_flight &&
+        slot.in_flight->kind == InFlightKind::Cleanup &&
+        cleanup_is_terminal(slot.in_flight->cleanup_mode)) {
+        return true;
+    }
+    return slot.cleanup_retry &&
+           cleanup_is_terminal(slot.cleanup_retry->mode);
+}
+
+bool trace_work_is_ready(const TraceSlot& slot) {
+    if (slot.cleanup_retry && !slot.cleanup_retry->ready) {
+        return false;
+    }
+    return slot.cleanup_retry || slot.cleanup_requested ||
+           !slot.queued.empty();
+}
+
+void remember_failed_cleanup(TraceSlot& slot,
+                             RedisWriteBatch batch,
+                             TraceCleanupMode mode) {
+    slot.cleanup_retry.emplace(CleanupRetry{
+        .batch = std::move(batch),
+        .mode = mode,
+    });
+    slot.deadline = td::Timestamp::in(kCleanupRetrySeconds);
+}
+
+std::deque<TraceRequest> resolve_completed_cleanup_queue(
+    TraceSlot& slot,
+    std::size_t& queued_updates,
+    TraceCleanupMode completed_mode) {
+    auto queued = std::move(slot.queued);
+    if (cleanup_is_terminal(completed_mode)) {
+        queued = resolve_terminal_queue(
+            std::move(queued), queued_updates, completed_mode);
+    }
+    return queued;
+}
 
 void real_root_applied(TraceSlot& slot) {
     if (slot.cleanup_mode != TraceCleanupMode::ReplacedConfirmedTimeout) {
@@ -1276,11 +1332,6 @@ RedisWriteBatch build_cleanup_batch(const std::string& trace_key,
     return RedisWriteBatch{.plans = {std::move(plan)}};
 }
 
-constexpr bool cleanup_is_terminal(TraceCleanupMode mode) {
-    return mode == TraceCleanupMode::Invalidation ||
-           mode == TraceCleanupMode::Oversized;
-}
-
 constexpr bool cleanup_waits_for_current_updates(TraceCleanupMode mode) {
     return !cleanup_is_terminal(mode);
 }
@@ -1368,6 +1419,26 @@ void execute_pipeline(sw::redis::Pipeline& pipeline) {
     }
 }
 
+template <typename ExecuteData, typename ExecutePublications>
+td::Status execute_redis_write(RedisWriteBatch& batch,
+                               ExecuteData&& execute_data,
+                               ExecutePublications&& execute_publications) {
+    try {
+        if (!batch.data_phase_completed) {
+            execute_data();
+            batch.data_phase_completed = true;
+        }
+        execute_publications();
+        return td::Status::OK();
+    } catch (const std::exception& error) {
+        return td::Status::Error("Failed to write trace to Redis: " +
+                                 std::string(error.what()));
+    } catch (...) {
+        return td::Status::Error(
+            "Failed to write trace to Redis: unknown error");
+    }
+}
+
 class RedisTraceWriter : public td::actor::Actor {
 public:
     using Completion = std::function<void(td::Status, RedisWriteBatch)>;
@@ -1389,26 +1460,23 @@ private:
     td::Timer timer_;
 
     void start_up() override {
-        auto status = td::Status::OK();
-        try {
-            for (const auto& plan : batch_.plans) {
-                append_redis_data_commands(pipeline_, plan);
-            }
-            execute_pipeline(pipeline_);
-
-            // Trace notifications use a second phase, so no client can
-            // observe a trace hint before every data command has succeeded.
-            // Account-state hints stay atomic with their HSET in the Lua
-            // command above.
-            if (append_redis_publications(pipeline_, batch_)) {
+        auto status = execute_redis_write(
+            batch_,
+            [this] {
+                for (const auto& plan : batch_.plans) {
+                    append_redis_data_commands(pipeline_, plan);
+                }
                 execute_pipeline(pipeline_);
-            }
-        } catch (const std::exception& error) {
-            status = td::Status::Error("Failed to write trace to Redis: " +
-                                       std::string(error.what()));
-        } catch (...) {
-            status = td::Status::Error("Failed to write trace to Redis: unknown error");
-        }
+            },
+            [this] {
+                // Trace notifications use a second phase, so no client can
+                // observe a trace hint before every data command has succeeded.
+                // Account-state hints stay atomic with their HSET in the Lua
+                // command above.
+                if (append_redis_publications(pipeline_, batch_)) {
+                    execute_pipeline(pipeline_);
+                }
+            });
         g_statistics.record_time(INSERT_TRACE, timer_.elapsed() * 1e3);
         completion_(std::move(status), std::move(batch_));
         stop();
@@ -1476,7 +1544,7 @@ void RedisInsertManager::schedule_trace(const std::string& trace_key) {
     }
     auto& slot = it->second;
     if (slot.scheduled || slot.in_flight ||
-        (slot.queued.empty() && !slot.cleanup_requested)) {
+        !trace_work_is_ready(slot)) {
         return;
     }
     slot.scheduled = true;
@@ -1485,7 +1553,15 @@ void RedisInsertManager::schedule_trace(const std::string& trace_key) {
 
 void RedisInsertManager::request_cleanup(const std::string& trace_key,
                                          TraceCleanupMode mode) {
-    auto& slot = impl_->traces[trace_key];
+    auto slot_it = impl_->traces.find(trace_key);
+    if (slot_it == impl_->traces.end()) {
+        // Choose the report's skip option for unknown keys: without an
+        // authoritative slot there is no complete index coverage, so this path
+        // must not mutate Redis. This avoids the discovery round trip, at the
+        // tradeoff that genuinely orphaned Redis state is not cleaned here.
+        return;
+    }
+    auto& slot = slot_it->second;
 
     if (slot.current->root_account) {
         impl_->candidates.forget(*slot.current->root_account, trace_key);
@@ -1506,6 +1582,9 @@ void RedisInsertManager::update_lifecycle(const std::string& trace_key) {
         return;
     }
     auto& slot = it->second;
+    if (slot.cleanup_retry) {
+        return;
+    }
     const auto previous_lifecycle = slot.lifecycle;
     const auto root_node =
         metadata_value(*slot.current, "root_node")
@@ -1629,7 +1708,7 @@ void RedisInsertManager::insert_impl(
     const bool real_root = contains_real_root(trace);
     auto slot_it = impl_->traces.find(trace_key);
     if (slot_it != impl_->traces.end() &&
-        cleanup_is_terminal(slot_it->second.cleanup_mode)) {
+        terminal_cleanup_pending(slot_it->second)) {
         if (confirmed) {
             completion.set_error(td::Status::Error(
                 "Confirmed trace is already being invalidated"));
@@ -1676,14 +1755,15 @@ void RedisInsertManager::start_next_writes() {
         }
         auto& slot = slot_it->second;
         slot.scheduled = false;
-        if (slot.in_flight ||
-            (slot.queued.empty() && !slot.cleanup_requested)) {
+        if (slot.in_flight || !trace_work_is_ready(slot)) {
             continue;
         }
 
-        if (slot.cleanup_requested) {
-            auto batch =
-                build_cleanup_batch(trace_key, slot, slot.cleanup_mode);
+        if (slot.cleanup_retry || slot.cleanup_requested) {
+            const bool retrying_cleanup = slot.cleanup_retry.has_value();
+            const auto cleanup_mode = retrying_cleanup
+                                          ? slot.cleanup_retry->mode
+                                          : slot.cleanup_mode;
             std::optional<sw::redis::Pipeline> pipeline;
             try {
                 pipeline.emplace(impl_->redis.pipeline(
@@ -1691,9 +1771,23 @@ void RedisInsertManager::start_next_writes() {
             } catch (const std::exception& error) {
                 LOG(ERROR) << "Failed to create Redis cleanup pipeline for trace "
                            << trace_key << ": " << error.what();
-                slot.cleanup_requested = false;
+                if (retrying_cleanup) {
+                    slot.cleanup_retry->ready = false;
+                } else {
+                    slot.cleanup_requested = false;
+                }
                 slot.deadline = td::Timestamp::in(kCleanupRetrySeconds);
                 continue;
+            }
+
+            RedisWriteBatch batch;
+            if (retrying_cleanup) {
+                batch = std::move(slot.cleanup_retry->batch);
+                slot.cleanup_retry.reset();
+            } else {
+                batch = build_cleanup_batch(
+                    trace_key, slot, cleanup_mode);
+                slot.cleanup_requested = false;
             }
 
             auto completion =
@@ -1710,7 +1804,7 @@ void RedisInsertManager::start_next_writes() {
 
             slot.in_flight.emplace(InFlightWork{
                 .kind = InFlightKind::Cleanup,
-                .cleanup_mode = slot.cleanup_mode,
+                .cleanup_mode = cleanup_mode,
             });
             ++impl_->active_writes;
             td::actor::create_actor<RedisTraceWriter>(
@@ -1879,6 +1973,7 @@ void RedisInsertManager::start_next_writes() {
         }
         RedisWriteBatch batch = std::move(slot.dirty);
         batch.plans.push_back(std::move(prepared.redis));
+        batch.data_phase_completed = false;
 
         std::optional<sw::redis::Pipeline> pipeline;
         try {
@@ -1945,13 +2040,10 @@ void RedisInsertManager::write_finished(std::string trace_key,
     if (in_flight.kind == InFlightKind::Cleanup) {
         if (status.is_error()) {
             LOG(ERROR) << "Redis cleanup failed for trace " << trace_key
-                       << "; retrying while the cleanup is still relevant: "
+                       << "; retaining its exact batch for retry: "
                        << status;
-            slot.cleanup_requested = false;
-            slot.deadline = td::Timestamp::in(kCleanupRetrySeconds);
-            if (cleanup_waits_for_current_updates(slot.cleanup_mode)) {
-                schedule_trace(trace_key);
-            }
+            remember_failed_cleanup(
+                slot, std::move(batch), in_flight.cleanup_mode);
         } else {
             if (slot.cleanup_requested &&
                 publishes_invalidation(slot.cleanup_mode) &&
@@ -1963,13 +2055,8 @@ void RedisInsertManager::write_finished(std::string trace_key,
                 start_next_writes();
                 return;
             }
-            auto queued = std::move(slot.queued);
-            if (cleanup_is_terminal(slot.cleanup_mode)) {
-                queued = resolve_terminal_queue(
-                    std::move(queued),
-                    impl_->queued_updates,
-                    slot.cleanup_mode);
-            }
+            auto queued = resolve_completed_cleanup_queue(
+                slot, impl_->queued_updates, in_flight.cleanup_mode);
 
             if (queued.empty()) {
                 impl_->traces.erase(slot_it);
@@ -2089,7 +2176,17 @@ void RedisInsertManager::promote_confirmed(
 void RedisInsertManager::alarm() {
     auto now = td::Timestamp::now();
     std::vector<std::pair<std::string, TraceCleanupMode>> expired;
-    for (const auto& [trace_key, slot] : impl_->traces) {
+    for (auto& [trace_key, slot] : impl_->traces) {
+        if (slot.cleanup_retry) {
+            if (!slot.in_flight &&
+                !slot.cleanup_retry->ready &&
+                slot.deadline &&
+                slot.deadline.is_in_past(now)) {
+                slot.cleanup_retry->ready = true;
+                schedule_trace(trace_key);
+            }
+            continue;
+        }
         if (slot.cleanup_requested ||
             !slot.deadline ||
             !slot.deadline.is_in_past(now)) {
@@ -2167,7 +2264,12 @@ void RedisInsertManager::mark_confirmed_roots_replaced(
     std::vector<td::Bits256> trace_hashes) {
     for (const auto& trace_hash : trace_hashes) {
         auto trace_key = td::base64_encode(trace_hash.as_slice());
-        auto& slot = impl_->traces[trace_key];
+        auto slot_it = impl_->traces.find(trace_key);
+        if (slot_it == impl_->traces.end()) {
+            // Apply the same no-Redis-mutation policy as request_cleanup().
+            continue;
+        }
+        auto& slot = slot_it->second;
         if (cleanup_is_terminal(slot.cleanup_mode)) {
             continue;
         }
