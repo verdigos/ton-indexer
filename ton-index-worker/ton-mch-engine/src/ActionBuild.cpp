@@ -18,9 +18,6 @@ namespace mch {
 
 namespace {
 
-// One fill function per supported serialized block type. ClassifyCore owns the
-// tree walk; this file maps each surviving row to wire-facing action fields.
-
 // _addr(): AccountId/Asset/None -> canonical address STRING (Str) or Null.
 // Composites and directional fields store addresses as plain strings (Python
 // _addr / .as_str()), so they render with the "str:" prefix on both sides.
@@ -42,7 +39,6 @@ Value av_amount(const Value &v) {
   return v;  // Int / Float passthrough
 }
 
-// data field read (Dict/Obj); missing == Null.
 Value dg(const Value &d, const char *k) {
   const Value *v = d.field(k);
   return v != nullptr ? *v : Value::null();
@@ -93,7 +89,7 @@ void push_account(Action &a, const Value &v) {
   if (v.t == VType::Str) a.accounts.push_back(v.str);
 }
 
-// --- per-btype fills (block_tree_serializer.py _fill_*) ---------------------
+// Per-btype fills
 
 void fill_jetton_transfer(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
@@ -816,7 +812,7 @@ void fill_ethena_withdrawal_request(const Value &d, Action &a) {
   a.staking_data = mkdict(std::move(f));
 }
 
-// --- Cocoon (block_tree_serializer.py:1159-1335) -----------------------------
+// Cocoon
 // Twelve fills, each a handful of directional fields plus its own composite. The
 // reference bodies are `block.data.<attr>` reads off a dataclass; the declarative
 // build hands the same names in a dict, which is what `_dget` bridges on the
@@ -1007,7 +1003,7 @@ void fill_tgbtc_dkg_log(const Value &d, Action &a) {
   a.value = dg(d, "timestamp");
 }
 
-// --- Fill functions for matcher-produced protocol blocks -------------------
+// Matcher-produced protocol blocks
 
 void fill_dns_renew(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "source"));
@@ -1484,7 +1480,7 @@ void fill_nft_mint(const Value &d, Action &a) {
   a.nft_mint_data = mkdict(std::move(f));
 }
 
-// --- Basic-action fallback fills -------------------------------------------
+// Basic-action fallback fills
 // Reached only on the fallback path (ClassifyResult.failure). The main dump's
 // `pending` is matcher-produced composites, never these leaf btypes. Corpus has
 // no failing traces, so this path is ungated (regression-gated only).

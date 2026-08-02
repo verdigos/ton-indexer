@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated evaa messages.
-
 @overflow1023_policy("suppress")
 struct (0x00000001) EvaaSupplyMaster {
     _query_id: bits64;

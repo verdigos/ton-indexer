@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated stonfi messages.
-
 struct StonfiPaymentRequestInfo {
     amount0_out: coins;
     token0: any_address;

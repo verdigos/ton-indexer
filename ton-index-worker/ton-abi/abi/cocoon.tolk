@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated cocoon messages.
-
 @overflow1023_policy("suppress")
 struct (0xa040ad28) CocoonPayoutPayload {
     query_id: uint64;

@@ -135,7 +135,7 @@ td::Result<vm::CellSlice> load_ref_slice(vm::CellSlice &cs) {
   return open_ref_cell(cs.fetch_ref());
 }
 
-// --- get_sale_data (messages/getgems.py:64) --------------------------------
+// get_sale_data
 
 td::Result<Value> parse_sale_data(vm::CellSlice cs, const std::string &version) {
   Value marketplace_address{Value::null()};
@@ -193,7 +193,7 @@ td::Result<Value> parse_sale_data(vm::CellSlice cs, const std::string &version) 
   return Value::make_obj(std::move(f));
 }
 
-// --- get_auction_data (messages/getgems.py:122) ----------------------------
+// get_auction_data
 
 struct AuctionInit {
   Value mp_fee_addr{Value::null()};
@@ -280,7 +280,7 @@ td::Status parse_auction_v4r1(vm::CellSlice &cs, AuctionInit &d) {
   return td::Status::OK();
 }
 
-// --- auction_bid_data helpers ----------------------------------------------
+// auction_bid_data helpers
 
 std::string block_comment(const Block *b) {
   const Value *c = b != nullptr ? b->data.field("comment") : nullptr;
@@ -344,7 +344,7 @@ Value account_of(const Value &v) {
 
 }  // namespace
 
-// --- registered predicates --------------------------------------------------
+// Registered predicates
 
 // The reference sale_init GenericMatcher (blocks/auction.py:237): a plain
 // ton_transfer/call_contract leaf that deployed at least one contract. NOTE
@@ -403,7 +403,7 @@ bool auction_outbid_leg(const Block *b) {
   return kind->str == "fragment" && is_call_op(b, 0x557CEA20);
 }
 
-// --- registered fns ---------------------------------------------------------
+// Registered functions
 
 // Find the NFT returned by cancel or finish without consuming it. A pattern edge
 // would consume the child and turn its top-level action into a child row. The

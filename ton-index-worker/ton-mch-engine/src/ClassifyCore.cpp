@@ -46,15 +46,13 @@ std::vector<Block *> collect_spine(Block *root) {
   return out;
 }
 
-// Returns true iff a block was produced. Rejections and mismatches collect
-// nothing; auxiliary and flow data remain raw for the adapter.
 bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *block,
                BlockArena &arena, const std::set<std::string> &kinds,
                const LookupSource &src, const WhereTable &wheres,
                std::vector<CoreAction> &out) {
-  auto res = matcher_match(m, block, wheres);  // test_self + walk (root absorb=False)
+  auto res = matcher_match(m, block, wheres);  // root absorb=false
   if (!res) {
-    return false;  // structural mismatch
+    return false;
   }
   std::vector<Value> slots = slots_from_captures(res->captures);
   std::vector<Value> consumed_vals;
@@ -63,13 +61,13 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
   }
   bool needs_lookups = !(m.ref_lookups.empty() && m.ref_fns.empty());
   RejectCtx rctx = reject_ctx();
-  rctx.matcher = &m.name;  // names the matcher on this build's [mch-reject] lines
+  rctx.matcher = &m.name;
   RejectScope reject_scope(rctx);
   BuildOutcome o = run_two_phase(fn, block, slots,
                                  Value::make_list(std::move(consumed_vals)), kinds, src,
                                  needs_lookups);
   if (o.is_rejected) {
-    return false;  // clean rejection: no consumption or auxiliary append
+    return false;
   }
 
   Block *produced = arena.make(o.btype.empty() ? m.produces.front() : o.btype);
@@ -80,7 +78,6 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
     return false;  // Python: merge raises -> try_build catches -> clean rejection
   }
 
-  // The shape hook is the last build step, after merge.
   if (!m.ref_shapers.empty()) {
     const std::string &shaper_name = *m.ref_shapers.begin();
     auto sit = host_shapers().find(shaper_name);
@@ -117,7 +114,7 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
   return true;
 }
 
-// --- Host post-processing passes -------------------------------------------
+// Host post-processing passes
 // Value flows and contract-deployment collection are outside this pipeline.
 // All surgery is throw-safe (no aborts).
 

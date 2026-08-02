@@ -37,7 +37,7 @@ using namespace ton_abi;
 using Json = td::JsonValue;
 using JType = td::JsonValue::Type;
 
-// -------- JSON helpers ------------------------------------------------------
+// JSON helpers
 const Json *jfield(const Json &e, td::Slice name) {
   if (e.type() != JType::Object) return nullptr;
   for (const auto &kv : e.get_object().field_values_) {
@@ -82,7 +82,7 @@ bool json_equal(const Json &a, const Json &b) {
   return false;
 }
 
-// -------- fift-hex parser ("x{..}" + indented refs) ------------------------
+// Fift-hex parser ("x{..}" + indented refs)
 struct FiftNode {
   std::string body;
   std::vector<FiftNode> children;
@@ -138,7 +138,7 @@ td::Result<td::Ref<vm::Cell>> parse_fift_hex(const std::string &text) {
   return fift_node_cell(root);
 }
 
-// -------- generated dispatch: (fixture::struct) -> from_slice+to_abi / store -
+// Generated dispatch: fixture struct to from_slice/to_abi/store
 struct GenEntry {
   std::function<td::Result<AbiValue>(vm::CellSlice &)> to_value;         // from_slice -> to_abi_value
   std::function<td::Result<td::Ref<vm::Cell>>(vm::CellSlice &)> repack;  // from_slice -> store -> cell
@@ -209,7 +209,7 @@ std::map<std::string, GenEntry> build_dispatch() {
   return m;
 }
 
-// -------- typed custom serializers (register once) -------------------------
+// Typed custom serializers
 void register_customs() {
   // Custom8 -> td::uint64 because a uint8 target uses the native member type.
   auto st = ton_abi::gen::register_abi_custom<td::uint64>(
@@ -363,7 +363,6 @@ TEST_CASE("A/B gate: generated structs match the oracle vectors, value + repack"
   MESSAGE("A/B gate: ", checked, " vectors checked (this doctest pass)");
 }
 
-// ---------------------------------------------------------------------------
 // Corpus-structure gate. The per-vector checks above live inside SUBCASEs, so
 // doctest re-enters the case body once per subcase and any counter incremented
 // there is a per-pass fact, never a whole-corpus one. These two asserts are the
@@ -373,7 +372,6 @@ TEST_CASE("A/B gate: generated structs match the oracle vectors, value + repack"
 //       shrink the gate);
 //   (b) every build_dispatch() key is exercised by at least one vector (catches
 //       an entry left behind after its vectors were renamed or dropped).
-// ---------------------------------------------------------------------------
 TEST_CASE("A/B gate corpus: full vector set present, no orphan dispatch entries") {
   constexpr std::size_t kExpectedVectorCount = 33;
 
@@ -401,7 +399,6 @@ TEST_CASE("A/B gate corpus: full vector set present, no orphan dispatch entries"
   }
 }
 
-// ---------------------------------------------------------------------------
 // Union dispatch forms on the generated path. Ported from the former
 // AbiLeavesPrefixTest cases that drove the interpreter's runtime dispatch_union
 // helper (deleted: pure codegen bakes its own dispatch chain, so the runtime
@@ -413,7 +410,6 @@ TEST_CASE("A/B gate corpus: full vector set present, no orphan dispatch entries"
 // The implicit-prefix EAT form is vector-covered already (generic-union-labels
 // MsgPair exercises both branches of a 1-bit Either), as is no-match-without-
 // void (the w8-hand-union::Holder expect_error vector).
-// ---------------------------------------------------------------------------
 TEST_CASE("union dispatch forms (generated): explicit peek, T|void, void-last") {
   namespace lw = ton_abi::gen::lots_of_wrappers;
   namespace whu = ton_abi::gen::w8_hand_union;
@@ -479,11 +475,9 @@ TEST_CASE("union dispatch forms (generated): explicit peek, T|void, void-last") 
   }
 }
 
-// ---------------------------------------------------------------------------
 // MyBorderedInt: typed-side 3-range lossy encoding, driven
 // through the GENERATED MyBorderedInt_store / _from_slice + typed registry).
 // Deliberately vector-less (non-idempotent), so a dedicated native unit.
-// ---------------------------------------------------------------------------
 TEST_CASE("typed custom: MyBorderedInt 3-range lossy encoding") {
   ensure_customs();
   namespace lw = ton_abi::gen::lots_of_wrappers;
@@ -505,11 +499,9 @@ TEST_CASE("typed custom: MyBorderedInt 3-range lossy encoding") {
   }
 }
 
-// ---------------------------------------------------------------------------
 // LotsOfStorage default-fill: create() with no explicit args
 // materializes every field's ABI default_value ConstExpr. Exactness gate
 // on a representative spread incl. the big 256-bit bigints and a nullable tensor.
-// ---------------------------------------------------------------------------
 TEST_CASE("create() default-fill: LotsOfStorage StWithAllDefaults") {
   namespace ls = ton_abi::gen::lots_of_storage;
   ls::StWithAllDefaults::CreateArgs args;  // all fields defaulted -> all optional, left empty
@@ -528,13 +520,11 @@ TEST_CASE("create() default-fill: LotsOfStorage StWithAllDefaults") {
   CHECK(std::get<2>(*s.t1) == 3);
 }
 
-// ---------------------------------------------------------------------------
 // client_ty_idx cell-side swap, now exercised through generated
 // path). ClientPayload.note is declared 'remaining' but carries
 // @abi.clientType 'string'; the kernel swaps to the cell type, so the emitted
 // member is std::string and the wire is a snake string ref-tail. Proves the
 // emitter consumed the kernel's client_ty_idx resolution end-to-end.
-// ---------------------------------------------------------------------------
 TEST_CASE("client_ty_idx: ClientPayload note reads as string (generated)") {
   namespace ct = ton_abi::gen::client_type_anno;
   static_assert(std::is_same_v<decltype(ct::ClientPayload::note), std::string>,
@@ -554,13 +544,11 @@ TEST_CASE("client_ty_idx: ClientPayload note reads as string (generated)") {
   CHECK(cb2.finalize()->get_hash() == cell->get_hash());
 }
 
-// ---------------------------------------------------------------------------
 // Custom declared-but-not-registered -> runtime error, preserving the former
 // Color-asymmetry, generated typed registry). Color is a custom enum; the A/B
 // setup deliberately never registers it, so every direction must fail with a
 // 'not registered' runtime error (NOT a compile/link error) -- reference
 // semantics for registerCustomPackUnpack.
-// ---------------------------------------------------------------------------
 TEST_CASE("custom not registered: Color errors at runtime, all directions (generated)") {
   namespace lw = ton_abi::gen::lots_of_wrappers;
   ensure_customs();  // registers Custom8/TelegramString/CustomPoint/MyBorderedInt, NOT Color

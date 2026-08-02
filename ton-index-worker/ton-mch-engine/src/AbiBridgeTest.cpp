@@ -42,7 +42,7 @@ void check(const std::string &name, bool ok) {
   }
 }
 
-// ---- Value inspectors -----------------------------------------------------
+// Value inspectors
 bool is_int(const Value *v, long long want) {
   return v && v->t == VType::Int && v->num.not_null() && v->num->to_dec_string() == std::to_string(want);
 }
@@ -59,7 +59,7 @@ bool is_account_str(const Value *v, const std::string &want) {
 }
 const Value *fld(const Value &v, const char *name) { return v.field(name); }
 
-// ---- cell-building helpers ------------------------------------------------
+// Cell-building helpers
 td::Ref<vm::Cell> empty_cell() { return vm::CellBuilder().finalize(); }
 td::Ref<vm::CellSlice> empty_slice() { return vm::load_cell_slice_ref(empty_cell()); }
 AbiAddress test_addr() { return ton_abi::gen::address_from_string("0:" + std::string(64, 'a')); }
@@ -76,7 +76,7 @@ td::Result<Value> round_trip(const T &s) {
   return abi_parse_body<T>(cb.finalize());
 }
 
-// ---- full-trampoline-path fixtures ----------------------------------------
+// Full-trampoline-path fixtures
 // ClaimRewardMessage below covers the prefix check, uintN-to-Int conversion,
 // and Struct-to-Obj("$") path on a production row.
 
@@ -135,7 +135,7 @@ void test_structlabeled_union() {
   check("union_structlabeled/inner_int", b && is_int(fld(*b, "n_times"), 3));
 }
 
-// ---- direct AbiValue -> Value adapter units (kinds no fixture reaches) -----
+// Direct AbiValue-to-Value adapter units
 void test_adapter_direct() {
   {
     Value v = abi_value_to_mch(AbiValue::make_bool(true));
@@ -192,7 +192,7 @@ void test_adapter_direct() {
   }
 }
 
-// ---- registry / trampoline-guard policy -----------------------------------
+// Registry and trampoline-guard policy
 void test_registry_policy() {
   // Duplicate keys across parser sources are reported.
   const std::vector<std::pair<std::string, MsgParserFn>> src_a = {{"A", nullptr}, {"B", nullptr}};
@@ -237,7 +237,7 @@ void test_abi_rows_dispatch() {
   }
 }
 
-// ---- First production protocol pair: DeDust CPMM V2 claim_reward. -----------
+// DeDust CPMM V2 claim_reward
 // Exercises the real registry rows (parse_message_body by BARE name) + the
 // mandatory address-render parity check on ownerAddress/excessesTo.
 void test_dedust_v2_claim_reward() {

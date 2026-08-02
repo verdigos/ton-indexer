@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated jetton messages.
-
 struct (0b1) JettonForwardPayloadRef {
     value: cell;
 }

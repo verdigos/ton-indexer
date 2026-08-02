@@ -44,7 +44,7 @@ td::Result<Value> parse_stonfi_swap(vm::CellSlice &cs) {
 
 }  // namespace
 
-// --- per-family adapters ----------------------------------------------------
+// Per-family adapters
 
 td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(ctx, open_body(body));

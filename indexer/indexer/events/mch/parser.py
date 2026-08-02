@@ -30,7 +30,6 @@ _CMP_OPS: dict[TokenKind, str] = {
     TokenKind.GE: ">=",
 }
 
-# Build statements start with one of these keywords.
 _BUILD_STMT_HEADS: frozenset[TokenKind] = frozenset({
     TokenKind.KW_PARSE, TokenKind.KW_LET, TokenKind.KW_REJECT,
     TokenKind.KW_FAILED, TokenKind.KW_BROKEN, TokenKind.KW_OUT,
@@ -40,9 +39,6 @@ _BUILD_STMT_HEADS: frozenset[TokenKind] = frozenset({
 
 class _ParserState:
     def __init__(self, tokens: list[Token], path: str, bag: DiagnosticBag):
-        # Drop NEWLINE tokens except where they matter (children blocks).
-        # We do NOT drop them here; the parser explicitly skips NEWLINE outside
-        # of children blocks via _skip_newlines().
         self.tokens = tokens
         self.path = path
         self.bag = bag
@@ -351,7 +347,6 @@ def _parse_pattern_expr(s: _ParserState) -> ast_.PatternExpr:
     separator_kind: TokenKind | None = None
 
     while True:
-        # Alternatives may span newlines for readability.
         save_i = s.i
         s.skip_newlines()
         if s.at(TokenKind.PIPE) or s.at(TokenKind.CARET):
@@ -425,12 +420,10 @@ def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
         inner = _parse_pattern_expr(s)
         s.skip_newlines()
         end = s.eat(TokenKind.RPAREN).span
-        # Strip parentheses; carry through the span and exclusive flag.
         if isinstance(inner, ast_.Alternative):
             return ast_.Alternative(branches=inner.branches, span=_join(t.span, end), exclusive=inner.exclusive)
         if isinstance(inner, ast_.Sequence):
             return ast_.Sequence(head=inner.head, tail=inner.tail, span=_join(t.span, end))
-        # Atomic — span unchanged.
         return inner
 
     if t.kind is TokenKind.LBRACE:
@@ -492,7 +485,6 @@ def _parse_node(s: _ParserState) -> ast_.Node:
     if s.at(TokenKind.KW_WHERE):
         s.i += 1
         if s.at(TokenKind.LPAREN):
-            # Inline `where (expr)` form.
             s.i += 1
             s.skip_newlines()
             where_expr = _parse_expr(s)
@@ -517,7 +509,6 @@ def _parse_children_block(s: _ParserState) -> ast_.ChildrenBlock:
     start = s.eat(TokenKind.LBRACE).span
     items: list[ast_.PatternExpr] = []
     while True:
-        # Skip empty separators between items.
         while s.at(TokenKind.SEMI) or s.at(TokenKind.NEWLINE):
             s.i += 1
         if s.at(TokenKind.RBRACE):
@@ -534,9 +525,7 @@ def _parse_children_block(s: _ParserState) -> ast_.ChildrenBlock:
     return ast_.ChildrenBlock(items=tuple(items), span=_join(start, end))
 
 
-# ==========================================================================
 # Build statements
-# ==========================================================================
 
 
 def _parse_build_stmts(s: _ParserState) -> tuple[ast_.BuildStmt, ...]:
@@ -601,7 +590,6 @@ def _parse_out_stmt(s: _ParserState) -> ast_.OutStmt:
     s.eat(TokenKind.LBRACE)
     fields: list[ast_.OutField] = []
     while True:
-        # Field separators: newline, ';' or ',' (children-block convention + `,`).
         while s.at(TokenKind.NEWLINE) or s.at(TokenKind.SEMI) or s.at(TokenKind.COMMA):
             s.i += 1
         if s.at(TokenKind.RBRACE):
@@ -668,9 +656,7 @@ def _parse_switch_stmt(s: _ParserState) -> ast_.SwitchStmt:
     return ast_.SwitchStmt(branches=tuple(branches), span=_join(start, end))
 
 
-# ==========================================================================
 # Expression language
-# ==========================================================================
 #
 # Precedence, low -> high:
 #   ternary ('A if C else B', right-assoc) -> or -> and -> not(prefix)
@@ -876,9 +862,6 @@ def _parse_parse_expr(s: _ParserState) -> ast_.ParseExpr:
 def _parse_primary(s: _ParserState) -> ast_.Expr:
     if _at_comprehension(s):
         return _parse_comprehension(s)
-    # `parse … as T` in expression position. The build-statement form is
-    # handled by _parse_build_stmts before expression parsing is reached, so a
-    # `parse` seen here is always the expression form.
     if s.at(TokenKind.KW_PARSE):
         return _parse_parse_expr(s)
     t = s.peek()
@@ -903,7 +886,6 @@ def _parse_primary(s: _ParserState) -> ast_.Expr:
     if t.kind is TokenKind.KW_LOOKUP:
         return _parse_lookup(s)
     if t.kind is TokenKind.DOT:
-        # Leading-dot field access: current block's data field (inline where).
         s.i += 1
         name = s.eat_field_name()
         return ast_.FieldRef(field=name.text, span=_join(t.span, name.span))

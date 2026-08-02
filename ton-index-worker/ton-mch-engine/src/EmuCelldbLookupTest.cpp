@@ -47,7 +47,7 @@ AllShardStates dummy_states() {
   return AllShardStates{cb.finalize()};
 }
 
-// --- synthetic account-data cells -------------------------------------------
+// Synthetic account-data cells
 // addr_std$10 anycast:(##0) workchain:int8 address:bits256, i.e. what
 // load_address_py reads back.
 void store_addr(vm::CellBuilder &cb, const block::StdAddress &a) {
@@ -92,7 +92,7 @@ schema::AccountState account_with_data(const block::StdAddress &a, td::Ref<vm::C
   return st;
 }
 
-// --- tier shape equality -----------------------------------------------------
+// Tier shape equality
 
 // Render `iface` the way TIER 1 does: put it in an account_interfaces_ map and
 // go through a real ParsedBlockLookupSource::fetch.
@@ -205,7 +205,7 @@ void test_tier_shapes() {
   }
 }
 
-// --- nominator_pool code-hash predicate --------------------------------------
+// nominator_pool code-hash predicate
 
 void test_nominator_predicate() {
   const block::StdAddress a = addr_of('A');
@@ -220,7 +220,7 @@ void test_nominator_predicate() {
         NominatorPoolContract::detect(a, not_the_pool, td::Ref<vm::Cell>{}).is_error());
 }
 
-// --- the jvault data-cell chain ----------------------------------------------
+// JVault data-cell chain
 
 void test_jvault_parsers() {
   const block::StdAddress pool = addr_of('1');
@@ -352,7 +352,7 @@ void test_jvault_hook() {
   }
 }
 
-// --- memo and budgets ---------------------------------------------------------
+// Memo and budgets
 
 void test_memo_and_budgets() {
   {
@@ -443,7 +443,7 @@ void test_memo_and_budgets() {
   }
 }
 
-// --- the two tiers behind one source -----------------------------------------
+// Two tiers behind one source
 
 void test_two_tier_routing() {
   const block::StdAddress a = addr_of('A');

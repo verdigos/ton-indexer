@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated subscriptions messages.
-
 @overflow1023_policy("suppress")
 struct (0x706c7567) SubscriptionPaymentRequest {
     query_id: uint64;

@@ -43,7 +43,7 @@ void check(const std::string &name, bool ok) {
   }
 }
 
-// ---- decoded-payload inspectors -------------------------------------------
+// Decoded-payload inspectors
 // Owns the bytes AND the unpack zone; msgpack::object points into both.
 class Decoded {
  public:
@@ -131,7 +131,7 @@ bool is_map(const msgpack::object *o, std::uint32_t size) {
   return o != nullptr && o->type == msgpack::type::MAP && o->via.map.size == size;
 }
 
-// ---- fixtures --------------------------------------------------------------
+// Fixtures
 const std::string kAddrA = "0:" + std::string(64, 'A');
 const std::string kAddrB = "0:" + std::string(64, 'B');
 const std::string kTraceKey = "6JLNRxi7yQKUYYSGxSt8SVLZKvC3vHMqBLHqOKTqDGA=";
@@ -168,7 +168,7 @@ const msgpack::object *first_row(const Decoded &d) {
   return (row != nullptr && row->type == msgpack::type::MAP) ? row : nullptr;
 }
 
-// ---- cases -----------------------------------------------------------------
+// Cases
 
 // "No actions" is the one-byte EMPTY ARRAY, never an empty string:
 // EmuActionPayload::actions_blob uses empty to mean "no `actions` field written
@@ -466,7 +466,7 @@ void test_determinism() {
   check("determinism/byte_identical", !first.empty() && first == second);
 }
 
-// --- G2: the cross-language wire fixture -----------------------------------
+// G2: cross-language wire fixture
 //
 // ONE row that exercises every wire-type decision this writer makes, built here
 // so the C++ assertions below and the Go round-trip test
@@ -1233,7 +1233,7 @@ void test_empty_view_finality() {
   }
 }
 
-// --- the two decisions the write-back's INSERT side turns on ----------------
+// Write-back decisions
 //
 // Neither is reachable from a fixture, and both are easy to get backwards in a
 // way no A/B would catch: view_finality feeds both the `finality` wire key and

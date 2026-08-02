@@ -135,7 +135,7 @@ EvalResult rt_access_build(const BuildEnv &env, const Value &obj, const std::str
   return rt_access(obj, field);
 }
 
-// --- Two-phase lookup runtime -----------------------------------------------
+// Two-phase lookup runtime
 
 std::string lookup_key(const std::string &kind, const std::vector<Value> &args) {
   // Type-tagged, length-prefixed encoding. An embedded NUL, a differing arity, or the same
@@ -227,7 +227,7 @@ EvalResult rt_lookup_build(const BuildEnv &env, const std::string &kind,
   return rt_ok(env.lookups->get(kind, args));
 }
 
-// --- host-reject observability (see BuildRuntime.h) ---------------------------
+// Host-reject observability
 
 RejectCtx &reject_ctx() {
   static thread_local RejectCtx ctx;

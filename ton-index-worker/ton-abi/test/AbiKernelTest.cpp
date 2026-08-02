@@ -26,9 +26,7 @@ const ton_abi::TyUnion &union_at(const AbiKernel &k, int ty_idx) {
 
 }  // namespace
 
-// ---------------------------------------------------------------------------
 // create() smoke
-// ---------------------------------------------------------------------------
 
 TEST_CASE("AbiKernel create: all committed fixture ABIs build a kernel") {
   for (const std::string &name : {
@@ -45,9 +43,7 @@ TEST_CASE("AbiKernel create: all committed fixture ABIs build a kernel") {
   }
 }
 
-// ---------------------------------------------------------------------------
 // SymTable lookups
-// ---------------------------------------------------------------------------
 
 TEST_CASE("AbiKernel SymTable: struct/alias/enum lookup + not-found errors") {
   ContractABI abi = load_fixture_abi("lots-of-messages");
@@ -70,9 +66,7 @@ TEST_CASE("AbiKernel ty_by_idx: bounds") {
   CHECK(k.ty_by_idx(100000).is_error());
 }
 
-// ---------------------------------------------------------------------------
 // structFieldsOf
-// ---------------------------------------------------------------------------
 
 TEST_CASE("AbiKernel structFieldsOf: non-generic struct -> fields verbatim, no uLabel") {
   ContractABI abi = load_fixture_abi("lots-of-messages");
@@ -141,9 +135,7 @@ TEST_CASE("AbiKernel structFieldsOf: not a StructRef -> error") {
   CHECK(k.struct_fields_of(8).is_error());  // ty 8 = intN, not a StructRef
 }
 
-// ---------------------------------------------------------------------------
 // aliasTargetOf
-// ---------------------------------------------------------------------------
 
 TEST_CASE("AbiKernel aliasTargetOf: generic instantiation -> monomorph target + uLabel") {
   ContractABI abi = load_fixture_abi("generic-union-labels");
@@ -174,9 +166,7 @@ TEST_CASE("AbiKernel aliasTargetOf: not an AliasRef -> error") {
   CHECK(k.alias_target_of(8).is_error());  // intN
 }
 
-// ---------------------------------------------------------------------------
 // createLabelsForUnion + invariant (i)
-// ---------------------------------------------------------------------------
 
 TEST_CASE("AbiKernel createLabelsForUnion: primitive variants get $ + value labels") {
   ContractABI abi = load_fixture_abi("generic-union-labels");
@@ -283,9 +273,7 @@ TEST_CASE("AbiKernel createLabelsForUnion: nullLiteral variant -> empty label, n
   CHECK(labels[1].has_value_field);
 }
 
-// ---------------------------------------------------------------------------
 // resolve_union: sorted dispatch table + has_void
-// ---------------------------------------------------------------------------
 
 TEST_CASE("AbiKernel resolve_union: dispatch order sorted by prefix, labels attached") {
   // Hand-built union with declaration order NOT sorted by prefix (len 3 before

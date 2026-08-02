@@ -11,7 +11,6 @@
 
 namespace mch {
 
-// The rendered Action (fixed schema; unset fields are Null, rendered "null").
 struct Action {
   std::string action_id;
   std::string type;
@@ -63,7 +62,6 @@ std::string calc_action_id(const Block *b);
 // Returns false for a btype outside the ported fill set (skip-table entry).
 bool build_action(Block *b, Action &a);
 
-// The same, over a serialize_blocks row: fills parent_action_id/ancestor_type too.
 bool build_action(const ActionRow &row, Action &a);
 
 // Stage-A action-surface hook. Kept out of build_action dispatch until the

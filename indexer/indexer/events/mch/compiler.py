@@ -41,19 +41,15 @@ class LNode:
     """
 
     kind: str
-    # Leaf payloads.
     opcode: int | None = None
     btype: str | None = None
     pred: str | None = None
-    # Alternative.
     branches: list["LNode"] | None = None
     exclusive: bool = False
-    # Recursion.
     strategy: str | None = None            # "cyclic" or None (frontier)
     step: "LNode | None" = None
     exit_: "LNode | None" = None
     target: "LNode | None" = None          # cyclic_ref back-edge target
-    # Common.
     optional: bool = False
     capture: str | None = None
     where: str | None = None
@@ -66,25 +62,16 @@ class LNode:
 @dataclass
 class CompiledMatcher:
     name: str
-    # Root node of the lowered IR graph (the anchor node; its child/parent/
-    # children edges hang the rest of the pattern).
     root: LNode
-    # None for declarative matchers (build statements instead of a registered builder).
     build_fn_name: str | None
     produces_cls_name: str
     source_span: Span
-    # Raw produced-btype names; the first is primary. The emitter normalizes them.
     produces: tuple[str, ...] = ()
-    # (capture-name, cardinality) pairs; cardinality ∈ {"one","opt","many"}.
     captures: tuple[tuple[str, str], ...] = ()
-    # Engine auto-append flags, default true.
     include_excess: bool = True
     include_bounces: bool = True
-    # Build statements in source order; empty for builder-based matchers.
     build_stmts: tuple = ()
-    # `shape` directive: registered shaper name, None when absent.
     shape_fn_name: str | None = None
-    # `priority` directive: registration-order weight, default 100.
     priority: int = 100
     # Anchor record representation. Exactly one of
     # these is set for a group/predicate anchor; a plain single op/btype anchor
@@ -172,19 +159,13 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     )
     parent_m, child_m, children_ms = _lower_relative_to_anchor(decl.pattern, anchor_atom, ctx)
 
-    # Build the root IR node based on the anchor head.
     head = rm.anchor_node.head
     anchor_pred: str | None = None
     anchor_branches: tuple | None = None
     anchor_opcodes: tuple[int, ...] | None = None
     anchor_btypes: tuple[str, ...] | None = None
     if rm.anchor_group is not None:
-        # Set-membership anchor: the anchor record carries a membership test over
-        # the group's branch heads, mirroring hand-written matchers like
-        # JettonMintBlockMatcher (`opcode in [...]`, jettons.py). Heads may mix
-        # op/btype and each branch may carry a named `where` predicate. The root
-        # stays permissive (`any`); the membership
-        # test lives entirely in the matcher record's `anchor`.
+        # Membership is recorded separately; the graph root remains permissive.
         if rm.anchor_group.exclusive:
             _check_redundant_exclusive_heads(rm.anchor_group, ctx)
         opcode_set, btype_set = _anchor_group_head_sets(rm.anchor_group, ctx)
@@ -203,9 +184,7 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     elif isinstance(head, ast_.BTypeHead):
         root = LNode(kind="block_type", btype=head.name, child=child_m, parent=parent_m)
     elif isinstance(head, ast_.PredHead):
-        # Predicate anchors have no opcode/btype prefilter. The anchor
-        # record carries the predicate name (kind "pred"), full-scanned over
-        # every candidate block. The root node stays permissive (`any`).
+        # Predicate anchors have no opcode/btype prefilter and are full-scanned.
         anchor_pred = head.name
         root = LNode(kind="any", child=child_m, parent=parent_m)
     else:
@@ -228,12 +207,8 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     anchor_pred_name = None if rm.anchor_group is not None else rm.anchor_node.where_predicate
     if anchor_pred_name is not None:
         root.where = anchor_pred_name
-    # Tag the anchor node with its capture name for IR emission.
     if rm.anchor_capture:
         root.capture = rm.anchor_capture
-    # The emitter stores an anchor's inline `where (expr)` on the root node.
-    # carries it, and the IR engine evaluates the root's where_expr in its head
-    # test. The C013 sync check still runs at compile time.
     if rm.anchor_group is None and rm.anchor_node.where_expr is not None:
         _set_where_expr(root, rm.anchor_node.where_expr, rm.anchor_node.span, ctx)
     if rm.anchor_group is not None:
@@ -519,7 +494,6 @@ def _lower_parent_chain_from(
             chain_pairs.append((ast_.Edge.PARENT, atom))
             saw_parent_link = True
         elif edge is ast_.Edge.CHILD and saw_parent_link and _is_cb_atom(atom):
-            # Children block attaching to the current chain tail.
             chain_pairs.append((ast_.Edge.CHILD, atom))
         else:
             # A non-PARENT edge before any parent link, or a non-CB child branch
@@ -729,7 +703,6 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
         pairs.extend(p.tail)
         result = _lower_chain_with_children_attach(pairs, ctx)
         if result is None:
-            # Defensive guard for malformed AST input.
             raise AssertionError("Sequence lowered to None")
         return result
     if isinstance(p, ast_.ChildrenBlock):
@@ -744,10 +717,7 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
         target = next((r for r in ctx.resolved.raw.rules if r.name == p.name), None)
         if target is None:
             raise CompileError(ctx.bag)
-        # A self-reference inside a cyclic rule body is a back-edge. Its target,
-        # the shared
-        # body root) is patched in by _lower_cyclic_rule once the body finishes
-        # lowering.
+        # _lower_cyclic_rule patches this back-edge to the shared body root.
         cyclic_pending = getattr(ctx, _CYCLIC_PENDING_KEY, None)
         if cyclic_pending is not None and p.name in cyclic_pending:
             ref = LNode(kind="cyclic_ref")
@@ -985,17 +955,13 @@ def _check_no_bare_children_block(
         if is_cb and not in_chain_left:
             emit_c008(span)
         if isinstance(p, ast_.Sequence):
-            # The sequence head has no left sibling.
             walk(p.head, in_chain_left=False)
             previous_was_atom = not is_cb_or_maybe_cb(p.head)[0]
             for _edge, atom in p.tail:
                 walk(atom, in_chain_left=previous_was_atom)
-                # Children blocks do not update the left sibling. The next atom chains from
-                # the same preceding node.
                 if not is_cb_or_maybe_cb(atom)[0]:
                     previous_was_atom = True
         elif isinstance(p, ast_.Maybe):
-            # A non-children-block inner expression has no chain context here.
             if not isinstance(p.inner, ast_.ChildrenBlock):
                 walk(p.inner, in_chain_left=False)
         elif isinstance(p, ast_.Alternative):

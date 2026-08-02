@@ -34,7 +34,6 @@
 namespace ton_abi {
 namespace gen {
 
-// ---------------------------------------------------------------------------
 // CellOf<T>: a value of type T that lives in a child cell (Tolk `Cell<T>`).
 // Emitted field type for the `cellOf` ABI kind. Holds the inner
 // value behind a shared_ptr indirection: cellOf is a cell-boundary, so a type
@@ -46,7 +45,6 @@ struct CellOf {
   std::shared_ptr<T> ref;
 };
 
-// ---------------------------------------------------------------------------
 // Typed custom-serializer registry.
 //
 // One registry PER value type T (a function-local static, so no global-init
@@ -55,7 +53,6 @@ struct CellOf {
 // or a missing operation at call time is
 // a runtime td::Status error -- NEVER a compile/link error (reference
 // semantics: registerCustomPackUnpack is a runtime map, not a specialization).
-// ---------------------------------------------------------------------------
 template <class T>
 struct AbiCustomEntry {
   std::function<td::Status(const T &, vm::CellBuilder &)> pack;
@@ -91,12 +88,10 @@ const AbiCustomEntry<T> *abi_custom_lookup(const std::string &key) {
   return it == reg.end() ? nullptr : &it->second;
 }
 
-// ---------------------------------------------------------------------------
 // to_abi_value leaf builders. The baked to_abi_value() bodies compose these;
 // composite kinds (list/tuple/map/optional/union) are emitted inline as IIFEs.
 // All return AbiValue by value (infallible for leaves); the struct-level
 // to_abi_value() returns td::Result<AbiValue> so custom hooks can fail.
-// ---------------------------------------------------------------------------
 inline AbiValue abi_v_int(const td::RefInt256 &v) { return AbiValue::make_int(v); }
 // Native-int overloads: intN/uintN fields with n<=64 are td::int64/td::uint64
 // members; their AbiValue Int dump is byte-identical to the RefInt256 form
@@ -116,10 +111,8 @@ inline AbiValue abi_v_string(const std::string &s) { return AbiValue::make_strin
 inline AbiValue abi_v_null() { return AbiValue::make_null(); }
 inline AbiValue abi_v_void() { return AbiValue::make_void(); }
 
-// ---------------------------------------------------------------------------
 // create()-default materializers for ConstExpr slice / address literals.
 // Used only by generated create() bodies.
-// ---------------------------------------------------------------------------
 inline td::Ref<vm::CellSlice> bits_from_hex(const std::string &hex) {
   unsigned char buf[256];
   long bits = td::bitstring::parse_bitstring_hex_literal(buf, sizeof(buf), hex.data(), hex.data() + hex.size());

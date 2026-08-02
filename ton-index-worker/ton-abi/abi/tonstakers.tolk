@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated tonstakers messages.
-
 @overflow1023_policy("suppress")
 struct (0xed58b0b2) TONStakersNftBurnNotification {
     query_id: uint64;

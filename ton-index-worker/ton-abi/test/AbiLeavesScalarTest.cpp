@@ -18,9 +18,7 @@ td::RefInt256 Idec(const std::string &s) { return td::dec_string_to_int256(s); }
 
 }  // namespace
 
-// ---------------------------------------------------------------------------
 // var_prefix_bits
-// ---------------------------------------------------------------------------
 
 TEST_CASE("var_prefix_bits: log2 of powers of two, reject otherwise") {
   CHECK(var_prefix_bits(16).ok() == 4);
@@ -31,9 +29,7 @@ TEST_CASE("var_prefix_bits: log2 of powers of two, reject otherwise") {
   CHECK(var_prefix_bits(-4).is_error());
 }
 
-// ---------------------------------------------------------------------------
 // intN
-// ---------------------------------------------------------------------------
 
 TEST_CASE("intN: round-trip signed values incl boundaries") {
   for (long long x : {0LL, 1LL, -1LL, 127LL, -128LL}) {
@@ -76,9 +72,7 @@ TEST_CASE("intN: wide 257-bit round-trip") {
   CHECK(r.ok()->to_dec_string() == big->to_dec_string());
 }
 
-// ---------------------------------------------------------------------------
 // uintN
-// ---------------------------------------------------------------------------
 
 TEST_CASE("uintN: round-trip incl max, reject negative and overflow") {
   vm::CellBuilder cb;
@@ -102,10 +96,8 @@ TEST_CASE("uintN: 256-bit max round-trip") {
   CHECK(r.ok()->to_dec_string() == max256->to_dec_string());
 }
 
-// ---------------------------------------------------------------------------
 // native int64 / uint64 fast paths must be bit-for-bit identical to
 // the RefInt256 path (same wire) at every boundary width the emitter uses.
-// ---------------------------------------------------------------------------
 
 TEST_CASE("load_int64/store_int64: boundaries at n=1,32,63,64, wire == RefInt256 path") {
   struct Case { int n; long long v; };
@@ -168,9 +160,7 @@ TEST_CASE("store_uint64: overflow rejected") {
   vm::CellBuilder p; CHECK(store_uint64(p, (1ULL << 63), 63).is_error());
 }
 
-// ---------------------------------------------------------------------------
 // bool
-// ---------------------------------------------------------------------------
 
 TEST_CASE("bool: round-trip both values, truncation error") {
   for (bool v : {false, true}) {
@@ -186,9 +176,7 @@ TEST_CASE("bool: round-trip both values, truncation error") {
   CHECK(load_bool(cs).is_error());
 }
 
-// ---------------------------------------------------------------------------
 // coins
-// ---------------------------------------------------------------------------
 
 TEST_CASE("coins: round-trip zero and large, reject negative") {
   for (const std::string &s : {std::string("0"), std::string("1"), std::string("1000000000000")}) {
@@ -208,9 +196,7 @@ TEST_CASE("coins: value needing 16 bytes overflows the 4-bit size prefix") {
   CHECK(store_coins(cb, big).is_error());
 }
 
-// ---------------------------------------------------------------------------
 // varintN / varuintN
-// ---------------------------------------------------------------------------
 
 TEST_CASE("varuintN: round-trip zero/large, reject negative") {
   for (const std::string &s : {std::string("0"), std::string("255"), std::string("1267650600228229401496703205376")}) { // 2^100
@@ -245,9 +231,7 @@ TEST_CASE("varuintN: non-power-of-two width rejected at the leaf") {
   CHECK(load_varuint(cs, 24).is_error());
 }
 
-// ---------------------------------------------------------------------------
 // bitsN
-// ---------------------------------------------------------------------------
 
 TEST_CASE("bitsN: round-trip exact n bits") {
   vm::CellBuilder src;

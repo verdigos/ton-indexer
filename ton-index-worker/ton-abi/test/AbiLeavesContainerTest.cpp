@@ -31,9 +31,7 @@ std::function<td::Status(vm::CellSlice &)> collector(std::vector<std::string> &o
 
 }  // namespace
 
-// ---------------------------------------------------------------------------
 // arrayOf
-// ---------------------------------------------------------------------------
 
 TEST_CASE("arrayOf: pack byte-identical to @ton/core, load round-trips") {
   std::vector<int> vals{10, 20, 30};
@@ -99,9 +97,7 @@ TEST_CASE("arrayOf: store rejects length > 255") {
   CHECK(store_array(cb, 256, never).is_error());
 }
 
-// ---------------------------------------------------------------------------
 // lispListOf
-// ---------------------------------------------------------------------------
 
 TEST_CASE("lispListOf: pack byte-identical to @ton/core, load round-trips") {
   std::vector<int> vals{1, 2, 3};

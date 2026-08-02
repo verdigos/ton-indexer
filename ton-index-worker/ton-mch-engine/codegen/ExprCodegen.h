@@ -12,8 +12,6 @@ namespace mch_codegen {
 // digit cannot extend it (the \x greedy-hex hazard). Verified by `--selftest`.
 std::string cstr(const std::string &s);
 
-// Emit one `EvalResult <fn_name>(const mch::Env&, const mch::Lookups&)` from an
-// IR expression node (k-tagged JSON). Reusable for future artifact-expr modes.
 std::string generate_function(const std::string &fn_name, const td::JsonValue &expr);
 
 // Emit one `EvalResult <fn_name>(const mch::WhereEnv &w)` for a node-level
@@ -22,8 +20,6 @@ std::string generate_function(const std::string &fn_name, const td::JsonValue &e
 // the Python sync evaluator).
 std::string generate_where_function(const std::string &fn_name, const td::JsonValue &expr);
 
-// Emit the whole vectors_generated.cpp from a decoded {"vectors":[...]} root.
-// `header` is the leading comment block (must end with a newline).
 std::string generate_vectors_file(const td::JsonValue &root, const std::string &header);
 
 // Emit the whole wheres_<suffix>_generated.cpp from a decoded IR artifact root:
@@ -35,14 +31,8 @@ std::string generate_vectors_file(const td::JsonValue &root, const std::string &
 std::string generate_wheres_file(const td::JsonValue &root, const std::string &header,
                                  const std::string &source_sha, const std::string &suffix);
 
-// Emit a whole builds table file: one
-// `BuildOutcome build_<id>_<name>(BuildEnv&)` per matcher carrying a
-// build_program, plus the `gen_builds_<suffix>()` / `gen_builds_<suffix>_
-// source_sha()` table accessors. Accepts an IR artifact root
-// ({matchers:[...]}, id = matcher index) or a build-vectors root
-// ({build_vectors:[...]}, id = case index). `suffix` gives each input
-// document its own table symbols so tables from BOTH documents link into one
-// binary (ir + vectors) and never need manual re-pairing.
+// Accepts either an IR artifact or the fixture harness's build-vectors document;
+// `suffix` keeps their generated symbols distinct when linked together.
 std::string generate_builds_file(const td::JsonValue &root, const std::string &header,
                                  const std::string &source_sha, const std::string &suffix);
 

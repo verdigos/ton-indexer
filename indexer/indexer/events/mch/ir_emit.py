@@ -35,9 +35,7 @@ def _unsigned32(opcode: int) -> int:
     return opcode & 0xFFFFFFFF
 
 
-# ---------------------------------------------------------------------------
 # Stub registries (CLI self-provisioning)
-# ---------------------------------------------------------------------------
 
 
 def _collect_predicate_names(p: ast_.PatternExpr, out: set[str]) -> None:
@@ -96,9 +94,7 @@ def build_stub_registries(files: list[ast_.File]) -> Registries:
     return reg
 
 
-# ---------------------------------------------------------------------------
 # Emission
-# ---------------------------------------------------------------------------
 
 
 def _emit_node(n: LNode, nodes: list[dict], memo: dict[int, int]) -> int:
@@ -111,9 +107,7 @@ def _emit_node(n: LNode, nodes: list[dict], memo: dict[int, int]) -> int:
     if existing is not None:
         return existing
 
-    # An in-body cyclic self-reference is a back-edge with no node of its own.
-    # It resolves to the shared
-    # body root's id (the memo guarantees the cycle terminates).
+    # An in-body cyclic self-reference resolves to the shared body root.
     if n.kind == "cyclic_ref":
         target_id = _emit_node(n.target, nodes, memo)
         memo[id(n)] = target_id
@@ -209,9 +203,7 @@ def _anchor_record(cm: CompiledMatcher) -> dict:
 _produces_btype = produces_btype
 
 
-# ---------------------------------------------------------------------------
 # Expressions and build programs.
-# ---------------------------------------------------------------------------
 
 
 # _emit_expr = expr_ir.emit_expr. The compiler shares that encoding, and the

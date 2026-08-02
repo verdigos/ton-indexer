@@ -80,14 +80,11 @@ int run_selftest() {
   expect("plain", cstr("abc"), "\"abc\"");
   expect("quote_backslash", cstr("a\"b\\c"), "\"a\\\"b\\\\c\"");
   expect("named_ctrl", cstr("a\nb\tc\rd"), "\"a\\nb\\tc\\rd\"");
-  // NUL followed by an ASCII digit: octal keeps them separate (\000 then '7').
   expect("nul_then_digit", cstr(std::string("\0" "7", 2)), "\"\\0007\"");
-  // Bare NUL and other low control bytes -> 3-digit octal.
   expect("bare_nul", cstr(std::string("\0", 1)), "\"\\000\"");
   expect("byte_0x01", cstr(std::string("\x01", 1)), "\"\\001\"");
   expect("byte_0x1f", cstr(std::string("\x1f", 1)), "\"\\037\"");
   expect("del_0x7f", cstr(std::string("\x7f", 1)), "\"\\177\"");
-  // Bytes >= 0x20 (and < 0x7f) pass through unescaped.
   expect("high_printable", cstr("~ "), "\"~ \"");
   std::fprintf(stderr, "mch-codegen selftest: %s\n", failures == 0 ? "ALL PASS" : "FAILURES");
   return failures == 0 ? 0 : 1;

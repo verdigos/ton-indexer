@@ -32,7 +32,6 @@ class _CaptureOccurrence:
     node: ast_.Node
     under_maybe: bool
     under_recursive: bool
-    # One entry per enclosing EXCLUSIVE alternative: (alt_id, branch_idx, branch_count).
     branch_path: tuple[tuple[int, int, int], ...]
     # True when any enclosing alternative is NOT exclusive (plain `|` failing the
     # ExclusiveOr-upgrade heuristic). Such positions can never anchor.
@@ -165,9 +164,6 @@ def _validate_group_anchor(
                 "requires concrete `op`/`btype` heads on every branch of the "
                 "exclusive alternative"
             )
-        # A branch `where` clause is legal. The anchor test checks
-        # union membership first, then the matching branch's predicate. Predicate
-        # existence is validated by the pattern walk (R003).
     return alt, ""
 
 
@@ -181,7 +177,6 @@ class ResolvedMatcher:
     # every branch of one exclusive alternative of bare concrete heads, this is
     # that Alternative; `anchor_node` then holds a representative branch node.
     anchor_group: ast_.Alternative | None = None
-    # Build statements are carried through unchanged; the pattern compiler ignores them.
     build_stmts: tuple[ast_.BuildStmt, ...] = ()
 
 
@@ -317,7 +312,6 @@ def _check_shapers(file: ast_.File, registries: Registries, bag: DiagnosticBag) 
 
 
 def _classify_rules(file: ast_.File, bag: DiagnosticBag) -> dict[str, RecursionClass]:
-    # Build the rule reference graph; classify cycles.
     name_to_rule = {r.name: r for r in file.rules}
     out: dict[str, RecursionClass] = {}
 
@@ -337,9 +331,7 @@ def _classify_rules(file: ast_.File, bag: DiagnosticBag) -> dict[str, RecursionC
         elif isinstance(p, ast_.ChildrenBlock):
             for it in p.items:
                 collect_refs(it, refs, under_maybe)
-        # Node: no refs.
 
-    # First validate all $X targets exist.
     for r in file.rules:
         refs = []
         collect_refs(r.pattern, refs, under_maybe=False)
@@ -351,7 +343,6 @@ def _classify_rules(file: ast_.File, bag: DiagnosticBag) -> dict[str, RecursionC
                     r.span,
                 )
 
-    # Classify each rule.
     for r in file.rules:
         refs = []
         collect_refs(r.pattern, refs, under_maybe=False)
@@ -445,7 +436,6 @@ def _check_rule_patterns(
         elif isinstance(p, ast_.ChildrenBlock):
             for it in p.items:
                 visit(it)
-        # RuleRef has no inline head to validate here.
 
     for r in file.rules:
         visit(r.pattern)
@@ -459,9 +449,6 @@ def _resolve_matcher(
     bag: DiagnosticBag,
     rule_recursion: dict[str, RecursionClass],
 ) -> ResolvedMatcher:
-    # Walk the pattern; collect capture occurrences; validate op/predicate refs.
-    # Occurrences are merged into CaptureInfo afterwards so that the same name in
-    # mutually exclusive alternative branches is legal.
     occurrences: dict[str, list[_CaptureOccurrence]] = {}
     alt_ids: dict[int, int] = {}  # id(Alternative) -> stable sequential id
     alt_nodes: dict[int, ast_.Alternative] = {}  # stable id -> Alternative node
@@ -583,7 +570,6 @@ def _resolve_matcher(
                 source=o.node,
             )
 
-    # Anchor.
     anchor_group: ast_.Alternative | None = None
     if m.entry is None:
         bag.error(
@@ -892,7 +878,6 @@ def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag,
             # element var, which may shadow an outer capture.
             value(e.xs, avail, True)
             value(e.body, avail | {e.var}, True)
-        # FieldRef / literals: nothing to resolve.
 
     value(expr, available, False)
 

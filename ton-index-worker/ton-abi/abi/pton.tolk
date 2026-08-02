@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated pton messages.
-
 struct (0b1) PTonForwardPayloadRef {
     value: cell;
 }

@@ -12,10 +12,8 @@ class Edge(Enum):
     PARENT = "<-"
 
 
-# ---------------------------------------------------------------------------
 # Expression nodes parsed and carried through the frontend. The
 # v0 compiler ignores these nodes entirely (no evaluation, no lowering).
-# ---------------------------------------------------------------------------
 
 
 class Expr:
@@ -263,9 +261,7 @@ class RuleDecl:
     strategy: str = "frontier"
 
 
-# ---------------------------------------------------------------------------
 # Build statements appear in a matcher body after the pattern.
-# ---------------------------------------------------------------------------
 
 
 class BuildStmt:

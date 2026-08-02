@@ -16,16 +16,13 @@ namespace ton_abi {
 
 namespace {
 
-// ---------------------------------------------------------------------------
-// gen-time control-flow signals (mirror the reference's exception model):
-//   HardFail       -> ton-abi-gen aborts for non-standard dictionary keys.
-// Per-direction stubs are decided structurally (omitted members), no throw.
-// ---------------------------------------------------------------------------
+// HardFail aborts generation for non-standard dictionary keys. Per-direction
+// stubs are represented by omitted members.
 struct HardFail {
   std::string msg;
 };
 
-// ---- identifier rules (ported from formatting.ts) -------------------------
+// Identifier rules
 bool is_safe_ident(const std::string &s) {
   if (s.empty()) {
     return false;
@@ -81,7 +78,6 @@ std::string mangle_monomorph(const std::string &s) {
 }
 
 std::string snake_case(const std::string &s) {
-  // Contract name -> file/namespace base: CamelCase -> camel_case, sanitize.
   std::string out;
   for (std::size_t i = 0; i < s.size(); ++i) {
     char c = s[i];
@@ -101,7 +97,6 @@ std::string snake_case(const std::string &s) {
 }
 
 std::string base_name(const std::string &mangled_or_plain) {
-  // "ResetTo<int64>" -> "ResetTo"; plain names pass through.
   auto lt = mangled_or_plain.find('<');
   return lt == std::string::npos ? mangled_or_plain : mangled_or_plain.substr(0, lt);
 }
@@ -142,9 +137,7 @@ std::string kind_render(TyKind k) {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Emitter
-// ---------------------------------------------------------------------------
 class Emitter {
  public:
   Emitter(const ContractABI &abi, const AbiKernel &kernel, std::string out_name)
@@ -155,8 +148,6 @@ class Emitter {
     ns_ = "ton_abi::gen::" + snake_;
     collect_targets();
 
-    // Emit bodies into per-target buffers first so a hard failure occurs before
-    // any output is assembled.
     for (std::size_t i = 0; i < targets_.size(); ++i) {
       emit_target_bodies(i);
     }
@@ -176,7 +167,7 @@ class Emitter {
   }
 
  private:
-  // ---- target model -------------------------------------------------------
+  // Target model
   enum class TKind { Struct, Alias, Enum };
   struct Target {
     TKind kind;
@@ -1276,7 +1267,7 @@ class Emitter {
     bool custom_unpack = has_custom(sd ? sd->custom_pack_unpack : std::nullopt, false);
     bool custom_pack = has_custom(sd ? sd->custom_pack_unpack : std::nullopt, true);
 
-    // ---------- header ----------
+    // Header
     std::string h;
     h += "struct " + t.cpp_name + " {\n";
     if (sd && sd->prefix) {
@@ -1308,7 +1299,7 @@ class Emitter {
     h += "};";
     t.h_decl = h;
 
-    // ---------- bodies ----------
+    // Bodies
     std::string c;
     const std::string &N = t.cpp_name;
 

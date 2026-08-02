@@ -16,7 +16,7 @@
 
 namespace mch {
 
-// --- EventNode -------------------------------------------------------------
+// EventNode
 
 // A node in the message tree. For a normal transaction the node's msg is the
 // incoming message; for a notification/log leaf it is the destination-less
@@ -28,7 +28,7 @@ struct EventNode {
   EventNode *parent{nullptr};
   std::vector<EventNode *> children;
 
-  // --- ghost-external synthesis (GhostExternal.h) ---------------------------
+  // Ghost-external synthesis
   // EventNode.ghost_node is an intended but unsent message decoded from a
   // failed wallet external. The destination is not a participating account,
   // because no transaction ran there.
@@ -84,7 +84,7 @@ struct EventTree {
 // transaction list using msg_hash linkage. The Trace must outlive the tree.
 EventTree to_tree(const Trace &trace);
 
-// --- Block -----------------------------------------------------------------
+// Block
 
 struct Block {
   std::string btype;
@@ -182,7 +182,7 @@ struct BlockArena {
 // Iterative (trace depth is unbounded); leaves next_blocks canonical.
 Block *init_block(BlockArena &arena, const EventNode *node);
 
-// --- TraceContext ------------------------------------------------------------
+// TraceContext
 
 // Bundles the chained-lifetime objects (Trace -> EventTree -> BlockArena) so
 // they cannot be torn apart. Everything in the arena points into the tree,

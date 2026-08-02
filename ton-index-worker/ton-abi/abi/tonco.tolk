@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated tonco messages.
-
 struct ToncoPositionOldFee {
     _fee_growth_inside0_last_x128: uint256;
     _fee_growth_inside1_last_x128: uint256;

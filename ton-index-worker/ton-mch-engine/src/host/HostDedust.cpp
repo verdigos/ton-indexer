@@ -25,7 +25,7 @@ namespace mch {
 
 namespace {
 
-// --- dedust swap host fns (builders/dedust.py + blocks/swaps.py) -------------
+// DeDust swap host functions
 
 constexpr std::uint32_t kDedustSwapExternal = 0x61ee542d;
 constexpr std::uint32_t kDedustSwapPeer = 0x72aca8aa;

@@ -68,7 +68,7 @@ td::Result<td::Ref<vm::Cell>> node_body_cell(const EventNode *n) {
   return vm::std_boc_deserialize(raw);
 }
 
-// --- NftTransfer body parse (messages/nft.py) -------------------------------
+// NftTransfer body parser
 
 struct NftTransferMsg {
   td::RefInt256 query_id;
@@ -193,7 +193,7 @@ td::Result<OwnershipFull> parse_ownership_full(const td::Ref<vm::Cell> &body) {
   return out;
 }
 
-// --- _get_nft_data (blocks/nft.py) ------------------------------------------
+// _get_nft_data
 
 // Returns the `nft` dict Value, or faults on a malformed content (Python's
 // `"uri" in None` TypeError -> rejection).
@@ -563,7 +563,7 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
   return rt_ok(Value::make_obj(std::move(ns)));
 }
 
-// --- specs/teleitem_auction.mch: _is_teleitem (blocks/auction.py) ------------
+// _is_teleitem
 
 // `is_teleitem(nft)`, the looked-up nft_item Obj in, a Bool out. Mirrors the
 // reference predicate exactly: a null item or a missing/absent `content` is false,

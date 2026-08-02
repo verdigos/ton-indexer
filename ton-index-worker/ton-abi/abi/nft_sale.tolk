@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated nft_sale messages.
-
 @overflow1023_policy("suppress")
 struct (0x05138d91) NftOwnershipAssignedPrevOwner {
     _query_id: bits64;

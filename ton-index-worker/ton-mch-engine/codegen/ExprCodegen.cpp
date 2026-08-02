@@ -395,7 +395,7 @@ class Emitter {
   }
 };
 
-// --- Build-statement generator ----------------------------------------------
+// Build-statement generator
 // Ports program.py BuildProgram.run statement-for-statement into straight-line
 // C++ over BuildRuntime/ExprRuntime. One BuildGen per matcher record.
 class BuildGen {
@@ -436,7 +436,6 @@ class BuildGen {
   Emitter em_;
   const Json *program_{nullptr};
 
-  // Run `fn` with em_.lines swapped out; returns the captured lines.
   template <typename Fn>
   std::vector<std::string> buffered(Fn &&fn) {
     std::vector<std::string> saved;

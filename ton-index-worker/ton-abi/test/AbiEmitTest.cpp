@@ -45,11 +45,9 @@ std::string emit_source_of(const std::string &fixture) {
 
 }  // namespace
 
-// ---------------------------------------------------------------------------
 // (A) create() default materialization: a defaulted field left out of
 // CreateArgs is filled from the ABI's ConstExpr. Defaults never appear on the
 // wire, so this is unreachable from the vector corpus.
-// ---------------------------------------------------------------------------
 TEST_CASE("emit: lots-of-messages IncreaseBy create()-with-default") {
   gen::lots_of_messages::IncreaseBy::CreateArgs args;
   args.counter_id = 7;  // int8 -> td::int64
@@ -58,9 +56,7 @@ TEST_CASE("emit: lots-of-messages IncreaseBy create()-with-default") {
   CHECK(made.counter_id == 7);
 }
 
-// ---------------------------------------------------------------------------
 // (B) per-direction custom gate: do not port the reference bug
-// ---------------------------------------------------------------------------
 namespace {
 // Minimal hand-authored ABI: struct S with a single uint8 field `a`, carrying a
 // custom_pack_unpack with the two booleans templated in.
@@ -115,9 +111,7 @@ TEST_CASE("emit: unpack-only custom struct delegates ONLY from_slice, not store"
   CHECK(body_mentions(src, "S::store(", "store_uint"));               // normal baked path
 }
 
-// ---------------------------------------------------------------------------
 // (C) decl-level non-standard map key -> HARD failure (ErrorsAtCodegen parity)
-// ---------------------------------------------------------------------------
 TEST_CASE("emit: err-invalid-map-key hard-fails with map-key error") {
   for (const char *fx : {"err-invalid-map-key-1", "err-invalid-map-key-2"}) {
     auto box = std::make_unique<ContractABI>(load_fixture_abi(fx));
@@ -128,9 +122,7 @@ TEST_CASE("emit: err-invalid-map-key hard-fails with map-key error") {
   }
 }
 
-// ---------------------------------------------------------------------------
 // (D) non-serializable field (callable) -> compiling stubs
-// ---------------------------------------------------------------------------
 TEST_CASE("emit: err-cont-on-stack emits cleanly; callable field -> stub") {
   // -1 has `struct D { n: callable }` -> the callable member is omitted and both
   // directions become runtime-error stubs. The file still emits cleanly because
@@ -145,10 +137,8 @@ TEST_CASE("emit: err-cont-on-stack emits cleanly; callable field -> stub") {
   CHECK(src2.find("not serializable") == std::string::npos);
 }
 
-// ---------------------------------------------------------------------------
 // The ton-abi-gen executable writes a pair to disk; the emitted header contains
 // the struct's signature.
-// ---------------------------------------------------------------------------
 #if defined(TON_ABI_GEN_EXE) && defined(TON_ABI_TEST_TMP)
 TEST_CASE("cli: ton-abi-gen writes a header containing the struct signature") {
   namespace fs = std::filesystem;

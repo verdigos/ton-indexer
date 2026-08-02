@@ -15,7 +15,7 @@ namespace {
 using Json = td::JsonValue;
 using JType = td::JsonValue::Type;
 
-// ---- generic JSON helpers (IrLoader.cpp convention) ----
+// JSON helpers
 
 const Json *jfield(const Json &e, td::Slice name) {
   if (e.type() != JType::Object) {
@@ -85,7 +85,7 @@ td::Result<td::RefInt256> jbigint_req(const Json &e, td::Slice name) {
   return v;
 }
 
-// ---- Ty (abi-types.ts:12-45) ----
+// Ty (abi-types.ts:12-45)
 
 td::Result<Ty> parse_ty(const Json &j, int idx) {
   if (j.type() != JType::Object) {
@@ -301,7 +301,7 @@ td::Result<Ty> parse_ty(const Json &j, int idx) {
   return td::Status::Error(PSLICE() << "unique_types[" << idx << "]: unknown Ty kind '" << kind << "'");
 }
 
-// ---- ABIConstExpression (abi-types.ts:71-90), recursive ----
+// ABIConstExpression (abi-types.ts:71-90)
 
 td::Result<ABIConstExpression> parse_const_expr(const Json &j) {
   if (j.type() != JType::Object) {
@@ -394,7 +394,7 @@ td::Result<ABIConstExpression> parse_const_expr(const Json &j) {
   return td::Status::Error(PSLICE() << "const expression: unknown kind '" << kind << "'");
 }
 
-// ---- ABIStruct / ABIAlias / ABIEnum (abi-types.ts:105-178) ----
+// ABIStruct / ABIAlias / ABIEnum (abi-types.ts:105-178)
 
 td::Result<ABICustomSerializers> parse_custom_pack_unpack(const Json &j) {
   ABICustomSerializers c;
@@ -694,7 +694,7 @@ td::Result<ABIThrownError> parse_thrown_error(const Json &j) {
   return e;
 }
 
-// ---- post-parse validation over the fully-built model ----
+// Post-parse validation
 
 // Every ty_idx a Ty can reference (single helper so OOB-index and future
 // passes stay in one place).

@@ -119,7 +119,7 @@ bool sender_related(std::uint32_t ec) {
   return ec == kStonfiSwapOk || ec == kStonfiSwapNoLiq || ec == kStonfiSwapReserveErr;
 }
 
-// --- stonfi v2 --------------------------------------------------------------
+// Stonfi v2
 
 // open_ref_cell is shared with the tonco and dedust parsers.
 

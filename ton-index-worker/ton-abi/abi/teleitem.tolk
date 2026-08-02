@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated teleitem messages.
-
 struct TeleitemAuctionConfig {
     beneficiary_address: any_address;
     initial_min_bid: coins;

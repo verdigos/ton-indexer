@@ -99,7 +99,7 @@ class MatchState {
   }
 
  private:
-  // ---- where_expr evaluation (engine.py eval_where_expr rule) ----
+  // where_expr evaluation
   // Never raises/aborts: a fault or a non-bool result is simply False.
   bool eval_where(const CompiledNode &node, Block *block) const {
     auto it = gen_.find(node.global_id);
@@ -111,7 +111,7 @@ class MatchState {
     return !r.faulted && r.value.t == VType::Bool && r.value.boolean;
   }
 
-  // ---- head test (kind + where + where_expr, no edges) ----
+  // Head test (no edges)
   bool test_head(int nid, Block *block) const {
     const CompiledNode &node = m_.nodes[nid];
     bool ok = false;
@@ -301,7 +301,7 @@ class MatchState {
     }
   }
 
-  // ---- context primitives ----
+  // Context primitives
   Mark mark() const { return Mark{bindings_.size(), consumed_.size(), frames_.size()}; }
 
   void rollback(const Mark &mk) {

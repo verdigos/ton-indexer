@@ -21,9 +21,7 @@ void store_test_hash(vm::CellBuilder &cb) {
 
 }  // namespace
 
-// ---------------------------------------------------------------------------
 // address (addr_std only)
-// ---------------------------------------------------------------------------
 
 TEST_CASE("address: addr_std round-trips byte-identically (masterchain wc=-1)") {
   vm::CellBuilder src;
@@ -110,9 +108,7 @@ TEST_CASE("address store REJECT: workchain out of int8 range") {
   CHECK(store_address(cb, a).is_error());
 }
 
-// ---------------------------------------------------------------------------
 // address? (addr_none | addr_std)
-// ---------------------------------------------------------------------------
 
 TEST_CASE("address?: none round-trips") {
   vm::CellBuilder src;
@@ -156,9 +152,7 @@ TEST_CASE("address? store REJECT: extern kind not valid") {
   CHECK(store_maybe_address(cb, a).is_error());
 }
 
-// ---------------------------------------------------------------------------
 // ext_address (addr_extern only)
-// ---------------------------------------------------------------------------
 
 TEST_CASE("ext_address: round-trips byte-identically (10-bit value)") {
   vm::CellBuilder src;
@@ -219,9 +213,7 @@ TEST_CASE("ext_address store REJECT: value slice size mismatch") {
   CHECK(store_external_address(cb, a).is_error());
 }
 
-// ---------------------------------------------------------------------------
 // any_address (none | std | extern; addr_var rejected)
-// ---------------------------------------------------------------------------
 
 TEST_CASE("any_address: none/std/extern all round-trip") {
   SUBCASE("none") {

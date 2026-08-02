@@ -42,10 +42,8 @@ class EvalError(Exception):
     """A build-expression runtime fault; the match is rejected."""
 
 
-# ---------------------------------------------------------------------------
 # Builtins: name -> (callable, arity). Null arguments never reach
 # the callable. The call evaluator returns null first.
-# ---------------------------------------------------------------------------
 
 
 def _builtin_account(x: Any) -> AccountId:
@@ -82,11 +80,9 @@ def _builtin_b64(x: Any) -> str:
     return base64.b64encode(x).decode("utf-8")
 
 
-# Frozen declaration arm names.
 _ASSET_TON_TAG = "AssetTon"
 _ASSET_JETTON_TAG = "AssetJetton"
 
-# Frozen declaration arm names and empty-inline policies.
 _TAIL_TAGS = {
     "JettonForwardPayloadRef": "ref",
     "JettonForwardPayloadInline": "bits",
@@ -262,10 +258,8 @@ BUILTINS: dict[str, tuple[Any, int]] = {
 }
 
 
-# ---------------------------------------------------------------------------
 # Operator cores shared by the async and sync evaluators. Lazy operators
 # (and/or/??/ternary) stay in each evaluator; these are the strict ones.
-# ---------------------------------------------------------------------------
 
 
 def _eq_result(op: str, left: Any, right: Any) -> bool:
@@ -449,9 +443,7 @@ def _access(obj: Any, field: str, bodies: dict[int, Any]) -> Any:
         raise EvalError(f"{type(obj).__name__} object has no attribute {field!r}") from None
 
 
-# ---------------------------------------------------------------------------
 # Sync evaluator (node-level `where_expr`)
-# ---------------------------------------------------------------------------
 
 
 def _sync_eval(e: dict, block: Block) -> Any:

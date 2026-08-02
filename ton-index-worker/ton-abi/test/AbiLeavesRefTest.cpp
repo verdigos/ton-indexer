@@ -24,9 +24,7 @@ td::Ref<vm::Cell> cell_u(unsigned long long val, int bits) {
 
 }  // namespace
 
-// ---------------------------------------------------------------------------
 // BOC mode pin
-// ---------------------------------------------------------------------------
 
 TEST_CASE("BOC mode: std_boc_serialize(_,2) matches @ton/core toBoc() default") {
   vm::CellBuilder root;
@@ -36,9 +34,7 @@ TEST_CASE("BOC mode: std_boc_serialize(_,2) matches @ton/core toBoc() default") 
   CHECK(boc_b64(root.finalize()) == "te6cckEBAgEACAABBBI0AQACqyFjJBU=");
 }
 
-// ---------------------------------------------------------------------------
 // cell
-// ---------------------------------------------------------------------------
 
 TEST_CASE("cell: store/load whole ref, identity preserved") {
   auto child = cell_u(0xDEAD, 16);
@@ -56,9 +52,7 @@ TEST_CASE("cell: load with no ref present -> error") {
   CHECK(load_cell(cs).is_error());
 }
 
-// ---------------------------------------------------------------------------
 // cellOf
-// ---------------------------------------------------------------------------
 
 TEST_CASE("cellOf: load_ref_slice opens the inner cell for the walker") {
   vm::CellBuilder inner;
@@ -72,9 +66,7 @@ TEST_CASE("cellOf: load_ref_slice opens the inner cell for the walker") {
   CHECK(r.ok()->prefetch_ulong(16) == 0x1234);
 }
 
-// ---------------------------------------------------------------------------
 // maybe_ref
-// ---------------------------------------------------------------------------
 
 TEST_CASE("maybe_ref: present round-trips") {
   auto child = cell_u(0x55, 8);
@@ -98,9 +90,7 @@ TEST_CASE("maybe_ref: absent round-trips (bit 0, no ref)") {
   CHECK(r.ok().is_null());
 }
 
-// ---------------------------------------------------------------------------
 // nullable presence prefix
-// ---------------------------------------------------------------------------
 
 TEST_CASE("nullable prefix: 1-bit presence round-trips") {
   for (bool present : {false, true}) {
@@ -113,9 +103,7 @@ TEST_CASE("nullable prefix: 1-bit presence round-trips") {
   }
 }
 
-// ---------------------------------------------------------------------------
 // string (snake ref-tail)
-// ---------------------------------------------------------------------------
 
 TEST_CASE("string: short round-trips and packs byte-identically to @ton/core") {
   vm::CellBuilder cb;
@@ -182,9 +170,7 @@ TEST_CASE("string REJECT: missing ref") {
   CHECK(load_string(cs).is_error());
 }
 
-// ---------------------------------------------------------------------------
 // remaining
-// ---------------------------------------------------------------------------
 
 TEST_CASE("remaining: snapshots all bits + refs, drains source, re-stores identically") {
   vm::CellBuilder src;

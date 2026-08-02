@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated jvault_payload messages.
-
 @overflow1023_policy("suppress")
 struct JVaultStakePeriodPayload {
     payload_opcode: uint32;

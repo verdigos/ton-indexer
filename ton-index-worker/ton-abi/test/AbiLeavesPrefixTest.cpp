@@ -15,9 +15,7 @@ vm::CellSlice cs_of(vm::CellBuilder &cb) { return vm::load_cell_slice(cb.finaliz
 
 }  // namespace
 
-// ---------------------------------------------------------------------------
 // prefix ops
-// ---------------------------------------------------------------------------
 
 TEST_CASE("prefix: store + check round-trip, mismatch rejects") {
   vm::CellBuilder cb;

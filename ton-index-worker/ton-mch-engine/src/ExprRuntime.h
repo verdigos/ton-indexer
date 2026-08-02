@@ -18,7 +18,6 @@ struct EvalResult {
   std::string message;  // fault reason (diagnostics only)
 };
 
-// Environments passed to generated expression functions and the interpreter.
 using Env = std::map<std::string, Value>;
 using Lookups = std::map<std::string, Value>;
 
@@ -53,8 +52,6 @@ EvalResult rt_dotfield(const WhereEnv &w, const std::string &name);
 // --- unary ---
 EvalResult rt_neg(const Value &x);
 EvalResult rt_not(const Value &x);
-// Faults unless x is a bool; returns the bool value. Used by lazy operators and
-// ternary/not conditions at the call site.
 EvalResult rt_require_bool(const Value &x);
 
 // --- binary strict operators (lazy and/or/??/ternary live at the call site) ---
@@ -74,7 +71,7 @@ EvalResult rt_mul(const Value &l, const Value &r);
 // string or per-call argument vector. Both paths run the same core.
 EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &args);
 EvalResult rt_builtin_account(const Value &x);
-// --- Comprehensions ---------------------------------------------------------
+// Comprehensions
 // Shared cores for `map(xs as e => body)` / `any|all(xs as e => body)`. `body`
 // is invoked once per element with that element bound; the core owns the
 // null, non-list, empty, and short-circuit semantics for both the interpreter

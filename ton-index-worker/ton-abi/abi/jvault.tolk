@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated jvault messages.
-
 type JVaultClaimEntry = RemainingBitsAndRefs
 
 @overflow1023_policy("suppress")

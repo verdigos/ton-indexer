@@ -62,7 +62,7 @@ LeafCommentInfo leaf_comment_info(const EventNode *node) {
 
 }  // namespace
 
-// --- EventNode tree ----------------------------------------------------------
+// EventNode tree
 
 EventTree to_tree(const Trace &trace) {
   EventTree tree;
@@ -150,7 +150,7 @@ EventTree to_tree(const Trace &trace) {
   return tree;
 }
 
-// --- Block -------------------------------------------------------------------
+// Block
 
 int Block::direction() const {
   if (event_nodes.size() == 1) {

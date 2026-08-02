@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated multisig messages.
-
 @overflow1023_policy("suppress")
 struct (0xf718510f) MultisigNewOrder {
     query_id: uint64;

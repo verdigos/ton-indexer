@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated coffee messages.
-
 struct (0b00) AssetTon {}
 
 struct (0b01) AssetJetton {

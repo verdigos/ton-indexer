@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated dedust messages.
-
 struct (0b0000) AssetTon {}
 
 struct (0b0001) AssetJetton {

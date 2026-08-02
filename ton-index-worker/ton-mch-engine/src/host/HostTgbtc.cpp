@@ -203,7 +203,7 @@ EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
   return rt_ok(Value::make_obj(std::move(ns)));
 }
 
-// --- Event-log parsers ------------------------------------------------------
+// Event-log parsers
 
 // TgBTCMintEvent 0x77A80EF3: coins amount, MsgAddress recipient, uint256 txid.
 EvalResult tgbtc_mint_log(BuildEnv &, const std::vector<Value> &args) {

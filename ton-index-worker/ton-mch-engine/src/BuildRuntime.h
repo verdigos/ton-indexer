@@ -1,4 +1,3 @@
-// Runtime operations used by generated MCH build programs.
 // Build faults and explicit rejections are clean matcher rejections. Captures are
 // slot-indexed; capture names do not exist at runtime.
 #pragma once
@@ -60,9 +59,8 @@ class NullLookupTable : public LookupTable {
   }
 };
 
-// --- Two-phase lookup runtime -----------------------------------------------
+// Two-phase lookup runtime
 
-// Canonical map key for a (kind, args) lookup call.
 std::string lookup_key(const std::string &kind, const std::vector<Value> &args);
 
 // Collect-pass table: `has` covers every kind the artifact references.
@@ -81,7 +79,6 @@ class CollectingLookupTable : public LookupTable {
   bool has(const std::string &kind) const override { return kinds_.count(kind) != 0; }
   Value get(const std::string &kind, const std::vector<Value> &args) const override;
 
-  // Misses recorded during the pass: key -> (kind, args).
   mutable std::map<std::string, std::pair<std::string, std::vector<Value>>> misses;
 
  private:
@@ -121,7 +118,6 @@ class LookupSource {
 // (fixtures/FixtureLookupSource.h).
 const std::set<std::string> &lookup_kinds();
 
-// Execution environment for one generated build function.
 struct BuildEnv {
   const Block *anchor{nullptr};
   const Value *slots{nullptr};  // capture values, slot-indexed (Block/Null/List)
@@ -166,7 +162,7 @@ EvalResult rt_lookup_build(const BuildEnv &env, const std::string &kind,
 EvalResult rt_call_hostfn(BuildEnv &env, const std::string &name,
                           const std::vector<Value> &args);
 
-// --- Host-rejection observability ------------------------------------------
+// Host-rejection observability
 // Host faults and null-gated results are clean match rejections. Emit the
 // `[mch-reject]` diagnostic only for the final lookup pass; collecting passes
 // intentionally operate with missing values.
@@ -194,8 +190,6 @@ class RejectScope {
   RejectCtx saved_;
 };
 
-// Emit the [mch-reject] line for the armed (trace, matcher, fn, anchor). No-op
-// unless the final pass is armed.
 void reject_log(const std::string &reason);
 
 // For a host fn whose Python twin is `try: ... except: return None`: the Null

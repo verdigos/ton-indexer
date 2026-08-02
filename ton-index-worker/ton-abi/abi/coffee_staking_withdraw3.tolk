@@ -1,7 +1,5 @@
 tolk 1.0
 
-// Faithful wire declarations for schema-migrated coffee_staking_withdraw3 messages.
-
 @overflow1023_policy("suppress")
 struct (0xcb03bfaf) CoffeeStakingPositionWithdraw3 {
     _query_id: bits64;
