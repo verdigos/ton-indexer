@@ -1242,6 +1242,8 @@ std::vector<TraceStateIndexRef> collect_cleanup_index_refs(const TraceSlot& slot
     for (const auto& [_, node] : slot.current->nodes.nodes()) {
         refs.insert(node.index_refs.begin(), node.index_refs.end());
     }
+    refs.insert(slot.current->actions.aai_refs.begin(),
+                slot.current->actions.aai_refs.end());
     // A failed patch may have removed an index only from the logical state.
     // Redis still contains that old member until the dirty batch is replayed,
     // so expiry must clean both sides of every carried delta.

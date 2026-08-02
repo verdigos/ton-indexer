@@ -2,6 +2,7 @@
 
 #include "td/utils/tests.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -163,4 +164,53 @@ TEST(TraceInserter, full_materialization_restores_action_marker_and_indexes) {
     ASSERT_EQ(std::string("trace:first"),
               prepared.redis.indexes_to_add[0].member);
     ASSERT_EQ(std::uint64_t{17}, prepared.redis.indexes_to_add[0].score);
+}
+
+TEST(TraceInserter, cleanup_removes_aai_refs) {
+    const TraceStateIndexRef node_ref{
+        .index_key = "account:node",
+        .member = "trace:node",
+        .score = 11,
+    };
+    const TraceStateIndexRef aai_ref{
+        .index_key = "_aai:account",
+        .member = "trace:action",
+        .score = 17,
+    };
+    ActiveTrace current;
+    auto node_change = current.nodes.upsert_nodes({TraceStateNode{
+        .key = "node",
+        .index_refs = {node_ref},
+    }});
+    current.nodes.apply(std::move(node_change));
+    current.actions.aai_refs = {aai_ref};
+    TraceSlot slot;
+    slot.current = std::make_shared<const ActiveTrace>(std::move(current));
+
+    const auto refs = collect_cleanup_index_refs(slot);
+
+    ASSERT_EQ(2u, refs.size());
+    ASSERT_TRUE(std::find(refs.begin(), refs.end(), node_ref) != refs.end());
+    ASSERT_TRUE(std::find(refs.begin(), refs.end(), aai_ref) != refs.end());
+}
+
+TEST(TraceInserter, cleanup_of_actionless_trace_unchanged) {
+    const TraceStateIndexRef node_ref{
+        .index_key = "account:node",
+        .member = "trace:node",
+        .score = 11,
+    };
+    ActiveTrace current;
+    auto node_change = current.nodes.upsert_nodes({TraceStateNode{
+        .key = "node",
+        .index_refs = {node_ref},
+    }});
+    current.nodes.apply(std::move(node_change));
+    TraceSlot slot;
+    slot.current = std::make_shared<const ActiveTrace>(std::move(current));
+
+    const auto refs = collect_cleanup_index_refs(slot);
+
+    ASSERT_EQ(1u, refs.size());
+    ASSERT_EQ(node_ref, refs[0]);
 }
