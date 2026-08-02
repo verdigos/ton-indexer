@@ -37,13 +37,13 @@ class ParsedBlockLookupSource : public LookupSource {
 
   // Tier-attribution telemetry: every resolved lookup
   // is charged to the tier that served it; unresolved calls are misses. Gives
-  // the tier-2 hit rate in shadow mode
+  // the tier-2 hit rate in a production classifier run
   // (tier2_hits / (tier1_hits + tier2_hits)). Does not affect fetch() results.
   struct LookupStats {
     std::size_t tier1_hits{0};  // served from account_interfaces_ (in-block)
     std::size_t tier2_hits{0};  // served from the tier-2 fallback (DB/kvrocks / fixture)
     std::size_t misses{0};      // unresolved after both tiers (null result)
-    // Miss attribution per lookup kind, so a shadow run can tell an expected
+    // Miss attribution per lookup kind, so a production run can tell an expected
     // gap (a kind with no tier-1 source) from a real resolution failure. Only
     // missed kinds get an entry, and the values sum to `misses` exactly.
     std::map<std::string, std::size_t> misses_by_kind;

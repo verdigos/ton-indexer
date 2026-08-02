@@ -1,5 +1,5 @@
-// Classifies trace emissions and returns serialized actions plus telemetry to
-// the decorated insert sink. The actor performs no Redis or database writes.
+// Classifies trace emissions and returns serialized actions plus telemetry for
+// scheduler integration. The actor performs no Redis or database writes.
 #pragma once
 
 #include "EmuTypes.h"
@@ -17,7 +17,7 @@ namespace mch {
 
 // Cumulative counters; the periodic log line prints these plus the delta since
 // the previous line.
-struct EmuShadowStats {
+struct EmuClassifierStats {
   std::size_t emissions{0}, reemissions{0};
   // Gate-side outcomes: the classifier did not run.
   std::size_t shed_admission{0}, shed_deadline{0}, bypassed_disabled{0};
@@ -37,11 +37,11 @@ struct EmuShadowStats {
 
 class EmuClassifierActor : public td::actor::Actor {
  public:
-  explicit EmuClassifierActor(EmuShadowConfig cfg) : cfg_(std::move(cfg)) {
-    CHECK(cfg_.gate);  // EmuShadowConfig contract; decorate_sink relies on it too
+  explicit EmuClassifierActor(EmuClassifierConfig cfg) : cfg_(std::move(cfg)) {
+    CHECK(cfg_.gate);  // Enabled EmuClassifierConfig requires a gate.
   }
 
-  // Request entry from the decorated sink. Always answers exactly once.
+  // Request entry from scheduler integration. Always answers exactly once.
   void classify(EmuTraceView view, td::Promise<EmuClassifyResult> promise);
   // The gate turned an emission away before it became a request (admission cap
   // or the sticky fail-open flag).
@@ -54,9 +54,9 @@ class EmuClassifierActor : public td::actor::Actor {
   // Bounded trace-id LRU distinguishes first emissions from reemissions.
   bool remember_seen(const std::string &trace_id);
 
-  EmuShadowConfig cfg_;
-  EmuShadowStats stats_;
-  EmuShadowStats prev_;  // snapshot at the previous log line, for the delta
+  EmuClassifierConfig cfg_;
+  EmuClassifierStats stats_;
+  EmuClassifierStats prev_;  // snapshot at the previous log line, for the delta
   std::unordered_set<std::string> seen_traces_;
   std::deque<std::string> seen_order_;
 };

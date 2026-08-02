@@ -89,7 +89,7 @@ std::size_t scrub_arena_refs(Action &a) {
 
 // Builds and classifies the trace, then materializes actions while the arena is
 // alive. All failures are mapped onto the result; this function never throws.
-void classify_txs(const EmuShadowConfig &cfg, const EmuTraceView &view,
+void classify_txs(const EmuClassifierConfig &cfg, const EmuTraceView &view,
                   const std::vector<schema::Transaction> &txs, EmuClassifyResult &res,
                   std::vector<Action> &rows, std::vector<std::string> &matcher_names,
                   std::size_t &scrubbed, bool &unknown_row) {

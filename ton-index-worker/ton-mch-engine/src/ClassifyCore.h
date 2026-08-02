@@ -17,7 +17,7 @@
 
 namespace mch {
 
-// Trace-terminal failure categories used by shadow-mode telemetry:
+// Trace-terminal failure categories used by production-classifier telemetry:
 //   - lookup_infra_fail:  two-phase lookup did not converge (infra error).
 //   - engine_fault:       a mid-trace exception (Python's per-trace fallback).
 //   - malformed_trace:    the trace could not be loaded into an event tree

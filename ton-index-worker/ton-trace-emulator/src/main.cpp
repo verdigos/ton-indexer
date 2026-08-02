@@ -10,7 +10,7 @@
 #include "TraceScheduler.h"
 #include "TraceInserter.h"
 #include "GenMatchers.h"
-#include "emu/EmuShadow.h"
+#include "emu/EmuClassifierBridge.h"
 
 #include <cmath>
 
@@ -141,7 +141,7 @@ int main(int argc, char *argv[]) {
     db_event_fifo_path = fname.str();
   });
 
-  // This option leaves the classification decorator uninstalled.
+  // This option bypasses in-process classification and inserts empty payloads.
   p.add_option('\0', "mch-disable", "Disable in-process MCH classification", [&]() {
     mch_disable = true;
   });
@@ -193,7 +193,7 @@ int main(int argc, char *argv[]) {
     std::_Exit(2);
   }
 
-  mch::EmuShadowConfig mch_shadow;
+  mch::EmuClassifierConfig mch_classifier_config;
   if (mch_disable) {
     LOG(WARNING) << "MCH classification DISABLED (--mch-disable): traces are inserted unclassified";
   } else {
@@ -202,15 +202,15 @@ int main(int argc, char *argv[]) {
     if (r_prep.is_error()) {
       LOG(FATAL) << "MCH engine prep failed: " << r_prep.move_as_error();
     }
-    mch_shadow.prep = r_prep.move_as_ok();
-    mch_shadow.gate = std::make_shared<mch::EmuGate>();
-    mch_shadow.tier2 = !mch_no_tier2;
-    mch_shadow.tier2_budget = mch_tier2_budget;
+    mch_classifier_config.prep = r_prep.move_as_ok();
+    mch_classifier_config.gate = std::make_shared<mch::EmuGate>();
+    mch_classifier_config.tier2 = !mch_no_tier2;
+    mch_classifier_config.tier2_budget = mch_tier2_budget;
     LOG(INFO) << "MCH classification ENABLED (artifact sha " << mch::gen_matchers_ir_source_sha()
               << "), insert gated on classification, celldb tier-2 "
-              << (mch_shadow.tier2 ? "ON" : "OFF") << " (budget "
-              << mch_shadow.tier2_budget.fetches << " fetches / "
-              << mch_shadow.tier2_budget.wall_us / 1000 << " ms per trace)";
+              << (mch_classifier_config.tier2 ? "ON" : "OFF") << " (budget "
+              << mch_classifier_config.tier2_budget.fetches << " fetches / "
+              << mch_classifier_config.tier2_budget.wall_us / 1000 << " ms per trace)";
   }
 
   // This must happen before any actor can subscribe to events or write a trace.
@@ -231,7 +231,8 @@ int main(int argc, char *argv[]) {
     insert_manager = td::actor::create_actor<RedisInsertManager>(
         "RedisInsertManager", redis_dsn, trace_retention);
     td::actor::create_actor<TraceEmulatorScheduler>("integritychecker", db_scanner.get(), insert_manager.get(), 
-      global_config_path, inet_addr, redis_dsn, redis_channel, working_dir, db_event_fifo_path, mch_shadow).release();
+      global_config_path, inet_addr, redis_dsn, redis_channel, working_dir, db_event_fifo_path,
+      mch_classifier_config).release();
   });
   
   scheduler.run();

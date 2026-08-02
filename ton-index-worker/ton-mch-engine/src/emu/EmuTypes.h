@@ -1,5 +1,5 @@
 // Emulator-header-free classifier types. EmuFinality mirrors FinalityState;
-// only EmuShadow.cpp translates between the two type sets.
+// only EmuClassifierBridge.cpp translates between the two type sets.
 #pragma once
 
 #include "ActionBuild.h"             // Action (the rows the classifier hands back)
@@ -109,8 +109,8 @@ struct EmuClassifyResult {
   std::int64_t queue_us{0}, classify_us{0}, serialize_us{0};
 };
 
-// Shared gate state: written by the decorator on the emulator's threads and by
-// the classifier on its own.
+// Shared gate state: written by emitter-thread admission and by the classifier
+// on its own.
 struct EmuGate {
   std::atomic<std::size_t> in_flight{0};
   // Seeded at construction so the first stalled request can trip fail-open.
@@ -118,10 +118,10 @@ struct EmuGate {
   std::atomic<bool> disabled{false};  // sticky fail-open
 };
 
-struct EmuShadowConfig {
+struct EmuClassifierConfig {
   std::shared_ptr<const MchEnginePrep> prep;  // nullptr = feature off
   int global_version{kEmuGlobalVersion};
-  // Required whenever `prep` is set; the decorator and actor dereference it.
+  // Required whenever `prep` is set; scheduler integration and actor dereference it.
   std::shared_ptr<EmuGate> gate;
   // Cell-db tier-2 lookups. Enabled by default; disabling them uses tier 1 only.
   bool tier2{true};

@@ -290,7 +290,7 @@ target_compile_features(mch-fixtures PUBLIC cxx_std_20)
 target_link_libraries(mch-fixtures PUBLIC mch-classify lz4::lz4)
 add_dependencies(mch-fixtures mch_generate_sources)
 
-# --- In-process shadow classifier for ton-trace-emulator.
+# --- In-process classifier for ton-trace-emulator.
 # Split in two so the emulator-free side (converter / interfaces / actor) stays
 # linkable without emulator_static.
 add_library(mch-emu STATIC
@@ -305,10 +305,10 @@ target_include_directories(mch-emu PUBLIC src)
 target_compile_features(mch-emu PUBLIC cxx_std_20)
 target_link_libraries(mch-emu PUBLIC mch-classify)
 
-# EmuShadow.cpp is the ONLY TU that includes TraceEmulator.h.
+# EmuClassifierBridge.cpp is the ONLY TU that includes TraceEmulator.h.
 # ton-trace-emulator-core is add_subdirectory'd after this one; link libraries
 # resolve at generate time, and the core lib knows nothing of mch (no cycle).
-add_library(mch-emu-bridge STATIC src/emu/EmuShadow.cpp)
+add_library(mch-emu-bridge STATIC src/emu/EmuClassifierBridge.cpp)
 target_compile_features(mch-emu-bridge PUBLIC cxx_std_20)
 target_link_libraries(mch-emu-bridge PUBLIC mch-emu ton-trace-emulator-core)
 
