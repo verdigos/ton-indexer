@@ -1,7 +1,6 @@
-# tgBTC mint — remake of blocks/tgbtc.py TgBTCMintBlockMatcher (roadmap R03).
+# tgBTC mint matcher corresponding to TgBTCMintBlockMatcher.
 #
-# Legacy shape vs. this remake
-# ----------------------------
+# Matcher shape
 # The mint trace is a single linear call chain of arbitrary length:
 #
 #     op 0x3F781D24 (head) -> <N arbitrary-opcode hops> -> op 0xE42A879B (tail)
@@ -13,7 +12,7 @@
 # opcodes 0xE92BD172 / 0xD303C8F4 / 0xEFFE02DA / 0x0A48515A that no fixed head
 # could enumerate). The legacy matcher anchors on the TAIL (0xE42A879B) and then
 # imperatively walks `previous_block` up to 20 hops to rediscover the head — a
-# scan the remake gate lets us drop. This remake anchors on the distinctive
+# scan. This matcher anchors on the distinctive
 # HEAD (0x3F781D24) and descends the chain with an `any`-headed recursion whose
 # exclusive exit branch is the tail plus its two-item children set. Same
 # consumed set, same produced block.
@@ -31,7 +30,7 @@
 # 0x77A80EF3 call, the mint the sole `jetton_mint` block — so derivation is
 # unambiguous. Captures are declared for pattern fidelity but not read (the
 # exit-branch captures @tail/@log/@mint would be list bindings under recursion,
-# §7.2, and the compiled path's positional walker mis-binds same-position exit
+# and the compiled path's positional walker mis-binds same-position exit
 # captures — the same reason evaa/stonfi_v2/dedust_swap drive off the consumed
 # set).
 #
@@ -43,13 +42,13 @@
 #   @mid   (any)                 the intermediate hops (structural only)
 
 # =============================================================================
-# W2 — the rest of the family (blocks/tgbtc.py, legacy matchers-list slots
-# 65..71: mint, burn, new_key, then the four log-only fallbacks).
+# The rest of the family comprises mint, burn, new_key, and four log-only
+# fallbacks.
 #
-# ORDERING. All six live in THIS file, in the legacy registration order, and the
-# order is LOAD-BEARING: each log-only matcher anchors on an opcode its full
-# sibling CONSUMES. `tgbtc_mint` eats 0x77A80EF3, `tgbtc_burn` eats 0xCA444CE6,
-# `tgbtc_new_key` eats both 0x27756729 and 0x453443A6 — so a full matcher must
+# All six live in this file in registration order. The order matters: each
+# log-only matcher anchors on an opcode its full sibling consumes. `tgbtc_mint`
+# eats 0x77A80EF3, `tgbtc_burn` eats 0xCA444CE6, and `tgbtc_new_key` eats both
+# 0x27756729 and 0x453443A6. A full matcher must
 # claim its chain before the fallback can claim the naked log, or every complete
 # trace would also emit a crippled `*_fallback` row. Equal priority (all default
 # 100) ⇒ the tie-break is (file, source position), which is exactly what the
@@ -59,14 +58,14 @@
 # `tgbtc_burn`'s `btype jetton_burn` anchor matters, and that must stay behind
 # the priority-90 jetton family that builds it (it does: default 100).
 #
-# THE SHARED PAYOUT TAIL. burn and new_key both allow the same optional payout
-# subtree — `0xBE44E7A6 -> { maybe 0x1A84C0E0 ; maybe ton_transfer }` — and both
+# Burn and new_key allow the same optional payout subtree,
+# `0xBE44E7A6 -> { maybe 0x1A84C0E0 ; maybe ton_transfer }`, and both
 # read nothing out of it; it exists only to widen the consumed set. Written out
 # twice rather than hoisted to a `rule`: a rule reference cannot carry the
 # attach-to-left context a children block needs (C008), so the inline form is
 # the only one available.
 #
-# CONTRACT DEPLOYS. The payout call deploys its destination on every fixture, so
+# The payout call deploys its destination on every fixture, so
 # a `ContractDeploy` hangs off its `children_blocks`. Unlike `tgbtc_mint` (whose
 # legacy hand-walk sweeps those up explicitly) neither legacy burn nor legacy
 # new_key collects them — both merge only `other_blocks + [block]` — so NO
@@ -194,7 +193,7 @@ matcher tgbtc_burn {
 # parent — legacy's `parent_matcher=GenericMatcher(test_self=True,
 # child_matcher=<dkg log>)`, i.e. "the anchor's parent, whatever it is, must
 # also have a dkg-log child". `any @p` is that untyped parent. The shape is
-# LEGAL (mch-port-audit.md:284): a children block does not advance the chain
+# This is legal because a children block does not advance the chain
 # cursor, so `@k -> {…}` still leaves the parent edge attached to the anchor,
 # and the trailing `-> {…}` attaches to @p — not the C009 shape, which needs a
 # parent edge hanging off a node reached BY a child edge.
@@ -240,10 +239,9 @@ matcher tgbtc_new_key {
 #
 # External-out logs ARE matchable on both engines: a destination-less out_msg
 # becomes a real leaf EventNode with `btype == "call_contract"` and its opcode
-# set, and the walker anchors on it (mch-port-audit.md:182 §2.7 — the suspected
-# engine gap that turned out not to exist).
+# set, and the walker anchors on it.
 #
-# Each fallback MUST stay after its full sibling above; see the ORDERING note at
+# Each fallback must stay after its full sibling above; see the ordering note at
 # the top of the file.
 # =============================================================================
 

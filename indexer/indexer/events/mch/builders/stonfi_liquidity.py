@@ -1,12 +1,11 @@
-"""mch registries for the stonfi_v2 liquidity matchers (specs/stonfi_v2_withdraw.mch).
+"""MCH registries for the Stonfi V2 liquidity matchers.
 
-R04 remake of StonfiV2WithdrawLiquidityMatcher, now a FULLY DECLARATIVE build:
-both matchers (normal + refund) express their produced data with `out {...}`
-build statements, so there is no host builder here — only the opcode / block-type
+Both matchers in specs/stonfi_v2_withdraw.mch use declarative builds. The normal
+and refund matchers express their produced data with `out {...}` statements, so
+there is no host builder here, only opcode and block-type
 registration plus the message parsers (`parse pton_* as PTonTransfer`) the
 declarative build needs. The shared blocks/liquidity.py build core is still used
-by the legacy StonfiV2WithdrawLiquidityMatcher (production path); it is no longer
-referenced from the DSL leg.
+by StonfiV2WithdrawLiquidityMatcher but not by the DSL path.
 """
 from __future__ import annotations
 

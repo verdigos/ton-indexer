@@ -69,7 +69,7 @@ td::Result<std::int64_t> num_i64(const Json &n) {
 }
 
 // Node ids referenced by a node record, in the fixed order Python's _edge_refs
-// uses (child, children..., parent, branches..., step, exit) — remap discovery
+// uses (child, children..., parent, branches..., step, exit), remap discovery
 // order depends on it.
 std::vector<int> edge_refs(const Json &rec) {
   std::vector<int> out;
@@ -99,7 +99,7 @@ std::vector<int> edge_refs(const Json &rec) {
 }
 
 // Fail closed on an unrecognized kind: an unknown/typo'd kind must NOT
-// silently degrade to the permissive `any` wildcard (§8.1) — that would make
+// silently degrade to the permissive `any` wildcard. That would make
 // a corrupt artifact match more blocks than authored.
 td::Result<NodeKind> parse_kind(const std::string &k) {
   if (k == "contract") return NodeKind::Contract;
@@ -112,7 +112,7 @@ td::Result<NodeKind> parse_kind(const std::string &k) {
 }
 
 // Recursively collect host-fn / lookup / parse-type names from a build_program
-// JSON subtree (report only).
+// JSON subtree for dependency discovery.
 void scan_program(const Json &e, CompiledMatcher &m) {
   if (e.type() == JType::Object) {
     const std::string k = jstr(e, "k");
@@ -147,7 +147,7 @@ void scan_program(const Json &e, CompiledMatcher &m) {
 }
 
 // Local reachability over every edge kind (child/parent/step/exit/children/
-// branches), mirroring IrMatcher._reachable — cycle-safe, discovery order.
+// branches), mirroring IrMatcher._reachable, cycle-safe, discovery order.
 std::vector<int> reachable(const std::vector<CompiledNode> &nodes, int start) {
   std::vector<int> out{start};
   std::unordered_set<int> seen{start};
@@ -241,8 +241,8 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
   }
 
   // Reachable subgraph remapped to local ids (root = 0), discovery order over
-  // edge_refs — mirrors IrMatcher.__init__. A missing or out-of-range root is
-  // a corrupt artifact, not a default-to-node-0 (§8.1 fail-closed).
+  // edge_refs, mirrors IrMatcher.__init__. A missing or out-of-range root is
+  // a corrupt artifact, not a default to node 0.
   if (!has(rec, "root")) {
     return td::Status::Error("matcher " + m.name + ": missing 'root'");
   }
@@ -354,7 +354,7 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
   m.include_excess = jbool(rec, "include_excess", true);
   m.include_bounces = jbool(rec, "include_bounces", true);
   // A present-but-non-numeric priority is corruption, not a silent default-100
-  // (§8.1): absence still defaults to 100 (matches the Python frontend).
+  // Absence still defaults to 100.
   if (const Json *pf = jfield(rec, "priority"); pf != nullptr && pf->type() != JType::Number) {
     return td::Status::Error("matcher " + m.name + ": 'priority' must be a number");
   }
@@ -448,7 +448,7 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
   if (const Json *ro = jfield(root, "registration_order"); ro != nullptr && ro->type() == JType::Array) {
     // Must be a permutation of [0, matchers): a stray/out-of-range/duplicate
     // index would index compiled[] out of bounds (or drop a matcher) during
-    // the priority sort below — fail closed (§8.1) instead.
+    // the priority sort below. Fail closed instead.
     std::vector<bool> seen(compiled.size(), false);
     for (const auto &mi : ro->get_array()) {
       TRY_RESULT(idx64, num_i64(mi));

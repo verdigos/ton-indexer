@@ -1,6 +1,6 @@
-# Jetton family matchers (T13) — ported from blocks/jettons.py.
+# Jetton family matchers corresponding to blocks/jettons.py.
 # PTonTransferMatcher and FallbackJettonTransferBlockMatcher stay hand-written
-# (build-side disambiguation; declarative in M4).
+# (build-side disambiguation in the declarative form).
 
 opcode JettonTransfer         = 0x0f8a7ea5
 opcode JettonInternalTransfer = 0x178d4519

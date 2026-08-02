@@ -13,9 +13,7 @@ namespace mch {
 
 namespace {
 
-// Memo key. block::StdAddress::parse already folded case and encoding, so the
-// canonical raw form is the identity; the NUL keeps a kind whose tail matches an
-// address head from aliasing (same argument as lookup_key's framing).
+// The NUL separates lookup kind from the canonical raw address without aliasing.
 std::string memo_key(const std::string &kind, const block::StdAddress &addr) {
   return kind + std::string(1, '\0') + std::to_string(addr.workchain) + ":" + addr.addr.to_hex();
 }
@@ -28,8 +26,7 @@ EmuCelldbTier2::EmuCelldbTier2(const AllShardStates *shard_states,
     , config_(std::move(config))
     , budget_(budget)
     , deadline_us_(emu_now_us() + budget.wall_us)
-    // Captures the states pointer, NOT `this`: the default source must survive
-    // a move of the object that installed it.
+    // Capture the states pointer so the source survives moving this object.
     , account_source_([states = shard_states](const block::StdAddress &a) {
       return lookup_account(*states, a);
     }) {
@@ -40,12 +37,10 @@ const schema::AccountState *EmuCelldbTier2::account(const block::StdAddress &add
   if (it != account_memo_.end()) {
     return it->second ? &*it->second : nullptr;
   }
-  // The wall window is half-open [start, deadline): reaching the deadline
-  // exhausts it. Strict `>` would let a wall_us of 0 serve every read that
-  // lands inside the same microsecond emu_now_us() truncates to.
+  // The half-open wall window is exhausted at the deadline.
   if (stats_.fetched >= budget_.fetches || emu_now_us() >= deadline_us_) {
     stats_.budget_exhausted++;
-    // NOT memoized: the budget is a property of the run, not of the account.
+    // Budget exhaustion is scoped to the run and is not memoized by account.
     return nullptr;
   }
   stats_.fetched++;
@@ -56,14 +51,11 @@ const schema::AccountState *EmuCelldbTier2::account(const block::StdAddress &add
 }
 
 Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &addr) {
-  // jvault is three raw data-cell reads and no detector at all, so it does not
-  // go through the V2 render below.
+  // JVault uses raw data-cell reads rather than a V2 detector result.
   if (kind == "jvault_assets") {
     return jvault_assets(addr);
   }
-  // Kind gate BEFORE the read, so an unserved kind never spends budget. This is
-  // what keeps nft_item / nft_sale / nft_auction — tier-1-only this wave — from
-  // costing a celldb round each.
+  // Reject unsupported kinds before spending the account-read budget.
   if (kind != "jetton_wallet" && kind != "dedust_pool" && kind != "nominator_pool") {
     return Value::null();
   }
@@ -73,11 +65,8 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
     return Value::null();
   }
 
-  // Each arm: run the SHARED tondb-scanner detector, adapt its Result to the
-  // pipeline's V2 struct, and hand that to tier 1's own renderer.
-  // The config check guards the two arms that run a get-method —
-  // execute_smc_method dereferences the config unguarded. nominator_pool and
-  // jvault never reach it (a code-hash predicate and three cell parses).
+  // Run the scanner detector and render its V2 result through the tier-1 path.
+  // Detectors that execute get-methods require config.
   std::optional<schema::BlockchainInterfaceV2> iface;
   if (kind == "jetton_wallet") {
     if (config_ == nullptr) {
@@ -101,10 +90,7 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
       iface = to_v2(r.move_as_ok());
     }
   }
-  // nft_item / nft_sale / nft_auction stay tier-1-only this wave (see the kind
-  // gate above): their detectors carry the DNS/auction time-branching that is
-  // excluded from any identity assertion, and the measured recovery target for
-  // this wave is jvault + dedust.
+  // Unsupported interface kinds remain tier-1-only.
   if (!iface) {
     return Value::null();
   }
@@ -129,8 +115,7 @@ Value EmuCelldbTier2::jvault_assets(const block::StdAddress &stake_wallet) {
   }
   const schema::AccountState *pool = account(r_pool_addr.move_as_ok());
   if (pool == nullptr) {
-    // THE PARTIAL CASE, and it is semantic rather than an error: Python returns
-    // (staking_pool, None, jvault_asset) when the pool's extra data is missing.
+    // A missing pool state yields a valid record with a null asset.
     return jvault_record(parts.staking_pool, Value::null(), std::move(jvault_asset));
   }
 
@@ -139,8 +124,7 @@ Value EmuCelldbTier2::jvault_assets(const block::StdAddress &stake_wallet) {
     // Python's KeyError on ['lock_wallet_address'] -> outer except -> None.
     return Value::null();
   }
-  // Through fetch(), so the lock wallet shares the memo and the budget. It is
-  // out-of-trace by construction, so routing it past tier 1 costs nothing.
+  // Resolve the lock wallet through fetch() to share memo and budget state.
   Value jw = fetch("jetton_wallet", {Value::make_str(r_lock.move_as_ok())});
   const Value *jetton = jw.field("jetton");
   if (jetton == nullptr || jetton->t != VType::Str) {
@@ -171,18 +155,14 @@ Value EmuCelldbTier2::fetch(const std::string &kind, const std::vector<Value> &a
     stats_.memo_hits++;
     return it->second;
   }
-  // The TLB parsers throw vm::VmError, which does NOT derive from std::exception
-  // and which classify_txs' catch-all would turn into an engine_fault — i.e. one
-  // malformed account data cell somewhere in celldb would demote a whole trace to
-  // the basic-actions fallback. A tier-2 read that cannot be parsed is a MISS.
+  // Any tier-2 parse failure is a miss and must not fail the whole trace.
   Value v;
   try {
     v = resolve(kind, addr);
   } catch (...) {
     v = Value::null();
   }
-  // Misses are memoized too: a null is a real answer, and the fixpoint would
-  // otherwise pay for the same failed detection once per round.
+  // Memoize misses so fixpoint rounds do not repeat failed detection.
   value_memo_.emplace(key, v);
   return v;
 }

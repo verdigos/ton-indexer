@@ -63,7 +63,7 @@ class Emitter {
   //    where evaluator has no env);
   //  - Build: name -> scope map (slot / let-local / well-known), attr ->
   //    rt_access_build (bodies-aware), lookup -> rt_lookup_build, and every
-  //    fault early-returns BuildOutcome::rejected (spec §10.7).
+  //    fault returns BuildOutcome::rejected.
   explicit Emitter(EmitMode mode = EmitMode::Vectors) : mode_(mode) {
   }
 
@@ -107,7 +107,7 @@ class Emitter {
     if (k == "name") {
       const std::string id = jstr(e, "id");
       // Comprehension element binders shadow every mode's name resolution: a
-      // reference to the bound var reads the lambda parameter directly (§16.1).
+      // reference to the bound variable reads the lambda parameter directly.
       if (auto lit = locals_.find(id); lit != locals_.end()) {
         int i = fresh();
         line("const Value &v" + num(i) + " = " + lit->second + ";");
@@ -123,7 +123,7 @@ class Emitter {
           return bind("rt_fault(\"name '" + id + "' is not bound\")");
         }
         int i = fresh();
-        // §11.4b: bind by const-ref, not a copy — a name read (env.slots[k] /
+        // Bind by const reference. A name read (env.slots[k],
         // consumed / a let alias / a lifetime-extended anchor temporary) is only
         // ever read or copied downstream, never moved-from, so this elides a
         // ~120-byte Value copy per reference on the build hot path.
@@ -148,15 +148,15 @@ class Emitter {
     if (k == "call") {
       const std::string fn = jstr(e, "fn");
       std::string argv = emit_args(*jfield(e, "args"));
-      // Build mode: a non-builtin call is a host `fn` (registries.fns) — emit
+      // Build mode: a non-builtin call is a host `fn` (registries.fns), emit
       // rt_call_hostfn (env-aware, NULL ARGS PASS THROUGH, unlike rt_call_builtin
       // which is null-strict). Vectors/Where modes only ever see builtins.
       if (mode_ == EmitMode::Build && !is_builtin(fn)) {
         return bind("rt_call_hostfn(env, " + cstr(fn) + ", std::vector<Value>{" + argv + "})");
       }
-      // §11.4a static dispatch: the builtin name + arity are known at emit time,
-      // so call the typed core directly — no name-keyed dispatch, no per-call
-      // heap args vector (§11.4b). is_builtin() gates this; the arg temps are
+      // The builtin name and arity are known at emit time, so call the typed
+      // core directly without name-keyed dispatch or a per-call heap vector.
+      // is_builtin() gates this; the argument temporaries are
       // Value locals passed by const-ref (rt_builtin_* take const Value&).
       return bind("rt_builtin_" + fn + "(" + argv + ")");
     }
@@ -205,8 +205,8 @@ class Emitter {
       return emit_comprehension(e, k == "quant");
     }
     if (k == "parse") {
-      // Build-only build EXPRESSION (W7, IR v1.1). Where/Vectors modes have no
-      // build env + no message parsers -> defensive fault (like lookup/mapc).
+      // Parse expressions require a build environment and message parsers.
+      // Other modes return a defensive fault, as for lookup and comprehension.
       if (mode_ != EmitMode::Build) {
         return bind("rt_fault(\"parse expression is only evaluable in a build program\")");
       }
@@ -224,11 +224,11 @@ class Emitter {
  private:
   EmitMode mode_ = EmitMode::Vectors;
   int n_ = 0;
-  // Comprehension element binders (spec §16.1): name -> C++ expr yielding the
+  // Comprehension element binders map names to C++ expressions yielding the
   // element Value (the lambda parameter). Checked first in the `name` branch,
-  // in every mode. No nesting (frontend R024), so a single flat map suffices.
+  // in every mode. Nested comprehensions are rejected, so one flat map suffices.
   std::map<std::string, std::string> locals_;
-  // True while emitting a comprehension body — the body is an EvalResult-
+  // True while emitting a comprehension body. The body is an EvalResult-
   // returning lambda, so a fault must `return r;` (EvalResult) even in Build
   // mode, not `return BuildOutcome::rejected(...)` (which is the outer fn type).
   bool in_lambda_ = false;
@@ -240,7 +240,7 @@ class Emitter {
   // Early return on a faulted EvalResult temp: expression fns propagate the
   // EvalResult; a build fn's fault is a clean rejection (program.py EvalError).
   // Inside a comprehension body lambda (EvalResult-returning), a Build-mode
-  // fault still returns the EvalResult — rt_mapc/rt_quant propagate it.
+  // fault still returns the EvalResult. rt_mapc and rt_quant propagate it.
   std::string fault_line(const std::string &res) const {
     if (mode_ == EmitMode::Build && !in_lambda_) {
       return "if (" + res + ".faulted) return BuildOutcome::rejected(std::move(" + res +
@@ -249,9 +249,9 @@ class Emitter {
     return "if (" + res + ".faulted) return " + res + ";";
   }
 
-  // `map|any|all(xs as VAR => body)` (§16.1). Emits the list expr, then a
+  // `map|any|all(xs as VAR => body)` emits the list expression, then a
   // lambda binding VAR per element, dispatched through the shared rt_mapc /
-  // rt_quant cores — the SAME cores the interpreter calls.
+  // rt_quant cores shared with the interpreter.
   std::string emit_comprehension(const Json &e, bool is_quant) {
     if (mode_ == EmitMode::Where) {
       // Load/compile-rejected in a where_expr; defensive fault (sync test_self).
@@ -395,7 +395,7 @@ class Emitter {
   }
 };
 
-// --- build-statement generator (Phase B1, D2) --------------------------------
+// --- Build-statement generator ----------------------------------------------
 // Ports program.py BuildProgram.run statement-for-statement into straight-line
 // C++ over BuildRuntime/ExprRuntime. One BuildGen per matcher record.
 class BuildGen {
@@ -485,7 +485,7 @@ class BuildGen {
   }
 
   // `produces switch`: first branch whose `when` is true (else arm has no
-  // `when`); LAZY — later branch conditions must not evaluate once one
+  // `when`); LAZY, later branch conditions must not evaluate once one
   // matched; no branch -> fault -> rejection (program.py _eval_switch).
   void emit_switch(const td::JsonArray &branches, std::size_t idx) {
     if (idx == branches.size()) {
@@ -549,7 +549,7 @@ class BuildGen {
       return;
     }
     if (s == "failed" || s == "broken") {
-      // program.py: `failed = failed or await eval_bool(...)` — the condition
+      // program.py: `failed = failed or await eval_bool(...)`, the condition
       // is NOT evaluated once the flag is already true (short-circuit).
       const std::string flag = s == "failed" ? "o.failed" : "o.broken";
       auto body = buffered([&] {
@@ -599,7 +599,7 @@ std::string cstr(const std::string &s) {
     } else if (ch == '\r') {
       out += "\\r";
     } else if (uc < 0x20 || uc == 0x7f) {
-      // Every other control byte (incl. NUL — a real past bug) as a 3-digit
+      // Every other control byte (incl. NUL, a real past bug) as a 3-digit
       // octal escape. Octal is used instead of \x because \x greedily consumes
       // ALL following hex digits: `\x0` before a literal 'a' would parse as
       // \x0a. A 3-digit octal escape reads at most 3 digits, so an adjacent

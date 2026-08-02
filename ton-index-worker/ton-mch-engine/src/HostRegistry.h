@@ -1,13 +1,13 @@
-// Host bindings ported from the Python registries (Phase D).
+// Host bindings corresponding to the reference registries.
 //
 // Predicates (`predicate NAME` in specs; Python impls live in
 // indexer/events/mch/builders/*.py registrations): sync `(Block) -> bool`,
 // consulted at MATCH time by the walker (pred-kind nodes, node-level named
 // `where` clauses, pred anchors). The IR loader gates matcher runnability on
-// this registry — a matcher whose pred names are all registered is runnable;
+// this registry, a matcher whose pred names are all registered is runnable;
 // the missing names become its skip reason. The Python twins read the
 // registered-name list from twins/cpp_surface.json (CPP_PREDS), emitted by
-// `ton-mch-engine --surface` off THIS registry — not hand-mirrored.
+// `ton-mch-engine --surface` off THIS registry, not hand-mirrored.
 #pragma once
 
 #include "ExprRuntime.h"
@@ -30,10 +30,10 @@ using HostPredFn = bool (*)(const Block *);
 const std::map<std::string, HostPredFn> &host_predicates();
 
 // Host `fn` implementations (Python registries.fns): the build-time escape
-// hatch. Unlike builtins, ARGUMENTS PASS THROUGH unchanged — a null arg is NOT
+// hatch. Unlike builtins, ARGUMENTS PASS THROUGH unchanged, a null arg is NOT
 // short-circuited (the fn decides). Signature takes the BuildEnv so a fn can
 // reach env.lookups (two-phase) / env.consumed. A thrown/faulted result is a
-// clean match rejection (spec §10.7); returning Null likewise rejects when the
+// clean match rejection. Returning Null likewise rejects when the
 // spec `reject when`s the null.
 using HostFn = EvalResult (*)(BuildEnv &, const std::vector<Value> &);
 
@@ -42,11 +42,11 @@ using HostFn = EvalResult (*)(BuildEnv &, const std::vector<Value> &);
 const std::map<std::string, HostFn> &host_fns();
 
 // Host `shape` implementations (Python registries.shapers): a post-build
-// topology pass (spec §8.7). Python signature is `shaper(produced, match)`;
+// topology pass. The reference signature is `shaper(produced, match)`;
 // captured blocks are reached by name and an arena is needed to mint proxy
 // blocks (Python EmptyBlock() self-allocates; C++ blocks are arena-owned), so
 // both ride on ShaperMatch. The classify pipeline INVOKES them
-// (ClassifyCore.cpp try_build, after merge — the §8.7 last build step); no
+// from ClassifyCore::try_build after merge as the last build step. No
 // artifact matcher currently pairs a build_program with a `shape`, so the call
 // site is live but unexercised by the corpus. The --shape-test harness drives
 // them directly, and registration keeps build_skip_reason from reporting a

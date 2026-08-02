@@ -227,23 +227,23 @@ type Envelope struct {
 	// unmarshal once into Envelope, then unmarshal again into op-specific struct.
 }
 
-// subscribe (merge) — adds event types to addresses (existing ones preserved)
+// SubscribeRequest adds event types to addresses and preserves existing ones.
 type SubscribeRequest struct {
 	Addresses []string    `json:"addresses"`
 	Types     []EventType `json:"types"`
 }
 
-// set_subscription (replace) — authoritative snapshot of the full subscription
+// SetSubscriptionRequest is an authoritative snapshot of the full subscription.
 type SetSubscriptionRequest struct {
 	Subscriptions map[string][]EventType `json:"subscriptions"`
 }
 
-// unsubscribe — remove a list of addresses entirely
+// UnsubscribeRequest removes a list of addresses entirely.
 type UnsubscribeRequest struct {
 	Addresses []string `json:"addresses"`
 }
 
-// configure — toggle globals setting for this connection
+// ConfigureRequest toggles global settings for this connection.
 type ConfigureRequest struct {
 	IncludeAddressBook   *bool    `json:"include_address_book"`
 	IncludeMetadata      *bool    `json:"include_metadata"`

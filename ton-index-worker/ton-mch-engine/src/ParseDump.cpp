@@ -1,5 +1,5 @@
 // --parse-dump harness (CLI dump adapter), split out of MsgParse.cpp so the
-// message-parsing layer keeps ONLY the registry + dispatch (§11 item 2
+// message-parsing layer keeps only the registry and dispatch;
 // isolation). Renders each fixture message whose opcode is a registered
 // jetton-family opcode; byte-for-byte twin: twins/py_msg_dump.py.
 #include "ParseDump.h"

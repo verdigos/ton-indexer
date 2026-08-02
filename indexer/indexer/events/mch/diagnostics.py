@@ -10,47 +10,47 @@ class Severity(Enum):
 
 
 # Diagnostic codes are plain strings passed at each call site (R0xx resolver,
-# P0xx parser, L0xx lexer, C0xx/B0xx compiler). New codes introduced for the M4
-# build language are named here so there is one discoverable record of them.
+# P0xx parser, L0xx lexer, C0xx/B0xx compiler). Build-language codes are named
+# here so there is one discoverable record of them.
 R010_UNRESOLVED_REFERENCE = "R010_UNRESOLVED_REFERENCE"
 """A bare identifier in a build-statement expression does not resolve to a
-pattern capture or a previously declared `let` name (§9)."""
+pattern capture or a previously declared `let` name."""
 
 R011_PARSE_TARGET_NOT_CAPTURE = "R011_PARSE_TARGET_NOT_CAPTURE"
-"""The target of a `parse X as T` statement is not a pattern capture (§9.1)."""
+"""The target of a `parse X as T` statement is not a pattern capture."""
 
 R012_UNKNOWN_MESSAGE_TYPE = "R012_UNKNOWN_MESSAGE_TYPE"
 """A message type named in `parse … as T` is not present in the host's
-message-type registry (§9.1)."""
+message-type registry."""
 
 R013_DUP_LET = "R013_DUP_LET"
-"""A `let` name collides with a pattern capture or an earlier `let` (§9.2)."""
+"""A `let` name collides with a pattern capture or an earlier `let`."""
 
 R014_DUP_OUT_FIELD = "R014_DUP_OUT_FIELD"
-"""The same field name appears more than once in an `out` block (§9.5)."""
+"""The same field name appears more than once in an `out` block."""
 
 R015_BUILD_AMBIGUOUS = "R015_BUILD_AMBIGUOUS"
 """A matcher declares both a `build` directive (registered builder) and build
-statements — ambiguous; use exactly one form (§9)."""
+statements. Use exactly one form."""
 
 R016_BUILD_NO_OUT = "R016_BUILD_NO_OUT"
 """A declarative matcher (no `build` directive) has build statements but no
-`out` block — nothing to produce (§9.5)."""
+`out` block, so there is nothing to produce."""
 
 R017_MULTIPLE_OUT = "R017_MULTIPLE_OUT"
-"""More than one `out` block in a matcher body; exactly one is allowed (§9.5)."""
+"""More than one `out` block in a matcher body; exactly one is allowed."""
 
 R022_UNNORMALIZED_PRODUCES_CLASS = "R022_UNNORMALIZED_PRODUCES_CLASS"
 """A PascalCase (class-name) `produces` token has no class->btype entry in
 mch/btypes.py CLASS_TO_BTYPE, so it cannot be normalized to the block's real
-btype (spec §8.1, report F3). Left unresolved it would silently emit the class
-name itself as the produced btype — a downstream mismatch the serializer and
+btype. Left unresolved it would silently emit the class name itself as the
+produced btype, which the serializer and
 legacy blocks never key on. Add the entry, or use the bare btype string."""
 
 R023_PARSE_TARGET_COMPOSED_BLOCK = "R023_PARSE_TARGET_COMPOSED_BLOCK"
-"""A `parse X as T` statement targets a capture bound by a `btype` node — a
-composed/produced block built by a PRIOR matcher (spec §9.1, report F1). A
-produced block's `get_body()` reads `event_nodes[0]`, whose identity after the
+"""A `parse X as T` statement targets a capture bound by a `btype` node: a
+composed block built by an earlier matcher. A produced block's `get_body()`
+reads `event_nodes[0]`, whose identity after the
 prior matcher's `merge_blocks` is not the anchor protocol message, so the
 re-parse does not round-trip and `.body` silently null-propagates. Read the
 prior matcher's fields via `X.data.<field>` instead of re-parsing."""
@@ -58,26 +58,25 @@ prior matcher's fields via `X.data.<field>` instead of re-parsing."""
 R024_NESTED_COMPREHENSION = "R024_NESTED_COMPREHENSION"
 """A `map|any|all(xs as e => body)` comprehension appears inside another
 comprehension (either the outer `xs` or `body`). Nested comprehensions are
-forbidden (spec §16.1): exactly one bound element var per comprehension, no
+forbidden: exactly one bound element var per comprehension, no
 comprehension in the iterated list or the body."""
 
 P011_DUPLICATE_DIRECTIVE = "P011_DUPLICATE_DIRECTIVE"
 """A matcher declares the same at-most-once directive more than once
-(currently: `shape`, §8.7)."""
+(currently `shape`)."""
 
 P012_STITCH_REMOVED = "P012_STITCH_REMOVED"
-"""A `stitch` declaration was encountered. stitch was removed in 0.2 (§3.5,
-§5.5): cross-trace joining is permanently out of scope; paired results are
-merged by host post-process code. The v0.1 words `stitch partial final key
-ttl merge` stay reserved solely to make this error targeted."""
+"""A `stitch` declaration was encountered. Cross-trace joining is unsupported;
+host post-process code merges paired results. The words `stitch partial final
+key ttl merge` remain reserved so this error is targeted."""
 
 C011_UNKNOWN_SHAPER = "C011_UNKNOWN_SHAPER"
 """The `shape` directive names a shaper that is not present in the host's
-shaper registry (§8.7, §11.1)."""
+shaper registry."""
 
 C012_CYCLIC_RULE_SHAPE = "C012_CYCLIC_RULE_SHAPE"
-"""A `rule NAME cyclic = …` body violates the cyclic-descent shape rules
-(§10.3, [M2R, R11/T28]): captures inside the body, a self-reference that is
+"""A `rule NAME cyclic = …` body violates the cyclic-descent shape rules:
+captures inside the body, a self-reference that is
 not the last atom of its chain, a `maybe`-wrapped self-reference, or a
 reference to another recursive rule."""
 

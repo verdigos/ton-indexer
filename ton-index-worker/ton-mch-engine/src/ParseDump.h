@@ -1,4 +1,4 @@
-// --parse-dump CLI harness (split out of MsgParse per §11 item 2). MsgParse now
+// --parse-dump CLI harness. MsgParse
 // holds only the TL-B registry + dispatch; this renders the fixture messages.
 #pragma once
 

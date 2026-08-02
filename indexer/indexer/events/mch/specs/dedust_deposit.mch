@@ -14,24 +14,21 @@
 # event-node sets are identical either way (the composite carries the same
 # nodes, including per-node excess absorption).
 #
-# The spec doc's §14.3 worked example is idealized — its opcode values and the
-# rejection/destroy shapes do not match the code; this file follows the code.
+# The implementation's opcode values and rejection/destroy shapes are
+# authoritative; this file follows the code rather than the idealized example.
 #
 # Paired partial+final blocks are merged by host-side
-# post_process_dedust_liquidity (spec §5.5): both builders return the exact
+# post_process_dedust_liquidity: both builders return the exact
 # registered block classes the pass dispatches on
 # (DedustDepositLiquidity / DedustDepositLiquidityPartial).
 #
 # The partial matcher's legacy guard (raise when final-deposit opcodes follow
-# the topup — a failed-final leftover) lives in the shared build core and
+# the topup, a failed-final leftover) lives in the shared build core and
 # surfaces as a builder reject here.
 #
 # Flat parent chain `<- op Ask -> { maybe op Deploy } <- $deposit_leg`: ask gets
-# BOTH children_matchers=[deploy] and parent=Or(deposit legs), byte-matching the
-# legacy structure. (Previously the trailing `<- $leg` parent edge after the
-# children block was silently dropped and the hop had to be grouped
-# `<- ( op Ask -> {...} <- $leg )`; T04 fixed the lowering so the flat form
-# wires identically to the grouped form.)
+# both children_matchers=[deploy] and parent=Or(deposit legs), matching the
+# source structure. The flat and grouped forms wire identically.
 #
 # Builders are consumed-set/tree-driven (Match._mch_consumed + previous_block
 # navigation), same approach as dedust_swap/stonfi_v2; captures are kept for
@@ -71,7 +68,7 @@ rule vault_excess =
 # assembly are declarative; the imperative residue (deposit-leg resolution via
 # previous_block navigation, per-vault BOC parsing, jetton-wallet interface
 # lookups, and the excess-payout scan over the consumed set) stays in two host
-# fns that return the field record. Each fn returns null to reject (spec §10.7),
+# fns that return the field record. Each fn returns null to reject,
 # reproducing the builder's `return None` (including the partial matcher's
 # final-deposit-opcodes-after-topup guard). Product is a generic
 # Block(btype dedust_deposit_liquidity[_partial]); the distinct btypes let

@@ -1,7 +1,5 @@
-# LayerZero receive — port of blocks/layerzero.py LayerZeroReceiveMatcher, now
-# DECLARATIVE build (M4 §9). Structure unchanged (single anchor + nested children
-# set, no recursion); only the build body moved from builders/layerzero.py into
-# the spec.
+# LayerZero receive matcher with a declarative build. It uses one anchor and a
+# nested children set, with no recursion.
 #
 # Structure:
 #
@@ -15,38 +13,38 @@
 #                        -> { maybe op LayerZeroEventMsgBody   # event_2 (optional)
 #                           ; maybe ton_transfer } } }         # excess_transfer_2
 #
-# DUP-LABEL TRAP (why two capture names): the legacy file reuses the label
-# "execute_callback" on TWO nested, non-exclusive nodes — layerzero.py:363
+# The source matcher reuses the label "execute_callback" on two nested,
+# non-exclusive nodes: layerzero.py:363
 # (LayerzeroLzReceiveExecute, 0x0c7b8418) and layerzero.py:368
 # (LayerZeroOappExecuteCallback, 0xcaae25a1). Same-name captures are only legal
-# across exclusive branches (R005), so the two nodes get DISTINCT names here:
+# across exclusive branches (R005), so the two nodes get distinct names here:
 # @execute (outer) and @oapp_callback (inner). The legacy `get_labeled` returns
-# the FIRST label in traversal order — the OUTER @execute — so the build reads
+# the first label in traversal order, the outer @execute, so the build reads
 # @execute (channel source, receiver-OApp destination) for the packet + envelope.
 # @oapp_callback is bound for pattern fidelity but the legacy build never read it.
 #
-# Captures bind as scalars (non-recursive pattern, §7.1/§7.2). The build parses
+# Captures bind as scalars because the pattern is non-recursive. The build parses
 # @execute's body (the OApp callback carries the LayerZero packet) and maps every
 # LayerZeroReceiveData field straight off the two envelopes + the parsed packet.
 #
-# GAP (address-form normalization): the legacy safety check compares the execute
+# The address-form safety check compares the execute
 # destination against the packet's dst_oapp with `dest[2:].lower() ==
-# dst_oapp[2:].lower()`. The two carry the same 256-bit hash in DIFFERENT string
-# forms — the envelope destination is `0:<hex>` (a TON address), the packet
+# dst_oapp[2:].lower()`. The two carry the same 256-bit hash in different string
+# forms. The envelope destination is `0:<hex>` (a TON address), while the packet
 # dst_oapp is `0x<hex>` (a bare 256-bit hash). `account()` cannot bridge them:
 # `account("0x<hex>")` raises AddressError (verified), so `account(a) == account(b)`
 # rejects every real trace. String slicing/lowercasing is out of the expression
-# language by design (§9.6, no string manipulation), so this stays a host `fn`.
-# Smallest C++-implementable design: a `bool same_hash(addr_str, hash_str)` that
+# language by design, so this stays a host `fn`.
+# The `same_hash(addr_str, hash_str)` host function
 # strips the two prefixes and compares the hex case-insensitively.
 
 # =============================================================================
-# W3 — the rest of the family (blocks/layerzero.py, legacy matchers-list slots
-# 75..79: send, send_tokens, receive, commit_packet, dvn_verify).
+# The remaining family matchers are send, send_tokens, receive, commit_packet,
+# and dvn_verify.
 #
-# ORDERING. All five live in THIS file. Only ONE pair is order-bearing:
+# All five live in this file. Only one pair is order-bearing:
 # `layerzero_send_tokens` anchors on `btype layerzero_send`, the block
-# `layerzero_send` produces, so it must stay AFTER it. The other three carry
+# `layerzero_send` produces, so it must stay after it. The other three carry
 # pairwise-distinct anchor opcodes (0x22f3ac09 / 0x28b97077 / 0xa0d51a8d),
 # claim no btype another matcher builds, and nothing consumes their products —
 # so `layerzero_receive` keeping its historical first slot (rather than the
@@ -56,18 +54,18 @@
 # keeps send_tokens behind the priority-90 jetton family that builds the
 # `jetton_transfer` parent it binds.
 #
-# THE THREE NEW HAND PARSERS. `LayerzeroChannelSendCallback`,
+# Hand parsers. `LayerzeroChannelSendCallback`,
 # `ChannelCommitPacket` and `UlnConnectionVerifyCallbackParser` are all
-# kept hand-side because each emits a NESTED named object
+# kept hand-side because each emits a nested named object
 # (LayerZeroPacket / LayerZeroPath / LayerZeroMDLzSend), reaches its payload
 # through a raw `refs[0].refs[0].refs[0]` walk, and formats 256-bit fields as
 # Python `hex()` minimal-digit strings. They join the hand table in
 # src/parse/ParseLayerZero.cpp next to the receive parser and reuse its
 # `lz_parse_packet` / `lz_hex_min` unchanged.
 #
-# THE STATUS STRING. `layerzero_dvn_verify.status` is one of "succeeded" /
+# `layerzero_dvn_verify.status` is one of "succeeded" /
 # "nonce_out_of_range" / "dvn_not_configured" / "unknown_<decimal code>". The
-# expression language has no string operations at all (§15b), so the mapping
+# expression language has no string operations at all, so the mapping
 # lives where the code is read — inside the parser, which emits both
 # `status_code` (the raw uint32) and `status` (the mapped string), exactly like
 # the Python class. No `produces switch`, no literal branch per code.
@@ -115,7 +113,7 @@ matcher layerzero_receive {
 
     parse execute as LayerZeroOappExecuteCallback
     # Safety check from build_layerzero_receive_core: the execute destination must
-    # be the same account as the packet's dst_oapp (see GAP note above).
+    # be the same account as the packet's dst_oapp.
     reject when not layerzero_dst_oapp_matches(execute.msg.destination, execute.body.packet.path.dst_oapp)
     out {
         sender:  account(prepare.msg.source)
@@ -148,7 +146,7 @@ matcher layerzero_receive {
 # items because the legacy matcher declares five (`excess_transfer_1..5`) — the
 # ULN fans gas remainders out to the workers it paid, and the count varies per
 # send (the two fixtures carry four and three). The language has no
-# `zero_or_more` quantifier (§16), so the legacy fixed-arity form is reproduced
+# `zero_or_more` quantifier, so the legacy fixed-arity form is reproduced
 # literally. Item order matters: the required PacketSent event goes first and
 # the required oapp callback last, exactly as legacy declares them, so the
 # optional slots in between can absorb whatever ton_transfers are present.
@@ -261,22 +259,20 @@ matcher layerzero_send_tokens {
 #     0x28b97077 -> 0xf9d37b80 -> 0x5dab749a -> 0x5388cd88
 #         -> { maybe PacketVerified event ; maybe msglib callback -> maybe excess }
 #
-# TRAP — msglib_callback is optional in the PATTERN and hard-required in the
-# BUILD (`if not … or not msglib_callback_block: return []`, layerzero.py:488),
-# so the real net behaviour is "required". Ported faithfully as `maybe` +
-# `reject when … == null`, NOT as a required node: the two differ in what the
+# msglib_callback is optional in the pattern and required by the build
+# (`if not … or not msglib_callback_block: return []`, layerzero.py:488).
+# This uses `maybe` plus `reject when … == null`, rather than a required node,
+# because the two forms differ in what the
 # engine does with a trace that lacks the callback. A required node fails the
-# structural match, which under the clean-rejection rule (§10.7) is the same
+# structural match, which under the clean-rejection rule is the same
 # outcome — but the `maybe` + reject form also reproduces the legacy CONSUMED
 # set on the paths where the callback exists and its own optional excess child
-# does not, and keeps the pattern a literal transcription of the legacy
-# children_matchers list. Both corpus fixtures carry the callback, so the reject
-# arm is unexercised on real data.
+# does not. It also preserves the children_matchers consumed set.
 #
-# QUIRK — `uln` and `uln_connection` are BOTH written from the ULN CONNECTION's
+# `uln` and `uln_connection` are both written from the ULN connection's
 # destination (layerzero.py:506-507 assigns the same `uln_connection` local to
 # both fields; the anchor's own destination, the real ULN, is never read).
-# Reproduced, not fixed.
+# This matches LayerZeroCommitPacketMatcher.
 # -----------------------------------------------------------------------------
 matcher layerzero_commit_packet {
     produces LayerZeroCommitPacketBlock

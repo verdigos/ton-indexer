@@ -2,10 +2,10 @@
 // build_coffee_swap_core). See host/HostImpls.h for the internal registry
 // surface. Message bodies are parsed inline (the spec parses none of them).
 //
-// W1 pilot for the typed host-authoring seam: coffee_swap_data is a thin thunk
+// coffee_swap_data is a thin thunk
 // over run_swap_host; the logic is the typed `coffee_swap` core below, which
 // derives a SwapRecord instead of assembling + mutating generic `Value` dicts
-// (the former const_cast peer-fill is now SwapRecord::fill_peer_out_assets).
+// through SwapRecord::fill_peer_out_assets.
 #include "host/HostImpls.h"
 
 #include "host/BlockViews.h"
@@ -132,9 +132,9 @@ R coffee_swap(HostContext &, const ConsumedBlocks &consumed) {
     return R::reject();
   }
 
-  // in_transfer_data (§11.5 dual dispatch). A jetton in-leg is a generic Block
+  // For in_transfer_data, a jetton in-leg is a generic Block
   // with btype "jetton_transfer" whose `.data` carries the transfer fields
-  // (swaps.py:1395 now gates on btype); else the CoffeeSwapNative TON arm.
+  // (swaps.py gates on btype); otherwise use the CoffeeSwapNative TON arm.
   Value sender = Value::null();
   TransferLeg in_leg;
   if (in_transfer->btype == "jetton_transfer") {
@@ -165,7 +165,7 @@ R coffee_swap(HostContext &, const ConsumedBlocks &consumed) {
                      account_from_opt(m != nullptr ? m->destination : std::nullopt));
   }
 
-  // out_transfer_data (§11.5 dual dispatch). Jetton out-leg via btype/.data
+  // For out_transfer_data, a jetton out-leg uses btype and data;
   // (swaps.py:1424); else CoffeePayout / CoffeeNotification TON arms.
   TransferLeg out_leg;
   if (out_transfer->btype == "jetton_transfer") {
@@ -213,7 +213,7 @@ R coffee_swap(HostContext &, const ConsumedBlocks &consumed) {
   rec.referral_amount = Value::null();
   rec.referral_address = Value::null();
   rec.failed = !ok;
-  // Fill peer out-assets from the next hop / final payout (replaces the former
+  // Fill peer out-assets from the next hop or final payout.
   // const_cast on generic Value storage).
   rec.fill_peer_out_assets();
   return R::ok(std::move(rec));

@@ -16,15 +16,15 @@ namespace {
 
 // A float-backed Amount (make_amount_float): a render-only representation from
 // fixture data (getgems price). The language has no floats, so any USE of one
-// as an expression value (comparison, arithmetic, `.value` unwrap) faults —
-// only rendering (BuildDriver / structural_equal) is allowed. §4.2.
+// as an expression value (comparison, arithmetic, `.value` unwrap) faults.
+// Only rendering and structural comparison are allowed.
 bool amount_float_backed(const Value &v) {
   return v.t == VType::Amount && v.amount_float;
 }
 
 // Python Amount(None): a present Amount object with a null value inside.
 // A float-backed Amount also carries a null `num`, but it is NOT Amount(None)
-// (it has a float payload) — exclude it so it faults at use instead of
+// (it has a float payload). Exclude it so it faults at use instead of
 // silently comparing equal to Amount(None).
 bool amount_none(const Value &v) {
   return v.t == VType::Amount && v.num.is_null() && !v.amount_float;
@@ -52,8 +52,7 @@ bool asset_eq(const Value &l, const Value &r) {
 // Python Asset.__eq__ evaluates `self.jetton_address.as_str().lower()` FIRST,
 // so an asset WITHOUT a jetton master (TON) raises AttributeError -> EvalError
 // -> fault; its `is_ton and other == "ton"` clause is unreachable. eq_result
-// faults that pair before reaching here (Phase C golden parse_coffee_vault_
-// native pinned this).
+// faults that pair before reaching here.
 bool asset_eq_str(const Value &asset, const std::string &s) {
   return asset.has_jetton && to_lower(asset.str) == to_lower(s);
 }
@@ -74,9 +73,9 @@ bool account_eq_str(const Value &acc, const std::string &s) {
 }
 
 // Symmetric container equality for the language `==` (rt_eq); defined below.
-// §11 item 2: the runtime owns its own container `==` instead of borrowing the
+// The runtime owns its own container `==` instead of borrowing the
 // harness comparator `structural_equal` (an expected-vs-actual vector helper).
-// The two are behaviourally equivalent for the value model today — this is a
+// The two are behaviorally equivalent for the value model. This is a
 // separation of concerns so `structural_equal` stays harness-only.
 bool container_eq(const Value &l, const Value &r);
 
@@ -159,8 +158,8 @@ EvalResult eq_result(const Value &l, const Value &r, bool want_eq) {
   if (rt_is_null(l) || rt_is_null(r)) {
     eq = rt_is_null(l) && rt_is_null(r);
   } else if (amount_float_backed(l) || amount_float_backed(r)) {
-    // The language has no floats — comparing a float-backed Amount faults
-    // (§4.2), never silently aliases Amount(None).
+    // The language has no floats. Comparing a float-backed Amount faults and
+    // never aliases Amount(None).
     return rt_fault("'==' on a float-backed Amount (the language has no floats)");
   } else {
     // Asset-without-jetton-master vs string: Python Asset.__eq__ raises
@@ -181,9 +180,9 @@ EvalResult ord_result(const Value &l, const Value &r, const char *op) {
     return rt_ok(Value::make_bool(false));
   }
   int c;
-  // Int/Int and Str/Str only — the host (Python) has no Amount ordering
+  // Int/Int and Str/Str only, the host (Python) has no Amount ordering
   // (Amount defines __eq__ only), so ordering an Amount is a fault there
-  // (spec §7.4 "host ordering; non-orderable types → fault").
+  // Non-orderable types fault.
   if (l.t == VType::Int && r.t == VType::Int) {
     c = cmp(l.num, r.num);
   } else if (l.t == VType::Str && r.t == VType::Str) {
@@ -197,7 +196,7 @@ EvalResult ord_result(const Value &l, const Value &r, const char *op) {
 
 // Integer arithmetic coercion: Amount/Int -> its value, else fault.
 // Amount(None) faults here (the Python reference would raise an uncaught
-// TypeError out of matching — a crash; we choose the containable outcome).
+// TypeError out of matching, a crash; we choose the containable outcome).
 bool coerce_int(const Value &v, td::RefInt256 &out, std::string &err) {
   if (amount_float_backed(v)) {
     err = "arithmetic operand is a float-backed Amount (the language has no floats)";
@@ -245,7 +244,7 @@ namespace {
 
 // The `.msg` message envelope of a Block, as an Obj Value. Mirrors Python
 // Block.get_message() (event_nodes[0].message): the field set is the subset of
-// the host Message row the C++ trace loader decodes — a field the loader does
+// the host Message row the C++ trace loader decodes, a field the loader does
 // not carry (e.g. fwd_fee) faults here where Python would return it; keep
 // where_exprs to the envelope set below. `exit_code` resolves through the
 // nested `transaction` object (rt_access Obj branch), like Python's
@@ -358,12 +357,12 @@ EvalResult rt_access(const Value &obj, const std::string &field) {
     return rt_fault("field '" + field + "' on a list capture requires matcher context");
   }
   if (obj.t == VType::Amount) {
-    // Amount.value (spec §9.6, F2): unwrap the wrapper to its raw int, the
+    // Amount.value unwraps the wrapper to its raw integer. The
     // inverse of amount(x). Amount(None) carries a null num -> yields null.
     if (field == "value") {
       if (obj.amount_float) {
         // A float-backed Amount has no integer value to unwrap; the language
-        // has no floats, so `.value` faults here (§4.2) rather than yielding
+        // has no floats, so `.value` faults rather than yielding
         // null (which would alias Amount(None).value).
         return rt_fault("`.value` on a float-backed Amount (the language has no floats)");
       }
@@ -445,9 +444,9 @@ EvalResult rt_mul(const Value &l, const Value &r) { return arith(l, r, '*'); }
 
 // Per-builtin cores (null-strict for 1+ arg builtins). BOTH the interpreter
 // dispatch (rt_call_builtin, vector args) and generated code (static direct
-// calls, §11.4a) go through these — ONE semantics (plan §0.2). Generated code
+// calls go through these typed cores. Generated code
 // emits rt_builtin_<name>(args...) directly, skipping the name-keyed dispatch
-// AND the per-call heap args vector (§11.4b).
+// and the per-call heap argument vector.
 static bool bi_require_list(const Value &v, const std::vector<Value> *&out) {
   if (v.t != VType::List) return false;
   out = v.items.get();
@@ -501,7 +500,7 @@ EvalResult rt_builtin_b64(const Value &x) {
   if (rt_is_null(x)) return rt_ok(Value::null());
   if (x.t == VType::Bytes) return rt_ok(Value::make_str(td::base64_encode(x.str)));
   if (x.t == VType::Cell) {
-    // §12: native td BOC bytes. The b64 STRING differs from pytoniq's on
+    // Use native BOC bytes. The base64 string may differ across writers on
     // multi-ref trees, but every consumer decodes it back to the same cell
     // (root hash equal), and the dumps render such fields by cellhash.
     auto r = td_boc_serialize(x.cell);
@@ -665,9 +664,8 @@ EvalResult rt_builtin_concat(const Value &a, const Value &b) {
   return rt_ok(Value::make_list(std::move(out)));
 }
 
-// The ONE string operation in the language (spec §9.6): a case-SENSITIVE
-// substring test. Both arguments must be Str — a non-string faults rather than
-// answering false — and an empty needle is contained in everything (npos-free
+// Case-sensitive substring test. Both arguments must be Str; a non-string faults
+// rather than answering false. An empty needle is contained in everything (npos-free
 // std::string::find semantics, identical to Python's `in`).
 EvalResult rt_builtin_contains(const Value &a, const Value &b) {
   if (rt_is_null(a) || rt_is_null(b)) return rt_ok(Value::null());

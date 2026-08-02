@@ -1,22 +1,18 @@
-# Base NFT transfer — remake of blocks/nft.py NftTransferBlockMatcher.
+# Base NFT transfer matcher corresponding to NftTransferBlockMatcher.
 #
 # This is the base matcher that produces the `nft_transfer` btype consumed
-# downstream by specs/getgems.mch (the getgems purchase anchors on it). The
-# legacy matcher was never remade in the wave-1/3 sweep; getgems.mch has been
-# running against the LEGACY NftTransferBlockMatcher as its production prereq.
-# This spec produces the identical block so an all-mch pipeline can drop the
-# legacy base matcher (ORDER: nft_transfer must register BEFORE getgems so
-# getgems sees the produced block — a production wiring concern in
-# event_processing.py, not in this file).
+# downstream by specs/getgems.mch (the getgems purchase anchors on it).
+# nft_transfer must
+# register before getgems so getgems sees the produced block; that ordering is
+# wired in event_processing.py.
 #
-# Shape vs. legacy
-# ----------------
+# Matcher shape
 # Anchor: the NftTransfer call. Children: the optional NftOwnershipAssigned
 # notification (source of `prev_owner`) and the optional excess. The legacy
-# child_matcher is an OrMatcher of {NftOwnershipAssigned?, Excess?} that MERGES
+# child_matcher is an OrMatcher of {NftOwnershipAssigned?, Excess?} that merges
 # whichever children match into the nft_transfer. `include_excess` at the root
-# only *appends* the anchor's excess to the result list (never merges it, §4.5),
-# so it would NOT reproduce the legacy topology where the excess is a child of
+# only *appends* the anchor's excess to the result list and never merges it,
+# so it would not reproduce the legacy topology where the excess is a child of
 # the nft_transfer. The excess is therefore matched explicitly in a children set
 # (consumed => merged) and `include_excess` is turned off to avoid a duplicate
 # standalone append. include_bounces stays default true (legacy appends bounces
@@ -25,19 +21,19 @@
 # Purchase-parent consumption (getgems)
 # -------------------------------------
 # When the interface lookups (nft_sale / nft_auction) confirm a getgems
-# purchase, the legacy build sets `is_purchase` + marketplace fields AND absorbs
-# the funding PARENT (buyer payment / sale-contract call) into the nft_transfer
-# — unless the parent is a finish/stop sale-contract ton_transfer. That parent
-# is UPSTREAM of the anchor, so it cannot ride in the pattern-consumed set. The
+# purchase, the legacy build sets `is_purchase` and marketplace fields and absorbs
+# the funding parent (buyer payment / sale-contract call) into the nft_transfer
+# except when the parent is a finish/stop sale-contract ton_transfer. That parent
+# is upstream of the anchor, so it cannot ride in the pattern-consumed set. The
 # builder returns it; the shaper `nft_transfer_parent_absorb` merges it as the
-# last build step (§8.7), after the wrapper merge has placed the produced block
+# last build step, after the wrapper merge has placed the produced block
 # at the anchor's position (so produced.previous_block is the funding parent).
 # On a plain transfer is_purchase is false and the shaper is a no-op.
 #
 # Hybrid shell (C++-runnable): the data build needs the interface repository
 # (`_get_nft_data`, `get_nft_sale`, `get_nft_auction`) and fragment-URI parsing
-# the DSL expression language cannot express — an irreducible host `fn` per
-# §9/§16 — but the wrapper (btype, reject, out mapping) is declarative. The data
+# the DSL expression language cannot express. The wrapper (btype, reject, out
+# mapping) remains declarative. The data
 # + purchase detection stay in build_nft_transfer_core (blocks/nft.py), the same
 # core the legacy thin wrapper calls, wrapped by the `nft_transfer_data` host fn.
 #

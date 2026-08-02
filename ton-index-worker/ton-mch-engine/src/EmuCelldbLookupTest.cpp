@@ -1,23 +1,6 @@
-// --celldb-tier2-test: the W3 celldb tier-2 self-test.
-//
-// The load-bearing assertion is TIER SHAPE EQUALITY. The hook never builds a
-// Value; it produces a schema::BlockchainInterfaceV2 and renders it through
-// ParsedBlockLookupSource::iface_value — the same call tier 1 makes. This gate
-// pins that: for every kind, a struct rendered by the hook's path and the same
-// struct rendered by a real tier-1 fetch must be structurally equal. That is the
-// job KvrocksDecodeTest did by hand in the archive, and it is cheap here only
-// because of the step-6 design.
-//
-// Account reads are injected, so there is no celldb, no shard state, no node.
-// WHAT THIS CANNOT COVER, and therefore needs a live run:
-//   - any successful detection that runs a get-method (jetton_wallet,
-//     dedust_pool V1/V2): they need real code cells, a real block::ConfigInfo
-//     and a TVM run. Only their FAILURE paths are exercised here.
-//   - NominatorPoolContract::detect's positive branch: it needs a code cell
-//     whose hash is the committed nominator-pool hash. The predicate's negative
-//     branch is covered.
-//   - the jvault happy path's last leg (lock wallet -> jetton), for the same
-//     reason. Every other jvault outcome (null, partial, malformed) is covered.
+// Cell-db tier-2 tests pin value-shape equality with tier 1, JVault cell parsing,
+// memoization, and budgets. Injected account reads cannot exercise successful
+// get-method detection or the final JVault jetton-wallet leg.
 #include "EmuCelldbLookupTest.h"
 
 #include "ParsedBlockLookupSource.h"
@@ -148,7 +131,7 @@ void test_tier_shapes() {
     nft.index = td::make_refint(7);
     nft.collection_address = b;
     nft.owner_address = c;
-    // W1 R1: content MUST render as a Dict on BOTH tiers — get_nft_data faults
+    // Content must render as a Dict on both tiers. get_nft_data faults
     // on a non-Dict and a fault drops the whole nft_transfer row.
     nft.content = std::map<std::string, std::string>{{"uri", "https://x/y.json"}};
     same("nft_item", nft);
@@ -167,7 +150,7 @@ void test_tier_shapes() {
     same("nft_sale", s);
   }
   {
-    // The V4 variant answers the SAME kind — that is why widening the emulator's
+    // The V4 variant answers the SAME kind, that is why widening the emulator's
     // detector set needs no tier-1 change.
     schema::GetGemsNftFixPriceSaleV4Data s{};
     s.address = a;
@@ -213,8 +196,8 @@ void test_tier_shapes() {
           ad != nullptr && ad->t == VType::Str && v.fields != nullptr && v.fields->size() == 1);
   }
   {
-    // A variant that answers no kind must render null, not an empty Obj —
-    // otherwise every `reject when lookup == null` would stop firing.
+    // A variant that answers no kind must render null, not an empty Obj, so
+    // `reject when lookup == null` continues to fire.
     schema::JettonWalletDataV2 jw{};
     jw.address = a;
     check("tier_shape/wrong_kind_is_null",
@@ -256,7 +239,7 @@ void test_jvault_parsers() {
   }
   {
     // addr_none pool: Python's staking_pool.to_str() raises into the outer
-    // except, so the WHOLE record is None — not a partial one.
+    // except, so the WHOLE record is None, not a partial one.
     check("jvault/wallet_addr_none_pool_rejects",
           parse_jvault_stake_wallet(stake_wallet_data(std::nullopt, minter)).is_error());
   }
@@ -452,7 +435,7 @@ void test_memo_and_budgets() {
     check("guard/no_reads_on_guarded", f.reads == 0 && t.stats().fetched == 0);
   }
   {
-    // No shard states (a listener-emulated trace) is the pre-W3 behaviour.
+    // A listener-emulated trace has no shard states and therefore no tier 2.
     AllShardStates none;
     EmuCelldbTier2 t(&none, nullptr, Tier2Budget{});
     check("guard/no_shard_states_null",

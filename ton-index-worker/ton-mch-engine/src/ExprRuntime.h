@@ -1,22 +1,6 @@
-// Shared expression-runtime semantics for the MCH expression VM.
-//
-// This is the SINGLE implementation of every leaf operation an MCH expression
-// performs — builtins, arithmetic / comparison / negation, null propagation,
-// truthiness, attribute access, name resolution, lookup nodes. Both consumers
-// share it, so a codegen bug can never be masked by a subtly different runtime:
-//   - the tree-walking interpreter (ExprEval) — reference / fallback path;
-//   - the build-time C++ code generated from IR expressions (indexer frontend
-//     module mch/cpp_expr_emit.py) — production path.
-//
-// Fault model (unchanged from stage 4a): a fault is a DISTINCT OUTCOME, never a
-// thrown exception. Every operation returns an EvalResult{faulted, value}. The
-// generated code threads these with straight-line early returns
-// (`if (r.faulted) return r;`); the interpreter does the same recursively.
-// Null propagation is baked into each op exactly as the Python reference does it
-// (arith null->null, ordering null->false, `==` structural null handling,
-// builtins null-strict), so call sites never need to special-case null except
-// for the lazy operators (`and`/`or`/`??`/ternary), which are control flow and
-// stay at the call site.
+// Shared leaf-operation semantics for generated expressions and the interpreter.
+// Faults are explicit EvalResult values, and each operation defines its own null
+// behavior. See docs/value-model.md for the value and fault contracts.
 #pragma once
 
 #include "Value.h"
@@ -38,10 +22,10 @@ struct EvalResult {
 using Env = std::map<std::string, Value>;
 using Lookups = std::map<std::string, Value>;
 
-// Evaluation context for a node-level inline `where (expr)` (spec §6.8,
-// mch-engine-v2.md §4.1): the candidate block plus (future) slot-indexed
+// Evaluation context for a node-level inline `where (expr)`: the candidate block
+// plus slot-indexed
 // captures. Both the interpreter (ExprEval with a where context) and the
-// generated where-functions take this — one signature, so codegen never has to
+// generated where-functions take this, one signature, so codegen never has to
 // change when slots land: `slots[i]` will hold the capture bound to slot i
 // (Null until bound), n_slots = the matcher's slot count.
 struct Block;  // BlockTree.h
@@ -86,16 +70,15 @@ EvalResult rt_mul(const Value &l, const Value &r);
 
 // --- builtins (null-strict: any null argument short-circuits to null) ---
 // Per-builtin cores. The interpreter dispatches through rt_call_builtin; the
-// generated code (§11.4a static dispatch) calls the typed rt_builtin_<name>
-// directly — no name string, no per-call args vector. ONE semantics: both
-// paths run the SAME core (plan §0.2).
+// generated code calls the typed rt_builtin_<name> directly, without a name
+// string or per-call argument vector. Both paths run the same core.
 EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &args);
 EvalResult rt_builtin_account(const Value &x);
-// --- comprehensions (G-LC / G-Q, spec §16.1) ---
+// --- Comprehensions ---------------------------------------------------------
 // Shared cores for `map(xs as e => body)` / `any|all(xs as e => body)`. `body`
 // is invoked once per element with that element bound; the core owns the
-// null/non-list/empty/short-circuit semantics IDENTICALLY for the interpreter
-// (ExprEval) and the generated code (ONE semantics, plan §0.2). null xs -> null;
+// null, non-list, empty, and short-circuit semantics for both the interpreter
+// and generated code. A null xs produces null;
 // non-list xs -> fault; empty -> [] (map) / false (any) / true (all). Quantifiers
 // short-circuit like std::any_of/std::all_of and require a bool body.
 using ElementFn = std::function<EvalResult(const Value &)>;

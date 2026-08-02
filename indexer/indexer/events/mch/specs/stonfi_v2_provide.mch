@@ -1,27 +1,26 @@
-# Stonfi v2 provide liquidity (R08 remake) — remade from blocks/liquidity.py
+# Stonfi v2 provide-liquidity matcher corresponding to
 # StonfiV2ProvideLiquidityMatcher.
 #
-# Architecture realignment (class C): the legacy matcher pairs the two deposit
-# branches IN-MATCHER — a GenericMatcher over a previously produced
-# dex_deposit_liquidity block hangs off the in-transfer's parent, and the
+# The source matcher pairs the two deposit branches in the matcher. A
+# GenericMatcher over a previously produced dex_deposit_liquidity block hangs
+# off the in-transfer's parent, and the
 # second fire absorbs the first block plus performs the EmptyBlock proxy
-# insertion inside build_block. Per spec §5.5 pairing/merging is host-side:
+# insertion inside build_block. Pairing and merging are host-side:
 # here each deposit leg is matched independently and produces a class-tagged
 # block (StonfiV2DepositLiquidity / StonfiV2DepositLiquidityPartial, both
 # btype dex_deposit_liquidity like legacy); the host pass
 # post_process_stonfi_v2_liquidity (blocks/liquidity.py) replays the legacy
-# pairing — data merge, EmptyBlock proxy surgery, and the legacy
-# condition-fail absorption — over the produced blocks.
+# pairing, data merge, EmptyBlock proxy surgery, and condition-fail absorption
+# over the produced blocks.
 #
-# `shape` (§8.7) is NOT used: the proxy insertion happens at PAIRING time in
-# legacy, and pairing knowledge only exists in the host pass — a per-matcher
-# shaper fires before the partner is known. Legacy placement is followed:
+# `shape` is not used because pairing knowledge only exists in the host pass. A
+# per-matcher shaper fires before the partner is known. Legacy placement is followed:
 # surgery lives in the pass.
 #
 # Split rationale: both legs share one structural shape except the pool
 # callback subtree (cb_add_liquidity -> LP mint | refund), which only the
-# completing leg carries. `final` (callback mandatory) registers FIRST and
-# consumes completed legs; `partial` (no callback) picks up the rest —
+# completing leg carries. `final` (callback mandatory) registers first and
+# consumes completed legs; `partial` (no callback) picks up the rest,
 # including the legacy edge where a cb call exists but has no LP/refund
 # child (legacy's optional cb matcher fails and matches the leg without it).
 # The partial builder rejects when a full callback subtree is present, so a
@@ -41,7 +40,7 @@
 # the LP-mint amount off the callback's JettonInternalTransfer (final only),
 # and the pool off the provide envelope. The paired amount_2/asset_2/
 # sender_wallet_2 stay null here — post_process_stonfi_v2_liquidity fills them
-# when it merges the partner leg (spec §5.5).
+# when it merges the partner leg.
 #
 # Product is a generic Block(btype dex_deposit_liquidity) instead of the
 # class-tagged StonfiV2DepositLiquidity[Partial]; the pairing pass dispatches

@@ -13,7 +13,7 @@ class Edge(Enum):
 
 
 # ---------------------------------------------------------------------------
-# Expression language (M4 §9.6). Parsed and carried through the frontend; the
+# Expression nodes parsed and carried through the frontend. The
 # v0 compiler ignores these nodes entirely (no evaluation, no lowering).
 # ---------------------------------------------------------------------------
 
@@ -54,7 +54,7 @@ class NameRef(Expr):
 
 @dataclass(frozen=True)
 class FieldRef(Expr):
-    """Leading-dot field access `.field` — the current block's data field
+    """Leading-dot field access `.field`, the current block's data field
     (valid only as a primary inside an inline `where (expr)` clause)."""
     field: str
     span: Span
@@ -76,7 +76,7 @@ class Call(Expr):
 
 @dataclass(frozen=True)
 class LookupExpr(Expr):
-    """`lookup KIND(args)` — interface-repository query (§9.2)."""
+    """`lookup KIND(args)` — interface-repository query."""
     kind: str
     args: tuple[Expr, ...]
     span: Span
@@ -108,19 +108,19 @@ class Ternary(Expr):
 
 @dataclass(frozen=True)
 class ListLit(Expr):
-    """`[expr, ...]` — a list value (§9.6 G4). Elements evaluate in order."""
+    """`[expr, ...]` is a list value whose elements evaluate in order."""
     elements: tuple[Expr, ...]
     span: Span
 
 
 @dataclass(frozen=True)
 class ParseExpr(Expr):
-    """`parse <target> as T (| T)*` in EXPRESSION position (W7, IR v1.1).
+    """`parse <target> as T (| T)*` in expression position.
 
     Evaluates `target` to a block and parses its body against the message types
     in source order (first success wins). On total failure (no type parses, or a
-    null/non-block target) it FAULTS — the build rejects. There is no soft-null
-    variant (spec §0.5(a)); the result is the parsed message object. Distinct
+    null/non-block target) it faults and the build rejects. There is no soft-null
+    variant; the result is the parsed message object. Distinct
     from the `parse CAPTURE as T` build STATEMENT (ParseStmt), which records the
     body in a side table for later `.body` access."""
     target: Expr
@@ -130,7 +130,7 @@ class ParseExpr(Expr):
 
 @dataclass(frozen=True)
 class Comprehension(Expr):
-    """`map|any|all(xs as e => body)` — lambda comprehension (§16.1 G-LC/G-Q).
+    """`map|any|all(xs as e => body)` lambda comprehension.
 
     `kind` is "map" (list comprehension), "any" or "all" (quantifiers). `var` is
     the element binder, visible ONLY inside `body` (a new scope frame). No nested
@@ -152,7 +152,7 @@ class RecordField:
 
 @dataclass(frozen=True)
 class RecordLit(Expr):
-    """`{key: expr, ...}` — a record (string-keyed map) value (§9.6 G4)."""
+    """`{key: expr, ...}` is a record value with string keys."""
     fields: tuple[RecordField, ...]
     span: Span
 
@@ -195,7 +195,7 @@ class Node(PatternExpr):
     capture: str | None
     where_predicate: str | None
     span: Span
-    # Inline `where (expr)` form (§4 M4). Mutually exclusive with the named
+    # Inline `where (expr)` form. Mutually exclusive with the named
     # `where_predicate` form; the compiler ignores it in v0.
     where_expr: Expr | None = None
 
@@ -255,8 +255,8 @@ class RuleDecl:
     name: str
     pattern: PatternExpr
     span: Span
-    # Recursion strategy for a self-referential rule (spec §10.3): "frontier"
-    # (default, T18 frontier walk) or "cyclic" (cyclic descent — self-refs at
+    # Recursion strategy for a self-referential rule: "frontier"
+    # (default) or "cyclic" (cyclic descent, with self-references at
     # chain ends lower to back-edges in the matcher graph). Parsed from the
     # contextual modifier `rule NAME cyclic = …`; ignored for non-recursive
     # rules.
@@ -264,7 +264,7 @@ class RuleDecl:
 
 
 # ---------------------------------------------------------------------------
-# Build statements (M4 §9). Appear in a matcher body after the pattern.
+# Build statements appear in a matcher body after the pattern.
 # ---------------------------------------------------------------------------
 
 
@@ -324,7 +324,7 @@ class OutField:
     value: Expr
     span: Span
     # `name?: expr` — omit this key from the produced data map when the value
-    # evaluates to null (§9.5 optional key). Default fields always emit the key.
+    # evaluates to null. Default fields always emit the key.
     optional: bool = False
 
 
@@ -347,8 +347,8 @@ class SwitchBranch:
 
 @dataclass(frozen=True)
 class SwitchStmt(BuildStmt):
-    """`produces switch { when cond => btype out {...} ... else => btype out {...} }`
-    (§9.5). Branches are tested in order; the first true (or `else`) wins,
+    """`produces switch { when cond => btype out {...} ... else => btype out {...} }`.
+    Branches are tested in order; the first true (or `else`) wins,
     selecting both the produced btype and its `out` fields."""
     branches: tuple[SwitchBranch, ...]
     span: Span
@@ -359,20 +359,20 @@ class MatcherDecl:
     name: str
     produces: tuple[str, ...]
     # None when the matcher is declarative (build statements with an `out`
-    # block instead of a registered-builder reference, §9.5).
+    # block instead of a registered-builder reference).
     build: str | None
     entry: str | None
     include_excess: bool
     include_bounces: bool
     pattern: PatternExpr
     span: Span
-    # M4 build statements, in source order. Empty for M1-M3 matchers.
+    # Build statements in source order. Empty for builder-based matchers.
     build_stmts: tuple[BuildStmt, ...] = ()
-    # `shape IDENT` directive (M2R R06, §8.7): registered shaper invoked by the
+    # `shape IDENT` names a registered shaper invoked by the
     # engine after merge, for post-build tree surgery on the produced block's
     # region. None when absent.
     shape: str | None = None
-    # `priority DEC` directive (§8.6/§10.6): registration-order weight, lower
+    # `priority DEC` directive: registration-order weight, lower
     # runs earlier; ties broken by (file name, source position). Default 100.
     priority: int = 100
 
@@ -380,7 +380,7 @@ class MatcherDecl:
     def produces_primary(self) -> str:
         """First declared `produces` name. Convenience accessor for code that
         needs a single type (e.g. `CompiledMatcher.produces_cls_name`); the
-        union (spec §8.1 M2) is documentation + registry validation, and
+        union is documentation plus registry validation, and
         selecting among the declared types at build time is the builder's job."""
         return self.produces[0]
 

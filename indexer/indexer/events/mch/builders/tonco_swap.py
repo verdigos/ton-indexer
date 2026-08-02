@@ -1,7 +1,7 @@
-"""mch builder for the tonco swap matcher (specs/tonco_swap.mch, R11 = T28).
+"""MCH builder for the Tonco swap matcher in specs/tonco_swap.mch.
 
 The legacy build (blocks/swaps.py ToncoSwapBlockMatcher.build_block) works off
-LabelBlocks, which the mch engine does not emit — and captures cannot live
+LabelBlocks, which the MCH engine does not emit. Captures cannot live
 inside a cyclic rule body (C012), so this builder reconstructs every label
 role structurally from `Match._mch_consumed` and delegates to the shared core
 `build_tonco_swap_core`.
@@ -11,7 +11,7 @@ ignored here: the pattern already consumes them (`{ maybe op PTonTransfer }`
 on the final-jetton branch, the in-chain pton on the hop branch), so the
 engine's merge covers them.
 
-NOT to be confused with builders/tonco.py — that one is tonco LIQUIDITY.
+builders/tonco.py handles Tonco liquidity instead.
 """
 from __future__ import annotations
 
@@ -108,7 +108,7 @@ async def _tonco_swap_data(consumed: list[Block]):
     the legacy label roles from the consumed set (cyclic bodies bind no
     captures) and delegates to build_tonco_swap_core; returns the jetton_swap
     field record with the `failed` flag attached (the spec drives
-    `failed when r.failed`), or None to reject (spec §10.7)."""
+    `failed when r.failed`), or None to reject."""
     core = await build_tonco_swap_core(*_derive_parts(consumed))
     if core is None:
         return None

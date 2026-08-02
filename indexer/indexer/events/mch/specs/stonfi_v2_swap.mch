@@ -1,16 +1,16 @@
-# Stonfi V2 swap (T16) — full port of blocks/swaps.py StonfiV2SwapBlockMatcher.
+# Stonfi V2 swap matcher corresponding to StonfiV2SwapBlockMatcher.
 #
-# Deviations from spec §14.2 (see docs/mch-roadmap.md T16 notes):
+# Implementation-specific shape details:
 # - anchor moved out of the recursive rule (entry cannot be a list binding);
 #   the first hop's swap/payout/out-alternative live in the matcher pattern,
 #   hops 2..n repeat via $swap_hop;
 # - the anchor's child chain is wrapped in a one-item children set so the
-#   parent edge stays attached to the anchor (§6.5 CB exemption; a bare
-#   `-> ... <-` chain is C009);
-# - §14.2's idealized `op JettonInternalTransfer` out-arm is really
+#   parent edge stays attached to the anchor; a bare
+#   `-> ... <-` chain is C009;
+# - the idealized `op JettonInternalTransfer` out-arm is implemented as
 #   `btype jetton_transfer` + an inline `where (not .has_internal_transfer)`
 #   (the former `no_internal_transfer` host predicate, folded into the language
-#   in W6 — reads the jetton_transfer block's own `has_internal_transfer` data
+#   reads the jetton_transfer block's own `has_internal_transfer` data
 #   flag) plus the payload-validating `pton_self_transfer` on a bare `pred` node
 #   (legacy GenericMatcher has no opcode constraint);
 # - `^` is used where legacy has ordered OrMatcher because same-name captures
@@ -22,9 +22,8 @@
 #   additional_blocks_to_include.
 #
 # Captures are kept for pattern fidelity but the builder works off the
-# consumed set (Match._mch_consumed). It predates the T18 capture fixes
-# (post-recursion captures such as the parent arm bind since then, spec §7.2)
-# and stays consumed-set-driven: the legacy scan logic needs the full set
+# consumed set (Match._mch_consumed). It stays consumed-set-driven because the
+# legacy scan logic needs the full set
 # anyway (same situation as dedust_swap.mch).
 
 opcode StonfiV2Swap  = 0x6664de2a

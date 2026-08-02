@@ -13,7 +13,7 @@
 # Both matchers reject unless the destination resolves to an NftItem whose
 # metadata `uri` contains "https://nft.fragment.com" (blocks/auction.py
 # `_is_teleitem`). That is a SUBSTRING test, and the expression language has no
-# string manipulation by design (§9.6), so it is the single host `fn`
+# string manipulation by design, so it is the single host `fn`
 # `is_teleitem(nft)` — registered in builders/teleitem_auction.py, where the
 # Python leg calls the legacy `_is_teleitem` verbatim.
 #
@@ -27,7 +27,7 @@
 #
 # Deviations from legacy, both unobservable on the corpus and documented rather
 # than fixed:
-#  - `parse` failure REJECTS (§9.1), while the legacy `TeleitemStartAuction`
+#  - `parse` failure REJECTS, while the legacy `TeleitemStartAuction`
 #    parser wraps its auction-config read in try/except and falls back to
 #    beneficiary=None + zero bids. A truncated auction-config ref is therefore a
 #    dropped row here and a zeroed row there.

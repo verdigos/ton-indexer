@@ -1115,10 +1115,6 @@ def _fill_coffee_mev_protect_hold_funds(block: Block, action: Action):
     action.asset = _addr(block.data['asset'])
     action.amount = _value(block.data['amount'])
 
-def _fill_coffee_mev_protect_failed_swap(block: Block, action: Action):
-    action.destination = _addr(block.data['recipient'])
-    action.asset = _addr(block.data['asset'])
-
 def _fill_coffee_staking_deposit(block: CoffeeStakingDepositBlock, action: Action):
     d = block.data
     action.source = _addr(_dget(d, 'source'))

@@ -386,10 +386,8 @@ func NewClientManager() *ClientManager {
 	}
 }
 
-// shouldFetchAddressBookAndMetadata figures out if at least one client
-// - is interested in any of the given event types for given addresses
-// - AND has IncludeAddressBook / IncludeMetadata true
-// AND will actually receive this event with given finality.
+// shouldFetchAddressBookAndMetadata reports whether an eligible client requests
+// enrichment for the event's type, address, and finality.
 func (manager *ClientManager) shouldFetchAddressBookAndMetadata(eventTypes []EventType, eventFinality indexModels.FinalityState, addressesToNotify []indexModels.AccountAddress) (bool, bool) {
 	shouldFetchAddressBook := false
 	shouldFetchMetadata := false
@@ -1057,8 +1055,7 @@ func SubscribeToConfirmedTransactions(ctx context.Context, rdb *redis.Client, ma
 	}
 }
 
-// SubscribeToFinalizedTransactions listens for txs that reached "finalized" state
-// (this replaces the old "committed" notion).
+// SubscribeToFinalizedTransactions listens for transactions in finalized state.
 // Channel format is assumed to be: "<trace_external_hash_norm>:txhash1,txhash2,..."
 func SubscribeToFinalizedTransactions(ctx context.Context, rdb *redis.Client, manager *ClientManager, channel string) {
 	pubsub := rdb.Subscribe(ctx, channel)
@@ -1095,8 +1092,8 @@ func SubscribeToFinalizedTransactions(ctx context.Context, rdb *redis.Client, ma
 	}
 }
 
-// ProcessNewConfirmedTxs now emits a FULL TRACE SNAPSHOT (not a fragment).
-// txHashes is ignored for payload building; it only serves as a "trace changed" signal.
+// ProcessNewConfirmedTxs emits a full trace snapshot. txHashes only signals a
+// trace change and does not contribute to the payload.
 func ProcessNewConfirmedTxs(ctx context.Context, rdb *redis.Client, traceExternalHashNorm indexModels.HashType, txHashes []indexModels.HashType, manager *ClientManager, channel string) {
 	processTransactionsTraceSnapshot(
 		ctx,
@@ -1119,11 +1116,9 @@ func ProcessNewFinalizedTxs(ctx context.Context, rdb *redis.Client, traceExterna
 	)
 }
 
-// processTransactionsTraceSnapshot loads the entire trace from Redis,
-// attaches messages, sorts, computes TRACE-level finality (min tx finality),
-// fetches address_book/metadata only if at least one eligible client needs them,
-// and broadcasts a single TransactionsNotification snapshot.
-// channelHint is only used for logging/debugging.
+// processTransactionsTraceSnapshot loads and sorts a complete trace, computes
+// minimum transaction finality, adds requested enrichment, and broadcasts one
+// snapshot. channelHint is used only for diagnostics.
 func processTransactionsTraceSnapshot(
 	ctx context.Context,
 	rdb *redis.Client,

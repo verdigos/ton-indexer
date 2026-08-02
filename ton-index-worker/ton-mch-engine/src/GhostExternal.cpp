@@ -1,4 +1,4 @@
-// Ghost-external fallback — see GhostExternal.h for WHY this is engine code and
+// Ghost-external fallback, see GhostExternal.h for WHY this is engine code and
 // not an MCH spec.
 //
 // The wallet-external decoder below is a port of
@@ -6,7 +6,7 @@
 // the failure modes because the fallback chain DEPENDS on them: a v5 body is
 // tried as v3 first and must FAIL (its single ref is an OutList node, not a
 // message), and a v4 body is accepted BY the v3 reader (v4 is v3 + an op byte,
-// and the message refs sit at the same place) — which is why the decoder is
+// and the message refs sit at the same place), which is why the decoder is
 // three whole-body attempts in order, not a tag sniff.
 #include "GhostExternal.h"
 
@@ -37,7 +37,7 @@ constexpr std::uint32_t kJettonTransferOpcode = 0x0F8A7EA5;
 struct WalletPayload {
   // PayloadMessage.info is not None. False == the cell is not an int_msg_info
   // (tag bit 1); Python leaves `info` None and init_from_external SKIPS the
-  // payload — it is not a parse error and does not fail the wallet attempt.
+  // payload, it is not a parse error and does not fail the wallet attempt.
   bool has_info{false};
   Value dest;  // Account (addr_none when the message had no destination)
   td::RefInt256 value;
@@ -77,7 +77,7 @@ td::Status load_int_msg_info(vm::CellSlice &cs, bool with_extra, WalletPayload &
   (void)ihr_fee;
   TRY_RESULT(fwd_fee, load_coins_py(cs));
   (void)fwd_fee;
-  // created_lt:uint64 created_at:uint32 — parsed by Python but then OVERWRITTEN
+  // created_lt:uint64 created_at:uint32, parsed by Python but then OVERWRITTEN
   // with the external's own tx lt/now, so only the cursor matters.
   if (!cs.have(64 + 32)) return td::Status::Error("payload: lt/at underflow");
   cs.advance(64 + 32);
@@ -146,7 +146,7 @@ td::Result<std::vector<WalletPayload>> parse_wallet_v4(vm::CellSlice cs) {
 
 // WalletV5R1ExternalMessage: opcode wallet_id valid_until seqno, then the
 // out_actions OutList walked ref-first (prev at ref 0, the message at ref 1).
-// Python reads NEITHER the 0x7369676e opcode nor the action tags — the walk
+// Python reads NEITHER the 0x7369676e opcode nor the action tags, the walk
 // alone is the discriminator, which is what makes v3/v4 bodies fail it.
 td::Result<std::vector<WalletPayload>> parse_wallet_v5r1(vm::CellSlice cs) {
   if (!cs.have(128)) return td::Status::Error("v5r1: header underflow");
@@ -200,10 +200,10 @@ std::size_t synthesize_ghost_children(EventTree &tree, EventNode *root) {
   std::vector<WalletPayload> payloads = extract_payload_from_wallet_message(r_cell.move_as_ok());
   for (std::size_t idx = 0; idx < payloads.size(); idx++) {
     const WalletPayload &p = payloads[idx];
-    if (!p.has_info) continue;  // enumerate() still counted it — idx keeps its slot
+    if (!p.has_info) continue;  // enumerate() counted it, so idx keeps its slot
     // dest is addr_std (Account) or addr_none (Null). Anything else is an
     // addr_extern in an int_msg_info, where Python's `.dest.to_str()` raises and
-    // takes the WHOLE fallback down to the `unknown` row — so bail, don't skip.
+    // takes the WHOLE fallback down to the `unknown` row, so bail, don't skip.
     // Unwind the children already hung on `root`: reporting 0 has to mean the
     // node is untouched, or a later walk would see half a synthesis.
     if (!p.dest.is_null() && p.dest.t != VType::Account) {
@@ -218,7 +218,7 @@ std::size_t synthesize_ghost_children(EventTree &tree, EventNode *root) {
     // The ONE identifier in the row set that no chain object supplies: these
     // messages were never sent, so they have no hash. Python mints
     // b64(b64(payload_cell_hash) + str(idx)) and it reaches the action_id
-    // through sha256 — the `idx` suffix is load-bearing, it is what keeps two
+    // through sha256, the `idx` suffix is load-bearing, it is what keeps two
     // IDENTICAL payloads in one external from collapsing into one row.
     m->msg_hash = td::base64_encode(td::Slice(p.cell_hash_b64 + std::to_string(idx)));
     m->tx_hash = tx->hash;
@@ -238,7 +238,7 @@ std::size_t synthesize_ghost_children(EventTree &tree, EventNode *root) {
     // non-const Trace); const only because EventNode holds tx read-only.
     m->tx = const_cast<Transaction *>(tx);
     // MsgContent::body is a base64 BOC by contract (block_body / the leaf comment
-    // parse both base64_decode it) — td_boc_serialize hands back RAW bytes.
+    // parse both base64_decode it), td_boc_serialize hands back RAW bytes.
     m->content = MsgContent{body_hash, td::base64_encode(td::Slice(r_boc.ok()))};
 
     auto n = std::make_unique<EventNode>();

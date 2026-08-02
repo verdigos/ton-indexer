@@ -1,21 +1,12 @@
-// tgBTC host fns + shaper (builders/tgbtc.py + blocks/tgbtc.py). See
+// tgBTC host functions and shaper. See
 // host/HostImpls.h for the internal registry surface.
 //
-// tgbtc_mint_data is consumed-set-driven: head = sole 0x3F781D24 call, success
-// log = sole 0x77A80EF3 call, jetton_mint = sole `jetton_mint` block.
-//
-// The other four fns are the shared EVENT-LOG PARSER SET (W2): one per event
-// opcode, each taking the log block and returning a namespace of its fields, or
-// Null when the body is unreadable — which the spec turns into `reject when
-// … == null`, matching legacy's try_build swallowing the parser exception.
-// They are parse fns and NOTHING else; field selection lives in the .mch. Each
-// is shared by a full matcher and its `*_log_only` fallback twin.
-//
-// Why fns and not ABI rows: TgBTCBurnEvent is deliberately TOLERANT
-// (blocks/messages/tgbtc.py:41 wraps both load_address calls in try/except and
-// yields addr_none on a truncated body — the 35MtsOa0… fixture), where the
-// schema's addr_py leaf hard-fails and would reject the whole match; and the
-// other three need hex renderings the expression language cannot express.
+// tgbtc_mint_data derives its head, success log, and jetton_mint from the consumed
+// set. Four shared event-log parsers return field objects or Null for unreadable
+// bodies; each serves a full matcher and its log-only fallback.
+// TgBTCBurnEvent tolerates truncated addresses by yielding addr_none, while an
+// ABI address leaf would fail the whole parse. The other events need hexadecimal
+// renderings unavailable in the expression language.
 #include "host/HostImpls.h"
 
 #include "host/HostCommon.h"
@@ -71,7 +62,7 @@ Value hex_min(const td::RefInt256 &v) {
 // `AccountId(x)` where x came straight out of pytoniq load_address(): an
 // Account passes through, addr_none (a NULL Value, MsgParse.h contract) becomes
 // AccountId(None), and an ExternalAddress (a Str) RAISES in Python
-// (ton_utils.py AccountId.__init__) — so `ok` clears and the caller rejects.
+// (ton_utils.py AccountId.__init__), so `ok` clears and the caller rejects.
 Value account_id_of(const Value &v, bool &ok) {
   if (v.t == VType::Account) {
     return v;
@@ -154,7 +145,7 @@ EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
   const Message *hmsg = block_msg(head);
   Value sender = account_from_opt(hmsg != nullptr ? hmsg->source : std::nullopt);
 
-  // TgBTCMintEvent(success_log body): the legacy `success` flag is set right
+  // TgBTCMintEvent(success_log body): the reference `success` flag is set right
   // after the log parse; a later failure (jetton_mint field access) keeps the
   // already-built fields. Mirror by treating a parse failure as reject.
   auto r_body = block_body(success_log);
@@ -212,7 +203,7 @@ EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
   return rt_ok(Value::make_obj(std::move(ns)));
 }
 
-// --- W2 event-log parse fns (builders/tgbtc.py, same names) -----------------
+// --- Event-log parsers ------------------------------------------------------
 
 // TgBTCMintEvent 0x77A80EF3: coins amount, MsgAddress recipient, uint256 txid.
 EvalResult tgbtc_mint_log(BuildEnv &, const std::vector<Value> &args) {
@@ -245,7 +236,7 @@ EvalResult tgbtc_mint_log(BuildEnv &, const std::vector<Value> &args) {
 // TgBTCBurnEvent 0xCA444CE6: coins amount, then TWO MsgAddresses parsed
 // TOLERANTLY. The Python parser assigns both locals to None up front and wraps
 // the pair in one try/except, so a body that runs out mid-address leaves the
-// already-read one set and the rest addr_none — reproduced exactly: on the
+// already-read one set and the rest addr_none, reproduced exactly: on the
 // first load_address error, everything from there on stays addr_none.
 EvalResult tgbtc_burn_log(BuildEnv &, const std::vector<Value> &args) {
   LogCursor lc = open_log(args);

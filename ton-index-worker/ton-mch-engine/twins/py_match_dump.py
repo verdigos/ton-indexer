@@ -81,14 +81,9 @@ def skip_reason(rec, nodes):
     missing = pred_names - CPP_PREDS
     if missing:
         return "pred:" + ",".join(sorted(missing))
-    # (The former `mixed_anchor_preds` skip is RETIRED. It was written 2026-07-11,
-    # when a Mixed anchor could not carry per-branch `where` predicates on the C++
-    # side; b559068 implemented them 2026-07-30 — Walker.cpp matcher_test_self
-    # AnchorKind::Mixed tests union membership then the matching branch's `where`,
-    # and the codegen'd table carries anchor_branches[i].where. The guard never
-    # fired because dedust_v2's mixed anchors have no `where`; specs/nft_sale.mch's
-    # cancel/finish pair is the first to. The `pred:` check above already covers
-    # the only real gap — _preds() includes anchor-branch `where` names.)
+    # Mixed anchors are runnable; the `pred:` check above includes branch-local
+    # `where` names. Specs may still use split matchers when their branches have
+    # different structural heads and consumed shapes (stonfi_v2_withdraw).
     return None
 
 

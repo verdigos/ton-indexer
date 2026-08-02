@@ -49,7 +49,7 @@ opcode TONStakersDistributedAsset    = 0xdb3b8abd
 #     walking `previous_block` upward for an unbounded number of hops until a
 #     0x1140a64f "start asset distribution" call (or an already-built
 #     tonstakers_withdraw block) is hit. Block-topology navigation, and the walk
-#     is unbounded, so it is deliberately outside the language (§15b). Shared
+#     is unbounded, so it is deliberately outside the language. Shared
 #     with legacy: both call blocks/staking.py::find_tonstakers_pool_addr.
 # ---------------------------------------------------------------------------
 matcher tonstakers_delayed_withdrawal {
@@ -79,14 +79,14 @@ matcher tonstakers_delayed_withdrawal {
 #     MintJettons 0x1674b0a0 (Pool -> tsTON minter)
 #       JettonInternalTransfer 0x178d4519 (minter -> user's tsTON wallet)
 #         JettonNotify 0x7362d09c                                    # optional
-#         excess 0xd53276db                                # auto-absorbed (§4.5)
+#         excess 0xd53276db                                # auto-absorbed
 #
-# DEAD-BRANCH TRAP (audit): legacy declares the MintJettons node `optional=True`,
+# The source declares the MintJettons node `optional=True`, but that branch is dead.
 # so on paper a deposit with no mint leg still matches and builds a `failed`
-# block with null wallet/tokens. That branch CANNOT emit: the very next line
+# block with null wallet/tokens. The branch cannot emit because the next line
 # builds `asset=Asset(False, transfer.get_message().source)` with NO null guard
 # (blocks/staking.py:160), so `transfer is None` raises AttributeError, which
-# BlockMatcher.try_build swallows into `return None` — a clean rejection that
+# BlockMatcher.try_build swallows into `return None`, a clean rejection that
 # consumes nothing. The optional node is therefore effectively mandatory, and
 # this pattern makes it mandatory outright: identical produced blocks, identical
 # consumed set, one fewer impossible state. A literal port of the `optional`
@@ -127,15 +127,15 @@ matcher tonstakers_deposit {
 # withdraw request, which forks into an immediate pool withdrawal or a delayed
 # withdrawal that mints a request NFT.
 #
-# produces switch (T11/M4, spec §9.5): the fork is an XOR of two distinct
-# concrete heads; the switch dispatches the produced btype on which arm bound —
+# The produces switch follows an XOR of two distinct concrete heads. It
+# dispatches the produced btype according to the bound arm:
 # tonstakers_withdraw (immediate) vs tonstakers_withdraw_request (delayed). Both
 # arms map their fields declaratively; one host fn covers the genuinely
 # inexpressible residue (a named language gap):
 #
 #   tonstakers_minted_nft(delayed) — GAP: reading the minted request NFT's
 #     address off delayed.next_blocks is block-topology navigation, deliberately
-#     excluded from the language (§15b). The NFT is a NON-consumed neighbor
+#     excluded from the language. The NFT is a NON-consumed neighbor
 #     (NftMintBlockMatcher produced it as its own sibling nft_mint action);
 #     capturing it as a pattern node would consume it and diverge the consumed
 #     set, so it must be read by a host fn, exactly as the legacy core does.

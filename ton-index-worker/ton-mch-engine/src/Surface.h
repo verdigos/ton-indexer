@@ -5,7 +5,7 @@
 // field names). Those sets were hand-mirrored in each twin (CPP_PARSERS etc.);
 // this mode emits them from the live registries so the twins load one source of
 // truth and can never silently drift. Any diff between this output and a twin's
-// former literals is REAL registry drift, not a formatting change.
+// expected literals is registry drift, not a formatting change.
 #pragma once
 
 namespace mch {

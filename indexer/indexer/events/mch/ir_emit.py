@@ -1,4 +1,4 @@
-"""MCH IR emitter (POC) — serializes lowered node graphs per docs/mch-ir-poc.md.
+"""MCH IR emitter for lowered node graphs.
 
 Walks the ``LNode`` graph the compiler lowers each ``.mch`` matcher into (plain
 records, no engine primitives). Node ids are per-matcher DFS pre-order from the
@@ -111,8 +111,8 @@ def _emit_node(n: LNode, nodes: list[dict], memo: dict[int, int]) -> int:
     if existing is not None:
         return existing
 
-    # Cyclic-strategy in-body self-reference (§10.3 cyclic descent, [M2R,
-    # R11/T28]): a true back-edge — no node of its own, it resolves to the shared
+    # An in-body cyclic self-reference is a back-edge with no node of its own.
+    # It resolves to the shared
     # body root's id (the memo guarantees the cycle terminates).
     if n.kind == "cyclic_ref":
         target_id = _emit_node(n.target, nodes, memo)
@@ -174,13 +174,13 @@ def _emit_node(n: LNode, nodes: list[dict], memo: dict[int, int]) -> int:
 
 
 def _anchor_record(cm: CompiledMatcher) -> dict:
-    # Predicate anchor ([M2R, R10]): no opcode/btype prefilter; the anchor test
+    # Predicate anchors have no opcode/btype prefilter. The anchor test
     # is the named predicate, full-scanned by the engine.
-    # Mixed-kind or per-branch-`where` anchor group ([M2R, R09]): a `mixed`
+    # A mixed-kind or per-branch-`where` anchor group uses a `mixed`
     # record carrying one branch object per alternative branch, each `{op}` or
     # `{btype}` with an optional `where` predicate name. Membership is the union
     # of all branch heads; the matching branch's `where` (if any) is tested
-    # after membership. Pure single-kind no-`where` groups keep the T10
+    # after membership. Pure single-kind groups without `where` keep the
     # opcode_set/btype forms (compiler records exactly one representation).
     if cm.anchor_pred is not None:
         return {"kind": "pred", "pred": cm.anchor_pred}
@@ -210,12 +210,12 @@ _produces_btype = produces_btype
 
 
 # ---------------------------------------------------------------------------
-# Expressions & build programs (M4 §9). See docs/mch-ir-poc.md.
+# Expressions and build programs.
 # ---------------------------------------------------------------------------
 
 
-# _emit_expr = expr_ir.emit_expr (moved there in T33 so the compiler can share
-# the encoding; ir_emit imports the compiler, so the reverse import is barred).
+# _emit_expr = expr_ir.emit_expr. The compiler shares that encoding, and the
+# import direction avoids a cycle through ir_emit.
 
 
 def _emit_stmt(stmt: ast_.BuildStmt) -> dict:
@@ -288,7 +288,7 @@ def emit_ir(
             "include_excess": bool(cm.include_excess),
             "include_bounces": bool(cm.include_bounces),
         }
-        # `priority` (§8.6): emitted only when non-default (100), keeping existing
+        # `priority`: emitted only when non-default (100), keeping existing
         # artifacts byte-identical. The loader defaults an absent key to 100.
         if cm.priority != 100:
             rec["priority"] = cm.priority
@@ -299,7 +299,7 @@ def emit_ir(
             rec["builder"] = cm.build_fn_name
         if stmts:
             rec["build_program"] = [_emit_stmt(s) for s in stmts]
-        # `shape` directive (§8.7): registered shaper name; container rule —
+        # `shape` contains a registered shaper name. Omit it when absent;
         # omit when absent, never emit null.
         if cm.shape_fn_name is not None:
             rec["shape"] = cm.shape_fn_name

@@ -3,9 +3,9 @@
 These JSON files are the cross-language contract consumed by the C++ build
 (mch-codegen reads them; no Python is required to build ton-mch-engine).
 
-- `mch_ir.json` — the compiled matcher IR artifact (currently 41 matchers, all
-  declarative). A pure BUILD input: `--matchers`, `--wheres` and `--builds
-  --suffix ir` compile it into the matcher table, the where functions and the
+- `mch_ir.json` — the compiled matcher IR artifact; its matcher count is derived
+  from the compiled artifact. A pure BUILD input: `--matchers`, `--wheres` and
+  `--builds --suffix ir` compile it into the matcher table, the where functions and the
   build programs, and NOTHING reads it at run time (the `mch_ir_equivalence`
   ctest is the only remaining reader of the document, and it is a build gate).
   The two

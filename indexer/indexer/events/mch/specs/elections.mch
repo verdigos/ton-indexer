@@ -9,9 +9,9 @@
 # ----------------
 # Both anchors additionally require the destination to be the masterchain
 # elector special account. The reference puts that test inside `test_self`; here
-# it is a `reject when` on the raw envelope address, which is equivalent by
-# §10.7 (a rejection consumes nothing and leaves the anchor for the next
-# matcher, exactly as a false `test_self` would) and stays inside the language.
+# it is a `reject when` on the raw envelope address, which is equivalent because
+# a rejection consumes nothing and leaves the anchor for the next
+# matcher, exactly as a false `test_self` would, and stays inside the language.
 # It cannot be an inline `where (.field == literal)`: that form tests the
 # candidate's `data` map, and a call_contract's `data.destination` is an
 # AccountId, not the raw string the reference compares. The literal is safe to

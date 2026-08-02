@@ -1,10 +1,10 @@
-// Offline A/B gate for the production SchemaTraceLoader (Phase G step 3 slice 2).
+// Offline comparison harness for the production SchemaTraceLoader.
 // HARNESS-ONLY test scaffolding: it SYNTHESIZES schema::Transactions from a
 // fixture that was loaded the normal way (path A: msgpack -> our structs), runs
 // them back through schema_to_trace (path B), and classifies both. `--classify`
 // (A) vs `--classify-schema` (B) diffed over the corpus proves the schema loader
 // reproduces the exact same trees/actions. The reverse synthesis here is NOT
-// production code — production feeds real schema::Transactions from ParsedBlock.
+// production code, production feeds real schema::Transactions from ParsedBlock.
 #include "SchemaGate.h"
 
 #include "BlockTree.h"
@@ -147,7 +147,7 @@ std::vector<schema::Transaction> synth_schema_txs(const Trace &trace) {
 // to_tree/init_block. run_dump supplies the identical rendering + engine loop,
 // so path B is byte-comparable with path A and BOTH dumps (classify + actions)
 // route through it. The interfaces map (lookup data) is carried from path A
-// unchanged — it is the LookupSource's concern, not part of trace->tree.
+// unchanged, it is the LookupSource's concern, not part of trace->tree.
 td::Result<TraceContext> schema_ctx_loader(const std::string &path) {
   TRY_RESULT(ctx_a, load_trace_context(path));
   std::vector<schema::Transaction> schema_txs = synth_schema_txs(ctx_a.trace);
@@ -163,20 +163,8 @@ td::Result<TraceContext> schema_ctx_loader(const std::string &path) {
   return ctx_b;
 }
 
-// --- production-path gate (slice 3): fixture interfaces -> BlockchainInterfaceV2
-// -> account_interfaces_ -> ParsedBlockLookupSource -------------------------
-//
-// HARNESS-ONLY reverse synthesis (mirror of ParsedBlockLookupSource's V2->Obj
-// mapping): reads the fixture `interfaces` Dict and rebuilds the production
-// interface structs the InterfaceProcessor would emit, keyed by StdAddress.
-// Only the FIVE tier-1 kinds are synthesizable into a V2 variant; the two
-// tier-2-only kinds (nominator_pool: no variant; jvault_assets: needs the raw
-// account-state data cell + chained reads, not in account_interfaces_) are
-// served in this gate by a fixture-backed tier-2 fallback — exactly the seam
-// production fills with a DB/kvrocks round. Fields the specs never read
-// (balance / full_price / index / init / content / last_bid) are defaulted; the
-// A/B bar is the final classify/actions dump, which reads only addresses (+ dns
-// collection_address). See ParsedBlockLookupSource.cpp for the forward map.
+// Harness-only reverse mapping from fixture interfaces to production V2 structs.
+// Kinds without a lossless V2 representation use the fixture-backed tier-2 hook.
 
 std::optional<block::StdAddress> parse_std_addr(const Value *v) {
   if (v == nullptr || v->t != VType::Str) {
@@ -218,26 +206,9 @@ ParsedBlockLookupSource::InterfaceMap synth_account_interfaces(
       jw.jetton = parse_std_addr_req(iface_field(iface_dict, "JettonWallet", "jetton"));
       ifaces.emplace_back(jw);
     }
-    // The THREE nft-family kinds (nft_item, nft_sale, nft_auction) are
-    // DELIBERATELY NOT synthesized here — they fall to the tier-2 fixture
-    // fallback in this gate. Reason: each carries a FIXTURE-FLOAT numeric field
-    // that the nft cores READ AND RENDER but that the integer V2 structs cannot
-    // reproduce byte-for-byte offline:
-    //   - nft_item.index (float 1.0 in fixtures) -> rendered as nft_item_index;
-    //     NFTItemDataV2.index is RefInt256. Also nft_item.content must be a Dict
-    //     (get_nft_data faults otherwise) and is a nested metadata map, not the
-    //     flat map<string,string> the V2 struct holds.
-    //   - nft_sale.full_price / nft_auction.last_bid (floats) -> rendered as the
-    //     nft_transfer_data `price`; GetGemsNftFixPriceSale*/AuctionData store
-    //     RefInt256. The classify dump masks it (Amount renders int==float for
-    //     whole numbers) but the actions dump's av_amount preserves the float,
-    //     so "float:1350000000" (fixture) != "1350000000" (production int).
-    // In REAL production both Python and C++ read the true INTEGER fields, so
-    // ParsedBlockLookupSource's tier-1 nft_item/nft_sale/nft_auction mappings are
-    // correct BY CONSTRUCTION (same addr_str/make_int logic jetton_wallet +
-    // dedust_pool prove offline) and fire in shadow mode — they just aren't
-    // offline-A/B-gatable against float-based fixtures. Address fields
-    // (marketplace/nft/owner) round-trip exactly; only the float amounts diverge.
+    // NFT kinds use the fixture fallback because fixtures encode index and price
+    // as floats while production V2 structs use integers. Synthesizing the V2
+    // forms would change the rendered action values despite equal whole numbers.
     if (const Value *dp = iface_dict.field("DedustPool")) {
       schema::DedustPoolData p{};
       const Value *assets = dp->field("assets");

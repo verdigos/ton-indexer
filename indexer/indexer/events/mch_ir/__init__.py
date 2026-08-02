@@ -1,8 +1,8 @@
-"""MCH IR engine — runs matchers from an mch-ir.json artifact (docs/mch-ir-poc.md).
+"""Run matchers from an mch-ir.json artifact.
 
 Host-side counterpart of the Go POC loader (mch-go-poc/ir/loader.go), including
 full build-program execution. Consumes ONLY the artifact plus host registries
-(indexer.events.mch.registry.Registries) — never the DSL frontend. This package
+(indexer.events.mch.registry.Registries), never the DSL frontend. This package
 is the reference blueprint for the C++ implementation.
 
 Public API::
@@ -14,7 +14,7 @@ Public API::
 Each returned matcher exposes `.name`, `.produces`, and the full BlockMatcher
 interface (`test_self` / `try_build`); `try_build` returns `[produced_block]`
 on success, `[]` on a builder/program rejection, `None` on structural mismatch
-— exactly like the compiler-generated matchers.
+just like the compiler-generated matchers.
 """
 from indexer.events.mch_ir.engine import build_matchers
 from indexer.events.mch_ir.expr import EvalError

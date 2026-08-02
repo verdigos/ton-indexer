@@ -1,18 +1,18 @@
-# Telegram (Fragment) NFT purchase (R01 remake) — remade from
-# blocks/nft.py TelegramNftPurchaseBlockMatcher.
+# Telegram (Fragment) NFT purchase matcher corresponding to
+# TelegramNftPurchaseBlockMatcher.
 #
 # The legacy matcher is a workaround: it anchors on the NftOwnershipAssigned
 # call, then imperatively walks `previous_block` and scans that parent's
 # next_blocks for AuctionFillUp payouts inside build_block (no declarative
-# structure). Per the M2R remake gate the internal walk may differ as long as
-# the OUTPUT is identical; here the whole shape is expressed declaratively:
+# structure). The internal walk may differ as long as the output is identical;
+# here the whole shape is expressed declaratively:
 #
 #   the funding payment (a ton_transfer to the marketplace, or the external
 #   message that drove the NFT item directly) is the anchor's PARENT; the two
 #   AuctionFillUp payouts (royalty then payout, by created_lt) are that parent's
-#   CHILDREN. This is the T12 `A <- B -> {C; D}` shape: the parent edge is
+#   children. In the `A <- B -> {C; D}` shape, the parent edge is
 #   anchor-headed, and children after a parent edge attach to the parent matcher
-#   (spec §6.4/§6.5).
+#   rather than to the anchor.
 #
 # The AuctionFillUp children set is what makes the parent edge fire only on
 # real fragment purchases (an ordinary orphan NftOwnershipAssigned has no such

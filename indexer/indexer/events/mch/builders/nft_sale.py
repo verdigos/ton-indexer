@@ -17,7 +17,7 @@ DSL side):
 * ``auction_bid_data`` is the whole of ``AuctionBidMatcher.build_block``. It has
   to be a host fn because the getgems branch looks an NFT ITEM up by an address
   that came out of the AUCTION lookup — a lookup keyed on a lookup, which the
-  build language forbids (mch-spec §9.7, ``B004_LOOKUP_DEPENDS_ON_LOOKUP``).
+  build language forbids (``B004_LOOKUP_DEPENDS_ON_LOOKUP``).
 * ``nft_trade_is_finish`` is the ``produces switch`` discriminator for
   NftCancelAuctionMatcher's finish-vs-cancel outcome, which tests an opcode SET
   on one anchor branch and a comment SET on another.

@@ -6,7 +6,7 @@ consumed block set — find_messages/find_call_contracts over other_blocks plus
 `in include` membership checks — which captures cannot reconstruct (blocks
 matched by the recursion's exit branch have no bindings). The builder therefore
 uses the well-known `Match._mch_consumed` attribute (anchor first) and
-delegates to the shared core. Returns None to reject the match (spec §10.7).
+delegates to the shared core. Returns None to reject the match.
 
 Withdraw: no recursion in the pattern, all captures bind positionally — the
 builder is fully capture-driven (anchor + the two payout terminals).
@@ -126,8 +126,8 @@ async def _dedust_swap_legs(consumed: list[Block],
     """Imperative residue of the dedust swap build, restructured from
     blocks/swaps.py build_dedust_swap_core (kept line-for-line where possible):
     peer-swap assembly, in-leg extraction, payout resolution, and the BOC
-    steps/pool-hop walk. Returns None to reject (wrong payload opcode), raises
-    to reject on malformed traces/missing pool data — both per spec §10.7.
+    steps/pool-hop walk. Returns None to reject (wrong payload opcode), and
+    raises to reject on malformed traces or missing pool data.
 
     The branch discriminator differs from legacy in form, not substance: legacy
     checks `block.previous_block.btype == 'jetton_transfer' and ... in
@@ -312,7 +312,7 @@ def dedust_withdraw_registries() -> Registries:
 # as prebuilt jetton_transfer blocks. The builders reconstruct the label roles
 # structurally from `Match._mch_consumed` + tree navigation (the tree is intact
 # until the engine merges) and delegate to the shared cores in
-# blocks/liquidity.py. Returns None to reject the match (spec §10.7) — this is
+# blocks/liquidity.py. Returns None to reject the match — this is
 # also how the partial matcher's legacy guard (raise when final-deposit opcodes
 # follow the topup) surfaces here.
 
@@ -363,7 +363,7 @@ async def _dedust_deposit_final_data(consumed: list[Block]) -> SimpleNamespace |
     spec). Derives the legacy label roles structurally from the consumed set +
     previous_block navigation and delegates to build_dedust_deposit_liquidity_core.
     Returns the field record (the `out` block maps `dex`/`failed`), or None to
-    reject (spec §10.7). `success` stays in the record — the spec drives
+    reject. `success` stays in the record — the spec drives
     `failed when not r.success`."""
     block = consumed[0]
     try:
@@ -389,7 +389,7 @@ async def _dedust_deposit_final_data(consumed: list[Block]) -> SimpleNamespace |
                         if isinstance(b, CallContractBlock)
                         and b.opcode == DedustPayout.opcode
                         and b.previous_block in returns]
-        # Dual dispatch (§11.5): the jetton excess payout is a generic
+        # Dual dispatch: the jetton excess payout is a generic
         # jetton_transfer block under the IR engine (isinstance dead), matched
         # by btype. Its parent is the DedustReturnExcessFromVault.
         jetton_excesses = [b for b in consumed

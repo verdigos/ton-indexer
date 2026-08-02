@@ -1,4 +1,4 @@
-# Dedust swap — HYBRID declarative build (fn-escape spike).
+# Dedust swap with a declarative build and host functions for the remaining fields.
 #
 # Pattern is identical to specs/dedust_swap.mch. The build replaces the
 # monolithic `build build_dedust_swap` directive with build statements:

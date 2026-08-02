@@ -31,7 +31,7 @@ class BuildProgram:
     """A matcher record's `build_program`, executable against a match environment.
 
     `run` returns a BuildOutcome, or None when a `reject when` fired — the
-    caller must treat None exactly like a builder returning nothing (§10.7).
+    caller must treat None exactly like a builder returning nothing.
     EvalError propagates; the caller rejects and logs.
     """
 
@@ -74,7 +74,7 @@ class BuildProgram:
     @staticmethod
     async def _eval_out_fields(fields: list[dict], ev: Evaluator) -> dict:
         """Evaluate `out` fields into a data map. An `optional` field whose value
-        is null is omitted from the map (present-vs-absent key, §9.5)."""
+        is null is omitted from the map, preserving a present-vs-absent key."""
         data: dict = {}
         for f in fields:
             value = await ev.eval(f["expr"])
@@ -114,10 +114,9 @@ class BuildProgram:
             except Exception as ex:
                 last_exc = ex
                 continue  # soft: try the next alternative
-        # Every alternative failed. The body stays null (soft, §6.1) and an
-        # expression handles it with `??`/`reject`; but the swallow used to be
-        # invisible (report F1/F6). A debug signal turns "why is .body null?"
-        # into one grep. The compile-time R023 diagnostic catches the common
+        # Every alternative failed. The body stays null (a soft failure) and an
+        # expression handles it with `??` or `reject`. A debug signal records
+        # the failure. The compile-time R023 diagnostic catches the common
         # cause (parsing a composed `btype` capture) at author time.
         logger.debug(
             "mch soft-parse failed for all of %s (btype=%s): %s",

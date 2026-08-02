@@ -5,8 +5,8 @@ flag and out-field mapping live in the .mch, and the imperative residue is the
 single host fn below plus the two predicates. The legacy build (blocks/swaps.py
 StonfiV2SwapBlockMatcher.build_block) works off LabelBlocks, which the mch
 engine does not emit; `_derive_parts` reconstructs the label roles structurally
-from the consumed set (it predates the T18 capture fixes — spec §7.2 — and the
-consumed set remains the simplest faithful input for the legacy scan logic),
+from the consumed set, which remains the simplest faithful input for the source
+scan logic,
 then delegates to the shared core `build_stonfi_v2_swap_core`.
 
 The core's additional_blocks_to_include (terminal pton transfer call) is
@@ -50,7 +50,7 @@ def _derive_parts(consumed: list[Block]):
     legacy label scan keeps after its overwrite-in-lt-order loop.
     """
     anchor = consumed[0]
-    # `_mch_consumed` arrives de-duplicated since T18 (spec §11.1), so no
+    # `_mch_consumed` is de-duplicated, so no
     # (swap, payout) pair can double up here.
     payouts = [b for b in consumed if isinstance(b, CallContractBlock)
                and b.opcode == StonfiV2SwapBlockMatcher.pay_to_opcode]
@@ -71,7 +71,7 @@ async def _stonfi_v2_swap_data(consumed: list[Block]) -> SimpleNamespace:
     """Imperative residue of the stonfi_v2 swap build: reconstruct the leg
     roles from the consumed set, delegate to the shared core, and expose its
     data dict as a namespace (`.failed` drives the failed flag). The core's
-    additional_blocks_to_include is dropped — the pattern already consumes the
+    additional_blocks_to_include is dropped because the pattern already consumes the
     terminal pton call. The core sets `anchor.broken` on a wallet-lookup miss;
     that flag rides on a merged child, exactly as the legacy build leaves it
     (merge_blocks does not propagate it to the produced swap block)."""
@@ -97,8 +97,7 @@ def register_stonfi_v2(reg: Registries) -> Registries:
         except Exception:
             return False
 
-    # `no_internal_transfer` (was `not block.data['has_internal_transfer']`) is
-    # gone (W6): folded into the spec as the inline `where (not
+    # `no_internal_transfer` is folded into the spec as the inline `where (not
     # .has_internal_transfer)` on the jetton_transfer out-arm.
     reg.register_fn("stonfi_v2_swap_data")(_stonfi_v2_swap_data)
 

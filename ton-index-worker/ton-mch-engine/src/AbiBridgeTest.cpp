@@ -1,4 +1,4 @@
-// W12 bridge self-test. See AbiBridgeTest.h / W12-BRIDGE-DESIGN.md §7.
+// ABI bridge self-test. See AbiBridgeTest.h.
 #include "AbiBridgeTest.h"
 
 #include "AbiBridge.h"
@@ -52,7 +52,7 @@ bool is_bool(const Value *v, bool want) {
 bool is_account(const Value *v) {  // non-none Account
   return v && v->t == VType::Account && !v->addr_none && !v->str.empty();
 }
-// Exact canonical raw render (the address-parity proof, T122 design §1): the
+// Exact canonical raw rendering: the
 // adapter must yield "WC:HEX_UPPER" == Python AccountId.as_str().upper().
 bool is_account_str(const Value *v, const std::string &want) {
   return v && v->t == VType::Account && !v->addr_none && v->str == want;
@@ -77,10 +77,8 @@ td::Result<Value> round_trip(const T &s) {
 }
 
 // ---- full-trampoline-path fixtures ----------------------------------------
-// (The plain prefixed-struct case that tolk_counter's IncreaseCounter used to
-// cover is subsumed by the dedust_v2 ClaimRewardMessage test below, which runs
-// the same prefix-check + uintN -> Int + Struct -> Obj("$") path on a REAL
-// production row; the fixture pair was dropped with it.)
+// ClaimRewardMessage below covers the prefix check, uintN-to-Int conversion,
+// and Struct-to-Obj("$") path on a production row.
 
 // Jetton fixture: RefInt256 coins -> Int + AbiAddress Std -> Account + Cell.
 // The ONLY case carrying a Cell field through the trampoline.
@@ -118,7 +116,7 @@ void test_hasvalue_union() {
 }
 
 // Struct-labeled union: variant IS its inner struct (carries own "$"), NOT
-// wrapped in {"$","value"} — the key design distinction. Also covers Address +
+// wrapped in {"$","value"}, the key design distinction. Also covers Address +
 // Bool + Bits inside the inner struct + an 8-bit prefix.
 void test_structlabeled_union() {
   lw::BodyPayload body{lw::BodyPayload1::create({/*should_forward*/ true, /*n_times*/ 3, empty_slice()})};
@@ -196,7 +194,7 @@ void test_adapter_direct() {
 
 // ---- registry / trampoline-guard policy -----------------------------------
 void test_registry_policy() {
-  // Duplicate key across sources -> reported (design §4 seam).
+  // Duplicate keys across parser sources are reported.
   const std::vector<std::pair<std::string, MsgParserFn>> src_a = {{"A", nullptr}, {"B", nullptr}};
   const std::vector<std::pair<std::string, MsgParserFn>> src_b = {{"B", nullptr},
                                                                  {"C", nullptr}};  // B collides
@@ -264,7 +262,7 @@ void test_dedust_v2_claim_reward() {
       check("dedust_v2/payout_reward/queryId", is_int(fld(v, "queryId"), 42));
       check("dedust_v2/payout_reward/amount", is_int(fld(v, "amount"), 150000000));
       check("dedust_v2/payout_reward/rewardIndex", is_int(fld(v, "rewardIndex"), 1));
-      // THE address-parity assert (design §1, mandatory #1 verify).
+      // Verify canonical address rendering at the production adapter boundary.
       check("dedust_v2/payout_reward/owner_addr_parity", is_account_str(fld(v, "ownerAddress"), A));
       check("dedust_v2/payout_reward/excesses_addr_parity", is_account_str(fld(v, "excessesTo"), A));
     }
@@ -309,7 +307,7 @@ void test_dedust_v2_claim_reward() {
     }
   }
 
-  // Real registry dispatch by BARE name (design §3): parse_message_body routes
+  // Real registry dispatch by bare name: parse_message_body routes
   // the production row, not just the direct abi_parse_body<T> call above.
   {
     vm::CellBuilder cb;

@@ -135,11 +135,10 @@ EvalResult rt_access_build(const BuildEnv &env, const Value &obj, const std::str
   return rt_access(obj, field);
 }
 
-// --- two-phase lookup runtime (B2) -------------------------------------------
+// --- Two-phase lookup runtime -----------------------------------------------
 
 std::string lookup_key(const std::string &kind, const std::vector<Value> &args) {
-  // Type-tagged + length-prefixed encoding (§4.1). NUL-concatenation was
-  // ambiguous — an embedded NUL in a payload, a differing arity, or the same
+  // Type-tagged, length-prefixed encoding. An embedded NUL, a differing arity, or the same
   // text carried by two different Value types could all collapse to the same
   // key and cross-wire a fetched lookup result. Here every segment is framed
   // as `<tag><decimal-len>:<payload>`, so no payload byte (NUL included) can
@@ -196,17 +195,15 @@ Value CollectingLookupTable::get(const std::string &kind, const std::vector<Valu
 
 namespace {
 
-// The lookup kinds the artifact may reference. NOT test-only: BuildDriver's
+// The lookup kinds the artifact may reference. BuildDriver's
 // runnability gating and the production ParsedBlockLookupSource both key off
 // this exact set, so it stays lib-side while the fixture-backed source that
 // serves them lives in mch-fixtures.
 //
 // dedust_pool is fetched by the dedust_swap_legs host fn via the two-phase
 // table (not a `lookup` build-program node), so it is absent from any
-// matcher's ref_lookups and never affected build_skip_reason. It is listed
-// here so has()/runnability gating recognises it honestly; behaviour is
-// unchanged (no matcher references it as a lookup node, so no skip decision
-// moves on either the C++ or Python side).
+// matcher's ref_lookups. It is listed here so has() and runnability gating
+// recognise it even though no matcher references it as a lookup node.
 const std::set<std::string> kLookupKinds = {"jetton_wallet", "nft_item", "nominator_pool",
                                             "jvault_assets", "dedust_pool", "nft_sale",
                                             "nft_auction", "multisig_order"};
@@ -217,7 +214,7 @@ const std::set<std::string> &lookup_kinds() { return kLookupKinds; }
 
 EvalResult rt_lookup_build(const BuildEnv &env, const std::string &kind,
                            const std::vector<Value> &args) {
-  // Registration check BEFORE the null-strict short-circuit — expr.py
+  // Check registration before the null-strict short-circuit. The evaluator
   // _eval_lookup resolves the kind first, so `lookup unknown(null)` faults.
   if (env.lookups == nullptr || !env.lookups->has(kind)) {
     return rt_fault("lookup kind '" + kind + "' is not registered");

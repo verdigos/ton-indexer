@@ -83,16 +83,12 @@ int main(int argc, char *argv[]) {
     db_event_fifo_path = fname.str();
   });
 
-  // Classification is ON by default (the matcher tables are compiled into this
-  // binary). This is the ops escape hatch: it produces exactly the behaviour of
-  // a build without the classifier — a null prep, so the shadow decorator is
-  // never installed.
+  // This option leaves the classification decorator uninstalled.
   p.add_option('\0', "mch-disable", "Disable in-process MCH classification", [&]() {
     mch_disable = true;
   });
 
-  // Tier 2 is ON wherever the classifier runs; these exist to turn it off and to
-  // re-set the two budgets from a live measurement without a rebuild.
+  // Tier-2 lookups are enabled by default and use configurable budgets.
   p.add_option('\0', "mch-no-tier2", "Disable celldb tier-2 lookups (tier-1-only classification)", [&]() {
     mch_no_tier2 = true;
   });
@@ -143,9 +139,7 @@ int main(int argc, char *argv[]) {
   if (mch_disable) {
     LOG(WARNING) << "MCH classification DISABLED (--mch-disable): traces are inserted unclassified";
   } else {
-    // The matcher tables are compiled in, so a prep failure is a build bug (a
-    // half-regenerated table or a parser-registry conflict), not a reason to run
-    // with classification silently skipped.
+    // Compiled matcher-table preparation must succeed when classification is enabled.
     auto r_prep = mch::make_engine_prep();
     if (r_prep.is_error()) {
       LOG(FATAL) << "MCH engine prep failed: " << r_prep.move_as_error();

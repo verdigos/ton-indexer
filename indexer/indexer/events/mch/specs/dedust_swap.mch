@@ -1,17 +1,16 @@
-# Dedust swap (T15) — ported from blocks/swaps.py DedustSwapBlockMatcher.
+# Dedust swap matcher corresponding to DedustSwapBlockMatcher.
 #
 # Production reality mirrored here: DedustPeerBlockMatcher is defined in
 # swaps.py but never registered in event_processing.matchers, so the recursive
 # chain sees raw DedustSwapPeer/DedustSwapExternal opcodes (never
 # SingleLevelWrapper blocks).
 #
-# Capture notes (T15 gaps resolved by T18, spec §7.2):
-# - captures in $peer_chain are list bindings; since T18 exit-branch captures
-#   bind once on termination and post-recursion captures (@notification,
+# Captures in $peer_chain are list bindings. Exit-branch captures bind once on
+# termination, and post-recursion captures (@notification,
 #   @in_transfer/@swap_request) bind on multi-hop too. The exit payout chain
-#   is left uncaptured for historical fidelity; the builder still works off
+#   is left uncaptured because the builder works from
 #   the consumed set (Match._mch_consumed), like the legacy build_block works
-#   off other_blocks — the simplest faithful input for its scan logic.
+#   off other_blocks. This is the simplest faithful input for its scan logic.
 
 opcode DedustSwapExternal     = 0x61ee542d
 opcode DedustSwapPeer         = 0x72aca8aa
@@ -34,16 +33,14 @@ rule peer_chain = (
 
 # HYBRID declarative build. The reject/failed wiring, `dex`, and the TON-in
 # sender/source_asset are declarative; the imperative residue stays in two host
-# fns (each a named gap):
-#   dedust_swap_legs  — peer-swap list assembly (G-LC: element-wise list->record
+# functions:
+#   dedust_swap_legs: peer-swap list assembly (element-wise list-to-record
 #     transform is inexpressible), payout resolution, and destination_asset
 #     (a bounded async pool-hop walk over parsed BOC swap-steps — inexpressible);
-#   dedust_swap_failed — the notification-coverage scan over the consumed set
-#     (G-Q: no list quantifier / consumed-set scan).
-# G2 (`.data`) + G4 (record literals) + G3 (first/last over a notification list
-# capture) would pull the in-leg, payout, and single-hop leg records into `out`,
-# shrinking dedust_swap_legs to just peer_swaps + destination_asset — left as a
-# follow-up (see report).
+#   dedust_swap_failed: the notification-coverage scan over the consumed set.
+# Data access, record literals, and first/last over a notification-list capture
+# could pull the in-leg, payout, and single-hop leg records into `out`,
+# shrinking dedust_swap_legs to just peer_swaps + destination_asset.
 matcher dedust_swap {
     produces JettonSwapBlock
     entry    @ext

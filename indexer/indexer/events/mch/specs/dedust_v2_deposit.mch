@@ -1,8 +1,6 @@
-# DeDust CPMM V2 deposit liquidity — port of the three-matcher family in
-# blocks/dedust_v2/liquidity.py: DedustV2DepositBlockMatcher (:210, the
-# completing leg), DedustV2RejectedDepositBlockMatcher (:319) and
-# DedustV2DepositPartialBlockMatcher (:414). One host fn (the deposit payload);
-# everything else is declarative.
+# DeDust CPMM V2 deposit-liquidity matchers corresponding to the completed,
+# rejected, and partial deposit matchers. One host function parses the deposit
+# payload; everything else is declarative.
 #
 # Chain (two carriers, one Deposit escrow, one Pool):
 #
@@ -15,19 +13,19 @@
 #         Pool -> Position CreditLiquidity 0x855afcbd    # optional, op only
 #         Pool -> user    jetton_transfer / Payout 0x3216ca09   # dust refunds
 #
-# THE SPLIT. Only ONE of the two legs reaches JoinLiquidity through the parent
+# Only one of the two legs reaches JoinLiquidity through the parent
 # chain — the last one credited, since the join hangs off its CreditAsset. That
 # leg is folded into the completing block; the other leg is matched on its own
 # by the partial matcher and merged in afterwards by the host pass
 # post_process_dedust_v2_liquidity (blocks/dedust_v2/liquidity.py:465), keyed on
-# the Deposit escrow address. That pass is the Phase-E mirror of the v1
-# post_process_dedust_liquidity and, like it, dispatches on the BTYPES this file
+# the Deposit escrow address. Like the v1 post_process_dedust_liquidity pass, it
+# dispatches on the btypes this file
 # produces, so the legacy classes and these generic blocks pair identically.
-# Matcher order inside this file is load-bearing for the same reason it is in
+# Matcher order inside this file matters for the same reason it does in
 # the reference's matchers() list: final and rejected must claim their
-# CreditAsset parent BEFORE the partial matcher, which would otherwise eat it.
+# CreditAsset parent before the partial matcher, which would otherwise eat it.
 #
-# SLOT ASSIGNMENT. The reference writes `data[f"asset_{slot}"]` with slot =
+# The reference writes `data[f"asset_{slot}"]` with slot =
 # 1 if is_x else 2 — a dynamic key the DSL has no form for, so each of the six
 # slot-bearing keys is spelled as the `is_x` conditional instead. Same values,
 # and the unwritten slot stays the hard null the reference leaves it as (it is
@@ -44,18 +42,16 @@
 # AMOUNTS. Success reads the realized amount_x_in/amount_y_in off the event;
 # rejection has no event and falls back to the ATTEMPTED amount_x/amount_y off
 # the JoinLiquidity body. Both write BOTH slots, so the post-process pass's
-# "fill amount_N when null" arm never fires for this family — it is ported
-# faithfully anyway, since the pass is shared with nothing else and its guard is
-# what makes the partial-only trace safe.
+# "fill amount_N when null" arm never fires for this family. Its guard keeps a
+# partial deposit safe.
 #
 # REFUNDS -> vault_excesses. A deposit that consumes less than it was given
-# refunds the dust to the INITIATOR, and the reference BAILS (not skips) on any
-# refund leg addressed elsewhere — one `reject when … != initiator` per leg
+# refunds dust to the initiator. A refund addressed elsewhere rejects the match,
+# implemented by one `reject when … != initiator` per leg
 # here, which is the same total check. Elements are 2-element LISTS where the
 # reference builds tuples; the expression language has no tuple literal, the
 # serializer indexes them identically, and the parity comparison treats the two
-# as one value (test_parity_sweep._detuple). Same deviation as
-# coffee_liquidity.mch:63. The rejected matcher additionally REQUIRES at least
+# as one value. The rejected matcher additionally requires at least
 # one refund leg (`len(...) == 0` reject), mirroring its "no refund legs found"
 # bail.
 #
@@ -69,23 +65,13 @@
 # specs_decl/dedust_v2_swap.mch uses for its swap payload. A payload that is
 # absent or not a deposit yields null, and both target amounts become null,
 # reproducing the reference's `payload is None` arm. The PARTIAL matcher does
-# NOT read the payload: the reference's partial build sets no target_* keys at
+# not read the payload: the partial build sets no target_* keys at
 # all, so neither does this one.
 #
-# NO AUX-ABSORB DEVIATION, unlike the sibling specs/dedust_v2_withdraw.mch.
-# That spec needs the test_parity_sweep._AUX_ABSORB_SPECS waiver because §4.5
-# nested absorption is UNCONDITIONAL for a matched non-root node
-# (mch_ir/engine.py `_absorb_aux`, mirrored in C++) while its reference sets
-# include_excess=False on the nested matchers, so the IR consumed set picks up
-# excess nodes the legacy one leaves loose. This family has the same
-# include_excess=False spelling on its nested matchers but nothing for the rule
-# to bite on: the only excess in the chain is the escrow's gas return, which the
-# reference binds EXPLICITLY (child_matcher=excess_matcher() on the partial) and
-# so does this file. Consumed sets are therefore byte-identical across all nine
-# corpus deposit fixtures with NO waiver — this spec is deliberately absent from
-# _AUX_ABSORB_SPECS, and that absence is a gate: adding a nested matcher whose
-# aux siblings are absorbed would start failing the sweep instead of silently
-# widening the consumed set.
+# Nested auxiliary absorption does not widen this match's consumed set. The only
+# excess is the escrow gas return, which is captured explicitly. Adding another
+# nested matcher can change this invariant if its auxiliary siblings are
+# absorbed.
 #
 # ORDERING. Both anchors (0x25251ee0, 0xdc5ddba1) are claimed by no other spec,
 # and no other spec binds a block this one produces, so this file's slot in
@@ -110,7 +96,7 @@ opcode ExcessMessage           = 0xd53276db
 
 # One deposit leg's carrier: the TON-side PayNative or a prebuilt jetton
 # transfer. Bare concrete nodes with distinct heads, so `^` (the compiler would
-# upgrade `|` to it anyway, §6.6) and at most one arm can ever bind.
+# upgrade `|` to it anyway) and at most one arm can ever bind.
 #
 # ARM ORDER IS LOAD-BEARING, though not semantically: it is the reverse of the
 # reference's _deposit_carrier_matcher and matches specs_decl/dedust_v2_swap.mch

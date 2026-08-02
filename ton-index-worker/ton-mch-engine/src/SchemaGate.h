@@ -1,4 +1,4 @@
-// Offline A/B gate for the production SchemaTraceLoader (Phase G step 3 slice 2,
+// Offline comparison harness for the production SchemaTraceLoader,
 // harness). `--classify-schema`: classify each fixture routed through
 // msgpack->our-structs->schema->SchemaTraceLoader->our-structs (path B), so
 // diffing it against `--classify` (path A) proves the schema loader reproduces

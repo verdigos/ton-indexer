@@ -58,7 +58,7 @@ void tgbtc_deploy_absorb(Block *produced, const ShaperMatch &m);
 // Coffee (HostCoffee.cpp): swap host fn.
 EvalResult coffee_swap_data(BuildEnv &env, const std::vector<Value> &args);
 
-// Stonfi (HostStonfi.cpp): v1 sender-payment pred + v1 swap fn (always-reject);
+// Stonfi (HostStonfi.cpp): v1 sender-payment pred + v1 swap fn;
 // v2 pton_self_transfer pred + v2 swap fn. (no_internal_transfer moved to an
 // inline where-expr in W6.)
 bool stonfi_v1_sender_payment(const Block *block);
@@ -66,7 +66,7 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args);
 bool pton_self_transfer(const Block *block);
 EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args);
 
-// Tonco (HostTonco.cpp): deposit-liquidity fn + swap fn (always-reject under IR).
+// Tonco (HostTonco.cpp): deposit-liquidity, withdraw-payout, and swap fns.
 EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> &args);
 EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args);
 EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args);

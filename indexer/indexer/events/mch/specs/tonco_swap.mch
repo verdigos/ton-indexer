@@ -1,15 +1,15 @@
-# Tonco swap ([M2R] R11 = T28) — port of blocks/swaps.py ToncoSwapBlockMatcher.
+# Tonco swap matcher corresponding to ToncoSwapBlockMatcher.
 #
-# First spec to use the CYCLIC recursion strategy (`rule NAME cyclic = …`,
-# spec §10.3). The legacy matcher is a hand-built cyclic child-matcher graph:
+# This matcher uses cyclic recursion (`rule NAME cyclic = …`). The source
+# matcher is a hand-built cyclic child-matcher graph:
 # hop continuation is MANDATORY inside the hop branches (jetton_transfer ->
 # [PTonTransfer -> JettonNotify ->] next swap), and the final-transfer
 # branches share the `swap -> payout -> jetton_transfer` prefix with them.
-# The frontier strategy (T18 walk) tries the exit FIRST per candidate, so on
-# any multi-hop chain the shared prefix would terminate the recursion at hop 2
-# (the T28 premature-exit problem). Cyclic descent lowers self-references at
+# The frontier strategy tries the exit first for each candidate. On a multi-hop
+# chain the shared prefix would therefore terminate at hop 2. Cyclic descent
+# lowers self-references at
 # chain ends to true back-edges in the matcher graph and disambiguates
-# hop-vs-final by looking down the actual chain — exactly the legacy walk.
+# hop-vs-final by looking down the actual chain.
 #
 # Deviations from the legacy graph (same class as the stonfi_v2 port):
 # - anchor duplication: the first hop's payout/out-alternative lives in the
@@ -22,8 +22,7 @@
 #   answers a swap message with exactly one ROUTERV3_PAY_TO (protocol
 #   behavior, holds across the corpus);
 # - legacy's final branches carry optional=True INSIDE the OrMatcher; the
-#   engine ignores branch-level optionality there (the T28 "maybe inside
-#   alternative" quirk, pinned by tests/mch/test_cyclic_recursion.py) — the
+#   engine ignores branch-level optionality there. The
 #   port simply drops the inert flag;
 # - the final-jetton branch carries `{ maybe op PTonTransfer }` so the pattern
 #   consumes the trailing pton call that the legacy build pulls in via
@@ -33,7 +32,7 @@
 #   branch) the pattern already consumes that exact call, and a jetton->jetton
 #   hop has no pton sibling.
 #
-# No captures inside the rule (C012 forbids them — cyclic bodies never bind);
+# C012 forbids captures inside cyclic rule bodies because they never bind.
 # the host fn derives every legacy label role (peer_swap/payout/out_transfer/
 # intermediate_transfer/intermediate_hop_trigger/in_transfer) structurally
 # from `consumed` and delegates to the shared build_tonco_swap_core
@@ -44,7 +43,7 @@
 # bodies bind no captures at all), so a single host fn returns the full
 # jetton_swap field record + the failed flag; the `out` block assembles the
 # produced Block(btype jetton_swap) from it and `failed when r.failed` sets the
-# flag. The fn returns null to reject (spec §10.7).
+# flag. The fn returns null to reject.
 
 opcode ToncoPoolV3Swap    = 0xa7fb58f8
 opcode ToncoRouterV3PayTo = 0xa1daa96d
@@ -53,7 +52,7 @@ opcode JettonTransfer     = 0x0f8a7ea5
 opcode PTonTransfer       = 0x01f3835d
 
 # One router hop per descent level: swap request + payment from the pool, then
-# EITHER a transfer that provably continues to the next swap (back-edge —
+# either a transfer that provably continues to the next swap (back-edge,
 # mandatory continuation, this is what the frontier strategy cannot express)
 # OR a final transfer to the user. Branch order mirrors the legacy OrMatcher:
 # hop-continuation branches first, then finals.

@@ -1,8 +1,8 @@
 // Narrow read-only views over blocks / consumed match sets for the host TUs
-// (findings 2026-07-12 candidate 3). Only operations a host already demonstrates
-// are here — this is NOT a graph-query language. Each op below has a 2nd use in
+// Only operations required by current hosts
+// are here, this is NOT a graph-query language. Each op below has a 2nd use in
 // the DEX cores (Stonfi v2 collects calls-by-op, lt-sorts swaps, finds a
-// next-block call child) even though HostCoffee is the W1 pilot that consumes it.
+// next-block call child). HostCoffee consumes this view.
 #pragma once
 
 #include "Value.h"

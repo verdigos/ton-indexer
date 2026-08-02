@@ -1,4 +1,4 @@
-// The engine's trace DATA MODEL (MsgContent / Message / Transaction / Trace) —
+// The engine's trace data model (MsgContent / Message / Transaction / Trace),
 // what every loader produces and the whole pipeline consumes.
 //
 // Loaders are elsewhere and are NOT interchangeable in kind: SchemaTraceLoader
@@ -64,7 +64,7 @@ struct Transaction {
   std::string hash;
   std::int64_t lt{0};
   std::int64_t now{0};
-  std::int64_t mc_block_seqno{0};  // Action.mc_seqno_end (Phase E serializer)
+  std::int64_t mc_block_seqno{0};  // Action.mc_seqno_end
   std::string account;
   std::string descr;  // "ord" | "tick_tock" | ...
   std::string orig_status;
@@ -77,29 +77,9 @@ struct Transaction {
 
 struct Trace {
   std::string trace_id;
-  // TRACE-LEVEL aggregates — the five create_unknown_action reads off the Trace
-  // ROW in Python (block_tree_serializer.py).
-  //
-  // EVERY loader must set them: this fixture loader from the `trace` header,
-  // SchemaTraceLoader (the PRODUCTION path, used by both classifier actors) via
-  // fill_trace_aggregates. Leaving them at zero on any path is a landmine for
-  // every future Trace consumer, which is why the derivation lives in the
-  // loader rather than at the one call site that happens to notice.
-  //
-  // The derived form is min/max over `transactions`, and that is the RIGHT
-  // definition on every path, not a fallback:
-  //  - fixtures: identical to the trace header on the whole corpus;
-  //  - emulated: there is nothing else to defer to. The emulator's ::Trace
-  //    carries NO trace-level lt/utime/seqno at all, and Python does not
-  //    either — it derives them the same way, per emission
-  //    (event_deserializer.py: start from the ROOT tx, end from
-  //    max(lt)/max(now)). So a pending trace's end_lt IS max(tx.lt) on both
-  //    sides; there is no projected end to miss.
-  // Two knowingly-accepted differences from Python on the emulated path:
-  // start_lt here is min(lt) where Python takes the root tx's lt (identical for
-  // any well-formed trace, since the root is the earliest), and mc_seqno_end is
-  // derived here where Python leaves it None (harmless — ton-index-go has no
-  // field for it).
+  // Trace-level aggregates used by unknown-action serialization. Every loader
+  // must populate them. Derived values are min/max transaction lt and time plus
+  // maximum masterchain sequence number; a well-formed root has the minimum lt.
   std::int64_t start_lt{0}, end_lt{0}, start_utime{0}, end_utime{0}, mc_seqno_end{0};
   std::vector<std::unique_ptr<Transaction>> transactions;
   // Root `interfaces` section, decoded generically: account (raw uppercase
@@ -111,14 +91,10 @@ struct Trace {
 };
 
 // Derives Trace's five aggregates from `trace.transactions`: min/max lt, min/max
-// now, max mc_block_seqno. For loaders with no trace header — i.e. the
+// now, max mc_block_seqno. Used by loaders with no trace header, including the
 // production SchemaTraceLoader.
 //
-// This reproduces the fixture header's values rather than defining new ones:
-// across the corpus fixtures the header's five ARE exactly these min/max. The
-// equivalence is not taken on faith — the `--actions` vs
-// `--actions-schema`/`--actions-prod` gates compare a header-sourced dump
-// against a derived one and must stay byte-identical.
+// Fixture trace headers use the same aggregates.
 void fill_trace_aggregates(Trace &trace);
 
 }  // namespace mch

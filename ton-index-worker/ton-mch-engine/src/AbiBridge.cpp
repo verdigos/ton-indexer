@@ -1,6 +1,6 @@
-// W12 mch <-> ton-abi bridge: AbiValue -> mch::Value adapter + the production
+// ton-abi bridge: AbiValue to mch::Value adapter and production
 // ABI parser rows. Registry keys are the stable, bare spec-facing declaration
-// names. See W12-BRIDGE-DESIGN.md §3/§4.
+// names. See docs/abi-bridge.md for the value mapping and registry contract.
 #include "AbiBridge.h"
 
 #include "common/refint.h"
@@ -35,17 +35,8 @@ using ton_abi::AbiAddressKind;
 
 namespace {
 
-// Build an mch::Value Cell from a bit-slice (bitsN / remaining / external-address
-// value): copy the slice's bits+refs into a fresh cell. Lossless and root-hash
-// comparable; avoids an {bits,refs} Obj shape and a new VType.
-//
-// The _bool overload is deliberate: `append_cellslice` THROWS vm::CellWriteError
-// (ensure_pass) on overflow, and that type is neither vm::VmError nor a
-// std::exception, so parse_message_body's soft-parse guards would NOT catch it --
-// a throw here would break the adapter's totality contract (design §3/§5). The
-// overflow itself is unreachable (a slice spans one cell: <=1023 bits / <=4 refs,
-// exactly an empty builder's capacity); the empty-cell fallback just keeps
-// totality a property of the code rather than of an argument about it.
+// Copy a bit slice into a fresh, root-hash-comparable cell. Use the non-throwing
+// append operation to preserve adapter totality. See docs/abi-bridge.md.
 Value cell_from_slice(const td::Ref<vm::CellSlice> &slice) {
   vm::CellBuilder cb;
   if (slice.not_null() && !cb.append_cellslice_bool(*slice)) {
@@ -63,11 +54,11 @@ Value adapt_address(const ton_abi::AbiAddress &a) {
       return Value::make_account_raw(canon ? *canon : raw);
     }
     case AbiAddressKind::None:
-      // Present-but-empty address (addr_none from any_address). NOT null --
+      // Present-but-empty address (addr_none from any_address). This is not null;
       // faithful to AccountId(None) vs a null Value.
       return Value::make_account_none();
     case AbiAddressKind::Extern: {
-      // No native external-address VType (and no new VType, design §3). Mirror
+      // There is no native external-address VType. Mirror
       // AbiValue's {"extern":{bits,value}} as an Obj without the pytoniq string.
       Value::Fields f;
       f.emplace_back("bits", Value::make_int(td::make_refint(a.ext_bits)));
@@ -114,7 +105,7 @@ Value abi_value_to_mch(const AbiValue &v) {
     }
     case AbiValueKind::Struct: {
       // Obj (attribute access), "$" = struct name FIRST, then fields in decl
-      // order -- mirrors the AbiValue dump so a consumer can switch on ".$".
+      // order. This mirrors the AbiValue dump so a consumer can switch on ".$".
       Value::Fields f;
       f.emplace_back("$", Value::make_str(v.struct_name));
       for (const auto &kv : v.struct_fields) {

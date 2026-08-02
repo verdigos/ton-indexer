@@ -1,13 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
-# --- ton-abi: standalone C++ port of the Tolk ABI message (de)serialization
-# rules (docs/ton-abi-plan.md). Pure C++, self-contained (decision 2): no
-# ton-mch-engine dependency, ever (decision 5).
-# W0 (scaffold): lib + test exe + vendored doctest + ctest wiring.
-# W1 (T1.1/T1.2): AbiModel.h (header-only PODs) + AbiLoader.h/.cpp (JSON ->
-# AbiModel, fail-closed). AbiKernel/AbiLeaves/AbiValue/AbiEmit land in later
-# waves. (W11.5: the AbiInterp interpreter -- dev scaffolding -- was removed;
-# end state is pure codegen, AbiValue kept as the to_abi_value dump medium.)
+# --- ton-abi: standalone C++ implementation of Tolk ABI message
+# serialization and deserialization. This library deliberately has no
+# ton-mch-engine dependency. Parsers are generated ahead of time, with
+# AbiValue retained as their protocol-neutral dump format.
 
 add_library(ton-abi STATIC
     src/AbiLoader.cpp
@@ -25,8 +21,8 @@ target_include_directories(ton-abi PUBLIC src)
 target_compile_features(ton-abi PUBLIC cxx_std_20)
 target_link_libraries(ton-abi PUBLIC tdutils ton_crypto_core)
 
-# ton-abi-gen: the emitter CLI (W11, T11.1). Reuses AbiModel/AbiLoader/AbiKernel
-# + AbiEmit; emits committed generated/<contract>_gen.{h,cpp} pairs.
+# ton-abi-gen emits committed generated/<contract>_gen.{h,cpp} pairs using the
+# model, loader, resolution kernel, and emitter library.
 add_executable(ton-abi-gen tools/AbiGenMain.cpp)
 target_compile_features(ton-abi-gen PRIVATE cxx_std_20)
 target_link_libraries(ton-abi-gen ton-abi tdutils)
@@ -48,9 +44,9 @@ add_executable(ton-abi-test
 )
 target_include_directories(ton-abi-test PRIVATE test generated)
 
-# Committed generated pairs. EVERY pair in generated/ is compiled into the test
-# exe (W11 T11.2) -- all loadable fixtures plus the production abi/ pairs:
-# guarantees every emitted file compiles, and gives the A/B gate its input.
+# Every committed generated pair is compiled into the test executable. This
+# covers all loadable fixtures and production declarations, and supplies the
+# generated-code comparison gate with its inputs.
 # --check (add_test below) covers byte-repro for all of them.
 file(GLOB TON_ABI_GENERATED CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/generated/*_gen.cpp)
 target_sources(ton-abi-test PRIVATE ${TON_ABI_GENERATED})
@@ -67,7 +63,7 @@ target_link_libraries(ton-abi-test ton-abi tdutils)
 enable_testing()
 add_test(NAME ton_abi_smoke COMMAND ton-abi-test)
 
-# --check byte-repro gate (W11 T11.2): every committed generated/ pair must
+# --check byte-reproduction gate: every committed generated pair must
 # regenerate byte-identically from its ABI (committed-codegen discipline). Two ABI
 # sources: testdata/fixtures/ (reference-repo test fixtures, built by
 # tools/gen_vectors.mjs) and abi/ (PRODUCTION message declarations, built by

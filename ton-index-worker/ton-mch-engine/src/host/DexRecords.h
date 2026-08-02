@@ -1,15 +1,12 @@
-// Typed records for the shared DEX swap action vocabulary (findings 2026-07-12
-// candidate 2). Protocol hosts DERIVE these facts, then call one encoder that
+// Typed records for the shared DEX swap action vocabulary. Protocol hosts derive
+// these facts, then call one encoder that
 // owns the output field names + null conventions, instead of assembling generic
 // `Value` dicts and mutating them (the HostCoffee const_cast is gone).
 //
-// ORDER NOTE (as-built): the leg / peer / record encoders emit the COFFEE field
-// order, and that is all any current consumer needs — Coffee and the Stonfi
+// The leg, peer, and record encoders emit Coffee field order. Coffee and Stonfi
 // cores (HostCoffee.cpp / HostStonfi.cpp) share one encoder and ONE leg reader
-// (TransferLeg::from_jetton_transfer). The anticipated per-DEX ordering variants
-// (a reversed Stonfi v2 peer inner leg, a reordered Stonfi v1 outgoing tail)
-// never materialised as divergences the encoders had to carry. Add a variant
-// only when a gated diff proves one is needed.
+// (TransferLeg::from_jetton_transfer). Add an ordering variant only for an
+// observed wire-format requirement.
 #pragma once
 
 #include "Value.h"
@@ -21,7 +18,7 @@ namespace mch {
 
 struct Block;  // BlockTree.h
 
-// {asset, amount} — a peer-swap hop's in/out side.
+// {asset, amount}, a peer-swap hop's in/out side.
 struct SwapLeg {
   Value asset;
   Value amount;
@@ -68,7 +65,7 @@ struct SwapRecord {
 
   // Fill each hop's out-asset from the next hop's in-asset, and the final hop's
   // out-asset from `dex_outgoing_transfer.asset`. This is the typed replacement
-  // for the former const_cast peer-fill; run it before encode().
+  // before encode().
   void fill_peer_out_assets();
 
   // Obj{dex, sender, source_asset, destination_asset, dex_incoming_transfer,

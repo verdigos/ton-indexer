@@ -10,10 +10,10 @@ namespace mch {
 
 // builders/layerzero.py layerzero_dst_oapp_matches(destination, dst_oapp):
 // str(destination)[2:].lower() == str(dst_oapp)[2:].lower(). str(AccountId) is
-// __repr__ = to_str(False) — the LOWERCASE 64-digit raw form (NOT as_str's
-// upper) — while dst_oapp is Python hex(): lowercase MINIMAL digits. The
+// __repr__ = to_str(False), the LOWERCASE 64-digit raw form (NOT as_str's
+// upper), while dst_oapp is Python hex(): lowercase MINIMAL digits. The
 // comparison is a literal string compare, so a dst_oapp hash with a leading
-// zero byte does NOT match its padded account form — quirk preserved. None on
+// zero byte does NOT match its padded account form, quirk preserved. None on
 // either side -> False.
 EvalResult layerzero_dst_oapp_matches(BuildEnv &, const std::vector<Value> &args) {
   if (args.size() != 2) {

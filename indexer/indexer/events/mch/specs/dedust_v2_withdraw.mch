@@ -24,9 +24,8 @@
 #
 # autoClaimFees is REJECTED, exactly as the reference bails: with the flag set
 # the pool mixes fee payouts into the same transaction and the two payout slots
-# can no longer be told apart from the withdrawn amounts. This is the first user
-# of the ABI declaration's `bool` leaf — the flag is one wire bit and
-# was previously unreachable, since `bits 1` only skips.
+# can no longer be told apart from the withdrawn amounts. The flag uses the ABI
+# declaration's `bool` leaf; `bits 1` would only skip it.
 #
 # PARSER PATHS, mixed in one spec (legal; the sibling dedust_v2_claim_fees.mch
 # does the same): DedustV2Withdraw, DedustV2WithdrawalEvent, and PayoutMessage
@@ -38,18 +37,18 @@
 # Per-leg OR order (`op PayoutMessage | btype jetton_transfer`) is the reverse
 # of the reference's payout_leg_matcher, and inert: the branches are bare
 # concrete nodes with distinct heads, so the compiler upgrades the `|` to an
-# exclusive-or (§6.6) and at most one can ever bind. Spelled this way to match
+# exclusive-or and at most one can ever bind. Spelled this way to match
 # the claim_fees/claim_reward siblings.
 #
 # Leg -> slot assignment is POSITIONAL, unlike claim_fees (which matches legs to
 # slots by exact amount). The reference reads `get_labeled_sorted("payout", ...)`
 # = ascending min_lt, and the children-set algorithm consumes candidates in
-# exactly that canonical order (§6.5/§10.5), so item 1 binds the earlier leg.
+# exactly that canonical order, so item 1 binds the earlier leg.
 #
 # DEVIATION FROM THE REFERENCE (one, engine-level, documented not fixed). The
 # reference passes include_excess=False on every NESTED matcher of the chain,
 # so the pool's 0xd53276db excess stays a standalone call_contract action. Both
-# MCH engines instead absorb it: §4.5 nested absorption is UNCONDITIONAL for a
+# MCH engines instead absorb it: nested absorption is UNCONDITIONAL for a
 # matched non-root node (mch_ir/engine.py `_absorb_aux`, mirrored in C++), and
 # the matcher-level `include_excess false` above only suppresses the ANCHOR's
 # own aux siblings. Verified against the real legacy classifier over all nine

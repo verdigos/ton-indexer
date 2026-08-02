@@ -48,16 +48,12 @@ EvalResult tonstakers_minted_nft(BuildEnv &, const std::vector<Value> &args) {
 
 // blocks/staking.py find_tonstakers_pool_addr(notification), reached through
 // builders/tonstakers.py _tonstakers_pool_addr: walk `previous_block` upward
-// from the NFT-burn notification until the "start asset distribution" call or an
-// already-built tonstakers_withdraw block is hit. Unbounded topology navigation,
-// hence a host fn (§15b). Any other block type stops the walk -> null.
-//
-// The tonstakers_withdraw arm is a BTYPE test, not an isinstance one: the .mch
-// build is declarative, so the block is a generic Block carrying that btype and
-// a dict `data` (legacy's TONStakersWithdrawBlock.btype is the same string, so
-// the shared Python core is unchanged). It is unreachable in practice on both
-// engines — tonstakers_delayed_withdrawal registers ahead of tonstakers_withdraw
-// — and is mirrored only for fidelity.
+// from the NFT-burn notification. The walk can land on an already-built
+// tonstakers_withdraw block, whose `pool` field is returned directly instead of
+// continuing. Otherwise, return the source of the "start asset distribution"
+// call, continue only through the three burn/distribution opcodes below, and
+// stop with null on any other block. The unbounded topology navigation is why
+// this remains a host fn.
 EvalResult tonstakers_pool_addr(BuildEnv &, const std::vector<Value> &args) {
   if (args.size() != 1) {
     return rt_fault("tonstakers_pool_addr: bad arguments");

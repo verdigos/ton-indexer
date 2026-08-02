@@ -1,23 +1,22 @@
-# EVAA withdraw — full port of blocks/evaa.py EvaaWithdrawBlockMatcher.
+# EVAA withdrawal matcher corresponding to EvaaWithdrawBlockMatcher.
 #
-# Deviations from the legacy matcher (see the parity notes in
-# tests/mch/integration/test_evaa_withdraw.py):
+# Differences from EvaaWithdrawBlockMatcher:
 # - EVAA user-contract messages prefix the 32-bit opcode with a variable-length
 #   header (version coins + maybe upgrade-info ref + 2 bits), so a plain `op`
 #   node cannot see the opcode. Legacy uses EvaaContractWithHeaderMatcher
 #   (test_self override); here those three nodes are `pred` nodes backed by
 #   host predicates (evaa_user_withdraw_*) with exactly the legacy test logic.
-#   M4 inline predicates cannot replace them (body parsing, not a data field).
+#   Inline predicates cannot replace them because they require body parsing.
 # - The EVAA service-comment ton_transfer (legacy evaa_action_comment_matcher,
 #   a GenericMatcher over TonTransferBlock.comment) is `maybe pred
 #   evaa_service_comment` — set membership over a block attribute is not
-#   expressible as an M4 inline field test either.
+#   expressible as an inline field test either.
 # - Legacy's withdraw_fail_on_user_excesses GenericMatcher (opcode-set
 #   membership over 4 error opcodes) is an exclusive alternative of the four
 #   concrete `op` nodes sharing one capture (@fail_excess); same block matched,
-#   same consumed set, and only the winning branch binds (spec §6.2).
+#   same consumed set, and only the winning branch binds.
 # - `^` mirrors legacy's ExclusiveOrMatcher use. As an edge target the
-#   exclusivity gate is try_build-inert (engine-v2 §4.4), so branch order is
+#   exclusivity gate is try_build-inert, so branch order is
 #   first-match-wins exactly like legacy.
 #
 # Capture -> legacy label map:
@@ -63,7 +62,7 @@ predicate evaa_user_liquidate
 predicate evaa_liquidate_success_header
 predicate evaa_bounced_call
 
-# EVAA supply — port of blocks/evaa.py EvaaSupplyBlockMatcher.
+# EVAA supply matcher corresponding to EvaaSupplyBlockMatcher.
 #
 # HYBRID: declarative pattern, one host fn for the build. The shape is small and
 # fully structural, but almost every field of the product is entangled with the
@@ -141,10 +140,11 @@ matcher evaa_withdraw {
            ^ op EvaaWithdrawMissingPricesExcess @fail_excess
            ^ op EvaaWithdrawExecutionCrashed @fail_excess ) )
 
-    # Declarative build (M4 §9), field-for-field with build_evaa_withdraw_core.
+    # Declarative build, field-for-field with build_evaa_withdraw_core.
     # The IR engine binds @coll_ok / @coll_fail / @fail_excess per the winning
     # exclusive branch (only the compiled path mis-bound the shared-head
-    # @coll_ok/@coll_fail — retired), so `coll_ok != null` is the success test
+    # @coll_ok/@coll_fail are not captured), so `coll_ok != null` is the
+    # success test.
     # exactly like the core's `if withdraw_collateralized_success:` branch.
     parse master     as EvaaWithdrawMaster
     parse coll_ok    as EvaaWithdrawCollateralized     # null on the fail branches

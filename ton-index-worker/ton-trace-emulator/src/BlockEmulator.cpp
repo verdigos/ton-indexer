@@ -166,11 +166,8 @@ void McBlockEmulator::start_up() {
         shard_states_.push_back(shard_state.block_state);
     }
     auto mc_block_seqno = mc_data_state_.shard_blocks_[0].handle->id().seqno();
-    // Transaction cells BlockParser hands us are interior cells of each block's
-    // lazily deserialized boc, which only the block root cell holds strongly.
-    // Traces carry this anchor so they stay readable after this actor stops.
-    // Built before the parsers are spawned so no later callback can observe it
-    // half-filled.
+    // The anchor keeps interior transaction cells readable after this actor stops.
+    // Build it before spawning parsers so callbacks see a complete anchor.
     auto cell_anchor = std::make_shared<std::vector<td::Ref<vm::Cell>>>();
     cell_anchor->reserve(mc_data_state_.shard_blocks_diff_.size());
     for (auto& block_data : mc_data_state_.shard_blocks_diff_) {

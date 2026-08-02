@@ -49,9 +49,8 @@ std::string render_value(const Value &v) {
     case VType::Int:
       return v.num.is_null() ? "nan" : v.num->to_dec_string();
     case VType::Float:
-      // Bare Python float: "float:" + shortest-safe %.17g (byte-matched by the
-      // twin's "float:%.17g" % v). Renderable now, so the NFT purchase/shaper
-      // path fires instead of TRACE_FAILing.
+      // Bare Python float: "float:" plus shortest-safe %.17g. This keeps float
+      // fields usable by the NFT purchase and shaper paths.
       return "float:" + fmt_g17(v.dnum);
     case VType::Amount:
       if (v.amount_float) {
@@ -93,7 +92,7 @@ std::string render_value(const Value &v) {
       for (const auto &k : keys) {
         if (!first) out += ",";
         first = false;
-        // §12 root-hash bar: Cell-derived BOC fields render as cellhash.
+        // Cell-derived BOC fields render as a cell hash.
         std::string rendered;
         if (is_boc_field(k)) rendered = boc_field_cellhash(*v.field(k));
         if (rendered.empty()) rendered = render_value(*v.field(k));
@@ -111,7 +110,7 @@ std::string render_parse_fields_sorted(const Value::Fields &fields) {
   std::vector<std::pair<std::string, std::string>> kv;
   kv.reserve(fields.size());
   for (const auto &f : fields) {
-    // §12 root-hash bar: Cell-derived BOC fields render as cellhash.
+    // Cell-derived BOC fields render as a cell hash.
     std::string rendered;
     if (is_boc_field(f.first)) rendered = boc_field_cellhash(f.second);
     if (rendered.empty()) rendered = render_parse_value(f.second);
@@ -162,7 +161,7 @@ std::string render_parse_value(const Value &v) {
 }
 
 const std::set<std::string> &boc_field_names() {
-  // Cell-derived BOC container fields (plan §12). `comment` / `bitcoin_txid` /
+  // Cell-derived BOC container fields. `comment`, `bitcoin_txid`, and
   // `pubkey` are raw non-BOC bytes and are DELIBERATELY excluded.
   static const std::set<std::string> kBocFields = {
       "forward_payload", "custom_payload", "message_boc", "message_boc_str",
@@ -178,11 +177,11 @@ std::string boc_field_cellhash(const Value &v) {
     auto h = cell->get_hash();
     return "cellhash:" + hex_upper(h.as_slice().ubegin(), h.as_slice().size());
   };
-  // Decode-fail marker (never throws — the dump must not abort/trace-fail on a
+  // Decode-fail marker (never throws, the dump must not abort/trace-fail on a
   // bad BOC field). A short deterministic prefix aids diagnosis; both engines
   // compute it identically from the same value type (str → the b64 string;
   // bytes → base64 of the raw), so a fail-case would still be A/B-comparable.
-  // Never fires over the corpus (all BOC fields decode) — defensive only.
+  // Never fires over the corpus (all BOC fields decode), defensive only.
   auto decode_fail = [](const std::string &enc_prefix_src) {
     return "cellhash:DECODE_FAIL:" + enc_prefix_src.substr(0, 12);
   };

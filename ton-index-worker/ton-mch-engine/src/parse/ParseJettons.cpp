@@ -18,7 +18,7 @@ namespace mch {
 
 namespace {
 
-// Serialized BOC bytes (§12: native td writer, root-hash bar). The container
+// Serialized BOC bytes use the native writer. The container
 // bytes differ from pytoniq's on multi-ref trees, but payload fields are
 // compared/rendered by cell root hash, so the difference is invisible.
 td::Result<std::string> boc_bytes(const td::Ref<vm::Cell> &c) {
@@ -157,9 +157,9 @@ td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body) {
   return Value::make_obj(std::move(f));
 }
 
-// JettonInternalTransfer / JettonBurn / JettonNotify / JettonMint now use
-// protocol ABI rows. Only the forward-payload-tail transfer and the
-// nested-capture minter mint stay hand.
+// JettonInternalTransfer, JettonBurn, JettonNotify, and JettonMint use protocol
+// ABI rows. The forward-payload-tail transfer and nested-capture minter mint
+// require the hand-written parsers below.
 
 td::Result<Value> parse_minter_jetton_mint(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(ctx, open_body(body));

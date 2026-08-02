@@ -1,11 +1,11 @@
-# DeDust CPMM V2 liquidity-mining reward claim (T12.2 — FIRST ABI-path protocol).
-# Ported from the reference DedustV2ClaimRewardBlockMatcher (blocks/dedust_v2/
+# DeDust CPMM V2 liquidity-mining reward claim corresponding to
+# DedustV2ClaimRewardBlockMatcher (blocks/dedust_v2/
 # claims.py). The three message bodies are parsed through the ton-abi generated
 # structs on the C++ side (bridge rows ClaimRewardMessage / PayoutRewardMessage /
-# PayoutMessage) and hand parsers on the Python twin (builders/dedust_v2.py) — the
+# PayoutMessage) and hand parsers on the Python twin (builders/dedust_v2.py). The
 # `parse ... as <Name>` names are the BARE ABI decl names, matching both.
 #
-# Chain (survey dev_utils/claim_reward_survey.md, 2 clusters):
+# Chain shape:
 #   ClaimReward 0x909fdb65 (user -> Pool)
 #     ClaimPositionReward 0x2e0cccba (Pool -> Position)   # matched by opcode only
 #       PayoutReward 0x9e17fbbe (Position -> Pool)        # exact amount + owner
@@ -41,7 +41,7 @@ matcher dedust_v2_claim_reward {
     # the leg contributes ton_asset() + the message source, not body data. Kept
     # so the arm is parsed (and the parser exercised) on both sides; its only
     # gate today is the mch_abi_bridge unit (no TON-payout fixture in the corpus
-    # yet — T122 design §10.3).
+# yet).
     parse ton           as PayoutMessage
     out {
         dex:               "dedust_v2"

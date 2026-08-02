@@ -1,6 +1,6 @@
-// ton-abi-gen: CLI front end for the ton-abi emitter (W11, T11.1). Loads one or
+// ton-abi-gen: CLI front end for the ton-abi emitter. Loads one or
 // more Tolk ABI JSON files, resolves each via AbiKernel, and emits the committed
-// C++ struct pair generated/<contract_snake>_gen.{h,cpp} (shape spec §11).
+// C++ struct pair generated/<contract_snake>_gen.{h,cpp} (see W11-SHAPE-SPEC.md).
 //
 //   ton-abi-gen <abi.json>... --out-dir <dir>   write the pairs
 //   ton-abi-gen <abi.json>... --out-dir <dir> --check

@@ -3,7 +3,7 @@
 Thin adapters: extract captured blocks from the runtime Match and delegate to
 the shared build cores in blocks/jettons.py — the same functions the legacy
 BlockMatchers call. Builders return the produced block (the synthesized
-wrapper merges consumed blocks) or None to reject the match (spec §10.7).
+wrapper merges consumed blocks) or None to reject the match.
 """
 from __future__ import annotations
 

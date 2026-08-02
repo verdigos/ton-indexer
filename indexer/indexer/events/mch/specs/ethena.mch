@@ -4,11 +4,11 @@
 # is btype-set membership) whose child is the pool's `jetton_mint`.
 # The withdrawal request is the second matcher in this file, below.
 #
-# Fully declarative build (M4 §9): the hardcoded USDe/tsUSDe asset gate is two
+# In the declarative build, the hardcoded USDe/tsUSDe asset gate is two
 # `reject when` clauses (Asset compares case-insensitively against the master
 # address literal — a TON/absent asset raises, i.e. rejects, exactly like the
 # legacy None guards). Every field is read off the composed jetton_transfer /
-# jetton_mint blocks' produced `data` (§9.6 `.data` accessor).
+# jetton_mint blocks' produced `data` through the `.data` accessor.
 
 matcher ethena_deposit {
     produces EthenaDepositBlock

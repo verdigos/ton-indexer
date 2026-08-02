@@ -5,7 +5,7 @@
 #include "EmuTraceConvert.h"
 #include "SchemaTraceLoader.h"
 
-#include "vm/excno.hpp"  // vm::VmError — NOT a std::exception, needs its own arm
+#include "vm/excno.hpp"  // vm::VmError is not a std::exception.
 
 #include "td/utils/logging.h"
 
@@ -32,26 +32,16 @@ const char *category_name(FailureCategory c) {
   return "?";
 }
 
-// Value is not unconditionally self-contained (Value.h): VType::Block holds a
-// RAW arena Block* that dies with the TraceContext this call owns. ActionBuild's
-// fills go through av_addr/av_amount/dg, so a Block-typed value reaching an
-// Action is believed impossible — this turns "believed impossible" into a
-// counter instead of a use-after-free at the integration point.
-// VType::Cell is deliberately left alone: those stay valid, which is what the
-// anchor handed back in EmuClassifyResult is for.
-// NOT a pure observation: Value's `items`/`fields` payloads are shared_ptrs
-// shared with the arena-side structures the fills read from, so nulling a
-// Block-typed value here mutates that shared structure too (idempotent, and
-// the arena dies at the end of this call either way) — which is why
-// arena_refs_scrubbed counts a repair, not a sighting.
+// Scrub non-owning Block values before the TraceContext arena dies. Cells remain
+// valid through the view's anchor. Shared container payloads make this a repair,
+// not a pure observation, so arena_refs_scrubbed counts each replacement.
 std::size_t scrub_value(Value &v) {
   if (v.t == VType::Block) {
     v = Value::null();
     return 1;
   }
   std::size_t n = 0;
-  // The composite *_data columns are Dict/Obj values, so the walk has to go
-  // through containers — a top-level-only pass would see nothing.
+  // Composite action fields require a recursive container walk.
   if (v.items) {
     for (Value &item : *v.items) {
       n += scrub_value(item);
@@ -65,8 +55,7 @@ std::size_t scrub_value(Value &v) {
   return n;
 }
 
-// SAME SET AND ORDER as optional_fields() (EmuActionSerialize.cpp) — two lists
-// that must stay in sync; a field added to Action needs a row in both.
+// Keep this field set and order synchronized with optional_fields().
 std::size_t scrub_arena_refs(Action &a) {
   std::size_t n = 0;
   for (Value *v : {&a.source, &a.source_secondary, &a.destination, &a.destination_secondary,
@@ -98,11 +87,8 @@ std::size_t scrub_arena_refs(Action &a) {
   return n;
 }
 
-// Same sequence the deleted Phase-G shadow actor ran (schema_to_trace ->
-// to_tree/init_block -> classify_trace over the two-tier lookup source), with
-// the same try/catch and FailureCategory mapping, plus build_action run INSIDE
-// the try — while the arena the CoreActions point into is still alive. Never
-// throws.
+// Builds and classifies the trace, then materializes actions while the arena is
+// alive. All failures are mapped onto the result; this function never throws.
 void classify_txs(const EmuShadowConfig &cfg, const EmuTraceView &view,
                   const std::vector<schema::Transaction> &txs, EmuClassifyResult &res,
                   std::vector<Action> &rows, std::vector<std::string> &matcher_names,
@@ -128,9 +114,7 @@ void classify_txs(const EmuShadowConfig &cfg, const EmuTraceView &view,
     }
     ctx.root = init_block(ctx.arena, ctx.tree.root);
 
-    // One tier-2 instance per classify — it IS the scope the memo and both
-    // budgets are measured over. Stack-lived, so it dies with this call and
-    // nothing carries a cell reference past the view's lifetime.
+    // Memoization and both tier-2 budgets are scoped to this classification.
     EmuCelldbTier2 tier2(&view.shard_states, view.config, cfg.tier2_budget);
     ParsedBlockLookupSource::Tier2Hook hook;
     if (cfg.tier2) {
@@ -146,8 +130,7 @@ void classify_txs(const EmuShadowConfig &cfg, const EmuTraceView &view,
     res.lookup_stats = src.stats();
     res.tier2_stats = tier2.stats();
 
-    // On failure the regular actions are discarded and the basic-actions
-    // fallback rows are what production commits (Classify.cpp).
+    // Classification failure replaces regular actions with basic fallback rows.
     res.used_fallback = cres.failure;
     const std::vector<ActionRow> &core = cres.failure ? cres.fallback_rows : cres.action_rows;
     for (const ActionRow &r : core) {
@@ -159,20 +142,13 @@ void classify_txs(const EmuShadowConfig &cfg, const EmuTraceView &view,
       scrubbed += scrub_arena_refs(act);
       rows.push_back(std::move(act));
     }
-    // Debug-log telemetry: which matchers FIRED, off the fire list — a fire whose
-    // product a later matcher absorbed contributes no row but did run.
+    // Record every fired matcher, including matches absorbed by later rules.
     std::set<std::string> names;
     for (const CoreAction &a : cres.actions) {
       names.insert(a.matcher_name);
     }
     matcher_names.assign(names.begin(), names.end());
-    // The synthetic row for a trace that classified cleanly and matched
-    // nothing, so the trace ships "we looked and found nothing" instead of an
-    // empty array that ton-index-go reports as a successful classification.
-    // ctx.trace carries the aggregates schema_to_trace derived — the emulator
-    // has no trace-level lt/utime of its own, and neither does Python here
-    // (event_deserializer.py:146-151 takes max over the transactions too), so
-    // the two agree by construction.
+    // A clean unmatched trace receives one synthetic unknown action.
     if (cres.unknown_trace) {
       rows.push_back(create_unknown_action(ctx.trace));
       unknown_row = true;
@@ -188,15 +164,12 @@ void classify_txs(const EmuShadowConfig &cfg, const EmuTraceView &view,
   }
 }
 
-// "wc:HEXUPPER" — the canonical raw form AccountId.as_str() produces and the
-// one the engine puts in Action::accounts, so the _aai keys and the
-// referenced_accounts payload join against the same strings the actions carry.
+// Canonical account form shared by actions, AAI keys, and reference notifications.
 std::string addr_str(const block::StdAddress &a) {
   return std::to_string(a.workchain) + ":" + a.addr.to_hex();
 }
 
-// Everything the MULTI needs, built here while the view is still alive. The
-// single serialization call site.
+// Build the Redis writeback payload while the view remains alive.
 EmuActionPayload build_payload(const EmuTraceView &view, const std::vector<Action> &rows,
                                std::int64_t aai_score, ActionSerializeStats &st) {
   EmuActionPayload payload;
@@ -210,9 +183,7 @@ EmuActionPayload build_payload(const EmuTraceView &view, const std::vector<Actio
   }
   std::set<std::string> referenced;
   for (const Action &a : rows) {
-    // Python's index key: "<trace_key>:<action_id>" (pendings.py:257-263). The
-    // suffix is action_id BYTE FOR BYTE, which is what lets a consumer join a
-    // decoded action against its index member.
+    // Preserve the action ID byte-for-byte in `<trace_key>:<action_id>` members.
     const std::string member = view.trace_id + ":" + a.action_id;
     for (const std::string &account : a.accounts) {
       payload.aai.emplace_back(account, member);
@@ -221,12 +192,8 @@ EmuActionPayload build_payload(const EmuTraceView &view, const std::vector<Actio
       }
     }
   }
-  // The referenced_accounts channel is an unauthenticated remote-kill surface:
-  // ton-trace-ttl-tracker splits the payload on ';' and indexes [1] with no
-  // length check, and a panic there takes the whole process down. Safe here by
-  // construction — an account is "wc:HEX", which cannot contain a separator —
-  // but the string must stay BUILT, never interpolated from anything less
-  // constrained.
+  // TraceInserter publishes these canonical accounts for AAI expiry cleanup.
+  // See ../../../ton-trace-emulator/README.md#aai-account-index.
   payload.referenced_accounts.assign(referenced.begin(), referenced.end());
   return payload;
 }
@@ -260,9 +227,7 @@ bool EmuClassifierActor::remember_seen(const std::string &trace_id) {
 void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResult> promise) {
   EmuClassifyResult res;
   res.trace_id = view.trace_id;
-  // The payload's finality and the wire `finality` key are the SAME derivation
-  // (view_finality), so the value the insert guards on cannot drift from the
-  // one the blob advertises.
+  // Derive payload and guard finality from the same view.
   res.payload.finality = static_cast<std::uint8_t>(view_finality(view));
 
   const std::int64_t started_us = emu_now_us();
@@ -271,8 +236,7 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
     stats_.queue_us_max = static_cast<std::size_t>(res.queue_us);
   }
 
-  // Attribution first, so `emissions` stays the count of everything that
-  // reached the actor — including what the deadline then sheds.
+  // Count every actor admission, including requests later shed by deadline.
   stats_.emissions++;
   if (!remember_seen(view.trace_id)) {
     stats_.reemissions++;
@@ -284,42 +248,29 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
     stats_.tx_limit_exceeded++;
   }
 
-  // The backlog valve (§16.2), checked before any work: a burst sheds instead
-  // of piling on. It bounds the QUEUE WAIT only — tested once, here, and never
-  // again while the trace is classified — so the latency this feature adds is
-  // kClassifyDeadlineUs plus however long classify_txs takes.
+  // Shed work whose queue deadline expired before classification starts.
   if (started_us > view.deadline_us) {
     stats_.shed_deadline++;
     res.outcome = EmuClassifyOutcome::shed_deadline;
-    // The marker says WHY there is no payload; the blob stays empty, so the
-    // `actions` field is not written and Go reports Classified:false.
+    // Record the shed reason without writing an action blob.
     res.payload.state = "shed_deadline";
     promise.set_value(std::move(res));
     return;
   }
 
-  // The rows this emission produced. They live HERE, not on the result: the
-  // serializer runs below while `view` (and so the cell anchor a VType::Cell
-  // value can point into) is still alive, and only bytes leave this function.
+  // Serialize rows before the view and its cell anchor leave scope.
   std::vector<Action> rows;
   bool unknown_row = false;
 
-  // The TLB parsers throw vm::VmError, which does NOT derive from std::exception
-  // (excno.hpp) and which tdactor does not catch anywhere — upstream contains it
-  // with the try/catch around parse_transactions' body, and the off-pipeline seam
-  // is outside that. Unguarded, one malformed cell would abort the emulator.
-  // Every arm falls through to the single promise.set_value below, which is what
-  // lets the decorator's response continuation decrement EmuGate::in_flight on
-  // the throwing path too.
+  // Catch vm::VmError explicitly because it does not derive from std::exception.
+  // Every path reaches the single response below and releases the gate slot.
   try {
     auto r_txs = emu_to_schema_txs(view, cfg_.global_version);
     if (r_txs.is_error()) {
       stats_.convert_failed++;
       res.outcome = EmuClassifyOutcome::convert_failed;
       res.failure = true;
-      // A category so the caller never sees failure with `none`; NOT counted in
-      // by_category, which attributes the engine's own failures (convert_failed
-      // is its own counter).
+      // Conversion failures use their own counter and a non-null failure category.
       res.failure_category = FailureCategory::malformed_trace;
       res.failure_reason = r_txs.move_as_error().message().str();
       res.payload.state = "convert_failed";
@@ -330,12 +281,8 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
       std::vector<std::string> matcher_names;
       std::size_t scrubbed = 0;
       classify_txs(cfg_, view, txs, res, rows, matcher_names, scrubbed, unknown_row);
-      // Python's trace.start_lt is the ROOT tx lt (event_deserializer.py:150),
-      // which is min(lt) over a well-formed trace — the same value
-      // fill_trace_aggregates derives, so the score matches Python's ZADD.
-      // (Redis scores are IEEE-754 doubles, so an lt above 2^53 loses
-      // precision — a pre-existing property of the protocol, identical for both
-      // writers.)
+      // AAI uses the minimum transaction LT as the trace-start score. Redis
+      // sorted-set scores lose integer precision above 2^53.
       std::int64_t aai_score = 0;
       bool first_tx = true;
       for (const auto &tx : txs) {
@@ -343,9 +290,7 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
         aai_score = first_tx ? lt : std::min(aai_score, lt);
         first_tx = false;
       }
-      // SERIALIZE HERE, inside the view's (and therefore the anchor's)
-      // lifetime. Timed on its own: it lands in the same critical section as
-      // classify_us but is a different cost with a different fix.
+      // Serialize within the anchor lifetime and measure it separately.
       const std::int64_t ser_started_us = emu_now_us();
       ActionSerializeStats ser;
       const std::uint8_t finality = res.payload.finality;
@@ -389,17 +334,14 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
         stats_.failed++;
         stats_.by_category[res.failure_category]++;
         res.outcome = EmuClassifyOutcome::classify_failed;
-        // The blob IS written — it carries the basic-actions fallback rows,
-        // which is the degraded output the policy requires, not silence.
+        // Classification failures write the basic-action fallback payload.
         res.payload.state = "fallback";
         LOG(WARNING) << "[mch-emu] trace=" << view.trace_id << " FAILED ("
                      << category_name(res.failure_category) << "): " << res.failure_reason;
       } else {
         stats_.classified++;
         res.outcome = EmuClassifyOutcome::classified;
-        // `unknown` marks a clean classification that matched nothing. The row
-        // ships either way, so the state string is the ONLY thing that
-        // separates it from a trace with genuine protocol actions.
+        // The state distinguishes a synthetic unknown row from protocol actions.
         res.payload.state = unknown_row ? "unknown" : "ok";
         std::string names;
         for (const std::string &n : matcher_names) {

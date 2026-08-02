@@ -28,14 +28,14 @@ class CaptureInfo:
 @dataclass
 class _CaptureOccurrence:
     """One @name position in a matcher pattern, with enough context to decide
-    whether several positions sharing a name are mutually exclusive (spec §6.2)."""
+    whether several positions sharing a name are mutually exclusive."""
     node: ast_.Node
     under_maybe: bool
     under_recursive: bool
     # One entry per enclosing EXCLUSIVE alternative: (alt_id, branch_idx, branch_count).
     branch_path: tuple[tuple[int, int, int], ...]
     # True when any enclosing alternative is NOT exclusive (plain `|` failing the
-    # ExclusiveOr-upgrade heuristic). Such positions can never anchor (spec §8.3).
+    # ExclusiveOr-upgrade heuristic). Such positions can never anchor.
     under_nonexclusive_alt: bool = False
 
 
@@ -91,7 +91,7 @@ def _merged_optional(occs: list[_CaptureOccurrence]) -> bool:
 
     The capture always binds (optional=False) only when no occurrence is under
     `maybe` and some exclusive alternative common to ALL occurrences is fully
-    covered — one occurrence in each of its branches. Otherwise a branch without
+    covered, with one occurrence in each branch. Otherwise a branch without
     the capture can win and the field stays at its default.
     """
     if any(o.under_maybe for o in occs):
@@ -116,15 +116,16 @@ def _validate_group_anchor(
     occs: list[_CaptureOccurrence],
     alt_nodes: dict[int, ast_.Alternative],
 ) -> tuple[ast_.Alternative | None, str]:
-    """Validate an `entry` capture that touches alternative branches (spec §8.3
-    M2 / [M2R, R09]).
+    """Validate an `entry` capture that touches alternative branches.
 
     Legal as a set-membership anchor: every occurrence is itself a branch of one
     exclusive alternative, one per branch, all branches covered, each branch a
     bare concrete `op`/`btype` node. Heads may mix `op` and `btype` (union
-    membership) and each branch MAY carry a `where <pred>` clause ([M2R, R09] —
-    membership is tested first, then the matching branch's predicate). Returns
+    membership) and each branch may carry a named `where <pred>` clause.
+    Membership is tested first, then the matching branch's predicate. Returns
     (group, "") on success or (None, reason) for the R007 message.
+
+    See docs/spec-authoring-notes.md.
     """
     if any(o.under_recursive for o in occs):
         return None, "is inside a recursive rule"
@@ -168,7 +169,7 @@ def _validate_group_anchor(
                 "requires concrete `op`/`btype` heads on every branch of the "
                 "exclusive alternative (spec §8.3 M2)"
             )
-        # A branch `where` clause is legal ([M2R, R09]): the anchor test checks
+        # A branch `where` clause is legal. The anchor test checks
         # union membership first, then the matching branch's predicate. Predicate
         # existence is validated by the pattern walk (R003).
     return alt, ""
@@ -180,11 +181,11 @@ class ResolvedMatcher:
     captures: dict[str, CaptureInfo]
     anchor_capture: str
     anchor_node: ast_.Node
-    # Opcode-set anchor (spec §8.3 M2): when `entry` names a capture bound on
+    # When `entry` names a capture bound on
     # every branch of one exclusive alternative of bare concrete heads, this is
     # that Alternative; `anchor_node` then holds a representative branch node.
     anchor_group: ast_.Alternative | None = None
-    # M4 build statements, carried through unchanged; the v0 compiler ignores them.
+    # Build statements are carried through unchanged; the pattern compiler ignores them.
     build_stmts: tuple[ast_.BuildStmt, ...] = ()
 
 
@@ -264,12 +265,12 @@ def _is_real_block_class(cls: object) -> bool:
 
 
 def _check_produces_union(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> None:
-    """Validate every name in a matcher's `produces` union (spec §8.1 M2) against
+    """Validate every name in a matcher's `produces` union against
     the host's block-type registry. A single-name `produces` is a 1-element union.
 
-    Also validates that a PascalCase (class-name) `produces` normalizes to a real
-    btype via `btypes.CLASS_TO_BTYPE` (report F3). Without an entry the name would
-    otherwise fall through to the class-name STRING as the produced btype — a
+    Also validates that a PascalCase `produces` name normalizes to a real btype
+    via `btypes.CLASS_TO_BTYPE`. Without an entry the name would fall through to
+    the class-name string as the produced btype, causing a
     silent downstream mismatch (the serializer and legacy blocks key on the real
     btype). Snake_case names are bare btypes and need no entry."""
     for m in file.matchers:
@@ -287,11 +288,11 @@ def _check_produces_union(file: ast_.File, registries: Registries, bag: Diagnost
                 and _is_real_block_class(registries.block_types[name])
             ):
                 # DECLARATIVE matcher (no host `build` fn) whose `produces` names
-                # a REAL typed block class (not a stub `object`/generic `Block`)
+                # A real typed block class (not a stub `object`/generic `Block`)
                 # absent from the map: the engine stamps this btype on the block
                 # it constructs, so an unresolved class name would silently emit
-                # the class-name string as the produced btype — a downstream
-                # mismatch the serializer never keys on (report F3). Builder
+                # the class-name string as the produced btype. The serializer
+                # does not key on that value. Builder
                 # matchers construct their own block, so their `produces` btype
                 # is documentation only and keeps the identity fallback; stubs
                 # and generic-Block producers likewise (their intended btype IS
@@ -308,7 +309,7 @@ def _check_produces_union(file: ast_.File, registries: Registries, bag: Diagnost
 
 
 def _check_shapers(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> None:
-    """Validate every `shape` directive (§8.7) against the host's shaper registry
+    """Validate every `shape` directive against the host's shaper registry
     (same early-check pattern as `_check_produces_union`; the compiler re-checks)."""
     for m in file.matchers:
         if m.shape is not None and m.shape not in registries.shapers:
@@ -360,10 +361,9 @@ def _classify_rules(file: ast_.File, bag: DiagnosticBag) -> dict[str, RecursionC
         collect_refs(r.pattern, refs, under_maybe=False)
         direct_self = any(name == r.name for name, _ in refs)
         if direct_self:
-            # Frontier strategy: must have at least one maybe-guarded $self for
-            # the recursion to terminate. Cyclic strategy (§10.3, [M2R,
-            # R11/T28]): termination is a non-recursive alternative branch —
-            # `maybe $self` is in fact FORBIDDEN there (C012); descent is
+            # Frontier recursion needs at least one maybe-guarded $self to
+            # terminate. Cyclic recursion terminates through a non-recursive
+            # alternative. `maybe $self` is forbidden there by C012; descent is
             # bounded by trace depth, so R006 does not apply.
             terminating = any(name == r.name and inside_maybe for name, inside_maybe in refs)
             if not terminating and r.strategy != "cyclic":
@@ -465,7 +465,7 @@ def _resolve_matcher(
 ) -> ResolvedMatcher:
     # Walk the pattern; collect capture occurrences; validate op/predicate refs.
     # Occurrences are merged into CaptureInfo afterwards so that the same name in
-    # mutually exclusive alternative branches is legal (spec §6.2).
+    # mutually exclusive alternative branches is legal.
     occurrences: dict[str, list[_CaptureOccurrence]] = {}
     alt_ids: dict[int, int] = {}  # id(Alternative) -> stable sequential id
     alt_nodes: dict[int, ast_.Alternative] = {}  # stable id -> Alternative node
@@ -611,7 +611,7 @@ def _resolve_matcher(
             occs = occurrences.get(m.entry, [])
             if len(occs) > 1 or any(o.branch_path or o.under_nonexclusive_alt for o in occs):
                 # Multi-position or alternative-resident entry: legal only as an
-                # opcode-set anchor over one exclusive alternative (spec §8.3 M2).
+                # Opcode-set anchor over one exclusive alternative.
                 anchor_group, reason = _validate_group_anchor(occs, alt_nodes)
                 if anchor_group is None:
                     bag.error(
@@ -639,9 +639,9 @@ def _resolve_matcher(
                         f"`op`, `btype`, or `pred` node",
                         m.span,
                     )
-                # A `pred`-headed anchor ([M2R, R10]) has no opcode/btype
+                # A `pred`-headed anchor has no opcode/btype
                 # prefilter: the engine full-scans `test_self` (the predicate) on
-                # every candidate block. Legal, measured-acceptable (see R10).
+                # every candidate block.
             anchor_node = ci.source
 
     _check_build_stmts(m, captures, registries, bag)
@@ -669,14 +669,14 @@ def _check_build_stmts(
     registries: Registries,
     bag: DiagnosticBag,
 ) -> None:
-    """M4 build-statement validation.
+    """Build-statement validation.
 
     - Every bare value reference must resolve to a pattern capture or a `let`
       declared earlier (R010). Builtin callees are intentionally unvalidated.
     - `parse` targets must be captures (R011) and name registered message
       types (R012).
     - `let` names must not collide with captures or earlier lets (R013).
-    - `out` fields must be unique (R014); at most one `out` block (R017) —
+    - `out` fields must be unique (R014); at most one `out` block (R017).
       it may sit anywhere among the statements, evaluation stays source-order.
     - Exactly one of `build` directive / build statements (R015); declarative
       matchers must have an `out` (R016).
@@ -706,7 +706,7 @@ def _check_build_stmts(
         )
 
     # Well-known env names (`consumed`, `anchor`) are always bound by the
-    # synthesized build path — legal references, and `let` may not shadow them.
+    # synthesized build path. They are legal references, and `let` may not shadow them.
     available: set[str] = set(captures.keys()) | set(WELL_KNOWN_ENV)
     out_seen = False
     for stmt in m.build_stmts:
@@ -718,8 +718,8 @@ def _check_build_stmts(
                     stmt.span,
                 )
             elif isinstance(captures[stmt.capture].head, ast_.BTypeHead):
-                # F1: parsing a composed/produced block's body never round-trips
-                # (§9.1). Its get_body() reads event_nodes[0], which after the
+                # Parsing a composed block's body never round-trips. Its
+                # get_body() reads event_nodes[0], which after the
                 # prior matcher's merge is not the anchor protocol message, so the
                 # parse silently yields a null body. Read the prior matcher's
                 # fields via `<capture>.data.<field>` instead.
@@ -796,7 +796,7 @@ def _check_build_stmts(
 
 
 def _check_priorities(file: ast_.File, bag: DiagnosticBag) -> None:
-    """Warn when two matchers share a NON-default `priority` (§8.6): their
+    """Warn when two matchers share a NON-default `priority`: their
     relative order then falls back to source position, usually not the author's
     intent. Default-100 matchers are the norm and never warned."""
     seen: dict[int, str] = {}
@@ -836,7 +836,7 @@ def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag,
     as a call callee is a function/builtin name and is skipped.
 
     A `map|any|all(xs as e => body)` comprehension binds `e` in `body` only (a
-    new scope frame, §16.1); `body` may shadow an outer capture named `e`. A
+    new scope frame); `body` may shadow an outer capture named `e`. A
     comprehension nested in another comprehension's `xs` or `body` is R024."""
     def value(e: ast_.Expr, avail: set[str], in_comp: bool) -> None:
         if isinstance(e, ast_.NameRef):
@@ -873,7 +873,7 @@ def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag,
             for f in e.fields:
                 value(f.value, avail, in_comp)
         elif isinstance(e, ast_.ParseExpr):
-            # `parse <target> as T` (W7): the target is a value expression; the
+            # The `parse <target> as T` target is a value expression; the
             # message types must name registered host message parsers (R012, same
             # as the `parse` build statement).
             value(e.target, avail, in_comp)

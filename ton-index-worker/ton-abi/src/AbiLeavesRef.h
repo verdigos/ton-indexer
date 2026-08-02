@@ -1,26 +1,8 @@
 #pragma once
 
-// AbiLeavesRef: L1 ref / string / remaining / maybe leaves (W5, T5.1). Each is
-// a thin move over vm::CellSlice / vm::CellBuilder; recursion into an inner type
-// is the WALKER's job (W8) -- these leaves only shuttle refs, bits, and bytes.
-//
-// NORMATIVE reference: @ton/core (vendored ton-abi/tools/node_modules/@ton/core):
-//   Slice.js/Builder.js loadRef/storeRef, loadMaybeRef/storeMaybeRef (1-bit
-//     presence + optional ref).
-//   dynamic-serialization.ts cellOf = storeRef(pack(inner)) / loadRef().beginParse()
-//     then unpack(inner); nullable = 1-bit maybe then inner; remaining = snapshot
-//     the rest (bits + refs) via clone/storeSlice.
-//   strings.js snake format (readBuffer/writeBuffer): each cell holds byte-ALIGNED
-//     bytes (remainingBits % 8 == 0, else throw "Invalid string length") and at
-//     most ONE continuation ref (remainingRefs in {0,1}); writer chunks at
-//     floor(1023/8)=127 bytes per cell. storeStringRefTail(s) = storeRef(snake
-//     cell of s); loadStringRefTail = readString(loadRef().beginParse()). The
-//     leaf moves raw bytes; the lossy-UTF8 decode for the JSON dump is W8's job.
-//
-// BOC serialization mode (W0-deferred §0.14 item, pinned here -- see
-// VALUE_SCHEMA.md): @ton/core cell.toBoc() defaults to { idx:false, crc32:true },
-// which equals vm::std_boc_serialize(root, 2) (Mode::WithCRC32C). Byte-identity
-// proven by AbiLeavesRefTest against a Node-generated reference BOC.
+// Fail-closed primitives for refs, nullable prefixes, snake strings, and
+// remaining slices. Inner-type recursion belongs to the caller. See
+// MODULE-NOTES.md for snake-cell constraints and cell serialization mode.
 
 #include "td/utils/Status.h"
 
@@ -48,7 +30,7 @@ td::Status store_maybe_ref(vm::CellBuilder &cb, td::Ref<vm::Cell> maybe_cell);
 td::Result<bool> load_maybe_prefix(vm::CellSlice &cs);
 td::Status store_maybe_prefix(vm::CellBuilder &cb, bool present);
 
-// string: snake ref-tail. Returns the raw bytes (UTF-8 decode is W8's dump job).
+// string: snake ref-tail. Returns raw bytes; JSON dumping performs UTF-8 decode.
 td::Result<std::string> load_string(vm::CellSlice &cs);
 td::Status store_string(vm::CellBuilder &cb, const std::string &s);
 

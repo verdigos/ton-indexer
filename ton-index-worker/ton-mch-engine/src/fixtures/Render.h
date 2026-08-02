@@ -1,13 +1,5 @@
-// TEST-ONLY dump renderers + the vector comparator (python-parity-audit §5.1).
-//
-// Everything here exists to serve the byte-level A/B gates against the Python
-// twins: the canonical block key, the outcome-value rendering, the §12 root-hash
-// bar for Cell-derived fields, the missing-parser startup warning, and the
-// expected-vs-actual structural comparison. NO product path renders a Value, a
-// block key or a cellhash, and no product path compares two Values structurally
-// (ExprRuntime deliberately keeps its own rt_eq — see ExprRuntime.cpp:76), so
-// none of this belongs in mch-classify / ton-index-postgres / ton-trace-emulator.
-// It lives with the fixture loader instead, in mch-fixtures.
+// Test-only dump renderers, parser diagnostics, and vector comparator. Product
+// code does not depend on these rendering or structural-comparison helpers.
 #pragma once
 
 #include "IrTables.h"
@@ -20,7 +12,7 @@ namespace mch {
 
 struct Block;  // BlockTree.h
 
-// `<btype>[#<opcode-hex8>]@<min_lt>` — the cross-language-proven key.
+// `<btype>[#<opcode-hex8>]@<min_lt>` canonical block key.
 std::string block_key(const Block *b);
 
 // Canonical outcome-value rendering (see BuildSmoke.h contract).
@@ -33,11 +25,11 @@ std::string render_value(const Value &v);
 std::string render_parse_value(const Value &v);
 std::string render_parse_fields_sorted(const Value::Fields &fields);
 
-// Plan §12 root-hash parity bar. A produced/parsed field whose value is a
+// A produced or parsed field whose value is a
 // Cell-derived BOC container (a b64 string from the b64() builtin, or raw BOC
 // Bytes from MsgParse) is rendered in the dumps as the cell's ROOT HASH
 // ("cellhash:HEX-UPPER") instead of its exact bytes, so serialization-order /
-// CRC provenance (pytoniq vs td) is invisible to the byte-level A/B comparison.
+// CRC provenance is invisible to the comparison.
 // `is_boc_field` gates the render by field name (comment / bitcoin_txid / pubkey
 // are raw non-BOC bytes and stay as-is). `boc_field_cellhash` returns the
 // cellhash string, or "" if the value is not a decodable BOC (caller falls back
@@ -51,10 +43,10 @@ std::string boc_field_cellhash(const Value &v);
 // Python runner's _equal: type-checked + deep). NOT the `==` operator.
 bool structural_equal(const Value &a, const Value &b);
 
-// One-shot startup diagnostic (§4.4): every message type any matcher's
+// One-shot startup diagnostic for every message type any matcher's
 // build_program references via `parse` that is ABSENT from message_parsers().
 // Such a gap silently forces a `types:` build skip; surfacing it on stderr
-// makes a missing-parser artifact loud. Stderr only — never touches the
+// makes a missing-parser artifact loud. Stderr only; it never touches the
 // stdout dump the A/B gate compares. Production surfaces the same gap through
 // prepare_classify's skip table, without writing to stderr from a library.
 void warn_missing_artifact_parsers(const std::vector<CompiledMatcher> &matchers);

@@ -7,9 +7,9 @@ from indexer.events.mch.diagnostics import CompileError, DiagnosticBag, Span
 from indexer.events.mch.tokens import Token, TokenKind
 
 
-# The M4 build/expression keywords, accepted as plain identifiers in name
-# positions (capture names, let/parse targets). Spec §3.5 reserves these words,
-# but pre-M4 specs use some as capture names (e.g. `@out` in coffee_swap.mch),
+# Build/expression keywords accepted as plain identifiers in name
+# positions (capture names, let/parse targets). Some existing specs use these as
+# capture names, so
 # so name positions stay permissive. Structural keywords (op/btype/maybe/…) are
 # deliberately NOT softened.
 _SOFT_KEYWORDS: frozenset[TokenKind] = frozenset({
@@ -30,7 +30,7 @@ _CMP_OPS: dict[TokenKind, str] = {
     TokenKind.GE: ">=",
 }
 
-# Build statements start with one of these keywords (§9).
+# Build statements start with one of these keywords.
 _BUILD_STMT_HEADS: frozenset[TokenKind] = frozenset({
     TokenKind.KW_PARSE, TokenKind.KW_LET, TokenKind.KW_REJECT,
     TokenKind.KW_FAILED, TokenKind.KW_BROKEN, TokenKind.KW_OUT,
@@ -79,7 +79,7 @@ class _ParserState:
             self.i += 1
 
     def eat_name(self) -> Token:
-        """Eat an identifier, accepting M4 soft keywords as plain names."""
+        """Eat an identifier, accepting soft keywords as plain names."""
         t = self.peek()
         if t.kind is TokenKind.IDENT or t.kind in _SOFT_KEYWORDS:
             self.i += 1
@@ -186,7 +186,7 @@ def _parse_rule_decl(s: _ParserState) -> ast_.RuleDecl:
     start = s.eat(TokenKind.KW_RULE).span
     name_tok = s.eat(TokenKind.IDENT)
     # Contextual modifier (not a reserved word): `rule NAME cyclic = …` selects
-    # the cyclic-descent recursion strategy (spec §10.3, [M2R, R11/T28]).
+    # the cyclic-descent recursion strategy.
     strategy = "frontier"
     if s.at(TokenKind.IDENT) and s.peek().text == "cyclic":
         s.eat(TokenKind.IDENT)
@@ -302,8 +302,8 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
     s.skip_newlines()
     end = s.eat(TokenKind.RBRACE).span
 
-    # `build` is optional when build statements are present (declarative form,
-    # §9.5); the resolver enforces the finer rules (out required, no mixing).
+    # `build` is optional when build statements are present in declarative form;
+    # the resolver enforces the finer rules (out required, no mixing).
     if produces is None or (build is None and not build_stmts):
         s.bag.error(
             "P001_UNEXPECTED_TOKEN",
@@ -492,7 +492,7 @@ def _parse_node(s: _ParserState) -> ast_.Node:
     if s.at(TokenKind.KW_WHERE):
         s.i += 1
         if s.at(TokenKind.LPAREN):
-            # Inline `where (expr)` form (M4).
+            # Inline `where (expr)` form.
             s.i += 1
             s.skip_newlines()
             where_expr = _parse_expr(s)
@@ -535,7 +535,7 @@ def _parse_children_block(s: _ParserState) -> ast_.ChildrenBlock:
 
 
 # ==========================================================================
-# Build statements (M4 §9)
+# Build statements
 # ==========================================================================
 
 
@@ -669,7 +669,7 @@ def _parse_switch_stmt(s: _ParserState) -> ast_.SwitchStmt:
 
 
 # ==========================================================================
-# Expression language (M4 §9.6)
+# Expression language
 # ==========================================================================
 #
 # Precedence, low -> high:
@@ -734,7 +734,7 @@ def _parse_cmp(s: _ParserState) -> ast_.Expr:
 
 def _parse_additive(s: _ParserState) -> ast_.Expr:
     """`+` / `-` (left-associative); binds tighter than comparison, looser than
-    `*` (§9.6 G-ARITH). A leading `-` is unary and belongs to `_parse_unary`."""
+    `*`. A leading `-` is unary and belongs to `_parse_unary`."""
     left = _parse_multiplicative(s)
     while s.at(TokenKind.PLUS) or s.at(TokenKind.MINUS):
         op = "+" if s.at(TokenKind.PLUS) else "-"
@@ -806,9 +806,9 @@ def _parse_arg_list(s: _ParserState) -> tuple[tuple[ast_.Expr, ...], Span]:
 # `any` lexes to KW_ANY (the node-head keyword), `map`/`all` stay plain
 # identifiers.
 def _at_comprehension(s: _ParserState) -> bool:
-    """True at `map|any|all ( … as … => … )` — the lambda comprehension form,
+    """True at `map|any|all ( … as … => … )`, the lambda comprehension form,
     told apart from the `map(xs, "f")` builtin call by an `as` keyword at the
-    argument list's top paren depth (handoff §1)."""
+    argument list's top parenthesis depth."""
     t = s.peek()
     if t.kind is TokenKind.KW_ANY:
         pass
@@ -836,7 +836,7 @@ def _at_comprehension(s: _ParserState) -> bool:
 
 
 def _parse_comprehension(s: _ParserState) -> ast_.Comprehension:
-    """`map|any|all ( xs as VAR => body )` (§16.1). VAR binds one element,
+    """`map|any|all ( xs as VAR => body )`. VAR binds one element,
     visible only in `body`."""
     head = s.peek()
     kind = "any" if head.kind is TokenKind.KW_ANY else head.text  # map | all
@@ -856,9 +856,9 @@ def _parse_comprehension(s: _ParserState) -> ast_.Comprehension:
 
 
 def _parse_parse_expr(s: _ParserState) -> ast_.ParseExpr:
-    """`parse <target> as T (| T)*` in expression position (W7). The target is a
+    """`parse <target> as T (| T)*` in expression position. The target is a
     postfix expression (a capture / element var / `.field` chain); `as`
-    terminates it. Faults at eval time if no type parses the body (§0.5(a))."""
+    terminates it. Faults at eval time if no type parses the body."""
     start = s.eat(TokenKind.KW_PARSE).span
     target = _parse_postfix(s)
     s.eat(TokenKind.KW_AS)
@@ -876,7 +876,7 @@ def _parse_parse_expr(s: _ParserState) -> ast_.ParseExpr:
 def _parse_primary(s: _ParserState) -> ast_.Expr:
     if _at_comprehension(s):
         return _parse_comprehension(s)
-    # `parse … as T` in expression position (W7). The build STATEMENT form is
+    # `parse … as T` in expression position. The build-statement form is
     # handled by _parse_build_stmts before expression parsing is reached, so a
     # `parse` seen here is always the expression form.
     if s.at(TokenKind.KW_PARSE):
@@ -934,7 +934,7 @@ def _parse_lookup(s: _ParserState) -> ast_.LookupExpr:
 
 
 def _parse_list_lit(s: _ParserState) -> ast_.ListLit:
-    """`[expr, ...]` — list literal (§9.6 G4). Trailing comma + newlines OK."""
+    """Parse a list literal, allowing a trailing comma and newlines."""
     start = s.eat(TokenKind.LBRACKET).span
     elements: list[ast_.Expr] = []
     s.skip_newlines()
@@ -955,7 +955,7 @@ def _parse_list_lit(s: _ParserState) -> ast_.ListLit:
 
 
 def _parse_record_lit(s: _ParserState) -> ast_.RecordLit:
-    """`{name: expr, ...}` — record literal (§9.6 G4). Fields separated by
+    """Parse a record literal. Fields are separated by
     comma/newline/`;` (same convention as `out { }`)."""
     start = s.eat(TokenKind.LBRACE).span
     fields: list[ast_.RecordField] = []

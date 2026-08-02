@@ -1,47 +1,19 @@
-"""Registries for specs/dedust_v2_claim_reward.mch (T12.2 — first ABI-path protocol).
+"""Registries for specs/dedust_v2_claim_reward.mch.
 
 The C++ engine parses these three message bodies through the ton-abi generated
 structs + the AbiValue->mch::Value adapter (bridge). The Python mch twin has no
 ABI parser, so it needs hand parsers registered under the SAME bare names the C++
 `abi_message_parsers()` rows use (ClaimRewardMessage / PayoutRewardMessage /
-PayoutMessage). To stay diff-0 with the adapter output these classes are
-TOLK-FAITHFUL: camelCase attribute names matching the ABI fields, coins/uintN ->
+PayoutMessage). To match the adapter output, these classes use camelCase
+attribute names matching the ABI fields, coins/uintN ->
 plain int (mirrors adapter Int), address -> AccountId (mirrors adapter Account,
-read UNWRAPPED in the spec), maybe-ref cell -> Cell|None. See
-ton-mch-engine/T122-CLAIMREWARD-DESIGN.md §1.
+read unwrapped in the spec), maybe-ref cell -> Cell|None.
 
-OP-GUARD RULE (binding for every ABI-path parser, not just these): the C++ side
-CHECKS the struct's opcode prefix inside `from_slice` and fails the parse on a
-mismatch, while these Python twins skip the leading 32 bits unchecked (the
-pytoniq convention the rest of the engine follows). The two sides therefore only
-agree when the body is known to carry the right opcode — so an ABI-path `parse`
-capture MUST sit behind an `op` guard in the .mch spec. An unguarded ABI parse
-yields a C++ error and a Python garbage object on the same body.
+See docs/spec-authoring-notes.md for the opcode guard and adapter shapes shared
+by ABI-backed message parsers.
 
-ADAPTER SHAPE RECIPE (what `abi_value_to_mch` produces per AbiValueKind, i.e.
-what a Python twin attribute has to look like; full rationale in
-ton-mch-engine/W12-BRIDGE-DESIGN.md §3):
-
-    Int / enum        -> Int              int
-    Bool              -> Bool             bool
-    Address (Std)     -> Account          AccountId(addr)   (uppercase raw render)
-    Address (None)    -> Account, addr_none=True            AccountId(None)
-    Address (Extern)  -> Obj{bits, value} dict(bits=int, value=Cell)
-    Cell              -> Cell             pytoniq Cell
-    CellOf            -> Obj{ref}         dict(ref=<inner>)
-    Bits N            -> Cell             the bits packed into a Cell
-    String            -> Str (RAW bytes; no UTF-8 decode on this path)
-    List              -> List             list  (arrayOf/lispListOf/tensor/tuple)
-    Struct            -> Obj{"$": <StructName>, <fields in decl order>}
-    Union has_value   -> Obj{"$": label, "value": <inner>}
-    Union struct-lbl  -> the inner Struct itself (it already carries its own "$")
-    Void              -> Obj{"$": "void"}
-    Null              -> Null             None
-    Map               -> List of [k, v] pairs in wire order (NOT a dict — keys
-                                          may be ints/addresses)
-
-`ABI_FIELDS` below pins each class's attribute names AND order against the
-committed ABI; tests/mch/test_abi_twin_fields.py enforces it.
+`ABI_FIELDS` pins each class's attribute names and declaration order to the
+committed ABI.
 """
 from __future__ import annotations
 
@@ -114,8 +86,8 @@ class PayoutMessage:
 
 # Attribute names, in ABI declaration order, for each twin class. The C++ adapter
 # emits struct fields in decl order under exactly these keys, so a rename or a
-# reorder on either side silently breaks the twin — pinned here and checked
-# against ton-abi/abi/dedust_v2.abi.json by tests/mch/test_abi_twin_fields.py.
+# reorder on either side silently breaks the twin. Keep this table aligned with
+# ton-abi/abi/dedust_v2.abi.json.
 ABI_FIELDS = {
     "ClaimRewardMessage": ("queryId", "rewardIndex", "excessesTo"),
     "PayoutRewardMessage": ("queryId", "amount", "rewardIndex", "ownerAddress", "excessesTo"),
@@ -206,8 +178,8 @@ def dedust_v2_claim_fees_registries() -> Registries:
 # **int** (0/1). The C++ leaf emits a real Bool, and the expression VM faults
 # on a non-bool condition — so `reject when withdraw.body.auto_claim_fees`
 # passes on one engine and blows up on the other. Hence the schema-shaped twin
-# below, whose only job is the `bool(...)` cast. THE RULE FOR EVERY FUTURE
-# `bool` FIELD: the Python twin must yield a real bool, never load_bit()'s int.
+# below, whose only job is the `bool(...)` cast. Python twins for ABI `bool`
+# fields must yield real bool values rather than load_bit() integers.
 #
 # Unlike the swap family's schema twins, this one still parses the message to
 # its END (it stops nowhere early), because the schema entry does too — that is
@@ -389,13 +361,13 @@ def dedust_v2_swap_registries() -> Registries:
 #
 # Three Python twins, all mirroring protocol ABI entries of the same name
 # (not the legacy blocks/messages/dedust_v2.py classes): the leading opcode is
-# skipped unchecked, and — like the withdraw entry — each parses to the END of
+# skipped unchecked. Like the withdraw entry, each parses to the end of
 # the wire shape so both engines fail on exactly the same truncations.
 #
 # `is_x` is the second user of the schema's `bool` leaf, so DedustV2CreditAsset
-# obeys the CASTING-TWIN RULE stated above the withdraw twin: pytoniq's
+# follows the ABI bool rule above: pytoniq's
 # `load_bit()` yields an int, the C++ leaf yields a real Bool, and the
-# expression VM faults on a non-bool used as a condition — hence `bool(...)`.
+# expression VM faults on a non-bool condition, hence `bool(...)`.
 #
 # DedustV2CreditLiquidity 0x855afcbd is pattern-only (an opcode row, no parser):
 # the reference never reads its body either.

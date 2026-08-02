@@ -42,7 +42,7 @@ private:
   td::Result<std::vector<schema::AccountState>> parse_account_states_new(ton::WorkchainId workchain_id, uint32_t gen_utime, std::map<td::Bits256, AccountStateShort> &account_states);
   td::Result<schema::AccountState> parse_none_account(td::Ref<vm::Cell> account_root, block::StdAddress address, uint32_t gen_utime, td::Bits256 last_trans_hash, uint64_t last_trans_lt);
 
-public: // pure TLB->schema parsers, reusable off-pipeline (em1-design §2 seam)
+public: // Pure TLB-to-schema parsers reusable outside the actor pipeline.
   // `global_version` is the only piece of ParseQuery state these need: it selects
   // extra_flags vs legacy ihr_fee in int_msg_info.
   static td::Result<schema::Message> parse_message(td::Ref<vm::Cell> msg_cell, int global_version);

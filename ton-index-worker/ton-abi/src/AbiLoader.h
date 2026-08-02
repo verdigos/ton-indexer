@@ -1,12 +1,11 @@
 #pragma once
 
-// AbiLoader: JSON -> AbiModel, fail-closed (T1.2). Rejects: unknown Ty kind,
+// Fail-closed JSON-to-AbiModel loader. Rejects unknown Ty kinds,
 // any nested ty_idx OOB, missing required field, abi_schema_version != "1.0",
 // malformed bigint, duplicate declaration names, instantiation arity
 // mismatch, intN/uintN/bitsN width limits, alias cycles, union prefix
 // non-freedom (a variant's prefix bit-string strict-prefixing another's),
-// prefix_len > 32. See docs/ton-abi-plan.md T1.2 row for the full list this
-// mirrors.
+// and prefix_len > 32.
 
 #include "AbiModel.h"
 

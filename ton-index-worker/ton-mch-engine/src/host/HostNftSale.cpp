@@ -1,25 +1,10 @@
-// GetGems / Fragment sale + auction host bindings (specs/nft_sale.mch), ported
-// from blocks/auction.py and blocks/messages/getgems.py. See host/HostImpls.h
+// GetGems and Fragment sale/auction host bindings. See host/HostImpls.h
 // for the internal registry surface and HostRegistry.h for the public one.
 //
-// Two groups live here:
-//
-//  1. The GetGems StateInit readers (`getgems_sale_init` /
-//     `getgems_auction_init`). NftPutOnSale takes its sale parameters from the
-//     DEPLOY MESSAGE's StateInit rather than from the account's interface
-//     snapshot, because the snapshot moves (an UpdateSale rewrites full_price
-//     on the live contract) while the StateInit is the listing as created.
-//     The contract layout changed across GetGems versions, so the parser is
-//     selected by the account's `code_hash` — the same base64 lookup tables
-//     messages/getgems.py carries, with the same "unknown hash -> latest"
-//     fallback. Every parse failure returns Null, never a fault: Python wraps
-//     both readers in `try/except -> None`, and a fault here would reject the
-//     whole match instead.
-//
-//  2. The small match-time predicates and the one chained-lookup fn
-//     (`auction_bid_data`) the expression language cannot host (§9.7 forbids a
-//     lookup keyed on another lookup's result, which is exactly what reading an
-//     auction's nft_addr and then looking that item up requires).
+// StateInit readers obtain immutable listing parameters from the deployment
+// message and select the layout by code hash. Parse failures return Null. The
+// remaining bindings are predicates and a chained auction-to-NFT lookup that the
+// expression language cannot represent.
 #include "host/HostImpls.h"
 
 #include "host/HostCommon.h"
@@ -48,7 +33,7 @@ constexpr char kDnsCollection[] =
     "0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF";
 
 // messages/getgems.py SALE_VERSION_MAPPING / AUCTION_VERSION_MAPPING. An
-// unlisted hash (including a MISSING one — Python's `.get(None, "latest")`)
+// unlisted hash (including a MISSING one, Python's `.get(None, "latest")`)
 // falls back to "latest", which each reader resolves to its newest layout.
 const std::map<std::string, std::string> &sale_versions() {
   static const std::map<std::string, std::string> m = {
@@ -171,7 +156,7 @@ td::Result<Value> parse_sale_data(vm::CellSlice cs, const std::string &version) 
     TRY_RESULT_ASSIGN(marketplace_fee_address, load_address_py(stat));
     TRY_RESULT_ASSIGN(royalty_address, load_address_py(stat));
     // fee_percent / royalty_percent are read by Python but never reach the
-    // block, and the reader returns EARLY — marketplace_fee / royalty_amount
+    // block, and the reader returns EARLY, marketplace_fee / royalty_amount
     // stay None on this version.
     TRY_STATUS(skip_bits(stat, 17));
     TRY_STATUS(skip_bits(stat, 17));
@@ -190,7 +175,7 @@ td::Result<Value> parse_sale_data(vm::CellSlice cs, const std::string &version) 
       TRY_RESULT_ASSIGN(marketplace_fee_address, load_address_py(fees));
       TRY_RESULT_ASSIGN(royalty_address, load_address_py(fees));
       TRY_RESULT_ASSIGN(royalty_amount, load_coins_py(fees));
-    } else {  // v2, v3, v3r2, v3r3 — the address/amount order is FLIPPED
+    } else {  // v2, v3, v3r2, v3r3 use the opposite address/amount order.
       TRY_RESULT_ASSIGN(marketplace_fee_address, load_address_py(fees));
       TRY_RESULT_ASSIGN(marketplace_fee, load_coins_py(fees));
       TRY_RESULT_ASSIGN(royalty_address, load_address_py(fees));
@@ -361,9 +346,9 @@ Value account_of(const Value &v) {
 
 // --- registered predicates --------------------------------------------------
 
-// The legacy sale_init GenericMatcher (blocks/auction.py:237): a plain
+// The reference sale_init GenericMatcher (blocks/auction.py:237): a plain
 // ton_transfer/call_contract leaf that deployed at least one contract. NOTE
-// `> 0`, not `== 1` — this is deliberately weaker than nft_mint's
+// `> 0`, not `== 1`, this is deliberately weaker than nft_mint's
 // `single_contract_deploy`.
 bool sale_contract_deploy(const Block *b) {
   if (b == nullptr || (b->btype != "ton_transfer" && b->btype != "call_contract")) {
@@ -420,19 +405,9 @@ bool auction_outbid_leg(const Block *b) {
 
 // --- registered fns ---------------------------------------------------------
 
-// The NFT a cancel/finish returned, WITHOUT consuming it.
-//
-// The three cancel/finish matchers gate on a child (`nft_transfer` for the two
-// cancels, `nft_purchase` for the finish) and read three fields off it, but
-// their legacy `build_block` merges ONLY the anchor — the child stays on the
-// spine as a top-level row of its own. A pattern edge cannot express that: mch
-// consumption IS the pattern match (spec §10.6; `omit` was cut from the
-// language), so an edge here would swallow the child into the produced block and
-// silently turn its top-level action row into a child row. Same escape as
-// DnsPurchase: keep the child out of the pattern and reach it from a host fn.
-//
-// First match in `next_blocks` order, mirroring BlockTypeMatcher's first-wins
-// child search. Null == the legacy child matcher failing to match, i.e. no block.
+// Find the NFT returned by cancel or finish without consuming it. A pattern edge
+// would consume the child and turn its top-level action into a child row. The
+// first matching next block wins; no match returns Null.
 EvalResult nft_trade_returned(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
   if (args.size() != 2 || args[1].t != VType::Str) {
@@ -457,10 +432,7 @@ EvalResult nft_trade_returned(BuildEnv &env, const std::vector<Value> &args) {
       const Value *addr = nft->field("address");
       nft_address = addr != nullptr ? *addr : Value::null();
       const Value *col = nft->field("collection");
-      // Legacy get_nft_collection() indexes straight into a None collection and
-      // raises; try_build swallows that into a non-match. Null-propagating here
-      // yields a row with a null collection where legacy yielded nothing — the
-      // documented deviation.
+      // A null collection remains null instead of being indexed.
       if (col != nullptr && !col->is_null()) {
         const Value *ca = col->field("address");
         nft_collection = ca != nullptr ? *ca : Value::null();
@@ -482,11 +454,11 @@ EvalResult nft_trade_returned(BuildEnv &env, const std::vector<Value> &args) {
 }
 
 // AuctionOutbidMatcher's whole build. The matcher ANCHORS on the outbid leg,
-// not on the auction_bid: legacy merges only the leg (`merge_blocks(include)`,
+// not on the auction_bid: reference merges only the leg (`merge_blocks(include)`,
 // include == [outbid_transfer]) and leaves the auction_bid a spine block of its
 // own, which an anchor edge would consume. So the bid is reached through
-// `.previous_block` here — the nominator_pool_withdraw_parent precedent — and
-// this fn also carries the "exactly one, reject on duplicate" count that legacy
+// `.previous_block` here, the nominator_pool_withdraw_parent precedent, and
+// this fn also carries the "exactly one, reject on duplicate" count that reference
 // runs over the bid's next_blocks and the language has no quantifier for.
 EvalResult auction_outbid_data(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
@@ -520,7 +492,7 @@ EvalResult auction_outbid_data(BuildEnv &env, const std::vector<Value> &args) {
   f.emplace_back("new_bidder", data_field(bid, "bidder"));
   f.emplace_back("amount", msg->value ? Value::make_amount(td::make_refint(*msg->value))
                                       : Value::make_amount_none());
-  // The fragment leg carries no comment (legacy hardcodes None there).
+  // The fragment leg carries no comment (reference hardcodes None there).
   f.emplace_back("comment", getgems ? data_field(leg, "comment") : Value::null());
   f.emplace_back("auction_type", data_field(bid, "auction_type"));
   return rt_ok(Value::make_obj(std::move(f)));
@@ -558,7 +530,7 @@ EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args) {
   }
   vm::CellSlice cs = r_data.move_as_ok();
   // "v2" is in Python's table but has no branch in get_auction_data, so it
-  // returns None there — reproduced by rejecting it here.
+  // returns None there, reproduced by rejecting it here.
   const std::string version = pick_version(auction_versions(), args[1], "v3r3");
   AuctionInit d;
   td::Status st = td::Status::Error("unsupported auction version");
@@ -587,8 +559,8 @@ EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args) {
 
 // AuctionBidMatcher.build_block (blocks/auction.py:60) as one fn: the getgems
 // branch reads the auction interface and then looks the ITEM up by the address
-// that interface carries — a lookup keyed on a lookup, which the build language
-// forbids (§9.7). Null result == every legacy `return []`.
+// that interface carries. This is a lookup keyed on another lookup's result,
+// which the build language cannot express. Any rejected branch returns Null.
 EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args) {
   if (args.size() != 1) {
     return rt_fault("auction_bid_data: bad arguments");
@@ -641,8 +613,7 @@ EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args) {
     return rt_ok(Value::null());
   }
   if (dns) {
-    // A DNS bid is only a bid when it actually outbid someone — legacy scans
-    // for the teleitem outbid notification and bails without it.
+    // A DNS bid requires the teleitem outbid notification.
     if (find_call(bid->next_blocks, 0x557CEA20) == nullptr) {
       return rt_ok(Value::null());
     }

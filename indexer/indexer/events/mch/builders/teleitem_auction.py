@@ -6,9 +6,8 @@ btypes, the `TeleitemStartAuction` body parser, an `nft_item` lookup and the one
 host fn the expression language cannot express.
 
 `is_teleitem` is that fn. The legacy gate (`blocks/auction.py::_is_teleitem`) is a
-SUBSTRING test on the item's metadata `uri`, and the spec forbids string
-manipulation in the expression language (mch-spec §9.6: "no string manipulation.
-If a computation does not fit, it belongs in a host `fn`"), so the predicate
+SUBSTRING test on the item's metadata `uri`, and the expression language does
+not support string manipulation, so the predicate
 stays a one-line host fn on both sides. It delegates to the legacy `_is_teleitem`
 verbatim, which makes the Python leg parity-by-construction; the C++ leg
 (host/HostNft.cpp) repeats the same `content["uri"] contains
@@ -86,7 +85,7 @@ def register_teleitem_auction(reg: Registries) -> Registries:
 
     @reg.register_fn("is_teleitem")
     async def is_teleitem(nft: Any) -> bool:
-        # Nulls pass through to host fns (spec §9.10), and _is_teleitem answers
+        # Nulls pass through to host fns, and _is_teleitem answers
         # False for a missing content — same rejection the legacy build takes.
         return bool(_is_teleitem(nft)) if nft is not None else False
 

@@ -249,7 +249,7 @@ bool evaa_bounced_call(const Block *b) {
 
 // EvaaSupplyBlockMatcher.test_self: the 0x1 supply_master call itself (TON side),
 // or a jetton transfer whose FORWARD PAYLOAD starts with the supply_master
-// opcode (jetton side). btype, not isinstance — the legacy JettonTransferBlock
+// opcode (jetton side). btype, not isinstance, the reference JettonTransferBlock
 // check is dead under the IR engine.
 bool evaa_supply_anchor(const Block *b) {
   if (is_call_op(b, kSupplyMaster)) {
@@ -323,7 +323,7 @@ EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args) {
   const Block *block = consumed.front();
 
   // Label roles, derived structurally from the consumed set (the anchor is
-  // excluded — on the jetton arm it is itself a jetton_transfer).
+  // excluded, on the jetton arm it is itself a jetton_transfer).
   const Block *user = nullptr, *success = nullptr, *fail = nullptr, *refund = nullptr;
   for (std::size_t i = 1; i < consumed.size(); i++) {
     const Block *b = consumed[i];

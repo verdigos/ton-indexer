@@ -1,39 +1,6 @@
-// End-to-end classify loop (`--classify`, Phase B3).
-//
-// Ports the Python outer loop VERBATIM (event_processing.process_event_async +
-// mch_ir/engine.py IrMatcher.try_build):
-//   root = Block('root'); root.connect(init_block(tree))
-//   for m in matchers (priority order):
-//     for b in root.bfs_iter():          # FIFO; b's next_blocks are read
-//       if b.parent is None:             # AFTER try_build(b) ran (generator
-//         try_build(m, b)                # resume order) — port exactly
-// Loop consequences (all inherited from Python, not invented here):
-//  - a block produced by matcher m is NOT visited by m's own ongoing BFS (it
-//    hangs off an ancestor whose next_blocks were already read) but IS visible
-//    to every later matcher's fresh BFS — cross-matcher production (e.g.
-//    ethena anchoring on a produced jetton_transfer) works;
-//  - consumed blocks keep their next_blocks, so the old topology is still
-//    traversed; the `parent is None` guard only filters try_build calls.
-//
-// try_build = match (root absorb=False) -> capture slots -> two-phase lookups
-// (FixtureLookupSource) -> GENERATED build fn -> on rejection: nothing (clean
-// §10.7); on accept: produced Block from the arena (btype = outcome or
-// produces[0], data/failed/broken from the outcome), merge_blocks(consumed)
-// (false => clean rejection), THEN the root-level excess/bounce auto-append
-// list from the anchor's next_blocks (canonical order, include_* flags) —
-// engine.py try_build lines 443-451 exactly. Flows are recorded on the dump
-// (value_flow application is Phase E).
-//
-// DUMP FORMAT CONTRACT (Python twin: twins/py_classify.py):
-//   SKIP <matcher> reason=...   # once, sorted (same rules as BuildSmoke.h)
-//   === <fixture-basename>
-//   ACTION <matcher> anchor=<key> btype=<bt> failed=0|1 broken=0|1
-//          data={..} consumed=[<key>,..] auto=[<key>,..]
-// consumed = SORTED keys of the produced block's children_blocks (== the merge
-// set); auto = canonical (min_lt) order, unsorted. Value rendering per
-// BuildSmoke.h. Rejections print nothing (matches Python r in (None, [])).
-//
-// gen_builds() must have been generated from THIS artifact (sha-checked).
+// End-to-end classifier and serialized-action dump adapters.
+// Generated build tables are source-hash checked against the matcher artifact.
+// See docs/engine-internals.md for traversal and build ordering.
 #pragma once
 
 #include "BlockTree.h"  // TraceContext (loader callback return type)
@@ -49,14 +16,8 @@ struct CoreAction;  // ClassifyCore.h
 struct Action;  // ActionBuild.h
 class LookupSource;  // BuildRuntime.h
 
-// TODO: remove (harness): TraceContextLoader and LookupSourceFactory below are
-// injection seams that exist only so the schema A/B gate can substitute a
-// loader and a fixture-backed lookup factory (audit §5.7 H31). They collapse
-// with the A/B gates once the golden gate is the only actions expectation.
-//
-// How run_dump acquires a trace's TraceContext for a fixture path. Path A = the
-// msgpack loader (load_trace_context); the schema A/B gate injects a callback
-// that synthesizes schema::Transactions and runs SchemaTraceLoader (SchemaGate.cpp).
+// Supplies a TraceContext for a fixture path. The default path uses the MsgPack
+// loader; schema-based harnesses can inject a SchemaTraceLoader callback.
 using TraceContextLoader = std::function<td::Result<TraceContext>(const std::string &)>;
 
 // How run_dump obtains the LookupSource for a trace. Empty (default) => the
@@ -69,9 +30,7 @@ using LookupSourceFactory = std::function<std::shared_ptr<LookupSource>(TraceCon
 // tests that must not enter the matcher pipeline.
 std::string render_action(const Action &action);
 
-// TODO: remove (harness): `--classify` renders the INTERMEDIATE block-tree
-// stage, whose only consumer was the Python twin twins/py_classify.py (audit
-// §5.7 H30). The action rows (run_actions below) are the gated stage.
+// Renders the intermediate matcher-fire view rather than serialized action rows.
 int run_classify(const std::vector<std::string> &paths);
 
 // Shared classify/actions dump over an injectable context loader (the render +
@@ -81,14 +40,14 @@ int run_dump(const std::vector<std::string> &paths,
              bool actions_mode, const TraceContextLoader &load_ctx,
              const LookupSourceFactory &lookup_factory = {});
 
-// Phase E part 2 (`--actions`): serialized-Action-row dump. Same collect->pass
+// `--actions` serialized-action-row dump. Uses the same collect-to-final-pass
 // pipeline as run_classify; each surviving post-pass produced block is rendered
-// as an Action row (block_tree_serializer.py _fill_* port, scoped to the 19
-// composite btypes that fire in the corpus). Python twin:
+// as an Action row, with one block_tree_serializer.py _fill_* port per supported
+// serialized btype. Python twin:
 // twins/py_actions.py. Dump line:
 //   ACTION anchor=<key> {id=..,type=..,<directional>,<composite maps>..}
 // Value rendering per fixtures/Render.h render_value (sorted keys). Rows are built
-// lib-side by ActionBuild.cpp — see its header block for what is and is not
+// lib-side by ActionBuild.cpp. See its header block for what is and is not
 // rendered (roles are not; accounts and the initiating-tx extension ARE).
 int run_actions(const std::vector<std::string> &paths);
 

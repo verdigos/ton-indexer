@@ -36,7 +36,7 @@ namespace {
 
 // Render + print a collected CoreAction from its FINAL (post-pass) state. The
 // aux/flows strings (fire-time) are rendered HERE from the core's raw block/
-// flow lists — the core stays rendering-agnostic (§11 item 2 isolation).
+// flow lists. The core stays rendering-agnostic.
 void emit_action(const CoreAction &a) {
   std::vector<std::string> ck;
   for (Block *cb : a.produced->children_blocks) ck.push_back(block_key(cb));
@@ -148,8 +148,8 @@ std::string render_action(const Action &a) {
   return render_value(Value::make_dict(std::move(f)));
 }
 
-// Shared CLI dump adapter over ClassifyCore (§11 item 2 / prod-design §2). The
-// core computes a buffered per-trace ClassifyResult; this reproduces today's
+// Shared CLI dump adapter over ClassifyCore. The core computes a buffered
+// per-trace ClassifyResult; this reproduces the
 // stdout byte-for-byte (SKIP header, `=== fixture`, ERROR/TRACE_FAIL lines, then
 // per surviving action either the classify line (emit_action) or the serialized
 // Action row (build_action + render_action)). --classify and --actions differ
@@ -206,11 +206,11 @@ int run_dump(const std::vector<std::string> &paths,
 
     ClassifyResult res = classify_trace(ctx, matchers, setup, *src);
     if (res.failure) {
-      // Per-trace exception boundary (event_processing.py): buffered — the
+      // Per-trace exception boundary (event_processing.py): buffered, the
       // regular actions are discarded, a single TRACE_FAIL on stdout, the reason
       // on stderr (A/B channel stays byte-comparable). In --actions mode the
-      // basic-actions fallback rows (Step 2c) follow behind a FALLBACK tag.
-      // No corpus trace triggers this — the fallback path is ungated.
+      // Basic-action fallback rows follow behind a FALLBACK tag.
+      // No corpus trace triggers this, the fallback path is ungated.
       std::printf("TRACE_FAIL\n");
       std::fprintf(stderr, "TRACE_FAIL %s: %s\n", fs::path(f).filename().string().c_str(),
                    res.failure_reason.c_str());

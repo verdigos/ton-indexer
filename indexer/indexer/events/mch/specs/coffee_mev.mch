@@ -1,5 +1,4 @@
-# Coffee MEV-protect hold funds — port of CoffeeMevProtectHoldFundsMatcher
-# (blocks/liquidity.py:2629). Fully declarative: zero host fns, zero parsers.
+# Coffee MEV-protect hold-funds matcher. It needs no host functions or parsers.
 #
 # The legacy matcher never reads a message body on either arm; every field comes
 # off the envelope (TON arm) or off the prebuilt jetton_transfer's data (jetton
@@ -8,17 +7,15 @@
 #     (CallContractBlock and opcode == 0x6bc79e7e)
 #  or (JettonTransferBlock and int(data["payload_opcode"], 16) == 0x6bc79e7e)
 #
-# TWO MATCHERS, one per arm — and why not one mixed anchor
-# --------------------------------------------------------
+# Each arm uses a separate matcher.
 # A mixed `(op X @m ^ btype jetton_transfer @m where …)` anchor group can only
 # carry a NAMED host `where` predicate; an inline `where (expr)` on a group
-# branch is C013_WHERE_EXPR_NOT_SYNC (compiler.py, spec §6.8/§8.3), because the
+# branch is C013_WHERE_EXPR_NOT_SYNC (compiler.py), because the
 # IR anchor record has no slot for an expression. A single anchor would
 # therefore cost a host predicate written twice (Python + C++) purely to test
 # one data field against one string — exactly the dual-implementation liability
 # the inline form exists to avoid. Splitting the arms keeps the payload test
-# inline on a PLAIN anchor node (where an expression IS supported) and the whole
-# port at zero host code.
+# inline on a plain anchor node and avoids host code.
 #
 # The split is behaviourally inert: the two anchors are disjoint (a block is
 # either a call_contract or a jetton_transfer), so at most one matcher can ever
@@ -37,8 +34,8 @@
 # child_matcher=ContractMatcher(CoffeeServiceFee))` — any parent block that also
 # emitted the 0xc0ffeea0 service fee, optional. That is the `A <- maybe (any ->
 # {…})` shape: an `any` head, and a children block after a parent edge attaching
-# to the PARENT matcher, not the anchor (spec §6.4/§6.5, telegram_nft
-# precedent). On the corpus fixture the parent is the user wallet's ext-in
+# to the PARENT matcher, not the anchor, as in the telegram_nft matcher. On the
+# corpus fixture the parent is the user wallet's ext-in
 # driven call, whose two children are the fee and the anchor.
 #
 # `mev_contract_wallet` is hard null in the legacy build on BOTH arms (it is
@@ -53,11 +50,9 @@
 # priority-90 jetton specs (default priority 100) is what makes the
 # jetton_transfer blocks exist at all.
 #
-# NOT PORTED: CoffeeMevProtectFailedSwapMatcher (liquidity.py:2690), the sibling
-# in the legacy list. It has no corpus fixture, its jetton arm needs a
+# CoffeeMevProtectFailedSwapMatcher is not represented here. Its jetton arm needs a
 # forward-payload parse the language cannot express (`parse` is node-only), and
-# its serializer fill has no dispatch arm at all — so legacy parity for it is an
-# all-NULL row. Deferred deliberately.
+# its serializer fill has no dispatch arm, so its result would contain only nulls.
 
 opcode CoffeeMevProtectHoldFunds = 0x6BC79E7E
 opcode CoffeeServiceFee          = 0xC0FFEEA0

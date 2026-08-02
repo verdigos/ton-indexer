@@ -1,32 +1,5 @@
-// Runtime value model for the MCH expression VM (docs/mch-ir-spec.md §7, §12).
-//
-// This is the C++ mirror of the Python reference values (blocks/utils AccountId
-// / Amount / Asset, plus plain int/str/bytes/list/dict) that the expression
-// evaluators in indexer/events/mch/expr_eval.py and mch_ir/expr.py produce and
-// consume. Only the semantics the conformance vectors exercise are modelled;
-// design decisions and deliberate deviations are documented per-member below.
-//
-// Key decisions:
-//  - Integers are td::RefInt256 for EVERY expression integer (Int and Amount
-//    value). Python ints are unbounded and jetton amounts overflow int64, so a
-//    fixed 256-bit big-int is the faithful carrier. int64 inputs (JSON numbers,
-//    host fields) are widened on entry.
-//  - AccountId carries a distinct addr_none state (present-but-empty address),
-//    separate from a null Value — mirrors AccountId(None): repr "addr_none",
-//    as_str() -> null. Addresses are normalized to the raw "wc:HEX" form with
-//    UPPERCASE hex (matches AccountId.as_str()); only the raw form is parsed
-//    (the vectors never use user-friendly base64 addresses).
-//  - Asset == string is JETTON-ONLY: a case-insensitive compare of the jetton
-//    master's raw string (Asset.__eq__ lowercases both sides without
-//    re-normalizing `other`). A TON asset vs a string FAULTS — __eq__ reads the
-//    jetton master before the is_ton branch, so the "ton"-string match is dead.
-//  - Dict vs Obj are two distinct map kinds: Dict is pure key lookup (Python
-//    dict / block data map / record literal), Obj is attribute access with the
-//    special `.exit_code` envelope accessor (Python SimpleNamespace, the $obj
-//    decode of a message envelope / body / lookup record). They differ only in
-//    attribute-access semantics (§7.2).
-//  - List/Dict/Obj payloads are held behind shared_ptr so a Value stays cheaply
-//    copyable (values are immutable once built; sharing is safe).
+// Runtime value model shared by expression evaluation, builds, host calls, and
+// action serialization. See docs/value-model.md for representation invariants.
 #pragma once
 
 #include "common/refint.h"
@@ -109,10 +82,8 @@ struct Value {
 };
 
 // Serialize a cell tree to standard BOC bytes (td std_boc_serialize, mode 0).
-// Plan §12: Cell-derived output fields are compared by ROOT HASH, not bytes, so
-// container byte order is no longer significant and the deterministic native
-// writer is used everywhere (the former pytoniq-order writer — and its P3
-// exponential-re-walk DoS — is gone).
+// Cell-derived output fields are compared by root hash, so container byte order
+// is not significant and the deterministic native writer is used everywhere.
 td::Result<std::string> td_boc_serialize(const td::Ref<vm::Cell> &root);
 
 // Normalize a raw TON address string "wc:hex64" to canonical "wc:HEX64".

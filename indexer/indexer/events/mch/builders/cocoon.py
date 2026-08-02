@@ -10,14 +10,14 @@ two host fns the expression language cannot express.
     routinely EXTERNAL on this protocol, and every legacy build renders it as a
     STRING with two spellings: `f"{len};{hex(value)[2:]}"` for an
     ExternalAddress, `to_str(False).upper()` for a std one, and None left as
-    None. String formatting is deliberately outside the language (mch-spec
-    §9.6), so this is a host fn. The three call sites (worker payout, proxy
+    None. String formatting is deliberately outside the language, so this is a
+    host fn. The three call sites (worker payout, proxy
     charge, grant refund) are byte-identical in legacy, hence one fn.
 
 `cocoon_withdraw_amount` — a NESTED payload parse: ClientProxyRequest.payload is
     a `maybe_ref` whose cell must then be `begin_parse`d as
     ClientProxyRefundGranted to reach the coins. `parse CAPTURE as T` reads only
-    the captured block's own body (§9.1), so the second hop needs a host fn. It
+    the captured block's own body, so the second hop needs a host fn. It
     reproduces CocoonClientWithdrawMatcher.build_block's try/except verbatim:
     ANY failure (unparseable request body, absent payload, unparseable payload)
     yields None, and the spec's `?? 0` is legacy's "warn and write 0".

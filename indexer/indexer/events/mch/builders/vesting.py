@@ -10,7 +10,7 @@ host fn for the genuinely inexpressible piece:
     whether the vesting contract actually emitted the requested message means
     scanning the REQUEST TRANSACTION's out-messages for a matching
     destination + body hash; transaction-level navigation is outside the
-    language (§15b), so it stays a host fn wrapping the legacy
+    language, so it stays a host fn wrapping the legacy
     _vesting_message_was_sent (blocks/vesting.py) verbatim.
 
 `vesting_add_whitelist` needs neither a host fn nor a twin class: its `out` is
@@ -58,7 +58,7 @@ MESSAGE_TYPES = {
 async def _vesting_message_was_sent_fn(send, body) -> bool:
     """`success`: did the vesting contract actually emit the requested message?
     Delegates to the legacy _vesting_message_was_sent over the request
-    transaction (GAP: transaction out-message navigation, §15b)."""
+    transaction, which the language cannot navigate."""
     if send is None or body is None:
         return False
     return _vesting_message_was_sent(send.get_message().transaction, body)

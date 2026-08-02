@@ -15,9 +15,9 @@
 
 namespace mch {
 
-// DedustPayoutFromPool and DedustSwapNotification now use protocol ABI rows.
-// Only parse_dedust_steps (the host-fn chain walk, not a registered message
-// parser) stays hand.
+// DedustPayoutFromPool and DedustSwapNotification use protocol ABI rows.
+// parse_dedust_steps remains a host-function chain walk rather than a
+// registered message parser.
 
 // blocks/swaps.py _parse_dedust_steps: walk the SwapStep chain (already
 // positioned past the sum-type/header). Each link: pool addr, 1 flag bit,

@@ -26,10 +26,10 @@ Value addr_str_opt(const std::optional<block::StdAddress> &a) {
   return a ? addr_str(*a) : Value::null();
 }
 
-// Python's `code_hash` column: base64 of the account's code cell hash, compared
+// The `code_hash` field is base64 of the account's code-cell hash, compared
 // against literal b64 constants (auction.py DNS_CODE_HASH, getgems.py's sale /
 // auction version tables). An all-zero Bits256 is the emulator adapter's
-// value-initialized tail, never a real code hash, so it renders as null — a miss
+// value-initialized tail, never a real code hash, so it renders as null. This is a miss
 // the reader can reject on, not a b64 string that would silently pick the
 // "latest" parser branch.
 Value code_hash_str(const td::Bits256 &h) {
@@ -39,23 +39,10 @@ Value code_hash_str(const td::Bits256 &h) {
   return Value::make_str(td::base64_encode(h.as_slice()));
 }
 
-// Python's NftItem.content, as a Dict. NOT cosmetic and NOT optional: the
-// consumer FAULTS on a non-Dict — get_nft_data mirrors Python's `"uri" in
-// nft.content` raising (HostNft.cpp) — and a fault rejects the match, so a Null
-// here drops the whole nft_transfer row. That is a live production action loss,
-// invisible to every offline gate because SchemaGate routes the nft kinds to the
-// fixture tier-2 fallback.
-//
-// A FLAT Str->Str dict is the right shape even though Python's metadata can
-// nest: `content` is observable in exactly two ways, and neither sees the
-// nesting. The fragment.com branch reads the top-level `uri` string, which the
-// flat map carries exactly; the other branch passes the whole dict through as
-// `meta`, which NO action fill and NO spec reads (the IR does not contain the
-// string "meta", and ActionBuild takes only address/collection/index off the nft
-// dict). So this cannot trade a dropped row for a wrong one.
-//
-// nullopt stays Null — an item with no content is the same rejection Python
-// takes, rather than a synthesized empty dict that would fabricate a row.
+// NftItem.content must be a Dict because get_nft_data tests the top-level `uri`
+// key and faults on another type. A flat string map preserves the observable
+// fields; nested metadata is not read by matchers or action fills. Missing content
+// remains null so it rejects instead of fabricating an empty record.
 Value nft_content(const std::optional<std::map<std::string, std::string>> &content) {
   if (!content) {
     return Value::null();
@@ -67,7 +54,7 @@ Value nft_content(const std::optional<std::map<std::string, std::string>> &conte
   return Value::make_dict(std::move(f));
 }
 
-// A dedust pool asset element: {is_ton, address} — the two fields
+// A DeDust pool asset element: {is_ton, address}, the two fields
 // HostDedust.cpp reads. nullopt asset slot == TON.
 Value dedust_asset(const std::optional<block::StdAddress> &a) {
   Value::Fields f;
@@ -79,7 +66,7 @@ Value dedust_asset(const std::optional<block::StdAddress> &a) {
 }  // namespace
 
 const std::set<std::string> &ParsedBlockLookupSource::kinds() {
-  // The lib-wide kind set — keeps prepare_classify's skip table
+  // The library-wide kind set keeps prepare_classify's skip table
   // byte-identical on the production path.
   return lookup_kinds();
 }
@@ -151,7 +138,7 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
       }
     } else if (kind == "dedust_pool") {
       if (const auto *p = std::get_if<schema::DedustPoolData>(&iface)) {
-        // Obj{assets: [ {is_ton, address}, ... ]} — HostDedust reads is_ton +
+        // Obj{assets: [ {is_ton, address}, ... ]}, HostDedust reads is_ton +
         // address per element; a nullopt asset slot is the TON side.
         std::vector<Value> assets;
         assets.push_back(dedust_asset(p->asset_1));
@@ -208,7 +195,7 @@ Value ParsedBlockLookupSource::tier1(const std::string &kind, const std::string 
 
 Value ParsedBlockLookupSource::fetch(const std::string &kind, const std::vector<Value> &args) const {
   // FixtureLookupSource parity guard: every registered lookup passes exactly one
-  // address — Str, or the Account a `.data` address field yields (same raw
+  // address, Str, or the Account a `.data` address field yields (same raw
   // uppercase text); anything else is a null result on both sources.
   if (args.size() != 1 ||
       !(args[0].t == VType::Str ||

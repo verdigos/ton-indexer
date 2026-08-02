@@ -26,7 +26,7 @@
 # ReturnExcessesBack 0x2565934C, ClientProxyRequest 0x65448FF4) appear as
 # CHILDREN of several matchers, never as an anchor, so they cannot collide.
 #
-# PARITY TRAPS honoured here (docs/mch-port-audit.md:310-313)
+# Compatibility details:
 # -----------------------------------------------------------------------------
 #  - `failed` comes from `<x>.msg.transaction.aborted`, NEVER from `<x>.failed`.
 #    Every legacy build_block ends `new_block.failed = <msg>.transaction.aborted`,
@@ -42,7 +42,7 @@
 #    `.data.opcode`. Never write `x.msg.opcode == 0xF5F26A36`.
 #  - Legacy writes `AccountId(...)` UNCONDITIONALLY for every address it stores,
 #    so a missing address becomes addr_none (present-but-empty), not null. Every
-#    address field below is `account(x) ?? addr_none()` to match (§9.6).
+#    address field below is `account(x) ?? addr_none()` to match.
 #
 # HOST FNS (2, both in builders/cocoon.py / src/host/HostCocoon.cpp)
 # -----------------------------------------------------------------------------
@@ -51,12 +51,12 @@
 #    carry `260;8da2…`), and the legacy builds render it as a STRING with two
 #    different spellings: `f"{len};{hex(value)[2:]}"` for an ExternalAddress and
 #    `to_str(False).upper()` for a std one. The expression language has no string
-#    formatting by design (§9.6), so this is a host fn. Shared by
+#    formatting by design, so this is a host fn. Shared by
 #    cocoon_worker_payout, cocoon_proxy_charge and cocoon_grant_refund.
 #  - cocoon_withdraw_amount(client_request) — a NESTED payload parse:
 #    ClientProxyRequest.payload is a `maybe_ref` whose cell must then be
 #    `begin_parse`d as ClientProxyRefundGranted to reach the coins. `parse
-#    CAPTURE as T` reads only the captured block's OWN body (§9.1), so the nested
+#    CAPTURE as T` reads only the captured block's OWN body, so the nested
 #    hop needs a host fn. It is TOLERANT by design — legacy wraps the whole thing
 #    in try/except and falls back to `withdraw_amount = 0` — so it returns null
 #    on any failure and the spec coalesces.
@@ -337,7 +337,7 @@ matcher cocoon_client_change_secret_hash {
 # Do not "fix" the dead arm by
 # dropping it: keeping it is the faithful transcription, and (1) makes it inert.
 #
-# EDGE ORDER IS LOAD-BEARING (compiler trap T04 / §6.5): the children block must
+# Edge order matters: the children block must
 # come BEFORE the parent edge. A children block written AFTER a parent edge
 # attaches to the PARENT matcher, not the anchor — `op A <- op B -> {C; D}` gives
 # B the children. Written in this order, `op A -> {C; D} <- op B` gives A both
@@ -434,7 +434,7 @@ matcher cocoon_client_increase_stake {
 # null on a missing/undecodable payload and the `?? 0` reproduces legacy's
 # "warn and write 0" fallback. Note the outer ClientProxyRequest parse lives
 # INSIDE the host fn rather than as a `parse` statement: a `parse` failure
-# REJECTS the whole match (§9.1) while legacy tolerates it and still emits the
+# REJECTS the whole match, while legacy tolerates it and still emits the
 # row with amount 0.
 # -----------------------------------------------------------------------------
 matcher cocoon_client_withdraw {

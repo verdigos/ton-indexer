@@ -1,13 +1,12 @@
-"""mch registries for the stonfi_v2 provide-liquidity matchers
+"""MCH registries for the Stonfi V2 provide-liquidity matchers
 (specs/stonfi_v2_provide.mch).
 
-R08 remake, now a FULLY DECLARATIVE build (no host builder): each matcher
-builds ONE deposit leg's `dex_deposit_liquidity` data entirely in the spec's
-`out` block (the build_stonfi_v2_provide_core computation inlined). The product
+Each matcher builds one deposit leg's `dex_deposit_liquidity` data in the
+spec's `out` block. The product
 is a generic Block(btype dex_deposit_liquidity); cross-branch pairing, the
-EmptyBlock proxy surgery and the legacy condition-fail absorption all live in
-the host pass post_process_stonfi_v2_liquidity (blocks/liquidity.py, spec
-§5.5), which dispatches dual (isinstance legacy classes OR btype+dex marker).
+EmptyBlock proxy surgery and condition-fail absorption live in
+the host pass post_process_stonfi_v2_liquidity (blocks/liquidity.py), which
+accepts either the source classes or a btype+dex marker.
 
 The registry therefore needs only the opcode constants, the produced btype in
 block_types, and the two message parsers the `parse` statements reference.

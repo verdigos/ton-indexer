@@ -1,28 +1,9 @@
 #pragma once
 
-// AbiLeavesScalar: L1 scalar leaves (W3, T3.1). Each Tolk scalar type gets a
-// load+store pair over vm::CellSlice / vm::CellBuilder, fail-closed (td::Result
-// / td::Status, never abort). Values are td::RefInt256 for the integer kinds
-// and bool for bool; bitsN is a bit-string, returned as a Ref<vm::CellSlice> of
-// exactly n bits / 0 refs (its §0.14 slice-ish dump is W8's job -- the leaf
-// only moves bits).
-//
-// NORMATIVE reference: @ton/core (vendored at ton-abi/tools/node_modules/
-// @ton/core), whose semantics the interpreter must reproduce exactly:
-//   BitReader.js   loadIntBig / loadUintBig (two's-complement, sign bit first)
-//                  loadVarUintBig(bits): size = loadUint(bits) BYTES, then
-//                  loadUintBig(size*8); loadVarIntBig likewise signed;
-//                  loadCoins() = loadVarUintBig(4)
-//   BitBuilder.js  writeUint (v in [0,2^bits)), writeInt (bits==1 -> {-1,0};
-//                  else [-2^(bits-1), 2^(bits-1))), writeVarUint (v>=0; v==0 ->
-//                  zero size; else sizeBytes = ceil(bitlen(v)/8)),
-//                  writeVarInt (sizeBytes = ceil((bitlen(|v|)+1)/8), +1 for
-//                  the sign bit -> NB differs from a two's-complement bit_size
-//                  for exact powers of two like -128), writeCoins = writeVarUint(_,4)
-// The var* size-prefix WIDTH is log2(n) bits, per dynamic-serialization.ts
-// (loadVarIntBig(Math.log2(ty.n)) / storeVarInt(v, Math.log2(ty.n))) -- verified
-// against BitReader/BitBuilder. n MUST be a power of two (var_prefix_bits fails
-// closed otherwise).
+// Fail-closed scalar load/store primitives matching @ton/core wire semantics.
+// Integer values use RefInt256 except for the explicit native-width overloads;
+// bitsN returns exactly n bits and no refs. See MODULE-NOTES.md for varint size
+// and range details.
 
 #include "common/refint.h"
 #include "td/utils/Status.h"

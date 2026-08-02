@@ -18,10 +18,10 @@ from indexer.events.mch.resolver import (
 
 @dataclass
 class LNode:
-    """A lowered IR node (spec: docs/mch-ir-poc.md "Node records").
+    """A lowered IR node.
 
     The frontend lowers `.mch` patterns straight into a graph of these plain
-    records — no engine primitives are constructed. `ir_emit` walks the graph in
+    records. No engine primitives are constructed. `ir_emit` walks the graph in
     DFS pre-order to assign node ids and produce the JSON artifact; the v2 IR
     engine (`mch_ir/`) is the only runtime that consumes it.
 
@@ -30,11 +30,11 @@ class LNode:
       - contract:   `opcode`
       - block_type: `btype`
       - pred:       `pred`
-      - any:        (leaf, permissive — anchor-group / predicate-anchor roots,
+      - any:        (leaf, permissive; anchor-group / predicate-anchor roots,
                     recursion sentinels, `any` heads)
       - or:         `branches`, `exclusive`
       - recursive:  `step`, `exit_` (frontier), or `strategy="cyclic"` + `step`
-      - cyclic_ref: `target` — an in-body self-reference back-edge; carries no
+      - cyclic_ref: `target`, an in-body self-reference back-edge; carries no
                     node of its own (emitter resolves it to `target`'s id).
     Common optional fields on every kind: `optional`, `capture`, `where`,
     `where_expr`, `child`, `children`, `parent`.
@@ -73,20 +73,20 @@ class CompiledMatcher:
     build_fn_name: str | None
     produces_cls_name: str
     source_span: Span
-    # Raw produced-btype names (spec §11: first = primary); emitter normalizes.
+    # Raw produced-btype names; the first is primary. The emitter normalizes them.
     produces: tuple[str, ...] = ()
     # (capture-name, cardinality) pairs; cardinality ∈ {"one","opt","many"}.
     captures: tuple[tuple[str, str], ...] = ()
-    # Engine auto-append flags (spec §11.1), default true.
+    # Engine auto-append flags, default true.
     include_excess: bool = True
     include_bounces: bool = True
-    # Build statements (M4), source order; empty tuple for builder-based matchers.
+    # Build statements in source order; empty for builder-based matchers.
     build_stmts: tuple = ()
-    # `shape` directive (§8.7): registered shaper name, None when absent.
+    # `shape` directive: registered shaper name, None when absent.
     shape_fn_name: str | None = None
-    # `priority` directive (§8.6): registration-order weight, default 100.
+    # `priority` directive: registration-order weight, default 100.
     priority: int = 100
-    # Anchor record representation ([M2R, R09/R10] + T10 groups). Exactly one of
+    # Anchor record representation. Exactly one of
     # these is set for a group/predicate anchor; a plain single op/btype anchor
     # leaves them all None and the emitter reads the root node's kind.
     anchor_pred: str | None = None
@@ -164,8 +164,8 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
             decl.span,
         )
 
-    # Lower the pattern relative to the anchor atom. For opcode-set anchors
-    # (spec §8.3 M2) the whole exclusive alternative group IS the anchor atom,
+    # Lower the pattern relative to the anchor atom. For set anchors, the whole
+    # exclusive alternative group is the anchor atom,
     # so chain edges around it wire exactly as around a single anchor node.
     anchor_atom: ast_.PatternExpr = (
         rm.anchor_group if rm.anchor_group is not None else rm.anchor_node
@@ -182,8 +182,8 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         # Set-membership anchor: the anchor record carries a membership test over
         # the group's branch heads, mirroring hand-written matchers like
         # JettonMintBlockMatcher (`opcode in [...]`, jettons.py). Heads may mix
-        # op/btype (union) and each branch may carry a `where` predicate
-        # ([M2R, R09]). The root node stays permissive (`any`); the membership
+        # op/btype and each branch may carry a named `where` predicate. The root
+        # stays permissive (`any`); the membership
         # test lives entirely in the matcher record's `anchor`.
         if rm.anchor_group.exclusive:
             _check_redundant_exclusive_heads(rm.anchor_group, ctx)
@@ -203,7 +203,7 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     elif isinstance(head, ast_.BTypeHead):
         root = LNode(kind="block_type", btype=head.name, child=child_m, parent=parent_m)
     elif isinstance(head, ast_.PredHead):
-        # Predicate anchor ([M2R, R10]): no opcode/btype prefilter — the anchor
+        # Predicate anchors have no opcode/btype prefilter. The anchor
         # record carries the predicate name (kind "pred"), full-scanned over
         # every candidate block. The root node stays permissive (`any`).
         anchor_pred = head.name
@@ -222,24 +222,23 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     if children_ms is not None and root.children is None:
         root.children = children_ms
     # Apply where-predicate on the anchor node, if any. For a set-membership
-    # group anchor ([M2R, R09]) the per-branch `where` is already folded into
+    # group anchor, the per-branch `where` is already folded into
     # the group's membership record; `anchor_node` is only a representative
-    # branch, so its `where` must NOT be re-applied to the root node.
+    # branch, so its `where` is not re-applied to the root node.
     anchor_pred_name = None if rm.anchor_group is not None else rm.anchor_node.where_predicate
     if anchor_pred_name is not None:
         root.where = anchor_pred_name
     # Tag the anchor node with its capture name for IR emission.
     if rm.anchor_capture:
         root.capture = rm.anchor_capture
-    # Anchor-node inline `where (expr)` (T33): the emitter's root-node record
+    # The emitter stores an anchor's inline `where (expr)` on the root node.
     # carries it, and the IR engine evaluates the root's where_expr in its head
     # test. The C013 sync check still runs at compile time.
     if rm.anchor_group is None and rm.anchor_node.where_expr is not None:
         _set_where_expr(root, rm.anchor_node.where_expr, rm.anchor_node.span, ctx)
     if rm.anchor_group is not None:
-        # Group-anchor branches carry only named `where` predicates in the IR
-        # anchor record ([M2R, R09]); an inline expr there would be silently
-        # dropped — reject instead (spec §6.8 no-silent-drop).
+        # Group-anchor branches carry only named `where` predicates in the IR.
+        # Reject an inline expression rather than dropping it.
         for b in rm.anchor_group.branches:
             if isinstance(b, ast_.Node) and b.where_expr is not None:
                 ctx.bag.error(
@@ -250,8 +249,8 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
                     b.span,
                 )
     if rm.anchor_group is not None:
-        # IR anchor emission ([M2R, R09]): a pure single-kind group with no
-        # branch `where` keeps the T10 `opcode_set`/`btype` forms unchanged;
+        # A pure single-kind group with no branch `where` keeps the
+        # `opcode_set`/`btype` forms.
         # a mixed-kind group or any branch `where` emits the `mixed` branch form
         # (see ir_emit._anchor_record). Record exactly one representation.
         kinds = {k for k, _v, _w in branch_descs}
@@ -294,7 +293,7 @@ def _lower_relative_to_anchor(
     """Walk the pattern to figure out (parent_matcher, child_matcher, children_matchers).
 
     `anchor` is compared by identity: a single anchor Node, or the whole
-    exclusive Alternative for opcode-set anchors (spec §8.3 M2).
+    exclusive Alternative for opcode-set anchors.
     """
     parents = _find_anchor_path(pattern, anchor)
     if parents is None:
@@ -342,8 +341,10 @@ def _find_anchor_path(pattern: ast_.PatternExpr, anchor: ast_.PatternExpr) -> li
 
 
 def _is_cb_atom(a: ast_.PatternExpr) -> bool:
-    """True for a ChildrenBlock or `maybe {...}` atom — the two forms that attach
-    to the preceding matcher without advancing the chain cursor (spec §6.5)."""
+    """Whether an atom attaches left without advancing the chain cursor.
+
+    See docs/spec-authoring-notes.md.
+    """
     return isinstance(a, ast_.ChildrenBlock) or (
         isinstance(a, ast_.Maybe) and isinstance(a.inner, ast_.ChildrenBlock)
     )
@@ -356,11 +357,11 @@ def _lower_child_chain_from(
     ctx: CompileCtx,
 ) -> tuple[LNode | None, list[LNode] | None]:
     if isinstance(parent, ast_.Sequence):
-        # Collect CHILD-edged atoms in the anchor's downstream slice. Stop at
-        # the first PARENT-edged atom — atoms appearing after a PARENT edge
-        # belong to the parent chain (`_lower_parent_chain_from` consumes them).
-        # This implements Q5: in `op A <- op B -> {C; D}`, {C; D} routes to B's
-        # parent chain, NOT to anchor A's children_matchers.
+        # Collect child-edged atoms in the anchor's downstream slice. Stop at
+        # the first parent edge; later atoms belong to the parent chain
+        # (`_lower_parent_chain_from` consumes them).
+        # In `op A <- op B -> {C; D}`, the children belong to B's parent chain,
+        # not to anchor A.
         downstream_atoms: list[ast_.PatternExpr] = []
         if parent.head is anchor:
             tail_slice = parent.tail
@@ -387,12 +388,12 @@ def _lower_child_chain_from(
                     # `op A -> op B <- op C`: the parent edge's left side is a
                     # non-anchor node (B) reached through a preceding child edge.
                     # Its only faithful lowering sets B.parent_matcher = C, which
-                    # at runtime tests B.previous_block (== the anchor A) against
+                    # at runtime tests B.previous_block (the anchor A) against
                     # opcode C and can never be satisfied. Reject rather than
-                    # silently drop the `<- C` segment (spec §6.4).
-                    # Exception (T15): if everything before the parent edge is
-                    # ChildrenBlocks, the chain cursor never left the anchor
-                    # (spec §6.5) — `op A -> {B; C} <- op P` is A with both
+                    # silently drop the `<- C` segment.
+                    # If everything before the parent edge is a children block,
+                    # the cursor never left the anchor. In
+                    # `op A -> {B; C} <- op P`, A has both
                     # children_matchers and parent_matcher.
                     ctx.bag.error(
                         "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
@@ -410,8 +411,8 @@ def _lower_child_chain_from(
         if isinstance(first, ast_.ChildrenBlock) or (
             isinstance(first, ast_.Maybe) and isinstance(first.inner, ast_.ChildrenBlock)
         ):
-            # Anchor-adjacent ChildrenBlock fast path. Greedily consume any
-            # consecutive bare/maybe ChildrenBlocks so back-to-back `{B;C} {D;E}`
+            # Consume consecutive anchor-adjacent children blocks so
+            # `{B;C} {D;E}`
             # all attach to the anchor's children_matchers in source order.
             children_ms: list[LNode] = []
             rest_idx = 0
@@ -458,9 +459,9 @@ def _lower_parent_chain_from(
     start_idx = 0
 
     if parent.head is anchor:
-        # Skip anchor-attached ChildrenBlocks — they do not advance the chain
-        # cursor (spec §6.5), so a parent edge after them still belongs to the
-        # anchor: `op A -> {B; C} <- op P` (T15).
+        # Skip anchor-attached children blocks. They do not advance the chain
+        # cursor, so a parent edge after them still belongs to the
+        # anchor: `op A -> {B; C} <- op P`.
         idx = 0
         while (
             idx < len(parent.tail)
@@ -480,15 +481,15 @@ def _lower_parent_chain_from(
             return None
         edge_at_anchor, _ = parent.tail[anchor_idx]
         if edge_at_anchor is ast_.Edge.PARENT:
-            # Variant B.1: anchor's incoming edge is PARENT; the "previous" atom
+            # When the anchor's incoming edge is PARENT, the previous atom
             # acts as the first parent link.
             prepend_previous = True
             start_idx = anchor_idx + 1
         else:
-            # Variant B.2: anchor's incoming edge is CHILD, i.e. an atom upstream
+            # When the anchor's incoming edge is CHILD, an atom upstream
             # of the anchor (`… -> op Anchor`) is the anchor's parent. Lowering
             # only walks downstream from the anchor, so every upstream atom would
-            # be silently dropped (T04/T16 `$rule -> anchor…` finding). Reject
+            # be silently dropped. Reject
             # rather than misbehave; re-anchor or restructure the pattern.
             upstream_atom = (
                 parent.head if anchor_idx == 0 else parent.tail[anchor_idx - 1][1]
@@ -501,11 +502,11 @@ def _lower_parent_chain_from(
             )
             raise CompileError(ctx.bag)
 
-    # Build the parent chain as a single interleaved walk from the anchor's first
+    # Build the parent chain in one interleaved walk from the anchor's first
     # parent link outward. PARENT edges extend the chain; CHILD-edged children
-    # blocks attach to the current chain tail (they do not advance the cursor,
-    # spec §6.5), so a `<- op X -> {CB} <- Y` shape wires X with BOTH
-    # children_matchers and parent_matcher — identical to the grouped form
+    # blocks attach to the current chain tail without advancing the cursor, so
+    # `<- op X -> {CB} <- Y` gives X both
+    # children_matchers and parent_matcher, matching the grouped form
     # `<- ( op X -> {CB} <- Y )`. A CHILD edge with a non-CB atom (a child branch
     # off a parent node) is out of scope in v0 and stops the walk.
     chain_pairs: list[tuple[ast_.Edge, ast_.PatternExpr]] = []
@@ -576,7 +577,7 @@ def _lower_chain_with_children_attach(
                 if optional_items:
                     lowered_item.optional = True
                 previous_lowered.children.append(lowered_item)
-            # Do NOT update previous_lowered — a CB is a constraint on the
+            # Do not update previous_lowered. A children block constrains the
             # preceding matcher, not a chain link.
             continue
 
@@ -658,7 +659,7 @@ def _anchor_group_head_sets(
     group: ast_.Alternative,
     ctx: CompileCtx,
 ) -> tuple[frozenset[int], frozenset[str]]:
-    """Collect the branch heads of an opcode-set anchor group (spec §8.3 M2).
+    """Collect the branch heads of an opcode-set anchor group.
 
     The resolver guarantees every branch is a bare Node with a concrete
     `op`/`btype` head and no `where` clause.
@@ -681,8 +682,8 @@ def _anchor_group_branch_descs(
     group: ast_.Alternative,
     ctx: CompileCtx,
 ) -> list[tuple[str, Any, str | None]]:
-    """Per-branch descriptors of a set-membership anchor group, source order
-    ([M2R, R09]). Each is `(kind, value, where_name)` where kind is `"op"`
+    """Per-branch descriptors of a set-membership anchor group, in source order.
+    Each is `(kind, value, where_name)` where kind is `"op"`
     (value = resolved opcode int) or `"btype"` (value = btype name), and
     where_name is the branch's `where` predicate name or None. The resolver
     guarantees every branch is a bare concrete `op`/`btype` node."""
@@ -703,9 +704,9 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
     if isinstance(p, ast_.Node):
         return _lower_node(p, ctx)
     if isinstance(p, ast_.Maybe):
-        # Bare `maybe {...}` (Maybe wrapping a ChildrenBlock with no chain
-        # context) is rejected. In-chain `op A -> maybe {B; C}` is handled by
-        # `_lower_chain_with_children_attach` BEFORE reaching here.
+        # Bare `maybe {...}` wrapping a children block with no chain context is
+        # rejected. `_lower_chain_with_children_attach` handles the in-chain
+        # form `op A -> maybe {B; C}` first.
         if isinstance(p.inner, ast_.ChildrenBlock):
             ctx.bag.error(
                 "C008_CHILDREN_BLOCK_BARE",
@@ -730,7 +731,7 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
         pairs.extend(p.tail)
         result = _lower_chain_with_children_attach(pairs, ctx)
         if result is None:
-            # Defensive — should not occur in well-formed AST.
+            # Defensive guard for malformed AST input.
             raise AssertionError("Sequence lowered to None")
         return result
     if isinstance(p, ast_.ChildrenBlock):
@@ -745,8 +746,8 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
         target = next((r for r in ctx.resolved.raw.rules if r.name == p.name), None)
         if target is None:
             raise CompileError(ctx.bag)
-        # Self-reference inside the body of a CYCLIC rule being lowered: a true
-        # back-edge — a per-site delegating reference whose target (the shared
+        # A self-reference inside a cyclic rule body is a back-edge. Its target,
+        # the shared
         # body root) is patched in by _lower_cyclic_rule once the body finishes
         # lowering.
         cyclic_pending = getattr(ctx, _CYCLIC_PENDING_KEY, None)
@@ -777,12 +778,12 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
 
 
 def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
-    """Compile-time mirror of the IR loader's _check_where_expr_sync (T33).
+    """Compile-time mirror of the IR loader's _check_where_expr_sync.
 
     An inline `where (expr)` composes onto the engine's synchronous test_self,
-    so async constructs (lookups, host fns) are compile errors here — the IR
+    so async constructs (lookups, host fns) are compile errors here. The IR
     loader rejects the same artifacts, keeping both paths failing at the same
-    stage instead of the compiled path silently never matching. Returns True
+    compiler instead of silently never matching. Returns True
     when the expression is sync-evaluable."""
     if isinstance(e, ast_.LookupExpr):
         ctx.bag.error(
@@ -833,8 +834,9 @@ def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
 
 
 def _set_where_expr(n: LNode, expr: ast_.Expr, span: Span, ctx: CompileCtx) -> None:
-    """Inline `where (expr)` (spec §6.8 M4, T33): stamp the ast expression on the
-    node for IR emission. The C013 sync check still runs — an async construct
+    """Store inline `where (expr)` on a node for IR emission.
+
+    The C013 sync check still runs. An async construct
     (lookup/host fn) is a compile error, keeping the frontend and the IR loader
     failing at the same stage. The IR engine evaluates the expression at match
     time via the shared sync evaluator (expr_eval.py)."""
@@ -898,8 +900,10 @@ def _check_no_capture_after_recursion(
     decl_span: Span,
     ctx: CompileCtx,
 ) -> None:
-    """Reject captures placed AFTER a direct-recursive rule reference in the
-    same sequence — the walker cannot reach them due to engine `set()` dedup."""
+    """Reject captures after a direct-recursive reference in the same sequence.
+
+    The walker cannot reach them after engine deduplication.
+    """
 
     def is_direct_recursive_ref(p: ast_.PatternExpr) -> bool:
         if isinstance(p, ast_.RuleRef):
@@ -957,18 +961,9 @@ def _check_no_bare_children_block(
     pattern: ast_.PatternExpr,
     ctx: CompileCtx,
 ) -> None:
-    """Reject ChildrenBlock atoms that lack a left sibling in their enclosing chain.
+    """Report C008 for a children block without a node on its left.
 
-    A ChildrenBlock (`{A; B}`) or `maybe {A; B}` must follow a node atom in a
-    Sequence's tail. Bare positions emit `C008_CHILDREN_BLOCK_BARE`:
-
-    - Sequence head (`{A; B} -> X`).
-    - Alternative branch (`(op A | {B; C})`).
-    - Maybe inner that itself is at a bare position (`maybe {A; B}` standalone).
-    - Standalone pattern (`{A; B}` as the whole matcher pattern).
-
-    Inside a sequence tail with a preceding atom, ChildrenBlock is well-formed
-    and the lowering path attaches its items to the left sibling.
+    See docs/spec-authoring-notes.md for cursor and attachment rules.
     """
 
     def is_cb_or_maybe_cb(p: ast_.PatternExpr) -> tuple[bool, ast_.Span]:
@@ -994,17 +989,17 @@ def _check_no_bare_children_block(
         if is_cb and not in_chain_left:
             emit_c008(span)
         if isinstance(p, ast_.Sequence):
-            # Head has no left sibling; if it's a CB, that's bare.
+            # The sequence head has no left sibling.
             walk(p.head, in_chain_left=False)
             previous_was_atom = not is_cb_or_maybe_cb(p.head)[0]
             for _edge, atom in p.tail:
                 walk(atom, in_chain_left=previous_was_atom)
-                # CBs don't update "left sibling" — next atom still chains off
+                # Children blocks do not update the left sibling. The next atom chains from
                 # the same preceding node.
                 if not is_cb_or_maybe_cb(atom)[0]:
                     previous_was_atom = True
         elif isinstance(p, ast_.Maybe):
-            # Maybe wraps a non-CB inner: recurse with no chain context for inner.
+            # A non-children-block inner expression has no chain context here.
             if not isinstance(p.inner, ast_.ChildrenBlock):
                 walk(p.inner, in_chain_left=False)
         elif isinstance(p, ast_.Alternative):
@@ -1015,7 +1010,7 @@ def _check_no_bare_children_block(
                 walk(it, in_chain_left=False)
         elif isinstance(p, ast_.RuleRef):
             # Check the rule body once at its definition site, with no chain
-            # context — its body must be self-contained or referenced from a
+            # context. Its body must be self-contained or referenced from a
             # Sequence (in which case body's own bareness is independent).
             target = next((r for r in ctx.resolved.raw.rules if r.name == p.name), None)
             if target is not None and not _seen_rule(p.name, ctx):
@@ -1062,8 +1057,7 @@ def _strip_trailing_self_ref(branch: ast_.PatternExpr, rule_name: str) -> ast_.P
     return branch
 
 
-# Dynamic CompileCtx attributes for the cyclic strategy (same pattern as
-# _RULE_VALIDATED_KEY — avoids touching the CompileCtx definition):
+# Dynamic CompileCtx attributes for cyclic rules avoid changing CompileCtx:
 # pending back-references collected while a cyclic body is being lowered, and
 # the per-compile cache of lowered body roots (shared across reference sites).
 _CYCLIC_PENDING_KEY = "_mch_cyclic_pending"   # dict[str, list[LNode]]  (cyclic_ref back-edges)
@@ -1071,12 +1065,10 @@ _CYCLIC_ROOTS_KEY = "_mch_cyclic_roots"       # dict[str, LNode]  (shared body r
 
 
 def _check_cyclic_rule_body(target: ast_.RuleDecl, ctx: CompileCtx) -> None:
-    """C012 shape rules for `rule NAME cyclic = …` bodies (spec §10.3):
-    no captures (they can never bind — the walker does not descend into the
-    back-edge cycle), self-references only as the last atom of their chain
-    (anything chained after one is structurally ignored by the engine), and no
-    references to other recursive rules (nested recursion, out of scope exactly
-    as for the frontier strategy)."""
+    """Enforce C012 shape rules for cyclic rule bodies.
+
+    See docs/spec-authoring-notes.md.
+    """
     name = target.name
 
     def is_self_ref(a: ast_.PatternExpr) -> bool:
@@ -1139,13 +1131,11 @@ def _check_cyclic_rule_body(target: ast_.RuleDecl, ctx: CompileCtx) -> None:
 
 
 def _lower_cyclic_rule(name: str, ctx: CompileCtx) -> LNode:
-    """Lower a reference to a `rule NAME cyclic = …` rule (spec §10.3 cyclic
-    descent, [M2R, R11/T28]).
+    """Lower a cyclic rule reference.
 
     The body lowers once per compile into a shared node graph; in-body
     self-references become back-edges to the body root (patched here after the
-    body finishes lowering — the exact legacy hand-built cycle, e.g.
-    ToncoSwapBlockMatcher). Each reference site emits its own cyclic `recursive`
+    body finishes lowering). Each reference site emits its own cyclic `recursive`
     node whose `step` is the shared body root; several sites may therefore share
     one body subgraph.
     """
@@ -1179,7 +1169,7 @@ def _lower_cyclic_rule(name: str, ctx: CompileCtx) -> LNode:
 
 
 def _lower_recursive_rule(name: str, ctx: CompileCtx) -> LNode:
-    """Lower a recursive rule to a frontier `recursive` node (spec §10.3 / T18).
+    """Lower a recursive rule to a frontier `recursive` node.
 
     Strip trailing `maybe $self` from step branches; leave `exit_` None when
     there are no pure-exit branches (avoids the v0 'always-one-iteration' bug

@@ -1,8 +1,6 @@
-// Shadow classifier actor (em1-design §15/§16): a sibling of the emulator's
-// insert path that classifies every trace emission and ANSWERS the decorated
-// sink with the Action rows plus per-trace telemetry. It writes nothing itself
-// — no Redis, no DB — so with the feature off (cfg.prep == nullptr, i.e.
-// --mch-disable) the emulator behaves exactly as before.
+// Classifies trace emissions and returns serialized actions plus telemetry to
+// the decorated insert sink. The actor performs no Redis or database writes.
+// See docs/emulator-integration.md for lifetime, fail-open, and payload rules.
 #pragma once
 
 #include "EmuTypes.h"
@@ -22,12 +20,10 @@ namespace mch {
 // the previous line.
 struct EmuShadowStats {
   std::size_t emissions{0}, reemissions{0};
-  // Gate-side outcomes: the classifier did not run (§16).
+  // Gate-side outcomes: the classifier did not run.
   std::size_t shed_admission{0}, shed_deadline{0}, bypassed_disabled{0};
   std::size_t classified{0}, failed{0}, convert_failed{0}, tx_limit_exceeded{0}, actions{0};
-  // Subset of `actions` that came from the basic-actions fallback of a FAILED
-  // classification, not from matchers: those rows are not equivalent to real
-  // ones, so the totals must stay separable.
+  // Actions produced by the basic-action fallback after classification failure.
   std::size_t fallback_actions{0};
   std::size_t unported_btypes{0}, arena_refs_scrubbed{0};
   std::size_t queue_us_max{0}, classify_us_max{0}, classify_us_total{0}, latency_samples{0};
@@ -46,8 +42,7 @@ class EmuClassifierActor : public td::actor::Actor {
     CHECK(cfg_.gate);  // EmuShadowConfig contract; decorate_sink relies on it too
   }
 
-  // Request entry from the decorated sink: ALWAYS answers the promise exactly
-  // once, and never throws.
+  // Request entry from the decorated sink. Always answers exactly once.
   void classify(EmuTraceView view, td::Promise<EmuClassifyResult> promise);
   // The gate turned an emission away before it became a request (admission cap
   // or the sticky fail-open flag).
@@ -57,9 +52,7 @@ class EmuClassifierActor : public td::actor::Actor {
   void alarm() override;
 
  private:
-  // Bounded LRU over trace ids: a trace is emitted 2-3 times (emulated ->
-  // confirmed -> finalized) and every emission IS classified, but only the
-  // first counts as new.
+  // Bounded trace-id LRU distinguishes first emissions from reemissions.
   bool remember_seen(const std::string &trace_id);
 
   EmuShadowConfig cfg_;

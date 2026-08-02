@@ -2,7 +2,7 @@
 // registry surface and HostRegistry.h for the public one.
 //
 // Two fns, both for things the expression language cannot do by design:
-// string formatting (§9.6) and a nested cell parse (§9.1).
+// string formatting and a nested cell parse.
 #include "host/HostImpls.h"
 
 #include "host/HostCommon.h"
@@ -42,7 +42,7 @@ Value extern_address_string(const std::string &s) {
 
 // The ABI bridge represents addr_extern as
 //   obj{bits: Int, value: Cell(bits)}
-// rather than MsgParse's legacy "extern:<len>:<hex>" sentinel. Render the
+// rather than MsgParse's reference "extern:<len>:<hex>" sentinel. Render the
 // value directly from the cell so widths above RefInt256's limit stay exact.
 Value extern_address_object(const Value &v) {
   const Value *bits = v.field("bits");
@@ -77,7 +77,7 @@ Value extern_address_object(const Value &v) {
 }  // namespace
 
 // `expected_address` for cocoon_worker_payout / cocoon_proxy_charge /
-// cocoon_grant_refund. The three legacy builds render `expectedMyAddress`
+// cocoon_grant_refund. The three reference builds render `expectedMyAddress`
 // identically (blocks/cocoon.py:134, :373, :1170):
 //   ExternalAddress -> f"{len};{hex(value)[2:]}"
 //   Address         -> to_str(False).upper()   == the canonical "wc:HEX"
@@ -103,8 +103,8 @@ EvalResult cocoon_expected_address(BuildEnv &, const std::vector<Value> &args) {
 // ClientProxyRequest.payload, which is a `maybe_ref` that must then be parsed as
 // ClientProxyRefundGranted. Reproduces the whole try/except of
 // CocoonClientWithdrawMatcher.build_block (blocks/cocoon.py:1066-1077),
-// including BOTH opcode asserts the two Python classes carry — every failure
-// path returns null, and the spec's `?? 0` supplies legacy's fallback.
+// including BOTH opcode asserts the two Python classes carry, every failure
+// path returns null, and the spec's `?? 0` supplies reference's fallback.
 EvalResult cocoon_withdraw_amount(BuildEnv &, const std::vector<Value> &args) {
   if (args.size() != 1) {
     return rt_fault("cocoon_withdraw_amount: bad arguments");

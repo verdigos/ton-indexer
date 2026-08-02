@@ -100,7 +100,7 @@ std::string slot_map(const std::map<int, std::set<int>> &m) {
 }
 
 // One builder function per matcher. Only fields that differ from the struct's
-// declared default are assigned — the defaults ARE the contract (IrTables.h),
+// declared default are assigned, the defaults ARE the contract (IrTables.h),
 // and the equivalence ctest is what proves the two agree.
 std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
   std::vector<std::string> out;

@@ -9,11 +9,11 @@
 # dedust_withdraw (T17). first-match-wins over candidates in canonical order
 # reproduces the legacy [anchor]+siblings order.
 #
-# Legacy's OrMatcher parent (normal burn vs refund) splits into two matchers —
-# no shared structural head exists (normal is fronted by a JettonBurn, refund by
-# op 0x132b9a2c) and multi-kind anchors (R09) are not available. The anchors are
-# mutually exclusive, so on any one trace at most one fires, and each produces
-# the same single dex_withdraw_liquidity block the legacy matcher does.
+# Legacy's OrMatcher parent (normal burn vs refund) remains split into two
+# matchers because they have different structural heads and consumed shapes:
+# normal is fronted by a JettonBurn, while refund is fronted by op 0x132b9a2c.
+# The anchors are mutually exclusive, so on any one trace at most one fires, and
+# each produces the same single dex_withdraw_liquidity block as legacy.
 #
 # Normal: burn-anchored (btype jetton_burn, the JettonBurnBlockMatcher-produced
 # block; stonfi_v2 runs after it in event_processing) -> op 0x297437cf router ->

@@ -1,18 +1,7 @@
-// Build-program runtime for the MCH engine (Phase B1, docs/mch-cpp-buildprog-design.md).
-//
-// Ground truth: indexer/indexer/events/mch_ir/program.py (BuildProgram.run) +
-// mch_ir/expr.py Evaluator. Statements are CODEGEN'd (D2): `mch-codegen
-// --builds` emits one `BuildOutcome build_<matcher>(BuildEnv&)` per matcher
-// with a build_program; the generated code calls ONLY the rt_* leaves here and
-// in ExprRuntime, so semantics live in exactly one place.
-//
-// Fault model: any EvalError-equivalent (EvalResult fault) inside a build
-// program is a clean match rejection (spec §10.7) — generated code early-
-// returns BuildOutcome::rejected(). `reject when` firing is the same outcome.
-//
-// Env layout (D3): slot-indexed captures, same family as WhereEnv. `let`
-// locals and parsed bodies are generated C++ locals / the env bodies map —
-// capture NAMES never exist at runtime.
+// Runtime operations used by generated MCH build programs.
+// Build faults and explicit rejections are clean matcher rejections. Captures are
+// slot-indexed; capture names do not exist at runtime.
+// See docs/engine-internals.md for build ordering and lookup passes.
 #pragma once
 
 #include "ExprRuntime.h"
@@ -52,7 +41,7 @@ struct BuildOutcome {
   }
 };
 
-// D1 lookup interface. `has` mirrors Python's registries.lookups registration
+// Lookup interface. `has` mirrors the evaluator's registration
 // check (unregistered kind => EvalError => rejection); `get` returns the
 // fetched value (Null == unknown key, Python lookup returning None).
 // Null-strict argument handling lives in rt_lookup_build, not here.
@@ -63,11 +52,7 @@ class LookupTable {
   virtual Value get(const std::string &kind, const std::vector<Value> &args) const = 0;
 };
 
-// TODO: remove (harness): the only instantiation is DexRecordsTest.cpp:201.
-// Production tables are Collecting/Filled; the B1 stub outlived its phase.
-//
-// B1 stub: every kind registered, every key unknown (returns null) — the
-// same table shape D1's collect pass uses.
+// Harness table with every kind registered and every key unknown.
 class NullLookupTable : public LookupTable {
  public:
   bool has(const std::string &) const override { return true; }
@@ -76,13 +61,13 @@ class NullLookupTable : public LookupTable {
   }
 };
 
-// --- two-phase lookup runtime (Phase B2, D1) --------------------------------
+// --- Two-phase lookup runtime -----------------------------------------------
 
 // Canonical map key for a (kind, args) lookup call.
 std::string lookup_key(const std::string &kind, const std::vector<Value> &args);
 
-// Collect-pass table (D1): `has` covers every kind the artifact references
-// (registration-first fault order — an uncovered kind faults the collect pass
+// Collect-pass table: `has` covers every kind the artifact references.
+// Registration is checked first; an uncovered kind faults the collect pass
 // before recording anything past it); `get` serves already-fetched values and
 // RECORDS misses (returning null). Re-running the build fn against this table
 // until no new misses appear reaches the key fixpoint even for lookup-arg-of-
@@ -123,7 +108,7 @@ class FilledLookupTable : public LookupTable {
   std::map<std::string, Value> values_;
 };
 
-// Fetch adapter interface (D1). Production: an actor-request round per trace;
+// Fetch adapter interface. Production uses an actor-request round per trace;
 // offline: the fixture-backed source below.
 class LookupSource {
  public:
@@ -137,7 +122,7 @@ class LookupSource {
 // (fixtures/FixtureLookupSource.h).
 const std::set<std::string> &lookup_kinds();
 
-// Execution environment for one generated build fn (D3).
+// Execution environment for one generated build function.
 struct BuildEnv {
   const Block *anchor{nullptr};
   const Value *slots{nullptr};  // capture values, slot-indexed (Block/Null/List)
@@ -155,9 +140,9 @@ struct BuildEnv {
 // next; all fail -> body Null. An UNREGISTERED type name faults (rejection).
 EvalResult rt_parse(BuildEnv &env, const Value &target, const std::vector<std::string> &types);
 
-// `parse TARGET as T1|T2` as a build EXPRESSION (W7, IR v1.1). Unlike the
+// `parse TARGET as T1|T2` as a build expression. Unlike the
 // statement form, this RETURNS the parsed message Obj directly and FAULTS on
-// total failure (spec §7.4.2 / program §0.5(a) — no soft-null): null/non-block
+// total failure instead of returning a soft null. A null or non-block
 // target -> fault; every type alternative failing to parse -> fault; an
 // unregistered type name -> fault. Stateless (no env.bodies side table); env is
 // accepted only for signature symmetry with the other build-mode rt_* leaves.
@@ -182,21 +167,10 @@ EvalResult rt_lookup_build(const BuildEnv &env, const std::string &kind,
 EvalResult rt_call_hostfn(BuildEnv &env, const std::string &name,
                           const std::vector<Value> &args);
 
-// --- host-reject observability ------------------------------------------------
-//
-// A host `fn` that FAULTS, or that returns the Null a `reject when r == null`
-// gates on, is a clean match rejection: the matcher's PATTERN matched but the
-// protocol core refused the data it found. That class is the one offline runs
-// cannot see — it lives in the lookup/host tier, and fixtures serve bundled
-// interfaces — so each occurrence emits ONE grep-able line tagged
-// `[mch-reject]`. Volume is bounded by MATCHES, not by traces.
-//
-// Arming is what makes the line trustworthy: run_two_phase calls the build fn
-// SEVERAL times, and the dry collect passes see an intentionally EMPTY lookup
-// table, so every lookup-dependent fn rejects there BY DESIGN. Only the final
-// pass is a real rejection. Three scopes fill the context — classify_trace
-// names the trace, try_build names the matcher, run_two_phase marks the final
-// pass — and nothing is emitted unless `final_pass` is set.
+// --- Host-rejection observability ------------------------------------------
+// Host faults and null-gated results are clean match rejections. Emit the
+// `[mch-reject]` diagnostic only for the final lookup pass; collecting passes
+// intentionally operate with missing values. See docs/engine-internals.md.
 struct RejectCtx {
   const std::string *trace_id{nullptr};
   const std::string *matcher{nullptr};

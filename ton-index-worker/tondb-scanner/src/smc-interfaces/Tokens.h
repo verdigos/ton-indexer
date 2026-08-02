@@ -24,10 +24,7 @@ public:
 
   void start_up() override;
 
-  // The detection with no actor around it (start_up() is a one-liner over it):
-  // get_wallet_data + is_claimed on this account, then the jetton master read
-  // back through lookup_account for the get_wallet_address round-trip. Every
-  // step was already synchronous; only the master fetch changes actor -> call.
+  // Synchronous wallet detection verifies the master-derived wallet address.
   static td::Result<Result> detect(const block::StdAddress& address,
                                    const td::Ref<vm::Cell>& code_cell,
                                    const td::Ref<vm::Cell>& data_cell,
@@ -180,10 +177,7 @@ public:
 
   void start_up() override;
 
-  // The detection with no actor around it (start_up() is a one-liner over it).
-  // V2 is self-contained (one get_pool_data); V1 reads the DeDust factory back
-  // through lookup_account for the get_pool_address round-trip. The asset
-  // decoders and the factory verification moved into Tokens.cpp with it.
+  // Synchronous pool detection verifies V1 through its factory; V2 is self-contained.
   static td::Result<Result> detect(const block::StdAddress& address,
                                    const td::Ref<vm::Cell>& code_cell,
                                    const td::Ref<vm::Cell>& data_cell,

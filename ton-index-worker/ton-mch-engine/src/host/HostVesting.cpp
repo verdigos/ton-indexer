@@ -42,7 +42,7 @@ std::string out_body_hash(const Message &m) {
 // through builders/vesting.py: scan the REQUEST transaction's out-messages for
 // one addressed to the requested destination whose body hash matches the
 // requested body. When the request body could not be hashed (message_body_hash
-// null — Python's MessageAny fallback) the match falls back to the TON value.
+// null, Python's MessageAny fallback) the match falls back to the TON value.
 // Args: (request block, its parsed VestingSendMessage body).
 EvalResult vesting_message_was_sent(BuildEnv &, const std::vector<Value> &args) {
   if (args.size() != 2) {

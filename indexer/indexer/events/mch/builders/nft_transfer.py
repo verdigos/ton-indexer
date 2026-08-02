@@ -20,7 +20,7 @@ consumed set. The synthesized wrapper merges the consumed set (anchor +
 ownership-assigned child + excess), which PLACES the produced block at the
 anchor's position; only then is produced.previous_block the funding parent, so
 the shaper nft_transfer_parent_absorb runs the parent merge as the last build
-step (spec §8.7). Legacy did this in one merge over [anchor, parent, children];
+step. Legacy did this in one merge over [anchor, parent, children];
 here it is two merges (wrapper then shaper), but block topology is compared as a
 sorted multiset, so merge order is immaterial to parity.
 """

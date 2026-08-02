@@ -1,9 +1,10 @@
 # Python twin of ton-mch-engine's `--classify` (src/Classify.h format contract).
-# Runs the REAL IR engine end-to-end: build_matchers + the event_processing
-# outer loop VERBATIM (per matcher: bfs_iter with the parent-is-None guard,
-# root wrapper block) + IrMatcher.try_build (match -> BuildProgram.run ->
-# merge -> aux append). BuildProgram.run is wrapped per matcher to capture the
-# BuildOutcome (flows/btype) that try_build does not expose.
+# Runs the REAL IR engine end-to-end, production-shaped with canonical twin
+# ordering: build_matchers + the event_processing outer loop (per matcher,
+# with the parent-is-None guard and root wrapper block) + IrMatcher.try_build
+# (match -> BuildProgram.run -> merge -> aux append). BuildProgram.run is wrapped
+# per matcher to capture the BuildOutcome (flows/btype) that try_build does not
+# expose.
 import asyncio
 import base64
 import os
@@ -231,12 +232,10 @@ async def classify_fixture(path, included):
     root = Block("root", [])
     root.connect(tree_root)
 
-    # Canonical-order BFS (T21 extension, DELIBERATE deviation from
-    # event_processing.bfs_iter's raw insertion order): the C++ substrate keeps
-    # next_blocks canonical (min_lt asc, stable) at all times, so the raw
-    # Python insertion order is not representable there. Both sides walk the
-    # canonical order; generator semantics (children read AFTER try_build ran
-    # on the parent) are preserved.
+    # Production-shaped traversal with canonical twin ordering: the C++
+    # substrate keeps next_blocks canonical (min_lt asc, stable) at all times,
+    # so both sides walk that order. Generator semantics (children read AFTER
+    # try_build ran on the parent) are preserved.
     def bfs_canonical(start):
         queue = [start]
         while queue:

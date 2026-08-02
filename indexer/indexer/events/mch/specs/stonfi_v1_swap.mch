@@ -1,4 +1,4 @@
-# Stonfi V1 swap ([M2R, R12]) — remake of blocks/swaps.py StonfiSwapBlockMatcher.
+# Stonfi V1 swap matcher corresponding to StonfiSwapBlockMatcher.
 #
 # The legacy hack: the chain matches EVERY payment request (any exit code)
 # that carries a jetton transfer, then IN BUILD classifies them by exit code
@@ -10,16 +10,14 @@
 # classifies on its own as a jetton_transfer action, which is exactly the
 # state the legacy surgery produced. The builder still reads the referral
 # amount/address from the UNCONSUMED sibling through the tree (the swap
-# call's next_blocks) — the R05 nominator precedent of inspecting without
-# consuming.
+# call's next_blocks) without consuming it.
 #
 # Exit-code parsing needs the message body, so the gate is a host predicate:
-# T33 inline `.field` predicates see only block.data and a CallContractBlock
-# carries none (the roadmap's hope that T33 alone kills the surgery did not
-# survive contact with the body-parsing requirement; the predicate does).
+# Inline `.field` predicates see only block.data, and a CallContractBlock
+# carries none. The body-parsing check therefore stays in a host predicate.
 #
-# The payment-request edge is multi-match (§4.2): when the referral is paid
-# through a second SENDER-RELATED payment request (legacy's out_amt<amount
+# The payment-request edge accumulates multiple matches: when the referral is
+# paid through a second SENDER-RELATED payment request (legacy's out_amt<amount
 # branch) both requests match and stay consumed — no surgery in that shape,
 # and none here.
 

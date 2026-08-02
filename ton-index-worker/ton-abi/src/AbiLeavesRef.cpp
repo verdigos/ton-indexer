@@ -9,7 +9,7 @@ namespace ton_abi {
 namespace {
 
 // Open a ref as an ordinary slice, fail-closed on special/exotic cells (the
-// reference assumes none; the top-level body open in W8 also rejects exotic).
+// reference assumes none; the top-level body open also rejects exotic cells).
 td::Result<vm::CellSlice> open_ordinary(const td::Ref<vm::Cell> &cell) {
   if (cell.is_null()) {
     return td::Status::Error("ref: null cell");

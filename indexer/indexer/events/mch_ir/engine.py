@@ -1,54 +1,51 @@
-"""Purpose-built IR walker: node records -> CompiledNode graph -> runnable matchers.
+"""Turn IR node records into runnable matchers.
 
-v2 engine (docs/mch-engine-v2.md). Interprets the IR node graph directly — no
-`blocks/basic_matchers.py` primitives — while reproducing the legacy engine's
+The engine interprets the IR node graph directly, without
+`blocks/basic_matchers.py` primitives, while reproducing these
 observable semantics:
 
-- child edge: multi-match accumulation over next_blocks (spec §4.2);
-- children set: declaration order, first-match-wins, consuming working set (§4.3);
+- child edge: multi-match accumulation over next_blocks;
+- children set: declaration order, first-match-wins, consuming working set;
 - or: first branch whose full subtree matches; `exclusive` changes the node's
-  HEAD TEST only (branch head-test count == 1) and is inert when the node is
-  matched as an edge target (§4.4, amended — see below);
-- recursive: frontier walk with exit-tried-first-per-candidate and one step
-  per round (§4.6, T18 semantics);
+  head test only (branch head-test count == 1) and is inert when the node is
+  matched as an edge target;
+- recursive: frontier walk with exit tried first for each candidate and one
+  step per round;
 - excess/bounce absorption on two levels: every matched nested node consumes
   its excess/bounce children; the root's own aux siblings are appended to the
-  result list after a successful build, per record flags (§4.5).
+  result list after a successful build, per record flags.
 
-Captures bind DURING the walk (slot ids resolved at load), so there is no
+Captures bind during the walk (slot ids resolved at load), so there is no
 positional re-trace: scalar cards take the first binding, list cards assemble
-from per-iteration recursion frames with gap alignment (§5). All per-attempt
+from per-iteration recursion frames with gap alignment. All per-attempt
 state lives in a _MatchContext; matcher objects are immutable after load and
 therefore reentrant. Failure discipline: a failed sub-attempt may leave the
-context dirty — only the caller's rollback cleans it (§4.1).
+context dirty. Only the caller's rollback cleans it.
 
-Determinism (spec §10.5, T21): every point that chooses among sibling
-candidates (child edge, children set, recursion frontier, aux/excess/bounce
-absorption) iterates in CANONICAL order — ascending `min_lt`, ties broken by
-existing relative order (stable sort) — via `_canonical`. So the produced and
+Every point that chooses among sibling candidates (child edge, children set,
+recursion frontier, aux/excess/bounce
+absorption) iterates in canonical order: ascending `min_lt`, with ties broken
+by existing relative order through a stable sort. The produced and
 consumed output is identical regardless of the tree's underlying next_blocks
 assembly order, not merely reproducible for one given order. Or-branches iterate
 in spec-declared order (already canonical). `ctx.consumed` is traversal order,
-identity-deduped at consume time. No set() is ever iterated (§7).
+identity-deduped at consume time. No set() is ever iterated.
 
-Known deliberate deviations from the spec doc (legacy parity wins, per the
-parity suite):
+Two compatibility rules preserve the runtime matchers' behavior:
 
-- §4.6 states that frontier exhaustion fails when an exit is declared; the
-  legacy engine succeeds whenever at least one step landed regardless of exit
-  presence (basic_matchers.py RecursiveMatcher, pinned by
-  test_frontier_exhaustion_leaves_exit_captures_empty).
-- §4.4 states `exclusive` gates match_node before the branch attempts; legacy
+- Frontier exhaustion succeeds whenever at least one step matched, whether or
+  not an exit matched. Exit captures remain empty in that case.
+- `exclusive` gates the head test only where that test is consulted. The
   ExclusiveOrMatcher overrides only test_self, which try_build never consults,
-  so the count gate applies ONLY where the head test is consulted (recursion
+  so the count gate applies only where the head test is consulted (recursion
   entry, nested head counts). specs/stonfi_v2_swap.mch depends on this
-  ("ExclusiveOr elsewhere is try_build-inert" — its hop branches overlap by
+  because its hop branches overlap by
   prefix and must resolve first-match-in-order).
 
 Unlike the Go POC, a predicate / builder / parse-message-type name missing from
 the host registries is a load-time IrLoadError, not an always-true stub. Nested
 recursion (a recursive node reachable from another's step subgraph) is also an
-IrLoadError (v1 silently degraded).
+IrLoadError.
 """
 from __future__ import annotations
 
@@ -126,8 +123,8 @@ def build_matchers(art: Artifact, registries: Registries) -> list["IrMatcher"]:
                             f"is not registered"
                         )
         # A build-program `call` whose fn is not a builtin is a host fn; it must
-        # be registered, exactly as builders/shapers/predicates/message-types
-        # hard-fail here (registry model, spec §9.10 — there is no `fn`
+        # be registered, just as builders, shapers, predicates, and message
+        # types hard-fail here. There is no `fn`
         # declaration form). Where-clause calls are builtin-only (loader-checked).
         fn_names: set[str] = set()
         for stmt in m.get("build_program") or ():
@@ -139,7 +136,7 @@ def build_matchers(art: Artifact, registries: Registries) -> list["IrMatcher"]:
                 )
 
     compiled = [IrMatcher(record, art.nodes, registries) for record in art.matchers]
-    # Priority order (§8.6/§10.6): ascending priority (default 100), ties broken
+    # Priority order: ascending priority (default 100), ties broken
     # by (file name, source position). `registration_order` is already source
     # order (emit concatenates files in name order, matchers in source position),
     # so a STABLE sort by priority yields exactly that tie-break.
@@ -193,14 +190,14 @@ class CompiledNode:
         self.step: int = remap[rec["step"]] if "step" in rec else -1
         self.exit: int = remap[rec["exit"]] if "exit" in rec else -1
         self.exclusive: bool = bool(rec.get("exclusive", False))
-        # Recursion strategy (§10.3, [M2R, R11/T28]): "frontier" (default) or
-        # "cyclic" — the step subgraph is a rule body with back-edges to its
+        # The recursion strategy is "frontier" by default. With "cyclic", the
+        # step subgraph is a rule body with back-edges to its
         # own root; matching is plain recursive descent (see _match_recursive).
         self.strategy: str = rec.get("strategy", "frontier")
 
 
 class _MatchContext:
-    """Per-try_build mutable state (spec §3.2): bindings, consumed set with an
+    """Per-try_build mutable state: bindings, consumed set with an
     identity guard, the recursion frame journal, and the current frame tag.
     mark()/rollback() give savepoint semantics; rollback restores `visited`
     from the truncated consumed tail (each consumed entry is unique)."""
@@ -235,20 +232,20 @@ class _MatchContext:
 
 
 def _canonical(blocks) -> list[Block]:
-    """Canonical candidate order (spec §10.5, T21 determinism).
+    """Return candidates in canonical order.
 
     Ascending `min_lt`, ties broken by the blocks' existing relative order
     (Python sort is stable). Every point where the walk chooses among sibling
     candidates iterates through this, so the produced/consumed output is
-    identical regardless of the tree's underlying next_blocks assembly order —
-    the property the C++ engine must also hold. `min_lt` is a plain int on every
+    identical regardless of the tree's underlying next_blocks assembly order.
+    The C++ engine must preserve the same property. `min_lt` is a plain int on every
     Block (0 for the synthetic root), so the key is total and never faults.
     """
     return sorted(blocks, key=lambda b: b.min_lt)
 
 
 def _absorb_aux(block: Block, ctx: _MatchContext) -> None:
-    """§4.5 nested absorption: a matched node always consumes its excess/bounce
+    """Nested absorption: a matched node always consumes its excess/bounce
     children (legacy nested matchers carry default-true include flags)."""
     for nb in _canonical(block.next_blocks):
         if nb.btype == "call_contract" and getattr(nb, "opcode", None) in _AUX_OPCODES:
@@ -259,7 +256,7 @@ class IrMatcher:
     """A matcher record compiled to an executable walker: anchor test, local
     CompiledNode pool, slot table with cards, per-recursion capture ownership,
     and the build behavior (builder / build program / Go-parity stub).
-    Immutable after load — reentrancy by construction."""
+    Immutable after load, so matcher instances are reentrant."""
 
     __slots__ = ("name", "produces", "_registries", "_anchor_opcodes",
                  "_anchor_btypes", "_anchor_branches", "_anchor_pred",
@@ -273,11 +270,11 @@ class IrMatcher:
         self._registries = registries
 
         anchor = record["anchor"]
-        # Mixed-kind / per-branch-`where` anchor group ([M2R, R09]): union
+        # A mixed-kind or per-branch-`where` anchor group uses union
         # membership over branch heads, then the matching branch's predicate.
         # Resolved to (kind, value, pred_callable_or_None) tuples, source order.
         self._anchor_branches: list[tuple[str, object, object]] | None = None
-        # Predicate anchor ([M2R, R10]): no prefilter — test_self runs the pred.
+        # Predicate anchors have no prefilter; test_self runs the predicate.
         self._anchor_pred = None
         if anchor["kind"] == "pred":
             self._anchor_opcodes = None
@@ -342,8 +339,8 @@ class IrMatcher:
                         f"(recursive node reachable from another's step subgraph)"
                     )
             if node.strategy == "cyclic":
-                # Cyclic descent (§10.3): the body pushes no iteration frames,
-                # so slots inside it could never assemble — the compiler
+                # Cyclic descent pushes no iteration frames, so slots inside
+                # the body could never assemble. The compiler
                 # rejects them (C012); reject handwritten artifacts too.
                 if any(self._nodes[r].slot >= 0 for r in reach):
                     raise IrLoadError(
@@ -376,7 +373,7 @@ class IrMatcher:
         )
         self._include_excess: bool = record.get("include_excess", True)
         self._include_bounces: bool = record.get("include_bounces", True)
-        # `shape` directive (§8.7): validated against registries at load
+        # `shape` directive: validated against registries at load
         # (build_matchers); resolved lazily like builders for symmetry.
         self._shaper_name: str | None = record.get("shape")
 
@@ -398,13 +395,13 @@ class IrMatcher:
     # ------------------------------------------------------------------ API
 
     def test_self(self, block: Block) -> bool:
-        """Anchor test only (spec §4.1 step 1); node-level where clauses are
+        """Anchor test only; node-level where clauses are
         re-checked inside try_build's walk."""
         if self._anchor_pred is not None:
-            # [M2R, R10]: full-scan predicate anchor, no prefilter.
+            # Full-scan predicate anchor with no prefilter.
             return bool(self._anchor_pred(block))
         if self._anchor_branches is not None:
-            # [M2R, R09]: union membership, then the matching branch's `where`.
+            # Union membership, then the matching branch's `where`.
             for kind, value, pred in self._anchor_branches:
                 if kind == "op":
                     ok = block.btype == "call_contract" \
@@ -425,7 +422,7 @@ class IrMatcher:
         ctx = _MatchContext()
         # The root skips nested aux absorption: the anchor's own excess/bounce
         # siblings are governed by the record flags and appended to the RESULT
-        # list after a successful build, never merged (§4.5 root level).
+        # list after a successful build, never merged.
         if not self._match_node(self._root, block, ctx, absorb=False):
             return None
         captures = self._assemble_captures(ctx)
@@ -436,8 +433,8 @@ class IrMatcher:
                 "mch_ir matcher %r: error while building block %r: %s",
                 self.name, block, e,
             )
-            return []  # §10.7: a raising builder is a clean rejection, not a
-                       # structural mismatch — no consumption, no aux append.
+            return []  # A raising builder is a clean rejection, not a structural
+                       # mismatch. Nothing is consumed or appended.
         if produced is None:
             return []  # clean rejection: no aux blocks to strip
         result = [produced]
@@ -450,11 +447,11 @@ class IrMatcher:
                 result.append(nb)
         return result
 
-    # ------------------------------------------------- walk (spec §4, sync)
+    # ------------------------------------------------- synchronous walk
 
     def _test_head(self, nid: int, block: Block) -> bool:
-        """Head test only — kind + where + where_expr, no edges. Used for
-        or-exclusivity gating and the recursion entry test (§4.4/§4.6)."""
+        """Test kind, where, and where_expr without following edges. Used for
+        or-exclusivity gating and the recursion entry test."""
         node = self._nodes[nid]
         kind = node.kind
         if kind == "contract":
@@ -483,8 +480,10 @@ class IrMatcher:
 
     def _match_node(self, nid: int, block: Block, ctx: _MatchContext,
                     absorb: bool = True) -> bool:
-        """Full node match against `block` (§4.1). May leave the context dirty
-        on failure — the caller's rollback cleans it."""
+        """Full node match against `block`.
+
+        Failure may leave the context dirty; the caller's rollback cleans it.
+        """
         node = self._nodes[nid]
         kind = node.kind
         if kind == "or":
@@ -508,8 +507,7 @@ class IrMatcher:
 
     def _match_child_edge(self, node: CompiledNode, block: Block,
                           ctx: _MatchContext) -> bool:
-        """§4.2 multi-match accumulation: EVERY next_block is tried and ALL
-        full matches consume — not first-win."""
+        """Try every next_block and consume every full match."""
         if node.child < 0:
             return True
         matched_any = False
@@ -523,7 +521,7 @@ class IrMatcher:
 
     def _match_children_set(self, node: CompiledNode, block: Block,
                             ctx: _MatchContext) -> bool:
-        """§4.3: declaration order, first-match-wins per item, matched
+        """Declaration order, first-match-wins per item, matched
         candidates removed from an independent working copy of next_blocks
         (overlap with the child edge dedups through ctx.consume)."""
         if not node.children:
@@ -544,7 +542,7 @@ class IrMatcher:
 
     def _match_parent_edge(self, node: CompiledNode, block: Block,
                            ctx: _MatchContext) -> bool:
-        """§4.7: single candidate — block.previous_block."""
+        """Match the single block.previous_block candidate."""
         if node.parent < 0:
             return True
         prev = block.previous_block
@@ -557,9 +555,10 @@ class IrMatcher:
 
     def _match_or(self, node: CompiledNode, block: Block,
                   ctx: _MatchContext) -> bool:
-        """§4.4 (amended): first branch whose FULL subtree matches wins,
-        rollback between attempts. `exclusive` and the node's own where clause
-        participate in HEAD TESTS only — legacy parity: ExclusiveOrMatcher
+        """Use the first branch whose full subtree matches.
+
+        Roll back between attempts. `exclusive` and the node's own where clause
+        participate in head tests only. ExclusiveOrMatcher
         overrides test_self, which OrMatcher.try_build never consults, and
         specs/stonfi_v2_swap.mch relies on overlapping `^` branches resolving
         first-match-in-order (see module docstring)."""
@@ -572,17 +571,18 @@ class IrMatcher:
 
     def _match_recursive(self, nid: int, node: CompiledNode, entry: Block,
                          ctx: _MatchContext) -> bool:
-        """§4.6 frontier walk, T18 semantics: exit tried FIRST per candidate,
+        """Run frontier or cyclic recursion.
+
+        Frontier recursion tries the exit first for each candidate,
         one step per round, the stepped blocks' next_blocks (in consumption
         order) become the new frontier. Entry gate = the STEP node's head test
         (legacy RecursiveMatcher.test_self) plus the node's own where clauses.
 
-        §4.6b cyclic strategy ([M2R, R11/T28]): no frontier and no frames —
-        `step` is the rule-body root whose subgraph contains back-edges to
-        itself; one full _match_node descent through the cycle IS the
-        recursion, bounded by trace depth (child edges always move down the
-        tree). Same-prefix step/final branches disambiguate by ordered
-        alternatives looking down the actual chain — the shape the frontier
+        Cyclic recursion has no frontier or frames. `step` is the rule-body root
+        whose subgraph contains back-edges to itself. One full _match_node
+        descent through the cycle is the recursion. Trace depth bounds it because
+        child edges move down the tree. Same-prefix step/final branches use ordered
+        alternatives looking down the actual chain, which the frontier
         walk's exit-first order cannot express."""
         if node.where is not None and not node.where(entry):
             return False
@@ -620,17 +620,16 @@ class IrMatcher:
                 if not stepped:
                     # Frontier exhausted. Legacy rule: success iff at least one
                     # step landed, regardless of exit presence (RecursiveMatcher
-                    # in basic_matchers.py; spec §4.6 mispins this — see the
-                    # module docstring).
+                    # in basic_matchers.py).
                     return iter_index > 0
                 iter_index += 1
         finally:
             ctx.frame = outer_frame
 
-    # ------------------------------------------------ captures & build (§5/§6)
+    # ------------------------------------------------ captures and build
 
     def _assemble_captures(self, ctx: _MatchContext) -> dict:
-        """Fold ctx.bindings into the capture env (§5): scalars take the first
+        """Fold ctx.bindings into the capture env: scalars take the first
         binding; `many` slots owned by a recursion assemble one element per
         journaled iteration frame (gap-aligned None for unbound iterations)
         plus the exit-frame element when the exit fired; unowned `many` slots
@@ -666,9 +665,10 @@ class IrMatcher:
         return env
 
     def _apply_shape(self, produced: Block, match_obj) -> None:
-        """§8.7 `shape` hook: LAST build step, after merge — same point as the
-        compiled path, so topology parity holds. Shapers are sync
-        `(produced_block, match) -> None` and may mutate only the produced
+        """Run the `shape` hook after merge as the last build step.
+
+        This matches the compiled path, so topology parity holds. Shapers are
+        synchronous `(produced_block, match) -> None` and may mutate only the produced
         block's region."""
         if self._shaper_name is None:
             return
@@ -681,7 +681,7 @@ class IrMatcher:
 
     async def _build(self, anchor: Block, captures: dict,
                      consumed: list[Block]) -> Block | None:
-        """Build phase (§6). Returns the produced block, or None for a clean
+        """Build phase. Returns the produced block, or None for a clean
         rejection (builder returned None / `reject when` fired / EvalError)."""
         if self._builder_name is not None:
             builder = self._registries.builders.get(self._builder_name)
@@ -706,8 +706,8 @@ class IrMatcher:
             try:
                 outcome = await self._program.run(env)
             except EvalError as e:
-                # Spec §10.7: an expression runtime error is a rejection —
-                # never aborts trace processing.
+                # An expression runtime error rejects the match and never aborts
+                # trace processing.
                 logger.warning(
                     "mch_ir matcher %r: build evaluation failed (%s); rejecting match",
                     self.name, e,

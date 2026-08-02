@@ -3,19 +3,19 @@ the withdraw fork, and the delayed withdrawal's NFT-burn payout.
 
 HYBRID declarative build: the produced btype/fields/flags are expressed with
 `out {...}` / `produces switch` in the spec; the immediate payout is declarative
-arithmetic (`amount(immediate.msg.value - request.msg.value)`, G-ARITH), leaving
-TWO genuinely inexpressible pieces as host fns:
+arithmetic (`amount(immediate.msg.value - request.msg.value)`), leaving two
+pieces as host functions:
 
-  tonstakers_minted_nft — reads the minted request NFT off
-    delayed.next_blocks; block-topology navigation is excluded from the language
-    (§15b), and the NFT is a NON-consumed neighbor (NftMintBlockMatcher's own
+  tonstakers_minted_nft reads the minted request NFT from
+    delayed.next_blocks; block-topology navigation is excluded from the
+    language, and the NFT is a non-consumed neighbor (NftMintBlockMatcher's own
     sibling nft_mint), so it cannot be a captured pattern node without diverging
     the consumed set.
 
-  tonstakers_pool_addr — walks `previous_block` upward an unbounded number of
-    hops for the pool address (§15b again). A thin wrapper over the shared
-    blocks/staking.py::find_tonstakers_pool_addr, which legacy calls too, so the
-    two engines cannot drift.
+  tonstakers_pool_addr walks `previous_block` upward an unbounded number of
+    hops for the pool address, which the language cannot express. It is a thin
+    wrapper over the shared blocks/staking.py::find_tonstakers_pool_addr, which
+    legacy calls too, so the two engines cannot drift.
 
 The declarative product is a generic Block + dict data (the canonical C++ shape).
 The shared build_tonstakers_withdraw_core (blocks/staking.py) stays with the
@@ -86,9 +86,9 @@ async def _tonstakers_minted_nft(delayed):
         return None
     # btype, not isinstance(NftMintBlock): specs/nft_mint.mch is declarative, so
     # the minted NFT is a generic Block under the mch engines. This arm is the
-    # LIVE one in production (nft_mint has priority 80 and consumes the
+    # live one in production: nft_mint has priority 80 and consumes the
     # TONStakersInitNFT call into itself, so the fallback below finds nothing);
-    # the sweep's legacy NftMintBlockMatcher prereq hid that for one wave.
+    # the raw call.
     nft = next((b for b in delayed.next_blocks if b.btype == 'nft_mint'), None)
     if nft is None:
         nft = find_call_contract(delayed.next_blocks, TONStakersInitNFT.opcode)

@@ -1,9 +1,9 @@
 """ast_ expression -> IR expression-tree encoding (k-tagged dicts).
 
-Extracted from ir_emit.py (T33) so the compiler can use it too: ir_emit
+This module is separate from ir_emit.py so the compiler can use it too: ir_emit
 imports the compiler, so the compiler cannot import ir_emit back. The compiled
 path converts a node's inline `where (expr)` to this encoding at compile time
-and evaluates it with the shared sync evaluator (mch/expr_eval.py) — the exact
+and evaluates it with the shared sync evaluator (mch/expr_eval.py). These are the exact
 artifact bytes the IR engine evaluates, so the two paths cannot drift.
 
 Frontend-only module (it walks ast_ nodes); mch_ir must not import it.
@@ -63,11 +63,11 @@ def emit_expr(e: ast_.Expr) -> dict:
             {"name": f.name, "expr": emit_expr(f.value)} for f in e.fields
         ]}
     if isinstance(e, ast_.ParseExpr):
-        # `parse` expression node (W7, IR v1.1): a target expr + message-type
-        # alternatives; faults at eval on total failure (IR spec §7).
+        # `parse` expression node: a target expression and message-type
+        # alternatives; faults at eval on total failure.
         return {"k": "parse", "x": emit_expr(e.target), "types": list(e.msg_types)}
     if isinstance(e, ast_.Comprehension):
-        # map -> `mapc`; any/all -> `quant` carrying the op (§16.1, IR spec §7).
+        # map -> `mapc`; any/all -> `quant` carrying the op.
         if e.kind == "map":
             return {"k": "mapc", "xs": emit_expr(e.xs), "var": e.var,
                     "body": emit_expr(e.body)}

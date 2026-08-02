@@ -5,7 +5,7 @@
 #include "ClassifyCore.h"    // prepare_classify
 #include "GenMatchers.h"
 #include "fixtures/FixtureLoader.h"
-#include "fixtures/Render.h"  // shared block_key (§11 item 2 dedupe)
+#include "fixtures/Render.h"  // shared block_key helper
 #include "Walker.h"
 
 #include <algorithm>
@@ -20,8 +20,7 @@ namespace mch {
 
 namespace {
 
-// block_key is the shared Block dump-key helper (fixtures/Render.h) — §11 item 2
-// dedupe removed the local copy that used to live here.
+// block_key is the shared Block dump-key helper from fixtures/Render.h.
 
 std::string cap_val(const Capture &c) {
   if (!c.is_list) {
@@ -101,8 +100,8 @@ void dump_fixture(const std::vector<const CompiledMatcher *> &runnable, const st
 
 int run_match(const std::vector<std::string> &paths) {
   // The compiled matcher table + the generated where table, through the SAME
-  // prepare_classify production runs — which is also where the where-coverage
-  // check lives (this mode used to carry its own copy of it).
+  // prepare_classify production runs, which is also where the where-coverage
+  // check lives.
   const std::vector<CompiledMatcher> &matchers = gen_matchers_ir();
   ClassifySetup setup = prepare_classify(matchers);
   if (setup.table_missing || setup.fn_missing) {
@@ -111,7 +110,7 @@ int run_match(const std::vector<std::string> &paths) {
   }
 
   // The match phase runs every matcher whose PREDICATES are available, including
-  // those a missing build binding would skip in classify — this dump is about the
+  // those a missing build binding would skip in classify, this dump is about the
   // walk, not about producing rows.
   std::vector<const CompiledMatcher *> runnable;
   std::vector<std::pair<std::string, std::string>> skips;

@@ -5,10 +5,9 @@ wiring and out-field mapping live in the .mch, and the imperative residue is
 the single host fn below. The shared core (blocks/swaps.py
 build_coffee_swap_core) needs the incoming transfer, the CoffeePayoutInternal
 and the outgoing transfer, plus the full consumed set for find_call_contracts.
-The legacy matcher extracts the three via labels; the mch engine has no labels,
-and this host fn (which predates the T18 capture fixes — exit-branch and
-post-recursion captures bind since then, spec §7.2) derives them structurally
-from the consumed set, which it needs anyway for the core's scan:
+Exit-branch and post-recursion captures bind. This host fn deliberately derives
+the three roles structurally from the consumed set because the shared legacy
+core needs that full set for its call-contract scan:
 
 - in_transfer: the anchor's previous_block (the anchor's parent alternative is
   required, so the block is always consumed when the match succeeds);
@@ -17,7 +16,7 @@ from the consumed set, which it needs anyway for the core's scan:
 - out_transfer: the consumed child of the payout, first in consumed order —
   matching legacy get_labeled semantics when several payout children matched.
 
-Returns None to reject the match (spec §10.7).
+Returns None to reject the match.
 """
 from __future__ import annotations
 
@@ -73,7 +72,7 @@ async def _coffee_swap_data(consumed):
     """Imperative residue of the coffee swap build: derive the three leg roles
     from the consumed set, delegate to the shared core, and expose its data
     dict as a namespace (`.failed` drives the failed flag). Returns None to
-    reject (core returns None on a missing role or no hops, spec §10.7)."""
+    reject (the core returns None on a missing role or no hops)."""
     block, others = consumed[0], list(consumed[1:])
 
     in_transfer = None

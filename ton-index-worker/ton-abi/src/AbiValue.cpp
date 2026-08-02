@@ -27,23 +27,10 @@ std::string lower(std::string s) {
   return s;
 }
 
-// Lossy UTF-8 decode, mirroring Node's Buffer.toString('utf8') (the WHATWG
-// UTF-8 decoder's replacement-on-error behavior, which @ton/core's
-// loadStringRefTail relies on -- VALUE_SCHEMA.md / §0.14 pins this exactly).
-// Verified against live `node -e` output (T8.3) on: lone continuation bytes,
-// truncation at every byte position of 2/3/4-byte sequences, always-invalid
-// lead bytes (C0/C1/F5-FF), overlong encodings (C0 80, C1 BF, E0 80 80),
-// UTF-16-surrogate encodings (ED A0-BF ..), and out-of-Unicode-range 4-byte
-// leads (F0 with 2nd byte <0x90, F4 with 2nd byte >0x8F). Key subtlety: when
-// the FIRST continuation byte of a sequence fails its lead-specific range
-// check, that byte is NOT consumed by the replacement (it's reprocessed as
-// its own byte next iteration) -- e.g. E0 80 80 yields THREE replacement
-// chars, not one, because 0x80 fails E0's required [0xA0,0xBF] second-byte
-// range and gets reprocessed as a lone continuation byte, which itself fails
-// again. But once at least one continuation byte has been validated, a LATER
-// bad byte consumes the whole valid prefix into a single replacement and does
-// NOT reprocess the bad byte as a continuation (e.g. E2 82 'A' -> one
-// replacement for E2+82, then 'A' decodes normally).
+// Lossy UTF-8 decode matching Node Buffer.toString('utf8'). Invalid first
+// continuation bytes are reprocessed; after a valid continuation, a later
+// failure replaces the valid prefix and leaves the failing byte for the next
+// iteration. See MODULE-NOTES.md for the covered malformed-input cases.
 std::string decode_utf8_lossy(const std::string &bytes) {
   std::string out;
   const std::size_t n = bytes.size();
@@ -323,7 +310,7 @@ void AbiValue::dump_to(std::string &out) const {
 
     case AbiValueKind::String:
       // string_v holds RAW bytes (pack round-trips them byte-for-byte via
-      // store_string); the lossy-UTF8 decode is a DUMP-only transform (§0.14).
+      // store_string); lossy UTF-8 decoding is a dump-only transform.
       dump_json_string(decode_utf8_lossy(string_v), out);
       break;
 

@@ -150,10 +150,8 @@ const Value *Value::field(const std::string &name) const {
 }
 
 td::Result<std::string> td_boc_serialize(const td::Ref<vm::Cell> &root) {
-  // Plan §12: the dumps render Cell-derived fields by ROOT HASH, so BOC
-  // container byte order no longer matters — use td's deterministic native
-  // writer (mode 0) everywhere. Replaces the former pytoniq-order writer (and
-  // with it the P3 exponential-re-walk DoS).
+  // Dumps render cell-derived fields by root hash, so use the deterministic
+  // native writer; BOC container byte order is not observable here.
   if (root.is_null()) {
     return td::Status::Error("td_boc_serialize: null cell");
   }

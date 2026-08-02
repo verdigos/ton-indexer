@@ -1,10 +1,10 @@
 // JVault host fns (builders/jvault.py). See host/HostImpls.h for the internal
 // registry surface and HostRegistry.h for the public one.
 //
-// Both fns became portable in the F1+F2 rewrite: they take the composed
+// Both functions take the composed
 // jetton_transfer's `data` scalars (a b64 string / an already-parsed address
-// list) rather than reaching the legacy `.jetton_transfer_message` attribute the
-// generic IR block lacks — see docs/mch-qol-report.md.
+// list) rather than reaching the reference `.jetton_transfer_message` attribute the
+// generic IR block does not expose.
 #include "host/HostImpls.h"
 
 #include "MsgParse.h"
@@ -49,8 +49,7 @@ EvalResult jvault_stake_period(BuildEnv &, const std::vector<Value> &args) {
   return rt_ok(*r.ok().field("stake_period"));
 }
 
-// jvault_account_list is gone (W6): the claim body's jetton-wallet list maps
-// through the account() constructor via the spec G-LC comprehension
-// `map(xs as e => account(e))` (spec §16.1) — no host fn.
+// The claim body's jetton-wallet list uses the expression-language account()
+// constructor directly, so it needs no host function.
 
 }  // namespace mch

@@ -12,11 +12,10 @@
 # The anchor children set mirrors legacy children_matchers=[event,
 # Or([recursion, payout_chain])]: the payout chain appears BOTH as the rule's
 # exit branch (multi-hop) and as the direct Or branch (zero intermediate
-# hops). Capture caveats (same as dedust_swap, see roadmap T15 notes):
-# @payout/@out/@in_transfer bind only on the zero-hop path — after a recursion
-# the walker cannot bind later siblings, and exit-branch captures never bind.
-# The builder therefore works off the consumed set (Match._mch_consumed);
-# captures are kept for pattern fidelity.
+# hops). Exit-branch and post-recursion captures bind. The builder deliberately
+# works from Match._mch_consumed because the shared legacy core needs the full
+# consumed set for its call-contract scan; this is a builder design choice, not
+# a capture limitation.
 
 opcode CoffeeSwapNative          = 0xc0ffee00
 opcode CoffeeSwapInternal        = 0xc0ffee20

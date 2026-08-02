@@ -1,4 +1,4 @@
-"""mch host fn for the stonfi v1 swap matcher (specs/stonfi_v1_swap.mch, R12).
+"""MCH host function for the Stonfi V1 swap matcher.
 
 specs/stonfi_v1_swap.mch is a HYBRID declarative build: the pattern, failed
 flag and out-field mapping live in the .mch, and the imperative residue is the

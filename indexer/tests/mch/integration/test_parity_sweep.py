@@ -36,8 +36,8 @@ message opcodes (normalized `& 0xFFFFFFFF` on both sides — DB opcodes may be
 signed int32). Sound over-approximation: may keep a pair that ultimately does
 not fire (both paths then produce nothing — still a valid "reject identically"
 check) but never drops a pair that would fire. A spec whose anchor opcodes are
-absent from the whole corpus (e.g. DNS, stonfi_v2 provide) yields zero pairs and
-is surfaced as an EXPLICIT skip, never silently dropped.
+absent from the whole corpus yields zero pairs and is surfaced as an EXPLICIT
+skip, never silently dropped.
 
 Registries come straight from indexer.events.mch.builders (the same factories
 the per-spec integration tests use); interface data comes from each trace's own
@@ -557,11 +557,10 @@ _SPEC_TABLE: list[tuple[str, Path, Callable, tuple, tuple]] = [
     # (nft_finish_auction's child). auction_bid is a bare `btype ton_transfer`
     # anchor so this row runs on ALL fixtures.
     #
-    # EXPECTED: this row currently fires on nothing. The family has zero corpus
-    # coverage (verified by running the full legacy matcher list over all 176
-    # fixtures — none of the eight btypes is produced), so every pair here is a
-    # "reject identically" check, not a parity assertion. Fixtures captured from
-    # the live A/B windows are what will turn it into a real gate.
+    # The fixture corpus exercises this family, including cancel-sale,
+    # cancel-auction, put-on-auction, and update-sale actions. Those traces carry
+    # substantive parity assertions; nonmatching traces remain useful
+    # "reject identically" checks.
     ("specs/nft_sale.mch", _SPECS_DIR / "nft_sale.mch", nft_sale_registries,
      (NftTransferBlockMatcher, GetgemsNftPurchaseBlockMatcher),
      (UpdateSaleMatcher, NftPutOnSaleBlockMatcher, NftDiscoveryBlockMatcher,

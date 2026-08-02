@@ -53,13 +53,13 @@ td::Result<Value> load_address_py(vm::CellSlice &cs) {
     if (!cs.have(len)) {
       return td::Status::Error("address: extern underflow");
     }
-    // pytoniq addr_extern: ba2int(bits, signed=False) — an unsigned big-endian
+    // pytoniq addr_extern: ba2int(bits, signed=False), an unsigned big-endian
     // integer of exactly `len` bits (1..511). NO td::RefInt256 CAN HOLD IT: that
     // type is a signed 257-bit BigInt, so anything past 256 bits is an
     // invalid-but-non-null value that renders "NaN" (which is what a 260-bit
-    // cocoon expectedMyAddress did until 2026-07-31, both in --parse-dump and
+    // cocoon expectedMyAddress, both in --parse-dump and
     // through to the cocoon_expected_address host fn). The Str therefore carries
-    // the value in HEX, assembled nibble by nibble straight off the wire — exact
+    // the value in HEX, assembled nibble by nibble straight off the wire, exact
     // for every length up to 511 and the direct twin of Python's `f"{int:x}"`:
     // lowercase, no leading zeros, "0" for zero.
     static const char kHexDigits[] = "0123456789abcdef";
@@ -361,7 +361,7 @@ std::optional<std::string> ton_transfer_comment(const td::Ref<vm::Cell> &body) {
   return decode_backslashreplace_strip_nul(bytes);
 }
 
-// Public wrapper (Phase E serializer: jetton_transfer/nft comment fields carry
+// Public wrapper used when jetton-transfer and NFT comment fields carry
 // RAW payload bytes that the fill decodes with the same codec as ton_transfer).
 std::string decode_comment_bytes(const std::string &raw) {
   return decode_backslashreplace_strip_nul(raw);

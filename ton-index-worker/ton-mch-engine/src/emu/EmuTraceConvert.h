@@ -1,7 +1,5 @@
-// Converter (em1-design §2): raw emulator transaction cells -> the
-// schema::Transaction shape SchemaTraceLoader is gated against, via the
-// ParseQuery static seam (DataParser.h) — the SAME parsers the indexing
-// pipeline runs, so there is no second parser to keep true.
+// Converts emulator transaction cells with the indexing pipeline's ParseQuery
+// parsers into the schema::Transaction classifier input.
 #pragma once
 
 #include "EmuTypes.h"
@@ -14,9 +12,7 @@
 
 namespace mch {
 
-// Per node: ParseQuery::parse_transaction(tx_root, address.workchain, gv), then
-// mc_seqno from the wrapper node. ANY node failing => whole-trace error: a
-// partial tree would classify wrong, never silently.
+// A node parse failure rejects the whole trace; partial trees are not classified.
 td::Result<std::vector<schema::Transaction>> emu_to_schema_txs(const EmuTraceView &view,
                                                                int global_version);
 

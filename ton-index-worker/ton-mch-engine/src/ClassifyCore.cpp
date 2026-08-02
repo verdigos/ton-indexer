@@ -29,7 +29,7 @@ constexpr std::uint32_t kBounceOpcode = 0xFFFFFFFF;
 // through next_blocks. Every consumer of "the spine" (prefilter inventory,
 // post-process input, basic-actions fallback) wants exactly this.
 //
-// NOT usable for the matcher walk: that one must read a node's next_blocks AFTER
+// This is not usable for the matcher walk, which must read next_blocks after
 // try_build ran on the node, because a merge mutates the tree mid-walk (Python
 // generator resume order).
 std::vector<Block *> collect_spine(Block *root) {
@@ -46,9 +46,8 @@ std::vector<Block *> collect_spine(Block *root) {
   return out;
 }
 
-// engine.py IrMatcher.try_build ported: returns true iff a block was produced
-// (collects a CoreAction). Rejections and mismatches collect nothing. Renders
-// NOTHING — aux/flows are stored raw for the adapter (§11 item 2 isolation).
+// Returns true iff a block was produced. Rejections and mismatches collect
+// nothing; auxiliary and flow data remain raw for the adapter.
 bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *block,
                BlockArena &arena, const std::set<std::string> &kinds,
                const LookupSource &src, const WhereTable &wheres,
@@ -70,7 +69,7 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
                                  Value::make_list(std::move(consumed_vals)), kinds, src,
                                  needs_lookups);
   if (o.is_rejected) {
-    return false;  // clean rejection §10.7: no consumption, no aux append
+    return false;  // clean rejection: no consumption or auxiliary append
   }
 
   Block *produced = arena.make(o.btype.empty() ? m.produces.front() : o.btype);
@@ -81,7 +80,7 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
     return false;  // Python: merge raises -> try_build catches -> clean rejection
   }
 
-  // §8.7 `shape` hook: LAST build step, after merge (engine.py _apply_shape).
+  // The shape hook is the last build step, after merge.
   if (!m.ref_shapers.empty()) {
     const std::string &shaper_name = *m.ref_shapers.begin();
     auto sit = host_shapers().find(shaper_name);
@@ -118,8 +117,8 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
   return true;
 }
 
-// --- Phase E: host post-process passes (blocks/liquidity.py) -----------------
-// value_flow / contract_deployments are DROPPED from C++ scope (plan §7 banner).
+// --- Host post-processing passes -------------------------------------------
+// Value flows and contract-deployment collection are outside this pipeline.
 // All surgery is throw-safe (no aborts).
 
 Value pp_field(const Value &d, const std::string &k) {
@@ -232,7 +231,7 @@ void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block 
     final_b->data = std::move(merged);
     for (Block *cb : first->children_blocks) final_b->children_blocks.push_back(cb);
     // Python does `list(set(children_blocks))` here, i.e. an order nothing
-    // downstream can rely on — but the C++ substrate has to pick SOME order,
+    // downstream can rely on, but the C++ substrate has to pick SOME order,
     // and sorting raw Block* sorted by ARENA ADDRESS: run-to-run stable within
     // one process, arbitrary across processes and across arena layouts. The
     // order reaches action output (unwind_deployments, the fallback rows), so
@@ -255,29 +254,10 @@ void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block 
   }
 }
 
-// blocks/dedust_v2/liquidity.py post_process_dedust_v2_liquidity (:465) — the
-// CPMM V2 twin of the pass above, and like it a Phase-E pairing pass keyed on
-// the Deposit ESCROW address. Only one of a deposit's two asset legs reaches
-// the completing block (the join hangs off the last-credited leg's CreditAsset);
-// the other is matched on its own as a partial and folded in here.
-//
-// Two things keep it a separate function rather than a parameterization of the
-// V1 pass:
-//   - the merge is a SLOT FILL, not combine_deposits arithmetic. Whichever
-//     asset_N slot the completing block left null is taken from the partial
-//     together with that slot's wallet — and that slot's amount, but ONLY if
-//     the final left it null too, which the V2 builds never do (both amount
-//     slots always come off the Deposit event or the JoinLiquidity body). That
-//     arm is ported anyway because it is what the reference does;
-//   - it walks FINALS and looks up the partial, where V1 walks partials. Under
-//     the >2 guard that is the same pairing, but the iteration order decides
-//     which duplicate wins, so it is kept as written.
-//
-// Dispatch is by btype: the legacy block classes tag their output with exactly
-// these two btypes, so a single test covers the hand-written matchers and
-// specs/dedust_v2_deposit.mch alike (the Python side is btype-only for the same
-// reason). There is no exception path — nothing here can throw, unlike V1's
-// combine_deposits.
+// Pair DeDust V2 liquidity blocks by deposit escrow address. Only one asset leg
+// reaches the completing block; the other remains a partial and is folded in.
+// This remains separate from the V1 arithmetic merge because it fills null slots
+// and scans final blocks first, which determines the winner among duplicates.
 void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
                                       std::set<Block *> &removed) {
   std::vector<Block *> partials, finals;
@@ -332,29 +312,14 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
 
     blocks.erase(std::remove(blocks.begin(), blocks.end(), partial), blocks.end());
     removed.insert(partial);
-    // event_nodes: a plain extend, deliberately dropping the reference's two
-    // extra steps (liquidity.py:499-501) — the conditional
-    // `append(partial.initiating_event_node)` and the `list(set(...))` dedup.
-    // Byte-for-byte the SAME omission the V1 pass above makes, kept identical on
-    // purpose rather than "fixed" here, because the two are not free:
-    // initiating_event_node is a block's tree PARENT (BlockTree.cpp:341), i.e. a
-    // node NOT otherwise in event_nodes, so appending it would ADD a node — and
-    // without Python's set() dedup that add is not idempotent.
-    // What makes the omission safe is the gate, not an argument: tx_hashes and
-    // accounts on the rendered row are derived from event_nodes, the actions
-    // twin runs the REFERENCE Python pass (which does both steps) against this
-    // one, and the diff is 0 over all 184 fixtures — including the nine on which
-    // this merge actually fires. Restoring either step must be done together
-    // with the V1 pass and re-gated, not piecemeal.
+    // Extend event_nodes without appending initiating_event_node or deduplicating.
+    // Keep this aligned with the V1 pass because both feed action account and
+    // transaction-hash derivation.
     for (const EventNode *n : partial->event_nodes) final_b->event_nodes.push_back(n);
     for (Block *cb : partial->children_blocks) final_b->children_blocks.push_back(cb);
-    // Same determinism argument as the V1 pass: Python's
-    // `list(set(children_blocks))` leaves an order nothing downstream may rely
-    // on, but a raw Block* sort would key on the ARENA ADDRESS — stable within
-    // a process, arbitrary across processes. Key on trace properties (earliest
-    // event lt, btype, anchor tx hash) with the pointer only as the final
-    // tiebreak, so the order is total and std::unique still collapses
-    // duplicates of the SAME block.
+    // Sort by trace properties rather than arena addresses. The pointer is only
+    // a final tiebreaker, keeping the order total so std::unique removes duplicate
+    // references to the same block.
     std::sort(final_b->children_blocks.begin(), final_b->children_blocks.end(),
               [](const Block *a, const Block *b) {
                 if (a->min_lt != b->min_lt) return a->min_lt < b->min_lt;
@@ -371,7 +336,7 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
 }
 
 // blocks/liquidity.py post_process_stonfi_v2_liquidity (R08 pairing pass). ZERO
-// corpus coverage — the `< 2 legs` guard returns immediately for every trace.
+// corpus coverage, the `< 2 legs` guard returns immediately for every trace.
 // KEEP (do not delete as dead): it is the port of a live Python production pass;
 // gating it needs a 2-leg stonfi_v2 deposit fixture the corpus does not have yet.
 bool is_stonfi_v2_leg(const Block *b) {
@@ -466,9 +431,9 @@ void post_process_stonfi_v2_liquidity(std::vector<Block *> &blocks, BlockArena &
 // 2b): promote ContractDeploy blocks nested in children up to the top-level
 // spine list. The Python `for block in blocks` loop SEES appends (it re-scans
 // the promoted deploys), so the C++ index loop must too. NOTE: a no-op for the
-// classify/actions DUMP — the dump emits matcher-produced blocks (`pending`),
+// classify/actions DUMP, the dump emits matcher-produced blocks (`pending`),
 // and this only appends to the spine, which the dump never walks; ported to
-// keep the post-processor chain aligned with production for Phase G.
+// keep the post-processor chain aligned with production.
 void unwind_deployments(std::vector<Block *> &blocks) {
   std::set<Block *> visited;
   for (std::size_t i = 0; i < blocks.size(); i++) {  // index loop: sees appends
@@ -499,7 +464,7 @@ bool serializes_to_row(const Block *b) {
 
 // v1_ops (block_tree_serializer.py:1605-1643): the btypes whose merged children
 // stay merged. Every OTHER btype gets its children expanded into rows of their
-// own — the v1 API predates the composite actions, so a consumer that only knows
+// own, the v1 API predates the composite actions, so a consumer that only knows
 // the v1 set still sees the legs a teleitem_start_auction / jvault_stake / …
 // absorbed. Keep in sync with the Python list; a btype missing here silently
 // starts emitting child rows.
@@ -546,20 +511,8 @@ bool is_v1_op(const std::string &t) {
   return ops.count(t) != 0;
 }
 
-// serialize_blocks (block_tree_serializer.py:1645-1681) in full: the row filter
-// AND the child recursion. `parent_id` is empty at the top level (Python's None).
-//
-// Three rules that are easy to lose:
-//   - a block that does not serialize is skipped WHOLE — its children are never
-//     visited either (Python `continue`s before the recursion);
-//   - a child whose action_id equals its parent's is dropped (:1663) — same
-//     lowest-lt node AND same btype as the block that consumed it, so it would
-//     be a row indistinguishable from its own parent;
-//   - contract_deploy children are dropped (:1673) because unwind_deployments
-//     already promoted them onto the SPINE, where they emit a top-level row.
-// ancestor_type accumulates on the way OUT of the recursion, so a grandchild
-// carries both its parent's and its grandparent's btype (deduped; sorted here
-// because Python's `list(set(...))` order is not a stable property).
+// Filter and recursively serialize action rows. See docs/engine-internals.md for
+// the child-suppression and ancestor-type rules.
 std::vector<ActionRow> serialize_rows(const std::vector<Block *> &blocks,
                                       const std::string &parent_id) {
   std::vector<ActionRow> out;
@@ -588,11 +541,8 @@ std::vector<ActionRow> serialize_rows(const std::vector<Block *> &blocks,
   return out;
 }
 
-// try_classify_basic_actions (event_processing.py:397-417, Step 2c): a FRESH
-// leaf-only classify (init_block over the same event tree, NO matchers) + the
-// post-processor chain, then serialize_blocks. Every surviving row is a basic
-// btype since nothing composite was built. Throw-safe (Python's fallback returns
-// [] on any exception). Ungated (corpus has no failing traces).
+// Fresh leaf-only classification with no matchers, followed by post-processing
+// and serialization. Any exception produces an empty fallback.
 std::vector<ActionRow> basic_classify_fallback(TraceContext &ctx) {
   std::vector<ActionRow> out;
   try {
@@ -605,8 +555,8 @@ std::vector<ActionRow> basic_classify_fallback(TraceContext &ctx) {
     post_process_dedust_v2_liquidity(spine, removed);
     post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
     unwind_deployments(spine);
-    // The same serialize_blocks Python calls here (event_processing.py:411) —
-    // recursion included, though every basic btype is a v1_op so it never fires.
+    // Use the recursive serialization path. Basic btypes are all v1_ops, so
+    // recursion normally has no additional rows to visit.
     out = serialize_rows(spine, "");
   } catch (...) {
     out.clear();  // Python: fallback returns [] on any exception
@@ -614,17 +564,9 @@ std::vector<ActionRow> basic_classify_fallback(TraceContext &ctx) {
   return out;
 }
 
-// try_process_unknown_event (event_processing.py:345-366) + the row filter
-// try_classify_unknown_trace applies to its output (:370-375, the same three
-// exclusions as serializes_to_row). The GHOST path: a trace that serialized
-// nothing gets one more chance — if it is a lone failed wallet external, the
-// messages it never sent become rows instead of the `unknown` stub.
-//
-// Runs a FRESH init_block over the same event tree (Python rebuilds the tree;
-// identical content, and the main tree's blocks are done with by now) after
-// synthesize_ghost_children has hung the ghosts off the root. Throw-safe:
-// Python's own except here falls back to the `unknown` row, never to a trace
-// failure.
+// If normal serialization is empty, synthesize rows for the unsent messages of a
+// lone failed wallet external. This uses a fresh block tree and falls back to the
+// unknown row on any exception.
 std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource &src) {
   std::vector<ActionRow> out;
   try {
@@ -677,7 +619,7 @@ ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers) {
   ClassifySetup s;
   // The matcher / build / where tables are three views of ONE document, wired up
   // by the same CMake step (MCH_CLASSIFY_ARTIFACT). Three shas that disagree mean
-  // the build regenerated some of them and not others — the tables would then run
+  // the build regenerated some of them and not others, the tables would then run
   // matchers against another document's build programs, which is silent
   // wrongness, so it is a hard setup error.
   const std::string sha = gen_matchers_ir_source_sha();
@@ -744,12 +686,12 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
   wrapper->connect(ctx.root);
 
   // B1 anchor prefilter inventory: the opcodes + btypes present on the spine
-  // (blocks reachable via next_blocks — the outer BFS's anchor candidates). A
+  // (blocks reachable via next_blocks, the outer BFS's anchor candidates). A
   // matcher whose opcode/btype anchor intersects neither can match nothing, so
   // its whole traversal is skipped. Opcodes are STATIC (produced composite blocks
   // carry no opcode); btypes GROW as matchers fire (a later matcher may anchor on
   // a produced btype), so produced btypes are folded in after each matcher. The
-  // inventory is a conservative superset — consumed blocks are never removed, so
+  // inventory is a conservative superset, consumed blocks are never removed, so
   // a skip only ever fires when the traversal provably matches nothing.
   std::unordered_set<std::uint32_t> inv_opcodes;
   std::unordered_set<std::string> inv_btypes;
@@ -781,12 +723,12 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     for (int idx : setup.included) {
       const CompiledMatcher &m = matchers[idx];
       if (!anchor_can_match(m)) {
-        continue;  // B1: no spine op/btype can satisfy this anchor — skip traversal
+        continue;  // No spine op/btype can satisfy this anchor; skip traversal.
       }
       auto fn = setup.build_fns.at(m.artifact_index);
       std::size_t produced_from = pending.size();
       // Python bfs_iter port: FIFO; cur's next_blocks are read AFTER try_build
-      // ran on cur (generator resume order) — merges mutate the tree mid-walk.
+      // ran on cur (generator resume order), merges mutate the tree mid-walk.
       std::deque<Block *> queue{wrapper};
       while (!queue.empty()) {
         Block *cur = queue.front();
@@ -805,26 +747,26 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
       }
     }
 
-    // Phase E: post-process passes over the flat spine list ([root] + bfs).
+    // Post-process the flat spine list ([root] + BFS).
     std::vector<Block *> spine = collect_spine(wrapper);
     std::set<Block *> removed;
     post_process_dedust_liquidity(spine, removed);
     post_process_dedust_v2_liquidity(spine, removed);
     post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
-    unwind_deployments(spine);  // Step 2b: promotes nested ContractDeploy onto the spine
+    unwind_deployments(spine);  // promotes nested ContractDeploy onto the spine
     for (CoreAction &a : pending) {
       if (!removed.count(a.produced)) result.actions.push_back(std::move(a));
     }
     // serialize_blocks: the ROW set is the spine, not the fire list. A fire whose
     // product a later matcher consumed is off the spine and emits no row of its
-    // own — unless its consumer's btype is outside v1_ops, in which case the
+    // own, unless its consumer's btype is outside v1_ops, in which case the
     // recursion brings it back as a CHILD row; a leaf no matcher consumed emits
     // a basic row.
     result.action_rows = serialize_rows(spine, "");
   } catch (const std::exception &e) {
     result.failure = true;
     result.failure_reason = e.what();
-    // The two-phase driver throws this exact message on non-convergence — an
+    // The two-phase driver throws this exact message on non-convergence, an
     // infra fault, distinct from a spec/parse engine fault. Everything else is
     // a generic engine_fault (Python's per-trace fallback boundary).
     result.failure_category =
@@ -841,7 +783,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     result.action_rows.clear();
     result.fallback_rows = basic_classify_fallback(ctx);
   } else if (result.action_rows.empty() && !ctx.trace.transactions.empty()) {
-    // trace_processor.py:44-46 — classification succeeded and serialized nothing.
+    // trace_processor.py:44-46, classification succeeded and serialized nothing.
     // try_classify_unknown_trace tries the GHOST path first and only mints the
     // `unknown` row when that yields nothing too (event_processing.py:367-388).
     result.action_rows = ghost_external_rows(ctx, src);

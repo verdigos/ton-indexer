@@ -2,9 +2,9 @@
 // blocks/liquidity.py build_dedust_deposit_{liquidity,partial}_core). See
 // host/HostImpls.h for the internal registry surface.
 //
-// Both fns take the consumed set and reconstruct the legacy label roles by
+// Both fns take the consumed set and reconstruct the reference label roles by
 // previous_block / children_blocks navigation. They return the field record
-// (Obj) on success or Null to reject (spec §10.7) — reproducing the Python
+// object on success or Null to reject, matching the reference
 // `return None` (its try/except swallows every exception into None, so any
 // parse/nav failure here is likewise a Null reject).
 #include "host/HostImpls.h"
@@ -174,11 +174,10 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
       rejection = b;
     }
   }
-  // returns / ton_excesses / jetton_excesses (§11.5 dual dispatch). Both excess
+  // Both TON and jetton excess
   // legs hang off a DedustReturnExcessFromVault: the ton excess is a DedustPayout
   // child, the jetton excess is a jetton_transfer child (labeled 'jetton_excess'
-  // in Python, matched by btype here). The jetton scan was previously a dead
-  // isinstance(JettonTransferBlock) reproduction (always []).
+  // in the reference implementation and matched by block type here).
   std::vector<const Block *> returns;
   for (const Block *b : consumed) {
     if (is_call_op(b, kReturnExcessFromVault)) {

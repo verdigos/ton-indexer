@@ -1,4 +1,4 @@
-"""mch-ir.json loading and structural validation (schema docs/mch-ir-poc.md).
+"""Load and structurally validate mch-ir.json artifacts.
 
 Everything checkable without host registries happens here: version, kind/tag
 vocabulary, index bounds, statement/expression shapes, and the where_expr
@@ -103,11 +103,11 @@ def _check_matcher(m: Any, n_nodes: int) -> None:
     if not isinstance(anchor, dict) or anchor.get("kind") not in ANCHOR_KINDS:
         raise IrLoadError(f"{where}: anchor kind must be one of {sorted(ANCHOR_KINDS)}")
     if anchor["kind"] == "pred":
-        # [M2R, R10] predicate anchor: no prefilter, full-scan test_self.
+        # Predicate anchors have no prefilter and full-scan test_self.
         if not isinstance(anchor.get("pred"), str):
             raise IrLoadError(f"{where}: pred anchor needs a 'pred' predicate name")
     elif anchor["kind"] == "mixed":
-        # [M2R, R09] union-membership group: one branch object per alternative
+        # A union-membership group has one branch object per alternative
         # branch, each `{op:int}` or `{btype:str}` with an optional `where` name.
         branches = anchor.get("branches")
         if not isinstance(branches, list) or not branches:
@@ -158,7 +158,7 @@ def _check_matcher(m: Any, n_nodes: int) -> None:
     if "shape" in m and not isinstance(m["shape"], str):
         raise IrLoadError(f"{where}: shape must be a string")
 
-    # `priority` (§8.6): optional; absent defaults to 100. bool is an int
+    # `priority`: optional; absent defaults to 100. bool is an int
     # subclass, so reject it explicitly.
     if "priority" in m and (isinstance(m["priority"], bool) or not isinstance(m["priority"], int)):
         raise IrLoadError(f"{where}: priority must be an integer")
@@ -313,8 +313,8 @@ def _check_node(i: int, node: Any, n_nodes: int) -> None:
             raise IrLoadError(f"{where}: recursive requires step")
         check_ref("step")
         check_ref("exit")
-        # Recursion strategy (spec §10.3, [M2R, R11/T28]): omitted = frontier
-        # walk. "cyclic" = cyclic descent — `step` is the rule-body root whose
+        # An omitted recursion strategy selects the frontier walk. With
+        # "cyclic", `step` is the rule-body root whose
         # subgraph may contain back-edges to itself; an exit cannot exist
         # (termination is a non-recursive alternative branch inside the body).
         if "strategy" in node:

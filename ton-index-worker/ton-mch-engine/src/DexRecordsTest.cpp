@@ -244,7 +244,7 @@ void test_pton_helper() {
   check("pton/other_convert_jetton", oc.t == VType::Asset && oc.has_jetton);
 }
 
-// --- block views (W4) -------------------------------------------------------
+// --- Block views ------------------------------------------------------------
 
 void test_data_truthy() {
   BlockArena arena;

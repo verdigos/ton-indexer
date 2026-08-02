@@ -1,50 +1,9 @@
 #pragma once
 
-// AbiValue: a standalone, protocol-agnostic tagged value tree. Re-scoped at
-// W11.5 (interpreter removed): it is now (a) the medium every generated
-// struct's to_abi_value() dumps into -- the A/B gate compares that dump against
-// the TS oracle vectors -- and (b) the interchange type the mch bridge adapts
-// into mch::Value.
-// Owns the canonical JSON dump (docs/ton-abi-plan.md §0.14 / MODULE-NOTES.md
-// point 5-9,12), which is the format the conformance vectors compare against.
-//
-// (b) put it ON the parse hot path as of W12: every ABI-path message parse
-// materializes the body THREE times -- typed struct (from_slice) -> AbiValue
-// (to_abi_value) -> mch::Value (abi_value_to_mch, AbiBridge.h). Known cost,
-// accepted for now: it keeps ton-abi mch-free and the vector gate exact.
-//
-// Kind -> payload -> JSON dump:
-//   Int      RefInt256              decimal STRING (also used for `enum`)
-//   Bool     bool                   JSON bool
-//   Address  AbiAddress             Std "wc:hex" | Extern {"extern":{...}} |
-//                                   None "none" (any_address only -- addressOpt
-//                                   absent is Null, not this kind, see below)
-//   Cell     Ref<Cell>              base64(std_boc_serialize(root,2))
-//   CellOf   inner (unique_ptr)     {"ref": <inner>}
-//   Bits     Ref<CellSlice>         {"bits":"0101..","refs":[boc-b64,...]}
-//                                   (bitsN / remaining)
-//   String   std::string            JSON string (raw bytes, walker decodes)
-//   List     vector<AbiValue>       JSON array (arrayOf/lispListOf/tensor/
-//                                   shapedTuple)
-//   Struct   name + ordered fields  {"$":name, field: <v>, ...} in DECL order
-//   Union    label + inner          {"$":label,"value":<inner>} -- ONLY used
-//                                   when has_value_field is true; when false
-//                                   the walker uses `inner` directly (it's
-//                                   already a Struct carrying its own "$")
-//   Void     (none)                 {"$":"void"}
-//   Null     (none)                 JSON null (nullLiteral AND addressOpt-
-//                                   absent AND nullable-absent all dump here)
-//   Map      vector<pair<K,V>>      [[<key>,<value>], ...] in WIRE (ascending
-//                                   raw-key-bit) order -- that IS §0.14's
-//                                   "sorted by key" per the W6 dict-order note;
-//                                   no re-sort at dump time.
-//
-// Recursive members needing a single embedded AbiValue (CellOf ref, Union
-// wrapped value) use unique_ptr<AbiValue> indirection -- same reasoning as
-// AbiModel.h's ABIConstExpression (a class can't contain itself by value).
-// vector<AbiValue> / vector<pair<..,AbiValue>> members do NOT need this: a
-// standard container only needs its element type complete when its own
-// members are instantiated, which happens after this class is fully defined.
+// Protocol-agnostic tagged values produced by generated parsers and adapted by
+// downstream consumers. The compact JSON representation is the conformance
+// vector format. See MODULE-NOTES.md for the complete kind mapping and the
+// recursive-member representation.
 
 #include "AbiLeavesAddress.h"  // AbiAddress
 
@@ -104,9 +63,8 @@ struct AbiValue {
   // the walker iterates struct_fields_of in order). No-op / UB on other kinds.
   void add_field(std::string name, AbiValue v);
 
-  // Canonical JSON dump (§0.14), compact (no whitespace). Deterministic key
-  // order by construction -- no sorting needed anywhere except what the Map
-  // entries already carry from the wire.
+  // Compact canonical JSON. Field order is structural, and Map entries retain
+  // their wire order, so dumping performs no sorting.
   std::string to_json() const;
 
  private:

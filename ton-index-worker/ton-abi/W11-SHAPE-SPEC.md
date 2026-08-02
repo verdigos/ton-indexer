@@ -1,41 +1,43 @@
-# W11 emitted-shape spec (lead-authored, per plan §0.13)
+# Emitted C++ shape specification
 
-Normative for ton-abi-gen (T11.1). The SHAPES below are binding; literal constants
-(prefixes, ty indices, field names) come from the input ABI at generation time. Golden
-examples use real fixture decls — validate emitted text against the actual .abi.json.
-Plan §0.17/§0.18/§0.19 + wave-log W10 observations are incorporated; read them first.
+This document defines the binding output contract for `ton-abi-gen`. Literal
+constants such as prefixes, type indices, and field names come from the input
+ABI at generation time. Examples use real fixture declarations and should be
+checked against the corresponding `.abi.json`.
 
 ## 1. Output layout
 
 Per ABI: `generated/<contract_snake>_gen.h` + `_gen.cpp`, namespace
-`ton_abi::gen::<contract_snake>` (contract_name → snake, sanitized). Both committed;
+`ton_abi::gen::<contract_snake>` (sanitized snake case of `contract_name`). Both are committed;
 `ton-abi-gen --check` regenerates to temp + byte-compares (msgs_gen discipline).
-Shared support header `src/AbiGenSupport.h` (hand-written, T11.1): `CellOf<T>` thin
-wrapper (`struct CellOf { std::shared_ptr<T> ref; }` — indirection, so recursive
-cellOf types work and the inner struct need only be forward-declared), typed custom-registry API
-(`register_abi_custom<T>` / lookup, §0.17 — runtime registry, NOT specializations),
-common includes. A generated header includes ONLY AbiGenSupport.h, a generated source ONLY
-its own header — the leaf headers, AbiValue.h and the std/ton common includes all arrive
-transitively from AbiGenSupport.h, which is the support contract for emitted code. NEVER
-AbiKernel/AbiLoader/AbiInterp (kernel runs at GENERATION time; all dispatch tables are
-BAKED into the emitted code).
+The hand-written shared support header `src/AbiGenSupport.h` provides
+`CellOf<T>`, the typed custom-serializer registry, common includes, and value
+helpers. `CellOf<T>` uses `std::shared_ptr<T>` so recursive cell boundaries work
+and the inner struct need only be forward-declared. Custom serializers use a
+runtime registry rather than template specializations.
+
+A generated header includes only `AbiGenSupport.h`, and a generated source
+includes only its own header. Leaf headers, `AbiValue.h`, and standard TON
+includes arrive transitively through this support contract. Generated code
+never includes `AbiKernel`, `AbiLoader`, or an interpreter; all
+resolution and dispatch are baked at generation time.
 
 ## 2. Identifier rules
 
-- Decl name valid C++ ident → verbatim. Else sanitize: non-[A-Za-z0-9_] → `_`
-  (`Storage@me` → `Storage_me`); keep original in the `$`-name string.
-- Monomorph instantiation (W10 obs #2 — resolve by TY_IDX, never name):
-  `ResetTo<int64>` → `ResetTo_int64` (strip `<>,` → `_`, collapse runs, trim trailing).
-  Collision after mangling → append an occurrence counter (`_2`, `_3`, …; as-built,
-  the spec's original `_t<ty_idx>` was not needed).
-- Reserved-word / collision with support names → trailing `_`.
+- A declaration name that is a valid C++ identifier is emitted verbatim.
+  Otherwise non-`[A-Za-z0-9_]` characters become `_`; for example,
+  `Storage@me` becomes `Storage_me`. The original spelling remains in `$`.
+- Monomorphs resolve by type index, never by display name. `ResetTo<int64>`
+  becomes `ResetTo_int64`; punctuation becomes `_`, runs collapse, and trailing
+  underscores are trimmed. Collisions gain an occurrence counter (`_2`, `_3`, ...).
+- Reserved words and collisions with support names gain a trailing `_`.
 
 ## 3. Field type mapping (typed struct members)
 
 | ABI ty | C++ member |
 |---|---|
-| intN with n<=64 | td::int64 (W11.5 — native fast path load_int64/store_int64) |
-| uintN with n<=64 | td::uint64 (W11.5 — native fast path load_uint64/store_uint64; n=64 fits uint64) |
+| intN with n<=64 | td::int64 via load_int64/store_int64 |
+| uintN with n<=64 | td::uint64 via load_uint64/store_uint64; n=64 fits uint64 |
 | intN/uintN with n>64, varintN/varuintN/coins | td::RefInt256 |
 | bool | bool |
 | bitsN / remaining | td::Ref<vm::CellSlice> |
@@ -47,20 +49,20 @@ BAKED into the emitted code).
 | arrayOf<T> / lispListOf<T> | std::vector<TypeOf(T)> |
 | tensor/shapedTuple | std::tuple<TypeOf(items)...> |
 | mapKV | std::vector<std::pair<KeyT, ValT>> in wire order |
-| EnumRef | td::RefInt256 (W11 correction: bigint-valued free helpers, not enum class). W11.5: KEPT RefInt256 even for encoded_as n<=64 — the encoded_as scalar is read/written via the RefInt256 leaves (load_int/store_int), NOT the native fast path, to avoid rippling the free-function signatures for zero member-shape gain |
+| EnumRef | td::RefInt256 with bigint-valued free helpers, not enum class. This remains RefInt256 when encoded_as is at most 64 bits, avoiding separate free-function signatures without changing member shape |
 | StructRef (concrete or monomorph) | the generated struct type |
-| union | std::variant<TypeOf(variants)...> (nullLiteral AND void variants → std::monostate; the spec's original per-union `<Name>_Void{}` tag type was dropped in W11) |
-| int/slice/builder/callable/unknown | field NOT representable → whole struct gets STUBS (§0.18); still emit the struct decl with a doc comment, members for representable fields omitted — see §7 |
+| union | std::variant<TypeOf(variants)...>; nullLiteral and void variants use std::monostate |
+| int/slice/builder/callable/unknown | field not representable; emit the struct with representable members only and stub affected directions as described below |
 
-CRITICAL (W10 obs #1, easy to get backwards): field types come from the kernel's
-struct_fields_of CELL-side resolution, which SWAPS TO client_ty_idx when present. The
-emitter consumes the kernel's resolved field list — never the raw declared ty.
+Field types come from the kernel's cell-side `struct_fields_of` resolution,
+which substitutes `client_ty_idx` when present. The emitter consumes the
+resolved field list, never the raw declared type.
 
-## 4. Golden example — simple prefixed struct (shape normative)
+## 4. Example: simple prefixed struct
 
 From lots-of-messages `IncreaseBy` (32-bit prefix; two int32 fields, inc_by with
-default 1 — constants from the ABI). Widths ≤64 bits use the native int types and
-leaves per the §3 table (W11.5); this is the as-built emitted text:
+default 1; all constants come from the ABI). Widths at most 64 bits use the
+native integer types and leaves shown in the field mapping above:
 
 ```cpp
 // _gen.h
@@ -78,12 +80,12 @@ struct IncreaseBy {
 
   static td::Result<IncreaseBy> from_slice(vm::CellSlice& cs);   // checks PREFIX
   td::Status store(vm::CellBuilder& cb) const;                   // writes PREFIX
-  td::Result<AbiValue> to_abi_value() const;                     // §0.14 shape, "$" = "IncreaseBy"
+  td::Result<AbiValue> to_abi_value() const;                     // canonical shape, "$" = "IncreaseBy"
 };
 ```
 
 ```cpp
-// _gen.cpp — bodies call ONLY ton_abi leaf functions (one-semantics)
+// _gen.cpp: bodies call only ton_abi leaf functions
 td::Result<IncreaseBy> IncreaseBy::from_slice(vm::CellSlice& cs) {
   TRY_STATUS_PREFIX(load_and_check_prefix(cs, PREFIX, PREFIX_LEN), "IncreaseBy: ");
   IncreaseBy r;
@@ -93,7 +95,7 @@ td::Result<IncreaseBy> IncreaseBy::from_slice(vm::CellSlice& cs) {
 }
 ```
 Field-path error prefixes exactly as shown (`Type.field: `). Store mirrors. No
-consumed-fully check inside struct loaders (caller's concern — matches reference).
+consumed-fully check inside struct loaders; that check belongs to the caller.
 
 ## 5. Unions, enums
 
@@ -101,30 +103,27 @@ Union: `using <Name> = std::variant<...>` (or named alias per use-site type). fr
 = BAKED dispatch chain from the generation-time ResolvedUnion (same table dispatch_union
 uses): exact-T|void form emits empty-check-first + unconditional-T; general form probes
 sorted prefixes (implicit: eat + construct; explicit: peek only, variant's from_slice
-re-reads), void LAST (W7 semantics — copy the pinned form-dependence). store =
+re-reads), then checks void last. store =
 `std::visit` over alternatives; union writes IMPLICIT prefixes only (explicit written by
-variant's own store — W7 pin). NO string-label matching anywhere (W10 obs #3).
-Enum (CORRECTED under fire in W11 — the original spec text here was wrong): NO
-`enum class`, and NO member-set validation. An enum emits free functions over
-`td::RefInt256` (`<Name>_from_slice` / `_store` / `_to_abi_value`, §3:46) that read and
+variant's own store). Dispatch never matches string labels.
+
+Enums use no `enum class` and perform no member-set validation. An enum emits free functions over
+`td::RefInt256` (`<Name>_from_slice` / `_store` / `_to_abi_value`) that read and
 write the encoded_as scalar and pass the value through unchecked. The reference does
-not validate either — `dynamic-serialization.ts:335-341` (unpack) and `:188-197` (pack)
-just (de)serialize the underlying scalar — so an out-of-range value must round-trip
+not validate either: `dynamic-serialization.ts:335-341` (unpack) and `:188-197` (pack)
+just serialize the underlying scalar. Therefore an out-of-range value must round-trip
 rather than fault. Adding validation would break oracle parity, and a vector carrying an
 out-of-range enum value proves it.
 
-## 6. Custom serializers (§0.17 + W10 obs #4/#5)
+## 6. Custom serializers
 
 Type declared custom_pack_unpack → generated from_slice/store bodies DELEGATE to the
 typed runtime registry: `abi_custom_lookup<T>("<contract>::<decl>")` → not-registered =
 runtime error (NEVER compile/link error). to_abi_value for such types = the custom
-value's own shape (registry provides to_abi_value hook too — 3-fn registration).
-DROPPED (R1a): the spec originally required a doc-comment on the generated decl
-("custom-serialized; round-trip not guaranteed (non-idempotent encoders exist)"). It was
-never emitted, and adding it now would rewrite every committed pair for a comment; the
-non-idempotency fact lives in the wave log and in the MyBorderedInt unit instead.
+value's own shape through the registry's third `to_abi_value` hook. Custom
+encoders may be non-idempotent; `MyBorderedInt` provides the focused coverage.
 
-## 7. Stub-vs-fail (§0.18 — binding)
+## 7. Stub versus hard failure
 
 Per-DIRECTION CantGeneratePackUnpack (field of kind int/slice/builder/callable/unknown/
 genericT-unresolved in the (de)serialization closure): emit that direction as a STUB:
@@ -133,8 +132,8 @@ td::Result<NotPackable1> NotPackable1::from_slice(vm::CellSlice&) {
   return td::Status::Error("NotPackable1: not serializable: field 'a[1]' has type 'int'");
 }
 ```
-(One direction can be real while the other stubs — OnlyWithPack/OnlyWithUnpack pattern;
-gate per direction independently, dynamic-path gate rule §0.19 — do NOT copy the
+(One direction can be real while the other stubs, as in OnlyWithPack and OnlyWithUnpack;
+gate each direction independently. Do not copy the
 reference emitter's pack_to_builder-flag bug.) Decl-level NonStandardDictKey (mapKV key
 ∉ intN/uintN/address anywhere in the file) → ton-abi-gen HARD FAILURE with the map-key
 error (ErrorsAtCodegen parity, err-invalid-map-key fixtures are the test).
@@ -147,30 +146,30 @@ struct with the unrepresentable members OMITTED + both directions stubbed.
 create(CreateArgs) materializes ABI default_value ConstExprs (int/bool/null/slice(hex
 bits)/address/string → constants; tensor/shapedTuple/object → nested braced init;
 castTo → inner). Unsupported-default field (isDefaultValueSupported analog: union/mapKV
-defaults) → NO default, required arg (silently-dropped is the reference behavior for
-those — mirror: required). LotsOfStorage's default-fill test (W11.3) validates against
+defaults) results in a required argument because the reference silently omits the
+default. LotsOfStorage's default-fill test validates against
 StWithAllDefaults incl. the big bigint.
 
 ## 9. to_abi_value
 
 Per struct: builds AbiValue::Struct{"$"=original decl name, fields in resolved order}
 via leaf-value→AbiValue converters in AbiGenSupport.h (int→Int, AbiAddress→Address,
-vector→List, variant→(Union kind ONLY for has_value_field variants — struct-labeled
-variants contribute their inner struct's to_abi_value directly, T8.1 rule), optional
+vector→List, variant→(Union kind only for has_value_field variants; struct-labeled
+variants contribute their inner struct's to_abi_value directly), optional
 absent→Null, CellOf→CellOf kind, tuple→List, map→Map). Output must byte-match the
-interpreter's dump on identical wire input — that IS the T11.2 A/B gate.
+reference interpreter's dump on identical wire input.
 
 ## 10. Emission order + determinism
 
 Emit ALL declarations (TS parity), topologically sorted (dependencies before users;
-cycle only possible via cellOf/ref — forward-declare + emit structs in decl order with
+cycle only possible through cellOf/ref; forward-declare and emit structs in declaration order with
 out-of-line bodies, so topology is only needed for member-type completeness: sort by
 dependency, ties by declaration index). Byte-stable: no timestamps, iteration over
 model vectors in index order, fixed formatting. Banner: `// Generated by ton-abi-gen
-from <fixture>.abi.json — DO NOT EDIT (regen: ton-abi-gen --check)`.
+from <fixture>.abi.json. DO NOT EDIT (regen: ton-abi-gen --check)`.
 
 ## 11. CLI
 
 `ton-abi-gen <abi.json>... --out-dir <dir>` (writes pairs) | `--check` (regen to temp,
-byte-compare, exit≠0 on drift) | errors to stderr, non-zero exit. Cli-analog test
-(T11.3): output file contains the struct signature line.
+byte-compare, exit≠0 on drift) | errors to stderr, non-zero exit. The CLI test
+checks that its output contains the expected struct signature.

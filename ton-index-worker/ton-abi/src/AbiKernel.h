@@ -1,37 +1,10 @@
 #pragma once
 
-// AbiKernel: the load-bearing resolution layer (W2). A faithful C++ port of
-// tolk-abi-to-typescript's src/types-kernel.ts -- SymTable, aliasTargetOf,
-// structFieldsOf (monomorph substitution + cell-side client_ty_idx swap +
-// uLabelTyIdx back-ref), createLabelsForUnion (with isStructWithItsOwnLabel /
-// renderTy dedup rules), plus the LOAD-TIME RESOLUTION PASS the plan asks for
-// (docs/ton-abi-plan.md T2.1/T2.2): flatten interned indices into resolved
-// field vectors and build sorted union prefix-dispatch tables.
-//
-// NOT ported: calcWidthOnStack and everything isForStack -- stack/get-method
-// domain is out of scope (plan decision 1). structFieldsOf here is CELL side
-// only (isForStack == false, always).
-//
-// THREE NAMED INVARIANTS (plan final-review F3) -- realized as follows:
-//  (i)   Union label tables are a USE-SITE property: the SAME interned union
-//        arrives with a DIFFERENT uLabel from different generic instantiations
-//        (e.g. GenericPair<int32,int64>.value labels as T1|T2, not int32|int64).
-//        So labels are computed per (union ty_idx, uLabelTyIdx) pair at
-//        resolve_union()/create_labels_for_union() call time and NEVER cached
-//        under the union ty_idx alone. Only the prefix DISPATCH ORDER (which is
-//        use-site independent -- prefixes don't vary with uLabel) is cached per
-//        union ty_idx.
-//  (ii)  Custom-hooked alias/enum/struct nodes SURVIVE resolution as nodes: the
-//        kernel NEVER checks custom_pack_unpack and NEVER collapses a custom
-//        node into its target on its own. Consumers (the W8 walker) MUST check
-//        custom_pack_unpack BEFORE calling alias_target_of/struct_fields_of --
-//        exactly the order in dynamic-serialization.ts:335-374. Eager precompute
-//        of a custom node's target is harmless dead data (the walker won't ask).
-//  (iii) Prefix-freedom is validated by the LOADER (AbiLoader union prefix-
-//        freedom check) BEFORE we sort, which makes the sorted dispatch order
-//        provably equivalent to the reference's declaration-order first-match
-//        (under prefix-freedom at most one variant prefix can match a slice, so
-//        order is irrelevant). See the comment on build_union_dispatch().
+// Cell-side ABI type resolution: symbol lookup, monomorph substitution,
+// client-type replacement, alias targets, generic-union labels, and sorted
+// prefix dispatch tables. Stack/get-method width calculation is intentionally
+// outside this module. See MODULE-NOTES.md for the resolution and caching
+// invariants.
 
 #include "AbiModel.h"
 
@@ -155,9 +128,8 @@ class AbiKernel {
   std::unordered_map<int, const ABIStructInstantiation *> struct_inst_;
   std::unordered_map<int, const ABIAliasInstantiation *> alias_inst_;
 
-  // Use-site-independent caches, populated in create(); read-only afterwards
-  // (so concurrent reads are lock-free -- the bridge holds kernels static and
-  // immortal, plan decision 16).
+  // Use-site-independent caches are populated in create() and read-only after
+  // construction, so concurrent reads require no locking.
   std::unordered_map<int, std::vector<ResolvedField>> fields_cache_;
   std::unordered_map<int, AliasTarget> alias_cache_;
   std::unordered_map<int, std::vector<std::size_t>> union_dispatch_cache_;

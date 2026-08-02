@@ -12,10 +12,10 @@
 # over the block's event nodes (blocks/core.py `_find_contract_deployments`).
 # Neither the leaf `data` map nor the message envelope carries it as one field,
 # and an inline `where (.field == literal)` only tests block data against a
-# literal (§6.8), so the test is the single host `predicate`
-# `single_contract_deploy` — the R10 pred anchor the spec itself cites as the
-# motivating case ("`len(block.contract_deployments) == 1`, NftMint-style",
-# §8.3), measured at 1.08x an opcode anchor.
+# literal, so the test is the single host `predicate`
+# `single_contract_deploy`, the predicate anchor used for the
+# motivating case (`len(block.contract_deployments) == 1`, NftMint-style),
+# measured at 1.08x an opcode anchor.
 #
 # NOTE the deliberate difference from the `contract_deploy` SIDE-EFFECT block
 # (basic_blocks.py, BlockTree.cpp): that one also excludes `orig_status ==
@@ -39,7 +39,7 @@
 # leaf's data has no `opcode` key at all (basic_blocks.py, BlockTree.cpp
 # `leaf_data`) — and the anchor here is deliberately btype-blind, so the value
 # comes off the envelope instead, where BOTH engines carry the opcode SIGNED as
-# stored. The ternary is that mask: null stays null (`null < 0` is false, §9.6),
+# stored. The ternary is that mask: null stays null (`null < 0` is false),
 # a negative value gets 2^32 added, everything else passes through.
 #
 # Capture -> legacy role map:

@@ -22,7 +22,7 @@ bool is_pton_master(const std::string &s);
 //  - true  (Stonfi v2 / Tonco): a pTON-master wallet becomes Asset(TON); an
 //    absent jetton master yields Null (caller treats it as "no asset").
 //  - false (Stonfi v1): NO pTON conversion (a real pTON wallet stays a jetton
-//    asset), and an absent jetton master yields Asset(is_ton=True) — Python
+//    asset), and an absent jetton master yields Asset(is_ton=True), Python
 //    builds `Asset(is_ton = jetton is None)` directly.
 // `wallet` may be Null (a lookup miss): jetton is then absent.
 Value wallet_jetton_asset(const Value &wallet, bool pton_conversion);

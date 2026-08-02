@@ -1,27 +1,21 @@
-# JVault family — R02 DECLARATIVE rewrite (M4 build language).
+# JVault family with declarative builds.
 #
-# Supersedes the consumed-set-driven builder tier (builders/jvault.py used to
-# host four `build_jvault_*` adapters over the cores in blocks/jvault.py). The
-# structural patterns are UNCHANGED from the R02 remake — same anchors, same
-# `$jvault_referrals` single-level recursion, same consumed sets — so block
-# topology and value_flow follow automatically (every build path still ends in
-# merge_blocks(consumed)). Only the build bodies moved into the language:
+# The patterns preserve the block matchers' anchors, `$jvault_referrals`
+# single-level recursion, and consumed sets, so block topology and value_flow
+# follow automatically (every build path still ends in
+# merge_blocks(consumed)). Build bodies use these language and host facilities:
 #
 # - extract_jvault_assets (two chained interface-repo reads + a data-cell parse)
-#   is now the record-returning lookup `jvault_assets` (spec §15b G10: one
-#   lookup, one record, read its fields). First real use of the sanctioned
-#   record-lookup pattern — see builders/jvault.py.
+#   uses the record-returning lookup `jvault_assets`: one lookup, one record,
+#   then field reads. See builders/jvault.py.
 # - unstake / unstake_request success/rejection gate on the lookup record and
-#   on `msg.exit_code` (the defined envelope field) — no host build fn.
+#   on `msg.exit_code` (the defined envelope field), with no host build function.
 # - stake/claim read the incoming/withdraw jetton_transfer's amount straight off
-#   the composed block's `data.desired_amount` (an Amount) and unwrap it with F2
-#   `.value` — no host fn (F1: a composed block's message cannot be re-`parse`d,
-#   but its produced `data` already carries the scalars).
-# - claim's claimed_jettons still maps the claim body's jetton-wallet list
-#   through AccountId (host fn — constructor-map is deferred G-LC, §16.1).
-# - stake's forward_payload sub-cell parse stays a host fn (jvault_stake_period)
-#   — the sanctioned irreducible escape (§15b: protocol-specific cell parsing) —
-#   now reading the b64 `data.forward_payload` string, so it is C++-portable.
+#   the composed block's `data.desired_amount` and unwrap it with `.value`.
+# - claim maps the claim body's jetton-wallet list through AccountId with a
+#   comprehension.
+# - stake's forward_payload sub-cell parse stays in the jvault_stake_period host function
+#   and reads the b64 `data.forward_payload` string, so it is C++-portable.
 #
 # Produced btype is the bare string (jvault_stake, …) rather than the class
 # name: the class→btype normalization map (mch/btypes.py) does not carry the
@@ -62,10 +56,10 @@ matcher jvault_stake {
     # off the already-built incoming jetton_transfer's `data`; the stake wallet
     # and pool are the receive call's envelope. The staked amount is the outer
     # transfer amount — the composed jetton_transfer already carries it as
-    # `data.desired_amount` (an Amount), unwrapped to a raw int via F2 `.value`
+    # `data.desired_amount` (an Amount), unwrapped to a raw int via `.value`
     # (legacy reads jetton_transfer_message.amount == that desired amount). The
-    # stake period is a forward_payload sub-cell — an irreducible cell parse
-    # (§15b), so it stays a host fn, but reads the composed block's
+    # stake period is a forward_payload sub-cell — an irreducible cell parse,
+    # so it stays a host fn, but reads the composed block's
     # `data.forward_payload` (a b64 string both engines carry) rather than the
     # legacy `.jetton_transfer_message` attribute, so the fn is C++-portable.
     reject when cancel == null and request == null
@@ -126,12 +120,10 @@ matcher jvault_claim {
            -> { btype jetton_transfer @withdraw ; op JVaultUpdateRewards @update }
 
     # Legacy build_jvault_claim_core. claimed_jettons maps the claim body's
-    # jetton-wallet list through the AccountId constructor — now the G-LC
-    # comprehension `map(xs as e => account(e))` (§16.1 W6), the exact
-    # element-wise constructor map that used to live in the `jvault_account_list`
-    # host fn (which existed ONLY because G-LC was deferred). claimed_amounts is
+    # jetton-wallet list through the AccountId constructor using
+    # `map(xs as e => account(e))`. claimed_amounts is
     # the single withdraw leg's outer transfer amount, carried on the composed
-    # jetton_transfer as `data.desired_amount` (an Amount), unwrapped via F2
+    # jetton_transfer as `data.desired_amount` (an Amount), unwrapped via
     # `.value` — the same scalar legacy reads as
     # withdrawal.jetton_transfer_message.amount — as a one-element list literal.
     parse claim as JVaultClaim

@@ -1,4 +1,4 @@
-// Typed host-authoring seam (findings 2026-07-12 candidate 1). Keeps the runtime
+// Typed host-authoring seam. Keeps the runtime
 // host ABI (EvalResult(BuildEnv&, args)) but lets a protocol core be written as
 //   HostResult<SwapRecord> core(HostContext&, const ConsumedBlocks&);
 // The adapter checks arity, decodes the `Value` args into typed inputs, applies

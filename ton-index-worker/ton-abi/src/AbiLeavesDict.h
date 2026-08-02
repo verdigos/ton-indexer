@@ -1,23 +1,8 @@
 #pragma once
 
-// AbiLeavesDict: L1 mapKV leaf (W6, T6.1). A thin adapter over vm::Dictionary
-// for the HashmapE wire form (§0.14 map). Keys are fixed-width (intN/uintN =>
-// n bits, address => 267 bits -- the reference's own restriction, @ton/core
-// createTonCoreDictionaryKey / dynamic-serialization.ts). Per-entry KEY and
-// VALUE parsing stays the WALKER's job (W8): the leaf yields key-slice +
-// value-slice pairs in ascending raw-key-bit order.
-//
-// ORDER: load yields entries in vm::Dictionary check_for_each ascending order,
-// which is the HashmapE's raw-key-bit order -- byte-for-byte the same order
-// @ton/core's Dictionary serializes/iterates in. For unsigned/address keys this
-// is numeric order; for signed intN keys negatives sort last (two's-complement
-// high bit). Both sides agree, so no side needs to re-sort for §0.14's
-// "sorted by key" (see the W6 report note).
-//
-// STORE: builds vm::Dictionary and append_dict_to_bool -- PROVEN byte-identical
-// to @ton/core storeDict/serializeDict in AbiLeavesDictTest (a dict built both
-// sides serializes to the same BOC), so no custom label writer is needed
-// (policy §3 W6 row).
+// HashmapE load/store adapter for fixed-width intN, uintN, and address keys.
+// Key and value recursion belongs to the callbacks; iteration preserves raw
+// key-bit wire order. See MODULE-NOTES.md for ordering details.
 
 #include "td/utils/Status.h"
 

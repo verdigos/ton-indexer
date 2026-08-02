@@ -2,19 +2,10 @@
 // host/HostImpls.h for the internal registry surface and HostRegistry.h for the
 // public one.
 //
-// STATUS: only the `shape` binding is landed here — the getgems match-time
-// predicates are deliberately NOT ported yet (they gate a builder-tier matcher
-// that cannot run until the Python declarative/hybrid conversion; port each
-// pred with that conversion, not speculatively). The shaper + Block::insert_between
-// are the reusable substrate the conversion (and stonfi_v2_provide) will need,
-// so they land now and are gated by the --shape-test harness, not by classify
-// (no classify matcher uses a shaper today; getgems stays pred-SKIP).
-//
-// FIDELITY NOTE: the finish/stop branch keys on the parent ton_transfer's
-// `comment`, which the C++ leaf_data subset does NOT populate today (the
-// documented "wire through when first needed" gap). The shaper reads it from
-// block.data and degrades to a no-op when absent (byte-safe); the --shape-test
-// harness sets the comment on its synthetic blocks to drive the finish/stop path.
+// The GetGems purchase/seller-payout predicates and proxy-insert shaper are
+// registered in HostRegistry and are available to classify. The finish/stop
+// paths read the parent ton_transfer comment populated by leaf_comment_info in
+// BlockTree, so both predicate selection and shaping use production comment data.
 #include "host/HostImpls.h"
 
 #include "host/HostCommon.h"

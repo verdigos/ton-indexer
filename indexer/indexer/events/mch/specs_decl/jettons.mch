@@ -1,4 +1,4 @@
-# Jetton family matchers — FULLY DECLARATIVE build (M4 §9).
+# Jetton family matchers with declarative builds.
 #
 # Same patterns as specs/jettons.mch, but the produced-block data/flags are
 # expressed with build statements + `out {...}` instead of a registered `build`
@@ -8,8 +8,7 @@
 # dir is not polluted with these duplicate anchors.
 #
 # Each matcher declares `priority 90` (< default 100) so it registers ahead of
-# the priority-100 specs regardless of emission order — replacing the former
-# 'a_jettons_decl.mch' filename-sort hack (T20). See ir/emit_manifest.json.
+# the priority-100 specs regardless of emission order.
 
 opcode JettonTransfer         = 0x0f8a7ea5
 opcode JettonInternalTransfer = 0x178d4519
@@ -27,7 +26,7 @@ opcode MinterJettonMint       = 0x00000015
 # lookup rejects the match when absent; when the wallet owner disagrees with the
 # transfer's declared destination the receiver is replaced with the wallet owner
 # (ternary). `has_internal_transfer` is a literal true — the pattern requires the
-# internal leg. See report: legacy marks the CONSUMED anchor block `broken` on
+# internal leg. Legacy marks the consumed anchor block `broken` on
 # owner/receiver mismatch, which the build language cannot express (it can only
 # flag the PRODUCED block); this does not affect produced-block parity because
 # legacy leaves the produced block's broken flag False.

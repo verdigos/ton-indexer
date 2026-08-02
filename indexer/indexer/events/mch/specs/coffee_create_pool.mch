@@ -1,7 +1,6 @@
-# Coffee pool creation — port of CoffeeCreatePoolCreatorMatcher
-# (blocks/liquidity.py:2403) and CoffeeCreatePoolMatcher (:2505), in the legacy
-# matchers-list order. SERIAL: the second matcher's anchor is the block the
-# first one produces. Both are fully declarative; no host fns, no lookups.
+# Coffee pool creation matchers corresponding to CoffeeCreatePoolCreatorMatcher
+# and CoffeeCreatePoolMatcher. The second matcher anchors on the block produced
+# by the first, so their order matters. Both are declarative.
 #
 # Shape. To create a pool the user funds it TWICE, once per asset, exactly like
 # a deposit. Each leg (a jetton transfer, or a native 0xc0ffee02 call to the TON
@@ -14,34 +13,30 @@
 # produces TWO creator blocks and ONE `coffee_create_pool` that consumes the
 # second one.
 #
-# THE 0xC0FFEE03 TRAP. The legacy parent alternative is
+# The 0xC0FFEE03 arm is dead. The source parent alternative is
 # `OR(jetton_transfer | 0xc0ffee02 | 0xc0ffee03)`, but the extra-currency arm is
 # DEAD: `build_block` has no branch for it and falls into `else: return []`
 # (liquidity.py:2447). Porting it literally would emit a block Python never
 # emits. It is omitted here instead, which reproduces the legacy NET behaviour
-# exactly — a 0xc0ffee03 parent makes the required parent edge fail, the match
+# exactly. A 0xc0ffee03 parent makes the required parent edge fail, the match
 # never happens, and nothing is consumed; legacy matched the parent and then
-# clean-rejected, which also consumes nothing (§10.7 T22/T29). Same observable
+# clean-rejected, which also consumes nothing. The observable
 # result, minus a branch that can only produce garbage.
 #
-# WHERE THE FIELDS COME FROM. `provided_asset` and `sender_jetton_wallet` have
+# `provided_asset` and `sender_jetton_wallet` have
 # no representation in the 0xc0ffee23 body, so they come off the leg — the
 # prebuilt jetton_transfer's data, or TON/addr_none on the native arm. The
 # remaining four (`amount`, `sender`, the two pool assets and the deposit
 # recipient) are read from the ANCHOR body, where legacy reads them from the
 # leg: for a jetton leg that means the CoffeeCreatePoolJetton sitting in the
-# transfer's FORWARD PAYLOAD, and `parse CAPTURE as T` is node-only (§9.1) — it
+# transfer's FORWARD PAYLOAD, and `parse CAPTURE as T` is node-only — it
 # reads the captured block's own body and cannot descend into a payload, so a
 # literal port would need a host fn.
 #
 # It does not need one, because the vault copies the leg into the request: the
 # 0xc0ffee23 body carries the same amount, the same sender, the same PoolParams
-# and the same creation_params the leg handed it. Verified field-for-field over
-# all three corpus fixtures and BOTH leg kinds (1TUCte7d jetton, 1VcQkyvd
-# jetton+native, 3uecEX5T jetton+native): every one of the four is byte-equal to
-# the value the legacy build takes from the leg. The parity sweep re-checks it
-# on every fixture, so a protocol change that broke the equivalence would turn
-# the sweep row red rather than silently skew a column.
+# and the same creation_params the leg handed it. These four values must remain
+# byte-equal to those read from the leg.
 #
 # NB the legacy `CoffeeCreatePoolCreatorRequest` class (messages/coffee.py:713)
 # CANNOT be that reader: it parses `creation_params` inline where the wire has
@@ -94,8 +89,8 @@ matcher coffee_create_pool_creator {
 
     # `-> { op CoffeeDeploy }` rather than `-> op CoffeeDeploy`: a children block
     # does not advance the chain cursor, so the `<-` leg edge still belongs to
-    # the ANCHOR instead of tripping C009 on the deploy node (§6.4/§6.5, the
-    # coffee_liquidity / dedust_deposit precedent). Legacy's single
+    # the ANCHOR instead of tripping C009 on the deploy node, as in the
+    # coffee_liquidity / dedust_deposit matchers. Legacy's single
     # `child_matcher` and a one-item children block differ only when several
     # 0xc0ffee22 children exist, which the factory never emits.
     op CoffeeCreatePoolCreatorRequest @request

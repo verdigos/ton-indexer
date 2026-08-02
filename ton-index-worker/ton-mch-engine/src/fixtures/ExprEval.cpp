@@ -167,7 +167,7 @@ EvalResult ExprEval::eval_unary(const Json &e) {
 EvalResult ExprEval::eval_binary(const Json &e) {
   const std::string op = jfield(e, "op")->get_string().str();
 
-  // Lazy operators (control flow) — stay at the call site.
+  // Lazy operators (control flow), stay at the call site.
   if (op == "and" || op == "or") {
     EvalResult l = eval(*jfield(e, "l"));
     if (l.faulted) {

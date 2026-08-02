@@ -8,9 +8,7 @@ namespace mch {
 
 namespace {
 
-// Python's Slice.one_from_boc over the account data. load_cell_slice_special
-// throws on a pruned/exotic cell, which is the same "the parse failed" outcome
-// as a short cell — the caller nulls the record either way.
+// Treat short, pruned, and exotic data cells as parse failures.
 td::Result<vm::CellSlice> data_slice(const td::Ref<vm::Cell> &data) {
   if (data.is_null()) {
     return td::Status::Error("jvault: no account data");
@@ -38,8 +36,7 @@ td::Result<JvaultStakeWallet> parse_jvault_stake_wallet(const td::Ref<vm::Cell> 
   TRY_RESULT(pool, load_address_py(cs));
   auto pool_raw = account_canonical(pool);
   if (!pool_raw) {
-    // addr_none / non-address: Python's staking_pool.to_str() raises into the
-    // outer except, so the WHOLE record is None, not a partial one.
+    // A missing staking-pool address invalidates the complete record.
     return td::Status::Error("jvault: staking pool is not an address");
   }
   TRY_RESULT(minter, load_address_py(cs));

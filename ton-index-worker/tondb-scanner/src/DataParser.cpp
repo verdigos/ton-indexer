@@ -263,7 +263,7 @@ td::Result<schema::Message> ParseQuery::parse_message(td::Ref<vm::Cell> msg_cell
         msg.ihr_fee = td::RefInt256{true, 0};
         msg.extra_flags = block::tlb::t_VarUInteger_16.as_integer_skip(msg_info.extra_flags.write());
       } else {
-        // Legacy: extra_flags was previously ihr_fee
+        // This global version stores extra_flags in the former ihr_fee slot.
         msg.ihr_fee = block::tlb::t_Grams.as_integer_skip(msg_info.extra_flags.write());
         msg.extra_flags = std::nullopt;
       }

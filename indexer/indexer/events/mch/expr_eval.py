@@ -1,4 +1,4 @@
-"""Sync IR-expression evaluator — shared leaf module (T33).
+"""Shared synchronous evaluator for IR expressions.
 
 Home of the single implementation of node-level inline `where (expr)`
 evaluation, composed onto `test_self` by BOTH engines:
@@ -15,9 +15,9 @@ that depends only on `blocks.core`/`blocks.utils` (the same footing as
 mch/registry.py, which mch_ir already imports). mch_ir/expr.py re-exports
 these names, keeping its public API unchanged.
 
-Semantics (docs/mch-ir-poc.md): sync, dispatches on k-tagged IR dicts,
+The evaluator dispatches on k-tagged IR dictionaries.
 `dotfield` reads the candidate block's `data`, missing field / any EvalError /
-non-bool result fails the test (False) — never raises out of matching. Async
+non-bool result fails the test and never raises out of matching. Async
 constructs (lookup, host fns) are rejected before run time: by the IR loader
 (loader._check_where_expr_sync) and by the frontend compiler (C013).
 
@@ -37,12 +37,12 @@ from indexer.events.blocks.utils import AccountId, Amount, Asset
 
 
 class EvalError(Exception):
-    """A build-expression runtime fault; the match is rejected (spec §10.7)."""
+    """A build-expression runtime fault; the match is rejected."""
 
 
 # ---------------------------------------------------------------------------
-# Builtins (spec §9.6): name -> (callable, arity). Null arguments never reach
-# the callable — the call evaluator returns null first.
+# Builtins: name -> (callable, arity). Null arguments never reach
+# the callable. The call evaluator returns null first.
 # ---------------------------------------------------------------------------
 
 
@@ -63,7 +63,7 @@ def _builtin_ton_asset() -> Asset:
 
 
 def _builtin_addr_none() -> AccountId:
-    # The addr_none AccountId — distinct from a null (missing) address. Mirrors
+    # The addr_none AccountId is distinct from a null address. It mirrors
     # the host's `AccountId(None)`: repr "addr_none", as_str() -> None. Needed
     # because `account(null)` short-circuits to null; a field that must carry a
     # present-but-empty address (e.g. a jetton transfer's absent response) uses
@@ -80,11 +80,11 @@ def _builtin_b64(x: Any) -> str:
     return base64.b64encode(x).decode("utf-8")
 
 
-# Frozen F1 declaration arm names.
+# Frozen declaration arm names.
 _ASSET_TON_TAG = "AssetTon"
 _ASSET_JETTON_TAG = "AssetJetton"
 
-# Frozen F1 declaration arm names and empty-inline policies.
+# Frozen declaration arm names and empty-inline policies.
 _TAIL_TAGS = {
     "JettonForwardPayloadRef": "ref",
     "JettonForwardPayloadInline": "bits",
@@ -155,18 +155,11 @@ def _builtin_bytes_of(x: Any) -> bytes:
     return x.begin_parse().load_bytes(len(x.bits) // 8)
 
 
-# ---------------------------------------------------------------------------
-# List combinators (spec §9.6). Operate on list captures / list literals. Edge
-# semantics are fixed and total (no host-specific behaviour):
-#   - a null list argument never reaches these (the call evaluator returns null
-#     first), so every argument here is a real list;
-#   - first/last on an empty list -> null; sum/len on empty -> 0 / 0;
-#   - sum coerces each element to an integer (Amount -> .value, int -> itself,
-#     anything else -> fault) and is integer-valued;
-#   - zip truncates to the shorter input (pairs are 2-element lists);
-#   - map projects one field per element (dict key lookup, attribute fallback) —
-#     no lambdas. Each combinator is a one-line loop in C++ (vector/map ops).
-# ---------------------------------------------------------------------------
+# List combinators operate on list captures and literals. Null propagates before
+# these functions run. Empty first/last return null; empty sum/len return zero.
+# Sum accepts integers and Amount values. Zip truncates to the shorter input.
+# Map projects a field by dictionary lookup, then attribute lookup; it has no
+# lambda form.
 
 
 def _require_list(name: str, xs: Any) -> list:
@@ -235,10 +228,10 @@ def _builtin_map(xs: Any, field: Any) -> list:
 
 
 def _builtin_contains(hay: Any, needle: Any) -> bool:
-    # The ONE string operation in the language (spec §9.6): substring test, no
-    # slicing/case folding/concatenation. Both arguments must be strings — a
-    # non-string is a fault, never a silent False — and the test is
-    # case-SENSITIVE (the URIs and content keys it exists for are exact). An
+    # The language's string operation is a substring test; it provides no
+    # slicing, case folding, or concatenation. Both arguments must be strings.
+    # A non-string is a fault rather than False, and the test is case-sensitive.
+    # The URIs and content keys it serves are exact. An
     # empty needle is contained in everything, like Python's `in` and C++'s
     # std::string::find. Nulls never reach here (the call evaluator returns
     # null first).
@@ -282,8 +275,8 @@ def _eq_result(op: str, left: Any, right: Any) -> bool:
         eq = left is None and right is None
     elif (isinstance(left, Amount) and isinstance(left.value, float)) or \
             (isinstance(right, Amount) and isinstance(right.value, float)):
-        # The language has no floats — comparing a float-backed Amount faults
-        # (§4.2, C++ parity) rather than silently comparing float values.
+        # The language has no floats. Comparing a float-backed Amount faults
+        # to preserve C++ parity rather than silently comparing float values.
         raise EvalError("'==' on a float-backed Amount (the language has no floats)")
     else:
         try:
@@ -322,7 +315,7 @@ def _neg_result(v: Any) -> Any:
 
 def _arith_int(v: Any) -> int:
     """Coerce an arithmetic operand to int: Amount -> its value, int -> itself
-    (bool rejected — it is an int subclass), anything else is a fault. Mirrors
+    (bool is rejected because it is an int subclass); anything else is a fault. Mirrors
     sum()'s coercion so `a.msg.value - b.msg.value` works whether the envelope
     value is an int or an Amount."""
     if isinstance(v, Amount):
@@ -338,10 +331,9 @@ def _arith_int(v: Any) -> int:
 
 
 def _arith_result(op: str, left: Any, right: Any) -> Any:
-    """Integer arithmetic `+`/`-`/`*` (spec §9.6 G-ARITH). Null on either side
+    """Integer arithmetic `+`/`-`/`*`. Null on either side
     propagates to null; operands coerce to int (Amount -> value); the result is
-    a plain int. No division (deliberately omitted — div-by-zero semantics is
-    not needed yet)."""
+    a plain int. Division is not supported."""
     if left is None or right is None:
         return None
     a, b = _arith_int(left), _arith_int(right)
@@ -427,22 +419,22 @@ def _access(obj: Any, field: str, bodies: dict[int, Any]) -> Any:
             return obj[field]
         raise EvalError(f"data has no field {field!r}")
     if isinstance(obj, Amount):
-        # `Amount.value` (spec §9.6): unwrap the wrapper to its raw int, the
+        # `Amount.value`: unwrap the wrapper to its raw int, the
         # inverse of the `amount(x)` builtin. This is the sanctioned way to feed
         # a jetton/DEX block's `Amount`-typed `data` scalar into a raw-int output
-        # field. Explicit (not generic getattr) so the C++ Value model — where
-        # Amount carries `num` — mirrors it with a fixed accessor. `Amount(None)`
+        # field. This fixed accessor also matches the C++ Value model, where
+        # Amount carries `num`. `Amount(None)`
         # carries `value is None`, so `.value` yields null there.
         if field == "value":
             if isinstance(obj.value, float):
                 # The language has no floats; a float-backed Amount (getgems
                 # price) is render-only, so `.value` faults instead of leaking
-                # a float into an integer output field (§4.2, C++ parity).
+                # a float into an integer output field, preserving C++ parity.
                 raise EvalError("`.value` on a float-backed Amount (the language has no floats)")
             return obj.value
         raise EvalError(f"unknown Amount accessor {field!r} (expected value)")
     if field == "exit_code":
-        # `CAPTURE.msg.exit_code` (§9.6): a defined envelope field — the
+        # `CAPTURE.msg.exit_code` is the envelope's
         # compute-phase exit code of the message's transaction (null if absent).
         # Scoped to the message envelope: `exit_code` is only valid on an object
         # that carries a transaction, never a generic accessor.

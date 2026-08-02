@@ -1,32 +1,7 @@
-// mch-codegen — build-time MCH IR -> C++ source generator (no Python in the
-// C++ build; the version-controlled IR JSON is the contract).
-//
-// Usage:
-//   mch-codegen --vectors <expr_vectors.json> -o <out.cpp>
-//   mch-codegen --wheres  <mch_ir.json> --suffix <sfx> -o <out.cpp>
-//   mch-codegen --builds  <mch_ir.json | build_vectors.json> --suffix <sfx> -o <out.cpp>
-//   mch-codegen --matchers <mch_ir.json> --suffix <sfx> -o <out.cpp>
-//
-// Every mode runs as a CMake custom command; outputs land in the build tree
-// (<binary-dir>/generated/), never in the source tree or git.
-//
-// TODO: remove (harness): of the artifact-driven modes, `--vectors` is the only
-// TEST-ONLY one — its table lives in mch-fixtures (GenVectors.h), as does the
-// `--builds ir/build_vectors.json --suffix vectors` table
-// (fixtures/GenBuildsVectors.h). `--wheres` and `--builds` over ir/mch_ir.json
-// both feed PRODUCTION (gen_wheres_ir / gen_builds_ir — the tables ClassifyCore
-// runs). Keep that split in mind before adding a mode: a new mode is production
-// only if a mch-classify TU references its symbols.
-// The `--vectors` mode emits the expression-conformance functions + table.
-// The `--wheres` mode emits one function per artifact node carrying a
-// `where_expr`, keyed by the global node index.
-// The `--matchers` mode emits the whole CompiledMatcher table as C++ data — the
-// mode that took the IR document off the production binaries' startup surface.
-// The `--wheres` / `--builds` modes both take `--suffix`, which names the table
-// symbols (gen_wheres_<sfx> / gen_builds_<sfx>) so the tables of several input
-// documents link into one binary, each permanently paired with its own document
-// (ir artifact, build vectors, testbed artifact) and selected at run time by
-// source sha.
+// Build-time MCH IR to C++ source generator. The version-controlled IR is the
+// input contract, and generated outputs live under the build tree.
+// The vector modes feed the fixture harness. Matcher, `where`, and IR build
+// tables feed the production classifier. See docs/codegen.md for table pairing.
 #include "ExprCodegen.h"
 #include "MatcherCodegen.h"
 
@@ -91,9 +66,8 @@ int write_output(const std::string &out_path, const std::string &src) {
   return 0;
 }
 
-// Escape-hardening self-test (§8.7): the string-literal emitter must render
-// EVERY control byte safely and adjacency-proof. A known past bug emitted a raw
-// NUL; a naive `\x` escape also mis-parses before an adjacent hex digit.
+// Verify that string literals render every control byte safely and that escapes
+// cannot consume characters that follow them.
 int run_selftest() {
   int failures = 0;
   auto expect = [&](const std::string &name, const std::string &got, const std::string &want) {

@@ -38,7 +38,7 @@ struct DescrInfo {
 // TransactionDescr variant -> descr string + compute exit code + aborted. The
 // engine consumes the descr TYPE (tick_tock vs ord), the compute exit code (msg
 // .exit_code envelope) AND aborted (BlockTree is_leaf_failed reads tx->aborted;
-// also exposed as msg.transaction.aborted) — aborted lives INSIDE the schema
+// also exposed as msg.transaction.aborted), aborted lives INSIDE the schema
 // variant, unlike path A's flat top-level field. Non-ord/tick_tock descrs are
 // rare (storage/split/merge) and map to "other" (never matched as tick_tock).
 DescrInfo descr_info(const schema::TransactionDescr &d) {
@@ -86,8 +86,8 @@ void map_message(Message *m, const schema::Message &s, const std::string &owner_
   m->bounce = s.bounce;
   m->bounced = s.bounced.value_or(false);
   // MsgContent: the engine carries the body as a base64 BOC string and decodes
-  // it in MsgParse (§12 cellhash rendering makes any pytoniq-vs-td byte diff
-  // invisible), so use the already-serialized body_boc directly — no cell
+  // it in MsgParse. Cell-hash rendering hides BOC writer-order differences, so
+  // use the already-serialized body_boc directly. No cell
   // re-serialization, ClassifyCore untouched.
   MsgContent c;
   c.hash = b256(s.hash);
@@ -147,16 +147,9 @@ td::Result<Trace> schema_to_trace(const std::string &trace_id,
     }
     trace.transactions.push_back(std::move(tx));
   }
-  // There is no trace header on this path, so the aggregates are DERIVED from
-  // the transactions. Not optional: this is the loader BOTH classifier actors
-  // reach, so anything reading Trace's trace-level fields — today
-  // create_unknown_action — would otherwise see zeros in production while the
-  // fixture path saw real values.
-  //
-  // Deriving is also the CORRECT source here, not merely the available one:
-  // the emulator's ::Trace has no trace-level lt/utime, and Python derives the
-  // same values per emission (event_deserializer.py). See TraceLoader.h for the
-  // two accepted differences from Python's exact expressions.
+  // The emulator trace has no trace-level lt/utime header, so derive every
+  // aggregate consumed by trace-level actions from its transactions.
+  // See TraceLoader.h for the derivation contract.
   fill_trace_aggregates(trace);
   return trace;
 }

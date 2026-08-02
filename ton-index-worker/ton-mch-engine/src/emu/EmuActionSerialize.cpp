@@ -30,16 +30,8 @@ void pack_text(Packer &pk, const std::string &s) {
   pk.pack_str_body(s.data(), n);
 }
 
-// Presence rule, TOP LEVEL ONLY: the Value shapes that mean "this Action field
-// was never filled". Python reaches the same wire state by never assigning the
-// attribute — an unassigned column is simply not a key in Action.to_dict(), and
-// AccountId.as_str(), Amount.value and a TON Asset all yield None.
-//
-// It deliberately does NOT apply one level down: a composite is a literal dict
-// whose key set is fixed by its fill (block_tree_serializer.py:195-204 assigns
-// all seven jetton_transfer_data keys, the None ones included), so an unfilled
-// composite field is present-as-nil on Python's wire. pack_fields keeps every
-// key for exactly that reason.
+// These shapes omit an unfilled top-level action field. Composite maps retain
+// their full key set and encode unfilled members as nil.
 bool omitted(const Value &v) {
   switch (v.t) {
     case VType::Null:
@@ -55,35 +47,9 @@ bool omitted(const Value &v) {
   }
 }
 
-// THE NATURAL-TYPES RULE.
-//
-// Emit the natural msgpack type. A value-domain field that can exceed int64 is
-// a DECIMAL STRING, because it does not fit an integer — a value-domain fact,
-// not a Python quirk. ton-index-go accepts both directions for every scalar
-// field (index/emulated/flexdecode.go registers flexible decoders for the ten
-// integer kinds AND for string), so nothing here has to reproduce Python's
-// stringify rules; the only thing that must be right is which fields cannot be
-// represented as an int64 at all.
-//
-// This is the whole set, matched by KEY NAME at every map depth (a list element
-// inherits its key's decision — jvault_claim_data.claimed_amounts is a list of
-// decimal strings). Flat rather than per-composite because no key name in this
-// set is ever a bounded integer somewhere else; the decision only ever applies
-// to a VType::Int, so a key like change_dns_record_data's `value` (always Str
-// or Null) is untouched by its presence here.
-//
-// `claimed_amounts` is doubly required: 256-bit, AND it is a Go []string whose
-// ELEMENTS bypass the flexible decoder (msgpack-go's slice fast path never
-// consults a registered element decoder). The same holds for every other
-// []string-valued field — tx_hashes, accounts, ancestor_type, claimed_jettons —
-// which is why nothing numeric may ever be emitted inside one.
-//
-// Deliberately NOT here, i.e. emitted as natural msgpack integers: `opcode`
-// (Go *uint32), `flags` (uint8 DNS record flags, Go *int64), `period` (Go
-// *int64), `src_eid`/`dst_eid` (int32), `tick_lower`/`tick_upper`
-// (int24), `exit_code`, and the already-native start_lt / end_lt / start_utime
-// / end_utime / finality. `evaa_withdraw_data.asset_id` is a hex STRING built
-// by av_hex and must not be renaturalized.
+// Keys in this set encode integer values as decimal strings at every map depth.
+// Other integers use native msgpack types. See
+// ../../../ton-trace-emulator/README.md#action-payload-encoding.
 bool decimal_string_key(const std::string &k) {
   static const std::set<std::string> keys{
       // top level
@@ -102,50 +68,26 @@ bool decimal_string_key(const std::string &k) {
       "tokens_minted", "tokens_burnt",
       // evaa_liquidate_data (Go *string)
       "debt_amount",
-      // coffee_create_pool_data (the underscore spelling is this composite's
-      // alone; `lp_tokens_minted` above covers its sixth field) /
-      // coffee_staking_*_data. All six Go fields are *string; these four are the
-      // ones that can exceed int64 — two Coins amounts, an nft index and a
-      // Coins-width points balance. `nft_index` above covers the withdraw side.
+      // Coffee amount, item-index, and points fields may exceed int64.
       "amount_1", "amount_2", "minted_item_index", "points",
-      // jvault_claim_data — a Go []string, see above
+      // jvault_claim_data uses []string, whose elements bypass scalar decoders.
       "claimed_amounts",
-      // layerzero_send_data. `native_fee`/`zro_fee` are uint128 off the lzSend
-      // payload and `send_request_id` is a u64 counter — none of the three fits
-      // a signed int64 by construction, and all three are Go *uint64. The
-      // packet's `nonce` / `src_eid` / `dst_eid` are bounded and stay natural
-      // integers (see the exclusion list above), as does dvn_verify's `nonce`.
+      // LayerZero fees are uint128 and the request ID is uint64.
       "send_request_id", "native_fee", "zro_fee",
-      // tonco_deploy_pool_data. All ten Go fields are *string, but only the
-      // Q64.96 sqrt price cannot be an int64 — it is a uint160 by construction.
-      // The three fee fields and `tick_spacing` are u16/int24 and stay natural
-      // integers, like `tick_lower`/`tick_upper` above.
+      // The Tonco Q64.96 initial price is uint160.
       "initial_price_x96",
-      // vesting_add_whitelist_data.accounts_added is a Go []string of ADDRESSES
-      // (never numeric), so it needs no entry here; `query_id` above covers the
-      // composite's only integer field.
-      // multisig create/execute order sequence numbers are uint256 and Go *string.
+      // Multisig order sequence numbers are uint256.
       "order_seqno",
-      // The cocoon composites. Six unbounded u64/coins fields, all Go *string.
-      // `nonce` MOVED here from the exclusion list above when cocoon landed:
-      // cocoon_client_register's nonce is a raw u64 that routinely exceeds
-      // int64 (the 5B6Ex8kv fixture carries 11924145372215500834), so it cannot
-      // stay a natural integer. LayerZero's bounded `nonce` (Go *int64) now
-      // travels as a decimal string too — lossless, since decodeFlexInt parses
-      // it back. `worker_state` (u2) and `seqno` (u32) stay natural integers,
-      // and `payout_type` / `expected_address` / `new_secret_hash` /
-      // `via_wallet` are not integers at all.
+      // Cocoon token, stake, and nonce fields can exceed int64. The shared key
+      // rule also stringifies bounded LayerZero nonce values losslessly.
       "nonce", "new_tokens", "worker_tokens", "new_tokens_used", "new_stake",
       "withdraw_amount",
   };
   return keys.count(k) != 0;
 }
 
-// An Int that stays a msgpack INTEGER. Out of SIGNED int64 range packs nil
-// rather than truncating silently: every field that can carry such a value is
-// in decimal_string_key() by construction, so this firing means the key table
-// is wrong — and an absent field is the only failure mode that cannot drop the
-// whole trace on the Go side.
+// Native integer fields must fit signed int64. Encode an unexpected wider value
+// as nil rather than truncating it or invalidating the complete Go decode.
 void pack_int(Packer &pk, const Value &v, ActionSerializeStats &st) {
   if (v.num.is_null() || !v.num->fits_bits(64)) {
     st.unrenderable++;
@@ -157,9 +99,7 @@ void pack_int(Packer &pk, const Value &v, ActionSerializeStats &st) {
 
 void pack_value(Packer &pk, const Value &v, bool as_decimal_string, ActionSerializeStats &st);
 
-// Dict/Obj -> msgpack map in INSERTION order (the composite payloads). EVERY
-// key is written, an unfilled one as nil: see omitted() — the composites are
-// literal dicts on the Python side, so absence is not a state they can express.
+// Encode composite maps in insertion order and retain unfilled keys as nil.
 void pack_fields(Packer &pk, const Value::Fields &fs, ActionSerializeStats &st) {
   pk.pack_map(static_cast<std::uint32_t>(fs.size()));
   for (const auto &[key, val] : fs) {
@@ -192,16 +132,8 @@ void pack_value(Packer &pk, const Value &v, bool as_decimal_string, ActionSerial
       }
       return;
     case VType::Float:
-      // The natural type, whatever msgpack-c makes of it. Note that
-      // packer::pack_double NORMALIZES an integral-valued double to a msgpack
-      // INTEGER (pack.hpp:1161) and only emits 0xcb for a fractional one — so
-      // 1037.0 goes out as an int and 2.5 as a float64. Both decode: every Go
-      // field that can carry a Float is a *string, and decodeFlexString handles
-      // the integer codes AND the float codes (rendering the latter with
-      // strconv.FormatFloat). The normalization is in fact the safer half — an
-      // integral float reaching a numeric field still decodes, which a raw
-      // 0xcb would not, since decodeFlexInt has no float branch. No CPython
-      // repr(float) reproduction is needed on this side either way.
+      // msgpack-c encodes integral doubles as integers and fractional values as
+      // float64. Flexible string fields accept both representations.
       st.float_values++;
       pk.pack(v.dnum);
       return;
@@ -243,9 +175,7 @@ void pack_value(Packer &pk, const Value &v, bool as_decimal_string, ActionSerial
       pack_text(pk, td::base64_encode(td::Slice(v.str)));
       return;
     case VType::Cell: {
-      // Should never reach an Action — the BOC-field root-hash substitution is
-      // a twin-diff device and must NOT be reused here, so the real bytes go
-      // out base64'd and the counter makes the sighting visible.
+      // Preserve unexpected cells as base64 BOCs and count the occurrence.
       st.cell_values++;
       if (v.cell.is_null()) {
         st.unrenderable++;
@@ -286,9 +216,7 @@ struct ActionField {
   Value Action::*member;
 };
 
-// The Value-typed Action fields, each omitted when unfilled. SAME SET AND ORDER
-// as scrub_arena_refs (EmuClassifierActor.cpp) — two lists that must stay in
-// sync; a field added to Action needs a row in both.
+// Keep this field set and order synchronized with scrub_arena_refs().
 const std::vector<ActionField> &optional_fields() {
   static const std::vector<ActionField> fields{
       {"source", &Action::source},
@@ -346,13 +274,8 @@ const std::vector<ActionField> &optional_fields() {
   return fields;
 }
 
-// Number of always-written keys below (ancestor_type is conditional, so it is
-// NOT in this count). Deliberately NOT written: trace_id /
-// trace_external_hash / trace_end_lt / trace_end_utime / trace_mc_seqno_end,
-// which Go clobbers right after decode (models.go:830-836); trace_start_lt and
-// value_extra_currencies, which Python never assigns on this path and Go has no
-// field for; and mc_seqno_end, which Go has no field for at all. Omitting them
-// also removes eleven chances to get a wire type wrong.
+// Number of unconditional keys below. ancestor_type and optional fields are
+// counted separately; fields unused by the Go consumer are not serialized.
 constexpr std::uint32_t kFixedKeys = 12;
 
 void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std::int64_t finality,
@@ -392,18 +315,15 @@ void pack_action(Packer &pk, const Action &a, const std::string &trace_key, std:
   pk.pack(a.start_utime);
   pack_key(pk, "end_utime");
   pk.pack(a.end_utime);
-  // Not on mch::Action — both come from the view.
+  // Both fields come from the view rather than mch::Action.
   pack_key(pk, "finality");
   pk.pack(finality);
   // Go only surfaces it when it differs from trace_external_hash
   // (models.go:930), so it must be written.
   pack_key(pk, "trace_external_hash_norm");
   pack_text(pk, trace_key);
-  // Child-action recursion. Python's asymmetry, reproduced: serialize_blocks
-  // ASSIGNS parent_action_id on every row (None on a top-level one), so the key
-  // is always in Action.to_dict(); ancestor_type is assigned only when the row
-  // is a child, so a top-level row has no such key at all. Go decodes both into
-  // zero values either way (emulated/models.go:566-567).
+  // parent_action_id is always present and nil for top-level rows.
+  // ancestor_type is present only for child rows.
   pack_key(pk, "parent_action_id");
   if (a.parent_action_id.empty()) {
     pk.pack_nil();
@@ -434,12 +354,7 @@ std::string serialize_actions(const std::vector<Action> &actions, const EmuTrace
                               ActionSerializeStats *stats) {
   ActionSerializeStats discarded;
   ActionSerializeStats &st = stats != nullptr ? *stats : discarded;
-  // Python's min(tx.finality) over the trace. The emulator's 3-value enum
-  // {emulated,confirmed,finalized} is exactly Go's FinalityState
-  // {pending,confirmed,finalized}, and an empty view degrades to the
-  // conservative end. The derivation lives in EmuTypes.h because the insert
-  // guard needs the SAME value — two copies would let the finality a trace is
-  // guarded on drift from the one its own payload advertises.
+  // The payload and insert guard share the minimum node finality.
   const auto finality = static_cast<std::int64_t>(view_finality(view));
 
   msgpack::sbuffer buf;

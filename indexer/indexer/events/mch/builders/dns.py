@@ -1,14 +1,11 @@
-"""mch registration for the DNS record-change matcher (specs/dns.mch).
+"""Register the DNS record-change matcher from specs/dns.mch.
 
-specs/dns.mch is FULLY DECLARATIVE (M4 §9.5 `produces switch`): the runtime
-evaluates it, so this module registers the opcodes, the produced block types,
-the message parser (for `parse`), and an `nft_item` lookup. The lookup mirrors
-the legacy `build_change_dns_core` exactly — it queries the interface
-repository with the raw destination address (NO `.upper()` normalization,
-unlike the shared default_lookups used by the jetton specs), so the declarative
-collection_address resolves identically to the legacy conditional add. The
-legacy ChangeDnsRecordMatcher and build_change_dns_core stay the parity
-reference.
+The spec uses `produces switch` for its build. This module registers its
+opcodes, block types, message parser, and `nft_item` lookup. The lookup mirrors
+`build_change_dns_core`: it queries the interface repository with the raw
+destination address, without the `.upper()` normalization used by the shared
+jetton lookups. This keeps collection-address resolution consistent with the
+legacy builder.
 """
 from __future__ import annotations
 

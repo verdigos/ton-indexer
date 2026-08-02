@@ -1,18 +1,9 @@
-// Dev-only oracle (§0.15). Copies the reference repo's Tolk fixtures, compiles
-// them via tolk-js into the committed testdata/fixtures/*.abi.json, and computes
-// golden pack/unpack vectors through the reference @ton/tolk-abi-to-typescript
-// dynamic-serialization path, dumped byte-stably to testdata/abi_vectors.json.
-//
-// The vectors are the ORACLE for the C++ side: test/AbiABGateTest.cpp runs every
-// one of them through the generated structs (value dump + repack hash), and its
-// corpus-structure case pins the total count. Coverage spans scalars, addresses,
-// nullables, cellOf, arrays, lisp lists, tensors, maps, enums, strings, unions
-// (incl. generic labels) and custom serializers, plus expect_error vectors.
-//
-// Value-JSON schema: §0.14 of docs/ton-abi-plan.md.
-//
-// Needs the reference-repo checkout (FIXTURES_SRC below). Production ABI
-// declarations are NOT built here -- see tools/gen_prod_abi.mjs.
+// Development oracle for committed ABI fixtures and byte-stable pack/unpack
+// vectors. The generated-struct gate compares both value dumps and repacked
+// bytes against these results. Coverage includes every supported value kind,
+// generic union labels, custom serializers, and expected failures.
+// Requires the reference checkout at FIXTURES_SRC. Production declarations are
+// compiled separately by gen_prod_abi.mjs. See MODULE-NOTES.md for value JSON.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -38,7 +29,7 @@ const VECTORS_FILE = path.join(ROOT, 'testdata', 'abi_vectors.json');
 // public index -- only DynamicCtx/packToBuilderDynamic/unpackFromSliceDynamic/
 // renderTy/SymTable are). Reaching into dist/ directly is fine for a dev-only
 // oracle script; it's the exact function dynamicPack/Unpack use internally
-// (dynamic-serialization.ts:5), so using it here keeps W8's own label/variant
+// (dynamic-serialization.ts:5), so using it here keeps label and variant
 // selection in lockstep with the reference instead of re-deriving the rules.
 const { createLabelsForUnion } = require(
     path.join(__dirname, 'node_modules', '@ton', 'tolk-abi-to-typescript', 'dist', 'types-kernel.js'));
@@ -60,7 +51,7 @@ async function compileTolk(absFileName) {
     return abiJson;
 }
 
-// ---- canonical value-JSON codec: SUBSET of §0.14 (intN/uintN/coins/bool + struct) ----
+// ---- canonical value-JSON codec for integers, bool, and structs -----------
 
 function findStructDecl(abi, structName) {
     const decl = abi.declarations.find(d => d.kind === 'struct' && d.name === structName);
@@ -137,18 +128,10 @@ function roundTripCheckOrThrow(ctx, abi, structTyIdx, obj, expectHex) {
     return json;
 }
 
-// ---- W8 (T8.3): full-kind value-JSON codec + a synthetic sample-value
-// generator, both driven through `ctx.symbols` (monomorph/alias/union
-// resolution-aware, unlike the W0 pair above which only ever saw plain
-// scalar-only structs). These mirror the C++ AbiValue::to_json() schema
-// exactly (§0.14) so the golden `value` these vectors carry is what the
-// C++ generated struct to_abi_value() + AbiValue dump must reproduce.
-//
-// Design choice: `value` is always derived from the ORACLE's OWN unpack of
-// the packed bytes (not from the raw sample fed into pack) -- this sidesteps
-// any JS-side Map/Dictionary iteration-order quirks for `mapKV` (the wire
-// order, which both sides derive independently from the same HashmapE
-// traversal, is what's canonical per §0.14's "sorted by key").
+// Full-kind value-JSON codec and synthetic sample generator. Both use
+// ctx.symbols so monomorphs, aliases, and unions resolve correctly. Golden
+// values come from unpacking the packed bytes, ensuring map entries follow the
+// HashmapE wire traversal rather than JavaScript collection order.
 
 function hexLower(buf) {
     return Buffer.from(buf).toString('hex');
@@ -180,14 +163,13 @@ function dictValueOf(ctx, valueTyIdx) {
 // available option (null / empty array / a union's void variant if present).
 const kMaxDepth = 6;
 
-// ---- W9 (T9.1): custom serializers ported verbatim from
+// Custom serializers ported verbatim from
 // LotsOfWrappers.spec.ts:243-380 (the ones that have a real fixture struct to
 // hang a vector off of -- Tensor3Skipping1/Color/OnlyWithPack/OnlyWithUnpack
 // have no wrapping struct in this fixture and are covered by native C++ units
 // in test/AbiABGateTest.cpp only). Gated BEFORE normal StructRef/AliasRef
 // resolution in sampleValue/toValueJsonFull/fromValueJsonFull, mirroring the
-// custom-gate-before-resolution invariant (W2 invariant ii) the C++ walker
-// follows.
+// same custom-before-resolution rule as the generated C++ path.
 const W9_CUSTOM_SAMPLE = {
     TelegramString: () => beginCell().storeBuffer(Buffer.from('hello')).endCell().beginParse(),
     Custom8: () => 42n,
@@ -471,9 +453,8 @@ function fromValueJsonFull(ctx, tyIdx, j, uLabelTyIdx) {
             const variant = variants[idx];
             const actualJson = variant.hasValueField ? j.value : j;
             const inner = fromValueJsonFull(ctx, ty.variants[idx].variant_ty_idx, actualJson, undefined);
-            // Re-wrap for hasValueField -- dynamicPack's raw union input shape
-            // is {$,value} in that case, same as the pack-sample shape (the
-            // earlier bug here: returning `inner` unwrapped unconditionally).
+            // A hasValueField variant uses the {$,value} shape expected by
+            // dynamicPack; other variants pass their inner value directly.
             return variant.hasValueField ? { $: variant.labelStr, value: inner } : inner;
         }
         default:
@@ -487,19 +468,14 @@ function packHexFull(ctx, tyIdx, obj) {
     return b.endCell().beginParse().toString();
 }
 
-// Generates one W8 vector for `structName` in `fixture`: sample -> pack ->
+// Generates one vector for `structName` in `fixture`: sample -> pack ->
 // unpack (oracle) -> derive canonical value-JSON from the UNPACKED result ->
 // self-check the value-JSON round-trips losslessly back to the same hex.
 function genW8Vector(ctx, fixture, structName, explicitSample) {
     const structTyIdx = ctx.symbols.getStruct(structName).ty_idx;
     const sample = explicitSample !== undefined ? explicitSample : sampleValue(ctx, structTyIdx, undefined, 0);
-    // Pack `sample` EXACTLY ONCE. A `Dictionary` value (mapKV fields) mutates
-    // internal state on serialize; packing the same sample object a second
-    // time (as an earlier version of this function did, for `hex` and for
-    // `s` separately) silently corrupts a Dictionary field's re-serialization
-    // -- the golden hex looked right but the unpacked-and-redumped `value`
-    // came out with fewer bits than were actually packed. Pack once, derive
-    // both the hex and the unpack-cursor from the SAME resulting cell.
+    // Pack exactly once because Dictionary serialization mutates internal
+    // state. Derive both the hex and unpack cursor from that resulting cell.
     const b = beginCell();
     packToBuilderDynamic(ctx, structTyIdx, sample, b);
     const cell = b.endCell();
@@ -580,7 +556,7 @@ async function main() {
         }
 
         if (fixture === 'lots-of-wrappers') {
-            // literal golds transcribed from tests/LotsOfWrappers.spec.ts (T0.2 self-validation (b))
+            // Literal golds transcribed from tests/LotsOfWrappers.spec.ts.
             const literalCases = [
                 { struct: 'MsgSinglePrefix32', val: { amount1: 80n, amount2: 800000000n }, hex: 'x{8765432115042FAF0800}' },
                 { struct: 'CounterIncrement', val: { counter_id: 123n, inc_by: 78n }, hex: 'x{123456787B0000004E}' },
@@ -596,9 +572,9 @@ async function main() {
         }
     }
 
-    // ---- T1.3: extend the committed fixture set to all 26 reference .tolk
-    // files (19 top-level + 7 imports/), ABI JSON only -- vectors stay the 12
-    // above. imports/ is copied verbatim so the fixtures that import from it
+    // Copy all 26 reference .tolk files (19 top-level + 7 imports/). Only the
+    // three fixtures above contribute the initial 12 vectors.
+    // imports/ is copied verbatim so the fixtures that import from it
     // (jetton-minter/wallet-contract, lots-of-throws) keep resolving.
     fs.mkdirSync(path.join(FIXTURES_DIR, 'imports'), { recursive: true });
     for (const f of fs.readdirSync(path.join(FIXTURES_SRC, 'imports'))) {
@@ -626,22 +602,13 @@ async function main() {
             path.join(FIXTURES_DIR, `${fixture}.abi.json`),
             JSON.stringify(abi, null, 2) + '\n',
         );
-        abiByFixture[fixture] = abi;  // kept for the W8+ blocks' ctxFor (today only generic-union-labels)
+        abiByFixture[fixture] = abi;  // ctxFor currently uses this for generic-union-labels
         loadableCount++;
     }
 
-    // TODO: remove (harness): porting-era bookkeeping only. This block copies
-    // testdata/fixtures/small.tolk and re-asserts a KNOWN upstream tolk-js
-    // failure; it yields no .abi.json, no vector, no generated pair and has no
-    // C++ consumer (AbiLoaderTest.cpp:46 mentions it in prose only). Delete
-    // together with the fixture, and drop "26" from the log line below.
-    //
-    // small.tolk is copied for completeness (the plan's fixture set is "26
-    // .tolk files copied from the reference repo") but genuinely fails to
-    // compile with tolk-js -- a real Tolk compiler error unrelated to ABI
-    // loading ("can not use `int` as a boolean condition"), not a fixture
-    // we can produce an ABI for. No .abi.json is written for it, and the
-    // C++ loads-all test does not expect one.
+    // TODO: Remove this block with small.tolk and update the logged corpus count.
+    // The fixture fails because tolk-js rejects `int` as a boolean condition;
+    // it produces no ABI JSON or vectors and has no C++ consumer.
     fs.copyFileSync(path.join(FIXTURES_SRC, 'small.tolk'), path.join(FIXTURES_DIR, 'small.tolk'));
     try {
         await compileTolk(path.join(FIXTURES_SRC, 'small.tolk'));
@@ -655,7 +622,7 @@ async function main() {
 
     console.log(`copied 26 .tolk fixtures (19 top-level + 7 imports/), ${loadableCount} compile to a valid ABI`);
 
-    // ---- W8 (T8.3): broaden vector coverage past W0's scalar-only subset.
+    // ---- full-kind value and wire coverage --------------------------------
     // One ctx per fixture, reusing the abi already compiled above.
     const ctxByFixture = {};
     const ctxFor = (fixture) => (ctxByFixture[fixture] ??= new DynamicCtx(abiByFixture[fixture]));
@@ -668,11 +635,10 @@ async function main() {
     {
         const ctx = ctxFor('lots-of-wrappers');
 
-        // W9 (T9.1): register the same custom impls the reference spec uses
+        // Register the same custom implementations the reference spec uses
         // (LotsOfWrappers.spec.ts:243-380, copied verbatim minus TS types) on
         // the ORACLE's own ctx, so packToBuilderDynamic/unpackFromSliceDynamic
-        // route through them for these vectors -- closes the W8 flag ("no
-        // custom-serializer vectors yet").
+        // route through them for these vectors.
         function TelegramString__packToBuilder(self, b) {
             let bytes = Math.ceil(self.remainingBits / 8);
             b.storeUint(bytes, 8);
@@ -706,8 +672,9 @@ async function main() {
         ctx.registerCustomPackUnpack('Custom8', Custom8__packToBuilder, Custom8__unpackFromSlice);
         ctx.registerCustomPackUnpack('MyBorderedInt', MyBorderedInt__packToBuilder, MyBorderedInt__unpackFromSlice);
         ctx.registerCustomPackUnpack('CustomPoint', CustomPoint__packToBuilder, CustomPoint__unpackFromSlice);
-        // Color intentionally NOT registered (spec :376 asymmetry, §0.17) --
-        // no vector needed for that, it's a native-unit-only assertion.
+        // Color is intentionally not registered, matching the reference's
+        // asymmetric custom-serializer setup.
+        // No vector is needed; a native unit covers this case.
 
         vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'JustAddress'));
         vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'JustMaybeInt32', { $: 'JustMaybeInt32', value: 5n }));
@@ -720,7 +687,7 @@ async function main() {
         vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'WithEnums'));
         vectors.push(genW8Vector(ctx, 'lots-of-wrappers', 'WithAnyAddress'));
 
-        // W9 custom-serializer vectors. WithMyBorder (MyBorderedInt) is
+        // Custom-serializer vectors. WithMyBorder (MyBorderedInt) is
         // deliberately NOT a vector here: its custom encoding is lossy AND
         // non-idempotent (pack(20n) -> tag1 -> unpack -> 10n, but
         // pack(10n) -> tag2, NOT tag1 -- 10 is not a fixed point), which
@@ -773,7 +740,7 @@ async function main() {
 
     console.log(`W8: added ${vectors.length - w8Before} value/hex coverage vectors`);
 
-    // ---- W8 error vectors (per-field truncation, prefix mismatch, union
+    // ---- error vectors (per-field truncation, prefix mismatch, union
     // no-match). No `value`/oracle involved -- these assert unpack FAILS.
     const errBefore = vectors.length;
     {

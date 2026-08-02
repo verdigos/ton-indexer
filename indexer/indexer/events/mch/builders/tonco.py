@@ -21,7 +21,7 @@ tree is intact until the engine merges) and delegates to the shared core
 
 The legacy additional_blocks bookkeeping (the raw PTonTransfer feeding the
 notify) is unnecessary here: the pattern consumes that call, so the synthesized
-merge covers it. Returns None to reject the match (spec §10.7).
+merge covers it. Returns None to reject the match.
 """
 from __future__ import annotations
 
@@ -68,12 +68,11 @@ OPCODES = {
 
 
 class ToncoPoolV3InitTwin:
-    """POOLV3_INIT#441c39ed — Python twin of ABI row `ToncoPoolV3Init`.
+    """Python twin of ABI row `ToncoPoolV3Init` (opcode 0x441c39ed).
 
     The legacy class cannot serve as the twin: `pool_active` is the schema's
-    `bool` leaf and pytoniq's load_bit() returns an INT, which faults the
-    expression VM wherever the C++ side has a Bool (the CASTING-TWIN RULE stated
-    in the ABI declaration, first applied in builders/dedust_v2.py). Stops right
+    `bool` leaf and pytoniq's load_bit() returns an int, which faults the
+    expression VM wherever the C++ side has a Bool. It stops right
     after `pool_active`, mirroring the schema entry: everything past it (two
     content refs and a Maybe ^[minters] cell) is unread by the matcher and has
     no schema form.
@@ -133,7 +132,7 @@ async def _tonco_deposit_liquidity_data(consumed: list[Block]):
     spec). Derives the legacy label roles structurally from the consumed set +
     previous_block navigation and delegates to
     build_tonco_deposit_liquidity_core; returns the ToncoDepositLiquidityData
-    record the `out` block flattens, or None to reject (spec §10.7)."""
+    record the `out` block flattens, or None to reject."""
     block = consumed[0]
     try:
         # anchor <- FundAccount <- input transfer
@@ -175,7 +174,7 @@ async def _tonco_withdraw_payouts(consumed: list[Block]):
     the legacy fixed arity of two. Delegates to the shared core
     resolve_tonco_withdraw_payouts, which is also what the legacy matcher calls.
 
-    Returns the record the `out` block reads, or None to reject (spec §10.7).
+    Returns the record the `out` block reads, or None to reject.
     Note the legacy build lets a malformed PayTo body raise out of build_block
     (the trace then falls back to basic actions); here it rejects instead, so
     the rest of the trace still classifies."""

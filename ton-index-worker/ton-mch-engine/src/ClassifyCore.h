@@ -1,10 +1,6 @@
-// Classification CORE (plan §11 item 2 / prod-design §2): the pure pipeline —
-// (TraceContext + the compiled matcher table + LookupSource + generated build
-// table) → a buffered
-// per-trace result. NO stdout/stderr, NO filesystem, NO fixture knowledge, NO
-// rendering. The CLI dumps (Classify.cpp) and the future `mch-classify` library
-// are thin adapters over this. This TU is the "core" side of the core/harness
-// split; group it with the other core TUs when the library target lands.
+// Pure classification pipeline from a TraceContext and compiled tables to a
+// buffered per-trace result. It performs no I/O or rendering.
+// See docs/engine-internals.md for traversal and result-view invariants.
 #pragma once
 
 #include "ActionBuild.h"  // ActionRow
@@ -22,20 +18,14 @@
 
 namespace mch {
 
-// Failure/skip taxonomy (additive, Phase G slice 3 review). A shared vocabulary
-// for WHY a matcher/trace did not produce actions; used for shadow-mode
-// telemetry only — rendering-agnostic, no dump/twin sees it, existing gates stay
-// byte-stable. TRACE-TERMINAL reasons only:
+// Trace-terminal failure categories used by shadow-mode telemetry:
 //   - lookup_infra_fail:  two-phase lookup did not converge (infra error).
 //   - engine_fault:       a mid-trace exception (Python's per-trace fallback).
 //   - malformed_trace:    the trace could not be loaded into an event tree
-//                         (schema map / empty tree) — set caller/actor-side.
-// Deliberately NOT enumerators: matcher_skip (a setup-level fact, read from
-// ClassifySetup.skips, never a per-trace outcome) and clean_reject / parse_null /
-// the per-lookup tier misses (per-(block, matcher, lookup) events on the hot
-// path — counted in ParsedBlockLookupSource::LookupStats, or left uncounted).
-// None of those can be the single trace-terminal value this field holds, so an
-// enumerator for them would be a state the type never reaches.
+//                         (schema map / empty tree), set caller/actor-side.
+// Matcher skips are setup-level facts, while clean rejection, parse-null, and
+// per-lookup misses are per-attempt events. They cannot be the single terminal
+// state held here and are deliberately not enumerators.
 enum class FailureCategory {
   none,
   lookup_infra_fail,
@@ -43,7 +33,7 @@ enum class FailureCategory {
   malformed_trace,
 };
 
-// One produced action, RENDERING-AGNOSTIC: raw block pointers + fire-time aux.
+// One produced action with raw block pointers and fire-time auxiliary blocks.
 // The adapter renders block_key(anchor)/data/consumed/aux or builds an Action
 // row from `produced`. Pointers reference the caller's arena (TraceContext),
 // valid for as long as the caller keeps it alive.
@@ -54,59 +44,27 @@ struct CoreAction {
   std::vector<Block *> aux;    // fire-time excess/bounce auto-append (anchor)
 };
 
-// Buffered ATOMIC per-trace result: on a mid-trace throw the pipeline sets
-// `failure` (+ reason) and returns whatever was collected — NOTHING is emitted
-// by the core; the adapter decides (a dump reproduces today's TRACE_FAIL line,
-// production commits only on success).
+// Buffered atomic per-trace result. On a mid-trace exception the pipeline sets
+// `failure` and returns what it collected; production commits only on success.
 struct ClassifyResult {
   std::vector<CoreAction> actions;  // surviving post-pass, in fire order
-  // The blocks serialize_blocks (block_tree_serializer.py:1641-1681) turns into
-  // rows: the POST-PASS SPINE, in spine order. NOT the same set as `actions`,
-  // which is the matcher FIRE list:
-  //   - a composite a later matcher consumed is off the spine — its row belongs
-  //     to the outer block, so Python never emits it (the fire list still has
-  //     it, which is what --classify wants to show);
-  //   - every leaf no matcher consumed is a BASIC row (ton_transfer /
-  //     call_contract / contract_deploy, the last promoted onto the spine by
-  //     unwind_deployments) — 143 of the 165 corpus fixtures have at least one.
-  // THIS is the production / `--actions` row set; `actions` stays the --classify
-  // view. A row needs nothing from the fire (no aux, no matcher name), so it is
-  // the block plus its place in the CHILD RECURSION: for a block whose btype is
-  // outside v1_ops, serialize_blocks descends into the children a matcher merged
-  // into it and emits those as rows of their own, linked back by
-  // parent_action_id + ancestor_type. Those child rows are here too — they are
-  // off the spine by construction, so they never collide with it.
-  //
-  // One more source feeds it: when the main spine serializes NOTHING, the
-  // ghost-external fallback (GhostExternal.h) may replace the whole set with
-  // rows synthesized from a failed wallet external's unsent messages. Those
-  // never appear in `actions` — they are not matcher fires, and --classify has
-  // no fallback view.
+  // Post-pass spine and recursive child rows for production serialization.
+  // This differs from the matcher-fire `actions` view; see engine-internals.md.
   std::vector<ActionRow> action_rows;
   bool failure = false;
   std::string failure_reason;
   // Trace-terminal failure category (additive telemetry; none unless `failure`).
   FailureCategory failure_category = FailureCategory::none;
-  // Step 2c basic-actions fallback (try_classify_basic_actions): populated ONLY
-  // when `failure` — a fresh leaf-only classify (no matchers) + the
+  // Basic-action fallback, populated only on failure. A fresh leaf-only classify
+  // with no matchers runs the
   // post-processor chain, serialized the same way as `action_rows`, so every row
   // is a basic btype (call_contract / contract_deploy / ton_transfer).
   // Production commits these when classification fails. Ungated (corpus has no
   // failing traces).
   std::vector<ActionRow> fallback_rows;
-  // Classification SUCCEEDED but serialized nothing AND the ghost-external
-  // fallback found nothing either, over a trace that has transactions —
-  // trace_processor.py:44-46's `len(actions) == 0 and
-  // len(trace.transactions) > 0` branch, i.e. `action_rows` empty (Python tests
-  // serialize_blocks' output, not the fire list). The adapter answers it with
-  // create_unknown_action(ctx.trace); that row has no Block, so it cannot be a
-  // CoreAction and the core only raises the flag.
-  //
-  // Why it matters beyond parity: ton-index-go reads `Classified` as "the
-  // `actions` field exists", so an EMPTY array is reported to API consumers as
-  // a successful classification (emulated/models.go:838-844). Without this row,
-  // "we looked and found nothing classifiable" is indistinguishable from "this
-  // trace was never classified".
+  // Set when classification succeeds but neither normal nor ghost serialization
+  // produces a row for a nonempty trace. The adapter emits an unknown action so
+  // "classified with no recognized action" remains distinct from "not classified".
   bool unknown_trace = false;
 };
 
@@ -126,14 +84,13 @@ struct ClassifySetup {
 };
 
 // Build the run prep from the compiled-in matcher table. No I/O. Pass the SAME
-// table classify_trace will get — `included` indexes into it. On a table/fn
+// table classify_trace will get. `included` indexes into it. On a table/fn
 // mismatch, sets the *_missing flags + error and returns what it has (adapter
 // reports + exits; production is startup-fatal).
 ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers);
 
-// Classify ONE trace: the matcher loop (BFS, parent-is-None guard, re-scan
-// semantics) + Phase E post-process passes, buffered. `arena` is the caller's
-// (usually ctx.arena) — the pipeline allocates produced/proxy blocks from it.
+// Classify one trace with the matcher loop and post-processing passes. The
+// pipeline allocates produced and proxy blocks from the caller-owned arena.
 ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatcher> &matchers,
                               const ClassifySetup &setup, const LookupSource &src);
 

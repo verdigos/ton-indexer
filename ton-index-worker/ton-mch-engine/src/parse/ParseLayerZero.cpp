@@ -1,28 +1,8 @@
-// LayerZero message parsers (messages/layerzero.py). See parse/PSlice.h for
-// shared machinery and MsgParse.cpp's header for the pytoniq-parity catalogue.
-//
-// The twin dumps vars() recursively, so every Obj here mirrors EVERY Python
-// attribute of its class, incl. b/cell (the source cell), s (the slice AFTER
-// all loads -> remainder rebuilt as a cell) and the asserted header ints.
-// guid / src_oapp / dst_oapp / send_msglib* are Python hex(): "0x" + lowercase
-// MINIMAL digits (leading zeros stripped — unlike the 64-digit account form).
-// message is '0x' + bits.tobytes().hex(): bit-level bytes, right-padded to a
-// byte boundary, leading zeros KEPT.
-//
-// Four entry points, all four in the --parse-dump A/B table (ParseDump.cpp):
-//
-//   LayerZeroOappExecuteCallback (0xcaae25a1, py:1378) — receive. cell =
-//     slice.to_cell(); packet = LayerZeroPacket(cell.refs[0].refs[0]).
-//   LayerzeroChannelSendCallback (0xa2b5fbae, py:593)  — send. Reads the
-//     opcode off the body, then lz_send = LayerZeroMDLzSend(
-//     cell.refs[0].refs[0].refs[0]) — "got it experimentally" per the source.
-//   ChannelCommitPacket (0x5388cd88, py:384)           — commit. Two refs deep
-//     to the packet; no opcode read at all (refs are prefix-independent).
-//   UlnConnectionVerifyCallbackParser (0x3cb38090, py:913) — dvn verify. MdObj
-//     ref[0] = md::VerificationStatus (u116 header + i234 filler, then
-//     nonce:u64 + status:u32). The status CODE becomes the status STRING here:
-//     the expression language has no string operations, so the mapping lives
-//     in the parser on both sides.
+// LayerZero message parsers. Objects preserve source cells, remaining slices,
+// and asserted header integers. Identifier fields use minimal lowercase `0x`
+// hexadecimal, while message bits retain leading zeros and pad the final byte.
+// Receive, send, commit, and DVN verification follow their distinct reference
+// chains; verification status codes are mapped to strings in the parser.
 #include "parse/Parsers.h"
 
 #include "parse/PSlice.h"
@@ -144,7 +124,7 @@ td::Result<Value> lz_parse_packet(const td::Ref<vm::Cell> &c) {
 // md::LzSend (py:87 LayerZeroMDLzSend). 80-bit NAME ("lzSend" big-endian,
 // zero-padded), 180-bit header info, 90 filler ones, then the scalar prefix and
 // three refs; the third ref carries the fee block. Every assert in the Python
-// __init__ is a hard check here — a mismatch rejects the whole parse, exactly
+// __init__ is a hard check here, a mismatch rejects the whole parse, exactly
 // as the raised AssertionError does.
 td::Result<Value> lz_parse_md_lz_send(const td::Ref<vm::Cell> &c) {
   PSlice ps = pslice_from_cell(c);
@@ -209,7 +189,7 @@ td::Result<Value> lz_parse_md_lz_send(const td::Ref<vm::Cell> &c) {
 }  // namespace
 
 td::Result<Value> parse_layerzero_oapp_execute_callback(const td::Ref<vm::Cell> &body) {
-  // self.cell = slice.to_cell() on the FRESH body slice — pytoniq rebuilds the
+  // self.cell = slice.to_cell() on the FRESH body slice, pytoniq rebuilds the
   // cell; hash-identical to the body root, but rebuilt to mirror the semantics.
   PSlice ps = pslice_from_cell(body);
   TRY_RESULT(cell0, pslice_to_cell(ps));
@@ -229,7 +209,7 @@ td::Result<Value> parse_layerzero_oapp_execute_callback(const td::Ref<vm::Cell> 
 
 td::Result<Value> parse_layerzero_channel_send_callback(const td::Ref<vm::Cell> &body) {
   // py:600. `self.cell = s.to_cell()` runs on the FRESH slice (the whole body),
-  // then `self.opcode = self.s.load_uint(32)` advances the SAME slice — so `s`
+  // then `self.opcode = self.s.load_uint(32)` advances the SAME slice, so `s`
   // is the body minus 32 bits with every ref still on it.
   PSlice ps = pslice_from_cell(body);
   TRY_RESULT(cell0, pslice_to_cell(ps));
@@ -259,7 +239,7 @@ td::Result<Value> parse_layerzero_channel_send_callback(const td::Ref<vm::Cell> 
 }
 
 td::Result<Value> parse_layerzero_channel_commit_packet(const td::Ref<vm::Cell> &body) {
-  // py:384. Pure ref walk — the 32 opcode bits are never read, so nothing is
+  // py:384. Pure ref walk, the 32 opcode bits are never read, so nothing is
   // skipped here either.
   PSlice ps = pslice_from_cell(body);
   if (ps.refs.empty()) {

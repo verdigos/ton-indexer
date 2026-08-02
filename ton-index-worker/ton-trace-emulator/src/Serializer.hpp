@@ -764,13 +764,8 @@ AddressInterfaces parse_interfaces(std::vector<typename Trace::Detector::Detecte
                            std::is_same_v<T, DedustPoolDetector::Result> ||
                            std::is_same_v<T, NominatorPoolContract::Result> ||
                            std::is_same_v<T, MultisigOrder::Result>) {
-        // DELIBERATELY NOT SERIALIZED. These joined Trace::Detector for the
-        // in-process classifier's tier-1 lookups only. The `interfaces` HSET field
-        // is a wire contract with ton-index-go / ton-emulate-go: giving
-        // AddressInterfaces new variant alternatives changes the msgpack framing
-        // every reader sees, which is a decoder wave of its own and not a side
-        // effect of widening a detector set. Dropping them here keeps the Redis
-        // payload byte-identical to pre-W3.
+        // These variants are available to in-process lookups but are not part of
+        // the Redis `interfaces` wire format. See ../README.md#redis-wire-layout.
       } else {
         static_assert(always_false<T>, "non-exhaustive visitor!");
       }

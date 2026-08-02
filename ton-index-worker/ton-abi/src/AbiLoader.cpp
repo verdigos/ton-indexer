@@ -248,8 +248,8 @@ td::Result<Ty> parse_ty(const Json &j, int idx) {
       TRY_RESULT_PREFIX(pl, jint_req(vj, "prefix_len"),
                          PSLICE() << "unique_types[" << idx << "].variants[" << vi << "]: ");
       uv.prefix_len = static_cast<int>(pl);
-      // Loader bound (locked decision, T1.2 row): prefix_len must fit in 32
-      // bits -- prefix_num is a float64 in the JS-side JSON, so a WIDER
+      // prefix_len must fit in 32 bits. prefix_num is a float64 in the JS-side
+      // JSON, so a wider
       // prefix here would be un-representable by the oracle; reject rather
       // than silently truncate.
       if (uv.prefix_len < 0 || uv.prefix_len > 32) {

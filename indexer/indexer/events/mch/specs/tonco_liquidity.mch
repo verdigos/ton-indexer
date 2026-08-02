@@ -8,8 +8,8 @@
 #
 # Shape notes:
 # - the anchor's optional MinAndRefund child chain is wrapped in a one-item
-#   children set so the parent edge stays attached to the anchor (§6.5 CB
-#   exemption; a bare `-> ... <-` chain is C009) — dedust_swap precedent;
+#   children set so the parent edge stays attached to the anchor; a bare
+#   `-> ... <-` chain is C009 — dedust_swap precedent;
 # - each refund transfer carries `-> { maybe op PTonTransfer }`: legacy
 #   output_ton_or_jetton has an optional PTonTransfer child_matcher;
 # - `maybe op ExcessMessage` mirrors the legacy explicit children item — the
@@ -25,7 +25,7 @@
 # pton navigation) stays in one host fn returning the field record — the
 # ToncoDepositLiquidityData the shared core already builds. The `out` block
 # flattens that record into the produced block's data map. The fn returns null
-# to reject (spec §10.7).
+# to reject.
 #
 # Product is a generic Block(btype tonco_deposit_liquidity) with a dict data
 # map (the legacy block carried a ToncoDepositLiquidityData dataclass); the
@@ -159,21 +159,20 @@ matcher tonco_deploy_pool {
 #           payout leg 1 (optional jetton_transfer -> optional PTonTransfer)
 #           payout leg 2 (same)
 #
-# HYBRID declarative build, split along what the DSL can actually express.
+# Hybrid declarative build, split along what the DSL can express.
 #
-# DECLARATIVE (the scalar half): sender / pool / burned-nft index+address /
-# liquidity_burnt / tick range all come off the three `parse`d bodies. These are
-# the FIRST users of the ABI declaration's uint128 and int24 leaves —
-# tick indices are signed and go negative, share amounts overflow 64 bits, so
-# before this port neither field was reachable. All three messages reuse their
-# LEGACY class as the Python twin unchanged: the ABI entries cover the whole
+# The declarative scalar half supplies sender, pool, burned-NFT index/address,
+# liquidity_burnt, and tick range from the three parsed bodies. These values use
+# the ABI declaration's uint128 and int24 leaves. Tick indices are
+# signed and go negative, while share amounts overflow 64 bits. All three
+# messages reuse their source class as the Python twin. The ABI entries cover the whole
 # body (dropping what is unread), so accept/reject matches the twin exactly, and
 # every leaf is a plain int on both sides — no casting twin (contrast the `bool`
 # rule the dedust_v2 withdraw port had to follow).
 #
-# HOST FN (the payout half): `tonco_withdraw_payouts` wraps the shared core
-# resolve_tonco_withdraw_payouts (blocks/liquidity.py), which both this spec and
-# the legacy matcher call. Three things keep it host-side, and only these three:
+# The payout half uses `tonco_withdraw_payouts` around the shared
+# resolve_tonco_withdraw_payouts core (blocks/liquidity.py). Three constraints
+# keep it host-side:
 #   - ToncoRouterV3PayTo cannot be a schema message at all: its coinsinfo is a
 #     Maybe ^Cell (there is no `maybe_ref { }` composite) and its two tail refs
 #     are conditional on exit_code, which the schema grammar has no form for;

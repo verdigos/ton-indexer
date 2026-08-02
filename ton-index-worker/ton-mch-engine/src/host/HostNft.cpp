@@ -446,7 +446,7 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
   }
   // telegram_nft_assigned passes @payment unbound: its pattern deliberately has
   // no parent edge (matching one would consume it), but the core still needs the
-  // parent to decide is_mint. Read it where legacy reads it.
+  // parent to decide is_mint. Read it where reference reads it.
   if (payment == nullptr) {
     payment = assigned->previous_block;
   }
@@ -565,11 +565,11 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
 
 // --- specs/teleitem_auction.mch: _is_teleitem (blocks/auction.py) ------------
 
-// `is_teleitem(nft)` — the looked-up nft_item Obj in, a Bool out. Mirrors the
-// legacy predicate exactly: a null item or a missing/absent `content` is false,
+// `is_teleitem(nft)`, the looked-up nft_item Obj in, a Bool out. Mirrors the
+// reference predicate exactly: a null item or a missing/absent `content` is false,
 // otherwise the metadata `uri` must contain "https://nft.fragment.com" (the same
 // test get_nft_data above already runs on the same field). Unlike get_nft_data
-// this NEVER faults: the legacy `_is_teleitem` returns False for a None content
+// this NEVER faults: the reference `_is_teleitem` returns False for a None content
 // instead of raising, and it is the only caller of this fn.
 EvalResult is_teleitem(BuildEnv &, const std::vector<Value> &args) {
   if (args.size() != 1) {
@@ -586,7 +586,7 @@ EvalResult is_teleitem(BuildEnv &, const std::vector<Value> &args) {
 }
 
 // builders/nft_transfer.py nft_transfer_parent_absorb shaper: purchase branch
-// only — absorb the funding parent (produced.previous_block) unless it is a
+// only, absorb the funding parent (produced.previous_block) unless it is a
 // finish/stop sale-contract ton_transfer.
 void nft_transfer_parent_absorb(Block *produced, const ShaperMatch &) {
   if (produced->data.is_null()) {
@@ -620,19 +620,10 @@ void nft_transfer_parent_absorb(Block *produced, const ShaperMatch &) {
   }
 }
 
-// specs/nft_mint.mch anchor predicate — NftMintBlockMatcher.test_self
-// (blocks/nft.py:442) over blocks/core.py `_find_contract_deployments`: the
-// block's event nodes deploy EXACTLY ONE DISTINCT account. Python holds a
-// `set[AccountId]`, so several nodes deploying the same account still count as
-// one; the accounts compared here are the raw-uppercase `transaction.account`
-// strings the loaders carry, which is the form `AccountId(...).as_str()`
-// produces, so a string compare is the set-membership test.
-//
-// NOTE the deliberate difference from the `contract_deploy` side-effect block
-// (BlockTree.cpp make_leaf_block): that one ALSO excludes `orig_status ==
-// "frozen"`. Python's `_find_contract_deployments` does not, so neither does
-// this — a frozen -> active transaction anchors nft_mint and has no
-// contract_deploy child.
+// True when the block's event nodes deploy exactly one distinct account.
+// Repeated deployment nodes for the same normalized account still count once.
+// Frozen-to-active transactions qualify here even though they do not create the
+// separate contract_deploy side-effect block.
 bool single_contract_deploy(const Block *b) {
   if (b == nullptr) {
     return false;
@@ -646,7 +637,7 @@ bool single_contract_deploy(const Block *b) {
     if (deployed == nullptr) {
       deployed = &tx->account;
     } else if (*deployed != tx->account) {
-      return false;  // two distinct deployments — legacy requires exactly one
+      return false;  // The reference behavior requires exactly one deployment.
     }
   }
   return deployed != nullptr;

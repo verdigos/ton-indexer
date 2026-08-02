@@ -1,17 +1,7 @@
-// Compiles the PRODUCTION ABI declarations in ton-abi/abi/*.tolk into their
-// committed *.abi.json siblings. These are hand-authored declaration files
-// (plan §0.11) describing real on-chain message families -- not test fixtures,
-// and not copied from the reference repo -- so this script needs only the Tolk
-// compiler (@ton/tolk-js). Unlike tools/gen_vectors.mjs it does NOT need the
-// reference-repo checkout or the @ton/tolk-abi-to-typescript oracle.
-//
-// The committed .abi.json is what ton-abi-gen consumes into the committed
-// generated/<name>_gen.{h,cpp} pair; `ton-abi-gen --check` (ctest
-// ton_abi_gen_check) proves the pair still regenerates byte-identically from
-// it, so this script only has to reproduce the .abi.json itself.
-//
-// The set of declarations is the explicit PROD_DECLS list below (NOT a glob),
-// so scaffolding files like abi/_TEMPLATE.tolk are never compiled.
+// Compiles production Tolk declarations into their committed .abi.json files.
+// Unlike gen_vectors.mjs, this script needs only @ton/tolk-js. ton-abi-gen then
+// consumes each JSON file and verifies its committed generated C++ pair.
+// PROD_DECLS is explicit so scaffolding such as abi/_TEMPLATE.tolk is skipped.
 //
 //   node gen_prod_abi.mjs            # recompile every PROD_DECLS entry
 //   node gen_prod_abi.mjs --check    # fail if any committed .abi.json is stale

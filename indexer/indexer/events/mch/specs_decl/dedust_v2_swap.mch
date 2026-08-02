@@ -1,4 +1,4 @@
-# DeDust CPMM V2 swap — port of DedustV2SwapBlockMatcher and
+# DeDust CPMM V2 swap corresponding to DedustV2SwapBlockMatcher and
 # DedustV2FailedSwapBlockMatcher (blocks/dedust_v2/swaps.py).
 #
 # Route shape (one unrolling of $dv2_hop per pool hop):
@@ -10,22 +10,22 @@
 #     excess 0xd53276db
 #
 # The reference matcher takes both carrier kinds in test_self; here that is one
-# anchor XOR (§8.3 R09 mixes an `op` and a `btype` head under one capture), so a
+# anchor XOR mixes an `op` and a `btype` head under one capture, so a
 # single matcher covers TON-in and jetton-in.
 #
-# Recursion notes (the shape is forced by the frontier walk, §4.6):
+# Recursion notes (the shape is forced by the frontier walk):
 # - the out leg appears TWICE: as the rule's exit arms (routes WITH hops, where
 #   it is reached on the post-step frontier) and again at the invocation site
-#   (single-hop routes, where the walk never steps — the frontier entry gate is
+#   (single-hop routes, where the walk never steps; the frontier entry gate is
 #   the STEP head, so an exit-only recursion can never fire);
 # - the `where (.payload_opcode …)` clauses are what keep the exit-tried-first
 #   order from mistaking an intermediate jetton carrier for the out leg (the
-#   T28 premature-exit shape): a pool->pool carrier rides a PayJetton
+#   premature exit: a pool-to-pool carrier rides a PayJetton
 #   (0xcbc33949) forward payload, the user-facing out leg does not;
 # - `maybe $dv2_hop` hangs off the Swap EVENT, not off the carrier's children
 #   set, and that position is load-bearing. An in-step self-reference lowers to
 #   an `any` node that CONSUMES a candidate, so under the carrier it would eat
-#   the next hop's carrier before the frontier reaches it — and a hop head that
+#   the next hop's carrier before the frontier reaches it. A hop head that
 #   is already consumed contributes no next_blocks to the following frontier,
 #   which truncated every 3-hop route to its last two hops. The event is a
 #   childless ext-out log, so the placeholder finds no candidate and the walk

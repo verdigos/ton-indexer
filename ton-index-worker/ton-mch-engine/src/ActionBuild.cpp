@@ -18,21 +18,9 @@ namespace mch {
 
 namespace {
 
-// ===========================================================================
-// Phase E part 2: C++ Action production (block_tree_serializer.py port).
-//
-// Scope: the composite btypes that FIRE in the corpus classify dump (19 of
-// them), rendered per surviving post-pass PendingAction — the same block set
-// the classify dump emits. The serializer's spine-walk / child-recursion wrapper
-// (v1_ops) lives in ClassifyCore; this file owns the per-row half of it, i.e.
-// the two fields it hands down (parent_action_id, ancestor_type) and
-// calc_action_id, the pure block->id function the recursion links rows with.
-//
-// NOT rendered: roles (this branch's action_accounts are role-less, prod-design
-// §6.1), trace_id / trace_* / finality (constant per fixture). accounts AND the
-// block_to_action tx_hashes extension by initiating_event_node ARE reproduced
-// (Step 2a) — Block carries initiating_event_node.
-// ===========================================================================
+// One fill function per supported serialized block type. ClassifyCore owns the
+// tree walk; this file maps each surviving row to wire-facing action fields.
+// See docs/engine-internals.md for the action serialization contract.
 
 // _addr(): AccountId/Asset/None -> canonical address STRING (Str) or Null.
 // Composites and directional fields store addresses as plain strings (Python
@@ -568,8 +556,8 @@ void fill_layerzero_receive(const Value &d, Action &a) {
   a.layerzero_packet_data = dg(d, "packet_data");  // record dict passthrough
 }
 
-// The layerzero_send composite, shared by `layerzero_send` and — through the
-// nested `layerzero_send_data` record — by `layerzero_send_tokens`. The split
+// The layerzero_send composite, shared by `layerzero_send` and, through the
+// nested `layerzero_send_data` record, by `layerzero_send_tokens`. The split
 // mirrors _fill_layerzero_send_action taking `data` rather than the block so
 // the tokens fill can reuse it. `msglib_manager`/`msglib` are hex STRINGS off
 // the lzSend payload, not accounts.
@@ -601,8 +589,8 @@ void fill_layerzero_send_tokens(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
 }
 
-// `uln` and `uln_connection` both carry the ULN CONNECTION's address — the
-// legacy build assigns the same local to both (layerzero.py:506-507).
+// `uln` and `uln_connection` both carry the ULN CONNECTION's address, the
+// reference build assigns the same local to both (layerzero.py:506-507).
 void fill_layerzero_commit_packet(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
   a.source_secondary = av_addr(dg(d, "endpoint"));
@@ -634,9 +622,8 @@ void fill_coffee_create_vault(const Value &d, Action &a) {
 
 // --- Coffee tail (specs/coffee_create_pool.mch, coffee_mev.mch,
 // coffee_staking.mch): six btypes, three of them the only producer of their
-// composite. `pool_first`/`pool_second` are the flat pool-asset pair the legacy
-// CoffeeCreatePoolCreatorData now carries in place of a live PoolParams parser
-// object — see the create-pool spec header.
+// composite. `pool_first`/`pool_second` carry the flat pool-asset pair rather
+// than a live PoolParams parser object.
 
 void fill_coffee_create_pool_creator(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
@@ -792,8 +779,8 @@ void fill_multisig_execute(const Value &d, Action &a) {
   if (sg.items) { for (const Value &x : *sg.items) push_account(a, x); }
 }
 
-// `success` is the literal true the spec writes — reaching the fill means the
-// POOLV3_INIT was found, which is the legacy build's whole success criterion.
+// `success` is the literal true the spec writes, reaching the fill means the
+// POOLV3_INIT was found, which is the reference build's whole success criterion.
 void fill_tonco_deploy_pool(const Value &d, Action &a) {
   Value succ = dg(d, "success");
   a.success = succ.t == VType::Bool && succ.boolean;
@@ -832,7 +819,7 @@ void fill_ethena_withdrawal_request(const Value &d, Action &a) {
 
 // --- Cocoon (block_tree_serializer.py:1159-1335) -----------------------------
 // Twelve fills, each a handful of directional fields plus its own composite. The
-// legacy bodies are `block.data.<attr>` reads off a dataclass; the declarative
+// reference bodies are `block.data.<attr>` reads off a dataclass; the declarative
 // build hands the same names in a dict, which is what `_dget` bridges on the
 // Python side and what `dg` has always done here.
 
@@ -859,7 +846,7 @@ void fill_cocoon_proxy_payout(const Value &d, Action &a) {
   a.cocoon_proxy_payout_data = mkdict(std::move(f));
 }
 
-// `amount = 0` is a LITERAL in the legacy fill ("no actual transfer"), not a
+// `amount = 0` is a LITERAL in the reference fill ("no actual transfer"), not a
 // value read off the block.
 void fill_cocoon_proxy_charge(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "proxy_contract"));
@@ -938,8 +925,8 @@ void fill_cocoon_grant_refund(const Value &d, Action &a) {
   a.cocoon_grant_refund_data = mkdict(std::move(f));
 }
 
-// `new_stake` / `withdraw_amount` below are each written TWICE by the legacy
-// fill — once as the row-level `amount`, once inside the composite.
+// `new_stake` / `withdraw_amount` below are each written TWICE by the reference
+// fill, once as the row-level `amount`, once inside the composite.
 void fill_cocoon_client_increase_stake(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "owner"));
   a.destination = av_addr(dg(d, "client_contract"));
@@ -993,7 +980,7 @@ void fill_tgbtc_burn(const Value &d, Action &a) {
 // block_tree_serializer.py _fill_tgbtc_new_key_action (:995). `amount` is a RAW
 // int on this action type (TgBTCNewKeyData declares `amount: int`); av_amount
 // is the Int passthrough. `value` carries the DKG timestamp and `extra.pubkey`
-// the raw hex — neither is a TON address.
+// the raw hex, neither is a TON address.
 void fill_tgbtc_new_key(const Value &d, Action &a) {
   a.type = "tgbtc_new_key";
   Value cr = dg(d, "crippled");
@@ -1009,7 +996,7 @@ void fill_tgbtc_new_key(const Value &d, Action &a) {
 }
 
 // block_tree_serializer.py _fill_tgbtc_dkg_log_action (:1009). The type is
-// hardcoded `_fallback` — this btype has no non-fallback producer at all — so
+// hardcoded `_fallback`. This block type has no non-fallback producer, so
 // the block carries no `crippled` field. Note the extra key is `pubkey` while
 // the data field is `internal_pubkey`; reproduced, not renamed.
 void fill_tgbtc_dkg_log(const Value &d, Action &a) {
@@ -1021,14 +1008,7 @@ void fill_tgbtc_dkg_log(const Value &d, Action &a) {
   a.value = dg(d, "timestamp");
 }
 
-// --- W6 bucket-B fills (em2-writeback-design.md §2.4) ------------------------
-// Btypes whose MATCHER runs and produces a block, but which had no fill_action
-// branch — so build_action returned false and the whole row vanished from the
-// payload even though the protocol HAD been recognised. Zero of these fire on
-// the 165-fixture corpus, so the A/B twin cannot cover them; each is gated
-// hermetically instead (--actions-msgpack-test), with the data field names
-// taken from the IR's own `out`/`switch` field lists and the column set from
-// the matching Python _fill_*.
+// --- Fill functions for matcher-produced protocol blocks -------------------
 
 void fill_dns_renew(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "source"));
@@ -1037,7 +1017,7 @@ void fill_dns_renew(const Value &d, Action &a) {
 }
 
 // Python bytes.hex(): lowercase, unseparated, no 0x prefix. td::buffer_to_hex
-// is UPPERCASE and must NOT be substituted — Go takes both these fields as
+// is uppercase and must not be substituted. Go takes both these fields as
 // *string, so the case difference would sail past the decoder and land in front
 // of API consumers as a silently different key.
 Value bytes_hex(const Value &v) {
@@ -1056,13 +1036,10 @@ Value bytes_hex(const Value &v) {
 
 // _fill_change_dns_record_action. The record dict the parser produces carries
 // {schema, address, flags, dns_text} exactly as Python's does, so the branching
-// is a transcription — but the KEY SET is Python's, not the branch's: it always
+// is a transcription. The key set always
 // emits value_schema/flags/address/key and appends `value` only for a schema it
-// recognises. `address` is dead on both sides and stays anyway: VERIFIED at
-// block_tree_serializer.py:563-568 (and :585-591 for delete), where Python seeds
-// the dict with 'address': None and never assigns it, and Go's
-// actionChangeDnsRecordDetails has no such field. Keeping it is what makes the
-// decoded map match Python's key for key.
+// recognises. `address` remains null but is retained so the decoded map preserves
+// its wire-facing key set.
 void fill_change_dns(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "source"));
   a.destination = av_addr(dg(d, "destination"));
@@ -1095,7 +1072,7 @@ void fill_change_dns(const Value &d, Action &a) {
   f.emplace_back("value_schema", schema);
   // Int, not Str: the serializer stringifies every non-excluded int inside a
   // composite, which is what Python does and what Go's *string + ParseInt
-  // expects — this one agrees on both sides, unlike the §2.6 fields.
+  // expects. This field has the same numeric representation on both sides.
   f.emplace_back("flags", flags);
   f.emplace_back("address", Value::null());
   f.emplace_back("key", bytes_hex(dg(d, "key")));
@@ -1106,7 +1083,7 @@ void fill_change_dns(const Value &d, Action &a) {
 }
 
 // _fill_delete_dns_record_action: the same column with everything but the key
-// nulled — a deletion names the record it removes and nothing else.
+// nulled. A deletion names the record it removes and nothing else.
 void fill_delete_dns(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "source"));
   a.destination = av_addr(dg(d, "destination"));
@@ -1149,7 +1126,7 @@ void fill_nominator_pool_withdraw_request(const Value &d, Action &a) {
 // Elector deposit / recover (specs/elections.mch). Python's
 // _fill_election_action serves both btypes: source + amount, and no composite
 // column at all. The recover half OMITS the `amount` key when the elector never
-// confirmed, which the Python fill reads with an `in` test — `dg` answers Null
+// confirmed, which the Python fill reads with an `in` test, `dg` answers Null
 // for a missing key, so the unconditional form is equivalent.
 void fill_election(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "stake_holder"));
@@ -1231,7 +1208,7 @@ void fill_dex_deposit_liquidity(const Value &d, Action &a) {
 // Two things differ from the V1 fill above and are NOT typos: the pool address
 // lives under `pool` (V1 uses `pool_address`) and the user wallets under
 // `sender_wallet_N` (V1 uses `user_jetton_wallet_N`); and the two
-// `target_asset_*` output keys ALIAS asset_1/asset_2 — the V2 build carries no
+// `target_asset_*` output keys ALIAS asset_1/asset_2, the V2 build carries no
 // separate target asset, only target AMOUNTS, and the reference passes the same
 // data key twice. `destination_secondary` is written only when the deposit
 // contract is present, mirroring the reference's `is not None` guard.
@@ -1278,7 +1255,7 @@ void fill_dedust_v2_deposit(const Value &d, Action &a) {
 // block_tree_serializer.py _fill_dedust_v2_deposit_liquidity_partial (:452):
 // the BARE dex_deposit_liquidity fill plus the deposit contract. A partial
 // carries no target amounts and no vault excesses, so its composite is the
-// eight-key one — deliberately NOT the twelve-key shape of the fill above.
+// eight-key one, deliberately NOT the twelve-key shape of the fill above.
 void fill_dedust_v2_deposit_partial(const Value &d, Action &a) {
   a.type = "dex_deposit_liquidity";
   fill_dex_deposit_liquidity(d, a);
@@ -1311,7 +1288,7 @@ void fill_dex_withdraw_liquidity(const Value &d, Action &a) {
   a.dex_withdraw_liquidity_data = mkdict(std::move(f));
 }
 
-// getgems / telegram NFT purchase. Sets nft_transfer_data ONLY — unlike
+// getgems / telegram NFT purchase. Sets nft_transfer_data ONLY, unlike
 // fill_nft_transfer, which also writes nft_listing_data.
 void fill_nft_purchase(const Value &d, Action &a) {
   // Python guards the source assignment on prev_owner being present; av_addr
@@ -1352,7 +1329,7 @@ void fill_dns_release(const Value &d, Action &a) {
   a.value = av_amount(dg(d, "value"));
 }
 
-// _fill_nft_put_on_auction_action — the `teleitem_start_auction` fill.
+// _fill_nft_put_on_auction_action, the `teleitem_start_auction` fill.
 void fill_nft_put_on_auction(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "owner"));
   a.source_secondary = av_addr(dg(d, "listing_address"));
@@ -1379,12 +1356,12 @@ void fill_nft_put_on_auction(const Value &d, Action &a) {
   a.nft_listing_data = mkdict(std::move(l));
 }
 
-// _fill_cancel_nft_trade_action — shared by teleitem_cancel_auction and the
+// _fill_cancel_nft_trade_action, shared by teleitem_cancel_auction and the
 // three GetGems cancel/finish btypes. Python appends asset_secondary to
 // `accounts` unconditionally. For the teleitem producer that is a no-op
 // (asset_secondary IS the destination there, which build_action already
 // pushes), but for the GetGems trio the destination is the SALE/AUCTION
-// contract and asset_secondary is the NFT — an account the generic assembly
+// contract and asset_secondary is the NFT, an account the generic assembly
 // cannot reach, because those matchers deliberately do NOT consume the
 // nft_transfer that would otherwise have carried it. push_account + the dedup
 // keeps both cases right.
@@ -1399,7 +1376,7 @@ void fill_cancel_nft_trade(const Value &d, Action &a) {
   push_account(a, a.asset_secondary);
 }
 
-// _fill_nft_put_on_sale_action — the `nft_put_on_sale` fill. Same two
+// _fill_nft_put_on_sale_action, the `nft_put_on_sale` fill. Same two
 // composites as fill_nft_put_on_auction with the sale/auction key groups
 // swapped: the sale carries full_price / marketplace_fee / royalty_amount and
 // nulls the five auction-only keys.
@@ -1429,7 +1406,7 @@ void fill_nft_put_on_sale(const Value &d, Action &a) {
   a.nft_listing_data = mkdict(std::move(l));
 }
 
-// _fill_sale_update_action — the `nft_update_sale` fill. Python also appends
+// _fill_sale_update_action, the `nft_update_sale` fill. Python also appends
 // asset_secondary to `accounts`; unlike the cancel fill, asset_secondary here is
 // the NFT (neither source nor destination), so it needs the extra push.
 void fill_sale_update(const Value &d, Action &a) {
@@ -1449,7 +1426,7 @@ void fill_sale_update(const Value &d, Action &a) {
 
 // _fill_auction_bid_action. Python reads `bidder`/`auction`/`nft_address` with a
 // bare `.as_str()` (no null guard), so a null there is a crash Python never
-// reaches — av_addr's Null is the same observable row.
+// reaches, av_addr's Null is the same observable row.
 void fill_auction_bid(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "bidder"));
   a.destination = av_addr(dg(d, "auction"));
@@ -1480,7 +1457,7 @@ void fill_auction_outbid(const Value &d, Action &a) {
   push_account(a, a.asset_secondary);
 }
 
-// _fill_nft_discovery_action — the smallest fill in the family. `destination` is
+// _fill_nft_discovery_action, the smallest fill in the family. `destination` is
 // deliberately never set (Python does not set it either).
 void fill_nft_discovery(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
@@ -1491,12 +1468,12 @@ void fill_nft_discovery(const Value &d, Action &a) {
   a.nft_transfer_data = mkdict(std::move(t));
 }
 
-// _fill_nft_mint_action — the `nft_mint` fill (specs/nft_mint.mch). The ONLY
-// producer of the nft_mint_data composite. Python guards the source/collection
+// _fill_nft_mint_action, the `nft_mint` fill (specs/nft_mint.mch). The ONLY
+// producer of the nft_mint_data composite. The reference serializer guards the source/collection
 // assignments on the AccountId being present; av_addr already answers Null for a
 // missing or addr_none value, so the unconditional form is equivalent. `opcode`
 // and `nft_item_index` are raw passthroughs (the index is a Float in the fixture
-// corpus, an Int in production — the serializer never coerces it).
+// corpus and an Int in production. The serializer never coerces it.
 void fill_nft_mint(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "source"));
   a.destination = av_addr(dg(d, "address"));
@@ -1508,8 +1485,8 @@ void fill_nft_mint(const Value &d, Action &a) {
   a.nft_mint_data = mkdict(std::move(f));
 }
 
-// --- basic-actions fallback fills (Step 2c; block_tree_serializer.py) --------
-// Reached ONLY on the FALLBACK path (ClassifyResult.failure) — the main dump's
+// --- Basic-action fallback fills -------------------------------------------
+// Reached only on the fallback path (ClassifyResult.failure). The main dump's
 // `pending` is matcher-produced composites, never these leaf btypes. Corpus has
 // no failing traces, so this path is ungated (regression-gated only).
 void fill_call_contract(const Value &d, Action &a) {
@@ -1518,7 +1495,7 @@ void fill_call_contract(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "source"));
   a.destination = av_addr(dg(d, "destination"));
   // value_extra_currencies is not a rendered column; `extra_currencies` is
-  // absent from the C++ leaf data (§10 residual) — Python defaults it to {}.
+  // absent from the C++ leaf data. The reference serializer defaults it to {}.
 }
 
 void fill_ton_transfer(const Value &d, Action &a) {
@@ -1552,7 +1529,7 @@ bool fill_action(Block *b, Action &a) {
   // Coffee liquidity port (specs/coffee_liquidity.mch). Python routes this
   // btype to _fill_dedust_deposit_liquidity_action verbatim
   // (block_tree_serializer.py `case "coffee_deposit_liquidity"`), and the data
-  // keys are the same DepositLiquidityData field set — so it is one dispatch
+  // keys are the same DepositLiquidityData field set, so it is one dispatch
   // arm, no new fill. The withdraw half needs none at all: it produces
   // `dex_withdraw_liquidity`, already dispatched below.
   else if (t == "coffee_deposit_liquidity") fill_dedust_deposit(d, a);
@@ -1606,8 +1583,7 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "tgbtc_burn") fill_tgbtc_burn(d, a);
   else if (t == "tgbtc_new_key") fill_tgbtc_new_key(d, a);
   else if (t == "tgbtc_dkg_log") fill_tgbtc_dkg_log(d, a);
-  // W6 bucket B: matcher-produced btypes that used to fall through to `return
-  // false` and lose the whole row.
+  // Matcher-produced block types with dedicated action fills.
   else if (t == "renew_dns") fill_dns_renew(d, a);
   else if (t == "nominator_pool_deposit") fill_nominator_pool_deposit(d, a);
   else if (t == "nominator_pool_withdraw_request") fill_nominator_pool_withdraw_request(d, a);
@@ -1619,14 +1595,8 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "tonstakers_withdraw_request") fill_tonstakers_withdraw_request(d, a);
   else if (t == "dex_deposit_liquidity") fill_dex_deposit_liquidity(d, a);
   else if (t == "dex_withdraw_liquidity") fill_dex_withdraw_liquidity(d, a);
-  // nft_purchase: the former NAMED SKIP, REVERSED in W6 by the lead.
-  // The old note said nft_purchase had zero corpus coverage and so nothing to
-  // A/B-gate, and left it unported. That reasoning does not survive EM2: the
-  // matcher runs and Python emits the row, so leaving it out does not avoid a
-  // diff — it MANUFACTURES one in `real-mismatch`, the one phase-1 bucket that
-  // must read zero, on traffic (GetGems) that is plentiful live even though the
-  // fixture corpus has none of it. Gated hermetically instead
-  // (--actions-msgpack-test), like the other W6 fills.
+  // nft_purchase is matcher-produced and therefore needs an action row even when
+  // the fixture corpus contains no matching trace.
   else if (t == "nft_purchase") fill_nft_purchase(d, a);
   else if (t == "dns_purchase") fill_nft_purchase(d, a);
   else if (t == "dns_release") fill_dns_release(d, a);
@@ -1634,7 +1604,7 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "delete_dns") fill_delete_dns(d, a);
   // Teleitem auction port (specs/teleitem_auction.mch). The two fills are named
   // for the Python functions they port, which the GetGems sale/auction family
-  // below shares verbatim — one Python fill, several producing btypes.
+  // below shares verbatim. One fill serves several producing block types.
   else if (t == "teleitem_start_auction" || t == "nft_put_on_auction")
     fill_nft_put_on_auction(d, a);
   else if (t == "teleitem_cancel_auction" || t == "nft_cancel_sale" ||
@@ -1684,7 +1654,7 @@ bool build_action(Block *b, Action &a) {
     maxu = std::max(maxu, n->tx != nullptr ? n->tx->now : 0);
     if (n->tx != nullptr) seqmax = std::max(seqmax, n->tx->mc_block_seqno);
   }
-  // tx_hashes extension by initiating_event_node (block_to_action, Step 2a).
+  // Extend tx_hashes with initiating_event_node.
   if (b->initiating_event_node != nullptr) {
     ths.insert(b->initiating_event_node->tx_hash());
   }
@@ -1696,14 +1666,14 @@ bool build_action(Block *b, Action &a) {
   a.mc_seqno_end = b->event_nodes.empty() ? 0 : seqmax;
   if (!fill_action(b, a)) return false;
 
-  // accounts assembly (block_to_action tail, Step 2a; role-less — no role
+  // Assemble role-less accounts; no role
   // system on this branch). base = each event_node's tx account; + source/
   // source_secondary; + destination/destination_secondary UNLESS ghost; +
   // the initiating tx account (non-tick_tock). Dedup, drop nulls. Directional
   // fields are av_addr Str values (or Null → skipped).
   // Seeded from whatever the fill already pushed (push_account): a handful of
-  // Python fills append a non-directional address — `action.accounts.append(
-  // action.asset_secondary)` in the NFT sale/auction family — which the
+  // Python fills append a non-directional address, `action.accounts.append(
+  // action.asset_secondary)` in the NFT sale/auction family, which the
   // source/destination-driven assembly below cannot derive. Empty for every
   // other fill, so the seed is a no-op there.
   std::vector<std::string> accts = std::move(a.accounts);

@@ -1,32 +1,32 @@
-"""Expression evaluator over IR JSON trees (k-tagged dicts, docs/mch-ir-poc.md).
+"""Evaluate k-tagged IR expression trees.
 
-Semantic mirror of the frontend evaluator (indexer/events/mch/eval.py) — same
+This mirrors the frontend evaluator (indexer/events/mch/eval.py), including the
 null propagation, bool-only conditions, builtin set/arity, lookup and host-fn
-resolution, and EvalError-as-rejection contract — but it dispatches on the IR
+resolution and EvalError-as-rejection contract. It dispatches on the IR
 encoding directly instead of ast_ nodes, so it needs nothing from the frontend.
 
 Two evaluation surfaces:
 
-- `Evaluator` — async, used by build programs. Env names are captures / lets /
+- `Evaluator` is async and used by build programs. Env names are captures, lets,
   well-known names; `dotfield` is an error here (build statements have no
   current block).
-- `eval_where_expr` — sync, used to compose a node's inline `where (expr)`
+- `eval_where_expr` is synchronous and composes a node's inline `where (expr)`
   onto `test_self`. `dotfield` reads the current block's `data` field; env
   names are unbound; async constructs (lookup, host fns) are rejected at
   artifact load time (see loader._check_where_expr). Any EvalError or non-bool
   result makes the test fail (False), never aborts matching.
 
 The sync evaluator, builtins table and strict operator cores live in the
-shared leaf `indexer/events/mch/expr_eval.py` (T33): the compiled path
-composes the SAME `eval_where_expr` onto its `test_self`, and neither package
-may import the other — see that module's docstring. Re-exported here so this
+shared leaf `indexer/events/mch/expr_eval.py`. The compiled path
+composes the same `eval_where_expr` onto its `test_self`, and neither package
+imports the other. The names are re-exported here so this
 module's public API is unchanged.
 """
 from __future__ import annotations
 
 from typing import Any
 
-from indexer.events.mch.expr_eval import (  # noqa: F401 — re-exports
+from indexer.events.mch.expr_eval import (  # noqa: F401; re-exports
     BUILTINS,
     EvalError,
     _access,
@@ -106,7 +106,7 @@ class Evaluator:
         return _require_bool(await self.eval(e))
 
     async def _eval_mapc(self, e: dict) -> Any:
-        """`map(xs as VAR => body)` (§16.1 G-LC). null xs -> null; non-list xs ->
+        """`map(xs as VAR => body)`. null xs -> null; non-list xs ->
         fault; empty -> []. Binds VAR in `self.env` per element (a new scope
         frame), restoring the prior binding afterward so `body` may shadow an
         outer capture named VAR."""
@@ -124,7 +124,7 @@ class Evaluator:
         return out
 
     async def _eval_quant(self, e: dict) -> Any:
-        """`any|all(xs as VAR => body)` (§16.1 G-Q). null xs -> null; non-list xs
+        """`any|all(xs as VAR => body)`. null xs -> null; non-list xs
         -> fault; empty -> false (any) / true (all). Short-circuits like
         std::any_of / std::all_of. `body` must be a bool."""
         xs = await self.eval(e["xs"])
@@ -168,10 +168,11 @@ class Evaluator:
         return _Frame()
 
     async def _eval_parse(self, e: dict) -> Any:
-        """`parse target as T (| T)*` (W7): parse the target block's body against
-        the message types in source order, first success wins. FAULTS (build
-        reject) on a null/non-block target or when no type parses — there is no
-        soft-null variant (spec §0.5(a)). Returns the parsed message object."""
+        """Parse the target block's body against message types in source order.
+
+        The first success wins. The expression faults and rejects the build on
+        a null/non-block target or when no type parses. There is no
+        soft-null variant. Returns the parsed message object."""
         target = await self.eval(e["x"])
         if target is None:
             raise EvalError("parse: target is null")

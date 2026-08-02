@@ -12,16 +12,14 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-// pythonExclusions is the top-level key set database.py:669 passes to
-// convert_numerics_to_strings - the only numbers Python leaves as numbers.
+// pythonExclusions lists top-level fields kept numeric by the Python encoder.
 var pythonExclusions = map[string]bool{
 	"start_lt": true, "end_lt": true, "start_utime": true, "end_utime": true,
 	"opcode": true, "trace_start_lt": true, "finality": true, "trace_end_lt": true,
 	"trace_end_utime": true, "mc_seqno_end": true, "trace_mc_seqno_end": true,
 }
 
-// pythonStyle reproduces database.py:147-174 convert_numerics_to_strings so the
-// test's "old" blob is byte-shaped the way production Python writes it today.
+// pythonStyle reproduces the production Python numeric conversion.
 func pythonStyle(m map[string]interface{}) map[string]interface{} {
 	out := make(map[string]interface{}, len(m))
 	for k, v := range m {
@@ -55,18 +53,15 @@ func pythonConvert(v interface{}) interface{} {
 	}
 }
 
-// pythonStyleAction is naturalAction as production Python writes it: every
-// number outside the exclusion set stringified, plus the one field Python
-// stringifies from a float (block_tree_serializer.py:572) and so emits with a
-// ".0" suffix that strconv.ParseInt rejects.
+// pythonStyleAction applies Python's string encoding, including an integral
+// float with a ".0" suffix.
 func pythonStyleAction() map[string]interface{} {
 	m := pythonStyle(naturalAction())
 	m["change_dns_record_data"].(map[string]interface{})["flags"] = "1.0"
 	return m
 }
 
-// naturalAction is one action carrying every field a native writer would emit
-// as a number, including all nine composites whose ints Python stringifies.
+// naturalAction carries numeric fields in their native msgpack forms.
 func naturalAction() map[string]interface{} {
 	return map[string]interface{}{
 		"action_id":                "9C7SqQ==",
@@ -169,8 +164,7 @@ func decodeAction(t *testing.T, m map[string]interface{}) Action {
 	return a
 }
 
-// (a) + (b) + (c) + (d): the Python-shaped blob and the natural-typed blob both
-// decode, and to the identical struct.
+// TestOldAndNewStyleDecodeIdentically checks both numeric wire representations.
 func TestOldAndNewStyleDecodeIdentically(t *testing.T) {
 	natural := naturalAction()
 	old := decodeAction(t, pythonStyleAction())
@@ -180,7 +174,7 @@ func TestOldAndNewStyleDecodeIdentically(t *testing.T) {
 		t.Fatalf("python-style and natural-style decode differ:\nold = %+v\nnew = %+v", old, new_)
 	}
 
-	// (a) the python-style blob decodes to the values it always decoded to
+	// Python-style scalar values decode without changing their values.
 	if old.ActionId != "9C7SqQ==" || old.Type != "change_dns_record" || !old.Success {
 		t.Errorf("scalars: %+v", old)
 	}
@@ -203,7 +197,7 @@ func TestOldAndNewStyleDecodeIdentically(t *testing.T) {
 		t.Errorf("tx_hashes = %v", old.TxHashes)
 	}
 
-	// (c) the seven composites that abort the whole Unmarshal today
+	// Composite numeric fields accept Python string encodings.
 	if d := old.MultisigCreateOrderData; d == nil || *d.CreatorIndex != 2 || *d.ExpirationDate != 1753900000 || *d.OrderSeqno != "4" {
 		t.Errorf("multisig_create_order_data = %+v", d)
 	}
@@ -225,7 +219,7 @@ func TestOldAndNewStyleDecodeIdentically(t *testing.T) {
 	if d := old.CocoonUnregisterProxyData; d == nil || *d.Seqno != 11 {
 		t.Errorf("cocoon_unregister_proxy_data = %+v", d)
 	}
-	// and the two the C++ exemption list already covered
+	// These fields also use decimal-string encoding.
 	if d := old.JvaultStakeData; d == nil || *d.Period != 2592000 {
 		t.Errorf("jvault_stake_data = %+v", d)
 	}
@@ -233,14 +227,13 @@ func TestOldAndNewStyleDecodeIdentically(t *testing.T) {
 		t.Errorf("layerzero_packet_data = %+v", d)
 	}
 
-	// (d) "1.0" no longer aborts the request
+	// Integral floating-point spellings decode into integer fields.
 	if d := old.ChangeDnsRecordData; d == nil || d.Flags == nil || *d.Flags != 1 {
 		t.Fatalf("change_dns_record_data = %+v", d)
 	}
 }
 
-// (d) flags accepts every form a writer can produce, and reaches RawAction
-// without the ParseInt that used to 500 the whole request.
+// TestDnsFlagsForms checks every supported flags representation through RawAction.
 func TestDnsFlagsForms(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -282,7 +275,7 @@ func TestDnsFlagsForms(t *testing.T) {
 	}
 }
 
-// (e) a native int in a *string field renders as decimal.
+// TestNativeNumberIntoStringField checks decimal rendering for native integers.
 func TestNativeNumberIntoStringField(t *testing.T) {
 	a := decodeAction(t, map[string]interface{}{
 		"action_id": "a",
@@ -316,7 +309,7 @@ func TestNativeNumberIntoStringField(t *testing.T) {
 	}
 }
 
-// Widening only: input that was never a number still fails, and nil still nils.
+// TestFlexDecodeRejectsNonNumbers checks invalid input and nil handling.
 func TestFlexDecodeRejectsNonNumbers(t *testing.T) {
 	for _, bad := range []interface{}{"abc", "1.5", "", "0x10", true} {
 		var a Action
@@ -346,9 +339,7 @@ func TestFlexDecodeRejectsNonNumbers(t *testing.T) {
 	}
 }
 
-// Control: typeDecMap is keyed on the exact type, so a defined int type keeps
-// the stock decoder. It pins what the registration actually changes - and that
-// the Python-written composites really did abort the whole Unmarshal before.
+// TestControlStockDecoderStillRejectsStrings checks exact-type registration.
 func TestControlStockDecoderStillRejectsStrings(t *testing.T) {
 	type stockInt64 int64
 	var v struct {
@@ -366,10 +357,7 @@ func TestControlStockDecoderStillRejectsStrings(t *testing.T) {
 	}
 }
 
-// The float fallback's range bounds. float64 represents neither MaxInt64 nor
-// MaxUint64, so both constants round *up* past the type's range and the ".0"
-// spelling of each maximum parses to the rounded value - which is why the upper
-// bounds are >= and not >.
+// TestParseFlexBoundaries checks rounded float bounds and exact decimal maxima.
 func TestParseFlexBoundaries(t *testing.T) {
 	// 2^63-1024 and 2^64-2048: the largest value of each type float64 holds exactly
 	for _, tc := range []struct {
@@ -378,8 +366,7 @@ func TestParseFlexBoundaries(t *testing.T) {
 	}{
 		{"9223372036854774784.0", 9223372036854774784},
 		{"-9223372036854775808.0", math.MinInt64},
-		// MinInt64 IS representable, so unlike the positive side the rounding
-		// lands back inside the range: this parses to MinInt64 and is accepted.
+		// MinInt64 is exactly representable and remains in range.
 		{"-9223372036854775809.0", math.MinInt64},
 	} {
 		got, err := parseFlexInt(tc.in)
@@ -387,7 +374,7 @@ func TestParseFlexBoundaries(t *testing.T) {
 			t.Errorf("parseFlexInt(%q) = %d, %v; want %d, nil", tc.in, got, err, tc.want)
 		}
 	}
-	// -2^63-2048 is the next float64 below MinInt64 - the real negative bound
+	// -2^63-2048 is the next float64 below MinInt64.
 	for _, in := range []string{"9223372036854775807.0", "9223372036854775808.0", "-9223372036854777856.0"} {
 		if got, err := parseFlexInt(in); err == nil {
 			t.Errorf("parseFlexInt(%q) = %d, want error", in, got)
@@ -403,8 +390,7 @@ func TestParseFlexBoundaries(t *testing.T) {
 		}
 	}
 
-	// the plain decimal spelling of each maximum takes the ParseInt/ParseUint
-	// path and stays exact
+	// Plain decimal maxima use exact ParseInt and ParseUint paths.
 	if got, err := parseFlexInt("9223372036854775807"); err != nil || got != math.MaxInt64 {
 		t.Errorf("parseFlexInt(MaxInt64) = %d, %v", got, err)
 	}
@@ -482,8 +468,7 @@ func TestNormAddr(t *testing.T) {
 	}
 }
 
-// The real entry point: an HSET with one node and an actions blob, in both
-// encodings and both gzip states.
+// TestConvertHSetBothEncodings checks numeric encodings and compression states.
 func TestConvertHSetBothEncodings(t *testing.T) {
 	rootHash := make([]byte, 32)
 	for i := range rootHash {

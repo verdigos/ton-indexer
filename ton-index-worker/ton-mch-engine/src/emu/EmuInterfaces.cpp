@@ -19,13 +19,9 @@ schema::NFTItemDataV2 to_v2(const NftItemDetectorR::Result &r) {
   v.index = r.index;
   v.collection_address = r.collection_address;
   v.owner_address = r.owner_address;
-  // content MUST be carried: get_nft_data faults on a non-Dict, so dropping it
-  // here drops the nft_transfer row of every EMULATED trace whose NFT the
-  // emulator itself detected. Both sides are the same
-  // optional<map<string,string>>.
+  // get_nft_data requires content to remain an optional dictionary.
   v.content = r.content;
-  // dns_entry stays unset: a distinct type on either side, and no lookup kind
-  // reads it.
+  // dns_entry has no compatible type and is not read by lookup handlers.
   return v;
 }
 

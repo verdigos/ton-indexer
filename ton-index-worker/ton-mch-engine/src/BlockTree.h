@@ -1,22 +1,6 @@
-// EventNode tree + Block substrate for the MCH engine.
-//
-// Ports the Python indexer's structural machinery (blocks/utils/tree_utils.py
-// to_tree, blocks/core.py Block, event_processing.init_block) following the
-// already-validated Go port (mch-go-poc/tree/tree.go, A/B-verified against the
-// Python engine on real fixtures).
-//
-// Deliberate deviations from the Python substrate (all deterministic):
-//  - next_blocks is kept in canonical order (min_lt asc, stable) at all times:
-//    after tree construction and after every merge. The Python IR engine
-//    instead sorts candidates at every walk site (T21); maintaining the
-//    invariant here lets the C++ walker read lists raw with identical
-//    observable semantics.
-//  - find_frontier dedups its output; Python's find_next can yield the same
-//    block twice on diamond shapes and keeps duplicates in next_blocks.
-//    Suspect #1 if a matcher A/B diff ever shows up on diamond traces.
-//  - compact_connections preserves first-seen order (Python uses set()).
-//  - No `transient` flag: only legacy LabelBlock ever set it; the IR engine
-//    produces no transient blocks, so the merge filter would filter nothing.
+// EventNode tree and Block substrate. Outgoing edges remain in stable min_lt
+// order, frontier discovery deduplicates blocks, and connection compaction keeps
+// first-seen order. See docs/engine-internals.md.
 #pragma once
 
 #include "TraceLoader.h"
@@ -45,10 +29,9 @@ struct EventNode {
   std::vector<EventNode *> children;
 
   // --- ghost-external synthesis (GhostExternal.h) ---------------------------
-  // EventNode.ghost_node: an intended-but-never-sent message, decoded out of a
-  // failed wallet external's body. Reaches the row set through
-  // Block::is_ghost_block (the destination is NOT a participating account —
-  // nothing ever ran at it).
+  // EventNode.ghost_node is an intended but unsent message decoded from a
+  // failed wallet external. The destination is not a participating account,
+  // because no transaction ran there.
   bool ghost{false};
   // EventNode.failed, when init_from_external FORCES it True on the external's
   // own node and every ghost it hangs off it. Everywhere else `failed` is
@@ -120,7 +103,7 @@ struct Block {
 
   // core.py Block.initiating_event_node: a leaf block's single node's tree
   // parent; a merged block inherits it from the earliest merged block. Drives
-  // the serializer's accounts assembly + tx_hashes extension (Phase G step 2a).
+  // the serializer's account assembly and tx_hashes extension.
   const EventNode *initiating_event_node{nullptr};
   // core.py is_ghost_block: true iff a node behind this block is a ghost (an
   // intended-but-not-started op). Only the ghost-external fallback produces
@@ -172,7 +155,7 @@ struct Block {
     return event_nodes.empty() ? std::string{} : event_nodes.front()->tx_hash();
   }
 
-  // Recompute min/max lt from the current event_nodes (Phase E passes call this
+  // Recompute min/max lt from the current event_nodes. Post-processing calls this
   // after absorbing a paired leg's nodes). Public: post-process is host-side.
   void calculate_min_max_lt();
 

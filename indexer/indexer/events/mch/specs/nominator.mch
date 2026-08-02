@@ -1,39 +1,36 @@
-# Nominator pool withdraw — REMAKE (not a port) of blocks/staking.py
-# NominatorPoolWithdrawMatcher (owner-initiated payout, following a
-# NominatorPoolProcessWithdrawRequests call). FULLY DECLARATIVE build.
+# Nominator pool withdraw matcher for an owner-initiated payout following a
+# NominatorPoolProcessWithdrawRequests call. Its build is declarative.
 #
 # Legacy anchors on the call and loops over every ton_transfer child, building
-# ONE NominatorPoolWithdrawRequestBlock per payout while deliberately leaving
-# the call itself unconsumed (each payout's `previous_block` stays the call —
+# one NominatorPoolWithdrawRequestBlock per payout while leaving
+# the call itself unconsumed (each payout's `previous_block` stays the call;
 # `merge_blocks([transfer_block])` only, never the call).
 #
 # That fan-out (1 match -> N produced blocks, shared parent unconsumed) is not
-# expressible by anchoring on the call. Remake per the port-wave sketch
-# ("re-anchor per payout"): anchor directly on each payout `ton_transfer`; the
-# parent call is checked via a host predicate on `.previous_block` (never a
+# expressible by anchoring on the call. Each payout `ton_transfer` is the anchor.
+# The parent call is checked via a host predicate on `.previous_block` (never a
 # captured node), so it is never part of the consumed set and stays unconsumed
 # exactly like legacy. The engine's normal per-block loop then produces one
 # independent match per payout for any N, with identical output granularity.
 #
 # The pool address and the payout amount are both reachable without navigating
 # to the (uncaptured) parent: the payout ton_transfer is sent BY the pool, so
-# `payout.msg.source` is the pool and `payout.msg.destination` is the nominator;
+# `payout.msg.source` is the pool and `payout.msg.destination` is the nominator.
 # the pool block value equals the payout message value (TonTransferBlock.value =
 # msg.value), so `payout.msg.value` is the amount. The NominatorPool interface
-# check (legacy `get_interfaces` membership, spec §10.7 reject / G10 verdict) is
+# check (legacy `get_interfaces` membership) is
 # a registered nullable lookup keyed on the pool address, rejected when null.
 #
 # Aux merge (both new matchers): legacy takes pre_build_auto_append=True with
 # include_excess/include_bounces defaulting True (staking.py:348,374), and
-# basic_matchers.py:42-57 funnels BOTH aux opcodes through one list, so the
-# excess and bounce are MERGED into the produced block, not appended standalone.
+# basic_matchers.py:42-57 funnels both auxiliary opcodes through one list, so the
+# excess and bounce are merged into the produced block, not appended standalone.
 # The mch root default appends, so both are consumed optional children and both
-# flags are off. This is the repo's FIRST `include_bounces false`; the precedent
-# is nft_transfer.mch:56 (+ header :17-23), which does this for excess alone.
+# flags are off. nft_transfer.mch uses the same approach for excess alone.
 #
-# ACCEPTED DIVERGENCE (aux arity): `maybe op X` binds AT MOST ONE block per item
+# Auxiliary arity differs: `maybe op X` binds at most one block per item
 # (engine.py:523-543, Walker.cpp:186-208), whereas the legacy true-form merges
-# EVERY matching excess/bounce (basic_matchers.py:49-52). A 'd'/'w' anchor with
+# every matching excess/bounce (basic_matchers.py:49-52). A 'd'/'w' anchor with
 # more than one excess or bounce therefore leaves the surplus unconsumed here.
 # One message chain practically yields one of each, so this is accepted. If an
 # A/B diff surfaces, this documented aux-arity divergence is the reason.

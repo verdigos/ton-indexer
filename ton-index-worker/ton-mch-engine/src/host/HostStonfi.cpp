@@ -39,7 +39,7 @@ constexpr std::uint32_t kStonfiSwapReserveErr = 0x38976e9b;
 // stonfi v2 opcodes (blocks/swaps.py StonfiV2SwapBlockMatcher). The swap
 // REQUEST call carries op 0x6664de2a (swap_opcode) with a StonfiSwapV2 body;
 // the pay_to call carries op 0x657b54f5 with a StonfiV2PayTo body (the
-// StonfiSwapV2.opcode class attr is misleading/unused — its __init__ never
+// StonfiSwapV2.opcode class attr is misleading/unused, its __init__ never
 // checks the tag). 0x6664de2a doubles as the forward-payload swap opcode and
 // one of the cross-swap sum-type tags.
 constexpr std::uint32_t kV2Swap = 0x6664de2a;       // swap request call
@@ -51,7 +51,7 @@ constexpr std::uint32_t kPTonTransfer = 0x01f3835d;
 // rejects on a missing wallet interface) rather than an absent message.
 constexpr std::uint32_t kJettonTransfer = 0x0f8a7ea5;
 
-// (acc_str moved to host/BlockViews.h — shared with the tonco core.)
+// acc_str is shared with the tonco core through host/BlockViews.h.
 
 // messages/swaps.py StonfiPaymentRequest.__init__ IN FULL: opcode(32),
 // query_id(64), owner(load_address), exit_code(32), then a ref whose slice
@@ -121,7 +121,7 @@ bool sender_related(std::uint32_t ec) {
 
 // --- stonfi v2 --------------------------------------------------------------
 
-// (open_ref moved to parse/PSlice.h as open_ref_cell — shared with tonco + dedust.)
+// open_ref_cell is shared with the tonco and dedust parsers.
 
 // messages/swaps.py StonfiV2PayTo. Fields the core reads: exit_code,
 // amount0_out, token0_address, amount1_out, token1_address (canonical upper).
@@ -316,9 +316,9 @@ bool stonfi_v1_sender_payment(const Block *block) {
 }
 
 // builders/stonfi_v1.py _stonfi_v1_swap_data -> blocks/swaps.py
-// build_stonfi_v1_swap_core (§11.5 full port). args = (in_transfer anchor,
-// StonfiSwap call). The outgoing transfer is now resolved by btype (matches the
-// generic declarative jetton_transfer block); no try/except in the Python
+// build_stonfi_v1_swap_core. Arguments are the in_transfer anchor and
+// StonfiSwap call). Resolve the outgoing transfer by btype to match the generic
+// declarative jetton_transfer block. There is no try/except in the Python
 // wrapper, so any nav/parse/lookup miss raises -> rt_fault -> match rejection.
 EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   if (args.size() != 2) {
@@ -504,8 +504,8 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   return rt_ok(Value::make_obj(std::move(d)));
 }
 
-// no_internal_transfer is gone (W6): folded into the spec as the inline
-// `where (not .has_internal_transfer)` on the stonfi_v2 jetton_transfer out-arm.
+// The stonfi_v2 jetton-transfer output arm uses the inline predicate
+// `where (not .has_internal_transfer)`.
 
 // builders/stonfi.py pton_self_transfer -> validate_stonfi_v2_intermediate_pton_transfer
 // (try/except -> False). The intermediate pton call's previous jetton_transfer
@@ -590,11 +590,9 @@ Value asset_from_wallet_jetton(const Value &wallet) {
 
 // builders/stonfi.py _stonfi_v2_swap_data -> blocks/swaps.py
 // build_stonfi_v2_swap_core. No try/except in the Python wrapper, so any parse/
-// nav failure raises -> match rejection (rt_fault here). NOTE the dead isinstance
-// at swaps.py:404: in_transfer is a generic jetton_transfer Block or a
-// PTonTransfer call, never the LEGACY JettonTransferBlock, so the JettonTransfer
-// arm is DEAD — the in-leg is always synthesized from the message (asset TON),
-// reproduced here.
+// nav failure raises -> match rejection (rt_fault here). The incoming btype
+// selects the leg construction: jetton_transfer reads the produced block data;
+// the pTON call path synthesizes the message-backed TON leg.
 EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
     return rt_fault("stonfi_v2_swap_data: bad arguments");
@@ -726,11 +724,8 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     }
   }
 
-  // in-transfer (§11.5 dual dispatch, deterministic). in_transfer is EITHER a
-  // produced jetton_transfer block (btype "jetton_transfer" — read its data
-  // dict) OR a PTonTransfer call (the message-synthesized TON leg). Python
-  // swaps.py:404 now gates on btype too, so the else arm handles ONLY the
-  // single-leaf pTON call — no more hash-seed-dependent event_nodes[0] read.
+  // Dispatch by incoming btype: a produced jetton_transfer supplies its data;
+  // the single-leaf PTonTransfer call synthesizes the message-backed TON leg.
   if (in_transfer == nullptr) {
     return rt_fault("stonfi_v2: no in_transfer");
   }
@@ -844,7 +839,7 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     // out_transfer.next_blocks. _derive_parts finds it by btype, so a raw
     // JettonTransfer CALL still in the consumed set means the jetton_transfer
     // matcher rejected it (missing wallet interface) rather than the trace
-    // lacking an out leg — that distinction is the whole point of the count.
+    // lacking an out leg, that distinction is the whole point of the count.
     std::size_t jt_calls = 0;
     for (const Block *b : consumed) {
       if (is_call_op(b, kJettonTransfer)) jt_calls++;

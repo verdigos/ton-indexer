@@ -16,7 +16,7 @@ namespace mch {
 namespace {
 
 // Shared arity classifier for both the amount fn and payout-absorb shaper.
-// Legacy consumes every payout only for arity 1 or 2; 0 and >=3 consume none.
+// Reference consumes every payout only for arity 1 or 2; 0 and >=3 consume none.
 std::vector<Block *> classified_withdraw_payouts(const Block *request) {
   std::vector<Block *> payouts;
   if (request == nullptr) {
@@ -79,7 +79,7 @@ void nominator_withdraw_absorb_payouts(Block *produced, const ShaperMatch &m) {
 
   // The wrapper merge made these siblings under produced. Temporarily expose
   // the connected downstream view merge_blocks requires, then restore the
-  // legacy child links after it has derived the combined frontier.
+  // reference child links after it has derived the combined frontier.
   Block *outer = produced->previous_block;
   std::vector<Block *> first_next = payouts.front()->next_blocks;
   payouts.front()->previous_block = outer;

@@ -37,7 +37,7 @@ EvalResult run_swap_host(BuildEnv &env, const std::vector<Value> &args, const ch
     case HostResult<SwapRecord>::Kind::Value:
       return rt_ok(r.value.encode());
     case HostResult<SwapRecord>::Kind::Reject:
-      // The typed Reject is the spec's `reject when r == null` — log it as one.
+      // The typed Reject is the spec's `reject when r == null`, log it as one.
       return host_reject("typed core reject");
     case HostResult<SwapRecord>::Kind::Fault:
       return rt_fault(std::string(binding) + ": " + r.message);

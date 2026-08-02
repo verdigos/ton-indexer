@@ -319,11 +319,7 @@ type actionDexWithdrawLiquidityData struct {
 	UserJettonWallet2 *string `msgpack:"user_jetton_wallet_2"`
 	DexJettonWallet1  *string `msgpack:"dex_jetton_wallet_1"`
 	DexJettonWallet2  *string `msgpack:"dex_jetton_wallet_2"`
-	// The pool-side vault/wallet pair. Real columns of Python's
-	// dex_withdraw_liquidity_details composite (core/database.py:463-464), so
-	// Python-written blobs have always carried them and this decoder silently
-	// dropped them; the C++ writer emits them from fill_dex_withdraw_liquidity
-	// and fill_dedust_v2_claim_reward.
+	// Pool-side vault and wallet fields in dex_withdraw_liquidity_details.
 	DexWallet1       *string `msgpack:"dex_wallet_1"`
 	DexWallet2       *string `msgpack:"dex_wallet_2"`
 	LpTokensBurnt    *string `msgpack:"lp_tokens_burnt"`
@@ -873,11 +869,8 @@ func ptrInt32FromUint16(v *uint16) *int32 {
 	return &i
 }
 
-// normAddr uppercases the hex part of a raw "<workchain>:<hex>" address.
-// Addresses from the payload are inlined verbatim into the addressbook WHERE
-// clause, where a lowercase one misses silently and the client gets an
-// unresolved address back. Anything that is not raw hex is returned unchanged,
-// and an already-uppercase address does not allocate.
+// normAddr uppercases raw address hex for address-book lookups. Non-raw input is
+// returned unchanged, and uppercase input does not allocate.
 func normAddr(s string) string {
 	i := strings.IndexByte(s, ':')
 	if i < 0 {

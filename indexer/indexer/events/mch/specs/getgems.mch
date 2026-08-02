@@ -1,5 +1,4 @@
-# Getgems NFT purchase (R07 remake) — remade from blocks/nft.py
-# GetgemsNftPurchaseBlockMatcher.
+# Getgems NFT purchase matcher corresponding to GetgemsNftPurchaseBlockMatcher.
 #
 # The legacy matcher anchors on the already-produced getgems `nft_transfer`
 # block, then imperatively finds the ton_transfer whose destination is the real
@@ -11,7 +10,7 @@
 #     EmptyBlock proxy between the parent and [nft_transfer, payout]
 #     (nft.py `insert_between`), leaving the parent itself UNCONSUMED.
 #
-# Per the M2R remake gate the internal walk may differ as long as the OUTPUT is
+# The internal walk may differ as long as the output is
 # identical. All three nft.yaml getgems fixtures (direct purchase + two auction
 # purchases) are the normal shape, expressed here as a plain child edge; the
 # seller is picked by a host predicate reusing the exact legacy comparison
@@ -27,7 +26,7 @@
 # The builder reuses the legacy field logic via build_getgems_nft_purchase_core
 # (blocks/nft.py) — the same function the legacy matcher's thin wrapper calls.
 #
-# `shape getgems_proxy_insert` (spec §8.7) carries the finish/stop branch: it
+# `shape getgems_proxy_insert` carries the finish/stop branch: it
 # lifts the verbatim legacy EmptyBlock `insert_between` surgery and, because the
 # sibling payout was not pattern-consumed, absorbs it into the produced block at
 # the same point legacy's single merge did. It is guarded by the same finish/

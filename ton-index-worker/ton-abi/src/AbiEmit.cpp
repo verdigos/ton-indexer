@@ -18,14 +18,14 @@ namespace {
 
 // ---------------------------------------------------------------------------
 // gen-time control-flow signals (mirror the reference's exception model):
-//   HardFail       -> ton-abi-gen aborts (NonStandardDictKey, shape spec §7).
+//   HardFail       -> ton-abi-gen aborts for non-standard dictionary keys.
 // Per-direction stubs are decided structurally (omitted members), no throw.
 // ---------------------------------------------------------------------------
 struct HardFail {
   std::string msg;
 };
 
-// ---- identifier rules (shape spec §2, ports formatting.ts) ----------------
+// ---- identifier rules (ported from formatting.ts) -------------------------
 bool is_safe_ident(const std::string &s) {
   if (s.empty()) {
     return false;
@@ -57,8 +57,8 @@ std::string sanitize_ident(const std::string &s) {
 }
 
 // Monomorph mangling: "ResetTo<int64>" -> "ResetTo_int64",
-// "GenericPair<int32, int64>" -> "GenericPair_int32_int64" (shape spec §2:
-// strip <>, -> _, collapse runs, trim trailing _).
+// "GenericPair<int32, int64>" -> "GenericPair_int32_int64". Replace
+// punctuation with underscores, collapse runs, and trim the trailing one.
 std::string mangle_monomorph(const std::string &s) {
   std::string t;
   for (char c : s) {
@@ -155,8 +155,8 @@ class Emitter {
     ns_ = "ton_abi::gen::" + snake_;
     collect_targets();
 
-    // Emit all bodies FIRST (into per-target buffers) so a HardFail aborts
-    // before any output is assembled (ErrorsAtCodegen parity, shape spec §7).
+    // Emit bodies into per-target buffers first so a hard failure occurs before
+    // any output is assembled.
     for (std::size_t i = 0; i < targets_.size(); ++i) {
       emit_target_bodies(i);
     }
@@ -402,7 +402,7 @@ class Emitter {
     return concrete_alias_.at(ar.alias_name);
   }
 
-  // ---- representability (§7): can this ty be a C++ member at all? --------
+  // ---- can this type be represented as a C++ member? ----------------------
   bool member_representable(int ty_idx) {
     DepthGuard __g(depth_, ty_idx);
     const Ty &t = ty(ty_idx);
@@ -540,7 +540,7 @@ class Emitter {
         return "std::vector<std::pair<" + cpp_key_type(m.key_ty_idx) + ", " + cpp_type(m.value_ty_idx) + ">>";
       }
       case TyKind::EnumRef:
-        return "td::RefInt256";  // enums are bigint-valued (see report deviation note)
+        return "td::RefInt256";  // enums retain their bigint wire representation
       case TyKind::StructRef:
       case TyKind::AliasRef:
         return name_for_ref(ty_idx);
@@ -922,7 +922,7 @@ class Emitter {
 
   // A leaf kind whose to_abi_value converter is INFALLIBLE (a plain abi_v_*
   // call, never a td::Result). For these the struct to_abi_value() body can
-  // add_field directly, skipping the TRY_RESULT unwrap ceremony (W11.5 §3).
+  // add_field directly, without a TRY_RESULT unwrap.
   static bool is_infallible_leaf(const Ty &t) {
     switch (t.kind) {
       case TyKind::IntN:
@@ -1096,7 +1096,7 @@ class Emitter {
     }
   }
 
-  // ---- const-expr materialization for create() defaults (§8) -------------
+  // ---- const-expr materialization for create() defaults -------------------
   std::string const_expr(const ABIConstExpression &ce, int ty_idx) {
     DepthGuard __g(depth_, ty_idx);
     // A non-null default for a nullable field carries the INNER value's
@@ -1144,8 +1144,7 @@ class Emitter {
         // The ty must actually be a tensor/shapedTuple for the item-type mapping
         // to be sound. arrayOf/lispListOf defaults also arrive as a tensor CE but
         // map every item to the container's inner ty; anything else can't be
-        // materialized soundly -> empty init (compiles; default-fill exactness is
-        // refined at T11.3 where it is gate-tested).
+        // materialized soundly, so use an empty initializer that still compiles.
         if (ft.kind == TyKind::Tensor || ft.kind == TyKind::ShapedTuple) {
           const auto &tys = std::get<TyItems>(ft.data).items_ty_idx;
           if (tys.size() == items.size()) {
@@ -1200,7 +1199,7 @@ class Emitter {
     return pack ? c->pack_to_builder : c->unpack_from_slice;
   }
 
-  // The custom-registry delegation preamble (§0.17), identical at every
+  // Custom-registry delegation is identical for every
   // direction of every custom decl: look the entry up by "<contract>::<decl>"
   // and, when that direction was never registered, fail at RUNTIME -- never at
   // compile/link time. `value_type` is the registry's typed slot: the generated
@@ -1222,7 +1221,7 @@ class Emitter {
   // typed form can't reconstruct (e.g. CustomPoint is an empty ABI struct whose
   // custom (un)pack materialize x/y; TelegramString's target is `slice`). Emit
   // it type-erased: `using N = AbiValue` + free N_from_slice/N_store/
-  // N_to_abi_value delegating to the typed registry<AbiValue> (§0.17).
+  // N_to_abi_value delegating to the typed registry<AbiValue>.
   void emit_custom_abivalue(Target &t) {
     t.abi_value_form = true;
     const std::string &N = t.cpp_name;

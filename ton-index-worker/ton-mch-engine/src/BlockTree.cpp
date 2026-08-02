@@ -349,11 +349,10 @@ Value account_or_null(const std::optional<std::string> &addr) {
   return Value::make_account_raw(norm ? *norm : *addr);
 }
 
-// Leaf-block data dicts, mirroring the basic_blocks.py constructors so a
-// where_expr dotfield reads the same values as Python. Deliberate subset:
-// extra_currencies (map not decoded) and ton_transfer's comment/encrypted
-// (need a BOC body parse) are omitted — reading them faults here where Python
-// yields a value, so keep where_exprs to the fields below.
+// Leaf-block data dicts mirror the basic_blocks.py constructors so a where_expr
+// dotfield reads the same values as Python. extra_currencies remains omitted
+// because its map is not decoded. For ton_transfer, leaf_comment_info populates
+// comment, encrypted, and encoded state (`comment_encoded`).
 Value leaf_data(const std::string &btype, const EventNode *node,
                 std::optional<std::uint32_t> op) {
   const Message *msg = node->msg;

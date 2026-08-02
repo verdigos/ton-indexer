@@ -177,10 +177,7 @@ void RedisListener::trace_interfaces_error(td::Bits256 ext_in_msg_hash_norm, td:
 }
 
 void RedisListener::finish_processing(Trace trace, MeasurementPtr measurement) {
-  // The same states TraceInterfaceDetector just ran against, carried on for the
-  // classifier's tier-2 lookups. This path matters MORE than the block
-  // emulators': these are the pending traces, and the accounts a pending trace
-  // references but never touches are exactly what tier 1 cannot serve.
+  // Carry the detector's states into tier-2 lookups for untouched accounts.
   trace.shard_states = shard_states_;
   trace.config = mc_data_state_.config_;
   measurement->end_otel_child_span("detect_interfaces");

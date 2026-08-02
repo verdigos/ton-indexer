@@ -4,11 +4,7 @@ from typing import Any, Protocol
 
 
 class RecursionStrategy(Protocol):
-    """Lowers a recursive rule reference to a lowered IR node.
-
-    v0 default implementation lives at the bottom of this module.
-    Future swap-in: BoundedUnrollingStrategy, SubclassPerRuleStrategy.
-    """
+    """Lower a recursive rule reference to an IR node."""
 
     def lower_recursive_rule(
         self,
@@ -19,7 +15,7 @@ class RecursionStrategy(Protocol):
 
 
 class RecursiveMatcherStrategy:
-    """v0: lowers a recursive rule reference to a frontier `recursive` IR node.
+    """Lower a recursive rule reference to a frontier `recursive` IR node.
 
     Implementation lives in compiler.py (it needs the compiler's lowering
     helpers). This class is a placeholder that the compiler instantiates; the

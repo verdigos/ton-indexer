@@ -1,7 +1,5 @@
-// The product-side half of TraceLoader.h: the trace-level aggregate derivation
-// every loader needs. Split out of the (now fixture-only) msgpack reader so
-// SchemaTraceLoader — the PRODUCTION path — does not pull lz4/msgpack in with
-// it. See TraceLoader.h for why the derivation lives in the loader.
+// Trace-level aggregate derivation shared by schema and fixture loaders.
+// Keeping it separate prevents the schema path from depending on lz4/msgpack.
 #include "TraceLoader.h"
 
 #include <algorithm>

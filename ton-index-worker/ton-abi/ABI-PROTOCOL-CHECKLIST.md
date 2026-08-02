@@ -1,19 +1,16 @@
-# Adding protocol #2 through the ABI path — end-to-end checklist
+# Adding a protocol through the ABI path
 
-Every touch point for putting a REAL on-chain message family through
-`.tolk` decl → committed ABI JSON → generated parser pair → mch registry row →
-`.mch` spec → gated Action row. Derived from the T12.2 as-built (DeDust CPMM V2
-`claim_reward`, the first one) after the R1b ergonomics pass; follow it in order.
+This checklist covers every touch point for putting an on-chain message family
+through a `.tolk` declaration, committed ABI JSON, generated parser pair, mch
+registry row, `.mch` spec, and gated Action row. Follow it in order.
 
-Reference reading: `ton-mch-engine/T122-CLAIMREWARD-DESIGN.md` (the worked
-example, incl. its §10 as-built deltas), `W11-SHAPE-SPEC.md` (what the emitter
-guarantees), `ton-mch-engine/W12-BRIDGE-DESIGN.md` §3 (the adapter's value
-shapes), `indexer/docs/mch-cpp-plan.md` §1 (the gate set).
+`W11-SHAPE-SPEC.md` defines the emitter contract. `MODULE-NOTES.md` defines the
+canonical value shapes and wire-format invariants used by the bridge.
 
 ## 1. Declare the messages (ton-abi)
 
 1. `cp abi/_TEMPLATE.tolk abi/<contract>.tolk` and fill the struct slot. Declare
-   ONLY the messages the spec parses — opcodes and field names/types copied
+   only the messages the spec parses. Copy opcodes and field names/types
    VERBATIM from the authoritative contract source. Everything below the slot is
    compiler appeasement (tolk needs a contract + entrypoint to emit an ABI);
    name your structs in the union arm and leave the rest alone.
@@ -39,7 +36,7 @@ shapes), `indexer/docs/mch-cpp-plan.md` §1 (the gate set).
    bare IDENT; `::` does not lex). A name that collides with an existing row is
    caught by `validate_registries()` at startup and fails closed in
    `parse_message_body`.
-6. `ton-mch-engine/CMakeLists.txt`: append the pair to `ABI_PROD_PAIRS` — **only
+6. `ton-mch-engine/CMakeLists.txt`: append the pair to `ABI_PROD_PAIRS` **only
    if this is a NEW `.tolk` file**. A new decl inside an existing contract's
    `.tolk` needs no CMake edit at all.
 7. `src/AbiBridgeTest.cpp`: the `test_abi_rows_dispatch()` loop already asserts
@@ -54,10 +51,9 @@ shapes), `indexer/docs/mch-cpp-plan.md` §1 (the gate set).
    parser classes mirroring the ADAPTER's shape, plus a `register_*` and a
    `*_registries()` factory. Load-bearing rules:
    - field names are the **tolk camelCase** ABI names, not the snake_case of
-     legacy `blocks/messages/*.py` — the spec accessor, the adapter's Obj key and
+     legacy `blocks/messages/*.py`. The spec accessor, adapter Obj key, and
      the Python attribute must be the same string;
-   - value kinds must match the adapter (see `W12-BRIDGE-DESIGN.md` §3 and the
-     13-kind table in `builders/dedust_v2.py`'s module docstring) — notably
+   - value kinds must match the adapter and the table in `MODULE-NOTES.md`; notably
      addresses are exposed already-typed as `AccountId`;
    - **op-guard rule**: the ABI parsers CHECK their own opcode prefix, the Python
      twins do NOT, so every ABI-path `parse` capture must sit behind an opcode
@@ -65,7 +61,7 @@ shapes), `indexer/docs/mch-cpp-plan.md` §1 (the gate set).
 9. `builders/__init__.py`: import and `__all__`-export BOTH `<x>_registries` and
    `register_<x>`, like the sibling modules.
 10. `ton-mch-engine/twins/twin_registries.py`: import the factory and append it to
-    `_FACTORIES`. **One edit — all three twins pick it up.**
+    `_FACTORIES`. This one edit updates all three twins.
 
 ## 4. Spec + artifact
 
@@ -93,20 +89,20 @@ shapes), `indexer/docs/mch-cpp-plan.md` §1 (the gate set).
 
 17. Put a real trace fixture in `indexer/tests/traces/*.lz4` (see the
     `hotcold_kvrocks_trace_fetch` notes for fetching one). Without a fixture the
-    leg is unit-gated only — say so explicitly in the wave report rather than
-    letting it look covered.
-18. Regenerate `twins/cpp_surface.json`: `ton-mch-engine --surface > …/twins/cpp_surface.json`
-    (new parser rows change it — that IS expected here, unlike a pure refactor).
+    leg has only unit coverage, which should be stated explicitly in coverage
+    notes.
+18. Regenerate `twins/cpp_surface.json`: `ton-mch-engine --surface > …/twins/cpp_surface.json`.
+    New parser rows are expected to change this file.
 
 ## 7. Gates (all must be green; STOP and report rather than tweak toward green)
 
 - build: `twins/build_mch.bat` via the PowerShell tool, never Bash. If the CMake
   file changed, configure FIRST in a plain environment (never under vcvars).
-  Never build the `all` target — named targets only.
+  Never build the `all` target; use named targets only.
 - `ctest -R mch` (incl. `mch_abi_bridge`); ton-abi `ctest` (`ton_abi_smoke` +
   `ton_abi_gen_check`).
 - twin diffs from `indexer/` with the venv python: parse-dump / match / classify /
   actions all diff-0; `--classify-schema` / `--actions-schema` and
   `--classify-prod` / `--actions-prod` vs their base modes diff-0. Action counts
-  move by exactly the rows the new protocol adds — account for every one.
-- `python -m pytest tests/` — no new failures.
+  move by exactly the rows the new protocol adds. Account for every one.
+- `python -m pytest tests/`: no new failures.

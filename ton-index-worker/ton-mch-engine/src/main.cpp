@@ -1,8 +1,6 @@
-// ton-mch-engine — C++ runtime for the MCH matcher IR (docs/mch-ir-spec.md).
+// ton-mch-engine is the C++ runtime for the MCH matcher IR.
 //
-// Step 1: minimal executable in the TON actor environment. Inherits the
-// dependency set of ton-smc-scanner via tondb-scanner (ton libs, msgpack).
-// Step 2: load .lz4 trace fixtures (LZ4-frame msgpack) and print transactions.
+// Runs in the TON actor environment and supports fixture-driven diagnostics.
 
 #include "td/utils/OptionParser.h"
 #include "td/utils/logging.h"
@@ -41,7 +39,7 @@
 // td::actor::Scheduler at the bottom of main() are the Step-1/Step-2 "hello from
 // the actor environment" scaffolding. They run only when NO mode flag is given,
 // no ctest or gate invokes that path, and nothing else in the exe needs a
-// scheduler — the modes all early-return before it.
+// scheduler, the modes all early-return before it.
 namespace {
 
 void print_trace(const mch::Trace &trace) {
@@ -190,8 +188,8 @@ int main(int argc, char *argv[]) {
                [&](td::Slice value) { ir_equivalence_path = value.str(); });
   // TODO: remove (harness): --match, --build-smoke, --classify,
   // --classify-schema, --classify-prod, --parse-dump and --surface all render
-  // INTERMEDIATE pipeline stages whose only consumers were the Python twins
-  // (audit §5.7 H33). The gated stage is the action rows: --actions, and the
+  // intermediate pipeline stages used by differential harnesses. The gated
+  // stage is the action rows: --actions and the
   // --actions-schema / --actions-prod A/B pair that cross-checks the
   // production loader against it.
   p.add_option('\0', "match", "Match-phase dump: -I <artifact> -T <fixture|dir> (repeatable)",
@@ -239,7 +237,7 @@ int main(int argc, char *argv[]) {
                "Celldb tier-2 lookup self-test (W3: tier shape equality, jvault chain, memo/budget)",
                [&]() { celldb_tier2_test_mode = true; });
   // TODO: remove (harness): fixture generator for the Go wire round-trip test;
-  // it belongs with that test, not on the engine CLI (W2 gate machinery).
+  // it belongs with that test, not on the engine CLI.
   p.add_option('\0', "actions-msgpack-out",
                "Regenerate the cross-language wire fixture the Go round-trip test decodes: "
                "--actions-msgpack-out <path>",
@@ -266,8 +264,8 @@ int main(int argc, char *argv[]) {
     return td::Status::OK();
   });
   // TODO: remove (harness): kept so the gate scripts and the CI golden step keep
-  // running unchanged. The IR document is a BUILD input now — every mode runs the
-  // table compiled into this binary — so there is nothing for a path to select.
+  // running unchanged. The IR document is a build input; every mode runs the
+  // table compiled into this binary, so there is nothing for a path to select.
   p.add_option('I', "ir", "DEPRECATED, ignored: the IR artifact is compiled in",
                [&](td::Slice value) { ir_path = value.str(); });
   p.add_option('T', "trace", "Path to an .lz4 trace fixture (repeatable)", [&](td::Slice value) {
@@ -287,9 +285,8 @@ int main(int argc, char *argv[]) {
                  ir_path.c_str(), mch::gen_matchers_ir_source_sha());
   }
 
-  // W12 (design §4): advisory startup consistency check on the merged parser
-  // registry, ahead of the mode dispatch so every mode (including the
-  // early-returning dump/self-test modes) gets it. Silent + no-op on OK; a
+  // Check the merged parser registry before mode dispatch so every mode,
+  // including early-returning dump and self-test modes, gets it. A
   // duplicate key across the hand and ABI sources stops startup here rather
   // than letting a lookup dispatch to an
   // arbitrary first-source parser.
@@ -319,12 +316,12 @@ int main(int argc, char *argv[]) {
   }
 
   if (match_mode) {
-    // Match-phase dump mode: no actor scheduler needed.
+    // Match dump mode needs no actor scheduler.
     return mch::run_match(trace_paths);
   }
 
   if (build_smoke_mode) {
-    // Build-phase smoke mode (two-phase lookups): no scheduler needed.
+    // Build smoke mode needs no actor scheduler.
     return mch::run_build_smoke(trace_paths);
   }
 
@@ -350,7 +347,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (actions_mode) {
-    // Serialized-Action-row dump (Phase E part 2): no scheduler needed.
+    // Serialized-action-row dump needs no actor scheduler.
     return mch::run_actions(trace_paths);
   }
 

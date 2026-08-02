@@ -12,7 +12,7 @@ namespace {
 // StructRef.struct_name / AliasRef.alias_name are ALWAYS plain declared names
 // (verified across all fixtures: the mangled monomorph name "ResetTo<int64>"
 // lives ONLY in struct_instantiations[].struct_name, which we match by ty_idx,
-// never by name -- see the note in the W2 report). So no <...> stripping is
+// never by name). So no <...> stripping is
 // needed on SymTable lookups; doing it would diverge from the reference
 // (types-kernel.ts getStruct takes the name verbatim) and could mask a bug.
 

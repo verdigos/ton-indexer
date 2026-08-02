@@ -35,7 +35,7 @@ class TokenKind(Enum):
     KW_INCLUDE_EXCESS = "include_excess"
     KW_INCLUDE_BOUNCES = "include_bounces"
     KW_SHAPE = "shape"
-    # build-language keywords (M4 §9) — parsed here, ignored by the compiler
+    # Build-language keywords parsed here and ignored by the pattern compiler.
     KW_PARSE = "parse"
     KW_AS = "as"
     KW_LET = "let"
@@ -51,8 +51,8 @@ class TokenKind(Enum):
     KW_NOT = "not"
     KW_AND = "and"
     KW_OR = "or"
-    # v0.1 stitch keywords — removed from the language (§3.5), kept reserved so
-    # the parser can emit the targeted migration error P012_STITCH_REMOVED
+    # Stitch keywords remain reserved so the parser can emit
+    # P012_STITCH_REMOVED.
     KW_PARTIAL = "partial"
     KW_FINAL = "final"
     KW_KEY = "key"
@@ -80,7 +80,7 @@ class TokenKind(Enum):
     SEMI = ";"
     COMMA = ","
     COLON = ":"
-    # expression operators (M4 §9.6)
+    # Expression operators.
     EQEQ = "=="
     NEQ = "!="
     LT = "<"

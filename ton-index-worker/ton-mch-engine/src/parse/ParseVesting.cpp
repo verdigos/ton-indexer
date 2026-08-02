@@ -91,7 +91,7 @@ td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body) {
 }
 
 // VestingAddWhiteList (messages/vesting.py): query_id followed by an UNBOUNDED
-// chain of one address per cell — each level stores an address and, when it has
+// chain of one address per cell, each level stores an address and, when it has
 // a ref, continues in it; the last level stores the trailing address only. The
 // schema's `ref { }` is fixed-depth, which is the whole reason this one stays
 // hand-written. Loop order is the Python one exactly: test refs BEFORE reading

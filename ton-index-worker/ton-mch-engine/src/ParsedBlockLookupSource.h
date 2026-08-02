@@ -1,24 +1,6 @@
-// Production LookupSource (Phase G step 3 slice 3, prod-design §3): resolves the
-// engine's `lookup kind(key)` calls from the pipeline's already-computed
-// interface data instead of a trace fixture.
-//
-// Two-tier fetch (prod-design §3, Q2 answer):
-//   Tier 1 = ParsedBlock.account_interfaces_ (StdAddress -> vector<
-//     BlockchainInterfaceV2>), the in-block interfaces the InterfaceProcessor
-//     produced this seqno. A kind maps to exactly one V2 variant and the Obj it
-//     yields is FIELD-FOR-FIELD identical to FixtureLookupSource's shape (the
-//     A/B parity contract). Tier-1 covers: jetton_wallet, nft_item, nft_sale,
-//     nft_auction, dedust_pool.
-//   Tier 2 = an injectable hook (DB/kvrocks in production, STUB here) consulted
-//     when tier 1 misses. nominator_pool and jvault_assets are TIER-2-ONLY (no
-//     V2 variant carries them — nominator_pool has no variant at all; jvault
-//     needs the stake wallet's raw account-state data cell + chained reads,
-//     which live in account_states_, not account_interfaces_). Both miss ->
-//     null (unchanged nullable-lookup semantics).
-//
-// The class is a pure function of (account_interfaces_ map + tier-2 hook); no
-// DB code lives here. Never throws (a malformed address / missing account is a
-// clean miss, exactly like the fixture source).
+// Resolves lookups from interfaces already computed for the block, with an
+// injectable fallback for persisted data. Malformed addresses and missing
+// accounts are clean misses. See docs/engine-internals.md for the tier contract.
 #pragma once
 
 #include "BuildRuntime.h"  // LookupSource, Value
@@ -53,9 +35,9 @@ class ParsedBlockLookupSource : public LookupSource {
 
   Value fetch(const std::string &kind, const std::vector<Value> &args) const override;
 
-  // Tier-attribution telemetry (Phase G slice 3 review): every resolved lookup
+  // Tier-attribution telemetry: every resolved lookup
   // is charged to the tier that served it; unresolved calls are misses. Gives
-  // the prod-design §3 tier-2 hit-rate for free in shadow mode
+  // the tier-2 hit rate in shadow mode
   // (tier2_hits / (tier1_hits + tier2_hits)). Does not affect fetch() results.
   struct LookupStats {
     std::size_t tier1_hits{0};  // served from account_interfaces_ (in-block)
@@ -68,10 +50,10 @@ class ParsedBlockLookupSource : public LookupSource {
   };
   const LookupStats &stats() const { return stats_; }
 
-  // ONE V2 -> Value shape map, shared by tier 1 and tier 2 (W3 §4d step 6).
+  // Shared V2-to-Value shape map for tier 1 and tier 2.
   // Null == this variant does not answer this kind. A tier-2 hook that produces
   // a schema::*V2 renders it through HERE rather than building a Value of its
-  // own, which is what makes the two tiers shape-identical by construction
+  // own. This makes the two tiers shape-identical by construction
   // instead of by review.
   static Value iface_value(const std::string &kind, const schema::BlockchainInterfaceV2 &iface);
 

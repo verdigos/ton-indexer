@@ -97,7 +97,7 @@ bool is_str(const msgpack::object *o, const std::string &want) {
 
 // The type test that matters against ton-index-go: an INTEGER where the Go
 // field is *uint64/*int64/*int32, a STR where it is *string. A str into a
-// numeric field (or the reverse) aborts the whole trace's decode (§2.2).
+// numeric field, or the reverse, aborts the whole trace decode.
 bool is_uint(const msgpack::object *o, std::uint64_t want) {
   return o != nullptr && o->type == msgpack::type::POSITIVE_INTEGER && o->via.u64 == want;
 }
@@ -173,7 +173,7 @@ const msgpack::object *first_row(const Decoded &d) {
 
 // "No actions" is the one-byte EMPTY ARRAY, never an empty string:
 // EmuActionPayload::actions_blob uses empty to mean "no `actions` field written
-// at all" (§7), which is a different state for ton-index-go (Classified=false).
+// at all", which is a different state for ton-index-go (Classified=false).
 void test_empty_actions() {
   Decoded d(serialize_actions({}, make_view({EmuFinality::finalized})));
   check("empty/one_byte", d.size() == 1);
@@ -181,8 +181,7 @@ void test_empty_actions() {
                                             d.root().via.array.size == 0);
 }
 
-// The always-written key set, the §2.2 exclusion-set integers, and the §2.3
-// deliberate omissions.
+// The always-written key set, bounded integers, and deliberate omissions.
 void test_fixed_keys() {
   Action a = base_action();
   Decoded d(serialize_actions({a}, make_view({EmuFinality::finalized})));
@@ -221,7 +220,7 @@ void test_fixed_keys() {
   check("fixed/omits_trace_mc_seqno_end", absent(m, "trace_mc_seqno_end"));
   check("fixed/omits_trace_start_lt", absent(m, "trace_start_lt"));
   check("fixed/omits_value_extra_currencies", absent(m, "value_extra_currencies"));
-  // Go has no mc_seqno_end field at all; the archive wrote it "for parity".
+  // Go has no mc_seqno_end field, so the wire payload omits it.
   check("fixed/omits_mc_seqno_end", absent(m, "mc_seqno_end"));
   // An unfilled field is ABSENT, not present-as-nil.
   check("fixed/omits_unfilled_source", absent(m, "source"));
@@ -295,16 +294,14 @@ void test_null_and_stringify() {
   check("null/finality_min_confirmed", is_uint(at(m, "finality"), 1));
 }
 
-// THE NATURAL-TYPES RULE, field by field. This is the case that decides wire
-// types for every consumer: a str where ton-index-go declares an int (or the
-// reverse) used to abort the whole trace's decode, and now merely has to be the
-// type the value domain actually needs.
+// Pin the natural wire type of each value domain. A string where the consumer
+// expects an integer, or the reverse, aborts the whole trace decode.
 void test_natural_types() {
   Action a = base_action();
   a.type = "jetton_transfer";
 
   // Bounded ints: naturalized, whatever their Go declaration (*int64 for
-  // period, *int32 for the eids, *string for tick_lower — decodeFlexString
+  // period, *int32 for the eids, *string for tick_lower, decodeFlexString
   // renders an integer for the last of those).
   Value::Fields jv;
   jv.emplace_back("period", Value::make_int64(7776000));
@@ -389,7 +386,7 @@ void test_natural_types() {
 
 // The []string-valued fields, whose ELEMENTS bypass ton-index-go's flexible
 // decoders entirely (msgpack-go's slice fast path never consults a registered
-// element decoder). Nothing numeric may ever be written inside one — and
+// element decoder). Nothing numeric may ever be written inside one, and
 // claimed_amounts is 256-bit on top of that, so it is doubly required to be a
 // string.
 void test_string_list_fields() {
@@ -416,7 +413,7 @@ void test_string_list_fields() {
   check("strlist/claimed_amounts_arity",
         amounts != nullptr && amounts->type == msgpack::type::ARRAY &&
             amounts->via.array.size == 2);
-  // BOTH elements are strings — the small one too. A []string with one int
+  // BOTH elements are strings, the small one too. A []string with one int
   // element fails the whole Unmarshal, so "it fits in an int64" is not a reason
   // to naturalize it here.
   check("strlist/claimed_amounts_small_is_str", is_str(elem(amounts, 0), "1000"));
@@ -432,7 +429,7 @@ void test_string_list_fields() {
 // A bounded key carrying a value that does not fit a SIGNED int64 packs nil and
 // counts, rather than truncating silently. Every field that can hold such a
 // value is in the decimal-string set by construction, so this firing means the
-// key table is wrong — and an absent field is the only failure mode that cannot
+// key table is wrong, and an absent field is the only failure mode that cannot
 // drop the whole trace on the Go side.
 void test_out_of_range_bounded_int() {
   Action a = base_action();
@@ -494,7 +491,7 @@ Action wire_fixture_action() {
       td::string_to_int256(std::string("340282366920938463463374607431768211456")));
 
   Value::Fields jt;
-  // uint64 above 2^63 — the case a signed naturalization would nil out.
+  // uint64 above 2^63, the case a signed naturalization would nil out.
   jt.emplace_back("query_id",
                   Value::make_int(td::string_to_int256(std::string("18446744073709551615"))));
   jt.emplace_back("response_destination", Value::make_str(kAddrB));
@@ -533,7 +530,7 @@ Action wire_fixture_action() {
   a.layerzero_send_data = Value::make_dict(std::move(lzs));
 
   // A bounded *int64 nonce beside a mapped status STRING (the PARSER, not the
-  // expression language, produces that string — see specs/layerzero.mch).
+  // expression language, produces that string, see specs/layerzero.mch).
   Value::Fields lzv;
   lzv.emplace_back("nonce", Value::make_int64(125));
   lzv.emplace_back("status", Value::make_str("succeeded"));
@@ -543,8 +540,8 @@ Action wire_fixture_action() {
   lzv.emplace_back("uln_connection", Value::null());
   a.layerzero_dvn_verify_data = Value::make_dict(std::move(lzv));
 
-  // The Q64.96 price is a uint160 — far past int64, so it must go out as a
-  // DECIMAL STRING — while the three u16 fee fields and the int24 tick spacing
+  // The Q64.96 price is a uint160, far past int64, so it must go out as a
+  // DECIMAL STRING, while the three u16 fee fields and the int24 tick spacing
   // stay natural integers despite all four being Go *string.
   Value::Fields tdp;
   tdp.emplace_back("jetton0_router_wallet", Value::make_str(kAddrA));
@@ -592,7 +589,7 @@ Action wire_fixture_action() {
   });
 
   // Cocoon: four of the twelve composites, chosen for wire SHAPES rather than
-  // coverage — between them they carry every type the family emits.
+  // coverage, between them they carry every type the family emits.
   //  - worker payout: a *string payout_type, two u64 amounts past int64, and a
   //    u2 `worker_state` that must stay a NATURAL integer beside them;
   //  - client register: the `nonce` that forced `nonce` into
@@ -731,7 +728,7 @@ void test_wire_fixture() {
   check("wire/cocoon_worker_tokens_str", is_str(at(*cwp, "worker_tokens"), "73063940556"));
   check("wire/cocoon_worker_state_int", is_uint(at(*cwp, "worker_state"), 2));
   check("wire/cocoon_payout_type_str", is_str(at(*cwp, "payout_type"), "last"));
-  // The u64 nonce past int64 — a natural pack would have nil'd it out.
+  // The u64 nonce past int64, a natural pack would have nil'd it out.
   check("wire/cocoon_nonce_str",
         is_str(at(*at(*row, "cocoon_client_register_data"), "nonce"),
                "11924145372215500834"));
@@ -798,7 +795,7 @@ void test_value_table() {
   check("table/list_str", is_str(elem(items, 2), "tail"));
   check("table/nested_map", is_map(at(*ttd, "nested"), 1) &&
                                 is_uint(at(*at(*ttd, "nested"), "depth"), 2));
-  // All six keys survive, nils included — a composite's arity is its fill's.
+  // All six keys survive, nils included, a composite's arity is its fill's.
   check("table/composite_key_count", is_map(ttd, 6));
   check("table/finality_min_emulated", is_uint(at(*row, "finality"), 0));
 }
@@ -831,13 +828,13 @@ void test_counters() {
   // FRACTIONAL doubles keep the 0xcb float64 encoding; the integral ones
   // msgpack-c folds into integers (wire/nft_index_integral_float_is_int). Both
   // reach Go's *string fields intact, which is why the writer does not fight
-  // the normalization — but the split is pinned here so a msgpack upgrade that
+  // the normalization, but the split is pinned here so a msgpack upgrade that
   // changed it would be caught rather than shipped.
   check("counters/amount_float_double", is_double(at(*row, "amount"), 1.5));
   const msgpack::object *ex = at(*row, "extra");
   check("counters/float_double", is_double(at(*ex, "ratio"), 2.5));
   const msgpack::object *boc = at(*ex, "boc");
-  // The real BOC bytes, base64'd — NOT the twin-diff root-hash substitution.
+  // The real BOC bytes, base64'd, NOT the twin-diff root-hash substitution.
   check("counters/cell_is_b64_str", boc != nullptr && boc->type == msgpack::type::STR &&
                                         boc->via.str.size > 0);
 }
@@ -870,7 +867,7 @@ void test_multiple_actions() {
   check("multi/shared_trace_key", is_str(at(*r1, "trace_external_hash_norm"), kTraceKey));
 }
 
-// create_unknown_action's row shape, gated hermetically — the corpus twin
+// create_unknown_action's row shape, gated hermetically, the corpus twin
 // covers it on 50 real fixtures, but that gate needs Python and the fixtures.
 void test_unknown_action() {
   Trace trace;
@@ -893,8 +890,8 @@ void test_unknown_action() {
     trace.transactions.push_back(std::move(tx));
   }
   trace.transactions[1]->account = kAddrB;
-  // The PRODUCTION derivation — SchemaTraceLoader has no trace header and calls
-  // exactly this — gated here alongside the row that consumes it.
+  // The PRODUCTION derivation, SchemaTraceLoader has no trace header and calls
+  // exactly this, gated here alongside the row that consumes it.
   fill_trace_aggregates(trace);
 
   Decoded d(serialize_actions({create_unknown_action(trace)},
@@ -905,9 +902,9 @@ void test_unknown_action() {
     return;
   }
   check("unknown/type", is_str(at(*row, "type"), "unknown"));
-  // The only action_id in the system not derived from a hash (§10 open item).
+  // The only action_id in the system not derived from a hash.
   check("unknown/action_id_is_trace_id", is_str(at(*row, "action_id"), kTraceKey));
-  // success = not any(tx.aborted) — a whole-trace property, not a block's.
+  // success = not any(tx.aborted), a whole-trace property, not a block's.
   check("unknown/success_false_when_any_aborted", is_bool(at(*row, "success"), false));
   // fill_trace_aggregates' min/max, carried through onto the row.
   check("unknown/start_lt", is_uint(at(*row, "start_lt"), 200));
@@ -922,21 +919,18 @@ void test_unknown_action() {
   check("unknown/accounts_deduped",
         acc != nullptr && acc->type == msgpack::type::ARRAY && acc->via.array.size == 2);
   // It sets no directional or composite field at all, so the row is exactly the
-  // fixed key set — the same shape Python's create_unknown_action produces.
+  // fixed key set, the same shape Python's create_unknown_action produces.
   check("unknown/no_optional_keys", row->via.map.size == 12);
 }
 
-// The bucket-B fills: btypes whose matcher runs and produces a block but which
-// had no fill_action branch, so build_action returned false and the whole row
-// vanished. NONE of them fire on the fixture corpus, so this TU is their only
-// gate.
+// Action fills without fixture-corpus coverage are exercised directly here.
 void test_bucket_b_fills() {
   BlockArena arena;
   auto row = [&](const char *btype, Value::Fields data) -> Action {
     Block *b = arena.make(btype);
     b->data = Value::make_dict(std::move(data));
     Action a;
-    // The whole point of the wave: this used to return false and lose the row.
+    // Each supported block type must produce an action row.
     check(std::string("bucketB/") + btype + "/builds", build_action(b, a));
     return a;
   };
@@ -1058,16 +1052,14 @@ void test_bucket_b_fills() {
     check("bucketB/dex_withdraw/asset2_out_ton_null", fld(c, "asset2_out").is_null());
     check("bucketB/dex_withdraw/dex_jetton_wallet_1",
           is_str_v(fld(c, "dex_jetton_wallet_1"), kAddrB));
-    // is_refund stays a BOOL on the wire, never a stringified int (§2.2).
+    // is_refund stays a Boolean on the wire, never a stringified integer.
     check("bucketB/dex_withdraw/is_refund_bool",
           fld(c, "is_refund").t == VType::Bool && fld(c, "is_refund").boolean);
     check("bucketB/dex_withdraw/lp_burnt", fld(c, "lp_tokens_burnt").t == VType::Int);
     check("bucketB/dex_withdraw/source_secondary", is_str_v(a.source_secondary, kAddrB));
   }
   {
-    // The former named skip, reversed in W6: leaving it unported would not have
-    // avoided a phase-1 diff, it would have manufactured one on live GetGems
-    // traffic that the fixture corpus happens not to sample.
+    // nft_purchase must serialize even though the fixture corpus has no sample.
     Action a = row("nft_purchase",
                    {{"prev_owner", Value::make_account_raw(kAddrA)},
                     {"new_owner", Value::make_account_raw(kAddrB)},
@@ -1111,8 +1103,8 @@ void test_bucket_b_fills() {
       for (auto &[k, v] : fields) f.emplace_back(k, std::move(v));
       return Value::make_dict(std::move(f));
     };
-    // A raw 32-byte key, to prove the hex is LOWERCASE (Python bytes.hex()) —
-    // td::buffer_to_hex would render it uppercase and Go would never notice.
+    // A raw 32-byte key proves the hex is lowercase. td::buffer_to_hex would
+    // render it uppercase, which the Go decoder would accept silently.
     const std::string key_bytes(4, '\xAB');
 
     Action a = row("change_dns",
@@ -1129,7 +1121,7 @@ void test_bucket_b_fills() {
     check("bucketB/change_dns/key_hex_lowercase", is_str_v(fld(c, "key"), "abababab"));
     check("bucketB/change_dns/value_schema", is_str_v(fld(c, "value_schema"), "DNSSmcAddress"));
     check("bucketB/change_dns/smc_value_is_address", is_str_v(fld(c, "value"), kAddrB));
-    // The second, standalone `if` in Python — an elif would have missed it.
+    // The second, standalone `if` in Python, an elif would have missed it.
     check("bucketB/change_dns/smc_flags", fld(c, "flags").t == VType::Int);
     // Dead on both sides, kept so the decoded map matches Python key for key.
     check("bucketB/change_dns/address_key_present_and_null",
@@ -1227,7 +1219,7 @@ void test_evaa_liquidate_surface() {
   }
 }
 
-// A view with no nodes degrades to `emulated` — the conservative end, and what
+// A view with no nodes degrades to `emulated`, the conservative end, and what
 // ton-index-go reads as FinalityStatePending.
 void test_empty_view_finality() {
   Decoded d(serialize_actions({base_action()}, make_view({})));
@@ -1278,7 +1270,7 @@ void test_actions_write_guard() {
 
   // Nothing stored: the first emission always writes.
   check("guard/absent_writes", !actions_write_is_stale(std::nullopt, emulated));
-  // THE case the guard exists for — a stale emulated emission landing after a
+  // THE case the guard exists for, a stale emulated emission landing after a
   // finalized one, which the node loop already refuses and `actions` did not.
   check("guard/emulated_over_finalized_skips",
         actions_write_is_stale(std::string("2"), emulated));

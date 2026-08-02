@@ -47,7 +47,7 @@ const Message *block_msg(const Block *b);
 Value to_amount(const Value &v);
 
 // Amount(x or 0): coins are never None, and `0 or 0 == 0`, so this is just
-// Amount(x) — but keep the null-guard for parse-failure paths that reach here.
+// Amount(x), but keep the null-guard for parse-failure paths that reach here.
 Value amount_or_zero(td::RefInt256 v);
 
 // Copy a field out of a Block's data Dict (Null when absent).

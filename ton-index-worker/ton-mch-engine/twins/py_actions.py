@@ -80,11 +80,9 @@ PORTED_BTYPES = {
     # Nominator deposit (2026-07-31, specs/nominator.mch) — fires on the 4 corpus
     # deposit fixtures added this wave; C++ fill is fill_nominator_pool_deposit.
     "nominator_pool_deposit",
-    # EM2 W6 bucket-B fills. NONE of these fire on the current 165 fixtures, so
-    # widening the set changes no output today — it keeps the twin
-    # correct-by-construction: the day a fixture carrying one is added, Python
-    # emits its row instead of silently skipping it while C++ emits one, which
-    # would read as a bogus cpp-only-row rather than the parity it is.
+    # EM2 W6 bucket-B fills. Coverage expectations come from the fixture corpus
+    # and committed action golden. Keeping the full supported set makes Python
+    # emit any covered row instead of silently presenting it as C++-only.
     "tick_tock", "renew_dns", "change_dns", "delete_dns", "dns_purchase", "dns_release",
     "nominator_pool_withdraw_request",
     "tonstakers_withdraw", "tonstakers_withdraw_request",
@@ -105,12 +103,10 @@ PORTED_BTYPES = {
     # an account carrying an NftItem interface; C++ fill is fill_nft_mint, the
     # one producer of the nft_mint_data composite.
     "nft_mint",
-    # GetGems sale/auction family (2026-07-30, specs/nft_sale.mch). NONE of
-    # these fires on the 176-fixture corpus — the family has zero fixture
-    # coverage — so widening the set changes no output today. Listed for the
-    # same reason as the bucket-B block above: the day a fixture carrying one
-    # lands, Python must emit its row instead of silently skipping it while C++
-    # emits one. Four of them share a fill with the teleitem pair.
+    # GetGems sale/auction family (2026-07-30, specs/nft_sale.mch). Coverage is
+    # defined by the fixtures and committed action golden, not a fixed corpus
+    # total. Keeping the complete family prevents covered rows from appearing
+    # spuriously C++-only. Four of them share a fill with the teleitem pair.
     "nft_put_on_sale", "nft_put_on_auction", "nft_update_sale", "nft_discovery",
     "auction_bid", "auction_outbid",
     "nft_cancel_sale", "nft_cancel_auction", "nft_finish_auction",
@@ -296,8 +292,8 @@ def render(v):
 def render_action(action, parent_id=None, ancestor=()):
     """Action -> the C++ render_action column dict.
 
-    THE render seam: every row kind funnels through here, so py_actions_msgpack
-    swaps the whole dump to msgpack by rebinding this one name.
+    Every row kind funnels through this renderer, which defines the shared
+    column contract used for comparison with the C++ action dump.
 
     parent_id/ancestor come from the serialize_rows recursion rather than off the
     Action, because the two row kinds that bypass it (the `unknown` stub and the

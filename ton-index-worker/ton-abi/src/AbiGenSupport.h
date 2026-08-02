@@ -1,17 +1,9 @@
 #pragma once
 
-// AbiGenSupport: the hand-written runtime support header that ton-abi-gen's
-// emitted code (generated/<contract>_gen.{h,cpp}) includes. It carries ONLY
-// what generated code needs at RUNTIME: the CellOf<T> wrapper, the typed
-// custom-serializer registry (plan §0.17 (b) -- runtime, NOT template
-// specializations), and small AbiValue-building helpers used by the baked
-// to_abi_value() bodies. Generated code calls ton_abi leaf functions + these
-// helpers ONLY -- never AbiKernel / AbiLoader (all dispatch is baked at
-// generation time; the kernel runs only inside ton-abi-gen).
-//
-// The generated structs are gated against the TS oracle vectors directly
-// (testdata/abi_vectors.json): from_slice -> to_abi_value dump == expected,
-// store/repack == golden hex (test/AbiABGateTest.cpp).
+// Runtime support included by generated C++ pairs: CellOf<T>, typed custom
+// serializers, leaf operations, and AbiValue builders. Resolution and dispatch
+// are already baked into generated code, so the loader and kernel stay out of
+// the runtime dependency graph. See W11-SHAPE-SPEC.md.
 
 #include "AbiValue.h"
 #include "AbiLeavesAddress.h"
@@ -44,7 +36,7 @@ namespace gen {
 
 // ---------------------------------------------------------------------------
 // CellOf<T>: a value of type T that lives in a child cell (Tolk `Cell<T>`).
-// Emitted field type for the `cellOf` ABI kind (shape spec §3). Holds the inner
+// Emitted field type for the `cellOf` ABI kind. Holds the inner
 // value behind a shared_ptr indirection: cellOf is a cell-boundary, so a type
 // may be recursive THROUGH a cellOf (e.g. `struct Node { next: Cell<Node> }`),
 // which an inline by-value member could not represent. The indirection also
@@ -55,12 +47,12 @@ struct CellOf {
 };
 
 // ---------------------------------------------------------------------------
-// Typed custom-serializer registry (plan §0.17 (b), shape spec §6).
+// Typed custom-serializer registry.
 //
 // One registry PER value type T (a function-local static, so no global-init
-// ordering issues). Key = "<contract_name>::<decl name>" (plan §0.16 identity).
-// pack / unpack / to_abi_value are INDEPENDENTLY optional (OnlyWithPack /
-// OnlyWithUnpack, §0.17). Missing registration or missing half at call time =
+// ordering issues). Keys have the form "<contract_name>::<decl name>".
+// pack / unpack / to_abi_value are independently optional. Missing registration
+// or a missing operation at call time is
 // a runtime td::Status error -- NEVER a compile/link error (reference
 // semantics: registerCustomPackUnpack is a runtime map, not a specialization).
 // ---------------------------------------------------------------------------
@@ -77,7 +69,7 @@ std::unordered_map<std::string, AbiCustomEntry<T>> &abi_custom_registry() {
   return reg;
 }
 
-// 3-fn registration (§0.17). Any of pack/unpack/to_abi may be an empty
+// Any of pack/unpack/to_abi may be an empty
 // std::function. Re-registering the same key for the same T is an error.
 template <class T>
 td::Status register_abi_custom(const std::string &key,
@@ -125,8 +117,8 @@ inline AbiValue abi_v_null() { return AbiValue::make_null(); }
 inline AbiValue abi_v_void() { return AbiValue::make_void(); }
 
 // ---------------------------------------------------------------------------
-// create()-default materializers for ConstExpr slice / address literals
-// (shape spec §8). Used only by generated create() bodies.
+// create()-default materializers for ConstExpr slice / address literals.
+// Used only by generated create() bodies.
 // ---------------------------------------------------------------------------
 inline td::Ref<vm::CellSlice> bits_from_hex(const std::string &hex) {
   unsigned char buf[256];

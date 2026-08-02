@@ -1,16 +1,6 @@
-// TEST-ONLY. Part of mch-fixtures; never linked into mch-classify or any
-// product binary. See ton-mch-engine/CMakeLists.txt MCH_FIXTURE_SOURCES.
-//
-// Reads an .lz4 trace fixture (LZ4-frame-compressed msgpack) produced by the
-// Python indexer's recorder (indexer/tests/traces/*.lz4, schema per
-// tests/utils/trace_deserializer.py) into the engine's Trace data model
-// (TraceLoader.h, which stays product-side). Mirrors mch-go-poc/trace/load.go:
-// only the fields needed for structural matching are decoded; unknown msgpack
-// keys are ignored — plus the root `interfaces` section, the per-account
-// interface data Python's TestInterfaceRepository serves lookups from.
-//
-// The PRODUCTION loader is SchemaTraceLoader (schema::Transaction -> Trace);
-// nothing here participates in it.
+// Test-only LZ4/MsgPack fixture loader. It decodes the trace fields required by
+// matching plus the per-account interface map used by fixture lookups. Unknown
+// MsgPack keys are ignored; production uses SchemaTraceLoader.
 #pragma once
 
 #include "BlockTree.h"  // TraceContext

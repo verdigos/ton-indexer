@@ -68,9 +68,7 @@ public:
 
   void start_up() override;
 
-  // The detection with no actor around it: a code-hash predicate plus a TLB
-  // parse of the data cell. No get-method and no shard access, so it takes
-  // neither shard_states nor config; start_up() is a one-liner over it.
+  // Synchronous detection uses only the code hash and data cell.
   static td::Result<Result> detect(const block::StdAddress& address,
                                    const td::Ref<vm::Cell>& code_cell,
                                    const td::Ref<vm::Cell>& data_cell);

@@ -32,9 +32,7 @@ td::Result<schema::AccountState> lookup_account(const AllShardStates& shard_stat
         block::gen::ShardAccount::Record acc_info;
         if (!tlb::csr_unpack(std::move(shard_account_csr), acc_info))
         {
-            // Was a LOG(ERROR) + unresolved promise (answered as "promise
-            // destroyed" by ~LambdaPromise). Now a named error; both reach the
-            // detectors as the same "not this interface" rejection.
+            // Return a named lookup error for an unknown shard.
             return td::Status::Error("Failed to unpack ShardAccount " + address.addr.to_hex());
         }
         int account_tag = block::gen::t_Account.get_tag(vm::load_cell_slice(acc_info.account));

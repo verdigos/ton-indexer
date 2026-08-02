@@ -294,12 +294,9 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
     if (include.count(n) == 0) {
       continue;
     }
-    // dedust.py:76 gates this branch on isinstance(payout_block,
-    // JettonTransferBlock) — a LEGACY class. Under the IR engine every
-    // jetton_transfer is the canonical generic Block, so the isinstance is
-    // always False and the branch is dead; matching on btype here filled the
-    // out-leg fields Python leaves null (caught by classify A/B). Only the
-    // DedustPayout call branch is live.
+    // The reference gate checks a JettonTransferBlock class, but IR transfers
+    // use the generic Block representation. That branch is therefore dead and
+    // only the DedustPayout call contributes an outgoing leg.
     if (is_call_op(n, kDedustPayout)) {
       const Message *m = block_msg(n);
       dex_outgoing_wallet = account_from_opt(m != nullptr ? m->source : std::nullopt);
@@ -416,7 +413,7 @@ constexpr std::uint32_t kDedustV2DepositPayload = 0xc9a015da;
 // blocks/messages/dedust_v2.py DedustV2SwapPayload: op(32) already consumed,
 // then minimal_amount_out:Coins deadline:uint40 next:(Maybe ^SwapStep)
 // partner:(Maybe (uint256,uint16)) referrer:(Maybe (uint256,uint16)). The
-// trailing configs are read even though nothing uses them — a body too short
+// trailing configs are read even though nothing uses them, a body too short
 // for them raises in the reference too, which is what makes the whole payload
 // "not a swap payload".
 td::Status dv2_read_payload(vm::CellSlice &cs, td::RefInt256 &min_out,
@@ -448,7 +445,7 @@ td::Status dv2_read_payload(vm::CellSlice &cs, td::RefInt256 &min_out,
 }
 
 // DedustV2SwapStep: pool:MsgAddressInt minimal_amount_out:Coins deadline:uint40
-// next:(Maybe ^SwapStep) — an inline struct, so no opcode prefix.
+// next:(Maybe ^SwapStep), an inline struct, so no opcode prefix.
 td::Status dv2_read_step(vm::CellSlice &cs, td::RefInt256 &min_out,
                          td::Ref<vm::Cell> &next) {
   TRY_RESULT(pool, load_address_py(cs));
@@ -473,7 +470,7 @@ td::Status dv2_read_step(vm::CellSlice &cs, td::RefInt256 &min_out,
 
 // blocks/messages/dedust_v2.py DedustV2DepositPayload: op(32) already consumed,
 // then amount_x:Coins amount_y:Coins minimal_liquidity:Coins
-// locked_liquidity_share:uint16. The last two are read but unused — the
+// locked_liquidity_share:uint16. The last two are read but unused, the
 // reference's class reads them too, so a body too short for them is "not a
 // deposit payload" on both sides.
 td::Status dv2_read_deposit_payload(vm::CellSlice &cs, td::RefInt256 &amount_x,
@@ -517,8 +514,8 @@ td::Result<td::Ref<vm::Cell>> dv2_payload_cell(const Value &arg) {
 }  // namespace
 
 // builders/dedust_v2.py dedust_v2_swap_payload: the carrier's swap payload, or
-// Null when the carrier is not a swap (wrong opcode / unparseable payload —
-// PayNative also carries deposits and fund rewards). `min_out` is the FINAL
+// Null when the carrier is not a swap. PayNative also carries deposits and
+// fund rewards. `min_out` is the final
 // minimal_amount_out: the entry payload carries only hop 1's, so the SwapStep
 // chain is walked to its last step (same 16-step cap as the reference). A
 // payload that parses but whose chain does not yields min_out=null.
@@ -571,7 +568,7 @@ EvalResult dedust_v2_swap_payload(BuildEnv &, const std::vector<Value> &args) {
 // deposit. Same two carrier shapes and the same "wrong opcode / unparseable ->
 // Null" contract as the swap payload above (PayNative carries swaps, deposits
 // and fund rewards alike), which on the spec side drives both target amounts to
-// null — the reference's `payload is None` arm.
+// null, the reference's `payload is None` arm.
 EvalResult dedust_v2_deposit_payload(BuildEnv &, const std::vector<Value> &args) {
   if (args.size() != 1) {
     return rt_fault("dedust_v2_deposit_payload: bad arguments");

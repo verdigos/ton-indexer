@@ -35,12 +35,12 @@ constexpr std::uint32_t kV3Swap = 0xa7fb58f8;         // POOLV3_SWAP (swap reque
 constexpr std::uint32_t kV3PayTo = 0xa1daa96d;        // ROUTERV3_PAY_TO
 constexpr std::uint32_t kJettonTransfer = 0x0f8a7ea5;
 constexpr std::uint32_t kPTonTransfer = 0x01f3835d;
-// blocks/liquidity.py TONCO_ROUTER_WTTON_WALLET_ADDR — the router's own wTON
+// blocks/liquidity.py TONCO_ROUTER_WTTON_WALLET_ADDR, the router's own wTON
 // jetton wallet. A PayTo slot naming it is a native-TON leg, not a jetton one.
 constexpr const char *kRouterWttonWallet =
     "0:871DA9215B14902166F0EA2A16DB56278D528108377F8158C5F4CCFDFDD22E17";
 
-// (open_ref moved to parse/PSlice.h as open_ref_cell — shared with stonfi + dedust.)
+// open_ref_cell is shared with the stonfi and dedust parsers.
 
 // get_jetton_wallet(addr) -> Asset (pton master -> TON), or Null when the
 // wallet lookup misses (caller decides fallback).
@@ -49,7 +49,7 @@ Value wallet_asset(BuildEnv &env, const std::string &addr) {
   return wallet_jetton_asset(jw, /*pton_conversion=*/true);
 }
 
-// (acc_str moved to host/BlockViews.h — shared with the stonfi core.)
+// acc_str is shared with the stonfi core through host/BlockViews.h.
 
 // messages/swaps.py ToncoPoolV3Swap: the core reads only source_wallet (the
 // two ref cells carry amounts/payloads the core does not touch here).
@@ -331,8 +331,8 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   std::string router_wallet = *jnm->source;
 
   // first asset (router wallet): null lookup -> REJECT, like the two branches
-  // above. Legacy falls back to TON here, which publishes a missing counterparty
-  // wallet as a TON deposit — the one site in the engine that answers a lookup
+  // above. Reference falls back to TON here, which publishes a missing counterparty
+  // wallet as a TON deposit, the one site in the engine that answers a lookup
   // miss with a plausible WRONG value. A null record is what
   // tonco_liquidity.mch's `reject when r == null` already gates on, so this
   // drops only this action and leaves the rest of the trace classified.
@@ -360,8 +360,8 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
     sw2 = sender_wallet;
   }
 
-  // excesses (§11.5 dual dispatch): the up-to-two jetton_transfer children of
-  // the ROUTERV3_PAY_TO, each (asset, amount) — a pTON child makes it a TON
+  // Excesses are the up-to-two jetton_transfer children of ROUTERV3_PAY_TO,
+  // each carrying an asset and amount. A pTON child makes it a TON
   // excess, else the leg's `.data`. No corpus coverage; ported for parity.
   std::vector<Value> excesses;
   {
@@ -458,8 +458,8 @@ EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args)
   RouterPayTo pt = r_pt.move_as_ok();
 
   // The two slots the pool declares, in asset0/asset1 order. A slot whose jetton
-  // wallet IS the router's wTON wallet is nulled — that leg is native TON. The
-  // legacy loop dereferences the wallet unconditionally, so a slot with no
+  // wallet IS the router's wTON wallet is nulled, that leg is native TON. The
+  // reference loop dereferences the wallet unconditionally, so a slot with no
   // jetton address raises there; here it rejects.
   struct Slot { Value amount, wallet, receiver; };
   Slot slots[2];
@@ -477,7 +477,7 @@ EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args)
   }
 
   // The up-to-two jetton_transfer legs hanging off the PayTo, in consumption
-  // order, padded to the legacy fixed arity of two.
+  // order, padded to the reference fixed arity of two.
   const Block *legs[2] = {nullptr, nullptr};
   {
     int n = 0;
@@ -561,7 +561,7 @@ Value tonco_leg_asset(const Value &asset_v) {
   return asset_v;
 }
 
-// builders/tonco_swap.py _derive_parts: reconstruct the legacy label roles from
+// builders/tonco_swap.py _derive_parts: reconstruct the reference label roles from
 // the consumed set (cyclic bodies bind no captures).
 struct ToncoParts {
   const Block *anchor{nullptr};
@@ -623,10 +623,10 @@ ToncoParts derive_tonco_parts(const std::vector<const Block *> &consumed) {
 }  // namespace
 
 // builders/tonco_swap.py _tonco_swap_data -> blocks/swaps.py build_tonco_swap_core
-// (§11.5 full port). args = (consumed list). Deterministic: the jetton legs are
+// over the consumed list. The jetton legs are
 // read by btype/`.data` (swaps.py:856/926), the pTON in-leg from a single-leaf
 // call message. Multi-hop peer_swaps + the failed-swap recursive-payload
-// fallback are ported faithfully (no corpus coverage — single-hop only).
+// fallback are supported; the corpus covers only single-hop swaps.
 EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   if (args.size() != 1 || args[0].t != VType::List) {
     return host_reject("bad arguments");

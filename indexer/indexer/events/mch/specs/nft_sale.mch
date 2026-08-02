@@ -1,11 +1,11 @@
-# GetGems / Fragment NFT sale + auction family — port of blocks/auction.py
+# GetGems and Fragment NFT sale and auction matchers from blocks/auction.py:
 # UpdateSaleMatcher (:642), NftPutOnSaleBlockMatcher (:235), NftCancelSaleMatcher
 # (:359), NftFinishAuctionMatcher (:419), NftCancelAuctionMatcher (:388),
 # AuctionBidMatcher (:53), AuctionOutbidMatcher (:133), plus blocks/nft.py
 # NftDiscoveryBlockMatcher (:298).
 #
 # One file because the eight matchers share a lookup surface (nft_sale /
-# nft_auction / nft_item), two serializer fills, and — for three of them — an
+# nft_auction / nft_item), two serializer fills, and, for three of them, an
 # anchor. Matcher order in this file IS registration order, and it reproduces the
 # legacy relative order verbatim; see "Ordering" below for what actually depends
 # on it.
@@ -17,8 +17,8 @@
 #
 #  - `nft_put_on_sale` anchors `btype nft_transfer`, the same anchor
 #    specs/getgems.mch uses. Legacy runs GetgemsNftPurchaseBlockMatcher first, so
-#    getgems.mch MUST stay earlier in the manifest — this is the one cross-file
-#    tie-break in the wave.
+#    getgems.mch must stay earlier in the manifest. This is a cross-file
+#    ordering constraint.
 #  - `nft_cancel_sale` / `nft_cancel_auction` READ an `nft_transfer` and
 #    `nft_finish_auction` reads an `nft_purchase` (through nft_trade_returned,
 #    not through a pattern edge — see below), so both producer specs
@@ -37,19 +37,19 @@
 #    even though legacy registers `nft_update_sale` much earlier (ahead of
 #    NftTransferBlockMatcher).
 #
-# `code_hash` (prep P2)
-# ---------------------
+# `code_hash`
+# -----------
 # `nft_item.code_hash`, `nft_sale.code_hash` and `nft_auction.code_hash` did not
-# exist on the C++ lookup shapes before this wave; all three were added for the
-# matchers here (ParsedBlockLookupSource.cpp, fixtures/FixtureLookupSource.cpp,
-# and emu/EmuShadow.cpp — no detector Result carries a code hash, so the emulator
+# are required on the C++ lookup shapes. They are supplied by
+# ParsedBlockLookupSource.cpp, fixtures/FixtureLookupSource.cpp, and
+# emu/EmuShadow.cpp. No detector Result carries a code hash, so the emulator
 # leg computes it from the account state cell the detector ran on). Zero renders
 # as null, so an unknown code hash reads as a MISS, never as a wrong version
 # string. Consumers: the DNS-item test inside `auction_bid_data`, and the GetGems
 # StateInit version dispatch in `getgems_sale_init` / `getgems_auction_init`.
 #
-# `init_state` (prep P4, user ruling)
-# -----------------------------------
+# `init_state`
+# ------------
 # NftPutOnSale reads the sale parameters out of the DEPLOY MESSAGE's StateInit
 # (`sale_init.get_message().init_state.body`), not out of the account's current
 # interface snapshot. The two are NOT interchangeable: a later UpdateSale rewrites
@@ -67,7 +67,7 @@
 #                                               get_sale_data / get_auction_data)
 #   fn  auction_bid_data(block)                 CHAINED lookups — the auction's
 #                                               nft_addr feeds an nft_item lookup,
-#                                               which §9.7 forbids in the DSL
+#                                               which the DSL forbids
 #                                               (B004_LOOKUP_DEPENDS_ON_LOOKUP)
 #   fn  nft_trade_is_finish(block)              opcode-set OR comment-set test on
 #                                               a mixed anchor, for the switch
@@ -89,10 +89,7 @@
 #                                               "exactly one, reject on duplicate"
 #                                               count the language cannot express
 #
-# Documented deviations from legacy (the corpus now covers four of the eight —
-# nft_cancel_sale, nft_cancel_auction, nft_put_on_auction, nft_update_sale — via
-# fixtures captured from the live A/B windows; the other four still fire on
-# nothing):
+# Differences from the runtime matchers:
 #  - `NftCancelSaleMatcher` / `NftCancelAuctionMatcher` reach the collection via
 #    `NftTransferBlock.get_nft_collection()` (blocks/nft.py:30), which indexes
 #    `data['nft']['collection']['address']` after testing only that the
@@ -170,8 +167,9 @@ matcher nft_put_on_sale {
     reject when account(to_sale.data.nft.address) != account(listing.data.nft.address)
     reject when account(to_sale.data.new_owner) != account(sale_init.msg.destination)
 
-    # Both lookups run in the same batch (§9.7 forbids chaining), and the switch
-    # below picks the sale branch first — legacy's `if get_nft_sale(...) is not
+    # Both independent lookups run in the same batch; chaining is forbidden.
+    # The switch below picks the sale branch first — legacy's
+    # `if get_nft_sale(...) is not
     # None: ... else: get_nft_auction(...)`.
     let sale    = lookup nft_sale(sale_init.msg.destination)
     let auction = lookup nft_auction(sale_init.msg.destination)

@@ -1,17 +1,16 @@
-# Dedust withdraw liquidity (T17) — ported from blocks/liquidity.py
-# DedustWithdrawBlockMatcher. FULLY DECLARATIVE build (no host builder).
+# Dedust withdraw liquidity matcher with a declarative build and no host builder.
 #
 # Shape of interest: a children set with two IDENTICAL-head items (both
-# `op DedustPayoutFromPool`). The engine's children-set algorithm (spec §6.5)
+# `op DedustPayoutFromPool`). The engine's children-set algorithm
 # is first-match-wins over candidates in canonical order, so item 1 consumes
-# the first matching payout chain and item 2 the next — deterministic, and it
+# the first matching payout chain and item 2 the next. This is deterministic and
 # matches the legacy labeled('payout_1')/labeled('payout_2') assignment
 # exactly. The @req_*/@ton_*/@jt_* captures bind positionally (no recursion),
 # so the build reads them directly.
 #
 # Each payout terminal is either a TON payout (`op DedustPayout`) or a jetton
 # payout (`btype jetton_transfer`, produced by the prerequisite
-# JettonTransferBlockMatcher/PTonTransferMatcher — same registration-order
+# JettonTransferBlockMatcher/PTonTransferMatcher, with the same registration-order
 # dependency as legacy). Splitting the OR into distinct capture names per arm
 # (@ton_N | @jt_N) lets the build branch on which arm bound (exactly one is
 # non-null); the payout-request call above each terminal is captured (@req_N)

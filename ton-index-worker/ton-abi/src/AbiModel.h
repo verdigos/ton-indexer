@@ -1,7 +1,7 @@
 #pragma once
 
-// AbiModel: PODs mirroring the reference Tolk ABI schema exactly
-// (tolk-abi-to-typescript: src/abi.ts + src/abi-types.ts). W1 (T1.1).
+// PODs mirroring the reference Tolk ABI schema in
+// tolk-abi-to-typescript src/abi.ts and src/abi-types.ts.
 //
 // Field names/shapes/optionality are a 1:1 mirror of the TS source -- see the
 // citation comment above each struct. Bigints (`bigint_as_string` in TS) are
@@ -311,7 +311,7 @@ struct ContractABI {
   // every fixture file actually is (abi_schema_version is a sibling field
   // emitted by the compiler; code_boc64 is bolted on by convertTolkFileToABI
   // and is of no interest here). Kept on the model for loader convenience;
-  // AbiLoader pins abi_schema_version = exactly "1.0" (locked decision 15).
+  // AbiLoader accepts exactly abi_schema_version "1.0".
   std::string abi_schema_version;
 };
 

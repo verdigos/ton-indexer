@@ -8,11 +8,8 @@
 
 using AllShardStates = std::vector<td::Ref<vm::Cell>>;
 
-// The shard-state account read as a plain function. Reading a shard state is a
-// dictionary lookup plus a TLB unpack — entirely synchronous — so the actor
-// below buys nothing but a scheduler hop, and a caller already on a synchronous
-// path (the celldb tier-2 lookup hook) can use this directly. Same static parse
-// seam idea as parse_transaction/parse_message in DataParser.
+// Performs the synchronous shard-state dictionary lookup and TLB unpack used by
+// both actors and direct callers.
 td::Result<schema::AccountState> lookup_account(const AllShardStates& shard_states,
                                                 const block::StdAddress& address);
 

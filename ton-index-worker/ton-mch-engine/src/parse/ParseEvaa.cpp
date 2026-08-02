@@ -12,8 +12,8 @@
 
 namespace mch {
 
-// WithdrawMaster and WithdrawCollateralized now use protocol ABI rows. Only
-// the opcode-enum fail_excess (a single-use construct not in the DSL) stays hand.
+// WithdrawMaster and WithdrawCollateralized use protocol ABI rows. The
+// single-use fail_excess opcode enum is parsed here because it is not in the DSL.
 
 // EvaaWithdrawFailExcess: opcode-tagged reason; an unknown opcode raises in
 // Python (ValueError) -> soft-parse failure.

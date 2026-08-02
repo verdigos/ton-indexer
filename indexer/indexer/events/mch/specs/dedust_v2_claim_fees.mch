@@ -8,7 +8,7 @@
 #       PayoutPositionFees 0x29ff1bcf (Position -> Pool) # exact x/y fees + owner
 #         payout leg  (PayoutMessage 0x3216ca09 TON | jetton_transfer)  # optional
 #         payout leg  (same)                                            # optional
-#         excess 0xd53276db                              # auto-absorbed (§4.5)
+#         excess 0xd53276db                              # auto-absorbed
 #
 # PARSER PATHS, mixed in one spec (legal; specs_decl/dedust_v2_swap.mch does the
 # same): PayoutPositionFees comes from the protocol ABI entry of the same name

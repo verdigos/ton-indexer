@@ -4,12 +4,9 @@ namespace ton_abi {
 
 namespace {
 
-// DISCREPANCY (flagged to lead): @ton/core's _loadInternalAddress does NOT
-// reject an anycast address -- it reads rewrite_depth/rewrite_pfx and rewrites
-// the hash prefix. The plan brief instructs anycast REJECT. We follow the plan
-// (reject), which is safe: no reference fixture or generated vector carries an
-// anycast address, and real on-chain messages never use it. Kept as a named
-// reject condition so the divergence is explicit rather than silent.
+// This implementation rejects anycast. @ton/core instead reads
+// rewrite_depth/rewrite_pfx and rewrites the hash prefix. No supported fixture
+// or generated vector contains an anycast address.
 constexpr bool kRejectAnycast = true;
 
 // addr_std body after the 2-bit tag was consumed: anycast(1) wc(int8) hash(256).

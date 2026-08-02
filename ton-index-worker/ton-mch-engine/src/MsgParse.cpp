@@ -1,21 +1,5 @@
-// TL-B message-parsing registry and dispatch (see MsgParse.h for the semantics
-// contract). The per-family adapters live in src/parse/*; this file owns the
-// message_parsers() map, parse_message_body dispatch, and the --parse-dump mode.
-//
-// FILE-LEVEL PYTONIQ-PARITY CATALOGUE (referenced by the split parser TUs):
-// Every quirk of the Python reference parsers is reproduced deliberately:
-//  - pytoniq Slice.copy() RESETS ref consumption, so JettonTransfer's INLINE
-//    forward_payload sees ALL body refs from index 0 (including an already
-//    consumed custom_payload ref) — both in to_cell() and in the snake walk;
-//  - JettonTransfer.sum_type is a conditionally-present key (Python only sets
-//    the attribute on some paths; notably NOT on stonfi-swap success and NOT
-//    when the body has no payload bits);
-//  - load_address: addr_none -> null, addr_extern -> "extern:<len>:<hex>"
-//    Str (len 0 fails: pytoniq ba2int on an empty bitarray raises), addr_var
-//    fails, anycast is consumed but NOT applied (pytoniq stores it without
-//    rewriting the address prefix, unlike convert::to_raw_address);
-//  - load_coins with len nibble 0 yields 0 (not null);
-//  - payload_sum_type is Python hex(): lowercase, no zero padding.
+// TL-B message-parser registry and dispatch. Per-family adapters live under
+// src/parse. See docs/message-parsing.md for observable parsing conventions.
 #include "MsgParse.h"
 
 #include "AbiBridge.h"
@@ -46,7 +30,7 @@ namespace mch {
 // instead poisoned to a nullptr parser at merge time, so parse_message_body
 // fails closed on an ambiguous name with the same map lookup it already does.
 // The collision NAMES are kept alongside the map purely so validate_registries()
-// can list them at startup (design §4) -- the total registered set (and
+// can list them at startup. The total registered set and
 // --surface / cpp_surface.json) is unchanged either way.
 namespace {
 
@@ -77,7 +61,7 @@ struct BuiltRegistry {
 
 const BuiltRegistry &built_registry() {
   static const BuiltRegistry built = [] {
-    // ONE enumeration of the two sources in first-wins order, shared by the
+    // One enumeration of the two sources in first-wins order, shared by the
     // merge and the duplicate scan (they must never disagree on the source set
     // or its order).
     const ParserSources sources = {&hand_message_parsers(), &abi_message_parsers()};
@@ -140,8 +124,8 @@ td::Result<Value> parse_message_body(const std::string &type_name, const td::Ref
   if (it->second == nullptr) {  // poisoned at merge time (multi-source key)
     return td::Status::Error(PSLICE() << "message type " << type_name << " is ambiguously registered");
   }
-  // Soft-parse (§5.4): a malformed body must reduce to a clean parse failure,
-  // but only for the exception kinds a parser legitimately raises — cell VM
+  // A malformed body must reduce to a clean parse failure,
+  // but only for the exception kinds a parser legitimately raises, cell VM
   // errors and std::exception subclasses (out_of_range/logic_error from the
   // hand-written tails). Anything else (bad_alloc, unknown host faults) is an
   // infrastructure failure and propagates to the trace-level handler rather

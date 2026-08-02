@@ -132,33 +132,17 @@ struct Trace {
     td::Bits256 rand_seed;
     bool tx_limit_exceeded{false};
 
-    // Keeps the block's cell store (StaticBagOfCellsDbLazy behind BlockData)
-    // alive for as long as this trace exists: transaction_root cells taken off
-    // a block are INTERIOR cells whose loader holds that store only weakly,
-    // while the block emulator that owns it stops as soon as every insert
-    // promise has resolved. Empty for listener-emulated traces, whose cells are
-    // either in-memory or celldb-backed (celldb ext cells hold their reader
-    // strongly).
+    // Keeps the block's lazy cell store alive while the trace holds interior
+    // transaction cells. Listener-emulated traces do not need an anchor.
     std::shared_ptr<const std::vector<td::Ref<vm::Cell>>> cell_anchor;
 
-    // Inputs for the classifier's celldb tier-2 lookups: the shard states this
-    // trace was emulated against, and their config. Shared handles, so carrying
-    // them costs refcounts. Empty for listener-emulated traces, which is the
-    // "no tier 2" case the hook degrades to.
+    // Shared shard-state and config handles for tier-2 account lookups.
+    // Listener-emulated traces leave them empty and receive no tier-2 results.
     AllShardStates shard_states;
     std::shared_ptr<block::ConfigInfo> config;
 
-    // DedustPoolDetector and NominatorPoolContract were added for the classifier
-    // (W3): both gate on the CODE HASH before doing anything, and the nominator
-    // one runs no get-method at all. GetGemsNftFixPriceSaleV4 and the two GetGems
-    // detectors already here run one get-method ungated. MultisigOrder likewise
-    // attempts get_order_data for every account. With no acc_active guard here,
-    // destroyed accounts get a detector that immediately fails on null code. Only
-    // a successful parse asynchronously fetches the parent multisig, then runs
-    // get_order_address to verify the address round-trip. This accepted cost
-    // matches committed detection.
-    // NOTE: the new results are deliberately NOT serialized to Redis — see
-    // parse_interfaces in Serializer.hpp.
+    // Detector results feed in-process lookups. Serializer.hpp controls which
+    // variants are also present in the Redis interface payload.
     using Detector = InterfacesDetector<JettonWalletDetectorR, JettonMasterDetectorR,
                                         NftItemDetectorR, NftCollectionDetectorR,
                                         GetGemsNftFixPriceSale, GetGemsNftAuction,

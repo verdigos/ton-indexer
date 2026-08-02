@@ -40,8 +40,8 @@ opcode TakeWalletAddress                      = 0xd1735400
 #
 # Legacy `child_matcher=deploy` is written here as a one-item children block
 # (`-> { op CoffeeDeploy ... }`): a children block does not advance the chain
-# cursor, so the `<-` in-transfer edge still belongs to the ANCHOR (§6.4 / §6.5,
-# dedust_deposit precedent) instead of tripping
+# cursor, so the `<-` in-transfer edge still belongs to the ANCHOR, as in the
+# dedust_deposit matcher, instead of tripping
 # C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED on the deploy node. With a single
 # item the two lowerings differ only when several 0xc0ffee22 children exist
 # (legacy would consume them all; its build reads only the first via
@@ -125,7 +125,7 @@ matcher coffee_deposit_liquidity {
 # the raw 0x2c76b973 / 0xd1735400 literals in the legacy matcher). Both
 # discovery hops are optional (TON/extra-currency vaults skip them).
 #
-# Fully declarative build (M4 §9): sender/amount from the anchor envelope, asset
+# The declarative build reads sender/amount from the anchor envelope and asset
 # from its parsed body, vault from the captured CoffeeDeploy call's envelope.
 # The produced block is the canonical generic block (btype + data map).
 # ---------------------------------------------------------------------------

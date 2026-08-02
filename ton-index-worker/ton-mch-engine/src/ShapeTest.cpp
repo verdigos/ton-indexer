@@ -102,11 +102,9 @@ void test_getgems_proxy_insert() {
   m.arena = &arena;
   it->second(produced, m);
 
-  // Post-merge topology (mirrors Python getgems.py + core.py exactly): the
-  // proxy is absorbed into `produced` (proxy.parent = produced), so the parent's
-  // compact_connections remaps its only edge to the proxy's topmost parent —
-  // parent.next collapses to [produced]. Payout is likewise absorbed; the
-  // sibling payout no longer hangs off the parent.
+  // The proxy is absorbed into `produced` (proxy.parent = produced), so
+  // compact_connections maps the parent's only edge to `produced`. The payout
+  // is also absorbed and is not a sibling of `produced`.
   check("getgems/parent_next_is_produced", parent->next_blocks == std::vector<Block *>{produced});
   check("getgems/parent_dropped_payout", !contains(parent->next_blocks, payout));
   check("getgems/produced_prev_is_parent", produced->previous_block == parent);
@@ -121,8 +119,7 @@ void test_getgems_proxy_insert() {
   check("getgems/proxy_absorbed", proxy_absorbed);
 }
 
-// §4.1: the typed lookup key must not collide across structurally distinct
-// requests. Each pair below collided under the old NUL-concatenation scheme.
+// Typed lookup keys must not collide across structurally distinct requests.
 void test_lookup_key() {
   const std::string embedded_nul("a\0b", 3);
   // Embedded NUL in one string vs two separate strings.

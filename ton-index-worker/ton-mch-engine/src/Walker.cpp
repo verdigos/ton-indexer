@@ -46,7 +46,7 @@ std::vector<Block *> canonical(const std::vector<Block *> &v) {
   return out;
 }
 
-// Per-attempt walk state (spec §3.2). Owns the match recursion; the matcher is
+// Per-attempt walk state. Owns the match recursion; the matcher is
 // immutable.
 class MatchState {
  public:
@@ -154,7 +154,7 @@ class MatchState {
       return false;
     }
     // Named `where` predicate (engine.py: `node.where(block)`), then inline
-    // where_exprs compose onto the head test (§4.1). Loader gates runnability
+    // where_exprs compose onto the head test. Loader gates runnability
     // on the registry, so a missing name here means an unrunnable matcher.
     if (!node.where_name.empty()) {
       auto it = host_predicates().find(node.where_name);
@@ -397,8 +397,8 @@ bool matcher_test_self(const CompiledMatcher &m, const Block *b) {
       return it != host_predicates().end() && it->second(b);
     }
     case AnchorKind::Mixed: {
-      // engine.py test_self [M2R, R09]: union membership in source order, then
-      // the matching branch's `where` — a head match whose predicate fails
+      // Mixed anchors test union membership in source order, then
+      // the matching branch's `where`, a head match whose predicate fails
       // falls through to a later branch sharing the head.
       for (const auto &br : m.anchor_branches) {
         bool ok = br.is_op ? (b->btype == "call_contract" && b->opcode && *b->opcode == br.opcode)

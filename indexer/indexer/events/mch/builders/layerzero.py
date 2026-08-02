@@ -1,21 +1,21 @@
-"""mch registration for the LayerZero family (specs/layerzero.mch).
+"""MCH registrations for the LayerZero family in specs/layerzero.mch.
 
-specs/layerzero.mch is DECLARATIVE (M4 §9) end to end: the runtime evaluates
+The runtime evaluates the spec's parse, reject, and output expressions
 parse/reject/out for all five matchers, so this module only registers the
 opcodes, the produced block types, the message parsers, and the single host
 `fn` the declarative build cannot express.
 
-Host `fn` (the only remaining dual-implementation liability):
+Host function:
 
-- layerzero_dst_oapp_matches — the legacy safety check `dest[2:].lower() ==
+- layerzero_dst_oapp_matches implements `dest[2:].lower() ==
   dst_oapp[2:].lower()`. The envelope destination is a TON address (`0:<hex>`)
   and the packet dst_oapp is a bare 256-bit hash (`0x<hex>`); `account()` rejects
   the `0x` form (AddressError), and the expression language has no string
-  manipulation (§9.6), so prefix-strip + case-insensitive hex compare stays here.
+  manipulation, so prefix-strip + case-insensitive hex compare stays here.
   Byte-identical to build_layerzero_receive_core's guard.
 
-Message parsers: `LayerZeroOappExecuteCallback` (receive) plus the three the W3
-wave added — `LayerzeroChannelSendCallback` (send), `ChannelCommitPacket`
+Message parsers are `LayerZeroOappExecuteCallback` (receive),
+`LayerzeroChannelSendCallback` (send), `ChannelCommitPacket`
 (commit) and `UlnConnectionVerifyCallbackParser` (dvn verify). The last one is
 also where the verification-status code becomes the status STRING, since the
 expression language has no string operations.

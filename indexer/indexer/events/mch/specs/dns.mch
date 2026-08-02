@@ -1,5 +1,5 @@
-# DNS record-change matcher — ported from blocks/dns.py, now FULLY DECLARATIVE
-# (M4 §9.5 `produces switch`). One anchor opcode (ChangeDnsRecord), three
+# DNS record-change matcher corresponding to blocks/dns.py.
+# using `produces switch`. One anchor opcode (ChangeDnsRecord), three
 # content-dispatched outcomes: change_dns / renew_dns / delete_dns. The optional
 # trailing bounce (op 0xffffffff) is consumed as an explicit child;
 # include_excess/include_bounces stay at their defaults (true) to mirror the

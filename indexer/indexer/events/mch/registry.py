@@ -24,7 +24,7 @@ class Registries:
     # builtins/lookups, null arguments are passed through (an absent optional
     # capture is a legitimate input to imperative host logic).
     fns:           dict[str, Callable[..., Awaitable[Any]]]          = field(default_factory=dict)
-    # shapers: post-build tree surgery hooks (`shape IDENT`, spec §8.7) — SYNC
+    # shapers: post-build tree surgery hooks (`shape IDENT`) — SYNC
     # callables `(produced_block, match) -> None` invoked by the engine after
     # the produced block's merge. May mutate only the produced block's region.
     shapers:       dict[str, Callable[..., Any]]                     = field(default_factory=dict)

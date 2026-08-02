@@ -1,11 +1,8 @@
-// W12 mch <-> ton-abi bridge (design: W12-BRIDGE-DESIGN.md). Turns a Tolk-ABI
-// generated struct (ton-abi-gen output) into an mch::Value so ABI-parsed message
+// Converts Tolk-ABI generated structs into mch::Value instances so parsed
+// message bodies plug into the existing message_parsers() registry alongside the kept
 // bodies plug into the existing message_parsers() registry alongside the kept
-// hand parsers. Pure codegen (W11.5): no runtime ABI loading, no
-// AbiModel, no init API -- registration is compile-time static rows.
-//
-// Dependency direction: mch -> ton-abi ONLY (ton-abi stays mch-free forever,
-// plan decision 5). This header lives mch-side and includes ton-abi's AbiValue.
+// hand parsers. Registration uses compile-time static rows and loads no ABI model
+// at runtime. See docs/abi-bridge.md for the dependency and value contracts.
 #pragma once
 
 #include "Value.h"
@@ -25,7 +22,7 @@ namespace mch {
 
 // AbiValue -> mch::Value adapter (impl in AbiBridge.cpp). TOLK-FAITHFUL value
 // conventions (@ton/core / AbiValue.h dump semantics, NOT pytoniq). Total: never
-// errors -- every AbiValueKind maps onto an existing VType (design §3). ABI bodies
+// errors. Every AbiValueKind maps onto an existing VType. ABI bodies
 // form a NEW value universe; this does NOT imitate PSlice's extern-string / None
 // -> null conventions.
 Value abi_value_to_mch(const ton_abi::AbiValue &v);
@@ -36,9 +33,9 @@ Value abi_value_to_mch(const ton_abi::AbiValue &v);
 //   td::Result<ton_abi::AbiValue> to_abi_value() const;
 //
 // &abi_parse_body<T> has type td::Result<Value>(*)(const td::Ref<vm::Cell>&) ==
-// MsgParserFn EXACTLY (no closure state -- dispatch is baked into from_slice), so
+// MsgParserFn exactly. Dispatch is baked into from_slice, so
 // the instantiation registers as an ordinary parser row. Top-level exotic cells
-// are rejected here (W11.5 re-home) with a clean error result -- never an abort.
+// return a clean error for top-level exotic cells rather than aborting.
 template <class T>
 td::Result<Value> abi_parse_body(const td::Ref<vm::Cell> &body) {
   if (body.is_null()) {
@@ -54,10 +51,10 @@ td::Result<Value> abi_parse_body(const td::Ref<vm::Cell> &body) {
   return abi_value_to_mch(av);
 }
 
-// The ABI-generated parser rows merged into message_parsers() (design §4).
-// Rows are {"<DeclName>", &abi_parse_body<T>} -- BARE decl names, not
+// The ABI-generated parser rows are merged into message_parsers().
+// Rows are {"<DeclName>", &abi_parse_body<T>}: bare declaration names, not
 // <contract>::<decl>: the .mch grammar's `parse CAP as Name` reads a bare IDENT
-// (acked deviation, T122-CLAIMREWARD-DESIGN.md §3).
+// because the grammar accepts a bare identifier at that position.
 const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers();
 
 }  // namespace mch

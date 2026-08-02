@@ -1,18 +1,5 @@
-// MCH IR expression -> C++ source generator (build-time codegen, C++ port).
-//
-// Ports the retired Python generator (indexer/events/mch/cpp_expr_emit.py) so
-// the C++ build needs NO Python: the version-controlled IR JSON is the sole
-// contract. Emits deterministic straight-line C++ over the ExprRuntime library
-// (rt_* free functions) — the SAME runtime the interpreter uses, so a codegen
-// bug cannot hide behind a divergent runtime.
-//
-// Codegen shape: SSA temporaries with early-return fault/null propagation
-// (`EvalResult rN = rt_op(...); if (rN.faulted) return rN; Value vN = ...;`),
-// lazy operators (and/or/??/ternary) as nested if/else blocks, int literals as
-// parse-once function-local statics. Temporaries and literals are numbered in a
-// fixed pre-order walk with stable formatting, so regeneration is byte-identical
-// (CI-diffable). Byte-for-byte compatible with the Python generator's function
-// bodies + table (verified at port time).
+// Deterministic MCH IR expression-to-C++ generator.
+// See docs/codegen.md for emission and runtime contracts.
 #pragma once
 
 #include "td/utils/JsonBuilder.h"
@@ -22,7 +9,7 @@
 namespace mch_codegen {
 
 // C++ string-literal body (escaped): \\ \" \n \t \r, plus every other control
-// byte (< 0x20 and 0x7F, NUL included) as a 3-digit octal escape so an adjacent
+// byte (< 0x20 and 0x7F, NUL included) as a 3-digit octal escape. An adjacent
 // digit cannot extend it (the \x greedy-hex hazard). Verified by `--selftest`.
 std::string cstr(const std::string &s);
 
@@ -49,7 +36,7 @@ std::string generate_vectors_file(const td::JsonValue &root, const std::string &
 std::string generate_wheres_file(const td::JsonValue &root, const std::string &header,
                                  const std::string &source_sha, const std::string &suffix);
 
-// Emit a whole builds table file (Phase B1, D2): one
+// Emit a whole builds table file: one
 // `BuildOutcome build_<id>_<name>(BuildEnv&)` per matcher carrying a
 // build_program, plus the `gen_builds_<suffix>()` / `gen_builds_<suffix>_
 // source_sha()` table accessors. Accepts an IR artifact root

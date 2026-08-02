@@ -1,23 +1,7 @@
-// The compiled matcher TABLES — the data the match phase runs on.
-//
-// These types are the whole interface between the IR document and the engine:
-// mch-codegen emits them as C++ (GenMatchers.h, one table per input document)
-// and the walker / ClassifyCore read them. Nothing here knows about JSON, files
-// or the host registry, so both the build-time emitter and the runtime library
-// can depend on it.
-//
-// Shape notes (docs/mch-ir-spec.md §3, §5; docs/mch-engine-v2.md §3.1):
-//  - Node ids are LOCAL to a matcher (root == 0), remapped from the artifact's
-//    global node pool in discovery order; `global_id` keeps the artifact-global
-//    index, which is the key of the generated where table (GenWheres.h).
-//  - Match-phase runnability is NOT a field: whether a matcher's predicates
-//    exist is a property of the linked host registry, not of the document, so it
-//    is computed at setup time by match_skip_reason() (BuildDriver.h).
-//  - Interning decision: btype comparisons use the raw std::string (btypes are
-//    short; the walk is match-only over a fixed corpus). A separate interned-id
-//    table was deliberately deferred — a pure perf optimization with no
-//    observable effect that would require touching the Block substrate. Opcodes
-//    are normalized to unsigned 32-bit.
+// Compiled matcher-table types shared by code generation and runtime. Node IDs are
+// matcher-local; global_id keys the generated where table. Host-registry
+// runnability is computed during setup rather than stored here. Opcodes are
+// normalized to unsigned 32-bit values.
 #pragma once
 
 #include <cstdint>
@@ -65,7 +49,7 @@ struct CompiledMatcher {
   std::unordered_set<std::string> anchor_btypes;
   std::string anchor_pred;  // Pred-kind anchor's predicate name
 
-  // [M2R, R09] Mixed anchor: the XOR branches in SOURCE order, each an opcode
+  // Mixed anchor: XOR branches remain in source order, each an opcode
   // or a btype head with an optional `where` predicate. test_self takes union
   // membership and then the matching branch's predicate, so the branch order
   // (and the head/pred pairing) has to survive into the table.

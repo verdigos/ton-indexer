@@ -8,10 +8,11 @@ function the legacy matcher calls) and exposes the produced TgBTCMintData
 dataclass as a namespace. `null` from the core (missing pieces / unparseable log)
 drives `reject when d == null`.
 
-Consumed-set-driven (the well-known `consumed` env name), NOT capture-driven —
-same situation as specs/evaa.mch: the three blocks the core needs sit in the
-recursion's exit branch (@tail/@log/@mint would be list bindings under §7.2 and
-the compiled path's positional walker mis-binds same-position exit captures).
+The builder uses the well-known `consumed` environment value rather than
+captures. The three blocks the core needs sit in the
+recursion's exit branch (@tail/@log/@mint would be list bindings because they
+belong to a recursive rule, and the compiled path's positional walker mis-binds
+same-position exit captures).
 Each role carries a unique signature within one match's consumed set:
 
 - head:        the sole CallContractBlock with opcode 0x3F781D24 (also the anchor).
@@ -21,18 +22,18 @@ Each role carries a unique signature within one match's consumed set:
 Deployment side-effects ride on the shaper `tgbtc_deploy_absorb`: every
 CallContractBlock whose transaction deploys its destination carries a
 `ContractDeploy` block in its `children_blocks` (attached at init, sharing the
-parent's event node — NOT reachable via `next_blocks`, so the structural match
+parent's event node. It is not reachable via `next_blocks`, so the structural match
 never consumes it). The legacy matcher sweeps these up and merges them into the
 produced block; to stay byte-identical (ContractDeploy as a direct child) the
 shaper collects them from the consumed set's `children_blocks` and merges them as
 the last build step, after the wrapper's consumed-merge. `unwind_deployments`
 still surfaces them as their own `contract_deploy` actions.
 
-W2 — the four EVENT-LOG parsers
--------------------------------
+Event-log parsers
+-----------------
 The other five matchers in the spec (`tgbtc_burn`, `tgbtc_new_key` and the four
 `*_log_only` fallbacks) are otherwise fully declarative; their only imperative
-residue is reading one external-out log body. That residue is factored into FOUR
+residue is reading one external-out log body. Four
 pure parse fns, one per event opcode, each taking the log block and returning a
 namespace of its fields (or `null` when the body is unreadable — the caller's
 `reject when` turns that into "no match", exactly like the legacy `try_build`
@@ -89,7 +90,7 @@ OPCODES = {
     "TgBTCMintHead":       _HEAD_OPCODE,
     "TgBTCMintTail":       _TAIL_OPCODE,
     "TgBTCMintSuccessLog": TgBTCMintEvent.opcode,
-    # W2: the rest of the family. The two "notify" heads a burn can arrive
+    # The two "notify" heads a burn can arrive
     # through, the new-key request, the shared payout tail, and the three
     # remaining event-log opcodes.
     "JettonBurnNotify":    JettonBurnNotification.opcode,   # 0x7BDD97DE
@@ -153,7 +154,7 @@ def register_tgbtc(reg: Registries) -> Registries:
             **{f.name: getattr(produced.data, f.name) for f in dc_fields(produced.data)}
         )
 
-    # --- W2 event-log parse fns (see the module docstring) -------------------
+    # Event-log parse functions. See the module docstring.
     # `hex(x)[2:]`: Python's minimal-length lowercase hex, no leading zeros.
     # Reproduced verbatim rather than zero-padded to 64 — the legacy fills write
     # it straight into `extra.pubkey` and the yaml cases pin the short form.

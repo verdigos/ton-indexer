@@ -1,15 +1,9 @@
-"""mch registries for the nominator pool matchers (specs/nominator.mch).
+"""Register the nominator pool matchers from specs/nominator.mch.
 
-Remake (not a port) of blocks/staking.py NominatorPoolWithdrawMatcher — see the
-spec file header for why the shape is re-anchored per payout instead of fanned
-out from the NominatorPoolProcessWithdrawRequests call. FULLY DECLARATIVE build:
-the produced fields are an `out {...}` block; the only host hooks are the
-structural `nominator_pool_withdraw_parent` predicate (gates the match on the
-parent call — a topology check that stays a host predicate, never a captured
-node), a payout-arithmetic fn and shaper for withdraw requests, and a nullable
-`nominator_pool` lookup (the NominatorPool interface-set membership, G10
-verdict). The shared build_nominator_pool_withdraw_core (blocks/staking.py)
-stays with the legacy matcher on the production path only.
+The withdrawal shape anchors each payout instead of fanning out from the
+NominatorPoolProcessWithdrawRequests call. Produced fields use an `out` block.
+Host hooks handle the parent topology check, payout arithmetic and shaping,
+and the nullable NominatorPool interface lookup.
 """
 from __future__ import annotations
 
@@ -48,7 +42,7 @@ def register_nominator(reg: Registries) -> Registries:
 
     @reg.register_lookup("nominator_pool")
     async def nominator_pool(address):
-        # Nullable interface lookup (G10): resolves the payout's pool address to
+        # Nullable interface lookup: resolves the payout's pool address to
         # its interface set, returning it only when the NominatorPool interface
         # is present (else None -> the build `reject when pool_iface == null`).
         repo = context.interface_repository.get()

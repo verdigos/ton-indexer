@@ -1,26 +1,13 @@
-"""mch registration for the evaa_withdraw matcher (specs/evaa.mch).
+"""Register the evaa_withdraw matcher from specs/evaa.mch.
 
-specs/evaa.mch is DECLARATIVE (M4 §9): the runtime evaluates parse/reject/out
-field-for-field with build_evaa_withdraw_core, so this module registers only the
-opcodes, the produced block type, the message parsers (`parse`), and the four
-host predicates the structural pattern needs. There is NO build function anymore
-— the derive-parts consumed-set walker the compiled path required is gone (the
-IR engine binds the exclusive-branch captures directly).
+The runtime evaluates the spec's parse, reject, and output expressions. This
+module registers its opcodes, produced block type, message parsers, and four
+host predicates.
 
-Host predicates (each a dual-implementation parity liability, spec §5.2 — the
-named GAPS that keep this matcher from being predicate-free):
-
-- evaa_user_withdraw_user / evaa_user_withdraw_success / evaa_user_withdraw_fail
-  — EVAA user-contract messages carry a variable-length header before the 32-bit
-  opcode, so a plain `op` test cannot identify them. `_opcode_after_user_header`
-  replicates EvaaContractWithHeaderMatcher.test_self (blocks/evaa.py) byte for
-  byte. This is body parsing, not an M4 inline field test.
-- evaa_service_comment — legacy evaa_action_comment_matcher: a TonTransferBlock
-  whose comment is one of the EVAA service comments (set membership over a block
-  attribute; not an M4 inline field test either).
-
-The legacy EvaaWithdrawBlockMatcher and build_evaa_withdraw_core stay the parity
-reference.
+The user, success, and failure predicates handle EVAA messages whose
+variable-length header precedes the opcode. `_opcode_after_user_header`
+therefore matches EvaaContractWithHeaderMatcher.test_self. The service-comment
+predicate recognizes TonTransferBlock comments in the EVAA service set.
 """
 from __future__ import annotations
 
@@ -236,7 +223,7 @@ async def _evaa_supply_data(consumed: list[Block]):
     """Host residue of the evaa supply build (hybrid declarative spec). Derives
     the legacy label roles structurally from `Match._mch_consumed` and delegates
     to build_evaa_supply_core, which the legacy matcher also calls. Returns the
-    EvaaSupplyData record the `out` block flattens, or None to reject (§10.7)."""
+    EvaaSupplyData record the `out` block flattens, or None to reject."""
     block, rest = consumed[0], consumed[1:]
     try:
         user = next((b for b in rest

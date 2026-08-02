@@ -1,4 +1,4 @@
-// Host binding registries and dispatch (Phase D). The per-protocol predicate
+// Host binding registries and dispatch. Per-protocol predicate
 // and fn implementations live in src/host/*; this file owns the host_fns() /
 // host_predicates() maps and the rt_call_hostfn dispatch.
 #include "HostRegistry.h"
@@ -39,13 +39,12 @@ const std::map<std::string, HostFn> &host_fns() {
       {"evaa_supply_data", evaa_supply_data},
       {"evaa_liquidate_data", evaa_liquidate_data},
       {"tonco_swap_data", tonco_swap_data},
-      // stonfi_v2_swap_data: registered by the §11.5 dual-dispatch wave. The
-      // Python core (build_stonfi_v2_swap_core) now reads the in-leg by btype
+      // stonfi_v2_swap_data reads the in-leg by block type
       // (swaps.py:404) instead of the hash-seed-dependent
       // in_transfer.event_nodes[0].message, so it is deterministic and matches
-      // this already-btype-driven port. A/B parity is now achievable.
+      // this block-type-driven implementation.
       {"stonfi_v2_swap_data", stonfi_v2_swap_data},
-      // specs/nft_sale.mch — GetGems StateInit readers, the chained-lookup bid
+      // specs/nft_sale.mch, GetGems StateInit readers, the chained-lookup bid
       // builder, and the cancel/finish switch discriminator.
       {"getgems_sale_init", getgems_sale_init},
       {"getgems_auction_init", getgems_auction_init},
@@ -53,7 +52,7 @@ const std::map<std::string, HostFn> &host_fns() {
       {"nft_trade_is_finish", nft_trade_is_finish},
       {"nft_trade_returned", nft_trade_returned},
       {"auction_outbid_data", auction_outbid_data},
-      // specs/cocoon.mch — the expectedMyAddress string renderer (shared by
+      // specs/cocoon.mch, the expectedMyAddress string renderer (shared by
       // three matchers) and the nested withdraw-payload coins read.
       {"cocoon_expected_address", cocoon_expected_address},
       {"cocoon_withdraw_amount", cocoon_withdraw_amount},
@@ -98,8 +97,8 @@ const std::map<std::string, HostPredFn> &host_predicates() {
       // specs/nft_mint.mch's pred ANCHOR (no opcode/btype prefilter, spec R10).
       {"single_contract_deploy", single_contract_deploy},
       {"stonfi_v1_sender_payment", stonfi_v1_sender_payment},
-      // pton_self_transfer gates stonfi_v2_swap. (no_internal_transfer folded
-      // into an inline where-expr in W6.)
+      // pton_self_transfer gates stonfi_v2_swap; no_internal_transfer is an
+      // inline where expression.
       {"pton_self_transfer", pton_self_transfer},
       // specs/nft_sale.mch.
       {"sale_contract_deploy", sale_contract_deploy},

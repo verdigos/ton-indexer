@@ -23,7 +23,7 @@
 #
 # The w2 children set is `[w3, maybe log]` where BOTH items share the head
 # 0xcb03bfaf. It resolves because item 1 carries the required jetton_transfer
-# child: the children algorithm (§6.5) tries candidates in canonical min_lt
+# child: the children algorithm tries candidates in canonical min_lt
 # order, the ext-out log comes first and fails item 1 for want of that child,
 # the real w3 matches, and the optional log then takes item 2.
 #

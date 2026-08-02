@@ -1,23 +1,18 @@
 tolk 1.0
 
-// TEMPLATE for a PRODUCTION message-declaration file (plan §0.11). Copy to
+// Template for a production message-declaration file. Copy to
 // abi/<contract>.tolk, fill the struct slot, add the stem to PROD_DECLS in
 // tools/gen_prod_abi.mjs, then run `node tools/gen_prod_abi.mjs`.
 //
-// This file is NOT compiled: gen_prod_abi.mjs drives an explicit PROD_DECLS
-// list, and the ton-abi --check glob covers abi/*.abi.json (which a template
-// never has). Full end-to-end steps: ton-abi/ABI-PROTOCOL-CHECKLIST.md.
+// This file is not compiled because gen_prod_abi.mjs uses an explicit list.
+// See ton-abi/ABI-PROTOCOL-CHECKLIST.md for the end-to-end steps.
 //
-// Everything below the struct slot is COMPILER APPEASEMENT ONLY: tolk needs a
-// contract with a storage type and an entrypoint before it will emit an ABI,
-// but none of it reaches the generated parsers. Keep it as-is; only the union
-// arm list has to name your structs. The `tolk 1.0` pragma matches what the
-// pinned @ton/tolk-js accepts here (the T12.2 design text said 1.4.1; the
-// as-built file uses 1.0 and regenerates byte-identically — do not "fix" it
-// without regenerating the committed .abi.json + generated pair).
+// The remaining contract scaffolding only enables ABI emission and does not
+// reach generated parsers. Keep the accepted `tolk 1.0` pragma and name each
+// declared message in the union arm.
 
 // ---------------------------------------------------------------------------
-// STRUCT SLOT — the only part you edit. One struct per on-chain message the
+// STRUCT SLOT. Add one struct per on-chain message the
 // mch spec parses, opcodes + field names/types copied VERBATIM from the
 // authoritative contract source. Declare ONLY the messages you parse.
 // ---------------------------------------------------------------------------
@@ -28,7 +23,7 @@ struct (0x00000001) ExampleMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Scaffolding below — name every struct above in the union, nothing else.
+// Scaffolding below. Name every struct above in the union, nothing else.
 // ---------------------------------------------------------------------------
 type AllowedMessage = ExampleMessage
 
