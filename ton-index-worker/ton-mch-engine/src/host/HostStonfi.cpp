@@ -737,7 +737,7 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     // AttributeError before the pton test -> reject.
     if (asset_v.t != VType::Asset || asset_v.is_ton) {
       // The asset came from the in-leg's own jetton_wallet lookup
-      // (specs_decl/jettons.mch `asset(wallet.jetton)`), so name the wallet:
+      // (specs/jettons_decl.mch `asset(wallet.jetton)`), so name the wallet:
       // a TON/absent asset here means that wallet's interface carried no master.
       return rt_fault("stonfi_v2: in asset has no jetton_address (asset=" + asset_v.describe() +
                       " receiver_wallet=" +

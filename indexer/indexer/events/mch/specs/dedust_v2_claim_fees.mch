@@ -10,7 +10,7 @@
 #         payout leg  (same)                                            # optional
 #         excess 0xd53276db                              # auto-absorbed
 #
-# PARSER PATHS, mixed in one spec (legal; specs_decl/dedust_v2_swap.mch does the
+# PARSER PATHS, mixed in one spec (legal; specs/dedust_v2_swap.mch does the
 # same): PayoutPositionFees comes from the protocol ABI entry of the same name
 # (snake_case, ABI prefix checked) with the LEGACY class as the Python twin,
 # while PayoutMessage rides the existing ton-abi bridge row (camelCase). Both sit

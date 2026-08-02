@@ -35,7 +35,6 @@ target_link_libraries(mch-codegen tdutils mch-ir-load)
 set(MCH_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(MCH_GENERATED_IR "${MCH_GEN_DIR}/mch_ir.json")
 set(MCH_GENERATED_IR_SECOND "${MCH_GEN_DIR}/mch_ir.second.json")
-set(MCH_EMIT_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/ir/emit_manifest.json")
 set(MCH_INDEXER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../indexer" CACHE PATH
     "Path to the repository indexer/ directory used for MCH IR generation")
 file(MAKE_DIRECTORY "${MCH_GEN_DIR}")
@@ -52,7 +51,6 @@ endif()
 
 file(GLOB MCH_SPEC_SOURCES CONFIGURE_DEPENDS
     "${MCH_INDEXER_ROOT}/indexer/events/mch/specs/*.mch"
-    "${MCH_INDEXER_ROOT}/indexer/events/mch/specs_decl/*.mch"
 )
 set(MCH_FRONTEND_PY_SOURCES
     "${MCH_INDEXER_ROOT}/indexer/__init__.py"
@@ -77,11 +75,11 @@ set(MCH_FRONTEND_PY_SOURCES
 add_custom_command(
     OUTPUT "${MCH_GENERATED_IR}" "${MCH_GENERATED_IR_SECOND}"
     COMMAND "${Python3_EXECUTABLE}" -m indexer.events.mch.ir_emit
-            --manifest "${MCH_EMIT_MANIFEST}" -o "${MCH_GENERATED_IR}"
+            -o "${MCH_GENERATED_IR}"
     COMMAND "${Python3_EXECUTABLE}" -m indexer.events.mch.ir_emit
-            --manifest "${MCH_EMIT_MANIFEST}" -o "${MCH_GENERATED_IR_SECOND}"
+            -o "${MCH_GENERATED_IR_SECOND}"
     WORKING_DIRECTORY "${MCH_INDEXER_ROOT}"
-    DEPENDS ${MCH_SPEC_SOURCES} ${MCH_FRONTEND_PY_SOURCES} "${MCH_EMIT_MANIFEST}"
+    DEPENDS ${MCH_SPEC_SOURCES} ${MCH_FRONTEND_PY_SOURCES}
     COMMENT "Generate deterministic MCH IR from .mch specs"
     VERBATIM
 )

@@ -1,0 +1,740 @@
+{
+  "id": "prod-path",
+  "title": "10 · The production path (Phase G) — shadow mode, and what it does not yet prove",
+  "summary": "Everything so far ran the engine over `.lz4` fixtures from a CLI. This chapter is the other end: the same library TUs running inside `ton-index-postgres`, on real `ParsedBlock` data, once per masterchain seqno. Three adapters make that possible — `SchemaTraceLoader` (production `schema::Transaction` -> the engine's own Trace structs), `ParsedBlockLookupSource` (the pipeline's in-block interface map -> `lookup kind(key)`), and `MchClassifierActor` (a thin `td::actor` gluing them to `ClassifyCore`). Nothing downstream changed: `to_tree`, `init_block`, `MsgParse` and `classify_trace` are byte-for-byte the code the gates already proved. The mode is SHADOW: fire-and-forget, log-only, zero DB writes, zero effect on the pipeline's promises. The offline proof that the adapters are faithful is a fourth gate pair, `--classify-prod` / `--actions-prod`, which diffs the full production path against the fixture path over the whole corpus — with one honestly-named hole (the nft family) that fixture floats make un-gatable offline. By the end you should know exactly which claims about production are proven, which are proven-by-construction, and which are still waiting on a remote shadow run.",
+  "diagrams": [
+    {
+      "title": "Where the shadow classifier sits in the IndexScheduler pipeline",
+      "mermaid": "flowchart LR\n  F[fetch] --> P[parse] --> TA[trace_assemble] --> IF[interfaces]\n  IF --> AD[\"ActionDetector<br/>(promise-chained, authoritative)\"] --> INS[(\"insert — actions rows\")]\n  IF -.->|\"same ParsedBlockPtr,<br/>fire-and-forget\"| SH[\"MchClassifierActor<br/>(shadow: LOG only)\"]\n  SH -.-> LOGS[\"[mch-shadow] log lines\"]\n  style SH stroke-dasharray: 5 5\n  style LOGS stroke-dasharray: 5 5"
+    },
+    {
+      "title": "One ParsedBlock through the shadow actor",
+      "mermaid": "flowchart TD\n  PB[\"ParsedBlock\"] --> TX[\"blocks_[*].transactions<br/>grouped by tx.trace_id\"]\n  PB --> AI[\"account_interfaces_<br/>StdAddress -&gt; [BlockchainInterfaceV2]\"]\n  TX --> STL[\"schema_to_trace()\"] --> TR[\"mch::Trace\"] --> TT[\"to_tree / init_block<br/>(UNCHANGED)\"] --> CT[\"classify_trace()\"]\n  AI --> T1[\"tier 1: in-block map\"]\n  T1 -->|miss| T2[\"tier 2 hook<br/>(UNSET in prod today)\"]\n  T1 --> PLS[\"ParsedBlockLookupSource\"]\n  T2 --> PLS\n  PLS --> CT\n  CT --> SUM[\"TraceClassifySummary<br/>actions / matchers / FailureCategory / LookupStats\"] --> LG[\"LOG only — no rows written\"]"
+    }
+  ],
+  "sections": [
+    {
+      "heading": "Shadow mode: the contract",
+      "prose": "Phase G's rollout decision was made up front and it shapes every file on this page: the C++ engine runs BESIDE the authoritative classifier, not instead of it. It reads the ParsedBlock the interfaces stage just produced, classifies, and prints. It writes nothing, returns nothing, and cannot fail a seqno.\n\nThat constraint is what makes the wiring boring on purpose. There is no promise, no batch, no insert path, no `_classifier_tasks` bookkeeping — those all belong to the flip, not to shadow. Everything genuinely interesting in this chapter is therefore about FAITHFULNESS of the input adapters, not about output.\n\nThe library boundary was drawn one wave earlier: `mch-classify` is a static lib containing the pipeline TUs (loader, block tree, Value, IR, walker, host fns, build runtime, `ActionBuild`, `ClassifyCore`, parsers, the ABI pairs) plus the three Phase G adapters. The CLI exe links it and adds the harness TUs — dumps, vector runners, `SchemaGate`, `main.cpp`. `ton-index-postgres` links the lib only, so no harness code can reach production even by accident.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/MchClassifierActor.h",
+          "lines": [
+            1,
+            16
+          ],
+          "lang": "cpp",
+          "title": "MchClassifierActor.h — the shadow contract, stated first",
+          "annotations": [
+            {
+              "lines": [
+                3,
+                9
+              ],
+              "text": "\"A THIN td::actor over the already-gated library pieces … It writes NOTHING\" is the design invariant of the entire chapter. Every claim on this page is either (a) proven by an offline gate, or (b) unobservable because nothing is persisted. There is no third category yet."
+            },
+            {
+              "lines": [
+                12,
+                14
+              ],
+              "text": "The three dependencies ARE the three adapters this chapter covers — `ClassifyCore` is unchanged lib code ([[big-picture]]), `IrLoader` is the artifact ([[ir-artifact]]), `ParsedBlockLookupSource` is new. Notably absent: anything DB-shaped."
+            },
+            {
+              "lines": [
+                16,
+                16
+              ],
+              "text": "`IndexData.h` comes straight from tondb-scanner, which exports `src/` as a PUBLIC include dir. So the engine speaks `schema::` types directly — no duplicated struct definitions, no IDL between the two projects, and a schema change breaks this file at compile time rather than at runtime."
+            }
+          ],
+          "sha8": "61d4ae49"
+        }
+      ]
+    },
+    {
+      "heading": "SchemaTraceLoader — production structs in, engine Trace out",
+      "prose": "The fixture loader ([[block-tree]]) reads msgpack into `Trace / Transaction / Message / MsgContent`. Production has a different shape entirely: `schema::Transaction` objects hanging off a `ParsedBlock`, with `schema::Trace` alongside. The obvious plan — walk `schema::Trace` — turns out to be wrong, and the header says why in its first paragraph.\n\n`schema::Trace` carries only `edges`, no transaction list. And the engine's `to_tree` never used edges: it rebuilds the EventNode tree purely by message-hash linking (an out-msg hash of the parent tx equals the in-msg hash of the child). So the loader takes a plain `std::vector<schema::Transaction>` and the edges are simply unused. That single finding is what kept `to_tree` / `init_block` single-sourced and untouched.\n\nWhat remains is a field-by-field map with three subtleties worth internalising: where `aborted` lives, why account strings get re-cased, and why message bodies are copied as already-serialized BOC strings.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/SchemaTraceLoader.h",
+          "lines": [
+            1,
+            28
+          ],
+          "lang": "cpp",
+          "title": "The signature is the finding",
+          "annotations": [
+            {
+              "lines": [
+                6,
+                10
+              ],
+              "text": "The load-bearing discovery, and the reason this adapter is ~140 lines instead of a tree-rebuild project: edges are dead weight because [[block-tree]]'s `to_tree` links by message hash. The cost is pushed to the caller — somebody must GATHER a trace's transactions, and in shadow mode that somebody sees only one seqno (see the actor section)."
+            },
+            {
+              "lines": [
+                24,
+                26
+              ],
+              "text": "`interfaces` is deliberately NOT part of this map. A fixture bundles trace and interface data in one file; production gets them from two different places, so the two axes are adapted separately — which is also what lets the offline gate vary one at a time."
+            },
+            {
+              "lines": [
+                27,
+                28
+              ],
+              "text": "`td::Result` with a \"never throws\" comment: today no code path in the .cpp actually produces an error, so the Result is future-proofing. The caller still branches on `is_error()` and maps it to `malformed_trace` — cheap, and it keeps the failure taxonomy total."
+            }
+          ],
+          "sha8": "bc779dfa"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/SchemaTraceLoader.cpp",
+          "lines": [
+            38,
+            64
+          ],
+          "lang": "cpp",
+          "title": "descr_info — the trap the --actions-schema gate exists to catch",
+          "annotations": [
+            {
+              "lines": [
+                40,
+                43
+              ],
+              "text": "`aborted` lives INSIDE the TransactionDescr variant here, where the fixture path had it as a flat top-level field. Its reader is `node_failed` (`BlockTree.cpp:319-326`, the port of Python's `EventNode.failed` — `node->tx != nullptr && node->tx->aborted`), and it flips an action's success/failed rendering, so a missed `aborted` would not crash anything, it would quietly mislabel actions. Ignore the source comment's `is_leaf_failed`: no such symbol exists in the repo — grepping for it finds only this comment. This is exactly the class of bug an A/B row diff catches and a unit test does not, and since it is purely a trace-loader-axis fact the gate that isolates it is `--actions-schema`."
+            },
+            {
+              "lines": [
+                46,
+                51
+              ],
+              "text": "A skipped compute phase yields `nullopt`, NOT 0. Matcher predicates distinguish \"no compute phase\" from \"exit code 0\" ([[matcher-runtime]]), so collapsing them would change which matchers fire."
+            },
+            {
+              "lines": [
+                56,
+                62
+              ],
+              "text": "Storage/split/merge descrs collapse to \"other\" and can never be matched as tick_tock. The engine only ever asks ord-vs-tick_tock, so \"other\" is a safe sink rather than a lossy one — but note it also leaves `aborted` false for those transactions."
+            }
+          ],
+          "sha8": "1b68f6a3"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/SchemaTraceLoader.cpp",
+          "lines": [
+            66,
+            96
+          ],
+          "lang": "cpp",
+          "title": "map_message — including the body_boc shortcut",
+          "annotations": [
+            {
+              "lines": [
+                66,
+                71
+              ],
+              "text": "The schema separates `in_msg` from `out_msgs` structurally; the engine wants one flat list with a `direction` string, because that is what the EventNode builder and every `msg.direction` expression read. The tag is supplied by the caller, not inferred."
+            },
+            {
+              "lines": [
+                76,
+                81
+              ],
+              "text": "A null `grams` becomes `nullopt`, not 0 — same rule as the exit code. `has_extra_currencies` is derived from a non-empty vector, matching how the Python side computes it; the currencies themselves are never modelled."
+            },
+            {
+              "lines": [
+                86,
+                87
+              ],
+              "text": "The schema has `std::optional<bool>` for BOTH fields (`IndexData.h:198-199`); the asymmetry is on the ENGINE side — `mch::Message::bounce` is `std::optional<bool>` while `bounced` is a plain bool (`TraceLoader.h:40-41`). Hence line 86 is a straight pass-through that preserves the msgpack null, and line 87 collapses the optional with `.value_or(false)` — matching the fixture path, where `bounce` comes from `get_opt_bool` and `bounced` from `get_bool` (`TraceLoader.cpp:129-130`). Anything else would flip bounce-handling matchers on production data while the fixture corpus stayed green."
+            },
+            {
+              "lines": [
+                88,
+                95
+              ],
+              "text": "The single best decision in this file: the already-serialized `body_boc` string is copied verbatim instead of re-serializing a cell. The engine carries bodies as base64 BOC and renders cells by HASH, so any pytoniq-vs-td byte-layout difference is invisible in output — which is why [[parse-layer]] needed exactly zero changes to run in production."
+            }
+          ],
+          "sha8": "8ca37114"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/SchemaTraceLoader.cpp",
+          "lines": [
+            104,
+            142
+          ],
+          "lang": "cpp",
+          "title": "The transaction loop — and the defensive account normalization",
+          "annotations": [
+            {
+              "lines": [
+                110,
+                117
+              ],
+              "text": "Do not read this (or the comment above it) as a case FIX. `convert::to_raw_address` is `to_string(wc) + \":\" + addr.to_hex()` (`convert-utils.cpp:90-92`), and `to_hex` goes through `bitstring.cpp`'s digit table `\"0123456789ABCDEF\"` (line 542) — so the schema path already produces UPPERCASE, and `normalize_raw_address` (`Value.cpp:225-259`) only validates and `toupper`s, i.e. it is a no-op here. What it actually buys is a canonicalization/validator at the boundary: reject anything that is not `wc:<64 hex>`, and guarantee the engine's canonical shape no matter which producer filled the field. Raw account strings DO leak into output (the accounts set on an Action row, `msg.transaction.account` in expressions) — what the gate proves is that they round-trip A==B, not that casing was ever the risk."
+            },
+            {
+              "lines": [
+                124,
+                124
+              ],
+              "text": "`skipped_reason` simply does not exist in the schema. It is null in every fixture too, so there is no observable delta today — but it is a field the Python model has and the C++ production path structurally cannot fill."
+            },
+            {
+              "lines": [
+                126,
+                138
+              ],
+              "text": "In-message first, then out-messages, each stamped with the owning tx hash/lt and given a back-pointer `m->tx`. Both the order and the back-pointer are relied on downstream ([[block-tree]]), so this loop is not as arbitrary as it looks."
+            }
+          ],
+          "sha8": "91324bf7"
+        }
+      ]
+    },
+    {
+      "heading": "ParsedBlockLookupSource — two tiers, one of them still a stub",
+      "prose": "`lookup kind(key)` is the engine's only way to ask about on-chain state it cannot see in the trace ([[build-programs]]). Offline it is served by `FixtureLookupSource`, reading the `interfaces` dict bundled in the `.lz4`. Production has to serve it from the pipeline.\n\nThe honest complication, answered by the lead's Q2 investigation: `ParsedBlock.account_interfaces_` only covers accounts TOUCHED in this seqno, while the Python classifier's `interface_repository` reads DB/kvrocks and can resolve an interface detected months ago — a counterparty jetton wallet that this block never touched, say. The fixtures happen to bundle exactly such historical data, so the offline corpus does not expose the gap. Hence a two-tier design: tier 1 is the in-block map, tier 2 is an injectable hook for a DB/kvrocks round.\n\nRead the class header (lines 1-21, not excerpted) for the per-kind table. The short version: five kinds resolve from tier 1 (jetton_wallet, nft_item, nft_sale, nft_auction, dedust_pool), and two are TIER-2-ONLY — `nominator_pool` has no V2 interface variant at all, and `jvault_assets` needs raw account-state cells plus chained reads that live in `account_states_`, not in the interface map. In production today the tier-2 hook is unset. That is the largest remaining gap before flip, and the telemetry below exists to size it.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ParsedBlockLookupSource.h",
+          "lines": [
+            35,
+            74
+          ],
+          "lang": "cpp",
+          "title": "The seam and its telemetry",
+          "annotations": [
+            {
+              "lines": [
+                37,
+                40
+              ],
+              "text": "\"Empty == no fallback (production stub…)\". The DB/kvrocks round is designed, typed, and NOT implemented. Concretely: in a shadow run, every lookup that Python would satisfy from history resolves to null here — so shadow output is expected to under-produce actions relative to Python, and that is not a bug in the engine."
+            },
+            {
+              "lines": [
+                45,
+                47
+              ],
+              "text": "The map is held by POINTER — the source is a view over memory owned by the ParsedBlock, valid only for as long as the actor holds its `shared_ptr`. No copy of a per-seqno interface table is ever made."
+            },
+            {
+              "lines": [
+                50,
+                51
+              ],
+              "text": "`kinds()` delegates to `FixtureLookupSource::kinds()` rather than declaring its own set. That is what keeps `prepare_classify`'s runnability/skip table identical offline and in production: a matcher that is skipped for a missing kind offline is skipped for the same reason in production, by construction rather than by review."
+            },
+            {
+              "lines": [
+                55,
+                63
+              ],
+              "text": "Tier attribution is the whole point of shadow mode's numbers. prod-design §3 asks \"how often does tier 2 actually get hit — enough to justify a warm interface cache?\" These three counters answer it from a live run without changing any behaviour (hence `mutable LookupStats stats_` at line 73: `fetch()` is const on the interface, so the counters have to be mutable to be updatable from it)."
+            }
+          ],
+          "sha8": "bba9a886"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ParsedBlockLookupSource.cpp",
+          "lines": [
+            46,
+            69
+          ],
+          "lang": "cpp",
+          "title": "tier1 — a V2 variant becomes the same Obj the fixture produced",
+          "annotations": [
+            {
+              "lines": [
+                47,
+                55
+              ],
+              "text": "Null map, unparseable address, unknown account: all three are a clean null, never an error. A lookup can never fail a trace — same nullable semantics the fixture source pinned, which is why the failure taxonomy has no \"lookup missing\" category."
+            },
+            {
+              "lines": [
+                58,
+                58
+              ],
+              "text": "One account can carry several interfaces, so the kind is matched against each variant in turn. Five kinds map to SIX variants: the relation is 1:1 everywhere except `nft_sale`, which accepts both `schema::GetGemsNftFixPriceSaleData` (line 88) and `schema::GetGemsNftFixPriceSaleV4Data` (line 97) — they carry the same four fields the nft host fn reads. The loop returns on the first matching variant, so for an account carrying both, vector order decides; harmless today precisely because the emitted field set is identical."
+            },
+            {
+              "lines": [
+                61,
+                68
+              ],
+              "text": "The field NAMES are the contract. Build programs read `.owner`, `.jetton`, `.balance` by name ([[build-programs]]), so a typo here is not a compile error — it is a null field, then a null-propagated expression, then a matcher that quietly stops firing. This is the strongest argument for the prod gate existing at all."
+            },
+            {
+              "lines": [
+                63,
+                64
+              ],
+              "text": "`balance` is a `RefInt256` that may be null -> Value null. Note the offline fixtures store this as a float that no spec reads; the mismatch is harmless here but becomes decisive for the nft family (last section)."
+            }
+          ],
+          "sha8": "368cb24e"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ParsedBlockLookupSource.cpp",
+          "lines": [
+            133,
+            156
+          ],
+          "lang": "cpp",
+          "title": "fetch — routing and what the counters really mean",
+          "annotations": [
+            {
+              "lines": [
+                134,
+                137
+              ],
+              "text": "Arity/type guard mirroring the fixture source exactly: one Str address or null. Keeping the two sources bug-compatible at the boundary is what lets the prod gate diff at 0 instead of needing an allowance list."
+            },
+            {
+              "lines": [
+                139,
+                142
+              ],
+              "text": "No kind whitelist here, and the comment explains the reasoning: `tier1()` self-gates because every branch tests `kind ==`. A second hand-kept list could only drift. Consequence: an unrecognised kind silently routes to tier 2 and then to null."
+            },
+            {
+              "lines": [
+                143,
+                147
+              ],
+              "text": "\"Non-null == tier-1 hit\" is the attribution rule, and it has a known imprecision: a lookup that legitimately resolves to null is indistinguishable from a miss, so `misses` over-counts by however many genuine nulls the corpus contains. Fine for a hit-RATE, wrong if you read it as an error count."
+            },
+            {
+              "lines": [
+                148,
+                155
+              ],
+              "text": "The two tier-2-only kinds land here on every single call. With the hook unset in production, `nominator_pool` and `jvault_assets` are permanently null in shadow mode — i.e. those matchers effectively do not fire, and their absence in a shadow diff means nothing until the fallback lands."
+            }
+          ],
+          "sha8": "8d075f95"
+        }
+      ]
+    },
+    {
+      "heading": "MchClassifierActor — startup prep, per-trace run, failure taxonomy",
+      "prose": "The actor itself is thin by construction: group, load, classify, log, stop. Two things in it deserve real attention — where the engine's startup checks happen (this is also where the ABI bridge rows enter the production path), and how transactions are grouped into traces.\n\n`load_engine_prep` is the embedding entry point, called once from `main.cpp` before the scheduler runs. It performs the same advisory registry validation the CLI does, loads the IR artifact, and builds the `ClassifySetup` (runnable matchers, skip table, generated build-fn map, referenced lookup kinds). A table/fn mismatch is returned as an error so the caller can be startup-fatal.\n\nThat `validate_registries()` call is the only place the ABI/tolk toolchain touches this chapter: the three parser sources (hand, schema-generated, ABI) merge into one flat name space, and a duplicate key must stop the process rather than resolve to whichever source enumerated first. The mechanism is covered in [[parse-layer]]; the tolk side — declarations, generated `from_slice`, the value-universe split — gets its own tutorial and is deliberately out of scope here.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/MchClassifierActor.cpp",
+          "lines": [
+            18,
+            34
+          ],
+          "lang": "cpp",
+          "title": "load_engine_prep — the embedding entry point",
+          "annotations": [
+            {
+              "lines": [
+                20,
+                23
+              ],
+              "text": "The ABI rows' only appearance on the production path. With live ABI parsers registered, a name collision across the three parser sources becomes possible in principle, and this is the fail-closed point for it ([[parse-layer]]). Nothing else about the tolk toolchain is visible from here — a separate tutorial covers that side."
+            },
+            {
+              "lines": [
+                25,
+                27
+              ],
+              "text": "The prep is built ONCE and shared as `shared_ptr<const>` across every per-seqno actor spawn. IR, build-fn table and skip table are immutable after load, so spawning a classifier per seqno costs a pointer copy — that is what makes the fire-and-forget actor pattern affordable."
+            },
+            {
+              "lines": [
+                28,
+                32
+              ],
+              "text": "An artifact matcher with no generated build fn is returned as an ERROR, not logged as a warning. The reasoning (prod-design §4): artifact and binary ship together, so a mismatch is a build bug. The caller turns this into `LOG(FATAL)` — see the flag section."
+            }
+          ],
+          "sha8": "d16f8522"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/MchClassifierActor.cpp",
+          "lines": [
+            42,
+            72
+          ],
+          "lang": "cpp",
+          "title": "classify_one — production plumbing around an unchanged core",
+          "annotations": [
+            {
+              "lines": [
+                42,
+                48
+              ],
+              "text": "The production entry is a pure function of (prep, interface map, trace_id, transactions). On the PER-TRACE path there is no DB handle, no promise, no I/O — verifiable by grep, and the last section asks you to do exactly that. Scope the claim that way and not to the whole TU: the one file read in this translation unit is `load_engine_prep`'s startup artifact load (`load_ir` at line 24; the header says as much — \"No I/O beyond reading the file\")."
+            },
+            {
+              "lines": [
+                56,
+                64
+              ],
+              "text": "An empty event tree is a `malformed_trace`. In production this is REACHABLE for ordinary healthy traces whose root transaction landed in an earlier seqno — see the grouping excerpt below. Read the shadow failure counters with that in mind."
+            },
+            {
+              "lines": [
+                67,
+                67
+              ],
+              "text": "One line, one gap: the lookup source is constructed with no tier-2 hook. Everything about production lookup fidelity today reduces to this default argument."
+            },
+            {
+              "lines": [
+                68,
+                72
+              ],
+              "text": "`classify_trace` is the same library entry the offline gates drive ([[gates]]). Everything above it in this function is adaptation; nothing below it knows it is running in production."
+            }
+          ],
+          "sha8": "b5cea4db"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/MchClassifierActor.cpp",
+          "lines": [
+            103,
+            122
+          ],
+          "lang": "cpp",
+          "title": "start_up — grouping, and the per-seqno truncation",
+          "annotations": [
+            {
+              "lines": [
+                104,
+                107
+              ],
+              "text": "The grouping key is `schema::Transaction.trace_id`, the field TraceAssembler stamps — NOT `schema::Trace`, which carries only edges. This is the practical consequence of the loader's design finding."
+            },
+            {
+              "lines": [
+                109,
+                113
+              ],
+              "text": "The transactions come from THIS ParsedBlock only. A trace spanning several masterchain seqnos is therefore classified in FRAGMENTS in shadow mode: partial trees, missing roots, matchers that cannot complete. The header calls this \"the caller's concern\"; the caller currently does not solve it, so a shadow run's failure counts include structural noise that a flipped production path would have to handle (gather-by-trace, or classify on trace completion)."
+            },
+            {
+              "lines": [
+                116,
+                118
+              ],
+              "text": "`account_interfaces_` is per-seqno for the same reason — it holds only the accounts this block touched. Tier 2 exists precisely to cover the difference between this map and what Python's DB-backed repository can see."
+            }
+          ],
+          "sha8": "669f1dd7"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/MchClassifierActor.cpp",
+          "lines": [
+            147,
+            160
+          ],
+          "lang": "cpp",
+          "title": "The entire output of production Phase G today",
+          "annotations": [
+            {
+              "lines": [
+                148,
+                152
+              ],
+              "text": "The category breakdown uses `FailureCategory`, which has exactly four values because it is TRACE-TERMINAL only — matcher skips are a setup-level fact read from `ClassifySetup.skips`, and per-lookup misses are counted separately. Categories that could never be the single terminal value were deliberately not made enumerators."
+            },
+            {
+              "lines": [
+                153,
+                158
+              ],
+              "text": "`tier2_rate` is prod-design §3's open metric — and with the hook unset it reads 0% BY CONSTRUCTION. The number only becomes informative after the DB/kvrocks fallback lands; until then the informative counter is `miss`."
+            },
+            {
+              "lines": [
+                160,
+                160
+              ],
+              "text": "`stop()` at the end of `start_up()`: the actor is single-shot — constructed per seqno, does all its work synchronously, and dies. No message loop, no promise, nothing waits on it."
+            }
+          ],
+          "sha8": "e6ab276d"
+        }
+      ]
+    },
+    {
+      "heading": "The --mch-shadow flag (ton-index-postgres)",
+      "prose": "The indexer-side change is deliberately tiny: one optional flag, one setter, one conditional spawn. Note the environment caveat up front — `ton-index-postgres` does NOT build on this Windows workstation (a pre-existing protobuf/MSVC failure unrelated to mch; the build directory contains no exe, only CMake scaffolding). Production builds are Linux-remote, so everything in this section is REMOTE-VERIFY only: the code below has been reviewed and links against `mch-classify`, but no local run exercises it. Every other claim in this chapter is locally reproducible.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-index-postgres/src/IndexScheduler.cpp",
+          "lines": [
+            340,
+            365
+          ],
+          "lang": "cpp",
+          "title": "The hook, in the one stage where it can work",
+          "annotations": [
+            {
+              "lines": [
+                340,
+                343
+              ],
+              "text": "Placement is not arbitrary: this is the earliest callback where `account_interfaces_` is populated, and it is the same `ParsedBlockPtr` that `ActionDetector` is about to consume — so the shadow engine sees byte-identical input to the authoritative path."
+            },
+            {
+              "lines": [
+                345,
+                349
+              ],
+              "text": "\"fire-and-forget\": `create_actor(...).release()` detaches the actor and no promise is created. Contrast every other stage in this file, which is promise-chained and calls `handle_seqno_failure` -> `reschedule_seqno` on error. The shadow classifier structurally cannot delay, fail, or requeue a seqno — that is the whole safety argument for enabling it on a live indexer."
+            },
+            {
+              "lines": [
+                350,
+                352
+              ],
+              "text": "`parsed_block` is COPIED here (shared_ptr) and only moved into `ActionDetector` further down. So a slow shadow run keeps the block alive a little longer but never blocks the insert path — and the guard means an indexer started without the flag runs exactly today's code."
+            }
+          ],
+          "sha8": "9088ec3a"
+        },
+        {
+          "file": "ton-index-worker/ton-index-postgres/src/main.cpp",
+          "lines": [
+            333,
+            343
+          ],
+          "lang": "cpp",
+          "title": "Startup: opt-in, but fail-closed once opted in",
+          "annotations": [
+            {
+              "lines": [
+                333,
+                335
+              ],
+              "text": "Shadow mode is keyed on an artifact PATH, not a boolean — the IR artifact is the thing that varies, and an empty string leaves the pipeline byte-identical to today's. (Standing decision: no hot reload; the artifact is chosen once at startup.)"
+            },
+            {
+              "lines": [
+                336,
+                339
+              ],
+              "text": "`LOG(FATAL)` aborts the process. Deliberate per prod-design §4: once an operator has asked for shadow classification, silently continuing WITHOUT it would make the whole exercise invisible — you would read a clean log and conclude nothing was wrong."
+            },
+            {
+              "lines": [
+                342,
+                342
+              ],
+              "text": "The prep reaches the scheduler through `send_closure` inside `run_in_context`, not by touching actor state from the boot thread — the ordinary td::actor discipline, and the only mutation the boot path performs on IndexScheduler."
+            }
+          ],
+          "sha8": "07b07de8"
+        }
+      ]
+    },
+    {
+      "heading": "The offline proof: --classify-prod / --actions-prod",
+      "prose": "None of the above can be gated by running the indexer, so the harness fakes the production input instead. `SchemaGate.cpp` loads a fixture the normal way (path A), SYNTHESIZES `schema::Transaction` objects back out of the loaded structs, feeds them through `SchemaTraceLoader` (path B), and — for the `-prod` variants — also synthesizes an `account_interfaces_` map of real `BlockchainInterfaceV2` structs and serves lookups through a real `ParsedBlockLookupSource`. Both paths then share `run_dump`'s rendering and engine loop verbatim, so any difference in the diff is the adapter's.\n\nThe reverse synthesis is harness-only scaffolding and lives nowhere near the lib. The tier-2 hook in the gate is wired to a `FixtureLookupSource` over the same fixture interfaces (`GateProdLookupSource`, lines 256-286) — that is the gate standing in for the DB/kvrocks round production has yet to implement.\n\nFour modes exist: `--classify-schema` / `--actions-schema` vary only the trace loader; `--classify-prod` / `--actions-prod` vary the loader AND the lookup source. Diffed against `--classify` / `--actions` the expectation is exact zero, and it holds across the whole corpus.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/SchemaGate.cpp",
+          "lines": [
+            129,
+            148
+          ],
+          "lang": "cpp",
+          "title": "schema_ctx_loader — path B differs in exactly one place",
+          "annotations": [
+            {
+              "lines": [
+                129,
+                134
+              ],
+              "text": "The injected-loader shape is what makes the diff meaningful: `run_dump` supplies the identical rendering and engine loop for A and B, so the only variable is how the TraceContext was acquired. A gate that re-implemented printing would prove much less."
+            },
+            {
+              "lines": [
+                136,
+                138
+              ],
+              "text": "This reverse synthesis (engine structs -> `schema::Transaction`) is HARNESS-ONLY and never runs in production — production feeds real schema objects from ParsedBlock. It is the price of gating a production adapter without a live indexer, and it is deliberately lossy: storage/credit/action phases are dropped because the loader reads only descr-type, exit code and aborted."
+            },
+            {
+              "lines": [
+                141,
+                141
+              ],
+              "text": "The interfaces map is carried over from path A UNCHANGED, so this gate isolates one variable — trace shape. The `-prod` variants then swap the second variable (lookups) on top of it. Two gates, two axes; a single combined gate would not tell you which adapter broke."
+            }
+          ],
+          "sha8": "1cc45b35"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/SchemaGate.cpp",
+          "lines": [
+            205,
+            224
+          ],
+          "lang": "cpp",
+          "title": "The named hole: why the nft family routes to tier 2 in the gate",
+          "annotations": [
+            {
+              "lines": [
+                205,
+                209
+              ],
+              "text": "Read this as coverage honesty, not as a TODO: three of the five tier-1 kinds are NOT exercised by the offline prod gate at all. They deliberately fall through to the fixture-backed tier-2 fallback, which means the diff-0 result says nothing about `nft_item` / `nft_sale` / `nft_auction` tier-1 mapping."
+            },
+            {
+              "lines": [
+                210,
+                218
+              ],
+              "text": "The blocker is a FIXTURE artefact, not a production one: fixtures came through Python/msgpack and store `index` / `full_price` / `last_bid` as FLOATS, while the V2 structs hold `RefInt256`. The classify dump happens to mask it (Amount renders int and whole float the same) but the actions dump's `av_amount` does not — \"float:1350000000\" vs \"1350000000\"."
+            },
+            {
+              "lines": [
+                219,
+                224
+              ],
+              "text": "The resulting claim strength, stated precisely: those three mappings are correct BY CONSTRUCTION (identical `addr_str` / `make_int` helpers that jetton_wallet and dedust_pool prove at diff 0) and they DO fire in shadow mode — they are simply not covered by a diff-0 proof. Addresses round-trip exactly; only the amounts cannot. If you ever change `addr_str` or the Obj field names, the nft branches are the ones no gate will catch."
+            }
+          ],
+          "sha8": "5e1c1ba8"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "# from S:/Dev/ton-indexer-clear/indexer; $exe = the built ton-mch-engine.exe,\n# $ir = ton-mch-engine/ir/mch_ir.json, $sp = any scratch dir\n& $exe --classify      -I $ir -T tests\\traces > $sp\\A.txt\n& $exe --classify-prod -I $ir -T tests\\traces > $sp\\B.txt\n& $exe --actions       -I $ir -T tests\\traces > $sp\\C.txt\n& $exe --actions-prod  -I $ir -T tests\\traces > $sp\\D.txt\nforeach($p in 'A','B','C','D'){ $l=gc \"$sp\\$p.txt\"; '{0}: lines={1} fixtures={2} rows={3}' -f $p,$l.Count,($l|?{$_ -like '=== *'}).Count,($l|?{$_ -notlike '=== *'}).Count }\n'classify vs classify-prod diff = ' + (Compare-Object (gc $sp\\A.txt) (gc $sp\\B.txt)).Count\n'actions  vs actions-prod  diff = ' + (Compare-Object (gc $sp\\C.txt) (gc $sp\\D.txt)).Count",
+          "output": "A: lines=347 fixtures=148 rows=199\nB: lines=347 fixtures=148 rows=199\nC: lines=347 fixtures=148 rows=199\nD: lines=347 fixtures=148 rows=199\nclassify vs classify-prod diff = 0\nactions  vs actions-prod  diff = 0",
+          "note": "The full production path (SchemaTraceLoader + ParsedBlockLookupSource) reproduces the fixture path exactly over all 148 fixtures / 199 action rows — both at the classify level and at the serialized-Action-row level. Remember what this does NOT cover: the nft-family tier-1 branches (routed to the gate's tier-2 fallback), the unimplemented production tier-2 hook, and anything about cross-seqno trace assembly."
+        }
+      ]
+    },
+    {
+      "heading": "What remains before the flip",
+      "prose": "Shadow mode is wired, gated offline, and never run against live data. The worklist that stands between here and writing rows, in rough order of weight:\n\n1. A REMOTE SHADOW RUN on a bounded dev seqno range — the only thing that produces real numbers for the tier-2 hit rate, the failure-category mix, and the cross-seqno fragmentation described above. Nothing offline can substitute for it.\n2. The tier-2 lookup fallback (DB/kvrocks). Until it exists, `nominator_pool` and `jvault_assets` never resolve and historical interfaces are invisible; a shadow diff against Python-written rows will show deficits that are this, not the engine.\n3. Trace gathering across seqnos — decide whether the actor waits for trace completion or the caller gathers.\n4. Persistence itself: `ClassifyResult.actions` -> `InsertBatchPostgres` with ON CONFLICT DO NOTHING, plus cleanup-on-reprocess by trace_id, plus the `_classifier_tasks` bookkeeping inventory. `ActionBuild` already produces the rows ([[actions]]); nothing calls it from the actor.\n5. Explicit matcher priorities in the specs (the artifact currently leans on file-name ordering) and the `nft_purchase` fill, which is blocked on corpus coverage.\n\nAlso worth carrying forward: the basic-actions fallback (`ClassifyResult.fallback_actions`) is ported but DORMANT — no corpus trace fails, so it is ungated. Shadow mode on live data is where it first gets real input, which is another reason the remote run is the gating item.",
+      "excerpts": []
+    },
+    {
+      "heading": "Check yourself",
+      "prose": "Four things you can verify in a few minutes, each testing a claim this page makes rather than re-reading the code.\n\n1. Re-run the prod-gate diffs from the previous section and confirm both read 0 at 148 fixtures / 199 rows. Then break it on purpose: change `\"owner\"` to `\"owner_\"` in `ParsedBlockLookupSource.cpp`'s jetton_wallet branch, rebuild the engine, and watch `--classify-prod` diverge from `--classify` while `--classify` itself stays green. That is the failure mode the gate is for — and it is exactly the failure mode the nft branches are NOT protected against.\n\n2. Prove the shadow actor cannot write anything (run below).\n\n3. Prove the offline gate synthesizes only two of the five tier-1 interface variants (run below), then read `SchemaGate.cpp` lines 205-224 for the reason.\n\n4. Confirm the environment caveat yourself: `ls S:/Dev/ton-indexer-clear/ton-index-worker/cmake-build-debug-visual-studio/ton-index-postgres` contains only `CMakeFiles` and `cmake_install.cmake` — no executable, no object files. The `--mch-shadow` wiring has never been compiled on this machine; treat that section as reviewed-not-run.",
+      "excerpts": [],
+      "runs": [
+        {
+          "cmd": "# Claim: the shadow actor has no write path at all.\ncd S:/Dev/ton-indexer-clear/ton-index-worker/ton-mch-engine/src\nSelect-String -Path MchClassifierActor.cpp -Pattern 'Insert|insert|Promise|promise|pqxx|db_|kvrocks' |\n  ForEach-Object { '{0}: {1}' -f $_.LineNumber, $_.Line.Trim() }",
+          "output": "40: // with a tier-1-only ParsedBlockLookupSource (tier-2 DB/kvrocks fallback is a\n76: names.insert(a.matcher_name);",
+          "note": "Two hits, both benign: a comment and a std::set insert. No promise, no DB handle, no insert manager — the \"writes NOTHING\" claim is grep-checkable."
+        },
+        {
+          "cmd": "# Claim: the offline prod gate synthesizes only TWO of the five tier-1 interface variants.\nSelect-String -Path SchemaGate.cpp -Pattern 'NFTItemDataV2|GetGemsNft|DedustPoolData|JettonWalletDataV2' |\n  ForEach-Object { '  {0}: {1}' -f $_.LineNumber, $_.Line.Trim() }",
+          "output": "  198: schema::JettonWalletDataV2 jw{};\n  211: //     NFTItemDataV2.index is RefInt256. Also nft_item.content must be a Dict\n  215: //     nft_transfer_data `price`; GetGemsNftFixPriceSale*/AuctionData store\n  226: schema::DedustPoolData p{};",
+          "note": "Only two real synthesis sites (JettonWalletDataV2 at 198, DedustPoolData at 226); the two nft hits are inside the explanatory comment, not code. Compare with ParsedBlockLookupSource.cpp, which matches six variants — the difference is exactly the ungated surface."
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "to": "block-tree",
+      "why": "SchemaTraceLoader exists so that to_tree / init_block run UNCHANGED on production data — the msg-hash linking rule is what made edges unnecessary"
+    },
+    {
+      "to": "parse-layer",
+      "why": "body_boc is copied verbatim so MsgParse needed zero changes; validate_registries() at startup is the same check main.cpp runs, and the point where ABI rows enter production"
+    },
+    {
+      "to": "build-programs",
+      "why": "ParsedBlockLookupSource serves the `lookup kind(key)` statement; the Obj field names it emits are what build programs read by name"
+    },
+    {
+      "to": "actions",
+      "why": "ActionBuild already produces the rows the flip will persist; the shadow actor deliberately stops at counting them"
+    },
+    {
+      "to": "gates",
+      "why": "--classify-prod / --actions-prod are the fourth gate pair, built on the same run_dump rendering as the twin gates"
+    },
+    {
+      "to": "ir-artifact",
+      "why": "load_engine_prep loads the artifact once and turns table/fn mismatches into a startup-fatal error"
+    }
+  ],
+  "not_annotated": [
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/SchemaTraceLoader.cpp",
+      "partial": true,
+      "reason": "PARTIAL: descr_info, map_message and the transaction loop are excerpted — that is the whole file bar two trivial helpers (`b256` base64 wrapper, `status_str` enum->string). Read those two directly (~145 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ParsedBlockLookupSource.h",
+      "partial": true,
+      "reason": "PARTIAL: the class body is excerpted; the file header comment (lines 1-21) is the per-kind tier table and is summarised in this chapter's prose — worth reading verbatim before touching the mapping (~77 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ParsedBlockLookupSource.cpp",
+      "partial": true,
+      "reason": "PARTIAL: the jetton_wallet branch and fetch() are excerpted. The nft_item / nft_sale / nft_auction / dedust_pool branches are the same recipe (`addr_str` + `make_int` + null-on-missing, field names copied from FixtureLookupSource's Obj shapes); the addr_str / dedust_asset helpers at the top are five lines each (~159 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/MchClassifierActor.h",
+      "partial": true,
+      "reason": "PARTIAL: the header contract is excerpted. The remainder is three plain declarations — MchEnginePrep {ir, setup}, TraceClassifySummary (the log-only per-trace record), and the actor class itself, which has three members and one overridden method (~67 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/MchClassifierActor.cpp",
+      "partial": true,
+      "reason": "PARTIAL: load_engine_prep, classify_one, the grouping and the aggregate log are excerpted. Not shown: the two catch blocks that map any escaped exception to FailureCategory::engine_fault (mirroring Python's per-trace fallback), `category_name`, and the per-trace WARNING/DEBUG log lines (~164 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/SchemaGate.cpp",
+      "partial": true,
+      "reason": "PARTIAL: the injected path-B loader and the nft-family limitation are excerpted. The rest is harness scaffolding: reverse maps (b64->Bits256, status string->enum, minimal TransactionDescr synthesis, Message synthesis), `synth_account_interfaces` (fixture Obj -> V2 structs for the two gatable kinds), `GateProdLookupSource` (owns the map + a FixtureLookupSource wired in as the tier-2 hook — read this one, it is the seam production must fill), and four one-line run_* entry points (~311 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/SchemaGate.h",
+      "reason": "declarations for the four gate modes, with the diff-0 expectation and the nft limit stated in the comments. No logic (~27 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-index-postgres/src/IndexScheduler.cpp",
+      "partial": true,
+      "reason": "PARTIAL and out-of-project: only the shadow hook in seqno_interfaces_processed is in scope. The surrounding stage machinery (queued/processing seqno sets, reschedule-to-front on error, OTEL stage timing) belongs to the indexer, not to mch — but read `handle_seqno_failure` / `reschedule_seqno` once to see what fire-and-forget spares you (~591 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-index-postgres/src/IndexScheduler.h",
+      "reason": "one member (`mch_prep_`) and one setter (`set_mch_shadow`), both commented as additive/off-by-default; everything else is the indexer's own stage plumbing (~114 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-index-postgres/src/main.cpp",
+      "partial": true,
+      "reason": "PARTIAL: the startup block is excerpted. The only other mch touchpoint is the `--mch-shadow` option registration (~line 107); the rest is the indexer's own CLI/actor bootstrap. Reminder: this binary does not build on this workstation (~351 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/CMakeLists.txt",
+      "partial": true,
+      "reason": "the lib/harness split lives here: `mch-classify` (STATIC, lines 98-177) lists the pipeline TUs plus the three Phase G adapters and the PRODUCTION ABI pairs; the exe below adds the harness TUs and the ABI test fixtures. Worth skimming to confirm by eye that no dump/gate TU is in the lib (~234 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ClassifyCore.h",
+      "partial": true,
+      "reason": "covered as the engine core in earlier chapters; in scope HERE only for the FailureCategory enum (lines 23-42), whose comment argues at length why matcher_skip / clean_reject / parse_null are deliberately NOT enumerators. Read that comment if you plan to add a category (~117 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/main.cpp",
+      "partial": true,
+      "reason": "in scope only for the four `--*-schema` / `--*-prod` option registrations and their one-line dispatch branches (lines ~192-210 and ~297-310). The startup validate_registries() call it shares with load_engine_prep is excerpted in [[parse-layer]] (~355 LOC)"
+    },
+    {
+      "path": "indexer/docs/mch-cpp-prod-design.md",
+      "reason": "not code, but the argument behind every decision on this page — §1 integration point, §3 the two-tier lookup answer (Q2), §4 startup-fatal (Q3), §5 persistence, §6 the pre-flip delta worklist, §7 the rollout log with per-slice DONE markers. When a comment here cites \"prod-design §N\", this is the file (~226 lines)"
+    }
+  ]
+}

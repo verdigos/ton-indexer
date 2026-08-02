@@ -1,0 +1,903 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4 · The IR — what the runtime actually executes</title>
+<style>
+:root{--bg:#ffffff;--fg:#1b2026;--mut:#5c6570;--line:#dfe4ea;--line-soft:#edf0f4;--surface:#f8f9fb;--accent:#0b6bcb;--band:#f2f4f7;--band-edge:#b6c0cc;--hot:#cfe4f9;--hot-edge:#0b6bcb;--code-bg:#f6f8fa;--note-bg:#fbfcfe;--drift:#b3261e;--drift-bg:#fdecea;--chip-bg:#0b6bcb;--chip-fg:#ffffff;--tk-k:#b02a37;--tk-s:#1a5f3c;--tk-n:#0550ae;--tk-c:#5c6570}
+@media (prefers-color-scheme: dark){:root{--bg:#0e1116;--fg:#dde3ea;--mut:#949daa;--line:#2a313a;--line-soft:#20262e;--surface:#151b23;--accent:#57a6ea;--band:#191f27;--band-edge:#3a4655;--hot:#17304a;--hot-edge:#57a6ea;--code-bg:#141920;--note-bg:#12171e;--drift:#ef6a5a;--drift-bg:#3a1a15;--chip-bg:#57a6ea;--chip-fg:#08101a;--tk-k:#ff9c92;--tk-s:#7ed8a8;--tk-n:#79c0ff;--tk-c:#949daa}}
+:root[data-theme=light]{--bg:#ffffff;--fg:#1b2026;--mut:#5c6570;--line:#dfe4ea;--line-soft:#edf0f4;--surface:#f8f9fb;--accent:#0b6bcb;--band:#f2f4f7;--band-edge:#b6c0cc;--hot:#cfe4f9;--hot-edge:#0b6bcb;--code-bg:#f6f8fa;--note-bg:#fbfcfe;--drift:#b3261e;--drift-bg:#fdecea;--chip-bg:#0b6bcb;--chip-fg:#ffffff;--tk-k:#b02a37;--tk-s:#1a5f3c;--tk-n:#0550ae;--tk-c:#5c6570}
+:root[data-theme=dark]{--bg:#0e1116;--fg:#dde3ea;--mut:#949daa;--line:#2a313a;--line-soft:#20262e;--surface:#151b23;--accent:#57a6ea;--band:#191f27;--band-edge:#3a4655;--hot:#17304a;--hot-edge:#57a6ea;--code-bg:#141920;--note-bg:#12171e;--drift:#ef6a5a;--drift-bg:#3a1a15;--chip-bg:#57a6ea;--chip-fg:#08101a;--tk-k:#ff9c92;--tk-s:#7ed8a8;--tk-n:#79c0ff;--tk-c:#949daa}
+:root{
+  --ff-sans:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;
+  --ff-mono:ui-monospace,'SF Mono',SFMono-Regular,'Cascadia Mono','Segoe UI Mono',Menlo,Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 16px/1.65 var(--ff-sans);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1360px;margin:0 auto;padding:0 28px 96px}
+
+/* --- chrome ------------------------------------------------------------- */
+.topbar{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);margin:0 -28px 24px;padding:10px 28px;display:flex;gap:9px;align-items:baseline}
+.topbar .crumb{color:var(--mut);font-size:13px;flex:none}
+.topbar .here{font-weight:600;font-size:14px;letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:2px}
+a:focus-visible,.card:focus-within{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+/* --- type scale --------------------------------------------------------- */
+h1{font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-.015em;margin:22px 0 10px;text-wrap:balance}
+h2{font-size:19px;line-height:1.35;font-weight:650;letter-spacing:-.01em;margin:46px 0 12px;padding-left:12px;border-left:3px solid var(--accent);scroll-margin-top:66px;text-wrap:balance}
+p{margin:0 0 .9em}
+.wrap>p,section>p{max-width:72ch}
+.meta{color:var(--mut);font-size:13px;line-height:1.55}
+.meta+p{margin-top:14px}
+.label{margin:0 0 9px;font:650 12px/1.4 var(--ff-sans);color:var(--mut);text-transform:uppercase;letter-spacing:.07em}
+.summary{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 9px 9px 0;padding:13px 18px;margin:16px 0 24px;background:var(--surface);max-width:78ch;font-size:16.5px;line-height:1.62}
+.summary p:last-child{margin-bottom:0}
+.rule{border:none;border-top:1px solid var(--line);margin:48px 0 14px}
+
+/* --- on-this-page ------------------------------------------------------- */
+.toc{margin:0 0 28px;padding:13px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);max-width:78ch}
+.toc ol{margin:0;padding:0;list-style:none}
+.toc li{display:flex;gap:11px;font-size:14.5px;line-height:1.5;margin:5px 0}
+.toc .tn{flex:none;min-width:1.3em;color:var(--mut);font:650 12px/1.7 var(--ff-mono);font-variant-numeric:tabular-nums}
+
+/* --- excerpt shell ------------------------------------------------------ */
+.excerpt{margin:26px 0;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.excerpt.cont{margin-top:-27px;border-top:none;border-top-left-radius:0;border-top-right-radius:0}
+.ex-head{display:flex;gap:12px;align-items:baseline;padding:9px 14px;background:var(--surface);border-bottom:1px solid var(--line);border-radius:9px 9px 0 0;font:500 12.5px/1.5 var(--ff-mono);min-width:0}
+.path{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plines{color:var(--mut);font-weight:400}
+.ex-title{color:var(--mut);font:400 13px/1.5 var(--ff-sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lang{margin-left:auto;flex:none;color:var(--mut);border:1px solid var(--line);border-radius:10px;padding:1px 8px;font-size:11px;letter-spacing:.05em;text-transform:uppercase}
+.sha{flex:none;color:var(--mut);font-size:11px}
+
+/* --- two-pane: code left, note rail right -------------------------------- */
+.ex-grid{display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,30%,420px);align-items:start}
+.excerpt.bare .ex-grid{grid-template-columns:minmax(0,1fr)}
+.ex-code{overflow-x:auto;overscroll-behavior-x:contain;padding:10px 0 12px}
+table.code{border-collapse:collapse;width:100%;font:400 13.5px/1.55 var(--ff-mono);letter-spacing:0;font-variant-ligatures:none;tab-size:4}
+/* keep these at the same specificity as the td reset above, or the reset wins */
+table.code td{padding:0;white-space:pre;vertical-align:baseline}
+table.code td.ln{width:1%;padding:0 8px 0 14px;color:var(--mut);text-align:right;user-select:none;font-size:12.5px;font-variant-numeric:tabular-nums}
+table.code td.mk{width:26px;padding:0 4px;text-align:center;vertical-align:middle;user-select:none}
+.excerpt.bare table.code td.mk{width:0;padding:0}
+table.code td.cd{width:100%;padding:0 12px 0 6px}
+tr.band td{background:var(--band)}
+tr.band td.mk{box-shadow:inset 3px 0 0 var(--band-edge)}
+tr.hot td{background:var(--hot)}
+tr.hot td.mk{box-shadow:inset 3px 0 0 var(--hot-edge)}
+/* text-indent:0 is load-bearing: the note body sets a negative text-indent for
+   its hanging first line, which would otherwise be inherited by the chip's
+   inner text box and fling the digit outside the card. */
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--chip-bg);color:var(--chip-fg);font:700 11px/1 var(--ff-sans);font-variant-numeric:tabular-nums;text-indent:0;flex:none}
+.ex-rail{position:relative;align-self:stretch;min-width:0;border-left:1px solid var(--line)}
+.note{position:absolute;left:14px;right:14px;padding:9px 13px 10px;border:1px solid var(--line);border-radius:8px;background:var(--note-bg);font-size:14px;line-height:1.55;transition:background .12s,border-color .12s,box-shadow .12s}
+.note .nt{padding-left:26px;text-indent:-26px}
+.note .chip{margin-right:7px}
+.note .nl{margin-right:7px;white-space:nowrap;color:var(--mut);font:650 12px/1 var(--ff-mono);letter-spacing:.01em}
+.note .nt code{font-size:12.5px}
+.note.hot{background:var(--hot);border-color:var(--hot-edge);box-shadow:0 0 0 1px var(--hot-edge)}
+@media (max-width: 979px){
+  .ex-grid{grid-template-columns:minmax(0,1fr)}
+  .ex-rail{border-left:none;border-top:1px solid var(--line);padding:12px 0 2px}
+  .note{position:static;margin:0 14px 10px}
+}
+
+/* --- syntax ------------------------------------------------------------- */
+.tk-k{color:var(--tk-k)}.tk-s{color:var(--tk-s)}.tk-n{color:var(--tk-n)}
+.tk-c{color:var(--tk-c);font-style:italic}
+.drift{background:var(--drift-bg);color:var(--drift);border-bottom:1px solid var(--line);padding:8px 14px;font-size:13px;line-height:1.5}
+.run{margin:16px 0;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);overflow:hidden}
+.run .label{padding:6px 14px 0}
+.run-cmd{padding:6px 14px 2px;font:600 12.5px/1.6 ui-monospace,'Cascadia Mono',Consolas,monospace;color:var(--accent);white-space:pre-wrap;word-break:break-all}
+.run-out{margin:0;padding:2px 14px 10px;font:12.5px/1.55 ui-monospace,'Cascadia Mono',Consolas,monospace;overflow-x:auto;color:var(--fg)}
+.run-note{padding:7px 14px 9px;border-top:1px solid var(--line-soft);font-size:13.5px;line-height:1.55;color:var(--mut)}
+
+/* --- blocks ------------------------------------------------------------- */
+.diagram{margin:22px 0;padding:14px 16px;border:1px solid var(--line);border-radius:10px;overflow-x:auto;background:var(--surface)}
+pre.mermaid{margin:0;font:13px/1.5 var(--ff-mono)}
+.edges,.cover{margin:26px 0;padding:14px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.edges ul,.cover ul{margin:0;padding-left:22px}
+.edges li,.cover li{margin:6px 0;font-size:14.5px;line-height:1.55}
+.cover .why{color:var(--mut)}
+.cover .label+ul+.label{margin-top:18px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin:20px 0}
+.card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--surface);transition:border-color .12s}
+.card:hover{border-color:var(--accent)}
+.card b{font-size:15.5px;font-weight:650;line-height:1.35}
+.card .num{margin-bottom:7px;color:var(--mut);font:650 11px/1 var(--ff-mono);letter-spacing:.06em}
+.card .meta{margin-top:5px}
+.card.planned{opacity:.55}
+.card.planned:hover{border-color:var(--line)}
+code{background:var(--code-bg);border:1px solid var(--line-soft);padding:.5px 5px;border-radius:5px;font-family:var(--ff-mono);font-size:.875em}
+.xl{font-weight:600}.xl-missing{color:var(--drift)}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{transition:none!important}}
+</style>
+<div class="wrap">
+<div class="topbar"><a class="crumb" href="index.html">atlas</a><span class="crumb">/</span><span class="here">4 · The IR — what the runtime actually executes</span></div>
+<h1>4 · The IR — what the runtime actually executes</h1>
+<div class="summary"><p>The C++ engine contains no matchers. It contains an interpreter for <code>ir/mch_ir.json</code>, a single 272 KB artifact compiled from the <code>.mch</code> specs by the Python frontend. After this chapter you can open that file and read it: you will know why a matcher record has both an <code>anchor</code> and a <code>root</code>, why <code>nodes</code> is one flat global array instead of a tree, what each of the six node kinds and six edge fields means, how <code>maybe</code> / <code>^</code> / <code>&lt;-</code> / <code>$rule</code> in a spec turn into JSON keys, and why a key being ABSENT (<code>priority</code>, <code>builder</code>, <code>shape</code>) carries meaning. You will also know what <code>IrLoader</code> refuses to load and why each refusal exists — the loader is written fail-closed on purpose, because a silently-degraded artifact matches MORE blocks than the spec author wrote. The matcher half of what the loader produces is executed in <a class="xl" href="matcher-runtime.html">matcher-runtime</a>; the <code>build_program</code> half in <a class="xl" href="build-programs.html">build-programs</a>. This chapter stops at &quot;you can read it&quot;.</p></div>
+<nav class="toc"><div class="label">On this page</div><ol><li><span class="tn">1</span><a href="#the-artifact-in-one-screen">The artifact in one screen</a></li><li><span class="tn">2</span><a href="#one-matcher-field-by-field">One matcher, field by field</a></li><li><span class="tn">3</span><a href="#the-node-pool-six-kinds-six-edge-fields">The node pool: six kinds, six edge fields</a></li><li><span class="tn">4</span><a href="#build-programs-and-expression-nodes-a-preview">Build programs and expression nodes — a preview</a></li><li><span class="tn">5</span><a href="#irloader-what-it-refuses-to-load">IrLoader: what it refuses to load</a></li><li><span class="tn">6</span><a href="#priorities-and-registration-order">Priorities and registration order</a></li><li><span class="tn">7</span><a href="#what-a-matcher-gets-skipped-for">What a matcher gets skipped for</a></li><li><span class="tn">8</span><a href="#the-emit-side-briefly">The emit side, briefly</a></li><li><span class="tn">9</span><a href="#check-yourself">Check yourself</a></li></ol></nav>
+<div class="diagram"><div class="label">Where the artifact comes from and what consumes it</div><pre class="mermaid">flowchart LR
+  S[&quot;.mch specs&lt;br/&gt;specs_decl/ + specs/&quot;] --&gt; C[&quot;mch frontend&lt;br/&gt;lexer -&amp;gt; parser -&amp;gt; compiler&quot;]
+  M[&quot;emit_manifest.json&lt;br/&gt;file list == registration order&quot;] --&gt; C
+  C --&gt; E[&quot;ir_emit.emit_ir&lt;br/&gt;matchers[] + nodes[]&quot;]
+  E --&gt; A[&quot;ir/mch_ir.json&lt;br/&gt;33 matchers, 329 nodes&quot;]
+  A --&gt; G[&quot;mch-codegen (CMake build step)&lt;br/&gt;wheres / builds tables + source sha&quot;]
+  A --&gt; L[&quot;IrLoader::load_ir&lt;br/&gt;sha256, then strict version 1.1&quot;]
+  L --&gt; LI[&quot;LoadedIr&lt;br/&gt;CompiledMatcher[] in priority order&quot;]
+  LI --&gt; W[&quot;Walker — ch.5&quot;]
+  LI --&gt; B[&quot;BuildDriver — ch.7&quot;]
+  G -. sha must match .-&gt; LI
+  A -. byte-repro pytest .-&gt; M</pre></div>
+<div class="diagram"><div class="label">A matcher record, and the flat node pool it points into</div><pre class="mermaid">flowchart TD
+  R[&quot;matchers[i]&quot;] --&gt; AN[&quot;anchor — the prefilter&lt;br/&gt;opcode_set | btype | pred | mixed&quot;]
+  R --&gt; RT[&quot;root — a GLOBAL node id&quot;]
+  R --&gt; CA[&quot;captures[] — slot id == position&lt;br/&gt;card: one | opt | many&quot;]
+  R --&gt; BP[&quot;build_program[] — ch.7&quot;]
+  RT --&gt; P[&quot;nodes[] — flat, global, 329 records&quot;]
+  P --&gt; ED[&quot;edges: child | children[] | parent&lt;br/&gt;branches[] | step | exit&quot;]
+  ED --&gt; P
+  P --&gt; LR[&quot;IrLoader: walk reachable subgraph,&lt;br/&gt;renumber to local ids, root == 0&quot;]
+  LR --&gt; CN[&quot;CompiledNode[]&lt;br/&gt;global_id kept for the codegen table&quot;]</pre></div>
+<h2 id="the-artifact-in-one-screen">The artifact in one screen</h2>
+<section><p>Open <code>ir/mch_ir.json</code> and the first 33 lines tell you almost everything about its shape: a version tag, a provenance block nobody reads, and then two flat arrays. There is no nesting — a matcher points at nodes by integer index, and nodes point at each other by integer index. That is a deliberate wire format, not an accident of serialization: it makes the whole graph addressable by a stable id, which is what lets the C++ build step generate a function per (matcher, node) pair and pair it with the artifact by sha.</p>
+<p>The file is regenerated, never edited. <code>ir/README.md</code> documents the one command; everything downstream of it (where_expr codegen, build-fn codegen, table sha pairing) is a CMake custom command.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/ir/mch_ir.json<span class="plines">:1–33</span></span><span class="ex-title">mch_ir.json — the header</span><span class="lang">json</span><span class="sha" title="span hash at render">4290c78a</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="1"><td class="ln">1</td><td class="mk"></td><td class="cd">{</td></tr>
+<tr class="cl band nb-0" data-l="2" data-n="0"><td class="ln">2</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-s">&quot;mch_ir_version&quot;</span>: <span class="tk-s">&quot;1.1&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="3" data-n="1"><td class="ln">3</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-s">&quot;frontend&quot;</span>: {</td></tr>
+<tr class="cl band nb-1" data-l="4" data-n="1"><td class="ln">4</td><td class="mk"></td><td class="cd">    <span class="tk-s">&quot;generator&quot;</span>: <span class="tk-s">&quot;mch-python&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="5" data-n="1"><td class="ln">5</td><td class="mk"></td><td class="cd">    <span class="tk-s">&quot;source_files&quot;</span>: [</td></tr>
+<tr class="cl band nb-2" data-l="6" data-n="2"><td class="ln">6</td><td class="mk"><span class="chip">3</span></td><td class="cd">      <span class="tk-s">&quot;specs_decl/jettons.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="7" data-n="2"><td class="ln">7</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/coffee_liquidity.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="8" data-n="2"><td class="ln">8</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/coffee_swap.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9" data-n="2"><td class="ln">9</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/dedust_deposit.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="10" data-n="2"><td class="ln">10</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/dedust_swap.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="11" data-n="2"><td class="ln">11</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/dedust_withdraw.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="12" data-n="2"><td class="ln">12</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/dedust_v2_claim_reward.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="13" data-n="2"><td class="ln">13</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/dns.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="14" data-n="2"><td class="ln">14</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/ethena.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="15" data-n="2"><td class="ln">15</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/evaa.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="16" data-n="2"><td class="ln">16</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/getgems.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="17" data-n="2"><td class="ln">17</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/jvault.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="18" data-n="2"><td class="ln">18</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/layerzero.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="19" data-n="2"><td class="ln">19</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/nft_transfer.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="20" data-n="2"><td class="ln">20</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/nominator.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="21" data-n="2"><td class="ln">21</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/stonfi_v1_swap.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="22" data-n="2"><td class="ln">22</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/stonfi_v2_provide.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="23" data-n="2"><td class="ln">23</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/stonfi_v2_swap.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="24" data-n="2"><td class="ln">24</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/stonfi_v2_withdraw.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="25" data-n="2"><td class="ln">25</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/telegram_nft.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="26" data-n="2"><td class="ln">26</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/tgbtc.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="27" data-n="2"><td class="ln">27</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/tonco_liquidity.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="28" data-n="2"><td class="ln">28</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/tonco_swap.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="29" data-n="2"><td class="ln">29</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/tonstakers.mch&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="30" data-n="2"><td class="ln">30</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;specs/vesting.mch&quot;</span></td></tr>
+<tr class="cl" data-l="31"><td class="ln">31</td><td class="mk"></td><td class="cd">    ]</td></tr>
+<tr class="cl" data-l="32"><td class="ln">32</td><td class="mk"></td><td class="cd">  },</td></tr>
+<tr class="cl band nb-3" data-l="33" data-n="3"><td class="ln">33</td><td class="mk"><span class="chip">4</span></td><td class="cd">  <span class="tk-s">&quot;matchers&quot;</span>: [</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="2" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L2</span>A strict equality gate on both loaders — no dual-accept, no range. The 1.0 -&gt; 1.1 bump was made deliberately non-additive (<code>docs/mch-w7-handoff.md</code> §1b) so that a stale binary cannot half-read a newer artifact and fail later at eval time. The constant is duplicated in three places with no shared source: <code>expr_ir.py</code>, <code>mch_ir/loader.py</code>, <code>IrLoader.cpp</code>.</div></div>
+<div class="note" data-a="3" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L3–5</span>Provenance only. Nothing in either loader reads <code>generator</code> or <code>source_files</code> — a hand-built artifact without a <code>frontend</code> key loads fine. It exists so a dumped artifact can be traced back to the spec list that produced it.</div></div>
+<div class="note" data-a="6" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L6–30</span>These 25 files are NOT &quot;every .mch under specs/&quot;. <code>specs/jetton_transfer.mch</code> and <code>specs/jettons.mch</code> are deliberately excluded (they are builder-tier conformance duplicates), and <code>specs_decl/jettons.mch</code> is pulled in from a sibling directory and listed FIRST. Treating <code>specs/</code> as the source of truth for what production runs will mislead you; <code>ir/emit_manifest.json</code> is authoritative and this array echoes it verbatim.</div></div>
+<div class="note" data-a="33" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L33</span>Two sibling arrays follow: <code>matchers</code> (33 records) and <code>nodes</code> (329 records). Because a matcher&#39;s pattern lives entirely in the node pool, you cannot read a matcher&#39;s shape without jumping — which is what the <code>runs</code> block below automates.</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ cd ton-index-worker/ton-mch-engine/ir &amp;&amp; node -e &quot;const j=require(&#39;./mch_ir.json&#39;); console.log(&#39;version&#39;,j.mch_ir_version,&#39;| matchers&#39;,j.matchers.length,&#39;| nodes&#39;,j.nodes.length); const p={}; j.matchers.forEach(m=&gt;{const k=m.priority??100;(p[k]=p[k]||[]).push(m.name)}); Object.keys(p).sort((a,b)=&gt;a-b).forEach(k=&gt;console.log(&#39;priority&#39;,k,&#39;-&gt;&#39;,p[k].length,&#39;matchers:&#39;,p[k].join(&#39; &#39;))); const a={}; j.matchers.forEach(m=&gt;a[m.anchor.kind]=(a[m.anchor.kind]||0)+1); console.log(&#39;anchor kinds&#39;,JSON.stringify(a)); console.log(&#39;with build_program&#39;,j.matchers.filter(m=&gt;m.build_program).length,&#39;| with builder&#39;,j.matchers.filter(m=&gt;m.builder).length,&#39;| with shape&#39;,j.matchers.filter(m=&gt;m.shape).length);&quot;</div><pre class="run-out">version 1.1 | matchers 33 | nodes 329
+priority 90 -&gt; 3 matchers: jetton_transfer jetton_burn jetton_mint
+priority 100 -&gt; 30 matchers: coffee_create_vault coffee_swap dedust_deposit_final dedust_deposit_partial dedust_swap dedust_withdraw dedust_v2_claim_reward change_dns ethena_deposit evaa_withdraw getgems_nft_purchase jvault_stake …
+anchor kinds {&quot;opcode_set&quot;:27,&quot;btype&quot;:6}
+with build_program 33 | with builder 0 | with shape 3</pre><div class="run-note">The census that orients everything else: only two priority tiers, only two anchor kinds in production (no <code>pred</code>/<code>mixed</code> anchor exists today), zero registered builders — every matcher in the production artifact is fully declarative.</div></div>
+<h2 id="one-matcher-field-by-field">One matcher, field by field</h2>
+<section><p><code>jetton_transfer</code> is the first record in the artifact and the smallest useful one: three atoms, three nodes, one optional leg. Read the spec first, then the record, then the nodes — the three excerpts below are the same matcher three times.</p>
+<p>A caution before you start: the spec you want is <code>specs_decl/jettons.mch</code>, not the same-named matcher in <code>specs/jettons.mch</code>. The manifest excludes the latter.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">indexer/indexer/events/mch/specs_decl/jettons.mch<span class="plines">:35–42</span></span><span class="ex-title">The source</span><span class="lang">text</span><span class="sha" title="span hash at render">4f4dd870</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="35"><td class="ln">35</td><td class="mk"></td><td class="cd">matcher jetton_transfer {</td></tr>
+<tr class="cl band nb-0" data-l="36" data-n="0"><td class="ln">36</td><td class="mk"><span class="chip">1</span></td><td class="cd">    produces JettonTransferBlock</td></tr>
+<tr class="cl band nb-1" data-l="37" data-n="1"><td class="ln">37</td><td class="mk"><span class="chip">2</span></td><td class="cd">    priority <span class="tk-n">90</span></td></tr>
+<tr class="cl band nb-2" data-l="38" data-n="2"><td class="ln">38</td><td class="mk"><span class="chip">3</span></td><td class="cd">    entry    @transfer</td></tr>
+<tr class="cl" data-l="39"><td class="ln">39</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-3" data-l="40" data-n="3"><td class="ln">40</td><td class="mk"><span class="chip">4</span></td><td class="cd">    op JettonTransfer @transfer</td></tr>
+<tr class="cl band nb-3" data-l="41" data-n="3"><td class="ln">41</td><td class="mk"></td><td class="cd">      -&gt; op JettonInternalTransfer @internal</td></tr>
+<tr class="cl band nb-3" data-l="42" data-n="3"><td class="ln">42</td><td class="mk"></td><td class="cd">      -&gt; maybe op JettonNotify @notify</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="36" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L36</span><code>produces</code> names a Python CLASS in the spec, but the artifact stores a btype STRING (<code>jetton_transfer</code>), normalized by <code>btypes.produces_btype</code>. Grepping the artifact for <code>JettonTransferBlock</code> finds nothing — that mapping is the single most common reason a spec-to-artifact search comes up empty.</div></div>
+<div class="note" data-a="37" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L37</span>In-spec <code>priority 90</code>. This one line is the entire reason the declarative jetton family consumes blocks ahead of every other matcher; it replaced an older hack that relied on the emitted filename sorting first (<code>a_jettons_decl.mch</code>).</div></div>
+<div class="note" data-a="38" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L38</span><code>entry @transfer</code> declares which capture is the anchor block. It appears nowhere as a key in the matcher record — it is what makes that atom&#39;s node the record&#39;s <code>root</code>, and what the anchor prefilter is derived from.</div></div>
+<div class="note" data-a="40" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L40–42</span>Three atoms, two <code>-&gt;</code> edges, one <code>maybe</code>. Count them against the three node records two excerpts down: the lowering is 1:1 here, which is exactly why this matcher is the one to learn on.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/ir/mch_ir.json<span class="plines">:34–62</span></span><span class="ex-title">The matcher record</span><span class="lang">json</span><span class="sha" title="span hash at render">7dbf20d9</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="34"><td class="ln">34</td><td class="mk"></td><td class="cd">    {</td></tr>
+<tr class="cl" data-l="35"><td class="ln">35</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;name&quot;</span>: <span class="tk-s">&quot;jetton_transfer&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="36" data-n="0"><td class="ln">36</td><td class="mk"><span class="chip">1</span></td><td class="cd">      <span class="tk-s">&quot;anchor&quot;</span>: {</td></tr>
+<tr class="cl band nb-0" data-l="37" data-n="0"><td class="ln">37</td><td class="mk"></td><td class="cd">        <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;opcode_set&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="38" data-n="0"><td class="ln">38</td><td class="mk"></td><td class="cd">        <span class="tk-s">&quot;values&quot;</span>: [</td></tr>
+<tr class="cl band nb-0" data-l="39" data-n="0"><td class="ln">39</td><td class="mk"></td><td class="cd">          <span class="tk-n">260734629</span></td></tr>
+<tr class="cl band nb-0" data-l="40" data-n="0"><td class="ln">40</td><td class="mk"></td><td class="cd">        ]</td></tr>
+<tr class="cl band nb-0" data-l="41" data-n="0"><td class="ln">41</td><td class="mk"></td><td class="cd">      },</td></tr>
+<tr class="cl band nb-1" data-l="42" data-n="1"><td class="ln">42</td><td class="mk"><span class="chip">2</span></td><td class="cd">      <span class="tk-s">&quot;root&quot;</span>: <span class="tk-n">0</span>,</td></tr>
+<tr class="cl band nb-2" data-l="43" data-n="2"><td class="ln">43</td><td class="mk"><span class="chip">3</span></td><td class="cd">      <span class="tk-s">&quot;produces&quot;</span>: [</td></tr>
+<tr class="cl band nb-2" data-l="44" data-n="2"><td class="ln">44</td><td class="mk"></td><td class="cd">        <span class="tk-s">&quot;jetton_transfer&quot;</span></td></tr>
+<tr class="cl band nb-2" data-l="45" data-n="2"><td class="ln">45</td><td class="mk"></td><td class="cd">      ],</td></tr>
+<tr class="cl band nb-3" data-l="46" data-n="3"><td class="ln">46</td><td class="mk"><span class="chip">4</span></td><td class="cd">      <span class="tk-s">&quot;captures&quot;</span>: [</td></tr>
+<tr class="cl band nb-3" data-l="47" data-n="3"><td class="ln">47</td><td class="mk"></td><td class="cd">        {</td></tr>
+<tr class="cl band nb-3" data-l="48" data-n="3"><td class="ln">48</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;name&quot;</span>: <span class="tk-s">&quot;transfer&quot;</span>,</td></tr>
+<tr class="cl band nb-3" data-l="49" data-n="3"><td class="ln">49</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;card&quot;</span>: <span class="tk-s">&quot;one&quot;</span></td></tr>
+<tr class="cl band nb-3" data-l="50" data-n="3"><td class="ln">50</td><td class="mk"></td><td class="cd">        },</td></tr>
+<tr class="cl band nb-3" data-l="51" data-n="3"><td class="ln">51</td><td class="mk"></td><td class="cd">        {</td></tr>
+<tr class="cl band nb-3" data-l="52" data-n="3"><td class="ln">52</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;name&quot;</span>: <span class="tk-s">&quot;internal&quot;</span>,</td></tr>
+<tr class="cl band nb-3" data-l="53" data-n="3"><td class="ln">53</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;card&quot;</span>: <span class="tk-s">&quot;one&quot;</span></td></tr>
+<tr class="cl band nb-3" data-l="54" data-n="3"><td class="ln">54</td><td class="mk"></td><td class="cd">        },</td></tr>
+<tr class="cl band nb-3" data-l="55" data-n="3"><td class="ln">55</td><td class="mk"></td><td class="cd">        {</td></tr>
+<tr class="cl band nb-3" data-l="56" data-n="3"><td class="ln">56</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;name&quot;</span>: <span class="tk-s">&quot;notify&quot;</span>,</td></tr>
+<tr class="cl band nb-3" data-l="57" data-n="3"><td class="ln">57</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;card&quot;</span>: <span class="tk-s">&quot;opt&quot;</span></td></tr>
+<tr class="cl band nb-3" data-l="58" data-n="3"><td class="ln">58</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl band nb-3" data-l="59" data-n="3"><td class="ln">59</td><td class="mk"></td><td class="cd">      ],</td></tr>
+<tr class="cl band nb-4" data-l="60" data-n="4"><td class="ln">60</td><td class="mk"><span class="chip">5</span></td><td class="cd">      <span class="tk-s">&quot;include_excess&quot;</span>: <span class="tk-k">true</span>,</td></tr>
+<tr class="cl band nb-4" data-l="61" data-n="4"><td class="ln">61</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;include_bounces&quot;</span>: <span class="tk-k">true</span>,</td></tr>
+<tr class="cl band nb-4" data-l="62" data-n="4"><td class="ln">62</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;priority&quot;</span>: <span class="tk-n">90</span>,</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="36" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L36–41</span><code>anchor</code> and <code>root</code> are two representations of the same head test, kept separate on purpose. The anchor is a PREFILTER — the walker only visits blocks whose opcode is in this set — while the root is the pattern&#39;s first node. <code>ir_emit._anchor_record</code> derives the anchor from the root when the compiler didn&#39;t record a distinct one, so they usually agree; the interesting cases are when they don&#39;t (next section).</div></div>
+<div class="note" data-a="42" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L42</span><code>root: 0</code> indexes the GLOBAL <code>nodes</code> array. The loader immediately renumbers the reachable subgraph to local ids with root == 0, so the id you read here is not the id the C++ runtime uses — <code>CompiledNode::global_id</code> is what preserves the artifact id for the codegen table.</div></div>
+<div class="note" data-a="43" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L43–45</span><code>produces</code> is a LIST, not a string. Most matchers produce one btype, but <code>change_dns</code> produces three and <code>tonstakers_withdraw</code> two — the <code>switch</code> build statement chooses which at build time (<a class="xl" href="build-programs.html">build-programs</a>). A reader who assumes <code>produces[0]</code> is the answer will be wrong twice.</div></div>
+<div class="note" data-a="46" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L46–59</span>The captures table IS the slot numbering: position in this array is the slot id, and <code>card</code> (<code>one</code>/<code>opt</code>/<code>many</code>) is what the walker enforces on binding. A node&#39;s <code>capture</code> key is a NAME; the loader resolves it against this table and stores -1 for an unknown name rather than erroring — a capture typo is a silent no-bind, not a load failure.</div></div>
+<div class="note" data-a="60" data-n="4"><div class="nt"><span class="chip">5</span><span class="nl">L60–62</span>Absent keys are meaningful and that is the trap of this format. <code>include_excess</code>/<code>include_bounces</code> are always written; <code>priority</code> is written ONLY when it differs from 100; <code>builder</code> and <code>shape</code> only when present. So &quot;no priority key&quot; means 100, and the 30 priority-100 matchers simply omit it — you cannot sort matchers by reading <code>m.priority</code> without a default.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/ir/mch_ir.json<span class="plines">:9452–9469</span></span><span class="ex-title">…and the three nodes it points at</span><span class="lang">json</span><span class="sha" title="span hash at render">6481c117</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-3" data-l="9452" data-n="3"><td class="ln">9452</td><td class="mk"><span class="chip">4</span></td><td class="cd">    {</td></tr>
+<tr class="cl band nb-0" data-l="9453" data-n="0"><td class="ln">9453</td><td class="mk"><span class="chip">1</span></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;contract&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="9454" data-n="0"><td class="ln">9454</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;opcode&quot;</span>: <span class="tk-n">260734629</span>,</td></tr>
+<tr class="cl band nb-3" data-l="9455" data-n="3"><td class="ln">9455</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;capture&quot;</span>: <span class="tk-s">&quot;transfer&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="9456" data-n="1"><td class="ln">9456</td><td class="mk"><span class="chip">2</span></td><td class="cd">      <span class="tk-s">&quot;child&quot;</span>: <span class="tk-n">1</span></td></tr>
+<tr class="cl band nb-3" data-l="9457" data-n="3"><td class="ln">9457</td><td class="mk"></td><td class="cd">    },</td></tr>
+<tr class="cl band nb-3" data-l="9458" data-n="3"><td class="ln">9458</td><td class="mk"></td><td class="cd">    {</td></tr>
+<tr class="cl band nb-3" data-l="9459" data-n="3"><td class="ln">9459</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;contract&quot;</span>,</td></tr>
+<tr class="cl band nb-3" data-l="9460" data-n="3"><td class="ln">9460</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;opcode&quot;</span>: <span class="tk-n">395134233</span>,</td></tr>
+<tr class="cl band nb-3" data-l="9461" data-n="3"><td class="ln">9461</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;capture&quot;</span>: <span class="tk-s">&quot;internal&quot;</span>,</td></tr>
+<tr class="cl band nb-3" data-l="9462" data-n="3"><td class="ln">9462</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;child&quot;</span>: <span class="tk-n">2</span></td></tr>
+<tr class="cl band nb-3" data-l="9463" data-n="3"><td class="ln">9463</td><td class="mk"></td><td class="cd">    },</td></tr>
+<tr class="cl band nb-2" data-l="9464" data-n="2"><td class="ln">9464</td><td class="mk"><span class="chip">3</span></td><td class="cd">    {</td></tr>
+<tr class="cl band nb-2" data-l="9465" data-n="2"><td class="ln">9465</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;contract&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9466" data-n="2"><td class="ln">9466</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;opcode&quot;</span>: <span class="tk-n">1935855772</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9467" data-n="2"><td class="ln">9467</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;optional&quot;</span>: <span class="tk-k">true</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9468" data-n="2"><td class="ln">9468</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;capture&quot;</span>: <span class="tk-s">&quot;notify&quot;</span></td></tr>
+<tr class="cl band nb-3" data-l="9469" data-n="3"><td class="ln">9469</td><td class="mk"></td><td class="cd">    },</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="9453" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L9453–9454</span><code>kind: &quot;contract&quot;</code> means &quot;a call_contract block whose message opcode equals this&quot;. Opcodes are stored as UNSIGNED decimal (260734629 == 0x0f8a7ea5); the emitter masks with 0xFFFFFFFF and the loader masks again, so a spec that wrote a negative literal can never reach the runtime as a signed value.</div></div>
+<div class="note" data-a="9456" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L9456</span><code>child: 1</code> is the <code>-&gt;</code> edge — &quot;the block produced by this block&#39;s message&quot;. Chains are a linked list of records, never nesting, which is why reading a matcher means jumping through the array rather than reading a subtree.</div></div>
+<div class="note" data-a="9464" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L9464–9468</span><code>maybe</code> becomes <code>optional: true</code> ON the node, not a wrapper node. Together with <code>card: &quot;opt&quot;</code> in the captures table, that is the entire encoding of an optional leg — there is no separate <code>Maybe</code> node kind in the IR.</div></div>
+<div class="note" data-a="9452" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L9452–9469</span>Note what is NOT here: no back-pointer to the owning matcher. A node does not know who owns it; ownership is discoverable only by walking from each matcher&#39;s root, which is exactly what the loader does and what the <code>runs</code> block below reproduces.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/IrLoader.h<span class="plines">:73–103</span></span><span class="ex-title">The same record, as the loader keeps it</span><span class="lang">cpp</span><span class="sha" title="span hash at render">d82c0445</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="73"><td class="ln">73</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> CompiledMatcher {</td></tr>
+<tr class="cl" data-l="74"><td class="ln">74</td><td class="mk"></td><td class="cd">  std::string name;</td></tr>
+<tr class="cl band nb-0" data-l="75" data-n="0"><td class="ln">75</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">int</span> artifact_index{-<span class="tk-n">1</span>};  <span class="tk-c">// index in the artifact `matchers` array (gen_builds key)</span></td></tr>
+<tr class="cl" data-l="76"><td class="ln">76</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> has_build_program{<span class="tk-k">false</span>};</td></tr>
+<tr class="cl" data-l="77"><td class="ln">77</td><td class="mk"></td><td class="cd">  std::vector&lt;std::string&gt; produces;</td></tr>
+<tr class="cl" data-l="78"><td class="ln">78</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="79" data-n="1"><td class="ln">79</td><td class="mk"><span class="chip">2</span></td><td class="cd">  AnchorKind anchor_kind{AnchorKind::OpcodeSet};</td></tr>
+<tr class="cl band nb-1" data-l="80" data-n="1"><td class="ln">80</td><td class="mk"></td><td class="cd">  std::unordered_set&lt;std::uint32_t&gt; anchor_opcodes;</td></tr>
+<tr class="cl band nb-1" data-l="81" data-n="1"><td class="ln">81</td><td class="mk"></td><td class="cd">  std::unordered_set&lt;std::string&gt; anchor_btypes;</td></tr>
+<tr class="cl band nb-1" data-l="82" data-n="1"><td class="ln">82</td><td class="mk"></td><td class="cd">  std::string anchor_pred;  <span class="tk-c">// Pred-kind anchor&#39;s predicate name</span></td></tr>
+<tr class="cl band nb-1" data-l="83" data-n="1"><td class="ln">83</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-2" data-l="84" data-n="2"><td class="ln">84</td><td class="mk"><span class="chip">3</span></td><td class="cd">  std::vector&lt;CompiledNode&gt; nodes;      <span class="tk-c">// local pool, remapped, root == 0</span></td></tr>
+<tr class="cl band nb-2" data-l="85" data-n="2"><td class="ln">85</td><td class="mk"></td><td class="cd">  std::vector&lt;std::string&gt; slot_names;  <span class="tk-c">// slot id -&gt; capture name (decl order)</span></td></tr>
+<tr class="cl band nb-2" data-l="86" data-n="2"><td class="ln">86</td><td class="mk"></td><td class="cd">  std::vector&lt;std::string&gt; cards;       <span class="tk-c">// slot id -&gt; &quot;one&quot;|&quot;opt&quot;|&quot;many&quot;</span></td></tr>
+<tr class="cl band nb-2" data-l="87" data-n="2"><td class="ln">87</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-2" data-l="88" data-n="2"><td class="ln">88</td><td class="mk"></td><td class="cd">  <span class="tk-c">// Recursion capture ownership (per recursive node id -&gt; owned slot ids).</span></td></tr>
+<tr class="cl band nb-2" data-l="89" data-n="2"><td class="ln">89</td><td class="mk"></td><td class="cd">  std::unordered_map&lt;<span class="tk-k">int</span>, std::set&lt;<span class="tk-k">int</span>&gt;&gt; step_slots;</td></tr>
+<tr class="cl band nb-2" data-l="90" data-n="2"><td class="ln">90</td><td class="mk"></td><td class="cd">  std::unordered_map&lt;<span class="tk-k">int</span>, std::set&lt;<span class="tk-k">int</span>&gt;&gt; exit_slots;</td></tr>
+<tr class="cl band nb-2" data-l="91" data-n="2"><td class="ln">91</td><td class="mk"></td><td class="cd">  std::set&lt;<span class="tk-k">int</span>&gt; owned_slots;</td></tr>
+<tr class="cl" data-l="92"><td class="ln">92</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="93"><td class="ln">93</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> include_excess{<span class="tk-k">true</span>};</td></tr>
+<tr class="cl" data-l="94"><td class="ln">94</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> include_bounces{<span class="tk-k">true</span>};</td></tr>
+<tr class="cl" data-l="95"><td class="ln">95</td><td class="mk"></td><td class="cd">  <span class="tk-k">int</span> priority{<span class="tk-n">100</span>};</td></tr>
+<tr class="cl" data-l="96"><td class="ln">96</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="97"><td class="ln">97</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> unrunnable{<span class="tk-k">false</span>};</td></tr>
+<tr class="cl" data-l="98"><td class="ln">98</td><td class="mk"></td><td class="cd">  std::string skip_reason;  <span class="tk-c">// e.g. &quot;pred:no_internal_transfer,pton_self_transfer&quot;</span></td></tr>
+<tr class="cl" data-l="99"><td class="ln">99</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="100"><td class="ln">100</td><td class="mk"></td><td class="cd">  <span class="tk-c">// Host bindings referenced (report only).</span></td></tr>
+<tr class="cl band nb-3" data-l="101" data-n="3"><td class="ln">101</td><td class="mk"><span class="chip">4</span></td><td class="cd">  std::set&lt;std::string&gt; ref_preds, ref_builders, ref_shapers;</td></tr>
+<tr class="cl band nb-3" data-l="102" data-n="3"><td class="ln">102</td><td class="mk"></td><td class="cd">  std::set&lt;std::string&gt; ref_msgtypes, ref_lookups, ref_fns;</td></tr>
+<tr class="cl" data-l="103"><td class="ln">103</td><td class="mk"></td><td class="cd">};</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="75" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L75</span><code>artifact_index</code> is recorded BEFORE the priority sort, and it is the key into the generated build-fn table. After <code>load_ir</code> returns, <code>matchers[i].artifact_index != i</code> in general — using the vector index to look up a build function is precisely the bug this field exists to prevent.</div></div>
+<div class="note" data-a="79" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L79–83</span>The anchor is decomposed into three parallel members of which exactly one is populated. This is also a performance decision: <code>prepare_classify</code> turns OpcodeSet/BType into a real prefilter and leaves Pred/Mixed as a full scan of the block tree (<a class="xl" href="matcher-runtime.html">matcher-runtime</a>).</div></div>
+<div class="note" data-a="84" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L84–91</span>Everything is COPIED out of the JSON — local node pool with root == 0, slot names by index, per-recursive-node slot ownership sets. The decoded document is dead the moment <code>load_ir</code> returns, which is why the artifact string can be freed and why <code>WhereExpr</code> needs its own buffer (see the fail-closed section).</div></div>
+<div class="note" data-a="101" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L101–102</span>Six <code>ref_*</code> sets, and the header comment above is explicit that they are report-only for MATCHING. Builders, shapers, parsers, lookups and host fns are build-phase bindings; the loader never marks a matcher unrunnable for a missing one. That check lives in <code>build_skip_reason</code>, later on this page.</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ cd ton-index-worker/ton-mch-engine/ir &amp;&amp; node -e &quot;const j=require(&#39;./mch_ir.json&#39;); const m=j.matchers[0]; const seen=new Set(), q=[m.root]; console.log(m.name,&#39;root=&#39;,m.root,&#39;anchor=&#39;,JSON.stringify(m.anchor),&#39;priority=&#39;,m.priority); while(q.length){const id=q.shift(); if(seen.has(id))continue; seen.add(id); const n=j.nodes[id]; console.log(&#39; node&#39;,id,JSON.stringify(n)); for(const r of [n.child,n.parent,n.step,n.exit,...(n.children||[]),...(n.branches||[])]) if(r!=null) q.push(r);} console.log(&#39;reachable node count =&#39;,seen.size,&#39;| captures =&#39;,m.captures.map(c=&gt;c.name+&#39;:&#39;+c.card).join(&#39; &#39;));&quot;</div><pre class="run-out">jetton_transfer root= 0 anchor= {&quot;kind&quot;:&quot;opcode_set&quot;,&quot;values&quot;:[260734629]} priority= 90
+ node 0 {&quot;kind&quot;:&quot;contract&quot;,&quot;opcode&quot;:260734629,&quot;capture&quot;:&quot;transfer&quot;,&quot;child&quot;:1}
+ node 1 {&quot;kind&quot;:&quot;contract&quot;,&quot;opcode&quot;:395134233,&quot;capture&quot;:&quot;internal&quot;,&quot;child&quot;:2}
+ node 2 {&quot;kind&quot;:&quot;contract&quot;,&quot;opcode&quot;:1935855772,&quot;optional&quot;:true,&quot;capture&quot;:&quot;notify&quot;}
+reachable node count = 3 | captures = transfer:one internal:one notify:opt</pre><div class="run-note">This 6-line walk is the same traversal <code>IrLoader::build_matcher</code> performs, minus the remap. Change <code>j.matchers[0]</code> to any index and you have a general-purpose reader for the artifact.</div></div>
+<h2 id="the-node-pool-six-kinds-six-edge-fields">The node pool: six kinds, six edge fields</h2>
+<section><p>Every node record has a <code>kind</code> (one of <code>contract</code>, <code>block_type</code>, <code>pred</code>, <code>any</code>, <code>or</code>, <code>recursive</code>) and may carry up to six edge fields (<code>child</code>, <code>children[]</code>, <code>parent</code>, <code>branches[]</code>, <code>step</code>, <code>exit</code>) plus the modifiers <code>optional</code>, <code>capture</code>, <code>where</code>, <code>where_expr</code>, <code>exclusive</code>, <code>strategy</code>. In the production artifact the distribution is 208 <code>contract</code>, 64 <code>block_type</code>, 36 <code>or</code>, 11 <code>recursive</code>, 8 <code>pred</code>, 2 <code>any</code>.</p>
+<p>Two of those numbers are worth pausing on. Only two nodes are <code>any</code> — and neither is a wildcard, as the first excerpt shows. Only 11 are <code>recursive</code>, but they carry the entire multi-hop-swap machinery.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/ir/mch_ir.json<span class="plines">:9482–9512</span></span><span class="ex-title">jetton_mint — an `any` root that is not a wildcard, and an ordered `or`</span><span class="lang">json</span><span class="sha" title="span hash at render">caef60db</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="9482" data-n="0"><td class="ln">9482</td><td class="mk"><span class="chip">1</span></td><td class="cd">    {</td></tr>
+<tr class="cl band nb-0" data-l="9483" data-n="0"><td class="ln">9483</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;any&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="9484" data-n="0"><td class="ln">9484</td><td class="mk"><span class="chip">2</span></td><td class="cd">      <span class="tk-s">&quot;capture&quot;</span>: <span class="tk-s">&quot;mint&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="9485" data-n="0"><td class="ln">9485</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;child&quot;</span>: <span class="tk-n">6</span></td></tr>
+<tr class="cl band nb-0" data-l="9486" data-n="0"><td class="ln">9486</td><td class="mk"></td><td class="cd">    },</td></tr>
+<tr class="cl band nb-2" data-l="9487" data-n="2"><td class="ln">9487</td><td class="mk"><span class="chip">3</span></td><td class="cd">    {</td></tr>
+<tr class="cl band nb-2" data-l="9488" data-n="2"><td class="ln">9488</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;or&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9489" data-n="2"><td class="ln">9489</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;branches&quot;</span>: [</td></tr>
+<tr class="cl band nb-2" data-l="9490" data-n="2"><td class="ln">9490</td><td class="mk"></td><td class="cd">        <span class="tk-n">7</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9491" data-n="2"><td class="ln">9491</td><td class="mk"></td><td class="cd">        <span class="tk-n">8</span></td></tr>
+<tr class="cl band nb-2" data-l="9492" data-n="2"><td class="ln">9492</td><td class="mk"></td><td class="cd">      ],</td></tr>
+<tr class="cl band nb-2" data-l="9493" data-n="2"><td class="ln">9493</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;exclusive&quot;</span>: <span class="tk-k">false</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9494" data-n="2"><td class="ln">9494</td><td class="mk"><span class="chip">4</span></td><td class="cd">      <span class="tk-s">&quot;optional&quot;</span>: <span class="tk-k">true</span></td></tr>
+<tr class="cl band nb-2" data-l="9495" data-n="2"><td class="ln">9495</td><td class="mk"></td><td class="cd">    },</td></tr>
+<tr class="cl" data-l="9496"><td class="ln">9496</td><td class="mk"></td><td class="cd">    {</td></tr>
+<tr class="cl" data-l="9497"><td class="ln">9497</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;contract&quot;</span>,</td></tr>
+<tr class="cl" data-l="9498"><td class="ln">9498</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;opcode&quot;</span>: <span class="tk-n">1935855772</span>,</td></tr>
+<tr class="cl" data-l="9499"><td class="ln">9499</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;capture&quot;</span>: <span class="tk-s">&quot;notify&quot;</span></td></tr>
+<tr class="cl" data-l="9500"><td class="ln">9500</td><td class="mk"></td><td class="cd">    },</td></tr>
+<tr class="cl" data-l="9501"><td class="ln">9501</td><td class="mk"></td><td class="cd">    {</td></tr>
+<tr class="cl" data-l="9502"><td class="ln">9502</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;contract&quot;</span>,</td></tr>
+<tr class="cl" data-l="9503"><td class="ln">9503</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;opcode&quot;</span>: <span class="tk-n">395134233</span>,</td></tr>
+<tr class="cl" data-l="9504"><td class="ln">9504</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;capture&quot;</span>: <span class="tk-s">&quot;internal&quot;</span>,</td></tr>
+<tr class="cl" data-l="9505"><td class="ln">9505</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;child&quot;</span>: <span class="tk-n">9</span></td></tr>
+<tr class="cl" data-l="9506"><td class="ln">9506</td><td class="mk"></td><td class="cd">    },</td></tr>
+<tr class="cl" data-l="9507"><td class="ln">9507</td><td class="mk"></td><td class="cd">    {</td></tr>
+<tr class="cl" data-l="9508"><td class="ln">9508</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;contract&quot;</span>,</td></tr>
+<tr class="cl" data-l="9509"><td class="ln">9509</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;opcode&quot;</span>: <span class="tk-n">1935855772</span>,</td></tr>
+<tr class="cl" data-l="9510"><td class="ln">9510</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;optional&quot;</span>: <span class="tk-k">true</span>,</td></tr>
+<tr class="cl" data-l="9511"><td class="ln">9511</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;capture&quot;</span>: <span class="tk-s">&quot;internal_notify&quot;</span></td></tr>
+<tr class="cl" data-l="9512"><td class="ln">9512</td><td class="mk"></td><td class="cd">    },</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="9482" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L9482–9486</span>The spec here is <code>(op JettonMint @mint ^ op MinterJettonMint @mint)</code> — an exclusive alternative of two opcode atoms. There is NO or-node in the IR: the root collapsed to <code>kind: &quot;any&quot;</code> and both opcodes moved into the matcher&#39;s <code>anchor.values</code> (<code>[21, 1680571655]</code>). Rule of thumb when reading: an <code>any</code> root is almost always a folded opcode set, not a wildcard — check the record&#39;s anchor before concluding a matcher matches everything.</div></div>
+<div class="note" data-a="9484" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L9484</span>The capture survived the fold: whichever of the two opcodes the anchor admitted binds to <code>mint</code>. Same-name captures across alternative branches are legal only when the branches are declared exclusive (<code>^</code>), which is what made this fold safe.</div></div>
+<div class="note" data-a="9487" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L9487–9495</span><code>or</code> with <code>exclusive: false</code> is an ORDERED alternative — first branch that matches wins, mirroring the Python <code>OrMatcher</code>. <code>exclusive: true</code> (next excerpt) asserts the branches are provably disjoint; the frontend proved it, so a C++ reader may treat it as already-checked.</div></div>
+<div class="note" data-a="9494" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L9494</span><code>optional</code> sits on the or-NODE, not on its branches — this is <code>maybe ( … | … )</code> in the source. Optionality composes onto the whole group, which is why there is no need for a <code>Maybe</code> node kind.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">indexer/indexer/events/mch/specs/coffee_swap.mch<span class="plines">:44–53</span></span><span class="ex-title">coffee_swap — every remaining pattern construct in ten lines</span><span class="lang">text</span><span class="sha" title="span hash at render">22b16438</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="44"><td class="ln">44</td><td class="mk"></td><td class="cd">matcher coffee_swap {</td></tr>
+<tr class="cl" data-l="45"><td class="ln">45</td><td class="mk"></td><td class="cd">    produces JettonSwapBlock</td></tr>
+<tr class="cl" data-l="46"><td class="ln">46</td><td class="mk"></td><td class="cd">    entry    @swap</td></tr>
+<tr class="cl" data-l="47"><td class="ln">47</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="48"><td class="ln">48</td><td class="mk"></td><td class="cd">    op CoffeeSwapInternal @swap</td></tr>
+<tr class="cl band nb-0" data-l="49" data-n="0"><td class="ln">49</td><td class="mk"><span class="chip">1</span></td><td class="cd">      -&gt; { op CoffeeSwapSuccessfulEvent @event</td></tr>
+<tr class="cl band nb-0" data-l="50" data-n="0"><td class="ln">50</td><td class="mk"><span class="chip">2</span></td><td class="cd">         ; ( $swap_chain</td></tr>
+<tr class="cl band nb-0" data-l="51" data-n="0"><td class="ln">51</td><td class="mk"></td><td class="cd">           | op CoffeePayoutInternal @payout</td></tr>
+<tr class="cl band nb-0" data-l="52" data-n="0"><td class="ln">52</td><td class="mk"></td><td class="cd">               -&gt; ( btype jetton_transfer @out ^ op CoffeePayout @out ^ op CoffeeNotification @out ) ) }</td></tr>
+<tr class="cl band nb-2" data-l="53" data-n="2"><td class="ln">53</td><td class="mk"><span class="chip">3</span></td><td class="cd">      &lt;- ( btype jetton_transfer @in_transfer ^ op CoffeeSwapNative @in_transfer )</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="49" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L49–52</span><code>{ A ; B }</code> is a children SET — siblings under the same anchor — and lowers to <code>children: [...]</code>. A plain <code>-&gt;</code> lowers to <code>child</code>. Two different edge fields with genuinely different semantics: a set matches unordered siblings, a child follows the message chain.</div></div>
+<div class="note" data-a="50" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L50</span><code>$swap_chain</code> is a rule reference, and rules do not exist in the IR at all. The frontend inlines the rule into a <code>recursive</code> node whose <code>step</code> is one unrolling of the rule body and whose <code>exit</code> is the rule&#39;s terminating alternative.</div></div>
+<div class="note" data-a="53" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L53</span><code>&lt;-</code> is a PARENT edge: the anchor&#39;s parent block must match too. It becomes <code>parent: 30</code> on the anchor node — and it is why a matcher&#39;s reachable set can walk upward as well as downward, which the loader&#39;s <code>reachable()</code> has to account for.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/ir/mch_ir.json<span class="plines">:9536–9564</span></span><span class="ex-title">…lowered: children + parent on one node, an exclusive `or`, a `recursive`</span><span class="lang">json</span><span class="sha" title="span hash at render">715baa54</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="9536" data-n="0"><td class="ln">9536</td><td class="mk"><span class="chip">1</span></td><td class="cd">    {</td></tr>
+<tr class="cl band nb-0" data-l="9537" data-n="0"><td class="ln">9537</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;contract&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="9538" data-n="0"><td class="ln">9538</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;opcode&quot;</span>: <span class="tk-n">3237998112</span>,</td></tr>
+<tr class="cl band nb-0" data-l="9539" data-n="0"><td class="ln">9539</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;capture&quot;</span>: <span class="tk-s">&quot;swap&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="9540" data-n="0"><td class="ln">9540</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;children&quot;</span>: [</td></tr>
+<tr class="cl band nb-0" data-l="9541" data-n="0"><td class="ln">9541</td><td class="mk"></td><td class="cd">        <span class="tk-n">15</span>,</td></tr>
+<tr class="cl band nb-0" data-l="9542" data-n="0"><td class="ln">9542</td><td class="mk"></td><td class="cd">        <span class="tk-n">16</span></td></tr>
+<tr class="cl band nb-0" data-l="9543" data-n="0"><td class="ln">9543</td><td class="mk"></td><td class="cd">      ],</td></tr>
+<tr class="cl band nb-0" data-l="9544" data-n="0"><td class="ln">9544</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;parent&quot;</span>: <span class="tk-n">30</span></td></tr>
+<tr class="cl band nb-0" data-l="9545" data-n="0"><td class="ln">9545</td><td class="mk"></td><td class="cd">    },</td></tr>
+<tr class="cl" data-l="9546"><td class="ln">9546</td><td class="mk"></td><td class="cd">    {</td></tr>
+<tr class="cl" data-l="9547"><td class="ln">9547</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;contract&quot;</span>,</td></tr>
+<tr class="cl" data-l="9548"><td class="ln">9548</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;opcode&quot;</span>: <span class="tk-n">3237998128</span>,</td></tr>
+<tr class="cl" data-l="9549"><td class="ln">9549</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;capture&quot;</span>: <span class="tk-s">&quot;event&quot;</span></td></tr>
+<tr class="cl" data-l="9550"><td class="ln">9550</td><td class="mk"></td><td class="cd">    },</td></tr>
+<tr class="cl band nb-1" data-l="9551" data-n="1"><td class="ln">9551</td><td class="mk"><span class="chip">2</span></td><td class="cd">    {</td></tr>
+<tr class="cl band nb-1" data-l="9552" data-n="1"><td class="ln">9552</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;or&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="9553" data-n="1"><td class="ln">9553</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;branches&quot;</span>: [</td></tr>
+<tr class="cl band nb-1" data-l="9554" data-n="1"><td class="ln">9554</td><td class="mk"></td><td class="cd">        <span class="tk-n">17</span>,</td></tr>
+<tr class="cl band nb-1" data-l="9555" data-n="1"><td class="ln">9555</td><td class="mk"></td><td class="cd">        <span class="tk-n">25</span></td></tr>
+<tr class="cl band nb-1" data-l="9556" data-n="1"><td class="ln">9556</td><td class="mk"></td><td class="cd">      ],</td></tr>
+<tr class="cl band nb-1" data-l="9557" data-n="1"><td class="ln">9557</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;exclusive&quot;</span>: <span class="tk-k">false</span></td></tr>
+<tr class="cl band nb-1" data-l="9558" data-n="1"><td class="ln">9558</td><td class="mk"></td><td class="cd">    },</td></tr>
+<tr class="cl band nb-2" data-l="9559" data-n="2"><td class="ln">9559</td><td class="mk"><span class="chip">3</span></td><td class="cd">    {</td></tr>
+<tr class="cl band nb-2" data-l="9560" data-n="2"><td class="ln">9560</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;recursive&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9561" data-n="2"><td class="ln">9561</td><td class="mk"><span class="chip">4</span></td><td class="cd">      <span class="tk-s">&quot;step&quot;</span>: <span class="tk-n">18</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9562" data-n="2"><td class="ln">9562</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;exit&quot;</span>: <span class="tk-n">20</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9563" data-n="2"><td class="ln">9563</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;optional&quot;</span>: <span class="tk-k">true</span></td></tr>
+<tr class="cl band nb-2" data-l="9564" data-n="2"><td class="ln">9564</td><td class="mk"></td><td class="cd">    },</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="9536" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L9536–9545</span>coffee_swap&#39;s root carries <code>children</code> AND <code>parent</code> simultaneously. The loader&#39;s <code>edge_refs</code> enumerates references in a FIXED order — child, children…, parent, branches…, step, exit — because that order determines local node ids, and the Python twin must assign identical ids for the generated per-node functions to line up.</div></div>
+<div class="note" data-a="9551" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L9551–9558</span><code>exclusive: true</code> here versus <code>false</code> on jetton_mint&#39;s or-node. Same key, and it is the only structural difference between an ordered alternative and a disjoint one in the artifact — the proof obligation was discharged in the frontend.</div></div>
+<div class="note" data-a="9559" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L9559–9564</span>The rule reference, lowered. <code>optional: true</code> is the <code>maybe</code>. Note the ABSENT <code>strategy</code> key: absent means frontier descent; <code>&quot;cyclic&quot;</code> is the only other value and appears twice in the whole artifact (both in <code>tonco_swap</code>, both pointing at the same body root — the emitter&#39;s memo turns a self-reference into a back-edge rather than a new node).</div></div>
+<div class="note" data-a="9561" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L9561–9562</span><code>step</code> and <code>exit</code> are what the loader&#39;s <code>reachable()</code> walks to compute <code>step_slots</code> / <code>exit_slots</code>: which capture slots an unrolling OWNS and must therefore reset between iterations. Two load-time refusals live in that same block — nested recursion, and any capture inside a cyclic body.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/ir/mch_ir.json<span class="plines">:10735–10753</span></span><span class="ex-title">block_type + inline where_expr, then a host `pred` node</span><span class="lang">json</span><span class="sha" title="span hash at render">6a1003f8</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="10735"><td class="ln">10735</td><td class="mk"></td><td class="cd">    {</td></tr>
+<tr class="cl band nb-0" data-l="10736" data-n="0"><td class="ln">10736</td><td class="mk"><span class="chip">1</span></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;block_type&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="10737" data-n="0"><td class="ln">10737</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;btype&quot;</span>: <span class="tk-s">&quot;jetton_transfer&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="10738" data-n="0"><td class="ln">10738</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;capture&quot;</span>: <span class="tk-s">&quot;out_transfer&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="10739" data-n="1"><td class="ln">10739</td><td class="mk"><span class="chip">2</span></td><td class="cd">      <span class="tk-s">&quot;where_expr&quot;</span>: {</td></tr>
+<tr class="cl band nb-1" data-l="10740" data-n="1"><td class="ln">10740</td><td class="mk"></td><td class="cd">        <span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;unary&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="10741" data-n="1"><td class="ln">10741</td><td class="mk"></td><td class="cd">        <span class="tk-s">&quot;op&quot;</span>: <span class="tk-s">&quot;not&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="10742" data-n="1"><td class="ln">10742</td><td class="mk"></td><td class="cd">        <span class="tk-s">&quot;x&quot;</span>: {</td></tr>
+<tr class="cl band nb-1" data-l="10743" data-n="1"><td class="ln">10743</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;dotfield&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="10744" data-n="1"><td class="ln">10744</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;name&quot;</span>: <span class="tk-s">&quot;has_internal_transfer&quot;</span></td></tr>
+<tr class="cl band nb-1" data-l="10745" data-n="1"><td class="ln">10745</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl band nb-1" data-l="10746" data-n="1"><td class="ln">10746</td><td class="mk"></td><td class="cd">      },</td></tr>
+<tr class="cl" data-l="10747"><td class="ln">10747</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;child&quot;</span>: <span class="tk-n">206</span></td></tr>
+<tr class="cl" data-l="10748"><td class="ln">10748</td><td class="mk"></td><td class="cd">    },</td></tr>
+<tr class="cl band nb-2" data-l="10749" data-n="2"><td class="ln">10749</td><td class="mk"><span class="chip">3</span></td><td class="cd">    {</td></tr>
+<tr class="cl band nb-2" data-l="10750" data-n="2"><td class="ln">10750</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;pred&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="10751" data-n="2"><td class="ln">10751</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;pred&quot;</span>: <span class="tk-s">&quot;pton_self_transfer&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="10752" data-n="2"><td class="ln">10752</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;child&quot;</span>: <span class="tk-n">207</span></td></tr>
+<tr class="cl" data-l="10753"><td class="ln">10753</td><td class="mk"></td><td class="cd">    },</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="10736" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L10736–10738</span><code>kind: &quot;block_type&quot;</code> matches an already-PRODUCED block by btype — the IR equivalent of the Python <code>BlockTypeMatcher</code>, and the mechanism by which a matcher composes on top of an earlier matcher&#39;s output. 6 of the 33 matchers even anchor on a btype rather than an opcode.</div></div>
+<div class="note" data-a="10739" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L10739–10746</span><code>where_expr</code> is an INLINE predicate tree in the same k-tagged encoding as build expressions (this one is <code>not .has_internal_transfer</code>). <code>dotfield</code> means &quot;a field of the block under test&quot;, distinct from <code>attr</code>, which navigates a named capture. Inline where_exprs are runnable in C++ — the loader re-encodes each into a self-owned buffer; NAMED <code>where</code> predicates are not, and make the matcher unrunnable.</div></div>
+<div class="note" data-a="10749" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L10749–10752</span><code>kind: &quot;pred&quot;</code> is a named host predicate: no opcode, no btype, just &quot;ask the host&quot;. Every pred name must exist in <code>host_predicates()</code> or the entire matcher is skipped. All 9 predicates the production artifact references are registered today, which is why a <code>--match</code> run currently emits zero SKIP lines.</div></div></div>
+</div>
+</div>
+<h2 id="build-programs-and-expression-nodes-a-preview">Build programs and expression nodes — a preview</h2>
+<section><p>About 95% of the artifact by volume is not pattern at all: it is <code>build_program</code>, a flat statement list per matcher whose expressions are k-tagged trees. This chapter only teaches you to READ them; execution is <a class="xl" href="build-programs.html">build-programs</a> and the <code>parse</code> statement&#39;s registry is <a class="xl" href="parse-layer.html">parse-layer</a>.</p>
+<p>Statement tags in the production artifact: 32 <code>let</code>, 31 <code>out</code>, 29 <code>parse</code>, 27 <code>reject</code>, 18 <code>failed</code>, 2 <code>switch</code>. Expression tags: 600 <code>attr</code>, 512 <code>name</code>, 144 <code>call</code>, 107 <code>bin</code>, 98 <code>null</code>, 51 <code>ternary</code>, 17 <code>unary</code>, 13 <code>str</code>, 9 <code>int</code>, 8 <code>lookup</code>, 5 <code>bool</code>, 4 <code>dotfield</code>, and exactly one each of <code>mapc</code>, <code>list</code>, <code>record</code>.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/ir/mch_ir.json<span class="plines">:9315–9346</span></span><span class="ex-title">vesting_send_message — `parse send as VestingSendMessage` and `sender: account(send.msg.source)`</span><span class="lang">json</span><span class="sha" title="span hash at render">492b3eee</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="9315"><td class="ln">9315</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;build_program&quot;</span>: [</td></tr>
+<tr class="cl band nb-0" data-l="9316" data-n="0"><td class="ln">9316</td><td class="mk"><span class="chip">1</span></td><td class="cd">        {</td></tr>
+<tr class="cl band nb-0" data-l="9317" data-n="0"><td class="ln">9317</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;s&quot;</span>: <span class="tk-s">&quot;parse&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="9318" data-n="0"><td class="ln">9318</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;target&quot;</span>: <span class="tk-s">&quot;send&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="9319" data-n="0"><td class="ln">9319</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;types&quot;</span>: [</td></tr>
+<tr class="cl band nb-0" data-l="9320" data-n="0"><td class="ln">9320</td><td class="mk"></td><td class="cd">            <span class="tk-s">&quot;VestingSendMessage&quot;</span></td></tr>
+<tr class="cl band nb-0" data-l="9321" data-n="0"><td class="ln">9321</td><td class="mk"></td><td class="cd">          ]</td></tr>
+<tr class="cl band nb-0" data-l="9322" data-n="0"><td class="ln">9322</td><td class="mk"></td><td class="cd">        },</td></tr>
+<tr class="cl" data-l="9323"><td class="ln">9323</td><td class="mk"></td><td class="cd">        {</td></tr>
+<tr class="cl band nb-1" data-l="9324" data-n="1"><td class="ln">9324</td><td class="mk"><span class="chip">2</span></td><td class="cd">          <span class="tk-s">&quot;s&quot;</span>: <span class="tk-s">&quot;out&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="9325" data-n="1"><td class="ln">9325</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;fields&quot;</span>: [</td></tr>
+<tr class="cl band nb-1" data-l="9326" data-n="1"><td class="ln">9326</td><td class="mk"></td><td class="cd">            {</td></tr>
+<tr class="cl" data-l="9327"><td class="ln">9327</td><td class="mk"></td><td class="cd">              <span class="tk-s">&quot;name&quot;</span>: <span class="tk-s">&quot;sender&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9328" data-n="2"><td class="ln">9328</td><td class="mk"><span class="chip">3</span></td><td class="cd">              <span class="tk-s">&quot;expr&quot;</span>: {</td></tr>
+<tr class="cl band nb-2" data-l="9329" data-n="2"><td class="ln">9329</td><td class="mk"></td><td class="cd">                <span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;call&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9330" data-n="2"><td class="ln">9330</td><td class="mk"></td><td class="cd">                <span class="tk-s">&quot;fn&quot;</span>: <span class="tk-s">&quot;account&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9331" data-n="2"><td class="ln">9331</td><td class="mk"></td><td class="cd">                <span class="tk-s">&quot;args&quot;</span>: [</td></tr>
+<tr class="cl band nb-2" data-l="9332" data-n="2"><td class="ln">9332</td><td class="mk"></td><td class="cd">                  {</td></tr>
+<tr class="cl band nb-2" data-l="9333" data-n="2"><td class="ln">9333</td><td class="mk"></td><td class="cd">                    <span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;attr&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9334" data-n="2"><td class="ln">9334</td><td class="mk"></td><td class="cd">                    <span class="tk-s">&quot;of&quot;</span>: {</td></tr>
+<tr class="cl band nb-2" data-l="9335" data-n="2"><td class="ln">9335</td><td class="mk"></td><td class="cd">                      <span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;attr&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9336" data-n="2"><td class="ln">9336</td><td class="mk"></td><td class="cd">                      <span class="tk-s">&quot;of&quot;</span>: {</td></tr>
+<tr class="cl band nb-2" data-l="9337" data-n="2"><td class="ln">9337</td><td class="mk"></td><td class="cd">                        <span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;name&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9338" data-n="2"><td class="ln">9338</td><td class="mk"></td><td class="cd">                        <span class="tk-s">&quot;id&quot;</span>: <span class="tk-s">&quot;send&quot;</span></td></tr>
+<tr class="cl band nb-2" data-l="9339" data-n="2"><td class="ln">9339</td><td class="mk"></td><td class="cd">                      },</td></tr>
+<tr class="cl band nb-2" data-l="9340" data-n="2"><td class="ln">9340</td><td class="mk"></td><td class="cd">                      <span class="tk-s">&quot;name&quot;</span>: <span class="tk-s">&quot;msg&quot;</span></td></tr>
+<tr class="cl band nb-2" data-l="9341" data-n="2"><td class="ln">9341</td><td class="mk"></td><td class="cd">                    },</td></tr>
+<tr class="cl band nb-2" data-l="9342" data-n="2"><td class="ln">9342</td><td class="mk"></td><td class="cd">                    <span class="tk-s">&quot;name&quot;</span>: <span class="tk-s">&quot;source&quot;</span></td></tr>
+<tr class="cl band nb-2" data-l="9343" data-n="2"><td class="ln">9343</td><td class="mk"></td><td class="cd">                  }</td></tr>
+<tr class="cl band nb-2" data-l="9344" data-n="2"><td class="ln">9344</td><td class="mk"></td><td class="cd">                ]</td></tr>
+<tr class="cl band nb-2" data-l="9345" data-n="2"><td class="ln">9345</td><td class="mk"></td><td class="cd">              }</td></tr>
+<tr class="cl" data-l="9346"><td class="ln">9346</td><td class="mk"></td><td class="cd">            },</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="9316" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L9316–9322</span><code>s: &quot;parse&quot;</code> binds a parsed message body to a capture; <code>types</code> is the alternatives list, tried in order until one succeeds. These strings are registry keys into the C++ parser map and into the Python <code>Registries.message_types</code> — the name is the only thing tying the two implementations together (<a class="xl" href="parse-layer.html">parse-layer</a>).</div></div>
+<div class="note" data-a="9324" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L9324–9326</span><code>out</code> is the produced block&#39;s field map. The ORDER of fields here is the artifact&#39;s order and it is preserved end to end, because the rendered data dict is diffed byte-for-byte against the Python twin (<a class="xl" href="gates.html">gates</a>).</div></div>
+<div class="note" data-a="9328" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L9328–9345</span>Five nested nodes for one source expression, <code>account(send.msg.source)</code>. <code>call</code> + <code>fn</code> names a builtin; an <code>attr</code> chain reads outward-in, so you decode it from the innermost <code>name</code> node upward. This verbosity is why 600 of the artifact&#39;s expression nodes are <code>attr</code> — expression trees, not patterns, are what makes the file 272 KB.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">indexer/indexer/events/mch/expr_ir.py<span class="plines">:59–76</span></span><span class="ex-title">The tail of the encoder — the constructs you will NOT see in production</span><span class="lang">python</span><span class="sha" title="span hash at render">57f3fe05</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="59" data-n="0"><td class="ln">59</td><td class="mk"><span class="chip">1</span></td><td class="cd">    <span class="tk-k">if</span> isinstance(e, ast_.ListLit):</td></tr>
+<tr class="cl band nb-0" data-l="60" data-n="0"><td class="ln">60</td><td class="mk"></td><td class="cd">        <span class="tk-k">return</span> {<span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;list&quot;</span>, <span class="tk-s">&quot;items&quot;</span>: [emit_expr(x) <span class="tk-k">for</span> x in e.elements]}</td></tr>
+<tr class="cl band nb-0" data-l="61" data-n="0"><td class="ln">61</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> isinstance(e, ast_.RecordLit):</td></tr>
+<tr class="cl band nb-0" data-l="62" data-n="0"><td class="ln">62</td><td class="mk"></td><td class="cd">        <span class="tk-k">return</span> {<span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;record&quot;</span>, <span class="tk-s">&quot;fields&quot;</span>: [</td></tr>
+<tr class="cl band nb-0" data-l="63" data-n="0"><td class="ln">63</td><td class="mk"></td><td class="cd">            {<span class="tk-s">&quot;name&quot;</span>: f.name, <span class="tk-s">&quot;expr&quot;</span>: emit_expr(f.value)} <span class="tk-k">for</span> f in e.fields</td></tr>
+<tr class="cl band nb-0" data-l="64" data-n="0"><td class="ln">64</td><td class="mk"></td><td class="cd">        ]}</td></tr>
+<tr class="cl band nb-1" data-l="65" data-n="1"><td class="ln">65</td><td class="mk"><span class="chip">2</span></td><td class="cd">    <span class="tk-k">if</span> isinstance(e, ast_.ParseExpr):</td></tr>
+<tr class="cl band nb-1" data-l="66" data-n="1"><td class="ln">66</td><td class="mk"></td><td class="cd">        # `parse` expression node (W7, IR v1.<span class="tk-n">1</span>): a target expr + message-type</td></tr>
+<tr class="cl band nb-1" data-l="67" data-n="1"><td class="ln">67</td><td class="mk"></td><td class="cd">        # alternatives; faults at eval on total failure (IR spec §<span class="tk-n">7</span>).</td></tr>
+<tr class="cl band nb-1" data-l="68" data-n="1"><td class="ln">68</td><td class="mk"></td><td class="cd">        <span class="tk-k">return</span> {<span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;parse&quot;</span>, <span class="tk-s">&quot;x&quot;</span>: emit_expr(e.target), <span class="tk-s">&quot;types&quot;</span>: list(e.msg_types)}</td></tr>
+<tr class="cl band nb-2" data-l="69" data-n="2"><td class="ln">69</td><td class="mk"><span class="chip">3</span></td><td class="cd">    <span class="tk-k">if</span> isinstance(e, ast_.Comprehension):</td></tr>
+<tr class="cl band nb-2" data-l="70" data-n="2"><td class="ln">70</td><td class="mk"></td><td class="cd">        # map -&gt; `mapc`; any/all -&gt; `quant` carrying the op (§<span class="tk-n">16</span>.<span class="tk-n">1</span>, IR spec §<span class="tk-n">7</span>).</td></tr>
+<tr class="cl band nb-2" data-l="71" data-n="2"><td class="ln">71</td><td class="mk"></td><td class="cd">        <span class="tk-k">if</span> e.kind == <span class="tk-s">&quot;map&quot;</span>:</td></tr>
+<tr class="cl band nb-2" data-l="72" data-n="2"><td class="ln">72</td><td class="mk"></td><td class="cd">            <span class="tk-k">return</span> {<span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;mapc&quot;</span>, <span class="tk-s">&quot;xs&quot;</span>: emit_expr(e.xs), <span class="tk-s">&quot;var&quot;</span>: e.var,</td></tr>
+<tr class="cl band nb-2" data-l="73" data-n="2"><td class="ln">73</td><td class="mk"></td><td class="cd">                    <span class="tk-s">&quot;body&quot;</span>: emit_expr(e.body)}</td></tr>
+<tr class="cl band nb-2" data-l="74" data-n="2"><td class="ln">74</td><td class="mk"></td><td class="cd">        <span class="tk-k">return</span> {<span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;quant&quot;</span>, <span class="tk-s">&quot;op&quot;</span>: e.kind, <span class="tk-s">&quot;xs&quot;</span>: emit_expr(e.xs), <span class="tk-s">&quot;var&quot;</span>: e.var,</td></tr>
+<tr class="cl band nb-2" data-l="75" data-n="2"><td class="ln">75</td><td class="mk"></td><td class="cd">                <span class="tk-s">&quot;body&quot;</span>: emit_expr(e.body)}</td></tr>
+<tr class="cl" data-l="76"><td class="ln">76</td><td class="mk"></td><td class="cd">    raise ValueError(f<span class="tk-s">&quot;unsupported expression node {type(e).__name__} in IR emission&quot;</span>)</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="59" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L59–64</span><code>list</code> and <code>record</code> are real node kinds but the production artifact has exactly one of each (<code>jvault_claim</code> and <code>layerzero_receive</code>). If you are learning the language from the artifact, do not infer frequency from the encoder — read the encoder for the vocabulary and the artifact for the idiom.</div></div>
+<div class="note" data-a="65" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L65–68</span>The <code>parse</code> EXPRESSION is a different construct from the <code>parse</code> STATEMENT: it evaluates inline and faults on total failure. It is also invisible to the C++ loader&#39;s <code>ref_msgtypes</code> scan, which keys on the statement tag <code>s == &quot;parse&quot;</code> — so the first spec that uses the expression form will not get its message types checked against the parse registry. Latent today: zero occurrences in production, and the Python twin has the same shallow rule, so the A/B gate cannot surface it either.</div></div>
+<div class="note" data-a="69" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L69–75</span><code>map</code> and <code>any</code>/<code>all</code> land on two different tags — <code>mapc</code>, and <code>quant</code> carrying the operator. Both are build-expression only: the Python loader hard-rejects either inside a <code>where_expr</code>, because <code>where_expr</code> composes onto a synchronous <code>test_self</code> and a comprehension can hide an async lookup.</div></div></div>
+</div>
+</div>
+<h2 id="irloader-what-it-refuses-to-load">IrLoader: what it refuses to load</h2>
+<section><p><code>IrLoader.cpp</code> is 520 lines and roughly a third of it is refusal. That ratio is the design: the IR spec&#39;s §8.1 rule is that an unrecognized or missing field must never degrade into something permissive, because a permissive degrade makes a corrupt artifact match MORE blocks than the spec author wrote — and matching more blocks is silent, whereas failing to load is loud.</p>
+<p>The exceptions are documented at their sites and worth memorizing, because they are the places where a corrupt artifact WILL load: <code>priority</code> absent defaults to 100, <code>include_excess</code>/<code>include_bounces</code> absent default to true, and <code>strategy</code> falls back to frontier for any unrecognized string (contrast <code>parse_kind</code>, which errors on an unknown node kind with the explicit comment that a typo must not become the permissive <code>any</code> wildcard).</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/IrLoader.cpp<span class="plines">:436–464</span></span><span class="ex-title">Identity first, then version, then shape</span><span class="lang">cpp</span><span class="sha" title="span hash at render">16883ad6</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="436"><td class="ln">436</td><td class="mk"></td><td class="cd">  std::string source_sha;</td></tr>
+<tr class="cl" data-l="437"><td class="ln">437</td><td class="mk"></td><td class="cd">  {</td></tr>
+<tr class="cl band nb-0" data-l="438" data-n="0"><td class="ln">438</td><td class="mk"><span class="chip">1</span></td><td class="cd">    <span class="tk-c">// Hash BEFORE json_decode mutates the buffer.</span></td></tr>
+<tr class="cl band nb-0" data-l="439" data-n="0"><td class="ln">439</td><td class="mk"></td><td class="cd">    <span class="tk-k">unsigned</span> char digest[<span class="tk-n">32</span>];</td></tr>
+<tr class="cl band nb-0" data-l="440" data-n="0"><td class="ln">440</td><td class="mk"></td><td class="cd">    td::sha256(td::Slice(buf), td::MutableSlice(digest, <span class="tk-n">32</span>));</td></tr>
+<tr class="cl band nb-0" data-l="441" data-n="0"><td class="ln">441</td><td class="mk"></td><td class="cd">    <span class="tk-k">static</span> <span class="tk-k">const</span> char *hex = <span class="tk-s">&quot;0123456789abcdef&quot;</span>;</td></tr>
+<tr class="cl band nb-0" data-l="442" data-n="0"><td class="ln">442</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">int</span> i = <span class="tk-n">0</span>; i &lt; <span class="tk-n">32</span>; i++) {</td></tr>
+<tr class="cl band nb-0" data-l="443" data-n="0"><td class="ln">443</td><td class="mk"></td><td class="cd">      source_sha += hex[digest[i] &gt;&gt; <span class="tk-n">4</span>];</td></tr>
+<tr class="cl band nb-0" data-l="444" data-n="0"><td class="ln">444</td><td class="mk"></td><td class="cd">      source_sha += hex[digest[i] &amp; <span class="tk-n">0xF</span>];</td></tr>
+<tr class="cl band nb-0" data-l="445" data-n="0"><td class="ln">445</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-0" data-l="446" data-n="0"><td class="ln">446</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="447"><td class="ln">447</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="448"><td class="ln">448</td><td class="mk"></td><td class="cd">  <span class="tk-k">auto</span> r_root = td::json_decode(td::MutableSlice(buf));</td></tr>
+<tr class="cl" data-l="449"><td class="ln">449</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (r_root.is_error()) {</td></tr>
+<tr class="cl" data-l="450"><td class="ln">450</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> td::Status::Error(<span class="tk-s">&quot;IR json parse error: &quot;</span> + r_root.error().message().str());</td></tr>
+<tr class="cl" data-l="451"><td class="ln">451</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="452"><td class="ln">452</td><td class="mk"></td><td class="cd">  Json root = r_root.move_as_ok();</td></tr>
+<tr class="cl" data-l="453"><td class="ln">453</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (root.type() != JType::Object) {</td></tr>
+<tr class="cl" data-l="454"><td class="ln">454</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> td::Status::Error(<span class="tk-s">&quot;IR artifact root must be an object&quot;</span>);</td></tr>
+<tr class="cl" data-l="455"><td class="ln">455</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="456" data-n="1"><td class="ln">456</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">if</span> (jstr(root, <span class="tk-s">&quot;mch_ir_version&quot;</span>) != <span class="tk-s">&quot;1.1&quot;</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="457" data-n="1"><td class="ln">457</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> td::Status::Error(<span class="tk-s">&quot;unsupported mch_ir_version (expected 1.1)&quot;</span>);</td></tr>
+<tr class="cl band nb-1" data-l="458" data-n="1"><td class="ln">458</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="459" data-n="2"><td class="ln">459</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">const</span> Json *nodes = jfield(root, <span class="tk-s">&quot;nodes&quot;</span>);</td></tr>
+<tr class="cl band nb-2" data-l="460" data-n="2"><td class="ln">460</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Json *matchers = jfield(root, <span class="tk-s">&quot;matchers&quot;</span>);</td></tr>
+<tr class="cl band nb-2" data-l="461" data-n="2"><td class="ln">461</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (nodes == <span class="tk-k">nullptr</span> || nodes-&gt;type() != JType::Array ||</td></tr>
+<tr class="cl band nb-2" data-l="462" data-n="2"><td class="ln">462</td><td class="mk"></td><td class="cd">      matchers == <span class="tk-k">nullptr</span> || matchers-&gt;type() != JType::Array) {</td></tr>
+<tr class="cl band nb-2" data-l="463" data-n="2"><td class="ln">463</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> td::Status::Error(<span class="tk-s">&quot;IR artifact needs &#39;nodes&#39; and &#39;matchers&#39; arrays&quot;</span>);</td></tr>
+<tr class="cl band nb-2" data-l="464" data-n="2"><td class="ln">464</td><td class="mk"></td><td class="cd">  }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="438" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L438–446</span>Hashed BEFORE decoding, because <code>td::json_decode</code> parses IN PLACE and mutates the buffer. This sha is the artifact&#39;s identity: <code>prepare_classify</code> refuses to run unless a generated build table was compiled from bytes hashing to exactly this — see the second captured run below, where one extra trailing newline is enough.</div></div>
+<div class="note" data-a="456" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L456–458</span>Strict equality against the literal &quot;1.1&quot;. No range accept, no forward compatibility — an artifact from a newer frontend is rejected at load rather than surfacing later as an unknown expression kind mid-trace.</div></div>
+<div class="note" data-a="459" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L459–464</span>Only two structural checks at the top level, and note what is NOT checked: <code>registration_order</code> is optional (identity is synthesized when absent) and <code>frontend</code> is never touched. Everything else is validated per-matcher, so the error message names the matcher.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/IrLoader.cpp<span class="plines">:232–268</span></span><span class="ex-title">The two-pass remap — where global node ids become local ones</span><span class="lang">cpp</span><span class="sha" title="span hash at render">773e8c6a</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="232"><td class="ln">232</td><td class="mk"></td><td class="cd">  <span class="tk-c">// Reachable subgraph remapped to local ids (root = 0), discovery order over</span></td></tr>
+<tr class="cl" data-l="233"><td class="ln">233</td><td class="mk"></td><td class="cd">  <span class="tk-c">// edge_refs — mirrors IrMatcher.__init__. A missing or out-of-range root is</span></td></tr>
+<tr class="cl" data-l="234"><td class="ln">234</td><td class="mk"></td><td class="cd">  <span class="tk-c">// a corrupt artifact, not a default-to-node-0 (§8.1 fail-closed).</span></td></tr>
+<tr class="cl band nb-0" data-l="235" data-n="0"><td class="ln">235</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">if</span> (!has(rec, <span class="tk-s">&quot;root&quot;</span>)) {</td></tr>
+<tr class="cl band nb-0" data-l="236" data-n="0"><td class="ln">236</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> td::Status::Error(<span class="tk-s">&quot;matcher &quot;</span> + m.name + <span class="tk-s">&quot;: missing &#39;root&#39;&quot;</span>);</td></tr>
+<tr class="cl band nb-0" data-l="237" data-n="0"><td class="ln">237</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-0" data-l="238" data-n="0"><td class="ln">238</td><td class="mk"></td><td class="cd">  <span class="tk-k">int</span> root = static_cast&lt;<span class="tk-k">int</span>&gt;(jint(rec, <span class="tk-s">&quot;root&quot;</span>));</td></tr>
+<tr class="cl band nb-0" data-l="239" data-n="0"><td class="ln">239</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (root &lt; <span class="tk-n">0</span> || root &gt;= static_cast&lt;<span class="tk-k">int</span>&gt;(pool.size())) {</td></tr>
+<tr class="cl band nb-0" data-l="240" data-n="0"><td class="ln">240</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> td::Status::Error(<span class="tk-s">&quot;matcher &quot;</span> + m.name + <span class="tk-s">&quot;: root index out of range&quot;</span>);</td></tr>
+<tr class="cl band nb-0" data-l="241" data-n="0"><td class="ln">241</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="242" data-n="1"><td class="ln">242</td><td class="mk"><span class="chip">2</span></td><td class="cd">  std::vector&lt;<span class="tk-k">int</span>&gt; order{root};</td></tr>
+<tr class="cl band nb-1" data-l="243" data-n="1"><td class="ln">243</td><td class="mk"></td><td class="cd">  std::unordered_map&lt;<span class="tk-k">int</span>, <span class="tk-k">int</span>&gt; remap{{root, <span class="tk-n">0</span>}};</td></tr>
+<tr class="cl band nb-1" data-l="244" data-n="1"><td class="ln">244</td><td class="mk"></td><td class="cd">  std::size_t qi = <span class="tk-n">0</span>;</td></tr>
+<tr class="cl band nb-1" data-l="245" data-n="1"><td class="ln">245</td><td class="mk"></td><td class="cd">  <span class="tk-k">while</span> (qi &lt; order.size()) {</td></tr>
+<tr class="cl band nb-1" data-l="246" data-n="1"><td class="ln">246</td><td class="mk"></td><td class="cd">    <span class="tk-k">const</span> Json &amp;nrec = *pool[order[qi++]];</td></tr>
+<tr class="cl band nb-1" data-l="247" data-n="1"><td class="ln">247</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">int</span> ref : edge_refs(nrec)) {</td></tr>
+<tr class="cl band nb-1" data-l="248" data-n="1"><td class="ln">248</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (ref &lt; <span class="tk-n">0</span> || ref &gt;= static_cast&lt;<span class="tk-k">int</span>&gt;(pool.size())) {</td></tr>
+<tr class="cl band nb-1" data-l="249" data-n="1"><td class="ln">249</td><td class="mk"></td><td class="cd">        <span class="tk-k">return</span> td::Status::Error(<span class="tk-s">&quot;matcher &quot;</span> + m.name + <span class="tk-s">&quot;: node ref out of range&quot;</span>);</td></tr>
+<tr class="cl band nb-1" data-l="250" data-n="1"><td class="ln">250</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-1" data-l="251" data-n="1"><td class="ln">251</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (remap.find(ref) == remap.end()) {</td></tr>
+<tr class="cl band nb-1" data-l="252" data-n="1"><td class="ln">252</td><td class="mk"></td><td class="cd">        remap[ref] = static_cast&lt;<span class="tk-k">int</span>&gt;(order.size());</td></tr>
+<tr class="cl band nb-1" data-l="253" data-n="1"><td class="ln">253</td><td class="mk"></td><td class="cd">        order.push_back(ref);</td></tr>
+<tr class="cl band nb-1" data-l="254" data-n="1"><td class="ln">254</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-1" data-l="255" data-n="1"><td class="ln">255</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="256" data-n="1"><td class="ln">256</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="257"><td class="ln">257</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-2" data-l="258" data-n="2"><td class="ln">258</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">auto</span> rm = [&amp;](<span class="tk-k">int</span> old) { <span class="tk-k">return</span> old &lt; <span class="tk-n">0</span> ? -<span class="tk-n">1</span> : remap[old]; };</td></tr>
+<tr class="cl" data-l="259"><td class="ln">259</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">int</span> old : order) {</td></tr>
+<tr class="cl" data-l="260"><td class="ln">260</td><td class="mk"></td><td class="cd">    <span class="tk-k">const</span> Json &amp;nrec = *pool[old];</td></tr>
+<tr class="cl" data-l="261"><td class="ln">261</td><td class="mk"></td><td class="cd">    CompiledNode cn;</td></tr>
+<tr class="cl" data-l="262"><td class="ln">262</td><td class="mk"></td><td class="cd">    cn.global_id = old;</td></tr>
+<tr class="cl band nb-3" data-l="263" data-n="3"><td class="ln">263</td><td class="mk"><span class="chip">4</span></td><td class="cd">    TRY_RESULT(kind, parse_kind(jstr(nrec, <span class="tk-s">&quot;kind&quot;</span>)));</td></tr>
+<tr class="cl band nb-3" data-l="264" data-n="3"><td class="ln">264</td><td class="mk"></td><td class="cd">    cn.kind = kind;</td></tr>
+<tr class="cl band nb-4" data-l="265" data-n="4"><td class="ln">265</td><td class="mk"><span class="chip">5</span></td><td class="cd">    <span class="tk-k">if</span> (has(nrec, <span class="tk-s">&quot;opcode&quot;</span>)) {</td></tr>
+<tr class="cl band nb-4" data-l="266" data-n="4"><td class="ln">266</td><td class="mk"></td><td class="cd">      cn.opcode = static_cast&lt;std::uint32_t&gt;(jint(nrec, <span class="tk-s">&quot;opcode&quot;</span>) &amp; <span class="tk-n">0xFFFFFFFF</span>);</td></tr>
+<tr class="cl band nb-4" data-l="267" data-n="4"><td class="ln">267</td><td class="mk"></td><td class="cd">      cn.has_opcode = <span class="tk-k">true</span>;</td></tr>
+<tr class="cl band nb-4" data-l="268" data-n="4"><td class="ln">268</td><td class="mk"></td><td class="cd">    }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="235" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L235–241</span>Fail-closed on the root: a missing or out-of-range <code>root</code> is an error, not a default to node 0. Every &quot;absent field&quot; decision in this loader is deliberate; the handful that do default are called out in the prose above.</div></div>
+<div class="note" data-a="242" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L242–256</span>Pass one assigns local ids in DISCOVERY order, mirroring <code>IrMatcher.__init__</code> on the Python side. The order is load-bearing: generated where_expr and build functions are keyed by (matcher, node) and both engines must number identically. Note the asymmetry — <code>edge_refs</code> (its own helper above) parses node refs with a raw <code>std::stoll</code> while pass two uses the guarded <code>num_i64</code>, so a corrupt ref token throws here instead of returning a Status.</div></div>
+<div class="note" data-a="258" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L258</span><code>remap[old]</code> default-inserts on a miss, which is safe only because pass one already discovered every reference reachable from the root. If the two passes ever disagreed about what counts as an edge, a missed reference would silently become node 0 — a matcher pointing at its own root — rather than an error.</div></div>
+<div class="note" data-a="263" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L263–264</span>Unknown <code>kind</code> is a hard error. The comment at <code>parse_kind</code>&#39;s definition states the reason in one line: a typo&#39;d kind must NOT silently degrade to the permissive <code>any</code> wildcard. This is the canonical example of the §8.1 rule, and the one to cite when you are tempted to add a lenient fallback.</div></div>
+<div class="note" data-a="265" data-n="4"><div class="nt"><span class="chip">5</span><span class="nl">L265–268</span>Opcode masked to 32 bits at load, mirroring <code>_unsigned32</code> on the emit side. Both ends normalize, so the comparison against a block&#39;s opcode is unsigned on every path and a spec author cannot create a signed/unsigned mismatch.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/IrLoader.cpp<span class="plines">:117–148</span></span><span class="ex-title">scan_program — collecting the names the build phase will need</span><span class="lang">cpp</span><span class="sha" title="span hash at render">33e9fa8d</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="117" data-n="0"><td class="ln">117</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-k">void</span> scan_program(<span class="tk-k">const</span> Json &amp;e, CompiledMatcher &amp;m) {</td></tr>
+<tr class="cl band nb-0" data-l="118" data-n="0"><td class="ln">118</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (e.type() == JType::Object) {</td></tr>
+<tr class="cl band nb-0" data-l="119" data-n="0"><td class="ln">119</td><td class="mk"></td><td class="cd">    <span class="tk-k">const</span> std::string k = jstr(e, <span class="tk-s">&quot;k&quot;</span>);</td></tr>
+<tr class="cl band nb-0" data-l="120" data-n="0"><td class="ln">120</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (k == <span class="tk-s">&quot;call&quot;</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="121" data-n="1"><td class="ln">121</td><td class="mk"><span class="chip">2</span></td><td class="cd">      std::string fn = jstr(e, <span class="tk-s">&quot;fn&quot;</span>);</td></tr>
+<tr class="cl band nb-1" data-l="122" data-n="1"><td class="ln">122</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (!fn.empty() &amp;&amp; kBuiltins.count(fn) == <span class="tk-n">0</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="123" data-n="1"><td class="ln">123</td><td class="mk"></td><td class="cd">        m.ref_fns.insert(fn);</td></tr>
+<tr class="cl band nb-1" data-l="124" data-n="1"><td class="ln">124</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl" data-l="125"><td class="ln">125</td><td class="mk"></td><td class="cd">    } <span class="tk-k">else</span> <span class="tk-k">if</span> (k == <span class="tk-s">&quot;lookup&quot;</span>) {</td></tr>
+<tr class="cl" data-l="126"><td class="ln">126</td><td class="mk"></td><td class="cd">      std::string nm = jstr(e, <span class="tk-s">&quot;name&quot;</span>);</td></tr>
+<tr class="cl" data-l="127"><td class="ln">127</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (!nm.empty()) {</td></tr>
+<tr class="cl" data-l="128"><td class="ln">128</td><td class="mk"></td><td class="cd">        m.ref_lookups.insert(nm);</td></tr>
+<tr class="cl" data-l="129"><td class="ln">129</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl" data-l="130"><td class="ln">130</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-2" data-l="131" data-n="2"><td class="ln">131</td><td class="mk"><span class="chip">3</span></td><td class="cd">    <span class="tk-k">if</span> (jstr(e, <span class="tk-s">&quot;s&quot;</span>) == <span class="tk-s">&quot;parse&quot;</span>) {</td></tr>
+<tr class="cl band nb-2" data-l="132" data-n="2"><td class="ln">132</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (<span class="tk-k">const</span> Json *types = jfield(e, <span class="tk-s">&quot;types&quot;</span>); types != <span class="tk-k">nullptr</span> &amp;&amp; types-&gt;type() == JType::Array) {</td></tr>
+<tr class="cl band nb-2" data-l="133" data-n="2"><td class="ln">133</td><td class="mk"></td><td class="cd">        <span class="tk-k">for</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> &amp;t : types-&gt;get_array()) {</td></tr>
+<tr class="cl band nb-2" data-l="134" data-n="2"><td class="ln">134</td><td class="mk"></td><td class="cd">          <span class="tk-k">if</span> (t.type() == JType::String) {</td></tr>
+<tr class="cl band nb-2" data-l="135" data-n="2"><td class="ln">135</td><td class="mk"></td><td class="cd">            m.ref_msgtypes.insert(t.get_string().str());</td></tr>
+<tr class="cl band nb-2" data-l="136" data-n="2"><td class="ln">136</td><td class="mk"></td><td class="cd">          }</td></tr>
+<tr class="cl band nb-2" data-l="137" data-n="2"><td class="ln">137</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl band nb-2" data-l="138" data-n="2"><td class="ln">138</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-2" data-l="139" data-n="2"><td class="ln">139</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-3" data-l="140" data-n="3"><td class="ln">140</td><td class="mk"><span class="chip">4</span></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> &amp;kv : e.get_object().field_values_) {</td></tr>
+<tr class="cl band nb-3" data-l="141" data-n="3"><td class="ln">141</td><td class="mk"></td><td class="cd">      scan_program(kv.second, m);</td></tr>
+<tr class="cl band nb-3" data-l="142" data-n="3"><td class="ln">142</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-3" data-l="143" data-n="3"><td class="ln">143</td><td class="mk"></td><td class="cd">  } <span class="tk-k">else</span> <span class="tk-k">if</span> (e.type() == JType::Array) {</td></tr>
+<tr class="cl band nb-3" data-l="144" data-n="3"><td class="ln">144</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> &amp;it : e.get_array()) {</td></tr>
+<tr class="cl band nb-3" data-l="145" data-n="3"><td class="ln">145</td><td class="mk"></td><td class="cd">      scan_program(it, m);</td></tr>
+<tr class="cl band nb-3" data-l="146" data-n="3"><td class="ln">146</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-3" data-l="147" data-n="3"><td class="ln">147</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="148"><td class="ln">148</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="117" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L117–120</span>A full RECURSIVE walk of the build_program JSON, not a scan of the statement list. It has to be: <code>call</code> and <code>lookup</code> nodes nest arbitrarily deep inside expression trees, so a shallow pass would find almost none of the artifact&#39;s 144 calls.</div></div>
+<div class="note" data-a="121" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L121–124</span>Builtins are subtracted using <code>kBuiltins</code>, a list hand-duplicated from the Python frontend&#39;s <code>BUILTINS</code>. Drift between the two lists is invisible: a builtin missing here gets reported as an unregistered host fn, and the matcher is build-SKIPPED — which is a normal-looking outcome, not an error.</div></div>
+<div class="note" data-a="131" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L131–139</span><code>ref_msgtypes</code> keys on the STATEMENT tag. This is the collection that <code>build_skip_reason</code> checks against the parse registry, so a <code>parse</code> statement naming an unregistered type degrades the matcher to &quot;never builds&quot;. The expression form (<code>k == &quot;parse&quot;</code>) is not collected — see the expr_ir excerpt above.</div></div>
+<div class="note" data-a="140" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L140–147</span>The recursion descends into object VALUES only, never keys, so a field literally named &quot;parse&quot; in an <code>out</code> block cannot be mistaken for a statement. It is applied to <code>build_program</code> alone — <code>where_expr</code> trees are scanned separately for predicate names, further down.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/IrLoader.cpp<span class="plines">:379–421</span></span><span class="ex-title">Match-phase runnability — the only thing the loader itself skips a matcher for</span><span class="lang">cpp</span><span class="sha" title="span hash at render">72dcaec0</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="379"><td class="ln">379</td><td class="mk"></td><td class="cd">  <span class="tk-c">// Match-phase runnability: named host predicates (anchor + reachable pred /</span></td></tr>
+<tr class="cl" data-l="380"><td class="ln">380</td><td class="mk"></td><td class="cd">  <span class="tk-c">// `where` nodes) are the only match-time host dependencies. Inline</span></td></tr>
+<tr class="cl" data-l="381"><td class="ln">381</td><td class="mk"></td><td class="cd">  <span class="tk-c">// where_exprs are evaluated by the walker (interpreter or generated code)</span></td></tr>
+<tr class="cl" data-l="382"><td class="ln">382</td><td class="mk"></td><td class="cd">  <span class="tk-c">// and no longer make a matcher unrunnable.</span></td></tr>
+<tr class="cl band nb-0" data-l="383" data-n="0"><td class="ln">383</td><td class="mk"><span class="chip">1</span></td><td class="cd">  std::set&lt;std::string&gt; pred_names;</td></tr>
+<tr class="cl band nb-0" data-l="384" data-n="0"><td class="ln">384</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> CompiledNode &amp;n : m.nodes) {</td></tr>
+<tr class="cl band nb-0" data-l="385" data-n="0"><td class="ln">385</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (n.kind == NodeKind::Pred &amp;&amp; !n.pred_name.empty()) {</td></tr>
+<tr class="cl band nb-0" data-l="386" data-n="0"><td class="ln">386</td><td class="mk"></td><td class="cd">      pred_names.insert(n.pred_name);</td></tr>
+<tr class="cl band nb-0" data-l="387" data-n="0"><td class="ln">387</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-0" data-l="388" data-n="0"><td class="ln">388</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (!n.where_name.empty()) {</td></tr>
+<tr class="cl band nb-0" data-l="389" data-n="0"><td class="ln">389</td><td class="mk"></td><td class="cd">      pred_names.insert(n.where_name);</td></tr>
+<tr class="cl band nb-0" data-l="390" data-n="0"><td class="ln">390</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-0" data-l="391" data-n="0"><td class="ln">391</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="392"><td class="ln">392</td><td class="mk"></td><td class="cd">  <span class="tk-c">// Anchor-level predicate names already collected in ref_preds for pred/mixed.</span></td></tr>
+<tr class="cl" data-l="393"><td class="ln">393</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (m.anchor_kind == AnchorKind::Pred || m.anchor_kind == AnchorKind::Mixed) {</td></tr>
+<tr class="cl" data-l="394"><td class="ln">394</td><td class="mk"></td><td class="cd">    pred_names.insert(m.ref_preds.begin(), m.ref_preds.end());</td></tr>
+<tr class="cl" data-l="395"><td class="ln">395</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="396"><td class="ln">396</td><td class="mk"></td><td class="cd">  m.ref_preds.insert(pred_names.begin(), pred_names.end());</td></tr>
+<tr class="cl" data-l="397"><td class="ln">397</td><td class="mk"></td><td class="cd">  <span class="tk-c">// Runnable iff every referenced predicate is in the host registry (Phase D);</span></td></tr>
+<tr class="cl" data-l="398"><td class="ln">398</td><td class="mk"></td><td class="cd">  <span class="tk-c">// the skip reason lists only the MISSING names. A mixed anchor stays</span></td></tr>
+<tr class="cl" data-l="399"><td class="ln">399</td><td class="mk"></td><td class="cd">  <span class="tk-c">// unrunnable even when its predicates exist: the loader does not yet store</span></td></tr>
+<tr class="cl" data-l="400"><td class="ln">400</td><td class="mk"></td><td class="cd">  <span class="tk-c">// the branch structure matcher_test_self would need (no current</span></td></tr>
+<tr class="cl" data-l="401"><td class="ln">401</td><td class="mk"></td><td class="cd">  <span class="tk-c">// build_program matcher has one — guard, not a plan).</span></td></tr>
+<tr class="cl band nb-1" data-l="402" data-n="1"><td class="ln">402</td><td class="mk"><span class="chip">2</span></td><td class="cd">  std::set&lt;std::string&gt; missing;</td></tr>
+<tr class="cl band nb-1" data-l="403" data-n="1"><td class="ln">403</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> std::string &amp;p : pred_names) {</td></tr>
+<tr class="cl band nb-1" data-l="404" data-n="1"><td class="ln">404</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (host_predicates().find(p) == host_predicates().end()) {</td></tr>
+<tr class="cl band nb-1" data-l="405" data-n="1"><td class="ln">405</td><td class="mk"></td><td class="cd">      missing.insert(p);</td></tr>
+<tr class="cl band nb-1" data-l="406" data-n="1"><td class="ln">406</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="407" data-n="1"><td class="ln">407</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="408" data-n="2"><td class="ln">408</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">if</span> (!missing.empty()) {</td></tr>
+<tr class="cl band nb-2" data-l="409" data-n="2"><td class="ln">409</td><td class="mk"></td><td class="cd">    m.unrunnable = <span class="tk-k">true</span>;</td></tr>
+<tr class="cl band nb-2" data-l="410" data-n="2"><td class="ln">410</td><td class="mk"></td><td class="cd">    std::string reason = <span class="tk-s">&quot;pred:&quot;</span>;</td></tr>
+<tr class="cl band nb-2" data-l="411" data-n="2"><td class="ln">411</td><td class="mk"></td><td class="cd">    <span class="tk-k">bool</span> first = <span class="tk-k">true</span>;</td></tr>
+<tr class="cl band nb-2" data-l="412" data-n="2"><td class="ln">412</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> std::string &amp;p : missing) {</td></tr>
+<tr class="cl band nb-2" data-l="413" data-n="2"><td class="ln">413</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (!first) reason += <span class="tk-s">&quot;,&quot;</span>;</td></tr>
+<tr class="cl band nb-2" data-l="414" data-n="2"><td class="ln">414</td><td class="mk"></td><td class="cd">      first = <span class="tk-k">false</span>;</td></tr>
+<tr class="cl band nb-2" data-l="415" data-n="2"><td class="ln">415</td><td class="mk"></td><td class="cd">      reason += p;</td></tr>
+<tr class="cl band nb-2" data-l="416" data-n="2"><td class="ln">416</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-2" data-l="417" data-n="2"><td class="ln">417</td><td class="mk"></td><td class="cd">    m.skip_reason = reason;</td></tr>
+<tr class="cl band nb-3" data-l="418" data-n="3"><td class="ln">418</td><td class="mk"><span class="chip">4</span></td><td class="cd">  } <span class="tk-k">else</span> <span class="tk-k">if</span> (m.anchor_kind == AnchorKind::Mixed &amp;&amp; !m.ref_preds.empty()) {</td></tr>
+<tr class="cl band nb-3" data-l="419" data-n="3"><td class="ln">419</td><td class="mk"></td><td class="cd">    m.unrunnable = <span class="tk-k">true</span>;</td></tr>
+<tr class="cl band nb-3" data-l="420" data-n="3"><td class="ln">420</td><td class="mk"></td><td class="cd">    m.skip_reason = <span class="tk-s">&quot;mixed_anchor_preds&quot;</span>;</td></tr>
+<tr class="cl band nb-3" data-l="421" data-n="3"><td class="ln">421</td><td class="mk"></td><td class="cd">  }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="383" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L383–391</span>Exactly two things make a matcher unrunnable at MATCH time: a <code>pred</code> node and a named <code>where</code> predicate. Builders, shapers, parsers and lookups are build-phase and never reach this decision — a matcher can be perfectly runnable here and still never produce anything.</div></div>
+<div class="note" data-a="402" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L402–407</span>The set difference against <code>host_predicates()</code> is the whole runnability test, and only the MISSING names survive it. That is required, not cosmetic: the reason string is diffed against the Python twin&#39;s, so it has to be derived from the same registry difference rather than from the spec text.</div></div>
+<div class="note" data-a="408" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L408–417</span>Reason format is <code>pred:a,b</code> with names in <code>std::set</code> order, i.e. deterministic. That stability is what lets the twin gate diff SKIP lines instead of merely counting them (<a class="xl" href="gates.html">gates</a>).</div></div>
+<div class="note" data-a="418" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L418–421</span>The mixed-anchor guard: unrunnable even when every predicate exists, because the loader does not store the per-branch structure <code>matcher_test_self</code> would need. The comment above is explicit that this is a guard rather than a plan — no production matcher has a mixed anchor, so this branch is dead today.</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ # $tmp/ir_v10.json = mch_ir.json with mch_ir_version changed to &quot;1.0&quot;, nothing else
+cd indexer &amp;&amp; ton-mch-engine.exe --classify -I $tmp/ir_v10.json -T tests/traces/&lt;one&gt;.lz4</div><pre class="run-out">failed to load IR artifact: unsupported mch_ir_version (expected 1.1)
+exit=2</pre><div class="run-note">Strict version check, exit 2 before a single trace is touched.</div></div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ # $tmp/ir_reser.json = mch_ir.json copied byte-for-byte with ONE extra trailing newline
+cd indexer &amp;&amp; ton-mch-engine.exe --classify -I $tmp/ir_reser.json -T tests/traces/&lt;one&gt;.lz4</div><pre class="run-out">no generated build table matches this artifact (loaded sha f6259389a8c36fae11b55487f62f13b677198789aff3287773789d4f287f8c65; ir table 20dc3366ad7b13c605037c191bee9c8c76d670109913ccbb422ab2144006771f, testbed table (stub)) — rebuild ton-mch-engine or pass a paired artifact
+exit=2</pre><div class="run-note">A semantically identical artifact is still rejected: the generated build-fn table is paired to the artifact by sha256 of the FILE BYTES, not by content equivalence. Editing <code>ir/mch_ir.json</code> and not rebuilding is therefore a hard exit 2, never a wrong answer.</div></div>
+<h2 id="priorities-and-registration-order">Priorities and registration order</h2>
+<section><p>Two knobs decide which matcher gets to consume a block first, and they interact. <code>priority</code> (default 100, ascending — lower runs first) is the primary key; <code>registration_order</code> breaks ties. In the production artifact <code>registration_order</code> is the identity permutation, which means ties break on emission order: manifest file order, then source position within each file. That is the whole reason <code>emit_manifest.json</code> lists <code>specs_decl/jettons.mch</code> first and documents it in a comment.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/IrLoader.cpp<span class="plines">:484–514</span></span><span class="ex-title">Permutation check, then one stable sort</span><span class="lang">cpp</span><span class="sha" title="span hash at render">48b70268</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="484"><td class="ln">484</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (<span class="tk-k">const</span> Json *ro = jfield(root, <span class="tk-s">&quot;registration_order&quot;</span>); ro != <span class="tk-k">nullptr</span> &amp;&amp; ro-&gt;type() == JType::Array) {</td></tr>
+<tr class="cl" data-l="485"><td class="ln">485</td><td class="mk"></td><td class="cd">    <span class="tk-c">// Must be a permutation of [0, matchers): a stray/out-of-range/duplicate</span></td></tr>
+<tr class="cl band nb-0" data-l="486" data-n="0"><td class="ln">486</td><td class="mk"><span class="chip">1</span></td><td class="cd">    <span class="tk-c">// index would index compiled[] out of bounds (or drop a matcher) during</span></td></tr>
+<tr class="cl band nb-0" data-l="487" data-n="0"><td class="ln">487</td><td class="mk"></td><td class="cd">    <span class="tk-c">// the priority sort below — fail closed (§8.1) instead.</span></td></tr>
+<tr class="cl band nb-0" data-l="488" data-n="0"><td class="ln">488</td><td class="mk"></td><td class="cd">    std::vector&lt;<span class="tk-k">bool</span>&gt; seen(compiled.size(), <span class="tk-k">false</span>);</td></tr>
+<tr class="cl band nb-0" data-l="489" data-n="0"><td class="ln">489</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> &amp;mi : ro-&gt;get_array()) {</td></tr>
+<tr class="cl band nb-0" data-l="490" data-n="0"><td class="ln">490</td><td class="mk"></td><td class="cd">      TRY_RESULT(idx64, num_i64(mi));</td></tr>
+<tr class="cl band nb-0" data-l="491" data-n="0"><td class="ln">491</td><td class="mk"></td><td class="cd">      <span class="tk-k">int</span> idx = static_cast&lt;<span class="tk-k">int</span>&gt;(idx64);</td></tr>
+<tr class="cl band nb-0" data-l="492" data-n="0"><td class="ln">492</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (idx &lt; <span class="tk-n">0</span> || idx &gt;= static_cast&lt;<span class="tk-k">int</span>&gt;(compiled.size())) {</td></tr>
+<tr class="cl band nb-0" data-l="493" data-n="0"><td class="ln">493</td><td class="mk"></td><td class="cd">        <span class="tk-k">return</span> td::Status::Error(<span class="tk-s">&quot;registration_order index out of range&quot;</span>);</td></tr>
+<tr class="cl band nb-0" data-l="494" data-n="0"><td class="ln">494</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-0" data-l="495" data-n="0"><td class="ln">495</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (seen[idx]) {</td></tr>
+<tr class="cl band nb-0" data-l="496" data-n="0"><td class="ln">496</td><td class="mk"></td><td class="cd">        <span class="tk-k">return</span> td::Status::Error(<span class="tk-s">&quot;registration_order has a duplicate index&quot;</span>);</td></tr>
+<tr class="cl band nb-0" data-l="497" data-n="0"><td class="ln">497</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-0" data-l="498" data-n="0"><td class="ln">498</td><td class="mk"></td><td class="cd">      seen[idx] = <span class="tk-k">true</span>;</td></tr>
+<tr class="cl band nb-0" data-l="499" data-n="0"><td class="ln">499</td><td class="mk"></td><td class="cd">      reg_order.push_back(idx);</td></tr>
+<tr class="cl band nb-0" data-l="500" data-n="0"><td class="ln">500</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-0" data-l="501" data-n="0"><td class="ln">501</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (reg_order.size() != compiled.size()) {</td></tr>
+<tr class="cl band nb-0" data-l="502" data-n="0"><td class="ln">502</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> td::Status::Error(<span class="tk-s">&quot;registration_order must list every matcher exactly once&quot;</span>);</td></tr>
+<tr class="cl band nb-0" data-l="503" data-n="0"><td class="ln">503</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="504"><td class="ln">504</td><td class="mk"></td><td class="cd">  } <span class="tk-k">else</span> {</td></tr>
+<tr class="cl" data-l="505"><td class="ln">505</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">int</span> i = <span class="tk-n">0</span>; i &lt; static_cast&lt;<span class="tk-k">int</span>&gt;(compiled.size()); i++) {</td></tr>
+<tr class="cl" data-l="506"><td class="ln">506</td><td class="mk"></td><td class="cd">      reg_order.push_back(i);</td></tr>
+<tr class="cl" data-l="507"><td class="ln">507</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="508"><td class="ln">508</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="509" data-n="1"><td class="ln">509</td><td class="mk"><span class="chip">2</span></td><td class="cd">  std::stable_sort(reg_order.begin(), reg_order.end(),</td></tr>
+<tr class="cl band nb-1" data-l="510" data-n="1"><td class="ln">510</td><td class="mk"></td><td class="cd">                   [&amp;](<span class="tk-k">int</span> a, <span class="tk-k">int</span> b) { <span class="tk-k">return</span> compiled[a].priority &lt; compiled[b].priority; });</td></tr>
+<tr class="cl" data-l="511"><td class="ln">511</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-2" data-l="512" data-n="2"><td class="ln">512</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">int</span> mi : reg_order) {</td></tr>
+<tr class="cl band nb-2" data-l="513" data-n="2"><td class="ln">513</td><td class="mk"></td><td class="cd">    out.matchers.push_back(std::move(compiled[mi]));</td></tr>
+<tr class="cl band nb-2" data-l="514" data-n="2"><td class="ln">514</td><td class="mk"></td><td class="cd">  }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="486" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L486–503</span><code>registration_order</code> must be a permutation of <code>[0, matchers)</code>, checked with a <code>seen</code> bitmap plus a length equality. It would be easy to treat a stray index as harmless — it is not: the sort below indexes <code>compiled[]</code> directly, so an out-of-range entry is out-of-bounds access and a duplicate silently drops a matcher from the run.</div></div>
+<div class="note" data-a="509" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L509–510</span>One <code>stable_sort</code> on priority is the entire ordering rule. Because the input vector is already in the artifact&#39;s registration order, stability means ties keep that order — which is what makes an in-spec <code>priority 90</code> sufficient to run the declarative jetton family first, with no filename tricks.</div></div>
+<div class="note" data-a="512" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L512–514</span>Matchers are MOVED into the output in final order. From this point the vector index no longer equals the artifact index — the reason <code>artifact_index</code> was captured at the top of the load and the reason the generated build table is keyed by it.</div></div></div>
+</div>
+</div>
+<h2 id="what-a-matcher-gets-skipped-for">What a matcher gets skipped for</h2>
+<section><p>Runnability is decided twice. The loader decides the MATCH half (predicates only). <code>build_skip_reason</code> decides the BUILD half by checking the artifact&#39;s collected <code>ref_*</code> sets against the live C++ registries — and this is the function that makes an unported protocol a visible SKIP line rather than a crash or, worse, a silently empty result.</p>
+<p>A matcher with a non-empty skip reason is dropped from the run entirely, and the reason is printed once, sorted, at the top of every <code>--match</code> / <code>--classify</code> dump. The Python twin computes the same set from the same artifact, so the skip set is itself gate-checked (<a class="xl" href="gates.html">gates</a>).</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BuildDriver.cpp<span class="plines">:119–149</span></span><span class="ex-title">build_skip_reason — four registry surfaces, one string</span><span class="lang">cpp</span><span class="sha" title="span hash at render">637ecedd</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="119"><td class="ln">119</td><td class="mk"></td><td class="cd">std::string build_skip_reason(<span class="tk-k">const</span> CompiledMatcher &amp;m) {</td></tr>
+<tr class="cl band nb-0" data-l="120" data-n="0"><td class="ln">120</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">if</span> (m.unrunnable) {</td></tr>
+<tr class="cl band nb-0" data-l="121" data-n="0"><td class="ln">121</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> m.skip_reason;  <span class="tk-c">// match-phase pred skip</span></td></tr>
+<tr class="cl band nb-0" data-l="122" data-n="0"><td class="ln">122</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="123" data-n="1"><td class="ln">123</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">if</span> (!m.has_build_program) {</td></tr>
+<tr class="cl band nb-1" data-l="124" data-n="1"><td class="ln">124</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> m.ref_builders.empty() ? <span class="tk-s">&quot;no_build_program&quot;</span> : <span class="tk-s">&quot;builder&quot;</span>;</td></tr>
+<tr class="cl band nb-1" data-l="125" data-n="1"><td class="ln">125</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="126" data-n="2"><td class="ln">126</td><td class="mk"><span class="chip">3</span></td><td class="cd">  std::vector&lt;std::string&gt; missing_types;</td></tr>
+<tr class="cl band nb-2" data-l="127" data-n="2"><td class="ln">127</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> std::string &amp;t : m.ref_msgtypes) {</td></tr>
+<tr class="cl band nb-2" data-l="128" data-n="2"><td class="ln">128</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (message_parsers().find(t) == message_parsers().end()) {</td></tr>
+<tr class="cl band nb-2" data-l="129" data-n="2"><td class="ln">129</td><td class="mk"></td><td class="cd">      missing_types.push_back(t);</td></tr>
+<tr class="cl band nb-2" data-l="130" data-n="2"><td class="ln">130</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-2" data-l="131" data-n="2"><td class="ln">131</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-3" data-l="132" data-n="3"><td class="ln">132</td><td class="mk"><span class="chip">4</span></td><td class="cd">  std::vector&lt;std::string&gt; missing_lookups;</td></tr>
+<tr class="cl band nb-3" data-l="133" data-n="3"><td class="ln">133</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> std::string &amp;l : m.ref_lookups) {</td></tr>
+<tr class="cl band nb-3" data-l="134" data-n="3"><td class="ln">134</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (FixtureLookupSource::kinds().count(l) == <span class="tk-n">0</span>) {</td></tr>
+<tr class="cl band nb-3" data-l="135" data-n="3"><td class="ln">135</td><td class="mk"></td><td class="cd">      missing_lookups.push_back(l);</td></tr>
+<tr class="cl band nb-3" data-l="136" data-n="3"><td class="ln">136</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="137"><td class="ln">137</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-4" data-l="138" data-n="4"><td class="ln">138</td><td class="mk"><span class="chip">5</span></td><td class="cd">  std::vector&lt;std::string&gt; missing_fns;</td></tr>
+<tr class="cl band nb-4" data-l="139" data-n="4"><td class="ln">139</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> std::string &amp;fn : m.ref_fns) {</td></tr>
+<tr class="cl band nb-4" data-l="140" data-n="4"><td class="ln">140</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (host_fns().find(fn) == host_fns().end()) {</td></tr>
+<tr class="cl band nb-4" data-l="141" data-n="4"><td class="ln">141</td><td class="mk"></td><td class="cd">      missing_fns.push_back(fn);</td></tr>
+<tr class="cl band nb-4" data-l="142" data-n="4"><td class="ln">142</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-4" data-l="143" data-n="4"><td class="ln">143</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-4" data-l="144" data-n="4"><td class="ln">144</td><td class="mk"></td><td class="cd">  std::vector&lt;std::string&gt; missing_shapers;</td></tr>
+<tr class="cl band nb-4" data-l="145" data-n="4"><td class="ln">145</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> std::string &amp;s : m.ref_shapers) {</td></tr>
+<tr class="cl band nb-4" data-l="146" data-n="4"><td class="ln">146</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (host_shapers().find(s) == host_shapers().end()) {</td></tr>
+<tr class="cl band nb-4" data-l="147" data-n="4"><td class="ln">147</td><td class="mk"></td><td class="cd">      missing_shapers.push_back(s);</td></tr>
+<tr class="cl band nb-4" data-l="148" data-n="4"><td class="ln">148</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-4" data-l="149" data-n="4"><td class="ln">149</td><td class="mk"></td><td class="cd">  }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="120" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L120–122</span>Match-phase skips win and short-circuit: a matcher already unrunnable keeps its <code>pred:</code> reason rather than being re-diagnosed as a build problem. One reason string per matcher, because the twin compares the string.</div></div>
+<div class="note" data-a="123" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L123–125</span>Two distinct reasons for &quot;no build program&quot;: <code>builder</code> means the spec named a registered Python builder function the C++ side does not implement, <code>no_build_program</code> means the spec had neither. Both are empty in the production artifact today — all 33 matchers are declarative, which is what the census run at the top of this page shows as <code>with builder 0</code>.</div></div>
+<div class="note" data-a="126" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L126–131</span>First of four independent surfaces, all checked against the LIVE registries rather than against anything in the artifact: message parsers here (<a class="xl" href="parse-layer.html">parse-layer</a>), then lookup kinds, host fns and shapers below. A name the artifact references but this binary does not provide degrades that matcher to &quot;never builds&quot; — nothing is rewritten and nothing throws.</div></div>
+<div class="note" data-a="132" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L132–136</span>The lookup check runs against <code>FixtureLookupSource::kinds()</code> — the fixture-backed source used by the dump modes. Production substitutes a different source, so whether a lookup kind is available is a property of the deployment as much as of the artifact (<a class="xl" href="prod-path.html">prod-path</a>).</div></div>
+<div class="note" data-a="138" data-n="4"><div class="nt"><span class="chip">5</span><span class="nl">L138–149</span>Host fns and shapers close the list. Note the asymmetry with the Python engine, which HARD-FAILS at load on an unregistered builder/shaper/fn/message-type; C++ degrades to a skip instead, because a partially-ported engine has to be able to run at all. Same artifact, two different strictness policies — deliberate, and the reason the twin gate compares skip sets rather than assuming both sides ran everything.</div></div></div>
+</div>
+</div>
+<h2 id="the-emit-side-briefly">The emit side, briefly</h2>
+<section><p>You do not need the Python compiler internals to read the artifact, but you do need to know three facts about how it is produced.</p>
+<p>First, the source list is <code>ir/emit_manifest.json</code>, and its order IS the registration order; <code>frontend.source_files</code> echoes it. Second, <code>ir_emit.py</code> emits node ids as a per-matcher DFS with a memo keyed on Python object identity — which is why cyclic recursion resolves to a back-edge rather than looping forever, and why node ranges are disjoint per matcher even though the array is global. Third, and most useful in practice: the emitter is byte-deterministic and a pytest holds it to that.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">indexer/tests/mch/test_ir_emit.py<span class="plines">:31–41</span></span><span class="ex-title">The byte-reproduction guard</span><span class="lang">python</span><span class="sha" title="span hash at render">379dad95</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="31" data-n="0"><td class="ln">31</td><td class="mk"><span class="chip">1</span></td><td class="cd">def test_manifest_reproduces_committed_artifact():</td></tr>
+<tr class="cl band nb-0" data-l="32" data-n="0"><td class="ln">32</td><td class="mk"></td><td class="cd">    <span class="tk-s">&quot;&quot;</span>&quot;The committed ir/mch_ir.json must be byte-reproducible from its manifest —</td></tr>
+<tr class="cl band nb-0" data-l="33" data-n="0"><td class="ln">33</td><td class="mk"></td><td class="cd">    the A1 reproducibility guarantee (no session-scratch emit dir).<span class="tk-s">&quot;&quot;</span>&quot;</td></tr>
+<tr class="cl" data-l="34"><td class="ln">34</td><td class="mk"></td><td class="cd">    manifest = IR_DIR / <span class="tk-s">&quot;emit_manifest.json&quot;</span></td></tr>
+<tr class="cl" data-l="35"><td class="ln">35</td><td class="mk"></td><td class="cd">    committed = IR_DIR / <span class="tk-s">&quot;mch_ir.json&quot;</span></td></tr>
+<tr class="cl band nb-1" data-l="36" data-n="1"><td class="ln">36</td><td class="mk"><span class="chip">2</span></td><td class="cd">    <span class="tk-k">if</span> not manifest.is_file() or not committed.is_file():</td></tr>
+<tr class="cl band nb-1" data-l="37" data-n="1"><td class="ln">37</td><td class="mk"></td><td class="cd">        import pytest</td></tr>
+<tr class="cl band nb-1" data-l="38" data-n="1"><td class="ln">38</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="39" data-n="1"><td class="ln">39</td><td class="mk"></td><td class="cd">        pytest.skip(<span class="tk-s">&quot;C++ engine ir/ dir not present in this checkout&quot;</span>)</td></tr>
+<tr class="cl" data-l="40"><td class="ln">40</td><td class="mk"></td><td class="cd">    emitted = render_json(emit_manifest(manifest)).encode(<span class="tk-s">&quot;utf-8&quot;</span>)</td></tr>
+<tr class="cl" data-l="41"><td class="ln">41</td><td class="mk"></td><td class="cd">    assert emitted == committed.read_bytes()</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="31" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L31–33</span>The reproducibility contract in one assert: the committed artifact must be byte-identical to what the manifest produces. Combined with the sha pairing at load, a hand edit to <code>ir/mch_ir.json</code> fails twice — this test diverges, and the engine rejects the unpaired bytes.</div></div>
+<div class="note" data-a="36" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L36–39</span>It SKIPS when the C++ tree is absent, so the Python repo stays independently testable. Worth knowing before you trust a green run: confirm this test actually executed rather than skipped.</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ cd indexer &amp;&amp; python -m pytest tests/mch/test_ir_emit.py -q</div><pre class="run-out">======================== 6 passed, 3 warnings in 0.75s ========================</pre><div class="run-note">Under a second, no C++ involved. Run it after any <code>.mch</code> edit and before regenerating the artifact — a failure here means the emitter is non-deterministic, which is a much worse problem than a wrong matcher.</div></div>
+<h2 id="check-yourself">Check yourself</h2>
+<section><p>Four things you can verify right now. The first two are claims made on this page; the third and fourth are the ones that most often surprise people who assumed the artifact is just a serialized object graph.</p></section>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ cd ton-index-worker/ton-mch-engine/ir &amp;&amp; node -e &quot;const j=require(&#39;./mch_ir.json&#39;); const owner=new Array(j.nodes.length).fill(null); let shared=0; j.matchers.forEach(m=&gt;{const seen=new Set(),q=[m.root]; while(q.length){const id=q.shift(); if(seen.has(id))continue; seen.add(id); const n=j.nodes[id]; if(owner[id]!==null&amp;&amp;owner[id]!==m.name)shared++; owner[id]=owner[id]??m.name; for(const r of [n.child,n.parent,n.step,n.exit,...(n.children||[]),...(n.branches||[])]) if(r!=null)q.push(r);}}); console.log(&#39;nodes reachable from some matcher:&#39;,owner.filter(x=&gt;x!==null).length,&#39;/&#39;,j.nodes.length); console.log(&#39;nodes shared between two matchers:&#39;,shared); console.log(&#39;distinct roots:&#39;,new Set(j.matchers.map(m=&gt;m.root)).size,&#39;of&#39;,j.matchers.length);&quot;</div><pre class="run-out">nodes reachable from some matcher: 329 / 329
+nodes shared between two matchers: 0
+distinct roots: 33 of 33</pre><div class="run-note">Claim 1: the pool is global but ownership is partitioned — no orphan nodes, no sharing across matchers, and every matcher has its own root (the IR spec requires that last one explicitly). If you ever see a non-zero <code>shared</code>, the emitter&#39;s per-matcher memo has leaked.</div></div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ ton-mch-engine.exe --surface | node -e &quot;let s=&#39;&#39;;process.stdin.on(&#39;data&#39;,d=&gt;s+=d).on(&#39;end&#39;,()=&gt;{const j=JSON.parse(s);Object.keys(j).forEach(k=&gt;console.log(k,&#39;=&#39;,j[k].length));console.log(&#39;preds:&#39;,j.preds);});&quot;</div><pre class="run-out">boc_fields = 7
+fns = 16
+lookup_kinds = 7
+parsers = 32
+preds = 9
+shapers = 3
+preds: [ &#39;evaa_service_comment&#39;, &#39;evaa_user_withdraw_fail&#39;, &#39;evaa_user_withdraw_success&#39;, &#39;evaa_user_withdraw_user&#39;, &#39;getgems_purchase&#39;, &#39;getgems_seller_payout&#39;, &#39;nominator_pool_withdraw_parent&#39;, &#39;pton_self_transfer&#39;, &#39;stonfi_v1_sender_payment&#39; ]</pre><div class="run-note">Claim 2: <code>--surface</code> dumps the live C++ registries — the exact sets <code>build_skip_reason</code> and the loader&#39;s runnability check compare against. The 9 predicates here cover the 8 <code>pred</code> nodes plus the 4 named <code>where</code> nodes in the artifact, which is why a <code>--match</code> run over the corpus currently prints no SKIP lines at all. Confirm that yourself: <code>--match -I ir/mch_ir.json -T tests\traces\&lt;one&gt;.lz4</code> and look for a line starting <code>SKIP</code>.</div></div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ cd ton-index-worker/ton-mch-engine/ir &amp;&amp; node -e &quot;const j=require(&#39;./mch_ir.json&#39;); const k={},s={}; const w=e=&gt;{if(Array.isArray(e))return e.forEach(w); if(e&amp;&amp;typeof e===&#39;object&#39;){if(typeof e.k===&#39;string&#39;)k[e.k]=(k[e.k]||0)+1; if(typeof e.s===&#39;string&#39;)s[e.s]=(s[e.s]||0)+1; Object.values(e).forEach(w);}}; j.matchers.forEach(m=&gt;w(m.build_program||[])); j.nodes.forEach(n=&gt;w(n.where_expr||{})); console.log(&#39;stmt&#39;,s); console.log(&#39;expr&#39;,k);&quot;</div><pre class="run-out">stmt { parse: 29, let: 32, reject: 27, failed: 18, out: 31, switch: 2 }
+expr { lookup: 8, attr: 600, name: 512, bin: 107, null: 98, call: 144, bool: 5, ternary: 51, unary: 17, int: 9, str: 13, mapc: 1, list: 1, record: 1, dotfield: 4 }</pre><div class="run-note">Claim 3: no <code>quant</code> and no <code>parse</code> EXPRESSION node exists in production, so the <code>ref_msgtypes</code> gap flagged in the expr_ir excerpt is latent rather than live. Re-run this after adding a spec that uses <code>any</code>/<code>all</code> or an inline <code>parse</code> — the counts are the cheapest early-warning you have.</div></div>
+<div class="edges"><div class="label">Connected scopes</div><ul><li><a class="xl" href="matcher-runtime.html">matcher-runtime</a> — the Walker consumes exactly the CompiledMatcher/CompiledNode tables this page describes, and turns anchor kinds into prefilters</li><li><a class="xl" href="build-programs.html">build-programs</a> — the build_program statement list and k-tagged expression trees previewed here are executed there</li><li><a class="xl" href="parse-layer.html">parse-layer</a> — a <code>parse</code> statement&#39;s types[] are registry keys; build_skip_reason checks them against the merged parser map</li><li><a class="xl" href="gates.html">gates</a> — the artifact&#39;s byte-repro pytest, the sha pairing and the twin-diffed SKIP set are the evidence for this page&#39;s claims</li><li><a class="xl" href="prod-path.html">prod-path</a> — the production entry loads the same artifact but substitutes lookup and trace sources, which changes what build_skip_reason sees</li></ul></div>
+<div class="cover"><div class="label">Not annotated in this scope — read directly</div><ul><li><code>ton-index-worker/ton-mch-engine/ir/mch_ir.json</code> <span class="why">— PARTIAL, and necessarily so: the header, 3 matcher records and ~10 node records are excerpted out of 11551 lines. The rest is more of the same two shapes — read it with the <code>node -e</code> walkers on this page rather than by scrolling</span></li><li><code>ton-index-worker/ton-mch-engine/src/IrLoader.cpp</code> <span class="why">— PARTIAL: the version/sha gate, the remap, scan_program, runnability and the priority sort are excerpted. Not shown: the tiny <code>jfield</code>/<code>jstr</code>/<code>jint</code> accessors (lines 25-70), <code>edge_refs</code> (75-100, referenced in an annotation), the <code>where_expr</code> re-encode into a self-owned buffer (274-294 — a C++ lifetime detail: the decoded JsonValue slices point into <code>WhereExpr::buf</code>, which must outlive the artifact document), and the recursion-ownership block (319-358) whose two load errors are nested recursion and captures inside a cyclic body (~520 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/IrLoader.h</code> <span class="why">— PARTIAL: <code>CompiledMatcher</code> is excerpted. The rest is the <code>NodeKind</code>/<code>RecStrategy</code>/<code>AnchorKind</code> enums, <code>WhereExpr</code>, <code>CompiledNode</code> (a field-for-field mirror of the JSON node record you already read) and <code>LoadedIr</code>. The file-top comment is the loader&#39;s actual specification and is worth reading in full before the .cpp (~117 LOC)</span></li><li><code>indexer/indexer/events/mch/ir_emit.py</code> <span class="why">— the emitter. Two parts repay reading if you touch the frontend: <code>_emit_node</code> (per-matcher DFS with an identity memo — the <code>cyclic_ref</code> back-edge and the disjoint-range property both come from there) and <code>_anchor_record</code> (why an <code>any</code> root can carry a multi-valued opcode anchor). The omit-when-default rules for <code>priority</code>/<code>builder</code>/<code>shape</code> live at the end of <code>emit_ir</code> (~333 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/ir/emit_manifest.json</code> <span class="why">— data, and already visible as <code>frontend.source_files</code> in the first excerpt. Its value is the two prose fields: <code>comment</code> (the regenerate command) and <code>excluded_note</code> (why the two legacy jetton specs are omitted from the PRODUCTION artifact but kept for the Python conformance suite) (~31 lines)</span></li><li><code>ton-index-worker/ton-mch-engine/ir/README.md</code> <span class="why">— the operational half of this chapter: regeneration command, the input-&gt;generator-&gt;output table for the CMake codegen step, how to run against a different artifact (contract swap vs <code>-DMCH_TESTBED_IR</code>), and a concurrency hazard about sharing one binary dir. Note it says &quot;currently 32 matchers&quot; — stale by one since dedust_v2_claim_reward landed (~98 LOC)</span></li><li><code>indexer/indexer/events/mch/expr_ir.py</code> <span class="why">— PARTIAL: the tail is excerpted. The head (lines 18-58) is the boring half — literals, <code>name</code>, <code>dotfield</code>, <code>attr</code>, <code>call</code>, <code>lookup</code>, <code>unary</code>, <code>bin</code>, <code>ternary</code> — each a one-line dict you can read off the excerpted vesting JSON instead. The one non-obvious rule there is that a non-name callee is rejected outright because the evaluator only ever calls bare builtins (~70 LOC)</span></li><li><code>indexer/indexer/events/mch_ir/loader.py</code> <span class="why">— the Python twin loader. It validates MORE than the C++ one (per-node key whitelists, <code>where</code>/<code>where_expr</code> mutual exclusion, the sync-only rule for where_exprs, no two matchers sharing a root) and is the better reference for what a legal artifact is. The C++ loader is a subset by design — it trusts an artifact the Python side already accepted (~335 LOC)</span></li><li><code>indexer/indexer/events/mch/btypes.py</code> <span class="why">— the <code>produces JettonTransferBlock</code> -&gt; <code>&quot;jetton_transfer&quot;</code> map, shared by the emitter and the declarative build path. One table; read it when a spec name and an artifact name refuse to match (~54 LOC)</span></li><li><code>indexer/tests/mch/test_ir_emit.py</code> <span class="why">— PARTIAL: the byte-repro guard is excerpted. The remaining ~155 lines are structural assertions on a freshly emitted artifact — node-ref bounds, the jetton_transfer graph shape, anchor forms — useful as executable documentation of the schema</span></li><li><code>ton-index-worker/ton-mch-engine/src/BuildDriver.cpp</code> <span class="why">— PARTIAL: <code>build_skip_reason</code> is excerpted because it is the payoff of the loader&#39;s <code>ref_*</code> collection. The rest of the file — value rendering, the build loop, <code>warn_missing_artifact_parsers</code> — belongs to <a class="xl" href="build-programs.html">build-programs</a> (~258 LOC)</span></li><li><code>indexer/docs/mch-ir-spec.md</code> <span class="why">— the normative schema the loaders implement (§3 matcher record, §5 node record, §7 expressions, §8.1 fail-closed). Read it when you need the rule rather than the implementation — but note its header still says version &quot;1.0&quot;; the on-the-wire tag has been &quot;1.1&quot; since the W7 bump (~253 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/ir/{expr,build,msg}_vectors.json</code> <span class="why">— conformance corpora, not artifacts: 97 expression cases, 36 build-program cases, and the message-schema boundary vectors. They are inputs to the same codegen step and are exercised by ctest, so they belong to <a class="xl" href="gates.html">gates</a></span></li></ul></div>
+<hr class="rule">
+<div class="meta">mch engine — a guided tutorial — commit ff4135bc — generated 2026-07-26 — code pulled live from repo at render time</div>
+</div>
+<script>
+(function(){
+  var GAP = 10;
+  function layout(){
+    var wide = window.matchMedia('(min-width: 980px)').matches;
+    document.querySelectorAll('.excerpt').forEach(function(ex){
+      var rail = ex.querySelector('.ex-rail');
+      if(!rail) return;
+      var grid = ex.querySelector('.ex-grid');
+      var notes = rail.querySelectorAll('.note');
+      if(!wide){ notes.forEach(function(n){ n.style.top=''; }); rail.style.minHeight=''; return; }
+      var g = grid.getBoundingClientRect(), y = 0, items = [];
+      notes.forEach(function(n){
+        var row = ex.querySelector('tr[data-l="'+n.dataset.a+'"]');
+        var t = Math.max(row ? (row.getBoundingClientRect().top - g.top) : y, y);
+        items.push({ n: n, t: t, h: n.offsetHeight });
+        y = t + n.offsetHeight + GAP;
+      });
+      if(!items.length) return;
+      var limit = ex.querySelector('.ex-code').getBoundingClientRect().height;
+      for(var i = items.length - 1; i >= 0; i--){
+        items[i].t = Math.min(items[i].t, limit - items[i].h);
+        limit = items[i].t - GAP;
+      }
+      var shift = Math.max(0, -items[0].t), maxB = 0;
+      items.forEach(function(it){
+        var t = it.t + shift;
+        it.n.style.top = t + 'px';
+        maxB = Math.max(maxB, t + it.h);
+      });
+      rail.style.minHeight = (maxB + 12) + 'px';
+    });
+  }
+  function hover(){
+    document.querySelectorAll('.excerpt').forEach(function(ex){
+      ex.querySelectorAll('.note').forEach(function(n){
+        var i = n.dataset.n;
+        var rows = ex.querySelectorAll('tr[data-n="'+i+'"]');
+        n.addEventListener('mouseenter', function(){ rows.forEach(function(r){ r.classList.add('hot'); }); });
+        n.addEventListener('mouseleave', function(){ rows.forEach(function(r){ r.classList.remove('hot'); }); });
+        rows.forEach(function(r){
+          r.addEventListener('mouseenter', function(){ n.classList.add('hot'); });
+          r.addEventListener('mouseleave', function(){ n.classList.remove('hot'); });
+        });
+      });
+    });
+  }
+  var t; function relayout(){ clearTimeout(t); t = setTimeout(layout, 60); }
+  window.addEventListener('resize', relayout);
+  window.addEventListener('load', relayout);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ layout(); hover(); });
+  else { layout(); hover(); }
+})();
+</script>

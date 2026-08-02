@@ -62,7 +62,7 @@
 # expressible, and the payload is only ours when its own opcode is 0xc9a015da
 # (PayNative also carries swaps and fund rewards), so both shapes go to the
 # `dedust_v2_deposit_payload` host fn — the exact structure
-# specs_decl/dedust_v2_swap.mch uses for its swap payload. A payload that is
+# specs/dedust_v2_swap.mch uses for its swap payload. A payload that is
 # absent or not a deposit yields null, and both target amounts become null,
 # reproducing the reference's `payload is None` arm. The PARTIAL matcher does
 # not read the payload: the partial build sets no target_* keys at
@@ -75,7 +75,7 @@
 #
 # ORDERING. Both anchors (0x25251ee0, 0xdc5ddba1) are claimed by no other spec,
 # and no other spec binds a block this one produces, so this file's slot in
-# ir/emit_manifest.json carries no tie-break of its own; it is listed right
+# the built-in source list carries no tie-break of its own; it is listed right
 # after specs/dedust_v2_withdraw.mch, mirroring dedust_v2.matchers() (swap,
 # failed swap, withdraw, deposit, rejected deposit, partial deposit). What IS
 # load-bearing is that it stays after the priority-90 jetton specs — the jetton
@@ -99,7 +99,7 @@ opcode ExcessMessage           = 0xd53276db
 # upgrade `|` to it anyway) and at most one arm can ever bind.
 #
 # ARM ORDER IS LOAD-BEARING, though not semantically: it is the reverse of the
-# reference's _deposit_carrier_matcher and matches specs_decl/dedust_v2_swap.mch
+# reference's _deposit_carrier_matcher and matches specs/dedust_v2_swap.mch
 # instead, because `parse carrier as DedustV2PayNative` below resolves against
 # the FIRST arm's head — a `btype` head there trips R023 (parsing a composed
 # block's body does not round-trip). The PayNative parse is harmless on the

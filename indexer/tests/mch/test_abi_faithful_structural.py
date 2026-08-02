@@ -198,7 +198,7 @@ def test_exactly_70_logical_rows_are_owned_and_cut_over():
     hand = _registry_names(MSG_PARSE, "hand_message_parsers")
     abi = _registry_names(ABI_BRIDGE, "abi_message_parsers")
 
-    assert len(hand) == len(set(hand)) == 13
+    assert len(hand) == len(set(hand)) == 12
     assert len(abi) == len(set(abi)) == 73
     assert set(abi) == migrated | EXISTING_ABI_ROWS
     assert migrated.isdisjoint(hand)

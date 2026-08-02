@@ -1,0 +1,1147 @@
+{
+  "id": "matcher-runtime",
+  "title": "5 · Matching — Walker, try_build, prefilter",
+  "summary": "This is the heart of the engine: the code that decides WHICH matcher fires on WHICH block. After this chapter you can read a `.mch` matcher's IR node graph ([[ir-artifact]]) and predict, without running anything, which blocks it will consume, which captures will bind, and why running it a minute later in the matcher order would give a different answer. Two loops do all the work: an OUTER loop that walks the block-tree spine once per matcher in priority order, and an INNER recursion (`MatchState::match_node`) that walks the matcher's node graph against one candidate block. The outer loop mutates the tree (each successful build merges blocks into a composite); the inner walk never does — it is pure, rollbackable, and re-runnable, which is exactly what makes `--match` a usable debugging tool. Two things trip up readers coming from the Python classifier: the B1 anchor prefilter (a per-trace opcode/btype inventory that skips whole traversals, and that must GROW as matchers produce new btypes or it would silently break composition), and the fact that `value_flow` does not exist on this side at all — the `flow` construct was removed from the language, so nothing in the match or build path accumulates account value flows.",
+  "diagrams": [
+    {
+      "title": "Two loops",
+      "mermaid": "flowchart TD\n  subgraph OUTER[\"classify_trace — one pass per matcher, priority order\"]\n    INV[\"B1 inventory:<br/>opcodes (static) + btypes (grows)\"] --> PF{\"anchor_can_match?\"}\n    PF -->|no| NEXT[\"next matcher\"]\n    PF -->|yes| BFS[\"BFS over spine (next_blocks)\"]\n    BFS --> PG{\"cur-&gt;parent == nullptr?\"}\n    PG -->|no, already merged| SKIP[skip as anchor]\n    PG -->|yes| TB[\"try_build(m, fn, cur)\"]\n    TB --> FOLD[\"fold produced btypes<br/>back into inventory\"]\n    FOLD --> NEXT\n  end\n  subgraph INNER[\"matcher_match — pure, no tree mutation\"]\n    TS[\"matcher_test_self(anchor)\"] --> MN[\"match_node(0, anchor, absorb=false)\"]\n    MN --> HEAD[\"test_head: kind + where + where_expr\"]\n    HEAD --> CONS[\"consume + bind(slot, frame)\"]\n    CONS --> ED[\"child edge → children set → parent edge\"]\n    ED --> AUX[\"absorb_aux (nested excess/bounce)\"]\n    AUX --> CAP[\"assemble_captures (frames, gap-align)\"]\n  end\n  TB -.-> TS\n  CAP -.-> TB"
+    },
+    {
+      "title": "try_build lifecycle — where consumption becomes permanent",
+      "mermaid": "flowchart LR\n  M[\"matcher_match\"] -->|nullopt| R1[\"structural mismatch<br/>nothing happens\"]\n  M -->|MatchResult| S[\"slots_from_captures\"]\n  S --> B[\"run_two_phase(build fn)\"]\n  B -->|is_rejected| R2[\"clean rejection<br/>NO consumption\"]\n  B --> P[\"arena.make(btype)<br/>data / failed / broken\"]\n  P --> MB[\"produced-&gt;merge_blocks(consumed)\"]\n  MB -->|false| R3[\"no common ancestor<br/>= clean rejection\"]\n  MB --> SH[\"shape hook (last build step)\"]\n  SH --> AX[\"root aux append<br/>include_excess / include_bounces\"]\n  AX --> OUT[\"CoreAction{name, anchor, produced, aux}\"]"
+    }
+  ],
+  "sections": [
+    {
+      "heading": "Two loops, one tree",
+      "prose": "Start with the file banner. `Walker.h` states the contract that everything else on this page depends on: the match phase NEVER mutates the block tree. That is not an implementation detail — it is what makes every matcher in a run see the same tree state as its predecessor left it, and it is what lets `--match` probe all 33 matchers against every block independently.\n\nEvery captured run below was taken from `S:/Dev/ton-indexer-clear/indexer` with `$ENGINE` = `../ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe` and `$IR` = `../ton-index-worker/ton-mch-engine/ir/mch_ir.json`; the corpus is the 148 `.lz4` fixtures in `tests/traces`.\n\nThe outer loop is in `ClassifyCore.cpp`. Read it next to the Python `event_processing.py` loop you already know: same shape (for each matcher, BFS the spine, try_build on each block), with two additions — the `parent == nullptr` guard and the B1 prefilter. The tree DOES mutate here, mid-walk, because a successful `try_build` merges blocks into a composite; the BFS reads `cur->next_blocks` only AFTER `try_build` has run on `cur`, which reproduces Python's generator-resume order exactly.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Walker.h",
+          "lines": [
+            1,
+            26
+          ],
+          "lang": "cpp",
+          "title": "Walker.h — the match-phase contract",
+          "annotations": [
+            {
+              "lines": [
+                9,
+                10
+              ],
+              "text": "\"matching never mutates the tree, so every matcher runs over the same shared block tree with clean A/B\". This is the single most useful invariant on the page: a failed match costs you nothing, a successful match costs you nothing either — consumption only becomes real when `try_build` merges. Everything else in this file is rollback machinery serving that sentence."
+            },
+            {
+              "lines": [
+                11,
+                16
+              ],
+              "text": "The determinism argument. Python's engine sorts sibling candidates by `min_lt` (`_canonical`); the C++ `Block` substrate already keeps `next_blocks` sorted ([[block-tree]]), so `canonical()` is a no-op except where the walker CONCATENATES lists — the recursion frontier. Worth knowing: if you ever see order-sensitivity, the frontier is where to look."
+            },
+            {
+              "lines": [
+                18,
+                19
+              ],
+              "text": "Host predicates are a load-time runnability question, not a runtime one: a matcher needing a C++-unavailable predicate is marked `unrunnable` and never reaches the walker. In the production artifact today that set is EMPTY — `--match` prints no SKIP lines at all."
+            },
+            {
+              "lines": [
+                21,
+                26
+              ],
+              "text": "Two interchangeable where_expr paths over ONE runtime (`ExprRuntime`). The interpreter walks the loader's JSON tree; the generated path is a table of compiled functions keyed by artifact-global node id. That they agree is a gate, not a hope — `--match` vs `--match-gen` over the corpus diffs to zero (see Check yourself)."
+            }
+          ],
+          "sha8": "e32c4291"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+          "lines": [
+            465,
+            492
+          ],
+          "lang": "cpp",
+          "title": "The outer loop — order, guard, fold-back",
+          "annotations": [
+            {
+              "lines": [
+                474,
+                476
+              ],
+              "text": "The comment is the whole subtlety: `cur->next_blocks` is read AFTER `try_build(cur)` ran. If `cur` produced a composite, the merge rewired `cur`'s successors, and the BFS enqueues the POST-merge list. Python's `bfs_iter` is a generator resumed after the body runs, so it has the same behaviour by accident of language; here it had to be reproduced on purpose."
+            },
+            {
+              "lines": [
+                480,
+                482
+              ],
+              "text": "The consumption guard, and the reason matcher order changes results. `merge_blocks` sets `parent` on every merged block; a block with a parent is inside somebody's composite and can no longer anchor anything. Corpus proof: `dedust_deposit_partial` MATCHES 14 times but produces only 4 actions — `dedust_deposit_final` sits earlier in the artifact and eats its anchors first."
+            },
+            {
+              "lines": [
+                486,
+                491
+              ],
+              "text": "The fold-back that makes the prefilter safe. `jetton_transfer` does not exist as a btype until the `jetton_transfer` matcher fires; five of the six btype-anchored matchers in prod anchor on a btype that ONLY exists after some earlier matcher produced it. Without this loop they would be prefiltered away on every trace."
+            }
+          ],
+          "sha8": "a11f473c"
+        }
+      ]
+    },
+    {
+      "heading": "The anchor: prefilter, test_self, and the conservative-superset argument",
+      "prose": "`matcher_test_self` is the cheap \"could this block possibly be my anchor\" test — the direct port of Python's `BlockMatcher.test_self`. B1 sits one level above it: instead of asking that question for every (matcher, block) pair, ask it once per (matcher, trace) against an inventory of what the trace contains at all.\n\nThe correctness argument has to be airtight, because a wrong skip silently loses actions. It rests on two asymmetries. Opcodes are STATIC: produced composite blocks carry no opcode, so the opcode set can only shrink as matchers consume blocks — and the inventory is never shrunk, making it a superset. Btypes GROW, which is unsafe in the other direction, so produced btypes are folded back after every matcher. Blocks that get consumed are never REMOVED from the inventory, so the worst case is a traversal that runs and finds nothing — never a traversal that was wrongly skipped.\n\nPred anchors opt out entirely (`prefilter = false`): their test runs an arbitrary host predicate, not an op/btype comparison, so there is nothing to index. `Mixed` anchors never run at all — the loader keeps them unrunnable because the branch structure is not stored.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.h",
+          "lines": [
+            76,
+            91
+          ],
+          "lang": "cpp",
+          "title": "AnchorFilter / IncludedMatcher",
+          "annotations": [
+            {
+              "lines": [
+                82,
+                83
+              ],
+              "text": "Non-owning pointers INTO the `CompiledMatcher`'s own anchor sets — no copy, so a matcher's anchor set has exactly one representation. The lifetime rule is stated and real: these dangle if the `LoadedIr` outlives its `ClassifySetup`, which is why both are built once in `prepare_classify` and held together."
+            },
+            {
+              "lines": [
+                88,
+                91
+              ],
+              "text": "The index and its filter live in ONE record rather than two parallel vectors. That is deliberate: `included` is a filtered subset of `ir.matchers` (build-skipped matchers are dropped), so a parallel array would be indexed by two different things and would desync the first time a skip reason changed."
+            }
+          ],
+          "sha8": "fc872fad"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+          "lines": [
+            383,
+            402
+          ],
+          "lang": "cpp",
+          "title": "prepare_classify — computing the filter once per artifact",
+          "annotations": [
+            {
+              "lines": [
+                384,
+                388
+              ],
+              "text": "`build_skip_reason` is the BUILD-phase runnability filter (missing parser / lookup kind / host fn / shaper), distinct from the loader's MATCH-phase `unrunnable`. A build-skipped matcher never enters `included`, so it costs nothing per trace. The Python twin computes the identical set from the same artifact, which is how the skip table itself is A/B checked ([[gates]])."
+            },
+            {
+              "lines": [
+                394,
+                400
+              ],
+              "text": "Only two of four anchor kinds get a filter. Note there is no `else` clause: `Pred` and `Mixed` leave `af.prefilter == false`, and `anchor_can_match` reads that as \"always traverse\". Fail-open by construction — the default for an unrecognised anchor is to do the work, not to skip it."
+            }
+          ],
+          "sha8": "1cb6761e"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+          "lines": [
+            428,
+            463
+          ],
+          "lang": "cpp",
+          "title": "The per-trace inventory and the skip decision",
+          "annotations": [
+            {
+              "lines": [
+                430,
+                435
+              ],
+              "text": "The correctness argument, written down where it is enforced. Two claims worth checking yourself: (a) produced blocks carry no opcode — `arena.make(btype)` never sets one, so `inv_opcodes` genuinely cannot grow; (b) consumed blocks are never erased from the inventory, so the set only ever over-approximates. Both hold, and both are what makes a skip provably lossless."
+            },
+            {
+              "lines": [
+                438,
+                447
+              ],
+              "text": "The inventory is taken over the SPINE only (blocks reachable via `next_blocks` from the synthetic root) — not over `children_blocks`. That matches the outer BFS's candidate set exactly: a block inside a composite has a parent and is skipped as an anchor anyway, so indexing it would only make the superset looser."
+            },
+            {
+              "lines": [
+                448,
+                462
+              ],
+              "text": "Linear scans over small sets, not a precomputed intersection — anchor sets are 1-3 elements in practice (see the IR census in [[ir-artifact]]). The early `return true` means a matcher whose anchor set has one hit stops immediately; the cost of a MISS is the full anchor-set scan, which is the common case and still tiny."
+            }
+          ],
+          "sha8": "ab1415f6"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Walker.cpp",
+          "lines": [
+            400,
+            429
+          ],
+          "lang": "cpp",
+          "title": "matcher_test_self + the match entry point",
+          "annotations": [
+            {
+              "lines": [
+                402,
+                404
+              ],
+              "text": "An opcode anchor implies `btype == \"call_contract\"`. Not redundant: `init_block` stamps the SAME opcode onto the `contract_deploy` side-effect block (`BlockTree.cpp:432`), which lives in `children_blocks` and so happens to be off the spine today — but the guard is what keeps \"anchor\" defined by block kind rather than by a bare 32-bit value, exactly as Python's `ContractMatcher` gates on `isinstance(CallContractBlock)` first."
+            },
+            {
+              "lines": [
+                406,
+                410
+              ],
+              "text": "The pred anchor runs the predicate on EVERY block of the spine — this is the \"full-scan fallback\" the prefilter deliberately does not optimise. It is correct and it is the reason `AnchorFilter::prefilter` exists as a bool rather than being inferred from an empty set."
+            },
+            {
+              "lines": [
+                411,
+                412
+              ],
+              "text": "`Mixed` returns false unconditionally. Reading this in isolation looks like a bug (a mixed anchor would never match); it is safe only because the loader marks mixed-anchor matchers unrunnable, so control never reaches here. The comment carries that invariant — if you ever make mixed anchors runnable, this line is the second half of the change."
+            },
+            {
+              "lines": [
+                423,
+                426
+              ],
+              "text": "`absorb = false` at the ROOT, true everywhere below. This asymmetry is the single most surprising thing in the walker and it is legacy parity: nested nodes swallow excess/bounce siblings into `consumed` (so they get merged), while the anchor's own excess/bounce siblings are appended to the RESULT list after a successful build — see the aux section below."
+            }
+          ],
+          "sha8": "5e289fc9"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "# which btype-anchored matchers anchor on a btype that exists at init time?\n$j = Get-Content 'ton-index-worker/ton-mch-engine/ir/mch_ir.json' -Raw | ConvertFrom-Json\n$init = @('call_contract','ton_transfer','tick_tock','contract_deploy','root','empty')\n$j.matchers | ? { $_.anchor.kind -eq 'btype' } | % { $v = $_.anchor.values -join ','\n  \"{0,-26} anchor-btype={1,-16} {2}\" -f $_.name, $v, $(if ($init -contains $v) {'INIT'} else {'PRODUCED'}) }",
+          "output": "ethena_deposit             anchor-btype=jetton_transfer  PRODUCED\ngetgems_nft_purchase       anchor-btype=nft_transfer     PRODUCED\njvault_stake               anchor-btype=jetton_transfer  PRODUCED\nnominator_pool_withdraw    anchor-btype=ton_transfer     INIT\nstonfi_v1_swap             anchor-btype=jetton_transfer  PRODUCED\nstonfi_v2_withdraw         anchor-btype=jetton_burn      PRODUCED",
+          "note": "Five of six btype anchors name a btype no init block ever has. Delete the produced-btype fold-back loop and four of those five are prefiltered out of every trace — silently, with no error and no diff in the SKIP table. That is the failure mode the fold-back exists to prevent. The fifth, `getgems_nft_purchase`, is a separate lesson: it anchors on `nft_transfer` but sits at matcher index 13 while the `nft_transfer` matcher that produces that btype sits at 19, so the fold-back never reaches it and B1 skips it on every trace TODAY. Consistent with reality — it contributes 0 of the corpus's 199 actions. The fold-back only helps a matcher that runs AFTER its producer."
+        }
+      ]
+    },
+    {
+      "heading": "Order is the whole game: priority, registration order, consumption",
+      "prose": "Python's ordering lives in the hand-maintained `matchers` list in `event_processing.py`. Here it is data: a `priority` per matcher plus an optional `registration_order` permutation in the artifact, resolved once at load.\n\nThe resolution is: apply `registration_order` (default identity), then STABLE-sort by priority ascending. Stability is the tie-break — equal-priority matchers keep artifact order. In the production artifact today only three matchers carry an explicit priority (the jetton trio at 90); everything else defaults to 100 and therefore runs in artifact order. That is the entire ordering story, and it has real consequences you can watch in the dumps below.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/IrLoader.cpp",
+          "lines": [
+            482,
+            514
+          ],
+          "lang": "cpp",
+          "title": "Ordering resolved at load — permutation, then stable priority sort",
+          "annotations": [
+            {
+              "lines": [
+                485,
+                503
+              ],
+              "text": "Fail-closed validation of a field that would otherwise corrupt quietly: an out-of-range index would read `compiled[]` out of bounds during the sort, a duplicate would drop a matcher entirely. A dropped matcher is invisible — no SKIP line, no error, just missing actions — hence three separate hard errors rather than a clamp."
+            },
+            {
+              "lines": [
+                509,
+                510
+              ],
+              "text": "`stable_sort`, not `sort`. This is the tie-break contract: same priority ⇒ registration (artifact) order preserved. `std::sort` would be free to permute equal-priority matchers and would silently change which matcher consumes an overlapping anchor first — an ordering bug that only shows up as an A/B diff on some traces."
+            },
+            {
+              "lines": [
+                512,
+                514
+              ],
+              "text": "`LoadedIr.matchers` is stored ALREADY in run order, so nothing downstream re-sorts. `artifact_index` (set before this move) is what keys the generated build-fn table — it survives the reorder, which is why the build table can be indexed by artifact position while the run walks priority order ([[build-programs]])."
+            }
+          ],
+          "sha8": "ef6aceeb"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "$j = Get-Content 'ton-index-worker/ton-mch-engine/ir/mch_ir.json' -Raw | ConvertFrom-Json\n\"registration_order == identity: \" + (($j.registration_order -join ',') -eq ((0..($j.matchers.Count-1)) -join ','))\n$j.matchers | % { $p = if ($null -eq $_.priority) { 100 } else { $_.priority }; \"pri={0,-4} {1}\" -f $p, $_.name } | Select -First 7",
+          "output": "registration_order == identity: True\npri=90   jetton_transfer\npri=90   jetton_burn\npri=90   jetton_mint\npri=100  coffee_create_vault\npri=100  coffee_swap\npri=100  dedust_deposit_final\npri=100  dedust_deposit_partial",
+          "note": "The jetton trio runs first by priority so that composites named `jetton_transfer` / `jetton_burn` exist for the protocol matchers to anchor on and capture. Everything after them is pure artifact order — note `dedust_deposit_final` before `dedust_deposit_partial`, which is why the partial matcher loses its anchors below."
+        },
+        {
+          "cmd": "# same fixture, two modes. --match probes every matcher independently (no consumption).\n# cosmetic only: consumed lists dropped, 'call_contract#'->'cc#', lt prefix 428731040000 stripped.\n& $ENGINE --match -I $IR -T 'tests\\traces\\-0M6pWgvSrqN06gIYbqrG2UbMCBKwiSuhR3-mZzRCS0=.lz4' |\n  % { $_ -replace ' consumed=\\[[^\\]]*\\]','' -replace 'call_contract#','cc#' -replace '@428731040000','@' }",
+          "output": "=== -0M6pWgvSrqN06gIYbqrG2UbMCBKwiSuhR3-mZzRCS0=.lz4\nMATCH jetton_transfer anchor=cc#0f8a7ea5@03 captures={transfer=cc#0f8a7ea5@03,internal=cc#178d4519@05,notify=cc#7362d09c@07}\nMATCH dedust_deposit_partial anchor=cc#54240fe5@09 captures={topup=cc#54240fe5@09,deposit_ton=cc#d55e4686@02,deposit_transfer=null,deposit_notify=null}\nMATCH dedust_deposit_partial anchor=cc#54240fe5@12 captures={topup=cc#54240fe5@12,deposit_ton=null,deposit_transfer=null,deposit_notify=cc#7362d09c@07}\nMATCH dedust_deposit_final anchor=cc#b56b9598@14 captures={pool=cc#b56b9598@14,lp_transfer=cc#178d4519@18,rejection=null,deposit_ton=null,deposit_transfer=null,deposit_notify=cc#7362d09c@07}\nMATCH jetton_transfer anchor=cc#0f8a7ea5@21 captures={transfer=cc#0f8a7ea5@21,internal=cc#178d4519@23,notify=null}",
+          "note": "Five matches, and they OVERLAP: `cc#7362d09c@07` is captured by three different matchers. That is legal precisely because `--match` never consumes — it runs `matcher_match` with a fresh `MatchState` for every (block, matcher) pair. Note also `deposit_transfer=null` / `deposit_ton=null`: unbound `opt` slots, not errors. Drop the `-replace ' consumed=…'` to see the same block in three separate consumed lists."
+        },
+        {
+          "cmd": "& $ENGINE --classify -I $IR -T 'tests\\traces\\-0M6pWgvSrqN06gIYbqrG2UbMCBKwiSuhR3-mZzRCS0=.lz4' |\n  % { $_ -replace ' data=\\{.*\\} consumed=',' consumed=' -replace 'call_contract#','cc#' -replace '@428731040000','@' }",
+          "output": "=== -0M6pWgvSrqN06gIYbqrG2UbMCBKwiSuhR3-mZzRCS0=.lz4\nACTION jetton_transfer anchor=cc#0f8a7ea5@03 btype=jetton_transfer failed=0 broken=0 consumed=[cc#0f8a7ea5@03,cc#178d4519@05,cc#7362d09c@07] auto=[]\nACTION jetton_transfer anchor=cc#0f8a7ea5@21 btype=jetton_transfer failed=0 broken=0 consumed=[cc#0f8a7ea5@21,cc#178d4519@23,cc#d53276db@25] auto=[]\nACTION dedust_deposit_final anchor=cc#b56b9598@14 btype=dedust_deposit_liquidity failed=0 broken=0 consumed=[cc#178d4519@18,cc#54240fe5@09,cc#54240fe5@12,cc#6b0b787f@19,cc#7362d09c@20,cc#9b3aa3fa@08,cc#9b3aa3fa@11,cc#aae79256@17,cc#b56b9598@14,cc#d53276db@21,cc#d55e4686@02,cc#f04ec526@06,cc#f04ec526@09,jetton_transfer@03,jetton_transfer@21,ton_transfer@20] auto=[]",
+          "note": "Same trace, ordered consuming loop, `data={…}` dropped for width. Three things to read: (1) the jetton trio ran first, so `dedust_deposit_final` consumes `jetton_transfer@03` / `@21` COMPOSITES, not the raw `#0f8a7ea5` calls they replaced — the merge spliced them into the spine; (2) both `dedust_deposit_partial` matches vanished, because `dedust_deposit_final` sits earlier in artifact order and merged their `cc#54240fe5@09` / `@12` anchors, so the `parent == nullptr` guard skipped them; (3) `cc#7362d09c@07`, matched three ways above, is consumed exactly once here — by the jetton_transfer that got there first."
+        }
+      ]
+    },
+    {
+      "heading": "Inside match_node",
+      "prose": "`MatchState` is one attempt's worth of state: bindings, consumed, visited, recursion frames, current frame, depth. The matcher itself is immutable, so a `MatchState` is cheap and disposable — `matcher_match` makes one per anchor and throws it away.\n\n`match_node` is the whole grammar in 35 lines. Read it as: dispatch the two composite kinds (Or / Recursive) first, then for a plain node do head test → consume → bind → three edge phases → aux absorption. Every one of those steps can fail, and failure just returns false — the CALLER decides whether to roll back, because only the caller knows whether it is inside an optional edge or a branch alternative.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Walker.cpp",
+          "lines": [
+            13,
+            48
+          ],
+          "lang": "cpp",
+          "title": "Attempt state: frames, marks, canonical order",
+          "annotations": [
+            {
+              "lines": [
+                20,
+                25
+              ],
+              "text": "The depth cap exists to convert an undefined stack overflow into a clean per-trace failure, mirroring Python's `RecursionError` hitting the trace-level fallback. 500 vs an observed corpus max of 2 tells you this is a guard against pathological input, not a tuning knob — do not raise it to \"fix\" a matcher."
+            },
+            {
+              "lines": [
+                27,
+                30
+              ],
+              "text": "`Frame` is the capture SCOPE, not a call frame: (recursive-node id, iteration index) or `kExitIdx` for the exit attempt. `nid == -1` means \"outside any recursion\". Every `bind()` records the frame that was current, and that pair is what lets `assemble_captures` reconstruct per-iteration lists later."
+            },
+            {
+              "lines": [
+                39,
+                41
+              ],
+              "text": "A `Mark` is three sizes. Rollback is `resize` on three vectors plus erasing the tail from `visited_` — O(undone work), no copying, no journal. This cheapness is why the walker can afford to try every branch and every child candidate speculatively."
+            },
+            {
+              "lines": [
+                43,
+                48
+              ],
+              "text": "`stable_sort` by `min_lt` — stable so equal-lt siblings keep list order. As the header says this is a no-op for a single block's `next_blocks` (already canonical from [[block-tree]]); it earns its keep on the recursion frontier, which is built by concatenating several blocks' successor lists."
+            }
+          ],
+          "sha8": "f693e100"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Walker.cpp",
+          "lines": [
+            57,
+            93
+          ],
+          "lang": "cpp",
+          "title": "match_node — the grammar in one function",
+          "annotations": [
+            {
+              "lines": [
+                67,
+                72
+              ],
+              "text": "Or and Recursive are dispatched BEFORE `test_head`. This is load-bearing for `or`: `test_head`'s Or case implements the `exclusive` count rule, and skipping it here is exactly what makes `exclusive` INERT when an or-node is an edge target — legacy `ExclusiveOrMatcher` inherits `try_build` from `OrMatcher` without consulting `test_self`. `stonfi_v2_swap` depends on that inertness."
+            },
+            {
+              "lines": [
+                76,
+                79
+              ],
+              "text": "Consume-then-bind happens BEFORE the edges are attempted, so a node's own block is in `consumed` while its subtree matches. That ordering is what gives `consumed` its traversal order (anchor first), which builders receive verbatim as `_mch_consumed` ([[build-programs]])."
+            },
+            {
+              "lines": [
+                80,
+                88
+              ],
+              "text": "Three edge phases, fixed order, any failure aborts. Note what is NOT here: no rollback. A false return leaves `bindings_`/`consumed_` dirty on purpose — the caller that took a `Mark` is the one that undoes it, and at the very top `matcher_match` just drops the whole `MatchState`."
+            },
+            {
+              "lines": [
+                89,
+                91
+              ],
+              "text": "`absorb` is a parameter, not a matcher flag, and it is false only at the root. Nested nodes ALWAYS absorb excess/bounce regardless of the matcher's `include_excess` / `include_bounces` — those flags govern only the root append. This asymmetry is inherited from v1 (nested `ContractMatcher`s were built with default flags) and it is a real trap: `nft_transfer` sets `include_excess = false` yet still swallows nested excess messages into `consumed`."
+            }
+          ],
+          "sha8": "efebe2df"
+        }
+      ]
+    },
+    {
+      "heading": "The head test",
+      "prose": "`test_head` answers \"does this node's own description fit this block\", with no edges involved. It is used in three places: by `match_node` for plain nodes, by `match_recursive` as the entry gate on the STEP node, and recursively by itself for nested Or/Recursive kinds.\n\nThe `exclusive` rule lives here and only here. Counting branch head tests and requiring exactly one is a HEAD-test rule — it never gates branch attempts. If you are trying to work out why an `exclusive or` behaves like a plain `or` in some position, the answer is that `match_node` dispatched straight to `match_or`.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Walker.cpp",
+          "lines": [
+            127,
+            164
+          ],
+          "lang": "cpp",
+          "title": "test_head — kind dispatch",
+          "annotations": [
+            {
+              "lines": [
+                131,
+                133
+              ],
+              "text": "The `Contract` kind is an opcode test AND a btype test. Same pairing as `matcher_test_self` — an opcode node can only ever match a `call_contract` block, which is why a produced composite (no opcode, different btype) is unreachable from an opcode node and can only be reached by a `block_type` node."
+            },
+            {
+              "lines": [
+                140,
+                155
+              ],
+              "text": "The `exclusive` count rule: count how many branch HEADS accept this block, require exactly one. Non-exclusive is a plain any-of with early exit. Both recurse into `test_head`, never into `match_node` — so no edges, no consumption, no bindings. Cheap by construction, because this can run inside a recursion entry gate on every frontier candidate."
+            },
+            {
+              "lines": [
+                156,
+                158
+              ],
+              "text": "A recursive node's head IS its step's head. That is why `match_recursive` can call `test_head(node.step, entry)` as its gate and why an `or` nested directly under a recursive node gets its exclusivity rule applied (the one position where `exclusive` is NOT inert)."
+            },
+            {
+              "lines": [
+                159,
+                163
+              ],
+              "text": "A `pred` node reaching the runtime means the loader let it through, which it only does when the predicate is registered. The `it != end()` guard is belt-and-braces: an unregistered name evaluates to false rather than dereferencing a bad iterator, honouring the engine's no-abort rule ([[big-picture]])."
+            }
+          ],
+          "sha8": "638db6fd"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Walker.cpp",
+          "lines": [
+            165,
+            181
+          ],
+          "lang": "cpp",
+          "continues": true,
+          "title": "…and the where composition",
+          "annotations": [
+            {
+              "lines": [
+                171,
+                176
+              ],
+              "text": "Named `where` predicates are host functions and are the reason a matcher can be `unrunnable`. Order matters: kind test → named where → inline where_expr. A where_expr may therefore assume the kind already matched, which is what lets specs write `.field` accesses that would be nonsense on another btype."
+            },
+            {
+              "lines": [
+                177,
+                179
+              ],
+              "text": "The inline `where (expr)` composes onto the head test rather than gating an edge. Consequence for spec authors: a where_expr can only see the CANDIDATE block — no captures, no siblings, no parent. If you need cross-block conditions, they belong in the build program's `reject when` ([[build-programs]]), which runs after the whole match succeeded."
+            }
+          ],
+          "sha8": "3901a694"
+        }
+      ]
+    },
+    {
+      "heading": "Edges: child, children-set, parent, or",
+      "prose": "Four edge forms, four different semantics, and they are easy to conflate. In IR terms: `child` is a single node id, `children` is a list of node ids, `parent` is a single node id, and `or` is a node kind with a `branches` list. All four appear on the same node record and are evaluated in the order child → children → parent.\n\nThe pair to keep straight is `child` vs `children`. `child` accumulates: it tries the SAME node against EVERY successor and keeps all that match — one matcher node can bind many blocks. `children` is a bag-assignment: each declared item takes the first successor it fits and REMOVES it from a working copy, so two items can never claim the same block. Overlap between the two phases is legal because `consume()` dedupes by identity.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Walker.cpp",
+          "lines": [
+            183,
+            220
+          ],
+          "lang": "cpp",
+          "title": "child edge (accumulating) vs children set (consuming)",
+          "annotations": [
+            {
+              "lines": [
+                187,
+                195
+              ],
+              "text": "Multi-match accumulation: no `break`. Every successor that matches is kept, every one that fails is rolled back individually. A `many` capture on the child node therefore collects one entry per matching sibling — this is the ordinary way a spec captures \"all the payout legs\"."
+            },
+            {
+              "lines": [
+                196,
+                196
+              ],
+              "text": "`matched_any || optional` — an `optional` child edge succeeds with zero matches, but a non-optional one needs at least ONE, not all. Contrast the children set below, where optionality is per declared item."
+            },
+            {
+              "lines": [
+                203,
+                203
+              ],
+              "text": "`working` is a private copy, so the children phase cannot see the child phase's consumption and vice versa. That is the documented legacy behaviour (`process_children_matchers` copies `block.next_blocks`), and it is why the same block can be bound by both a child edge and a children item in one match."
+            },
+            {
+              "lines": [
+                206,
+                214
+              ],
+              "text": "First-match-wins with removal, and NO backtracking across items: if item A greedily takes the block item B needed, the match fails rather than retrying a different assignment. This is bag-assignment, not bipartite matching — declaration order of `children` is therefore semantically significant in a spec."
+            }
+          ],
+          "sha8": "c32b3723"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Walker.cpp",
+          "lines": [
+            222,
+            246
+          ],
+          "lang": "cpp",
+          "title": "parent edge and or",
+          "annotations": [
+            {
+              "lines": [
+                226,
+                233
+              ],
+              "text": "One candidate only: `previous_block`. The parent edge walks UP a single link and then matches a full subtree downward from there — which means a parent node's own `child` edge can re-descend onto the block you came from. Blocks reached twice are deduped by `consume()`, so this is a supported (and used) idiom for \"my parent must also have a sibling of kind X\"."
+            },
+            {
+              "lines": [
+                234,
+                234
+              ],
+              "text": "A null `previous_block` does not fail outright — it falls through to the optionality check. So `parent` on the root of a spine succeeds iff the parent node is optional, which is exactly what lets one matcher serve both the top-level and the nested occurrence of a pattern."
+            },
+            {
+              "lines": [
+                238,
+                245
+              ],
+              "text": "First branch whose FULL SUBTREE matches wins — `match_node`, not `test_head`. Branch order in the spec is the tie-break, and prefix-overlapping branches (stonfi_v2's hop/final arms) resolve first-in-order. No `exclusive` check anywhere in this function: that is the inertness described above, and it is deliberate parity, not an omission."
+            }
+          ],
+          "sha8": "3b2dc00c"
+        }
+      ]
+    },
+    {
+      "heading": "Recursion: frontier walk and cyclic descent",
+      "prose": "Two strategies share one node kind. `frontier` (9 of 11 recursive nodes in the prod artifact) is an iterative walk: try the exit first on each candidate, else take one step, then rebuild the frontier from what that step consumed. `cyclic` (2 nodes) is not iterative at all — the node graph itself contains back-edges, so recursion is ordinary `match_node` descent bounded by tree depth.\n\nThe frontier loop has three rules that surprise people. Exit is tried FIRST per candidate (so a pattern whose exit shares a prefix with its step will terminate early — the reason `tonco_swap` uses cyclic instead). Only ONE step is taken per round, then the frontier is replaced. And frontier exhaustion succeeds iff at least one step landed, REGARDLESS of whether an exit was declared — a declared exit that never fires does not fail the recursion, it just leaves its captures empty.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Walker.cpp",
+          "lines": [
+            248,
+            305
+          ],
+          "lang": "cpp",
+          "title": "match_recursive — 58 lines, but the loop's three rules only make sense together",
+          "annotations": [
+            {
+              "lines": [
+                249,
+                259
+              ],
+              "text": "The entry gate runs the recursive node's OWN where clauses against the entry block, before any strategy dispatch — and before the step's head test. So a `where` on a recursive node is a precondition on entering the recursion at all, not a per-iteration filter."
+            },
+            {
+              "lines": [
+                260,
+                262
+              ],
+              "text": "Cyclic: no frame push, no frontier, no exit — just descend into the body, whose subgraph refers back to its own root. `frame_` is untouched, which is precisely why the loader REJECTS capture slots anywhere inside a cyclic body: there would be no frame to attribute them to."
+            },
+            {
+              "lines": [
+                271,
+                281
+              ],
+              "text": "Exit-first per candidate, with its own frame (`kExitIdx`). On success it pushes a non-step FrameEntry, restores the outer frame and returns immediately — note it does NOT roll back the step frames already recorded, so the exit's captures land after the accumulated step captures in assembly order."
+            },
+            {
+              "lines": [
+                286,
+                295
+              ],
+              "text": "The frontier is rebuilt from the successors of exactly what THIS step consumed (`consumed_` beyond the mark), then canonicalised. `break` after the first successful step is the one-step-per-round rule: sibling candidates that would also have matched are not tried in this round — they reappear only if they are successors of the consumed set."
+            },
+            {
+              "lines": [
+                299,
+                302
+              ],
+              "text": "`return iter_index > 0`: zero iterations is a failure, one or more is a success even with no exit. Combined with `optional` on the recursive node at the call site, that gives the familiar \"zero-or-more hops\" shape. The exit's presence is irrelevant to success — pinned by `test_walker.py::test_frontier_exhaustion_leaves_exit_captures_empty`."
+            }
+          ],
+          "sha8": "2ae7e9b3"
+        }
+      ]
+    },
+    {
+      "heading": "Bookkeeping: consume, rollback, and the absorb asymmetry",
+      "prose": "Four tiny functions carry the entire transactional model. `consume` is identity-deduped and append-only within an attempt; `mark`/`rollback` are the undo; `bind` records (slot, current frame, block).\n\n`absorb_aux` is the nested half of excess/bounce handling — and it is the half that puts blocks into `consumed`, meaning they get MERGED into the produced composite. The root half (next section) only appends to the result list. Two levels, two different destinations, one flag pair that governs only the second.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Walker.cpp",
+          "lines": [
+            307,
+            334
+          ],
+          "lang": "cpp",
+          "title": "absorb_aux + the context primitives",
+          "annotations": [
+            {
+              "lines": [
+                307,
+                314
+              ],
+              "text": "No reference to `include_excess` / `include_bounces` anywhere — nested absorption behaves as if both were always true. That is v1 parity (nested `ContractMatcher`s carried default flags and IR node records have no flags at all), and it means `nft_transfer`'s `include_excess: false` only suppresses the ROOT append."
+            },
+            {
+              "lines": [
+                319,
+                326
+              ],
+              "text": "Rollback must undo `visited_` as well as `consumed_`, and it does it by erasing exactly the tail. Miss this and a rolled-back attempt would leave blocks marked visited, so a later successful attempt would silently omit them from `consumed` — a bug that would surface as a too-small merge set, not as a match failure."
+            },
+            {
+              "lines": [
+                328,
+                332
+              ],
+              "text": "Identity dedup at consume time is what makes overlapping edges safe (child ∩ children, parent re-descent, absorbed aux). The resulting list is traversal order with the anchor first — and that order is observable: builders receive it as `consumed`, and the classify dump prints it."
+            },
+            {
+              "lines": [
+                334,
+                334
+              ],
+              "text": "`bind` snapshots the CURRENT frame, not the node. Two bindings of the same slot from different recursion iterations are distinguished only by that frame tuple — the whole per-iteration capture story below rests on this one line."
+            }
+          ],
+          "sha8": "2eae84eb"
+        }
+      ]
+    },
+    {
+      "heading": "Capture assembly: slots, frames, gap alignment",
+      "prose": "Bindings are recorded flat during the walk and folded into captures only at the end. The fold has three modes, keyed by the slot's cardinality and by whether the slot is OWNED by a recursion node.\n\nScalar (`one` / `opt`): first binding wins, unbound is a null. `many` outside any recursion: every binding in order. `many` owned by a recursive node R: one element per iteration FRAME of R, in iteration order, with a null for an iteration that bound nothing — that is the gap alignment, and it is what keeps two parallel `many` captures index-aligned across hops. Iterations that consumed nothing contribute no element at all.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Walker.h",
+          "lines": [
+            45,
+            74
+          ],
+          "lang": "cpp",
+          "title": "What a Capture is",
+          "annotations": [
+            {
+              "lines": [
+                52,
+                59
+              ],
+              "text": "A scalar capture is a list of exactly one, possibly `nullptr`. Uniform shape, so the slot conversion for the build phase has no special case; the `is_list` flag is what tells the renderer whether to print `null` or `[…]`. In the `--match` dump you can read both forms directly."
+            },
+            {
+              "lines": [
+                61,
+                64
+              ],
+              "text": "`consumed` is deduped traversal order and `captures` is slot DECLARATION order — neither is sorted. Both orders are observable in dumps and both are part of the A/B contract with the Python twin ([[gates]])."
+            },
+            {
+              "lines": [
+                70,
+                73
+              ],
+              "text": "`nullopt` means structural mismatch and nothing else — there is no error channel out of matching. Faults inside a where_expr become `false` (next section), a depth blow-up throws, and everything else is just \"no match\"."
+            }
+          ],
+          "sha8": "e48113e5"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Walker.cpp",
+          "lines": [
+            336,
+            386
+          ],
+          "lang": "cpp",
+          "title": "assemble_captures — 51 lines because the three cardinality modes only make sense side by side",
+          "annotations": [
+            {
+              "lines": [
+                337,
+                345
+              ],
+              "text": "Two indexes built in one pass, both using `emplace` so FIRST binding wins. `first_any` serves scalars; `first_framed` is keyed by (slot, recursion node, iteration) and serves the framed `many` case. Everything downstream is lookups into these two maps."
+            },
+            {
+              "lines": [
+                352,
+                357
+              ],
+              "text": "Scalar: first binding, or `nullptr`. Note that an unbound `one` is a null rather than a failure — the loader and frontend are trusted to guarantee it binds, and hard-failing here would turn a spec bug into a trace failure. Python does the same."
+            },
+            {
+              "lines": [
+                359,
+                366
+              ],
+              "text": "Plain `many` (not owned by any recursion) — every binding in walk order. This is what a `many` capture on a child edge produces: one entry per matching sibling, no gaps, no framing."
+            },
+            {
+              "lines": [
+                368,
+                374
+              ],
+              "text": "The gap alignment. One element per STEP frame of the owning recursion, in frame order; a frame that bound nothing for this slot contributes an explicit `nullptr`. That is what keeps two `many` captures from the same recursion index-aligned — element i of both lists comes from iteration i."
+            },
+            {
+              "lines": [
+                371,
+                371
+              ],
+              "text": "`e.consumed_any` is the exception to \"one element per frame\": an iteration that consumed nothing contributes NO element, not a null. Subtle, and it is the difference between a trailing null and a shorter list — worth remembering when a peer_swaps-style list is one shorter than you expected."
+            },
+            {
+              "lines": [
+                375,
+                381
+              ],
+              "text": "Exit-frame bindings append AFTER the step elements, at most one. Combined with the early `return true` in the exit branch, this is why a recursion's final hop lands at the end of its list rather than being interleaved."
+            }
+          ],
+          "sha8": "43ee3064"
+        }
+      ]
+    },
+    {
+      "heading": "where_expr — the only expressions the match phase runs",
+      "prose": "Matching evaluates exactly one kind of expression: a node's inline `where (expr)`, against one candidate block. Everything else — `parse`, `lookup`, host `fn`, `let`, `out` — is build phase ([[build-programs]]).\n\nTwo details matter for reading specs. First, a fault is not an error: `eval_where` collapses faulted, non-bool, and false into a single `false`, so a where clause that trips over a missing field simply does not match. Second, the interpreter's scope model is a single copied frame per comprehension — `map(xs as e => …)` binds `e` into a COPY of the environment, so the element variable shadows for the body only and never leaks. And `parse` as an expression is explicitly unreachable in the interpreter, which is another way of saying a where clause can never parse a message body.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Walker.cpp",
+          "lines": [
+            105,
+            124
+          ],
+          "lang": "cpp",
+          "title": "eval_where — faults are just false",
+          "annotations": [
+            {
+              "lines": [
+                106,
+                106
+              ],
+              "text": "`WhereEnv{block, nullptr, 0}` — the slots pointer is null and `n_slots` is zero. The signature is future-proofed for slot-aware where clauses but nothing supplies them today, so a where_expr genuinely cannot see any capture, only the candidate block's own data."
+            },
+            {
+              "lines": [
+                108,
+                113
+              ],
+              "text": "The generated path is a hash lookup by artifact-global node id, and a MISS returns false rather than falling back to the interpreter. That would be a silent wrong answer, which is why `run_match` validates full coverage up front and refuses to start otherwise — the guard is at the door, not here."
+            },
+            {
+              "lines": [
+                123,
+                123
+              ],
+              "text": "One line collapses three outcomes into false: faulted, wrong type, or false. That is the documented rule (`engine.py eval_where_expr`) and it is why a where clause is safe to write speculatively — a null-propagating access chain that ends in null just fails the node instead of failing the trace."
+            }
+          ],
+          "sha8": "cac21f18"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ExprEval.cpp",
+          "lines": [
+            104,
+            130
+          ],
+          "lang": "cpp",
+          "title": "The comprehension binder — one copied scope frame",
+          "annotations": [
+            {
+              "lines": [
+                111,
+                118
+              ],
+              "text": "`Env local = env_` is copied ONCE outside the lambda, then `local[var]` is overwritten per element. So the element variable shadows any outer binding for the body only, `env_` is never touched, and nested comprehensions each get their own copy. This mirrors the Python engine's scope frame exactly — including the fact that later elements see no residue from earlier ones except through `local[var]` being reassigned."
+            },
+            {
+              "lines": [
+                119,
+                122
+              ],
+              "text": "`map` and `any`/`all` share the binder and differ only in the core they hand it to. Both cores live in `ExprRuntime` and are shared with the generated code, so a comprehension means the same thing in a where clause and in a compiled build program ([[value]])."
+            },
+            {
+              "lines": [
+                124,
+                130
+              ],
+              "text": "`parse` is a build-only expression and faults here. Since a fault in a where clause is just `false`, a spec that put `parse` inside `where` would produce a matcher that never matches — silently. Worth knowing as a debugging shortcut: a where clause that mysteriously never fires is worth checking for build-only constructs."
+            }
+          ],
+          "sha8": "3508c807"
+        }
+      ]
+    },
+    {
+      "heading": "try_build: produce, merge, aux — and the flow construct that is not here",
+      "prose": "`try_build` is where a match becomes permanent. It is also where four different things can decline, all of them cleanly: a structural mismatch, a build-program `reject when`, a failed merge, and (upstream) an anchor that already has a parent.\n\nOne removal deserves a banner, because it is a trap for anyone reading this with the Python classifier in mind. **There is no `value_flow` here, and no `flow` statement in the language.** `AccountValueFlow` is not persisted to the database and the Go API computes flows separately, so the C++ engine never produces them: Phase E does not port `AccountValueFlow`, the `flow` statement was dropped from the IR (grep the artifact — zero occurrences), and `value_flow` was removed from the parity gate. If you are looking for where flows are accumulated during the merge, the answer is nowhere.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+          "lines": [
+            26,
+            52
+          ],
+          "lang": "cpp",
+          "title": "try_build — match, build, produce, merge",
+          "annotations": [
+            {
+              "lines": [
+                29,
+                32
+              ],
+              "text": "`matcher_match` does test_self + the whole walk. A `nullopt` here is completely free: nothing was consumed, nothing was allocated, the tree is untouched. That is the property that makes running 33 matchers over every spine block affordable in the first place."
+            },
+            {
+              "lines": [
+                38,
+                41
+              ],
+              "text": "`needs_lookups` skips the collect pass for matchers that reference neither a `lookup` node nor a host `fn` (the `BuildDriver.h` comment records 12 of 36 at the time it was written) — provably byte-identical, because a matcher with no lookups can only ever produce zero misses ([[build-programs]])."
+            },
+            {
+              "lines": [
+                43,
+                45
+              ],
+              "text": "A `reject when` firing returns false with NO consumption and no aux — the rejection has to be clean because the anchor must stay available for the next matcher. This is why the aux append is deliberately placed AFTER the build rather than before it."
+            },
+            {
+              "lines": [
+                46,
+                52
+              ],
+              "text": "`o.btype.empty() ? m.produces.front() : o.btype` — a build program may switch its produced btype, otherwise the first declared `produces` wins. And a merge returning false is ALSO a clean rejection: Python's `merge_blocks` raises when the consumed set has no earliest common ancestor, `try_build` catches it, and the net effect is the same nothing-happened."
+            }
+          ],
+          "sha8": "0af37742"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.cpp",
+          "lines": [
+            283,
+            317
+          ],
+          "lang": "cpp",
+          "title": "merge_blocks — the only mutation matching ever causes",
+          "annotations": [
+            {
+              "lines": [
+                293,
+                296
+              ],
+              "text": "`ensure_earliest_common_block` is the gate: the consumed set must have a single earliest block that dominates the rest. Returning nullptr here is the \"merge raises\" path — a structurally impossible composite is refused rather than built wrong."
+            },
+            {
+              "lines": [
+                297,
+                301
+              ],
+              "text": "`b->parent = this` on every merged block. This one assignment is what the outer loop's `cur->parent == nullptr` guard reads, so THIS is the exact moment a block stops being available as an anchor for later matchers. Ordering effects all trace back to this line."
+            },
+            {
+              "lines": [
+                302,
+                306
+              ],
+              "text": "The composite splices itself into the spine: it takes the frontier (successors of the merged set that are outside it) as its own `next_blocks`, and inherits the earliest block's `previous_block`. That is how a later matcher sees `jetton_transfer@…` as a spine sibling instead of the three raw calls it replaced."
+            },
+            {
+              "lines": [
+                307,
+                312
+              ],
+              "text": "Note what is absent: no flow accumulation, no `AccountValueFlow`. In the Python `Block.merge_blocks` this is where value flows would be folded together. Here the merge is purely structural — event nodes, children, lt bounds, connections."
+            }
+          ],
+          "sha8": "cc6eb046"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+          "lines": [
+            69,
+            89
+          ],
+          "lang": "cpp",
+          "title": "Root aux append — the other half of excess/bounce",
+          "annotations": [
+            {
+              "lines": [
+                69,
+                75
+              ],
+              "text": "\"from the ANCHOR's next_blocks (unchanged by the merge)\" — the anchor keeps its own successor list even after being merged into `produced`, so this reads pre-merge topology. Reading `produced->next_blocks` instead would give the frontier and silently pick up different blocks."
+            },
+            {
+              "lines": [
+                77,
+                84
+              ],
+              "text": "Here — and only here — do `include_excess` / `include_bounces` apply. Compare `absorb_aux`: nested absorption ignores both flags and puts blocks in `consumed` (merged), this one honours them and puts blocks in `aux` (appended alongside). Same two opcodes, two completely different destinations."
+            },
+            {
+              "lines": [
+                87,
+                87
+              ],
+              "text": "`aux` travels as a separate field of `CoreAction`, never merged into `produced`. That is why the classify dump prints `consumed=[…] auto=[…]` as two lists — and why in the whole 148-trace corpus only two actions have a non-empty `auto`, both bounces."
+            }
+          ],
+          "sha8": "8a7597ba"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "& $ENGINE --classify -I $IR -T tests\\traces |\n  Select-String 'auto=\\[.+\\]' | % { $_.Line -replace ' data=\\{.*?\\} consumed=',' consumed=' }",
+          "output": "ACTION jvault_unstake_request anchor=call_contract#0168d4b7@56850346000002 btype=jvault_unstake_request failed=1 broken=0 consumed=[call_contract#0168d4b7@56850346000002] auto=[call_contract#ffffffff@56850346000004]\nACTION jvault_unstake anchor=call_contract#499a9262@52779926000002 btype=jvault_unstake failed=0 broken=0 consumed=[call_contract#499a9262@52779926000002] auto=[call_contract#ffffffff@52779932000002]",
+          "note": "Two of 199 corpus actions carry a root aux append, both `0xffffffff` bounces. Note the aux block is NOT in `consumed` — it was never merged, so it stays an independent spine block that a later matcher could still anchor on. (`$ENGINE` / `$IR` are the exe and `ir/mch_ir.json` paths from the header of this chapter.)"
+        }
+      ]
+    },
+    {
+      "heading": "block_key and the --match dump",
+      "prose": "`block_key` is the one string that makes all of this observable, and it is shared verbatim by the match dump, the classify dump, the action dump and the Python twins. `<btype>[#<opcode-hex8>]@<min_lt>`: btype tells you init vs composite, the opcode is present only on `call_contract`, and `min_lt` is the identity within a trace.\n\n`--match` is the debugging mode built directly on `matcher_match`. It deliberately does NOT run the classify loop: no prefilter, no priority order, no consumption, no builds. Every runnable matcher is probed against every block, so overlapping matches are expected and informative — the difference between the `--match` output and the `--classify` output on the same trace IS the ordering/consumption effect.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BuildDriver.cpp",
+          "lines": [
+            41,
+            50
+          ],
+          "lang": "cpp",
+          "title": "block_key",
+          "annotations": [
+            {
+              "lines": [
+                43,
+                47
+              ],
+              "text": "Lowercase `%08x`, zero-padded, and only when an opcode is present. Both halves are part of the cross-language contract — a produced composite has no opcode, so `jetton_transfer@42873104000003` versus `call_contract#0f8a7ea5@42873104000003` is how you tell a composite from the raw call it merged, at the same lt."
+            },
+            {
+              "lines": [
+                48,
+                48
+              ],
+              "text": "`min_lt` is the identity, not a pointer or an index. It is stable across runs and across languages, which is what lets the Python twin emit byte-identical dump lines ([[gates]]). Two blocks CAN share a min_lt (a composite and its earliest member), which is why btype is part of the key."
+            }
+          ],
+          "sha8": "50f14a39"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/MatchRunner.cpp",
+          "lines": [
+            58,
+            97
+          ],
+          "lang": "cpp",
+          "title": "dump_fixture — every matcher against every block",
+          "annotations": [
+            {
+              "lines": [
+                65,
+                70
+              ],
+              "text": "The double loop with no state between iterations: `matcher_match` is called fresh for every (block, matcher) pair. No prefilter, no priority order, no `parent == nullptr` guard, no builds. This is a probe, not a run — which is exactly why it is the right tool for \"why doesn't my matcher fire\"."
+            },
+            {
+              "lines": [
+                74,
+                78
+              ],
+              "text": "`consumed` is SORTED here, unlike everywhere else. The dump wants a stable set comparison against the Python twin; traversal order is preserved in the real `MatchResult` and is what builders see. Do not read the dump's consumed order as traversal order."
+            },
+            {
+              "lines": [
+                86,
+                91
+              ],
+              "text": "Captures print in slot declaration order with `null` for unbound — so an all-null capture set tells you the walk succeeded structurally but every optional edge missed. Lists print as `[a,b,null]`, with the nulls being gap-alignment placeholders from a recursion."
+            }
+          ],
+          "sha8": "208a3f44"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "& $ENGINE --match    -I $IR -T tests\\traces > match.txt\n& $ENGINE --match-gen -I $IR -T tests\\traces > match_gen.txt\n\"diff lines: \" + ((Compare-Object (gc match.txt) (gc match_gen.txt)) | Measure-Object).Count\n\"MATCH lines: \" + ((gc match.txt | Select-String '^MATCH ').Count)",
+          "output": "diff lines: 0\nMATCH lines: 183",
+          "note": "The interpreter and the generated where_expr functions agree on all 183 matches across the 148-trace corpus. Note also that neither run printed a single `SKIP` line — the production artifact currently has zero match-unrunnable matchers, so every matcher on this page really does run."
+        }
+      ]
+    },
+    {
+      "heading": "Python-parity trap: the in-leg `event_nodes[0]` story",
+      "prose": "Worth knowing because it is the one place where the Python side was genuinely non-deterministic and the C++ port could not simply copy it. `build_stonfi_v2_swap_core` used to read `in_transfer.event_nodes[0].message` to describe the incoming leg. On a set-merged composite the node order is hash-seed dependent, so `event_nodes[0]` flipped between the excess message and the jetton notify across runs on the SAME trace — and with it `dex_incoming_transfer`, `sender`, `source_asset`, `peer_swaps[].in`.\n\n**Current state, verified in the tree:** fixed. The dual-dispatch wave replaced the message read with a btype gate on both sides, and the fix was proven stable across `PYTHONHASHSEED` 1/7/999. The C++ trio is registered and 7 `stonfi_v2_swap` actions fire in the corpus. Older notes calling this a blocker for the stonfi_v2 port are stale. The general lesson survives the fix and is the reason it belongs on this page: a composite's `event_nodes` list has no defined order, so anything downstream of a merge must read `.data`, never `event_nodes[i]`.",
+      "excerpts": [
+        {
+          "file": "indexer/indexer/events/blocks/swaps.py",
+          "lines": [
+            405,
+            419
+          ],
+          "lang": "python",
+          "title": "The Python fix — gate on btype, not on event_nodes",
+          "annotations": [
+            {
+              "lines": [
+                407,
+                412
+              ],
+              "text": "The comment records both halves: the btype gate is needed for dual dispatch (legacy `JettonTransferBlock` and declarative generic `Block` both carry the fields in `.data`), and it INCIDENTALLY removes the non-determinism by leaving the `else` arm to the genuine single-leaf pTON call, which has exactly one event node."
+            },
+            {
+              "lines": [
+                413,
+                415
+              ],
+              "text": "`in_transfer.data['sender']` instead of `in_transfer.event_nodes[0].message`. `.data` is built by the producing matcher's build program and is order-independent by construction — this is the rule to carry away: after a merge, read data, not nodes."
+            },
+            {
+              "lines": [
+                416,
+                418
+              ],
+              "text": "The pTON normalisation that used to hide inside the message read. The C++ twin (`src/host/HostStonfi.cpp` around the `in-transfer (§11.5 dual dispatch, deterministic)` comment) gates on `btype == \"jetton_transfer\"` at the same point and applies the same pton override, so the two engines agree leg-for-leg."
+            }
+          ],
+          "sha8": "53722a83"
+        }
+      ]
+    },
+    {
+      "heading": "Check yourself",
+      "prose": "Four things to try. The first two are captured below; the last two are a read and an experiment.\n\n**3 · Read the two absorb sites side by side.** `Walker.cpp:307` (`absorb_aux` → `consumed`, merged, ignores both flags) and `ClassifyCore.cpp:69` (root append → `aux`, honours both flags). Confirm for yourself that `absorb_aux` never mentions `include_excess` or `include_bounces`, then look up the one matcher in the artifact that sets `include_excess: false` (`nft_transfer`) and satisfy yourself that its NESTED excess messages still land in `consumed`. If you expected that flag to be global, this is the trap.\n\n**4 · Break the fold-back and watch matchers disappear.** Comment out the produced-btype fold-back loop at `ClassifyCore.cpp:489`, rebuild, and re-run the ACTION count from step 2. Four matchers anchored on a produced btype — `ethena_deposit`, `jvault_stake`, `stonfi_v1_swap`, `stonfi_v2_withdraw` — are then prefiltered away on every trace, with no error and no change to the SKIP table; the corpus loses 7 actions (1 + 5 + 1 + 0). That silence is why the conservative-superset argument has to be argued rather than assumed. Revert afterwards. Then ask the harder question the same experiment sets up: `getgems_nft_purchase` also anchors on a produced btype and its action count does NOT change, because it already runs before its producer — order and the fold-back are two separate preconditions and a matcher needs both.\n\nThe match-phase A/B twin (`twins/py_match_dump.py` vs `--match`) is the mechanical check behind every claim on this page about candidate ordering, first-wins capture selection and recursion gap alignment — 183 MATCH lines, diff 0 over the 148-trace corpus. Running it, and the fuller `py_classify.py` gate, belongs to [[gates]].",
+      "excerpts": [],
+      "runs": [
+        {
+          "cmd": "# 1. The ordering claim: partial matches far outnumber partial actions.\n\"MATCH: \" + (& $ENGINE --match    -I $IR -T tests\\traces | Select-String '^MATCH dedust_deposit_partial ').Count\n\"ACTION:\" + (& $ENGINE --classify -I $IR -T tests\\traces | Select-String '^ACTION dedust_deposit_partial ').Count",
+          "output": "MATCH: 14\nACTION:4",
+          "note": "14 → 4. Now find the missing ten: pick a `--match` anchor with no corresponding `--classify` action and confirm its `call_contract#54240fe5@…` key appears in some EARLIER action's `consumed` list. That block was given a `parent` by `merge_blocks`, and the `cur->parent == nullptr` guard skipped it as an anchor."
+        },
+        {
+          "cmd": "# 2. Baseline counts for the whole corpus — the numbers this chapter quotes.\n\"traces:  \" + (Get-ChildItem tests\\traces\\*.lz4).Count\n\"MATCHes: \" + (& $ENGINE --match    -I $IR -T tests\\traces | Select-String '^MATCH ').Count\n\"ACTIONs: \" + (& $ENGINE --classify -I $IR -T tests\\traces | Select-String '^ACTION ').Count",
+          "output": "traces:  148\nMATCHes: 183\nACTIONs: 199",
+          "note": "MORE actions than matches, which looks backwards until you remember what each mode does. The two counts are not comparable term by term: `--match` finds matches the classify loop later loses to consumption (the 14→4 above), and misses matches the classify loop finds, because composites like `jetton_transfer` / `jetton_burn` / `nft_transfer` only exist mid-run and a static probe never sees them. Keep these three numbers — they are the reference points for the fold-back experiment in step 4."
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "to": "block-tree",
+      "why": "the walker's candidate order (canonical by min_lt), previous_block/next_blocks topology, and merge_blocks all belong to the Block substrate this chapter assumes"
+    },
+    {
+      "to": "ir-artifact",
+      "why": "CompiledMatcher / CompiledNode, anchor kinds, priority and registration_order are loaded there; this chapter is what executes them"
+    },
+    {
+      "to": "value",
+      "why": "where_expr evaluation returns an EvalResult over the same Value type and shares ExprRuntime with the build path"
+    },
+    {
+      "to": "build-programs",
+      "why": "try_build hands captures to run_two_phase; reject-when, lookups, parse and the shape hook all live on the build side of this seam"
+    },
+    {
+      "to": "actions",
+      "why": "CoreAction (anchor, produced, aux) is the rendering-agnostic handoff the Action serializer consumes"
+    },
+    {
+      "to": "gates",
+      "why": "the --match / --match-gen equality and the Python twin classify diff are what hold this chapter's parity claims"
+    }
+  ],
+  "not_annotated": [
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/Walker.cpp",
+      "partial": true,
+      "reason": "PARTIAL, but only barely: every function is excerpted except the `finish()` two-liner and the member declarations at the bottom of MatchState. Read those two spans directly (~431 LOC total)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/Walker.h",
+      "partial": true,
+      "reason": "PARTIAL: the header comment, the exception type, Capture/MatchResult and the two entry points are excerpted. The remainder is includes and the WhereFn/WhereTable typedefs (~75 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+      "partial": true,
+      "reason": "PARTIAL by design — the matching half (try_build, prepare_classify's B1 block, the inventory, the matcher loop, the aux append) is excerpted here. Lines 91-330 are the Phase E post-process passes (combine_deposits, the two liquidity pairing passes, unwind_deployments) and 333-367 is the basic-actions fallback; both are host surgery that runs AFTER matching and belong with [[actions]] (~534 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ClassifyCore.h",
+      "partial": true,
+      "reason": "PARTIAL: AnchorFilter / IncludedMatcher are excerpted. The rest is the FailureCategory taxonomy, CoreAction and ClassifyResult — read the FailureCategory comment, it explains at length which failure modes deliberately do NOT get an enumerator (~117 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/MatchRunner.cpp",
+      "partial": true,
+      "reason": "PARTIAL: dump_fixture is excerpted. The remainder of run_match is CLI plumbing — artifact load, generated-where-table sha check and coverage validation, SKIP lines, directory expansion. The sha/coverage guard is worth a glance since it is what makes the --match-gen equality claim meaningful (~181 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/MatchRunner.h",
+      "reason": "one declaration (run_match) plus a comment describing the dump line format; the format is visible in this chapter's captured runs (~44 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/IrLoader.cpp",
+      "partial": true,
+      "reason": "BORROWED, not owned by this chapter: only the ordering resolution is excerpted here. Anchor parsing, node remapping, where_expr re-encoding and the recursion-ownership load gates (nested recursion rejected, captures inside a cyclic body rejected) belong to [[ir-artifact]] (~519 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/BlockTree.cpp",
+      "partial": true,
+      "reason": "BORROWED: merge_blocks is excerpted because it is the only mutation matching causes. ensure_earliest_common_block / find_frontier / compact_connections / insert_between and the whole init_block spine builder are [[block-tree]] (~474 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/BuildDriver.cpp",
+      "partial": true,
+      "reason": "BORROWED: block_key only. render_value, build_skip_reason, slots_from_captures and run_two_phase are [[build-programs]] (~600+ LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ExprEval.cpp",
+      "partial": true,
+      "reason": "BORROWED: the comprehension binder and the parse guard, because they define the scope model a where clause runs under. The rest of the tree-walking interpreter is [[value]] / [[build-programs]] (~220 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ExprRuntime.h",
+      "reason": "read the WhereEnv struct (lines 41-52) — it is the entire environment a where clause sees, and the fact that `slots` is always null today is the reason where clauses cannot reference captures. The rest is the shared operator surface, covered in [[value]] (~117 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/GenWheres.h",
+      "reason": "generated table declaration: {node_id, fn} rows plus the source-sha accessor. The generated bodies are one compiled function per where_expr node, mechanically emitted from the same IR the interpreter walks — nothing to learn from reading them that the interpreter does not teach (~31 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/HostRegistry.cpp",
+      "reason": "the name -> function maps the walker consults for `pred` nodes and named `where` predicates. Small dispatch tables; the interesting content is the individual host predicates in src/host/*.cpp, which are protocol logic rather than matcher runtime (~73 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/Classify.cpp",
+      "reason": "the CLI adapter that turns CoreAction into the ACTION/FALLBACK dump lines quoted throughout this chapter. Pure rendering over the core's output; belongs with [[actions]] (~218 LOC)"
+    },
+    {
+      "path": "indexer/docs/mch-engine-v2.md",
+      "reason": "the specification this walker is a literal port of — §4.1-4.7 (edges, absorption, recursion) and §5 (capture assembly) are the authority for every semantics claim on this page, and §4.4's amendment note explains the exclusive-inertness rule better than any code comment can. Read it if a walker branch looks arbitrary"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/tests (test_walker.py, test_recursion_captures.py, test_cyclic_recursion.py)",
+      "reason": "the executable specs for this chapter — 11 recursion-capture cases define the gap-alignment results, and test_frontier_exhaustion_leaves_exit_captures_empty pins the `return iter_index > 0` rule. They are Python-side and belong to [[gates]]"
+    }
+  ]
+}

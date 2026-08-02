@@ -1,0 +1,835 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1 · The engine in one pass — a trace becomes an action</title>
+<style>
+:root{--bg:#ffffff;--fg:#1b2026;--mut:#5c6570;--line:#dfe4ea;--line-soft:#edf0f4;--surface:#f8f9fb;--accent:#0b6bcb;--band:#f2f4f7;--band-edge:#b6c0cc;--hot:#cfe4f9;--hot-edge:#0b6bcb;--code-bg:#f6f8fa;--note-bg:#fbfcfe;--drift:#b3261e;--drift-bg:#fdecea;--chip-bg:#0b6bcb;--chip-fg:#ffffff;--tk-k:#b02a37;--tk-s:#1a5f3c;--tk-n:#0550ae;--tk-c:#5c6570}
+@media (prefers-color-scheme: dark){:root{--bg:#0e1116;--fg:#dde3ea;--mut:#949daa;--line:#2a313a;--line-soft:#20262e;--surface:#151b23;--accent:#57a6ea;--band:#191f27;--band-edge:#3a4655;--hot:#17304a;--hot-edge:#57a6ea;--code-bg:#141920;--note-bg:#12171e;--drift:#ef6a5a;--drift-bg:#3a1a15;--chip-bg:#57a6ea;--chip-fg:#08101a;--tk-k:#ff9c92;--tk-s:#7ed8a8;--tk-n:#79c0ff;--tk-c:#949daa}}
+:root[data-theme=light]{--bg:#ffffff;--fg:#1b2026;--mut:#5c6570;--line:#dfe4ea;--line-soft:#edf0f4;--surface:#f8f9fb;--accent:#0b6bcb;--band:#f2f4f7;--band-edge:#b6c0cc;--hot:#cfe4f9;--hot-edge:#0b6bcb;--code-bg:#f6f8fa;--note-bg:#fbfcfe;--drift:#b3261e;--drift-bg:#fdecea;--chip-bg:#0b6bcb;--chip-fg:#ffffff;--tk-k:#b02a37;--tk-s:#1a5f3c;--tk-n:#0550ae;--tk-c:#5c6570}
+:root[data-theme=dark]{--bg:#0e1116;--fg:#dde3ea;--mut:#949daa;--line:#2a313a;--line-soft:#20262e;--surface:#151b23;--accent:#57a6ea;--band:#191f27;--band-edge:#3a4655;--hot:#17304a;--hot-edge:#57a6ea;--code-bg:#141920;--note-bg:#12171e;--drift:#ef6a5a;--drift-bg:#3a1a15;--chip-bg:#57a6ea;--chip-fg:#08101a;--tk-k:#ff9c92;--tk-s:#7ed8a8;--tk-n:#79c0ff;--tk-c:#949daa}
+:root{
+  --ff-sans:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;
+  --ff-mono:ui-monospace,'SF Mono',SFMono-Regular,'Cascadia Mono','Segoe UI Mono',Menlo,Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 16px/1.65 var(--ff-sans);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1360px;margin:0 auto;padding:0 28px 96px}
+
+/* --- chrome ------------------------------------------------------------- */
+.topbar{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);margin:0 -28px 24px;padding:10px 28px;display:flex;gap:9px;align-items:baseline}
+.topbar .crumb{color:var(--mut);font-size:13px;flex:none}
+.topbar .here{font-weight:600;font-size:14px;letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:2px}
+a:focus-visible,.card:focus-within{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+/* --- type scale --------------------------------------------------------- */
+h1{font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-.015em;margin:22px 0 10px;text-wrap:balance}
+h2{font-size:19px;line-height:1.35;font-weight:650;letter-spacing:-.01em;margin:46px 0 12px;padding-left:12px;border-left:3px solid var(--accent);scroll-margin-top:66px;text-wrap:balance}
+p{margin:0 0 .9em}
+.wrap>p,section>p{max-width:72ch}
+.meta{color:var(--mut);font-size:13px;line-height:1.55}
+.meta+p{margin-top:14px}
+.label{margin:0 0 9px;font:650 12px/1.4 var(--ff-sans);color:var(--mut);text-transform:uppercase;letter-spacing:.07em}
+.summary{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 9px 9px 0;padding:13px 18px;margin:16px 0 24px;background:var(--surface);max-width:78ch;font-size:16.5px;line-height:1.62}
+.summary p:last-child{margin-bottom:0}
+.rule{border:none;border-top:1px solid var(--line);margin:48px 0 14px}
+
+/* --- on-this-page ------------------------------------------------------- */
+.toc{margin:0 0 28px;padding:13px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);max-width:78ch}
+.toc ol{margin:0;padding:0;list-style:none}
+.toc li{display:flex;gap:11px;font-size:14.5px;line-height:1.5;margin:5px 0}
+.toc .tn{flex:none;min-width:1.3em;color:var(--mut);font:650 12px/1.7 var(--ff-mono);font-variant-numeric:tabular-nums}
+
+/* --- excerpt shell ------------------------------------------------------ */
+.excerpt{margin:26px 0;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.excerpt.cont{margin-top:-27px;border-top:none;border-top-left-radius:0;border-top-right-radius:0}
+.ex-head{display:flex;gap:12px;align-items:baseline;padding:9px 14px;background:var(--surface);border-bottom:1px solid var(--line);border-radius:9px 9px 0 0;font:500 12.5px/1.5 var(--ff-mono);min-width:0}
+.path{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plines{color:var(--mut);font-weight:400}
+.ex-title{color:var(--mut);font:400 13px/1.5 var(--ff-sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lang{margin-left:auto;flex:none;color:var(--mut);border:1px solid var(--line);border-radius:10px;padding:1px 8px;font-size:11px;letter-spacing:.05em;text-transform:uppercase}
+.sha{flex:none;color:var(--mut);font-size:11px}
+
+/* --- two-pane: code left, note rail right -------------------------------- */
+.ex-grid{display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,30%,420px);align-items:start}
+.excerpt.bare .ex-grid{grid-template-columns:minmax(0,1fr)}
+.ex-code{overflow-x:auto;overscroll-behavior-x:contain;padding:10px 0 12px}
+table.code{border-collapse:collapse;width:100%;font:400 13.5px/1.55 var(--ff-mono);letter-spacing:0;font-variant-ligatures:none;tab-size:4}
+/* keep these at the same specificity as the td reset above, or the reset wins */
+table.code td{padding:0;white-space:pre;vertical-align:baseline}
+table.code td.ln{width:1%;padding:0 8px 0 14px;color:var(--mut);text-align:right;user-select:none;font-size:12.5px;font-variant-numeric:tabular-nums}
+table.code td.mk{width:26px;padding:0 4px;text-align:center;vertical-align:middle;user-select:none}
+.excerpt.bare table.code td.mk{width:0;padding:0}
+table.code td.cd{width:100%;padding:0 12px 0 6px}
+tr.band td{background:var(--band)}
+tr.band td.mk{box-shadow:inset 3px 0 0 var(--band-edge)}
+tr.hot td{background:var(--hot)}
+tr.hot td.mk{box-shadow:inset 3px 0 0 var(--hot-edge)}
+/* text-indent:0 is load-bearing: the note body sets a negative text-indent for
+   its hanging first line, which would otherwise be inherited by the chip's
+   inner text box and fling the digit outside the card. */
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--chip-bg);color:var(--chip-fg);font:700 11px/1 var(--ff-sans);font-variant-numeric:tabular-nums;text-indent:0;flex:none}
+.ex-rail{position:relative;align-self:stretch;min-width:0;border-left:1px solid var(--line)}
+.note{position:absolute;left:14px;right:14px;padding:9px 13px 10px;border:1px solid var(--line);border-radius:8px;background:var(--note-bg);font-size:14px;line-height:1.55;transition:background .12s,border-color .12s,box-shadow .12s}
+.note .nt{padding-left:26px;text-indent:-26px}
+.note .chip{margin-right:7px}
+.note .nl{margin-right:7px;white-space:nowrap;color:var(--mut);font:650 12px/1 var(--ff-mono);letter-spacing:.01em}
+.note .nt code{font-size:12.5px}
+.note.hot{background:var(--hot);border-color:var(--hot-edge);box-shadow:0 0 0 1px var(--hot-edge)}
+@media (max-width: 979px){
+  .ex-grid{grid-template-columns:minmax(0,1fr)}
+  .ex-rail{border-left:none;border-top:1px solid var(--line);padding:12px 0 2px}
+  .note{position:static;margin:0 14px 10px}
+}
+
+/* --- syntax ------------------------------------------------------------- */
+.tk-k{color:var(--tk-k)}.tk-s{color:var(--tk-s)}.tk-n{color:var(--tk-n)}
+.tk-c{color:var(--tk-c);font-style:italic}
+.drift{background:var(--drift-bg);color:var(--drift);border-bottom:1px solid var(--line);padding:8px 14px;font-size:13px;line-height:1.5}
+.run{margin:16px 0;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);overflow:hidden}
+.run .label{padding:6px 14px 0}
+.run-cmd{padding:6px 14px 2px;font:600 12.5px/1.6 ui-monospace,'Cascadia Mono',Consolas,monospace;color:var(--accent);white-space:pre-wrap;word-break:break-all}
+.run-out{margin:0;padding:2px 14px 10px;font:12.5px/1.55 ui-monospace,'Cascadia Mono',Consolas,monospace;overflow-x:auto;color:var(--fg)}
+.run-note{padding:7px 14px 9px;border-top:1px solid var(--line-soft);font-size:13.5px;line-height:1.55;color:var(--mut)}
+
+/* --- blocks ------------------------------------------------------------- */
+.diagram{margin:22px 0;padding:14px 16px;border:1px solid var(--line);border-radius:10px;overflow-x:auto;background:var(--surface)}
+pre.mermaid{margin:0;font:13px/1.5 var(--ff-mono)}
+.edges,.cover{margin:26px 0;padding:14px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.edges ul,.cover ul{margin:0;padding-left:22px}
+.edges li,.cover li{margin:6px 0;font-size:14.5px;line-height:1.55}
+.cover .why{color:var(--mut)}
+.cover .label+ul+.label{margin-top:18px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin:20px 0}
+.card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--surface);transition:border-color .12s}
+.card:hover{border-color:var(--accent)}
+.card b{font-size:15.5px;font-weight:650;line-height:1.35}
+.card .num{margin-bottom:7px;color:var(--mut);font:650 11px/1 var(--ff-mono);letter-spacing:.06em}
+.card .meta{margin-top:5px}
+.card.planned{opacity:.55}
+.card.planned:hover{border-color:var(--line)}
+code{background:var(--code-bg);border:1px solid var(--line-soft);padding:.5px 5px;border-radius:5px;font-family:var(--ff-mono);font-size:.875em}
+.xl{font-weight:600}.xl-missing{color:var(--drift)}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{transition:none!important}}
+</style>
+<div class="wrap">
+<div class="topbar"><a class="crumb" href="index.html">atlas</a><span class="crumb">/</span><span class="here">1 · The engine in one pass — a trace becomes an action</span></div>
+<h1>1 · The engine in one pass — a trace becomes an action</h1>
+<div class="summary"><p>After this chapter you can take any fixture in <code>tests/traces</code>, run it through the C++ engine, and say which matcher fired, why, and where every field of the resulting Action row came from. We follow ONE real trace — <code>03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4</code>, 5 transactions, 5 leaf blocks, exactly 1 action — end to end: LZ4+msgpack fixture -&gt; <code>Trace</code> -&gt; <code>EventNode</code> tree -&gt; <code>Block</code> spine -&gt; the one matcher whose anchor opcode is present -&gt; captures -&gt; a 6-field build output -&gt; an <code>Action</code> row. You also see the same matcher in its two committed forms, the <code>.mch</code> source a human writes and the compiled row the runtime actually executes, and you learn the one discipline that holds the whole port together: the C++ dump and the Python twin must be byte-identical. Everything here is deliberately shallow — each stage is one chapter later on, and this page is the map you hang them on.</p></div>
+<nav class="toc"><div class="label">On this page</div><ol><li><span class="tn">1</span><a href="#lab-setup-three-commands">Lab setup — three commands</a></li><li><span class="tn">2</span><a href="#the-fixture-and-why-this-one">The fixture, and why this one</a></li><li><span class="tn">3</span><a href="#eventnode-tree-then-the-block-init-spine">EventNode tree, then the Block init spine</a></li><li><span class="tn">4</span><a href="#the-one-matcher-that-fires-spec-form">The one matcher that fires — spec form</a></li><li><span class="tn">5</span><a href="#and-the-same-matcher-compiled">…and the same matcher, compiled</a></li><li><span class="tn">6</span><a href="#mode-dispatch-and-the-core-harness-split">Mode dispatch and the core/harness split</a></li><li><span class="tn">7</span><a href="#the-loop-that-actually-runs-it">The loop that actually runs it</a></li><li><span class="tn">8</span><a href="#from-captures-to-an-action-row">From captures to an Action row</a></li><li><span class="tn">9</span><a href="#diff-0-the-discipline-behind-every-claim-on-this-page">diff-0 — the discipline behind every claim on this page</a></li><li><span class="tn">10</span><a href="#check-yourself">Check yourself</a></li></ol></nav>
+<div class="diagram"><div class="label">One pass, with this fixture&#39;s real names on the edges</div><pre class="mermaid">flowchart LR
+  F[&quot;03RZ…vXJ0=.lz4&lt;br/&gt;LZ4 frame + msgpack&quot;] --&gt; T[&quot;Trace&lt;br/&gt;5 transactions&quot;]
+  T --&gt; E[&quot;EventNode tree&lt;br/&gt;root = ext-in 0xcfc2d330&quot;]
+  E --&gt; B[&quot;Block spine, 5 leaves&lt;br/&gt;…0xa7733acd -&gt; 0xf7733acd&quot;]
+  IR[&quot;mch_ir.json&lt;br/&gt;matchers[32], anchor 2809346765&quot;] --&gt; W
+  B --&gt; W[&quot;classify_trace&lt;br/&gt;one BFS per matcher&quot;]
+  W --&gt; C[&quot;captures&lt;br/&gt;send + response&quot;]
+  C --&gt; BP[&quot;build_32_vesting_send_message&lt;br/&gt;6 out fields&quot;]
+  BP --&gt; P[&quot;produced Block&lt;br/&gt;btype vesting_send_message&quot;]
+  P --&gt; A[&quot;Action row&lt;br/&gt;source / destination / destination_secondary&lt;br/&gt;+ vesting_send_message_data&quot;]</pre></div>
+<div class="diagram"><div class="label">One matcher, three committed representations (+ one twin)</div><pre class="mermaid">flowchart TD
+  S[&quot;specs/vesting.mch&lt;br/&gt;matcher vesting_send_message&quot;] --&gt;|&quot;mch-python frontend&quot;| I[&quot;ir/mch_ir.json&lt;br/&gt;matchers[32] + nodes[327,328]&quot;]
+  I --&gt;|&quot;IrLoader, at startup&quot;| R[&quot;CompiledMatcher&lt;br/&gt;walked by classify_trace&quot;]
+  I --&gt;|&quot;mch-codegen, a CMake step&quot;| G[&quot;builds_ir_generated.cpp&lt;br/&gt;build_32_vesting_send_message&quot;]
+  R --&gt; X[&quot;captures {send, response}&quot;]
+  G --&gt; X
+  X --&gt; O[&quot;Block.data = 6 fields&quot;]
+  I -.-&gt;|&quot;same artifact&quot;| PY[&quot;twins/py_classify.py&lt;br/&gt;Python IR engine&quot;]
+  O -.-&gt;|&quot;stdout byte-diff&quot;| PY</pre></div>
+<h2 id="lab-setup-three-commands">Lab setup — three commands</h2>
+<section><p>Keep a shell open at <code>S:/Dev/ton-indexer-clear/indexer</code> for the rest of the tutorial. Two paths never change, so export them once: the engine binary <code>…/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe</code> and the IR artifact <code>…/ton-mch-engine/ir/mch_ir.json</code>. <code>-T</code> takes either a single <code>.lz4</code> or a directory (which it walks sorted, <code>.lz4</code> only).</p>
+<p>The three commands you will use constantly:</p>
+<p>1. <code>ton-mch-engine -T &lt;fixture&gt;</code> — no mode flag. Decodes the fixture and prints the transaction list plus the initialized block tree. This is the ONLY mode that spins up a TON actor scheduler; every <code>--…</code> mode returns from <code>main</code> before reaching it, single-threaded and deterministic, because their stdout is a compared artifact.
+2. <code>ton-mch-engine --classify -I &lt;ir&gt; -T &lt;fixture|dir&gt;</code> — the whole match+build+merge pipeline, one <code>ACTION</code> line per produced block.
+3. <code>ton-mch-engine --actions -I &lt;ir&gt; -T &lt;fixture|dir&gt;</code> — the same pipeline, but each produced block is serialized into a database <code>Action</code> row before printing.</p>
+<p>Everything on stdout is byte-compared against a Python twin; anything advisory (orphan-node warnings, registry complaints) goes to stderr. When you pipe engine output anywhere, <code>2&gt;/dev/null</code> is usually what you want.</p></section>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ ton-mch-engine.exe -T &quot;tests/traces/03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4&quot; 2&gt;&amp;1 | sed &#39;s/^.*!mch-engine\]\t//&#39; | tail -13</div><pre class="run-out">loaded tests/traces/03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4
+trace_id: 03RZCW7mu3eJp+FWifVzKsRHafUrqQNu4E6YwZxvXJ0=, transactions: 5
+tx lt=45769974000001 account=0:335908D9…B367BA descr=ord | in: 0xcfc2d330 from (ext) | out msgs: 1
+tx lt=45769974000003 account=0:0F956925…E213D4 descr=ord | in: 0xa7733acd from 0:335908D9…B367BA | out msgs: 2
+tx lt=45769974000006 account=0:335908D9…B367BA descr=ord | in: 0xf7733acd from 0:0F956925…E213D4 | out msgs: 0
+tx lt=45769977000001 account=0:A8A697AB…F87D39 descr=ord | in: 0x00000000 from 0:0F956925…E213D4 | out msgs: 1
+tx lt=45769982000001 account=0:0F956925…E213D4 descr=ord | in: 0x00000000 from 0:A8A697AB…F87D39 | out msgs: 0
+block tree (5 leaf blocks):
+call_contract 0xcfc2d330 (nodes: 1, lt: 45769974000001)
+  call_contract 0xa7733acd (nodes: 1, lt: 45769974000002)
+    ton_transfer (nodes: 1, lt: 45769974000004)
+      ton_transfer (nodes: 1, lt: 45769977000002)
+    call_contract 0xf7733acd (nodes: 1, lt: 45769974000005)</pre><div class="run-note">The <code>sed</code> only strips td&#39;s log prefix (mode 1 logs through LOG(INFO), unlike the dump modes which print straight to stdout). Account hex elided here for width; the real output prints them in full. Note the block tree already exists BEFORE any matcher runs — five leaves, canonical order, one root.</div></div>
+<h2 id="the-fixture-and-why-this-one">The fixture, and why this one</h2>
+<section><p>The corpus is 148 <code>.lz4</code> fixtures producing 199 actions. Most are jetton/DEX traces with 20+ transactions and several interacting matchers — bad for a first read. <code>03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4</code> is the smallest trace in the corpus that still exercises a genuinely non-trivial matcher: 5 transactions, 5 leaf blocks, exactly one action, and the matcher that produces it (<code>vesting_send_message</code>) is a two-node chain with a real message-body parse and a fully declarative 6-field build. Nothing about it is a special case — no lookups, no host shapers, no post-processing, no merge of a composite into another composite — so every mechanism you see is the general one.</p>
+<p>A <code>.lz4</code> fixture is LZ4-frame-compressed msgpack, written by the Python indexer&#39;s <code>recorder.py</code> and read by <code>tests/utils/trace_deserializer.py</code> on the Python side. It is a whole trace: transactions, their in/out messages, base64 message bodies, and a root <code>interfaces</code> section — the per-account interface data that <code>TestInterfaceRepository</code> serves. The C++ loader decodes only the fields structural matching needs and ignores unknown keys, so fixtures recorded by a newer recorder still load.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/TraceLoader.h<span class="plines">:29–55</span></span><span class="ex-title">What one message decodes to</span><span class="lang">cpp</span><span class="sha" title="span hash at render">469e459d</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="29"><td class="ln">29</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> Message {</td></tr>
+<tr class="cl" data-l="30"><td class="ln">30</td><td class="mk"></td><td class="cd">  std::string msg_hash;</td></tr>
+<tr class="cl" data-l="31"><td class="ln">31</td><td class="mk"></td><td class="cd">  std::string tx_hash;</td></tr>
+<tr class="cl" data-l="32"><td class="ln">32</td><td class="mk"></td><td class="cd">  std::int64_t tx_lt{<span class="tk-n">0</span>};</td></tr>
+<tr class="cl" data-l="33"><td class="ln">33</td><td class="mk"></td><td class="cd">  std::string direction;  <span class="tk-c">// &quot;in&quot; | &quot;out&quot;</span></td></tr>
+<tr class="cl" data-l="34"><td class="ln">34</td><td class="mk"></td><td class="cd">  std::optional&lt;std::string&gt; source;</td></tr>
+<tr class="cl" data-l="35"><td class="ln">35</td><td class="mk"></td><td class="cd">  std::optional&lt;std::string&gt; destination;</td></tr>
+<tr class="cl band nb-0" data-l="36" data-n="0"><td class="ln">36</td><td class="mk"><span class="chip">1</span></td><td class="cd">  std::optional&lt;std::int64_t&gt; opcode;  <span class="tk-c">// stored SIGNED (int32)</span></td></tr>
+<tr class="cl" data-l="37"><td class="ln">37</td><td class="mk"></td><td class="cd">  std::optional&lt;std::int64_t&gt; value;</td></tr>
+<tr class="cl" data-l="38"><td class="ln">38</td><td class="mk"></td><td class="cd">  std::optional&lt;std::int64_t&gt; created_lt;</td></tr>
+<tr class="cl" data-l="39"><td class="ln">39</td><td class="mk"></td><td class="cd">  std::optional&lt;std::int64_t&gt; created_at;</td></tr>
+<tr class="cl" data-l="40"><td class="ln">40</td><td class="mk"></td><td class="cd">  std::optional&lt;<span class="tk-k">bool</span>&gt; bounce;</td></tr>
+<tr class="cl" data-l="41"><td class="ln">41</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> bounced{<span class="tk-k">false</span>};</td></tr>
+<tr class="cl band nb-1" data-l="42" data-n="1"><td class="ln">42</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">bool</span> has_extra_currencies{<span class="tk-k">false</span>};  <span class="tk-c">// value_extra_currencies map is non-empty</span></td></tr>
+<tr class="cl band nb-2" data-l="43" data-n="2"><td class="ln">43</td><td class="mk"><span class="chip">3</span></td><td class="cd">  std::optional&lt;MsgContent&gt; content;</td></tr>
+<tr class="cl" data-l="44"><td class="ln">44</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-3" data-l="45" data-n="3"><td class="ln">45</td><td class="mk"><span class="chip">4</span></td><td class="cd">  <span class="tk-c">// Owning transaction, wired after decode (Python Message.transaction).</span></td></tr>
+<tr class="cl band nb-3" data-l="46" data-n="3"><td class="ln">46</td><td class="mk"></td><td class="cd">  Transaction *tx{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl" data-l="47"><td class="ln">47</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="48"><td class="ln">48</td><td class="mk"></td><td class="cd">  <span class="tk-c">// Opcode masked to 32 bits (matches Python EventNode.get_opcode).</span></td></tr>
+<tr class="cl" data-l="49"><td class="ln">49</td><td class="mk"></td><td class="cd">  std::optional&lt;std::uint32_t&gt; opcode32() <span class="tk-k">const</span> {</td></tr>
+<tr class="cl" data-l="50"><td class="ln">50</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (!opcode) {</td></tr>
+<tr class="cl" data-l="51"><td class="ln">51</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> std::nullopt;</td></tr>
+<tr class="cl" data-l="52"><td class="ln">52</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="53"><td class="ln">53</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> static_cast&lt;std::uint32_t&gt;(*opcode &amp; <span class="tk-n">0xFFFFFFFF</span>);</td></tr>
+<tr class="cl" data-l="54"><td class="ln">54</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="55"><td class="ln">55</td><td class="mk"></td><td class="cd">};</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="36" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L36</span>The trap in this struct: <code>opcode</code> is stored SIGNED, because msgpack carries Python&#39;s int and the indexer writes opcodes as int32. <code>0xA7733ACD</code> round-trips as a negative number here. Never compare <code>*msg-&gt;opcode</code> against a hex literal — use <code>opcode32()</code> at the bottom, which is the exact port of Python&#39;s <code>EventNode.get_opcode</code>.</div></div>
+<div class="note" data-a="42" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L42</span>A derived flag, not a decoded field: the fixture carries a <code>value_extra_currencies</code> map and the loader collapses it to &quot;non-empty?&quot;. That is all any ported matcher asks, and keeping the map would mean owning a second value universe for no reader.</div></div>
+<div class="note" data-a="43" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L43</span><code>content</code> is optional and its absence is NORMAL, not an error — a message whose body was not indexed simply has nothing to parse. Downstream that becomes a failed parse alternative rather than a fault; see <a class="xl" href="parse-layer.html">parse-layer</a>.</div></div>
+<div class="note" data-a="45" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L45–46</span>The back-pointer is wired AFTER decode, mirroring Python&#39;s <code>Message.transaction</code>. It is why <code>Trace</code> must outlive everything built on it — a moved-from <code>Trace</code> dangles every <code>EventNode</code> and every <code>Block</code>.</div></div></div>
+</div>
+</div>
+<h2 id="eventnode-tree-then-the-block-init-spine">EventNode tree, then the Block init spine</h2>
+<section><p>Two structural steps happen before any matching, and both are straight ports of the Python substrate you already know: <code>to_tree</code> (from <code>blocks/utils/tree_utils.py</code>) links transactions into a message tree, and <code>init_block</code> (from <code>event_processing.py</code>) turns every node into exactly one leaf <code>Block</code> — <code>ton_transfer</code>, <code>call_contract</code>, or <code>tick_tock</code> — connected in the same shape.</p>
+<p>Our fixture&#39;s tree, from the lab run above: the ext-in wallet tx becomes <code>call_contract 0xcfc2d330</code>, its child is <code>call_contract 0xa7733acd</code> (owner -&gt; vesting request), and that node has two children — the outgoing <code>ton_transfer</code> the vesting contract forwards, and <code>call_contract 0xf7733acd</code>, the response callback. Five leaves, one root. The deep dive on ordering, merging and the deliberate deviations from Python lives in <a class="xl" href="block-tree.html">block-tree</a>.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.h<span class="plines">:38–64</span></span><span class="ex-title">EventNode — the sentence that explains the whole tree</span><span class="lang">cpp</span><span class="sha" title="span hash at render">8e6a5c17</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="38" data-n="0"><td class="ln">38</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// A node in the message tree. For a normal transaction the node&#39;s msg is the</span></td></tr>
+<tr class="cl band nb-0" data-l="39" data-n="0"><td class="ln">39</td><td class="mk"></td><td class="cd"><span class="tk-c">// incoming message; for a notification/log leaf it is the destination-less</span></td></tr>
+<tr class="cl band nb-0" data-l="40" data-n="0"><td class="ln">40</td><td class="mk"></td><td class="cd"><span class="tk-c">// outgoing message.</span></td></tr>
+<tr class="cl" data-l="41"><td class="ln">41</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> EventNode {</td></tr>
+<tr class="cl" data-l="42"><td class="ln">42</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Message *msg{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl" data-l="43"><td class="ln">43</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Transaction *tx{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl" data-l="44"><td class="ln">44</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> is_tick_tock{<span class="tk-k">false</span>};</td></tr>
+<tr class="cl band nb-2" data-l="45" data-n="2"><td class="ln">45</td><td class="mk"><span class="chip">3</span></td><td class="cd">  EventNode *parent{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl band nb-2" data-l="46" data-n="2"><td class="ln">46</td><td class="mk"></td><td class="cd">  std::vector&lt;EventNode *&gt; children;</td></tr>
+<tr class="cl" data-l="47"><td class="ln">47</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="48"><td class="ln">48</td><td class="mk"></td><td class="cd">  std::optional&lt;std::uint32_t&gt; opcode() <span class="tk-k">const</span> {</td></tr>
+<tr class="cl" data-l="49"><td class="ln">49</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> msg != <span class="tk-k">nullptr</span> ? msg-&gt;opcode32() : std::nullopt;</td></tr>
+<tr class="cl" data-l="50"><td class="ln">50</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="51"><td class="ln">51</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="52" data-n="1"><td class="ln">52</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-c">// Mirrors EventNode.get_lt.</span></td></tr>
+<tr class="cl band nb-1" data-l="53" data-n="1"><td class="ln">53</td><td class="mk"></td><td class="cd">  std::int64_t lt() <span class="tk-k">const</span> {</td></tr>
+<tr class="cl band nb-1" data-l="54" data-n="1"><td class="ln">54</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (is_tick_tock &amp;&amp; tx != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="55" data-n="1"><td class="ln">55</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> tx-&gt;lt;</td></tr>
+<tr class="cl band nb-1" data-l="56" data-n="1"><td class="ln">56</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="57" data-n="1"><td class="ln">57</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (msg != <span class="tk-k">nullptr</span> &amp;&amp; msg-&gt;created_lt) {</td></tr>
+<tr class="cl band nb-1" data-l="58" data-n="1"><td class="ln">58</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> *msg-&gt;created_lt;</td></tr>
+<tr class="cl band nb-1" data-l="59" data-n="1"><td class="ln">59</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="60" data-n="1"><td class="ln">60</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (msg != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="61" data-n="1"><td class="ln">61</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> msg-&gt;tx_lt;</td></tr>
+<tr class="cl band nb-1" data-l="62" data-n="1"><td class="ln">62</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="63" data-n="1"><td class="ln">63</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> <span class="tk-n">0</span>;</td></tr>
+<tr class="cl" data-l="64"><td class="ln">64</td><td class="mk"></td><td class="cd">  }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="38" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L38–40</span>Read this comment twice. A node&#39;s <code>msg</code> is normally the INCOMING message, but a log/notification leaf (an outgoing message with no destination) gets its own node whose <code>msg</code> is that outgoing message. That is why an event-log opcode can be a matcher anchor at all — it is a first-class node, not a field of its parent.</div></div>
+<div class="note" data-a="52" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L52–63</span><code>lt()</code> is the sort key for the entire spine (<code>next_blocks</code> is kept in min_lt-ascending order), so its fallback chain is load-bearing: tick-tock uses the transaction&#39;s lt, everything else prefers <code>created_lt</code> and only falls back to <code>tx_lt</code>. Get this wrong and blocks reorder, which changes which candidate a matcher meets first.</div></div>
+<div class="note" data-a="45" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L45–46</span>Raw pointers into <code>EventTree</code>&#39;s arena — no ownership here. Python&#39;s GC hides this chain; in C++ the lifetime <code>Trace -&gt; EventTree -&gt; BlockArena</code> is what <code>TraceContext</code> (below) exists to keep intact.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.h<span class="plines">:92–105</span></span><span class="ex-title">Block — one field with two lifetimes</span><span class="lang">cpp</span><span class="sha" title="span hash at render">d130d80f</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="92"><td class="ln">92</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> Block {</td></tr>
+<tr class="cl band nb-0" data-l="93" data-n="0"><td class="ln">93</td><td class="mk"><span class="chip">1</span></td><td class="cd">  std::string btype;</td></tr>
+<tr class="cl band nb-0" data-l="94" data-n="0"><td class="ln">94</td><td class="mk"></td><td class="cd">  std::optional&lt;std::uint32_t&gt; opcode;  <span class="tk-c">// set for call_contract blocks</span></td></tr>
+<tr class="cl" data-l="95"><td class="ln">95</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="96" data-n="1"><td class="ln">96</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-c">// Python Block.data. Leaf blocks carry the basic_blocks.py constructor dicts</span></td></tr>
+<tr class="cl band nb-1" data-l="97" data-n="1"><td class="ln">97</td><td class="mk"></td><td class="cd">  <span class="tk-c">// (subset: see init_block); a produced (composed) block will carry its build</span></td></tr>
+<tr class="cl band nb-1" data-l="98" data-n="1"><td class="ln">98</td><td class="mk"></td><td class="cd">  <span class="tk-c">// output. Null == Python data=None. Read by where_exprs via rt_dotfield.</span></td></tr>
+<tr class="cl band nb-1" data-l="99" data-n="1"><td class="ln">99</td><td class="mk"></td><td class="cd">  Value data;</td></tr>
+<tr class="cl" data-l="100"><td class="ln">100</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="101"><td class="ln">101</td><td class="mk"></td><td class="cd">  std::vector&lt;<span class="tk-k">const</span> EventNode *&gt; event_nodes;</td></tr>
+<tr class="cl band nb-2" data-l="102" data-n="2"><td class="ln">102</td><td class="mk"><span class="chip">3</span></td><td class="cd">  std::vector&lt;Block *&gt; next_blocks;  <span class="tk-c">// canonical order: (min_lt asc, stable)</span></td></tr>
+<tr class="cl" data-l="103"><td class="ln">103</td><td class="mk"></td><td class="cd">  std::vector&lt;Block *&gt; children_blocks;</td></tr>
+<tr class="cl" data-l="104"><td class="ln">104</td><td class="mk"></td><td class="cd">  Block *previous_block{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl" data-l="105"><td class="ln">105</td><td class="mk"></td><td class="cd">  Block *parent{<span class="tk-k">nullptr</span>};</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="93" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L93–94</span><code>opcode</code> is set only on <code>call_contract</code> leaves. A block PRODUCED by a matcher carries no opcode — which is exactly why the anchor prefilter can treat the trace&#39;s opcode inventory as static while its btype inventory grows (see the matcher loop below).</div></div>
+<div class="note" data-a="96" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L96–99</span>The same <code>data</code> field is the leaf&#39;s constructor dict before matching and the build program&#39;s output after — Python&#39;s <code>Block.data</code> exactly. So <code>CAPTURE.data.x</code> in a spec means different things depending on whether the capture is a leaf or a composite; that is a property of the substrate, not a spec quirk. Values are <a class="xl" href="value.html">value</a>.</div></div>
+<div class="note" data-a="102" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L102</span>A deliberate deviation from Python: the order invariant is maintained at construction and after every merge, instead of Python&#39;s sort-at-every-walk-site. Same observable semantics, but it means C++ code may read <code>next_blocks</code> raw — and it means a mutation that forgets to re-sort is a real bug class.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.h<span class="plines">:198–217</span></span><span class="ex-title">init_block and the chained-lifetime bundle</span><span class="lang">cpp</span><span class="sha" title="span hash at render">2d0f4fc2</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="198" data-n="0"><td class="ln">198</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// Ports event_processing.init_block: classify each event node into a leaf</span></td></tr>
+<tr class="cl band nb-0" data-l="199" data-n="0"><td class="ln">199</td><td class="mk"></td><td class="cd"><span class="tk-c">// block (tick_tock / ton_transfer / call_contract) and connect the subtree.</span></td></tr>
+<tr class="cl band nb-0" data-l="200" data-n="0"><td class="ln">200</td><td class="mk"></td><td class="cd"><span class="tk-c">// Iterative (trace depth is unbounded); leaves next_blocks canonical.</span></td></tr>
+<tr class="cl band nb-0" data-l="201" data-n="0"><td class="ln">201</td><td class="mk"></td><td class="cd">Block *init_block(BlockArena &amp;arena, <span class="tk-k">const</span> EventNode *node);</td></tr>
+<tr class="cl" data-l="202"><td class="ln">202</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="203"><td class="ln">203</td><td class="mk"></td><td class="cd"><span class="tk-c">// --- TraceContext ------------------------------------------------------------</span></td></tr>
+<tr class="cl" data-l="204"><td class="ln">204</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="205"><td class="ln">205</td><td class="mk"></td><td class="cd"><span class="tk-c">// Bundles the chained-lifetime objects (Trace -&gt; EventTree -&gt; BlockArena) so</span></td></tr>
+<tr class="cl" data-l="206"><td class="ln">206</td><td class="mk"></td><td class="cd"><span class="tk-c">// they cannot be torn apart. Everything in the arena points into the tree,</span></td></tr>
+<tr class="cl" data-l="207"><td class="ln">207</td><td class="mk"></td><td class="cd"><span class="tk-c">// which points into the trace.</span></td></tr>
+<tr class="cl band nb-1" data-l="208" data-n="1"><td class="ln">208</td><td class="mk"><span class="chip">2</span></td><td class="cd"><span class="tk-k">struct</span> TraceContext {</td></tr>
+<tr class="cl band nb-1" data-l="209" data-n="1"><td class="ln">209</td><td class="mk"></td><td class="cd">  Trace trace;</td></tr>
+<tr class="cl band nb-1" data-l="210" data-n="1"><td class="ln">210</td><td class="mk"></td><td class="cd">  EventTree tree;</td></tr>
+<tr class="cl band nb-1" data-l="211" data-n="1"><td class="ln">211</td><td class="mk"></td><td class="cd">  BlockArena arena;</td></tr>
+<tr class="cl band nb-1" data-l="212" data-n="1"><td class="ln">212</td><td class="mk"></td><td class="cd">  Block *root{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl band nb-1" data-l="213" data-n="1"><td class="ln">213</td><td class="mk"></td><td class="cd">};</td></tr>
+<tr class="cl" data-l="214"><td class="ln">214</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="215"><td class="ln">215</td><td class="mk"></td><td class="cd"><span class="tk-c">// Loads an .lz4 trace fixture and builds the full block substrate.</span></td></tr>
+<tr class="cl band nb-2" data-l="216" data-n="2"><td class="ln">216</td><td class="mk"><span class="chip">3</span></td><td class="cd"><span class="tk-c">// tree.root == nullptr (empty trace) is an error.</span></td></tr>
+<tr class="cl band nb-2" data-l="217" data-n="2"><td class="ln">217</td><td class="mk"></td><td class="cd">td::Result&lt;TraceContext&gt; load_trace_context(<span class="tk-k">const</span> std::string &amp;path);</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="198" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L198–201</span>Iterative where Python recurses, because trace depth is attacker-influenced and the engine&#39;s rule is that no input may abort the process. Same rule shows up again in the parsers (<a class="xl" href="parse-layer.html">parse-layer</a>).</div></div>
+<div class="note" data-a="208" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L208–213</span><code>TraceContext::root</code> is the block for the FIRST transaction (here <code>call_contract 0xcfc2d330</code>), not a synthetic root. The <code>root</code>-btype wrapper block you will see in <code>classify_trace</code> is created separately, per classification run — so &quot;root scaffold&quot; in a dump is an internal wrapper, never a second trace root.</div></div>
+<div class="note" data-a="216" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L216–217</span>An empty tree is an ERROR, not an empty result. Production turns that into a <code>malformed_trace</code> category rather than a silently action-less trace — the distinction matters for telemetry (<a class="xl" href="prod-path.html">prod-path</a>).</div></div></div>
+</div>
+</div>
+<h2 id="the-one-matcher-that-fires-spec-form">The one matcher that fires — spec form</h2>
+<section><p>Only one matcher in the artifact can possibly match this trace: the anchor prefilter keeps a matcher whose anchor is an opcode set only if one of its opcodes appears on the spine, and <code>0xA7733ACD</code> appears exactly once. Here is the whole matcher, in the form a human writes and commits.</p>
+<p>Thirty lines, and every one of them shows up in the output you already saw. Two opcode constants, a two-node chain, a parse, and six output fields. The <code>--match</code> run below stops after the match phase, so you can see the captures before any building happens.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">indexer/indexer/events/mch/specs/vesting.mch<span class="plines">:1–30</span></span><span class="ex-title">specs/vesting.mch — the entire matcher</span><span class="lang">text</span><span class="sha" title="span hash at render">1cd0bd52</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="1"><td class="ln">1</td><td class="mk"></td><td class="cd"># Vesting send-message matcher — ported from blocks/vesting.py</td></tr>
+<tr class="cl band nb-0" data-l="2" data-n="0"><td class="ln">2</td><td class="mk"><span class="chip">1</span></td><td class="cd"># VestingSendMessageBlockMatcher. Linear two-node chain (M1 shape): the</td></tr>
+<tr class="cl band nb-0" data-l="3" data-n="0"><td class="ln">3</td><td class="mk"></td><td class="cd"># owner-&gt;vesting request plus its required response callback. The response is</td></tr>
+<tr class="cl band nb-0" data-l="4" data-n="0"><td class="ln">4</td><td class="mk"></td><td class="cd"># consumed (legacy child_matcher optional=False) but only the request feeds the</td></tr>
+<tr class="cl band nb-0" data-l="5" data-n="0"><td class="ln">5</td><td class="mk"></td><td class="cd"># build. VestingAddWhiteListBlockMatcher stays hand-written (out of scope).</td></tr>
+<tr class="cl" data-l="6"><td class="ln">6</td><td class="mk"></td><td class="cd">#</td></tr>
+<tr class="cl" data-l="7"><td class="ln">7</td><td class="mk"></td><td class="cd"># Fully declarative build (M4 §<span class="tk-n">9</span>): field-<span class="tk-k">for</span>-field parity with</td></tr>
+<tr class="cl" data-l="8"><td class="ln">8</td><td class="mk"></td><td class="cd"># build_vesting_send_message_core in blocks/vesting.py. `message_boc_str` uses</td></tr>
+<tr class="cl" data-l="9"><td class="ln">9</td><td class="mk"></td><td class="cd"># the b64 builtin over the parsed `message_cell` — b64 BOC-encodes a raw Cell</td></tr>
+<tr class="cl" data-l="10"><td class="ln">10</td><td class="mk"></td><td class="cd"># before base64 (mirrors the legacy `message_cell.to_boc()`).</td></tr>
+<tr class="cl" data-l="11"><td class="ln">11</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="12" data-n="1"><td class="ln">12</td><td class="mk"><span class="chip">2</span></td><td class="cd">opcode VestingSendMessage         = <span class="tk-n">0xA7733ACD</span></td></tr>
+<tr class="cl band nb-1" data-l="13" data-n="1"><td class="ln">13</td><td class="mk"></td><td class="cd">opcode VestingSendMessageResponse = <span class="tk-n">0xF7733ACD</span></td></tr>
+<tr class="cl" data-l="14"><td class="ln">14</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="15"><td class="ln">15</td><td class="mk"></td><td class="cd">matcher vesting_send_message {</td></tr>
+<tr class="cl band nb-2" data-l="16" data-n="2"><td class="ln">16</td><td class="mk"><span class="chip">3</span></td><td class="cd">    produces VestingSendMessageBlock</td></tr>
+<tr class="cl band nb-2" data-l="17" data-n="2"><td class="ln">17</td><td class="mk"></td><td class="cd">    entry    @send</td></tr>
+<tr class="cl" data-l="18"><td class="ln">18</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-3" data-l="19" data-n="3"><td class="ln">19</td><td class="mk"><span class="chip">4</span></td><td class="cd">    op VestingSendMessage @send -&gt; op VestingSendMessageResponse @response</td></tr>
+<tr class="cl" data-l="20"><td class="ln">20</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-4" data-l="21" data-n="4"><td class="ln">21</td><td class="mk"><span class="chip">5</span></td><td class="cd">    parse send as VestingSendMessage</td></tr>
+<tr class="cl band nb-4" data-l="22" data-n="4"><td class="ln">22</td><td class="mk"></td><td class="cd">    out {</td></tr>
+<tr class="cl band nb-4" data-l="23" data-n="4"><td class="ln">23</td><td class="mk"></td><td class="cd">        sender:              account(send.msg.source)</td></tr>
+<tr class="cl band nb-4" data-l="24" data-n="4"><td class="ln">24</td><td class="mk"></td><td class="cd">        vesting:             account(send.msg.destination)</td></tr>
+<tr class="cl band nb-4" data-l="25" data-n="4"><td class="ln">25</td><td class="mk"></td><td class="cd">        query_id:            send.body.query_id</td></tr>
+<tr class="cl band nb-4" data-l="26" data-n="4"><td class="ln">26</td><td class="mk"></td><td class="cd">        message_boc_str:     b64(send.body.message_cell)</td></tr>
+<tr class="cl band nb-4" data-l="27" data-n="4"><td class="ln">27</td><td class="mk"></td><td class="cd">        message_destination: account(send.body.message_destination)</td></tr>
+<tr class="cl band nb-4" data-l="28" data-n="4"><td class="ln">28</td><td class="mk"></td><td class="cd">        message_value:       amount(send.body.message_value)</td></tr>
+<tr class="cl band nb-4" data-l="29" data-n="4"><td class="ln">29</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="30"><td class="ln">30</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="2" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L2–5</span>&quot;The response is consumed … but only the request feeds the build&quot; is the single most important invariant on this page. Matching a block does two independent things: it may bind a capture the build reads, AND it removes the block from the spine so no later matcher can claim it. The <code>response</code> capture exists purely for the second effect.</div></div>
+<div class="note" data-a="12" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L12–13</span><code>opcode</code> declarations are spec-local names. Nothing downstream knows the identifier — the compiled artifact carries only the number, in decimal. Grepping <code>mch_ir.json</code> for <code>A7733ACD</code> finds nothing; grep <code>2809346765</code>.</div></div>
+<div class="note" data-a="16" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L16–17</span><code>produces</code> names a Python Block CLASS, but the emitted btype is <code>vesting_send_message</code> — the frontend maps class -&gt; btype through <code>indexer/events/mch/btypes.py</code>. The btype is what the serializer dispatches on, so that table is a real part of the contract, not a naming convenience.</div></div>
+<div class="note" data-a="19" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L19</span>The chain arrow walks the BLOCK tree&#39;s <code>next_blocks</code>, not the message tree. In this fixture <code>0xf7733acd</code> happens to be a direct child of the anchor, but the walker&#39;s reachability rules (<a class="xl" href="matcher-runtime.html">matcher-runtime</a>) are what actually decide, and they are not simply &quot;is a child&quot;.</div></div>
+<div class="note" data-a="21" data-n="4"><div class="nt"><span class="chip">5</span><span class="nl">L21–29</span><code>send.msg.*</code> reads the message envelope and is available immediately; <code>send.body.*</code> is null until the <code>parse</code> statement on line 21 has run. Both are attribute accesses on the same capture, and nothing in the syntax marks the difference — the ordering of statements is the only thing that makes <code>body</code> non-null (<a class="xl" href="parse-layer.html">parse-layer</a>, <a class="xl" href="build-programs.html">build-programs</a>).</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ ton-mch-engine.exe --match -I &lt;ir&gt; -T &quot;tests/traces/03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4&quot;</div><pre class="run-out">=== 03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4
+MATCH vesting_send_message anchor=call_contract#a7733acd@45769974000002 consumed=[call_contract#a7733acd@45769974000002,call_contract#f7733acd@45769974000005] captures={send=call_contract#a7733acd@45769974000002,response=call_contract#f7733acd@45769974000005}</pre><div class="run-note">Match phase only — no build, no merge. <code>block_key</code> is <code>btype#opcode@lt</code>, the identity used in every dump. Note <code>consumed</code> has two entries while the build reads only one: the response is claimed and removed from the spine regardless.</div></div>
+<h2 id="and-the-same-matcher-compiled">…and the same matcher, compiled</h2>
+<section><p><code>ir/mch_ir.json</code> is the committed compilation of every <code>.mch</code> file — one JSON document, 11.5k lines, produced by the Python frontend (<code>indexer/events/mch/</code>) and consumed by both engines. It has three top-level parts that matter here: <code>matchers</code> (one row per matcher), <code>nodes</code> (a FLAT array of match-tree nodes shared by all matchers and referenced by index), and <code>registration_order</code> (the priority order matchers run in). Our matcher is <code>matchers[32]</code>.</p>
+<p>Read the row next to the spec above and the mapping is one-to-one. The point of showing both is that they are the same object: nothing is inferred at runtime, and if you ever wonder what the engine will actually do, this file — not the spec — is the answer. <a class="xl" href="ir-artifact.html">ir-artifact</a> covers the format properly.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/ir/mch_ir.json<span class="plines">:9291–9322</span></span><span class="ex-title">matchers[32] — header, captures, first build statement</span><span class="lang">json</span><span class="sha" title="span hash at render">7d77f5e1</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="9291"><td class="ln">9291</td><td class="mk"></td><td class="cd">    {</td></tr>
+<tr class="cl" data-l="9292"><td class="ln">9292</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;name&quot;</span>: <span class="tk-s">&quot;vesting_send_message&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="9293" data-n="0"><td class="ln">9293</td><td class="mk"><span class="chip">1</span></td><td class="cd">      <span class="tk-s">&quot;anchor&quot;</span>: {</td></tr>
+<tr class="cl band nb-0" data-l="9294" data-n="0"><td class="ln">9294</td><td class="mk"></td><td class="cd">        <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;opcode_set&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="9295" data-n="0"><td class="ln">9295</td><td class="mk"></td><td class="cd">        <span class="tk-s">&quot;values&quot;</span>: [</td></tr>
+<tr class="cl band nb-0" data-l="9296" data-n="0"><td class="ln">9296</td><td class="mk"></td><td class="cd">          <span class="tk-n">2809346765</span></td></tr>
+<tr class="cl band nb-0" data-l="9297" data-n="0"><td class="ln">9297</td><td class="mk"></td><td class="cd">        ]</td></tr>
+<tr class="cl band nb-0" data-l="9298" data-n="0"><td class="ln">9298</td><td class="mk"></td><td class="cd">      },</td></tr>
+<tr class="cl band nb-1" data-l="9299" data-n="1"><td class="ln">9299</td><td class="mk"><span class="chip">2</span></td><td class="cd">      <span class="tk-s">&quot;root&quot;</span>: <span class="tk-n">327</span>,</td></tr>
+<tr class="cl" data-l="9300"><td class="ln">9300</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;produces&quot;</span>: [</td></tr>
+<tr class="cl" data-l="9301"><td class="ln">9301</td><td class="mk"></td><td class="cd">        <span class="tk-s">&quot;vesting_send_message&quot;</span></td></tr>
+<tr class="cl" data-l="9302"><td class="ln">9302</td><td class="mk"></td><td class="cd">      ],</td></tr>
+<tr class="cl band nb-2" data-l="9303" data-n="2"><td class="ln">9303</td><td class="mk"><span class="chip">3</span></td><td class="cd">      <span class="tk-s">&quot;captures&quot;</span>: [</td></tr>
+<tr class="cl band nb-2" data-l="9304" data-n="2"><td class="ln">9304</td><td class="mk"></td><td class="cd">        {</td></tr>
+<tr class="cl band nb-2" data-l="9305" data-n="2"><td class="ln">9305</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;name&quot;</span>: <span class="tk-s">&quot;send&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9306" data-n="2"><td class="ln">9306</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;card&quot;</span>: <span class="tk-s">&quot;one&quot;</span></td></tr>
+<tr class="cl band nb-2" data-l="9307" data-n="2"><td class="ln">9307</td><td class="mk"></td><td class="cd">        },</td></tr>
+<tr class="cl band nb-2" data-l="9308" data-n="2"><td class="ln">9308</td><td class="mk"></td><td class="cd">        {</td></tr>
+<tr class="cl band nb-2" data-l="9309" data-n="2"><td class="ln">9309</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;name&quot;</span>: <span class="tk-s">&quot;response&quot;</span>,</td></tr>
+<tr class="cl band nb-2" data-l="9310" data-n="2"><td class="ln">9310</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;card&quot;</span>: <span class="tk-s">&quot;one&quot;</span></td></tr>
+<tr class="cl band nb-2" data-l="9311" data-n="2"><td class="ln">9311</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl band nb-2" data-l="9312" data-n="2"><td class="ln">9312</td><td class="mk"></td><td class="cd">      ],</td></tr>
+<tr class="cl band nb-3" data-l="9313" data-n="3"><td class="ln">9313</td><td class="mk"><span class="chip">4</span></td><td class="cd">      <span class="tk-s">&quot;include_excess&quot;</span>: <span class="tk-k">true</span>,</td></tr>
+<tr class="cl band nb-3" data-l="9314" data-n="3"><td class="ln">9314</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;include_bounces&quot;</span>: <span class="tk-k">true</span>,</td></tr>
+<tr class="cl band nb-4" data-l="9315" data-n="4"><td class="ln">9315</td><td class="mk"><span class="chip">5</span></td><td class="cd">      <span class="tk-s">&quot;build_program&quot;</span>: [</td></tr>
+<tr class="cl band nb-4" data-l="9316" data-n="4"><td class="ln">9316</td><td class="mk"></td><td class="cd">        {</td></tr>
+<tr class="cl band nb-4" data-l="9317" data-n="4"><td class="ln">9317</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;s&quot;</span>: <span class="tk-s">&quot;parse&quot;</span>,</td></tr>
+<tr class="cl band nb-4" data-l="9318" data-n="4"><td class="ln">9318</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;target&quot;</span>: <span class="tk-s">&quot;send&quot;</span>,</td></tr>
+<tr class="cl band nb-4" data-l="9319" data-n="4"><td class="ln">9319</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;types&quot;</span>: [</td></tr>
+<tr class="cl band nb-4" data-l="9320" data-n="4"><td class="ln">9320</td><td class="mk"></td><td class="cd">            <span class="tk-s">&quot;VestingSendMessage&quot;</span></td></tr>
+<tr class="cl band nb-4" data-l="9321" data-n="4"><td class="ln">9321</td><td class="mk"></td><td class="cd">          ]</td></tr>
+<tr class="cl band nb-4" data-l="9322" data-n="4"><td class="ln">9322</td><td class="mk"></td><td class="cd">        },</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="9293" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L9293–9298</span><code>2809346765</code> is <code>0xA7733ACD</code>. This set is also the runtime prefilter key: <code>classify_trace</code> collects the trace&#39;s opcode inventory once and skips a matcher&#39;s entire BFS when the intersection is empty. On this trace 32 of 33 matchers are skipped without ever touching a block.</div></div>
+<div class="note" data-a="9299" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L9299</span><code>root</code> is an INDEX into the document-level <code>nodes</code> array, not an inline subtree. Match trees are pooled across all matchers, so node indices are global and a node can in principle be shared.</div></div>
+<div class="note" data-a="9303" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L9303–9312</span>Captures are declared with cardinality (<code>one</code> vs a list form) and in spec order — and that order is their SLOT order. The generated build function addresses them positionally as <code>env.slots[0]</code>, never by name, so reordering captures in a spec silently changes the compiled program.</div></div>
+<div class="note" data-a="9313" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L9313–9314</span>Both default to true: after a successful match the anchor&#39;s remaining excess/bounce children are auto-appended to the consumed set. That is the <code>auto=[]</code> field in the <code>--classify</code> line — empty here, because this trace has neither.</div></div>
+<div class="note" data-a="9315" data-n="4"><div class="nt"><span class="chip">5</span><span class="nl">L9315–9322</span><code>build_program</code> is an ordered STATEMENT list, not an expression tree. <code>parse</code> is a statement with a side effect: it fills <code>slots[0].body</code>. That is why spec statement order is semantically significant, as flagged on the spec excerpt above.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/ir/mch_ir.json<span class="plines">:11504–11514</span></span><span class="ex-title">nodes[327] and nodes[328] — the chain, at the end of the file</span><span class="lang">json</span><span class="sha" title="span hash at render">6a945237</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="11504" data-n="0"><td class="ln">11504</td><td class="mk"><span class="chip">1</span></td><td class="cd">    {</td></tr>
+<tr class="cl band nb-0" data-l="11505" data-n="0"><td class="ln">11505</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;contract&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="11506" data-n="0"><td class="ln">11506</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;opcode&quot;</span>: <span class="tk-n">2809346765</span>,</td></tr>
+<tr class="cl band nb-0" data-l="11507" data-n="0"><td class="ln">11507</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;capture&quot;</span>: <span class="tk-s">&quot;send&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="11508" data-n="0"><td class="ln">11508</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;child&quot;</span>: <span class="tk-n">328</span></td></tr>
+<tr class="cl band nb-0" data-l="11509" data-n="0"><td class="ln">11509</td><td class="mk"></td><td class="cd">    },</td></tr>
+<tr class="cl band nb-1" data-l="11510" data-n="1"><td class="ln">11510</td><td class="mk"><span class="chip">2</span></td><td class="cd">    {</td></tr>
+<tr class="cl band nb-1" data-l="11511" data-n="1"><td class="ln">11511</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;kind&quot;</span>: <span class="tk-s">&quot;contract&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="11512" data-n="1"><td class="ln">11512</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;opcode&quot;</span>: <span class="tk-n">4151524045</span>,</td></tr>
+<tr class="cl band nb-1" data-l="11513" data-n="1"><td class="ln">11513</td><td class="mk"></td><td class="cd">      <span class="tk-s">&quot;capture&quot;</span>: <span class="tk-s">&quot;response&quot;</span></td></tr>
+<tr class="cl" data-l="11514"><td class="ln">11514</td><td class="mk"></td><td class="cd">    }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="11504" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L11504–11509</span>Node 327 is the anchor: opcode + the capture it binds + a single <code>child</code>. <code>child</code> means &quot;and then this must also match, somewhere reachable onward&quot; — a chain link, not a tree branch. Branching kinds (<code>or</code>, exclusive-or, recursive) exist and appear elsewhere in this array.</div></div>
+<div class="note" data-a="11510" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L11510–11513</span><code>4151524045</code> = <code>0xF7733ACD</code>, capture <code>response</code>, no <code>child</code> — the chain terminates. This node has no consumer in the build program at all; its entire job is to exist so that the response block is consumed. Confirmed by the <code>--match</code> run: two blocks consumed, one capture read.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/ir/mch_ir.json<span class="plines">:9323–9346</span></span><span class="ex-title">The `out` statement, first field only</span><span class="lang">json</span><span class="sha" title="span hash at render">ad847aa9</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="9323"><td class="ln">9323</td><td class="mk"></td><td class="cd">        {</td></tr>
+<tr class="cl band nb-0" data-l="9324" data-n="0"><td class="ln">9324</td><td class="mk"><span class="chip">1</span></td><td class="cd">          <span class="tk-s">&quot;s&quot;</span>: <span class="tk-s">&quot;out&quot;</span>,</td></tr>
+<tr class="cl band nb-0" data-l="9325" data-n="0"><td class="ln">9325</td><td class="mk"></td><td class="cd">          <span class="tk-s">&quot;fields&quot;</span>: [</td></tr>
+<tr class="cl band nb-0" data-l="9326" data-n="0"><td class="ln">9326</td><td class="mk"></td><td class="cd">            {</td></tr>
+<tr class="cl band nb-0" data-l="9327" data-n="0"><td class="ln">9327</td><td class="mk"></td><td class="cd">              <span class="tk-s">&quot;name&quot;</span>: <span class="tk-s">&quot;sender&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="9328" data-n="1"><td class="ln">9328</td><td class="mk"><span class="chip">2</span></td><td class="cd">              <span class="tk-s">&quot;expr&quot;</span>: {</td></tr>
+<tr class="cl band nb-1" data-l="9329" data-n="1"><td class="ln">9329</td><td class="mk"></td><td class="cd">                <span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;call&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="9330" data-n="1"><td class="ln">9330</td><td class="mk"><span class="chip">3</span></td><td class="cd">                <span class="tk-s">&quot;fn&quot;</span>: <span class="tk-s">&quot;account&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="9331" data-n="1"><td class="ln">9331</td><td class="mk"></td><td class="cd">                <span class="tk-s">&quot;args&quot;</span>: [</td></tr>
+<tr class="cl band nb-1" data-l="9332" data-n="1"><td class="ln">9332</td><td class="mk"></td><td class="cd">                  {</td></tr>
+<tr class="cl band nb-1" data-l="9333" data-n="1"><td class="ln">9333</td><td class="mk"></td><td class="cd">                    <span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;attr&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="9334" data-n="1"><td class="ln">9334</td><td class="mk"></td><td class="cd">                    <span class="tk-s">&quot;of&quot;</span>: {</td></tr>
+<tr class="cl band nb-1" data-l="9335" data-n="1"><td class="ln">9335</td><td class="mk"></td><td class="cd">                      <span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;attr&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="9336" data-n="1"><td class="ln">9336</td><td class="mk"></td><td class="cd">                      <span class="tk-s">&quot;of&quot;</span>: {</td></tr>
+<tr class="cl band nb-1" data-l="9337" data-n="1"><td class="ln">9337</td><td class="mk"></td><td class="cd">                        <span class="tk-s">&quot;k&quot;</span>: <span class="tk-s">&quot;name&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="9338" data-n="1"><td class="ln">9338</td><td class="mk"></td><td class="cd">                        <span class="tk-s">&quot;id&quot;</span>: <span class="tk-s">&quot;send&quot;</span></td></tr>
+<tr class="cl band nb-1" data-l="9339" data-n="1"><td class="ln">9339</td><td class="mk"></td><td class="cd">                      },</td></tr>
+<tr class="cl band nb-1" data-l="9340" data-n="1"><td class="ln">9340</td><td class="mk"></td><td class="cd">                      <span class="tk-s">&quot;name&quot;</span>: <span class="tk-s">&quot;msg&quot;</span></td></tr>
+<tr class="cl band nb-1" data-l="9341" data-n="1"><td class="ln">9341</td><td class="mk"></td><td class="cd">                    },</td></tr>
+<tr class="cl band nb-1" data-l="9342" data-n="1"><td class="ln">9342</td><td class="mk"></td><td class="cd">                    <span class="tk-s">&quot;name&quot;</span>: <span class="tk-s">&quot;source&quot;</span></td></tr>
+<tr class="cl band nb-1" data-l="9343" data-n="1"><td class="ln">9343</td><td class="mk"></td><td class="cd">                  }</td></tr>
+<tr class="cl band nb-1" data-l="9344" data-n="1"><td class="ln">9344</td><td class="mk"></td><td class="cd">                ]</td></tr>
+<tr class="cl band nb-1" data-l="9345" data-n="1"><td class="ln">9345</td><td class="mk"></td><td class="cd">              }</td></tr>
+<tr class="cl" data-l="9346"><td class="ln">9346</td><td class="mk"></td><td class="cd">            },</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="9324" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L9324–9327</span>One <code>out</code> statement carries the whole field list, in spec order. Do NOT infer that order from a dump: the rendered <code>data={…}</code> is key-sorted, which is why <code>message_boc_str</code> prints first even though it is the fourth field here.</div></div>
+<div class="note" data-a="9328" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L9328–9345</span><code>send.msg.source</code> is three nested nodes — <code>attr(attr(name send, &quot;msg&quot;), &quot;source&quot;)</code> — wrapped in a <code>call</code>. Expressions are trees of tagged JSON objects, and this shape is exactly what the code generator unrolls into a straight-line chain of <code>rt_access_build</code> calls (see the captured output below).</div></div>
+<div class="note" data-a="9330" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L9330</span><code>fn</code> names a HOST builtin resolved by name. The set of legal names is not open — it is pinned by the registry surface dump that the Python twins consume, so a spec cannot invent a builtin that only one engine has (<a class="xl" href="build-programs.html">build-programs</a>, <a class="xl" href="gates.html">gates</a>).</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ sed -n &#39;4622,4634p&#39; cmake-build-debug-visual-studio/ton-mch-engine/generated/builds_ir_generated.cpp</div><pre class="run-out">BuildOutcome build_32_vesting_send_message(BuildEnv &amp;env) {
+  (void)env;
+  BuildOutcome o = BuildOutcome::accepted();
+  Value pt0 = env.slots[0];
+  EvalResult sp0 = rt_parse(env, pt0, std::vector&lt;std::string&gt;{&quot;VestingSendMessage&quot;});
+  if (sp0.faulted) return BuildOutcome::rejected(std::move(sp0.message));
+  Value::Fields fs1;
+  const Value &amp;v2 = env.slots[0];
+  EvalResult r3 = rt_access_build(env, v2, &quot;msg&quot;);
+  if (r3.faulted) return BuildOutcome::rejected(std::move(r3.message));
+  Value v3 = std::move(r3.value);
+  EvalResult r4 = rt_access_build(env, v3, &quot;source&quot;);
+  if (r4.faulted) return BuildOutcome::rejected(std::move(r4.message));</pre><div class="run-note">A third representation of the same matcher: the build program is COMPILED to C++ at build time by <code>mch-codegen</code> (a CMake step), not interpreted. This file lives in the build tree and is not in git — which is why it is shown as captured output rather than an excerpt. Note <code>env.slots[0]</code> and the positional capture access, and that every step can <code>reject</code> the whole match. Full story in <a class="xl" href="build-programs.html">build-programs</a>.</div></div>
+<h2 id="mode-dispatch-and-the-core-harness-split">Mode dispatch and the core/harness split</h2>
+<section><p><code>main.cpp</code> is a flat option parser followed by a chain of early returns. Every mode is a <code>run_*</code> free function that owns its own lifecycle; nothing is shared but the parsed <code>-I</code> / <code>-T</code> values and one startup check (<code>validate_registries()</code>, placed ahead of dispatch so even the self-test modes get it — see <a class="xl" href="parse-layer.html">parse-layer</a>).</p>
+<p>Underneath, the code is split in two on a hard line. <code>ClassifyCore.{h,cpp}</code> is the PURE pipeline: <code>(TraceContext + LoadedIr + LookupSource + generated build table) -&gt; a buffered per-trace result</code>, with no stdout, no filesystem, no fixture knowledge and no rendering. <code>Classify.cpp</code> is the harness that prints. That split is what lets the production actor reuse the identical pipeline (<a class="xl" href="prod-path.html">prod-path</a>) and, more immediately, it is why a diff between <code>--classify</code> and <code>--classify-prod</code> can only come from the loader or the lookup source, never from the matching.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/main.cpp<span class="plines">:297–321</span></span><span class="ex-title">main.cpp — the dispatch region</span><span class="lang">cpp</span><span class="sha" title="span hash at render">c7219c10</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="297" data-n="0"><td class="ln">297</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">if</span> (classify_schema_mode) {</td></tr>
+<tr class="cl band nb-0" data-l="298" data-n="0"><td class="ln">298</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> mch::run_classify_schema(ir_path, trace_paths);</td></tr>
+<tr class="cl band nb-0" data-l="299" data-n="0"><td class="ln">299</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-0" data-l="300" data-n="0"><td class="ln">300</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-0" data-l="301" data-n="0"><td class="ln">301</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (actions_schema_mode) {</td></tr>
+<tr class="cl band nb-0" data-l="302" data-n="0"><td class="ln">302</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> mch::run_actions_schema(ir_path, trace_paths);</td></tr>
+<tr class="cl band nb-0" data-l="303" data-n="0"><td class="ln">303</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-0" data-l="304" data-n="0"><td class="ln">304</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-0" data-l="305" data-n="0"><td class="ln">305</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (classify_prod_mode) {</td></tr>
+<tr class="cl band nb-0" data-l="306" data-n="0"><td class="ln">306</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> mch::run_classify_prod(ir_path, trace_paths);</td></tr>
+<tr class="cl band nb-0" data-l="307" data-n="0"><td class="ln">307</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-0" data-l="308" data-n="0"><td class="ln">308</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-0" data-l="309" data-n="0"><td class="ln">309</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (actions_prod_mode) {</td></tr>
+<tr class="cl band nb-0" data-l="310" data-n="0"><td class="ln">310</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> mch::run_actions_prod(ir_path, trace_paths);</td></tr>
+<tr class="cl band nb-0" data-l="311" data-n="0"><td class="ln">311</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="312"><td class="ln">312</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="313" data-n="1"><td class="ln">313</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">if</span> (classify_mode) {</td></tr>
+<tr class="cl band nb-1" data-l="314" data-n="1"><td class="ln">314</td><td class="mk"><span class="chip">3</span></td><td class="cd">    <span class="tk-c">// End-to-end classify mode: no scheduler needed.</span></td></tr>
+<tr class="cl band nb-1" data-l="315" data-n="1"><td class="ln">315</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> mch::run_classify(ir_path, trace_paths);</td></tr>
+<tr class="cl band nb-1" data-l="316" data-n="1"><td class="ln">316</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="317" data-n="1"><td class="ln">317</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="318" data-n="1"><td class="ln">318</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (actions_mode) {</td></tr>
+<tr class="cl band nb-1" data-l="319" data-n="1"><td class="ln">319</td><td class="mk"></td><td class="cd">    <span class="tk-c">// Serialized-Action-row dump (Phase E part 2): no scheduler needed.</span></td></tr>
+<tr class="cl band nb-1" data-l="320" data-n="1"><td class="ln">320</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> mch::run_actions(ir_path, trace_paths);</td></tr>
+<tr class="cl band nb-1" data-l="321" data-n="1"><td class="ln">321</td><td class="mk"></td><td class="cd">  }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="297" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L297–311</span>The <code>-schema</code> and <code>-prod</code> variants are not different pipelines: they run the SAME <code>ClassifyCore</code> with a different trace loader and a different lookup source. They exist to be A/B-diffed against the plain modes, which is how the production ingestion path is proven equivalent to the fixture path.</div></div>
+<div class="note" data-a="313" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L313–321</span><code>--classify</code> and <code>--actions</code> are the same run; they diverge at one boolean deep inside the shared adapter (below). If the two dumps ever disagree about WHICH actions exist, the cause is the serializer&#39;s fill table, not the engine.</div></div>
+<div class="note" data-a="314" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L314</span>&quot;no scheduler needed&quot; repeats on every dump mode and is a real constraint, not a note: all of these return before the <code>td::actor::Scheduler</code> at the bottom of <code>main</code>. Single-threaded, deterministic, no actor context — required, because their stdout is compared byte-for-byte against Python.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.h<span class="plines">:94–115</span></span><span class="ex-title">The two entry points</span><span class="lang">cpp</span><span class="sha" title="span hash at render">acabe8cd</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="94" data-n="0"><td class="ln">94</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// matcher set, the SKIP table (name -&gt; reason, sorted), the generated build-fn</span></td></tr>
+<tr class="cl band nb-0" data-l="95" data-n="0"><td class="ln">95</td><td class="mk"></td><td class="cd"><span class="tk-c">// map, and the union of referenced lookup kinds.</span></td></tr>
+<tr class="cl" data-l="96"><td class="ln">96</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> ClassifySetup {</td></tr>
+<tr class="cl" data-l="97"><td class="ln">97</td><td class="mk"></td><td class="cd">  std::vector&lt;IncludedMatcher&gt; included;  <span class="tk-c">// priority order</span></td></tr>
+<tr class="cl" data-l="98"><td class="ln">98</td><td class="mk"></td><td class="cd">  std::vector&lt;std::pair&lt;std::string, std::string&gt;&gt; skips;</td></tr>
+<tr class="cl band nb-1" data-l="99" data-n="1"><td class="ln">99</td><td class="mk"><span class="chip">2</span></td><td class="cd">  std::unordered_map&lt;<span class="tk-k">int</span>, BuildOutcome (*)(BuildEnv &amp;)&gt; build_fns;</td></tr>
+<tr class="cl" data-l="100"><td class="ln">100</td><td class="mk"></td><td class="cd">  std::set&lt;std::string&gt; kinds;</td></tr>
+<tr class="cl" data-l="101"><td class="ln">101</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> table_missing = <span class="tk-k">false</span>;  <span class="tk-c">// no generated build table paired with this artifact</span></td></tr>
+<tr class="cl" data-l="102"><td class="ln">102</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> fn_missing = <span class="tk-k">false</span>;     <span class="tk-c">// an included matcher has no generated fn</span></td></tr>
+<tr class="cl" data-l="103"><td class="ln">103</td><td class="mk"></td><td class="cd">  std::string error;           <span class="tk-c">// populated when table_missing/fn_missing</span></td></tr>
+<tr class="cl" data-l="104"><td class="ln">104</td><td class="mk"></td><td class="cd">};</td></tr>
+<tr class="cl" data-l="105"><td class="ln">105</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="106"><td class="ln">106</td><td class="mk"></td><td class="cd"><span class="tk-c">// Build the run prep from a loaded artifact (selects the generated build table</span></td></tr>
+<tr class="cl" data-l="107"><td class="ln">107</td><td class="mk"></td><td class="cd"><span class="tk-c">// by source sha). No I/O. On a table/fn mismatch, sets the *_missing flags +</span></td></tr>
+<tr class="cl" data-l="108"><td class="ln">108</td><td class="mk"></td><td class="cd"><span class="tk-c">// error and returns what it has (adapter reports + exits).</span></td></tr>
+<tr class="cl band nb-2" data-l="109" data-n="2"><td class="ln">109</td><td class="mk"><span class="chip">3</span></td><td class="cd">ClassifySetup prepare_classify(<span class="tk-k">const</span> LoadedIr &amp;ir);</td></tr>
+<tr class="cl" data-l="110"><td class="ln">110</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-3" data-l="111" data-n="3"><td class="ln">111</td><td class="mk"><span class="chip">4</span></td><td class="cd"><span class="tk-c">// Classify ONE trace: the matcher loop (BFS, parent-is-None guard, re-scan</span></td></tr>
+<tr class="cl band nb-3" data-l="112" data-n="3"><td class="ln">112</td><td class="mk"></td><td class="cd"><span class="tk-c">// semantics) + Phase E post-process passes, buffered. `arena` is the caller&#39;s</span></td></tr>
+<tr class="cl band nb-3" data-l="113" data-n="3"><td class="ln">113</td><td class="mk"></td><td class="cd"><span class="tk-c">// (usually ctx.arena) — the pipeline allocates produced/proxy blocks from it.</span></td></tr>
+<tr class="cl band nb-3" data-l="114" data-n="3"><td class="ln">114</td><td class="mk"></td><td class="cd">ClassifyResult classify_trace(TraceContext &amp;ctx, <span class="tk-k">const</span> LoadedIr &amp;ir,</td></tr>
+<tr class="cl band nb-3" data-l="115" data-n="3"><td class="ln">115</td><td class="mk"></td><td class="cd">                              <span class="tk-k">const</span> ClassifySetup &amp;setup, <span class="tk-k">const</span> LookupSource &amp;src);</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="94" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L94–95</span>&quot;Trace-independent&quot; is the whole point: matcher selection, the build-fn table, the lookup kinds and the anchor prefilters are computed ONCE per process. Anything you see recomputed per trace in the loop below is there because it genuinely depends on the trace.</div></div>
+<div class="note" data-a="99" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L99</span>The build table is a map from artifact matcher index to a plain function pointer, selected by the ARTIFACT&#39;s sha256. A mismatched artifact/binary pair cannot run silently — <code>prepare_classify</code> reports and the adapter exits 2.</div></div>
+<div class="note" data-a="109" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L109</span>No I/O in either signature. <code>prepare_classify</code> takes an already-loaded <code>LoadedIr</code>; <code>classify_trace</code> takes an already-loaded <code>TraceContext</code>. Reading files is the caller&#39;s job, which is exactly what makes both callable from an actor that gets its rows from Postgres instead.</div></div>
+<div class="note" data-a="111" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L111–115</span><code>arena</code> is the CALLER&#39;s (<code>ctx.arena</code>): produced and proxy blocks are allocated into the same arena as the leaves, so the whole block graph shares one lifetime and pointers stay valid for as long as the caller holds the context.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.h<span class="plines">:44–71</span></span><span class="ex-title">The result: rendering-agnostic and atomic</span><span class="lang">cpp</span><span class="sha" title="span hash at render">5c70ffae</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="44" data-n="0"><td class="ln">44</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// One produced action, RENDERING-AGNOSTIC: raw block pointers + fire-time aux.</span></td></tr>
+<tr class="cl band nb-0" data-l="45" data-n="0"><td class="ln">45</td><td class="mk"></td><td class="cd"><span class="tk-c">// The adapter renders block_key(anchor)/data/consumed/aux or builds an Action</span></td></tr>
+<tr class="cl band nb-0" data-l="46" data-n="0"><td class="ln">46</td><td class="mk"></td><td class="cd"><span class="tk-c">// row from `produced`. Pointers reference the caller&#39;s arena (TraceContext),</span></td></tr>
+<tr class="cl band nb-0" data-l="47" data-n="0"><td class="ln">47</td><td class="mk"></td><td class="cd"><span class="tk-c">// valid for as long as the caller keeps it alive.</span></td></tr>
+<tr class="cl band nb-0" data-l="48" data-n="0"><td class="ln">48</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> CoreAction {</td></tr>
+<tr class="cl band nb-0" data-l="49" data-n="0"><td class="ln">49</td><td class="mk"></td><td class="cd">  std::string matcher_name;</td></tr>
+<tr class="cl band nb-0" data-l="50" data-n="0"><td class="ln">50</td><td class="mk"></td><td class="cd">  Block *anchor;</td></tr>
+<tr class="cl band nb-0" data-l="51" data-n="0"><td class="ln">51</td><td class="mk"></td><td class="cd">  Block *produced;</td></tr>
+<tr class="cl band nb-0" data-l="52" data-n="0"><td class="ln">52</td><td class="mk"></td><td class="cd">  std::vector&lt;Block *&gt; aux;    <span class="tk-c">// fire-time excess/bounce auto-append (anchor)</span></td></tr>
+<tr class="cl band nb-0" data-l="53" data-n="0"><td class="ln">53</td><td class="mk"></td><td class="cd">};</td></tr>
+<tr class="cl" data-l="54"><td class="ln">54</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="55"><td class="ln">55</td><td class="mk"></td><td class="cd"><span class="tk-c">// Buffered ATOMIC per-trace result: on a mid-trace throw the pipeline sets</span></td></tr>
+<tr class="cl band nb-1" data-l="56" data-n="1"><td class="ln">56</td><td class="mk"><span class="chip">2</span></td><td class="cd"><span class="tk-c">// `failure` (+ reason) and returns whatever was collected — NOTHING is emitted</span></td></tr>
+<tr class="cl band nb-1" data-l="57" data-n="1"><td class="ln">57</td><td class="mk"></td><td class="cd"><span class="tk-c">// by the core; the adapter decides (a dump reproduces today&#39;s TRACE_FAIL line,</span></td></tr>
+<tr class="cl band nb-1" data-l="58" data-n="1"><td class="ln">58</td><td class="mk"></td><td class="cd"><span class="tk-c">// production commits only on success).</span></td></tr>
+<tr class="cl" data-l="59"><td class="ln">59</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> ClassifyResult {</td></tr>
+<tr class="cl" data-l="60"><td class="ln">60</td><td class="mk"></td><td class="cd">  std::vector&lt;CoreAction&gt; actions;  <span class="tk-c">// surviving post-pass, in fire order</span></td></tr>
+<tr class="cl" data-l="61"><td class="ln">61</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> failure = <span class="tk-k">false</span>;</td></tr>
+<tr class="cl" data-l="62"><td class="ln">62</td><td class="mk"></td><td class="cd">  std::string failure_reason;</td></tr>
+<tr class="cl" data-l="63"><td class="ln">63</td><td class="mk"></td><td class="cd">  <span class="tk-c">// Trace-terminal failure category (additive telemetry; none unless `failure`).</span></td></tr>
+<tr class="cl band nb-2" data-l="64" data-n="2"><td class="ln">64</td><td class="mk"><span class="chip">3</span></td><td class="cd">  FailureCategory failure_category = FailureCategory::none;</td></tr>
+<tr class="cl band nb-2" data-l="65" data-n="2"><td class="ln">65</td><td class="mk"></td><td class="cd">  <span class="tk-c">// Step 2c basic-actions fallback (try_classify_basic_actions): populated ONLY</span></td></tr>
+<tr class="cl band nb-2" data-l="66" data-n="2"><td class="ln">66</td><td class="mk"></td><td class="cd">  <span class="tk-c">// when `failure` — a fresh leaf-only classify (no matchers) + the</span></td></tr>
+<tr class="cl band nb-2" data-l="67" data-n="2"><td class="ln">67</td><td class="mk"></td><td class="cd">  <span class="tk-c">// post-processor chain, one CoreAction per surviving spine block of a basic</span></td></tr>
+<tr class="cl band nb-2" data-l="68" data-n="2"><td class="ln">68</td><td class="mk"></td><td class="cd">  <span class="tk-c">// btype (call_contract / contract_deploy / ton_transfer). Production commits</span></td></tr>
+<tr class="cl band nb-2" data-l="69" data-n="2"><td class="ln">69</td><td class="mk"></td><td class="cd">  <span class="tk-c">// these when classification fails. Ungated (corpus has no failing traces).</span></td></tr>
+<tr class="cl band nb-2" data-l="70" data-n="2"><td class="ln">70</td><td class="mk"></td><td class="cd">  std::vector&lt;CoreAction&gt; fallback_actions;</td></tr>
+<tr class="cl" data-l="71"><td class="ln">71</td><td class="mk"></td><td class="cd">};</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="44" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L44–53</span>A <code>CoreAction</code> is three block pointers, not data: <code>anchor</code> (where the matcher fired, used as the dump&#39;s identity), <code>produced</code> (the composite whose <code>data</code> holds the build output), and <code>aux</code> (the fire-time excess/bounce auto-append). Rendering — or building an <code>Action</code> row — happens strictly in the adapter.</div></div>
+<div class="note" data-a="56" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L56–58</span>&quot;ATOMIC&quot; and &quot;NOTHING is emitted by the core&quot; together: a mid-trace throw does not leave a half-emitted trace. The core buffers, sets <code>failure</code>, and hands the decision to the adapter — a dump prints <code>TRACE_FAIL</code>, production commits nothing. This is the C++ image of the Python classifier&#39;s per-trace try/except boundary.</div></div>
+<div class="note" data-a="64" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L64–70</span>The fallback mirrors Python&#39;s <code>try_classify_basic_actions</code>: on failure, reclassify with NO matchers and keep the surviving <code>ton_transfer</code> / <code>call_contract</code> / <code>contract_deploy</code> leaves. Note the honesty in the comment — no corpus trace fails, so this path is ungated, i.e. untested by the twins.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/Classify.cpp<span class="plines">:115–139</span></span><span class="ex-title">The harness adapter — one function for both dumps</span><span class="lang">cpp</span><span class="sha" title="span hash at render">934fd8cb</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="115" data-n="0"><td class="ln">115</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// Shared CLI dump adapter over ClassifyCore (§11 item 2 / prod-design §2). The</span></td></tr>
+<tr class="cl band nb-0" data-l="116" data-n="0"><td class="ln">116</td><td class="mk"></td><td class="cd"><span class="tk-c">// core computes a buffered per-trace ClassifyResult; this reproduces today&#39;s</span></td></tr>
+<tr class="cl band nb-0" data-l="117" data-n="0"><td class="ln">117</td><td class="mk"></td><td class="cd"><span class="tk-c">// stdout byte-for-byte (SKIP header, `=== fixture`, ERROR/TRACE_FAIL lines, then</span></td></tr>
+<tr class="cl band nb-0" data-l="118" data-n="0"><td class="ln">118</td><td class="mk"></td><td class="cd"><span class="tk-c">// per surviving action either the classify line (emit_action) or the serialized</span></td></tr>
+<tr class="cl band nb-0" data-l="119" data-n="0"><td class="ln">119</td><td class="mk"></td><td class="cd"><span class="tk-c">// Action row (build_action + render_action)). --classify and --actions differ</span></td></tr>
+<tr class="cl band nb-0" data-l="120" data-n="0"><td class="ln">120</td><td class="mk"></td><td class="cd"><span class="tk-c">// ONLY in the per-action render, so they share this.</span></td></tr>
+<tr class="cl" data-l="121"><td class="ln">121</td><td class="mk"></td><td class="cd"><span class="tk-k">int</span> run_dump(<span class="tk-k">const</span> std::string &amp;artifact_path, <span class="tk-k">const</span> std::vector&lt;std::string&gt; &amp;paths,</td></tr>
+<tr class="cl" data-l="122"><td class="ln">122</td><td class="mk"></td><td class="cd">             <span class="tk-k">bool</span> actions_mode, <span class="tk-k">const</span> TraceContextLoader &amp;load_ctx,</td></tr>
+<tr class="cl" data-l="123"><td class="ln">123</td><td class="mk"></td><td class="cd">             <span class="tk-k">const</span> LookupSourceFactory &amp;lookup_factory) {</td></tr>
+<tr class="cl" data-l="124"><td class="ln">124</td><td class="mk"></td><td class="cd">  <span class="tk-k">auto</span> r_ir = load_ir(artifact_path);</td></tr>
+<tr class="cl" data-l="125"><td class="ln">125</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (r_ir.is_error()) {</td></tr>
+<tr class="cl" data-l="126"><td class="ln">126</td><td class="mk"></td><td class="cd">    std::fprintf(stderr, <span class="tk-s">&quot;failed to load IR artifact: %s\n&quot;</span>, r_ir.error().message().c_str());</td></tr>
+<tr class="cl" data-l="127"><td class="ln">127</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> <span class="tk-n">2</span>;</td></tr>
+<tr class="cl" data-l="128"><td class="ln">128</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="129"><td class="ln">129</td><td class="mk"></td><td class="cd">  LoadedIr ir = r_ir.move_as_ok();</td></tr>
+<tr class="cl band nb-1" data-l="130" data-n="1"><td class="ln">130</td><td class="mk"><span class="chip">2</span></td><td class="cd">  warn_missing_artifact_parsers(ir);</td></tr>
+<tr class="cl" data-l="131"><td class="ln">131</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-2" data-l="132" data-n="2"><td class="ln">132</td><td class="mk"><span class="chip">3</span></td><td class="cd">  ClassifySetup setup = prepare_classify(ir);</td></tr>
+<tr class="cl band nb-2" data-l="133" data-n="2"><td class="ln">133</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (setup.table_missing || setup.fn_missing) {</td></tr>
+<tr class="cl band nb-2" data-l="134" data-n="2"><td class="ln">134</td><td class="mk"></td><td class="cd">    std::fprintf(stderr, <span class="tk-s">&quot;%s\n&quot;</span>, setup.error.c_str());</td></tr>
+<tr class="cl band nb-2" data-l="135" data-n="2"><td class="ln">135</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> <span class="tk-n">2</span>;</td></tr>
+<tr class="cl band nb-2" data-l="136" data-n="2"><td class="ln">136</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-3" data-l="137" data-n="3"><td class="ln">137</td><td class="mk"><span class="chip">4</span></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> &amp;s : setup.skips) {</td></tr>
+<tr class="cl band nb-3" data-l="138" data-n="3"><td class="ln">138</td><td class="mk"></td><td class="cd">    std::printf(<span class="tk-s">&quot;SKIP %s reason=%s\n&quot;</span>, s.first.c_str(), s.second.c_str());</td></tr>
+<tr class="cl band nb-3" data-l="139" data-n="3"><td class="ln">139</td><td class="mk"></td><td class="cd">  }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="115" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L115–120</span>The contract of the whole dump surface in one comment, ending with the line that matters: the two modes differ ONLY in the per-action render. Any structural difference between <code>--classify</code> and <code>--actions</code> output is therefore a serializer fact, never a harness fact.</div></div>
+<div class="note" data-a="130" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L130</span>A preflight, not an assertion: a matcher referencing a message type nobody registered is warned about on stderr and build-skipped, so a half-wired protocol degrades into &quot;this matcher never fires&quot; instead of a crash (<a class="xl" href="parse-layer.html">parse-layer</a>).</div></div>
+<div class="note" data-a="132" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L132–136</span><code>prepare_classify</code> runs once, before the fixture loop — and a table/fn mismatch exits 2 rather than running with a stale generated build table. That guard is what makes &quot;rebuild the C++ after regenerating the IR&quot; a hard failure instead of a mysterious diff.</div></div>
+<div class="note" data-a="137" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L137–139</span><code>SKIP</code> lines are part of the compared stdout, sorted for stability: which matchers the engine refuses to run is itself a gate artifact. Our corpus run prints zero of them — every matcher in the committed artifact is runnable today.</div></div></div>
+</div>
+</div>
+<h2 id="the-loop-that-actually-runs-it">The loop that actually runs it</h2>
+<section><p><code>classify_trace</code> is a port of the Python <code>event_processing</code> outer loop, and its shape is worth memorizing because every later chapter plugs into it: FOR EACH matcher in priority order, do a full BFS over the spine and try to build at every block. Not the other way around. That ordering is why the global matcher list order matters in the Python engine and matters identically here — an earlier matcher consumes blocks a later one would have wanted.</p>
+<p>After every matcher has had its pass, host-side post-processing runs over a flat snapshot of the spine. Those passes are not expressible in the DSL (they merge across matcher results), so they stay hand-written on both sides.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp<span class="plines">:465–492</span></span><span class="ex-title">The matcher loop</span><span class="lang">cpp</span><span class="sha" title="span hash at render">a11f473c</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="465" data-n="0"><td class="ln">465</td><td class="mk"><span class="chip">1</span></td><td class="cd">  std::vector&lt;CoreAction&gt; pending;</td></tr>
+<tr class="cl band nb-0" data-l="466" data-n="0"><td class="ln">466</td><td class="mk"></td><td class="cd">  <span class="tk-k">try</span> {</td></tr>
+<tr class="cl band nb-1" data-l="467" data-n="1"><td class="ln">467</td><td class="mk"><span class="chip">2</span></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> IncludedMatcher &amp;im : setup.included) {</td></tr>
+<tr class="cl band nb-1" data-l="468" data-n="1"><td class="ln">468</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (!anchor_can_match(im.filter)) {</td></tr>
+<tr class="cl band nb-1" data-l="469" data-n="1"><td class="ln">469</td><td class="mk"></td><td class="cd">        <span class="tk-k">continue</span>;  <span class="tk-c">// B1: no spine op/btype can satisfy this anchor — skip traversal</span></td></tr>
+<tr class="cl band nb-1" data-l="470" data-n="1"><td class="ln">470</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-1" data-l="471" data-n="1"><td class="ln">471</td><td class="mk"></td><td class="cd">      <span class="tk-k">const</span> CompiledMatcher &amp;m = ir.matchers[im.matcher_index];</td></tr>
+<tr class="cl" data-l="472"><td class="ln">472</td><td class="mk"></td><td class="cd">      <span class="tk-k">auto</span> fn = setup.build_fns.at(m.artifact_index);</td></tr>
+<tr class="cl" data-l="473"><td class="ln">473</td><td class="mk"></td><td class="cd">      std::size_t produced_from = pending.size();</td></tr>
+<tr class="cl" data-l="474"><td class="ln">474</td><td class="mk"></td><td class="cd">      <span class="tk-c">// Python bfs_iter port: FIFO; cur&#39;s next_blocks are read AFTER try_build</span></td></tr>
+<tr class="cl" data-l="475"><td class="ln">475</td><td class="mk"></td><td class="cd">      <span class="tk-c">// ran on cur (generator resume order) — merges mutate the tree mid-walk.</span></td></tr>
+<tr class="cl" data-l="476"><td class="ln">476</td><td class="mk"></td><td class="cd">      std::deque&lt;Block *&gt; queue{wrapper};</td></tr>
+<tr class="cl" data-l="477"><td class="ln">477</td><td class="mk"></td><td class="cd">      <span class="tk-k">while</span> (!queue.empty()) {</td></tr>
+<tr class="cl" data-l="478"><td class="ln">478</td><td class="mk"></td><td class="cd">        Block *cur = queue.front();</td></tr>
+<tr class="cl" data-l="479"><td class="ln">479</td><td class="mk"></td><td class="cd">        queue.pop_front();</td></tr>
+<tr class="cl band nb-2" data-l="480" data-n="2"><td class="ln">480</td><td class="mk"><span class="chip">3</span></td><td class="cd">        <span class="tk-k">if</span> (cur-&gt;parent == <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-2" data-l="481" data-n="2"><td class="ln">481</td><td class="mk"></td><td class="cd">          try_build(m, fn, cur, ctx.arena, setup.kinds, src, pending);</td></tr>
+<tr class="cl band nb-2" data-l="482" data-n="2"><td class="ln">482</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl band nb-3" data-l="483" data-n="3"><td class="ln">483</td><td class="mk"><span class="chip">4</span></td><td class="cd">        <span class="tk-k">for</span> (Block *n : cur-&gt;next_blocks) {</td></tr>
+<tr class="cl band nb-3" data-l="484" data-n="3"><td class="ln">484</td><td class="mk"></td><td class="cd">          queue.push_back(n);</td></tr>
+<tr class="cl band nb-3" data-l="485" data-n="3"><td class="ln">485</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl" data-l="486"><td class="ln">486</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-4" data-l="487" data-n="4"><td class="ln">487</td><td class="mk"><span class="chip">5</span></td><td class="cd">      <span class="tk-c">// Fold this matcher&#39;s produced btypes into the inventory so a later</span></td></tr>
+<tr class="cl band nb-4" data-l="488" data-n="4"><td class="ln">488</td><td class="mk"></td><td class="cd">      <span class="tk-c">// btype-anchored matcher composing on them is not wrongly skipped.</span></td></tr>
+<tr class="cl band nb-4" data-l="489" data-n="4"><td class="ln">489</td><td class="mk"></td><td class="cd">      <span class="tk-k">for</span> (std::size_t j = produced_from; j &lt; pending.size(); j++) {</td></tr>
+<tr class="cl band nb-4" data-l="490" data-n="4"><td class="ln">490</td><td class="mk"></td><td class="cd">        <span class="tk-k">if</span> (pending[j].produced != <span class="tk-k">nullptr</span>) inv_btypes.insert(pending[j].produced-&gt;btype);</td></tr>
+<tr class="cl band nb-4" data-l="491" data-n="4"><td class="ln">491</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl" data-l="492"><td class="ln">492</td><td class="mk"></td><td class="cd">    }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="465" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L465–466</span>One <code>try</code> around the ENTIRE matcher loop, and every result accumulates in a local <code>pending</code>. Nothing escapes on the failure path — this is the buffering promised by <code>ClassifyResult</code>, and it is the reason a spec bug can never produce a partially classified trace.</div></div>
+<div class="note" data-a="467" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L467–471</span>The prefilter short-circuit: with an opcode anchor and no matching opcode on the spine, the matcher&#39;s whole traversal is skipped. On our fixture this eliminates every matcher but one — and it is safe precisely because consumed blocks are never REMOVED from the inventory, so the set is a conservative superset.</div></div>
+<div class="note" data-a="480" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L480–482</span><code>cur-&gt;parent == nullptr</code> is the consumed guard. A block absorbed into a composite gets a parent, so later BFS passes still walk it but never attempt a build on it. This one line is the C++ equivalent of Python&#39;s parent check and the reason double-classification cannot happen.</div></div>
+<div class="note" data-a="483" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L483–485</span>The subtle one: <code>next_blocks</code> is read AFTER <code>try_build</code> ran on <code>cur</code>, because a successful build MERGES blocks and mutates the tree mid-walk. Python gets this for free from generator resume order; here it is a deliberate statement ordering, and swapping the two lines would change which blocks the walk reaches.</div></div>
+<div class="note" data-a="487" data-n="4"><div class="nt"><span class="chip">5</span><span class="nl">L487–491</span>btypes grow, opcodes do not. A matcher anchored on a btype like <code>jetton_transfer</code> can only match blocks a previous matcher produced, so produced btypes are folded back into the inventory after each matcher — otherwise the prefilter would wrongly skip every composing matcher.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp<span class="plines">:494–511</span></span><span class="ex-title">Post-process, then commit</span><span class="lang">cpp</span><span class="sha" title="span hash at render">0adb35ed</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="494" data-n="0"><td class="ln">494</td><td class="mk"><span class="chip">1</span></td><td class="cd">    <span class="tk-c">// Phase E: post-process passes over the flat spine list ([root] + bfs).</span></td></tr>
+<tr class="cl band nb-0" data-l="495" data-n="0"><td class="ln">495</td><td class="mk"></td><td class="cd">    std::vector&lt;Block *&gt; spine;</td></tr>
+<tr class="cl band nb-0" data-l="496" data-n="0"><td class="ln">496</td><td class="mk"></td><td class="cd">    {</td></tr>
+<tr class="cl band nb-0" data-l="497" data-n="0"><td class="ln">497</td><td class="mk"></td><td class="cd">      std::deque&lt;Block *&gt; q{wrapper};</td></tr>
+<tr class="cl band nb-0" data-l="498" data-n="0"><td class="ln">498</td><td class="mk"></td><td class="cd">      <span class="tk-k">while</span> (!q.empty()) {</td></tr>
+<tr class="cl band nb-0" data-l="499" data-n="0"><td class="ln">499</td><td class="mk"></td><td class="cd">        Block *cur = q.front();</td></tr>
+<tr class="cl band nb-0" data-l="500" data-n="0"><td class="ln">500</td><td class="mk"></td><td class="cd">        q.pop_front();</td></tr>
+<tr class="cl band nb-0" data-l="501" data-n="0"><td class="ln">501</td><td class="mk"></td><td class="cd">        spine.push_back(cur);</td></tr>
+<tr class="cl band nb-0" data-l="502" data-n="0"><td class="ln">502</td><td class="mk"></td><td class="cd">        <span class="tk-k">for</span> (Block *n : cur-&gt;next_blocks) q.push_back(n);</td></tr>
+<tr class="cl band nb-0" data-l="503" data-n="0"><td class="ln">503</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-0" data-l="504" data-n="0"><td class="ln">504</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="505" data-n="1"><td class="ln">505</td><td class="mk"><span class="chip">2</span></td><td class="cd">    std::set&lt;Block *&gt; removed;</td></tr>
+<tr class="cl band nb-1" data-l="506" data-n="1"><td class="ln">506</td><td class="mk"></td><td class="cd">    post_process_dedust_liquidity(spine, removed);</td></tr>
+<tr class="cl band nb-1" data-l="507" data-n="1"><td class="ln">507</td><td class="mk"></td><td class="cd">    post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);</td></tr>
+<tr class="cl band nb-1" data-l="508" data-n="1"><td class="ln">508</td><td class="mk"></td><td class="cd">    unwind_deployments(spine);  <span class="tk-c">// Step 2b (no-op for the dump; production chain parity)</span></td></tr>
+<tr class="cl band nb-1" data-l="509" data-n="1"><td class="ln">509</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (CoreAction &amp;a : pending) {</td></tr>
+<tr class="cl band nb-1" data-l="510" data-n="1"><td class="ln">510</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (!removed.count(a.produced)) result.actions.push_back(std::move(a));</td></tr>
+<tr class="cl band nb-1" data-l="511" data-n="1"><td class="ln">511</td><td class="mk"></td><td class="cd">    }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="494" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L494–504</span>The post-process passes see a FLAT snapshot of the spine taken after all matchers have run — not the tree, and not a per-matcher view. They are the ported Python host passes (<code>post_process_dedust_liquidity</code> and friends); <a class="xl" href="actions.html">actions</a> covers what they do.</div></div>
+<div class="note" data-a="505" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L505–511</span>The filter that surprises people: a post-pass can REMOVE an already-produced action, and this is where that removal lands. &quot;A matcher fired&quot; is therefore not the same claim as &quot;an action was emitted&quot; — reconcile <code>--match</code> output against <code>--classify</code> output with that in mind.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/Classify.cpp<span class="plines">:159–176</span></span><span class="ex-title">Per-fixture: framing, warnings, and the lookup seam</span><span class="lang">cpp</span><span class="sha" title="span hash at render">c5468083</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="159" data-n="0"><td class="ln">159</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> std::string &amp;f : fixtures) {</td></tr>
+<tr class="cl band nb-0" data-l="160" data-n="0"><td class="ln">160</td><td class="mk"></td><td class="cd">    std::printf(<span class="tk-s">&quot;=== %s\n&quot;</span>, fs::path(f).filename().string().c_str());</td></tr>
+<tr class="cl" data-l="161"><td class="ln">161</td><td class="mk"></td><td class="cd">    <span class="tk-k">auto</span> r_ctx = load_ctx(f);</td></tr>
+<tr class="cl" data-l="162"><td class="ln">162</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (r_ctx.is_error()) {</td></tr>
+<tr class="cl" data-l="163"><td class="ln">163</td><td class="mk"></td><td class="cd">      std::printf(<span class="tk-s">&quot;ERROR: %s\n&quot;</span>, r_ctx.error().message().c_str());</td></tr>
+<tr class="cl" data-l="164"><td class="ln">164</td><td class="mk"></td><td class="cd">      <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl" data-l="165"><td class="ln">165</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="166"><td class="ln">166</td><td class="mk"></td><td class="cd">    <span class="tk-k">auto</span> ctx = r_ctx.move_as_ok();</td></tr>
+<tr class="cl band nb-1" data-l="167" data-n="1"><td class="ln">167</td><td class="mk"><span class="chip">2</span></td><td class="cd">    <span class="tk-c">// Orphan warning: stderr only (stdout is the A/B channel; never fires on corpus).</span></td></tr>
+<tr class="cl band nb-1" data-l="168" data-n="1"><td class="ln">168</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (ctx.tree.unlinked != <span class="tk-n">0</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="169" data-n="1"><td class="ln">169</td><td class="mk"></td><td class="cd">      std::fprintf(stderr, <span class="tk-s">&quot;WARN %s: %zu orphan nodes unreachable from root\n&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="170" data-n="1"><td class="ln">170</td><td class="mk"></td><td class="cd">                   fs::path(f).filename().string().c_str(), ctx.tree.unlinked);</td></tr>
+<tr class="cl band nb-1" data-l="171" data-n="1"><td class="ln">171</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-2" data-l="172" data-n="2"><td class="ln">172</td><td class="mk"><span class="chip">3</span></td><td class="cd">    std::shared_ptr&lt;LookupSource&gt; src =</td></tr>
+<tr class="cl band nb-2" data-l="173" data-n="2"><td class="ln">173</td><td class="mk"></td><td class="cd">        lookup_factory ? lookup_factory(ctx)</td></tr>
+<tr class="cl band nb-2" data-l="174" data-n="2"><td class="ln">174</td><td class="mk"></td><td class="cd">                       : std::make_shared&lt;FixtureLookupSource&gt;(&amp;ctx.trace.interfaces);</td></tr>
+<tr class="cl band nb-2" data-l="175" data-n="2"><td class="ln">175</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="176"><td class="ln">176</td><td class="mk"></td><td class="cd">    ClassifyResult res = classify_trace(ctx, ir, setup, *src);</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="159" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L159–160</span><code>=== &lt;basename&gt;</code> frames every fixture and the directory walk is sorted, so a whole-corpus dump is stable across filesystems. That stability is the precondition for diffing 199 action lines against Python with <code>diff</code> and expecting zero.</div></div>
+<div class="note" data-a="167" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L167–171</span>Orphan nodes are reported to STDERR, deliberately: stdout is the comparison channel and nothing advisory may ever land there. Worth internalizing before you add any printf to this file.</div></div>
+<div class="note" data-a="172" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L172–175</span>The lookup seam. For a fixture the interface repository is the trace&#39;s OWN <code>interfaces</code> map, decoded from the same <code>.lz4</code>; production injects a database-backed source through the same <code>LookupSource</code> interface. Our matcher performs no lookups at all, which is part of why it makes a clean first example.</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ ton-mch-engine.exe --classify -I &lt;ir&gt; -T &quot;tests/traces/03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4&quot;</div><pre class="run-out">=== 03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4
+ACTION vesting_send_message anchor=call_contract#a7733acd@45769974000002 btype=vesting_send_message failed=0 broken=0
+  data={message_boc_str=cellhash:CB4DAEDD…2217441,message_destination=0:A8A697AB…F87D39,message_value=amount:100000000000,
+        query_id=0,sender=0:335908D9…B367BA,vesting=0:0F956925…E213D4}
+  consumed=[call_contract#a7733acd@45769974000002,call_contract#f7733acd@45769974000005] auto=[]</pre><div class="run-note">One real line, wrapped here for width (the engine prints it unwrapped, with full hashes). Six <code>data</code> keys, key-sorted — the exact six fields of the spec&#39;s <code>out</code> block, nothing added and nothing dropped. <code>failed</code>/<code>broken</code> are the produced block&#39;s flags; <code>auto=[]</code> is the empty excess/bounce auto-append.</div></div>
+<h2 id="from-captures-to-an-action-row">From captures to an Action row</h2>
+<section><p><code>--classify</code> stops at the produced block. <code>--actions</code> takes one more step: <code>build_action</code> serializes that block into the wide <code>Action</code> schema the database actually stores — the C++ port of <code>block_tree_serializer.py</code>. The dispatch is a <code>btype</code> switch onto a <code>fill_*</code> function, exactly like the Python <code>match block.btype</code> you know.</p>
+<p>This is where the fixed directional columns (<code>source</code>, <code>destination</code>, <code>destination_secondary</code>, <code>amount</code>, …) get filled and where anything left over goes into a per-type composite. Our matcher&#39;s six build fields split four/two. <a class="xl" href="actions.html">actions</a> takes this apart properly.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/Classify.cpp<span class="plines">:196–205</span></span><span class="ex-title">The one fork between the two dump modes</span><span class="lang">cpp</span><span class="sha" title="span hash at render">7a493516</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="196" data-n="0"><td class="ln">196</td><td class="mk"><span class="chip">1</span></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> CoreAction &amp;a : res.actions) {</td></tr>
+<tr class="cl band nb-0" data-l="197" data-n="0"><td class="ln">197</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (actions_mode) {</td></tr>
+<tr class="cl" data-l="198"><td class="ln">198</td><td class="mk"></td><td class="cd">        Action act;</td></tr>
+<tr class="cl band nb-1" data-l="199" data-n="1"><td class="ln">199</td><td class="mk"><span class="chip">2</span></td><td class="cd">        <span class="tk-k">if</span> (!build_action(a.produced, act)) <span class="tk-k">continue</span>;  <span class="tk-c">// btype outside ported set</span></td></tr>
+<tr class="cl" data-l="200"><td class="ln">200</td><td class="mk"></td><td class="cd">        std::printf(<span class="tk-s">&quot;ACTION anchor=%s %s\n&quot;</span>, block_key(a.anchor).c_str(),</td></tr>
+<tr class="cl" data-l="201"><td class="ln">201</td><td class="mk"></td><td class="cd">                    render_action(act).c_str());</td></tr>
+<tr class="cl" data-l="202"><td class="ln">202</td><td class="mk"></td><td class="cd">      } <span class="tk-k">else</span> {</td></tr>
+<tr class="cl" data-l="203"><td class="ln">203</td><td class="mk"></td><td class="cd">        emit_action(a);</td></tr>
+<tr class="cl" data-l="204"><td class="ln">204</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl" data-l="205"><td class="ln">205</td><td class="mk"></td><td class="cd">    }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="196" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L196–197</span>Here is the entire difference between <code>--classify</code> and <code>--actions</code>. Everything before this point — loading, prefiltering, matching, building, merging, post-processing — is bit-identical between the two.</div></div>
+<div class="note" data-a="199" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L199</span>A produced btype with no <code>fill_*</code> is silently skipped in <code>--actions</code> but still printed by <code>--classify</code>, so the two dumps can legitimately have different line counts. That is a coverage signal, not a bug: it tells you which btypes are matched but not yet serializable.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ActionBuild.h<span class="plines">:18–33</span></span><span class="ex-title">The Action row is one wide fixed schema</span><span class="lang">cpp</span><span class="sha" title="span hash at render">956e5261</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="18"><td class="ln">18</td><td class="mk"></td><td class="cd"><span class="tk-c">// The rendered Action (fixed schema; unset fields are Null, rendered &quot;null&quot;).</span></td></tr>
+<tr class="cl band nb-0" data-l="19" data-n="0"><td class="ln">19</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-k">struct</span> Action {</td></tr>
+<tr class="cl band nb-0" data-l="20" data-n="0"><td class="ln">20</td><td class="mk"></td><td class="cd">  std::string action_id;</td></tr>
+<tr class="cl band nb-0" data-l="21" data-n="0"><td class="ln">21</td><td class="mk"></td><td class="cd">  std::string type;</td></tr>
+<tr class="cl band nb-0" data-l="22" data-n="0"><td class="ln">22</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> success{<span class="tk-k">true</span>};</td></tr>
+<tr class="cl band nb-0" data-l="23" data-n="0"><td class="ln">23</td><td class="mk"></td><td class="cd">  std::int64_t start_lt{<span class="tk-n">0</span>}, end_lt{<span class="tk-n">0</span>}, start_utime{<span class="tk-n">0</span>}, end_utime{<span class="tk-n">0</span>}, mc_seqno_end{<span class="tk-n">0</span>};</td></tr>
+<tr class="cl band nb-0" data-l="24" data-n="0"><td class="ln">24</td><td class="mk"></td><td class="cd">  std::vector&lt;std::string&gt; tx_hashes;</td></tr>
+<tr class="cl band nb-0" data-l="25" data-n="0"><td class="ln">25</td><td class="mk"><span class="chip">4</span></td><td class="cd">  std::vector&lt;std::string&gt; accounts;  <span class="tk-c">// Step 2a: role-less action_accounts set</span></td></tr>
+<tr class="cl band nb-1" data-l="26" data-n="1"><td class="ln">26</td><td class="mk"><span class="chip">2</span></td><td class="cd">  Value source, source_secondary, destination, destination_secondary;</td></tr>
+<tr class="cl band nb-1" data-l="27" data-n="1"><td class="ln">27</td><td class="mk"></td><td class="cd">  Value asset, asset_secondary, asset2, asset2_secondary;</td></tr>
+<tr class="cl band nb-1" data-l="28" data-n="1"><td class="ln">28</td><td class="mk"></td><td class="cd">  Value amount, value, opcode;</td></tr>
+<tr class="cl band nb-2" data-l="29" data-n="2"><td class="ln">29</td><td class="mk"><span class="chip">3</span></td><td class="cd">  Value ton_transfer_data, jetton_transfer_data, jetton_swap_data, nft_transfer_data,</td></tr>
+<tr class="cl band nb-2" data-l="30" data-n="2"><td class="ln">30</td><td class="mk"></td><td class="cd">      nft_listing_data, dex_deposit_liquidity_data, dex_withdraw_liquidity_data, staking_data,</td></tr>
+<tr class="cl band nb-2" data-l="31" data-n="2"><td class="ln">31</td><td class="mk"></td><td class="cd">      evaa_withdraw_data, vesting_send_message_data, layerzero_packet_data, jvault_stake_data,</td></tr>
+<tr class="cl band nb-2" data-l="32" data-n="2"><td class="ln">32</td><td class="mk"></td><td class="cd">      jvault_claim_data, extra;</td></tr>
+<tr class="cl" data-l="33"><td class="ln">33</td><td class="mk"></td><td class="cd">};</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="19" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L19–25</span>One struct for every action type; unset fields are Null and render as <code>null</code>. This mirrors the Python <code>Action</code> model rather than improving on it, because the row has to line up column-for-column with what the Python classifier writes.</div></div>
+<div class="note" data-a="26" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L26–28</span>The standard directional quartet plus the asset quartet — the fields a consumer can read WITHOUT knowing the action type. Filling these correctly is most of what a <code>fill_*</code> function is for.</div></div>
+<div class="note" data-a="29" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L29–32</span>The per-type composites, one per protocol family. This list is the reason the project rule says to reuse an existing composite when the fields fit: each new name here is a DDL migration on the Python side too.</div></div>
+<div class="note" data-a="25" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L25</span><code>accounts</code> is role-less on this branch — a flat set of participating accounts, one <code>action_accounts</code> row each. If you remember a <code>ROLE_SENDER</code>/<code>ROLE_RECEIVER</code> scheme from the Python docs, that belongs to a different era of the schema; do not look for it here.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ActionBuild.cpp<span class="plines">:468–477</span></span><span class="ex-title">fill_vesting_send_message — six fields, four columns, one composite</span><span class="lang">cpp</span><span class="sha" title="span hash at render">46a99d8e</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="468"><td class="ln">468</td><td class="mk"></td><td class="cd"><span class="tk-k">void</span> fill_vesting_send_message(<span class="tk-k">const</span> Value &amp;d, Action &amp;a) {</td></tr>
+<tr class="cl band nb-0" data-l="469" data-n="0"><td class="ln">469</td><td class="mk"><span class="chip">1</span></td><td class="cd">  a.source = av_addr(dg(d, <span class="tk-s">&quot;sender&quot;</span>));</td></tr>
+<tr class="cl band nb-0" data-l="470" data-n="0"><td class="ln">470</td><td class="mk"></td><td class="cd">  a.destination = av_addr(dg(d, <span class="tk-s">&quot;vesting&quot;</span>));</td></tr>
+<tr class="cl band nb-0" data-l="471" data-n="0"><td class="ln">471</td><td class="mk"></td><td class="cd">  a.destination_secondary = av_addr(dg(d, <span class="tk-s">&quot;message_destination&quot;</span>));</td></tr>
+<tr class="cl band nb-0" data-l="472" data-n="0"><td class="ln">472</td><td class="mk"></td><td class="cd">  a.amount = av_amount(dg(d, <span class="tk-s">&quot;message_value&quot;</span>));</td></tr>
+<tr class="cl band nb-1" data-l="473" data-n="1"><td class="ln">473</td><td class="mk"><span class="chip">2</span></td><td class="cd">  Value::Fields f;</td></tr>
+<tr class="cl band nb-1" data-l="474" data-n="1"><td class="ln">474</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;query_id&quot;</span>, dg(d, <span class="tk-s">&quot;query_id&quot;</span>));</td></tr>
+<tr class="cl band nb-1" data-l="475" data-n="1"><td class="ln">475</td><td class="mk"></td><td class="cd">  f.emplace_back(<span class="tk-s">&quot;message_boc&quot;</span>, dg(d, <span class="tk-s">&quot;message_boc_str&quot;</span>));</td></tr>
+<tr class="cl band nb-1" data-l="476" data-n="1"><td class="ln">476</td><td class="mk"></td><td class="cd">  a.vesting_send_message_data = mkdict(std::move(f));</td></tr>
+<tr class="cl" data-l="477"><td class="ln">477</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="469" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L469–472</span>Four of the spec&#39;s six output fields become standard columns: <code>sender</code>-&gt;source, <code>vesting</code>-&gt;destination, <code>message_destination</code>-&gt;destination_secondary, <code>message_value</code>-&gt;amount. Reading a <code>fill_*</code> backwards is the fastest way to answer &quot;which spec field ends up in which column&quot;.</div></div>
+<div class="note" data-a="473" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L473–476</span>The other two go into the composite — and note the RENAME: the build field <code>message_boc_str</code> is stored as <code>message_boc</code>. Spec names and column names are NOT the same namespace, so grepping the DB column name in the specs directory will find nothing.</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ ton-mch-engine.exe --actions -I &lt;ir&gt; -T &quot;…03RZ….lz4&quot; 2&gt;/dev/null | tr &#39;,&#39; &#39;\n&#39; | grep -E &quot;^(type|source|destination|destination_secondary|amount|vesting_send_message_data|query_id|message_boc|start_lt|end_lt|mc_seqno_end)=&quot;</div><pre class="run-out">amount=100000000000
+destination=str:0:0F956925D8E1E32E5189E35100ADEF828BE779D079C6D8B966B2209FCCE213D4
+destination_secondary=str:0:A8A697ABD5448BB35EBBD414E4C9D8F621F53B67B54551560645B8EC25F87D39
+end_lt=45769974000006
+mc_seqno_end=37203206
+source=str:0:335908D9CDA99C650695253FAD22BE00E0B1005634133589DFA8BDF522B367BA
+start_lt=45769974000002
+type=str:vesting_send_message
+vesting_send_message_data={message_boc=cellhash:CB4DAEDD56B7472389D5D2F3BB1B8CB5037494EC999A1DC7C48D3080A2217441
+query_id=0}}</pre><div class="run-note">The full row has ~35 keys, almost all null; the <code>tr</code>/<code>grep</code> keeps the ones this action fills. Compare against <code>fill_vesting_send_message</code> above — four columns plus the two-field composite, and note <code>message_boc_str</code> arriving as <code>message_boc</code>. <code>start_lt</code>/<code>end_lt</code>/<code>mc_seqno_end</code>/<code>tx_hashes</code> come from the produced block&#39;s event nodes, not from the spec.</div></div>
+<h2 id="diff-0-the-discipline-behind-every-claim-on-this-page">diff-0 — the discipline behind every claim on this page</h2>
+<section><p>The C++ engine is a PORT, and the thing that makes a port trustworthy is not tests of the port&#39;s own opinions — it is running the same artifact through the original and demanding identical bytes. <code>twins/py_classify.py</code> runs the real Python IR engine (the same <code>build_matchers</code> + <code>event_processing</code> outer loop) and prints the exact same line format. So the correctness statement for the entire pipeline is a <code>diff</code> returning nothing.</p>
+<p>One fixture is shown below because it fits on the page; the real gate is the same command over the whole 148-fixture corpus, plus the same treatment for <code>--actions</code>, <code>--match</code>, <code>--parse-dump</code>, and the schema/prod loader variants. <a class="xl" href="gates.html">gates</a> is the full story, including how to run all of them and what each one actually protects.</p></section>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ diff &lt;(ton-mch-engine.exe --classify -I &quot;$IR&quot; -T &quot;$F&quot; 2&gt;/dev/null) &lt;(venv0/python.exe twins/py_classify.py &quot;$IR&quot; &quot;$F&quot; 2&gt;/dev/null) &amp;&amp; echo &quot;OK: cpp == python, 0 diff lines&quot;</div><pre class="run-out">OK: cpp == python, 0 diff lines</pre><div class="run-note">Both sides consume the SAME <code>mch_ir.json</code>. That is the point: the artifact is the shared contract, and a divergence is always in an engine&#39;s execution of it, never in two independent readings of a spec.</div></div>
+<h2 id="check-yourself">Check yourself</h2>
+<section><p>Four things you can verify right now. If any of them surprises you, that is the chapter to read next.</p>
+<p>1. **Know the corpus baseline.** The run below is the first thing to check after any change: 148 fixtures, 199 actions, and zero <code>SKIP</code> lines. Any page — including this one — that quotes different numbers is out of date.</p>
+<p>2. **Prove the <code>response</code> capture is consumed but never read.** Read <code>specs/vesting.mch</code> line 19 next to the <code>--match</code> output above, then confirm in <code>mch_ir.json</code> that <code>nodes[328]</code> (line 11510) has no <code>child</code> and that <code>response</code> appears nowhere in <code>matchers[32]</code>&#39;s <code>build_program</code>. A capture can be bound purely to remove a block from the spine — which is exactly why matcher ORDER changes results.</p>
+<p>3. **Find your own anchor fixture.** Run <code>--classify</code> over <code>tests/traces</code>, pick any single-action line, take its <code>anchor=btype#opcode@lt</code>, convert the opcode to DECIMAL and grep it in <code>mch_ir.json</code> to find the matcher, then open the matching <code>.mch</code> in <code>indexer/indexer/events/mch/specs/</code>. You should be able to predict the <code>data={…}</code> keys from the spec&#39;s <code>out</code> block before you look at the dump. If you can, you have the loop.</p>
+<p>4. **Test the claim that <code>--classify</code> and <code>--actions</code> are the same run.** Run both over the whole corpus and compare the <code>anchor=</code> values line by line. They may differ ONLY where a produced btype has no <code>fill_*</code> — the set you would get by listing the btypes absent from <code>build_action</code>&#39;s dispatch in <code>src/ActionBuild.cpp</code> (around line 543). Any other difference means the harness is doing something the comment on <code>run_dump</code> claims it does not.</p></section>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ ton-mch-engine.exe --classify -I &lt;ir&gt; -T tests/traces 2&gt;/dev/null | grep -c &quot;^ACTION &quot;   # then the same with: grep -c &quot;^=== &quot;</div><pre class="run-out">199
+148</pre><div class="run-note">199 actions over 148 fixtures, and the <code>--classify</code> run prints no <code>SKIP</code> lines at all — every matcher in the committed artifact is runnable against the committed build table.</div></div>
+<div class="edges"><div class="label">Connected scopes</div><ul><li><a class="xl" href="value.html">value</a> — every <code>data</code> field, capture and Action column on this page is an <code>mch::Value</code>; its kinds and rendering rules are what make the dumps comparable</li><li><a class="xl" href="block-tree.html">block-tree</a> — to_tree / init_block / merge semantics — the substrate this chapter only sketches, including the deliberate deviations from the Python tree</li><li><a class="xl" href="ir-artifact.html">ir-artifact</a> — the full format of mch_ir.json: node kinds, capture cardinality, registration order, and how IrLoader turns rows into CompiledMatcher</li><li><a class="xl" href="matcher-runtime.html">matcher-runtime</a> — what <code>op X @cap -&gt; op Y @cap</code> actually walks, how try_build accepts or rejects, and the prefilter this chapter uses without explaining</li><li><a class="xl" href="parse-layer.html">parse-layer</a> — the <code>parse send as VestingSendMessage</code> statement resolves a name against the message-parser registry; a failed parse is a null body, not an error</li><li><a class="xl" href="build-programs.html">build-programs</a> — statements, expression nodes, host builtins like account/amount/b64, and the generated build functions shown here only as captured output</li><li><a class="xl" href="actions.html">actions</a> — build_action&#39;s full fill table, the post-process passes that can remove an action, and how accounts/tx_hashes are assembled</li><li><a class="xl" href="gates.html">gates</a> — the diff-0 run at the end of this page is one of ~8 gates; that chapter runs them all and says what each protects</li><li><a class="xl" href="prod-path.html">prod-path</a> — --classify-schema / --classify-prod are the same ClassifyCore with a production loader and lookup source; that is where the split introduced here pays off</li></ul></div>
+<div class="cover"><div class="label">Not annotated in this scope — read directly</div><ul><li><code>ton-index-worker/ton-mch-engine/src/main.cpp</code> <span class="why">— PARTIAL: the dispatch region is excerpted. The remainder is the option-parser table (one <code>add_option</code> per mode — read it as the mode index), the two <code>print_*</code> helpers behind mode 1&#39;s tree dump, and the actor-scheduler fall-through (~355 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/ClassifyCore.h</code> <span class="why">— PARTIAL: the entry points and result types are excerpted. Not shown: the file&#39;s header comment (the core/harness contract, paraphrased in prose) and the <code>FailureCategory</code> enum, whose comment argues carefully about which failures can and cannot be a trace-terminal value — worth reading before adding one (~117 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp</code> <span class="why">— PARTIAL: classify_trace&#39;s loop and commit are excerpted. The rest is <code>prepare_classify</code> (table pairing + prefilter precompute), <code>try_build</code>&#39;s merge/shape/auto-append tail, the ported post-process passes, and the basic-actions fallback — all owned by later chapters (~534 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/Classify.cpp</code> <span class="why">— PARTIAL: the adapter contract, the fixture loop and the render fork are excerpted. The remainder is <code>render_action</code> (the fixed ~35-key key order — a gate artifact, not logic), <code>emit_action</code>, and the thin <code>run_*</code> wrappers (~218 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/Classify.h</code> <span class="why">— declarations for the six run_* dump entry points plus the loader/lookup-factory typedefs the -schema/-prod variants inject; no logic (~82 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/TraceLoader.h</code> <span class="why">— PARTIAL: the Message struct is excerpted. <code>Transaction</code> and <code>Trace</code> are the same kind of decode-only shape; the one comment worth reading there is on <code>Trace::interfaces</code>, which documents the msgpack-&gt;Value scalar mapping (~86 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/TraceLoader.cpp</code> <span class="why">— the LZ4-frame decompressor plus the msgpack walk. Mechanical and defensive (unknown keys ignored by design); read it only if a fixture fails to load (~266 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/BlockTree.h</code> <span class="why">— PARTIAL: EventNode, the Block head and the TraceContext bundle are excerpted. Not shown: the file&#39;s header comment listing four deliberate deviations from the Python substrate (read it — <code>find_frontier</code> dedup is called out as suspect #1 for diamond-shape diffs), and the merge/connect/insert_between API that <a class="xl" href="block-tree.html">block-tree</a> owns (~219 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/BlockTree.cpp</code> <span class="why">— the implementations: to_tree&#39;s msg_hash linkage, init_block&#39;s iterative classification, and merge_blocks. Entirely <a class="xl" href="block-tree.html">block-tree</a>&#39;s subject (~430 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/ActionBuild.h</code> <span class="why">— PARTIAL: the Action struct is excerpted; only the <code>build_action</code> declaration and its &quot;returns false for an unported btype&quot; contract are left (~39 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/ActionBuild.cpp</code> <span class="why">— PARTIAL: one fill_* is excerpted. The other ~30 are the same shape per action type, plus the base fields (id/tx_hashes/accounts/lt window) and the btype dispatch — <a class="xl" href="actions.html">actions</a> (~560 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/ir/mch_ir.json</code> <span class="why">— PARTIAL: one matcher row, its two match-tree nodes, and one output field are excerpted. The other ~11.4k lines are 32 more matchers and 327 more nodes in the same format — read it with a JSON tool, not an editor (<a class="xl" href="ir-artifact.html">ir-artifact</a>)</span></li><li><code>ton-index-worker/ton-mch-engine/src/IrLoader.{h,cpp}</code> <span class="why">— turns the JSON document into <code>LoadedIr</code> / <code>CompiledMatcher</code>, computes the source sha the build table is paired against, and decides <code>build_skip_reason</code>. Directly next in <a class="xl" href="ir-artifact.html">ir-artifact</a> (~700 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/Walker.{h,cpp}</code> <span class="why">— the match-phase engine: node-kind dispatch, reachability, capture binding. This chapter treats a match as atomic; <a class="xl" href="matcher-runtime.html">matcher-runtime</a> does not (~600 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/BuildRuntime.{h,cpp}</code> <span class="why">— BuildEnv/BuildOutcome and the rt_* runtime functions the generated build code calls (rt_parse, rt_access_build, rt_builtin_*). Named in this chapter&#39;s captured output only; <a class="xl" href="build-programs.html">build-programs</a> (~800 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/GenBuilds.h</code> <span class="why">— the three generated build tables (ir / vectors / testbed) and their per-document sha guards. Its header comment explains why the pairing is correct by construction — read it if <code>prepare_classify</code> ever exits 2 on you (~55 LOC)</span></li><li><code>ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/generated/builds_ir_generated.cpp</code> <span class="why">— the generated build functions, shown here as captured output because it is a BUILD-TREE file, not committed — it is regenerated by a CMake step from mch_ir.json and must never be edited (~5k LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/Value.{h,cpp}</code> <span class="why">— the value type every capture, <code>data</code> field and Action column is made of, plus the rendering that makes dumps comparable. It is chapter 2 (<a class="xl" href="value.html">value</a>) precisely because everything here assumes it</span></li><li><code>ton-index-worker/ton-mch-engine/src/parse/ParseVesting.cpp</code> <span class="why">— the parser behind <code>parse send as VestingSendMessage</code> — it fully deserializes an inner int_msg_info header. Its header comment states its one documented deviation; <a class="xl" href="parse-layer.html">parse-layer</a> (~79 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/twins/py_classify.py</code> <span class="why">— the Python twin whose output this chapter diffs against. It runs the REAL Python IR engine plus a thin re-implementation of the dump format; <a class="xl" href="gates.html">gates</a> (~400 LOC)</span></li><li><code>indexer/indexer/events/mch/btypes.py</code> <span class="why">— the Block-class -&gt; btype table the frontend uses to turn <code>produces VestingSendMessageBlock</code> into <code>&quot;vesting_send_message&quot;</code>. A flat dict; the only reason to open it is to add a row</span></li><li><code>ton-index-worker/ton-mch-engine/src/{SchemaTraceLoader,ParsedBlockLookupSource,MchClassifierActor}.cpp</code> <span class="why">— the production-side loader, lookup source and actor that the --schema/--prod modes dispatch into. Named in this chapter&#39;s dispatch excerpt, owned by <a class="xl" href="prod-path.html">prod-path</a></span></li></ul></div>
+<hr class="rule">
+<div class="meta">mch engine — a guided tutorial — commit ff4135bc — generated 2026-07-26 — code pulled live from repo at render time</div>
+</div>
+<script>
+(function(){
+  var GAP = 10;
+  function layout(){
+    var wide = window.matchMedia('(min-width: 980px)').matches;
+    document.querySelectorAll('.excerpt').forEach(function(ex){
+      var rail = ex.querySelector('.ex-rail');
+      if(!rail) return;
+      var grid = ex.querySelector('.ex-grid');
+      var notes = rail.querySelectorAll('.note');
+      if(!wide){ notes.forEach(function(n){ n.style.top=''; }); rail.style.minHeight=''; return; }
+      var g = grid.getBoundingClientRect(), y = 0, items = [];
+      notes.forEach(function(n){
+        var row = ex.querySelector('tr[data-l="'+n.dataset.a+'"]');
+        var t = Math.max(row ? (row.getBoundingClientRect().top - g.top) : y, y);
+        items.push({ n: n, t: t, h: n.offsetHeight });
+        y = t + n.offsetHeight + GAP;
+      });
+      if(!items.length) return;
+      var limit = ex.querySelector('.ex-code').getBoundingClientRect().height;
+      for(var i = items.length - 1; i >= 0; i--){
+        items[i].t = Math.min(items[i].t, limit - items[i].h);
+        limit = items[i].t - GAP;
+      }
+      var shift = Math.max(0, -items[0].t), maxB = 0;
+      items.forEach(function(it){
+        var t = it.t + shift;
+        it.n.style.top = t + 'px';
+        maxB = Math.max(maxB, t + it.h);
+      });
+      rail.style.minHeight = (maxB + 12) + 'px';
+    });
+  }
+  function hover(){
+    document.querySelectorAll('.excerpt').forEach(function(ex){
+      ex.querySelectorAll('.note').forEach(function(n){
+        var i = n.dataset.n;
+        var rows = ex.querySelectorAll('tr[data-n="'+i+'"]');
+        n.addEventListener('mouseenter', function(){ rows.forEach(function(r){ r.classList.add('hot'); }); });
+        n.addEventListener('mouseleave', function(){ rows.forEach(function(r){ r.classList.remove('hot'); }); });
+        rows.forEach(function(r){
+          r.addEventListener('mouseenter', function(){ n.classList.add('hot'); });
+          r.addEventListener('mouseleave', function(){ n.classList.remove('hot'); });
+        });
+      });
+    });
+  }
+  var t; function relayout(){ clearTimeout(t); t = setTimeout(layout, 60); }
+  window.addEventListener('resize', relayout);
+  window.addEventListener('load', relayout);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ layout(); hover(); });
+  else { layout(); hover(); }
+})();
+</script>

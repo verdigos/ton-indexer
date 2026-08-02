@@ -39,7 +39,6 @@ const std::vector<std::pair<std::string, MsgParserFn>> &hand_message_parsers() {
   static const std::vector<std::pair<std::string, MsgParserFn>> rows = {
       {"JettonTransfer", parse_jetton_transfer},         // forward-payload tail hook
       {"MinterJettonMint", parse_minter_jetton_mint},    // nested ref-capture
-      {"JettonBurnNotification", parse_never},           // not Slice-constructible
       {"ChangeDnsRecordMessage", parse_change_dns},
       {"AuctionFillUpMessage", parse_auction_fill_up},
       {"DnsReleaseBalanceMessage", parse_dns_release_balance},

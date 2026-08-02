@@ -3,7 +3,7 @@
 # (idx 1), TONStakersDeposit (idx 4), TONStakersWithdraw (idx 5).
 #
 # PRIORITY 85 on all three, and it is load-bearing on the withdraw matcher:
-# JettonBurn 0x595f07bc is ALSO the anchor of specs_decl/jettons.mch's
+# JettonBurn 0x595f07bc is ALSO the anchor of specs/jettons_decl.mch's
 # `jetton_burn`, which carries `priority 90`. Legacy registers
 # TONStakersWithdrawMatcher (idx 5) ahead of JettonBurnBlockMatcher (idx 17), so
 # without a priority < 90 the jetton family consumed the burn first and the whole

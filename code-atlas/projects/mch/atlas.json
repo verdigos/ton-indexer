@@ -1,0 +1,70 @@
+{
+  "project": "mch",
+  "title": "mch engine — a guided tutorial",
+  "repo_root": "S:/Dev/ton-indexer-clear",
+  "commit": "ff4135bc",
+  "intro": "A tutorial, not a reference: chapters are ordered so each one only needs what came before, and together they take you from zero to being able to read, verify, and extend the mch C++ engine. Every code block is pulled from the real tree at render time and drift-checked against the hash recorded when it was annotated — what you see IS the code. Captured-output blocks show real engine runs you can reproduce. Each chapter ends with the in-scope files that were deliberately NOT annotated (with reasons), so you always know what remains for your own reading. The ABI/tolk side gets its own tutorial later; chapter 6 previews the boundary.",
+  "arch_diagrams": [
+    {
+      "title": "The pipeline you will understand by chapter 8",
+      "mermaid": "flowchart LR\n  T[\"trace fixture (.lz4)\"] --> L[TraceLoader] --> E[EventNode tree] --> B[\"Block tree (init spine)\"] --> W[\"Walker: matchers from IR\"] --> BP[\"build programs -> captures\"] --> A[\"ActionBuild -> Action rows\"]\n  IR[\"mch_ir.json (compiled .mch specs)\"] --> W\n  P[\"parse registry (ch.6)\"] -.-> BP\n  TW[\"Python twins (ch.9)\"] -. byte-diff .- A"
+    }
+  ],
+  "scopes": [
+    {
+      "id": "big-picture",
+      "title": "1 · The engine in one pass — a trace becomes an action",
+      "status": "done"
+    },
+    {
+      "id": "value",
+      "title": "2 · Value — the engine's currency",
+      "status": "done"
+    },
+    {
+      "id": "block-tree",
+      "title": "3 · From trace to Block tree",
+      "status": "done"
+    },
+    {
+      "id": "ir-artifact",
+      "title": "4 · The IR — what the runtime actually executes",
+      "status": "done"
+    },
+    {
+      "id": "matcher-runtime",
+      "title": "5 · Matching — Walker, try_build, prefilter",
+      "status": "done"
+    },
+    {
+      "id": "parse-layer",
+      "title": "6 · Parse layer — 3 parser sources, 2 value universes",
+      "status": "done"
+    },
+    {
+      "id": "build-programs",
+      "title": "7 · Build programs — expressions, captures, host seam",
+      "status": "done"
+    },
+    {
+      "id": "actions",
+      "title": "8 · From blocks to Action rows",
+      "status": "done"
+    },
+    {
+      "id": "gates",
+      "title": "9 · Gates and twins — verify everything yourself",
+      "status": "done"
+    },
+    {
+      "id": "prod-path",
+      "title": "10 · The production path (Phase G)",
+      "status": "done"
+    }
+  ],
+  "tutorial_fixture": {
+    "registry": "projects/mch/FIXTURE.md",
+    "spine": "tests/traces/03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4 (vesting send message; ch1+ch3)",
+    "rule": "every chapter naming engine output states its fixture in prose"
+  }
+}

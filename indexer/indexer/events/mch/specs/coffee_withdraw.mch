@@ -15,7 +15,7 @@
 # Anchor claim: `btype jetton_burn` is also claimed by specs/stonfi_v2_withdraw.mch
 # and specs/tonstakers.mch reads the same burn opcode. The three are structurally
 # disjoint (coffee needs 2x 0xc0ffee21 + 0xc0ffee35 children), so this file's
-# position in ir/emit_manifest.json carries no observable tie-break.
+# position in the built-in source list carries no observable tie-break.
 #
 # Leg ordering differs from CoffeeWithdrawLiquidityMatcher.
 # `amount1_out`/`amount2_out` come from the withdrawal event, while

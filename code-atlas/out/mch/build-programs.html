@@ -1,0 +1,1022 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build programs — expressions, captures, host seam</title>
+<style>
+:root{--bg:#ffffff;--fg:#1b2026;--mut:#5c6570;--line:#dfe4ea;--line-soft:#edf0f4;--surface:#f8f9fb;--accent:#0b6bcb;--band:#f2f4f7;--band-edge:#b6c0cc;--hot:#cfe4f9;--hot-edge:#0b6bcb;--code-bg:#f6f8fa;--note-bg:#fbfcfe;--drift:#b3261e;--drift-bg:#fdecea;--chip-bg:#0b6bcb;--chip-fg:#ffffff;--tk-k:#b02a37;--tk-s:#1a5f3c;--tk-n:#0550ae;--tk-c:#5c6570}
+@media (prefers-color-scheme: dark){:root{--bg:#0e1116;--fg:#dde3ea;--mut:#949daa;--line:#2a313a;--line-soft:#20262e;--surface:#151b23;--accent:#57a6ea;--band:#191f27;--band-edge:#3a4655;--hot:#17304a;--hot-edge:#57a6ea;--code-bg:#141920;--note-bg:#12171e;--drift:#ef6a5a;--drift-bg:#3a1a15;--chip-bg:#57a6ea;--chip-fg:#08101a;--tk-k:#ff9c92;--tk-s:#7ed8a8;--tk-n:#79c0ff;--tk-c:#949daa}}
+:root[data-theme=light]{--bg:#ffffff;--fg:#1b2026;--mut:#5c6570;--line:#dfe4ea;--line-soft:#edf0f4;--surface:#f8f9fb;--accent:#0b6bcb;--band:#f2f4f7;--band-edge:#b6c0cc;--hot:#cfe4f9;--hot-edge:#0b6bcb;--code-bg:#f6f8fa;--note-bg:#fbfcfe;--drift:#b3261e;--drift-bg:#fdecea;--chip-bg:#0b6bcb;--chip-fg:#ffffff;--tk-k:#b02a37;--tk-s:#1a5f3c;--tk-n:#0550ae;--tk-c:#5c6570}
+:root[data-theme=dark]{--bg:#0e1116;--fg:#dde3ea;--mut:#949daa;--line:#2a313a;--line-soft:#20262e;--surface:#151b23;--accent:#57a6ea;--band:#191f27;--band-edge:#3a4655;--hot:#17304a;--hot-edge:#57a6ea;--code-bg:#141920;--note-bg:#12171e;--drift:#ef6a5a;--drift-bg:#3a1a15;--chip-bg:#57a6ea;--chip-fg:#08101a;--tk-k:#ff9c92;--tk-s:#7ed8a8;--tk-n:#79c0ff;--tk-c:#949daa}
+:root{
+  --ff-sans:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;
+  --ff-mono:ui-monospace,'SF Mono',SFMono-Regular,'Cascadia Mono','Segoe UI Mono',Menlo,Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 16px/1.65 var(--ff-sans);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1360px;margin:0 auto;padding:0 28px 96px}
+
+/* --- chrome ------------------------------------------------------------- */
+.topbar{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);margin:0 -28px 24px;padding:10px 28px;display:flex;gap:9px;align-items:baseline}
+.topbar .crumb{color:var(--mut);font-size:13px;flex:none}
+.topbar .here{font-weight:600;font-size:14px;letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:2px}
+a:focus-visible,.card:focus-within{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+/* --- type scale --------------------------------------------------------- */
+h1{font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-.015em;margin:22px 0 10px;text-wrap:balance}
+h2{font-size:19px;line-height:1.35;font-weight:650;letter-spacing:-.01em;margin:46px 0 12px;padding-left:12px;border-left:3px solid var(--accent);scroll-margin-top:66px;text-wrap:balance}
+p{margin:0 0 .9em}
+.wrap>p,section>p{max-width:72ch}
+.meta{color:var(--mut);font-size:13px;line-height:1.55}
+.meta+p{margin-top:14px}
+.label{margin:0 0 9px;font:650 12px/1.4 var(--ff-sans);color:var(--mut);text-transform:uppercase;letter-spacing:.07em}
+.summary{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 9px 9px 0;padding:13px 18px;margin:16px 0 24px;background:var(--surface);max-width:78ch;font-size:16.5px;line-height:1.62}
+.summary p:last-child{margin-bottom:0}
+.rule{border:none;border-top:1px solid var(--line);margin:48px 0 14px}
+
+/* --- on-this-page ------------------------------------------------------- */
+.toc{margin:0 0 28px;padding:13px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);max-width:78ch}
+.toc ol{margin:0;padding:0;list-style:none}
+.toc li{display:flex;gap:11px;font-size:14.5px;line-height:1.5;margin:5px 0}
+.toc .tn{flex:none;min-width:1.3em;color:var(--mut);font:650 12px/1.7 var(--ff-mono);font-variant-numeric:tabular-nums}
+
+/* --- excerpt shell ------------------------------------------------------ */
+.excerpt{margin:26px 0;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.excerpt.cont{margin-top:-27px;border-top:none;border-top-left-radius:0;border-top-right-radius:0}
+.ex-head{display:flex;gap:12px;align-items:baseline;padding:9px 14px;background:var(--surface);border-bottom:1px solid var(--line);border-radius:9px 9px 0 0;font:500 12.5px/1.5 var(--ff-mono);min-width:0}
+.path{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plines{color:var(--mut);font-weight:400}
+.ex-title{color:var(--mut);font:400 13px/1.5 var(--ff-sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lang{margin-left:auto;flex:none;color:var(--mut);border:1px solid var(--line);border-radius:10px;padding:1px 8px;font-size:11px;letter-spacing:.05em;text-transform:uppercase}
+.sha{flex:none;color:var(--mut);font-size:11px}
+
+/* --- two-pane: code left, note rail right -------------------------------- */
+.ex-grid{display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,30%,420px);align-items:start}
+.excerpt.bare .ex-grid{grid-template-columns:minmax(0,1fr)}
+.ex-code{overflow-x:auto;overscroll-behavior-x:contain;padding:10px 0 12px}
+table.code{border-collapse:collapse;width:100%;font:400 13.5px/1.55 var(--ff-mono);letter-spacing:0;font-variant-ligatures:none;tab-size:4}
+/* keep these at the same specificity as the td reset above, or the reset wins */
+table.code td{padding:0;white-space:pre;vertical-align:baseline}
+table.code td.ln{width:1%;padding:0 8px 0 14px;color:var(--mut);text-align:right;user-select:none;font-size:12.5px;font-variant-numeric:tabular-nums}
+table.code td.mk{width:26px;padding:0 4px;text-align:center;vertical-align:middle;user-select:none}
+.excerpt.bare table.code td.mk{width:0;padding:0}
+table.code td.cd{width:100%;padding:0 12px 0 6px}
+tr.band td{background:var(--band)}
+tr.band td.mk{box-shadow:inset 3px 0 0 var(--band-edge)}
+tr.hot td{background:var(--hot)}
+tr.hot td.mk{box-shadow:inset 3px 0 0 var(--hot-edge)}
+/* text-indent:0 is load-bearing: the note body sets a negative text-indent for
+   its hanging first line, which would otherwise be inherited by the chip's
+   inner text box and fling the digit outside the card. */
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--chip-bg);color:var(--chip-fg);font:700 11px/1 var(--ff-sans);font-variant-numeric:tabular-nums;text-indent:0;flex:none}
+.ex-rail{position:relative;align-self:stretch;min-width:0;border-left:1px solid var(--line)}
+.note{position:absolute;left:14px;right:14px;padding:9px 13px 10px;border:1px solid var(--line);border-radius:8px;background:var(--note-bg);font-size:14px;line-height:1.55;transition:background .12s,border-color .12s,box-shadow .12s}
+.note .nt{padding-left:26px;text-indent:-26px}
+.note .chip{margin-right:7px}
+.note .nl{margin-right:7px;white-space:nowrap;color:var(--mut);font:650 12px/1 var(--ff-mono);letter-spacing:.01em}
+.note .nt code{font-size:12.5px}
+.note.hot{background:var(--hot);border-color:var(--hot-edge);box-shadow:0 0 0 1px var(--hot-edge)}
+@media (max-width: 979px){
+  .ex-grid{grid-template-columns:minmax(0,1fr)}
+  .ex-rail{border-left:none;border-top:1px solid var(--line);padding:12px 0 2px}
+  .note{position:static;margin:0 14px 10px}
+}
+
+/* --- syntax ------------------------------------------------------------- */
+.tk-k{color:var(--tk-k)}.tk-s{color:var(--tk-s)}.tk-n{color:var(--tk-n)}
+.tk-c{color:var(--tk-c);font-style:italic}
+.drift{background:var(--drift-bg);color:var(--drift);border-bottom:1px solid var(--line);padding:8px 14px;font-size:13px;line-height:1.5}
+.run{margin:16px 0;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);overflow:hidden}
+.run .label{padding:6px 14px 0}
+.run-cmd{padding:6px 14px 2px;font:600 12.5px/1.6 ui-monospace,'Cascadia Mono',Consolas,monospace;color:var(--accent);white-space:pre-wrap;word-break:break-all}
+.run-out{margin:0;padding:2px 14px 10px;font:12.5px/1.55 ui-monospace,'Cascadia Mono',Consolas,monospace;overflow-x:auto;color:var(--fg)}
+.run-note{padding:7px 14px 9px;border-top:1px solid var(--line-soft);font-size:13.5px;line-height:1.55;color:var(--mut)}
+
+/* --- blocks ------------------------------------------------------------- */
+.diagram{margin:22px 0;padding:14px 16px;border:1px solid var(--line);border-radius:10px;overflow-x:auto;background:var(--surface)}
+pre.mermaid{margin:0;font:13px/1.5 var(--ff-mono)}
+.edges,.cover{margin:26px 0;padding:14px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.edges ul,.cover ul{margin:0;padding-left:22px}
+.edges li,.cover li{margin:6px 0;font-size:14.5px;line-height:1.55}
+.cover .why{color:var(--mut)}
+.cover .label+ul+.label{margin-top:18px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin:20px 0}
+.card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--surface);transition:border-color .12s}
+.card:hover{border-color:var(--accent)}
+.card b{font-size:15.5px;font-weight:650;line-height:1.35}
+.card .num{margin-bottom:7px;color:var(--mut);font:650 11px/1 var(--ff-mono);letter-spacing:.06em}
+.card .meta{margin-top:5px}
+.card.planned{opacity:.55}
+.card.planned:hover{border-color:var(--line)}
+code{background:var(--code-bg);border:1px solid var(--line-soft);padding:.5px 5px;border-radius:5px;font-family:var(--ff-mono);font-size:.875em}
+.xl{font-weight:600}.xl-missing{color:var(--drift)}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{transition:none!important}}
+</style>
+<div class="wrap">
+<div class="topbar"><a class="crumb" href="index.html">atlas</a><span class="crumb">/</span><span class="here">Build programs — expressions, captures, host seam</span></div>
+<h1>Build programs — expressions, captures, host seam</h1>
+<div class="summary"><p>Matching (<a class="xl" href="matcher-runtime.html">matcher-runtime</a>) answers &quot;does this shape occur here&quot; and hands back a set of captured blocks. A build program answers the second half: &quot;what does it MEAN&quot; — it turns those captures into the produced block&#39;s <code>data</code> dict, its <code>failed</code>/<code>broken</code> flags, and (for a switch matcher) its btype. After this chapter you can read any <code>.mch</code> build program and predict exactly what the engine does with it: which statements can reject a match, where a null quietly propagates and where it faults, what <code>parse</code> actually guarantees, when the engine calls out to a hand-written C++ host fn, and why the C++ and Python engines cannot drift apart on any of it. You will also be able to read the GENERATED C++ that the engine really runs — build programs are not interpreted in production; <code>mch-codegen</code> emits one straight-line <code>BuildOutcome build_&lt;n&gt;(BuildEnv&amp;)</code> per matcher whose only job is to call the <code>rt_*</code> leaves documented here. The one thing this chapter does NOT cover is what happens to the produced block afterwards: merging into the tree is <a class="xl" href="block-tree.html">block-tree</a>, serialization into Action rows is <a class="xl" href="actions.html">actions</a>.</p></div>
+<nav class="toc"><div class="label">On this page</div><ol><li><span class="tn">1</span><a href="#what-a-build-program-is">What a build program is</a></li><li><span class="tn">2</span><a href="#the-execution-model-stateless-per-matched-anchor-codegen-d">The execution model: stateless, per-matched-anchor, codegen&#39;d</a></li><li><span class="tn">3</span><a href="#parse-the-statement-the-expression-and-the-contract">parse: the statement, the expression, and the contract</a></li><li><span class="tn">4</span><a href="#expressions-one-runtime-two-callers">Expressions: one runtime, two callers</a></li><li><span class="tn">5</span><a href="#lookups-why-the-build-fn-runs-more-than-once">Lookups: why the build fn runs more than once</a></li><li><span class="tn">6</span><a href="#the-host-seam-preds-fns-shapers">The host seam: preds, fns, shapers</a></li><li><span class="tn">7</span><a href="#what-actually-runs-the-skip-table">What actually runs: the skip table</a></li><li><span class="tn">8</span><a href="#check-yourself">Check yourself</a></li></ol></nav>
+<div class="diagram"><div class="label">One matched anchor → one CoreAction</div><pre class="mermaid">flowchart TD
+  M[&quot;matcher_match(m, block)&quot;] --&gt; C[&quot;MatchResult: captures + consumed&quot;]
+  C --&gt; S[&quot;slots_from_captures()&lt;br/&gt;slot i = Block / Null / List&quot;]
+  S --&gt; E[&quot;BuildEnv{anchor, slots, consumed, lookups, bodies}&quot;]
+  E --&gt; TP[&quot;run_two_phase()&lt;br/&gt;collect → fetch → resume&quot;]
+  TP --&gt; G[&quot;generated build_&amp;lt;n&amp;gt;(BuildEnv&amp;amp;)&lt;br/&gt;straight-line rt_* calls&quot;]
+  G --&gt;|fault anywhere| R[&quot;BuildOutcome::rejected → no action&quot;]
+  G --&gt; O[&quot;BuildOutcome{btype, data, failed, broken}&quot;]
+  O --&gt; P[&quot;arena.make(btype); produced-&amp;gt;data = o.data&quot;]
+  P --&gt; MG[&quot;produced-&amp;gt;merge_blocks(consumed)&quot;]
+  MG --&gt;|merge fails| R
+  MG --&gt; SH[&quot;host shaper (post-merge, §8.7)&quot;]
+  SH --&gt; CA[&quot;CoreAction{matcher, anchor, produced, aux}&quot;]</pre></div>
+<div class="diagram"><div class="label">The three host registries and what they gate</div><pre class="mermaid">flowchart LR
+  P[&quot;host_predicates()&lt;br/&gt;bool(const Block*)&quot;] --&gt; MATCH[&quot;match time: pred nodes,&lt;br/&gt;named where clauses&quot;]
+  F[&quot;host_fns()&lt;br/&gt;EvalResult(BuildEnv&amp;amp;, args)&quot;] --&gt; BUILD[&quot;build time: rt_call_hostfn&quot;]
+  SH[&quot;host_shapers()&lt;br/&gt;void(Block* produced, ShaperMatch)&quot;] --&gt; POST[&quot;after merge: topology surgery&quot;]
+  P --&gt; SKIP[&quot;build_skip_reason()&quot;]
+  F --&gt; SKIP
+  SH --&gt; SKIP
+  SKIP --&gt; INC[&quot;included matchers vs&lt;br/&gt;skipped (reason string)&quot;]
+  P --&gt; SURF[&quot;--surface → twins/cpp_surface.json&quot;]
+  F --&gt; SURF
+  SH --&gt; SURF
+  SURF --&gt; TW[&quot;Python twins compute the&lt;br/&gt;IDENTICAL skip set&quot;]</pre></div>
+<h2 id="what-a-build-program-is">What a build program is</h2>
+<section><p>A <code>.mch</code> matcher has two halves separated by a blank line: a PATTERN (chapter 5) and, below it, a build program. The build program is a short imperative script over the captures the pattern bound. Its whole statement vocabulary is: <code>parse CAP as T1|T2</code>, <code>let NAME = expr</code>, <code>reject when expr</code>, <code>failed when expr</code>, <code>broken when expr</code>, <code>out { field: expr }</code>, and <code>produces switch { when expr =&gt; BTYPE out {...} … else =&gt; … }</code>.</p>
+<p>Two properties make it tractable. It is STATELESS — nothing survives between runs, and the program is re-run from scratch for every matched anchor in the trace. And it is TOTAL in one direction only: every statement can reject the match, none can crash it. Any evaluation error anywhere (a missing object field, an un-orderable comparison, an unregistered lookup kind) becomes a clean rejection of this match, indistinguishable from the pattern not having matched at all.</p>
+<p>The first excerpt is the whole language on one screen.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">indexer/indexer/events/mch/specs_decl/jettons.mch<span class="plines">:35–72</span></span><span class="ex-title">jetton_transfer — pattern above, build program below</span><span class="lang">text</span><span class="sha" title="span hash at render">1efb6580</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="35"><td class="ln">35</td><td class="mk"></td><td class="cd">matcher jetton_transfer {</td></tr>
+<tr class="cl" data-l="36"><td class="ln">36</td><td class="mk"></td><td class="cd">    produces JettonTransferBlock</td></tr>
+<tr class="cl" data-l="37"><td class="ln">37</td><td class="mk"></td><td class="cd">    priority <span class="tk-n">90</span></td></tr>
+<tr class="cl" data-l="38"><td class="ln">38</td><td class="mk"></td><td class="cd">    entry    @transfer</td></tr>
+<tr class="cl" data-l="39"><td class="ln">39</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-0" data-l="40" data-n="0"><td class="ln">40</td><td class="mk"><span class="chip">1</span></td><td class="cd">    op JettonTransfer @transfer</td></tr>
+<tr class="cl band nb-0" data-l="41" data-n="0"><td class="ln">41</td><td class="mk"></td><td class="cd">      -&gt; op JettonInternalTransfer @internal</td></tr>
+<tr class="cl band nb-0" data-l="42" data-n="0"><td class="ln">42</td><td class="mk"></td><td class="cd">      -&gt; maybe op JettonNotify @notify</td></tr>
+<tr class="cl band nb-0" data-l="43" data-n="0"><td class="ln">43</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-0" data-l="44" data-n="0"><td class="ln">44</td><td class="mk"></td><td class="cd">    parse transfer as JettonTransfer</td></tr>
+<tr class="cl band nb-0" data-l="45" data-n="0"><td class="ln">45</td><td class="mk"></td><td class="cd">    parse internal  as JettonInternalTransfer</td></tr>
+<tr class="cl band nb-1" data-l="46" data-n="1"><td class="ln">46</td><td class="mk"><span class="chip">2</span></td><td class="cd">    let wallet   = lookup jetton_wallet(internal.msg.destination)</td></tr>
+<tr class="cl band nb-1" data-l="47" data-n="1"><td class="ln">47</td><td class="mk"></td><td class="cd">    reject when wallet == null</td></tr>
+<tr class="cl" data-l="48"><td class="ln">48</td><td class="mk"></td><td class="cd">    let mismatch = account(wallet.owner) != account(transfer.body.destination)</td></tr>
+<tr class="cl band nb-2" data-l="49" data-n="2"><td class="ln">49</td><td class="mk"><span class="chip">3</span></td><td class="cd">    let amt      = internal.body.amount ?? transfer.body.amount</td></tr>
+<tr class="cl band nb-2" data-l="50" data-n="2"><td class="ln">50</td><td class="mk"></td><td class="cd">    let fwd      = internal.body.forward_ton_amount ?? transfer.body.forward_amount</td></tr>
+<tr class="cl band nb-3" data-l="51" data-n="3"><td class="ln">51</td><td class="mk"><span class="chip">4</span></td><td class="cd">    failed when transfer.failed or internal.failed</td></tr>
+<tr class="cl" data-l="52"><td class="ln">52</td><td class="mk"></td><td class="cd">    out {</td></tr>
+<tr class="cl" data-l="53"><td class="ln">53</td><td class="mk"></td><td class="cd">        has_internal_transfer:  <span class="tk-k">true</span></td></tr>
+<tr class="cl" data-l="54"><td class="ln">54</td><td class="mk"></td><td class="cd">        sender:                 account(transfer.msg.source)</td></tr>
+<tr class="cl" data-l="55"><td class="ln">55</td><td class="mk"></td><td class="cd">        sender_wallet:          account(transfer.msg.destination)</td></tr>
+<tr class="cl band nb-4" data-l="56" data-n="4"><td class="ln">56</td><td class="mk"><span class="chip">5</span></td><td class="cd">        receiver:               account(wallet.owner) <span class="tk-k">if</span> mismatch <span class="tk-k">else</span> account(transfer.body.destination)</td></tr>
+<tr class="cl" data-l="57"><td class="ln">57</td><td class="mk"></td><td class="cd">        receiver_wallet:        account(internal.msg.destination)</td></tr>
+<tr class="cl" data-l="58"><td class="ln">58</td><td class="mk"></td><td class="cd">        response_address:       account(transfer.body.response) ?? addr_none()</td></tr>
+<tr class="cl" data-l="59"><td class="ln">59</td><td class="mk"></td><td class="cd">        forward_amount:         amount(fwd)</td></tr>
+<tr class="cl" data-l="60"><td class="ln">60</td><td class="mk"></td><td class="cd">        desired_forward_amount: amount(transfer.body.forward_amount)</td></tr>
+<tr class="cl" data-l="61"><td class="ln">61</td><td class="mk"></td><td class="cd">        query_id:               transfer.body.query_id</td></tr>
+<tr class="cl" data-l="62"><td class="ln">62</td><td class="mk"></td><td class="cd">        asset:                  asset(wallet.jetton)</td></tr>
+<tr class="cl" data-l="63"><td class="ln">63</td><td class="mk"></td><td class="cd">        amount:                 amount(amt)</td></tr>
+<tr class="cl" data-l="64"><td class="ln">64</td><td class="mk"></td><td class="cd">        desired_amount:         amount(transfer.body.amount)</td></tr>
+<tr class="cl" data-l="65"><td class="ln">65</td><td class="mk"></td><td class="cd">        forward_payload:        b64(transfer.body.forward_payload)</td></tr>
+<tr class="cl" data-l="66"><td class="ln">66</td><td class="mk"></td><td class="cd">        custom_payload:         b64(transfer.body.custom_payload)</td></tr>
+<tr class="cl" data-l="67"><td class="ln">67</td><td class="mk"></td><td class="cd">        comment:                transfer.body.comment</td></tr>
+<tr class="cl" data-l="68"><td class="ln">68</td><td class="mk"></td><td class="cd">        encrypted_comment:      transfer.body.encrypted_comment</td></tr>
+<tr class="cl" data-l="69"><td class="ln">69</td><td class="mk"></td><td class="cd">        payload_opcode:         transfer.body.payload_sum_type</td></tr>
+<tr class="cl" data-l="70"><td class="ln">70</td><td class="mk"></td><td class="cd">        stonfi_swap_body:       transfer.body.stonfi_swap_body</td></tr>
+<tr class="cl" data-l="71"><td class="ln">71</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="72"><td class="ln">72</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="40" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L40–45</span>The bridge between the two halves: <code>@transfer</code> / <code>@internal</code> are pattern capture names, and the build program addresses them as plain identifiers. There is no third namespace — a <code>let</code> name and a capture name live in the same scope, and shadowing a capture is a compile error on the Python frontend, not a runtime surprise.</div></div>
+<div class="note" data-a="46" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L46–47</span><code>reject when</code> is the only statement whose PURPOSE is to reject; every other statement can reject as a side effect of faulting. Here the intent is legacy parity: <code>build_jetton_transfer_core</code> asserts the wallet is non-null, and <code>reject when</code> is the containable spelling of that assert.</div></div>
+<div class="note" data-a="49" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L49–50</span><code>??</code> is where the soft-parse contract pays off. If <code>JettonInternalTransfer</code> failed to parse, <code>internal.body</code> is Null, <code>internal.body.amount</code> null-propagates, and the <code>??</code> silently falls back to the outer transfer&#39;s amount. No error is raised anywhere on that path — which is exactly why an unguarded ABI-path parse is dangerous (<a class="xl" href="parse-layer.html">parse-layer</a>).</div></div>
+<div class="note" data-a="51" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L51</span><code>failed when</code> ACCUMULATES: several <code>failed when</code> statements OR together, and once set the flag is never cleared. The generated code emits each one as <code>if (!o.failed) { … }</code>, so a later statement cannot un-fail a block.</div></div>
+<div class="note" data-a="56" data-n="4"><div class="nt"><span class="chip">5</span><span class="nl">L56</span>The ternary is <code>A if cond else B</code> — Python&#39;s order, not C&#39;s. Worth internalising before you read the generated code, where it becomes an ordinary <code>if/else</code> and the source ordering is gone.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">indexer/indexer/events/mch/specs/dns.mch<span class="plines">:15–45</span></span><span class="ex-title">The switch form — one matcher, three btypes</span><span class="lang">text</span><span class="sha" title="span hash at render">8e10549d</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="15"><td class="ln">15</td><td class="mk"></td><td class="cd">matcher change_dns {</td></tr>
+<tr class="cl band nb-0" data-l="16" data-n="0"><td class="ln">16</td><td class="mk"><span class="chip">1</span></td><td class="cd">    produces change_dns | renew_dns | delete_dns</td></tr>
+<tr class="cl" data-l="17"><td class="ln">17</td><td class="mk"></td><td class="cd">    entry    @dns</td></tr>
+<tr class="cl" data-l="18"><td class="ln">18</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="19"><td class="ln">19</td><td class="mk"></td><td class="cd">    op ChangeDnsRecord @dns -&gt; maybe op <span class="tk-n">0xffffffff</span></td></tr>
+<tr class="cl" data-l="20"><td class="ln">20</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="21"><td class="ln">21</td><td class="mk"></td><td class="cd">    parse dns as ChangeDnsRecordMessage</td></tr>
+<tr class="cl" data-l="22"><td class="ln">22</td><td class="mk"></td><td class="cd">    let nft = lookup nft_item(dns.msg.destination)</td></tr>
+<tr class="cl" data-l="23"><td class="ln">23</td><td class="mk"></td><td class="cd">    failed when dns.failed</td></tr>
+<tr class="cl band nb-1" data-l="24" data-n="1"><td class="ln">24</td><td class="mk"><span class="chip">2</span></td><td class="cd">    produces <span class="tk-k">switch</span> {</td></tr>
+<tr class="cl band nb-1" data-l="25" data-n="1"><td class="ln">25</td><td class="mk"></td><td class="cd">        when dns.body.has_value =&gt; change_dns out {</td></tr>
+<tr class="cl" data-l="26"><td class="ln">26</td><td class="mk"></td><td class="cd">            source:               account(dns.msg.source)</td></tr>
+<tr class="cl" data-l="27"><td class="ln">27</td><td class="mk"></td><td class="cd">            destination:          account(dns.msg.destination)</td></tr>
+<tr class="cl" data-l="28"><td class="ln">28</td><td class="mk"></td><td class="cd">            key:                  dns.body.key</td></tr>
+<tr class="cl" data-l="29"><td class="ln">29</td><td class="mk"></td><td class="cd">            value:                dns.body.value</td></tr>
+<tr class="cl band nb-2" data-l="30" data-n="2"><td class="ln">30</td><td class="mk"><span class="chip">3</span></td><td class="cd">            collection_address?:  account(nft.collection_address)</td></tr>
+<tr class="cl" data-l="31"><td class="ln">31</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl" data-l="32"><td class="ln">32</td><td class="mk"></td><td class="cd">        # zero key (b64 of <span class="tk-n">32</span> zero bytes) with no value -&gt; renew.</td></tr>
+<tr class="cl band nb-3" data-l="33" data-n="3"><td class="ln">33</td><td class="mk"><span class="chip">4</span></td><td class="cd">        when b64(dns.body.key) == <span class="tk-s">&quot;AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=&quot;</span> =&gt; renew_dns out {</td></tr>
+<tr class="cl" data-l="34"><td class="ln">34</td><td class="mk"></td><td class="cd">            source:               account(dns.msg.source)</td></tr>
+<tr class="cl" data-l="35"><td class="ln">35</td><td class="mk"></td><td class="cd">            destination:          account(dns.msg.destination)</td></tr>
+<tr class="cl" data-l="36"><td class="ln">36</td><td class="mk"></td><td class="cd">            collection_address?:  account(nft.collection_address)</td></tr>
+<tr class="cl" data-l="37"><td class="ln">37</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl" data-l="38"><td class="ln">38</td><td class="mk"></td><td class="cd">        <span class="tk-k">else</span> =&gt; delete_dns out {</td></tr>
+<tr class="cl" data-l="39"><td class="ln">39</td><td class="mk"></td><td class="cd">            source:               account(dns.msg.source)</td></tr>
+<tr class="cl" data-l="40"><td class="ln">40</td><td class="mk"></td><td class="cd">            destination:          account(dns.msg.destination)</td></tr>
+<tr class="cl" data-l="41"><td class="ln">41</td><td class="mk"></td><td class="cd">            key:                  dns.body.key</td></tr>
+<tr class="cl" data-l="42"><td class="ln">42</td><td class="mk"></td><td class="cd">            collection_address?:  account(nft.collection_address)</td></tr>
+<tr class="cl" data-l="43"><td class="ln">43</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl" data-l="44"><td class="ln">44</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="45"><td class="ln">45</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="16" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L16</span><code>produces A | B | C</code> declares the switch up front so the IR (and the block-type registry) knows all three outcomes statically. The runtime picks one; the artifact still records the full set, which is what <code>build_skip_reason</code> and the btype prefilter reason about.</div></div>
+<div class="note" data-a="24" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L24–25</span>This is the ONLY way a build program sets a btype. A non-switch matcher leaves <code>BuildOutcome::btype</code> empty and the caller uses <code>produces[0]</code> — see the next section. The <code>when</code> guards are tested in source order, first match wins, <code>else</code> is mandatory.</div></div>
+<div class="note" data-a="30" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L30</span><code>name?:</code> — an OPTIONAL key. The generated code is <code>if (!v.is_null()) fs.emplace_back(...)</code>, so the key is ABSENT rather than null when the lookup misses. That distinction is observable: the dump renders a key set, and the Python twin&#39;s dict has to have the same keys. Mirrors legacy&#39;s conditional <code>data[&#39;collection_address&#39;] = …</code>.</div></div>
+<div class="note" data-a="33" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L33</span><code>b64(...)</code> on a Bytes key compared against a literal string: the spec-level way to test a 32-zero-byte DNS key. Note this is a comparison of the b64 TEXT, which is safe here only because the value is raw bytes, not a cell — see the b64 excerpt further down for why cells are different.</div></div></div>
+</div>
+</div>
+<h2 id="the-execution-model-stateless-per-matched-anchor-codegen-d">The execution model: stateless, per-matched-anchor, codegen&#39;d</h2>
+<section><p>Nothing in this layer interprets a build program in production. <code>mch-codegen --builds</code> reads the IR artifact and emits one C++ function per matcher into the build tree; the engine holds a table of those function pointers keyed by artifact index. The generated code contains no policy — every operation is a call into <code>BuildRuntime</code>/<code>ExprRuntime</code>, so the interpreter path (<code>ExprEval</code>, used by the conformance vectors) and the production path cannot diverge on semantics.</p>
+<p>The two structs below are the entire interface between generated code and the engine: <code>BuildOutcome</code> out, <code>BuildEnv</code> in.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BuildRuntime.h<span class="plines">:30–53</span></span><span class="ex-title">BuildOutcome — the whole return channel</span><span class="lang">cpp</span><span class="sha" title="span hash at render">257f9194</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="30" data-n="0"><td class="ln">30</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// program.py BuildOutcome | None. rejected==true corresponds to Python&#39;s None</span></td></tr>
+<tr class="cl band nb-0" data-l="31" data-n="0"><td class="ln">31</td><td class="mk"></td><td class="cd"><span class="tk-c">// (a `reject when` fired OR an EvalError surfaced); the other fields are then</span></td></tr>
+<tr class="cl band nb-0" data-l="32" data-n="0"><td class="ln">32</td><td class="mk"></td><td class="cd"><span class="tk-c">// meaningless. btype empty == Python btype None (non-switch matcher: caller</span></td></tr>
+<tr class="cl band nb-0" data-l="33" data-n="0"><td class="ln">33</td><td class="mk"></td><td class="cd"><span class="tk-c">// uses produces[0]).</span></td></tr>
+<tr class="cl" data-l="34"><td class="ln">34</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> BuildOutcome {</td></tr>
+<tr class="cl" data-l="35"><td class="ln">35</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> is_rejected{<span class="tk-k">false</span>};</td></tr>
+<tr class="cl" data-l="36"><td class="ln">36</td><td class="mk"></td><td class="cd">  std::string reject_reason;  <span class="tk-c">// diagnostics only</span></td></tr>
+<tr class="cl" data-l="37"><td class="ln">37</td><td class="mk"></td><td class="cd">  std::string btype;</td></tr>
+<tr class="cl band nb-1" data-l="38" data-n="1"><td class="ln">38</td><td class="mk"><span class="chip">2</span></td><td class="cd">  Value data;  <span class="tk-c">// Dict; defaults to the empty dict (Python: data None -&gt; {})</span></td></tr>
+<tr class="cl" data-l="39"><td class="ln">39</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> failed{<span class="tk-k">false</span>};</td></tr>
+<tr class="cl" data-l="40"><td class="ln">40</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> broken{<span class="tk-k">false</span>};</td></tr>
+<tr class="cl" data-l="41"><td class="ln">41</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-2" data-l="42" data-n="2"><td class="ln">42</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">static</span> BuildOutcome rejected(std::string reason = {}) {</td></tr>
+<tr class="cl band nb-2" data-l="43" data-n="2"><td class="ln">43</td><td class="mk"></td><td class="cd">    BuildOutcome o;</td></tr>
+<tr class="cl band nb-2" data-l="44" data-n="2"><td class="ln">44</td><td class="mk"></td><td class="cd">    o.is_rejected = <span class="tk-k">true</span>;</td></tr>
+<tr class="cl band nb-2" data-l="45" data-n="2"><td class="ln">45</td><td class="mk"></td><td class="cd">    o.reject_reason = std::move(reason);</td></tr>
+<tr class="cl band nb-2" data-l="46" data-n="2"><td class="ln">46</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> o;</td></tr>
+<tr class="cl band nb-2" data-l="47" data-n="2"><td class="ln">47</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="48"><td class="ln">48</td><td class="mk"></td><td class="cd">  <span class="tk-k">static</span> BuildOutcome accepted() {</td></tr>
+<tr class="cl" data-l="49"><td class="ln">49</td><td class="mk"></td><td class="cd">    BuildOutcome o;</td></tr>
+<tr class="cl" data-l="50"><td class="ln">50</td><td class="mk"></td><td class="cd">    o.data = Value::make_dict({});</td></tr>
+<tr class="cl" data-l="51"><td class="ln">51</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> o;</td></tr>
+<tr class="cl" data-l="52"><td class="ln">52</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="53"><td class="ln">53</td><td class="mk"></td><td class="cd">};</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="30" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L30–33</span><code>is_rejected</code> is C++&#39;s spelling of Python returning <code>None</code>, and the comment is precise about the conflation: a <code>reject when</code> firing and an EvalError surfacing produce the SAME outcome. <code>reject_reason</code> exists only so a log line can tell them apart; nothing branches on it.</div></div>
+<div class="note" data-a="38" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L38</span><code>data</code> defaults to the empty Dict, not Null. Python&#39;s <code>data=None</code> is normalised to <code>{}</code> at the same boundary, so a matcher with no <code>out {}</code> block still produces a block with an empty (not absent) data dict — which the <a class="xl" href="actions.html">actions</a> serializer then reads without a null check.</div></div>
+<div class="note" data-a="42" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L42–47</span>Note what <code>rejected()</code> does NOT do: it leaves <code>data</code> default-constructed (Null), <code>failed</code>/<code>broken</code> false. Any code reading those fields on a rejected outcome is reading garbage — the caller&#39;s contract is to check <code>is_rejected</code> first and never look again.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BuildRuntime.h<span class="plines">:157–167</span></span><span class="ex-title">BuildEnv — capture names do not exist at runtime</span><span class="lang">cpp</span><span class="sha" title="span hash at render">94910f44</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="157"><td class="ln">157</td><td class="mk"></td><td class="cd"><span class="tk-c">// Execution environment for one generated build fn (D3).</span></td></tr>
+<tr class="cl" data-l="158"><td class="ln">158</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> BuildEnv {</td></tr>
+<tr class="cl" data-l="159"><td class="ln">159</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Block *anchor{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl band nb-0" data-l="160" data-n="0"><td class="ln">160</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">const</span> Value *slots{<span class="tk-k">nullptr</span>};  <span class="tk-c">// capture values, slot-indexed (Block/Null/List)</span></td></tr>
+<tr class="cl band nb-0" data-l="161" data-n="0"><td class="ln">161</td><td class="mk"></td><td class="cd">  std::size_t n_slots{<span class="tk-n">0</span>};</td></tr>
+<tr class="cl band nb-1" data-l="162" data-n="1"><td class="ln">162</td><td class="mk"><span class="chip">2</span></td><td class="cd">  Value consumed;               <span class="tk-c">// well-known `consumed`: List of Block values</span></td></tr>
+<tr class="cl" data-l="163"><td class="ln">163</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> LookupTable *lookups{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl band nb-2" data-l="164" data-n="2"><td class="ln">164</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-c">// program.py Evaluator.bodies: block identity -&gt; parsed body (Null == every</span></td></tr>
+<tr class="cl band nb-2" data-l="165" data-n="2"><td class="ln">165</td><td class="mk"></td><td class="cd">  <span class="tk-c">// soft-parse alternative failed). Filled by rt_parse, read by `.body`.</span></td></tr>
+<tr class="cl band nb-2" data-l="166" data-n="2"><td class="ln">166</td><td class="mk"></td><td class="cd">  std::map&lt;<span class="tk-k">const</span> Block *, Value&gt; bodies;</td></tr>
+<tr class="cl" data-l="167"><td class="ln">167</td><td class="mk"></td><td class="cd">};</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="160" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L160–161</span>Captures are a raw pointer + count, indexed positionally. The frontend assigns slot numbers at compile time and the generated code says <code>env.slots[1]</code>, never &quot;internal&quot; — a capture NAME appears nowhere in the binary. Same design as the where-clause <code>WhereEnv</code> in <a class="xl" href="matcher-runtime.html">matcher-runtime</a>, deliberately: one env family, one codegen shape.</div></div>
+<div class="note" data-a="162" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L162</span><code>consumed</code> is a well-known pseudo-capture: the match&#39;s consumed set as a List of Block values. It is what every host fn takes as its argument, because the hybrid specs could not express the imperative role reconstruction any other way (see the host section).</div></div>
+<div class="note" data-a="164" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L164–166</span><code>bodies</code> is the ONLY mutable state a build program accumulates, and it is per-run. A <code>parse</code> statement writes into it keyed by Block identity; <code>.body</code> reads it back. Note the key is the Block POINTER — parse a capture in one matcher and the entry is invisible to every other matcher, which is what makes the program stateless across anchors.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/generated/builds_ir_generated.cpp<span class="plines">:14–40</span></span><span class="ex-title">The generated image of the first 5 spec lines (build-tree artifact, not in git)</span><span class="lang">cpp</span><span class="sha" title="span hash at render">451951a6</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="14"><td class="ln">14</td><td class="mk"></td><td class="cd">BuildOutcome build_0_jetton_transfer(BuildEnv &amp;env) {</td></tr>
+<tr class="cl" data-l="15"><td class="ln">15</td><td class="mk"></td><td class="cd">  (<span class="tk-k">void</span>)env;</td></tr>
+<tr class="cl" data-l="16"><td class="ln">16</td><td class="mk"></td><td class="cd">  BuildOutcome o = BuildOutcome::accepted();</td></tr>
+<tr class="cl band nb-0" data-l="17" data-n="0"><td class="ln">17</td><td class="mk"><span class="chip">1</span></td><td class="cd">  Value pt0 = env.slots[<span class="tk-n">0</span>];</td></tr>
+<tr class="cl band nb-0" data-l="18" data-n="0"><td class="ln">18</td><td class="mk"></td><td class="cd">  EvalResult sp0 = rt_parse(env, pt0, std::vector&lt;std::string&gt;{<span class="tk-s">&quot;JettonTransfer&quot;</span>});</td></tr>
+<tr class="cl band nb-0" data-l="19" data-n="0"><td class="ln">19</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (sp0.faulted) <span class="tk-k">return</span> BuildOutcome::rejected(std::move(sp0.message));</td></tr>
+<tr class="cl band nb-0" data-l="20" data-n="0"><td class="ln">20</td><td class="mk"></td><td class="cd">  Value pt1 = env.slots[<span class="tk-n">1</span>];</td></tr>
+<tr class="cl band nb-0" data-l="21" data-n="0"><td class="ln">21</td><td class="mk"></td><td class="cd">  EvalResult sp1 = rt_parse(env, pt1, std::vector&lt;std::string&gt;{<span class="tk-s">&quot;JettonInternalTransfer&quot;</span>});</td></tr>
+<tr class="cl band nb-0" data-l="22" data-n="0"><td class="ln">22</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (sp1.faulted) <span class="tk-k">return</span> BuildOutcome::rejected(std::move(sp1.message));</td></tr>
+<tr class="cl band nb-1" data-l="23" data-n="1"><td class="ln">23</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">const</span> Value &amp;v2 = env.slots[<span class="tk-n">1</span>];</td></tr>
+<tr class="cl band nb-1" data-l="24" data-n="1"><td class="ln">24</td><td class="mk"></td><td class="cd">  EvalResult r3 = rt_access_build(env, v2, <span class="tk-s">&quot;msg&quot;</span>);</td></tr>
+<tr class="cl band nb-1" data-l="25" data-n="1"><td class="ln">25</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (r3.faulted) <span class="tk-k">return</span> BuildOutcome::rejected(std::move(r3.message));</td></tr>
+<tr class="cl band nb-1" data-l="26" data-n="1"><td class="ln">26</td><td class="mk"></td><td class="cd">  Value v3 = std::move(r3.value);</td></tr>
+<tr class="cl band nb-1" data-l="27" data-n="1"><td class="ln">27</td><td class="mk"></td><td class="cd">  EvalResult r4 = rt_access_build(env, v3, <span class="tk-s">&quot;destination&quot;</span>);</td></tr>
+<tr class="cl band nb-1" data-l="28" data-n="1"><td class="ln">28</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (r4.faulted) <span class="tk-k">return</span> BuildOutcome::rejected(std::move(r4.message));</td></tr>
+<tr class="cl band nb-1" data-l="29" data-n="1"><td class="ln">29</td><td class="mk"></td><td class="cd">  Value v4 = std::move(r4.value);</td></tr>
+<tr class="cl band nb-1" data-l="30" data-n="1"><td class="ln">30</td><td class="mk"></td><td class="cd">  EvalResult r5 = rt_lookup_build(env, <span class="tk-s">&quot;jetton_wallet&quot;</span>, std::vector&lt;Value&gt;{v4});</td></tr>
+<tr class="cl band nb-1" data-l="31" data-n="1"><td class="ln">31</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (r5.faulted) <span class="tk-k">return</span> BuildOutcome::rejected(std::move(r5.message));</td></tr>
+<tr class="cl band nb-1" data-l="32" data-n="1"><td class="ln">32</td><td class="mk"></td><td class="cd">  Value v5 = std::move(r5.value);</td></tr>
+<tr class="cl band nb-2" data-l="33" data-n="2"><td class="ln">33</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">const</span> Value &amp;v6 = v5;</td></tr>
+<tr class="cl band nb-2" data-l="34" data-n="2"><td class="ln">34</td><td class="mk"></td><td class="cd">  Value v7 = Value::null();</td></tr>
+<tr class="cl band nb-2" data-l="35" data-n="2"><td class="ln">35</td><td class="mk"></td><td class="cd">  EvalResult r8 = rt_eq(v6, v7);</td></tr>
+<tr class="cl band nb-2" data-l="36" data-n="2"><td class="ln">36</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (r8.faulted) <span class="tk-k">return</span> BuildOutcome::rejected(std::move(r8.message));</td></tr>
+<tr class="cl band nb-2" data-l="37" data-n="2"><td class="ln">37</td><td class="mk"></td><td class="cd">  Value v8 = std::move(r8.value);</td></tr>
+<tr class="cl band nb-2" data-l="38" data-n="2"><td class="ln">38</td><td class="mk"></td><td class="cd">  EvalResult sb9 = rt_require_bool(v8);</td></tr>
+<tr class="cl band nb-2" data-l="39" data-n="2"><td class="ln">39</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (sb9.faulted) <span class="tk-k">return</span> BuildOutcome::rejected(std::move(sb9.message));</td></tr>
+<tr class="cl band nb-2" data-l="40" data-n="2"><td class="ln">40</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (sb9.value.boolean) <span class="tk-k">return</span> BuildOutcome::rejected(<span class="tk-s">&quot;reject when&quot;</span>);</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="17" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L17–22</span>The two <code>parse</code> statements from the spec, verbatim in order. <code>rt_parse</code> is called for its SIDE EFFECT on <code>env.bodies</code> and its return value is discarded — only the fault flag matters here. Compare <code>rt_parse_expr</code> below, which is the opposite.</div></div>
+<div class="note" data-a="23" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L23–32</span><code>let wallet = lookup jetton_wallet(internal.msg.destination)</code> expanded: one SSA temp per IR node, one early return per possible fault. There are no loops and no function calls except into the runtime — which is why a build program&#39;s cost is bounded by its statement count, and why the fault model needs no exceptions.</div></div>
+<div class="note" data-a="33" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L33–40</span><code>reject when wallet == null</code> — and note it goes through <code>rt_eq</code> + <code>rt_require_bool</code> rather than a C++ <code>== nullptr</code>. Both matter: <code>rt_eq</code> is the language&#39;s typed equality (Amount(None), Asset-vs-string, Block identity), and <code>rt_require_bool</code> faults if the condition is not a Bool, so <code>reject when 5</code> is a rejection, not a truthiness test.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp<span class="plines">:26–52</span></span><span class="ex-title">try_build — captures in, CoreAction out</span><span class="lang">cpp</span><span class="sha" title="span hash at render">0af37742</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="26"><td class="ln">26</td><td class="mk"></td><td class="cd"><span class="tk-k">bool</span> try_build(<span class="tk-k">const</span> CompiledMatcher &amp;m, BuildOutcome (*fn)(BuildEnv &amp;), Block *block,</td></tr>
+<tr class="cl" data-l="27"><td class="ln">27</td><td class="mk"></td><td class="cd">               BlockArena &amp;arena, <span class="tk-k">const</span> std::set&lt;std::string&gt; &amp;kinds,</td></tr>
+<tr class="cl" data-l="28"><td class="ln">28</td><td class="mk"></td><td class="cd">               <span class="tk-k">const</span> LookupSource &amp;src, std::vector&lt;CoreAction&gt; &amp;out) {</td></tr>
+<tr class="cl" data-l="29"><td class="ln">29</td><td class="mk"></td><td class="cd">  <span class="tk-k">auto</span> res = matcher_match(m, block);  <span class="tk-c">// test_self + walk (root absorb=False)</span></td></tr>
+<tr class="cl" data-l="30"><td class="ln">30</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (!res) {</td></tr>
+<tr class="cl" data-l="31"><td class="ln">31</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> <span class="tk-k">false</span>;  <span class="tk-c">// structural mismatch</span></td></tr>
+<tr class="cl" data-l="32"><td class="ln">32</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-0" data-l="33" data-n="0"><td class="ln">33</td><td class="mk"><span class="chip">1</span></td><td class="cd">  std::vector&lt;Value&gt; slots = slots_from_captures(res-&gt;captures);</td></tr>
+<tr class="cl band nb-0" data-l="34" data-n="0"><td class="ln">34</td><td class="mk"></td><td class="cd">  std::vector&lt;Value&gt; consumed_vals;</td></tr>
+<tr class="cl band nb-0" data-l="35" data-n="0"><td class="ln">35</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (Block *b : res-&gt;consumed) {</td></tr>
+<tr class="cl band nb-0" data-l="36" data-n="0"><td class="ln">36</td><td class="mk"></td><td class="cd">    consumed_vals.push_back(Value::make_block(b));</td></tr>
+<tr class="cl band nb-0" data-l="37" data-n="0"><td class="ln">37</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="38" data-n="1"><td class="ln">38</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">bool</span> needs_lookups = !(m.ref_lookups.empty() &amp;&amp; m.ref_fns.empty());</td></tr>
+<tr class="cl band nb-1" data-l="39" data-n="1"><td class="ln">39</td><td class="mk"></td><td class="cd">  BuildOutcome o = run_two_phase(fn, block, slots,</td></tr>
+<tr class="cl band nb-1" data-l="40" data-n="1"><td class="ln">40</td><td class="mk"></td><td class="cd">                                 Value::make_list(std::move(consumed_vals)), kinds, src,</td></tr>
+<tr class="cl band nb-1" data-l="41" data-n="1"><td class="ln">41</td><td class="mk"></td><td class="cd">                                 needs_lookups);</td></tr>
+<tr class="cl band nb-2" data-l="42" data-n="2"><td class="ln">42</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">if</span> (o.is_rejected) {</td></tr>
+<tr class="cl band nb-2" data-l="43" data-n="2"><td class="ln">43</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> <span class="tk-k">false</span>;  <span class="tk-c">// clean rejection §10.7: no consumption, no aux append</span></td></tr>
+<tr class="cl band nb-2" data-l="44" data-n="2"><td class="ln">44</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="45"><td class="ln">45</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-3" data-l="46" data-n="3"><td class="ln">46</td><td class="mk"><span class="chip">4</span></td><td class="cd">  Block *produced = arena.make(o.btype.empty() ? m.produces.front() : o.btype);</td></tr>
+<tr class="cl band nb-3" data-l="47" data-n="3"><td class="ln">47</td><td class="mk"></td><td class="cd">  produced-&gt;data = o.data;</td></tr>
+<tr class="cl band nb-3" data-l="48" data-n="3"><td class="ln">48</td><td class="mk"></td><td class="cd">  produced-&gt;failed = o.failed;</td></tr>
+<tr class="cl band nb-3" data-l="49" data-n="3"><td class="ln">49</td><td class="mk"></td><td class="cd">  produced-&gt;broken = o.broken;</td></tr>
+<tr class="cl band nb-3" data-l="50" data-n="3"><td class="ln">50</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (!produced-&gt;merge_blocks(res-&gt;consumed)) {</td></tr>
+<tr class="cl band nb-3" data-l="51" data-n="3"><td class="ln">51</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> <span class="tk-k">false</span>;  <span class="tk-c">// Python: merge raises -&gt; try_build catches -&gt; clean rejection</span></td></tr>
+<tr class="cl band nb-3" data-l="52" data-n="3"><td class="ln">52</td><td class="mk"></td><td class="cd">  }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="33" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L33–37</span>The conversion the whole chapter hinges on: a <code>MatchResult</code> capture becomes a slot Value — a Block for a scalar capture, Null for an unbound optional, a List (with Null gaps) for a <code>many</code> capture. <code>slots_from_captures</code> in BuildDriver.cpp is nine lines and worth reading; the gap-preserving List is why <code>.body</code> on a list capture has to tolerate Null elements.</div></div>
+<div class="note" data-a="38" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L38–41</span><code>needs_lookups</code> is a pure optimisation with a proof attached: a matcher referencing no <code>lookup</code> node and no host fn can never record a miss, so the collect pass is provably a no-op and is skipped. About a third of the artifact&#39;s matchers take this path.</div></div>
+<div class="note" data-a="42" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L42–44</span>A rejection consumes NOTHING. The block tree is untouched, no aux blocks are appended, and the walker moves on to the next anchor — spec §10.7. This is the invariant that lets a build program be used as a late semantic filter (&quot;the pattern matched but the wallet lookup says otherwise&quot;) without corrupting the tree.</div></div>
+<div class="note" data-a="46" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L46–52</span>Where the build program&#39;s output lands: <code>o.btype</code> (empty ⇒ <code>produces[0]</code>, the non-switch case) names the produced block, <code>o.data</code> becomes its data dict. <code>merge_blocks</code> failing is ALSO a clean rejection — Python raises inside <code>try_build</code> and the caller swallows it, so C++ must return false rather than propagate.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp<span class="plines">:467–492</span></span><span class="ex-title">The dispatch loop — matcher-major, not block-major</span><span class="lang">cpp</span><span class="sha" title="span hash at render">441a8e0d</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="467" data-n="0"><td class="ln">467</td><td class="mk"><span class="chip">1</span></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> IncludedMatcher &amp;im : setup.included) {</td></tr>
+<tr class="cl band nb-0" data-l="468" data-n="0"><td class="ln">468</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (!anchor_can_match(im.filter)) {</td></tr>
+<tr class="cl band nb-0" data-l="469" data-n="0"><td class="ln">469</td><td class="mk"></td><td class="cd">        <span class="tk-k">continue</span>;  <span class="tk-c">// B1: no spine op/btype can satisfy this anchor — skip traversal</span></td></tr>
+<tr class="cl band nb-0" data-l="470" data-n="0"><td class="ln">470</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-0" data-l="471" data-n="0"><td class="ln">471</td><td class="mk"></td><td class="cd">      <span class="tk-k">const</span> CompiledMatcher &amp;m = ir.matchers[im.matcher_index];</td></tr>
+<tr class="cl band nb-0" data-l="472" data-n="0"><td class="ln">472</td><td class="mk"></td><td class="cd">      <span class="tk-k">auto</span> fn = setup.build_fns.at(m.artifact_index);</td></tr>
+<tr class="cl" data-l="473"><td class="ln">473</td><td class="mk"></td><td class="cd">      std::size_t produced_from = pending.size();</td></tr>
+<tr class="cl band nb-1" data-l="474" data-n="1"><td class="ln">474</td><td class="mk"><span class="chip">2</span></td><td class="cd">      <span class="tk-c">// Python bfs_iter port: FIFO; cur&#39;s next_blocks are read AFTER try_build</span></td></tr>
+<tr class="cl band nb-1" data-l="475" data-n="1"><td class="ln">475</td><td class="mk"></td><td class="cd">      <span class="tk-c">// ran on cur (generator resume order) — merges mutate the tree mid-walk.</span></td></tr>
+<tr class="cl band nb-1" data-l="476" data-n="1"><td class="ln">476</td><td class="mk"></td><td class="cd">      std::deque&lt;Block *&gt; queue{wrapper};</td></tr>
+<tr class="cl band nb-1" data-l="477" data-n="1"><td class="ln">477</td><td class="mk"></td><td class="cd">      <span class="tk-k">while</span> (!queue.empty()) {</td></tr>
+<tr class="cl band nb-1" data-l="478" data-n="1"><td class="ln">478</td><td class="mk"></td><td class="cd">        Block *cur = queue.front();</td></tr>
+<tr class="cl band nb-1" data-l="479" data-n="1"><td class="ln">479</td><td class="mk"></td><td class="cd">        queue.pop_front();</td></tr>
+<tr class="cl band nb-1" data-l="480" data-n="1"><td class="ln">480</td><td class="mk"></td><td class="cd">        <span class="tk-k">if</span> (cur-&gt;parent == <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="481" data-n="1"><td class="ln">481</td><td class="mk"></td><td class="cd">          try_build(m, fn, cur, ctx.arena, setup.kinds, src, pending);</td></tr>
+<tr class="cl band nb-1" data-l="482" data-n="1"><td class="ln">482</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl band nb-1" data-l="483" data-n="1"><td class="ln">483</td><td class="mk"></td><td class="cd">        <span class="tk-k">for</span> (Block *n : cur-&gt;next_blocks) {</td></tr>
+<tr class="cl band nb-1" data-l="484" data-n="1"><td class="ln">484</td><td class="mk"></td><td class="cd">          queue.push_back(n);</td></tr>
+<tr class="cl band nb-1" data-l="485" data-n="1"><td class="ln">485</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl band nb-1" data-l="486" data-n="1"><td class="ln">486</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-2" data-l="487" data-n="2"><td class="ln">487</td><td class="mk"><span class="chip">3</span></td><td class="cd">      <span class="tk-c">// Fold this matcher&#39;s produced btypes into the inventory so a later</span></td></tr>
+<tr class="cl band nb-2" data-l="488" data-n="2"><td class="ln">488</td><td class="mk"></td><td class="cd">      <span class="tk-c">// btype-anchored matcher composing on them is not wrongly skipped.</span></td></tr>
+<tr class="cl band nb-2" data-l="489" data-n="2"><td class="ln">489</td><td class="mk"></td><td class="cd">      <span class="tk-k">for</span> (std::size_t j = produced_from; j &lt; pending.size(); j++) {</td></tr>
+<tr class="cl band nb-2" data-l="490" data-n="2"><td class="ln">490</td><td class="mk"></td><td class="cd">        <span class="tk-k">if</span> (pending[j].produced != <span class="tk-k">nullptr</span>) inv_btypes.insert(pending[j].produced-&gt;btype);</td></tr>
+<tr class="cl band nb-2" data-l="491" data-n="2"><td class="ln">491</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl" data-l="492"><td class="ln">492</td><td class="mk"></td><td class="cd">    }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="467" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L467–472</span>Matcher-major ordering: matcher 0 is walked over the ENTIRE tree before matcher 1 starts. That is the Python engine&#39;s order and it is load-bearing — earlier matchers consume blocks that later matchers would otherwise anchor on, which is why <code>registration_order</code> / <code>priority</code> in the artifact is a semantic input, not a hint. <code>setup.build_fns.at()</code> is the whole dispatch: an index lookup into the generated table.</div></div>
+<div class="note" data-a="474" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L474–486</span>A subtle port: <code>cur-&gt;next_blocks</code> is read AFTER <code>try_build</code> ran on <code>cur</code>. Python uses a generator whose resume order gives exactly this, and merges mutate <code>next_blocks</code> mid-walk — reading the children first would traverse the pre-merge tree. <code>cur-&gt;parent == nullptr</code> skips blocks already absorbed by a merge.</div></div>
+<div class="note" data-a="487" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L487–491</span>The btype prefilter inventory GROWS as matchers fire, because a matcher may anchor on a btype an earlier matcher produced (<code>jvault_stake</code> anchors on <code>jetton_transfer</code>). Opcodes never grow — produced composite blocks carry no opcode — so only btypes are folded back in.</div></div></div>
+</div>
+</div>
+<h2 id="parse-the-statement-the-expression-and-the-contract">parse: the statement, the expression, and the contract</h2>
+<section><p><code>parse CAP as T1|T2</code> is soft by design. Its inner half (<code>soft_parse</code>, first alternative that succeeds wins, all-fail ⇒ Null body) is excerpted in <a class="xl" href="parse-layer.html">parse-layer</a>; here is the outer half — what a <code>parse</code> statement does with the target it is given, and how <code>.body</code> reads the result back.</p>
+<p>The key asymmetry to hold onto: an UNREGISTERED type name is a fault (broken spec), a failing PARSER is not (normal traffic). Everything else follows from that. And because a failed parse is silent, the op-guard rule from <a class="xl" href="parse-layer.html">parse-layer</a> is not optional discipline — it is the only thing standing between an ABI-path parse and a divergence that surfaces hundreds of lines away in a twin diff.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BuildRuntime.cpp<span class="plines">:51–81</span></span><span class="ex-title">rt_parse — three target shapes, all soft</span><span class="lang">cpp</span><span class="sha" title="span hash at render">173ea416</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="51"><td class="ln">51</td><td class="mk"></td><td class="cd">EvalResult rt_parse(BuildEnv &amp;env, <span class="tk-k">const</span> Value &amp;target, <span class="tk-k">const</span> std::vector&lt;std::string&gt; &amp;types) {</td></tr>
+<tr class="cl band nb-0" data-l="52" data-n="0"><td class="ln">52</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">if</span> (target.is_null()) {</td></tr>
+<tr class="cl band nb-0" data-l="53" data-n="0"><td class="ln">53</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> rt_ok(Value::null());  <span class="tk-c">// absent optional capture: `.body` null-propagates</span></td></tr>
+<tr class="cl band nb-0" data-l="54" data-n="0"><td class="ln">54</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="55" data-n="1"><td class="ln">55</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">if</span> (target.t == VType::List) {</td></tr>
+<tr class="cl band nb-1" data-l="56" data-n="1"><td class="ln">56</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> Value &amp;el : *target.items) {</td></tr>
+<tr class="cl band nb-1" data-l="57" data-n="1"><td class="ln">57</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (el.t != VType::Block || el.block == <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="58" data-n="1"><td class="ln">58</td><td class="mk"></td><td class="cd">        <span class="tk-k">continue</span>;  <span class="tk-c">// null (gap) elements stay unparsed; non-blocks unreachable</span></td></tr>
+<tr class="cl band nb-1" data-l="59" data-n="1"><td class="ln">59</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-1" data-l="60" data-n="1"><td class="ln">60</td><td class="mk"></td><td class="cd">      Value body;</td></tr>
+<tr class="cl band nb-1" data-l="61" data-n="1"><td class="ln">61</td><td class="mk"></td><td class="cd">      EvalResult r = soft_parse(el.block, types, body);</td></tr>
+<tr class="cl band nb-1" data-l="62" data-n="1"><td class="ln">62</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (r.faulted) {</td></tr>
+<tr class="cl band nb-1" data-l="63" data-n="1"><td class="ln">63</td><td class="mk"></td><td class="cd">        <span class="tk-k">return</span> r;</td></tr>
+<tr class="cl band nb-1" data-l="64" data-n="1"><td class="ln">64</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-1" data-l="65" data-n="1"><td class="ln">65</td><td class="mk"></td><td class="cd">      env.bodies[el.block] = std::move(body);</td></tr>
+<tr class="cl band nb-1" data-l="66" data-n="1"><td class="ln">66</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="67" data-n="1"><td class="ln">67</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> rt_ok(Value::null());</td></tr>
+<tr class="cl band nb-1" data-l="68" data-n="1"><td class="ln">68</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="69"><td class="ln">69</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (target.t == VType::Block &amp;&amp; target.block != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl" data-l="70"><td class="ln">70</td><td class="mk"></td><td class="cd">    Value body;</td></tr>
+<tr class="cl" data-l="71"><td class="ln">71</td><td class="mk"></td><td class="cd">    EvalResult r = soft_parse(target.block, types, body);</td></tr>
+<tr class="cl" data-l="72"><td class="ln">72</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (r.faulted) {</td></tr>
+<tr class="cl" data-l="73"><td class="ln">73</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> r;</td></tr>
+<tr class="cl" data-l="74"><td class="ln">74</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="75"><td class="ln">75</td><td class="mk"></td><td class="cd">    env.bodies[target.block] = std::move(body);</td></tr>
+<tr class="cl" data-l="76"><td class="ln">76</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> rt_ok(Value::null());</td></tr>
+<tr class="cl" data-l="77"><td class="ln">77</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="78" data-n="2"><td class="ln">78</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-c">// Non-block target: Python&#39;s per-type try swallows the get_body attribute</span></td></tr>
+<tr class="cl band nb-2" data-l="79" data-n="2"><td class="ln">79</td><td class="mk"></td><td class="cd">  <span class="tk-c">// error, leaving the body unset for anything `.body` could reach — no-op.</span></td></tr>
+<tr class="cl band nb-2" data-l="80" data-n="2"><td class="ln">80</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> rt_ok(Value::null());</td></tr>
+<tr class="cl" data-l="81"><td class="ln">81</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="52" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L52–54</span>A null target is a NO-OP, not an error. An unbound optional capture (<code>maybe op X @cap</code>) therefore parses to nothing, and the later <code>.body</code> on it null-propagates through the whole expression. That is how <code>internal.body.amount ?? transfer.body.amount</code> degrades gracefully with no explicit null test in the spec.</div></div>
+<div class="note" data-a="55" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L55–68</span>List targets parse element-wise and SKIP null gaps rather than erroring — but note the fault from <code>soft_parse</code> (unregistered type) short-circuits the whole loop. So a typo&#39;d type name fails on the first element, not after silently parsing the rest.</div></div>
+<div class="note" data-a="78" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L78–80</span>The most Python-shaped line in the file: a non-Block target is a no-op because Python&#39;s per-type <code>try</code> swallows the AttributeError from calling <code>get_body()</code> on something that has no such method. Reproducing the SHAPE of Python&#39;s exception handling, not its intent — a recurring theme in this port.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BuildRuntime.cpp<span class="plines">:104–133</span></span><span class="ex-title">rt_access_build — `.body` is the only field the build context adds</span><span class="lang">cpp</span><span class="sha" title="span hash at render">670aeedc</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="104"><td class="ln">104</td><td class="mk"></td><td class="cd">EvalResult rt_access_build(<span class="tk-k">const</span> BuildEnv &amp;env, <span class="tk-k">const</span> Value &amp;obj, <span class="tk-k">const</span> std::string &amp;field) {</td></tr>
+<tr class="cl band nb-0" data-l="105" data-n="0"><td class="ln">105</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">if</span> (field == <span class="tk-s">&quot;body&quot;</span>) {</td></tr>
+<tr class="cl band nb-0" data-l="106" data-n="0"><td class="ln">106</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (obj.t == VType::Block) {</td></tr>
+<tr class="cl band nb-0" data-l="107" data-n="0"><td class="ln">107</td><td class="mk"></td><td class="cd">      <span class="tk-k">auto</span> it = env.bodies.find(obj.block);</td></tr>
+<tr class="cl band nb-0" data-l="108" data-n="0"><td class="ln">108</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (it == env.bodies.end()) {</td></tr>
+<tr class="cl band nb-0" data-l="109" data-n="0"><td class="ln">109</td><td class="mk"></td><td class="cd">        <span class="tk-k">return</span> rt_fault(<span class="tk-s">&quot;`.body` accessed on a capture that was not `parse`d&quot;</span>);</td></tr>
+<tr class="cl band nb-0" data-l="110" data-n="0"><td class="ln">110</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-0" data-l="111" data-n="0"><td class="ln">111</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> rt_ok(it-&gt;second);</td></tr>
+<tr class="cl" data-l="112"><td class="ln">112</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="113" data-n="1"><td class="ln">113</td><td class="mk"><span class="chip">2</span></td><td class="cd">    <span class="tk-k">if</span> (obj.t == VType::List) {</td></tr>
+<tr class="cl band nb-1" data-l="114" data-n="1"><td class="ln">114</td><td class="mk"></td><td class="cd">      std::vector&lt;Value&gt; out;</td></tr>
+<tr class="cl band nb-1" data-l="115" data-n="1"><td class="ln">115</td><td class="mk"></td><td class="cd">      <span class="tk-k">for</span> (<span class="tk-k">const</span> Value &amp;el : *obj.items) {</td></tr>
+<tr class="cl band nb-1" data-l="116" data-n="1"><td class="ln">116</td><td class="mk"></td><td class="cd">        <span class="tk-k">if</span> (el.is_null()) {</td></tr>
+<tr class="cl band nb-1" data-l="117" data-n="1"><td class="ln">117</td><td class="mk"></td><td class="cd">          out.push_back(Value::null());</td></tr>
+<tr class="cl band nb-1" data-l="118" data-n="1"><td class="ln">118</td><td class="mk"></td><td class="cd">          <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl band nb-1" data-l="119" data-n="1"><td class="ln">119</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl band nb-1" data-l="120" data-n="1"><td class="ln">120</td><td class="mk"></td><td class="cd">        <span class="tk-k">if</span> (el.t != VType::Block) {</td></tr>
+<tr class="cl band nb-1" data-l="121" data-n="1"><td class="ln">121</td><td class="mk"></td><td class="cd">          <span class="tk-k">return</span> rt_fault(<span class="tk-s">&quot;`.body` accessed on a list capture that was not `parse`d&quot;</span>);</td></tr>
+<tr class="cl band nb-1" data-l="122" data-n="1"><td class="ln">122</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl band nb-1" data-l="123" data-n="1"><td class="ln">123</td><td class="mk"></td><td class="cd">        <span class="tk-k">auto</span> it = env.bodies.find(el.block);</td></tr>
+<tr class="cl band nb-1" data-l="124" data-n="1"><td class="ln">124</td><td class="mk"></td><td class="cd">        <span class="tk-k">if</span> (it == env.bodies.end()) {</td></tr>
+<tr class="cl band nb-1" data-l="125" data-n="1"><td class="ln">125</td><td class="mk"></td><td class="cd">          <span class="tk-k">return</span> rt_fault(<span class="tk-s">&quot;`.body` accessed on a list capture that was not `parse`d&quot;</span>);</td></tr>
+<tr class="cl band nb-1" data-l="126" data-n="1"><td class="ln">126</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl band nb-1" data-l="127" data-n="1"><td class="ln">127</td><td class="mk"></td><td class="cd">        out.push_back(it-&gt;second);</td></tr>
+<tr class="cl band nb-1" data-l="128" data-n="1"><td class="ln">128</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl" data-l="129"><td class="ln">129</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> rt_ok(Value::make_list(std::move(out)));</td></tr>
+<tr class="cl" data-l="130"><td class="ln">130</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="131"><td class="ln">131</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="132" data-n="2"><td class="ln">132</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">return</span> rt_access(obj, field);</td></tr>
+<tr class="cl" data-l="133"><td class="ln">133</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="105" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L105–111</span>&quot;Not present in <code>bodies</code>&quot; and &quot;present but Null&quot; are DIFFERENT: the first faults (you forgot to <code>parse</code> this capture), the second returns Null (you parsed it and every alternative failed). Getting these backwards would turn every soft-parse miss into a rejection, which is precisely the bug this distinction prevents.</div></div>
+<div class="note" data-a="113" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L113–128</span><code>.body</code> on a LIST capture maps element-wise and preserves Null gaps as Nulls — so <code>map(xs.body as b =&gt; …)</code> sees the same arity as the capture. But an unparsed non-null element still faults, per element: partial parsing of a list capture is not a supported state.</div></div>
+<div class="note" data-a="132" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L132</span>Everything that is not <code>.body</code> falls through to the shared <code>rt_access</code> — the same function a <code>where</code> clause uses in <a class="xl" href="matcher-runtime.html">matcher-runtime</a>. Build context adds exactly ONE field to the language; the rest of attribute access (message envelope, <code>.data</code>, <code>.failed</code>, Amount <code>.value</code>) is universal.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BuildRuntime.cpp<span class="plines">:83–102</span></span><span class="ex-title">rt_parse_expr — the deliberate inversion</span><span class="lang">cpp</span><span class="sha" title="span hash at render">92daef02</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="83" data-n="0"><td class="ln">83</td><td class="mk"><span class="chip">1</span></td><td class="cd">EvalResult rt_parse_expr(BuildEnv &amp;env, <span class="tk-k">const</span> Value &amp;target,</td></tr>
+<tr class="cl band nb-0" data-l="84" data-n="0"><td class="ln">84</td><td class="mk"></td><td class="cd">                         <span class="tk-k">const</span> std::vector&lt;std::string&gt; &amp;types) {</td></tr>
+<tr class="cl band nb-1" data-l="85" data-n="1"><td class="ln">85</td><td class="mk"><span class="chip">2</span></td><td class="cd">  (<span class="tk-k">void</span>)env;  <span class="tk-c">// stateless: no env.bodies store, unlike the statement form</span></td></tr>
+<tr class="cl band nb-1" data-l="86" data-n="1"><td class="ln">86</td><td class="mk"></td><td class="cd">  <span class="tk-c">// expr.py _eval_parse: a null target or a non-block target (no get_body)</span></td></tr>
+<tr class="cl band nb-1" data-l="87" data-n="1"><td class="ln">87</td><td class="mk"></td><td class="cd">  <span class="tk-c">// faults — the deliberate inversion of rt_parse&#39;s soft no-op on those.</span></td></tr>
+<tr class="cl band nb-1" data-l="88" data-n="1"><td class="ln">88</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (target.t != VType::Block || target.block == <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="89" data-n="1"><td class="ln">89</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> rt_fault(<span class="tk-s">&quot;parse expression: target is null or not a block&quot;</span>);</td></tr>
+<tr class="cl band nb-1" data-l="90" data-n="1"><td class="ln">90</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="91"><td class="ln">91</td><td class="mk"></td><td class="cd">  Value body;</td></tr>
+<tr class="cl" data-l="92"><td class="ln">92</td><td class="mk"></td><td class="cd">  EvalResult r = soft_parse(target.block, types, body);</td></tr>
+<tr class="cl" data-l="93"><td class="ln">93</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (r.faulted) {</td></tr>
+<tr class="cl" data-l="94"><td class="ln">94</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> r;  <span class="tk-c">// unregistered type name</span></td></tr>
+<tr class="cl" data-l="95"><td class="ln">95</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="96" data-n="2"><td class="ln">96</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">if</span> (body.is_null()) {</td></tr>
+<tr class="cl band nb-2" data-l="97" data-n="2"><td class="ln">97</td><td class="mk"></td><td class="cd">    <span class="tk-c">// Every alternative failed to parse the body: total failure -&gt; fault</span></td></tr>
+<tr class="cl band nb-2" data-l="98" data-n="2"><td class="ln">98</td><td class="mk"></td><td class="cd">    <span class="tk-c">// (build reject), NOT the statement form&#39;s soft-null.</span></td></tr>
+<tr class="cl band nb-2" data-l="99" data-n="2"><td class="ln">99</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> rt_fault(<span class="tk-s">&quot;parse expression: no message type parsed the body&quot;</span>);</td></tr>
+<tr class="cl band nb-2" data-l="100" data-n="2"><td class="ln">100</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="101"><td class="ln">101</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> rt_ok(std::move(body));</td></tr>
+<tr class="cl" data-l="102"><td class="ln">102</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="83" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L83–84</span>Coverage honesty: today&#39;s production artifact uses ZERO parse expressions — every <code>parse</code> in <code>specs/</code> is the statement form. The three call sites of this function all live in the generated <code>build_vectors</code> table, so this path is exercised only by the <code>mch_build_vectors</code> ctest (<a class="xl" href="gates.html">gates</a>).</div></div>
+<div class="note" data-a="85" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L85–90</span>IR v1.1 (the W7 minify wave) added <code>parse</code> as an EXPRESSION, and it is soft-parse&#39;s mirror image on every axis: no <code>env.bodies</code> write (stateless), and a null-or-non-block target FAULTS where the statement form no-ops. <code>env</code> is taken only so all build-mode <code>rt_*</code> leaves share one signature.</div></div>
+<div class="note" data-a="96" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L96–100</span>The whole point: total parse failure is a FAULT here, i.e. a build rejection, not a silent Null. That makes the expression form safe to use with an ABI-path parser without an op guard — the C++ error and the Python garbage-object both end up rejecting… but only if the Python twin also faults, which is why this form is still gated behind the same review rule.</div></div></div>
+</div>
+</div>
+<h2 id="expressions-one-runtime-two-callers">Expressions: one runtime, two callers</h2>
+<section><p>Every operation a build expression performs — arithmetic, comparison, null propagation, attribute access, builtins, comprehensions — has exactly one implementation, in <code>ExprRuntime</code>. The tree-walking interpreter calls it recursively; the generated code calls the same functions in straight line. There is no second semantics to keep in sync, which is why the conformance-vector gates over the interpreter are evidence about the production path too.</p>
+<p>Two builtins deserve individual attention because their behaviour is not what you would guess from the name.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ExprRuntime.h<span class="plines">:1–19</span></span><span class="ex-title">The contract at the top of ExprRuntime.h</span><span class="lang">cpp</span><span class="sha" title="span hash at render">989c105f</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="1"><td class="ln">1</td><td class="mk"></td><td class="cd"><span class="tk-c">// Shared expression-runtime semantics for the MCH expression VM.</span></td></tr>
+<tr class="cl" data-l="2"><td class="ln">2</td><td class="mk"></td><td class="cd"><span class="tk-c">//</span></td></tr>
+<tr class="cl" data-l="3"><td class="ln">3</td><td class="mk"></td><td class="cd"><span class="tk-c">// This is the SINGLE implementation of every leaf operation an MCH expression</span></td></tr>
+<tr class="cl" data-l="4"><td class="ln">4</td><td class="mk"></td><td class="cd"><span class="tk-c">// performs — builtins, arithmetic / comparison / negation, null propagation,</span></td></tr>
+<tr class="cl band nb-0" data-l="5" data-n="0"><td class="ln">5</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// truthiness, attribute access, name resolution, lookup nodes. Both consumers</span></td></tr>
+<tr class="cl band nb-0" data-l="6" data-n="0"><td class="ln">6</td><td class="mk"></td><td class="cd"><span class="tk-c">// share it, so a codegen bug can never be masked by a subtly different runtime:</span></td></tr>
+<tr class="cl band nb-0" data-l="7" data-n="0"><td class="ln">7</td><td class="mk"></td><td class="cd"><span class="tk-c">//   - the tree-walking interpreter (ExprEval) — reference / fallback path;</span></td></tr>
+<tr class="cl band nb-0" data-l="8" data-n="0"><td class="ln">8</td><td class="mk"></td><td class="cd"><span class="tk-c">//   - the build-time C++ code generated from IR expressions (indexer frontend</span></td></tr>
+<tr class="cl band nb-0" data-l="9" data-n="0"><td class="ln">9</td><td class="mk"></td><td class="cd"><span class="tk-c">//     module mch/cpp_expr_emit.py) — production path.</span></td></tr>
+<tr class="cl" data-l="10"><td class="ln">10</td><td class="mk"></td><td class="cd"><span class="tk-c">//</span></td></tr>
+<tr class="cl band nb-1" data-l="11" data-n="1"><td class="ln">11</td><td class="mk"><span class="chip">2</span></td><td class="cd"><span class="tk-c">// Fault model (unchanged from stage 4a): a fault is a DISTINCT OUTCOME, never a</span></td></tr>
+<tr class="cl band nb-1" data-l="12" data-n="1"><td class="ln">12</td><td class="mk"></td><td class="cd"><span class="tk-c">// thrown exception. Every operation returns an EvalResult{faulted, value}. The</span></td></tr>
+<tr class="cl band nb-1" data-l="13" data-n="1"><td class="ln">13</td><td class="mk"></td><td class="cd"><span class="tk-c">// generated code threads these with straight-line early returns</span></td></tr>
+<tr class="cl band nb-1" data-l="14" data-n="1"><td class="ln">14</td><td class="mk"></td><td class="cd"><span class="tk-c">// (`if (r.faulted) return r;`); the interpreter does the same recursively.</span></td></tr>
+<tr class="cl band nb-2" data-l="15" data-n="2"><td class="ln">15</td><td class="mk"><span class="chip">3</span></td><td class="cd"><span class="tk-c">// Null propagation is baked into each op exactly as the Python reference does it</span></td></tr>
+<tr class="cl band nb-2" data-l="16" data-n="2"><td class="ln">16</td><td class="mk"></td><td class="cd"><span class="tk-c">// (arith null-&gt;null, ordering null-&gt;false, `==` structural null handling,</span></td></tr>
+<tr class="cl band nb-2" data-l="17" data-n="2"><td class="ln">17</td><td class="mk"></td><td class="cd"><span class="tk-c">// builtins null-strict), so call sites never need to special-case null except</span></td></tr>
+<tr class="cl band nb-2" data-l="18" data-n="2"><td class="ln">18</td><td class="mk"></td><td class="cd"><span class="tk-c">// for the lazy operators (`and`/`or`/`??`/ternary), which are control flow and</span></td></tr>
+<tr class="cl band nb-2" data-l="19" data-n="2"><td class="ln">19</td><td class="mk"></td><td class="cd"><span class="tk-c">// stay at the call site.</span></td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="5" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L5–9</span>&quot;A codegen bug can never be masked by a subtly different runtime&quot; is the actual design argument. The generated code is allowed to be wrong about STRUCTURE (which leaf, in what order); it cannot be wrong about SEMANTICS, because it has no semantics of its own.</div></div>
+<div class="note" data-a="11" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L11–14</span>A fault is a value, not a <code>throw</code>. This is what lets the generated code be pure straight-line C++ with <code>if (r.faulted) return r;</code> and no unwinding — and it is why an unexpected C++ exception escaping a host fn is a categorically different event (it reaches the trace-level boundary in ClassifyCore, not the build rejection path).</div></div>
+<div class="note" data-a="15" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L15–19</span>Null propagation is baked into each op, so call sites never null-check — EXCEPT the lazy operators (<code>and</code>, <code>or</code>, <code>??</code>, ternary), which are control flow and stay inlined in the generated code. That is why you see <code>if (!rt_is_null(v20)) { … } else { … }</code> in the generated <code>??</code> rather than a runtime call.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ExprRuntime.cpp<span class="plines">:488–500</span></span><span class="ex-title">b64 — two inputs, and only one of them round-trips textually</span><span class="lang">cpp</span><span class="sha" title="span hash at render">233f7034</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="488"><td class="ln">488</td><td class="mk"></td><td class="cd">EvalResult rt_builtin_b64(<span class="tk-k">const</span> Value &amp;x) {</td></tr>
+<tr class="cl band nb-0" data-l="489" data-n="0"><td class="ln">489</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">if</span> (rt_is_null(x)) <span class="tk-k">return</span> rt_ok(Value::null());</td></tr>
+<tr class="cl band nb-0" data-l="490" data-n="0"><td class="ln">490</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (x.t == VType::Bytes) <span class="tk-k">return</span> rt_ok(Value::make_str(td::base64_encode(x.str)));</td></tr>
+<tr class="cl band nb-1" data-l="491" data-n="1"><td class="ln">491</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">if</span> (x.t == VType::Cell) {</td></tr>
+<tr class="cl band nb-1" data-l="492" data-n="1"><td class="ln">492</td><td class="mk"></td><td class="cd">    <span class="tk-c">// §12: native td BOC bytes. The b64 STRING differs from pytoniq&#39;s on</span></td></tr>
+<tr class="cl band nb-1" data-l="493" data-n="1"><td class="ln">493</td><td class="mk"></td><td class="cd">    <span class="tk-c">// multi-ref trees, but every consumer decodes it back to the same cell</span></td></tr>
+<tr class="cl band nb-1" data-l="494" data-n="1"><td class="ln">494</td><td class="mk"></td><td class="cd">    <span class="tk-c">// (root hash equal), and the dumps render such fields by cellhash.</span></td></tr>
+<tr class="cl band nb-1" data-l="495" data-n="1"><td class="ln">495</td><td class="mk"></td><td class="cd">    <span class="tk-k">auto</span> r = td_boc_serialize(x.cell);</td></tr>
+<tr class="cl band nb-1" data-l="496" data-n="1"><td class="ln">496</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (r.is_error()) <span class="tk-k">return</span> rt_fault(<span class="tk-s">&quot;b64: cell serialization failed&quot;</span>);</td></tr>
+<tr class="cl band nb-1" data-l="497" data-n="1"><td class="ln">497</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> rt_ok(Value::make_str(td::base64_encode(r.move_as_ok())));</td></tr>
+<tr class="cl" data-l="498"><td class="ln">498</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="499" data-n="2"><td class="ln">499</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">return</span> rt_fault(<span class="tk-s">&quot;b64: expects bytes or a cell, got &quot;</span> + x.describe());</td></tr>
+<tr class="cl" data-l="500"><td class="ln">500</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="489" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L489–490</span>Null-strict, like every 1+-arg builtin: <code>b64(null)</code> is <code>null</code>, not an error and not <code>&quot;&quot;</code>. Bytes take the obvious path — and that is the case where the b64 STRING is stable enough to compare against a literal, as <code>dns.mch</code> does.</div></div>
+<div class="note" data-a="491" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L491–497</span>The trap. A Cell is serialised with td&#39;s BOC writer, whose byte output differs from pytoniq&#39;s on multi-ref trees — so the b64 text of a <code>forward_payload</code> is NOT comparable across engines. What IS equal is the cell it decodes back to. The layer&#39;s answer is at the render boundary, not here: <code>render_value</code> in BuildDriver.cpp routes known BOC-carrying field names through <code>boc_field_cellhash</code>, so the dumps compare root hashes instead of base64. See <a class="xl" href="value.html">value</a> for the field-name set and the hashing rule.</div></div>
+<div class="note" data-a="499" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L499</span>Anything else faults — notably a Str. <code>b64(some_string)</code> is not a re-encode, it is a rejection; the builtin is a serialiser for the two byte-ish types only.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ExprRuntime.cpp<span class="plines">:575–610</span></span><span class="ex-title">map / any / all — the comprehension cores</span><span class="lang">cpp</span><span class="sha" title="span hash at render">b836b49c</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="575"><td class="ln">575</td><td class="mk"></td><td class="cd">EvalResult rt_mapc(<span class="tk-k">const</span> Value &amp;xs, <span class="tk-k">const</span> ElementFn &amp;body) {</td></tr>
+<tr class="cl band nb-0" data-l="576" data-n="0"><td class="ln">576</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">if</span> (rt_is_null(xs)) <span class="tk-k">return</span> rt_ok(Value::null());</td></tr>
+<tr class="cl band nb-0" data-l="577" data-n="0"><td class="ln">577</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (xs.t != VType::List) <span class="tk-k">return</span> rt_fault(<span class="tk-s">&quot;map comprehension expects a list, got &quot;</span> + xs.describe());</td></tr>
+<tr class="cl" data-l="578"><td class="ln">578</td><td class="mk"></td><td class="cd">  std::vector&lt;Value&gt; out;</td></tr>
+<tr class="cl" data-l="579"><td class="ln">579</td><td class="mk"></td><td class="cd">  out.reserve(xs.items-&gt;size());</td></tr>
+<tr class="cl" data-l="580"><td class="ln">580</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> &amp;el : *xs.items) {</td></tr>
+<tr class="cl band nb-1" data-l="581" data-n="1"><td class="ln">581</td><td class="mk"><span class="chip">2</span></td><td class="cd">    EvalResult r = body(el);</td></tr>
+<tr class="cl band nb-1" data-l="582" data-n="1"><td class="ln">582</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (r.faulted) <span class="tk-k">return</span> r;</td></tr>
+<tr class="cl band nb-1" data-l="583" data-n="1"><td class="ln">583</td><td class="mk"></td><td class="cd">    out.push_back(std::move(r.value));</td></tr>
+<tr class="cl" data-l="584"><td class="ln">584</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="585"><td class="ln">585</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> rt_ok(Value::make_list(std::move(out)));</td></tr>
+<tr class="cl" data-l="586"><td class="ln">586</td><td class="mk"></td><td class="cd">}</td></tr>
+<tr class="cl" data-l="587"><td class="ln">587</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="588"><td class="ln">588</td><td class="mk"></td><td class="cd">EvalResult rt_quant(<span class="tk-k">bool</span> is_all, <span class="tk-k">const</span> Value &amp;xs, <span class="tk-k">const</span> ElementFn &amp;body) {</td></tr>
+<tr class="cl" data-l="589"><td class="ln">589</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (rt_is_null(xs)) <span class="tk-k">return</span> rt_ok(Value::null());</td></tr>
+<tr class="cl" data-l="590"><td class="ln">590</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (xs.t != VType::List) {</td></tr>
+<tr class="cl" data-l="591"><td class="ln">591</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> rt_fault(std::string(is_all ? <span class="tk-s">&quot;all&quot;</span> : <span class="tk-s">&quot;any&quot;</span>) + <span class="tk-s">&quot; comprehension expects a list, got &quot;</span> +</td></tr>
+<tr class="cl" data-l="592"><td class="ln">592</td><td class="mk"></td><td class="cd">                    xs.describe());</td></tr>
+<tr class="cl" data-l="593"><td class="ln">593</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="594" data-n="2"><td class="ln">594</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">bool</span> result = is_all;  <span class="tk-c">// all of empty = true, any of empty = false</span></td></tr>
+<tr class="cl" data-l="595"><td class="ln">595</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> &amp;el : *xs.items) {</td></tr>
+<tr class="cl" data-l="596"><td class="ln">596</td><td class="mk"></td><td class="cd">    EvalResult r = body(el);</td></tr>
+<tr class="cl" data-l="597"><td class="ln">597</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (r.faulted) <span class="tk-k">return</span> r;</td></tr>
+<tr class="cl band nb-3" data-l="598" data-n="3"><td class="ln">598</td><td class="mk"><span class="chip">4</span></td><td class="cd">    EvalResult b = rt_require_bool(r.value);</td></tr>
+<tr class="cl band nb-3" data-l="599" data-n="3"><td class="ln">599</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (b.faulted) <span class="tk-k">return</span> b;</td></tr>
+<tr class="cl" data-l="600"><td class="ln">600</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (!is_all &amp;&amp; b.value.boolean) {</td></tr>
+<tr class="cl" data-l="601"><td class="ln">601</td><td class="mk"></td><td class="cd">      result = <span class="tk-k">true</span>;</td></tr>
+<tr class="cl" data-l="602"><td class="ln">602</td><td class="mk"></td><td class="cd">      <span class="tk-k">break</span>;</td></tr>
+<tr class="cl" data-l="603"><td class="ln">603</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="604"><td class="ln">604</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (is_all &amp;&amp; !b.value.boolean) {</td></tr>
+<tr class="cl" data-l="605"><td class="ln">605</td><td class="mk"></td><td class="cd">      result = <span class="tk-k">false</span>;</td></tr>
+<tr class="cl" data-l="606"><td class="ln">606</td><td class="mk"></td><td class="cd">      <span class="tk-k">break</span>;</td></tr>
+<tr class="cl" data-l="607"><td class="ln">607</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="608"><td class="ln">608</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="609"><td class="ln">609</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> rt_ok(Value::make_bool(result));</td></tr>
+<tr class="cl" data-l="610"><td class="ln">610</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="576" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L576–577</span>Null xs is null (propagation), non-list xs FAULTS. That asymmetry is deliberate: an absent optional capture should flow through, but mapping over a scalar is a spec bug. Same rule in both quantifiers.</div></div>
+<div class="note" data-a="581" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L581–583</span>The body is a <code>std::function</code> called once per element — the ONE place in the runtime that takes a callable. Generated code emits it as a local lambda capturing by reference (<code>auto body17 = [&amp;](const Value &amp;el17) -&gt; EvalResult { … };</code>), so there is no allocation per element, only the one type-erasure at the call.</div></div>
+<div class="note" data-a="594" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L594</span><code>all</code> of empty is true, <code>any</code> of empty is false — Python&#39;s <code>all()</code>/<code>any()</code>, which is what the twins compute. Easy to get wrong when you fold the two into one function, and the corpus does contain empty lists.</div></div>
+<div class="note" data-a="598" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L598–599</span>A quantifier body must return a Bool: <code>any(xs as x =&gt; x.amount)</code> faults rather than testing truthiness. Note the fault happens on the FIRST element, so it short-circuits before evaluating the rest — a fault and a <code>true</code> result are both early exits.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">indexer/indexer/events/mch/specs/jvault.mch<span class="plines">:120–144</span></span><span class="ex-title">Both halves in one matcher: a comprehension and a cross-block capture read</span><span class="lang">text</span><span class="sha" title="span hash at render">ba3802f8</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="120"><td class="ln">120</td><td class="mk"></td><td class="cd">matcher jvault_claim {</td></tr>
+<tr class="cl" data-l="121"><td class="ln">121</td><td class="mk"></td><td class="cd">    produces jvault_claim</td></tr>
+<tr class="cl" data-l="122"><td class="ln">122</td><td class="mk"></td><td class="cd">    entry    @claim</td></tr>
+<tr class="cl" data-l="123"><td class="ln">123</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="124"><td class="ln">124</td><td class="mk"></td><td class="cd">    op JVaultClaim @claim</td></tr>
+<tr class="cl" data-l="125"><td class="ln">125</td><td class="mk"></td><td class="cd">      -&gt; op JVaultSendClaimedRewards @send</td></tr>
+<tr class="cl band nb-0" data-l="126" data-n="0"><td class="ln">126</td><td class="mk"><span class="chip">1</span></td><td class="cd">           -&gt; { btype jetton_transfer @withdraw ; op JVaultUpdateRewards @update }</td></tr>
+<tr class="cl" data-l="127"><td class="ln">127</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="128"><td class="ln">128</td><td class="mk"></td><td class="cd">    # Legacy build_jvault_claim_core. claimed_jettons maps the claim body&#<span class="tk-n">39</span>;s</td></tr>
+<tr class="cl" data-l="129"><td class="ln">129</td><td class="mk"></td><td class="cd">    # jetton-wallet list through the AccountId constructor — now the G-LC</td></tr>
+<tr class="cl" data-l="130"><td class="ln">130</td><td class="mk"></td><td class="cd">    # comprehension `map(xs as e =&gt; account(e))` (§<span class="tk-n">16</span>.<span class="tk-n">1</span> W6), the exact</td></tr>
+<tr class="cl" data-l="131"><td class="ln">131</td><td class="mk"></td><td class="cd">    # element-wise constructor map that used to live in the `jvault_account_list`</td></tr>
+<tr class="cl" data-l="132"><td class="ln">132</td><td class="mk"></td><td class="cd">    # host fn (which existed ONLY because G-LC was deferred). claimed_amounts is</td></tr>
+<tr class="cl" data-l="133"><td class="ln">133</td><td class="mk"></td><td class="cd">    # the single withdraw leg&#<span class="tk-n">39</span>;s outer transfer amount, carried on the composed</td></tr>
+<tr class="cl" data-l="134"><td class="ln">134</td><td class="mk"></td><td class="cd">    # jetton_transfer as `data.desired_amount` (an Amount), unwrapped via F2</td></tr>
+<tr class="cl" data-l="135"><td class="ln">135</td><td class="mk"></td><td class="cd">    # `.value` — the same scalar legacy reads as</td></tr>
+<tr class="cl" data-l="136"><td class="ln">136</td><td class="mk"></td><td class="cd">    # withdrawal.jetton_transfer_message.amount — as a one-element list literal.</td></tr>
+<tr class="cl" data-l="137"><td class="ln">137</td><td class="mk"></td><td class="cd">    parse claim as JVaultClaim</td></tr>
+<tr class="cl" data-l="138"><td class="ln">138</td><td class="mk"></td><td class="cd">    out {</td></tr>
+<tr class="cl" data-l="139"><td class="ln">139</td><td class="mk"></td><td class="cd">        sender:          account(claim.msg.source)</td></tr>
+<tr class="cl" data-l="140"><td class="ln">140</td><td class="mk"></td><td class="cd">        stake_wallet:    account(claim.msg.destination)</td></tr>
+<tr class="cl" data-l="141"><td class="ln">141</td><td class="mk"></td><td class="cd">        staking_pool:    account(send.msg.destination)</td></tr>
+<tr class="cl band nb-1" data-l="142" data-n="1"><td class="ln">142</td><td class="mk"><span class="chip">2</span></td><td class="cd">        claimed_jettons: map(claim.body.jettons_to_claim as jw =&gt; account(jw))</td></tr>
+<tr class="cl band nb-2" data-l="143" data-n="2"><td class="ln">143</td><td class="mk"><span class="chip">3</span></td><td class="cd">        claimed_amounts: [ withdraw.data.desired_amount.value ]</td></tr>
+<tr class="cl" data-l="144"><td class="ln">144</td><td class="mk"></td><td class="cd">    }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="126" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L126</span><code>btype jetton_transfer @withdraw</code> captures a block PRODUCED by an earlier matcher — the composition described in <a class="xl" href="block-tree.html">block-tree</a>. Its <code>.data</code> is that matcher&#39;s own <code>out {}</code> dict, so this build program is reading another build program&#39;s output.</div></div>
+<div class="note" data-a="142" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L142</span><code>map(xs as e =&gt; account(e))</code> replaced a host fn (<code>jvault_account_list</code>) that existed ONLY because the comprehension form did not. Worth knowing as a pattern: several remaining host fns are compensating for missing language, not for genuinely imperative logic.</div></div>
+<div class="note" data-a="143" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L143</span>Three things at once: a list literal, a read of a composed block&#39;s <code>.data</code>, and F2 <code>.value</code> unwrapping an Amount to a raw Int. The next section&#39;s captured run shows this exact expression&#39;s output landing in the dump next to the <code>desired_amount</code> it was read from.</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ &amp; &#39;S:/Dev/ton-indexer-clear/ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe&#39; --classify -I &#39;S:/Dev/ton-indexer-clear/ton-index-worker/ton-mch-engine/ir/mch_ir.json&#39; -T &#39;tests\traces\Lsy5I_gotIvt0EYwoPuqd-1s-IyYNR3Sc0XmM_lWKa8=.lz4&#39;</div><pre class="run-out">=== Lsy5I_gotIvt0EYwoPuqd-1s-IyYNR3Sc0XmM_lWKa8=.lz4
+ACTION jetton_transfer anchor=call_contract#0f8a7ea5@48756833000002 btype=jetton_transfer failed=0 broken=0 data={amount=amount:7919563,asset=asset:0:BC16864C941719859E8FAFDB071B21F3905BFDCB60795FDB4DEB546FB9C2D1CC,…,desired_amount=amount:7919563,…} consumed=[…] auto=[]
+ACTION jvault_claim anchor=call_contract#78d9f109@48756818000002 btype=jvault_claim failed=0 broken=0 data={claimed_amounts=[7919563],claimed_jettons=[0:A048BDFAAC1F51AEAE2C1100CF5F1C1D1D316AD4E013A4030F7E2DF2A4ADE68D],sender=0:D94FCAE73C2E76C960834E0F5E739B0AD28D42EB9EE1C6A1BD5E0E7FE8257CCF,stake_wallet=0:32F3F3C9881BF73850082C9F5F4D5B654F4062E71EDD93D868BC59447F9AA2AA,staking_pool=0:AA5C2D9CB469BECB874312C79ABC9DA6C2E64C92C108FE31A2F26B00D8134CD7} consumed=[…] auto=[]</pre><div class="run-note">Two ACTION lines from one trace, long fields elided. Read them together: the first line is the jetton_transfer matcher&#39;s <code>out {}</code> (its <code>desired_amount=amount:7919563</code> is an Amount). The second is jvault_claim, whose <code>claimed_amounts=[7919563]</code> is that same value reached as <code>withdraw.data.desired_amount.value</code> — capture → composed block&#39;s data → Amount unwrap → list literal → dump. <code>claimed_jettons</code> is the <code>map(... as jw =&gt; account(jw))</code> comprehension: one element, rendered as a raw address because <code>account()</code> produced an Account Value.</div></div>
+<h2 id="lookups-why-the-build-fn-runs-more-than-once">Lookups: why the build fn runs more than once</h2>
+<section><p><code>lookup kind(args)</code> reaches outside the trace — jetton wallet interfaces, NFT items, pool records. In Python that is an inline async call. In C++ the fetch has to be batched (production issues one actor round per trace, <a class="xl" href="prod-path.html">prod-path</a>), so the build fn is executed as a DRY pass against a table that records misses, the misses are fetched, and the fn is re-run against a filled table. The build program being stateless and side-effect-free is exactly what makes running it twice legal.</p>
+<p>One subtlety forces a loop rather than a single dry pass: a lookup whose ARGUMENT comes from another lookup. On the first pass the inner lookup returns Null, the null-strict rule short-circuits the outer call, and the outer key never forms. So the collect pass is iterated to a fixpoint.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BuildDriver.cpp<span class="plines">:224–259</span></span><span class="ex-title">run_two_phase — collect to fixpoint, then resume</span><span class="lang">cpp</span><span class="sha" title="span hash at render">61dd11ec</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="224"><td class="ln">224</td><td class="mk"></td><td class="cd">  <span class="tk-c">// A2: a matcher with no lookup nodes and no host fns can never miss in the dry</span></td></tr>
+<tr class="cl" data-l="225"><td class="ln">225</td><td class="mk"></td><td class="cd">  <span class="tk-c">// pass, so run the final pass directly against an empty filled table. Same</span></td></tr>
+<tr class="cl" data-l="226"><td class="ln">226</td><td class="mk"></td><td class="cd">  <span class="tk-c">// result as the loop below (which would converge on round 0 with no fetches).</span></td></tr>
+<tr class="cl band nb-0" data-l="227" data-n="0"><td class="ln">227</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">if</span> (!needs_lookups) {</td></tr>
+<tr class="cl band nb-0" data-l="228" data-n="0"><td class="ln">228</td><td class="mk"></td><td class="cd">    FilledLookupTable filled(kinds, {});</td></tr>
+<tr class="cl band nb-0" data-l="229" data-n="0"><td class="ln">229</td><td class="mk"></td><td class="cd">    BuildEnv env = fresh_env(&amp;filled);</td></tr>
+<tr class="cl band nb-0" data-l="230" data-n="0"><td class="ln">230</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> fn(env);</td></tr>
+<tr class="cl band nb-0" data-l="231" data-n="0"><td class="ln">231</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="232"><td class="ln">232</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="233"><td class="ln">233</td><td class="mk"></td><td class="cd">  std::map&lt;std::string, Value&gt; fetched;</td></tr>
+<tr class="cl" data-l="234"><td class="ln">234</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> converged = <span class="tk-k">false</span>;</td></tr>
+<tr class="cl band nb-1" data-l="235" data-n="1"><td class="ln">235</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">int</span> round = <span class="tk-n">0</span>; round &lt; <span class="tk-n">8</span>; round++) {</td></tr>
+<tr class="cl band nb-1" data-l="236" data-n="1"><td class="ln">236</td><td class="mk"></td><td class="cd">    CollectingLookupTable coll(kinds, fetched);</td></tr>
+<tr class="cl band nb-1" data-l="237" data-n="1"><td class="ln">237</td><td class="mk"></td><td class="cd">    BuildEnv env = fresh_env(&amp;coll);</td></tr>
+<tr class="cl band nb-1" data-l="238" data-n="1"><td class="ln">238</td><td class="mk"></td><td class="cd">    fn(env);  <span class="tk-c">// dry pass, outcome discarded</span></td></tr>
+<tr class="cl band nb-1" data-l="239" data-n="1"><td class="ln">239</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (coll.misses.empty()) {</td></tr>
+<tr class="cl band nb-1" data-l="240" data-n="1"><td class="ln">240</td><td class="mk"></td><td class="cd">      converged = <span class="tk-k">true</span>;</td></tr>
+<tr class="cl band nb-1" data-l="241" data-n="1"><td class="ln">241</td><td class="mk"></td><td class="cd">      <span class="tk-k">break</span>;</td></tr>
+<tr class="cl band nb-1" data-l="242" data-n="1"><td class="ln">242</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="243" data-n="1"><td class="ln">243</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> &amp;[key, ka] : coll.misses) {</td></tr>
+<tr class="cl band nb-1" data-l="244" data-n="1"><td class="ln">244</td><td class="mk"></td><td class="cd">      fetched.emplace(key, src.fetch(ka.first, ka.second));</td></tr>
+<tr class="cl band nb-1" data-l="245" data-n="1"><td class="ln">245</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="246" data-n="1"><td class="ln">246</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="247" data-n="2"><td class="ln">247</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-c">// Python resolves any lookup-arg-of-lookup depth inline, so an unconverged</span></td></tr>
+<tr class="cl band nb-2" data-l="248" data-n="2"><td class="ln">248</td><td class="mk"></td><td class="cd">  <span class="tk-c">// fixpoint here is a genuine divergence, not a benign truncation — do not</span></td></tr>
+<tr class="cl band nb-2" data-l="249" data-n="2"><td class="ln">249</td><td class="mk"></td><td class="cd">  <span class="tk-c">// proceed with a partial table (silent wrongness). Throw to the classify</span></td></tr>
+<tr class="cl band nb-2" data-l="250" data-n="2"><td class="ln">250</td><td class="mk"></td><td class="cd">  <span class="tk-c">// trace boundary (Python&#39;s per-trace fallback). Today&#39;s artifacts have max</span></td></tr>
+<tr class="cl band nb-2" data-l="251" data-n="2"><td class="ln">251</td><td class="mk"></td><td class="cd">  <span class="tk-c">// lookup depth 2 and converge in &lt;=2 rounds, so this never fires.</span></td></tr>
+<tr class="cl band nb-2" data-l="252" data-n="2"><td class="ln">252</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (!converged) {</td></tr>
+<tr class="cl band nb-2" data-l="253" data-n="2"><td class="ln">253</td><td class="mk"></td><td class="cd">    <span class="tk-k">throw</span> std::runtime_error(<span class="tk-s">&quot;two-phase lookup did not converge after 8 rounds&quot;</span>);</td></tr>
+<tr class="cl band nb-2" data-l="254" data-n="2"><td class="ln">254</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="255"><td class="ln">255</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-3" data-l="256" data-n="3"><td class="ln">256</td><td class="mk"><span class="chip">4</span></td><td class="cd">  FilledLookupTable filled(kinds, std::move(fetched));</td></tr>
+<tr class="cl band nb-3" data-l="257" data-n="3"><td class="ln">257</td><td class="mk"></td><td class="cd">  BuildEnv env = fresh_env(&amp;filled);</td></tr>
+<tr class="cl band nb-3" data-l="258" data-n="3"><td class="ln">258</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> fn(env);</td></tr>
+<tr class="cl" data-l="259"><td class="ln">259</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="227" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L227–231</span>The A2 fast path: no lookups and no host fns ⇒ zero possible misses ⇒ run once against an empty filled table. Byte-identical to the loop below by construction, not by measurement.</div></div>
+<div class="note" data-a="235" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L235–246</span>Each round is a full re-execution with a FRESH env — <code>bodies</code> is per-run state, so re-parsing happens every round. That is cheap and, more importantly, keeps the passes independent: a round is not allowed to observe the previous round&#39;s leftovers.</div></div>
+<div class="note" data-a="247" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L247–254</span>The non-convergence branch throws rather than proceeding with a partial table, and the comment says why: Python resolves arbitrary lookup depth inline, so a truncated fixpoint here is silent WRONGNESS, not a benign approximation. Today&#39;s artifacts have max depth 2 and converge in ≤2 rounds, so this is dead code whose value is that it can never become quiet.</div></div>
+<div class="note" data-a="256" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L256–258</span>Only the FINAL pass&#39;s outcome is used. Any rejection or fault produced during a collect round is discarded — which is another reason build programs must be free of side effects: a dry pass that rejected still counted as a real execution.</div></div></div>
+</div>
+</div>
+<h2 id="the-host-seam-preds-fns-shapers">The host seam: preds, fns, shapers</h2>
+<section><p>Some logic genuinely cannot be written declaratively — reconstructing roles from an unordered consumed set, walking a DeDust step chain, scanning for a per-hop event. Those stay as hand-written C++ registered in one of three name→function-pointer maps. The names are the PYTHON registry keys, so a <code>.mch</code> spec compiled by the Python frontend and executed by the C++ engine resolves the same identifier on both sides.</p>
+<p>The three registries differ in when they run: predicates at match time (chapter 5), fns during the build program, shapers AFTER the produced block has merged its consumed set. And they share one consequence: an unregistered name is not a crash but a SKIP — the matcher is excluded from the run and the reason is reported, so the C++ engine can legitimately implement a subset of the artifact while the twins compute the identical subset.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/HostRegistry.h<span class="plines">:32–68</span></span><span class="ex-title">The three signatures and what each one is allowed to do</span><span class="lang">cpp</span><span class="sha" title="span hash at render">0b7488d4</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="32" data-n="0"><td class="ln">32</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// Host `fn` implementations (Python registries.fns): the build-time escape</span></td></tr>
+<tr class="cl band nb-0" data-l="33" data-n="0"><td class="ln">33</td><td class="mk"></td><td class="cd"><span class="tk-c">// hatch. Unlike builtins, ARGUMENTS PASS THROUGH unchanged — a null arg is NOT</span></td></tr>
+<tr class="cl band nb-0" data-l="34" data-n="0"><td class="ln">34</td><td class="mk"></td><td class="cd"><span class="tk-c">// short-circuited (the fn decides). Signature takes the BuildEnv so a fn can</span></td></tr>
+<tr class="cl band nb-1" data-l="35" data-n="1"><td class="ln">35</td><td class="mk"><span class="chip">2</span></td><td class="cd"><span class="tk-c">// reach env.lookups (two-phase) / env.consumed. A thrown/faulted result is a</span></td></tr>
+<tr class="cl band nb-1" data-l="36" data-n="1"><td class="ln">36</td><td class="mk"></td><td class="cd"><span class="tk-c">// clean match rejection (spec §10.7); returning Null likewise rejects when the</span></td></tr>
+<tr class="cl band nb-1" data-l="37" data-n="1"><td class="ln">37</td><td class="mk"></td><td class="cd"><span class="tk-c">// spec `reject when`s the null.</span></td></tr>
+<tr class="cl band nb-1" data-l="38" data-n="1"><td class="ln">38</td><td class="mk"></td><td class="cd"><span class="tk-k">using</span> HostFn = EvalResult (*)(BuildEnv &amp;, <span class="tk-k">const</span> std::vector&lt;Value&gt; &amp;);</td></tr>
+<tr class="cl" data-l="39"><td class="ln">39</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="40"><td class="ln">40</td><td class="mk"></td><td class="cd"><span class="tk-c">// Registered host fns, name -&gt; fn (names are the Python registry keys). The IR</span></td></tr>
+<tr class="cl" data-l="41"><td class="ln">41</td><td class="mk"></td><td class="cd"><span class="tk-c">// loader / build_skip_reason gate a matcher&#39;s inclusion on this registry.</span></td></tr>
+<tr class="cl" data-l="42"><td class="ln">42</td><td class="mk"></td><td class="cd"><span class="tk-k">const</span> std::map&lt;std::string, HostFn&gt; &amp;host_fns();</td></tr>
+<tr class="cl" data-l="43"><td class="ln">43</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-2" data-l="44" data-n="2"><td class="ln">44</td><td class="mk"><span class="chip">3</span></td><td class="cd"><span class="tk-c">// Host `shape` implementations (Python registries.shapers): a post-build</span></td></tr>
+<tr class="cl band nb-2" data-l="45" data-n="2"><td class="ln">45</td><td class="mk"></td><td class="cd"><span class="tk-c">// topology pass (spec §8.7). Python signature is `shaper(produced, match)`;</span></td></tr>
+<tr class="cl band nb-2" data-l="46" data-n="2"><td class="ln">46</td><td class="mk"></td><td class="cd"><span class="tk-c">// captured blocks are reached by name and an arena is needed to mint proxy</span></td></tr>
+<tr class="cl band nb-2" data-l="47" data-n="2"><td class="ln">47</td><td class="mk"></td><td class="cd"><span class="tk-c">// blocks (Python EmptyBlock() self-allocates; C++ blocks are arena-owned), so</span></td></tr>
+<tr class="cl band nb-2" data-l="48" data-n="2"><td class="ln">48</td><td class="mk"></td><td class="cd"><span class="tk-c">// both ride on ShaperMatch. The classify pipeline INVOKES them</span></td></tr>
+<tr class="cl band nb-2" data-l="49" data-n="2"><td class="ln">49</td><td class="mk"></td><td class="cd"><span class="tk-c">// (ClassifyCore.cpp try_build, after merge — the §8.7 last build step); no</span></td></tr>
+<tr class="cl band nb-2" data-l="50" data-n="2"><td class="ln">50</td><td class="mk"></td><td class="cd"><span class="tk-c">// artifact matcher currently pairs a build_program with a `shape`, so the call</span></td></tr>
+<tr class="cl band nb-2" data-l="51" data-n="2"><td class="ln">51</td><td class="mk"></td><td class="cd"><span class="tk-c">// site is live but unexercised by the corpus. The --shape-test harness drives</span></td></tr>
+<tr class="cl band nb-2" data-l="52" data-n="2"><td class="ln">52</td><td class="mk"></td><td class="cd"><span class="tk-c">// them directly, and registration keeps build_skip_reason from reporting a</span></td></tr>
+<tr class="cl band nb-2" data-l="53" data-n="2"><td class="ln">53</td><td class="mk"></td><td class="cd"><span class="tk-c">// registered shaper as a missing binding.</span></td></tr>
+<tr class="cl" data-l="54"><td class="ln">54</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> ShaperMatch {</td></tr>
+<tr class="cl" data-l="55"><td class="ln">55</td><td class="mk"></td><td class="cd">  std::map&lt;std::string, Block *&gt; captures;  <span class="tk-c">// capture name -&gt; block (or absent)</span></td></tr>
+<tr class="cl" data-l="56"><td class="ln">56</td><td class="mk"></td><td class="cd">  std::vector&lt;Block *&gt; consumed;            <span class="tk-c">// match consumed set (`match.consumed`)</span></td></tr>
+<tr class="cl" data-l="57"><td class="ln">57</td><td class="mk"></td><td class="cd">  BlockArena *arena{<span class="tk-k">nullptr</span>};               <span class="tk-c">// proxy-block allocation</span></td></tr>
+<tr class="cl" data-l="58"><td class="ln">58</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-3" data-l="59" data-n="3"><td class="ln">59</td><td class="mk"><span class="chip">4</span></td><td class="cd">  Block *capture(<span class="tk-k">const</span> std::string &amp;name) <span class="tk-k">const</span> {</td></tr>
+<tr class="cl band nb-3" data-l="60" data-n="3"><td class="ln">60</td><td class="mk"></td><td class="cd">    <span class="tk-k">auto</span> it = captures.find(name);</td></tr>
+<tr class="cl band nb-3" data-l="61" data-n="3"><td class="ln">61</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> it == captures.end() ? <span class="tk-k">nullptr</span> : it-&gt;second;</td></tr>
+<tr class="cl band nb-3" data-l="62" data-n="3"><td class="ln">62</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="63"><td class="ln">63</td><td class="mk"></td><td class="cd">};</td></tr>
+<tr class="cl" data-l="64"><td class="ln">64</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="65"><td class="ln">65</td><td class="mk"></td><td class="cd"><span class="tk-k">using</span> HostShaperFn = <span class="tk-k">void</span> (*)(Block *produced, <span class="tk-k">const</span> ShaperMatch &amp;m);</td></tr>
+<tr class="cl" data-l="66"><td class="ln">66</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="67"><td class="ln">67</td><td class="mk"></td><td class="cd"><span class="tk-c">// Registered host shapers, name -&gt; fn (names are the Python registry keys).</span></td></tr>
+<tr class="cl" data-l="68"><td class="ln">68</td><td class="mk"></td><td class="cd"><span class="tk-k">const</span> std::map&lt;std::string, HostShaperFn&gt; &amp;host_shapers();</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="32" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L32–34</span>The one rule that separates a host fn from a builtin: arguments are NOT null-strict. <code>rt_call_builtin</code> short-circuits on a null arg; <code>rt_call_hostfn</code> passes it straight through, because a host fn&#39;s job is often to DECIDE what a missing leg means. A spec calling a host fn must therefore expect it to be entered with nulls.</div></div>
+<div class="note" data-a="35" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L35–38</span>Two ways to reject from a host fn, and they are not equivalent: a fault rejects the match unconditionally, while returning Null rejects only if the spec wrote <code>reject when d == null</code>. The hybrid specs use the second so that &quot;no roles found&quot; reads as data, not as an error. Note the signature takes <code>BuildEnv&amp;</code> — that is how a host fn reaches <code>env.lookups</code> and participates in the two-phase fetch.</div></div>
+<div class="note" data-a="44" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L44–53</span>The shaper contract, including its honesty note. Python&#39;s <code>EmptyBlock()</code> self-allocates; C++ blocks are arena-owned, so the arena has to ride along on <code>ShaperMatch</code>. And: no artifact matcher currently pairs a build_program with a <code>shape</code>, so the classify call site below is LIVE but unexercised by the corpus — only <code>--shape-test</code> drives these (<a class="xl" href="gates.html">gates</a>).</div></div>
+<div class="note" data-a="59" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L59–62</span>Shapers address captures BY NAME, unlike build programs&#39; slot indexing. They are hand-written C++ that predates the slot scheme and there are three of them, so the name map is cheaper than threading a slot table through.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/HostRegistry.cpp<span class="plines">:11–45</span></span><span class="ex-title">The fn registry and its dispatch</span><span class="lang">cpp</span><span class="sha" title="span hash at render">a0407fa8</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="11"><td class="ln">11</td><td class="mk"></td><td class="cd"><span class="tk-k">const</span> std::map&lt;std::string, HostFn&gt; &amp;host_fns() {</td></tr>
+<tr class="cl band nb-0" data-l="12" data-n="0"><td class="ln">12</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">static</span> <span class="tk-k">const</span> std::map&lt;std::string, HostFn&gt; fns = {</td></tr>
+<tr class="cl band nb-0" data-l="13" data-n="0"><td class="ln">13</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;dedust_swap_legs&quot;</span>, dedust_swap_legs},</td></tr>
+<tr class="cl" data-l="14"><td class="ln">14</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;dedust_swap_failed&quot;</span>, dedust_swap_failed},</td></tr>
+<tr class="cl" data-l="15"><td class="ln">15</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;layerzero_dst_oapp_matches&quot;</span>, layerzero_dst_oapp_matches},</td></tr>
+<tr class="cl" data-l="16"><td class="ln">16</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;tonstakers_minted_nft&quot;</span>, tonstakers_minted_nft},</td></tr>
+<tr class="cl" data-l="17"><td class="ln">17</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;jvault_stake_period&quot;</span>, jvault_stake_period},</td></tr>
+<tr class="cl" data-l="18"><td class="ln">18</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;nft_transfer_data&quot;</span>, nft_transfer_data},</td></tr>
+<tr class="cl" data-l="19"><td class="ln">19</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;getgems_nft_purchase_data&quot;</span>, getgems_nft_purchase_data},</td></tr>
+<tr class="cl" data-l="20"><td class="ln">20</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;telegram_nft_purchase_data&quot;</span>, telegram_nft_purchase_data},</td></tr>
+<tr class="cl" data-l="21"><td class="ln">21</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;tgbtc_mint_data&quot;</span>, tgbtc_mint_data},</td></tr>
+<tr class="cl" data-l="22"><td class="ln">22</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;coffee_swap_data&quot;</span>, coffee_swap_data},</td></tr>
+<tr class="cl" data-l="23"><td class="ln">23</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;stonfi_v1_swap_data&quot;</span>, stonfi_v1_swap_data},</td></tr>
+<tr class="cl" data-l="24"><td class="ln">24</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;dedust_deposit_final_data&quot;</span>, dedust_deposit_final_data},</td></tr>
+<tr class="cl" data-l="25"><td class="ln">25</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;dedust_deposit_partial_data&quot;</span>, dedust_deposit_partial_data},</td></tr>
+<tr class="cl" data-l="26"><td class="ln">26</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;tonco_deposit_liquidity_data&quot;</span>, tonco_deposit_liquidity_data},</td></tr>
+<tr class="cl" data-l="27"><td class="ln">27</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;tonco_swap_data&quot;</span>, tonco_swap_data},</td></tr>
+<tr class="cl band nb-1" data-l="28" data-n="1"><td class="ln">28</td><td class="mk"><span class="chip">2</span></td><td class="cd">      <span class="tk-c">// stonfi_v2_swap_data: registered by the §11.5 dual-dispatch wave. The</span></td></tr>
+<tr class="cl band nb-1" data-l="29" data-n="1"><td class="ln">29</td><td class="mk"></td><td class="cd">      <span class="tk-c">// Python core (build_stonfi_v2_swap_core) now reads the in-leg by btype</span></td></tr>
+<tr class="cl band nb-1" data-l="30" data-n="1"><td class="ln">30</td><td class="mk"></td><td class="cd">      <span class="tk-c">// (swaps.py:404) instead of the hash-seed-dependent</span></td></tr>
+<tr class="cl band nb-1" data-l="31" data-n="1"><td class="ln">31</td><td class="mk"></td><td class="cd">      <span class="tk-c">// in_transfer.event_nodes[0].message, so it is deterministic and matches</span></td></tr>
+<tr class="cl band nb-1" data-l="32" data-n="1"><td class="ln">32</td><td class="mk"></td><td class="cd">      <span class="tk-c">// this already-btype-driven port. A/B parity is now achievable.</span></td></tr>
+<tr class="cl band nb-1" data-l="33" data-n="1"><td class="ln">33</td><td class="mk"></td><td class="cd">      {<span class="tk-s">&quot;stonfi_v2_swap_data&quot;</span>, stonfi_v2_swap_data},</td></tr>
+<tr class="cl" data-l="34"><td class="ln">34</td><td class="mk"></td><td class="cd">  };</td></tr>
+<tr class="cl" data-l="35"><td class="ln">35</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> fns;</td></tr>
+<tr class="cl" data-l="36"><td class="ln">36</td><td class="mk"></td><td class="cd">}</td></tr>
+<tr class="cl" data-l="37"><td class="ln">37</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-2" data-l="38" data-n="2"><td class="ln">38</td><td class="mk"><span class="chip">3</span></td><td class="cd">EvalResult rt_call_hostfn(BuildEnv &amp;env, <span class="tk-k">const</span> std::string &amp;name,</td></tr>
+<tr class="cl band nb-2" data-l="39" data-n="2"><td class="ln">39</td><td class="mk"></td><td class="cd">                          <span class="tk-k">const</span> std::vector&lt;Value&gt; &amp;args) {</td></tr>
+<tr class="cl band nb-2" data-l="40" data-n="2"><td class="ln">40</td><td class="mk"></td><td class="cd">  <span class="tk-k">auto</span> it = host_fns().find(name);</td></tr>
+<tr class="cl band nb-2" data-l="41" data-n="2"><td class="ln">41</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (it == host_fns().end()) {</td></tr>
+<tr class="cl band nb-2" data-l="42" data-n="2"><td class="ln">42</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> rt_fault(<span class="tk-s">&quot;unknown host fn &#39;&quot;</span> + name + <span class="tk-s">&quot;&#39;&quot;</span>);</td></tr>
+<tr class="cl band nb-2" data-l="43" data-n="2"><td class="ln">43</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="44" data-n="2"><td class="ln">44</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> it-&gt;second(env, args);</td></tr>
+<tr class="cl band nb-2" data-l="45" data-n="2"><td class="ln">45</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="12" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L12–13</span>Meyer&#39;s static again, and a plain function-pointer map — no <code>std::function</code>, no registration API, no init order to get wrong. Adding a host fn is one line here plus a declaration in <code>host/HostImpls.h</code>.</div></div>
+<div class="note" data-a="28" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L28–33</span>The most instructive comment in the file: <code>stonfi_v2_swap_data</code> was UNREGISTERABLE for a long time because the Python core read <code>in_transfer.event_nodes[0].message</code>, whose order is hash-seed dependent. The fix was on the PYTHON side (read the in-leg by btype), and only then could the already-deterministic C++ port be registered. A/B parity is a constraint on both engines, not a target the port aims at.</div></div>
+<div class="note" data-a="38" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L38–45</span>Unknown name ⇒ fault ⇒ rejection. In practice this is unreachable: <code>build_skip_reason</code> already excluded any matcher referencing an unregistered fn before classify started. The check survives as a guard against the two lists disagreeing.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp<span class="plines">:54–67</span></span><span class="ex-title">Where a shaper actually runs</span><span class="lang">cpp</span><span class="sha" title="span hash at render">58736b1d</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="54" data-n="0"><td class="ln">54</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-c">// §8.7 `shape` hook: LAST build step, after merge (engine.py _apply_shape).</span></td></tr>
+<tr class="cl band nb-0" data-l="55" data-n="0"><td class="ln">55</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (!m.ref_shapers.empty()) {</td></tr>
+<tr class="cl band nb-0" data-l="56" data-n="0"><td class="ln">56</td><td class="mk"></td><td class="cd">    <span class="tk-k">const</span> std::string &amp;shaper_name = *m.ref_shapers.begin();</td></tr>
+<tr class="cl" data-l="57"><td class="ln">57</td><td class="mk"></td><td class="cd">    <span class="tk-k">auto</span> sit = host_shapers().find(shaper_name);</td></tr>
+<tr class="cl band nb-1" data-l="58" data-n="1"><td class="ln">58</td><td class="mk"><span class="chip">2</span></td><td class="cd">    <span class="tk-k">if</span> (sit != host_shapers().end()) {</td></tr>
+<tr class="cl band nb-1" data-l="59" data-n="1"><td class="ln">59</td><td class="mk"></td><td class="cd">      ShaperMatch sm;</td></tr>
+<tr class="cl band nb-1" data-l="60" data-n="1"><td class="ln">60</td><td class="mk"></td><td class="cd">      sm.arena = &amp;arena;</td></tr>
+<tr class="cl band nb-1" data-l="61" data-n="1"><td class="ln">61</td><td class="mk"></td><td class="cd">      sm.consumed = res-&gt;consumed;</td></tr>
+<tr class="cl band nb-1" data-l="62" data-n="1"><td class="ln">62</td><td class="mk"></td><td class="cd">      <span class="tk-k">for</span> (<span class="tk-k">const</span> Capture &amp;c : res-&gt;captures) {</td></tr>
+<tr class="cl band nb-1" data-l="63" data-n="1"><td class="ln">63</td><td class="mk"></td><td class="cd">        sm.captures[c.name] = c.vals.empty() ? <span class="tk-k">nullptr</span> : c.vals.front();</td></tr>
+<tr class="cl band nb-1" data-l="64" data-n="1"><td class="ln">64</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-1" data-l="65" data-n="1"><td class="ln">65</td><td class="mk"></td><td class="cd">      sit-&gt;second(produced, sm);</td></tr>
+<tr class="cl" data-l="66"><td class="ln">66</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="67"><td class="ln">67</td><td class="mk"></td><td class="cd">  }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="54" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L54–56</span>AFTER <code>merge_blocks</code>, deliberately — §8.7 makes <code>shape</code> the last build step precisely so a shaper sees the final topology (the produced block already owning its consumed children) rather than the pre-merge tree. <code>*m.ref_shapers.begin()</code> takes the first: the grammar allows one <code>shape</code> per matcher, and the set is a compile artifact, not a list.</div></div>
+<div class="note" data-a="58" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L58–65</span>The <code>ShaperMatch</code> is rebuilt from the match result, taking only <code>vals.front()</code> per capture — shapers get the scalar view even of a <code>many</code> capture. Passing <code>&amp;arena</code> is what lets a shaper mint proxy blocks; a shaper that allocated its own would leak past the trace&#39;s arena lifetime.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/host/HostAdapter.h<span class="plines">:41–68</span></span><span class="ex-title">The typed authoring seam over the raw host ABI</span><span class="lang">cpp</span><span class="sha" title="span hash at render">f86e0e50</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="41" data-n="0"><td class="ln">41</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// A typed host result. `Value` -&gt; encode + rt_ok; `Reject` -&gt; rt_ok(Null) (the</span></td></tr>
+<tr class="cl band nb-0" data-l="42" data-n="0"><td class="ln">42</td><td class="mk"></td><td class="cd"><span class="tk-c">// spec `reject when`s the null); `Fault` -&gt; rt_fault (clean match rejection).</span></td></tr>
+<tr class="cl band nb-0" data-l="43" data-n="0"><td class="ln">43</td><td class="mk"></td><td class="cd"><span class="tk-k">template</span> &lt;<span class="tk-k">class</span> T&gt;</td></tr>
+<tr class="cl band nb-0" data-l="44" data-n="0"><td class="ln">44</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> HostResult {</td></tr>
+<tr class="cl band nb-0" data-l="45" data-n="0"><td class="ln">45</td><td class="mk"></td><td class="cd">  <span class="tk-k">enum</span> <span class="tk-k">class</span> Kind { Value, Reject, Fault };</td></tr>
+<tr class="cl band nb-0" data-l="46" data-n="0"><td class="ln">46</td><td class="mk"></td><td class="cd">  Kind kind{Kind::Reject};</td></tr>
+<tr class="cl band nb-0" data-l="47" data-n="0"><td class="ln">47</td><td class="mk"></td><td class="cd">  T value{};</td></tr>
+<tr class="cl band nb-0" data-l="48" data-n="0"><td class="ln">48</td><td class="mk"></td><td class="cd">  std::string message;</td></tr>
+<tr class="cl band nb-0" data-l="49" data-n="0"><td class="ln">49</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-0" data-l="50" data-n="0"><td class="ln">50</td><td class="mk"></td><td class="cd">  <span class="tk-k">static</span> HostResult ok(T v) { <span class="tk-k">return</span> HostResult{Kind::Value, std::move(v), {}}; }</td></tr>
+<tr class="cl band nb-0" data-l="51" data-n="0"><td class="ln">51</td><td class="mk"></td><td class="cd">  <span class="tk-k">static</span> HostResult reject() { <span class="tk-k">return</span> HostResult{Kind::Reject, {}, {}}; }</td></tr>
+<tr class="cl band nb-0" data-l="52" data-n="0"><td class="ln">52</td><td class="mk"></td><td class="cd">  <span class="tk-k">static</span> HostResult fault(std::string m) { <span class="tk-k">return</span> HostResult{Kind::Fault, {}, std::move(m)}; }</td></tr>
+<tr class="cl band nb-0" data-l="53" data-n="0"><td class="ln">53</td><td class="mk"></td><td class="cd">};</td></tr>
+<tr class="cl" data-l="54"><td class="ln">54</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="55" data-n="1"><td class="ln">55</td><td class="mk"><span class="chip">2</span></td><td class="cd"><span class="tk-c">// Decode the single-List-arg calling convention (Coffee / Stonfi v2 / DeDust</span></td></tr>
+<tr class="cl band nb-1" data-l="56" data-n="1"><td class="ln">56</td><td class="mk"></td><td class="cd"><span class="tk-c">// shape): args must be exactly one non-empty List, and it must contain at least</span></td></tr>
+<tr class="cl band nb-1" data-l="57" data-n="1"><td class="ln">57</td><td class="mk"></td><td class="cd"><span class="tk-c">// one Block. Faults (binding-tagged) otherwise.</span></td></tr>
+<tr class="cl band nb-1" data-l="58" data-n="1"><td class="ln">58</td><td class="mk"></td><td class="cd">EvalResult decode_consumed(<span class="tk-k">const</span> std::vector&lt;Value&gt; &amp;args, <span class="tk-k">const</span> char *binding,</td></tr>
+<tr class="cl band nb-1" data-l="59" data-n="1"><td class="ln">59</td><td class="mk"></td><td class="cd">                           ConsumedBlocks &amp;out);</td></tr>
+<tr class="cl band nb-1" data-l="60" data-n="1"><td class="ln">60</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="61" data-n="1"><td class="ln">61</td><td class="mk"></td><td class="cd"><span class="tk-c">// A swap-style typed core: single-List consumed set -&gt; a SwapRecord result.</span></td></tr>
+<tr class="cl band nb-1" data-l="62" data-n="1"><td class="ln">62</td><td class="mk"></td><td class="cd"><span class="tk-k">using</span> SwapCore = HostResult&lt;SwapRecord&gt; (*)(HostContext &amp;, <span class="tk-k">const</span> ConsumedBlocks &amp;);</td></tr>
+<tr class="cl" data-l="63"><td class="ln">63</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-2" data-l="64" data-n="2"><td class="ln">64</td><td class="mk"><span class="chip">3</span></td><td class="cd"><span class="tk-c">// Register a swap core through the runtime ABI: decode the consumed set, run the</span></td></tr>
+<tr class="cl band nb-2" data-l="65" data-n="2"><td class="ln">65</td><td class="mk"></td><td class="cd"><span class="tk-c">// core, then map its HostResult to an EvalResult (encode the record / Null-</span></td></tr>
+<tr class="cl band nb-2" data-l="66" data-n="2"><td class="ln">66</td><td class="mk"></td><td class="cd"><span class="tk-c">// reject / fault). This is the whole body of a registered *_swap_data thunk.</span></td></tr>
+<tr class="cl band nb-2" data-l="67" data-n="2"><td class="ln">67</td><td class="mk"></td><td class="cd">EvalResult run_swap_host(BuildEnv &amp;env, <span class="tk-k">const</span> std::vector&lt;Value&gt; &amp;args, <span class="tk-k">const</span> char *binding,</td></tr>
+<tr class="cl band nb-2" data-l="68" data-n="2"><td class="ln">68</td><td class="mk"></td><td class="cd">                         SwapCore core);</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="41" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L41–53</span><code>HostResult&lt;T&gt;</code> names the three outcomes a host fn actually has, which the raw <code>EvalResult</code> conflates: a real value, &quot;no match&quot; (Null, which the spec <code>reject when</code>s), and a fault. Before this, cores expressed &quot;reject&quot; as <code>rt_ok(Value::null())</code> inline and it was easy to write a fault where a reject was meant.</div></div>
+<div class="note" data-a="55" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L55–62</span>The single-List calling convention formalised: every swap-style fn takes <code>consumed</code> and nothing else. <code>decode_consumed</code> drops non-Block elements silently, matching the hand-written loops it replaced — a deliberate bug-compatible choice, not an oversight.</div></div>
+<div class="note" data-a="64" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L64–68</span><code>run_swap_host</code> IS the body of every registered <code>*_swap_data</code> thunk. The payoff is that a protocol core becomes a pure function from typed inputs to a typed <code>SwapRecord</code> — no <code>Value</code> dict assembly, and notably no <code>const_cast</code> peer-fill, which is what the previous generic-Value version needed.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/host/HostCoffee.cpp<span class="plines">:56–95</span></span><span class="ex-title">A host fn body — reconstructing roles from an unordered consumed set</span><span class="lang">cpp</span><span class="sha" title="span hash at render">95211855</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="56" data-n="0"><td class="ln">56</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// builders/coffee.py _coffee_swap_data + blocks/swaps.py build_coffee_swap_core.</span></td></tr>
+<tr class="cl band nb-0" data-l="57" data-n="0"><td class="ln">57</td><td class="mk"></td><td class="cd"><span class="tk-c">// TON-arm reachable under the IR engine (CoffeeSwapNative in, CoffeePayout /</span></td></tr>
+<tr class="cl band nb-0" data-l="58" data-n="0"><td class="ln">58</td><td class="mk"></td><td class="cd"><span class="tk-c">// CoffeeNotification out); the jetton legs need the skipped jetton_transfer</span></td></tr>
+<tr class="cl band nb-0" data-l="59" data-n="0"><td class="ln">59</td><td class="mk"></td><td class="cd"><span class="tk-c">// block. Returns a SwapRecord, or reject() where a role is missing / no hop.</span></td></tr>
+<tr class="cl band nb-0" data-l="60" data-n="0"><td class="ln">60</td><td class="mk"></td><td class="cd">R coffee_swap(HostContext &amp;, <span class="tk-k">const</span> ConsumedBlocks &amp;consumed) {</td></tr>
+<tr class="cl" data-l="61"><td class="ln">61</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Block *block = consumed.anchor();</td></tr>
+<tr class="cl" data-l="62"><td class="ln">62</td><td class="mk"></td><td class="cd">  std::vector&lt;<span class="tk-k">const</span> Block *&gt; others = consumed.others();</td></tr>
+<tr class="cl" data-l="63"><td class="ln">63</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="64" data-n="1"><td class="ln">64</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-c">// in_transfer = prev if in others and (jetton_transfer | CoffeeSwapNative).</span></td></tr>
+<tr class="cl band nb-1" data-l="65" data-n="1"><td class="ln">65</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Block *in_transfer = <span class="tk-k">nullptr</span>;</td></tr>
+<tr class="cl band nb-1" data-l="66" data-n="1"><td class="ln">66</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Block *prev = block-&gt;previous_block;</td></tr>
+<tr class="cl band nb-1" data-l="67" data-n="1"><td class="ln">67</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (prev != <span class="tk-k">nullptr</span> &amp;&amp; block_in(others, prev) &amp;&amp;</td></tr>
+<tr class="cl band nb-1" data-l="68" data-n="1"><td class="ln">68</td><td class="mk"></td><td class="cd">      (prev-&gt;btype == <span class="tk-s">&quot;jetton_transfer&quot;</span> || is_call_op(prev, kCoffeeSwapNative))) {</td></tr>
+<tr class="cl band nb-1" data-l="69" data-n="1"><td class="ln">69</td><td class="mk"></td><td class="cd">    in_transfer = prev;</td></tr>
+<tr class="cl band nb-1" data-l="70" data-n="1"><td class="ln">70</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="71"><td class="ln">71</td><td class="mk"></td><td class="cd">  <span class="tk-c">// payout = first CoffeePayoutInternal in others.</span></td></tr>
+<tr class="cl" data-l="72"><td class="ln">72</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Block *payout = first_call(others, kCoffeePayoutInternal);</td></tr>
+<tr class="cl" data-l="73"><td class="ln">73</td><td class="mk"></td><td class="cd">  <span class="tk-c">// out_transfer = first in others whose previous_block is payout and is a</span></td></tr>
+<tr class="cl" data-l="74"><td class="ln">74</td><td class="mk"></td><td class="cd">  <span class="tk-c">// jetton_transfer / CoffeePayout / CoffeeNotification.</span></td></tr>
+<tr class="cl" data-l="75"><td class="ln">75</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Block *out_transfer = <span class="tk-k">nullptr</span>;</td></tr>
+<tr class="cl" data-l="76"><td class="ln">76</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (payout != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl" data-l="77"><td class="ln">77</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> Block *b : others) {</td></tr>
+<tr class="cl" data-l="78"><td class="ln">78</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (b-&gt;previous_block == payout &amp;&amp;</td></tr>
+<tr class="cl" data-l="79"><td class="ln">79</td><td class="mk"></td><td class="cd">          (b-&gt;btype == <span class="tk-s">&quot;jetton_transfer&quot;</span> || is_call_op(b, kCoffeePayout) ||</td></tr>
+<tr class="cl" data-l="80"><td class="ln">80</td><td class="mk"></td><td class="cd">           is_call_op(b, kCoffeeNotification))) {</td></tr>
+<tr class="cl" data-l="81"><td class="ln">81</td><td class="mk"></td><td class="cd">        out_transfer = b;</td></tr>
+<tr class="cl" data-l="82"><td class="ln">82</td><td class="mk"></td><td class="cd">        <span class="tk-k">break</span>;</td></tr>
+<tr class="cl" data-l="83"><td class="ln">83</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl" data-l="84"><td class="ln">84</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="85"><td class="ln">85</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="86"><td class="ln">86</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="87"><td class="ln">87</td><td class="mk"></td><td class="cd">  <span class="tk-c">// --- build_coffee_swap_core ---</span></td></tr>
+<tr class="cl band nb-2" data-l="88" data-n="2"><td class="ln">88</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">if</span> (in_transfer == <span class="tk-k">nullptr</span> || payout == <span class="tk-k">nullptr</span> || out_transfer == <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-2" data-l="89" data-n="2"><td class="ln">89</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> R::reject();  <span class="tk-c">// not all roles</span></td></tr>
+<tr class="cl band nb-2" data-l="90" data-n="2"><td class="ln">90</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="91"><td class="ln">91</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-3" data-l="92" data-n="3"><td class="ln">92</td><td class="mk"><span class="chip">4</span></td><td class="cd">  <span class="tk-c">// swap_internal blocks (others + anchor), unique, sorted by min_lt.</span></td></tr>
+<tr class="cl band nb-3" data-l="93" data-n="3"><td class="ln">93</td><td class="mk"></td><td class="cd">  std::vector&lt;<span class="tk-k">const</span> Block *&gt; swaps = all_calls(others, kCoffeeSwapInternal);</td></tr>
+<tr class="cl band nb-3" data-l="94" data-n="3"><td class="ln">94</td><td class="mk"></td><td class="cd">  swaps.push_back(block);  <span class="tk-c">// the anchor is a CoffeeSwapInternal</span></td></tr>
+<tr class="cl band nb-3" data-l="95" data-n="3"><td class="ln">95</td><td class="mk"></td><td class="cd">  unique_lt_sorted(swaps);</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="56" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L56–60</span>The signature the adapter enables: no <code>BuildEnv</code>, no <code>std::vector&lt;Value&gt;</code>, no <code>EvalResult</code>. <code>HostContext</code> is present for the lookup table but this core never needs it. Registration is one line at the bottom of the file: <code>return run_swap_host(env, args, &quot;coffee_swap_data&quot;, coffee_swap);</code>.</div></div>
+<div class="note" data-a="64" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L64–70</span>This is the imperative residue the spec could not express. The pattern DID capture <code>@in_transfer</code>, but on a multi-hop path the walker cannot bind captures after a recursion (see the caveat in <code>coffee_swap.mch</code>), so the fn re-derives the role from <code>previous_block</code> + membership in the consumed set. That is the honest reason host fns still exist here — capture binding under recursion, not algorithmic complexity.</div></div>
+<div class="note" data-a="88" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L88–90</span>&quot;Not all roles&quot; is a REJECT, not a fault — it becomes <code>d == null</code> and the spec&#39;s <code>reject when d == null</code> fires. Contrast the <code>R::fault(&quot;event parse&quot;)</code> calls further down, which reject unconditionally: a missing role is expected traffic, an unparseable event body is not.</div></div>
+<div class="note" data-a="92" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L92–95</span><code>unique_lt_sorted</code> after pushing the anchor onto the <code>others</code> list: the consumed set has no inherent order, so every host fn that iterates it must impose one. Sorting by <code>min_lt</code> is the canonical choice across this codebase and matches the Python cores — a different order changes <code>peer_swaps</code> and thus the dump.</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ &amp; &#39;S:/Dev/ton-indexer-clear/ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe&#39; --surface</div><pre class="run-out">{
+  &quot;boc_fields&quot;: [&quot;custom_payload&quot;, &quot;forward_payload&quot;, &quot;message_boc&quot;, &quot;message_boc_str&quot;, &quot;order_boc&quot;, &quot;order_boc_str&quot;, &quot;stonfi_swap_body&quot;],
+  &quot;fns&quot;: [&quot;coffee_swap_data&quot;, &quot;dedust_deposit_final_data&quot;, &quot;dedust_deposit_partial_data&quot;, &quot;dedust_swap_failed&quot;, &quot;dedust_swap_legs&quot;, &quot;getgems_nft_purch…
+  &quot;lookup_kinds&quot;: [&quot;dedust_pool&quot;, &quot;jetton_wallet&quot;, &quot;jvault_assets&quot;, &quot;nft_auction&quot;, &quot;nft_item&quot;, &quot;nft_sale&quot;, &quot;nominator_pool&quot;],
+  &quot;parsers&quot;: [&quot;ChangeDnsRecordMessage&quot;, &quot;ClaimRewardMessage&quot;, &quot;CoffeeCreateVault&quot;, &quot;CoffeeSwapEvent&quot;, &quot;DedustDepositLiquidityToPool&quot;, &quot;DedustPayoutFro…
+  &quot;preds&quot;: [&quot;evaa_service_comment&quot;, &quot;evaa_user_withdraw_fail&quot;, &quot;evaa_user_withdraw_success&quot;, &quot;evaa_user_withdraw_user&quot;, &quot;getgems_purchase&quot;, &quot;getgems_s…
+  &quot;shapers&quot;: [&quot;getgems_proxy_insert&quot;, &quot;nft_transfer_parent_absorb&quot;, &quot;tgbtc_deploy_absorb&quot;]
+}</pre><div class="run-note">Long arrays truncated at the right margin. This is the C++ engine describing ITS OWN registries; the output is committed as <code>twins/cpp_surface.json</code> and the Python twins read the fn/pred/shaper/lookup lists from it to compute the identical included-matcher set. Nothing is hand-mirrored, so registering a host fn without regenerating this file makes the twins disagree — that is a gate failure, covered in <a class="xl" href="gates.html">gates</a>.</div></div>
+<h2 id="what-actually-runs-the-skip-table">What actually runs: the skip table</h2>
+<section><p><code>build_skip_reason</code> is the function that turns &quot;this C++ engine implements a subset&quot; into a precise, comparable statement. It is computed once at startup per matcher from the artifact&#39;s declared references plus the four registries, and the Python twin computes the same string from the same artifact and the same <code>cpp_surface.json</code>. A matcher with an empty reason runs end-to-end; anything else is excluded from BOTH engines, so the A/B diff stays meaningful.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BuildDriver.cpp<span class="plines">:119–149</span></span><span class="ex-title">build_skip_reason — the inclusion filter</span><span class="lang">cpp</span><span class="sha" title="span hash at render">637ecedd</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="119" data-n="0"><td class="ln">119</td><td class="mk"><span class="chip">1</span></td><td class="cd">std::string build_skip_reason(<span class="tk-k">const</span> CompiledMatcher &amp;m) {</td></tr>
+<tr class="cl band nb-0" data-l="120" data-n="0"><td class="ln">120</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (m.unrunnable) {</td></tr>
+<tr class="cl band nb-0" data-l="121" data-n="0"><td class="ln">121</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> m.skip_reason;  <span class="tk-c">// match-phase pred skip</span></td></tr>
+<tr class="cl band nb-0" data-l="122" data-n="0"><td class="ln">122</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-0" data-l="123" data-n="0"><td class="ln">123</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (!m.has_build_program) {</td></tr>
+<tr class="cl band nb-0" data-l="124" data-n="0"><td class="ln">124</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> m.ref_builders.empty() ? <span class="tk-s">&quot;no_build_program&quot;</span> : <span class="tk-s">&quot;builder&quot;</span>;</td></tr>
+<tr class="cl band nb-0" data-l="125" data-n="0"><td class="ln">125</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="126" data-n="1"><td class="ln">126</td><td class="mk"><span class="chip">2</span></td><td class="cd">  std::vector&lt;std::string&gt; missing_types;</td></tr>
+<tr class="cl band nb-1" data-l="127" data-n="1"><td class="ln">127</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> std::string &amp;t : m.ref_msgtypes) {</td></tr>
+<tr class="cl band nb-1" data-l="128" data-n="1"><td class="ln">128</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (message_parsers().find(t) == message_parsers().end()) {</td></tr>
+<tr class="cl band nb-1" data-l="129" data-n="1"><td class="ln">129</td><td class="mk"></td><td class="cd">      missing_types.push_back(t);</td></tr>
+<tr class="cl band nb-1" data-l="130" data-n="1"><td class="ln">130</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="131" data-n="1"><td class="ln">131</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="132" data-n="2"><td class="ln">132</td><td class="mk"><span class="chip">3</span></td><td class="cd">  std::vector&lt;std::string&gt; missing_lookups;</td></tr>
+<tr class="cl band nb-2" data-l="133" data-n="2"><td class="ln">133</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> std::string &amp;l : m.ref_lookups) {</td></tr>
+<tr class="cl band nb-2" data-l="134" data-n="2"><td class="ln">134</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (FixtureLookupSource::kinds().count(l) == <span class="tk-n">0</span>) {</td></tr>
+<tr class="cl band nb-2" data-l="135" data-n="2"><td class="ln">135</td><td class="mk"></td><td class="cd">      missing_lookups.push_back(l);</td></tr>
+<tr class="cl band nb-2" data-l="136" data-n="2"><td class="ln">136</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-2" data-l="137" data-n="2"><td class="ln">137</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="138"><td class="ln">138</td><td class="mk"></td><td class="cd">  std::vector&lt;std::string&gt; missing_fns;</td></tr>
+<tr class="cl" data-l="139"><td class="ln">139</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> std::string &amp;fn : m.ref_fns) {</td></tr>
+<tr class="cl" data-l="140"><td class="ln">140</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (host_fns().find(fn) == host_fns().end()) {</td></tr>
+<tr class="cl" data-l="141"><td class="ln">141</td><td class="mk"></td><td class="cd">      missing_fns.push_back(fn);</td></tr>
+<tr class="cl" data-l="142"><td class="ln">142</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="143"><td class="ln">143</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="144"><td class="ln">144</td><td class="mk"></td><td class="cd">  std::vector&lt;std::string&gt; missing_shapers;</td></tr>
+<tr class="cl" data-l="145"><td class="ln">145</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> std::string &amp;s : m.ref_shapers) {</td></tr>
+<tr class="cl" data-l="146"><td class="ln">146</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (host_shapers().find(s) == host_shapers().end()) {</td></tr>
+<tr class="cl" data-l="147"><td class="ln">147</td><td class="mk"></td><td class="cd">      missing_shapers.push_back(s);</td></tr>
+<tr class="cl" data-l="148"><td class="ln">148</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="149"><td class="ln">149</td><td class="mk"></td><td class="cd">  }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="119" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L119–125</span>Two skips that are not about missing bindings: <code>unrunnable</code> is a match-phase predicate gap inherited from the IR loader (<a class="xl" href="ir-artifact.html">ir-artifact</a>), and <code>builder</code> means the spec used the legacy <code>build &lt;python_fn&gt;</code> directive instead of a declarative build program — the C++ engine has no Python to call, so those matchers are structurally out of scope.</div></div>
+<div class="note" data-a="126" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L126–131</span>Four independent scans follow, over the artifact&#39;s declared reference lists — <code>ref_msgtypes</code>, <code>ref_lookups</code>, <code>ref_fns</code>, <code>ref_shapers</code>. Note it is the ARTIFACT that declares them, not a scan of the generated code: the frontend records what each build program references, so this check needs neither the IR expression tree nor the generated C++. The assembled reason string is <code>types:A,B;lookups:C;fns:D;shaper:E</code> — a sorted, comparable token the Python twin reproduces exactly.</div></div>
+<div class="note" data-a="132" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L132–137</span>Lookups are checked against <code>FixtureLookupSource::kinds()</code> — the OFFLINE source&#39;s kind set. That is why <code>dedust_pool</code> had to be listed there even though no matcher references it as a <code>lookup</code> node (a host fn fetches it): the honest kind set and the skip-gating set are the same set, so an omission would silently move a skip decision.</div></div></div>
+</div>
+</div>
+<h2 id="check-yourself">Check yourself</h2>
+<section><p>Four claims from this page, each testable in a couple of minutes.</p>
+<p>**1 — Build programs really are compiled, not interpreted.** Pick any statement from a spec and find its C++ image; the first run below does it for <code>let d = coffee_swap_data(consumed)</code> in <code>coffee_swap.mch</code>. Then read the ~70 generated lines around the hit and match every one back to a spec line. If you can do that for one matcher you can do it for all 33.</p>
+<p>**2 — The parse EXPRESSION is vector-only today.** <code>grep -c rt_parse_expr</code> returns 0 in <code>builds_ir_generated.cpp</code> and 3 in <code>builds_vectors_generated.cpp</code>. That is the coverage claim in the parse section, stated as a command rather than a promise — and it is why the <code>mch_build_vectors</code> ctest is the only thing exercising <code>rt_parse_expr</code>.</p>
+<p>**3 — The surface is a projection, not a hand-mirrored list.** Regenerate <code>twins/cpp_surface.json</code> from the running binary and diff it against the committed copy (second run below; note the CRLF normalisation on Windows). A non-empty diff means someone registered a host binding without refreshing the file, and the Python twins are about to compute a different included-matcher set.</p>
+<p>**4 — A rejection consumes nothing.** Worth doing once by hand: delete <code>reject when wallet == null</code> from <code>specs_decl/jettons.mch</code>, recompile the artifact, and diff the <code>--classify</code> dump. Predict first — the only change should be extra <code>jetton_transfer</code> actions whose wallet lookup missed. If a consumed set changes, or a downstream matcher gains or loses a block, your model of §10.7 is wrong.</p></section>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ grep -n &#39;rt_call_hostfn(env, &quot;coffee_swap_data&quot;&#39; ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/generated/builds_ir_generated.cpp</div><pre class="run-out">652:  EvalResult r1 = rt_call_hostfn(env, &quot;coffee_swap_data&quot;, std::vector&lt;Value&gt;{v0});</pre><div class="run-note">One spec line, one C++ line. <code>v0</code> a few lines above is <code>env.consumed</code>; <code>r1</code> a few lines below feeds the <code>reject when d == null</code> test.</div></div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ cd ton-index-worker/ton-mch-engine
+&#39;…/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe&#39; --surface | tr -d &#39;\r&#39; &gt; /tmp/surf.json
+diff /tmp/surf.json twins/cpp_surface.json &amp;&amp; echo &quot;IDENTICAL after CRLF normalisation&quot;</div><pre class="run-out">IDENTICAL after CRLF normalisation</pre><div class="run-note">The committed twin input is exactly what the binary reports. Without the <code>tr -d &#39;\r&#39;</code> the raw diff fails on line endings only — a Windows artefact, not a content difference.</div></div>
+<div class="edges"><div class="label">Connected scopes</div><ul><li><a class="xl" href="matcher-runtime.html">matcher-runtime</a> — captures and the consumed set are produced there; a build program is the second half of the same try_build</li><li><a class="xl" href="parse-layer.html">parse-layer</a> — soft_parse&#39;s inner half and the op-guard rule that makes an ABI-path <code>parse</code> safe</li><li><a class="xl" href="value.html">value</a> — b64-of-cell is not text-comparable across engines; the BOC-field cellhash render rule lives there</li><li><a class="xl" href="ir-artifact.html">ir-artifact</a> — build_program statements and ref_* lists are artifact data; the generated build table is keyed by artifact index</li><li><a class="xl" href="actions.html">actions</a> — the produced block&#39;s data dict becomes the Action row&#39;s composite columns</li><li><a class="xl" href="gates.html">gates</a> — --build-vectors, cpp_surface.json and the classify twin diff are what hold every parity claim on this page</li><li><a class="xl" href="prod-path.html">prod-path</a> — the two-phase lookup exists because production batches the fetch into one actor round per trace</li></ul></div>
+<div class="cover"><div class="label">Not annotated in this scope — read directly</div><ul><li><code>ton-index-worker/ton-mch-engine/src/BuildRuntime.h</code> <span class="why">— PARTIAL: BuildOutcome and BuildEnv are excerpted. The remainder is the LookupTable class family (Null/Collecting/Filled) and FixtureLookupSource — a fixture-backed offline source whose per-kind key normalisation (jetton_wallet uppercases, nft_item does not) is documented in a 20-line header comment worth reading before you touch it (~202 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/BuildRuntime.cpp</code> <span class="why">— PARTIAL: rt_parse / rt_parse_expr / rt_access_build are excerpted; soft_parse is excerpted in <a class="xl" href="parse-layer.html">parse-layer</a>. The remainder is <code>lookup_key</code> (a type-tagged, length-framed encoding — read its comment for why NUL-concatenation was unsafe) and the FixtureLookupSource kind implementations, of which <code>jvault_assets</code> is a 90-line chain of Python try/except reproductions (~413 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/BuildDriver.h</code> <span class="why">— declarations only, but the comments ARE the contracts for run_two_phase and build_skip_reason — read it as the summary of this chapter&#39;s second half (~54 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/BuildDriver.cpp</code> <span class="why">— PARTIAL: run_two_phase and build_skip_reason are excerpted. The remainder is <code>block_key</code> / <code>render_value</code> (the dump format contract, better read alongside <a class="xl" href="value.html">value</a>), <code>slots_from_captures</code> (9 lines, referenced above), <code>warn_missing_artifact_parsers</code> and <code>select_gen_builds</code> (~277 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/ExprRuntime.h</code> <span class="why">— PARTIAL: the header contract is excerpted. The rest is a flat list of ~30 <code>rt_*</code> declarations; each one&#39;s semantics is at its definition in the .cpp (~116 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/ExprRuntime.cpp</code> <span class="why">— PARTIAL: b64 and the comprehension cores are excerpted. The big remainder is the equality/ordering/arithmetic block at the top — <code>raw_eq</code>, <code>container_eq</code>, <code>eq_result</code>, <code>ord_result</code>, <code>coerce_int</code> — which encodes a dozen Python-parity quirks (Asset.__eq__ raising before its is_ton clause; float-backed Amounts faulting at USE but rendering fine; Amount having no ordering). Plus <code>msg_envelope</code> and <code>rt_access</code>, the universal attribute access shared with the where-clause path. Read the comments, not the code (~641 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/ExprEval.h, src/ExprEval.cpp</code> <span class="why">— the tree-walking interpreter over the k-tagged IR JSON. It is the reference/fallback path: it delegates every leaf to ExprRuntime and only owns control flow (name/lookup/list/record + the lazy operators), so reading it teaches you the IR expression encoding, not any semantics you did not get above. It never runs a build program — no Block or parse state (~53 + ~220 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/HostRegistry.h</code> <span class="why">— PARTIAL: the fn/shaper half is excerpted. The remainder is the file header plus HostPredFn and host_predicates() — the match-time half, which belongs to <a class="xl" href="matcher-runtime.html">matcher-runtime</a> (~70 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/HostRegistry.cpp</code> <span class="why">— PARTIAL: host_fns() and rt_call_hostfn are excerpted. The remainder is the predicate and shaper maps in the same one-line-per-entry shape (~73 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/host/HostCoffee.cpp</code> <span class="why">— PARTIAL: the role reconstruction and the per-hop event scan are excerpted. The remainder is the in-leg / out-leg extraction — a §11.5 dual dispatch that branches on <code>btype == &quot;jetton_transfer&quot;</code> (read <code>.data</code>) versus a raw opcode (decode the body inline), which is the shape every ported swap core now has (~220 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/host/HostAdapter.h, HostAdapter.cpp</code> <span class="why">— PARTIAL: the typed-result half of the header is excerpted; the .cpp is 45 lines and holds no surprises — decode, call, map three outcomes. Read it once to see that the seam really is that thin</span></li><li><code>ton-index-worker/ton-mch-engine/src/host/HostDedust.cpp, HostStonfi.cpp, HostTonco.cpp, HostNft.cpp, HostGetgems.cpp, HostDedustDeposit.cpp, HostTgbtc.cpp, HostEvaa.cpp, HostJvault.cpp, HostLayerZero.cpp, HostTonstakers.cpp, HostNominator.cpp, DexPton.cpp</code> <span class="why">— the other 15 registered fns and 9 predicates, one file per protocol (~3.4k LOC total). They are all the same shape as HostCoffee: derive roles from the consumed set, then reproduce a Python core statement for statement. Read the one whose protocol you are working on and no others — there is no shared machinery hiding in them beyond BlockViews/DexRecords/HostCommon</span></li><li><code>ton-index-worker/ton-mch-engine/src/host/DexRecords.{h,cpp}, host/BlockViews.{h,cpp}, host/HostCommon.{h,cpp}, host/HostImpls.h</code> <span class="why">— the typed vocabulary the cores share: SwapRecord / TransferLeg / PeerSwap and their <code>encode()</code> to Value, block accessors (block_body, block_msg, data_field, first_call, is_call_op), and the internal declaration header. Mechanical, but DexRecords&#39; encode() is where a swap&#39;s dump field ORDER is decided (~250 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/GenBuilds.h</code> <span class="why">— the interface to the generated build tables. Its header comment explains the three tables (ir / vectors / testbed), the per-document source-sha pairing, and why a mismatched artifact hard-fails instead of running — read it if you ever see &quot;no generated build table matches this artifact&quot; (~54 LOC)</span></li><li><code>ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/generated/builds_ir_generated.cpp</code> <span class="why">— PARTIAL: one function head is excerpted as the codegen sample. This is a BUILD-TREE artifact regenerated by CMake and not in git (~4.7k LOC, 33 build fns). Never edit it; read a function when you want to see what a spec really compiled to</span></li><li><code>ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp</code> <span class="why">— PARTIAL: try_build, the shaper hook and the dispatch loop are excerpted. The remainder is the Phase E host post-process passes (dedust/stonfi liquidity combination, unwind_deployments), the anchor prefilter inventory, the trace-level failure boundary and the basic-classify fallback — the surrounding pipeline, covered in <a class="xl" href="big-picture.html">big-picture</a> and <a class="xl" href="actions.html">actions</a> (~534 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/Surface.cpp</code> <span class="why">— the --surface mode whose output is captured above: JSON escaping, sorted keys, one array per registry. 84 lines with no logic; it belongs to <a class="xl" href="gates.html">gates</a> as the twins&#39; input</span></li><li><code>indexer/indexer/events/mch/specs/*.mch, specs_decl/jettons.mch</code> <span class="why">— PARTIAL: four build programs are excerpted (jetton_transfer, change_dns, jvault_claim, coffee_swap by reference). The other ~25 are the same vocabulary applied to other protocols — read them as worked examples, and prefer them over the C++ when you want to know what a matcher MEANS</span></li><li><code>indexer/indexer/events/mch/codegen.py, cpp_expr_emit.py (frontend)</code> <span class="why">— the Python emitter that produces the generated C++. Out of scope for reading the engine: its output is fully described by the rt_* contracts above, and it is gated by the codegen self-test. Only open it if you are adding a STATEMENT form to the language</span></li></ul></div>
+<hr class="rule">
+<div class="meta">mch engine — a guided tutorial — commit ff4135bc — generated 2026-07-26 — code pulled live from repo at render time</div>
+</div>
+<script>
+(function(){
+  var GAP = 10;
+  function layout(){
+    var wide = window.matchMedia('(min-width: 980px)').matches;
+    document.querySelectorAll('.excerpt').forEach(function(ex){
+      var rail = ex.querySelector('.ex-rail');
+      if(!rail) return;
+      var grid = ex.querySelector('.ex-grid');
+      var notes = rail.querySelectorAll('.note');
+      if(!wide){ notes.forEach(function(n){ n.style.top=''; }); rail.style.minHeight=''; return; }
+      var g = grid.getBoundingClientRect(), y = 0, items = [];
+      notes.forEach(function(n){
+        var row = ex.querySelector('tr[data-l="'+n.dataset.a+'"]');
+        var t = Math.max(row ? (row.getBoundingClientRect().top - g.top) : y, y);
+        items.push({ n: n, t: t, h: n.offsetHeight });
+        y = t + n.offsetHeight + GAP;
+      });
+      if(!items.length) return;
+      var limit = ex.querySelector('.ex-code').getBoundingClientRect().height;
+      for(var i = items.length - 1; i >= 0; i--){
+        items[i].t = Math.min(items[i].t, limit - items[i].h);
+        limit = items[i].t - GAP;
+      }
+      var shift = Math.max(0, -items[0].t), maxB = 0;
+      items.forEach(function(it){
+        var t = it.t + shift;
+        it.n.style.top = t + 'px';
+        maxB = Math.max(maxB, t + it.h);
+      });
+      rail.style.minHeight = (maxB + 12) + 'px';
+    });
+  }
+  function hover(){
+    document.querySelectorAll('.excerpt').forEach(function(ex){
+      ex.querySelectorAll('.note').forEach(function(n){
+        var i = n.dataset.n;
+        var rows = ex.querySelectorAll('tr[data-n="'+i+'"]');
+        n.addEventListener('mouseenter', function(){ rows.forEach(function(r){ r.classList.add('hot'); }); });
+        n.addEventListener('mouseleave', function(){ rows.forEach(function(r){ r.classList.remove('hot'); }); });
+        rows.forEach(function(r){
+          r.addEventListener('mouseenter', function(){ n.classList.add('hot'); });
+          r.addEventListener('mouseleave', function(){ n.classList.remove('hot'); });
+        });
+      });
+    });
+  }
+  var t; function relayout(){ clearTimeout(t); t = setTimeout(layout, 60); }
+  window.addEventListener('resize', relayout);
+  window.addEventListener('load', relayout);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ layout(); hover(); });
+  else { layout(); hover(); }
+})();
+</script>

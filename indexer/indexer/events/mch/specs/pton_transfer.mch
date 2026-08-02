@@ -2,14 +2,14 @@
 #
 # A pTON ("proxy TON") wallet wraps native TON behind the jetton transfer
 # interface: it accepts the ordinary 0x0f8a7ea5 body but never emits an internal
-# transfer, so `jetton_transfer` (specs_decl/jettons.mch, whose pattern requires
+# transfer, so `jetton_transfer` (specs/jettons_decl.mch, whose pattern requires
 # the internal leg) can never match one. Without this matcher the pTON leg of a
 # DEX swap stays an unconsumed call_contract and every consumer that binds
 # `btype jetton_transfer` — stonfi v1/v2, dedust, tonco — loses its TON-side leg.
 #
 # Same anchor opcode as `jetton_transfer`, so registration order decides: this
-# spec is listed AFTER specs_decl/jettons.mch in ir/emit_manifest.json and shares
-# its `priority 90`, which reproduces the legacy list order (JettonTransferBlock-
+# spec is listed AFTER specs/jettons_decl.mch in the built-in source list and
+# shares its `priority 90`, which reproduces the legacy list order (JettonTransferBlock-
 # Matcher, then PTonTransferMatcher, both ahead of the swap matchers).
 #
 # The pTON master allowlist is what makes the match safe on an opcode this

@@ -52,7 +52,7 @@
 # shared with ethena_deposit, jvault_stake, stonfi_v1_swap, dedust_v2_swap/
 # failed_swap and coffee_mev_protect_hold_funds_jetton: the legacy list puts
 # CoffeeStakingDepositMatcher after every one of them, so this file is LAST in
-# ir/emit_manifest.json. The default priority 100 also keeps it behind the
+# the built-in source list. The default priority 100 also keeps it behind the
 # priority-90 jetton family (which builds the anchor) and the priority-80
 # nft_mint spec (which builds the child it binds).
 

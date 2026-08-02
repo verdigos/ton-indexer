@@ -53,8 +53,8 @@
 # trace would also emit a crippled `*_fallback` row. Equal priority (all default
 # 100) ⇒ the tie-break is (file, source position), which is exactly what the
 # single-file layout pins. No other spec declares any of these nine opcodes
-# (grep over specs/ + specs_decl/), and nothing binds a tgbtc btype, so the
-# file's slot in emit_manifest.json carries no cross-spec tie-break — only
+# (grep over specs/), and nothing binds a tgbtc btype, so the file's slot in the
+# built-in source list carries no cross-spec tie-break — only
 # `tgbtc_burn`'s `btype jetton_burn` anchor matters, and that must stay behind
 # the priority-90 jetton family that builds it (it does: default 100).
 #

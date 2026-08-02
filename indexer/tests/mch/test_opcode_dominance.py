@@ -10,12 +10,11 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from indexer.events.mch.ir_emit import emit_manifest
+from indexer.events.mch.ir_emit import emit_default
 
 
 REPO = Path(__file__).resolve().parents[3]
 HOST = REPO / "ton-index-worker/ton-mch-engine/src/host"
-MANIFEST = REPO / "ton-index-worker/ton-mch-engine/ir/emit_manifest.json"
 
 
 @dataclass(frozen=True)
@@ -129,7 +128,7 @@ def test_host_calls_remain_a_closed_opcode_dominated_manifest():
 
 
 def test_cocoon_parent_wallet_anchor_cannot_reach_build():
-    artifact = emit_manifest(MANIFEST)
+    artifact = emit_default()
     matcher = next(
         row for row in artifact["matchers"]
         if row["name"] == "cocoon_client_request_refund"

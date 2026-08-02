@@ -8,7 +8,7 @@ same specs yield byte-identical output.
 
 CLI::
 
-    python -m indexer.events.mch.ir_emit <specs_dir> -o <out.json>
+    python -m indexer.events.mch.ir_emit -o <out.json>
 
 The CLI self-provisions permissive Registries: it pre-parses the spec files and
 registers always-true predicate stubs, no-op async builder stubs, and dummy
@@ -29,6 +29,64 @@ from indexer.events.mch.expr_ir import IR_VERSION, emit_expr as _emit_expr
 from indexer.events.mch.lexer import tokenize
 from indexer.events.mch.parser import parse
 from indexer.events.mch.registry import Registries
+
+
+# Reproducible source list for build-time IR emission. Paths are relative to
+# this module's directory. ORDER IS THE CONTRACT: it equals matcher registration
+# order, and equal-priority matchers tie-break on this order.
+#
+# specs/jetton_transfer.mch and specs/jettons.mch are deliberately omitted (A4).
+# They are builder-tier conformance references that duplicate the
+# jetton_transfer/burn/mint matchers in specs/jettons_decl.mch. They are
+# permanently C++-skipped and inert in Python because the priority-90
+# declarative jetton matchers consume the blocks first. Including them only
+# produced duplicate/ambiguous name-keyed shadow counters and dead SKIP lines.
+# They remain in specs/ for the Python conformance suite, which references them
+# by matcher name, so suffixing was not an option.
+DEFAULT_SPEC_PATHS = [
+    "specs/nft_mint.mch",
+    "specs/jettons_decl.mch",
+    "specs/pton_transfer.mch",
+    "specs/coffee_liquidity.mch",
+    "specs/coffee_swap.mch",
+    "specs/coffee_withdraw.mch",
+    "specs/dedust_deposit.mch",
+    "specs/dedust_swap.mch",
+    "specs/dedust_withdraw.mch",
+    "specs/dedust_v2_claim_fees.mch",
+    "specs/dedust_v2_claim_reward.mch",
+    "specs/dedust_v2_swap.mch",
+    "specs/dedust_v2_withdraw.mch",
+    "specs/dedust_v2_deposit.mch",
+    "specs/dns.mch",
+    "specs/elections.mch",
+    "specs/subscriptions.mch",
+    "specs/ethena.mch",
+    "specs/evaa.mch",
+    "specs/getgems.mch",
+    "specs/jvault.mch",
+    "specs/layerzero.mch",
+    "specs/multisig.mch",
+    "specs/nft_transfer.mch",
+    "specs/nominator.mch",
+    "specs/stonfi_v1_swap.mch",
+    "specs/stonfi_v2_provide.mch",
+    "specs/stonfi_v2_swap.mch",
+    "specs/stonfi_v2_withdraw.mch",
+    "specs/telegram_nft.mch",
+    "specs/teleitem_auction.mch",
+    "specs/nft_sale.mch",
+    "specs/tgbtc.mch",
+    "specs/tonco_liquidity.mch",
+    "specs/tonco_swap.mch",
+    "specs/tonstakers.mch",
+    "specs/vesting.mch",
+    "specs/coffee_create_pool.mch",
+    "specs/coffee_mev.mch",
+    "specs/coffee_staking.mch",
+    "specs/cocoon.mch",
+]
+
 
 def _unsigned32(opcode: int) -> int:
     """Canonical unsigned 32-bit opcode (schema rule: hosts compare unsigned)."""
@@ -349,6 +407,16 @@ def emit_manifest(manifest_path: Path) -> dict:
     return _emit_paths(paths, list(rels))
 
 
+def emit_default() -> dict:
+    """Compile the built-in production spec list and emit IR."""
+    base = Path(__file__).resolve().parent
+    paths = [base / rel for rel in DEFAULT_SPEC_PATHS]
+    missing = [str(path) for path in paths if not path.is_file()]
+    if missing:
+        raise FileNotFoundError(f"built-in manifest references missing spec files: {missing}")
+    return _emit_paths(paths, list(DEFAULT_SPEC_PATHS))
+
+
 def render_json(artifact: dict) -> str:
     return json.dumps(artifact, indent=2, sort_keys=False, ensure_ascii=False) + "\n"
 
@@ -356,7 +424,7 @@ def render_json(artifact: dict) -> str:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="python -m indexer.events.mch.ir_emit",
-        description="Emit MCH IR (1.0) from a directory of .mch spec files.",
+        description="Emit MCH IR from the built-in production list or specified .mch specs.",
     )
     ap.add_argument("specs_dir", nargs="?", help="directory containing .mch spec files")
     ap.add_argument(
@@ -367,9 +435,14 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("-o", "--output", required=True, help="output JSON path")
     args = ap.parse_args(argv)
 
-    if bool(args.specs_dir) == bool(args.manifest):
-        ap.error("provide exactly one of specs_dir or --manifest")
-    artifact = emit_manifest(Path(args.manifest)) if args.manifest else emit_dir(Path(args.specs_dir))
+    if args.specs_dir and args.manifest:
+        ap.error("provide at most one of specs_dir or --manifest")
+    if args.manifest:
+        artifact = emit_manifest(Path(args.manifest))
+    elif args.specs_dir:
+        artifact = emit_dir(Path(args.specs_dir))
+    else:
+        artifact = emit_default()
     with open(args.output, "w", encoding="utf-8", newline="\n") as f:
         f.write(render_json(artifact))
     print(

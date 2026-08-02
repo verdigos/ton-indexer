@@ -1,0 +1,819 @@
+{
+  "id": "block-tree",
+  "title": "3 · From trace to Block tree — the structure matchers walk",
+  "summary": "Chapter 1 showed a trace turning into an action; chapter 2 showed the `Value` that travels through it. This chapter is the substrate in between: the four plain structs a fixture decodes into, the `EventNode` tree that reassembles the message graph from flat rows, and the `Block` spine that `init_block` lays over it. By the end you can read any block-tree dump and say exactly which C++ line produced each node, predict what `failed` will be for a given transaction, and know precisely what a merge inherits and what it destroys. This layer is a port of the Python indexer's `tree_utils.to_tree` / `core.Block` / `event_processing.init_block`, and it is the one layer that was verified byte-identical against Python across the whole fixture corpus — so most of what is worth saying here is about the places where the C++ deliberately does NOT copy Python (determinism) and the places where it copies Python bug-for-bug (failed semantics, ContractDeploy children). Nothing in this file matches anything: it only builds the shape that [[matcher-runtime]] walks.",
+  "diagrams": [
+    {
+      "title": "Fixture to spine",
+      "mermaid": "flowchart TD\n  F[\".lz4 fixture (LZ4 frame + msgpack)\"] --> L[\"load_trace -> Trace / Transaction / Message / MsgContent\"]\n  L --> T[\"to_tree: sort tx by lt DESC, link child by in-msg hash\"]\n  T --> R[\"root = lowest-lt tx, then walk .parent up\"]\n  R --> I[\"init_block: iterative DFS over EventNode.children\"]\n  I --> LB[\"one leaf Block per node:<br/>tick_tock | ton_transfer | call_contract\"]\n  LB --> D[\"+ contract_deploy pushed into children_blocks<br/>(uninit/nonexist -> active)\"]\n  LB --> C[\"connect(parent,child) then sort_next_blocks (min_lt asc)\"]\n  C --> S[\"Block spine -> walker (ch.5)\"]\n  L -.-> IF[\"interfaces section -> LookupSource (ch.7)\"]"
+    },
+    {
+      "title": "What merge_blocks does, in order",
+      "mermaid": "flowchart TD\n  E[\"produced->merge_blocks(consumed)\"] --> Q[\"dedup, FIRST-SEEN order<br/>(Python uses set() = nondeterministic)\"]\n  Q --> EC[\"ensure_earliest_common_block:<br/>sort by (min_lt_without_initiating_tx, direction),<br/>every other block must chain back to the head\"]\n  EC -->|nullptr| FA[\"return false -> build rejected,<br/>tree left completely untouched\"]\n  EC --> M[\"each merged block: parent = produced,<br/>event_nodes APPENDED, pushed to children_blocks\"]\n  M --> FR[\"find_frontier(earliest): BFS through the merged set,<br/>first non-member on each path -> new next_blocks (deduped)\"]\n  FR --> PR[\"previous_block = earliest->previous_block<br/>initiating_event_node = earliest's\"]\n  PR --> LT[\"calculate_min_max_lt, then sort_next_blocks\"]\n  LT --> CC[\"earliest->previous_block->compact_connections()\"]"
+    }
+  ],
+  "sections": [
+    {
+      "heading": "The fixture loader — msgpack in, four structs out",
+      "prose": "`TraceLoader.{h,cpp}` is the FIXTURE path only: it reads one `tests/traces/*.lz4` (an LZ4 frame wrapping msgpack, written by the Python recorder) and produces `Trace -> Transaction -> Message -> MsgContent`. The production loader that reads the same shape out of Postgres is a different file entirely and is covered in [[prod-path]]; everything downstream of these four structs is shared, which is exactly what makes the prod A/B gate meaningful.\n\nThe decode is deliberately dumb: every field is fetched by name, a missing or nil key yields the default, and unknown keys are ignored. There is no schema validation because the fixture writer and this reader are pinned together by the twin gates, not by a contract. Two decisions in here have consequences much later — the signed storage of `opcode`, and the fact that `message_content` is optional.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/TraceLoader.h",
+          "lines": [
+            29,
+            55
+          ],
+          "lang": "cpp",
+          "title": "Message — the row the whole engine reads from",
+          "annotations": [
+            {
+              "lines": [
+                36,
+                36
+              ],
+              "text": "Stored SIGNED because that is how Postgres stores it (`int4`) and how the msgpack fixture carries it. Every consumer must go through `opcode32()`; comparing `msg->opcode` against `0xa7733acd` directly would silently fail for any opcode with the high bit set. This is the single most common way to write a wrong condition against this struct."
+            },
+            {
+              "lines": [
+                42,
+                42
+              ],
+              "text": "Only the emptiness of `value_extra_currencies` is kept, not the map. That is enough because the one place it is read is the `call_contract` failed-exception rule, which tests Python's `not node.message.value_extra_currencies` — a truthiness test. Decoding the dict would be dead weight."
+            },
+            {
+              "lines": [
+                43,
+                43
+              ],
+              "text": "Optional: a message with no content row is representable. Python's `EventNode.__init__` RAISES `NoMessageBodyException` in that case and the whole trace falls back to basic classification; the C++ node has no such precondition and the leaf simply gets `comment = null`. No fixture in the corpus exercises it, so the twins agree — but it is a real asymmetry to remember if you ever feed the engine a hand-built trace."
+            },
+            {
+              "lines": [
+                49,
+                54
+              ],
+              "text": "The mask, mirroring Python's `EventNode.get_opcode`. Note it returns `nullopt` for an absent opcode, NOT 0 — and `init_block` treats absent and 0 the same, so the distinction only matters to specs that read `data.opcode`."
+            }
+          ],
+          "sha8": "469e459d"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/TraceLoader.cpp",
+          "lines": [
+            117,
+            142
+          ],
+          "lang": "cpp",
+          "title": "parse_message — every field is best-effort",
+          "annotations": [
+            {
+              "lines": [
+                129,
+                130
+              ],
+              "text": "`bounce` is `optional<bool>` and `bounced` is a plain `bool`, and the difference is load-bearing: the ton_transfer failed rule tests `msg->bounce && *msg->bounce`, i.e. it must distinguish \"bounce flag absent\" from \"bounce == false\". `bounced` has no such consumer, so it collapses to false."
+            },
+            {
+              "lines": [
+                131,
+                133
+              ],
+              "text": "The extra-currency truthiness test, computed once at decode. `is_nil` covers both an absent key and an explicit nil, so a fixture written by an older recorder decodes identically."
+            },
+            {
+              "lines": [
+                134,
+                140
+              ],
+              "text": "`body` stays as the base64 BOC string — no cell is deserialized here. Every consumer (the comment derivation later in this chapter, the parsers in [[parse-layer]]) decodes it itself, which is why a corrupt body is a local parse failure rather than a load failure."
+            }
+          ],
+          "sha8": "7d748ca6"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/TraceLoader.cpp",
+          "lines": [
+            230,
+            263
+          ],
+          "lang": "cpp",
+          "title": "load_trace — the two things that are not just field copying",
+          "annotations": [
+            {
+              "lines": [
+                240,
+                243
+              ],
+              "text": "Once the frame decompresses and the msgpack root is a map — the errors just above at 221, 222 and 226-233 — a missing `transactions` array is the only remaining hard error; every FIELD below it degrades to a default. The principle: a fixture the recorder wrote is trusted, and a fixture it did not write should fail loudly at the top rather than subtly three layers down."
+            },
+            {
+              "lines": [
+                247,
+                251
+              ],
+              "text": "Back-wiring the owning transaction into each `Message` (Python's `Message.transaction`). This second pass is a LOCALITY choice, not a necessity: `parse_message` has no owner in hand, while `parse_transaction` does and could legally stamp `msg->tx = tx.get()` in its own message loop (lines 211-213). The invariant that actually matters here is the one that makes either placement safe — `trace.transactions` holds `unique_ptr`, so a `Transaction*` stays valid for the lifetime of the `Trace` even as the vector reallocates while it grows. That is what lets every `Message` and every `EventNode` hold raw `Transaction` pointers."
+            },
+            {
+              "lines": [
+                252,
+                262
+              ],
+              "text": "The `interfaces` section decodes generically into `Value` (via `msgpack_to_value`, just above) rather than into typed structs, because the Python `TestInterfaceRepository` serves whatever the recorder captured. Note the float branch in that helper: msgpack floats become `VType::Float`, a kind that deliberately has NO rendering, so a spec that reads a raw float fails exactly where the Python twin's `render()` raises ([[value]])."
+            }
+          ],
+          "sha8": "346fcaf7"
+        }
+      ]
+    },
+    {
+      "heading": "to_tree — parent links by message hash",
+      "prose": "A trace arrives as a flat list of transactions. `to_tree` rebuilds the message graph with one trick: sort the transactions by `lt` DESCENDING, so every child transaction is created before the parent that sent to it. By the time a parent enumerates its out-messages, the `in-msg-hash -> tx-hash` map already contains the child's entry, and the link is a single lookup. This is a direct port of Python's `tree_utils.to_tree`, sort direction and all.\n\nThe node type is deliberately thin — a message pointer, a transaction pointer, a tick-tock flag, and links. Everything derived (`lt()`, `opcode()`, `tx_hash()`) is computed on demand so there is no cached state to get stale when a block absorbs nodes from elsewhere.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.h",
+          "lines": [
+            41,
+            75
+          ],
+          "lang": "cpp",
+          "title": "EventNode — three accessors that all special-case tick_tock",
+          "annotations": [
+            {
+              "lines": [
+                41,
+                46
+              ],
+              "text": "For a normal transaction `msg` is the INCOMING message; for a destination-less out-message (a log/notification) the node's `msg` is that outgoing message and `tx` is the sender's transaction. So `msg->direction` is the only way to tell the two node flavours apart, and `Block::direction()` in the merge code depends on exactly that."
+            },
+            {
+              "lines": [
+                53,
+                64
+              ],
+              "text": "Port of `EventNode.get_lt`. The precedence is tick_tock first, then `created_lt`, then `tx_lt` — and it matters because `min_lt` derives from it and `min_lt` decides sibling order everywhere. A tick_tock node has no meaningful message lt at all, hence the first branch."
+            },
+            {
+              "lines": [
+                54,
+                56
+              ],
+              "text": "Python synthesises a fake `Message(msg_hash=tx.hash, direction='in', transaction=tick_tock_tx)` for tick-tock nodes; the C++ leaves `msg` null and reads `tx` instead. Same answers from `lt()`, `tx_hash()` and `is_tick_tock`, but any new code that dereferences `node->msg` unconditionally will crash on a tick-tock node where Python quietly returned a synthetic value."
+            }
+          ],
+          "sha8": "9f3365b6"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.cpp",
+          "lines": [
+            73,
+            107
+          ],
+          "lang": "cpp",
+          "title": "to_tree part 1 — descending lt is the whole algorithm",
+          "annotations": [
+            {
+              "lines": [
+                77,
+                78
+              ],
+              "text": "`stable_sort` with `>` — NOT an ascending sort then reversed. Python's `sorted(txs, key=lt, reverse=True)` is stable in the original order for equal lt, and reversing after an ascending sort would flip those ties. Equal `lt` across two transactions in one trace is rare but not impossible (different shards), and this is the kind of thing that shows up as a single-fixture A/B diff months later."
+            },
+            {
+              "lines": [
+                92,
+                95
+              ],
+              "text": "The dedup guard exists because a node can already have been created as somebody's child... except it cannot, in this loop: children are looked up in `tx_nodes`, never created there. It is a faithful copy of Python's `if tx.hash not in nodes`, kept so the two loops read identically."
+            },
+            {
+              "lines": [
+                103,
+                105
+              ],
+              "text": "The registration that makes descending order pay off: this transaction publishes ITS incoming message hash before the loop ever reaches the transaction that sent it. Parent links are therefore never deferred and no second pass is needed."
+            }
+          ],
+          "sha8": "6c18349c"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.cpp",
+          "lines": [
+            109,
+            151
+          ],
+          "lang": "cpp",
+          "title": "to_tree part 2 — children, root, and the orphan counter",
+          "annotations": [
+            {
+              "lines": [
+                113,
+                117
+              ],
+              "text": "A destination-less out-message becomes its own leaf node under the sending transaction. This is where the engine's log/event leaves come from — every `call_contract` block whose opcode is an event opcode is one of these, and it shares its `tx` with its parent."
+            },
+            {
+              "lines": [
+                119,
+                126
+              ],
+              "text": "Python `assert m.msg_hash in msg_tx` here; the C++ skips silently. That is intentional (it matches the Go PoC and keeps the no-abort rule), but silence is the dangerous half — hence `unlinked` below. An out-message with a destination and no matching child transaction means the trace was captured incomplete."
+            },
+            {
+              "lines": [
+                131,
+                135
+              ],
+              "text": "`sorted.back()` is the LOWEST-lt transaction, and walking `.parent` up from it lands on the root. Note the trace root is normally the ext-in transaction; picking it by lowest lt rather than by \"has no in-message source\" is Python's rule, copied verbatim."
+            },
+            {
+              "lines": [
+                137,
+                149
+              ],
+              "text": "The reachability sweep that turns the silent skip above into a number. `unlinked != 0` prints a warning in the classify drivers, so an incomplete fixture is visible instead of quietly classifying a subset. On the current 148-fixture corpus it is zero for every fixture — see the corpus run at the end of this chapter."
+            }
+          ],
+          "sha8": "2723005d"
+        }
+      ]
+    },
+    {
+      "heading": "What a Block is",
+      "prose": "A `Block` is a node in a second tree laid over the first. Initially there is one block per event node (the \"spine\"), and matching replaces runs of blocks with produced blocks that own them. Two link families coexist and must not be confused: `next_blocks`/`previous_block` is the FLOW (who follows whom in the message graph), and `children_blocks`/`parent` is CONSUMPTION (who was absorbed into whom). A matcher walks the first; the serializer in [[actions]] reads the second.\n\nThe file header is worth reading before the struct, because it enumerates every place the C++ deliberately departs from Python. All four departures are in the same direction: replace a Python `set()` or an unsorted list with a deterministic order.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.h",
+          "lines": [
+            1,
+            19
+          ],
+          "lang": "cpp",
+          "title": "The four deliberate deviations, stated up front",
+          "annotations": [
+            {
+              "lines": [
+                9,
+                13
+              ],
+              "text": "The invariant that lets the walker read `next_blocks` raw. Python's IR engine sorts candidates at every walk site instead; maintaining the order at construction and after every merge is observably identical and strictly cheaper. If you ever add a mutation of `next_blocks`, re-establishing this is your job — nothing asserts it."
+            },
+            {
+              "lines": [
+                14,
+                16
+              ],
+              "text": "The one departure that is NOT provably neutral, and it says so. Python's `find_next` can yield the same block twice on a diamond and leaves the duplicate in `next_blocks`; the C++ dedups. Named \"suspect #1\" because if a matcher A/B diff ever appears on a diamond-shaped trace, this is the first thing to un-dedup and re-run."
+            },
+            {
+              "lines": [
+                17,
+                19
+              ],
+              "text": "`transient` was a Python filter on the merge input, used only by a legacy `LabelBlock`. The IR engine emits no transient blocks, so the filter would filter nothing — dropping the field is the honest encoding of that, and this comment is the receipt if the assumption ever changes."
+            }
+          ],
+          "sha8": "831d95ad"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.h",
+          "lines": [
+            92,
+            121
+          ],
+          "lang": "cpp",
+          "title": "Block — the fields that survive to the serializer",
+          "annotations": [
+            {
+              "lines": [
+                96,
+                99
+              ],
+              "text": "One `data` field carries two very different payloads depending on who built the block: for a spine leaf it is the `basic_blocks.py` constructor dict (a deliberate subset — see `leaf_data` below), for a produced block it is whatever the build program captured. `where_exprs` read it through `rt_dotfield` and cannot tell which, which is why the leaf subset is documented rather than enforced."
+            },
+            {
+              "lines": [
+                107,
+                110
+              ],
+              "text": "`initiating_event_node` is a LEAF's tree-parent — the node that caused this block to exist, not one of its own nodes. It survives a merge (inherited from the earliest merged block) and is read twice by the serializer: to extend `tx_hashes` and to add the initiating transaction's account. Get it wrong and actions gain or lose an account row with no other symptom."
+            },
+            {
+              "lines": [
+                111,
+                114
+              ],
+              "text": "`is_ghost_block` is permanently false: ghost nodes (an intended-but-never-started operation) exist only in a Python code path the IR engine does not use. It is kept as a field rather than deleted because [[actions]] gates the destination-account push on it, and a hard-coded `false` there would hide the dependency."
+            },
+            {
+              "lines": [
+                119,
+                120
+              ],
+              "text": "Two lt fields, and the difference only exists for a leaf: `min_lt` is the node's message lt, `min_lt_without_initiating_tx` is the owning transaction's lt. They are the same after `calculate_min_max_lt`, i.e. after any merge. Sibling ordering uses `min_lt`; merge-anchor selection uses the other one."
+            }
+          ],
+          "sha8": "f9f2b22b"
+        }
+      ]
+    },
+    {
+      "heading": "init_block — the leaf spine",
+      "prose": "`init_block` walks the event tree and hangs exactly one leaf block off each node. There are four leaf btypes: `tick_tock`, `ton_transfer`, `call_contract`, and `contract_deploy` — but the fourth is never a spine node, it is a side-effect block pushed into a leaf's `children_blocks`.\n\nThe classification rule is three lines long and the `failed` rules are longer than the classification. That is the honest shape of this code: what a block IS is trivial, whether it FAILED is a pile of protocol-specific exceptions that the Python engine accumulated over years, and every one of them had to be copied exactly.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.cpp",
+          "lines": [
+            19,
+            61
+          ],
+          "lang": "cpp",
+          "title": "Comment derivation — the only BOC work init_block does",
+          "annotations": [
+            {
+              "lines": [
+                22,
+                27
+              ],
+              "text": "The contract in one comment. `comment` is base64 of the RAW bytes when the message is encrypted, and utf-8-backslashreplace with U+0000 stripped otherwise — both branches live in `ton_transfer_comment` ([[parse-layer]]). `comment_encoded` is the AND of the two, and it is a Python attribute on the block rather than a data key; it is promoted into `data` here because a `Value` dict is the only channel a spec has."
+            },
+            {
+              "lines": [
+                41,
+                47
+              ],
+              "text": "Three early returns, all silent. Python wraps the whole body parse in a `try` and swallows, so an undecodable body must yield `comment = null, encrypted = false` — not a failed block, not an error. A stricter reading here would reject traces Python happily classifies."
+            },
+            {
+              "lines": [
+                50,
+                58
+              ],
+              "text": "The `encrypted` flag is a raw 32-bit peek, not a parse: `0x2167da4b` is the encrypted-comment opcode. Note this same opcode is treated as a TON transfer by the classifier below, which is the whole reason the flag has to be recovered from the body."
+            }
+          ],
+          "sha8": "28012964"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.cpp",
+          "lines": [
+            321,
+            335
+          ],
+          "lang": "cpp",
+          "title": "node_failed and init_leaf",
+          "annotations": [
+            {
+              "lines": [
+                321,
+                326
+              ],
+              "text": "Python's `EventNode.failed` is `message.transaction.aborted`, and for a tick-tock node the tick-tock transaction's `aborted`. Because the C++ node stores `tx` directly in both cases, one expression covers both — where Python needed the synthetic-message trick. `aborted` is the ONLY input; `compute_exit_code` is loaded but never consulted."
+            },
+            {
+              "lines": [
+                329,
+                331
+              ],
+              "text": "The two lt fields diverge exactly here and nowhere else: `min_lt` from the message (`created_lt` if present), `min_lt_without_initiating_tx` from the owning transaction. For an out-message leaf under the same transaction as its parent, the second value is identical to the parent's — which is what makes the merge anchor prefer the parent."
+            },
+            {
+              "lines": [
+                332,
+                334
+              ],
+              "text": "`initiating_event_node = node->parent` — the leaf's tree parent, null at the root. Mirrors `core.py Block.__init__`'s `if len(nodes) == 1: self.initiating_event_node = nodes[0].parent`. A block built with zero or several nodes gets nothing, which is why only leaves ever set it and merges only ever inherit it."
+            }
+          ],
+          "sha8": "71b4cae3"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.cpp",
+          "lines": [
+            345,
+            385
+          ],
+          "lang": "cpp",
+          "title": "leaf_data — a deliberate subset of the Python dict",
+          "annotations": [
+            {
+              "lines": [
+                345,
+                349
+              ],
+              "text": "Read this before writing any `where_expr` against a leaf. `extra_currencies` is NOT in the dict (the map is never decoded), so reading it faults where Python yields a value. The set of readable leaf fields is exactly what this function emplaces — there is no schema, this is it."
+            },
+            {
+              "lines": [
+                354,
+                362
+              ],
+              "text": "A `tick_tock` leaf's data has ONE key, `account`, and it comes from the transaction, not from any message. Any spec branch that reaches for `source`/`destination` on a tick_tock block is reading fields that were never emplaced."
+            },
+            {
+              "lines": [
+                365,
+                369
+              ],
+              "text": "`ton_transfer` is the only leaf without an `opcode` key — matching Python, where `TonTransferBlock`'s dict simply omits it. So `data.opcode` is a fault on a ton_transfer and null-or-int everywhere else; the difference is observable to a spec."
+            },
+            {
+              "lines": [
+                373,
+                375
+              ],
+              "text": "`value` is an Amount, and a message with no value becomes `make_amount_none()` rather than null — mirroring Python's `Amount(None)`. That distinction is what lets an arithmetic expression over a valueless message behave the same on both sides ([[value]])."
+            },
+            {
+              "lines": [
+                376,
+                383
+              ],
+              "text": "Only the ton_transfer branch pays for the BOC decode, and only because two consumers need it (the getgems purchase predicate and the nft_transfer_parent_absorb shaper). Every other leaf's data is pure field copying — worth knowing when reasoning about spine construction cost."
+            }
+          ],
+          "sha8": "940796e8"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.cpp",
+          "lines": [
+            387,
+            424
+          ],
+          "lang": "cpp",
+          "title": "make_leaf_block — classification, then the failed exceptions",
+          "annotations": [
+            {
+              "lines": [
+                388,
+                389
+              ],
+              "text": "Three opcodes count as \"TON transfer\": absent, zero, and the encrypted-comment opcode. But a TON transfer also needs BOTH endpoints — so an ext-in (no source) with opcode 0 becomes a `call_contract`, not a `ton_transfer`. That is Python's rule verbatim and it is why trace roots are almost always `call_contract` blocks."
+            },
+            {
+              "lines": [
+                398,
+                411
+              ],
+              "text": "The ton_transfer failed ladder, in Python's exact order, and note what it does NOT do: when the node did not fail, `failed` is never assigned at all — it keeps the struct default. Reordering these branches changes answers, because `bounce == true` wins over `end_status == uninit` and both win over the no-gas exemption."
+            },
+            {
+              "lines": [
+                405,
+                407
+              ],
+              "text": "This branch is dead on fixtures: `skipped_reason` is absent from every recorded trace, so the optional is always empty. It is ported anyway because the production loader can supply it — the prod A/B gate in [[prod-path]] is what would surface a divergence."
+            },
+            {
+              "lines": [
+                416,
+                423
+              ],
+              "text": "The call_contract exception, and the one place a truthiness test hides in plain sight. Python writes `not node.message.value` — which is true for BOTH None and 0 — so a failed, valueless, non-zero-opcode call with no extra currencies is NOT marked failed. These are log/event leaves: they \"fail\" only because the transaction that emitted them aborted, and treating them as failed would poison every action built above them."
+            }
+          ],
+          "sha8": "37d746af"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.cpp",
+          "lines": [
+            425,
+            459
+          ],
+          "lang": "cpp",
+          "title": "The ContractDeploy child, and the iterative spine walk",
+          "annotations": [
+            {
+              "lines": [
+                429,
+                431
+              ],
+              "text": "The deploy predicate: the transaction ended `active` and did not start `active` or `frozen`. Python attaches this to `TonTransferBlock` and `CallContractBlock` but NOT to `TickTockBlock` — hence the explicit `!node->is_tick_tock` guard, which is the only reason it is spelled out."
+            },
+            {
+              "lines": [
+                432,
+                437
+              ],
+              "text": "The subtle one. The deploy block goes into `children_blocks` but its `parent` is left NULL, because Python only sets `.parent` inside `merge_blocks`. Consequence: the deploy block is not reachable from the spine at all — it is not in anyone's `next_blocks` and `topmost_parent()` returns itself — so it survives independently even when its host leaf is consumed by a matcher, and gets serialized as its own top-level action. The run below shows exactly that."
+            },
+            {
+              "lines": [
+                445,
+                447
+              ],
+              "text": "Iterative where Python recurses. Trace depth is attacker-influenced (a long chain of forwards), so recursion depth is not a safe function of input. The stack is LIFO, which visits siblings in reverse — harmless, because `connect` happens inside the parent's own loop and the order is re-established by the sort below."
+            },
+            {
+              "lines": [
+                456,
+                456
+              ],
+              "text": "The canonical-order invariant established at construction. Every child's `min_lt` is already final at this point (set by `init_leaf` inside `make_leaf_block`), so one stable sort per node is enough and no later pass has to re-sort the spine."
+            }
+          ],
+          "sha8": "d00b31c5"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "python tools/trace_inspect.py \"tests/traces/03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4\" --blocks",
+          "output": "trace_id=03RZCW7mu3eJp+FWifVzKsRHafUrqQNu4E6YwZxvXJ0=  txs=5  lt=[45769974000001..45769982000001]\n[000] EXT_IN->0:3359..67BA op=0xcfc2d330\n[001] 0:3359..67BA->0:0F95..13D4 op=0xa7733acd/VestingSendMessage v=0.0500TON\n[002] 0:0F95..13D4->0:3359..67BA op=0xf7733acd v=0.0392TON\n[003] 0:0F95..13D4->0:A8A6..7D39 op=0x00000000 v=100.0000TON c=\"Deposit\"\n[004] 0:A8A6..7D39->0:0F95..13D4 op=0x00000000 v=0.0987TON c=\"Stake 99.800000000 accepted\"\n-- block tree (top-level=4, total=6, *=unmatched basic) --\n[000] *call_contract op=0xcfc2d330 EXT_IN->0:3359..67BA\n  [001] vesting_send_message nodes=2\n      + call_contract op=0xa7733acd/VestingSendMessage {query_id=0 send_mode=3 …} 0:3359..67BA->0:0F95..13D4 v=0.0500TON\n      + call_contract op=0xf7733acd 0:0F95..13D4->0:3359..67BA v=0.0392TON\n    [002] *ton_transfer 0:0F95..13D4->0:A8A6..7D39 v=100.0000TON c=\"Deposit\"\n      [003] *ton_transfer 0:A8A6..7D39->0:0F95..13D4 v=0.0987TON c=\"Stake 99.800000000 accepted\"",
+          "note": "Run from S:/Dev/ton-indexer-clear/indexer with the venv0 python. Everything above the `--` line is the EventNode tree in tx order; everything below is the Block tree. Read it against this chapter: line [000] is the ext-in leaf classified `call_contract` (opcode 0 but no source); [003]/[004] have opcode 0 with both endpoints, so they are `ton_transfer` leaves and their `c=` comments come from `leaf_comment_info`; indentation is `next_blocks`, `+` lines are `children_blocks`. `nodes=2` is the merged block's `event_nodes` after `merge_blocks`. The one data dict is elided with … for width."
+        },
+        {
+          "cmd": "python tools/trace_inspect.py \"tests/traces/I8W6RKYLE-NJPAComfUWhsG7_L5VvFxNEzizt5N8AAc=.lz4\" --blocks",
+          "output": "trace_id=I8W6RKYLE+NJPAComfUWhsG7/L5VvFxNEzizt5N8AAc=  txs=3  lt=[26717862000001..26717862000005]\n[000] EXT_IN->0:6F23..3083 op=0x726c8f3c\n[001] 0:6F23..3083->0:F791..4280 op=0x00000015/MinterJettonMint v=0.0500TON\n[002] 0:F791..4280->0:AFE2..F7CF op=0x178d4519/JettonInternalTransfer v=0.0400TON\n-- block tree (top-level=3, total=5, *=unmatched basic) --\n[000] *call_contract op=0x726c8f3c EXT_IN->0:6F23..3083\n  [001] jetton_mint nodes=2\n      + call_contract op=0x00000015/MinterJettonMint {…} 0:6F23..3083->0:F791..4280 v=0.0500TON\n      + call_contract op=0x178d4519/JettonInternalTransfer {…} 0:F791..4280->0:AFE2..F7CF v=0.0400TON\n[002] contract_deploy {…} 0:F791..4280->0:AFE2..F7CF v=0.0400TON",
+          "note": "The ContractDeploy claim, demonstrated. Transaction [002] deploys the destination jetton wallet, so its leaf gets a `contract_deploy` sibling in `children_blocks`. That leaf is then consumed by `jetton_mint` — but the deploy block is listed at TOP LEVEL, because its `.parent` was never set. Three transactions, five blocks: three spine leaves + one deploy + one produced. Data dicts elided with … for width."
+        }
+      ]
+    },
+    {
+      "heading": "merge_blocks — who inherits what",
+      "prose": "When a matcher accepts, the produced block calls `merge_blocks(consumed)` and the spine is rewritten in place. This is the only destructive operation in the substrate, and the header comment states the contract bluntly: it must be called ONLY after a build accepts, because there is no rollback. The `false` return exists for the one case that can be detected before any mutation — no earliest common block — and in that case the tree is untouched.\n\nFour helpers do the work. `ensure_earliest_common_block` picks the anchor and validates that the consumed set is actually connected. `find_frontier` computes what the produced block should now point at. `compact_connections` repairs the parent's outgoing edges. `calculate_min_max_lt` re-derives the ordering key. Read them in that order.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.cpp",
+          "lines": [
+            163,
+            183
+          ],
+          "lang": "cpp",
+          "title": "sort_next_blocks and compact_connections",
+          "annotations": [
+            {
+              "lines": [
+                164,
+                165
+              ],
+              "text": "`stable_sort`, not `sort`. Blocks with equal `min_lt` are common (an out-message leaf and its log sibling share a transaction), and preserving their insertion order is what keeps the walker's candidate order reproducible run to run."
+            },
+            {
+              "lines": [
+                172,
+                180
+              ],
+              "text": "The repair after a merge: an edge that used to point at a consumed block must now point at whatever swallowed it, hence `topmost_parent()`. The dedup is by first-seen order — Python writes `set(...)`, whose iteration order is id-based and therefore varies between processes. This is the single largest determinism win in the file, and it is invisible until you diff two Python runs of the same trace."
+            },
+            {
+              "lines": [
+                181,
+                182
+              ],
+              "text": "Python's `compact_connections` does NOT sort; the sort here is what keeps the canonical-order invariant true after a merge. Note the ordering constraint it creates: `merge_blocks` must finish `calculate_min_max_lt` on the produced block BEFORE the parent compacts, or the parent would sort on a stale key."
+            }
+          ],
+          "sha8": "64c89e4e"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.cpp",
+          "lines": [
+            224,
+            253
+          ],
+          "lang": "cpp",
+          "title": "find_frontier and calculate_min_max_lt",
+          "annotations": [
+            {
+              "lines": [
+                229,
+                239
+              ],
+              "text": "BFS that descends THROUGH members of the merged set and yields the first non-member on each path — Python's `find_next(..., stop_on_filter_unmatch=True, yield_on_unmatch=True)`. The `seen` set is the documented deviation: on a diamond, Python yields the same frontier block twice and keeps both copies in `next_blocks`."
+            },
+            {
+              "lines": [
+                243,
+                253
+              ],
+              "text": "The C++ keeps only `min_lt` and `min_lt_without_initiating_tx`; Python's version also recomputes `min_utime`, `max_lt` and `max_utime`. Those three feed Action timestamps, which the C++ serializer derives from the event nodes directly ([[actions]]) — so they are absent here rather than maintained and unread."
+            },
+            {
+              "lines": [
+                248,
+                250
+              ],
+              "text": "The empty-set guard turns `int64 max` into 0. It cannot fire from `merge_blocks` (a merged block always has nodes) but it can from the Phase E post-process passes that call this after re-absorbing legs, which is why the method is public."
+            }
+          ],
+          "sha8": "0a0b51ba"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.cpp",
+          "lines": [
+            255,
+            281
+          ],
+          "lang": "cpp",
+          "title": "ensure_earliest_common_block — anchor selection and the connectivity check",
+          "annotations": [
+            {
+              "lines": [
+                257,
+                262
+              ],
+              "text": "The sort key is `(min_lt_without_initiating_tx, direction)`, i.e. the OWNING TRANSACTION's lt, not the message lt. That is deliberate: an out-message leaf and the transaction that produced it tie on the first key, and `direction()` (0 = in/anchor, 1 = out, 2 = multi-node) breaks the tie toward the incoming side. Python's tuple sort, reproduced."
+            },
+            {
+              "lines": [
+                266,
+                279
+              ],
+              "text": "The connectivity check, and it is weaker than it looks: it only requires each block's IMMEDIATE `previous_block` to already be in `connected`, and it iterates in sorted order, so it validates a chain rather than a general reachability. Copied as-is — a stronger check would reject matches Python accepts."
+            },
+            {
+              "lines": [
+                277,
+                277
+              ],
+              "text": "`return nullptr` here is what becomes `merge_blocks` returning false. Python raises instead (`raise \"Earliest common block not found\"` — a bare string, which would itself be a TypeError), so on the Python side this path is a hard failure caught upstream; on the C++ side it is a clean build rejection with the tree untouched."
+            }
+          ],
+          "sha8": "2f80a262"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BlockTree.cpp",
+          "lines": [
+            283,
+            317
+          ],
+          "lang": "cpp",
+          "title": "merge_blocks — the inheritance list",
+          "annotations": [
+            {
+              "lines": [
+                284,
+                292
+              ],
+              "text": "Dedup preserving FIRST-SEEN order, against Python's `set(blocks)`. This order then feeds the sort in `ensure_earliest_common_block` (whose ties are broken by stability) AND the `event_nodes` append order below — so a nondeterministic set here would produce a nondeterministic anchor and a nondeterministic node order in the same breath."
+            },
+            {
+              "lines": [
+                293,
+                296
+              ],
+              "text": "The only pre-mutation exit. Everything after this line mutates the tree irreversibly, which is why the header insists this is called after a build ACCEPTS, never speculatively."
+            },
+            {
+              "lines": [
+                297,
+                301
+              ],
+              "text": "What a merge inherits: `event_nodes` are APPENDED in merged order (so `anchor_tx_hash()` is the first consumed block's first node), each consumed block gets `parent` set and lands in `children_blocks`. Note it does NOT take their `data`, `failed`, or `opcode` — a produced block's data comes entirely from its build program ([[build-programs]])."
+            },
+            {
+              "lines": [
+                302,
+                310
+              ],
+              "text": "The three link repairs, in Python's order: frontier blocks become the produced block's `next_blocks` and get their `previous_block` re-pointed; the produced block takes the anchor's `previous_block`; `initiating_event_node` is inherited from the ANCHOR, not from the first consumed block. The `is_ghost_block` OR that Python does here is unreachable and is documented instead of written."
+            },
+            {
+              "lines": [
+                311,
+                315
+              ],
+              "text": "Order matters and differs from Python: `calculate_min_max_lt` runs BEFORE the parent's `compact_connections`, because compaction now sorts and would otherwise sort on the produced block's pre-merge `min_lt`. Python compacts first and never sorts, so both orders are correct in their own engine — but swapping them here would silently reorder siblings."
+            }
+          ],
+          "sha8": "cc6eb046"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "\"$ENGINE\" --classify -I \"$IR\" -T \"tests/traces/03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4\"",
+          "output": "=== 03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4\nACTION vesting_send_message anchor=call_contract#a7733acd@45769974000002 btype=vesting_send_message failed=0 broken=0 data={…} consumed=[call_contract#a7733acd@45769974000002,call_contract#f7733acd@45769974000005] auto=[]",
+          "note": "The same fixture as the first run, now through the C++ engine. `$ENGINE` = ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe, `$IR` = ton-index-worker/ton-mch-engine/ir/mch_ir.json. `consumed=[...]` is `children_blocks` in merge order and matches the two `+` lines Python printed; `anchor=` is the merged block's first event node, i.e. `anchor_tx_hash()` after the append in merge_blocks. The `data={…}` composite is elided here — it is a build-program product, not a merge product."
+        }
+      ]
+    },
+    {
+      "heading": "Reading a block: the view helpers",
+      "prose": "Host functions need to ask small questions of a block, and `host/BlockViews.{h,cpp}` is the deliberately tiny vocabulary they are allowed to use. It is not a graph query language — the header says so, and the rule for admitting a new op is that some host already demonstrates it twice. Two of them, `data_truthy` and `acc_str`, are the ones you will meet everywhere and both encode a Python semantic rather than a C++ one.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/host/BlockViews.cpp",
+          "lines": [
+            46,
+            64
+          ],
+          "lang": "cpp",
+          "title": "unique_lt_sorted, data_truthy, acc_str",
+          "annotations": [
+            {
+              "lines": [
+                47,
+                50
+              ],
+              "text": "Sort by POINTER, unique, then stable-sort by `min_lt`. The pointer sort is not cosmetic — it is how HostCoffee's original code deduped, and reproducing it (rather than a first-seen dedup) is what keeps peer-swap order byte-identical. This is the one place in the substrate where address order is deliberately observable, and it is safe only because the second sort is stable on a key that ties rarely."
+            },
+            {
+              "lines": [
+                53,
+                57
+              ],
+              "text": "`bool(block.data[field])` for exactly the two carriers the specs use. Note what is FALSE here: a missing key, a null, a string, an Amount. Python's `bool()` would say a non-empty string is true — the narrow reading is intentional, because every real call site tests a bool or an int flag and a wider rule would silently change behaviour if a field's type ever moved."
+            },
+            {
+              "lines": [
+                59,
+                63
+              ],
+              "text": "`AccountId(v).as_str()` — and crucially `addr_none` returns nullopt, not an empty string. Callers gate on the optional, which is how an addr_none address stops a wallet lookup instead of performing one against the empty key. Contrast the ABI universe in [[parse-layer]], where addr_none is a present-but-empty Account for the same TL-B input."
+            }
+          ],
+          "sha8": "ebef35e7"
+        }
+      ]
+    },
+    {
+      "heading": "Check yourself",
+      "prose": "Four things you can verify right now. The first two are the evidence behind this chapter's parity claims; the third exercises the one substrate operation not covered by an excerpt (`insert_between`, used by shapers); the fourth is a claim about the Python side you should confirm by reading rather than trusting.\n\nAll commands run from `S:/Dev/ton-indexer-clear/indexer`, with `$ENGINE` = `ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe` and `$IR` = `ton-index-worker/ton-mch-engine/ir/mch_ir.json`. The venv python is `S:/Dev/H-dump/tonscan-indexator/venv0/Scripts/python.exe`.\n\n1. Classify the whole corpus and confirm stderr is EMPTY — that is the `unlinked` counter reporting that every one of the 148 fixtures has a single-rooted event tree, i.e. `to_tree` never silently dropped a subtree.\n\n2. Run the Python twin over the same corpus and diff. Diff-0 across 347 lines is what licenses every \"byte-identical\" claim on this page; if you change anything in `BlockTree.cpp`, this is the gate that will tell you.\n\n3. Run `--shape-test`, which drives `Block::insert_between` directly (parent/proxy/target rewiring, grandchild edge redirection, target back-edge reparenting) plus the getgems shaper that uses it.\n\n4. Open `indexer/events/blocks/core.py` and read `compact_connections` (one line, `set(...)`) and `merge_blocks` (`blocks_to_merge = [b for b in set(blocks) ...]`). Then re-read the two C++ dedups in this chapter. Convince yourself that the Python engine's sibling order and merge anchor really are hash-seed dependent, and that the C++ is not — this is the difference the whole \"canonical order\" invariant exists to buy.",
+      "excerpts": [],
+      "runs": [
+        {
+          "cmd": "\"$ENGINE\" --classify -I \"$IR\" -T tests/traces > cls.txt 2> cls.err\ngrep -c \"^=== \" cls.txt; grep -c \"^ACTION \" cls.txt; wc -l < cls.err",
+          "output": "148\n199\n0",
+          "note": "148 fixtures, 199 action rows, zero lines on stderr. An `event tree has N unlinked node(s)` warning would appear in cls.err — it does not, for any fixture."
+        },
+        {
+          "cmd": "python ../ton-index-worker/ton-mch-engine/twins/py_classify.py \"$IR\" tests/traces > py.txt 2>&1\ngrep -E \"^(===|ACTION) \" py.txt > py2.txt; grep -E \"^(===|ACTION) \" cls.txt > cls2.txt\ndiff py2.txt cls2.txt && echo \"TWIN DIFF 0\" && wc -l py2.txt cls2.txt",
+          "output": "TWIN DIFF 0\n   347 py2.txt\n   347 cls2.txt\n   694 total",
+          "note": "The grep filter exists because the Python twin also writes engine log lines to stdout; only `===` and `ACTION` lines are the compared surface. Full gate mechanics are in [[gates]]."
+        },
+        {
+          "cmd": "\"$ENGINE\" --shape-test",
+          "output": "PASS insert_between/parent_next_is_proxy\nPASS insert_between/proxy_next_is_target\nPASS insert_between/proxy_prev_is_parent\nPASS insert_between/target_prev_is_proxy\nPASS insert_between/grandchild_edge_redirected\nPASS insert_between/target_backedge_reparented\nPASS getgems/shaper_registered\nPASS getgems/parent_next_is_produced\nPASS getgems/parent_dropped_payout\nPASS getgems/produced_prev_is_parent\nPASS getgems/payout_absorbed\nPASS getgems/proxy_absorbed\n…\nSHAPE-TEST ALL PASS",
+          "note": "Six lookup_key cases elided. The six `insert_between/*` cases are the substrate operation this chapter names but does not excerpt — read `Block::insert_between` (BlockTree.cpp) against these assertions and the Python original at core.py:244."
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "to": "value",
+      "why": "leaf data dicts are Values — Amount vs Int, Account vs Null, and the unrenderable Float that msgpack interface data can produce"
+    },
+    {
+      "to": "matcher-runtime",
+      "why": "the walker BFSes the spine this file builds and reads next_blocks raw, relying on the canonical-order invariant established here"
+    },
+    {
+      "to": "build-programs",
+      "why": "a produced block's data comes from a build program; merge_blocks is what installs the produced block into the tree once the build accepts"
+    },
+    {
+      "to": "actions",
+      "why": "initiating_event_node, is_ghost_block and event_nodes order are read by ActionBuild to assemble tx_hashes and accounts"
+    },
+    {
+      "to": "parse-layer",
+      "why": "ton_transfer_comment (leaf comment derivation) and every message-body parse start from the base64 body this loader keeps undecoded"
+    },
+    {
+      "to": "prod-path",
+      "why": "SchemaTraceLoader fills the same four structs from Postgres; everything in this chapter is shared, which is what makes the prod A/B gate meaningful"
+    },
+    {
+      "to": "gates",
+      "why": "the --classify twin diff and --shape-test are the evidence for the parity and rewiring claims on this page"
+    }
+  ],
+  "not_annotated": [
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/TraceLoader.h",
+      "reason": "PARTIAL: the Message struct is excerpted. The remainder is Transaction / Trace / MsgContent — flat field bags whose only commentary is already in the field comments (mc_block_seqno feeds Action.mc_seqno_end, skipped_reason is always null in fixtures) (~87 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/TraceLoader.cpp",
+      "reason": "PARTIAL: parse_message and load_trace are excerpted. The remainder is the LZ4-frame decompression loop, six `get_*` msgpack accessors, parse_transaction (pure field copying), and msgpack_to_value — the last one is worth a read for its u64-above-int64 widening and the Float branch, both noted in the prose above (~267 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/BlockTree.h",
+      "reason": "PARTIAL: the header comment, EventNode and the Block field block are excerpted. The remainder is the method declarations (whose comments this chapter quotes), the templated `bfs` (a plain BFS whose only subtlety is that it re-reads next_blocks AFTER visiting, so a visitor may merge), BlockArena, and TraceContext (~220 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/BlockTree.cpp",
+      "reason": "PARTIAL: everything except Block::direction (3 lines, quoted in the merge annotations), Block::insert_between (exercised by --shape-test in Check yourself), and load_trace_context (four lines chaining load_trace -> to_tree -> init_block, erroring on an empty tree) (~475 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/host/BlockViews.h",
+      "reason": "declaration-only, but the comments ARE the contract for what the host layer is allowed to ask of a block — read it before adding an op. The admission rule (two independent demonstrated uses) is in the file header (~48 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/host/BlockViews.cpp",
+      "reason": "PARTIAL: the three interesting views are excerpted. block_in / first_call / all_calls / first_next_call are four-line linear scans over `is_call_op` (~67 LOC)"
+    },
+    {
+      "path": "indexer/indexer/events/blocks/utils/tree_utils.py",
+      "reason": "the Python original of to_tree + EventNode. Not C++, but the twin this chapter is measured against — read get_lt, the synthetic tick-tock Message, and the `assert m.msg_hash in msg_tx` the C++ replaces with the unlinked counter (~120 LOC of relevant code)"
+    },
+    {
+      "path": "indexer/indexer/events/blocks/core.py, indexer/indexer/events/blocks/basic_blocks.py",
+      "reason": "the Python originals of Block/merge_blocks and of the four leaf constructors. Item 4 of Check yourself asks you to read two specific functions in core.py; basic_blocks.py is worth reading in full once, since the failed ladders excerpted here are transcriptions of it"
+    },
+    {
+      "path": "indexer/tools/trace_inspect.py",
+      "reason": "the ASCII inspector used for this chapter's runs. A tool, not engine code — but knowing that `--blocks` prints `next_blocks` as indentation and `children_blocks` as `+` lines is what makes its output readable (~600 LOC)"
+    }
+  ]
+}

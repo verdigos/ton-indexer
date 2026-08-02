@@ -46,7 +46,7 @@
 # stonfi_v1_swap, dedust_v2_swap/failed_swap and coffee_staking_deposit — and
 # the legacy list puts CoffeeMevProtectHoldFundsMatcher AFTER every one of those
 # except the staking family, so this file is listed near the END of
-# ir/emit_manifest.json, before specs/coffee_staking.mch. Being behind the
+# the built-in source list, before specs/coffee_staking.mch. Being behind the
 # priority-90 jetton specs (default priority 100) is what makes the
 # jetton_transfer blocks exist at all.
 #

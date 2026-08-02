@@ -33,7 +33,7 @@
 #
 # ORDERING. None of the four opcodes is claimed by any other spec, and neither
 # matcher binds a block another matcher produces, so the file's position in
-# ir/emit_manifest.json carries no tie-break; it is listed where the file-name
+# the built-in source list carries no tie-break; it is listed where the file-name
 # sort puts it. The reference registers the pair between ChangeDnsRecordMatcher
 # and SubscriptionBlockMatcher, neither of which shares an anchor with it.
 #

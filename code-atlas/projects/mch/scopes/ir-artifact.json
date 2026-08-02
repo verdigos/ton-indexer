@@ -1,0 +1,881 @@
+{
+  "id": "ir-artifact",
+  "title": "4 · The IR — what the runtime actually executes",
+  "summary": "The C++ engine contains no matchers. It contains an interpreter for `ir/mch_ir.json`, a single 272 KB artifact compiled from the `.mch` specs by the Python frontend. After this chapter you can open that file and read it: you will know why a matcher record has both an `anchor` and a `root`, why `nodes` is one flat global array instead of a tree, what each of the six node kinds and six edge fields means, how `maybe` / `^` / `<-` / `$rule` in a spec turn into JSON keys, and why a key being ABSENT (`priority`, `builder`, `shape`) carries meaning. You will also know what `IrLoader` refuses to load and why each refusal exists — the loader is written fail-closed on purpose, because a silently-degraded artifact matches MORE blocks than the spec author wrote. The matcher half of what the loader produces is executed in [[matcher-runtime]]; the `build_program` half in [[build-programs]]. This chapter stops at \"you can read it\".",
+  "diagrams": [
+    {
+      "title": "Where the artifact comes from and what consumes it",
+      "mermaid": "flowchart LR\n  S[\".mch specs<br/>specs_decl/ + specs/\"] --> C[\"mch frontend<br/>lexer -&gt; parser -&gt; compiler\"]\n  M[\"emit_manifest.json<br/>file list == registration order\"] --> C\n  C --> E[\"ir_emit.emit_ir<br/>matchers[] + nodes[]\"]\n  E --> A[\"ir/mch_ir.json<br/>33 matchers, 329 nodes\"]\n  A --> G[\"mch-codegen (CMake build step)<br/>wheres / builds tables + source sha\"]\n  A --> L[\"IrLoader::load_ir<br/>sha256, then strict version 1.1\"]\n  L --> LI[\"LoadedIr<br/>CompiledMatcher[] in priority order\"]\n  LI --> W[\"Walker — ch.5\"]\n  LI --> B[\"BuildDriver — ch.7\"]\n  G -. sha must match .-> LI\n  A -. byte-repro pytest .-> M"
+    },
+    {
+      "title": "A matcher record, and the flat node pool it points into",
+      "mermaid": "flowchart TD\n  R[\"matchers[i]\"] --> AN[\"anchor — the prefilter<br/>opcode_set | btype | pred | mixed\"]\n  R --> RT[\"root — a GLOBAL node id\"]\n  R --> CA[\"captures[] — slot id == position<br/>card: one | opt | many\"]\n  R --> BP[\"build_program[] — ch.7\"]\n  RT --> P[\"nodes[] — flat, global, 329 records\"]\n  P --> ED[\"edges: child | children[] | parent<br/>branches[] | step | exit\"]\n  ED --> P\n  P --> LR[\"IrLoader: walk reachable subgraph,<br/>renumber to local ids, root == 0\"]\n  LR --> CN[\"CompiledNode[]<br/>global_id kept for the codegen table\"]"
+    }
+  ],
+  "sections": [
+    {
+      "heading": "The artifact in one screen",
+      "prose": "Open `ir/mch_ir.json` and the first 33 lines tell you almost everything about its shape: a version tag, a provenance block nobody reads, and then two flat arrays. There is no nesting — a matcher points at nodes by integer index, and nodes point at each other by integer index. That is a deliberate wire format, not an accident of serialization: it makes the whole graph addressable by a stable id, which is what lets the C++ build step generate a function per (matcher, node) pair and pair it with the artifact by sha.\n\nThe file is regenerated, never edited. `ir/README.md` documents the one command; everything downstream of it (where_expr codegen, build-fn codegen, table sha pairing) is a CMake custom command.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/ir/mch_ir.json",
+          "lines": [
+            1,
+            33
+          ],
+          "lang": "json",
+          "title": "mch_ir.json — the header",
+          "annotations": [
+            {
+              "lines": [
+                2,
+                2
+              ],
+              "text": "A strict equality gate on both loaders — no dual-accept, no range. The 1.0 -> 1.1 bump was made deliberately non-additive (`docs/mch-w7-handoff.md` §1b) so that a stale binary cannot half-read a newer artifact and fail later at eval time. The constant is duplicated in three places with no shared source: `expr_ir.py`, `mch_ir/loader.py`, `IrLoader.cpp`."
+            },
+            {
+              "lines": [
+                3,
+                5
+              ],
+              "text": "Provenance only. Nothing in either loader reads `generator` or `source_files` — a hand-built artifact without a `frontend` key loads fine. It exists so a dumped artifact can be traced back to the spec list that produced it."
+            },
+            {
+              "lines": [
+                6,
+                30
+              ],
+              "text": "These 25 files are NOT \"every .mch under specs/\". `specs/jetton_transfer.mch` and `specs/jettons.mch` are deliberately excluded (they are builder-tier conformance duplicates), and `specs_decl/jettons.mch` is pulled in from a sibling directory and listed FIRST. Treating `specs/` as the source of truth for what production runs will mislead you; `ir/emit_manifest.json` is authoritative and this array echoes it verbatim."
+            },
+            {
+              "lines": [
+                33,
+                33
+              ],
+              "text": "Two sibling arrays follow: `matchers` (33 records) and `nodes` (329 records). Because a matcher's pattern lives entirely in the node pool, you cannot read a matcher's shape without jumping — which is what the `runs` block below automates."
+            }
+          ],
+          "sha8": "4290c78a"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "cd ton-index-worker/ton-mch-engine/ir && node -e \"const j=require('./mch_ir.json'); console.log('version',j.mch_ir_version,'| matchers',j.matchers.length,'| nodes',j.nodes.length); const p={}; j.matchers.forEach(m=>{const k=m.priority??100;(p[k]=p[k]||[]).push(m.name)}); Object.keys(p).sort((a,b)=>a-b).forEach(k=>console.log('priority',k,'->',p[k].length,'matchers:',p[k].join(' '))); const a={}; j.matchers.forEach(m=>a[m.anchor.kind]=(a[m.anchor.kind]||0)+1); console.log('anchor kinds',JSON.stringify(a)); console.log('with build_program',j.matchers.filter(m=>m.build_program).length,'| with builder',j.matchers.filter(m=>m.builder).length,'| with shape',j.matchers.filter(m=>m.shape).length);\"",
+          "output": "version 1.1 | matchers 33 | nodes 329\npriority 90 -> 3 matchers: jetton_transfer jetton_burn jetton_mint\npriority 100 -> 30 matchers: coffee_create_vault coffee_swap dedust_deposit_final dedust_deposit_partial dedust_swap dedust_withdraw dedust_v2_claim_reward change_dns ethena_deposit evaa_withdraw getgems_nft_purchase jvault_stake …\nanchor kinds {\"opcode_set\":27,\"btype\":6}\nwith build_program 33 | with builder 0 | with shape 3",
+          "note": "The census that orients everything else: only two priority tiers, only two anchor kinds in production (no `pred`/`mixed` anchor exists today), zero registered builders — every matcher in the production artifact is fully declarative."
+        }
+      ]
+    },
+    {
+      "heading": "One matcher, field by field",
+      "prose": "`jetton_transfer` is the first record in the artifact and the smallest useful one: three atoms, three nodes, one optional leg. Read the spec first, then the record, then the nodes — the three excerpts below are the same matcher three times.\n\nA caution before you start: the spec you want is `specs_decl/jettons.mch`, not the same-named matcher in `specs/jettons.mch`. The manifest excludes the latter.",
+      "excerpts": [
+        {
+          "file": "indexer/indexer/events/mch/specs_decl/jettons.mch",
+          "lines": [
+            35,
+            42
+          ],
+          "lang": "text",
+          "title": "The source",
+          "annotations": [
+            {
+              "lines": [
+                36,
+                36
+              ],
+              "text": "`produces` names a Python CLASS in the spec, but the artifact stores a btype STRING (`jetton_transfer`), normalized by `btypes.produces_btype`. Grepping the artifact for `JettonTransferBlock` finds nothing — that mapping is the single most common reason a spec-to-artifact search comes up empty."
+            },
+            {
+              "lines": [
+                37,
+                37
+              ],
+              "text": "In-spec `priority 90`. This one line is the entire reason the declarative jetton family consumes blocks ahead of every other matcher; it replaced an older hack that relied on the emitted filename sorting first (`a_jettons_decl.mch`)."
+            },
+            {
+              "lines": [
+                38,
+                38
+              ],
+              "text": "`entry @transfer` declares which capture is the anchor block. It appears nowhere as a key in the matcher record — it is what makes that atom's node the record's `root`, and what the anchor prefilter is derived from."
+            },
+            {
+              "lines": [
+                40,
+                42
+              ],
+              "text": "Three atoms, two `->` edges, one `maybe`. Count them against the three node records two excerpts down: the lowering is 1:1 here, which is exactly why this matcher is the one to learn on."
+            }
+          ],
+          "sha8": "4f4dd870"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/ir/mch_ir.json",
+          "lines": [
+            34,
+            62
+          ],
+          "lang": "json",
+          "title": "The matcher record",
+          "annotations": [
+            {
+              "lines": [
+                36,
+                41
+              ],
+              "text": "`anchor` and `root` are two representations of the same head test, kept separate on purpose. The anchor is a PREFILTER — the walker only visits blocks whose opcode is in this set — while the root is the pattern's first node. `ir_emit._anchor_record` derives the anchor from the root when the compiler didn't record a distinct one, so they usually agree; the interesting cases are when they don't (next section)."
+            },
+            {
+              "lines": [
+                42,
+                42
+              ],
+              "text": "`root: 0` indexes the GLOBAL `nodes` array. The loader immediately renumbers the reachable subgraph to local ids with root == 0, so the id you read here is not the id the C++ runtime uses — `CompiledNode::global_id` is what preserves the artifact id for the codegen table."
+            },
+            {
+              "lines": [
+                43,
+                45
+              ],
+              "text": "`produces` is a LIST, not a string. Most matchers produce one btype, but `change_dns` produces three and `tonstakers_withdraw` two — the `switch` build statement chooses which at build time ([[build-programs]]). A reader who assumes `produces[0]` is the answer will be wrong twice."
+            },
+            {
+              "lines": [
+                46,
+                59
+              ],
+              "text": "The captures table IS the slot numbering: position in this array is the slot id, and `card` (`one`/`opt`/`many`) is what the walker enforces on binding. A node's `capture` key is a NAME; the loader resolves it against this table and stores -1 for an unknown name rather than erroring — a capture typo is a silent no-bind, not a load failure."
+            },
+            {
+              "lines": [
+                60,
+                62
+              ],
+              "text": "Absent keys are meaningful and that is the trap of this format. `include_excess`/`include_bounces` are always written; `priority` is written ONLY when it differs from 100; `builder` and `shape` only when present. So \"no priority key\" means 100, and the 30 priority-100 matchers simply omit it — you cannot sort matchers by reading `m.priority` without a default."
+            }
+          ],
+          "sha8": "7dbf20d9"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/ir/mch_ir.json",
+          "lines": [
+            9452,
+            9469
+          ],
+          "lang": "json",
+          "title": "…and the three nodes it points at",
+          "annotations": [
+            {
+              "lines": [
+                9453,
+                9454
+              ],
+              "text": "`kind: \"contract\"` means \"a call_contract block whose message opcode equals this\". Opcodes are stored as UNSIGNED decimal (260734629 == 0x0f8a7ea5); the emitter masks with 0xFFFFFFFF and the loader masks again, so a spec that wrote a negative literal can never reach the runtime as a signed value."
+            },
+            {
+              "lines": [
+                9456,
+                9456
+              ],
+              "text": "`child: 1` is the `->` edge — \"the block produced by this block's message\". Chains are a linked list of records, never nesting, which is why reading a matcher means jumping through the array rather than reading a subtree."
+            },
+            {
+              "lines": [
+                9464,
+                9468
+              ],
+              "text": "`maybe` becomes `optional: true` ON the node, not a wrapper node. Together with `card: \"opt\"` in the captures table, that is the entire encoding of an optional leg — there is no separate `Maybe` node kind in the IR."
+            },
+            {
+              "lines": [
+                9452,
+                9469
+              ],
+              "text": "Note what is NOT here: no back-pointer to the owning matcher. A node does not know who owns it; ownership is discoverable only by walking from each matcher's root, which is exactly what the loader does and what the `runs` block below reproduces."
+            }
+          ],
+          "sha8": "6481c117"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/IrLoader.h",
+          "lines": [
+            73,
+            103
+          ],
+          "lang": "cpp",
+          "title": "The same record, as the loader keeps it",
+          "annotations": [
+            {
+              "lines": [
+                75,
+                75
+              ],
+              "text": "`artifact_index` is recorded BEFORE the priority sort, and it is the key into the generated build-fn table. After `load_ir` returns, `matchers[i].artifact_index != i` in general — using the vector index to look up a build function is precisely the bug this field exists to prevent."
+            },
+            {
+              "lines": [
+                79,
+                83
+              ],
+              "text": "The anchor is decomposed into three parallel members of which exactly one is populated. This is also a performance decision: `prepare_classify` turns OpcodeSet/BType into a real prefilter and leaves Pred/Mixed as a full scan of the block tree ([[matcher-runtime]])."
+            },
+            {
+              "lines": [
+                84,
+                91
+              ],
+              "text": "Everything is COPIED out of the JSON — local node pool with root == 0, slot names by index, per-recursive-node slot ownership sets. The decoded document is dead the moment `load_ir` returns, which is why the artifact string can be freed and why `WhereExpr` needs its own buffer (see the fail-closed section)."
+            },
+            {
+              "lines": [
+                101,
+                102
+              ],
+              "text": "Six `ref_*` sets, and the header comment above is explicit that they are report-only for MATCHING. Builders, shapers, parsers, lookups and host fns are build-phase bindings; the loader never marks a matcher unrunnable for a missing one. That check lives in `build_skip_reason`, later on this page."
+            }
+          ],
+          "sha8": "d82c0445"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "cd ton-index-worker/ton-mch-engine/ir && node -e \"const j=require('./mch_ir.json'); const m=j.matchers[0]; const seen=new Set(), q=[m.root]; console.log(m.name,'root=',m.root,'anchor=',JSON.stringify(m.anchor),'priority=',m.priority); while(q.length){const id=q.shift(); if(seen.has(id))continue; seen.add(id); const n=j.nodes[id]; console.log(' node',id,JSON.stringify(n)); for(const r of [n.child,n.parent,n.step,n.exit,...(n.children||[]),...(n.branches||[])]) if(r!=null) q.push(r);} console.log('reachable node count =',seen.size,'| captures =',m.captures.map(c=>c.name+':'+c.card).join(' '));\"",
+          "output": "jetton_transfer root= 0 anchor= {\"kind\":\"opcode_set\",\"values\":[260734629]} priority= 90\n node 0 {\"kind\":\"contract\",\"opcode\":260734629,\"capture\":\"transfer\",\"child\":1}\n node 1 {\"kind\":\"contract\",\"opcode\":395134233,\"capture\":\"internal\",\"child\":2}\n node 2 {\"kind\":\"contract\",\"opcode\":1935855772,\"optional\":true,\"capture\":\"notify\"}\nreachable node count = 3 | captures = transfer:one internal:one notify:opt",
+          "note": "This 6-line walk is the same traversal `IrLoader::build_matcher` performs, minus the remap. Change `j.matchers[0]` to any index and you have a general-purpose reader for the artifact."
+        }
+      ]
+    },
+    {
+      "heading": "The node pool: six kinds, six edge fields",
+      "prose": "Every node record has a `kind` (one of `contract`, `block_type`, `pred`, `any`, `or`, `recursive`) and may carry up to six edge fields (`child`, `children[]`, `parent`, `branches[]`, `step`, `exit`) plus the modifiers `optional`, `capture`, `where`, `where_expr`, `exclusive`, `strategy`. In the production artifact the distribution is 208 `contract`, 64 `block_type`, 36 `or`, 11 `recursive`, 8 `pred`, 2 `any`.\n\nTwo of those numbers are worth pausing on. Only two nodes are `any` — and neither is a wildcard, as the first excerpt shows. Only 11 are `recursive`, but they carry the entire multi-hop-swap machinery.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/ir/mch_ir.json",
+          "lines": [
+            9482,
+            9512
+          ],
+          "lang": "json",
+          "title": "jetton_mint — an `any` root that is not a wildcard, and an ordered `or`",
+          "annotations": [
+            {
+              "lines": [
+                9482,
+                9486
+              ],
+              "text": "The spec here is `(op JettonMint @mint ^ op MinterJettonMint @mint)` — an exclusive alternative of two opcode atoms. There is NO or-node in the IR: the root collapsed to `kind: \"any\"` and both opcodes moved into the matcher's `anchor.values` (`[21, 1680571655]`). Rule of thumb when reading: an `any` root is almost always a folded opcode set, not a wildcard — check the record's anchor before concluding a matcher matches everything."
+            },
+            {
+              "lines": [
+                9484,
+                9484
+              ],
+              "text": "The capture survived the fold: whichever of the two opcodes the anchor admitted binds to `mint`. Same-name captures across alternative branches are legal only when the branches are declared exclusive (`^`), which is what made this fold safe."
+            },
+            {
+              "lines": [
+                9487,
+                9495
+              ],
+              "text": "`or` with `exclusive: false` is an ORDERED alternative — first branch that matches wins, mirroring the Python `OrMatcher`. `exclusive: true` (next excerpt) asserts the branches are provably disjoint; the frontend proved it, so a C++ reader may treat it as already-checked."
+            },
+            {
+              "lines": [
+                9494,
+                9494
+              ],
+              "text": "`optional` sits on the or-NODE, not on its branches — this is `maybe ( … | … )` in the source. Optionality composes onto the whole group, which is why there is no need for a `Maybe` node kind."
+            }
+          ],
+          "sha8": "caef60db"
+        },
+        {
+          "file": "indexer/indexer/events/mch/specs/coffee_swap.mch",
+          "lines": [
+            44,
+            53
+          ],
+          "lang": "text",
+          "title": "coffee_swap — every remaining pattern construct in ten lines",
+          "annotations": [
+            {
+              "lines": [
+                49,
+                52
+              ],
+              "text": "`{ A ; B }` is a children SET — siblings under the same anchor — and lowers to `children: [...]`. A plain `->` lowers to `child`. Two different edge fields with genuinely different semantics: a set matches unordered siblings, a child follows the message chain."
+            },
+            {
+              "lines": [
+                50,
+                50
+              ],
+              "text": "`$swap_chain` is a rule reference, and rules do not exist in the IR at all. The frontend inlines the rule into a `recursive` node whose `step` is one unrolling of the rule body and whose `exit` is the rule's terminating alternative."
+            },
+            {
+              "lines": [
+                53,
+                53
+              ],
+              "text": "`<-` is a PARENT edge: the anchor's parent block must match too. It becomes `parent: 30` on the anchor node — and it is why a matcher's reachable set can walk upward as well as downward, which the loader's `reachable()` has to account for."
+            }
+          ],
+          "sha8": "22b16438"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/ir/mch_ir.json",
+          "lines": [
+            9536,
+            9564
+          ],
+          "lang": "json",
+          "title": "…lowered: children + parent on one node, an exclusive `or`, a `recursive`",
+          "annotations": [
+            {
+              "lines": [
+                9536,
+                9545
+              ],
+              "text": "coffee_swap's root carries `children` AND `parent` simultaneously. The loader's `edge_refs` enumerates references in a FIXED order — child, children…, parent, branches…, step, exit — because that order determines local node ids, and the Python twin must assign identical ids for the generated per-node functions to line up."
+            },
+            {
+              "lines": [
+                9551,
+                9558
+              ],
+              "text": "`exclusive: true` here versus `false` on jetton_mint's or-node. Same key, and it is the only structural difference between an ordered alternative and a disjoint one in the artifact — the proof obligation was discharged in the frontend."
+            },
+            {
+              "lines": [
+                9559,
+                9564
+              ],
+              "text": "The rule reference, lowered. `optional: true` is the `maybe`. Note the ABSENT `strategy` key: absent means frontier descent; `\"cyclic\"` is the only other value and appears twice in the whole artifact (both in `tonco_swap`, both pointing at the same body root — the emitter's memo turns a self-reference into a back-edge rather than a new node)."
+            },
+            {
+              "lines": [
+                9561,
+                9562
+              ],
+              "text": "`step` and `exit` are what the loader's `reachable()` walks to compute `step_slots` / `exit_slots`: which capture slots an unrolling OWNS and must therefore reset between iterations. Two load-time refusals live in that same block — nested recursion, and any capture inside a cyclic body."
+            }
+          ],
+          "sha8": "715baa54"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/ir/mch_ir.json",
+          "lines": [
+            10735,
+            10753
+          ],
+          "lang": "json",
+          "title": "block_type + inline where_expr, then a host `pred` node",
+          "annotations": [
+            {
+              "lines": [
+                10736,
+                10738
+              ],
+              "text": "`kind: \"block_type\"` matches an already-PRODUCED block by btype — the IR equivalent of the Python `BlockTypeMatcher`, and the mechanism by which a matcher composes on top of an earlier matcher's output. 6 of the 33 matchers even anchor on a btype rather than an opcode."
+            },
+            {
+              "lines": [
+                10739,
+                10746
+              ],
+              "text": "`where_expr` is an INLINE predicate tree in the same k-tagged encoding as build expressions (this one is `not .has_internal_transfer`). `dotfield` means \"a field of the block under test\", distinct from `attr`, which navigates a named capture. Inline where_exprs are runnable in C++ — the loader re-encodes each into a self-owned buffer; NAMED `where` predicates are not, and make the matcher unrunnable."
+            },
+            {
+              "lines": [
+                10749,
+                10752
+              ],
+              "text": "`kind: \"pred\"` is a named host predicate: no opcode, no btype, just \"ask the host\". Every pred name must exist in `host_predicates()` or the entire matcher is skipped. All 9 predicates the production artifact references are registered today, which is why a `--match` run currently emits zero SKIP lines."
+            }
+          ],
+          "sha8": "6a1003f8"
+        }
+      ]
+    },
+    {
+      "heading": "Build programs and expression nodes — a preview",
+      "prose": "About 95% of the artifact by volume is not pattern at all: it is `build_program`, a flat statement list per matcher whose expressions are k-tagged trees. This chapter only teaches you to READ them; execution is [[build-programs]] and the `parse` statement's registry is [[parse-layer]].\n\nStatement tags in the production artifact: 32 `let`, 31 `out`, 29 `parse`, 27 `reject`, 18 `failed`, 2 `switch`. Expression tags: 600 `attr`, 512 `name`, 144 `call`, 107 `bin`, 98 `null`, 51 `ternary`, 17 `unary`, 13 `str`, 9 `int`, 8 `lookup`, 5 `bool`, 4 `dotfield`, and exactly one each of `mapc`, `list`, `record`.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/ir/mch_ir.json",
+          "lines": [
+            9315,
+            9346
+          ],
+          "lang": "json",
+          "title": "vesting_send_message — `parse send as VestingSendMessage` and `sender: account(send.msg.source)`",
+          "annotations": [
+            {
+              "lines": [
+                9316,
+                9322
+              ],
+              "text": "`s: \"parse\"` binds a parsed message body to a capture; `types` is the alternatives list, tried in order until one succeeds. These strings are registry keys into the C++ parser map and into the Python `Registries.message_types` — the name is the only thing tying the two implementations together ([[parse-layer]])."
+            },
+            {
+              "lines": [
+                9324,
+                9326
+              ],
+              "text": "`out` is the produced block's field map. The ORDER of fields here is the artifact's order and it is preserved end to end, because the rendered data dict is diffed byte-for-byte against the Python twin ([[gates]])."
+            },
+            {
+              "lines": [
+                9328,
+                9345
+              ],
+              "text": "Five nested nodes for one source expression, `account(send.msg.source)`. `call` + `fn` names a builtin; an `attr` chain reads outward-in, so you decode it from the innermost `name` node upward. This verbosity is why 600 of the artifact's expression nodes are `attr` — expression trees, not patterns, are what makes the file 272 KB."
+            }
+          ],
+          "sha8": "492b3eee"
+        },
+        {
+          "file": "indexer/indexer/events/mch/expr_ir.py",
+          "lines": [
+            59,
+            76
+          ],
+          "lang": "python",
+          "title": "The tail of the encoder — the constructs you will NOT see in production",
+          "annotations": [
+            {
+              "lines": [
+                59,
+                64
+              ],
+              "text": "`list` and `record` are real node kinds but the production artifact has exactly one of each (`jvault_claim` and `layerzero_receive`). If you are learning the language from the artifact, do not infer frequency from the encoder — read the encoder for the vocabulary and the artifact for the idiom."
+            },
+            {
+              "lines": [
+                65,
+                68
+              ],
+              "text": "The `parse` EXPRESSION is a different construct from the `parse` STATEMENT: it evaluates inline and faults on total failure. It is also invisible to the C++ loader's `ref_msgtypes` scan, which keys on the statement tag `s == \"parse\"` — so the first spec that uses the expression form will not get its message types checked against the parse registry. Latent today: zero occurrences in production, and the Python twin has the same shallow rule, so the A/B gate cannot surface it either."
+            },
+            {
+              "lines": [
+                69,
+                75
+              ],
+              "text": "`map` and `any`/`all` land on two different tags — `mapc`, and `quant` carrying the operator. Both are build-expression only: the Python loader hard-rejects either inside a `where_expr`, because `where_expr` composes onto a synchronous `test_self` and a comprehension can hide an async lookup."
+            }
+          ],
+          "sha8": "57f3fe05"
+        }
+      ]
+    },
+    {
+      "heading": "IrLoader: what it refuses to load",
+      "prose": "`IrLoader.cpp` is 520 lines and roughly a third of it is refusal. That ratio is the design: the IR spec's §8.1 rule is that an unrecognized or missing field must never degrade into something permissive, because a permissive degrade makes a corrupt artifact match MORE blocks than the spec author wrote — and matching more blocks is silent, whereas failing to load is loud.\n\nThe exceptions are documented at their sites and worth memorizing, because they are the places where a corrupt artifact WILL load: `priority` absent defaults to 100, `include_excess`/`include_bounces` absent default to true, and `strategy` falls back to frontier for any unrecognized string (contrast `parse_kind`, which errors on an unknown node kind with the explicit comment that a typo must not become the permissive `any` wildcard).",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/IrLoader.cpp",
+          "lines": [
+            436,
+            464
+          ],
+          "lang": "cpp",
+          "title": "Identity first, then version, then shape",
+          "annotations": [
+            {
+              "lines": [
+                438,
+                446
+              ],
+              "text": "Hashed BEFORE decoding, because `td::json_decode` parses IN PLACE and mutates the buffer. This sha is the artifact's identity: `prepare_classify` refuses to run unless a generated build table was compiled from bytes hashing to exactly this — see the second captured run below, where one extra trailing newline is enough."
+            },
+            {
+              "lines": [
+                456,
+                458
+              ],
+              "text": "Strict equality against the literal \"1.1\". No range accept, no forward compatibility — an artifact from a newer frontend is rejected at load rather than surfacing later as an unknown expression kind mid-trace."
+            },
+            {
+              "lines": [
+                459,
+                464
+              ],
+              "text": "Only two structural checks at the top level, and note what is NOT checked: `registration_order` is optional (identity is synthesized when absent) and `frontend` is never touched. Everything else is validated per-matcher, so the error message names the matcher."
+            }
+          ],
+          "sha8": "16883ad6"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/IrLoader.cpp",
+          "lines": [
+            232,
+            268
+          ],
+          "lang": "cpp",
+          "title": "The two-pass remap — where global node ids become local ones",
+          "annotations": [
+            {
+              "lines": [
+                235,
+                241
+              ],
+              "text": "Fail-closed on the root: a missing or out-of-range `root` is an error, not a default to node 0. Every \"absent field\" decision in this loader is deliberate; the handful that do default are called out in the prose above."
+            },
+            {
+              "lines": [
+                242,
+                256
+              ],
+              "text": "Pass one assigns local ids in DISCOVERY order, mirroring `IrMatcher.__init__` on the Python side. The order is load-bearing: generated where_expr and build functions are keyed by (matcher, node) and both engines must number identically. Note the asymmetry — `edge_refs` (its own helper above) parses node refs with a raw `std::stoll` while pass two uses the guarded `num_i64`, so a corrupt ref token throws here instead of returning a Status."
+            },
+            {
+              "lines": [
+                258,
+                258
+              ],
+              "text": "`remap[old]` default-inserts on a miss, which is safe only because pass one already discovered every reference reachable from the root. If the two passes ever disagreed about what counts as an edge, a missed reference would silently become node 0 — a matcher pointing at its own root — rather than an error."
+            },
+            {
+              "lines": [
+                263,
+                264
+              ],
+              "text": "Unknown `kind` is a hard error. The comment at `parse_kind`'s definition states the reason in one line: a typo'd kind must NOT silently degrade to the permissive `any` wildcard. This is the canonical example of the §8.1 rule, and the one to cite when you are tempted to add a lenient fallback."
+            },
+            {
+              "lines": [
+                265,
+                268
+              ],
+              "text": "Opcode masked to 32 bits at load, mirroring `_unsigned32` on the emit side. Both ends normalize, so the comparison against a block's opcode is unsigned on every path and a spec author cannot create a signed/unsigned mismatch."
+            }
+          ],
+          "sha8": "773e8c6a"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/IrLoader.cpp",
+          "lines": [
+            117,
+            148
+          ],
+          "lang": "cpp",
+          "title": "scan_program — collecting the names the build phase will need",
+          "annotations": [
+            {
+              "lines": [
+                117,
+                120
+              ],
+              "text": "A full RECURSIVE walk of the build_program JSON, not a scan of the statement list. It has to be: `call` and `lookup` nodes nest arbitrarily deep inside expression trees, so a shallow pass would find almost none of the artifact's 144 calls."
+            },
+            {
+              "lines": [
+                121,
+                124
+              ],
+              "text": "Builtins are subtracted using `kBuiltins`, a list hand-duplicated from the Python frontend's `BUILTINS`. Drift between the two lists is invisible: a builtin missing here gets reported as an unregistered host fn, and the matcher is build-SKIPPED — which is a normal-looking outcome, not an error."
+            },
+            {
+              "lines": [
+                131,
+                139
+              ],
+              "text": "`ref_msgtypes` keys on the STATEMENT tag. This is the collection that `build_skip_reason` checks against the parse registry, so a `parse` statement naming an unregistered type degrades the matcher to \"never builds\". The expression form (`k == \"parse\"`) is not collected — see the expr_ir excerpt above."
+            },
+            {
+              "lines": [
+                140,
+                147
+              ],
+              "text": "The recursion descends into object VALUES only, never keys, so a field literally named \"parse\" in an `out` block cannot be mistaken for a statement. It is applied to `build_program` alone — `where_expr` trees are scanned separately for predicate names, further down."
+            }
+          ],
+          "sha8": "33e9fa8d"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/IrLoader.cpp",
+          "lines": [
+            379,
+            421
+          ],
+          "lang": "cpp",
+          "title": "Match-phase runnability — the only thing the loader itself skips a matcher for",
+          "annotations": [
+            {
+              "lines": [
+                383,
+                391
+              ],
+              "text": "Exactly two things make a matcher unrunnable at MATCH time: a `pred` node and a named `where` predicate. Builders, shapers, parsers and lookups are build-phase and never reach this decision — a matcher can be perfectly runnable here and still never produce anything."
+            },
+            {
+              "lines": [
+                402,
+                407
+              ],
+              "text": "The set difference against `host_predicates()` is the whole runnability test, and only the MISSING names survive it. That is required, not cosmetic: the reason string is diffed against the Python twin's, so it has to be derived from the same registry difference rather than from the spec text."
+            },
+            {
+              "lines": [
+                408,
+                417
+              ],
+              "text": "Reason format is `pred:a,b` with names in `std::set` order, i.e. deterministic. That stability is what lets the twin gate diff SKIP lines instead of merely counting them ([[gates]])."
+            },
+            {
+              "lines": [
+                418,
+                421
+              ],
+              "text": "The mixed-anchor guard: unrunnable even when every predicate exists, because the loader does not store the per-branch structure `matcher_test_self` would need. The comment above is explicit that this is a guard rather than a plan — no production matcher has a mixed anchor, so this branch is dead today."
+            }
+          ],
+          "sha8": "72dcaec0"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "# $tmp/ir_v10.json = mch_ir.json with mch_ir_version changed to \"1.0\", nothing else\ncd indexer && ton-mch-engine.exe --classify -I $tmp/ir_v10.json -T tests/traces/<one>.lz4",
+          "output": "failed to load IR artifact: unsupported mch_ir_version (expected 1.1)\nexit=2",
+          "note": "Strict version check, exit 2 before a single trace is touched."
+        },
+        {
+          "cmd": "# $tmp/ir_reser.json = mch_ir.json copied byte-for-byte with ONE extra trailing newline\ncd indexer && ton-mch-engine.exe --classify -I $tmp/ir_reser.json -T tests/traces/<one>.lz4",
+          "output": "no generated build table matches this artifact (loaded sha f6259389a8c36fae11b55487f62f13b677198789aff3287773789d4f287f8c65; ir table 20dc3366ad7b13c605037c191bee9c8c76d670109913ccbb422ab2144006771f, testbed table (stub)) — rebuild ton-mch-engine or pass a paired artifact\nexit=2",
+          "note": "A semantically identical artifact is still rejected: the generated build-fn table is paired to the artifact by sha256 of the FILE BYTES, not by content equivalence. Editing `ir/mch_ir.json` and not rebuilding is therefore a hard exit 2, never a wrong answer."
+        }
+      ]
+    },
+    {
+      "heading": "Priorities and registration order",
+      "prose": "Two knobs decide which matcher gets to consume a block first, and they interact. `priority` (default 100, ascending — lower runs first) is the primary key; `registration_order` breaks ties. In the production artifact `registration_order` is the identity permutation, which means ties break on emission order: manifest file order, then source position within each file. That is the whole reason `emit_manifest.json` lists `specs_decl/jettons.mch` first and documents it in a comment.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/IrLoader.cpp",
+          "lines": [
+            484,
+            514
+          ],
+          "lang": "cpp",
+          "title": "Permutation check, then one stable sort",
+          "annotations": [
+            {
+              "lines": [
+                486,
+                503
+              ],
+              "text": "`registration_order` must be a permutation of `[0, matchers)`, checked with a `seen` bitmap plus a length equality. It would be easy to treat a stray index as harmless — it is not: the sort below indexes `compiled[]` directly, so an out-of-range entry is out-of-bounds access and a duplicate silently drops a matcher from the run."
+            },
+            {
+              "lines": [
+                509,
+                510
+              ],
+              "text": "One `stable_sort` on priority is the entire ordering rule. Because the input vector is already in the artifact's registration order, stability means ties keep that order — which is what makes an in-spec `priority 90` sufficient to run the declarative jetton family first, with no filename tricks."
+            },
+            {
+              "lines": [
+                512,
+                514
+              ],
+              "text": "Matchers are MOVED into the output in final order. From this point the vector index no longer equals the artifact index — the reason `artifact_index` was captured at the top of the load and the reason the generated build table is keyed by it."
+            }
+          ],
+          "sha8": "48b70268"
+        }
+      ]
+    },
+    {
+      "heading": "What a matcher gets skipped for",
+      "prose": "Runnability is decided twice. The loader decides the MATCH half (predicates only). `build_skip_reason` decides the BUILD half by checking the artifact's collected `ref_*` sets against the live C++ registries — and this is the function that makes an unported protocol a visible SKIP line rather than a crash or, worse, a silently empty result.\n\nA matcher with a non-empty skip reason is dropped from the run entirely, and the reason is printed once, sorted, at the top of every `--match` / `--classify` dump. The Python twin computes the same set from the same artifact, so the skip set is itself gate-checked ([[gates]]).",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BuildDriver.cpp",
+          "lines": [
+            119,
+            149
+          ],
+          "lang": "cpp",
+          "title": "build_skip_reason — four registry surfaces, one string",
+          "annotations": [
+            {
+              "lines": [
+                120,
+                122
+              ],
+              "text": "Match-phase skips win and short-circuit: a matcher already unrunnable keeps its `pred:` reason rather than being re-diagnosed as a build problem. One reason string per matcher, because the twin compares the string."
+            },
+            {
+              "lines": [
+                123,
+                125
+              ],
+              "text": "Two distinct reasons for \"no build program\": `builder` means the spec named a registered Python builder function the C++ side does not implement, `no_build_program` means the spec had neither. Both are empty in the production artifact today — all 33 matchers are declarative, which is what the census run at the top of this page shows as `with builder 0`."
+            },
+            {
+              "lines": [
+                126,
+                131
+              ],
+              "text": "First of four independent surfaces, all checked against the LIVE registries rather than against anything in the artifact: message parsers here ([[parse-layer]]), then lookup kinds, host fns and shapers below. A name the artifact references but this binary does not provide degrades that matcher to \"never builds\" — nothing is rewritten and nothing throws."
+            },
+            {
+              "lines": [
+                132,
+                136
+              ],
+              "text": "The lookup check runs against `FixtureLookupSource::kinds()` — the fixture-backed source used by the dump modes. Production substitutes a different source, so whether a lookup kind is available is a property of the deployment as much as of the artifact ([[prod-path]])."
+            },
+            {
+              "lines": [
+                138,
+                149
+              ],
+              "text": "Host fns and shapers close the list. Note the asymmetry with the Python engine, which HARD-FAILS at load on an unregistered builder/shaper/fn/message-type; C++ degrades to a skip instead, because a partially-ported engine has to be able to run at all. Same artifact, two different strictness policies — deliberate, and the reason the twin gate compares skip sets rather than assuming both sides ran everything."
+            }
+          ],
+          "sha8": "637ecedd"
+        }
+      ]
+    },
+    {
+      "heading": "The emit side, briefly",
+      "prose": "You do not need the Python compiler internals to read the artifact, but you do need to know three facts about how it is produced.\n\nFirst, the source list is `ir/emit_manifest.json`, and its order IS the registration order; `frontend.source_files` echoes it. Second, `ir_emit.py` emits node ids as a per-matcher DFS with a memo keyed on Python object identity — which is why cyclic recursion resolves to a back-edge rather than looping forever, and why node ranges are disjoint per matcher even though the array is global. Third, and most useful in practice: the emitter is byte-deterministic and a pytest holds it to that.",
+      "excerpts": [
+        {
+          "file": "indexer/tests/mch/test_ir_emit.py",
+          "lines": [
+            31,
+            41
+          ],
+          "lang": "python",
+          "title": "The byte-reproduction guard",
+          "annotations": [
+            {
+              "lines": [
+                31,
+                33
+              ],
+              "text": "The reproducibility contract in one assert: the committed artifact must be byte-identical to what the manifest produces. Combined with the sha pairing at load, a hand edit to `ir/mch_ir.json` fails twice — this test diverges, and the engine rejects the unpaired bytes."
+            },
+            {
+              "lines": [
+                36,
+                39
+              ],
+              "text": "It SKIPS when the C++ tree is absent, so the Python repo stays independently testable. Worth knowing before you trust a green run: confirm this test actually executed rather than skipped."
+            }
+          ],
+          "sha8": "379dad95"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "cd indexer && python -m pytest tests/mch/test_ir_emit.py -q",
+          "output": "======================== 6 passed, 3 warnings in 0.75s ========================",
+          "note": "Under a second, no C++ involved. Run it after any `.mch` edit and before regenerating the artifact — a failure here means the emitter is non-deterministic, which is a much worse problem than a wrong matcher."
+        }
+      ]
+    },
+    {
+      "heading": "Check yourself",
+      "prose": "Four things you can verify right now. The first two are claims made on this page; the third and fourth are the ones that most often surprise people who assumed the artifact is just a serialized object graph.",
+      "excerpts": [],
+      "runs": [
+        {
+          "cmd": "cd ton-index-worker/ton-mch-engine/ir && node -e \"const j=require('./mch_ir.json'); const owner=new Array(j.nodes.length).fill(null); let shared=0; j.matchers.forEach(m=>{const seen=new Set(),q=[m.root]; while(q.length){const id=q.shift(); if(seen.has(id))continue; seen.add(id); const n=j.nodes[id]; if(owner[id]!==null&&owner[id]!==m.name)shared++; owner[id]=owner[id]??m.name; for(const r of [n.child,n.parent,n.step,n.exit,...(n.children||[]),...(n.branches||[])]) if(r!=null)q.push(r);}}); console.log('nodes reachable from some matcher:',owner.filter(x=>x!==null).length,'/',j.nodes.length); console.log('nodes shared between two matchers:',shared); console.log('distinct roots:',new Set(j.matchers.map(m=>m.root)).size,'of',j.matchers.length);\"",
+          "output": "nodes reachable from some matcher: 329 / 329\nnodes shared between two matchers: 0\ndistinct roots: 33 of 33",
+          "note": "Claim 1: the pool is global but ownership is partitioned — no orphan nodes, no sharing across matchers, and every matcher has its own root (the IR spec requires that last one explicitly). If you ever see a non-zero `shared`, the emitter's per-matcher memo has leaked."
+        },
+        {
+          "cmd": "ton-mch-engine.exe --surface | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);Object.keys(j).forEach(k=>console.log(k,'=',j[k].length));console.log('preds:',j.preds);});\"",
+          "output": "boc_fields = 7\nfns = 16\nlookup_kinds = 7\nparsers = 32\npreds = 9\nshapers = 3\npreds: [ 'evaa_service_comment', 'evaa_user_withdraw_fail', 'evaa_user_withdraw_success', 'evaa_user_withdraw_user', 'getgems_purchase', 'getgems_seller_payout', 'nominator_pool_withdraw_parent', 'pton_self_transfer', 'stonfi_v1_sender_payment' ]",
+          "note": "Claim 2: `--surface` dumps the live C++ registries — the exact sets `build_skip_reason` and the loader's runnability check compare against. The 9 predicates here cover the 8 `pred` nodes plus the 4 named `where` nodes in the artifact, which is why a `--match` run over the corpus currently prints no SKIP lines at all. Confirm that yourself: `--match -I ir/mch_ir.json -T tests\\traces\\<one>.lz4` and look for a line starting `SKIP`."
+        },
+        {
+          "cmd": "cd ton-index-worker/ton-mch-engine/ir && node -e \"const j=require('./mch_ir.json'); const k={},s={}; const w=e=>{if(Array.isArray(e))return e.forEach(w); if(e&&typeof e==='object'){if(typeof e.k==='string')k[e.k]=(k[e.k]||0)+1; if(typeof e.s==='string')s[e.s]=(s[e.s]||0)+1; Object.values(e).forEach(w);}}; j.matchers.forEach(m=>w(m.build_program||[])); j.nodes.forEach(n=>w(n.where_expr||{})); console.log('stmt',s); console.log('expr',k);\"",
+          "output": "stmt { parse: 29, let: 32, reject: 27, failed: 18, out: 31, switch: 2 }\nexpr { lookup: 8, attr: 600, name: 512, bin: 107, null: 98, call: 144, bool: 5, ternary: 51, unary: 17, int: 9, str: 13, mapc: 1, list: 1, record: 1, dotfield: 4 }",
+          "note": "Claim 3: no `quant` and no `parse` EXPRESSION node exists in production, so the `ref_msgtypes` gap flagged in the expr_ir excerpt is latent rather than live. Re-run this after adding a spec that uses `any`/`all` or an inline `parse` — the counts are the cheapest early-warning you have."
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "to": "matcher-runtime",
+      "why": "the Walker consumes exactly the CompiledMatcher/CompiledNode tables this page describes, and turns anchor kinds into prefilters"
+    },
+    {
+      "to": "build-programs",
+      "why": "the build_program statement list and k-tagged expression trees previewed here are executed there"
+    },
+    {
+      "to": "parse-layer",
+      "why": "a `parse` statement's types[] are registry keys; build_skip_reason checks them against the merged parser map"
+    },
+    {
+      "to": "gates",
+      "why": "the artifact's byte-repro pytest, the sha pairing and the twin-diffed SKIP set are the evidence for this page's claims"
+    },
+    {
+      "to": "prod-path",
+      "why": "the production entry loads the same artifact but substitutes lookup and trace sources, which changes what build_skip_reason sees"
+    }
+  ],
+  "not_annotated": [
+    {
+      "path": "ton-index-worker/ton-mch-engine/ir/mch_ir.json",
+      "reason": "PARTIAL, and necessarily so: the header, 3 matcher records and ~10 node records are excerpted out of 11551 lines. The rest is more of the same two shapes — read it with the `node -e` walkers on this page rather than by scrolling"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/IrLoader.cpp",
+      "reason": "PARTIAL: the version/sha gate, the remap, scan_program, runnability and the priority sort are excerpted. Not shown: the tiny `jfield`/`jstr`/`jint` accessors (lines 25-70), `edge_refs` (75-100, referenced in an annotation), the `where_expr` re-encode into a self-owned buffer (274-294 — a C++ lifetime detail: the decoded JsonValue slices point into `WhereExpr::buf`, which must outlive the artifact document), and the recursion-ownership block (319-358) whose two load errors are nested recursion and captures inside a cyclic body (~520 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/IrLoader.h",
+      "reason": "PARTIAL: `CompiledMatcher` is excerpted. The rest is the `NodeKind`/`RecStrategy`/`AnchorKind` enums, `WhereExpr`, `CompiledNode` (a field-for-field mirror of the JSON node record you already read) and `LoadedIr`. The file-top comment is the loader's actual specification and is worth reading in full before the .cpp (~117 LOC)"
+    },
+    {
+      "path": "indexer/indexer/events/mch/ir_emit.py",
+      "reason": "the emitter. Two parts repay reading if you touch the frontend: `_emit_node` (per-matcher DFS with an identity memo — the `cyclic_ref` back-edge and the disjoint-range property both come from there) and `_anchor_record` (why an `any` root can carry a multi-valued opcode anchor). The omit-when-default rules for `priority`/`builder`/`shape` live at the end of `emit_ir` (~333 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/ir/emit_manifest.json",
+      "reason": "data, and already visible as `frontend.source_files` in the first excerpt. Its value is the two prose fields: `comment` (the regenerate command) and `excluded_note` (why the two legacy jetton specs are omitted from the PRODUCTION artifact but kept for the Python conformance suite) (~31 lines)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/ir/README.md",
+      "reason": "the operational half of this chapter: regeneration command, the input->generator->output table for the CMake codegen step, how to run against a different artifact (contract swap vs `-DMCH_TESTBED_IR`), and a concurrency hazard about sharing one binary dir. Note it says \"currently 32 matchers\" — stale by one since dedust_v2_claim_reward landed (~98 LOC)"
+    },
+    {
+      "path": "indexer/indexer/events/mch/expr_ir.py",
+      "reason": "PARTIAL: the tail is excerpted. The head (lines 18-58) is the boring half — literals, `name`, `dotfield`, `attr`, `call`, `lookup`, `unary`, `bin`, `ternary` — each a one-line dict you can read off the excerpted vesting JSON instead. The one non-obvious rule there is that a non-name callee is rejected outright because the evaluator only ever calls bare builtins (~70 LOC)"
+    },
+    {
+      "path": "indexer/indexer/events/mch_ir/loader.py",
+      "reason": "the Python twin loader. It validates MORE than the C++ one (per-node key whitelists, `where`/`where_expr` mutual exclusion, the sync-only rule for where_exprs, no two matchers sharing a root) and is the better reference for what a legal artifact is. The C++ loader is a subset by design — it trusts an artifact the Python side already accepted (~335 LOC)"
+    },
+    {
+      "path": "indexer/indexer/events/mch/btypes.py",
+      "reason": "the `produces JettonTransferBlock` -> `\"jetton_transfer\"` map, shared by the emitter and the declarative build path. One table; read it when a spec name and an artifact name refuse to match (~54 LOC)"
+    },
+    {
+      "path": "indexer/tests/mch/test_ir_emit.py",
+      "reason": "PARTIAL: the byte-repro guard is excerpted. The remaining ~155 lines are structural assertions on a freshly emitted artifact — node-ref bounds, the jetton_transfer graph shape, anchor forms — useful as executable documentation of the schema"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/BuildDriver.cpp",
+      "reason": "PARTIAL: `build_skip_reason` is excerpted because it is the payoff of the loader's `ref_*` collection. The rest of the file — value rendering, the build loop, `warn_missing_artifact_parsers` — belongs to [[build-programs]] (~258 LOC)"
+    },
+    {
+      "path": "indexer/docs/mch-ir-spec.md",
+      "reason": "the normative schema the loaders implement (§3 matcher record, §5 node record, §7 expressions, §8.1 fail-closed). Read it when you need the rule rather than the implementation — but note its header still says version \"1.0\"; the on-the-wire tag has been \"1.1\" since the W7 bump (~253 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/ir/{expr,build,msg}_vectors.json",
+      "reason": "conformance corpora, not artifacts: 97 expression cases, 36 build-program cases, and the message-schema boundary vectors. They are inputs to the same codegen step and are exercised by ctest, so they belong to [[gates]]"
+    }
+  ]
+}

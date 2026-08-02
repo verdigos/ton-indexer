@@ -180,7 +180,7 @@ matcher tonco_deploy_pool {
 #     needs an async jetton-wallet interface lookup plus the pTON-master
 #     classification to decide whether that slot is TON or a jetton. `lookup
 #     jetton_wallet(...)` plus three address literals could express the lookup in
-#     isolation (specs_decl/pton_transfer.mch does exactly that), but the key it
+#     isolation (specs/pton_transfer.mch does exactly that), but the key it
 #     would need comes out of the unparseable PayTo body;
 #   - the final leg->slot reordering compares a resolved wallet against the
 #     router's asset0 wallet, so it depends on both of the above.

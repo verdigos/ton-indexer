@@ -89,7 +89,7 @@ predicate evaa_bounced_call
 # evaa_action_comment_matcher, already used by the withdraw matcher below.
 #
 # ORDERING. The 0x1 anchor opcode is claimed by no other spec (grepped over
-# specs/ + specs_decl/), and the jetton arm binds a prebuilt `btype
+# specs/), and the jetton arm binds a prebuilt `btype
 # jetton_transfer`, so the default priority 100 — behind the priority-90 jetton
 # specs — is what this needs, matching legacy (jetton matchers 16-19, evaa
 # supply 54).

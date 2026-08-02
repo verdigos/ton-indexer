@@ -191,10 +191,4 @@ td::Result<Value> parse_minter_jetton_mint(const td::Ref<vm::Cell> &body) {
   return Value::make_obj(std::move(f));
 }
 
-// Python's JettonBurnNotification has no __init__(Slice): _soft_parse's
-// cls(body) raises TypeError, i.e. the parse ALWAYS fails.
-td::Result<Value> parse_never(const td::Ref<vm::Cell> &) {
-  return td::Status::Error("message type is not constructible (Python parity)");
-}
-
 }  // namespace mch

@@ -19,10 +19,8 @@ class LookupSource;  // BuildRuntime.h
 // loader; schema-based harnesses can inject a SchemaTraceLoader callback.
 using TraceContextLoader = std::function<td::Result<TraceContext>(const std::string &)>;
 
-// How run_dump obtains the LookupSource for a trace. Empty (default) => the
-// fixture-backed FixtureLookupSource over ctx.trace.interfaces; the production-
-// path gate (--classify-prod / --actions-prod) injects a ParsedBlockLookupSource
-// factory over a synthesized account_interfaces_ map (SchemaGate.cpp).
+// Parameterizes the LookupSource used by run_dump. Empty (default) uses the
+// fixture-backed FixtureLookupSource; callers may inject a different source.
 using LookupSourceFactory = std::function<std::shared_ptr<LookupSource>(TraceContext &)>;
 
 // Dump-side fixed-column Action renderer, exposed for hermetic action-surface

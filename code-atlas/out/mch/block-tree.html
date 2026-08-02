@@ -1,0 +1,996 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3 · From trace to Block tree — the structure matchers walk</title>
+<style>
+:root{--bg:#ffffff;--fg:#1b2026;--mut:#5c6570;--line:#dfe4ea;--line-soft:#edf0f4;--surface:#f8f9fb;--accent:#0b6bcb;--band:#f2f4f7;--band-edge:#b6c0cc;--hot:#cfe4f9;--hot-edge:#0b6bcb;--code-bg:#f6f8fa;--note-bg:#fbfcfe;--drift:#b3261e;--drift-bg:#fdecea;--chip-bg:#0b6bcb;--chip-fg:#ffffff;--tk-k:#b02a37;--tk-s:#1a5f3c;--tk-n:#0550ae;--tk-c:#5c6570}
+@media (prefers-color-scheme: dark){:root{--bg:#0e1116;--fg:#dde3ea;--mut:#949daa;--line:#2a313a;--line-soft:#20262e;--surface:#151b23;--accent:#57a6ea;--band:#191f27;--band-edge:#3a4655;--hot:#17304a;--hot-edge:#57a6ea;--code-bg:#141920;--note-bg:#12171e;--drift:#ef6a5a;--drift-bg:#3a1a15;--chip-bg:#57a6ea;--chip-fg:#08101a;--tk-k:#ff9c92;--tk-s:#7ed8a8;--tk-n:#79c0ff;--tk-c:#949daa}}
+:root[data-theme=light]{--bg:#ffffff;--fg:#1b2026;--mut:#5c6570;--line:#dfe4ea;--line-soft:#edf0f4;--surface:#f8f9fb;--accent:#0b6bcb;--band:#f2f4f7;--band-edge:#b6c0cc;--hot:#cfe4f9;--hot-edge:#0b6bcb;--code-bg:#f6f8fa;--note-bg:#fbfcfe;--drift:#b3261e;--drift-bg:#fdecea;--chip-bg:#0b6bcb;--chip-fg:#ffffff;--tk-k:#b02a37;--tk-s:#1a5f3c;--tk-n:#0550ae;--tk-c:#5c6570}
+:root[data-theme=dark]{--bg:#0e1116;--fg:#dde3ea;--mut:#949daa;--line:#2a313a;--line-soft:#20262e;--surface:#151b23;--accent:#57a6ea;--band:#191f27;--band-edge:#3a4655;--hot:#17304a;--hot-edge:#57a6ea;--code-bg:#141920;--note-bg:#12171e;--drift:#ef6a5a;--drift-bg:#3a1a15;--chip-bg:#57a6ea;--chip-fg:#08101a;--tk-k:#ff9c92;--tk-s:#7ed8a8;--tk-n:#79c0ff;--tk-c:#949daa}
+:root{
+  --ff-sans:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;
+  --ff-mono:ui-monospace,'SF Mono',SFMono-Regular,'Cascadia Mono','Segoe UI Mono',Menlo,Consolas,'Liberation Mono',monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 16px/1.65 var(--ff-sans);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1360px;margin:0 auto;padding:0 28px 96px}
+
+/* --- chrome ------------------------------------------------------------- */
+.topbar{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);margin:0 -28px 24px;padding:10px 28px;display:flex;gap:9px;align-items:baseline}
+.topbar .crumb{color:var(--mut);font-size:13px;flex:none}
+.topbar .here{font-weight:600;font-size:14px;letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline;text-underline-offset:2px}
+a:focus-visible,.card:focus-within{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+/* --- type scale --------------------------------------------------------- */
+h1{font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-.015em;margin:22px 0 10px;text-wrap:balance}
+h2{font-size:19px;line-height:1.35;font-weight:650;letter-spacing:-.01em;margin:46px 0 12px;padding-left:12px;border-left:3px solid var(--accent);scroll-margin-top:66px;text-wrap:balance}
+p{margin:0 0 .9em}
+.wrap>p,section>p{max-width:72ch}
+.meta{color:var(--mut);font-size:13px;line-height:1.55}
+.meta+p{margin-top:14px}
+.label{margin:0 0 9px;font:650 12px/1.4 var(--ff-sans);color:var(--mut);text-transform:uppercase;letter-spacing:.07em}
+.summary{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:0 9px 9px 0;padding:13px 18px;margin:16px 0 24px;background:var(--surface);max-width:78ch;font-size:16.5px;line-height:1.62}
+.summary p:last-child{margin-bottom:0}
+.rule{border:none;border-top:1px solid var(--line);margin:48px 0 14px}
+
+/* --- on-this-page ------------------------------------------------------- */
+.toc{margin:0 0 28px;padding:13px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);max-width:78ch}
+.toc ol{margin:0;padding:0;list-style:none}
+.toc li{display:flex;gap:11px;font-size:14.5px;line-height:1.5;margin:5px 0}
+.toc .tn{flex:none;min-width:1.3em;color:var(--mut);font:650 12px/1.7 var(--ff-mono);font-variant-numeric:tabular-nums}
+
+/* --- excerpt shell ------------------------------------------------------ */
+.excerpt{margin:26px 0;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.excerpt.cont{margin-top:-27px;border-top:none;border-top-left-radius:0;border-top-right-radius:0}
+.ex-head{display:flex;gap:12px;align-items:baseline;padding:9px 14px;background:var(--surface);border-bottom:1px solid var(--line);border-radius:9px 9px 0 0;font:500 12.5px/1.5 var(--ff-mono);min-width:0}
+.path{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plines{color:var(--mut);font-weight:400}
+.ex-title{color:var(--mut);font:400 13px/1.5 var(--ff-sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lang{margin-left:auto;flex:none;color:var(--mut);border:1px solid var(--line);border-radius:10px;padding:1px 8px;font-size:11px;letter-spacing:.05em;text-transform:uppercase}
+.sha{flex:none;color:var(--mut);font-size:11px}
+
+/* --- two-pane: code left, note rail right -------------------------------- */
+.ex-grid{display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,30%,420px);align-items:start}
+.excerpt.bare .ex-grid{grid-template-columns:minmax(0,1fr)}
+.ex-code{overflow-x:auto;overscroll-behavior-x:contain;padding:10px 0 12px}
+table.code{border-collapse:collapse;width:100%;font:400 13.5px/1.55 var(--ff-mono);letter-spacing:0;font-variant-ligatures:none;tab-size:4}
+/* keep these at the same specificity as the td reset above, or the reset wins */
+table.code td{padding:0;white-space:pre;vertical-align:baseline}
+table.code td.ln{width:1%;padding:0 8px 0 14px;color:var(--mut);text-align:right;user-select:none;font-size:12.5px;font-variant-numeric:tabular-nums}
+table.code td.mk{width:26px;padding:0 4px;text-align:center;vertical-align:middle;user-select:none}
+.excerpt.bare table.code td.mk{width:0;padding:0}
+table.code td.cd{width:100%;padding:0 12px 0 6px}
+tr.band td{background:var(--band)}
+tr.band td.mk{box-shadow:inset 3px 0 0 var(--band-edge)}
+tr.hot td{background:var(--hot)}
+tr.hot td.mk{box-shadow:inset 3px 0 0 var(--hot-edge)}
+/* text-indent:0 is load-bearing: the note body sets a negative text-indent for
+   its hanging first line, which would otherwise be inherited by the chip's
+   inner text box and fling the digit outside the card. */
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--chip-bg);color:var(--chip-fg);font:700 11px/1 var(--ff-sans);font-variant-numeric:tabular-nums;text-indent:0;flex:none}
+.ex-rail{position:relative;align-self:stretch;min-width:0;border-left:1px solid var(--line)}
+.note{position:absolute;left:14px;right:14px;padding:9px 13px 10px;border:1px solid var(--line);border-radius:8px;background:var(--note-bg);font-size:14px;line-height:1.55;transition:background .12s,border-color .12s,box-shadow .12s}
+.note .nt{padding-left:26px;text-indent:-26px}
+.note .chip{margin-right:7px}
+.note .nl{margin-right:7px;white-space:nowrap;color:var(--mut);font:650 12px/1 var(--ff-mono);letter-spacing:.01em}
+.note .nt code{font-size:12.5px}
+.note.hot{background:var(--hot);border-color:var(--hot-edge);box-shadow:0 0 0 1px var(--hot-edge)}
+@media (max-width: 979px){
+  .ex-grid{grid-template-columns:minmax(0,1fr)}
+  .ex-rail{border-left:none;border-top:1px solid var(--line);padding:12px 0 2px}
+  .note{position:static;margin:0 14px 10px}
+}
+
+/* --- syntax ------------------------------------------------------------- */
+.tk-k{color:var(--tk-k)}.tk-s{color:var(--tk-s)}.tk-n{color:var(--tk-n)}
+.tk-c{color:var(--tk-c);font-style:italic}
+.drift{background:var(--drift-bg);color:var(--drift);border-bottom:1px solid var(--line);padding:8px 14px;font-size:13px;line-height:1.5}
+.run{margin:16px 0;border:1px solid var(--line);border-radius:8px;background:var(--code-bg);overflow:hidden}
+.run .label{padding:6px 14px 0}
+.run-cmd{padding:6px 14px 2px;font:600 12.5px/1.6 ui-monospace,'Cascadia Mono',Consolas,monospace;color:var(--accent);white-space:pre-wrap;word-break:break-all}
+.run-out{margin:0;padding:2px 14px 10px;font:12.5px/1.55 ui-monospace,'Cascadia Mono',Consolas,monospace;overflow-x:auto;color:var(--fg)}
+.run-note{padding:7px 14px 9px;border-top:1px solid var(--line-soft);font-size:13.5px;line-height:1.55;color:var(--mut)}
+
+/* --- blocks ------------------------------------------------------------- */
+.diagram{margin:22px 0;padding:14px 16px;border:1px solid var(--line);border-radius:10px;overflow-x:auto;background:var(--surface)}
+pre.mermaid{margin:0;font:13px/1.5 var(--ff-mono)}
+.edges,.cover{margin:26px 0;padding:14px 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.edges ul,.cover ul{margin:0;padding-left:22px}
+.edges li,.cover li{margin:6px 0;font-size:14.5px;line-height:1.55}
+.cover .why{color:var(--mut)}
+.cover .label+ul+.label{margin-top:18px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin:20px 0}
+.card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;background:var(--surface);transition:border-color .12s}
+.card:hover{border-color:var(--accent)}
+.card b{font-size:15.5px;font-weight:650;line-height:1.35}
+.card .num{margin-bottom:7px;color:var(--mut);font:650 11px/1 var(--ff-mono);letter-spacing:.06em}
+.card .meta{margin-top:5px}
+.card.planned{opacity:.55}
+.card.planned:hover{border-color:var(--line)}
+code{background:var(--code-bg);border:1px solid var(--line-soft);padding:.5px 5px;border-radius:5px;font-family:var(--ff-mono);font-size:.875em}
+.xl{font-weight:600}.xl-missing{color:var(--drift)}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{transition:none!important}}
+</style>
+<div class="wrap">
+<div class="topbar"><a class="crumb" href="index.html">atlas</a><span class="crumb">/</span><span class="here">3 · From trace to Block tree — the structure matchers walk</span></div>
+<h1>3 · From trace to Block tree — the structure matchers walk</h1>
+<div class="summary"><p>Chapter 1 showed a trace turning into an action; chapter 2 showed the <code>Value</code> that travels through it. This chapter is the substrate in between: the four plain structs a fixture decodes into, the <code>EventNode</code> tree that reassembles the message graph from flat rows, and the <code>Block</code> spine that <code>init_block</code> lays over it. By the end you can read any block-tree dump and say exactly which C++ line produced each node, predict what <code>failed</code> will be for a given transaction, and know precisely what a merge inherits and what it destroys. This layer is a port of the Python indexer&#39;s <code>tree_utils.to_tree</code> / <code>core.Block</code> / <code>event_processing.init_block</code>, and it is the one layer that was verified byte-identical against Python across the whole fixture corpus — so most of what is worth saying here is about the places where the C++ deliberately does NOT copy Python (determinism) and the places where it copies Python bug-for-bug (failed semantics, ContractDeploy children). Nothing in this file matches anything: it only builds the shape that <a class="xl" href="matcher-runtime.html">matcher-runtime</a> walks.</p></div>
+<nav class="toc"><div class="label">On this page</div><ol><li><span class="tn">1</span><a href="#the-fixture-loader-msgpack-in-four-structs-out">The fixture loader — msgpack in, four structs out</a></li><li><span class="tn">2</span><a href="#to-tree-parent-links-by-message-hash">to_tree — parent links by message hash</a></li><li><span class="tn">3</span><a href="#what-a-block-is">What a Block is</a></li><li><span class="tn">4</span><a href="#init-block-the-leaf-spine">init_block — the leaf spine</a></li><li><span class="tn">5</span><a href="#merge-blocks-who-inherits-what">merge_blocks — who inherits what</a></li><li><span class="tn">6</span><a href="#reading-a-block-the-view-helpers">Reading a block: the view helpers</a></li><li><span class="tn">7</span><a href="#check-yourself">Check yourself</a></li></ol></nav>
+<div class="diagram"><div class="label">Fixture to spine</div><pre class="mermaid">flowchart TD
+  F[&quot;.lz4 fixture (LZ4 frame + msgpack)&quot;] --&gt; L[&quot;load_trace -&gt; Trace / Transaction / Message / MsgContent&quot;]
+  L --&gt; T[&quot;to_tree: sort tx by lt DESC, link child by in-msg hash&quot;]
+  T --&gt; R[&quot;root = lowest-lt tx, then walk .parent up&quot;]
+  R --&gt; I[&quot;init_block: iterative DFS over EventNode.children&quot;]
+  I --&gt; LB[&quot;one leaf Block per node:&lt;br/&gt;tick_tock | ton_transfer | call_contract&quot;]
+  LB --&gt; D[&quot;+ contract_deploy pushed into children_blocks&lt;br/&gt;(uninit/nonexist -&gt; active)&quot;]
+  LB --&gt; C[&quot;connect(parent,child) then sort_next_blocks (min_lt asc)&quot;]
+  C --&gt; S[&quot;Block spine -&gt; walker (ch.5)&quot;]
+  L -.-&gt; IF[&quot;interfaces section -&gt; LookupSource (ch.7)&quot;]</pre></div>
+<div class="diagram"><div class="label">What merge_blocks does, in order</div><pre class="mermaid">flowchart TD
+  E[&quot;produced-&gt;merge_blocks(consumed)&quot;] --&gt; Q[&quot;dedup, FIRST-SEEN order&lt;br/&gt;(Python uses set() = nondeterministic)&quot;]
+  Q --&gt; EC[&quot;ensure_earliest_common_block:&lt;br/&gt;sort by (min_lt_without_initiating_tx, direction),&lt;br/&gt;every other block must chain back to the head&quot;]
+  EC --&gt;|nullptr| FA[&quot;return false -&gt; build rejected,&lt;br/&gt;tree left completely untouched&quot;]
+  EC --&gt; M[&quot;each merged block: parent = produced,&lt;br/&gt;event_nodes APPENDED, pushed to children_blocks&quot;]
+  M --&gt; FR[&quot;find_frontier(earliest): BFS through the merged set,&lt;br/&gt;first non-member on each path -&gt; new next_blocks (deduped)&quot;]
+  FR --&gt; PR[&quot;previous_block = earliest-&gt;previous_block&lt;br/&gt;initiating_event_node = earliest&#39;s&quot;]
+  PR --&gt; LT[&quot;calculate_min_max_lt, then sort_next_blocks&quot;]
+  LT --&gt; CC[&quot;earliest-&gt;previous_block-&gt;compact_connections()&quot;]</pre></div>
+<h2 id="the-fixture-loader-msgpack-in-four-structs-out">The fixture loader — msgpack in, four structs out</h2>
+<section><p><code>TraceLoader.{h,cpp}</code> is the FIXTURE path only: it reads one <code>tests/traces/*.lz4</code> (an LZ4 frame wrapping msgpack, written by the Python recorder) and produces <code>Trace -&gt; Transaction -&gt; Message -&gt; MsgContent</code>. The production loader that reads the same shape out of Postgres is a different file entirely and is covered in <a class="xl" href="prod-path.html">prod-path</a>; everything downstream of these four structs is shared, which is exactly what makes the prod A/B gate meaningful.</p>
+<p>The decode is deliberately dumb: every field is fetched by name, a missing or nil key yields the default, and unknown keys are ignored. There is no schema validation because the fixture writer and this reader are pinned together by the twin gates, not by a contract. Two decisions in here have consequences much later — the signed storage of <code>opcode</code>, and the fact that <code>message_content</code> is optional.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/TraceLoader.h<span class="plines">:29–55</span></span><span class="ex-title">Message — the row the whole engine reads from</span><span class="lang">cpp</span><span class="sha" title="span hash at render">469e459d</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="29"><td class="ln">29</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> Message {</td></tr>
+<tr class="cl" data-l="30"><td class="ln">30</td><td class="mk"></td><td class="cd">  std::string msg_hash;</td></tr>
+<tr class="cl" data-l="31"><td class="ln">31</td><td class="mk"></td><td class="cd">  std::string tx_hash;</td></tr>
+<tr class="cl" data-l="32"><td class="ln">32</td><td class="mk"></td><td class="cd">  std::int64_t tx_lt{<span class="tk-n">0</span>};</td></tr>
+<tr class="cl" data-l="33"><td class="ln">33</td><td class="mk"></td><td class="cd">  std::string direction;  <span class="tk-c">// &quot;in&quot; | &quot;out&quot;</span></td></tr>
+<tr class="cl" data-l="34"><td class="ln">34</td><td class="mk"></td><td class="cd">  std::optional&lt;std::string&gt; source;</td></tr>
+<tr class="cl" data-l="35"><td class="ln">35</td><td class="mk"></td><td class="cd">  std::optional&lt;std::string&gt; destination;</td></tr>
+<tr class="cl band nb-0" data-l="36" data-n="0"><td class="ln">36</td><td class="mk"><span class="chip">1</span></td><td class="cd">  std::optional&lt;std::int64_t&gt; opcode;  <span class="tk-c">// stored SIGNED (int32)</span></td></tr>
+<tr class="cl" data-l="37"><td class="ln">37</td><td class="mk"></td><td class="cd">  std::optional&lt;std::int64_t&gt; value;</td></tr>
+<tr class="cl" data-l="38"><td class="ln">38</td><td class="mk"></td><td class="cd">  std::optional&lt;std::int64_t&gt; created_lt;</td></tr>
+<tr class="cl" data-l="39"><td class="ln">39</td><td class="mk"></td><td class="cd">  std::optional&lt;std::int64_t&gt; created_at;</td></tr>
+<tr class="cl" data-l="40"><td class="ln">40</td><td class="mk"></td><td class="cd">  std::optional&lt;<span class="tk-k">bool</span>&gt; bounce;</td></tr>
+<tr class="cl" data-l="41"><td class="ln">41</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> bounced{<span class="tk-k">false</span>};</td></tr>
+<tr class="cl band nb-1" data-l="42" data-n="1"><td class="ln">42</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">bool</span> has_extra_currencies{<span class="tk-k">false</span>};  <span class="tk-c">// value_extra_currencies map is non-empty</span></td></tr>
+<tr class="cl band nb-2" data-l="43" data-n="2"><td class="ln">43</td><td class="mk"><span class="chip">3</span></td><td class="cd">  std::optional&lt;MsgContent&gt; content;</td></tr>
+<tr class="cl" data-l="44"><td class="ln">44</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="45"><td class="ln">45</td><td class="mk"></td><td class="cd">  <span class="tk-c">// Owning transaction, wired after decode (Python Message.transaction).</span></td></tr>
+<tr class="cl" data-l="46"><td class="ln">46</td><td class="mk"></td><td class="cd">  Transaction *tx{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl" data-l="47"><td class="ln">47</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="48"><td class="ln">48</td><td class="mk"></td><td class="cd">  <span class="tk-c">// Opcode masked to 32 bits (matches Python EventNode.get_opcode).</span></td></tr>
+<tr class="cl band nb-3" data-l="49" data-n="3"><td class="ln">49</td><td class="mk"><span class="chip">4</span></td><td class="cd">  std::optional&lt;std::uint32_t&gt; opcode32() <span class="tk-k">const</span> {</td></tr>
+<tr class="cl band nb-3" data-l="50" data-n="3"><td class="ln">50</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (!opcode) {</td></tr>
+<tr class="cl band nb-3" data-l="51" data-n="3"><td class="ln">51</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> std::nullopt;</td></tr>
+<tr class="cl band nb-3" data-l="52" data-n="3"><td class="ln">52</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-3" data-l="53" data-n="3"><td class="ln">53</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> static_cast&lt;std::uint32_t&gt;(*opcode &amp; <span class="tk-n">0xFFFFFFFF</span>);</td></tr>
+<tr class="cl band nb-3" data-l="54" data-n="3"><td class="ln">54</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="55"><td class="ln">55</td><td class="mk"></td><td class="cd">};</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="36" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L36</span>Stored SIGNED because that is how Postgres stores it (<code>int4</code>) and how the msgpack fixture carries it. Every consumer must go through <code>opcode32()</code>; comparing <code>msg-&gt;opcode</code> against <code>0xa7733acd</code> directly would silently fail for any opcode with the high bit set. This is the single most common way to write a wrong condition against this struct.</div></div>
+<div class="note" data-a="42" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L42</span>Only the emptiness of <code>value_extra_currencies</code> is kept, not the map. That is enough because the one place it is read is the <code>call_contract</code> failed-exception rule, which tests Python&#39;s <code>not node.message.value_extra_currencies</code> — a truthiness test. Decoding the dict would be dead weight.</div></div>
+<div class="note" data-a="43" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L43</span>Optional: a message with no content row is representable. Python&#39;s <code>EventNode.__init__</code> RAISES <code>NoMessageBodyException</code> in that case and the whole trace falls back to basic classification; the C++ node has no such precondition and the leaf simply gets <code>comment = null</code>. No fixture in the corpus exercises it, so the twins agree — but it is a real asymmetry to remember if you ever feed the engine a hand-built trace.</div></div>
+<div class="note" data-a="49" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L49–54</span>The mask, mirroring Python&#39;s <code>EventNode.get_opcode</code>. Note it returns <code>nullopt</code> for an absent opcode, NOT 0 — and <code>init_block</code> treats absent and 0 the same, so the distinction only matters to specs that read <code>data.opcode</code>.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/TraceLoader.cpp<span class="plines">:117–142</span></span><span class="ex-title">parse_message — every field is best-effort</span><span class="lang">cpp</span><span class="sha" title="span hash at render">7d748ca6</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="117"><td class="ln">117</td><td class="mk"></td><td class="cd">std::unique_ptr&lt;Message&gt; parse_message(<span class="tk-k">const</span> msgpack::object &amp;m) {</td></tr>
+<tr class="cl" data-l="118"><td class="ln">118</td><td class="mk"></td><td class="cd">  <span class="tk-k">auto</span> msg = std::make_unique&lt;Message&gt;();</td></tr>
+<tr class="cl" data-l="119"><td class="ln">119</td><td class="mk"></td><td class="cd">  msg-&gt;msg_hash = get_str(m, <span class="tk-s">&quot;msg_hash&quot;</span>);</td></tr>
+<tr class="cl" data-l="120"><td class="ln">120</td><td class="mk"></td><td class="cd">  msg-&gt;tx_hash = get_str(m, <span class="tk-s">&quot;tx_hash&quot;</span>);</td></tr>
+<tr class="cl" data-l="121"><td class="ln">121</td><td class="mk"></td><td class="cd">  msg-&gt;tx_lt = get_i64(m, <span class="tk-s">&quot;tx_lt&quot;</span>);</td></tr>
+<tr class="cl" data-l="122"><td class="ln">122</td><td class="mk"></td><td class="cd">  msg-&gt;direction = get_str(m, <span class="tk-s">&quot;direction&quot;</span>);</td></tr>
+<tr class="cl" data-l="123"><td class="ln">123</td><td class="mk"></td><td class="cd">  msg-&gt;source = get_opt_str(m, <span class="tk-s">&quot;source&quot;</span>);</td></tr>
+<tr class="cl" data-l="124"><td class="ln">124</td><td class="mk"></td><td class="cd">  msg-&gt;destination = get_opt_str(m, <span class="tk-s">&quot;destination&quot;</span>);</td></tr>
+<tr class="cl" data-l="125"><td class="ln">125</td><td class="mk"></td><td class="cd">  msg-&gt;opcode = get_opt_i64(m, <span class="tk-s">&quot;opcode&quot;</span>);</td></tr>
+<tr class="cl" data-l="126"><td class="ln">126</td><td class="mk"></td><td class="cd">  msg-&gt;value = get_opt_i64(m, <span class="tk-s">&quot;value&quot;</span>);</td></tr>
+<tr class="cl" data-l="127"><td class="ln">127</td><td class="mk"></td><td class="cd">  msg-&gt;created_lt = get_opt_i64(m, <span class="tk-s">&quot;created_lt&quot;</span>);</td></tr>
+<tr class="cl" data-l="128"><td class="ln">128</td><td class="mk"></td><td class="cd">  msg-&gt;created_at = get_opt_i64(m, <span class="tk-s">&quot;created_at&quot;</span>);</td></tr>
+<tr class="cl band nb-0" data-l="129" data-n="0"><td class="ln">129</td><td class="mk"><span class="chip">1</span></td><td class="cd">  msg-&gt;bounce = get_opt_bool(m, <span class="tk-s">&quot;bounce&quot;</span>);</td></tr>
+<tr class="cl band nb-0" data-l="130" data-n="0"><td class="ln">130</td><td class="mk"></td><td class="cd">  msg-&gt;bounced = get_bool(m, <span class="tk-s">&quot;bounced&quot;</span>);</td></tr>
+<tr class="cl band nb-1" data-l="131" data-n="1"><td class="ln">131</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">const</span> <span class="tk-k">auto</span> *extra = map_get(m, <span class="tk-s">&quot;value_extra_currencies&quot;</span>);</td></tr>
+<tr class="cl band nb-1" data-l="132" data-n="1"><td class="ln">132</td><td class="mk"></td><td class="cd">  msg-&gt;has_extra_currencies =</td></tr>
+<tr class="cl band nb-1" data-l="133" data-n="1"><td class="ln">133</td><td class="mk"></td><td class="cd">      !is_nil(extra) &amp;&amp; extra-&gt;type == msgpack::type::MAP &amp;&amp; extra-&gt;via.map.size &gt; <span class="tk-n">0</span>;</td></tr>
+<tr class="cl band nb-2" data-l="134" data-n="2"><td class="ln">134</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">const</span> <span class="tk-k">auto</span> *content = map_get(m, <span class="tk-s">&quot;message_content&quot;</span>);</td></tr>
+<tr class="cl band nb-2" data-l="135" data-n="2"><td class="ln">135</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (!is_nil(content)) {</td></tr>
+<tr class="cl band nb-2" data-l="136" data-n="2"><td class="ln">136</td><td class="mk"></td><td class="cd">    MsgContent c;</td></tr>
+<tr class="cl band nb-2" data-l="137" data-n="2"><td class="ln">137</td><td class="mk"></td><td class="cd">    c.hash = get_str(*content, <span class="tk-s">&quot;hash&quot;</span>);</td></tr>
+<tr class="cl band nb-2" data-l="138" data-n="2"><td class="ln">138</td><td class="mk"></td><td class="cd">    c.body = get_str(*content, <span class="tk-s">&quot;body&quot;</span>);</td></tr>
+<tr class="cl band nb-2" data-l="139" data-n="2"><td class="ln">139</td><td class="mk"></td><td class="cd">    msg-&gt;content = std::move(c);</td></tr>
+<tr class="cl band nb-2" data-l="140" data-n="2"><td class="ln">140</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="141"><td class="ln">141</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> msg;</td></tr>
+<tr class="cl" data-l="142"><td class="ln">142</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="129" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L129–130</span><code>bounce</code> is <code>optional&lt;bool&gt;</code> and <code>bounced</code> is a plain <code>bool</code>, and the difference is load-bearing: the ton_transfer failed rule tests <code>msg-&gt;bounce &amp;&amp; *msg-&gt;bounce</code>, i.e. it must distinguish &quot;bounce flag absent&quot; from &quot;bounce == false&quot;. <code>bounced</code> has no such consumer, so it collapses to false.</div></div>
+<div class="note" data-a="131" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L131–133</span>The extra-currency truthiness test, computed once at decode. <code>is_nil</code> covers both an absent key and an explicit nil, so a fixture written by an older recorder decodes identically.</div></div>
+<div class="note" data-a="134" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L134–140</span><code>body</code> stays as the base64 BOC string — no cell is deserialized here. Every consumer (the comment derivation later in this chapter, the parsers in <a class="xl" href="parse-layer.html">parse-layer</a>) decodes it itself, which is why a corrupt body is a local parse failure rather than a load failure.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/TraceLoader.cpp<span class="plines">:230–263</span></span><span class="ex-title">load_trace — the two things that are not just field copying</span><span class="lang">cpp</span><span class="sha" title="span hash at render">346fcaf7</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="230"><td class="ln">230</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> msgpack::object &amp;root = handle.get();</td></tr>
+<tr class="cl" data-l="231"><td class="ln">231</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (root.type != msgpack::type::MAP) {</td></tr>
+<tr class="cl" data-l="232"><td class="ln">232</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> td::Status::Error(<span class="tk-s">&quot;msgpack: root is not a map&quot;</span>);</td></tr>
+<tr class="cl" data-l="233"><td class="ln">233</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="234"><td class="ln">234</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="235"><td class="ln">235</td><td class="mk"></td><td class="cd">  Trace trace;</td></tr>
+<tr class="cl" data-l="236"><td class="ln">236</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> <span class="tk-k">auto</span> *trace_obj = map_get(root, <span class="tk-s">&quot;trace&quot;</span>);</td></tr>
+<tr class="cl" data-l="237"><td class="ln">237</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (!is_nil(trace_obj)) {</td></tr>
+<tr class="cl" data-l="238"><td class="ln">238</td><td class="mk"></td><td class="cd">    trace.trace_id = get_str(*trace_obj, <span class="tk-s">&quot;trace_id&quot;</span>);</td></tr>
+<tr class="cl" data-l="239"><td class="ln">239</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-0" data-l="240" data-n="0"><td class="ln">240</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">const</span> <span class="tk-k">auto</span> *txs = map_get(root, <span class="tk-s">&quot;transactions&quot;</span>);</td></tr>
+<tr class="cl band nb-0" data-l="241" data-n="0"><td class="ln">241</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (is_nil(txs) || txs-&gt;type != msgpack::type::ARRAY) {</td></tr>
+<tr class="cl band nb-0" data-l="242" data-n="0"><td class="ln">242</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> td::Status::Error(<span class="tk-s">&quot;msgpack: no transactions array&quot;</span>);</td></tr>
+<tr class="cl band nb-0" data-l="243" data-n="0"><td class="ln">243</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="244"><td class="ln">244</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (std::uint32_t i = <span class="tk-n">0</span>; i &lt; txs-&gt;via.array.size; i++) {</td></tr>
+<tr class="cl" data-l="245"><td class="ln">245</td><td class="mk"></td><td class="cd">    trace.transactions.push_back(parse_transaction(txs-&gt;via.array.ptr[i]));</td></tr>
+<tr class="cl" data-l="246"><td class="ln">246</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="247" data-n="1"><td class="ln">247</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">auto</span> &amp;tx : trace.transactions) {</td></tr>
+<tr class="cl band nb-1" data-l="248" data-n="1"><td class="ln">248</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">auto</span> &amp;m : tx-&gt;messages) {</td></tr>
+<tr class="cl band nb-1" data-l="249" data-n="1"><td class="ln">249</td><td class="mk"></td><td class="cd">      m-&gt;tx = tx.get();</td></tr>
+<tr class="cl band nb-1" data-l="250" data-n="1"><td class="ln">250</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="251" data-n="1"><td class="ln">251</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="252" data-n="2"><td class="ln">252</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">if</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> *ifs = map_get(root, <span class="tk-s">&quot;interfaces&quot;</span>);</td></tr>
+<tr class="cl band nb-2" data-l="253" data-n="2"><td class="ln">253</td><td class="mk"></td><td class="cd">      !is_nil(ifs) &amp;&amp; ifs-&gt;type == msgpack::type::MAP) {</td></tr>
+<tr class="cl band nb-2" data-l="254" data-n="2"><td class="ln">254</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (std::uint32_t i = <span class="tk-n">0</span>; i &lt; ifs-&gt;via.map.size; i++) {</td></tr>
+<tr class="cl band nb-2" data-l="255" data-n="2"><td class="ln">255</td><td class="mk"></td><td class="cd">      <span class="tk-k">const</span> <span class="tk-k">auto</span> &amp;kv = ifs-&gt;via.map.ptr[i];</td></tr>
+<tr class="cl band nb-2" data-l="256" data-n="2"><td class="ln">256</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (kv.key.type != msgpack::type::STR) {</td></tr>
+<tr class="cl band nb-2" data-l="257" data-n="2"><td class="ln">257</td><td class="mk"></td><td class="cd">        <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl band nb-2" data-l="258" data-n="2"><td class="ln">258</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-2" data-l="259" data-n="2"><td class="ln">259</td><td class="mk"></td><td class="cd">      trace.interfaces.emplace(std::string(kv.key.via.str.ptr, kv.key.via.str.size),</td></tr>
+<tr class="cl band nb-2" data-l="260" data-n="2"><td class="ln">260</td><td class="mk"></td><td class="cd">                               msgpack_to_value(kv.val));</td></tr>
+<tr class="cl band nb-2" data-l="261" data-n="2"><td class="ln">261</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-2" data-l="262" data-n="2"><td class="ln">262</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="263"><td class="ln">263</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> trace;</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="240" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L240–243</span>A missing <code>transactions</code> array is the ONLY hard error in the decoder. Everything else degrades to defaults, on the principle that a fixture the recorder wrote is trusted and a fixture it did not write should fail loudly at the top rather than subtly three layers down.</div></div>
+<div class="note" data-a="247" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L247–251</span>Back-wiring the owning transaction into each <code>Message</code> (Python&#39;s <code>Message.transaction</code>). It has to happen after the whole vector is filled — <code>trace.transactions</code> is a vector of <code>unique_ptr</code>, so the pointers are stable, but the vector itself reallocates while it grows. This is why <code>Message::tx</code> is not set inside <code>parse_message</code>.</div></div>
+<div class="note" data-a="252" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L252–262</span>The <code>interfaces</code> section decodes generically into <code>Value</code> (via <code>msgpack_to_value</code>, just above) rather than into typed structs, because the Python <code>TestInterfaceRepository</code> serves whatever the recorder captured. Note the float branch in that helper: msgpack floats become <code>VType::Float</code>, a kind that deliberately has NO rendering, so a spec that reads a raw float fails exactly where the Python twin&#39;s <code>render()</code> raises (<a class="xl" href="value.html">value</a>).</div></div></div>
+</div>
+</div>
+<h2 id="to-tree-parent-links-by-message-hash">to_tree — parent links by message hash</h2>
+<section><p>A trace arrives as a flat list of transactions. <code>to_tree</code> rebuilds the message graph with one trick: sort the transactions by <code>lt</code> DESCENDING, so every child transaction is created before the parent that sent to it. By the time a parent enumerates its out-messages, the <code>in-msg-hash -&gt; tx-hash</code> map already contains the child&#39;s entry, and the link is a single lookup. This is a direct port of Python&#39;s <code>tree_utils.to_tree</code>, sort direction and all.</p>
+<p>The node type is deliberately thin — a message pointer, a transaction pointer, a tick-tock flag, and links. Everything derived (<code>lt()</code>, <code>opcode()</code>, <code>tx_hash()</code>) is computed on demand so there is no cached state to get stale when a block absorbs nodes from elsewhere.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.h<span class="plines">:41–75</span></span><span class="ex-title">EventNode — three accessors that all special-case tick_tock</span><span class="lang">cpp</span><span class="sha" title="span hash at render">9f3365b6</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="41" data-n="0"><td class="ln">41</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-k">struct</span> EventNode {</td></tr>
+<tr class="cl band nb-0" data-l="42" data-n="0"><td class="ln">42</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Message *msg{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl band nb-0" data-l="43" data-n="0"><td class="ln">43</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Transaction *tx{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl band nb-0" data-l="44" data-n="0"><td class="ln">44</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> is_tick_tock{<span class="tk-k">false</span>};</td></tr>
+<tr class="cl band nb-0" data-l="45" data-n="0"><td class="ln">45</td><td class="mk"></td><td class="cd">  EventNode *parent{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl band nb-0" data-l="46" data-n="0"><td class="ln">46</td><td class="mk"></td><td class="cd">  std::vector&lt;EventNode *&gt; children;</td></tr>
+<tr class="cl" data-l="47"><td class="ln">47</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="48"><td class="ln">48</td><td class="mk"></td><td class="cd">  std::optional&lt;std::uint32_t&gt; opcode() <span class="tk-k">const</span> {</td></tr>
+<tr class="cl" data-l="49"><td class="ln">49</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> msg != <span class="tk-k">nullptr</span> ? msg-&gt;opcode32() : std::nullopt;</td></tr>
+<tr class="cl" data-l="50"><td class="ln">50</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="51"><td class="ln">51</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="52"><td class="ln">52</td><td class="mk"></td><td class="cd">  <span class="tk-c">// Mirrors EventNode.get_lt.</span></td></tr>
+<tr class="cl band nb-1" data-l="53" data-n="1"><td class="ln">53</td><td class="mk"><span class="chip">2</span></td><td class="cd">  std::int64_t lt() <span class="tk-k">const</span> {</td></tr>
+<tr class="cl band nb-1" data-l="54" data-n="1"><td class="ln">54</td><td class="mk"><span class="chip">3</span></td><td class="cd">    <span class="tk-k">if</span> (is_tick_tock &amp;&amp; tx != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="55" data-n="1"><td class="ln">55</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> tx-&gt;lt;</td></tr>
+<tr class="cl band nb-1" data-l="56" data-n="1"><td class="ln">56</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="57" data-n="1"><td class="ln">57</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (msg != <span class="tk-k">nullptr</span> &amp;&amp; msg-&gt;created_lt) {</td></tr>
+<tr class="cl band nb-1" data-l="58" data-n="1"><td class="ln">58</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> *msg-&gt;created_lt;</td></tr>
+<tr class="cl band nb-1" data-l="59" data-n="1"><td class="ln">59</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="60" data-n="1"><td class="ln">60</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (msg != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="61" data-n="1"><td class="ln">61</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> msg-&gt;tx_lt;</td></tr>
+<tr class="cl band nb-1" data-l="62" data-n="1"><td class="ln">62</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="63" data-n="1"><td class="ln">63</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> <span class="tk-n">0</span>;</td></tr>
+<tr class="cl band nb-1" data-l="64" data-n="1"><td class="ln">64</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="65"><td class="ln">65</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="66"><td class="ln">66</td><td class="mk"></td><td class="cd">  std::string tx_hash() <span class="tk-k">const</span> {</td></tr>
+<tr class="cl" data-l="67"><td class="ln">67</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (tx != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl" data-l="68"><td class="ln">68</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> tx-&gt;hash;</td></tr>
+<tr class="cl" data-l="69"><td class="ln">69</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="70"><td class="ln">70</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (msg != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl" data-l="71"><td class="ln">71</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> msg-&gt;tx_hash;</td></tr>
+<tr class="cl" data-l="72"><td class="ln">72</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="73"><td class="ln">73</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> {};</td></tr>
+<tr class="cl" data-l="74"><td class="ln">74</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="75"><td class="ln">75</td><td class="mk"></td><td class="cd">};</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="41" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L41–46</span>For a normal transaction <code>msg</code> is the INCOMING message; for a destination-less out-message (a log/notification) the node&#39;s <code>msg</code> is that outgoing message and <code>tx</code> is the sender&#39;s transaction. So <code>msg-&gt;direction</code> is the only way to tell the two node flavours apart, and <code>Block::direction()</code> in the merge code depends on exactly that.</div></div>
+<div class="note" data-a="53" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L53–64</span>Port of <code>EventNode.get_lt</code>. The precedence is tick_tock first, then <code>created_lt</code>, then <code>tx_lt</code> — and it matters because <code>min_lt</code> derives from it and <code>min_lt</code> decides sibling order everywhere. A tick_tock node has no meaningful message lt at all, hence the first branch.</div></div>
+<div class="note" data-a="54" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L54–56</span>Python synthesises a fake <code>Message(msg_hash=tx.hash, direction=&#39;in&#39;, transaction=tick_tock_tx)</code> for tick-tock nodes; the C++ leaves <code>msg</code> null and reads <code>tx</code> instead. Same answers from <code>lt()</code>, <code>tx_hash()</code> and <code>is_tick_tock</code>, but any new code that dereferences <code>node-&gt;msg</code> unconditionally will crash on a tick-tock node where Python quietly returned a synthetic value.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.cpp<span class="plines">:73–107</span></span><span class="ex-title">to_tree part 1 — descending lt is the whole algorithm</span><span class="lang">cpp</span><span class="sha" title="span hash at render">6c18349c</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="73"><td class="ln">73</td><td class="mk"></td><td class="cd">  std::vector&lt;<span class="tk-k">const</span> Transaction *&gt; sorted;</td></tr>
+<tr class="cl" data-l="74"><td class="ln">74</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> &amp;tx : trace.transactions) {</td></tr>
+<tr class="cl" data-l="75"><td class="ln">75</td><td class="mk"></td><td class="cd">    sorted.push_back(tx.get());</td></tr>
+<tr class="cl" data-l="76"><td class="ln">76</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-0" data-l="77" data-n="0"><td class="ln">77</td><td class="mk"><span class="chip">1</span></td><td class="cd">  std::stable_sort(sorted.begin(), sorted.end(),</td></tr>
+<tr class="cl band nb-0" data-l="78" data-n="0"><td class="ln">78</td><td class="mk"></td><td class="cd">                   [](<span class="tk-k">const</span> Transaction *a, <span class="tk-k">const</span> Transaction *b) { <span class="tk-k">return</span> a-&gt;lt &gt; b-&gt;lt; });</td></tr>
+<tr class="cl" data-l="79"><td class="ln">79</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="80"><td class="ln">80</td><td class="mk"></td><td class="cd">  std::unordered_map&lt;std::string, std::string&gt; msg_tx;   <span class="tk-c">// in-msg hash -&gt; owning tx hash</span></td></tr>
+<tr class="cl" data-l="81"><td class="ln">81</td><td class="mk"></td><td class="cd">  std::unordered_map&lt;std::string, EventNode *&gt; tx_nodes;  <span class="tk-c">// tx hash -&gt; node</span></td></tr>
+<tr class="cl" data-l="82"><td class="ln">82</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="83"><td class="ln">83</td><td class="mk"></td><td class="cd">  <span class="tk-k">auto</span> make_node = [&amp;tree](<span class="tk-k">const</span> Message *msg, <span class="tk-k">const</span> Transaction *tx, <span class="tk-k">bool</span> tick_tock) {</td></tr>
+<tr class="cl" data-l="84"><td class="ln">84</td><td class="mk"></td><td class="cd">    tree.nodes.push_back(std::make_unique&lt;EventNode&gt;());</td></tr>
+<tr class="cl" data-l="85"><td class="ln">85</td><td class="mk"></td><td class="cd">    EventNode *n = tree.nodes.back().get();</td></tr>
+<tr class="cl" data-l="86"><td class="ln">86</td><td class="mk"></td><td class="cd">    n-&gt;msg = msg;</td></tr>
+<tr class="cl" data-l="87"><td class="ln">87</td><td class="mk"></td><td class="cd">    n-&gt;tx = tx;</td></tr>
+<tr class="cl" data-l="88"><td class="ln">88</td><td class="mk"></td><td class="cd">    n-&gt;is_tick_tock = tick_tock;</td></tr>
+<tr class="cl" data-l="89"><td class="ln">89</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> n;</td></tr>
+<tr class="cl" data-l="90"><td class="ln">90</td><td class="mk"></td><td class="cd">  };</td></tr>
+<tr class="cl" data-l="91"><td class="ln">91</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="92" data-n="1"><td class="ln">92</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> *tx : sorted) {</td></tr>
+<tr class="cl band nb-1" data-l="93" data-n="1"><td class="ln">93</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (tx_nodes.count(tx-&gt;hash) != <span class="tk-n">0</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="94" data-n="1"><td class="ln">94</td><td class="mk"></td><td class="cd">      <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl band nb-1" data-l="95" data-n="1"><td class="ln">95</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="96"><td class="ln">96</td><td class="mk"></td><td class="cd">    <span class="tk-k">const</span> Message *in_msg = <span class="tk-k">nullptr</span>;</td></tr>
+<tr class="cl" data-l="97"><td class="ln">97</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> &amp;m : tx-&gt;messages) {</td></tr>
+<tr class="cl" data-l="98"><td class="ln">98</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (m-&gt;direction == <span class="tk-s">&quot;in&quot;</span>) {</td></tr>
+<tr class="cl" data-l="99"><td class="ln">99</td><td class="mk"></td><td class="cd">        in_msg = m.get();</td></tr>
+<tr class="cl" data-l="100"><td class="ln">100</td><td class="mk"></td><td class="cd">        <span class="tk-k">break</span>;</td></tr>
+<tr class="cl" data-l="101"><td class="ln">101</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl" data-l="102"><td class="ln">102</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-2" data-l="103" data-n="2"><td class="ln">103</td><td class="mk"><span class="chip">3</span></td><td class="cd">    <span class="tk-k">if</span> (in_msg != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-2" data-l="104" data-n="2"><td class="ln">104</td><td class="mk"></td><td class="cd">      msg_tx[in_msg-&gt;msg_hash] = tx-&gt;hash;</td></tr>
+<tr class="cl band nb-2" data-l="105" data-n="2"><td class="ln">105</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="106"><td class="ln">106</td><td class="mk"></td><td class="cd">    EventNode *node = make_node(in_msg, tx, tx-&gt;descr == <span class="tk-s">&quot;tick_tock&quot;</span>);</td></tr>
+<tr class="cl" data-l="107"><td class="ln">107</td><td class="mk"></td><td class="cd">    tx_nodes[tx-&gt;hash] = node;</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="77" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L77–78</span><code>stable_sort</code> with <code>&gt;</code> — NOT an ascending sort then reversed. Python&#39;s <code>sorted(txs, key=lt, reverse=True)</code> is stable in the original order for equal lt, and reversing after an ascending sort would flip those ties. Equal <code>lt</code> across two transactions in one trace is rare but not impossible (different shards), and this is the kind of thing that shows up as a single-fixture A/B diff months later.</div></div>
+<div class="note" data-a="92" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L92–95</span>The dedup guard exists because a node can already have been created as somebody&#39;s child... except it cannot, in this loop: children are looked up in <code>tx_nodes</code>, never created there. It is a faithful copy of Python&#39;s <code>if tx.hash not in nodes</code>, kept so the two loops read identically.</div></div>
+<div class="note" data-a="103" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L103–105</span>The registration that makes descending order pay off: this transaction publishes ITS incoming message hash before the loop ever reaches the transaction that sent it. Parent links are therefore never deferred and no second pass is needed.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.cpp<span class="plines">:109–151</span></span><span class="ex-title">to_tree part 2 — children, root, and the orphan counter</span><span class="lang">cpp</span><span class="sha" title="span hash at render">2723005d</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="109"><td class="ln">109</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> &amp;m : tx-&gt;messages) {</td></tr>
+<tr class="cl" data-l="110"><td class="ln">110</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (m-&gt;direction != <span class="tk-s">&quot;out&quot;</span>) {</td></tr>
+<tr class="cl" data-l="111"><td class="ln">111</td><td class="mk"></td><td class="cd">        <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl" data-l="112"><td class="ln">112</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-0" data-l="113" data-n="0"><td class="ln">113</td><td class="mk"><span class="chip">1</span></td><td class="cd">      <span class="tk-k">if</span> (!m-&gt;destination) {</td></tr>
+<tr class="cl band nb-0" data-l="114" data-n="0"><td class="ln">114</td><td class="mk"></td><td class="cd">        <span class="tk-c">// Notification / log leaf.</span></td></tr>
+<tr class="cl band nb-0" data-l="115" data-n="0"><td class="ln">115</td><td class="mk"></td><td class="cd">        EventNode *leaf = make_node(m.get(), tx, <span class="tk-k">false</span>);</td></tr>
+<tr class="cl band nb-0" data-l="116" data-n="0"><td class="ln">116</td><td class="mk"></td><td class="cd">        leaf-&gt;parent = node;</td></tr>
+<tr class="cl band nb-0" data-l="117" data-n="0"><td class="ln">117</td><td class="mk"></td><td class="cd">        node-&gt;children.push_back(leaf);</td></tr>
+<tr class="cl" data-l="118"><td class="ln">118</td><td class="mk"></td><td class="cd">      } <span class="tk-k">else</span> {</td></tr>
+<tr class="cl band nb-1" data-l="119" data-n="1"><td class="ln">119</td><td class="mk"><span class="chip">2</span></td><td class="cd">        <span class="tk-k">auto</span> it = msg_tx.find(m-&gt;msg_hash);</td></tr>
+<tr class="cl band nb-1" data-l="120" data-n="1"><td class="ln">120</td><td class="mk"></td><td class="cd">        <span class="tk-k">if</span> (it != msg_tx.end()) {</td></tr>
+<tr class="cl band nb-1" data-l="121" data-n="1"><td class="ln">121</td><td class="mk"></td><td class="cd">          EventNode *child = tx_nodes[it-&gt;second];</td></tr>
+<tr class="cl band nb-1" data-l="122" data-n="1"><td class="ln">122</td><td class="mk"></td><td class="cd">          child-&gt;parent = node;</td></tr>
+<tr class="cl band nb-1" data-l="123" data-n="1"><td class="ln">123</td><td class="mk"></td><td class="cd">          node-&gt;children.push_back(child);</td></tr>
+<tr class="cl band nb-1" data-l="124" data-n="1"><td class="ln">124</td><td class="mk"></td><td class="cd">        }</td></tr>
+<tr class="cl band nb-1" data-l="125" data-n="1"><td class="ln">125</td><td class="mk"></td><td class="cd">        <span class="tk-c">// Out-message with destination but no matching child tx: Python</span></td></tr>
+<tr class="cl band nb-1" data-l="126" data-n="1"><td class="ln">126</td><td class="mk"></td><td class="cd">        <span class="tk-c">// asserts; we skip (Go POC behavior) and count via `unlinked` below.</span></td></tr>
+<tr class="cl" data-l="127"><td class="ln">127</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl" data-l="128"><td class="ln">128</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="129"><td class="ln">129</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="130"><td class="ln">130</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-2" data-l="131" data-n="2"><td class="ln">131</td><td class="mk"><span class="chip">3</span></td><td class="cd">  EventNode *root = tx_nodes[sorted.back()-&gt;hash];</td></tr>
+<tr class="cl band nb-2" data-l="132" data-n="2"><td class="ln">132</td><td class="mk"></td><td class="cd">  <span class="tk-k">while</span> (root-&gt;parent != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-2" data-l="133" data-n="2"><td class="ln">133</td><td class="mk"></td><td class="cd">    root = root-&gt;parent;</td></tr>
+<tr class="cl band nb-2" data-l="134" data-n="2"><td class="ln">134</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="135" data-n="2"><td class="ln">135</td><td class="mk"></td><td class="cd">  tree.root = root;</td></tr>
+<tr class="cl" data-l="136"><td class="ln">136</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-3" data-l="137" data-n="3"><td class="ln">137</td><td class="mk"><span class="chip">4</span></td><td class="cd">  <span class="tk-c">// Python asserts a single root; we tolerate orphan subtrees but surface</span></td></tr>
+<tr class="cl band nb-3" data-l="138" data-n="3"><td class="ln">138</td><td class="mk"></td><td class="cd">  <span class="tk-c">// them (silent loss is the worst kind of parity bug).</span></td></tr>
+<tr class="cl band nb-3" data-l="139" data-n="3"><td class="ln">139</td><td class="mk"></td><td class="cd">  std::size_t reachable = <span class="tk-n">0</span>;</td></tr>
+<tr class="cl band nb-3" data-l="140" data-n="3"><td class="ln">140</td><td class="mk"></td><td class="cd">  std::deque&lt;<span class="tk-k">const</span> EventNode *&gt; queue{root};</td></tr>
+<tr class="cl band nb-3" data-l="141" data-n="3"><td class="ln">141</td><td class="mk"></td><td class="cd">  <span class="tk-k">while</span> (!queue.empty()) {</td></tr>
+<tr class="cl band nb-3" data-l="142" data-n="3"><td class="ln">142</td><td class="mk"></td><td class="cd">    <span class="tk-k">const</span> EventNode *cur = queue.front();</td></tr>
+<tr class="cl band nb-3" data-l="143" data-n="3"><td class="ln">143</td><td class="mk"></td><td class="cd">    queue.pop_front();</td></tr>
+<tr class="cl band nb-3" data-l="144" data-n="3"><td class="ln">144</td><td class="mk"></td><td class="cd">    reachable++;</td></tr>
+<tr class="cl band nb-3" data-l="145" data-n="3"><td class="ln">145</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> EventNode *c : cur-&gt;children) {</td></tr>
+<tr class="cl band nb-3" data-l="146" data-n="3"><td class="ln">146</td><td class="mk"></td><td class="cd">      queue.push_back(c);</td></tr>
+<tr class="cl band nb-3" data-l="147" data-n="3"><td class="ln">147</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-3" data-l="148" data-n="3"><td class="ln">148</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-3" data-l="149" data-n="3"><td class="ln">149</td><td class="mk"></td><td class="cd">  tree.unlinked = tree.nodes.size() - reachable;</td></tr>
+<tr class="cl" data-l="150"><td class="ln">150</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> tree;</td></tr>
+<tr class="cl" data-l="151"><td class="ln">151</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="113" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L113–117</span>A destination-less out-message becomes its own leaf node under the sending transaction. This is where the engine&#39;s log/event leaves come from — every <code>call_contract</code> block whose opcode is an event opcode is one of these, and it shares its <code>tx</code> with its parent.</div></div>
+<div class="note" data-a="119" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L119–126</span>Python <code>assert m.msg_hash in msg_tx</code> here; the C++ skips silently. That is intentional (it matches the Go PoC and keeps the no-abort rule), but silence is the dangerous half — hence <code>unlinked</code> below. An out-message with a destination and no matching child transaction means the trace was captured incomplete.</div></div>
+<div class="note" data-a="131" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L131–135</span><code>sorted.back()</code> is the LOWEST-lt transaction, and walking <code>.parent</code> up from it lands on the root. Note the trace root is normally the ext-in transaction; picking it by lowest lt rather than by &quot;has no in-message source&quot; is Python&#39;s rule, copied verbatim.</div></div>
+<div class="note" data-a="137" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L137–149</span>The reachability sweep that turns the silent skip above into a number. <code>unlinked != 0</code> prints a warning in the classify drivers, so an incomplete fixture is visible instead of quietly classifying a subset. On the current 148-fixture corpus it is zero for every fixture — see the corpus run at the end of this chapter.</div></div></div>
+</div>
+</div>
+<h2 id="what-a-block-is">What a Block is</h2>
+<section><p>A <code>Block</code> is a node in a second tree laid over the first. Initially there is one block per event node (the &quot;spine&quot;), and matching replaces runs of blocks with produced blocks that own them. Two link families coexist and must not be confused: <code>next_blocks</code>/<code>previous_block</code> is the FLOW (who follows whom in the message graph), and <code>children_blocks</code>/<code>parent</code> is CONSUMPTION (who was absorbed into whom). A matcher walks the first; the serializer in <a class="xl" href="actions.html">actions</a> reads the second.</p>
+<p>The file header is worth reading before the struct, because it enumerates every place the C++ deliberately departs from Python. All four departures are in the same direction: replace a Python <code>set()</code> or an unsorted list with a deterministic order.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.h<span class="plines">:1–19</span></span><span class="ex-title">The four deliberate deviations, stated up front</span><span class="lang">cpp</span><span class="sha" title="span hash at render">831d95ad</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="1"><td class="ln">1</td><td class="mk"></td><td class="cd"><span class="tk-c">// EventNode tree + Block substrate for the MCH engine.</span></td></tr>
+<tr class="cl" data-l="2"><td class="ln">2</td><td class="mk"></td><td class="cd"><span class="tk-c">//</span></td></tr>
+<tr class="cl" data-l="3"><td class="ln">3</td><td class="mk"></td><td class="cd"><span class="tk-c">// Ports the Python indexer&#39;s structural machinery (blocks/utils/tree_utils.py</span></td></tr>
+<tr class="cl" data-l="4"><td class="ln">4</td><td class="mk"></td><td class="cd"><span class="tk-c">// to_tree, blocks/core.py Block, event_processing.init_block) following the</span></td></tr>
+<tr class="cl" data-l="5"><td class="ln">5</td><td class="mk"></td><td class="cd"><span class="tk-c">// already-validated Go port (mch-go-poc/tree/tree.go, A/B-verified against the</span></td></tr>
+<tr class="cl" data-l="6"><td class="ln">6</td><td class="mk"></td><td class="cd"><span class="tk-c">// Python engine on real fixtures).</span></td></tr>
+<tr class="cl" data-l="7"><td class="ln">7</td><td class="mk"></td><td class="cd"><span class="tk-c">//</span></td></tr>
+<tr class="cl" data-l="8"><td class="ln">8</td><td class="mk"></td><td class="cd"><span class="tk-c">// Deliberate deviations from the Python substrate (all deterministic):</span></td></tr>
+<tr class="cl band nb-0" data-l="9" data-n="0"><td class="ln">9</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">//  - next_blocks is kept in canonical order (min_lt asc, stable) at all times:</span></td></tr>
+<tr class="cl band nb-0" data-l="10" data-n="0"><td class="ln">10</td><td class="mk"></td><td class="cd"><span class="tk-c">//    after tree construction and after every merge. The Python IR engine</span></td></tr>
+<tr class="cl band nb-0" data-l="11" data-n="0"><td class="ln">11</td><td class="mk"></td><td class="cd"><span class="tk-c">//    instead sorts candidates at every walk site (T21); maintaining the</span></td></tr>
+<tr class="cl band nb-0" data-l="12" data-n="0"><td class="ln">12</td><td class="mk"></td><td class="cd"><span class="tk-c">//    invariant here lets the C++ walker read lists raw with identical</span></td></tr>
+<tr class="cl band nb-0" data-l="13" data-n="0"><td class="ln">13</td><td class="mk"></td><td class="cd"><span class="tk-c">//    observable semantics.</span></td></tr>
+<tr class="cl band nb-1" data-l="14" data-n="1"><td class="ln">14</td><td class="mk"><span class="chip">2</span></td><td class="cd"><span class="tk-c">//  - find_frontier dedups its output; Python&#39;s find_next can yield the same</span></td></tr>
+<tr class="cl band nb-1" data-l="15" data-n="1"><td class="ln">15</td><td class="mk"></td><td class="cd"><span class="tk-c">//    block twice on diamond shapes and keeps duplicates in next_blocks.</span></td></tr>
+<tr class="cl band nb-1" data-l="16" data-n="1"><td class="ln">16</td><td class="mk"></td><td class="cd"><span class="tk-c">//    Suspect #1 if a matcher A/B diff ever shows up on diamond traces.</span></td></tr>
+<tr class="cl band nb-2" data-l="17" data-n="2"><td class="ln">17</td><td class="mk"><span class="chip">3</span></td><td class="cd"><span class="tk-c">//  - compact_connections preserves first-seen order (Python uses set()).</span></td></tr>
+<tr class="cl band nb-2" data-l="18" data-n="2"><td class="ln">18</td><td class="mk"></td><td class="cd"><span class="tk-c">//  - No `transient` flag: only legacy LabelBlock ever set it; the IR engine</span></td></tr>
+<tr class="cl band nb-2" data-l="19" data-n="2"><td class="ln">19</td><td class="mk"></td><td class="cd"><span class="tk-c">//    produces no transient blocks, so the merge filter would filter nothing.</span></td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="9" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L9–13</span>The invariant that lets the walker read <code>next_blocks</code> raw. Python&#39;s IR engine sorts candidates at every walk site instead; maintaining the order at construction and after every merge is observably identical and strictly cheaper. If you ever add a mutation of <code>next_blocks</code>, re-establishing this is your job — nothing asserts it.</div></div>
+<div class="note" data-a="14" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L14–16</span>The one departure that is NOT provably neutral, and it says so. Python&#39;s <code>find_next</code> can yield the same block twice on a diamond and leaves the duplicate in <code>next_blocks</code>; the C++ dedups. Named &quot;suspect #1&quot; because if a matcher A/B diff ever appears on a diamond-shaped trace, this is the first thing to un-dedup and re-run.</div></div>
+<div class="note" data-a="17" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L17–19</span><code>transient</code> was a Python filter on the merge input, used only by a legacy <code>LabelBlock</code>. The IR engine emits no transient blocks, so the filter would filter nothing — dropping the field is the honest encoding of that, and this comment is the receipt if the assumption ever changes.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.h<span class="plines">:92–121</span></span><span class="ex-title">Block — the fields that survive to the serializer</span><span class="lang">cpp</span><span class="sha" title="span hash at render">f9f2b22b</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="92"><td class="ln">92</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> Block {</td></tr>
+<tr class="cl" data-l="93"><td class="ln">93</td><td class="mk"></td><td class="cd">  std::string btype;</td></tr>
+<tr class="cl" data-l="94"><td class="ln">94</td><td class="mk"></td><td class="cd">  std::optional&lt;std::uint32_t&gt; opcode;  <span class="tk-c">// set for call_contract blocks</span></td></tr>
+<tr class="cl" data-l="95"><td class="ln">95</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-0" data-l="96" data-n="0"><td class="ln">96</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-c">// Python Block.data. Leaf blocks carry the basic_blocks.py constructor dicts</span></td></tr>
+<tr class="cl band nb-0" data-l="97" data-n="0"><td class="ln">97</td><td class="mk"></td><td class="cd">  <span class="tk-c">// (subset: see init_block); a produced (composed) block will carry its build</span></td></tr>
+<tr class="cl band nb-0" data-l="98" data-n="0"><td class="ln">98</td><td class="mk"></td><td class="cd">  <span class="tk-c">// output. Null == Python data=None. Read by where_exprs via rt_dotfield.</span></td></tr>
+<tr class="cl band nb-0" data-l="99" data-n="0"><td class="ln">99</td><td class="mk"></td><td class="cd">  Value data;</td></tr>
+<tr class="cl" data-l="100"><td class="ln">100</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="101"><td class="ln">101</td><td class="mk"></td><td class="cd">  std::vector&lt;<span class="tk-k">const</span> EventNode *&gt; event_nodes;</td></tr>
+<tr class="cl" data-l="102"><td class="ln">102</td><td class="mk"></td><td class="cd">  std::vector&lt;Block *&gt; next_blocks;  <span class="tk-c">// canonical order: (min_lt asc, stable)</span></td></tr>
+<tr class="cl" data-l="103"><td class="ln">103</td><td class="mk"></td><td class="cd">  std::vector&lt;Block *&gt; children_blocks;</td></tr>
+<tr class="cl" data-l="104"><td class="ln">104</td><td class="mk"></td><td class="cd">  Block *previous_block{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl" data-l="105"><td class="ln">105</td><td class="mk"></td><td class="cd">  Block *parent{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl" data-l="106"><td class="ln">106</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="107" data-n="1"><td class="ln">107</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-c">// core.py Block.initiating_event_node: a leaf block&#39;s single node&#39;s tree</span></td></tr>
+<tr class="cl band nb-1" data-l="108" data-n="1"><td class="ln">108</td><td class="mk"></td><td class="cd">  <span class="tk-c">// parent; a merged block inherits it from the earliest merged block. Drives</span></td></tr>
+<tr class="cl band nb-1" data-l="109" data-n="1"><td class="ln">109</td><td class="mk"></td><td class="cd">  <span class="tk-c">// the serializer&#39;s accounts assembly + tx_hashes extension (Phase G step 2a).</span></td></tr>
+<tr class="cl band nb-1" data-l="110" data-n="1"><td class="ln">110</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> EventNode *initiating_event_node{<span class="tk-k">nullptr</span>};</td></tr>
+<tr class="cl band nb-2" data-l="111" data-n="2"><td class="ln">111</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-c">// core.py is_ghost_block: the C++ substrate has no ghost nodes (an</span></td></tr>
+<tr class="cl band nb-2" data-l="112" data-n="2"><td class="ln">112</td><td class="mk"></td><td class="cd">  <span class="tk-c">// intended-but-not-started op), so this stays false — none of the ported</span></td></tr>
+<tr class="cl band nb-2" data-l="113" data-n="2"><td class="ln">113</td><td class="mk"></td><td class="cd">  <span class="tk-c">// btypes are ghost blocks (A/B-verified). Gate for the destination accounts.</span></td></tr>
+<tr class="cl band nb-2" data-l="114" data-n="2"><td class="ln">114</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> is_ghost_block{<span class="tk-k">false</span>};</td></tr>
+<tr class="cl" data-l="115"><td class="ln">115</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="116"><td class="ln">116</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> failed{<span class="tk-k">false</span>};</td></tr>
+<tr class="cl" data-l="117"><td class="ln">117</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> broken{<span class="tk-k">false</span>};</td></tr>
+<tr class="cl" data-l="118"><td class="ln">118</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-3" data-l="119" data-n="3"><td class="ln">119</td><td class="mk"><span class="chip">4</span></td><td class="cd">  std::int64_t min_lt{<span class="tk-n">0</span>};</td></tr>
+<tr class="cl band nb-3" data-l="120" data-n="3"><td class="ln">120</td><td class="mk"></td><td class="cd">  std::int64_t min_lt_without_initiating_tx{<span class="tk-n">0</span>};</td></tr>
+<tr class="cl" data-l="121"><td class="ln">121</td><td class="mk"></td><td class="cd">&nbsp;</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="96" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L96–99</span>One <code>data</code> field carries two very different payloads depending on who built the block: for a spine leaf it is the <code>basic_blocks.py</code> constructor dict (a deliberate subset — see <code>leaf_data</code> below), for a produced block it is whatever the build program captured. <code>where_exprs</code> read it through <code>rt_dotfield</code> and cannot tell which, which is why the leaf subset is documented rather than enforced.</div></div>
+<div class="note" data-a="107" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L107–110</span><code>initiating_event_node</code> is a LEAF&#39;s tree-parent — the node that caused this block to exist, not one of its own nodes. It survives a merge (inherited from the earliest merged block) and is read twice by the serializer: to extend <code>tx_hashes</code> and to add the initiating transaction&#39;s account. Get it wrong and actions gain or lose an account row with no other symptom.</div></div>
+<div class="note" data-a="111" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L111–114</span><code>is_ghost_block</code> is permanently false: ghost nodes (an intended-but-never-started operation) exist only in a Python code path the IR engine does not use. It is kept as a field rather than deleted because <a class="xl" href="actions.html">actions</a> gates the destination-account push on it, and a hard-coded <code>false</code> there would hide the dependency.</div></div>
+<div class="note" data-a="119" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L119–120</span>Two lt fields, and the difference only exists for a leaf: <code>min_lt</code> is the node&#39;s message lt, <code>min_lt_without_initiating_tx</code> is the owning transaction&#39;s lt. They are the same after <code>calculate_min_max_lt</code>, i.e. after any merge. Sibling ordering uses <code>min_lt</code>; merge-anchor selection uses the other one.</div></div></div>
+</div>
+</div>
+<h2 id="init-block-the-leaf-spine">init_block — the leaf spine</h2>
+<section><p><code>init_block</code> walks the event tree and hangs exactly one leaf block off each node. There are four leaf btypes: <code>tick_tock</code>, <code>ton_transfer</code>, <code>call_contract</code>, and <code>contract_deploy</code> — but the fourth is never a spine node, it is a side-effect block pushed into a leaf&#39;s <code>children_blocks</code>.</p>
+<p>The classification rule is three lines long and the <code>failed</code> rules are longer than the classification. That is the honest shape of this code: what a block IS is trivial, whether it FAILED is a pile of protocol-specific exceptions that the Python engine accumulated over years, and every one of them had to be copied exactly.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.cpp<span class="plines">:19–61</span></span><span class="ex-title">Comment derivation — the only BOC work init_block does</span><span class="lang">cpp</span><span class="sha" title="span hash at render">28012964</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="19"><td class="ln">19</td><td class="mk"></td><td class="cd"><span class="tk-c">// TonTransferMessage.encrypted_opcode — an encrypted-comment plain transfer.</span></td></tr>
+<tr class="cl" data-l="20"><td class="ln">20</td><td class="mk"></td><td class="cd"><span class="tk-k">constexpr</span> std::uint32_t kEncryptedTonOpcode = <span class="tk-n">0x2167da4b</span>;</td></tr>
+<tr class="cl" data-l="21"><td class="ln">21</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-0" data-l="22" data-n="0"><td class="ln">22</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// TonTransferBlock.comment/encrypted/comment_encoded (basic_blocks.py): parse</span></td></tr>
+<tr class="cl band nb-0" data-l="23" data-n="0"><td class="ln">23</td><td class="mk"></td><td class="cd"><span class="tk-c">// the leaf&#39;s message body. `comment` is decoded (base64 when encrypted, else</span></td></tr>
+<tr class="cl band nb-0" data-l="24" data-n="0"><td class="ln">24</td><td class="mk"></td><td class="cd"><span class="tk-c">// utf-8 backslashreplace with U+0000 stripped) exactly as ton_transfer_comment</span></td></tr>
+<tr class="cl band nb-0" data-l="25" data-n="0"><td class="ln">25</td><td class="mk"></td><td class="cd"><span class="tk-c">// does; `encrypted` is the op == TonTransferMessage.encrypted_opcode flag;</span></td></tr>
+<tr class="cl band nb-0" data-l="26" data-n="0"><td class="ln">26</td><td class="mk"></td><td class="cd"><span class="tk-c">// `comment_encoded` is set only when a comment is present AND encrypted. Any BOC</span></td></tr>
+<tr class="cl band nb-0" data-l="27" data-n="0"><td class="ln">27</td><td class="mk"></td><td class="cd"><span class="tk-c">// failure == Python&#39;s inner try swallowing -&gt; comment None, encrypted false.</span></td></tr>
+<tr class="cl" data-l="28"><td class="ln">28</td><td class="mk"></td><td class="cd"><span class="tk-k">struct</span> LeafCommentInfo {</td></tr>
+<tr class="cl" data-l="29"><td class="ln">29</td><td class="mk"></td><td class="cd">  std::optional&lt;std::string&gt; comment;</td></tr>
+<tr class="cl" data-l="30"><td class="ln">30</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> encrypted{<span class="tk-k">false</span>};</td></tr>
+<tr class="cl" data-l="31"><td class="ln">31</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> comment_encoded{<span class="tk-k">false</span>};</td></tr>
+<tr class="cl" data-l="32"><td class="ln">32</td><td class="mk"></td><td class="cd">};</td></tr>
+<tr class="cl" data-l="33"><td class="ln">33</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="34"><td class="ln">34</td><td class="mk"></td><td class="cd">LeafCommentInfo leaf_comment_info(<span class="tk-k">const</span> EventNode *node) {</td></tr>
+<tr class="cl" data-l="35"><td class="ln">35</td><td class="mk"></td><td class="cd">  LeafCommentInfo info;</td></tr>
+<tr class="cl" data-l="36"><td class="ln">36</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Message *msg = node != <span class="tk-k">nullptr</span> ? node-&gt;msg : <span class="tk-k">nullptr</span>;</td></tr>
+<tr class="cl" data-l="37"><td class="ln">37</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (msg == <span class="tk-k">nullptr</span> || !msg-&gt;content) {</td></tr>
+<tr class="cl" data-l="38"><td class="ln">38</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> info;</td></tr>
+<tr class="cl" data-l="39"><td class="ln">39</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="40"><td class="ln">40</td><td class="mk"></td><td class="cd">  <span class="tk-k">auto</span> r_raw = td::base64_decode(td::Slice(msg-&gt;content-&gt;body));</td></tr>
+<tr class="cl band nb-1" data-l="41" data-n="1"><td class="ln">41</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">if</span> (r_raw.is_error()) {</td></tr>
+<tr class="cl band nb-1" data-l="42" data-n="1"><td class="ln">42</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> info;</td></tr>
+<tr class="cl band nb-1" data-l="43" data-n="1"><td class="ln">43</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="44" data-n="1"><td class="ln">44</td><td class="mk"></td><td class="cd">  <span class="tk-k">auto</span> r_cell = vm::std_boc_deserialize(r_raw.move_as_ok());</td></tr>
+<tr class="cl band nb-1" data-l="45" data-n="1"><td class="ln">45</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (r_cell.is_error()) {</td></tr>
+<tr class="cl band nb-1" data-l="46" data-n="1"><td class="ln">46</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> info;</td></tr>
+<tr class="cl band nb-1" data-l="47" data-n="1"><td class="ln">47</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="48"><td class="ln">48</td><td class="mk"></td><td class="cd">  td::Ref&lt;vm::Cell&gt; cell = r_cell.move_as_ok();</td></tr>
+<tr class="cl" data-l="49"><td class="ln">49</td><td class="mk"></td><td class="cd">  info.comment = ton_transfer_comment(cell);</td></tr>
+<tr class="cl band nb-2" data-l="50" data-n="2"><td class="ln">50</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-c">// TonTransferMessage.encrypted: op == 0x2167da4b (peek the first 32 bits).</span></td></tr>
+<tr class="cl band nb-2" data-l="51" data-n="2"><td class="ln">51</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> special = <span class="tk-k">false</span>;</td></tr>
+<tr class="cl band nb-2" data-l="52" data-n="2"><td class="ln">52</td><td class="mk"></td><td class="cd">  <span class="tk-k">try</span> {</td></tr>
+<tr class="cl band nb-2" data-l="53" data-n="2"><td class="ln">53</td><td class="mk"></td><td class="cd">    vm::CellSlice cs = vm::load_cell_slice_special(cell, special);</td></tr>
+<tr class="cl band nb-2" data-l="54" data-n="2"><td class="ln">54</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (cs.size() &gt;= <span class="tk-n">32</span>) {</td></tr>
+<tr class="cl band nb-2" data-l="55" data-n="2"><td class="ln">55</td><td class="mk"></td><td class="cd">      info.encrypted = static_cast&lt;std::uint32_t&gt;(cs.fetch_ulong(<span class="tk-n">32</span>)) == kEncryptedTonOpcode;</td></tr>
+<tr class="cl band nb-2" data-l="56" data-n="2"><td class="ln">56</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-2" data-l="57" data-n="2"><td class="ln">57</td><td class="mk"></td><td class="cd">  } <span class="tk-k">catch</span> (...) {</td></tr>
+<tr class="cl band nb-2" data-l="58" data-n="2"><td class="ln">58</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="59"><td class="ln">59</td><td class="mk"></td><td class="cd">  info.comment_encoded = info.comment.has_value() &amp;&amp; info.encrypted;</td></tr>
+<tr class="cl" data-l="60"><td class="ln">60</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> info;</td></tr>
+<tr class="cl" data-l="61"><td class="ln">61</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="22" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L22–27</span>The contract in one comment. <code>comment</code> is base64 of the RAW bytes when the message is encrypted, and utf-8-backslashreplace with U+0000 stripped otherwise — both branches live in <code>ton_transfer_comment</code> (<a class="xl" href="parse-layer.html">parse-layer</a>). <code>comment_encoded</code> is the AND of the two, and it is a Python attribute on the block rather than a data key; it is promoted into <code>data</code> here because a <code>Value</code> dict is the only channel a spec has.</div></div>
+<div class="note" data-a="41" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L41–47</span>Three early returns, all silent. Python wraps the whole body parse in a <code>try</code> and swallows, so an undecodable body must yield <code>comment = null, encrypted = false</code> — not a failed block, not an error. A stricter reading here would reject traces Python happily classifies.</div></div>
+<div class="note" data-a="50" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L50–58</span>The <code>encrypted</code> flag is a raw 32-bit peek, not a parse: <code>0x2167da4b</code> is the encrypted-comment opcode. Note this same opcode is treated as a TON transfer by the classifier below, which is the whole reason the flag has to be recovered from the body.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.cpp<span class="plines">:321–335</span></span><span class="ex-title">node_failed and init_leaf</span><span class="lang">cpp</span><span class="sha" title="span hash at render">71b4cae3</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="321" data-n="0"><td class="ln">321</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// EventNode.failed in Python: message.transaction.aborted (for a tick_tock</span></td></tr>
+<tr class="cl band nb-0" data-l="322" data-n="0"><td class="ln">322</td><td class="mk"></td><td class="cd"><span class="tk-c">// node: the tick-tock transaction&#39;s aborted flag). Our node-&gt;tx is exactly</span></td></tr>
+<tr class="cl band nb-0" data-l="323" data-n="0"><td class="ln">323</td><td class="mk"></td><td class="cd"><span class="tk-c">// that transaction in both cases.</span></td></tr>
+<tr class="cl band nb-0" data-l="324" data-n="0"><td class="ln">324</td><td class="mk"></td><td class="cd"><span class="tk-k">bool</span> node_failed(<span class="tk-k">const</span> EventNode *node) {</td></tr>
+<tr class="cl band nb-0" data-l="325" data-n="0"><td class="ln">325</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> node-&gt;tx != <span class="tk-k">nullptr</span> &amp;&amp; node-&gt;tx-&gt;aborted;</td></tr>
+<tr class="cl band nb-0" data-l="326" data-n="0"><td class="ln">326</td><td class="mk"></td><td class="cd">}</td></tr>
+<tr class="cl" data-l="327"><td class="ln">327</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="328"><td class="ln">328</td><td class="mk"></td><td class="cd"><span class="tk-k">void</span> init_leaf(Block *b, <span class="tk-k">const</span> EventNode *node) {</td></tr>
+<tr class="cl band nb-1" data-l="329" data-n="1"><td class="ln">329</td><td class="mk"><span class="chip">2</span></td><td class="cd">  b-&gt;event_nodes.push_back(node);</td></tr>
+<tr class="cl band nb-1" data-l="330" data-n="1"><td class="ln">330</td><td class="mk"></td><td class="cd">  b-&gt;min_lt = node-&gt;lt();</td></tr>
+<tr class="cl band nb-1" data-l="331" data-n="1"><td class="ln">331</td><td class="mk"></td><td class="cd">  b-&gt;min_lt_without_initiating_tx = node-&gt;tx != <span class="tk-k">nullptr</span> ? node-&gt;tx-&gt;lt : node-&gt;lt();</td></tr>
+<tr class="cl band nb-2" data-l="332" data-n="2"><td class="ln">332</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-c">// core.py Block.__init__: a single-node block&#39;s initiating_event_node is that</span></td></tr>
+<tr class="cl band nb-2" data-l="333" data-n="2"><td class="ln">333</td><td class="mk"></td><td class="cd">  <span class="tk-c">// node&#39;s tree parent (nullptr at the root). (Step 2a.)</span></td></tr>
+<tr class="cl band nb-2" data-l="334" data-n="2"><td class="ln">334</td><td class="mk"></td><td class="cd">  b-&gt;initiating_event_node = node-&gt;parent;</td></tr>
+<tr class="cl" data-l="335"><td class="ln">335</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="321" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L321–326</span>Python&#39;s <code>EventNode.failed</code> is <code>message.transaction.aborted</code>, and for a tick-tock node the tick-tock transaction&#39;s <code>aborted</code>. Because the C++ node stores <code>tx</code> directly in both cases, one expression covers both — where Python needed the synthetic-message trick. <code>aborted</code> is the ONLY input; <code>compute_exit_code</code> is loaded but never consulted.</div></div>
+<div class="note" data-a="329" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L329–331</span>The two lt fields diverge exactly here and nowhere else: <code>min_lt</code> from the message (<code>created_lt</code> if present), <code>min_lt_without_initiating_tx</code> from the owning transaction. For an out-message leaf under the same transaction as its parent, the second value is identical to the parent&#39;s — which is what makes the merge anchor prefer the parent.</div></div>
+<div class="note" data-a="332" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L332–334</span><code>initiating_event_node = node-&gt;parent</code> — the leaf&#39;s tree parent, null at the root. Mirrors <code>core.py Block.__init__</code>&#39;s <code>if len(nodes) == 1: self.initiating_event_node = nodes[0].parent</code>. A block built with zero or several nodes gets nothing, which is why only leaves ever set it and merges only ever inherit it.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.cpp<span class="plines">:345–385</span></span><span class="ex-title">leaf_data — a deliberate subset of the Python dict</span><span class="lang">cpp</span><span class="sha" title="span hash at render">940796e8</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl band nb-0" data-l="345" data-n="0"><td class="ln">345</td><td class="mk"><span class="chip">1</span></td><td class="cd"><span class="tk-c">// Leaf-block data dicts, mirroring the basic_blocks.py constructors so a</span></td></tr>
+<tr class="cl band nb-0" data-l="346" data-n="0"><td class="ln">346</td><td class="mk"></td><td class="cd"><span class="tk-c">// where_expr dotfield reads the same values as Python. Deliberate subset:</span></td></tr>
+<tr class="cl band nb-0" data-l="347" data-n="0"><td class="ln">347</td><td class="mk"></td><td class="cd"><span class="tk-c">// extra_currencies (map not decoded) and ton_transfer&#39;s comment/encrypted</span></td></tr>
+<tr class="cl band nb-0" data-l="348" data-n="0"><td class="ln">348</td><td class="mk"></td><td class="cd"><span class="tk-c">// (need a BOC body parse) are omitted — reading them faults here where Python</span></td></tr>
+<tr class="cl band nb-0" data-l="349" data-n="0"><td class="ln">349</td><td class="mk"></td><td class="cd"><span class="tk-c">// yields a value, so keep where_exprs to the fields below.</span></td></tr>
+<tr class="cl" data-l="350"><td class="ln">350</td><td class="mk"></td><td class="cd">Value leaf_data(<span class="tk-k">const</span> std::string &amp;btype, <span class="tk-k">const</span> EventNode *node,</td></tr>
+<tr class="cl" data-l="351"><td class="ln">351</td><td class="mk"></td><td class="cd">                std::optional&lt;std::uint32_t&gt; op) {</td></tr>
+<tr class="cl" data-l="352"><td class="ln">352</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Message *msg = node-&gt;msg;</td></tr>
+<tr class="cl" data-l="353"><td class="ln">353</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (btype == <span class="tk-s">&quot;tick_tock&quot;</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="354" data-n="1"><td class="ln">354</td><td class="mk"><span class="chip">2</span></td><td class="cd">    Value::Fields fs;</td></tr>
+<tr class="cl band nb-1" data-l="355" data-n="1"><td class="ln">355</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (node-&gt;tx != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="356" data-n="1"><td class="ln">356</td><td class="mk"></td><td class="cd">      <span class="tk-k">auto</span> norm = normalize_raw_address(node-&gt;tx-&gt;account);</td></tr>
+<tr class="cl band nb-1" data-l="357" data-n="1"><td class="ln">357</td><td class="mk"></td><td class="cd">      fs.emplace_back(<span class="tk-s">&quot;account&quot;</span>,</td></tr>
+<tr class="cl band nb-1" data-l="358" data-n="1"><td class="ln">358</td><td class="mk"></td><td class="cd">                      Value::make_account_raw(norm ? *norm : node-&gt;tx-&gt;account));</td></tr>
+<tr class="cl band nb-1" data-l="359" data-n="1"><td class="ln">359</td><td class="mk"></td><td class="cd">    } <span class="tk-k">else</span> {</td></tr>
+<tr class="cl band nb-1" data-l="360" data-n="1"><td class="ln">360</td><td class="mk"></td><td class="cd">      fs.emplace_back(<span class="tk-s">&quot;account&quot;</span>, Value::null());</td></tr>
+<tr class="cl band nb-1" data-l="361" data-n="1"><td class="ln">361</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="362" data-n="1"><td class="ln">362</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> Value::make_dict(std::move(fs));</td></tr>
+<tr class="cl" data-l="363"><td class="ln">363</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="364"><td class="ln">364</td><td class="mk"></td><td class="cd">  Value::Fields fs;</td></tr>
+<tr class="cl band nb-2" data-l="365" data-n="2"><td class="ln">365</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">if</span> (btype != <span class="tk-s">&quot;ton_transfer&quot;</span>) {</td></tr>
+<tr class="cl band nb-2" data-l="366" data-n="2"><td class="ln">366</td><td class="mk"></td><td class="cd">    <span class="tk-c">// CallContractBlock / ContractDeploy: data[&#39;opcode&#39;] = get_opcode() (masked u32).</span></td></tr>
+<tr class="cl band nb-2" data-l="367" data-n="2"><td class="ln">367</td><td class="mk"></td><td class="cd">    fs.emplace_back(<span class="tk-s">&quot;opcode&quot;</span>, op ? Value::make_int64(static_cast&lt;std::int64_t&gt;(*op))</td></tr>
+<tr class="cl band nb-2" data-l="368" data-n="2"><td class="ln">368</td><td class="mk"></td><td class="cd">                                 : Value::null());</td></tr>
+<tr class="cl band nb-2" data-l="369" data-n="2"><td class="ln">369</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="370"><td class="ln">370</td><td class="mk"></td><td class="cd">  fs.emplace_back(<span class="tk-s">&quot;source&quot;</span>, account_or_null(msg != <span class="tk-k">nullptr</span> ? msg-&gt;source : std::nullopt));</td></tr>
+<tr class="cl" data-l="371"><td class="ln">371</td><td class="mk"></td><td class="cd">  fs.emplace_back(<span class="tk-s">&quot;destination&quot;</span>,</td></tr>
+<tr class="cl" data-l="372"><td class="ln">372</td><td class="mk"></td><td class="cd">                  account_or_null(msg != <span class="tk-k">nullptr</span> ? msg-&gt;destination : std::nullopt));</td></tr>
+<tr class="cl band nb-3" data-l="373" data-n="3"><td class="ln">373</td><td class="mk"><span class="chip">4</span></td><td class="cd">  fs.emplace_back(<span class="tk-s">&quot;value&quot;</span>, (msg != <span class="tk-k">nullptr</span> &amp;&amp; msg-&gt;value)</td></tr>
+<tr class="cl band nb-3" data-l="374" data-n="3"><td class="ln">374</td><td class="mk"></td><td class="cd">                               ? Value::make_amount(td::make_refint(*msg-&gt;value))</td></tr>
+<tr class="cl band nb-3" data-l="375" data-n="3"><td class="ln">375</td><td class="mk"></td><td class="cd">                               : Value::make_amount_none());</td></tr>
+<tr class="cl band nb-4" data-l="376" data-n="4"><td class="ln">376</td><td class="mk"><span class="chip">5</span></td><td class="cd">  <span class="tk-k">if</span> (btype == <span class="tk-s">&quot;ton_transfer&quot;</span>) {</td></tr>
+<tr class="cl band nb-4" data-l="377" data-n="4"><td class="ln">377</td><td class="mk"></td><td class="cd">    <span class="tk-c">// TonTransferBlock comment/encrypted/comment_encoded: needed by the getgems</span></td></tr>
+<tr class="cl band nb-4" data-l="378" data-n="4"><td class="ln">378</td><td class="mk"></td><td class="cd">    <span class="tk-c">// purchase predicate + fn and the nft_transfer_parent_absorb shaper.</span></td></tr>
+<tr class="cl band nb-4" data-l="379" data-n="4"><td class="ln">379</td><td class="mk"></td><td class="cd">    LeafCommentInfo ci = leaf_comment_info(node);</td></tr>
+<tr class="cl band nb-4" data-l="380" data-n="4"><td class="ln">380</td><td class="mk"></td><td class="cd">    fs.emplace_back(<span class="tk-s">&quot;comment&quot;</span>, ci.comment ? Value::make_str(*ci.comment) : Value::null());</td></tr>
+<tr class="cl band nb-4" data-l="381" data-n="4"><td class="ln">381</td><td class="mk"></td><td class="cd">    fs.emplace_back(<span class="tk-s">&quot;encrypted&quot;</span>, Value::make_bool(ci.encrypted));</td></tr>
+<tr class="cl band nb-4" data-l="382" data-n="4"><td class="ln">382</td><td class="mk"></td><td class="cd">    fs.emplace_back(<span class="tk-s">&quot;comment_encoded&quot;</span>, Value::make_bool(ci.comment_encoded));</td></tr>
+<tr class="cl band nb-4" data-l="383" data-n="4"><td class="ln">383</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="384"><td class="ln">384</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> Value::make_dict(std::move(fs));</td></tr>
+<tr class="cl" data-l="385"><td class="ln">385</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="345" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L345–349</span>Read this before writing any <code>where_expr</code> against a leaf. <code>extra_currencies</code> is NOT in the dict (the map is never decoded), so reading it faults where Python yields a value. The set of readable leaf fields is exactly what this function emplaces — there is no schema, this is it.</div></div>
+<div class="note" data-a="354" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L354–362</span>A <code>tick_tock</code> leaf&#39;s data has ONE key, <code>account</code>, and it comes from the transaction, not from any message. Any spec branch that reaches for <code>source</code>/<code>destination</code> on a tick_tock block is reading fields that were never emplaced.</div></div>
+<div class="note" data-a="365" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L365–369</span><code>ton_transfer</code> is the only leaf without an <code>opcode</code> key — matching Python, where <code>TonTransferBlock</code>&#39;s dict simply omits it. So <code>data.opcode</code> is a fault on a ton_transfer and null-or-int everywhere else; the difference is observable to a spec.</div></div>
+<div class="note" data-a="373" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L373–375</span><code>value</code> is an Amount, and a message with no value becomes <code>make_amount_none()</code> rather than null — mirroring Python&#39;s <code>Amount(None)</code>. That distinction is what lets an arithmetic expression over a valueless message behave the same on both sides (<a class="xl" href="value.html">value</a>).</div></div>
+<div class="note" data-a="376" data-n="4"><div class="nt"><span class="chip">5</span><span class="nl">L376–383</span>Only the ton_transfer branch pays for the BOC decode, and only because two consumers need it (the getgems purchase predicate and the nft_transfer_parent_absorb shaper). Every other leaf&#39;s data is pure field copying — worth knowing when reasoning about spine construction cost.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.cpp<span class="plines">:387–424</span></span><span class="ex-title">make_leaf_block — classification, then the failed exceptions</span><span class="lang">cpp</span><span class="sha" title="span hash at render">37d746af</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="387"><td class="ln">387</td><td class="mk"></td><td class="cd">Block *make_leaf_block(BlockArena &amp;arena, <span class="tk-k">const</span> EventNode *node) {</td></tr>
+<tr class="cl band nb-0" data-l="388" data-n="0"><td class="ln">388</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">auto</span> op = node-&gt;opcode();</td></tr>
+<tr class="cl band nb-0" data-l="389" data-n="0"><td class="ln">389</td><td class="mk"></td><td class="cd">  <span class="tk-k">bool</span> is_ton = !op || *op == <span class="tk-n">0</span> || *op == kEncryptedTonOpcode;</td></tr>
+<tr class="cl" data-l="390"><td class="ln">390</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Message *msg = node-&gt;msg;</td></tr>
+<tr class="cl" data-l="391"><td class="ln">391</td><td class="mk"></td><td class="cd">  <span class="tk-k">const</span> Transaction *tx = node-&gt;tx;</td></tr>
+<tr class="cl" data-l="392"><td class="ln">392</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="393"><td class="ln">393</td><td class="mk"></td><td class="cd">  Block *b;</td></tr>
+<tr class="cl" data-l="394"><td class="ln">394</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (node-&gt;is_tick_tock) {</td></tr>
+<tr class="cl" data-l="395"><td class="ln">395</td><td class="mk"></td><td class="cd">    b = arena.make(<span class="tk-s">&quot;tick_tock&quot;</span>);</td></tr>
+<tr class="cl" data-l="396"><td class="ln">396</td><td class="mk"></td><td class="cd">    b-&gt;failed = node_failed(node);</td></tr>
+<tr class="cl" data-l="397"><td class="ln">397</td><td class="mk"></td><td class="cd">  } <span class="tk-k">else</span> <span class="tk-k">if</span> (is_ton &amp;&amp; msg != <span class="tk-k">nullptr</span> &amp;&amp; msg-&gt;destination &amp;&amp; msg-&gt;source) {</td></tr>
+<tr class="cl band nb-1" data-l="398" data-n="1"><td class="ln">398</td><td class="mk"><span class="chip">2</span></td><td class="cd">    b = arena.make(<span class="tk-s">&quot;ton_transfer&quot;</span>);</td></tr>
+<tr class="cl band nb-1" data-l="399" data-n="1"><td class="ln">399</td><td class="mk"></td><td class="cd">    <span class="tk-c">// TonTransferBlock failed logic (basic_blocks.py).</span></td></tr>
+<tr class="cl band nb-1" data-l="400" data-n="1"><td class="ln">400</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (node_failed(node)) {</td></tr>
+<tr class="cl band nb-1" data-l="401" data-n="1"><td class="ln">401</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (msg-&gt;bounce &amp;&amp; *msg-&gt;bounce) {</td></tr>
+<tr class="cl band nb-1" data-l="402" data-n="1"><td class="ln">402</td><td class="mk"></td><td class="cd">        b-&gt;failed = <span class="tk-k">true</span>;</td></tr>
+<tr class="cl band nb-1" data-l="403" data-n="1"><td class="ln">403</td><td class="mk"></td><td class="cd">      } <span class="tk-k">else</span> <span class="tk-k">if</span> (tx != <span class="tk-k">nullptr</span> &amp;&amp; tx-&gt;end_status == <span class="tk-s">&quot;uninit&quot;</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="404" data-n="1"><td class="ln">404</td><td class="mk"></td><td class="cd">        b-&gt;failed = <span class="tk-k">false</span>;</td></tr>
+<tr class="cl band nb-1" data-l="405" data-n="1"><td class="ln">405</td><td class="mk"><span class="chip">3</span></td><td class="cd">      } <span class="tk-k">else</span> <span class="tk-k">if</span> (msg-&gt;source &amp;&amp; tx != <span class="tk-k">nullptr</span> &amp;&amp; tx-&gt;skipped_reason &amp;&amp;</td></tr>
+<tr class="cl band nb-1" data-l="406" data-n="1"><td class="ln">406</td><td class="mk"></td><td class="cd">                 *tx-&gt;skipped_reason == <span class="tk-s">&quot;no_gas&quot;</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="407" data-n="1"><td class="ln">407</td><td class="mk"></td><td class="cd">        b-&gt;failed = <span class="tk-k">false</span>;  <span class="tk-c">// ignore no-gas errors on incoming ton transfers</span></td></tr>
+<tr class="cl band nb-1" data-l="408" data-n="1"><td class="ln">408</td><td class="mk"></td><td class="cd">      } <span class="tk-k">else</span> {</td></tr>
+<tr class="cl band nb-1" data-l="409" data-n="1"><td class="ln">409</td><td class="mk"></td><td class="cd">        b-&gt;failed = <span class="tk-k">true</span>;</td></tr>
+<tr class="cl band nb-1" data-l="410" data-n="1"><td class="ln">410</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-1" data-l="411" data-n="1"><td class="ln">411</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="412"><td class="ln">412</td><td class="mk"></td><td class="cd">  } <span class="tk-k">else</span> {</td></tr>
+<tr class="cl" data-l="413"><td class="ln">413</td><td class="mk"></td><td class="cd">    b = arena.make(<span class="tk-s">&quot;call_contract&quot;</span>);</td></tr>
+<tr class="cl" data-l="414"><td class="ln">414</td><td class="mk"></td><td class="cd">    b-&gt;opcode = op;</td></tr>
+<tr class="cl" data-l="415"><td class="ln">415</td><td class="mk"></td><td class="cd">    b-&gt;failed = node_failed(node);</td></tr>
+<tr class="cl band nb-3" data-l="416" data-n="3"><td class="ln">416</td><td class="mk"><span class="chip">4</span></td><td class="cd">    <span class="tk-c">// CallContractBlock exception: a failed valueless call with a non-zero</span></td></tr>
+<tr class="cl band nb-3" data-l="417" data-n="3"><td class="ln">417</td><td class="mk"></td><td class="cd">    <span class="tk-c">// opcode and no extra currencies is not marked failed (log/event leaves).</span></td></tr>
+<tr class="cl band nb-3" data-l="418" data-n="3"><td class="ln">418</td><td class="mk"></td><td class="cd">    <span class="tk-k">bool</span> has_value = msg != <span class="tk-k">nullptr</span> &amp;&amp; msg-&gt;value &amp;&amp; *msg-&gt;value != <span class="tk-n">0</span>;</td></tr>
+<tr class="cl band nb-3" data-l="419" data-n="3"><td class="ln">419</td><td class="mk"></td><td class="cd">    <span class="tk-k">bool</span> opcode_truthy = op &amp;&amp; *op != <span class="tk-n">0</span>;</td></tr>
+<tr class="cl band nb-3" data-l="420" data-n="3"><td class="ln">420</td><td class="mk"></td><td class="cd">    <span class="tk-k">bool</span> has_extra = msg != <span class="tk-k">nullptr</span> &amp;&amp; msg-&gt;has_extra_currencies;</td></tr>
+<tr class="cl band nb-3" data-l="421" data-n="3"><td class="ln">421</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (b-&gt;failed &amp;&amp; !has_value &amp;&amp; opcode_truthy &amp;&amp; !has_extra) {</td></tr>
+<tr class="cl band nb-3" data-l="422" data-n="3"><td class="ln">422</td><td class="mk"></td><td class="cd">      b-&gt;failed = <span class="tk-k">false</span>;</td></tr>
+<tr class="cl band nb-3" data-l="423" data-n="3"><td class="ln">423</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl" data-l="424"><td class="ln">424</td><td class="mk"></td><td class="cd">  }</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="388" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L388–389</span>Three opcodes count as &quot;TON transfer&quot;: absent, zero, and the encrypted-comment opcode. But a TON transfer also needs BOTH endpoints — so an ext-in (no source) with opcode 0 becomes a <code>call_contract</code>, not a <code>ton_transfer</code>. That is Python&#39;s rule verbatim and it is why trace roots are almost always <code>call_contract</code> blocks.</div></div>
+<div class="note" data-a="398" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L398–411</span>The ton_transfer failed ladder, in Python&#39;s exact order, and note what it does NOT do: when the node did not fail, <code>failed</code> is never assigned at all — it keeps the struct default. Reordering these branches changes answers, because <code>bounce == true</code> wins over <code>end_status == uninit</code> and both win over the no-gas exemption.</div></div>
+<div class="note" data-a="405" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L405–407</span>This branch is dead on fixtures: <code>skipped_reason</code> is absent from every recorded trace, so the optional is always empty. It is ported anyway because the production loader can supply it — the prod A/B gate in <a class="xl" href="prod-path.html">prod-path</a> is what would surface a divergence.</div></div>
+<div class="note" data-a="416" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L416–423</span>The call_contract exception, and the one place a truthiness test hides in plain sight. Python writes <code>not node.message.value</code> — which is true for BOTH None and 0 — so a failed, valueless, non-zero-opcode call with no extra currencies is NOT marked failed. These are log/event leaves: they &quot;fail&quot; only because the transaction that emitted them aborted, and treating them as failed would poison every action built above them.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.cpp<span class="plines">:425–459</span></span><span class="ex-title">The ContractDeploy child, and the iterative spine walk</span><span class="lang">cpp</span><span class="sha" title="span hash at render">d00b31c5</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="425"><td class="ln">425</td><td class="mk"></td><td class="cd">  b-&gt;data = leaf_data(b-&gt;btype, node, op);</td></tr>
+<tr class="cl" data-l="426"><td class="ln">426</td><td class="mk"></td><td class="cd">  init_leaf(b, node);</td></tr>
+<tr class="cl" data-l="427"><td class="ln">427</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="428"><td class="ln">428</td><td class="mk"></td><td class="cd">  <span class="tk-c">// ContractDeploy side-effect block lives in children_blocks (spec §11.1).</span></td></tr>
+<tr class="cl band nb-0" data-l="429" data-n="0"><td class="ln">429</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">if</span> (!node-&gt;is_tick_tock &amp;&amp; tx != <span class="tk-k">nullptr</span> &amp;&amp; tx-&gt;end_status == <span class="tk-s">&quot;active&quot;</span> &amp;&amp;</td></tr>
+<tr class="cl band nb-0" data-l="430" data-n="0"><td class="ln">430</td><td class="mk"></td><td class="cd">      tx-&gt;orig_status != <span class="tk-s">&quot;active&quot;</span> &amp;&amp; tx-&gt;orig_status != <span class="tk-s">&quot;frozen&quot;</span>) {</td></tr>
+<tr class="cl band nb-0" data-l="431" data-n="0"><td class="ln">431</td><td class="mk"></td><td class="cd">    Block *deploy = arena.make(<span class="tk-s">&quot;contract_deploy&quot;</span>);</td></tr>
+<tr class="cl band nb-1" data-l="432" data-n="1"><td class="ln">432</td><td class="mk"><span class="chip">2</span></td><td class="cd">    deploy-&gt;opcode = op;</td></tr>
+<tr class="cl band nb-1" data-l="433" data-n="1"><td class="ln">433</td><td class="mk"></td><td class="cd">    deploy-&gt;failed = node_failed(node);</td></tr>
+<tr class="cl band nb-1" data-l="434" data-n="1"><td class="ln">434</td><td class="mk"></td><td class="cd">    deploy-&gt;data = leaf_data(<span class="tk-s">&quot;contract_deploy&quot;</span>, node, op);</td></tr>
+<tr class="cl band nb-1" data-l="435" data-n="1"><td class="ln">435</td><td class="mk"></td><td class="cd">    init_leaf(deploy, node);</td></tr>
+<tr class="cl band nb-1" data-l="436" data-n="1"><td class="ln">436</td><td class="mk"></td><td class="cd">    <span class="tk-c">// NB: Python does not set .parent here — only merge_blocks does.</span></td></tr>
+<tr class="cl band nb-1" data-l="437" data-n="1"><td class="ln">437</td><td class="mk"></td><td class="cd">    b-&gt;children_blocks.push_back(deploy);</td></tr>
+<tr class="cl" data-l="438"><td class="ln">438</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="439"><td class="ln">439</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> b;</td></tr>
+<tr class="cl" data-l="440"><td class="ln">440</td><td class="mk"></td><td class="cd">}</td></tr>
+<tr class="cl" data-l="441"><td class="ln">441</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="442"><td class="ln">442</td><td class="mk"></td><td class="cd">}  <span class="tk-c">// namespace</span></td></tr>
+<tr class="cl" data-l="443"><td class="ln">443</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="444"><td class="ln">444</td><td class="mk"></td><td class="cd">Block *init_block(BlockArena &amp;arena, <span class="tk-k">const</span> EventNode *node) {</td></tr>
+<tr class="cl band nb-2" data-l="445" data-n="2"><td class="ln">445</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-c">// Iterative DFS: trace depth is unbounded, recursion is not.</span></td></tr>
+<tr class="cl band nb-2" data-l="446" data-n="2"><td class="ln">446</td><td class="mk"></td><td class="cd">  Block *root = make_leaf_block(arena, node);</td></tr>
+<tr class="cl band nb-2" data-l="447" data-n="2"><td class="ln">447</td><td class="mk"></td><td class="cd">  std::vector&lt;std::pair&lt;<span class="tk-k">const</span> EventNode *, Block *&gt;&gt; stack{{node, root}};</td></tr>
+<tr class="cl" data-l="448"><td class="ln">448</td><td class="mk"></td><td class="cd">  <span class="tk-k">while</span> (!stack.empty()) {</td></tr>
+<tr class="cl" data-l="449"><td class="ln">449</td><td class="mk"></td><td class="cd">    <span class="tk-k">auto</span> [cur, block] = stack.back();</td></tr>
+<tr class="cl" data-l="450"><td class="ln">450</td><td class="mk"></td><td class="cd">    stack.pop_back();</td></tr>
+<tr class="cl" data-l="451"><td class="ln">451</td><td class="mk"></td><td class="cd">    <span class="tk-k">for</span> (<span class="tk-k">const</span> EventNode *c : cur-&gt;children) {</td></tr>
+<tr class="cl" data-l="452"><td class="ln">452</td><td class="mk"></td><td class="cd">      Block *child = make_leaf_block(arena, c);</td></tr>
+<tr class="cl" data-l="453"><td class="ln">453</td><td class="mk"></td><td class="cd">      block-&gt;connect(child);</td></tr>
+<tr class="cl" data-l="454"><td class="ln">454</td><td class="mk"></td><td class="cd">      stack.emplace_back(c, child);</td></tr>
+<tr class="cl" data-l="455"><td class="ln">455</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-3" data-l="456" data-n="3"><td class="ln">456</td><td class="mk"><span class="chip">4</span></td><td class="cd">    block-&gt;sort_next_blocks();</td></tr>
+<tr class="cl" data-l="457"><td class="ln">457</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="458"><td class="ln">458</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> root;</td></tr>
+<tr class="cl" data-l="459"><td class="ln">459</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="429" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L429–431</span>The deploy predicate: the transaction ended <code>active</code> and did not start <code>active</code> or <code>frozen</code>. Python attaches this to <code>TonTransferBlock</code> and <code>CallContractBlock</code> but NOT to <code>TickTockBlock</code> — hence the explicit <code>!node-&gt;is_tick_tock</code> guard, which is the only reason it is spelled out.</div></div>
+<div class="note" data-a="432" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L432–437</span>The subtle one. The deploy block goes into <code>children_blocks</code> but its <code>parent</code> is left NULL, because Python only sets <code>.parent</code> inside <code>merge_blocks</code>. Consequence: the deploy block is not reachable from the spine at all — it is not in anyone&#39;s <code>next_blocks</code> and <code>topmost_parent()</code> returns itself — so it survives independently even when its host leaf is consumed by a matcher, and gets serialized as its own top-level action. The run below shows exactly that.</div></div>
+<div class="note" data-a="445" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L445–447</span>Iterative where Python recurses. Trace depth is attacker-influenced (a long chain of forwards), so recursion depth is not a safe function of input. The stack is LIFO, which visits siblings in reverse — harmless, because <code>connect</code> happens inside the parent&#39;s own loop and the order is re-established by the sort below.</div></div>
+<div class="note" data-a="456" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L456</span>The canonical-order invariant established at construction. Every child&#39;s <code>min_lt</code> is already final at this point (set by <code>init_leaf</code> inside <code>make_leaf_block</code>), so one stable sort per node is enough and no later pass has to re-sort the spine.</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ python tools/trace_inspect.py &quot;tests/traces/03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4&quot; --blocks</div><pre class="run-out">trace_id=03RZCW7mu3eJp+FWifVzKsRHafUrqQNu4E6YwZxvXJ0=  txs=5  lt=[45769974000001..45769982000001]
+[000] EXT_IN-&gt;0:3359..67BA op=0xcfc2d330
+[001] 0:3359..67BA-&gt;0:0F95..13D4 op=0xa7733acd/VestingSendMessage v=0.0500TON
+[002] 0:0F95..13D4-&gt;0:3359..67BA op=0xf7733acd v=0.0392TON
+[003] 0:0F95..13D4-&gt;0:A8A6..7D39 op=0x00000000 v=100.0000TON c=&quot;Deposit&quot;
+[004] 0:A8A6..7D39-&gt;0:0F95..13D4 op=0x00000000 v=0.0987TON c=&quot;Stake 99.800000000 accepted&quot;
+-- block tree (top-level=4, total=6, *=unmatched basic) --
+[000] *call_contract op=0xcfc2d330 EXT_IN-&gt;0:3359..67BA
+  [001] vesting_send_message nodes=2
+      + call_contract op=0xa7733acd/VestingSendMessage {query_id=0 send_mode=3 …} 0:3359..67BA-&gt;0:0F95..13D4 v=0.0500TON
+      + call_contract op=0xf7733acd 0:0F95..13D4-&gt;0:3359..67BA v=0.0392TON
+    [002] *ton_transfer 0:0F95..13D4-&gt;0:A8A6..7D39 v=100.0000TON c=&quot;Deposit&quot;
+      [003] *ton_transfer 0:A8A6..7D39-&gt;0:0F95..13D4 v=0.0987TON c=&quot;Stake 99.800000000 accepted&quot;</pre><div class="run-note">Run from S:/Dev/ton-indexer-clear/indexer with the venv0 python. Everything above the <code>--</code> line is the EventNode tree in tx order; everything below is the Block tree. Read it against this chapter: line [000] is the ext-in leaf classified <code>call_contract</code> (opcode 0 but no source); [003]/[004] have opcode 0 with both endpoints, so they are <code>ton_transfer</code> leaves and their <code>c=</code> comments come from <code>leaf_comment_info</code>; indentation is <code>next_blocks</code>, <code>+</code> lines are <code>children_blocks</code>. <code>nodes=2</code> is the merged block&#39;s <code>event_nodes</code> after <code>merge_blocks</code>. The one data dict is elided with … for width.</div></div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ python tools/trace_inspect.py &quot;tests/traces/I8W6RKYLE-NJPAComfUWhsG7_L5VvFxNEzizt5N8AAc=.lz4&quot; --blocks</div><pre class="run-out">trace_id=I8W6RKYLE+NJPAComfUWhsG7/L5VvFxNEzizt5N8AAc=  txs=3  lt=[26717862000001..26717862000005]
+[000] EXT_IN-&gt;0:6F23..3083 op=0x726c8f3c
+[001] 0:6F23..3083-&gt;0:F791..4280 op=0x00000015/MinterJettonMint v=0.0500TON
+[002] 0:F791..4280-&gt;0:AFE2..F7CF op=0x178d4519/JettonInternalTransfer v=0.0400TON
+-- block tree (top-level=3, total=5, *=unmatched basic) --
+[000] *call_contract op=0x726c8f3c EXT_IN-&gt;0:6F23..3083
+  [001] jetton_mint nodes=2
+      + call_contract op=0x00000015/MinterJettonMint {…} 0:6F23..3083-&gt;0:F791..4280 v=0.0500TON
+      + call_contract op=0x178d4519/JettonInternalTransfer {…} 0:F791..4280-&gt;0:AFE2..F7CF v=0.0400TON
+[002] contract_deploy {…} 0:F791..4280-&gt;0:AFE2..F7CF v=0.0400TON</pre><div class="run-note">The ContractDeploy claim, demonstrated. Transaction [002] deploys the destination jetton wallet, so its leaf gets a <code>contract_deploy</code> sibling in <code>children_blocks</code>. That leaf is then consumed by <code>jetton_mint</code> — but the deploy block is listed at TOP LEVEL, because its <code>.parent</code> was never set. Three transactions, five blocks: three spine leaves + one deploy + one produced. Data dicts elided with … for width.</div></div>
+<h2 id="merge-blocks-who-inherits-what">merge_blocks — who inherits what</h2>
+<section><p>When a matcher accepts, the produced block calls <code>merge_blocks(consumed)</code> and the spine is rewritten in place. This is the only destructive operation in the substrate, and the header comment states the contract bluntly: it must be called ONLY after a build accepts, because there is no rollback. The <code>false</code> return exists for the one case that can be detected before any mutation — no earliest common block — and in that case the tree is untouched.</p>
+<p>Four helpers do the work. <code>ensure_earliest_common_block</code> picks the anchor and validates that the consumed set is actually connected. <code>find_frontier</code> computes what the produced block should now point at. <code>compact_connections</code> repairs the parent&#39;s outgoing edges. <code>calculate_min_max_lt</code> re-derives the ordering key. Read them in that order.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.cpp<span class="plines">:163–183</span></span><span class="ex-title">sort_next_blocks and compact_connections</span><span class="lang">cpp</span><span class="sha" title="span hash at render">64c89e4e</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="163"><td class="ln">163</td><td class="mk"></td><td class="cd"><span class="tk-k">void</span> Block::sort_next_blocks() {</td></tr>
+<tr class="cl band nb-0" data-l="164" data-n="0"><td class="ln">164</td><td class="mk"><span class="chip">1</span></td><td class="cd">  std::stable_sort(next_blocks.begin(), next_blocks.end(),</td></tr>
+<tr class="cl band nb-0" data-l="165" data-n="0"><td class="ln">165</td><td class="mk"></td><td class="cd">                   [](<span class="tk-k">const</span> Block *a, <span class="tk-k">const</span> Block *b) { <span class="tk-k">return</span> a-&gt;min_lt &lt; b-&gt;min_lt; });</td></tr>
+<tr class="cl" data-l="166"><td class="ln">166</td><td class="mk"></td><td class="cd">}</td></tr>
+<tr class="cl" data-l="167"><td class="ln">167</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl" data-l="168"><td class="ln">168</td><td class="mk"></td><td class="cd"><span class="tk-k">void</span> Block::compact_connections() {</td></tr>
+<tr class="cl" data-l="169"><td class="ln">169</td><td class="mk"></td><td class="cd">  std::unordered_set&lt;<span class="tk-k">const</span> Block *&gt; child_set(children_blocks.begin(), children_blocks.end());</td></tr>
+<tr class="cl" data-l="170"><td class="ln">170</td><td class="mk"></td><td class="cd">  std::unordered_set&lt;<span class="tk-k">const</span> Block *&gt; seen;</td></tr>
+<tr class="cl" data-l="171"><td class="ln">171</td><td class="mk"></td><td class="cd">  std::vector&lt;Block *&gt; out;</td></tr>
+<tr class="cl band nb-1" data-l="172" data-n="1"><td class="ln">172</td><td class="mk"><span class="chip">2</span></td><td class="cd">  <span class="tk-k">for</span> (Block *n : next_blocks) {</td></tr>
+<tr class="cl band nb-1" data-l="173" data-n="1"><td class="ln">173</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (child_set.count(n) != <span class="tk-n">0</span> || n == <span class="tk-k">this</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="174" data-n="1"><td class="ln">174</td><td class="mk"></td><td class="cd">      <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl band nb-1" data-l="175" data-n="1"><td class="ln">175</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="176" data-n="1"><td class="ln">176</td><td class="mk"></td><td class="cd">    Block *tp = n-&gt;topmost_parent();</td></tr>
+<tr class="cl band nb-1" data-l="177" data-n="1"><td class="ln">177</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (seen.insert(tp).second) {</td></tr>
+<tr class="cl band nb-1" data-l="178" data-n="1"><td class="ln">178</td><td class="mk"></td><td class="cd">      out.push_back(tp);</td></tr>
+<tr class="cl band nb-1" data-l="179" data-n="1"><td class="ln">179</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="180" data-n="1"><td class="ln">180</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="181" data-n="2"><td class="ln">181</td><td class="mk"><span class="chip">3</span></td><td class="cd">  next_blocks = std::move(out);</td></tr>
+<tr class="cl band nb-2" data-l="182" data-n="2"><td class="ln">182</td><td class="mk"></td><td class="cd">  sort_next_blocks();</td></tr>
+<tr class="cl" data-l="183"><td class="ln">183</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="164" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L164–165</span><code>stable_sort</code>, not <code>sort</code>. Blocks with equal <code>min_lt</code> are common (an out-message leaf and its log sibling share a transaction), and preserving their insertion order is what keeps the walker&#39;s candidate order reproducible run to run.</div></div>
+<div class="note" data-a="172" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L172–180</span>The repair after a merge: an edge that used to point at a consumed block must now point at whatever swallowed it, hence <code>topmost_parent()</code>. The dedup is by first-seen order — Python writes <code>set(...)</code>, whose iteration order is id-based and therefore varies between processes. This is the single largest determinism win in the file, and it is invisible until you diff two Python runs of the same trace.</div></div>
+<div class="note" data-a="181" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L181–182</span>Python&#39;s <code>compact_connections</code> does NOT sort; the sort here is what keeps the canonical-order invariant true after a merge. Note the ordering constraint it creates: <code>merge_blocks</code> must finish <code>calculate_min_max_lt</code> on the produced block BEFORE the parent compacts, or the parent would sort on a stale key.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.cpp<span class="plines">:224–253</span></span><span class="ex-title">find_frontier and calculate_min_max_lt</span><span class="lang">cpp</span><span class="sha" title="span hash at render">0a0b51ba</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="224"><td class="ln">224</td><td class="mk"></td><td class="cd">std::vector&lt;Block *&gt; Block::find_frontier(<span class="tk-k">const</span> std::vector&lt;Block *&gt; &amp;in_set) <span class="tk-k">const</span> {</td></tr>
+<tr class="cl" data-l="225"><td class="ln">225</td><td class="mk"></td><td class="cd">  std::unordered_set&lt;<span class="tk-k">const</span> Block *&gt; set(in_set.begin(), in_set.end());</td></tr>
+<tr class="cl" data-l="226"><td class="ln">226</td><td class="mk"></td><td class="cd">  std::deque&lt;Block *&gt; queue(next_blocks.begin(), next_blocks.end());</td></tr>
+<tr class="cl" data-l="227"><td class="ln">227</td><td class="mk"></td><td class="cd">  std::unordered_set&lt;<span class="tk-k">const</span> Block *&gt; seen;</td></tr>
+<tr class="cl" data-l="228"><td class="ln">228</td><td class="mk"></td><td class="cd">  std::vector&lt;Block *&gt; out;</td></tr>
+<tr class="cl band nb-0" data-l="229" data-n="0"><td class="ln">229</td><td class="mk"><span class="chip">1</span></td><td class="cd">  <span class="tk-k">while</span> (!queue.empty()) {</td></tr>
+<tr class="cl band nb-0" data-l="230" data-n="0"><td class="ln">230</td><td class="mk"></td><td class="cd">    Block *cur = queue.front();</td></tr>
+<tr class="cl band nb-0" data-l="231" data-n="0"><td class="ln">231</td><td class="mk"></td><td class="cd">    queue.pop_front();</td></tr>
+<tr class="cl band nb-0" data-l="232" data-n="0"><td class="ln">232</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (set.count(cur) != <span class="tk-n">0</span>) {</td></tr>
+<tr class="cl band nb-0" data-l="233" data-n="0"><td class="ln">233</td><td class="mk"></td><td class="cd">      <span class="tk-k">for</span> (Block *c : cur-&gt;next_blocks) {</td></tr>
+<tr class="cl band nb-0" data-l="234" data-n="0"><td class="ln">234</td><td class="mk"></td><td class="cd">        queue.push_back(c);</td></tr>
+<tr class="cl band nb-0" data-l="235" data-n="0"><td class="ln">235</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-0" data-l="236" data-n="0"><td class="ln">236</td><td class="mk"></td><td class="cd">    } <span class="tk-k">else</span> <span class="tk-k">if</span> (seen.insert(cur).second) {</td></tr>
+<tr class="cl band nb-0" data-l="237" data-n="0"><td class="ln">237</td><td class="mk"></td><td class="cd">      out.push_back(cur);</td></tr>
+<tr class="cl band nb-0" data-l="238" data-n="0"><td class="ln">238</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-0" data-l="239" data-n="0"><td class="ln">239</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="240"><td class="ln">240</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> out;</td></tr>
+<tr class="cl" data-l="241"><td class="ln">241</td><td class="mk"></td><td class="cd">}</td></tr>
+<tr class="cl" data-l="242"><td class="ln">242</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="243" data-n="1"><td class="ln">243</td><td class="mk"><span class="chip">2</span></td><td class="cd"><span class="tk-k">void</span> Block::calculate_min_max_lt() {</td></tr>
+<tr class="cl band nb-1" data-l="244" data-n="1"><td class="ln">244</td><td class="mk"></td><td class="cd">  std::int64_t lo = std::numeric_limits&lt;std::int64_t&gt;::max();</td></tr>
+<tr class="cl band nb-1" data-l="245" data-n="1"><td class="ln">245</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (<span class="tk-k">const</span> <span class="tk-k">auto</span> *n : event_nodes) {</td></tr>
+<tr class="cl band nb-1" data-l="246" data-n="1"><td class="ln">246</td><td class="mk"></td><td class="cd">    lo = std::min(lo, n-&gt;lt());</td></tr>
+<tr class="cl band nb-1" data-l="247" data-n="1"><td class="ln">247</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="248" data-n="1"><td class="ln">248</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">if</span> (event_nodes.empty()) {</td></tr>
+<tr class="cl band nb-1" data-l="249" data-n="1"><td class="ln">249</td><td class="mk"></td><td class="cd">    lo = <span class="tk-n">0</span>;</td></tr>
+<tr class="cl band nb-1" data-l="250" data-n="1"><td class="ln">250</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="251" data-n="1"><td class="ln">251</td><td class="mk"></td><td class="cd">  min_lt = lo;</td></tr>
+<tr class="cl band nb-1" data-l="252" data-n="1"><td class="ln">252</td><td class="mk"></td><td class="cd">  min_lt_without_initiating_tx = lo;</td></tr>
+<tr class="cl band nb-1" data-l="253" data-n="1"><td class="ln">253</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="229" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L229–239</span>BFS that descends THROUGH members of the merged set and yields the first non-member on each path — Python&#39;s <code>find_next(..., stop_on_filter_unmatch=True, yield_on_unmatch=True)</code>. The <code>seen</code> set is the documented deviation: on a diamond, Python yields the same frontier block twice and keeps both copies in <code>next_blocks</code>.</div></div>
+<div class="note" data-a="243" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L243–253</span>The C++ keeps only <code>min_lt</code> and <code>min_lt_without_initiating_tx</code>; Python&#39;s version also recomputes <code>min_utime</code>, <code>max_lt</code> and <code>max_utime</code>. Those three feed Action timestamps, which the C++ serializer derives from the event nodes directly (<a class="xl" href="actions.html">actions</a>) — so they are absent here rather than maintained and unread.</div></div>
+<div class="note" data-a="248" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L248–250</span>The empty-set guard turns <code>int64 max</code> into 0. It cannot fire from <code>merge_blocks</code> (a merged block always has nodes) but it can from the Phase E post-process passes that call this after re-absorbing legs, which is why the method is public.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.cpp<span class="plines">:255–281</span></span><span class="ex-title">ensure_earliest_common_block — anchor selection and the connectivity check</span><span class="lang">cpp</span><span class="sha" title="span hash at render">2f80a262</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="255"><td class="ln">255</td><td class="mk"></td><td class="cd">Block *ensure_earliest_common_block(<span class="tk-k">const</span> std::vector&lt;Block *&gt; &amp;blocks) {</td></tr>
+<tr class="cl" data-l="256"><td class="ln">256</td><td class="mk"></td><td class="cd">  std::vector&lt;Block *&gt; sorted = blocks;</td></tr>
+<tr class="cl band nb-0" data-l="257" data-n="0"><td class="ln">257</td><td class="mk"><span class="chip">1</span></td><td class="cd">  std::stable_sort(sorted.begin(), sorted.end(), [](<span class="tk-k">const</span> Block *a, <span class="tk-k">const</span> Block *b) {</td></tr>
+<tr class="cl band nb-0" data-l="258" data-n="0"><td class="ln">258</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (a-&gt;min_lt_without_initiating_tx != b-&gt;min_lt_without_initiating_tx) {</td></tr>
+<tr class="cl band nb-0" data-l="259" data-n="0"><td class="ln">259</td><td class="mk"></td><td class="cd">      <span class="tk-k">return</span> a-&gt;min_lt_without_initiating_tx &lt; b-&gt;min_lt_without_initiating_tx;</td></tr>
+<tr class="cl band nb-0" data-l="260" data-n="0"><td class="ln">260</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-0" data-l="261" data-n="0"><td class="ln">261</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> a-&gt;direction() &lt; b-&gt;direction();</td></tr>
+<tr class="cl band nb-0" data-l="262" data-n="0"><td class="ln">262</td><td class="mk"></td><td class="cd">  });</td></tr>
+<tr class="cl" data-l="263"><td class="ln">263</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (sorted.empty()) {</td></tr>
+<tr class="cl" data-l="264"><td class="ln">264</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> <span class="tk-k">nullptr</span>;</td></tr>
+<tr class="cl" data-l="265"><td class="ln">265</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="266" data-n="1"><td class="ln">266</td><td class="mk"><span class="chip">2</span></td><td class="cd">  Block *earliest = sorted.front();</td></tr>
+<tr class="cl band nb-1" data-l="267" data-n="1"><td class="ln">267</td><td class="mk"></td><td class="cd">  std::unordered_set&lt;<span class="tk-k">const</span> Block *&gt; connected{earliest};</td></tr>
+<tr class="cl band nb-1" data-l="268" data-n="1"><td class="ln">268</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (Block *block : sorted) {</td></tr>
+<tr class="cl band nb-1" data-l="269" data-n="1"><td class="ln">269</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (connected.count(block) != <span class="tk-n">0</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="270" data-n="1"><td class="ln">270</td><td class="mk"></td><td class="cd">      <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl band nb-1" data-l="271" data-n="1"><td class="ln">271</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="272" data-n="1"><td class="ln">272</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (block-&gt;previous_block != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="273" data-n="1"><td class="ln">273</td><td class="mk"></td><td class="cd">      <span class="tk-k">if</span> (connected.count(block-&gt;previous_block) != <span class="tk-n">0</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="274" data-n="1"><td class="ln">274</td><td class="mk"></td><td class="cd">        connected.insert(block);</td></tr>
+<tr class="cl band nb-1" data-l="275" data-n="1"><td class="ln">275</td><td class="mk"></td><td class="cd">        <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl band nb-1" data-l="276" data-n="1"><td class="ln">276</td><td class="mk"></td><td class="cd">      }</td></tr>
+<tr class="cl band nb-1" data-l="277" data-n="1"><td class="ln">277</td><td class="mk"><span class="chip">3</span></td><td class="cd">      <span class="tk-k">return</span> <span class="tk-k">nullptr</span>;</td></tr>
+<tr class="cl band nb-1" data-l="278" data-n="1"><td class="ln">278</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-1" data-l="279" data-n="1"><td class="ln">279</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="280"><td class="ln">280</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> earliest;</td></tr>
+<tr class="cl" data-l="281"><td class="ln">281</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="257" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L257–262</span>The sort key is <code>(min_lt_without_initiating_tx, direction)</code>, i.e. the OWNING TRANSACTION&#39;s lt, not the message lt. That is deliberate: an out-message leaf and the transaction that produced it tie on the first key, and <code>direction()</code> (0 = in/anchor, 1 = out, 2 = multi-node) breaks the tie toward the incoming side. Python&#39;s tuple sort, reproduced.</div></div>
+<div class="note" data-a="266" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L266–279</span>The connectivity check, and it is weaker than it looks: it only requires each block&#39;s IMMEDIATE <code>previous_block</code> to already be in <code>connected</code>, and it iterates in sorted order, so it validates a chain rather than a general reachability. Copied as-is — a stronger check would reject matches Python accepts.</div></div>
+<div class="note" data-a="277" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L277</span><code>return nullptr</code> here is what becomes <code>merge_blocks</code> returning false. Python raises instead (<code>raise &quot;Earliest common block not found&quot;</code> — a bare string, which would itself be a TypeError), so on the Python side this path is a hard failure caught upstream; on the C++ side it is a clean build rejection with the tree untouched.</div></div></div>
+</div>
+</div>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/BlockTree.cpp<span class="plines">:283–317</span></span><span class="ex-title">merge_blocks — the inheritance list</span><span class="lang">cpp</span><span class="sha" title="span hash at render">cc6eb046</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="283"><td class="ln">283</td><td class="mk"></td><td class="cd"><span class="tk-k">bool</span> Block::merge_blocks(<span class="tk-k">const</span> std::vector&lt;Block *&gt; &amp;blocks) {</td></tr>
+<tr class="cl band nb-0" data-l="284" data-n="0"><td class="ln">284</td><td class="mk"><span class="chip">1</span></td><td class="cd">  std::unordered_set&lt;<span class="tk-k">const</span> Block *&gt; set;</td></tr>
+<tr class="cl band nb-0" data-l="285" data-n="0"><td class="ln">285</td><td class="mk"></td><td class="cd">  std::vector&lt;Block *&gt; to_merge;</td></tr>
+<tr class="cl band nb-0" data-l="286" data-n="0"><td class="ln">286</td><td class="mk"></td><td class="cd">  <span class="tk-k">for</span> (Block *b : blocks) {</td></tr>
+<tr class="cl band nb-0" data-l="287" data-n="0"><td class="ln">287</td><td class="mk"></td><td class="cd">    <span class="tk-k">if</span> (b == <span class="tk-k">nullptr</span> || set.count(b) != <span class="tk-n">0</span>) {</td></tr>
+<tr class="cl band nb-0" data-l="288" data-n="0"><td class="ln">288</td><td class="mk"></td><td class="cd">      <span class="tk-k">continue</span>;</td></tr>
+<tr class="cl band nb-0" data-l="289" data-n="0"><td class="ln">289</td><td class="mk"></td><td class="cd">    }</td></tr>
+<tr class="cl band nb-0" data-l="290" data-n="0"><td class="ln">290</td><td class="mk"></td><td class="cd">    set.insert(b);</td></tr>
+<tr class="cl band nb-0" data-l="291" data-n="0"><td class="ln">291</td><td class="mk"></td><td class="cd">    to_merge.push_back(b);</td></tr>
+<tr class="cl band nb-0" data-l="292" data-n="0"><td class="ln">292</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-1" data-l="293" data-n="1"><td class="ln">293</td><td class="mk"><span class="chip">2</span></td><td class="cd">  Block *earliest = ensure_earliest_common_block(to_merge);</td></tr>
+<tr class="cl band nb-1" data-l="294" data-n="1"><td class="ln">294</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (earliest == <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-1" data-l="295" data-n="1"><td class="ln">295</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> <span class="tk-k">false</span>;</td></tr>
+<tr class="cl band nb-1" data-l="296" data-n="1"><td class="ln">296</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="297" data-n="2"><td class="ln">297</td><td class="mk"><span class="chip">3</span></td><td class="cd">  <span class="tk-k">for</span> (Block *b : to_merge) {</td></tr>
+<tr class="cl band nb-2" data-l="298" data-n="2"><td class="ln">298</td><td class="mk"></td><td class="cd">    b-&gt;parent = <span class="tk-k">this</span>;</td></tr>
+<tr class="cl band nb-2" data-l="299" data-n="2"><td class="ln">299</td><td class="mk"></td><td class="cd">    event_nodes.insert(event_nodes.end(), b-&gt;event_nodes.begin(), b-&gt;event_nodes.end());</td></tr>
+<tr class="cl band nb-2" data-l="300" data-n="2"><td class="ln">300</td><td class="mk"></td><td class="cd">    children_blocks.push_back(b);</td></tr>
+<tr class="cl band nb-2" data-l="301" data-n="2"><td class="ln">301</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-3" data-l="302" data-n="3"><td class="ln">302</td><td class="mk"><span class="chip">4</span></td><td class="cd">  <span class="tk-k">for</span> (Block *fb : earliest-&gt;find_frontier(to_merge)) {</td></tr>
+<tr class="cl band nb-3" data-l="303" data-n="3"><td class="ln">303</td><td class="mk"></td><td class="cd">    next_blocks.push_back(fb);</td></tr>
+<tr class="cl band nb-3" data-l="304" data-n="3"><td class="ln">304</td><td class="mk"></td><td class="cd">    fb-&gt;previous_block = <span class="tk-k">this</span>;</td></tr>
+<tr class="cl band nb-3" data-l="305" data-n="3"><td class="ln">305</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-3" data-l="306" data-n="3"><td class="ln">306</td><td class="mk"></td><td class="cd">  previous_block = earliest-&gt;previous_block;</td></tr>
+<tr class="cl band nb-3" data-l="307" data-n="3"><td class="ln">307</td><td class="mk"></td><td class="cd">  <span class="tk-c">// core.py merge_blocks: the merged block inherits initiating_event_node from</span></td></tr>
+<tr class="cl band nb-3" data-l="308" data-n="3"><td class="ln">308</td><td class="mk"></td><td class="cd">  <span class="tk-c">// the earliest merged block (Step 2a). is_ghost_block would OR over ghost</span></td></tr>
+<tr class="cl band nb-3" data-l="309" data-n="3"><td class="ln">309</td><td class="mk"></td><td class="cd">  <span class="tk-c">// nodes, but the C++ substrate has none, so it stays false.</span></td></tr>
+<tr class="cl band nb-3" data-l="310" data-n="3"><td class="ln">310</td><td class="mk"></td><td class="cd">  initiating_event_node = earliest-&gt;initiating_event_node;</td></tr>
+<tr class="cl band nb-4" data-l="311" data-n="4"><td class="ln">311</td><td class="mk"><span class="chip">5</span></td><td class="cd">  calculate_min_max_lt();</td></tr>
+<tr class="cl band nb-4" data-l="312" data-n="4"><td class="ln">312</td><td class="mk"></td><td class="cd">  sort_next_blocks();</td></tr>
+<tr class="cl band nb-4" data-l="313" data-n="4"><td class="ln">313</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (earliest-&gt;previous_block != <span class="tk-k">nullptr</span>) {</td></tr>
+<tr class="cl band nb-4" data-l="314" data-n="4"><td class="ln">314</td><td class="mk"></td><td class="cd">    earliest-&gt;previous_block-&gt;compact_connections();</td></tr>
+<tr class="cl band nb-4" data-l="315" data-n="4"><td class="ln">315</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl" data-l="316"><td class="ln">316</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> <span class="tk-k">true</span>;</td></tr>
+<tr class="cl" data-l="317"><td class="ln">317</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="284" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L284–292</span>Dedup preserving FIRST-SEEN order, against Python&#39;s <code>set(blocks)</code>. This order then feeds the sort in <code>ensure_earliest_common_block</code> (whose ties are broken by stability) AND the <code>event_nodes</code> append order below — so a nondeterministic set here would produce a nondeterministic anchor and a nondeterministic node order in the same breath.</div></div>
+<div class="note" data-a="293" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L293–296</span>The only pre-mutation exit. Everything after this line mutates the tree irreversibly, which is why the header insists this is called after a build ACCEPTS, never speculatively.</div></div>
+<div class="note" data-a="297" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L297–301</span>What a merge inherits: <code>event_nodes</code> are APPENDED in merged order (so <code>anchor_tx_hash()</code> is the first consumed block&#39;s first node), each consumed block gets <code>parent</code> set and lands in <code>children_blocks</code>. Note it does NOT take their <code>data</code>, <code>failed</code>, or <code>opcode</code> — a produced block&#39;s data comes entirely from its build program (<a class="xl" href="build-programs.html">build-programs</a>).</div></div>
+<div class="note" data-a="302" data-n="3"><div class="nt"><span class="chip">4</span><span class="nl">L302–310</span>The three link repairs, in Python&#39;s order: frontier blocks become the produced block&#39;s <code>next_blocks</code> and get their <code>previous_block</code> re-pointed; the produced block takes the anchor&#39;s <code>previous_block</code>; <code>initiating_event_node</code> is inherited from the ANCHOR, not from the first consumed block. The <code>is_ghost_block</code> OR that Python does here is unreachable and is documented instead of written.</div></div>
+<div class="note" data-a="311" data-n="4"><div class="nt"><span class="chip">5</span><span class="nl">L311–315</span>Order matters and differs from Python: <code>calculate_min_max_lt</code> runs BEFORE the parent&#39;s <code>compact_connections</code>, because compaction now sorts and would otherwise sort on the produced block&#39;s pre-merge <code>min_lt</code>. Python compacts first and never sorts, so both orders are correct in their own engine — but swapping them here would silently reorder siblings.</div></div></div>
+</div>
+</div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ &quot;$ENGINE&quot; --classify -I &quot;$IR&quot; -T &quot;tests/traces/03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4&quot;</div><pre class="run-out">=== 03RZCW7mu3eJp-FWifVzKsRHafUrqQNu4E6YwZxvXJ0=.lz4
+ACTION vesting_send_message anchor=call_contract#a7733acd@45769974000002 btype=vesting_send_message failed=0 broken=0 data={…} consumed=[call_contract#a7733acd@45769974000002,call_contract#f7733acd@45769974000005] auto=[]</pre><div class="run-note">The same fixture as the first run, now through the C++ engine. <code>$ENGINE</code> = ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe, <code>$IR</code> = ton-index-worker/ton-mch-engine/ir/mch_ir.json. <code>consumed=[...]</code> is <code>children_blocks</code> in merge order and matches the two <code>+</code> lines Python printed; <code>anchor=</code> is the merged block&#39;s first event node, i.e. <code>anchor_tx_hash()</code> after the append in merge_blocks. The <code>data={…}</code> composite is elided here — it is a build-program product, not a merge product.</div></div>
+<h2 id="reading-a-block-the-view-helpers">Reading a block: the view helpers</h2>
+<section><p>Host functions need to ask small questions of a block, and <code>host/BlockViews.{h,cpp}</code> is the deliberately tiny vocabulary they are allowed to use. It is not a graph query language — the header says so, and the rule for admitting a new op is that some host already demonstrates it twice. Two of them, <code>data_truthy</code> and <code>acc_str</code>, are the ones you will meet everywhere and both encode a Python semantic rather than a C++ one.</p></section>
+<div class="excerpt">
+<div class="ex-head"><span class="path">ton-index-worker/ton-mch-engine/src/host/BlockViews.cpp<span class="plines">:46–64</span></span><span class="ex-title">unique_lt_sorted, data_truthy, acc_str</span><span class="lang">cpp</span><span class="sha" title="span hash at render">ebef35e7</span></div>
+
+<div class="ex-grid">
+<div class="ex-code"><table class="code"><tr class="cl" data-l="46"><td class="ln">46</td><td class="mk"></td><td class="cd"><span class="tk-k">void</span> unique_lt_sorted(std::vector&lt;<span class="tk-k">const</span> Block *&gt; &amp;blocks) {</td></tr>
+<tr class="cl band nb-0" data-l="47" data-n="0"><td class="ln">47</td><td class="mk"><span class="chip">1</span></td><td class="cd">  std::sort(blocks.begin(), blocks.end());</td></tr>
+<tr class="cl band nb-0" data-l="48" data-n="0"><td class="ln">48</td><td class="mk"></td><td class="cd">  blocks.erase(std::unique(blocks.begin(), blocks.end()), blocks.end());</td></tr>
+<tr class="cl band nb-0" data-l="49" data-n="0"><td class="ln">49</td><td class="mk"></td><td class="cd">  std::stable_sort(blocks.begin(), blocks.end(),</td></tr>
+<tr class="cl band nb-0" data-l="50" data-n="0"><td class="ln">50</td><td class="mk"></td><td class="cd">                   [](<span class="tk-k">const</span> Block *a, <span class="tk-k">const</span> Block *b) { <span class="tk-k">return</span> a-&gt;min_lt &lt; b-&gt;min_lt; });</td></tr>
+<tr class="cl" data-l="51"><td class="ln">51</td><td class="mk"></td><td class="cd">}</td></tr>
+<tr class="cl" data-l="52"><td class="ln">52</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-1" data-l="53" data-n="1"><td class="ln">53</td><td class="mk"><span class="chip">2</span></td><td class="cd"><span class="tk-k">bool</span> data_truthy(<span class="tk-k">const</span> Block *b, <span class="tk-k">const</span> char *field) {</td></tr>
+<tr class="cl band nb-1" data-l="54" data-n="1"><td class="ln">54</td><td class="mk"></td><td class="cd">  Value v = data_field(b, field);</td></tr>
+<tr class="cl band nb-1" data-l="55" data-n="1"><td class="ln">55</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> (v.t == VType::Bool &amp;&amp; v.boolean) ||</td></tr>
+<tr class="cl band nb-1" data-l="56" data-n="1"><td class="ln">56</td><td class="mk"></td><td class="cd">         (v.t == VType::Int &amp;&amp; !v.num.is_null() &amp;&amp; v.num-&gt;sgn() != <span class="tk-n">0</span>);</td></tr>
+<tr class="cl band nb-1" data-l="57" data-n="1"><td class="ln">57</td><td class="mk"></td><td class="cd">}</td></tr>
+<tr class="cl" data-l="58"><td class="ln">58</td><td class="mk"></td><td class="cd">&nbsp;</td></tr>
+<tr class="cl band nb-2" data-l="59" data-n="2"><td class="ln">59</td><td class="mk"><span class="chip">3</span></td><td class="cd">std::optional&lt;std::string&gt; acc_str(<span class="tk-k">const</span> Value &amp;v) {</td></tr>
+<tr class="cl band nb-2" data-l="60" data-n="2"><td class="ln">60</td><td class="mk"></td><td class="cd">  <span class="tk-k">if</span> (v.t == VType::Account &amp;&amp; !v.addr_none) {</td></tr>
+<tr class="cl band nb-2" data-l="61" data-n="2"><td class="ln">61</td><td class="mk"></td><td class="cd">    <span class="tk-k">return</span> v.str;</td></tr>
+<tr class="cl band nb-2" data-l="62" data-n="2"><td class="ln">62</td><td class="mk"></td><td class="cd">  }</td></tr>
+<tr class="cl band nb-2" data-l="63" data-n="2"><td class="ln">63</td><td class="mk"></td><td class="cd">  <span class="tk-k">return</span> std::nullopt;</td></tr>
+<tr class="cl" data-l="64"><td class="ln">64</td><td class="mk"></td><td class="cd">}</td></tr></table></div>
+<div class="ex-rail"><div class="note" data-a="47" data-n="0"><div class="nt"><span class="chip">1</span><span class="nl">L47–50</span>Sort by POINTER, unique, then stable-sort by <code>min_lt</code>. The pointer sort is not cosmetic — it is how HostCoffee&#39;s original code deduped, and reproducing it (rather than a first-seen dedup) is what keeps peer-swap order byte-identical. This is the one place in the substrate where address order is deliberately observable, and it is safe only because the second sort is stable on a key that ties rarely.</div></div>
+<div class="note" data-a="53" data-n="1"><div class="nt"><span class="chip">2</span><span class="nl">L53–57</span><code>bool(block.data[field])</code> for exactly the two carriers the specs use. Note what is FALSE here: a missing key, a null, a string, an Amount. Python&#39;s <code>bool()</code> would say a non-empty string is true — the narrow reading is intentional, because every real call site tests a bool or an int flag and a wider rule would silently change behaviour if a field&#39;s type ever moved.</div></div>
+<div class="note" data-a="59" data-n="2"><div class="nt"><span class="chip">3</span><span class="nl">L59–63</span><code>AccountId(v).as_str()</code> — and crucially <code>addr_none</code> returns nullopt, not an empty string. Callers gate on the optional, which is how an addr_none address stops a wallet lookup instead of performing one against the empty key. Contrast the ABI universe in <a class="xl" href="parse-layer.html">parse-layer</a>, where addr_none is a present-but-empty Account for the same TL-B input.</div></div></div>
+</div>
+</div>
+<h2 id="check-yourself">Check yourself</h2>
+<section><p>Four things you can verify right now. The first two are the evidence behind this chapter&#39;s parity claims; the third exercises the one substrate operation not covered by an excerpt (<code>insert_between</code>, used by shapers); the fourth is a claim about the Python side you should confirm by reading rather than trusting.</p>
+<p>All commands run from <code>S:/Dev/ton-indexer-clear/indexer</code>, with <code>$ENGINE</code> = <code>ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe</code> and <code>$IR</code> = <code>ton-index-worker/ton-mch-engine/ir/mch_ir.json</code>. The venv python is <code>S:/Dev/H-dump/tonscan-indexator/venv0/Scripts/python.exe</code>.</p>
+<p>1. Classify the whole corpus and confirm stderr is EMPTY — that is the <code>unlinked</code> counter reporting that every one of the 148 fixtures has a single-rooted event tree, i.e. <code>to_tree</code> never silently dropped a subtree.</p>
+<p>2. Run the Python twin over the same corpus and diff. Diff-0 across 347 lines is what licenses every &quot;byte-identical&quot; claim on this page; if you change anything in <code>BlockTree.cpp</code>, this is the gate that will tell you.</p>
+<p>3. Run <code>--shape-test</code>, which drives <code>Block::insert_between</code> directly (parent/proxy/target rewiring, grandchild edge redirection, target back-edge reparenting) plus the getgems shaper that uses it.</p>
+<p>4. Open <code>indexer/events/blocks/core.py</code> and read <code>compact_connections</code> (one line, <code>set(...)</code>) and <code>merge_blocks</code> (<code>blocks_to_merge = [b for b in set(blocks) ...]</code>). Then re-read the two C++ dedups in this chapter. Convince yourself that the Python engine&#39;s sibling order and merge anchor really are hash-seed dependent, and that the C++ is not — this is the difference the whole &quot;canonical order&quot; invariant exists to buy.</p></section>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ &quot;$ENGINE&quot; --classify -I &quot;$IR&quot; -T tests/traces &gt; cls.txt 2&gt; cls.err
+grep -c &quot;^=== &quot; cls.txt; grep -c &quot;^ACTION &quot; cls.txt; wc -l &lt; cls.err</div><pre class="run-out">148
+199
+0</pre><div class="run-note">148 fixtures, 199 action rows, zero lines on stderr. An <code>event tree has N unlinked node(s)</code> warning would appear in cls.err — it does not, for any fixture.</div></div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ python ../ton-index-worker/ton-mch-engine/twins/py_classify.py &quot;$IR&quot; tests/traces &gt; py.txt 2&gt;&amp;1
+grep -E &quot;^(===|ACTION) &quot; py.txt &gt; py2.txt; grep -E &quot;^(===|ACTION) &quot; cls.txt &gt; cls2.txt
+diff py2.txt cls2.txt &amp;&amp; echo &quot;TWIN DIFF 0&quot; &amp;&amp; wc -l py2.txt cls2.txt</div><pre class="run-out">TWIN DIFF 0
+   347 py2.txt
+   347 cls2.txt
+   694 total</pre><div class="run-note">The grep filter exists because the Python twin also writes engine log lines to stdout; only <code>===</code> and <code>ACTION</code> lines are the compared surface. Full gate mechanics are in <a class="xl" href="gates.html">gates</a>.</div></div>
+<div class="run"><div class="label">captured output</div><div class="run-cmd">$ &quot;$ENGINE&quot; --shape-test</div><pre class="run-out">PASS insert_between/parent_next_is_proxy
+PASS insert_between/proxy_next_is_target
+PASS insert_between/proxy_prev_is_parent
+PASS insert_between/target_prev_is_proxy
+PASS insert_between/grandchild_edge_redirected
+PASS insert_between/target_backedge_reparented
+PASS getgems/shaper_registered
+PASS getgems/parent_next_is_produced
+PASS getgems/parent_dropped_payout
+PASS getgems/produced_prev_is_parent
+PASS getgems/payout_absorbed
+PASS getgems/proxy_absorbed
+…
+SHAPE-TEST ALL PASS</pre><div class="run-note">Six lookup_key cases elided. The six <code>insert_between/*</code> cases are the substrate operation this chapter names but does not excerpt — read <code>Block::insert_between</code> (BlockTree.cpp) against these assertions and the Python original at core.py:244.</div></div>
+<div class="edges"><div class="label">Connected scopes</div><ul><li><a class="xl" href="value.html">value</a> — leaf data dicts are Values — Amount vs Int, Account vs Null, and the unrenderable Float that msgpack interface data can produce</li><li><a class="xl" href="matcher-runtime.html">matcher-runtime</a> — the walker BFSes the spine this file builds and reads next_blocks raw, relying on the canonical-order invariant established here</li><li><a class="xl" href="build-programs.html">build-programs</a> — a produced block&#39;s data comes from a build program; merge_blocks is what installs the produced block into the tree once the build accepts</li><li><a class="xl" href="actions.html">actions</a> — initiating_event_node, is_ghost_block and event_nodes order are read by ActionBuild to assemble tx_hashes and accounts</li><li><a class="xl" href="parse-layer.html">parse-layer</a> — ton_transfer_comment (leaf comment derivation) and every message-body parse start from the base64 body this loader keeps undecoded</li><li><a class="xl" href="prod-path.html">prod-path</a> — SchemaTraceLoader fills the same four structs from Postgres; everything in this chapter is shared, which is what makes the prod A/B gate meaningful</li><li><a class="xl" href="gates.html">gates</a> — the --classify twin diff and --shape-test are the evidence for the parity and rewiring claims on this page</li></ul></div>
+<div class="cover"><div class="label">Not annotated in this scope — read directly</div><ul><li><code>ton-index-worker/ton-mch-engine/src/TraceLoader.h</code> <span class="why">— PARTIAL: the Message struct is excerpted. The remainder is Transaction / Trace / MsgContent — flat field bags whose only commentary is already in the field comments (mc_block_seqno feeds Action.mc_seqno_end, skipped_reason is always null in fixtures) (~87 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/TraceLoader.cpp</code> <span class="why">— PARTIAL: parse_message and load_trace are excerpted. The remainder is the LZ4-frame decompression loop, six <code>get_*</code> msgpack accessors, parse_transaction (pure field copying), and msgpack_to_value — the last one is worth a read for its u64-above-int64 widening and the Float branch, both noted in the prose above (~267 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/BlockTree.h</code> <span class="why">— PARTIAL: the header comment, EventNode and the Block field block are excerpted. The remainder is the method declarations (whose comments this chapter quotes), the templated <code>bfs</code> (a plain BFS whose only subtlety is that it re-reads next_blocks AFTER visiting, so a visitor may merge), BlockArena, and TraceContext (~220 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/BlockTree.cpp</code> <span class="why">— PARTIAL: everything except Block::direction (3 lines, quoted in the merge annotations), Block::insert_between (exercised by --shape-test in Check yourself), and load_trace_context (four lines chaining load_trace -&gt; to_tree -&gt; init_block, erroring on an empty tree) (~475 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/host/BlockViews.h</code> <span class="why">— declaration-only, but the comments ARE the contract for what the host layer is allowed to ask of a block — read it before adding an op. The admission rule (two independent demonstrated uses) is in the file header (~48 LOC)</span></li><li><code>ton-index-worker/ton-mch-engine/src/host/BlockViews.cpp</code> <span class="why">— PARTIAL: the three interesting views are excerpted. block_in / first_call / all_calls / first_next_call are four-line linear scans over <code>is_call_op</code> (~67 LOC)</span></li><li><code>indexer/indexer/events/blocks/utils/tree_utils.py</code> <span class="why">— the Python original of to_tree + EventNode. Not C++, but the twin this chapter is measured against — read get_lt, the synthetic tick-tock Message, and the <code>assert m.msg_hash in msg_tx</code> the C++ replaces with the unlinked counter (~120 LOC of relevant code)</span></li><li><code>indexer/indexer/events/blocks/core.py, indexer/indexer/events/blocks/basic_blocks.py</code> <span class="why">— the Python originals of Block/merge_blocks and of the four leaf constructors. Item 4 of Check yourself asks you to read two specific functions in core.py; basic_blocks.py is worth reading in full once, since the failed ladders excerpted here are transcriptions of it</span></li><li><code>indexer/tools/trace_inspect.py</code> <span class="why">— the ASCII inspector used for this chapter&#39;s runs. A tool, not engine code — but knowing that <code>--blocks</code> prints <code>next_blocks</code> as indentation and <code>children_blocks</code> as <code>+</code> lines is what makes its output readable (~600 LOC)</span></li></ul></div>
+<hr class="rule">
+<div class="meta">mch engine — a guided tutorial — commit ff4135bc — generated 2026-07-26 — code pulled live from repo at render time</div>
+</div>
+<script>
+(function(){
+  var GAP = 10;
+  function layout(){
+    var wide = window.matchMedia('(min-width: 980px)').matches;
+    document.querySelectorAll('.excerpt').forEach(function(ex){
+      var rail = ex.querySelector('.ex-rail');
+      if(!rail) return;
+      var grid = ex.querySelector('.ex-grid');
+      var notes = rail.querySelectorAll('.note');
+      if(!wide){ notes.forEach(function(n){ n.style.top=''; }); rail.style.minHeight=''; return; }
+      var g = grid.getBoundingClientRect(), y = 0, items = [];
+      notes.forEach(function(n){
+        var row = ex.querySelector('tr[data-l="'+n.dataset.a+'"]');
+        var t = Math.max(row ? (row.getBoundingClientRect().top - g.top) : y, y);
+        items.push({ n: n, t: t, h: n.offsetHeight });
+        y = t + n.offsetHeight + GAP;
+      });
+      if(!items.length) return;
+      var limit = ex.querySelector('.ex-code').getBoundingClientRect().height;
+      for(var i = items.length - 1; i >= 0; i--){
+        items[i].t = Math.min(items[i].t, limit - items[i].h);
+        limit = items[i].t - GAP;
+      }
+      var shift = Math.max(0, -items[0].t), maxB = 0;
+      items.forEach(function(it){
+        var t = it.t + shift;
+        it.n.style.top = t + 'px';
+        maxB = Math.max(maxB, t + it.h);
+      });
+      rail.style.minHeight = (maxB + 12) + 'px';
+    });
+  }
+  function hover(){
+    document.querySelectorAll('.excerpt').forEach(function(ex){
+      ex.querySelectorAll('.note').forEach(function(n){
+        var i = n.dataset.n;
+        var rows = ex.querySelectorAll('tr[data-n="'+i+'"]');
+        n.addEventListener('mouseenter', function(){ rows.forEach(function(r){ r.classList.add('hot'); }); });
+        n.addEventListener('mouseleave', function(){ rows.forEach(function(r){ r.classList.remove('hot'); }); });
+        rows.forEach(function(r){
+          r.addEventListener('mouseenter', function(){ n.classList.add('hot'); });
+          r.addEventListener('mouseleave', function(){ n.classList.remove('hot'); });
+        });
+      });
+    });
+  }
+  var t; function relayout(){ clearTimeout(t); t = setTimeout(layout, 60); }
+  window.addEventListener('resize', relayout);
+  window.addEventListener('load', relayout);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ layout(); hover(); });
+  else { layout(); hover(); }
+})();
+</script>

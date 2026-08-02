@@ -4,8 +4,9 @@
 # expressed with build statements + `out {...}` instead of a registered `build`
 # directive. Field-for-field parity with the legacy imperative cores in
 # blocks/jettons.py (build_jetton_transfer_core / _get_jetton_burn_data /
-# _get_jetton_mint_data). Kept OUT of specs/ so the Go artifact emission of that
-# dir is not polluted with these duplicate anchors.
+# _get_jetton_mint_data). The separate specs/jettons.mch builder-tier
+# conformance reference is excluded from the production source list to avoid
+# duplicate anchors.
 #
 # Each matcher declares `priority 90` (< default 100) so it registers ahead of
 # the priority-100 specs regardless of emission order.

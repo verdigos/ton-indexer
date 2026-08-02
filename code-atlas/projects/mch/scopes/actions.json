@@ -1,0 +1,798 @@
+{
+  "id": "actions",
+  "title": "From blocks to Action rows",
+  "summary": "By the end of [[build-programs]] a matcher has produced a `Block` carrying a `data` dict. This chapter is the last leg: how that block becomes an `Action` row with an id, a time window, a tx-hash set, an accounts set, eight directional columns and one protocol-specific composite. Two files do the work. `ClassifyCore.cpp` runs the post-pass stage — the host post-processors (`post_process_dedust_liquidity`, `post_process_stonfi_v2_liquidity`, `unwind_deployments`) that mutate the already-matched block set, plus the per-trace exception boundary that decides between \"commit these actions\" and \"throw them all away and fall back to leaf actions\". `ActionBuild.{h,cpp}` is the `block_tree_serializer.py` port: `build_action` fills the universal fields, `fill_action` dispatches on btype to one of 21 `fill_*` functions. Rendering is NOT in either — `render_action` stays harness-side in `Classify.cpp`, which is the whole point of the core/harness split. Two things will surprise you if you know the Python classifier from another branch: there is NO role system on this branch (`action_accounts` is role-less by design, not by omission), and the A/B twin gate compares FULL rendered rows, so every field you see below is byte-pinned against the real Python serializer over 148 fixtures.",
+  "diagrams": [
+    {
+      "title": "CoreAction -> Action row",
+      "mermaid": "flowchart TD\n  M[\"matcher fires (ch.5)\"] --> TB[\"try_build: produced Block + aux\"]\n  TB --> CA[\"CoreAction{matcher_name, anchor, produced, aux}<br/>rendering-agnostic, raw pointers\"]\n  CA --> PP[\"post-pass over the spine:<br/>dedust merge -> stonfi_v2 pair -> unwind_deployments\"]\n  PP --> R{\"produced in `removed`?\"}\n  R -- yes --> DROP[\"dropped (merged away)\"]\n  R -- no --> RES[\"ClassifyResult.actions\"]\n  RES --> BA[\"build_action(produced, Action&)\"]\n  BA --> U[\"universal: action_id, lt/utime window,<br/>tx_hashes, accounts\"]\n  BA --> FA{\"fill_action by btype\"}\n  FA -- ported (21) --> F[\"fill_*: directional cols + composite\"]\n  FA -- not ported --> SKIP[\"return false -> row skipped\"]\n  F --> RA[\"render_action (HARNESS side, Classify.cpp)\"]\n  RA --> DIFF[\"byte-diff vs twins/py_actions.py\"]"
+    },
+    {
+      "title": "The per-trace failure fork",
+      "mermaid": "flowchart LR\n  C[\"classify_trace\"] --> T{\"throw during<br/>matching or post-pass?\"}\n  T -- no --> OK[\"actions = surviving CoreActions\"]\n  T -- yes --> F1[\"actions.clear()\"]\n  F1 --> CAT{\"reason contains<br/>'two-phase lookup did not converge'?\"}\n  CAT -- yes --> LI[\"FailureCategory::lookup_infra_fail\"]\n  CAT -- no --> EF[\"FailureCategory::engine_fault\"]\n  LI --> FB[\"basic_classify_fallback:<br/>fresh init_block, NO matchers\"]\n  EF --> FB\n  FB --> FBA[\"fallback_actions (leaf btypes only)\"]"
+    }
+  ],
+  "sections": [
+    {
+      "heading": "The seam: a CoreAction is not a row",
+      "prose": "The core deliberately stops one step short of an `Action`. What the matcher loop collects is a `CoreAction`: four raw pointers into the caller's arena, no strings, no rendering, no schema. Everything that turns those pointers into text or into a row happens in an adapter — the CLI dump in `Classify.cpp`, or the production actor in [[prod-path]].\n\nThat sounds like ceremony until you notice WHEN a CoreAction is collected versus when it is rendered. It is collected at fire time, mid-walk, while later matchers are still mutating the tree; it is rendered after the post-pass, from the block's FINAL state. Keeping the two apart is what lets a later merge rewrite `produced->data` and have the row reflect it.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.h",
+          "lines": [
+            44,
+            71
+          ],
+          "lang": "cpp",
+          "title": "CoreAction / ClassifyResult — the core's whole output vocabulary",
+          "annotations": [
+            {
+              "lines": [
+                48,
+                53
+              ],
+              "text": "`anchor` and `produced` are usually different blocks: the anchor is where the matcher's `test_self` hit (the block whose key the dump prints), `produced` is the new composite block the match built. On the fallback path they are deliberately the SAME pointer — a leaf block is its own anchor."
+            },
+            {
+              "lines": [
+                52,
+                52
+              ],
+              "text": "`aux` is the one piece of fire-time state that cannot be recovered later. It is captured from the anchor's `next_blocks` at match time; by the time the post-pass has run, merges may have moved those siblings. Storing them as raw pointers (not rendered strings) is what keeps the core rendering-agnostic while still preserving the fire-time answer."
+            },
+            {
+              "lines": [
+                56,
+                58
+              ],
+              "text": "\"Buffered ATOMIC\" is the contract that makes the failure fork possible: nothing is printed or inserted while the trace is being classified, so a throw halfway through can discard the whole trace's output without needing to un-emit anything. Python gets this for free by building a list; C++ has to promise it."
+            },
+            {
+              "lines": [
+                65,
+                70
+              ],
+              "text": "Two separate action vectors, never both populated. `fallback_actions` is the Step 2c path and is UNGATED — no corpus trace fails, so the A/B twins never exercise it. Treat any behaviour you read in `basic_classify_fallback` as unproven-by-gate, unlike everything else on this page."
+            }
+          ],
+          "sha8": "5c70ffae"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+          "lines": [
+            69,
+            89
+          ],
+          "lang": "cpp",
+          "title": "Where aux comes from (end of try_build)",
+          "annotations": [
+            {
+              "lines": [
+                69,
+                73
+              ],
+              "text": "Read from the ANCHOR's `next_blocks`, not the produced block's. The merge just consumed a set of blocks into `produced`, but the anchor's sibling list is untouched by that — so excess/bounce messages that trail the matched subtree are still visible here and only here."
+            },
+            {
+              "lines": [
+                74,
+                76
+              ],
+              "text": "`stable_sort` by `min_lt` before scanning: the list is already in canonical order ([[block-tree]]), but the sort is re-asserted because `aux` order IS rendered and a merge earlier in this same walk could have appended out of order."
+            },
+            {
+              "lines": [
+                80,
+                82
+              ],
+              "text": "Two hardcoded opcodes — `0xD53276DB` (excess) and `0xFFFFFFFF` (bounce) — gated per matcher by `include_excess` / `include_bounces` from the IR ([[ir-artifact]]). A matcher that opts out simply gets an empty aux list; the messages stay unconsumed in the tree."
+            },
+            {
+              "lines": [
+                87,
+                87
+              ],
+              "text": "The only place a CoreAction is created on the normal path. Note what is NOT stored: no data snapshot, no rendered strings. `produced->data` is read later, after the post-pass may have rewritten it."
+            }
+          ],
+          "sha8": "8a7597ba"
+        }
+      ]
+    },
+    {
+      "heading": "The post-pass stage: what survives becomes a row",
+      "prose": "After every matcher has walked, three host post-processors run over a freshly re-collected spine list. They are ports of `blocks/liquidity.py` and `event_processing.py`, and unlike matchers they are imperative surgery on the block graph: they merge two produced blocks into one, re-parent children, and delete blocks that already have a CoreAction pointing at them.\n\nThat last part is the mechanism to understand. A post-processor never touches `pending`; it inserts into a `removed` set, and the filter at the end of `classify_trace` is what actually drops the row. So \"this matcher fired but produced no action\" has exactly two causes on this branch: a clean rejection inside `try_build` ([[matcher-runtime]]), or a post-processor merging the produced block away here.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+          "lines": [
+            494,
+            511
+          ],
+          "lang": "cpp",
+          "title": "The pass chain and the survival filter",
+          "annotations": [
+            {
+              "lines": [
+                495,
+                504
+              ],
+              "text": "The spine is re-collected from scratch AFTER matching, not reused from the prefilter inventory at the top of the function. It has to be: matchers rewired `next_blocks` as they merged, so the pre-match BFS order is stale. Note the walk follows `next_blocks` only — children of produced composites are not on the spine."
+            },
+            {
+              "lines": [
+                506,
+                508
+              ],
+              "text": "Order is load-bearing and mirrors `event_processing.py` exactly. `post_process_stonfi_v2_liquidity` pairs blocks that `post_process_dedust_liquidity` may already have merged; running them the other way round changes which pair survives. `unwind_deployments` last, and it is a no-op for the dumps (it only appends to the spine, which the dump never re-walks) — ported so the chain matches production, per [[prod-path]]."
+            },
+            {
+              "lines": [
+                509,
+                511
+              ],
+              "text": "The whole survival rule in three lines, and it keys on `produced`, not `anchor`. A merged-away block's CoreAction disappears silently — there is no \"merged\" marker in the output, the row just isn't there. When a dump has fewer rows than you expect, this filter and `try_build`'s clean rejection are the two places to look."
+            }
+          ],
+          "sha8": "0adb35ed"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+          "lines": [
+            168,
+            210
+          ],
+          "lang": "cpp",
+          "title": "post_process_dedust_liquidity — merge two blocks, delete one",
+          "annotations": [
+            {
+              "lines": [
+                171,
+                174
+              ],
+              "text": "`contract_key` deliberately uses `describe()` (the debug rendering) for anything that is not an Account. That is not sloppiness: the key only needs to group blocks, and Python groups by the raw object's equality. Using `describe()` gives a total, deterministic key for the Null / wrong-type cases without adding a branch per Value kind ([[value]])."
+            },
+            {
+              "lines": [
+                184,
+                186
+              ],
+              "text": "Python logs a warning and skips merging when a deposit contract appears more than twice; C++ silently returns. The stdout channel is the A/B comparison channel, so a log line here would be a diff — warnings that Python prints to its logger have no C++ counterpart by design."
+            },
+            {
+              "lines": [
+                193,
+                198
+              ],
+              "text": "`combine_deposits` signals its consistency failures by throwing, and the catch turns that into \"leave the pair unmerged\" — the net effect of a Python `raise` propagating out of the same call. Unreached over the corpus, so this is parity by construction rather than by gate."
+            },
+            {
+              "lines": [
+                199,
+                209
+              ],
+              "text": "The merge itself: `first` is erased from the spine AND inserted into `removed` (two different jobs — the spine erase affects later passes, the `removed` insert kills the row), then its event nodes and children are folded into `final_b` and the lt window recomputed. The `sort`+`unique` on `children_blocks` is a pointer-value dedup, which means child order after a merge is ADDRESS order, not lt order — harmless only because `emit_action` sorts the rendered child keys."
+            }
+          ],
+          "sha8": "a06a16bf"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+          "lines": [
+            302,
+            325
+          ],
+          "lang": "cpp",
+          "title": "unwind_deployments — the loop that must see its own appends",
+          "annotations": [
+            {
+              "lines": [
+                305,
+                308
+              ],
+              "text": "The honesty note that matters: this pass is a no-op for both dumps. It appends promoted `contract_deploy` blocks to the spine, and the dump emits matcher-produced blocks from `pending`, never the spine. It exists so the pass chain is identical to production, where the spine IS the serialization input."
+            },
+            {
+              "lines": [
+                311,
+                311
+              ],
+              "text": "An index loop, not a range-for, and the comment says why: Python's `for block in blocks` over a list being appended to re-scans the appended entries. A range-for (or a cached `end()`) would silently change the traversal — and because the pass is a dump no-op, the gate would not catch it."
+            },
+            {
+              "lines": [
+                317,
+                322
+              ],
+              "text": "Note the else: a promoted deploy's own children are NOT queued. Promotion terminates the descent on that branch, so a deploy nested inside a deploy is reached on the outer loop's later pass over the appended entry, not here."
+            }
+          ],
+          "sha8": "406c512b"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "# from S:/Dev/ton-indexer-clear/indexer\n'…/ton-mch-engine.exe' --classify -I '…/ir/mch_ir.json' -T tests/traces \\\n  | grep '^ACTION' | sed -E 's/.*btype=([a-z_0-9]+) .*/\\1/' | sort | uniq -c | sort -rn",
+          "output": "    114 jetton_transfer\n     19 jetton_swap\n     11 jetton_mint\n      7 jetton_burn\n      7 dedust_deposit_liquidity\n      6 evaa_withdraw\n      5 tonco_deposit_liquidity\n      5 jvault_stake\n      4 tgbtc_mint\n      4 nft_transfer\n      4 jvault_unstake_request\n      4 dedust_deposit_liquidity_partial\n      2 layerzero_receive\n      2 jvault_unstake\n      1 vesting_send_message\n      1 jvault_claim\n      1 ethena_deposit\n      1 dedust_v2_claim_reward\n      1 coffee_create_vault",
+          "note": "199 surviving CoreActions across 148 fixtures, spread over 19 distinct produced btypes. Run the same command with `--actions` and you also get 199 rows — every btype the corpus produces has a `fill_*`, so today `fill_action`'s \"return false\" branch fires zero times. That equality is the cheapest sanity check that the ported fill set still covers the corpus."
+        }
+      ]
+    },
+    {
+      "heading": "The failure fork",
+      "prose": "`classify_trace` wraps the whole matcher loop and post-pass in one try/catch. This is the C++ image of `event_processing.py`'s per-trace boundary: a trace that throws anywhere loses ALL its classified actions and is re-run through a leaf-only classification instead.\n\nThe `FailureCategory` enum next to it is newer and serves a different purpose — shadow-mode telemetry for [[prod-path]]. It is worth reading its comment carefully, because it documents as much by what it refuses to enumerate as by what it does.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.h",
+          "lines": [
+            23,
+            42
+          ],
+          "lang": "cpp",
+          "title": "FailureCategory — four members, and the argument for four",
+          "annotations": [
+            {
+              "lines": [
+                26,
+                31
+              ],
+              "text": "\"TRACE-TERMINAL reasons only\" is the type invariant. The field holds ONE value for a whole trace, so anything that can happen many times per trace (a clean reject, a null parse, a lookup tier miss) cannot be a member without making the type lie."
+            },
+            {
+              "lines": [
+                30,
+                31
+              ],
+              "text": "`malformed_trace` is the one member `classify_trace` never sets — the trace never reached it. It is set caller-side by whoever failed to build the event tree ([[block-tree]]), which is why you will not find it assigned anywhere in `ClassifyCore.cpp`."
+            },
+            {
+              "lines": [
+                32,
+                36
+              ],
+              "text": "The deliberately-excluded list. `matcher_skip` is a SETUP fact (read from `ClassifySetup.skips`, same for every trace) and would be a category error here; the per-lookup misses are counted separately in `LookupStats`. This comment is the reason the enum shrank from a larger draft to four."
+            }
+          ],
+          "sha8": "ba4f1841"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+          "lines": [
+            512,
+            531
+          ],
+          "lang": "cpp",
+          "title": "The catch and the discard",
+          "annotations": [
+            {
+              "lines": [
+                516,
+                521
+              ],
+              "text": "Categorisation by substring match on the exception message. Fragile-looking, and it is — the string `\"two-phase lookup did not converge\"` is thrown by the build driver and matched here by text. It survives because the category is telemetry only: getting it wrong mislabels a metric, it does not change a row. Anything else is `engine_fault`."
+            },
+            {
+              "lines": [
+                522,
+                526
+              ],
+              "text": "The catch-all is NOT redundant. A parser tail can throw something that is neither a `std::exception` nor a `vm::VmError` ([[parse-layer]] covers the narrow catch list one level down); without this the throw would escape into the caller's loop and take the whole corpus run with it."
+            },
+            {
+              "lines": [
+                527,
+                530
+              ],
+              "text": "`actions.clear()` is the atomicity promise being kept: a trace that failed at action 40 does not emit its first 39. Python does the same by letting the list go out of scope. The fallback is then computed from a FRESH block tree, not from the half-mutated one — see the next excerpt."
+            }
+          ],
+          "sha8": "a6ff2878"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+          "lines": [
+            327,
+            367
+          ],
+          "lang": "cpp",
+          "title": "basic_classify_fallback — a second classification with no matchers",
+          "annotations": [
+            {
+              "lines": [
+                336,
+                338
+              ],
+              "text": "`init_block` over `ctx.tree.root` again: a brand-new spine, allocated from the same arena, sharing nothing mutable with the tree the failed run mangled. That is the only safe thing to do — the failed run threw mid-merge, so the old spine may be half-rewired."
+            },
+            {
+              "lines": [
+                349,
+                352
+              ],
+              "text": "The post-processor chain runs here too, over blocks no matcher ever touched. In practice they all no-op (there are no dedust/stonfi composite btypes without matchers), but the chain is kept verbatim because Python's `try_classify_basic_actions` calls it."
+            },
+            {
+              "lines": [
+                353,
+                360
+              ],
+              "text": "The `serialize_blocks` skip conditions, inlined: root/empty wrappers out, and a `call_contract` with a null source OR destination out. That second rule is why a bounced-to-nowhere message never becomes a fallback row."
+            },
+            {
+              "lines": [
+                361,
+                366
+              ],
+              "text": "`CoreAction{\"basic\", b, b, {}}` — anchor and produced are the same block, matcher_name is the literal `\"basic\"`, aux is empty. Downstream `build_action` cannot tell the difference, which is exactly why the fallback rows render through the same code path. The catch-all `out.clear()` reproduces Python's \"fallback returns [] on any exception\": a failure to fall back yields no rows at all, never a partial set."
+            }
+          ],
+          "sha8": "95df804c"
+        }
+      ]
+    },
+    {
+      "heading": "build_action: the fields every row gets",
+      "prose": "`ActionBuild.{h,cpp}` moved out of the harness in R1b so the production actor could call it without dragging stdout printing along. The code is byte-identical to what used to live in `Classify.cpp` — the twin dumps proved the move.\n\n`build_action` fills what does not depend on btype: the action id, the lt/utime window, `mc_seqno_end`, `tx_hashes`, and `accounts`. Then it calls `fill_action`, and only if that succeeds does it assemble accounts — because accounts are derived from the directional fields the fill just wrote.\n\nOne honesty note about the demo trace used below (`013-itRDy…`): in PRODUCTION this trace is classified as `coffee_staking_claim_rewards` — the coffee staking protocol is NOT ported to mch specs, so the mch engine (both C++ and its Python twin, identically) classifies the ported jetton_transfer leg instead. The row is real and every column below is exactly what ActionBuild emits; it is just not what the production classifier stores for this trace. The twin gate proves C++ == Python-mch over PORTED specs — not C++ == the production event_classifier. See [[gates]] for the precise claim.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ActionBuild.h",
+          "lines": [
+            18,
+            38
+          ],
+          "lang": "cpp",
+          "title": "The Action struct — a flat, fixed schema",
+          "annotations": [
+            {
+              "lines": [
+                25,
+                25
+              ],
+              "text": "THE divergence from the docs you may have read. `accounts` is a bare `vector<string>` with no parallel role map, because this branch has no role system: `action_accounts` in `indexer/core/database.py` is `(action_id, trace_id, account)` plus lt/utime denormalisation and NOTHING else, and `role_assignment.py` does not exist here. CLAUDE.md's ROLE_SENDER/ROLE_RECEIVER section describes a different branch. Verified in \"Check yourself\" below."
+            },
+            {
+              "lines": [
+                26,
+                28
+              ],
+              "text": "Eight directional columns + `amount`/`value`/`opcode`, all typed `Value` rather than `string`/`int64`. That is not laziness: it gives \"unset\" a first-class representation (`Null`) distinct from empty-string, matching Python's `None` exactly, so a field the fill never touched renders as `null` on both sides."
+            },
+            {
+              "lines": [
+                29,
+                32
+              ],
+              "text": "Fourteen composite columns, one per protocol family, plus `extra`. A new action type is supposed to REUSE one of these rather than add a column — `fill_dedust_v2_claim_reward` below is the worked example of that rule, and it is why the list has stayed this length."
+            }
+          ],
+          "sha8": "7b76667e"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ActionBuild.cpp",
+          "lines": [
+            556,
+            594
+          ],
+          "lang": "cpp",
+          "title": "build_action head — id, time window, tx_hashes",
+          "annotations": [
+            {
+              "lines": [
+                560,
+                570
+              ],
+              "text": "The action id is `base64(sha256(msg_hash_or_tx_hash + btype))` over the EARLIEST event node. The tie-break is load-bearing: `n->lt() < root->lt()` with strict `<` keeps the first minimum, which is what Python's `min()` returns. Flip it to `<=` and traces with two nodes at the same lt get a different id — a silent, data-dependent diff."
+            },
+            {
+              "lines": [
+                571,
+                584
+              ],
+              "text": "`end_lt` / `start_utime` / `end_utime` / `mc_seqno_end` are recomputed here from `event_nodes`, whereas Python reads `block.max_lt` / `min_utime` / `max_utime`. They agree because Python's `calculate_min_max_lt` computes them from the same node set — but the C++ `Block` genuinely has no such fields ([[block-tree]]), so this is a re-derivation, not a read. `node_utime` (above, line 86) reproduces `get_utime`'s three-way rule: tick_tock -> tx.now, created_lt set -> created_at, else tx.now."
+            },
+            {
+              "lines": [
+                577,
+                583
+              ],
+              "text": "Every accumulator is null-guarded on `n->tx`. Python is not: `max(n.message.transaction.lt ...)` would raise on a tick_tock node and `max(...)` over an empty `event_nodes` raises ValueError. The guards below (`event_nodes.empty() ? 0 : …`) make the C++ total where Python would throw — unreachable for the ported btypes, but it means a bug here degrades to a zero rather than to a trace failure."
+            },
+            {
+              "lines": [
+                585,
+                589
+              ],
+              "text": "The Step 2a extension: the block's `initiating_event_node` contributes its tx hash even though that node is not in `event_nodes`. `std::set` gives sorted-unique for free; Python uses `set()` and gets arbitrary order, which is why BOTH dumps sort `tx_hashes` before rendering. Do not read meaning into the order."
+            }
+          ],
+          "sha8": "66b3dd28"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ActionBuild.cpp",
+          "lines": [
+            595,
+            622
+          ],
+          "lang": "cpp",
+          "title": "build_action tail — the accounts set (no roles)",
+          "annotations": [
+            {
+              "lines": [
+                595,
+                595
+              ],
+              "text": "Accounts are assembled AFTER the fill, and that ordering is required: three of the four sources below are the directional fields the fill just wrote. A fill that forgets to set `source` silently shrinks the accounts set — which is a missing `action_accounts` row in production, not a visibly wrong column."
+            },
+            {
+              "lines": [
+                602,
+                608
+              ],
+              "text": "`push_acc` accepts only `VType::Str`. That works because `av_addr` has already converted every Account/Asset to a canonical string — a directional field still holding an `Account` would be silently dropped. The invariant \"directional columns are Str or Null\" is enforced by convention in the fills, not by the type."
+            },
+            {
+              "lines": [
+                611,
+                614
+              ],
+              "text": "The `is_ghost_block` gate on destinations. On this branch the C++ substrate has no ghost nodes so the flag is always false (see `BlockTree.h`), meaning this branch is structurally dead — ported anyway because the Python serializer has it and a future ghost-producing matcher would need it."
+            },
+            {
+              "lines": [
+                615,
+                621
+              ],
+              "text": "The initiating tx's account joins the set unless the node is tick_tock. Python logs a debug line when that account was not already present; C++ does not (stdout is the diff channel). `sort`+`unique` versus Python's `list(set(...))`: the CONTENTS are gated, the order is not — both dumps sort, and `action_accounts` is a set of rows anyway."
+            }
+          ],
+          "sha8": "b5095d5a"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "# one fixture, one row, universal fields only (top-level keys are sorted by render_value)\n'…/ton-mch-engine.exe' --actions -I '…/ir/mch_ir.json' \\\n  -T 'tests/traces/013-itRDy37A4DNurC-pFIfagpvLEqH3q_7NU5IGDic=.lz4' \\\n  | tr ',' '\\n' | grep -E '^(id|type|success|start_lt|end_lt|start_utime|end_utime|mc_seqno_end|source|source_secondary|destination|destination_secondary|asset|amount|value|opcode)='",
+          "output": "amount=3998849373083\nasset=str:0:157C463688A4A91245218052C5580807792CF6347D9757E32F0EE88A179A6549\ndestination=str:0:712CB2B613EDEAFCAC9E7B79B188E3D387EA21C415D6E4E4C0CFBFFA6AB7031D\ndestination_secondary=str:0:C33F0AA6D3646D9BE133FCA3B716192309BC0D825CD720D1B5E4F34A4D528247\nend_lt=54593909000001\nend_utime=1741087549\nid=str:6+4/RXw9DqevJzQ2e6aL6NCItumOpEP6VeLwEIwKffA=\nmc_seqno_end=45514143\nopcode=null\nsource=str:0:B6725D7A23D406ED2008A537236E5F607D084EA9EFEEBFCA53BF3156B491C8CC\nsource_secondary=str:0:0E1F5140AAA6F35F147432FA2AAB8C0FFB66572FDC3B2249A824BD5EEBA8ED7A\nstart_lt=54593899000003\nstart_utime=1741087525\nsuccess=true\ntype=str:jetton_transfer\nvalue=null",
+          "note": "Field by field. `id` is base64(sha256(earliest-node msg_hash + \"jetton_transfer\")) — stable across runs and across engines, which is what makes rows joinable. `type` came from `b->btype` (the fill did not rewrite it; several fills do). `success = !b->failed`. `start_lt` is `Block::min_lt` verbatim; `end_lt`/`start_utime`/`end_utime`/`mc_seqno_end` were re-derived from the four event nodes — note start_utime 1741087525 vs end_utime 1741087549, a 24-second window across the transfer chain. `source`/`source_secondary` = sender + sender's jetton wallet, `destination`/`destination_secondary` = receiver + receiver's jetton wallet: the standard jetton four-address shape. `asset` is the jetton MASTER (a plain `str:`, not `asset:` — `av_addr` unwrapped the Asset). `amount` is a bare int because `av_amount` unwrapped the `Amount`. `value` and `opcode` stay null: those belong to the leaf `call_contract` fill, not to a jetton transfer. No `roles` key exists anywhere in the row."
+        },
+        {
+          "cmd": "# same fixture, the three list/composite fields\n'…/ton-mch-engine.exe' --actions -I '…/ir/mch_ir.json' \\\n  -T 'tests/traces/013-itRDy37A4DNurC-pFIfagpvLEqH3q_7NU5IGDic=.lz4' \\\n  | grep -o -E '(accounts=\\[[^]]*\\]|tx_hashes=\\[[^]]*\\]|jetton_transfer_data=\\{[^}]*\\})'",
+          "output": "accounts=[str:0:0E1F5140AAA6F35F147432FA2AAB8C0FFB66572FDC3B2249A824BD5EEBA8ED7A,str:0:712CB2B613EDEAFCAC9E7B79B188E3D387EA21C415D6E4E4C0CFBFFA6AB7031D,str:0:B6725D7A23D406ED2008A537236E5F607D084EA9EFEEBFCA53BF3156B491C8CC,str:0:C33F0AA6D3646D9BE133FCA3B716192309BC0D825CD720D1B5E4F34A4D528247]\njetton_transfer_data={comment=null,custom_payload=null,forward_amount=0,forward_payload=null,is_encrypted_comment=false,query_id=21721,response_destination=str:0:712CB2B613EDEAFCAC9E7B79B188E3D387EA21C415D6E4E4C0CFBFFA6AB7031D}\ntx_hashes=[str:OZ1xiTKTH7tm63Gv0lejQ1kUSV/qBGl6IxTnaXlRnH4=,str:gaPa/TambbKHCEfekr7ZojlQt1OQGnr5PGPaivfY9MI=,str:s0baLhSJmpksN858LtB50sfAAnaEEgb06WPbKy6QH4k=,str:wC4djeb4IXT5zPFDGiYf7aPi5HDgQz0S4+nqEBEJMko=]",
+          "note": "`accounts` has exactly four entries and they are exactly the four directional fields from the previous run — the event-node tx accounts and the initiating tx account all fall inside that set here, so the dedup collapses them. Each entry becomes one role-less `action_accounts` row. `tx_hashes` has four entries for a four-transaction chain (the initiating-node extension added nothing new in this trace). In `jetton_transfer_data`, `forward_payload` is null and `comment` is null — a bare transfer with no attached message; `response_destination` equals `destination`, which is normal for wallet-initiated transfers."
+        }
+      ]
+    },
+    {
+      "heading": "fill_action: dispatch, helpers, and two representative fills",
+      "prose": "Everything btype-specific lives in a `fill_*`. They all have the same shape: read `block.data` fields by name, run them through one of three converters, write directional columns and one composite dict. The converters are the interesting part — they are where the engine's rich `Value` types ([[value]]) collapse into the flat column types the DB expects.\n\nOne consequence worth internalising before reading any fill: `render_value` SORTS dict keys, so the order of `f.emplace_back(...)` calls is invisible to the A/B gate. The names and values are pinned; the emission order is not.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ActionBuild.cpp",
+          "lines": [
+            37,
+            63
+          ],
+          "lang": "cpp",
+          "title": "The three converters every fill runs on",
+          "annotations": [
+            {
+              "lines": [
+                37,
+                45
+              ],
+              "text": "`av_addr` is the whole reason directional columns render as `str:0:ABC…` and not `asset:…` or a raw Account. Note the two null-producing cases: an `Asset` with no jetton (i.e. TON) becomes Null, and an `addr_none` Account becomes Null. So \"TON\" and \"no address\" are indistinguishable in a column — a fill that needs to say \"this leg was TON\" has to encode it elsewhere (see `fill_jetton_transfer`'s asset branch)."
+            },
+            {
+              "lines": [
+                47,
+                56
+              ],
+              "text": "`av_amount` unwraps `Amount` to its underlying Int (or Float for the NaN-ish cases), and passes a bare Int through untouched. That passthrough is what lets jvault/evaa/tgbtc fills, whose builders emit raw ints rather than Amounts, share the same converter. It also means you cannot tell from the row whether the builder produced an Amount."
+            },
+            {
+              "lines": [
+                58,
+                63
+              ],
+              "text": "`dg` returns Null for a missing key, `has` distinguishes missing from present-and-null. Several fills need BOTH (`has(d,\"receiver_wallet\") ? av_addr(...) : Null` in the next excerpt) because the Python side reads the key conditionally — the same conditionally-present-key discipline as the parse layer ([[parse-layer]]), one level up."
+            }
+          ],
+          "sha8": "a987a22a"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ActionBuild.cpp",
+          "lines": [
+            97,
+            114
+          ],
+          "lang": "cpp",
+          "title": "fill_jetton_transfer — the row from the run above",
+          "annotations": [
+            {
+              "lines": [
+                101,
+                101
+              ],
+              "text": "`has(...)` guarding a field that `dg` would already return Null for. It is not redundant in intent: it documents that Python reads `receiver_wallet` only when the builder set it. Since both branches produce Null here, this is one of the few places where the C++ is defensive beyond what the gate can prove."
+            },
+            {
+              "lines": [
+                103,
+                104
+              ],
+              "text": "The TON-vs-jetton fork. A TON `Asset` becomes Null explicitly rather than by falling through `av_addr` — semantically the same result, written out because the reader needs to know that `asset=null` on a jetton_transfer row means TON, not \"unknown\"."
+            },
+            {
+              "lines": [
+                105,
+                113
+              ],
+              "text": "The composite. Seven keys, and two of them (`custom_payload`, `forward_payload`) are Cell-derived — they render as `cellhash:HEX` rather than as serialized BOC, which is the §12 root-hash bar that makes pytoniq-vs-td serialization differences invisible to the byte diff. `comment` goes through `comment_value`, which picks base64 for encrypted comments and UTF-8 backslashreplace otherwise."
+            }
+          ],
+          "sha8": "19fc21ea"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ActionBuild.cpp",
+          "lines": [
+            286,
+            310
+          ],
+          "lang": "cpp",
+          "title": "fill_dedust_v2_claim_reward — reusing a composite instead of adding one",
+          "annotations": [
+            {
+              "lines": [
+                286,
+                288
+              ],
+              "text": "The T12.2 protocol from [[parse-layer]], arriving at its final destination. Note what it does NOT do: set `a.type`. The row's type stays the raw btype `dedust_v2_claim_reward` — several other fills DO rewrite type (`fill_dedust_deposit` -> `dex_deposit_liquidity`, `fill_ethena_deposit` -> `stake_deposit`), so the btype and the rendered type are not interchangeable."
+            },
+            {
+              "lines": [
+                292,
+                306
+              ],
+              "text": "A reward claim is modelled as a one-sided liquidity withdrawal: every side-2 key is explicitly Null rather than omitted. Emitting the nulls (instead of leaving keys out) is what keeps the composite's key SET constant across the btypes that share it — the DB composite is positional, so an absent key and a null key are not the same thing downstream."
+            },
+            {
+              "lines": [
+                304,
+                304
+              ],
+              "text": "Worth a look before this reaches production: `is_refund` is emitted by both engines (Python's `_fill_dedust_v2_claim_reward` sets it too, so the A/B gate is satisfied), but the `dex_withdraw_liquidity_details` CompositeType declared in `indexer/core/database.py` has no such column. The gate proves the two engines agree on the dict; it says nothing about what Postgres stores."
+            },
+            {
+              "lines": [
+                307,
+                309
+              ],
+              "text": "`extra` is the escape hatch for the one field that fits no existing composite. Preferring `extra` over a new column is a standing rule on this branch — a new composite type means a DDL migration on a table with billions of rows."
+            }
+          ],
+          "sha8": "ff360d2c"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ActionBuild.cpp",
+          "lines": [
+            519,
+            553
+          ],
+          "lang": "cpp",
+          "title": "fill_action — the dispatch, and what is deliberately missing",
+          "annotations": [
+            {
+              "lines": [
+                521,
+                524
+              ],
+              "text": "An if/else-if chain on `b->btype`, matching Python's `match block.btype`. The Python version has ~90 cases; this has 21. The difference is not a porting backlog — it is the corpus: only btypes that FIRE in the fixture set can be A/B-gated, and an ungated fill is a liability."
+            },
+            {
+              "lines": [
+                524,
+                524
+              ],
+              "text": "`contract_deploy` shares `fill_call_contract`, exactly as Python's `case 'call_contract' | 'contract_deploy'` does. Both are fallback-only here: the main dump's blocks are matcher-produced composites, never leaves."
+            },
+            {
+              "lines": [
+                535,
+                535
+              ],
+              "text": "The only fill that takes a third argument. `evaa_withdraw` derives `success` from BOTH the data's `is_success` field and the block's `failed` flag — the one place where a row's success is not simply `!b->failed`."
+            },
+            {
+              "lines": [
+                546,
+                551
+              ],
+              "text": "The named skip, and the honest reason: `nft_purchase`/`dns_purchase` have zero corpus coverage, so porting the fill would add untested code that the twin gate cannot check. Note the asymmetry this creates — the Python twin's `PORTED_BTYPES` set skips the same btypes, so the gate cannot detect a MISSING fill at all. Coverage of the fill set is a human responsibility, not a gated one."
+            }
+          ],
+          "sha8": "315f696f"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "'…/ton-mch-engine.exe' --actions -I '…/ir/mch_ir.json' \\\n  -T 'tests/traces/i-gQwY3nWC6BQx1XOSWliBC-b1Pt7Y-Fn5jphK5uCGk=.lz4' \\\n  | grep dedust_v2_claim_reward \\\n  | grep -o -E 'type=str:dedust_v2_claim_reward|dex_withdraw_liquidity_data=\\{[^}]*\\}|extra=\\{[^}]*\\}'",
+          "output": "dex_withdraw_liquidity_data={amount1=7454897358831,amount2=null,asset1_out=str:0:105E5589BC66DB15F13C177A12F2CF3B94881DA2F4B8E7922C58569176625EB5,asset2_out=null,dex=str:dedust_v2,dex_jetton_wallet_1=str:0:50DC3BABDE6F3D2A91CDC874BA110E2F1D6BDDF781AEB9E2149D7160ACC05026,dex_jetton_wallet_2=null,dex_wallet_1=str:0:4E50A518CFFDE030B1E124B2DA8E80EA53BFA3115E1CED345913B100AD8ACAB1,dex_wallet_2=null,is_refund=false,lp_tokens_burnt=null,user_jetton_wallet_1=str:0:360A2F32DDEF2B9622CBAB986B5461338ED3E9179F161E0FD49CEA5CC8447904,user_jetton_wallet_2=null}\nextra={reward_index=0}\ntype=str:dedust_v2_claim_reward",
+          "note": "The composite-reuse rule in one row: thirteen keys, seven of them null, because the claim only has a side-1. Keys are alphabetical in the output — that is `render_value` sorting, not the `emplace_back` order in the fill. This same fixture also produces a `jetton_transfer` row (the payout leg), which is why the grep filter is needed."
+        }
+      ]
+    },
+    {
+      "heading": "The render seam and the Python parity contract",
+      "prose": "`render_action` is the piece that did NOT move lib-side, and the split is exactly where you would want it: everything above produces an `Action` value; this turns one into a line of text for the A/B channel. Production never calls it — it binds the same `Action` to SQL instead ([[prod-path]]).\n\nThe parity contract is stronger than it is for any other layer in this engine. `twins/py_actions.py` does not reimplement the serializer — it calls the REAL `block_tree_serializer.block_to_action` and renders the result in this same column set. So a diff here is a diff against production Python, not against a twin's approximation.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Classify.cpp",
+          "lines": [
+            63,
+            95
+          ],
+          "lang": "cpp",
+          "title": "render_action — the column set, harness-side",
+          "annotations": [
+            {
+              "lines": [
+                66,
+                67
+              ],
+              "text": "The row is rendered by building a `Value` Dict and handing it to the ordinary `render_value`. That is why an Action row and a block's `data` render with identical syntax — one renderer, so a `str:`/`amount:`/`cellhash:` prefix means the same thing everywhere in the dumps."
+            },
+            {
+              "lines": [
+                75,
+                84
+              ],
+              "text": "`tx_hashes` and `accounts` are sorted HERE, at render time, not in `build_action`. The reason is Python: `list(set(...))` gives hash order, so neither side has a meaningful order to compare. Sorting at the boundary keeps the diff stable without forcing an order the data model does not have."
+            },
+            {
+              "lines": [
+                85,
+                92
+              ],
+              "text": "The eight directional columns pass through as raw `Value`s — no conversion left to do, because `av_addr` already ran inside the fill. If one of these ever renders as `asset:…` or `0:ABC…` (an Account) instead of `str:0:ABC…`, a fill skipped its converter."
+            },
+            {
+              "lines": [
+                68,
+                74
+              ],
+              "text": "What is absent is as informative as what is present: no `trace_id`, no `trace_end_lt`/`trace_*`, no `finality`, and no roles. The trace-level fields are constant per fixture (the twin feeds a stub Trace), and roles do not exist on this branch — so neither is gated here, and neither should be inferred from this list."
+            }
+          ],
+          "sha8": "a0b8cd1c"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/Classify.cpp",
+          "lines": [
+            176,
+            205
+          ],
+          "lang": "cpp",
+          "title": "run_dump — where the two dump modes diverge",
+          "annotations": [
+            {
+              "lines": [
+                177,
+                185
+              ],
+              "text": "The failure line goes to stdout as a bare `TRACE_FAIL` while the REASON goes to stderr. That asymmetry is deliberate: stdout is the byte-compared channel, and exception messages are the one thing that will never match between a C++ and a Python engine."
+            },
+            {
+              "lines": [
+                186,
+                193
+              ],
+              "text": "Fallback rows are tagged `FALLBACK` and only exist in `--actions` mode; `--classify` prints nothing after a TRACE_FAIL. Since no corpus trace fails, this entire block is dead in every gate run — which is precisely why the tag exists, so that if it ever fires it is unmistakable in a diff."
+            },
+            {
+              "lines": [
+                196,
+                205
+              ],
+              "text": "The two modes share everything up to this point and differ only in the per-action render: `build_action` + `render_action` for `--actions`, `emit_action` (raw block data) for `--classify`. Note the `continue` on a false return — an unported btype is skipped SILENTLY, so `--classify` and `--actions` row counts can legitimately differ. Today they don't (199 = 199)."
+            }
+          ],
+          "sha8": "303a3f29"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "# PowerShell, from S:/Dev/ton-indexer-clear/indexer\n$e='…/ton-mch-engine.exe'; $ir='…/ir/mch_ir.json'; $py='S:/Dev/H-dump/tonscan-indexator/venv0/Scripts/python.exe'\n& $e --actions -I $ir -T tests\\traces > $env:TEMP\\cpp_actions.txt\n& $py ..\\ton-index-worker\\ton-mch-engine\\twins\\py_actions.py $ir tests\\traces 2>$null > $env:TEMP\\py_actions.txt\n\"cpp rows: \" + (Select-String -Path $env:TEMP\\cpp_actions.txt -Pattern '^ACTION').Count\n\"py  rows: \" + (Select-String -Path $env:TEMP\\py_actions.txt -Pattern '^ACTION').Count\n\"diff lines: \" + (Compare-Object (Get-Content $env:TEMP\\cpp_actions.txt) (Get-Content $env:TEMP\\py_actions.txt) | Measure-Object).Count",
+          "output": "cpp rows: 199\npy  rows: 199\ndiff lines: 0",
+          "note": "The gate this whole chapter rests on. Every field of every row above — ids, lt windows, sorted tx_hashes and accounts, every composite key — is byte-identical to what `block_tree_serializer.block_to_action` produces in the real Python classifier. The mechanics of the gate set (and the other five twins) are [[gates]]."
+        }
+      ]
+    },
+    {
+      "heading": "Check yourself",
+      "prose": "Four things worth doing before moving on to [[gates]]. The first has its captured output below; the other three you run yourself.\n\n2. Prove that composite key ORDER is not gated. Swap any two adjacent `f.emplace_back(...)` lines inside `fill_jetton_transfer` (`ActionBuild.cpp` 105-113), rebuild `ton-mch-engine`, and re-run the twin diff from the previous section. It stays at 0, because `render_value` sorts keys. Then convince yourself why that is still dangerous: the DB composite in `indexer/core/database.py` is positional.\n\n3. Prove that field VALUES are gated, hard. Swap `a.source` and `a.destination` in the same fill, rebuild, re-run the diff — you should see roughly 114 changed rows (one per jetton_transfer in the histogram above), and the ids will NOT change, because `action_id` is derived from the event node and the btype, never from the columns. That is worth seeing once: a corrupted row keeps its identity.\n\n4. Read `block_to_action`'s tail in `indexer/indexer/events/blocks/utils/block_tree_serializer.py` (lines 1519-1541) next to `build_action`'s tail (`ActionBuild.cpp` 595-622) and check the four accounts sources line up: event-node tx accounts, source + source_secondary, destination pair gated on `is_ghost_block`, and the initiating tx's account gated on `is_tick_tock`. If you can also say why Python's `list(set(...))` there forces both dumps to sort, you have the parity contract.",
+      "runs": [
+        {
+          "cmd": "# 1. The NO-ROLES claim, tested rather than believed (from S:/Dev/ton-indexer-clear/indexer)\ngrep -rn \"role\" indexer/core/database.py | head -5\nls indexer/events/role_assignment.py",
+          "output": "-- (no hits above = no role column anywhere in the model file)\nls: cannot access 'indexer/events/role_assignment.py': No such file or directory",
+          "note": "Then read `indexer/core/database.py` around line 241: `ActionAccount` is `(action_id, trace_id, account)` plus four lt/utime denorm columns — no role, no `account_roles`. If you have read a description of `ROLE_SENDER`/`ROLE_RECEIVER` for this codebase, it was about a different branch, and `Action.accounts` being a bare string list here is the deliberate consequence."
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "to": "matcher-runtime",
+      "why": "try_build collects the CoreAction; a clean rejection there is the OTHER reason a fired matcher yields no row"
+    },
+    {
+      "to": "build-programs",
+      "why": "everything a fill_* reads out of block.data was written by a build program's captures"
+    },
+    {
+      "to": "block-tree",
+      "why": "min_lt / event_nodes / initiating_event_node / is_ghost_block are the Block fields build_action derives the universal columns from"
+    },
+    {
+      "to": "value",
+      "why": "av_addr / av_amount are the collapse from the engine's Value universe into flat column types; Null-vs-absent semantics come from there"
+    },
+    {
+      "to": "gates",
+      "why": "forward: the --actions twin diff, and the other five gates that pin this layer"
+    },
+    {
+      "to": "prod-path",
+      "why": "forward: the same ActionBuild lib, bound to SQL instead of render_action; FailureCategory exists for that path's telemetry"
+    }
+  ],
+  "not_annotated": [
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+      "partial": true,
+      "reason": "PARTIAL. Not excerpted: `combine_deposits` (lines 107-166) — the dedust deposit-record merge arithmetic, mechanical once you know it throws on every consistency check Python raises on; `post_process_stonfi_v2_liquidity` + its three helpers (212-300) — a full pass with ZERO corpus coverage (the `deposits.size() < 2` guard returns immediately for every fixture), so read it as unproven code; `prepare_classify` (371-418) and the B1 anchor prefilter in `classify_trace` (425-492), both covered in [[matcher-runtime]] and [[ir-artifact]] (~534 LOC total)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ClassifyCore.h",
+      "partial": true,
+      "reason": "PARTIAL. Not excerpted: `AnchorFilter` / `IncludedMatcher` / `ClassifySetup` (lines 76-104) — the trace-independent run prep, which belongs to [[matcher-runtime]]. The file header (1-6) states the core/harness split rule and is worth reading directly (~117 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ActionBuild.cpp",
+      "partial": true,
+      "reason": "PARTIAL. Excerpted: the converters, `fill_jetton_transfer`, `fill_dedust_v2_claim_reward`, the dispatch, and `build_action`. The other 18 fills (lines 116-517) are the same shape by construction — read the one for the protocol you care about, they are independent of each other. Two are worth a look for their own reasons: `fill_jetton_swap` (152-191), the only fill that rewrites `asset`/`asset2` conditionally per DEX and converts a nested `peer_swaps` list; and `fill_tonco_deposit` (312-370), which picks the first/second PRESENT leg rather than trusting the field numbering (~625 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ActionBuild.h",
+      "partial": true,
+      "reason": "PARTIAL. Only the file header (1-6, why the code moved lib-side in R1b) and the `build_action` declaration (35-38) are outside the excerpt. Both are one-liners (~39 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/Classify.cpp",
+      "partial": true,
+      "reason": "PARTIAL. Not excerpted: `emit_action` (34-61), the `--classify` per-action render — child keys sorted, aux rendered from the raw block list; the artifact-loading and fixture-enumeration preamble of `run_dump` (121-175); and the two one-line mode entry points (210-216) (~218 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/Classify.h",
+      "reason": "declarations only — `run_classify` / `run_actions` / `run_dump` plus the `TraceContextLoader` and `LookupSourceFactory` typedefs that let the production actor reuse the dump adapter with its own loaders. Read it if you are wiring a new mode (~80 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/BuildDriver.cpp",
+      "reason": "contains `render_value` (lines 52-117), the shared renderer every dump on this page goes through — including the key sort and the `is_boc_field` -> `cellhash:` substitution. Belongs to [[build-programs]], but read those 65 lines if a rendered value surprises you"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/twins/py_actions.py",
+      "reason": "the Python twin for `--actions`. It is thin on purpose: it calls the REAL `block_tree_serializer.block_to_action` and reformats into this page's column set. The only parts worth reading are `PORTED_BTYPES` (the mirror of `fill_action`'s case list) and `_cellhash` (the §12 root-hash bar). Gate mechanics are [[gates]] (~330 LOC)"
+    },
+    {
+      "path": "indexer/indexer/events/blocks/utils/block_tree_serializer.py",
+      "reason": "the Python original this whole page ports. ~90 btype cases against the C++ 21, plus the spine-walk / child-recursion wrapper (`parent_action_id`, `ancestor_type`, `v1_ops`) that is entirely OUT of C++ scope. Read `_calc_action_id` (110) and `block_to_action`'s tail (1519-1541) side by side with `build_action` — those are the two functions the C++ reproduces line for line (~1700 LOC)"
+    },
+    {
+      "path": "indexer/indexer/core/database.py",
+      "reason": "the `Action` and `ActionAccount` SQLAlchemy models — the ground truth for the column set and for the no-roles claim. The composite columns (lines ~330-470) are declared as positional Postgres `CompositeType`s, which is the detail behind the `is_refund` note above (~900 LOC)"
+    },
+    {
+      "path": "indexer/docs/mch-cpp-prod-design.md",
+      "reason": "the design doc the code comments cite by section (§6.1 = the no-roles correction, §10 = the leaf-data hazard, §11 item 2 = the core/harness isolation rule, §12 = the root-hash bar). Not code; the place to go when a comment says \"design §N\""
+    }
+  ]
+}

@@ -12,7 +12,7 @@
 #
 # Ordering
 # --------
-# Position in ir/emit_manifest.json: AFTER specs/getgems.mch and
+# Position in the built-in source list: AFTER specs/getgems.mch and
 # specs/nft_transfer.mch, listed next to specs/teleitem_auction.mch.
 #
 #  - `nft_put_on_sale` anchors `btype nft_transfer`, the same anchor

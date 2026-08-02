@@ -20,7 +20,7 @@
 # Ordering
 # --------
 # Neither anchor (0x487a8e81 / 0x371638ae) is claimed by any other spec, so this
-# file's position in ir/emit_manifest.json carries no tie-break; it is listed
+# file's position in the built-in source list carries no tie-break; it is listed
 # where the file-name sort puts it, which also happens to mirror the legacy
 # matchers list (both Teleitem matchers sit right after the telegram/getgems nft
 # purchase matchers).

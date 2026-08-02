@@ -1,0 +1,939 @@
+{
+  "id": "build-programs",
+  "title": "Build programs — expressions, captures, host seam",
+  "summary": "Matching ([[matcher-runtime]]) answers \"does this shape occur here\" and hands back a set of captured blocks. A build program answers the second half: \"what does it MEAN\" — it turns those captures into the produced block's `data` dict, its `failed`/`broken` flags, and (for a switch matcher) its btype. After this chapter you can read any `.mch` build program and predict exactly what the engine does with it: which statements can reject a match, where a null quietly propagates and where it faults, what `parse` actually guarantees, when the engine calls out to a hand-written C++ host fn, and why the C++ and Python engines cannot drift apart on any of it. You will also be able to read the GENERATED C++ that the engine really runs — build programs are not interpreted in production; `mch-codegen` emits one straight-line `BuildOutcome build_<n>(BuildEnv&)` per matcher whose only job is to call the `rt_*` leaves documented here. The one thing this chapter does NOT cover is what happens to the produced block afterwards: merging into the tree is [[block-tree]], serialization into Action rows is [[actions]].",
+  "diagrams": [
+    {
+      "title": "One matched anchor → one CoreAction",
+      "mermaid": "flowchart TD\n  M[\"matcher_match(m, block)\"] --> C[\"MatchResult: captures + consumed\"]\n  C --> S[\"slots_from_captures()<br/>slot i = Block / Null / List\"]\n  S --> E[\"BuildEnv{anchor, slots, consumed, lookups, bodies}\"]\n  E --> TP[\"run_two_phase()<br/>collect → fetch → resume\"]\n  TP --> G[\"generated build_&lt;n&gt;(BuildEnv&amp;)<br/>straight-line rt_* calls\"]\n  G -->|fault anywhere| R[\"BuildOutcome::rejected → no action\"]\n  G --> O[\"BuildOutcome{btype, data, failed, broken}\"]\n  O --> P[\"arena.make(btype); produced-&gt;data = o.data\"]\n  P --> MG[\"produced-&gt;merge_blocks(consumed)\"]\n  MG -->|merge fails| R\n  MG --> SH[\"host shaper (post-merge, §8.7)\"]\n  SH --> CA[\"CoreAction{matcher, anchor, produced, aux}\"]"
+    },
+    {
+      "title": "The three host registries and what they gate",
+      "mermaid": "flowchart LR\n  P[\"host_predicates()<br/>bool(const Block*)\"] --> MATCH[\"match time: pred nodes,<br/>named where clauses\"]\n  F[\"host_fns()<br/>EvalResult(BuildEnv&amp;, args)\"] --> BUILD[\"build time: rt_call_hostfn\"]\n  SH[\"host_shapers()<br/>void(Block* produced, ShaperMatch)\"] --> POST[\"after merge: topology surgery\"]\n  P --> SKIP[\"build_skip_reason()\"]\n  F --> SKIP\n  SH --> SKIP\n  SKIP --> INC[\"included matchers vs<br/>skipped (reason string)\"]\n  P --> SURF[\"--surface → twins/cpp_surface.json\"]\n  F --> SURF\n  SH --> SURF\n  SURF --> TW[\"Python twins compute the<br/>IDENTICAL skip set\"]"
+    }
+  ],
+  "sections": [
+    {
+      "heading": "What a build program is",
+      "prose": "A `.mch` matcher has two halves separated by a blank line: a PATTERN (chapter 5) and, below it, a build program. The build program is a short imperative script over the captures the pattern bound. Its whole statement vocabulary is: `parse CAP as T1|T2`, `let NAME = expr`, `reject when expr`, `failed when expr`, `broken when expr`, `out { field: expr }`, and `produces switch { when expr => BTYPE out {...} … else => … }`.\n\nTwo properties make it tractable. It is STATELESS — nothing survives between runs, and the program is re-run from scratch for every matched anchor in the trace. And it is TOTAL in one direction only: every statement can reject the match, none can crash it. Any evaluation error anywhere (a missing object field, an un-orderable comparison, an unregistered lookup kind) becomes a clean rejection of this match, indistinguishable from the pattern not having matched at all.\n\nThe first excerpt is the whole language on one screen.",
+      "excerpts": [
+        {
+          "file": "indexer/indexer/events/mch/specs_decl/jettons.mch",
+          "lines": [
+            35,
+            72
+          ],
+          "lang": "text",
+          "title": "jetton_transfer — pattern above, build program below",
+          "annotations": [
+            {
+              "lines": [
+                40,
+                45
+              ],
+              "text": "The bridge between the two halves: `@transfer` / `@internal` are pattern capture names, and the build program addresses them as plain identifiers. There is no third namespace — a `let` name and a capture name live in the same scope, and shadowing a capture is a compile error on the Python frontend, not a runtime surprise."
+            },
+            {
+              "lines": [
+                46,
+                47
+              ],
+              "text": "`reject when` is the only statement whose PURPOSE is to reject; every other statement can reject as a side effect of faulting. Here the intent is legacy parity: `build_jetton_transfer_core` asserts the wallet is non-null, and `reject when` is the containable spelling of that assert."
+            },
+            {
+              "lines": [
+                49,
+                50
+              ],
+              "text": "`??` is where the soft-parse contract pays off. If `JettonInternalTransfer` failed to parse, `internal.body` is Null, `internal.body.amount` null-propagates, and the `??` silently falls back to the outer transfer's amount. No error is raised anywhere on that path — which is exactly why an unguarded ABI-path parse is dangerous ([[parse-layer]])."
+            },
+            {
+              "lines": [
+                51,
+                51
+              ],
+              "text": "`failed when` ACCUMULATES: several `failed when` statements OR together, and once set the flag is never cleared. The generated code emits each one as `if (!o.failed) { … }`, so a later statement cannot un-fail a block."
+            },
+            {
+              "lines": [
+                56,
+                56
+              ],
+              "text": "The ternary is `A if cond else B` — Python's order, not C's. Worth internalising before you read the generated code, where it becomes an ordinary `if/else` and the source ordering is gone."
+            }
+          ],
+          "sha8": "1efb6580"
+        },
+        {
+          "file": "indexer/indexer/events/mch/specs/dns.mch",
+          "lines": [
+            15,
+            45
+          ],
+          "lang": "text",
+          "title": "The switch form — one matcher, three btypes",
+          "annotations": [
+            {
+              "lines": [
+                16,
+                16
+              ],
+              "text": "`produces A | B | C` declares the switch up front so the IR (and the block-type registry) knows all three outcomes statically. The runtime picks one; the artifact still records the full set, which is what `build_skip_reason` and the btype prefilter reason about."
+            },
+            {
+              "lines": [
+                24,
+                25
+              ],
+              "text": "This is the ONLY way a build program sets a btype. A non-switch matcher leaves `BuildOutcome::btype` empty and the caller uses `produces[0]` — see the next section. The `when` guards are tested in source order, first match wins, `else` is mandatory."
+            },
+            {
+              "lines": [
+                30,
+                30
+              ],
+              "text": "`name?:` — an OPTIONAL key. The generated code is `if (!v.is_null()) fs.emplace_back(...)`, so the key is ABSENT rather than null when the lookup misses. That distinction is observable: the dump renders a key set, and the Python twin's dict has to have the same keys. Mirrors legacy's conditional `data['collection_address'] = …`."
+            },
+            {
+              "lines": [
+                33,
+                33
+              ],
+              "text": "`b64(...)` on a Bytes key compared against a literal string: the spec-level way to test a 32-zero-byte DNS key. Note this is a comparison of the b64 TEXT, which is safe here only because the value is raw bytes, not a cell — see the b64 excerpt further down for why cells are different."
+            }
+          ],
+          "sha8": "8e10549d"
+        }
+      ]
+    },
+    {
+      "heading": "The execution model: stateless, per-matched-anchor, codegen'd",
+      "prose": "Nothing in this layer interprets a build program in production. `mch-codegen --builds` reads the IR artifact and emits one C++ function per matcher into the build tree; the engine holds a table of those function pointers keyed by artifact index. The generated code contains no policy — every operation is a call into `BuildRuntime`/`ExprRuntime`, so the interpreter path (`ExprEval`, used by the conformance vectors) and the production path cannot diverge on semantics.\n\nThe two structs below are the entire interface between generated code and the engine: `BuildOutcome` out, `BuildEnv` in.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BuildRuntime.h",
+          "lines": [
+            30,
+            53
+          ],
+          "lang": "cpp",
+          "title": "BuildOutcome — the whole return channel",
+          "annotations": [
+            {
+              "lines": [
+                30,
+                33
+              ],
+              "text": "`is_rejected` is C++'s spelling of Python returning `None`, and the comment is precise about the conflation: a `reject when` firing and an EvalError surfacing produce the SAME outcome. `reject_reason` exists only so a log line can tell them apart; nothing branches on it."
+            },
+            {
+              "lines": [
+                38,
+                38
+              ],
+              "text": "`data` defaults to the empty Dict, not Null. Python's `data=None` is normalised to `{}` at the same boundary, so a matcher with no `out {}` block still produces a block with an empty (not absent) data dict — which the [[actions]] serializer then reads without a null check."
+            },
+            {
+              "lines": [
+                42,
+                47
+              ],
+              "text": "Note what `rejected()` does NOT do: it leaves `data` default-constructed (Null), `failed`/`broken` false. Any code reading those fields on a rejected outcome is reading garbage — the caller's contract is to check `is_rejected` first and never look again."
+            }
+          ],
+          "sha8": "257f9194"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BuildRuntime.h",
+          "lines": [
+            157,
+            167
+          ],
+          "lang": "cpp",
+          "title": "BuildEnv — capture names do not exist at runtime",
+          "annotations": [
+            {
+              "lines": [
+                160,
+                161
+              ],
+              "text": "Captures are a raw pointer + count, indexed positionally. The frontend assigns slot numbers at compile time and the generated code says `env.slots[1]`, never \"internal\" — a capture NAME appears nowhere in the binary. Same design as the where-clause `WhereEnv` in [[matcher-runtime]], deliberately: one env family, one codegen shape."
+            },
+            {
+              "lines": [
+                162,
+                162
+              ],
+              "text": "`consumed` is a well-known pseudo-capture: the match's consumed set as a List of Block values. It is what every host fn takes as its argument, because the hybrid specs could not express the imperative role reconstruction any other way (see the host section)."
+            },
+            {
+              "lines": [
+                164,
+                166
+              ],
+              "text": "`bodies` is the ONLY mutable state a build program accumulates, and it is per-run. A `parse` statement writes into it keyed by Block identity; `.body` reads it back. Note the key is the Block POINTER — parse a capture in one matcher and the entry is invisible to every other matcher, which is what makes the program stateless across anchors."
+            }
+          ],
+          "sha8": "94910f44"
+        },
+        {
+          "file": "ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/generated/builds_ir_generated.cpp",
+          "lines": [
+            14,
+            40
+          ],
+          "lang": "cpp",
+          "title": "The generated image of the first 5 spec lines (build-tree artifact, not in git)",
+          "annotations": [
+            {
+              "lines": [
+                17,
+                22
+              ],
+              "text": "The two `parse` statements from the spec, verbatim in order. `rt_parse` is called for its SIDE EFFECT on `env.bodies` and its return value is discarded — only the fault flag matters here. Compare `rt_parse_expr` below, which is the opposite."
+            },
+            {
+              "lines": [
+                23,
+                32
+              ],
+              "text": "`let wallet = lookup jetton_wallet(internal.msg.destination)` expanded: one SSA temp per IR node, one early return per possible fault. There are no loops and no function calls except into the runtime — which is why a build program's cost is bounded by its statement count, and why the fault model needs no exceptions."
+            },
+            {
+              "lines": [
+                33,
+                40
+              ],
+              "text": "`reject when wallet == null` — and note it goes through `rt_eq` + `rt_require_bool` rather than a C++ `== nullptr`. Both matter: `rt_eq` is the language's typed equality (Amount(None), Asset-vs-string, Block identity), and `rt_require_bool` faults if the condition is not a Bool, so `reject when 5` is a rejection, not a truthiness test."
+            }
+          ],
+          "sha8": "451951a6"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+          "lines": [
+            26,
+            52
+          ],
+          "lang": "cpp",
+          "title": "try_build — captures in, CoreAction out",
+          "annotations": [
+            {
+              "lines": [
+                33,
+                37
+              ],
+              "text": "The conversion the whole chapter hinges on: a `MatchResult` capture becomes a slot Value — a Block for a scalar capture, Null for an unbound optional, a List (with Null gaps) for a `many` capture. `slots_from_captures` in BuildDriver.cpp is nine lines and worth reading; the gap-preserving List is why `.body` on a list capture has to tolerate Null elements."
+            },
+            {
+              "lines": [
+                38,
+                41
+              ],
+              "text": "`needs_lookups` is a pure optimisation with a proof attached: a matcher referencing no `lookup` node and no host fn can never record a miss, so the collect pass is provably a no-op and is skipped. About a third of the artifact's matchers take this path."
+            },
+            {
+              "lines": [
+                42,
+                44
+              ],
+              "text": "A rejection consumes NOTHING. The block tree is untouched, no aux blocks are appended, and the walker moves on to the next anchor — spec §10.7. This is the invariant that lets a build program be used as a late semantic filter (\"the pattern matched but the wallet lookup says otherwise\") without corrupting the tree."
+            },
+            {
+              "lines": [
+                46,
+                52
+              ],
+              "text": "Where the build program's output lands: `o.btype` (empty ⇒ `produces[0]`, the non-switch case) names the produced block, `o.data` becomes its data dict. `merge_blocks` failing is ALSO a clean rejection — Python raises inside `try_build` and the caller swallows it, so C++ must return false rather than propagate."
+            }
+          ],
+          "sha8": "0af37742"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+          "lines": [
+            467,
+            492
+          ],
+          "lang": "cpp",
+          "title": "The dispatch loop — matcher-major, not block-major",
+          "annotations": [
+            {
+              "lines": [
+                467,
+                472
+              ],
+              "text": "Matcher-major ordering: matcher 0 is walked over the ENTIRE tree before matcher 1 starts. That is the Python engine's order and it is load-bearing — earlier matchers consume blocks that later matchers would otherwise anchor on, which is why `registration_order` / `priority` in the artifact is a semantic input, not a hint. `setup.build_fns.at()` is the whole dispatch: an index lookup into the generated table."
+            },
+            {
+              "lines": [
+                474,
+                486
+              ],
+              "text": "A subtle port: `cur->next_blocks` is read AFTER `try_build` ran on `cur`. Python uses a generator whose resume order gives exactly this, and merges mutate `next_blocks` mid-walk — reading the children first would traverse the pre-merge tree. `cur->parent == nullptr` skips blocks already absorbed by a merge."
+            },
+            {
+              "lines": [
+                487,
+                491
+              ],
+              "text": "The btype prefilter inventory GROWS as matchers fire, because a matcher may anchor on a btype an earlier matcher produced (`jvault_stake` anchors on `jetton_transfer`). Opcodes never grow — produced composite blocks carry no opcode — so only btypes are folded back in."
+            }
+          ],
+          "sha8": "441a8e0d"
+        }
+      ]
+    },
+    {
+      "heading": "parse: the statement, the expression, and the contract",
+      "prose": "`parse CAP as T1|T2` is soft by design. Its inner half (`soft_parse`, first alternative that succeeds wins, all-fail ⇒ Null body) is excerpted in [[parse-layer]]; here is the outer half — what a `parse` statement does with the target it is given, and how `.body` reads the result back.\n\nThe key asymmetry to hold onto: an UNREGISTERED type name is a fault (broken spec), a failing PARSER is not (normal traffic). Everything else follows from that. And because a failed parse is silent, the op-guard rule from [[parse-layer]] is not optional discipline — it is the only thing standing between an ABI-path parse and a divergence that surfaces hundreds of lines away in a twin diff.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BuildRuntime.cpp",
+          "lines": [
+            51,
+            81
+          ],
+          "lang": "cpp",
+          "title": "rt_parse — three target shapes, all soft",
+          "annotations": [
+            {
+              "lines": [
+                52,
+                54
+              ],
+              "text": "A null target is a NO-OP, not an error. An unbound optional capture (`maybe op X @cap`) therefore parses to nothing, and the later `.body` on it null-propagates through the whole expression. That is how `internal.body.amount ?? transfer.body.amount` degrades gracefully with no explicit null test in the spec."
+            },
+            {
+              "lines": [
+                55,
+                68
+              ],
+              "text": "List targets parse element-wise and SKIP null gaps rather than erroring — but note the fault from `soft_parse` (unregistered type) short-circuits the whole loop. So a typo'd type name fails on the first element, not after silently parsing the rest."
+            },
+            {
+              "lines": [
+                78,
+                80
+              ],
+              "text": "The most Python-shaped line in the file: a non-Block target is a no-op because Python's per-type `try` swallows the AttributeError from calling `get_body()` on something that has no such method. Reproducing the SHAPE of Python's exception handling, not its intent — a recurring theme in this port."
+            }
+          ],
+          "sha8": "173ea416"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BuildRuntime.cpp",
+          "lines": [
+            104,
+            133
+          ],
+          "lang": "cpp",
+          "title": "rt_access_build — `.body` is the only field the build context adds",
+          "annotations": [
+            {
+              "lines": [
+                105,
+                111
+              ],
+              "text": "\"Not present in `bodies`\" and \"present but Null\" are DIFFERENT: the first faults (you forgot to `parse` this capture), the second returns Null (you parsed it and every alternative failed). Getting these backwards would turn every soft-parse miss into a rejection, which is precisely the bug this distinction prevents."
+            },
+            {
+              "lines": [
+                113,
+                128
+              ],
+              "text": "`.body` on a LIST capture maps element-wise and preserves Null gaps as Nulls — so `map(xs.body as b => …)` sees the same arity as the capture. But an unparsed non-null element still faults, per element: partial parsing of a list capture is not a supported state."
+            },
+            {
+              "lines": [
+                132,
+                132
+              ],
+              "text": "Everything that is not `.body` falls through to the shared `rt_access` — the same function a `where` clause uses in [[matcher-runtime]]. Build context adds exactly ONE field to the language; the rest of attribute access (message envelope, `.data`, `.failed`, Amount `.value`) is universal."
+            }
+          ],
+          "sha8": "670aeedc"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BuildRuntime.cpp",
+          "lines": [
+            83,
+            102
+          ],
+          "lang": "cpp",
+          "title": "rt_parse_expr — the deliberate inversion",
+          "annotations": [
+            {
+              "lines": [
+                83,
+                84
+              ],
+              "text": "Coverage honesty: today's production artifact uses ZERO parse expressions — every `parse` in `specs/` is the statement form. The three call sites of this function all live in the generated `build_vectors` table, so this path is exercised only by the `mch_build_vectors` ctest ([[gates]])."
+            },
+            {
+              "lines": [
+                85,
+                90
+              ],
+              "text": "IR v1.1 (the W7 minify wave) added `parse` as an EXPRESSION, and it is soft-parse's mirror image on every axis: no `env.bodies` write (stateless), and a null-or-non-block target FAULTS where the statement form no-ops. `env` is taken only so all build-mode `rt_*` leaves share one signature."
+            },
+            {
+              "lines": [
+                96,
+                100
+              ],
+              "text": "The whole point: total parse failure is a FAULT here, i.e. a build rejection, not a silent Null. That makes the expression form safe to use with an ABI-path parser without an op guard — the C++ error and the Python garbage-object both end up rejecting… but only if the Python twin also faults, which is why this form is still gated behind the same review rule."
+            }
+          ],
+          "sha8": "92daef02"
+        }
+      ]
+    },
+    {
+      "heading": "Expressions: one runtime, two callers",
+      "prose": "Every operation a build expression performs — arithmetic, comparison, null propagation, attribute access, builtins, comprehensions — has exactly one implementation, in `ExprRuntime`. The tree-walking interpreter calls it recursively; the generated code calls the same functions in straight line. There is no second semantics to keep in sync, which is why the conformance-vector gates over the interpreter are evidence about the production path too.\n\nTwo builtins deserve individual attention because their behaviour is not what you would guess from the name.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ExprRuntime.h",
+          "lines": [
+            1,
+            19
+          ],
+          "lang": "cpp",
+          "title": "The contract at the top of ExprRuntime.h",
+          "annotations": [
+            {
+              "lines": [
+                5,
+                9
+              ],
+              "text": "\"A codegen bug can never be masked by a subtly different runtime\" is the actual design argument. The generated code is allowed to be wrong about STRUCTURE (which leaf, in what order); it cannot be wrong about SEMANTICS, because it has no semantics of its own."
+            },
+            {
+              "lines": [
+                11,
+                14
+              ],
+              "text": "A fault is a value, not a `throw`. This is what lets the generated code be pure straight-line C++ with `if (r.faulted) return r;` and no unwinding — and it is why an unexpected C++ exception escaping a host fn is a categorically different event (it reaches the trace-level boundary in ClassifyCore, not the build rejection path)."
+            },
+            {
+              "lines": [
+                15,
+                19
+              ],
+              "text": "Null propagation is baked into each op, so call sites never null-check — EXCEPT the lazy operators (`and`, `or`, `??`, ternary), which are control flow and stay inlined in the generated code. That is why you see `if (!rt_is_null(v20)) { … } else { … }` in the generated `??` rather than a runtime call."
+            }
+          ],
+          "sha8": "989c105f"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ExprRuntime.cpp",
+          "lines": [
+            488,
+            500
+          ],
+          "lang": "cpp",
+          "title": "b64 — two inputs, and only one of them round-trips textually",
+          "annotations": [
+            {
+              "lines": [
+                489,
+                490
+              ],
+              "text": "Null-strict, like every 1+-arg builtin: `b64(null)` is `null`, not an error and not `\"\"`. Bytes take the obvious path — and that is the case where the b64 STRING is stable enough to compare against a literal, as `dns.mch` does."
+            },
+            {
+              "lines": [
+                491,
+                497
+              ],
+              "text": "The trap. A Cell is serialised with td's BOC writer, whose byte output differs from pytoniq's on multi-ref trees — so the b64 text of a `forward_payload` is NOT comparable across engines. What IS equal is the cell it decodes back to. The layer's answer is at the render boundary, not here: `render_value` in BuildDriver.cpp routes known BOC-carrying field names through `boc_field_cellhash`, so the dumps compare root hashes instead of base64. See [[value]] for the field-name set and the hashing rule."
+            },
+            {
+              "lines": [
+                499,
+                499
+              ],
+              "text": "Anything else faults — notably a Str. `b64(some_string)` is not a re-encode, it is a rejection; the builtin is a serialiser for the two byte-ish types only."
+            }
+          ],
+          "sha8": "233f7034"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ExprRuntime.cpp",
+          "lines": [
+            575,
+            610
+          ],
+          "lang": "cpp",
+          "title": "map / any / all — the comprehension cores",
+          "annotations": [
+            {
+              "lines": [
+                576,
+                577
+              ],
+              "text": "Null xs is null (propagation), non-list xs FAULTS. That asymmetry is deliberate: an absent optional capture should flow through, but mapping over a scalar is a spec bug. Same rule in both quantifiers."
+            },
+            {
+              "lines": [
+                581,
+                583
+              ],
+              "text": "The body is a `std::function` called once per element — the ONE place in the runtime that takes a callable. Generated code emits it as a local lambda capturing by reference (`auto body17 = [&](const Value &el17) -> EvalResult { … };`), so there is no allocation per element, only the one type-erasure at the call."
+            },
+            {
+              "lines": [
+                594,
+                594
+              ],
+              "text": "`all` of empty is true, `any` of empty is false — Python's `all()`/`any()`, which is what the twins compute. Easy to get wrong when you fold the two into one function, and the corpus does contain empty lists."
+            },
+            {
+              "lines": [
+                598,
+                599
+              ],
+              "text": "A quantifier body must return a Bool: `any(xs as x => x.amount)` faults rather than testing truthiness. Note the fault happens on the FIRST element, so it short-circuits before evaluating the rest — a fault and a `true` result are both early exits."
+            }
+          ],
+          "sha8": "b836b49c"
+        },
+        {
+          "file": "indexer/indexer/events/mch/specs/jvault.mch",
+          "lines": [
+            120,
+            144
+          ],
+          "lang": "text",
+          "title": "Both halves in one matcher: a comprehension and a cross-block capture read",
+          "annotations": [
+            {
+              "lines": [
+                126,
+                126
+              ],
+              "text": "`btype jetton_transfer @withdraw` captures a block PRODUCED by an earlier matcher — the composition described in [[block-tree]]. Its `.data` is that matcher's own `out {}` dict, so this build program is reading another build program's output."
+            },
+            {
+              "lines": [
+                142,
+                142
+              ],
+              "text": "`map(xs as e => account(e))` replaced a host fn (`jvault_account_list`) that existed ONLY because the comprehension form did not. Worth knowing as a pattern: several remaining host fns are compensating for missing language, not for genuinely imperative logic."
+            },
+            {
+              "lines": [
+                143,
+                143
+              ],
+              "text": "Three things at once: a list literal, a read of a composed block's `.data`, and F2 `.value` unwrapping an Amount to a raw Int. The next section's captured run shows this exact expression's output landing in the dump next to the `desired_amount` it was read from."
+            }
+          ],
+          "sha8": "ba3802f8"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "& 'S:/Dev/ton-indexer-clear/ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe' --classify -I 'S:/Dev/ton-indexer-clear/ton-index-worker/ton-mch-engine/ir/mch_ir.json' -T 'tests\\traces\\Lsy5I_gotIvt0EYwoPuqd-1s-IyYNR3Sc0XmM_lWKa8=.lz4'",
+          "output": "=== Lsy5I_gotIvt0EYwoPuqd-1s-IyYNR3Sc0XmM_lWKa8=.lz4\nACTION jetton_transfer anchor=call_contract#0f8a7ea5@48756833000002 btype=jetton_transfer failed=0 broken=0 data={amount=amount:7919563,asset=asset:0:BC16864C941719859E8FAFDB071B21F3905BFDCB60795FDB4DEB546FB9C2D1CC,…,desired_amount=amount:7919563,…} consumed=[…] auto=[]\nACTION jvault_claim anchor=call_contract#78d9f109@48756818000002 btype=jvault_claim failed=0 broken=0 data={claimed_amounts=[7919563],claimed_jettons=[0:A048BDFAAC1F51AEAE2C1100CF5F1C1D1D316AD4E013A4030F7E2DF2A4ADE68D],sender=0:D94FCAE73C2E76C960834E0F5E739B0AD28D42EB9EE1C6A1BD5E0E7FE8257CCF,stake_wallet=0:32F3F3C9881BF73850082C9F5F4D5B654F4062E71EDD93D868BC59447F9AA2AA,staking_pool=0:AA5C2D9CB469BECB874312C79ABC9DA6C2E64C92C108FE31A2F26B00D8134CD7} consumed=[…] auto=[]",
+          "note": "Two ACTION lines from one trace, long fields elided. Read them together: the first line is the jetton_transfer matcher's `out {}` (its `desired_amount=amount:7919563` is an Amount). The second is jvault_claim, whose `claimed_amounts=[7919563]` is that same value reached as `withdraw.data.desired_amount.value` — capture → composed block's data → Amount unwrap → list literal → dump. `claimed_jettons` is the `map(... as jw => account(jw))` comprehension: one element, rendered as a raw address because `account()` produced an Account Value."
+        }
+      ]
+    },
+    {
+      "heading": "Lookups: why the build fn runs more than once",
+      "prose": "`lookup kind(args)` reaches outside the trace — jetton wallet interfaces, NFT items, pool records. In Python that is an inline async call. In C++ the fetch has to be batched (production issues one actor round per trace, [[prod-path]]), so the build fn is executed as a DRY pass against a table that records misses, the misses are fetched, and the fn is re-run against a filled table. The build program being stateless and side-effect-free is exactly what makes running it twice legal.\n\nOne subtlety forces a loop rather than a single dry pass: a lookup whose ARGUMENT comes from another lookup. On the first pass the inner lookup returns Null, the null-strict rule short-circuits the outer call, and the outer key never forms. So the collect pass is iterated to a fixpoint.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BuildDriver.cpp",
+          "lines": [
+            224,
+            259
+          ],
+          "lang": "cpp",
+          "title": "run_two_phase — collect to fixpoint, then resume",
+          "annotations": [
+            {
+              "lines": [
+                227,
+                231
+              ],
+              "text": "The A2 fast path: no lookups and no host fns ⇒ zero possible misses ⇒ run once against an empty filled table. Byte-identical to the loop below by construction, not by measurement."
+            },
+            {
+              "lines": [
+                235,
+                246
+              ],
+              "text": "Each round is a full re-execution with a FRESH env — `bodies` is per-run state, so re-parsing happens every round. That is cheap and, more importantly, keeps the passes independent: a round is not allowed to observe the previous round's leftovers."
+            },
+            {
+              "lines": [
+                247,
+                254
+              ],
+              "text": "The non-convergence branch throws rather than proceeding with a partial table, and the comment says why: Python resolves arbitrary lookup depth inline, so a truncated fixpoint here is silent WRONGNESS, not a benign approximation. Today's artifacts have max depth 2 and converge in ≤2 rounds, so this is dead code whose value is that it can never become quiet."
+            },
+            {
+              "lines": [
+                256,
+                258
+              ],
+              "text": "Only the FINAL pass's outcome is used. Any rejection or fault produced during a collect round is discarded — which is another reason build programs must be free of side effects: a dry pass that rejected still counted as a real execution."
+            }
+          ],
+          "sha8": "61dd11ec"
+        }
+      ]
+    },
+    {
+      "heading": "The host seam: preds, fns, shapers",
+      "prose": "Some logic genuinely cannot be written declaratively — reconstructing roles from an unordered consumed set, walking a DeDust step chain, scanning for a per-hop event. Those stay as hand-written C++ registered in one of three name→function-pointer maps. The names are the PYTHON registry keys, so a `.mch` spec compiled by the Python frontend and executed by the C++ engine resolves the same identifier on both sides.\n\nThe three registries differ in when they run: predicates at match time (chapter 5), fns during the build program, shapers AFTER the produced block has merged its consumed set. And they share one consequence: an unregistered name is not a crash but a SKIP — the matcher is excluded from the run and the reason is reported, so the C++ engine can legitimately implement a subset of the artifact while the twins compute the identical subset.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/HostRegistry.h",
+          "lines": [
+            32,
+            68
+          ],
+          "lang": "cpp",
+          "title": "The three signatures and what each one is allowed to do",
+          "annotations": [
+            {
+              "lines": [
+                32,
+                34
+              ],
+              "text": "The one rule that separates a host fn from a builtin: arguments are NOT null-strict. `rt_call_builtin` short-circuits on a null arg; `rt_call_hostfn` passes it straight through, because a host fn's job is often to DECIDE what a missing leg means. A spec calling a host fn must therefore expect it to be entered with nulls."
+            },
+            {
+              "lines": [
+                35,
+                38
+              ],
+              "text": "Two ways to reject from a host fn, and they are not equivalent: a fault rejects the match unconditionally, while returning Null rejects only if the spec wrote `reject when d == null`. The hybrid specs use the second so that \"no roles found\" reads as data, not as an error. Note the signature takes `BuildEnv&` — that is how a host fn reaches `env.lookups` and participates in the two-phase fetch."
+            },
+            {
+              "lines": [
+                44,
+                53
+              ],
+              "text": "The shaper contract, including its honesty note. Python's `EmptyBlock()` self-allocates; C++ blocks are arena-owned, so the arena has to ride along on `ShaperMatch`. And: no artifact matcher currently pairs a build_program with a `shape`, so the classify call site below is LIVE but unexercised by the corpus — only `--shape-test` drives these ([[gates]])."
+            },
+            {
+              "lines": [
+                59,
+                62
+              ],
+              "text": "Shapers address captures BY NAME, unlike build programs' slot indexing. They are hand-written C++ that predates the slot scheme and there are three of them, so the name map is cheaper than threading a slot table through."
+            }
+          ],
+          "sha8": "0b7488d4"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/HostRegistry.cpp",
+          "lines": [
+            11,
+            45
+          ],
+          "lang": "cpp",
+          "title": "The fn registry and its dispatch",
+          "annotations": [
+            {
+              "lines": [
+                12,
+                13
+              ],
+              "text": "Meyer's static again, and a plain function-pointer map — no `std::function`, no registration API, no init order to get wrong. Adding a host fn is one line here plus a declaration in `host/HostImpls.h`."
+            },
+            {
+              "lines": [
+                28,
+                33
+              ],
+              "text": "The most instructive comment in the file: `stonfi_v2_swap_data` was UNREGISTERABLE for a long time because the Python core read `in_transfer.event_nodes[0].message`, whose order is hash-seed dependent. The fix was on the PYTHON side (read the in-leg by btype), and only then could the already-deterministic C++ port be registered. A/B parity is a constraint on both engines, not a target the port aims at."
+            },
+            {
+              "lines": [
+                38,
+                45
+              ],
+              "text": "Unknown name ⇒ fault ⇒ rejection. In practice this is unreachable: `build_skip_reason` already excluded any matcher referencing an unregistered fn before classify started. The check survives as a guard against the two lists disagreeing."
+            }
+          ],
+          "sha8": "a0407fa8"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+          "lines": [
+            54,
+            67
+          ],
+          "lang": "cpp",
+          "title": "Where a shaper actually runs",
+          "annotations": [
+            {
+              "lines": [
+                54,
+                56
+              ],
+              "text": "AFTER `merge_blocks`, deliberately — §8.7 makes `shape` the last build step precisely so a shaper sees the final topology (the produced block already owning its consumed children) rather than the pre-merge tree. `*m.ref_shapers.begin()` takes the first: the grammar allows one `shape` per matcher, and the set is a compile artifact, not a list."
+            },
+            {
+              "lines": [
+                58,
+                65
+              ],
+              "text": "The `ShaperMatch` is rebuilt from the match result, taking only `vals.front()` per capture — shapers get the scalar view even of a `many` capture. Passing `&arena` is what lets a shaper mint proxy blocks; a shaper that allocated its own would leak past the trace's arena lifetime."
+            }
+          ],
+          "sha8": "58736b1d"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/host/HostAdapter.h",
+          "lines": [
+            41,
+            68
+          ],
+          "lang": "cpp",
+          "title": "The typed authoring seam over the raw host ABI",
+          "annotations": [
+            {
+              "lines": [
+                41,
+                53
+              ],
+              "text": "`HostResult<T>` names the three outcomes a host fn actually has, which the raw `EvalResult` conflates: a real value, \"no match\" (Null, which the spec `reject when`s), and a fault. Before this, cores expressed \"reject\" as `rt_ok(Value::null())` inline and it was easy to write a fault where a reject was meant."
+            },
+            {
+              "lines": [
+                55,
+                62
+              ],
+              "text": "The single-List calling convention formalised: every swap-style fn takes `consumed` and nothing else. `decode_consumed` drops non-Block elements silently, matching the hand-written loops it replaced — a deliberate bug-compatible choice, not an oversight."
+            },
+            {
+              "lines": [
+                64,
+                68
+              ],
+              "text": "`run_swap_host` IS the body of every registered `*_swap_data` thunk. The payoff is that a protocol core becomes a pure function from typed inputs to a typed `SwapRecord` — no `Value` dict assembly, and notably no `const_cast` peer-fill, which is what the previous generic-Value version needed."
+            }
+          ],
+          "sha8": "f86e0e50"
+        },
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/host/HostCoffee.cpp",
+          "lines": [
+            56,
+            95
+          ],
+          "lang": "cpp",
+          "title": "A host fn body — reconstructing roles from an unordered consumed set",
+          "annotations": [
+            {
+              "lines": [
+                56,
+                60
+              ],
+              "text": "The signature the adapter enables: no `BuildEnv`, no `std::vector<Value>`, no `EvalResult`. `HostContext` is present for the lookup table but this core never needs it. Registration is one line at the bottom of the file: `return run_swap_host(env, args, \"coffee_swap_data\", coffee_swap);`."
+            },
+            {
+              "lines": [
+                64,
+                70
+              ],
+              "text": "This is the imperative residue the spec could not express. The pattern DID capture `@in_transfer`, but on a multi-hop path the walker cannot bind captures after a recursion (see the caveat in `coffee_swap.mch`), so the fn re-derives the role from `previous_block` + membership in the consumed set. That is the honest reason host fns still exist here — capture binding under recursion, not algorithmic complexity."
+            },
+            {
+              "lines": [
+                88,
+                90
+              ],
+              "text": "\"Not all roles\" is a REJECT, not a fault — it becomes `d == null` and the spec's `reject when d == null` fires. Contrast the `R::fault(\"event parse\")` calls further down, which reject unconditionally: a missing role is expected traffic, an unparseable event body is not."
+            },
+            {
+              "lines": [
+                92,
+                95
+              ],
+              "text": "`unique_lt_sorted` after pushing the anchor onto the `others` list: the consumed set has no inherent order, so every host fn that iterates it must impose one. Sorting by `min_lt` is the canonical choice across this codebase and matches the Python cores — a different order changes `peer_swaps` and thus the dump."
+            }
+          ],
+          "sha8": "95211855"
+        }
+      ],
+      "runs": [
+        {
+          "cmd": "& 'S:/Dev/ton-indexer-clear/ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe' --surface",
+          "output": "{\n  \"boc_fields\": [\"custom_payload\", \"forward_payload\", \"message_boc\", \"message_boc_str\", \"order_boc\", \"order_boc_str\", \"stonfi_swap_body\"],\n  \"fns\": [\"coffee_swap_data\", \"dedust_deposit_final_data\", \"dedust_deposit_partial_data\", \"dedust_swap_failed\", \"dedust_swap_legs\", \"getgems_nft_purch…\n  \"lookup_kinds\": [\"dedust_pool\", \"jetton_wallet\", \"jvault_assets\", \"nft_auction\", \"nft_item\", \"nft_sale\", \"nominator_pool\"],\n  \"parsers\": [\"ChangeDnsRecordMessage\", \"ClaimRewardMessage\", \"CoffeeCreateVault\", \"CoffeeSwapEvent\", \"DedustDepositLiquidityToPool\", \"DedustPayoutFro…\n  \"preds\": [\"evaa_service_comment\", \"evaa_user_withdraw_fail\", \"evaa_user_withdraw_success\", \"evaa_user_withdraw_user\", \"getgems_purchase\", \"getgems_s…\n  \"shapers\": [\"getgems_proxy_insert\", \"nft_transfer_parent_absorb\", \"tgbtc_deploy_absorb\"]\n}",
+          "note": "Long arrays truncated at the right margin. This is the C++ engine describing ITS OWN registries; the output is committed as `twins/cpp_surface.json` and the Python twins read the fn/pred/shaper/lookup lists from it to compute the identical included-matcher set. Nothing is hand-mirrored, so registering a host fn without regenerating this file makes the twins disagree — that is a gate failure, covered in [[gates]]."
+        }
+      ]
+    },
+    {
+      "heading": "What actually runs: the skip table",
+      "prose": "`build_skip_reason` is the function that turns \"this C++ engine implements a subset\" into a precise, comparable statement. It is computed once at startup per matcher from the artifact's declared references plus the four registries, and the Python twin computes the same string from the same artifact and the same `cpp_surface.json`. A matcher with an empty reason runs end-to-end; anything else is excluded from BOTH engines, so the A/B diff stays meaningful.",
+      "excerpts": [
+        {
+          "file": "ton-index-worker/ton-mch-engine/src/BuildDriver.cpp",
+          "lines": [
+            119,
+            149
+          ],
+          "lang": "cpp",
+          "title": "build_skip_reason — the inclusion filter",
+          "annotations": [
+            {
+              "lines": [
+                119,
+                125
+              ],
+              "text": "Two skips that are not about missing bindings: `unrunnable` is a match-phase predicate gap inherited from the IR loader ([[ir-artifact]]), and `builder` means the spec used the legacy `build <python_fn>` directive instead of a declarative build program — the C++ engine has no Python to call, so those matchers are structurally out of scope."
+            },
+            {
+              "lines": [
+                126,
+                131
+              ],
+              "text": "Four independent scans follow, over the artifact's declared reference lists — `ref_msgtypes`, `ref_lookups`, `ref_fns`, `ref_shapers`. Note it is the ARTIFACT that declares them, not a scan of the generated code: the frontend records what each build program references, so this check needs neither the IR expression tree nor the generated C++. The assembled reason string is `types:A,B;lookups:C;fns:D;shaper:E` — a sorted, comparable token the Python twin reproduces exactly."
+            },
+            {
+              "lines": [
+                132,
+                137
+              ],
+              "text": "Lookups are checked against `FixtureLookupSource::kinds()` — the OFFLINE source's kind set. That is why `dedust_pool` had to be listed there even though no matcher references it as a `lookup` node (a host fn fetches it): the honest kind set and the skip-gating set are the same set, so an omission would silently move a skip decision."
+            }
+          ],
+          "sha8": "637ecedd"
+        }
+      ]
+    },
+    {
+      "heading": "Check yourself",
+      "prose": "Four claims from this page, each testable in a couple of minutes.\n\n**1 — Build programs really are compiled, not interpreted.** Pick any statement from a spec and find its C++ image; the first run below does it for `let d = coffee_swap_data(consumed)` in `coffee_swap.mch`. Then read the ~70 generated lines around the hit and match every one back to a spec line. If you can do that for one matcher you can do it for all 33.\n\n**2 — The parse EXPRESSION is vector-only today.** `grep -c rt_parse_expr` returns 0 in `builds_ir_generated.cpp` and 3 in `builds_vectors_generated.cpp`. That is the coverage claim in the parse section, stated as a command rather than a promise — and it is why the `mch_build_vectors` ctest is the only thing exercising `rt_parse_expr`.\n\n**3 — The surface is a projection, not a hand-mirrored list.** Regenerate `twins/cpp_surface.json` from the running binary and diff it against the committed copy (second run below; note the CRLF normalisation on Windows). A non-empty diff means someone registered a host binding without refreshing the file, and the Python twins are about to compute a different included-matcher set.\n\n**4 — A rejection consumes nothing.** Worth doing once by hand: delete `reject when wallet == null` from `specs_decl/jettons.mch`, recompile the artifact, and diff the `--classify` dump. Predict first — the only change should be extra `jetton_transfer` actions whose wallet lookup missed. If a consumed set changes, or a downstream matcher gains or loses a block, your model of §10.7 is wrong.",
+      "runs": [
+        {
+          "cmd": "grep -n 'rt_call_hostfn(env, \"coffee_swap_data\"' ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/generated/builds_ir_generated.cpp",
+          "output": "652:  EvalResult r1 = rt_call_hostfn(env, \"coffee_swap_data\", std::vector<Value>{v0});",
+          "note": "One spec line, one C++ line. `v0` a few lines above is `env.consumed`; `r1` a few lines below feeds the `reject when d == null` test."
+        },
+        {
+          "cmd": "cd ton-index-worker/ton-mch-engine\n'…/cmake-build-debug-visual-studio/ton-mch-engine/ton-mch-engine.exe' --surface | tr -d '\\r' > /tmp/surf.json\ndiff /tmp/surf.json twins/cpp_surface.json && echo \"IDENTICAL after CRLF normalisation\"",
+          "output": "IDENTICAL after CRLF normalisation",
+          "note": "The committed twin input is exactly what the binary reports. Without the `tr -d '\\r'` the raw diff fails on line endings only — a Windows artefact, not a content difference."
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "to": "matcher-runtime",
+      "why": "captures and the consumed set are produced there; a build program is the second half of the same try_build"
+    },
+    {
+      "to": "parse-layer",
+      "why": "soft_parse's inner half and the op-guard rule that makes an ABI-path `parse` safe"
+    },
+    {
+      "to": "value",
+      "why": "b64-of-cell is not text-comparable across engines; the BOC-field cellhash render rule lives there"
+    },
+    {
+      "to": "ir-artifact",
+      "why": "build_program statements and ref_* lists are artifact data; the generated build table is keyed by artifact index"
+    },
+    {
+      "to": "actions",
+      "why": "the produced block's data dict becomes the Action row's composite columns"
+    },
+    {
+      "to": "gates",
+      "why": "--build-vectors, cpp_surface.json and the classify twin diff are what hold every parity claim on this page"
+    },
+    {
+      "to": "prod-path",
+      "why": "the two-phase lookup exists because production batches the fetch into one actor round per trace"
+    }
+  ],
+  "not_annotated": [
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/BuildRuntime.h",
+      "reason": "PARTIAL: BuildOutcome and BuildEnv are excerpted. The remainder is the LookupTable class family (Null/Collecting/Filled) and FixtureLookupSource — a fixture-backed offline source whose per-kind key normalisation (jetton_wallet uppercases, nft_item does not) is documented in a 20-line header comment worth reading before you touch it (~202 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/BuildRuntime.cpp",
+      "reason": "PARTIAL: rt_parse / rt_parse_expr / rt_access_build are excerpted; soft_parse is excerpted in [[parse-layer]]. The remainder is `lookup_key` (a type-tagged, length-framed encoding — read its comment for why NUL-concatenation was unsafe) and the FixtureLookupSource kind implementations, of which `jvault_assets` is a 90-line chain of Python try/except reproductions (~413 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/BuildDriver.h",
+      "reason": "declarations only, but the comments ARE the contracts for run_two_phase and build_skip_reason — read it as the summary of this chapter's second half (~54 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/BuildDriver.cpp",
+      "reason": "PARTIAL: run_two_phase and build_skip_reason are excerpted. The remainder is `block_key` / `render_value` (the dump format contract, better read alongside [[value]]), `slots_from_captures` (9 lines, referenced above), `warn_missing_artifact_parsers` and `select_gen_builds` (~277 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ExprRuntime.h",
+      "reason": "PARTIAL: the header contract is excerpted. The rest is a flat list of ~30 `rt_*` declarations; each one's semantics is at its definition in the .cpp (~116 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ExprRuntime.cpp",
+      "reason": "PARTIAL: b64 and the comprehension cores are excerpted. The big remainder is the equality/ordering/arithmetic block at the top — `raw_eq`, `container_eq`, `eq_result`, `ord_result`, `coerce_int` — which encodes a dozen Python-parity quirks (Asset.__eq__ raising before its is_ton clause; float-backed Amounts faulting at USE but rendering fine; Amount having no ordering). Plus `msg_envelope` and `rt_access`, the universal attribute access shared with the where-clause path. Read the comments, not the code (~641 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ExprEval.h, src/ExprEval.cpp",
+      "reason": "the tree-walking interpreter over the k-tagged IR JSON. It is the reference/fallback path: it delegates every leaf to ExprRuntime and only owns control flow (name/lookup/list/record + the lazy operators), so reading it teaches you the IR expression encoding, not any semantics you did not get above. It never runs a build program — no Block or parse state (~53 + ~220 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/HostRegistry.h",
+      "reason": "PARTIAL: the fn/shaper half is excerpted. The remainder is the file header plus HostPredFn and host_predicates() — the match-time half, which belongs to [[matcher-runtime]] (~70 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/HostRegistry.cpp",
+      "reason": "PARTIAL: host_fns() and rt_call_hostfn are excerpted. The remainder is the predicate and shaper maps in the same one-line-per-entry shape (~73 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/host/HostCoffee.cpp",
+      "reason": "PARTIAL: the role reconstruction and the per-hop event scan are excerpted. The remainder is the in-leg / out-leg extraction — a §11.5 dual dispatch that branches on `btype == \"jetton_transfer\"` (read `.data`) versus a raw opcode (decode the body inline), which is the shape every ported swap core now has (~220 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/host/HostAdapter.h, HostAdapter.cpp",
+      "reason": "PARTIAL: the typed-result half of the header is excerpted; the .cpp is 45 lines and holds no surprises — decode, call, map three outcomes. Read it once to see that the seam really is that thin"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/host/HostDedust.cpp, HostStonfi.cpp, HostTonco.cpp, HostNft.cpp, HostGetgems.cpp, HostDedustDeposit.cpp, HostTgbtc.cpp, HostEvaa.cpp, HostJvault.cpp, HostLayerZero.cpp, HostTonstakers.cpp, HostNominator.cpp, DexPton.cpp",
+      "reason": "the other 15 registered fns and 9 predicates, one file per protocol (~3.4k LOC total). They are all the same shape as HostCoffee: derive roles from the consumed set, then reproduce a Python core statement for statement. Read the one whose protocol you are working on and no others — there is no shared machinery hiding in them beyond BlockViews/DexRecords/HostCommon"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/host/DexRecords.{h,cpp}, host/BlockViews.{h,cpp}, host/HostCommon.{h,cpp}, host/HostImpls.h",
+      "reason": "the typed vocabulary the cores share: SwapRecord / TransferLeg / PeerSwap and their `encode()` to Value, block accessors (block_body, block_msg, data_field, first_call, is_call_op), and the internal declaration header. Mechanical, but DexRecords' encode() is where a swap's dump field ORDER is decided (~250 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/GenBuilds.h",
+      "reason": "the interface to the generated build tables. Its header comment explains the three tables (ir / vectors / testbed), the per-document source-sha pairing, and why a mismatched artifact hard-fails instead of running — read it if you ever see \"no generated build table matches this artifact\" (~54 LOC)"
+    },
+    {
+      "path": "ton-index-worker/cmake-build-debug-visual-studio/ton-mch-engine/generated/builds_ir_generated.cpp",
+      "reason": "PARTIAL: one function head is excerpted as the codegen sample. This is a BUILD-TREE artifact regenerated by CMake and not in git (~4.7k LOC, 33 build fns). Never edit it; read a function when you want to see what a spec really compiled to"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/ClassifyCore.cpp",
+      "reason": "PARTIAL: try_build, the shaper hook and the dispatch loop are excerpted. The remainder is the Phase E host post-process passes (dedust/stonfi liquidity combination, unwind_deployments), the anchor prefilter inventory, the trace-level failure boundary and the basic-classify fallback — the surrounding pipeline, covered in [[big-picture]] and [[actions]] (~534 LOC)"
+    },
+    {
+      "path": "ton-index-worker/ton-mch-engine/src/Surface.cpp",
+      "reason": "the --surface mode whose output is captured above: JSON escaping, sorted keys, one array per registry. 84 lines with no logic; it belongs to [[gates]] as the twins' input"
+    },
+    {
+      "path": "indexer/indexer/events/mch/specs/*.mch, specs_decl/jettons.mch",
+      "reason": "PARTIAL: four build programs are excerpted (jetton_transfer, change_dns, jvault_claim, coffee_swap by reference). The other ~25 are the same vocabulary applied to other protocols — read them as worked examples, and prefer them over the C++ when you want to know what a matcher MEANS"
+    },
+    {
+      "path": "indexer/indexer/events/mch/codegen.py, cpp_expr_emit.py (frontend)",
+      "reason": "the Python emitter that produces the generated C++. Out of scope for reading the engine: its output is fully described by the rt_* contracts above, and it is gated by the codegen self-test. Only open it if you are adding a STATEMENT form to the language"
+    }
+  ]
+}

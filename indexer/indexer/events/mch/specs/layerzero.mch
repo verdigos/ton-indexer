@@ -49,8 +49,8 @@
 # claim no btype another matcher builds, and nothing consumes their products —
 # so `layerzero_receive` keeping its historical first slot (rather than the
 # legacy list's third) is inert. No opcode declared here appears in any other
-# spec (grep over specs/ + specs_decl/), so the file's slot in
-# emit_manifest.json carries no cross-spec tie-break. Default priority 100
+# spec (grep over specs/), so the file's slot in the built-in source list
+# carries no cross-spec tie-break. Default priority 100
 # keeps send_tokens behind the priority-90 jetton family that builds the
 # `jetton_transfer` parent it binds.
 #
