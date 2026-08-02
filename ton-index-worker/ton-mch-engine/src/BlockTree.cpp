@@ -122,8 +122,8 @@ EventTree to_tree(const Trace &trace) {
           child->parent = node;
           node->children.push_back(child);
         }
-        // Out-message with destination but no matching child tx: Python
-        // asserts; we skip (Go POC behavior) and count via `unlinked` below.
+        // Out-message with destination but no matching child tx: tolerated
+        // (partial traces are legal input); counted via `unlinked` below.
       }
     }
   }
