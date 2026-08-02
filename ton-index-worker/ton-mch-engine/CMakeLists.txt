@@ -170,7 +170,7 @@ set(ABI_PROD_PAIRS
     ${TON_ABI_DIR}/generated/pton_gen.cpp
     ${TON_ABI_DIR}/generated/stonfi_gen.cpp
     ${TON_ABI_DIR}/generated/dedust_gen.cpp
-    # T12.2: DeDust CPMM V2 claim_reward family.
+    # DeDust CPMM V2 claim_reward family.
     ${TON_ABI_DIR}/generated/dedust_v2_gen.cpp
     ${TON_ABI_DIR}/generated/coffee_gen.cpp
     ${TON_ABI_DIR}/generated/coffee_staking_withdraw3_gen.cpp
@@ -245,7 +245,7 @@ target_include_directories(mch-classify
 )
 target_compile_features(mch-classify PUBLIC cxx_std_20)
 
-# ton-abi (W12 bridge): mch-classify -> ton-abi ONLY (ton-abi stays mch-free).
+# ton-abi bridge: mch-classify -> ton-abi ONLY (ton-abi stays mch-free).
 target_link_libraries(mch-classify PUBLIC tondb-scanner tdactor ton-abi)
 add_dependencies(mch-classify mch_generate_sources)
 
@@ -312,7 +312,7 @@ target_compile_features(mch-emu-bridge PUBLIC cxx_std_20)
 target_link_libraries(mch-emu-bridge PUBLIC mch-emu ton-trace-emulator-core)
 
 # The upstream CLI/gate executable over the product boundary.
-# W12 bridge self-test (--abi-bridge-test): committed ton-abi generated fixture
+# Bridge self-test (--abi-bridge-test): committed ton-abi generated fixture
 # pairs compiled into the HARNESS EXE ONLY (never the mch-classify prod lib) so
 # the trampoline+adapter run against real generated structs; these are UNDER TEST,
 # not production registry rows. TON_ABI_DIR set above.

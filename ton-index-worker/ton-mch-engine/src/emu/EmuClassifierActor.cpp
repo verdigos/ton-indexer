@@ -193,7 +193,7 @@ EmuActionPayload build_payload(const EmuTraceView &view, const std::vector<Actio
     }
   }
   // TraceInserter publishes these canonical accounts for AAI expiry cleanup.
-  // See ../../../ton-trace-emulator/README.md#aai-account-index.
+  // _aai:<account> set-index of trace hashes; consumers filter subscriptions by it.
   payload.referenced_accounts.assign(referenced.begin(), referenced.end());
   return payload;
 }

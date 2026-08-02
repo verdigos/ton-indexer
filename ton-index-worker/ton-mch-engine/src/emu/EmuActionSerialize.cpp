@@ -49,7 +49,7 @@ bool omitted(const Value &v) {
 
 // Keys in this set encode integer values as decimal strings at every map depth.
 // Other integers use native msgpack types. See
-// ../../../ton-trace-emulator/README.md#action-payload-encoding.
+// Plain MsgPack payload; integers that can exceed int64 are decimal strings by field name.
 bool decimal_string_key(const std::string &k) {
   static const std::set<std::string> keys{
       // top level

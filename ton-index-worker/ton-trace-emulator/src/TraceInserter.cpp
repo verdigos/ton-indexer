@@ -337,7 +337,7 @@ public:
     }
 
     // Append action fields, indexes, and notifications to the trace transaction.
-    // See ../README.md#atomic-action-writeback for the finality guard.
+    // Finality guard: never overwrite a stored payload with a less-final one.
     void append_actions(std::vector<std::pair<std::string, std::string>>& trace_fields_to_set) {
         if (actions_.state == nullptr) {
             // A null state suppresses both telemetry and the finality read.
@@ -365,7 +365,7 @@ public:
             transaction_.zadd(kAaiPrefix + account, member,
                               static_cast<double>(actions_.aai_score));
         }
-        // See ../README.md#aai-account-index for the key and cleanup contracts.
+        // _aai:<account> sets index trace hashes per account; cleanup mirrors action deletion.
         for (const auto& account : actions_.referenced_accounts) {
             transaction_.publish(kReferencedAccountsChannel, account + ";" + trace_key_);
         }

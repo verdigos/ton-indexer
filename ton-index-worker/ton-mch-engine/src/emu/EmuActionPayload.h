@@ -13,7 +13,7 @@ namespace mch {
 
 struct EmuActionPayload {
   // Bare msgpack. Empty means no payload and suppresses the `actions` field.
-  // See ../../../ton-trace-emulator/README.md#action-payload-encoding.
+  // Payload is plain MsgPack (consumer detects gzip by magic bytes if compressed).
   std::string actions_blob;
   // (account, "<trace_key>:<action_id>") for every (action, account) pair.
   std::vector<std::pair<std::string, std::string>> aai;

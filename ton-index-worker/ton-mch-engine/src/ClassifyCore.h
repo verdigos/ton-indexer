@@ -48,7 +48,8 @@ struct CoreAction {
 struct ClassifyResult {
   std::vector<CoreAction> actions;  // surviving post-pass, in fire order
   // Post-pass spine and recursive child rows for production serialization.
-  // This differs from the matcher-fire `actions` view; see engine-internals.md.
+  // This differs from the matcher-fire `actions` view: this list is the
+  // post-processing spine used for serialization; `actions` records fires in order.
   std::vector<ActionRow> action_rows;
   bool failure = false;
   std::string failure_reason;
