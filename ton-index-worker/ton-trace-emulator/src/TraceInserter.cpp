@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <optional>
@@ -80,6 +81,10 @@ constexpr double kExpirySweepSeconds = 1.0;
 constexpr const char* kNewTraceChannel = "new_trace";
 constexpr const char* kInvalidatedTraceChannel = "invalidated_traces";
 constexpr const char* kStreamingTransactionsChannel = "streaming_transactions";
+constexpr const char* kActionsStateField = "mch_classify_state";
+constexpr const char* kActionsField = "actions";
+constexpr const char* kActionsFinalityField = "actions_finality";
+constexpr const char* kAaiPrefix = "_aai:";
 
 constexpr const char* kUpdateAccountStateScript = R"(
     local cur = redis.call('HGET', KEYS[1], 'lt')
@@ -181,8 +186,18 @@ struct AcceptedNode {
 
 using TraceMetadata = std::map<std::string, std::string>;
 
+struct ActionState {
+    // Finality of the last *blob-bearing* write. nullopt means no blob has ever
+    // been written for this trace, so the finality guard passes unconditionally.
+    std::optional<std::uint8_t> blob_finality;
+    // Sorted, deterministic snapshot of every _aai:<account> index ref currently
+    // believed to be in Redis for this trace's actions.
+    std::vector<TraceStateIndexRef> aai_refs;
+};
+
 struct ActiveTrace {
     TraceState nodes;
+    ActionState actions;
     TraceMetadata metadata;
     std::uint64_t update_seq{0};
     std::optional<std::string> root_account;
@@ -252,6 +267,13 @@ struct PreparedNodeUpdate {
     TraceStateUpdate state_update;
     std::vector<AcceptedNode> accepted_nodes;
     std::size_t reused_serializations{0};
+};
+
+struct PreparedActionUpdate {
+    ActionState state;
+    std::vector<std::pair<std::string, std::string>> fields_to_set;
+    std::vector<TraceStateIndexRef> removed_index_refs;
+    std::vector<TraceStateIndexRef> added_index_refs;
 };
 
 struct PreparedTraceUpdate {
@@ -569,6 +591,57 @@ td::Result<PreparedNodeUpdate> prepare_node_update(const ActiveTrace& current,
     return prepared;
 }
 
+PreparedActionUpdate prepare_action_update(
+    const ActionState& current,
+    const mch::EmuActionPayload& payload,
+    const std::string& trace_key) {
+    PreparedActionUpdate prepared;
+    prepared.state = current;
+    if (payload.state == nullptr) {
+        return prepared;
+    }
+    if (current.blob_finality && *current.blob_finality > payload.finality) {
+        LOG(DEBUG) << "skipping stale actions write for " << trace_key
+                   << ": stored finality "
+                   << static_cast<int>(*current.blob_finality)
+                   << " > emission finality " << static_cast<int>(payload.finality);
+        return prepared;
+    }
+
+    prepared.fields_to_set.emplace_back(kActionsStateField, payload.state);
+    if (payload.actions_blob.empty()) {
+        return prepared;
+    }
+
+    prepared.fields_to_set.emplace_back(kActionsField, payload.actions_blob);
+    prepared.fields_to_set.emplace_back(
+        kActionsFinalityField, std::to_string(static_cast<int>(payload.finality)));
+
+    std::vector<TraceStateIndexRef> resulting_refs;
+    resulting_refs.reserve(payload.aai.size());
+    for (const auto& [account, member] : payload.aai) {
+        resulting_refs.push_back(TraceStateIndexRef{
+            .index_key = std::string(kAaiPrefix) + account,
+            .member = member,
+            .score = static_cast<std::uint64_t>(payload.aai_score),
+        });
+    }
+    std::sort(resulting_refs.begin(), resulting_refs.end());
+    resulting_refs.erase(
+        std::unique(resulting_refs.begin(), resulting_refs.end()),
+        resulting_refs.end());
+
+    std::set_difference(current.aai_refs.begin(), current.aai_refs.end(),
+                        resulting_refs.begin(), resulting_refs.end(),
+                        std::back_inserter(prepared.removed_index_refs));
+    std::set_difference(resulting_refs.begin(), resulting_refs.end(),
+                        current.aai_refs.begin(), current.aai_refs.end(),
+                        std::back_inserter(prepared.added_index_refs));
+    prepared.state.blob_finality = payload.finality;
+    prepared.state.aai_refs = std::move(resulting_refs);
+    return prepared;
+}
+
 td::Result<TraceTransition> prepare_trace_transition(const ActiveTrace& current,
                                                      const Trace& trace,
                                                      const std::string& trace_key) {
@@ -590,6 +663,7 @@ td::Result<TraceTransition> prepare_trace_transition(const ActiveTrace& current,
     auto state_change = current.nodes.prepare(node_update.state_update);
     transition.node_delta = std::move(state_change.delta);
     transition.next_trace.nodes.apply(std::move(state_change));
+    transition.next_trace.actions = current.actions;
     transition.next_trace.metadata = current.metadata;
     transition.next_trace.update_seq = current.update_seq;
     transition.next_trace.root_account = current.root_account;
@@ -702,6 +776,7 @@ void append_publications(RedisWritePlan& plan,
 }
 
 td::Result<RedisWritePlan> build_redis_plan(const TraceTransition& transition,
+                                            const PreparedActionUpdate& action_update,
                                             const Trace& trace,
                                             const std::string& trace_key) {
     RedisWritePlan plan;
@@ -709,10 +784,17 @@ td::Result<RedisWritePlan> build_redis_plan(const TraceTransition& transition,
     plan.node_fields_to_delete = transition.node_delta.removed_node_keys;
     plan.indexes_to_remove = transition.node_delta.removed_index_refs;
     plan.indexes_to_add = transition.node_delta.added_index_refs;
+    plan.indexes_to_remove.insert(plan.indexes_to_remove.end(),
+                                  action_update.removed_index_refs.begin(),
+                                  action_update.removed_index_refs.end());
+    plan.indexes_to_add.insert(plan.indexes_to_add.end(),
+                               action_update.added_index_refs.begin(),
+                               action_update.added_index_refs.end());
     plan.raw_external_message_hash = transition.raw_external_message_hash;
 
     plan.fields_to_set.reserve(transition.node_delta.upserted_nodes.size() +
-                               transition.metadata_patch.size() + 1);
+                               transition.metadata_patch.size() +
+                               action_update.fields_to_set.size() + 1);
     for (const auto& node : transition.node_delta.upserted_nodes) {
         if (!node.serialized) {
             return td::Status::Error("Cannot materialize trace node without serialized payload");
@@ -726,6 +808,9 @@ td::Result<RedisWritePlan> build_redis_plan(const TraceTransition& transition,
         plan.fields_to_set.emplace_back(
             "update_seq", std::to_string(transition.next_trace.update_seq));
     }
+    plan.fields_to_set.insert(plan.fields_to_set.end(),
+                              action_update.fields_to_set.begin(),
+                              action_update.fields_to_set.end());
 
     auto account_states_status = append_account_state_writes(plan, trace);
     if (account_states_status.is_error()) {
@@ -783,6 +868,7 @@ void append_otel_propagation(const MeasurementPtr& measurement, RedisWritePlan& 
 
 td::Result<PreparedTraceUpdate> prepare_trace_update(const ActiveTrace& current,
                                                      const Trace& trace,
+                                                     const mch::EmuActionPayload& payload,
                                                      const std::string& trace_key,
                                                      const MeasurementPtr& measurement) {
     auto transition_result = prepare_trace_transition(current, trace, trace_key);
@@ -791,12 +877,19 @@ td::Result<PreparedTraceUpdate> prepare_trace_update(const ActiveTrace& current,
     }
     auto transition = transition_result.move_as_ok();
     fill_measurement(transition, trace, measurement);
+    if (payload.state != nullptr && measurement) {
+        measurement->set_otel_attribute(
+            "ton.actions.count",
+            static_cast<std::int64_t>(payload.action_count));
+    }
 
     if (!transition.needs_redis_write) {
         return PreparedTraceUpdate{};
     }
 
-    auto redis_result = build_redis_plan(transition, trace, trace_key);
+    auto action_update = prepare_action_update(current.actions, payload, trace_key);
+    transition.next_trace.actions = action_update.state;
+    auto redis_result = build_redis_plan(transition, action_update, trace, trace_key);
     if (redis_result.is_error()) {
         return redis_result.move_as_error();
     }
@@ -1543,6 +1636,7 @@ void RedisInsertManager::start_next_writes() {
                 prepared_result = prepare_trace_update(
                     *slot.current,
                     request->trace,
+                    request->payload,
                     trace_key,
                     request_measurement);
             } catch (const vm::VmError& error) {
