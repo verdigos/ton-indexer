@@ -1,23 +1,18 @@
 cmake_minimum_required(VERSION 3.16)
 
-# --- mch-ir-load: the IR artifact PARSER, alone in a target because two very
-# different things need it and NEITHER of them is production:
-#   - mch-codegen (below), which compiles the artifact into the matcher tables;
-#   - the harness exe, whose mch_ir_equivalence ctest uses it as the reference
-#     the generated table is compared against.
+# --- mch-ir-load: the IR artifact parser used by mch-codegen, which compiles
+# the artifact into matcher tables.
 # It links tdutils and nothing else — that is what lets the build-time tool use
 # it, and it is why the runnable/skip decision (which needs the host registry)
 # lives in BuildDriver.cpp instead of in the loader. mch-classify does NOT link
 # it: no production binary parses an IR document any more.
-# TODO: remove (harness): with the tables compiled in, the last thing keeping the
-# parser alive is the equivalence gate.
 add_library(mch-ir-load STATIC src/fixtures/IrLoader.cpp)
 target_include_directories(mch-ir-load PUBLIC src)
 target_compile_features(mch-ir-load PUBLIC cxx_std_20)
 target_link_libraries(mch-ir-load PUBLIC tdutils)
 
-# --- mch-codegen: build-time IR -> C++ source generator (no Python in the build).
-# Reads the version-controlled IR JSON under ir/ and emits deterministic C++.
+# --- mch-codegen: build-time IR -> C++ source generator.
+# Reads generated or testbed IR JSON and emits deterministic C++.
 add_executable(mch-codegen
     codegen/main.cpp
     codegen/ExprCodegen.cpp
@@ -29,30 +24,82 @@ target_link_libraries(mch-codegen tdutils mch-ir-load)
 # --- generated sources ---------------------------------------------------------
 # EVERY generated file (mch-codegen tables + tlbc parsers) is a build step whose
 # output lives in the build tree (${CMAKE_CURRENT_BINARY_DIR}/generated/), never
-# in the source tree or git. The ir/*.json inputs and tlb/mch-msgs.tlb ARE the
-# version-controlled contract; the .cpp tables are derived artifacts.
+# in the source tree or git. The manifest/specs, conformance JSON, and
+# tlb/mch-msgs.tlb are version-controlled inputs; the production IR and .cpp
+# tables are derived artifacts.
 #
 # Per-document tables: mch-codegen emits gen_*_<suffix>() symbols, so the tables
 # generated from the CLASSIFY artifact and the one from ir/build_vectors.json
 # (--build-vectors) both link into the binary, each permanently paired with its
 # input document.
-set(MCH_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
-file(MAKE_DIRECTORY ${MCH_GEN_DIR})
+set(MCH_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(MCH_GENERATED_IR "${MCH_GEN_DIR}/mch_ir.json")
+set(MCH_GENERATED_IR_SECOND "${MCH_GEN_DIR}/mch_ir.second.json")
+set(MCH_EMIT_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/ir/emit_manifest.json")
+set(MCH_INDEXER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../indexer" CACHE PATH
+    "Path to the repository indexer/ directory used for MCH IR generation")
+file(MAKE_DIRECTORY "${MCH_GEN_DIR}")
+
+find_package(Python3 3.10 QUIET COMPONENTS Interpreter)
+if(NOT Python3_Interpreter_FOUND)
+    message(FATAL_ERROR
+        "MCH IR generation requires Python 3.10 or newer; install python3 and make it discoverable by CMake (Python3_EXECUTABLE).")
+endif()
+if(NOT EXISTS "${MCH_INDEXER_ROOT}/indexer/events/mch/ir_emit.py")
+    message(FATAL_ERROR
+        "MCH IR generation requires the in-tree indexer Python package at ${MCH_INDEXER_ROOT}/indexer/events/mch; set MCH_INDEXER_ROOT to the repository's indexer/ directory.")
+endif()
+
+file(GLOB MCH_SPEC_SOURCES CONFIGURE_DEPENDS
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/specs/*.mch"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/specs_decl/*.mch"
+)
+set(MCH_FRONTEND_PY_SOURCES
+    "${MCH_INDEXER_ROOT}/indexer/__init__.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/__init__.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/__init__.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/ast_.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/btypes.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/builtin_signatures.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/compile.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/compiler.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/diagnostics.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/expr_ir.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/ir_emit.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/lexer.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/parser.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/recursion.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/registry.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/resolver.py"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/tokens.py"
+)
+
+add_custom_command(
+    OUTPUT "${MCH_GENERATED_IR}" "${MCH_GENERATED_IR_SECOND}"
+    COMMAND "${Python3_EXECUTABLE}" -m indexer.events.mch.ir_emit
+            --manifest "${MCH_EMIT_MANIFEST}" -o "${MCH_GENERATED_IR}"
+    COMMAND "${Python3_EXECUTABLE}" -m indexer.events.mch.ir_emit
+            --manifest "${MCH_EMIT_MANIFEST}" -o "${MCH_GENERATED_IR_SECOND}"
+    WORKING_DIRECTORY "${MCH_INDEXER_ROOT}"
+    DEPENDS ${MCH_SPEC_SOURCES} ${MCH_FRONTEND_PY_SOURCES} "${MCH_EMIT_MANIFEST}"
+    COMMENT "Generate deterministic MCH IR from .mch specs"
+    VERBATIM
+)
 
 # The document the CLASSIFY tables (matchers + builds + wheres) are generated
 # from. -DMCH_TESTBED_IR=<artifact.json> lets a phase run classify against an
-# experimental artifact WITHOUT editing the ir/mch_ir.json contract; the table
+# experimental artifact without replacing the generated production IR; the table
 # SYMBOLS are unchanged, so swapping the document is all the knob does and no
 # run-time table selection is needed. All three tables come from this one
 # variable, which is why they cannot disagree unless a build is left half-done
 # (prepare_classify cross-checks their source shas for exactly that case).
 set(MCH_TESTBED_IR "" CACHE FILEPATH
-    "Optional experimental IR artifact the classify tables are generated from instead of ir/mch_ir.json")
+    "Optional experimental IR artifact used instead of the generated production IR")
 if(MCH_TESTBED_IR)
     set(MCH_CLASSIFY_ARTIFACT ${MCH_TESTBED_IR})
     message(STATUS "mch: classify tables from TESTBED artifact ${MCH_TESTBED_IR}")
 else()
-    set(MCH_CLASSIFY_ARTIFACT ${CMAKE_CURRENT_SOURCE_DIR}/ir/mch_ir.json)
+    set(MCH_CLASSIFY_ARTIFACT ${MCH_GENERATED_IR})
 endif()
 
 add_custom_command(
@@ -122,7 +169,9 @@ set(MCH_GENERATED_TEST_SOURCES
     ${MCH_GEN_DIR}/builds_vectors_generated.cpp
 )
 add_custom_target(mch_generate_sources
-    DEPENDS ${MCH_GENERATED_SOURCES} ${MCH_GENERATED_TEST_SOURCES} ${MCH_GEN_DIR}/mch-msgs-tlb.h)
+    DEPENDS ${MCH_GENERATED_IR} ${MCH_GENERATED_IR_SECOND}
+            ${MCH_GENERATED_SOURCES} ${MCH_GENERATED_TEST_SOURCES}
+            ${MCH_GEN_DIR}/mch-msgs-tlb.h)
 
 # --- mch-classify: the classification CORE static library (Phase G step 3,
 # prod-design §2). The pure pipeline TUs (no CLI/dump/harness) — ton-index-
@@ -268,9 +317,7 @@ endif()
 add_library(mch-fixtures STATIC ${MCH_FIXTURE_SOURCES})
 target_include_directories(mch-fixtures PUBLIC src PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 target_compile_features(mch-fixtures PUBLIC cxx_std_20)
-# mch-ir-load rides in HERE, not on mch-classify: the artifact parser is the
-# equivalence gate's reference, not a production code path.
-target_link_libraries(mch-fixtures PUBLIC mch-classify mch-ir-load lz4::lz4)
+target_link_libraries(mch-fixtures PUBLIC mch-classify lz4::lz4)
 add_dependencies(mch-fixtures mch_generate_sources)
 
 # --- In-process shadow classifier for ton-trace-emulator (em1-design §8).
@@ -313,7 +360,6 @@ add_executable(ton-mch-engine
     src/MatchRunner.cpp
     src/BuildVectorRunner.cpp
     src/BuildSmoke.cpp
-    src/IrEquivalence.cpp
     src/Classify.cpp
     src/ShapeTest.cpp
     src/DexRecordsTest.cpp
@@ -332,6 +378,19 @@ target_compile_features(ton-mch-engine PRIVATE cxx_std_20)
 # the only target that knows ::Trace. mch-fixtures is linked HERE and only here.
 target_link_libraries(ton-mch-engine mch-fixtures mch-classify mch-emu)
 add_dependencies(ton-mch-engine mch_generate_sources)
+
+set(MCH_GENERATED_SURFACE "${MCH_GEN_DIR}/cpp_surface.json")
+add_custom_command(
+    OUTPUT "${MCH_GENERATED_SURFACE}"
+    COMMAND "${CMAKE_COMMAND}"
+            "-DMCH_ENGINE_EXECUTABLE=$<TARGET_FILE:ton-mch-engine>"
+            "-DMCH_SURFACE_OUTPUT=${MCH_GENERATED_SURFACE}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CaptureCppSurface.cmake"
+    DEPENDS ton-mch-engine "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CaptureCppSurface.cmake"
+    COMMENT "Generate C++ registry surface for the MCH twins"
+    VERBATIM
+)
+add_custom_target(mch_generate_surface DEPENDS "${MCH_GENERATED_SURFACE}")
 
 # Deliberately NOT install()ed: this is the gate/dev harness, not a product
 # binary, and it has no place in the production bin dir
@@ -360,7 +419,6 @@ add_test(NAME mch_actions_msgpack
     COMMAND ton-mch-engine --actions-msgpack-test)
 add_test(NAME mch_celldb_tier2
     COMMAND ton-mch-engine --celldb-tier2-test)
-# The compiled-in matcher table vs the artifact parsed at run time: the gate that
-# lets production stop parsing the document (src/IrEquivalence.h).
 add_test(NAME mch_ir_equivalence
-    COMMAND ton-mch-engine --ir-equivalence ${MCH_CLASSIFY_ARTIFACT})
+    COMMAND "${CMAKE_COMMAND}" -E compare_files
+            "${MCH_GENERATED_IR}" "${MCH_GENERATED_IR_SECOND}")

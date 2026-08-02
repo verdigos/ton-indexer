@@ -346,3 +346,5 @@ tmp/
 
 # code-atlas content/output may legitimately start with "build" (build-programs chapter)
 !code-atlas/**
+
+**/ton-mch-engine/generated/

@@ -13,7 +13,6 @@ ABI_DIR = REPO / "ton-index-worker/ton-abi/abi"
 ENGINE = REPO / "ton-index-worker/ton-mch-engine"
 MSG_PARSE = ENGINE / "src/MsgParse.cpp"
 ABI_BRIDGE = ENGINE / "src/AbiBridge.cpp"
-SURFACE = ENGINE / "twins/cpp_surface.json"
 
 # Logical public rows and their protocol-owned declaration files. The standard
 # and Ethena internal-transfer structs intentionally share one logical key.
@@ -211,11 +210,6 @@ def test_exactly_70_logical_rows_are_owned_and_cut_over():
         for name in names:
             assert name in structs
             assert name in _allowed_arms(sources[stem])
-
-    surface_names = set(json.loads(SURFACE.read_text(encoding="utf-8"))["parsers"])
-    assert len(surface_names) == 86
-    assert surface_names == set(hand) | set(abi)
-
 
 def test_frozen_declaration_surface_and_cell_topology():
     sources = _sources()

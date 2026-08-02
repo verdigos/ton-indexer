@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from indexer.events.mch import ast_
+from indexer.events.mch.builtin_signatures import BUILTIN_SIGNATURES
 from indexer.events.mch.diagnostics import CompileError, DiagnosticBag, Span
-from indexer.events.mch.expr_eval import BUILTINS as _EXPR_BUILTINS
 from indexer.events.mch.recursion import RecursionStrategy, RecursiveMatcherStrategy
 from indexer.events.mch.registry import Registries
 from indexer.events.mch.resolver import (
@@ -810,7 +810,7 @@ def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
         return False
     if isinstance(e, ast_.Call):
         callee = e.callee
-        if not isinstance(callee, ast_.NameRef) or callee.name not in _EXPR_BUILTINS:
+        if not isinstance(callee, ast_.NameRef) or callee.name not in BUILTIN_SIGNATURES:
             shown = callee.name if isinstance(callee, ast_.NameRef) else type(callee).__name__
             ctx.bag.error(
                 "C013_WHERE_EXPR_NOT_SYNC",

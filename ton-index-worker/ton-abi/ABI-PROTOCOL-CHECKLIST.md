@@ -67,10 +67,9 @@ canonical value shapes and wire-format invariants used by the bridge.
 
 11. `indexer/indexer/events/mch/specs/<name>.mch`: the matcher. `produces <snake>`
     is the btype and therefore `action.type`.
-12. `ton-mch-engine/ir/emit_manifest.json`: add the spec path, then regenerate the
-    artifact: `python -m indexer.events.mch.ir_emit --manifest …/ir/emit_manifest.json`
-    → commit `ir/mch_ir.json`. (CMake regenerates the paired build tables from it
-    on the next build; a stale pairing is a hard error, not a silent skip.)
+12. `ton-mch-engine/ir/emit_manifest.json`: add the spec path. CMake emits
+    `generated/mch_ir.json` from the manifest and regenerates the paired build
+    tables on the next build; a stale pairing is a hard error, not a silent skip.
 
 ## 5. Action serialization (usually the bulk)
 

@@ -6,15 +6,16 @@ intentional exception: its first 32-bit word is retained as data.
 """
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from indexer.events.mch.ir_emit import emit_manifest
+
 
 REPO = Path(__file__).resolve().parents[3]
 HOST = REPO / "ton-index-worker/ton-mch-engine/src/host"
-IR = REPO / "ton-index-worker/ton-mch-engine/ir/mch_ir.json"
+MANIFEST = REPO / "ton-index-worker/ton-mch-engine/ir/emit_manifest.json"
 
 
 @dataclass(frozen=True)
@@ -128,7 +129,7 @@ def test_host_calls_remain_a_closed_opcode_dominated_manifest():
 
 
 def test_cocoon_parent_wallet_anchor_cannot_reach_build():
-    artifact = json.loads(IR.read_text(encoding="utf-8"))
+    artifact = emit_manifest(MANIFEST)
     matcher = next(
         row for row in artifact["matchers"]
         if row["name"] == "cocoon_client_request_refund"

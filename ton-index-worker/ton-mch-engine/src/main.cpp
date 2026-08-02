@@ -18,7 +18,6 @@
 #include "EmuActionSerializeTest.h"
 #include "EmuCelldbLookupTest.h"
 #include "GenMatchers.h"
-#include "IrEquivalence.h"
 #include "BuildVectorRunner.h"
 #include "MatchRunner.h"
 #include "MsgParse.h"
@@ -153,7 +152,6 @@ int main(int argc, char *argv[]) {
   std::string vectors_path;
   std::string vectors_gen_path;
   std::string build_vectors_path;
-  std::string ir_equivalence_path;
   bool match_mode = false;
   bool build_smoke_mode = false;
   bool classify_mode = false;
@@ -182,10 +180,6 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "build-vectors",
                "Run build-program conformance vectors through GENERATED build fns and exit",
                [&](td::Slice value) { build_vectors_path = value.str(); });
-  p.add_option('\0', "ir-equivalence",
-               "Compare the compiled-in matcher table against the artifact parsed at run time "
-               "and exit: --ir-equivalence <mch_ir.json>",
-               [&](td::Slice value) { ir_equivalence_path = value.str(); });
   // TODO: remove (harness): --match, --build-smoke, --classify,
   // --classify-schema, --classify-prod, --parse-dump and --surface all render
   // intermediate pipeline stages used by differential harnesses. The gated
@@ -308,11 +302,6 @@ int main(int argc, char *argv[]) {
   if (!build_vectors_path.empty()) {
     // Build-program conformance mode (generated build fns): no scheduler needed.
     return mch::run_build_vectors(build_vectors_path);
-  }
-
-  if (!ir_equivalence_path.empty()) {
-    // Generated-table vs runtime-loaded-table gate: no scheduler needed.
-    return mch::run_ir_equivalence(ir_equivalence_path);
   }
 
   if (match_mode) {

@@ -27,6 +27,7 @@ the async build-program evaluator (mch_ir/expr.py Evaluator) shares them.
 from __future__ import annotations
 
 import base64
+import inspect
 from types import SimpleNamespace
 from typing import Any
 
@@ -34,6 +35,7 @@ from pytoniq_core import Cell
 
 from indexer.events.blocks.core import Block
 from indexer.events.blocks.utils import AccountId, Amount, Asset
+from indexer.events.mch.builtin_signatures import BUILTIN_SIGNATURES
 
 
 class EvalError(Exception):
@@ -242,24 +244,21 @@ def _builtin_contains(hay: Any, needle: Any) -> bool:
     return needle in hay
 
 
+_BUILTIN_CALLABLES: dict[str, Any] = {
+    symbol.removeprefix("_builtin_"): value
+    for symbol, value in globals().items()
+    if symbol.startswith("_builtin_") and callable(value)
+}
+
+if _BUILTIN_CALLABLES.keys() != BUILTIN_SIGNATURES.keys():
+    raise RuntimeError("builtin callable names disagree with builtin signatures")
+for _name, _arity in BUILTIN_SIGNATURES.items():
+    if len(inspect.signature(_BUILTIN_CALLABLES[_name]).parameters) != _arity:
+        raise RuntimeError(f"builtin callable arity disagrees for {_name!r}")
+
 BUILTINS: dict[str, tuple[Any, int]] = {
-    "account":   (_builtin_account, 1),
-    "amount":    (_builtin_amount, 1),
-    "asset":     (_builtin_asset, 1),
-    "ton_asset": (_builtin_ton_asset, 0),
-    "addr_none": (_builtin_addr_none, 0),
-    "b64":       (_builtin_b64, 1),
-    "asset_of":  (_builtin_asset_of, 1),
-    "tail_unwrap": (_builtin_tail_unwrap, 1),
-    "bytes_of":  (_builtin_bytes_of, 1),
-    "first":     (_builtin_first, 1),
-    "last":      (_builtin_last, 1),
-    "len":       (_builtin_len, 1),
-    "sum":       (_builtin_sum, 1),
-    "zip":       (_builtin_zip, 2),
-    "concat":    (_builtin_concat, 2),
-    "map":       (_builtin_map, 2),
-    "contains":  (_builtin_contains, 2),
+    name: (_BUILTIN_CALLABLES[name], arity)
+    for name, arity in BUILTIN_SIGNATURES.items()
 }
 
 

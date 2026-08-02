@@ -17,7 +17,7 @@ from indexer.events.mch.parser import parse
 SPECS_DIR = (
     Path(__file__).resolve().parents[2] / "indexer" / "events" / "mch" / "specs"
 )
-# Committed reproducible-emit contract (A1): manifest + the artifact it produces.
+# Tracked reproducible-emit policy input (A1).
 IR_DIR = (
     Path(__file__).resolve().parents[3]
     / "ton-index-worker" / "ton-mch-engine" / "ir"
@@ -28,17 +28,16 @@ def _emit() -> dict:
     return emit_dir(SPECS_DIR)
 
 
-def test_manifest_reproduces_committed_artifact():
-    """The committed ir/mch_ir.json must be byte-reproducible from its manifest —
-    the A1 reproducibility guarantee (no session-scratch emit dir)."""
+def test_manifest_emission_is_deterministic():
+    """The production manifest must emit byte-identical IR on repeated runs."""
     manifest = IR_DIR / "emit_manifest.json"
-    committed = IR_DIR / "mch_ir.json"
-    if not manifest.is_file() or not committed.is_file():
+    if not manifest.is_file():
         import pytest
 
         pytest.skip("C++ engine ir/ dir not present in this checkout")
-    emitted = render_json(emit_manifest(manifest)).encode("utf-8")
-    assert emitted == committed.read_bytes()
+    first = render_json(emit_manifest(manifest)).encode("utf-8")
+    second = render_json(emit_manifest(manifest)).encode("utf-8")
+    assert first == second
 
 
 def test_emit_specs_dir_deterministic():

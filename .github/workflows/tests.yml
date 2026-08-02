@@ -79,11 +79,9 @@ jobs:
     - name: Build C++ libraries
       run: touch suppression_mappings.txt && cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target ton-index-postgres ton-index-postgres-migrate ton-index-clickhouse ton-trace-emulator ton-trace-task-emulator ton-index-go ton-streaming-go ton-mch-engine --parallel $(nproc)
 
-    # The hermetic mch gates. Inputs are the committed JSON under
-    # ton-mch-engine/ir/; none of them needs the fixture corpus or Python.
-    # mch_ir_equivalence is the one that keeps ir/mch_ir.json honest: the matcher
-    # table is COMPILED IN, and that test proves the compiled table is what the
-    # committed document says.
+    # The hermetic mch gates. CMake emits the production IR from the tracked
+    # manifest/specs and compiles its tables into the engine. mch_ir_equivalence
+    # byte-compares two independent build-tree emissions for determinism.
     - name: Test mch engine
       working-directory: ${{github.workspace}}/build/ton-index-worker/ton-mch-engine
       run: ctest --output-on-failure

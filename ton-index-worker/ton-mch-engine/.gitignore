@@ -2,3 +2,5 @@
 # This entry only guards against a stray old-style in-tree regeneration; it is
 # deliberately precise (the repo-level build* patterns must not be relied on).
 /src/generated/
+/ir/mch_ir.json
+/twins/cpp_surface.json
