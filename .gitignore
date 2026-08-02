@@ -348,3 +348,4 @@ tmp/
 !code-atlas/**
 
 **/ton-mch-engine/generated/
+**/ton-abi/generated/

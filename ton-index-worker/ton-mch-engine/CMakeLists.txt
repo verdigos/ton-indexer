@@ -158,33 +158,35 @@ add_custom_target(mch_generate_sources
 # with the harness Classify.cpp.
 # ton-abi generated pairs live here (fixture pairs for the harness test below;
 # the PRODUCTION pairs compiled into mch-classify).
-set(TON_ABI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../ton-abi)
+set(TON_ABI_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/../ton-abi/generated)
 
 # PRODUCTION ABI parser pairs — compiled into mch-classify and explicitly
 # registered in AbiBridge.cpp. Adding a NEW .tolk declaration file = one line here
 # (a new decl in an EXISTING contract needs no CMake edit at all; the
-# .abi.json and generated pair are committed alongside the declaration).
+# .abi.json is committed alongside the declaration; its generated pair is a build output).
 set(ABI_PROD_PAIRS
-    ${TON_ABI_DIR}/generated/jetton_gen.cpp
-    ${TON_ABI_DIR}/generated/multisig_gen.cpp
-    ${TON_ABI_DIR}/generated/pton_gen.cpp
-    ${TON_ABI_DIR}/generated/stonfi_gen.cpp
-    ${TON_ABI_DIR}/generated/dedust_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/jetton_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/multisig_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/pton_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/stonfi_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/dedust_gen.cpp
     # DeDust CPMM V2 claim_reward family.
-    ${TON_ABI_DIR}/generated/dedust_v2_gen.cpp
-    ${TON_ABI_DIR}/generated/coffee_gen.cpp
-    ${TON_ABI_DIR}/generated/coffee_staking_withdraw3_gen.cpp
-    ${TON_ABI_DIR}/generated/evaa_gen.cpp
-    ${TON_ABI_DIR}/generated/evaa_supply_forward_gen.cpp
-    ${TON_ABI_DIR}/generated/jvault_gen.cpp
-    ${TON_ABI_DIR}/generated/jvault_payload_gen.cpp
-    ${TON_ABI_DIR}/generated/subscriptions_gen.cpp
-    ${TON_ABI_DIR}/generated/tonco_gen.cpp
-    ${TON_ABI_DIR}/generated/teleitem_gen.cpp
-    ${TON_ABI_DIR}/generated/nft_sale_gen.cpp
-    ${TON_ABI_DIR}/generated/tonstakers_gen.cpp
-    ${TON_ABI_DIR}/generated/cocoon_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/dedust_v2_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/coffee_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/coffee_staking_withdraw3_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/evaa_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/evaa_supply_forward_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/jvault_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/jvault_payload_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/subscriptions_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/tonco_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/teleitem_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/nft_sale_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/tonstakers_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/cocoon_gen.cpp
 )
+
+set_source_files_properties(${ABI_PROD_PAIRS} PROPERTIES GENERATED TRUE)
 
 add_library(mch-classify STATIC
     src/TraceAggregates.cpp
@@ -241,12 +243,13 @@ target_include_directories(mch-classify
     # the build tree; nothing generated ever lands under src/.
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
     # AbiBridge.cpp includes the ABI_PROD_PAIRS generated headers.
-    PRIVATE ${TON_ABI_DIR}/generated
+    PRIVATE ${TON_ABI_GENERATED_DIR}
 )
 target_compile_features(mch-classify PUBLIC cxx_std_20)
 
 # ton-abi bridge: mch-classify -> ton-abi ONLY (ton-abi stays mch-free).
 target_link_libraries(mch-classify PUBLIC tondb-scanner tdactor ton-abi)
+add_dependencies(mch-classify ton_abi_generate_sources)
 add_dependencies(mch-classify mch_generate_sources)
 
 # --- mch-fixtures: the TEST-ONLY static lib.
@@ -312,16 +315,18 @@ target_compile_features(mch-emu-bridge PUBLIC cxx_std_20)
 target_link_libraries(mch-emu-bridge PUBLIC mch-emu ton-trace-emulator-core)
 
 # The upstream CLI/gate executable over the product boundary.
-# Bridge self-test (--abi-bridge-test): committed ton-abi generated fixture
+# Bridge self-test (--abi-bridge-test): build-time ton-abi generated fixture
 # pairs compiled into the HARNESS EXE ONLY (never the mch-classify prod lib) so
 # the trampoline+adapter run against real generated structs; these are UNDER TEST,
-# not production registry rows. TON_ABI_DIR set above.
+# not production registry rows. TON_ABI_GENERATED_DIR set above.
 set(ABI_BRIDGE_TEST_FIXTURES
     # jetton_wallet_contract: the only Cell-through-the-trampoline coverage.
     # lots_of_wrappers: both union forms + address/optional/list/nested struct.
-    ${TON_ABI_DIR}/generated/jetton_wallet_contract_gen.cpp
-    ${TON_ABI_DIR}/generated/lots_of_wrappers_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/jetton_wallet_contract_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/lots_of_wrappers_gen.cpp
 )
+
+set_source_files_properties(${ABI_BRIDGE_TEST_FIXTURES} PROPERTIES GENERATED TRUE)
 
 add_executable(ton-mch-engine
     src/main.cpp
@@ -331,7 +336,7 @@ add_executable(ton-mch-engine
     src/EmuCelldbLookupTest.cpp
     ${ABI_BRIDGE_TEST_FIXTURES}
 )
-target_include_directories(ton-mch-engine PRIVATE src ${CMAKE_CURRENT_BINARY_DIR} ${TON_ABI_DIR}/generated)
+target_include_directories(ton-mch-engine PRIVATE src ${CMAKE_CURRENT_BINARY_DIR} ${TON_ABI_GENERATED_DIR})
 target_compile_features(ton-mch-engine PRIVATE cxx_std_20)
 # mch-emu (not just mch-classify): --actions-msgpack-test gates the write-back
 # writer, which lives there. Still no emulator dependency — mch-emu-bridge is
