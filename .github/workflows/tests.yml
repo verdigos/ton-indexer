@@ -87,7 +87,7 @@ jobs:
       run: ctest --output-on-failure
 
     # G1: the frozen action goldens over the fixture corpus. A diff is a
-    # regression, not a re-baseline — see ton-mch-engine/goldens/README.md.
+    # regression, not a re-baseline.
     - name: Action goldens
       run: |
         ./build/ton-index-worker/ton-mch-engine/ton-mch-engine \

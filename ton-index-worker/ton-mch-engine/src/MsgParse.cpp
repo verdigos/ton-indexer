@@ -1,5 +1,5 @@
 // TL-B message-parser registry and dispatch. Per-family adapters live under
-// src/parse. See docs/message-parsing.md for observable parsing conventions.
+// src/parse.
 #include "MsgParse.h"
 
 #include "AbiBridge.h"

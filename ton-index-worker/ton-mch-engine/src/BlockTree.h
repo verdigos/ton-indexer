@@ -1,6 +1,6 @@
 // EventNode tree and Block substrate. Outgoing edges remain in stable min_lt
 // order, frontier discovery deduplicates blocks, and connection compaction keeps
-// first-seen order. See docs/engine-internals.md.
+// first-seen order.
 #pragma once
 
 #include "TraceLoader.h"

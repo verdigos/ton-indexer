@@ -1,5 +1,5 @@
-// W11 T11.2: the conformance gate. Every vector in testdata/abi_vectors.json is
-// run through the GENERATED typed structs (from_slice -> to_abi_value ->
+// The conformance gate runs every vector in testdata/abi_vectors.json through
+// the GENERATED typed structs (from_slice -> to_abi_value ->
 // canonical JSON) and the result must byte-match the vector's expected value.
 // The vectors ARE the oracle: tools/gen_vectors.mjs produces them from the
 // reference TS implementation, so generated == vector means generated ==
@@ -8,7 +8,7 @@
 // golden cell hash). Compiling this TU is also what proves every committed
 // generated pair compiles and links.
 //
-// Custom-serializer vectors are driven via the TYPED registry (§0.17 (b)):
+// Custom-serializer vectors are driven via the typed registry:
 // register_abi_custom<T> in setup, keyed <contract_name>::<decl>. TelegramString
 // and CustomPoint are AbiValue-form (type-erased); Custom8 is td::uint64.
 
@@ -211,7 +211,7 @@ std::map<std::string, GenEntry> build_dispatch() {
 
 // -------- typed custom serializers (register once) -------------------------
 void register_customs() {
-  // Custom8 -> td::uint64 (uint8 target, n<=64 -> native member type; W11.5).
+  // Custom8 -> td::uint64 because a uint8 target uses the native member type.
   auto st = ton_abi::gen::register_abi_custom<td::uint64>(
       "LotsOfWrappers::Custom8",
       [](const td::uint64 &v, vm::CellBuilder &cb) -> td::Status { return store_uint64(cb, v, 8); },
@@ -268,7 +268,7 @@ void register_customs() {
 
   // MyBorderedInt -> td::RefInt256 (representable target): a lossy 3-range
   // encoding -- pack stores a 4-bit range TAG, unpack returns a fixed
-  // representative per range (non-idempotent by design; W9 dynamic twin).
+  // representative per range, which is non-idempotent by design.
   st = ton_abi::gen::register_abi_custom<td::RefInt256>(
       "LotsOfWrappers::MyBorderedInt",
       [](const td::RefInt256 &v, vm::CellBuilder &cb) -> td::Status {
@@ -402,7 +402,7 @@ TEST_CASE("A/B gate corpus: full vector set present, no orphan dispatch entries"
 }
 
 // ---------------------------------------------------------------------------
-// Union dispatch FORMS on the generated path. Ported from the W7-era
+// Union dispatch forms on the generated path. Ported from the former
 // AbiLeavesPrefixTest cases that drove the interpreter's runtime dispatch_union
 // helper (deleted: pure codegen bakes its own dispatch chain, so the runtime
 // helper had no callers). The semantics still need a home:
@@ -480,7 +480,7 @@ TEST_CASE("union dispatch forms (generated): explicit peek, T|void, void-last") 
 }
 
 // ---------------------------------------------------------------------------
-// MyBorderedInt: typed-side 3-range lossy encoding (W9 dynamic twin, but driven
+// MyBorderedInt: typed-side 3-range lossy encoding, driven
 // through the GENERATED MyBorderedInt_store / _from_slice + typed registry).
 // Deliberately vector-less (non-idempotent), so a dedicated native unit.
 // ---------------------------------------------------------------------------
@@ -506,8 +506,8 @@ TEST_CASE("typed custom: MyBorderedInt 3-range lossy encoding") {
 }
 
 // ---------------------------------------------------------------------------
-// LotsOfStorage default-fill (W9-deferred): create() with no explicit args
-// materializes every field's ABI default_value ConstExpr (§8). Exactness gate
+// LotsOfStorage default-fill: create() with no explicit args
+// materializes every field's ABI default_value ConstExpr. Exactness gate
 // on a representative spread incl. the big 256-bit bigints and a nullable tensor.
 // ---------------------------------------------------------------------------
 TEST_CASE("create() default-fill: LotsOfStorage StWithAllDefaults") {
@@ -515,7 +515,7 @@ TEST_CASE("create() default-fill: LotsOfStorage StWithAllDefaults") {
   ls::StWithAllDefaults::CreateArgs args;  // all fields defaulted -> all optional, left empty
   ls::StWithAllDefaults s = ls::StWithAllDefaults::create(args);
 
-  CHECK(s.i1 == 0);  // int32 -> td::int64 (W11.5)
+  CHECK(s.i1 == 0);  // int32 -> td::int64
   CHECK(s.i5->to_dec_string() == "1267650600228229401496703205376");   // uint256 -> RefInt256
   CHECK(s.i6->to_dec_string() == "-1267650600228229401496703205375");  // int256 -> RefInt256
   CHECK(s.b1 == true);
@@ -529,7 +529,7 @@ TEST_CASE("create() default-fill: LotsOfStorage StWithAllDefaults") {
 }
 
 // ---------------------------------------------------------------------------
-// client_ty_idx cell-side swap (ported from W9.2 AbiInterpW9Test, generated
+// client_ty_idx cell-side swap, now exercised through generated
 // path). ClientPayload.note is declared 'remaining' but carries
 // @abi.clientType 'string'; the kernel swaps to the cell type, so the emitted
 // member is std::string and the wire is a snake string ref-tail. Proves the
@@ -555,7 +555,7 @@ TEST_CASE("client_ty_idx: ClientPayload note reads as string (generated)") {
 }
 
 // ---------------------------------------------------------------------------
-// Custom declared-but-not-registered -> runtime error (ported from W9's
+// Custom declared-but-not-registered -> runtime error, preserving the former
 // Color-asymmetry, generated typed registry). Color is a custom enum; the A/B
 // setup deliberately never registers it, so every direction must fail with a
 // 'not registered' runtime error (NOT a compile/link error) -- reference

@@ -1,8 +1,7 @@
 #pragma once
 
 // Structural walkers for the @ton/core arrayOf and lispListOf wire formats.
-// Element recursion belongs to the supplied callback. See MODULE-NOTES.md for
-// chunk ordering, count validation, and the lisp-list reference limitation.
+// Element recursion belongs to the supplied callback.
 
 #include "td/utils/Status.h"
 

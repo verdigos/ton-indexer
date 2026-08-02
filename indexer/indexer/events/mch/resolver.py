@@ -124,8 +124,6 @@ def _validate_group_anchor(
     membership) and each branch may carry a named `where <pred>` clause.
     Membership is tested first, then the matching branch's predicate. Returns
     (group, "") on success or (None, reason) for the R007 message.
-
-    See docs/spec-authoring-notes.md.
     """
     if any(o.under_recursive for o in occs):
         return None, "is inside a recursive rule"
@@ -135,25 +133,24 @@ def _validate_group_anchor(
         return None, (
             "sits in a non-exclusive alternative branch; an opcode-set anchor "
             "requires an exclusive alternative (`^`, or `|` of distinct bare "
-            "concrete heads) (spec §8.3 M2)"
+            "concrete heads)"
         )
     if any(len(o.branch_path) != 1 for o in occs):
         return None, (
             "must sit directly on the branches of a single exclusive "
-            "alternative, not nested in or outside one (spec §8.3 M2)"
+            "alternative, not nested in or outside one"
         )
     alt_id = occs[0].branch_path[0][0]
     if any(o.branch_path[0][0] != alt_id for o in occs):
         return None, (
             "occurrences span different alternatives; an opcode-set anchor "
-            "requires a single exclusive alternative (spec §8.3 M2)"
+            "requires a single exclusive alternative"
         )
     alt = alt_nodes[alt_id]
     idxs = {o.branch_path[0][1] for o in occs}
     if len(occs) != len(alt.branches) or idxs != set(range(len(alt.branches))):
         return None, (
-            "must be bound on every branch of the exclusive alternative "
-            "(spec §8.3 M2)"
+            "must be bound on every branch of the exclusive alternative"
         )
     by_idx = {o.branch_path[0][1]: o for o in occs}
     for idx, branch in enumerate(alt.branches):
@@ -161,13 +158,12 @@ def _validate_group_anchor(
         if branch is not occ.node:
             return None, (
                 "requires every branch of the exclusive alternative to be a "
-                "bare node carrying the capture (no chains or nesting) "
-                "(spec §8.3 M2)"
+                "bare node carrying the capture (no chains or nesting)"
             )
         if not isinstance(occ.node.head, (ast_.OpHead, ast_.BTypeHead)):
             return None, (
                 "requires concrete `op`/`btype` heads on every branch of the "
-                "exclusive alternative (spec §8.3 M2)"
+                "exclusive alternative"
             )
         # A branch `where` clause is legal. The anchor test checks
         # union membership first, then the matching branch's predicate. Predicate
@@ -889,8 +885,7 @@ def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag,
                 bag.error(
                     diagnostics.R024_NESTED_COMPREHENSION,
                     "nested comprehensions are not allowed; a `map|any|all` "
-                    "comprehension may not appear inside another comprehension "
-                    "(spec §16.1)",
+                    "comprehension may not appear inside another comprehension",
                     e.span,
                 )
             # `xs` evaluates in the enclosing scope (no binder); `body` sees the

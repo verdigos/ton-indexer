@@ -245,7 +245,7 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
                     "C013_WHERE_EXPR_NOT_SYNC",
                     f"matcher {decl.name!r}: inline `where (expr)` is not "
                     f"supported on opcode-set anchor branches; use a named "
-                    f"`where <predicate>` (spec §8.3 / [M2R, R09])",
+                    f"`where <predicate>`",
                     b.span,
                 )
     if rm.anchor_group is not None:
@@ -342,8 +342,6 @@ def _find_anchor_path(pattern: ast_.PatternExpr, anchor: ast_.PatternExpr) -> li
 
 def _is_cb_atom(a: ast_.PatternExpr) -> bool:
     """Whether an atom attaches left without advancing the chain cursor.
-
-    See docs/spec-authoring-notes.md.
     """
     return isinstance(a, ast_.ChildrenBlock) or (
         isinstance(a, ast_.Maybe) and isinstance(a.inner, ast_.ChildrenBlock)
@@ -962,8 +960,6 @@ def _check_no_bare_children_block(
     ctx: CompileCtx,
 ) -> None:
     """Report C008 for a children block without a node on its left.
-
-    See docs/spec-authoring-notes.md for cursor and attachment rules.
     """
 
     def is_cb_or_maybe_cb(p: ast_.PatternExpr) -> tuple[bool, ast_.Span]:
@@ -1066,8 +1062,6 @@ _CYCLIC_ROOTS_KEY = "_mch_cyclic_roots"       # dict[str, LNode]  (shared body r
 
 def _check_cyclic_rule_body(target: ast_.RuleDecl, ctx: CompileCtx) -> None:
     """Enforce C012 shape rules for cyclic rule bodies.
-
-    See docs/spec-authoring-notes.md.
     """
     name = target.name
 

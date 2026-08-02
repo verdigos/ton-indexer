@@ -1,6 +1,6 @@
 // Shared leaf-operation semantics for generated expressions and the interpreter.
 // Faults are explicit EvalResult values, and each operation defines its own null
-// behavior. See docs/value-model.md for the value and fault contracts.
+// behavior.
 #pragma once
 
 #include "Value.h"

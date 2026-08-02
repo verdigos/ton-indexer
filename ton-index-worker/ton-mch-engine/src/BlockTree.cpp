@@ -431,7 +431,7 @@ Block *make_leaf_block(BlockArena &arena, const EventNode *node) {
   b->data = leaf_data(b->btype, node, op);
   init_leaf(b, node);
 
-  // ContractDeploy side-effect block lives in children_blocks (spec §11.1).
+  // ContractDeploy side-effect blocks live in children_blocks.
   if (!node->is_tick_tock && tx != nullptr && tx->end_status == "active" &&
       tx->orig_status != "active" && tx->orig_status != "frozen") {
     Block *deploy = arena.make("contract_deploy");

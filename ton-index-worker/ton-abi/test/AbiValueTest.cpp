@@ -1,8 +1,7 @@
-// W8 TDD (T8.1): AbiValue tree + canonical JSON dump shapes (§0.14). Units
-// build AbiValue trees by hand (no kernel/walker involved -- that's T8.2) and
-// assert the exact dump string per kind, matching VALUE_SCHEMA.md / the
-// MODULE-NOTES.md semantics points (lowercase hex, cellOf {"ref":...}, union
-// hasValueField wrapper, struct "$" first).
+// These units build AbiValue trees by hand without involving the kernel or
+// generated walker. They assert the exact canonical JSON dump for each kind,
+// including lowercase hex, cellOf {"ref":...}, the union hasValueField wrapper,
+// and struct "$" first.
 
 #include "AbiTestSupport.h"
 
@@ -112,7 +111,7 @@ TEST_CASE("AbiValue dump: String -> JSON string, escapes quote/backslash/control
   CHECK(AbiValue::make_string("a\nb").to_json() == R"("a\nb")");
 }
 
-// T8.3 requirement (§0.14): string dump uses @ton/core's lossy-UTF8 decode
+// String dumping uses @ton/core's lossy-UTF8 decode
 // (Node Buffer.toString('utf8')), U+FFFD = the 3-byte sequence EF BF BD.
 // string_v itself stays RAW (pack round-trips the original bytes exactly);
 // only to_json() applies this. Every case below was cross-checked against

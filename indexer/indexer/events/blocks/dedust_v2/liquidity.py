@@ -465,7 +465,7 @@ class DedustV2DepositPartialBlockMatcher(BlockMatcher):
 async def post_process_dedust_v2_liquidity(blocks: list[Block]) -> list[Block]:
     # merge deposit partials into their completing block by deposit contract
     #
-    # Dispatch is by BTYPE, not isinstance (spec §5.5): the declarative mch build
+    # Dispatch is by BTYPE, not isinstance: the declarative mch build
     # (specs/dedust_v2_deposit.mch) emits generic Blocks, while the two block
     # classes above tag their output with exactly these same btypes, so one
     # btype test covers the legacy trio and the ported one. The v1 sibling

@@ -3,7 +3,7 @@
 // bytes against these results. Coverage includes every supported value kind,
 // generic union labels, custom serializers, and expected failures.
 // Requires the reference checkout at FIXTURES_SRC. Production declarations are
-// compiled separately by gen_prod_abi.mjs. See MODULE-NOTES.md for value JSON.
+// compiled separately by gen_prod_abi.mjs.
 
 import fs from 'node:fs';
 import path from 'node:path';

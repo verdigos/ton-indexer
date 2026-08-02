@@ -1,5 +1,4 @@
 // Message-parsing registry for hand-written adapters and generated ABI rows.
-// See docs/message-parsing.md for parsing and failure conventions.
 #pragma once
 
 #include "Value.h"

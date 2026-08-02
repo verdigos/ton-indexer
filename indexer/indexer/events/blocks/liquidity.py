@@ -506,8 +506,8 @@ async def post_process_dedust_liquidity(blocks: list[Block]) -> list[Block]:
     final_deposits = []
     used_deposit_contracts = defaultdict(int)
 
-    # Dual dispatch (spec §5.5): the legacy pair tags its output with the
-    # DedustDepositLiquidity[Partial] subclasses; the declarative mch build
+    # Dispatch supports both implementations: the legacy pair tags its output
+    # with the DedustDepositLiquidity[Partial] subclasses; the declarative mch build
     # (specs/dedust_deposit.mch) emits generic Block(btype
     # dedust_deposit_liquidity[_partial]). The distinct btypes carry the same
     # final/partial split, so match either form.
@@ -738,7 +738,7 @@ class StonfiV2DepositLiquidity(Block):
     """Stonfi v2 provide-liquidity leg that carries the pool callback
     (cb_add_liquidity -> LP mint or refund). Same btype as the legacy
     matcher's output; the class tag exists for
-    post_process_stonfi_v2_liquidity dispatch (R08)."""
+    post_process_stonfi_v2_liquidity dispatch."""
 
     def __init__(self, data):
         super().__init__("dex_deposit_liquidity", [], data)
@@ -747,7 +747,7 @@ class StonfiV2DepositLiquidity(Block):
 class StonfiV2DepositLiquidityPartial(Block):
     """Stonfi v2 provide-liquidity leg without the pool callback — the
     deposit that waits for its pair. Same btype as the legacy matcher's
-    output; class tag for post_process_stonfi_v2_liquidity dispatch (R08)."""
+    output; class tag for post_process_stonfi_v2_liquidity dispatch."""
 
     def __init__(self, data):
         super().__init__("dex_deposit_liquidity", [], data)
@@ -793,7 +793,7 @@ _STONFI_V2_DEPOSIT_CLASSES = (StonfiV2DepositLiquidity, StonfiV2DepositLiquidity
 
 
 def _is_stonfi_v2_provide_leg(b: Block) -> bool:
-    """Dual dispatch for the pairing pass (spec §5.5): the legacy matcher tags
+    """Dual dispatch for the pairing pass: the legacy matcher tags
     its produced legs with the StonfiV2DepositLiquidity[Partial] subclasses,
     while the declarative mch build (specs/stonfi_v2_provide.mch) emits a
     generic Block(btype dex_deposit_liquidity) carrying dex == 'stonfi_v2'.
@@ -923,7 +923,7 @@ def _stonfi_v2_absorb_unpaired(final: Block, partial: Block) -> None:
 
 async def post_process_stonfi_v2_liquidity(blocks: list[Block]) -> list[Block]:
     """Host-side pairing pass for the R08 stonfi_v2 provide-liquidity remake
-    (spec §5.5: merging stays host-side). The mch matchers emit one
+    (merging stays host-side). The mch matchers emit one
     class-tagged block per deposit leg; this pass replays the legacy
     cross-branch pairing: a later-fired leg absorbs an earlier sibling leg
     (same previous_block) — with the EmptyBlock proxy insertion and data
@@ -1441,7 +1441,7 @@ async def build_tonco_deposit_liquidity_core(
     excesses = []
     for excess_transfer in excess_transfers:
         if excess_transfer:
-            # Dual dispatch (§11.5): btype covers legacy + declarative jetton legs.
+            # The shared btype covers legacy and declarative jetton legs.
             if excess_transfer.btype == "jetton_transfer":
                 pton_transfer = find_call_contract(
                     excess_transfer.next_blocks, PTonTransfer.opcode
@@ -1582,7 +1582,7 @@ async def resolve_tonco_withdraw_payouts(
 
     for i, payout_transfer_block in enumerate(actual_payout_transfers):
         temp_processed_payout = {}
-        # Dual dispatch (§11.5): btype covers the legacy JettonTransferBlock and
+        # The shared btype covers the legacy JettonTransferBlock and
         # the declarative jetton leg, which is a plain Block.
         if (
             payout_transfer_block is not None

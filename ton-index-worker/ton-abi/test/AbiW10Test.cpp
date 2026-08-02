@@ -1,13 +1,13 @@
-// W10 (T10.1): ABI-inspection port -- LOW, last test wave before the emitter.
-// Ports the pure ABI-PARSE asserts from OnlyHeader/LotsOfAnnotations/
+// ABI-inspection tests port the pure ABI-parse assertions from OnlyHeader/
+// LotsOfAnnotations/
 // LotsOfThrows/LotsOfStorage/HasNotInitializedStorage.spec.ts onto our already
 // -committed .abi.json fixtures, using AbiModel/AbiLoader/AbiKernel accessors
 // directly (no AbiInterp needed -- these are declaration/type-tree
 // inspections, not (de)serialization).
 //
-// Deliberately OUT (per plan + lead's W10 brief):
+// Deliberately out of scope:
 //  - LotsOfThrows' `isDefaultValueSupported` / `CodegenCtx` check -- a CODEGEN
-//    concern (emit-field-defs.ts), belongs with the W11 emitter's defaults
+//    concern (emit-field-defs.ts), belongs with the emitter's defaults
 //    support gate, not the loader/kernel. We still assert every
 //    WithUnsupportedDefaults field HAS a default_value (that much is a loader
 //    fact), just not whether the emitter could legally encode it.
@@ -87,7 +87,7 @@ TEST_CASE("W10 OnlyHeader: outgoing/emitted/thrown_errors from the contract head
     REQUIRE(e->members.size() == 1);
     CHECK(e->members[0].name == "NotFound");
     CHECK(e->members[0].value->to_dec_string() == "404");
-    // GAP CLOSED (W10, patched per lead's request): ABIEnumMember now carries
+    // ABIEnumMember carries
     // {name, value, description}; parse_enum reads the JSON's per-member
     // "description" field (previously silently dropped).
     REQUIRE(e->members[0].description.has_value());

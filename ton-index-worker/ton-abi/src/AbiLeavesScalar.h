@@ -2,8 +2,7 @@
 
 // Fail-closed scalar load/store primitives matching @ton/core wire semantics.
 // Integer values use RefInt256 except for the explicit native-width overloads;
-// bitsN returns exactly n bits and no refs. See MODULE-NOTES.md for varint size
-// and range details.
+// bitsN returns exactly n bits and no refs.
 
 #include "common/refint.h"
 #include "td/utils/Status.h"

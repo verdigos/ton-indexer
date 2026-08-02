@@ -1,6 +1,6 @@
 // ton-abi bridge: AbiValue to mch::Value adapter and production
 // ABI parser rows. Registry keys are the stable, bare spec-facing declaration
-// names. See docs/abi-bridge.md for the value mapping and registry contract.
+// names.
 #include "AbiBridge.h"
 
 #include "common/refint.h"
@@ -36,7 +36,7 @@ using ton_abi::AbiAddressKind;
 namespace {
 
 // Copy a bit slice into a fresh, root-hash-comparable cell. Use the non-throwing
-// append operation to preserve adapter totality. See docs/abi-bridge.md.
+// append operation to preserve adapter totality.
 Value cell_from_slice(const td::Ref<vm::CellSlice> &slice) {
   vm::CellBuilder cb;
   if (slice.not_null() && !cb.append_cellslice_bool(*slice)) {

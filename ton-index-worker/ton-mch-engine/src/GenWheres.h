@@ -1,6 +1,5 @@
 // Stable interface for generated where-expression functions, keyed by the
 // artifact-global node index. The walker has no alternate runtime path.
-// See docs/codegen.md.
 #pragma once
 
 #include "ExprRuntime.h"

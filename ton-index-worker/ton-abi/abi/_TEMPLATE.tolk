@@ -5,7 +5,6 @@ tolk 1.0
 // tools/gen_prod_abi.mjs, then run `node tools/gen_prod_abi.mjs`.
 //
 // This file is not compiled because gen_prod_abi.mjs uses an explicit list.
-// See ton-abi/ABI-PROTOCOL-CHECKLIST.md for the end-to-end steps.
 //
 // The remaining contract scaffolding only enables ABI emission and does not
 // reach generated parsers. Keep the accepted `tolk 1.0` pragma and name each

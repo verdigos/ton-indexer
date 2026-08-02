@@ -1,4 +1,4 @@
-# Stonfi v2 withdraw liquidity (R04 remake) — remade from blocks/liquidity.py
+# Stonfi v2 withdraw liquidity, remade from blocks/liquidity.py
 # StonfiV2WithdrawLiquidityMatcher. FULLY DECLARATIVE build (no host builder).
 #
 # The legacy matcher anchors on ONE pool pay-to (op 0x657b54f5) and then does an
@@ -19,7 +19,7 @@
 # block; stonfi_v2 runs after it in event_processing) -> op 0x297437cf router ->
 # {two pay-tos}. Same shape family as dedust_withdraw.
 # Refund: anchored on op 0x0f98e2b8, its parent (op 0x132b9a2c) carried on a
-# `<-` edge (wrapped-children-set CB exemption, §6.5 / tonco precedent) so the
+# `<-` edge, following the wrapped-children-set Tonco precedent, so the
 # core can read the sender off refund.previous_block, and the parent is consumed.
 #
 # Each pay-to has a jetton_transfer child; a TON payout carries a PTonTransfer

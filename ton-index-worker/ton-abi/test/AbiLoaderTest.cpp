@@ -1,8 +1,8 @@
-// T1.2 TDD: AbiLoader fail-closed unit tests. Each REJECT case hand-builds a
+// AbiLoader fail-closed unit tests. Each REJECT case hand-builds a
 // minimal ABI JSON that violates EXACTLY one invariant; each ACCEPT case
 // either uses the minimal valid skeleton or one of the 3 committed fixture
-// ABIs from testdata/fixtures/ (W0). See docs/ton-abi-plan.md T1.2 row for
-// the invariant list this mirrors.
+// ABIs from testdata/fixtures/. Together these mirror the loader's invariant
+// list.
 
 #include "AbiTestSupport.h"
 
@@ -41,7 +41,7 @@ TEST_CASE("AbiLoader accept: minimal valid skeleton") {
   CHECK(abi.declarations.empty());
 }
 
-// T1.3: all 18 fixtures that compile to a valid ABI (of the 26 .tolk files
+// All 18 fixtures that compile to a valid ABI (of the 26 .tolk files
 // copied from the reference repo -- 19 top-level + 7 imports/; imports/ are
 // not independently-compilable top-level contracts and small.tolk is a
 // genuine Tolk compiler error unrelated to ABI loading, see gen_vectors.mjs)

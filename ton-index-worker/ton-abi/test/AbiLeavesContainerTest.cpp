@@ -1,7 +1,7 @@
-// W6 TDD: arrayOf / lispListOf structural leaves. Round-trips + PACK
+// arrayOf / lispListOf structural leaves. Round-trips + PACK
 // byte-identity vs Node @ton/core references; arrayOf LOAD accepts both the
 // 1-elem/ref form and the compiler-chunked form. Element (un)pack is a uint8
-// callback standing in for the W8 walker.
+// callback standing in for the generated walker.
 
 #include "AbiTestSupport.h"
 

@@ -1,4 +1,4 @@
-// W7 TDD: prefix ops over hand-built cells -- store/check round-trip, the wide
+// Prefix ops over hand-built cells cover store/check round-trip, the wide
 // (48-bit) struct opcode, zero length, truncation reject, and the peek
 // primitive. The union prefix-tree cases that used to live here drove the
 // interpreter-era runtime dispatch_union helper; with pure codegen that helper

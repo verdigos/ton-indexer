@@ -20,7 +20,6 @@ namespace {
 
 // One fill function per supported serialized block type. ClassifyCore owns the
 // tree walk; this file maps each surviving row to wire-facing action fields.
-// See docs/engine-internals.md for the action serialization contract.
 
 // _addr(): AccountId/Asset/None -> canonical address STRING (Str) or Null.
 // Composites and directional fields store addresses as plain strings (Python
@@ -310,7 +309,7 @@ void fill_dedust_v2_claim_fees(const Value &d, Action &a) {
   a.dex_withdraw_liquidity_data = mkdict(std::move(f));
 }
 
-// T12.2: DeDust CPMM V2 reward claim (block_tree_serializer _fill_dedust_v2_claim_reward).
+// DeDust CPMM V2 reward claim (block_tree_serializer _fill_dedust_v2_claim_reward).
 // Reuses the dex_withdraw_liquidity_data composite; reward_index is carried in
 // the block data but is NOT serialized (upstream v1.3 contract).
 void fill_dedust_v2_claim_reward(const Value &d, Action &a) {

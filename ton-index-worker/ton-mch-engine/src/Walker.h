@@ -1,6 +1,5 @@
 // Read-only MCH IR matcher walker. Candidate choices use stable min_lt ordering,
 // and inline where expressions run through the generated table after head tests.
-// See docs/engine-internals.md for ordering and capture invariants.
 #pragma once
 
 #include "BlockTree.h"

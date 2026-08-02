@@ -1,8 +1,7 @@
 #pragma once
 
 // Fail-closed primitives for refs, nullable prefixes, snake strings, and
-// remaining slices. Inner-type recursion belongs to the caller. See
-// MODULE-NOTES.md for snake-cell constraints and cell serialization mode.
+// remaining slices. Inner-type recursion belongs to the caller.
 
 #include "td/utils/Status.h"
 

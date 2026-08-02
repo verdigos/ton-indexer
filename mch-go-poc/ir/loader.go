@@ -11,8 +11,8 @@ import (
 )
 
 // PredRegistry maps a predicate name to its host implementation. Unknown names
-// resolve to an always-true stub (with one stderr warning), so an artifact whose
-// predicates aren't ported stays runnable — per schema §Predicates.
+// resolve to an always-true stub (with one stderr warning), so an artifact
+// remains runnable even when its predicates have not been ported.
 type PredRegistry map[string]func(*tree.Block) bool
 
 // DefaultPredicates is the POC registry. No predicates are ported yet, so it is
@@ -108,7 +108,7 @@ func (doc *IR) Build(names []string, log *engine.MatchLog, preds PredRegistry) (
 	}
 
 	// Duplicate matcher names are legal (a name can appear across spec files with
-	// identical patterns — schema §Emitter-note 2). A selected name expands to
+	// identical patterns). A selected name expands to
 	// EVERY occurrence, in registration order; re-runs are idempotent because the
 	// first pass's absorbed blocks don't re-match. nameToRoots preserves that
 	// order.

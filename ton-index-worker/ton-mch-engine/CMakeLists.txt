@@ -151,7 +151,7 @@ add_custom_target(mch_generate_sources
             ${MCH_GEN_DIR}/mch-msgs-tlb.h)
 
 # --- mch-classify: the classification CORE static library (Phase G step 3,
-# prod-design §2). The pure pipeline TUs (no CLI/dump/harness) — ton-index-
+# The pure pipeline TUs (no CLI/dump/harness) - ton-index-
 # postgres links THIS; the CLI exe below links it + the harness TUs. Action-row
 # construction (Action struct + build_action + the fill_*) lives here in
 # ActionBuild.cpp; only the dump-side render_action + stdout printing stayed
@@ -162,8 +162,8 @@ set(TON_ABI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../ton-abi)
 
 # PRODUCTION ABI parser pairs — compiled into mch-classify and explicitly
 # registered in AbiBridge.cpp. Adding a NEW .tolk declaration file = one line here
-# (a new decl in an EXISTING contract needs no CMake edit at all; see
-# ton-abi/ABI-PROTOCOL-CHECKLIST.md).
+# (a new decl in an EXISTING contract needs no CMake edit at all; the
+# .abi.json and generated pair are committed alongside the declaration).
 set(ABI_PROD_PAIRS
     ${TON_ABI_DIR}/generated/jetton_gen.cpp
     ${TON_ABI_DIR}/generated/multisig_gen.cpp
@@ -249,7 +249,7 @@ target_compile_features(mch-classify PUBLIC cxx_std_20)
 target_link_libraries(mch-classify PUBLIC tondb-scanner tdactor ton-abi)
 add_dependencies(mch-classify mch_generate_sources)
 
-# --- mch-fixtures: the TEST-ONLY static lib (python-parity-audit §5.1).
+# --- mch-fixtures: the TEST-ONLY static lib.
 #
 # These sources serve the .lz4 fixture corpus. They must NEVER reach
 # mch-classify — and therefore never reach
@@ -289,7 +289,7 @@ target_compile_features(mch-fixtures PUBLIC cxx_std_20)
 target_link_libraries(mch-fixtures PUBLIC mch-classify lz4::lz4)
 add_dependencies(mch-fixtures mch_generate_sources)
 
-# --- In-process shadow classifier for ton-trace-emulator (em1-design §8).
+# --- In-process shadow classifier for ton-trace-emulator.
 # Split in two so the emulator-free side (converter / interfaces / actor) stays
 # linkable without emulator_static.
 add_library(mch-emu STATIC
@@ -315,7 +315,7 @@ target_link_libraries(mch-emu-bridge PUBLIC mch-emu ton-trace-emulator-core)
 # W12 bridge self-test (--abi-bridge-test): committed ton-abi generated fixture
 # pairs compiled into the HARNESS EXE ONLY (never the mch-classify prod lib) so
 # the trampoline+adapter run against real generated structs; these are UNDER TEST,
-# not production registry rows (design §6/§7). TON_ABI_DIR set above.
+# not production registry rows. TON_ABI_DIR set above.
 set(ABI_BRIDGE_TEST_FIXTURES
     # jetton_wallet_contract: the only Cell-through-the-trampoline coverage.
     # lots_of_wrappers: both union forms + address/optional/list/nested struct.
@@ -341,9 +341,9 @@ add_dependencies(ton-mch-engine mch_generate_sources)
 
 # Deliberately NOT install()ed: this is the gate/dev harness, not a product
 # binary, and it has no place in the production bin dir
-# (python-parity-audit §5.7 H35).
+#
 
-# --- CTest wiring (§10.1) ------------------------------------------------------
+# --- CTest wiring --------------------------------------------------------------
 # The deterministic, self-contained gate modes as native tests (`ctest -R mch`).
 # The differential A/B gates (parse-dump / classify vs the Python twins) stay
 # OUT — they need the fixture corpus and Python and are run from the harness.

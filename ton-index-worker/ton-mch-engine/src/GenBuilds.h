@@ -1,6 +1,6 @@
 // Stable interface for generated build-program functions. The matcher, build,
 // and where tables share one compile-time artifact and are cross-checked by
-// source hash. See docs/codegen.md.
+// source hash.
 #pragma once
 
 #include "BuildRuntime.h"

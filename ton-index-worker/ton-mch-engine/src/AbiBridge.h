@@ -2,7 +2,7 @@
 // message bodies plug into the existing message_parsers() registry alongside the kept
 // bodies plug into the existing message_parsers() registry alongside the kept
 // hand parsers. Registration uses compile-time static rows and loads no ABI model
-// at runtime. See docs/abi-bridge.md for the dependency and value contracts.
+// at runtime.
 #pragma once
 
 #include "Value.h"

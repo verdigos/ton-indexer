@@ -1,6 +1,5 @@
 // End-to-end classifier and serialized-action dump adapters.
 // Generated build tables are source-hash checked against the matcher artifact.
-// See docs/engine-internals.md for traversal and build ordering.
 #pragma once
 
 #include "BlockTree.h"  // TraceContext (loader callback return type)

@@ -26,7 +26,7 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args);
 void nft_transfer_parent_absorb(Block *produced, const ShaperMatch &m);
 EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &args);
 // specs/teleitem_auction.mch: blocks/auction.py `_is_teleitem` (a substring test
-// the expression language deliberately cannot express — mch-spec §9.6).
+// the expression language deliberately cannot express).
 EvalResult is_teleitem(BuildEnv &env, const std::vector<Value> &args);
 // specs/nft_mint.mch anchor: NftMintBlockMatcher.test_self — exactly one
 // distinct contract deployment across the block's event nodes.
@@ -60,7 +60,7 @@ EvalResult coffee_swap_data(BuildEnv &env, const std::vector<Value> &args);
 
 // Stonfi (HostStonfi.cpp): v1 sender-payment pred + v1 swap fn;
 // v2 pton_self_transfer pred + v2 swap fn. (no_internal_transfer moved to an
-// inline where-expr in W6.)
+// inline where expression.)
 bool stonfi_v1_sender_payment(const Block *block);
 EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args);
 bool pton_self_transfer(const Block *block);
@@ -113,7 +113,7 @@ EvalResult dns_purchase_buyer(BuildEnv &env, const std::vector<Value> &args);
 // Vesting (HostVesting.cpp).
 EvalResult vesting_message_was_sent(BuildEnv &env, const std::vector<Value> &args);
 
-// JVault (HostJvault.cpp). (jvault_account_list moved to a spec G-LC map in W6.)
+// JVault (HostJvault.cpp). jvault_account_list is defined by a spec G-LC map.
 EvalResult jvault_stake_period(BuildEnv &env, const std::vector<Value> &args);
 
 // Cocoon (HostCocoon.cpp): the shared expectedMyAddress renderer and the nested

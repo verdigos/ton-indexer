@@ -2,7 +2,7 @@
 
 // Fail-closed load/store primitives for address, address?, ext_address, and
 // any_address. They follow @ton/core tags and layouts but reject anycast and
-// addr_var. See MODULE-NOTES.md for the accepted forms and dump mapping.
+// addr_var.
 
 #include "common/bitstring.h"
 #include "common/refint.h"

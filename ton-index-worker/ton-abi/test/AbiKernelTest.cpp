@@ -1,8 +1,8 @@
-// W2 TDD: AbiKernel resolution-layer units. Ported from types-kernel.ts
+// AbiKernel resolution-layer units ported from types-kernel.ts
 // behaviour (structFieldsOf / aliasTargetOf / createLabelsForUnion) plus the
 // generic fixtures (lots-of-messages' ResetTo<int64>/BasicStorage<int64>,
-// generic-union-labels' GenericPair<int32,int64> T1|T2 labelling). See
-// docs/ton-abi-plan.md T2.1/T2.2 and the THREE NAMED INVARIANTS.
+// generic-union-labels' GenericPair<int32,int64> T1|T2 labelling) and the
+// three named invariants exercised below.
 
 #include "AbiTestSupport.h"
 
@@ -71,7 +71,7 @@ TEST_CASE("AbiKernel ty_by_idx: bounds") {
 }
 
 // ---------------------------------------------------------------------------
-// structFieldsOf (T2.2)
+// structFieldsOf
 // ---------------------------------------------------------------------------
 
 TEST_CASE("AbiKernel structFieldsOf: non-generic struct -> fields verbatim, no uLabel") {
@@ -142,7 +142,7 @@ TEST_CASE("AbiKernel structFieldsOf: not a StructRef -> error") {
 }
 
 // ---------------------------------------------------------------------------
-// aliasTargetOf (T2.1)
+// aliasTargetOf
 // ---------------------------------------------------------------------------
 
 TEST_CASE("AbiKernel aliasTargetOf: generic instantiation -> monomorph target + uLabel") {
@@ -175,7 +175,7 @@ TEST_CASE("AbiKernel aliasTargetOf: not an AliasRef -> error") {
 }
 
 // ---------------------------------------------------------------------------
-// createLabelsForUnion (T2.2) + invariant (i)
+// createLabelsForUnion + invariant (i)
 // ---------------------------------------------------------------------------
 
 TEST_CASE("AbiKernel createLabelsForUnion: primitive variants get $ + value labels") {
@@ -284,7 +284,7 @@ TEST_CASE("AbiKernel createLabelsForUnion: nullLiteral variant -> empty label, n
 }
 
 // ---------------------------------------------------------------------------
-// resolve_union: sorted dispatch table + has_void (T2.1 resolution pass)
+// resolve_union: sorted dispatch table + has_void
 // ---------------------------------------------------------------------------
 
 TEST_CASE("AbiKernel resolve_union: dispatch order sorted by prefix, labels attached") {

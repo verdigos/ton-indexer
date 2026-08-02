@@ -2,7 +2,7 @@
 
 // HashmapE load/store adapter for fixed-width intN, uintN, and address keys.
 // Key and value recursion belongs to the callbacks; iteration preserves raw
-// key-bit wire order. See MODULE-NOTES.md for ordering details.
+// key-bit wire order.
 
 #include "td/utils/Status.h"
 

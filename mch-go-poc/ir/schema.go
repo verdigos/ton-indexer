@@ -1,7 +1,5 @@
-// Package ir loads the MCH IR POC artifact (mch-ir.json, schema v0.1-poc, see
-// indexer/docs/mch-ir-poc.md) and constructs native mchpoc/engine matchers from
-// it. No .mch parsing happens here — the Python emitter has already lowered the
-// matcher graph into the flat node/matcher records decoded below.
+// Package ir loads the mch-ir.json IR POC artifact at schema v0.1-poc and builds native mchpoc/engine
+// matchers from it; no .mch parsing happens here because the Python emitter already lowered the matcher graph.
 package ir
 
 import "encoding/json"

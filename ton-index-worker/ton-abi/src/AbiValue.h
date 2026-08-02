@@ -2,8 +2,7 @@
 
 // Protocol-agnostic tagged values produced by generated parsers and adapted by
 // downstream consumers. The compact JSON representation is the conformance
-// vector format. See MODULE-NOTES.md for the complete kind mapping and the
-// recursive-member representation.
+// vector format.
 
 #include "AbiLeavesAddress.h"  // AbiAddress
 

@@ -1,6 +1,6 @@
 // Build-time and test-only IR artifact loader. It copies JSON data into immutable
 // matcher tables and remains independent of host registries. Production consumes
-// generated tables instead. See docs/codegen.md.
+// generated tables instead.
 #pragma once
 
 #include "IrTables.h"

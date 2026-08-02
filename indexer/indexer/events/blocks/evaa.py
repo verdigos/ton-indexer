@@ -138,7 +138,7 @@ async def build_evaa_supply_core(
     Returns the EvaaSupplyData, or None to reject the match. Does NOT merge
     consumed blocks — callers merge.
     """
-    # Dual dispatch (§11.5): btype, not isinstance — under the IR engine the
+    # Dispatch by btype, not isinstance: under the IR engine the
     # jetton anchor is a plain Block, not a JettonTransferBlock.
     is_ton = block.btype == "call_contract"
     sender = None

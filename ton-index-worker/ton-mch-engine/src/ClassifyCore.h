@@ -1,6 +1,5 @@
 // Pure classification pipeline from a TraceContext and compiled tables to a
 // buffered per-trace result. It performs no I/O or rendering.
-// See docs/engine-internals.md for traversal and result-view invariants.
 #pragma once
 
 #include "ActionBuild.h"  // ActionRow

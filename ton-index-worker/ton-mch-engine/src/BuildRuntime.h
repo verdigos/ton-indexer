@@ -1,7 +1,6 @@
 // Runtime operations used by generated MCH build programs.
 // Build faults and explicit rejections are clean matcher rejections. Captures are
 // slot-indexed; capture names do not exist at runtime.
-// See docs/engine-internals.md for build ordering and lookup passes.
 #pragma once
 
 #include "ExprRuntime.h"
@@ -170,7 +169,7 @@ EvalResult rt_call_hostfn(BuildEnv &env, const std::string &name,
 // --- Host-rejection observability ------------------------------------------
 // Host faults and null-gated results are clean match rejections. Emit the
 // `[mch-reject]` diagnostic only for the final lookup pass; collecting passes
-// intentionally operate with missing values. See docs/engine-internals.md.
+// intentionally operate with missing values.
 struct RejectCtx {
   const std::string *trace_id{nullptr};
   const std::string *matcher{nullptr};

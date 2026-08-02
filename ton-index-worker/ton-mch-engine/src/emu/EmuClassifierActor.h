@@ -1,6 +1,5 @@
 // Classifies trace emissions and returns serialized actions plus telemetry to
 // the decorated insert sink. The actor performs no Redis or database writes.
-// See docs/emulator-integration.md for lifetime, fail-open, and payload rules.
 #pragma once
 
 #include "EmuTypes.h"

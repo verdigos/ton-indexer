@@ -11,7 +11,7 @@
 
 #include "jetton_wallet_contract_gen.h"
 #include "lots_of_wrappers_gen.h"
-#include "dedust_v2_gen.h"  // T12.2 production pair
+#include "dedust_v2_gen.h"  // DeDust V2 production pair
 
 #include "common/refint.h"
 #include "vm/cells/CellBuilder.h"
@@ -237,7 +237,7 @@ void test_abi_rows_dispatch() {
   }
 }
 
-// ---- T12.2: the first PRODUCTION protocol pair (DeDust CPMM V2 claim_reward). --
+// ---- First production protocol pair: DeDust CPMM V2 claim_reward. -----------
 // Exercises the real registry rows (parse_message_body by BARE name) + the
 // mandatory address-render parity check on ownerAddress/excessesTo.
 void test_dedust_v2_claim_reward() {

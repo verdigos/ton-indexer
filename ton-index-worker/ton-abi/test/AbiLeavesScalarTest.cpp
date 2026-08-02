@@ -1,4 +1,4 @@
-// W3 TDD: scalar leaf load+store units. Hand-built cells via vm::CellBuilder;
+// Scalar leaf load+store units use hand-built cells via vm::CellBuilder;
 // boundary/min/max/truncation per type. Semantics pinned to @ton/core
 // (BitReader.js / BitBuilder.js) -- see AbiLeavesScalar.h for the citations.
 
@@ -103,7 +103,7 @@ TEST_CASE("uintN: 256-bit max round-trip") {
 }
 
 // ---------------------------------------------------------------------------
-// native int64 / uint64 fast paths (W11.5) -- must be bit-for-bit identical to
+// native int64 / uint64 fast paths must be bit-for-bit identical to
 // the RefInt256 path (same wire) at every boundary width the emitter uses.
 // ---------------------------------------------------------------------------
 

@@ -1,7 +1,7 @@
 // Build-time MCH IR to C++ source generator. The version-controlled IR is the
 // input contract, and generated outputs live under the build tree.
 // The vector modes feed the fixture harness. Matcher, `where`, and IR build
-// tables feed the production classifier. See docs/codegen.md for table pairing.
+// tables feed the production classifier.
 #include "ExprCodegen.h"
 #include "MatcherCodegen.h"
 

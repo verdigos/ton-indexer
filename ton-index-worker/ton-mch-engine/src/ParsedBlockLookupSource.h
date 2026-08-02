@@ -1,6 +1,6 @@
 // Resolves lookups from interfaces already computed for the block, with an
 // injectable fallback for persisted data. Malformed addresses and missing
-// accounts are clean misses. See docs/engine-internals.md for the tier contract.
+// accounts are clean misses.
 #pragma once
 
 #include "BuildRuntime.h"  // LookupSource, Value

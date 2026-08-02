@@ -335,7 +335,7 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
   }
 }
 
-// blocks/liquidity.py post_process_stonfi_v2_liquidity (R08 pairing pass). ZERO
+// blocks/liquidity.py post_process_stonfi_v2_liquidity pairing pass. ZERO
 // corpus coverage, the `< 2 legs` guard returns immediately for every trace.
 // KEEP (do not delete as dead): it is the port of a live Python production pass;
 // gating it needs a 2-leg stonfi_v2 deposit fixture the corpus does not have yet.
@@ -511,8 +511,7 @@ bool is_v1_op(const std::string &t) {
   return ops.count(t) != 0;
 }
 
-// Filter and recursively serialize action rows. See docs/engine-internals.md for
-// the child-suppression and ancestor-type rules.
+// Filter and recursively serialize action rows.
 std::vector<ActionRow> serialize_rows(const std::vector<Block *> &blocks,
                                       const std::string &parent_id) {
   std::vector<ActionRow> out;

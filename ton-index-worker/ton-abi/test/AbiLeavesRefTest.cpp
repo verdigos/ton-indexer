@@ -1,7 +1,7 @@
-// W5 TDD: ref / string / remaining / maybe leaf units. Round-trips compared via
+// Ref / string / remaining / maybe leaf units. Round-trips are compared via
 // cell hash; string PACK byte-identity checked against Node-generated @ton/core
 // reference BOCs; the snake REJECT space enumerated from strings.js. Also pins
-// the §0.14 BOC serialization mode (vm::std_boc_serialize(_, 2) == @ton/core
+// the BOC serialization mode (vm::std_boc_serialize(_, 2) == @ton/core
 // toBoc() default). See AbiLeavesRef.h for citations.
 
 #include "AbiTestSupport.h"
@@ -25,7 +25,7 @@ td::Ref<vm::Cell> cell_u(unsigned long long val, int bits) {
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// BOC mode pin (§0.14, W0-deferred)
+// BOC mode pin
 // ---------------------------------------------------------------------------
 
 TEST_CASE("BOC mode: std_boc_serialize(_,2) matches @ton/core toBoc() default") {

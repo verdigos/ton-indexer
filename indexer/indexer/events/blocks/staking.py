@@ -277,7 +277,7 @@ def find_tonstakers_pool_addr(block: Block) -> AccountId | None:
     Shared build core: the legacy TONStakersDelayedWithdrawalMatcher and the
     `tonstakers_pool_addr` host fn of specs/tonstakers.mch both call this, so the
     two engines cannot drift. The walk is unbounded block-topology navigation,
-    deliberately outside the .mch language (§15b).
+    deliberately outside the .mch language.
     """
     try:
         supported_opcodes = {

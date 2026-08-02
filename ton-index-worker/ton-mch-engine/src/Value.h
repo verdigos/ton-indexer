@@ -1,5 +1,5 @@
 // Runtime value model shared by expression evaluation, builds, host calls, and
-// action serialization. See docs/value-model.md for representation invariants.
+// action serialization.
 #pragma once
 
 #include "common/refint.h"

@@ -1,6 +1,5 @@
 // Stable interface for the compiled matcher table. Production consumes the
 // generated C++ data and does not parse an IR artifact at runtime.
-// See docs/codegen.md.
 #pragma once
 
 #include "IrTables.h"

@@ -3,8 +3,7 @@
 // Cell-side ABI type resolution: symbol lookup, monomorph substitution,
 // client-type replacement, alias targets, generic-union labels, and sorted
 // prefix dispatch tables. Stack/get-method width calculation is intentionally
-// outside this module. See MODULE-NOTES.md for the resolution and caching
-// invariants.
+// outside this module.
 
 #include "AbiModel.h"
 

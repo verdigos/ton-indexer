@@ -1,5 +1,4 @@
 // Deterministic MCH IR expression-to-C++ generator.
-// See docs/codegen.md for emission and runtime contracts.
 #pragma once
 
 #include "td/utils/JsonBuilder.h"

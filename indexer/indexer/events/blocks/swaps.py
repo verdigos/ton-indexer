@@ -80,7 +80,7 @@ class JettonSwapBlock(Block):
 
 
 async def build_stonfi_v1_swap_core(block, swap_call_block, payment_requests_messages):
-    """Shared stonfi v1 swap data builder ([M2R, R12]).
+    """Shared stonfi v1 swap data builder.
 
     Consumption-neutral extraction of the legacy `_get_block_data` logic: the
     computation is unchanged, but instead of removing the `ok_ref` referral
@@ -134,8 +134,8 @@ async def build_stonfi_v1_swap_core(block, swap_call_block, payment_requests_mes
             referral_request_blocks.append(payment_request_block)
 
     actual_out_addr = out_addr
-    # Dual dispatch (§11.5): legacy JettonTransferBlock exposes the parsed body
-    # via `.jetton_transfer_message`; a declarative jetton_transfer block is a
+    # Dispatch supports both implementations: JettonTransferBlock exposes the
+    # parsed body via `.jetton_transfer_message`; a declarative jetton_transfer block is a
     # generic Block whose `.data['stonfi_swap_body']` carries the same dict.
     if block.btype == "jetton_transfer" and block.data.get('stonfi_swap_body') is not None:
         out_addr = block.data['stonfi_swap_body']['jetton_wallet']
@@ -406,7 +406,7 @@ async def build_stonfi_v2_swap_core(
 
     in_transfer_data = {}
     sender = None
-    # Dual dispatch (§11.5): a jetton in-leg carries all fields in `.data` under
+    # A jetton in-leg carries all fields in `.data` under
     # BOTH legacy (JettonTransferBlock) and declarative (generic Block) producers
     # — gate on btype. This also REMOVES the non-determinism: the old `else` arm
     # read `in_transfer.event_nodes[0].message` on a set-merged composite whose
@@ -769,8 +769,8 @@ async def build_tonco_swap_core(
     intermediate_transfers: list[Block],
     intermediate_hop_triggers: list[Block],
 ) -> tuple[JettonSwapBlock, list[Block]] | None:
-    """Shared build core for the tonco jetton_swap ([M2R, R11/T28] port
-    convention, same shape as build_coffee_swap_core below). `block` is the
+    """Shared build core for the tonco jetton_swap port convention, with the
+    same shape as build_coffee_swap_core below. `block` is the
     anchor ToncoPoolV3Swap; the remaining arguments are the legacy label roles
     in ascending-min_lt order, WITHOUT the anchor (the core prepends it to the
     swap list itself). Returns `(new_block, additional_blocks)` where
@@ -856,7 +856,7 @@ async def build_tonco_swap_core(
     sender = None
     in_transfer_payload = begin_cell().end_cell()
 
-    # Dual dispatch (§11.5): btype covers legacy + declarative jetton legs.
+    # The shared btype covers legacy and declarative jetton legs.
     if in_transfer_block is not None and in_transfer_block.btype == "jetton_transfer":
         sender = in_transfer_block.data.get("sender")
         jetton_address = in_transfer_block.data.get("asset").jetton_address
@@ -1284,7 +1284,7 @@ class ToncoSwapBlockMatcher(BlockMatcher):
         2. PTonTransfer followed by JettonNotify indicates an intermediate hop
         3. Final transfers can be either regular Jetton or JettonTransfer + PTonTransfer
 
-        Thin wrapper since [M2R, R11/T28]: extracts the label roles and
+        Thin wrapper that extracts the label roles and
         delegates the compute to build_tonco_swap_core (shared with the mch
         builder, which derives the same roles from the consumed set).
         """
@@ -1407,7 +1407,7 @@ async def build_coffee_swap_core(
     # 3. parse incoming transfer
     in_transfer_data = {}
     sender = None
-    # Dual dispatch (§11.5): btype covers legacy + declarative jetton legs.
+    # The shared btype covers legacy and declarative jetton legs.
     if in_transfer_block is not None and in_transfer_block.btype == "jetton_transfer":
         sender = in_transfer_block.data["sender"]
         in_transfer_data = {

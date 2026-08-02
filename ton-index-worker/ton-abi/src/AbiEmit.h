@@ -4,7 +4,7 @@
 // Resolution and dispatch are baked into typed from_slice, store, and
 // to_abi_value bodies. Non-standard map keys fail generation; unsupported
 // per-direction fields produce compiling runtime-error stubs. Generated code
-// has no dependency on the loader or kernel. See W11-SHAPE-SPEC.md.
+// has no dependency on the loader or kernel.
 
 #include "AbiKernel.h"
 #include "AbiModel.h"

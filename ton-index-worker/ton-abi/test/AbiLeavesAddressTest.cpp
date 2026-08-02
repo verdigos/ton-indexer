@@ -1,4 +1,4 @@
-// W4 TDD: address leaf load+store units. Hand-built cells via vm::CellBuilder;
+// Address leaf load+store units use hand-built cells via vm::CellBuilder;
 // accepted inputs round-trip byte-identically (compared via cell hash), and the
 // @ton/core-derived REJECT space gets one unit per condition (both directions
 // where applicable). See AbiLeavesAddress.h for the normative citations.

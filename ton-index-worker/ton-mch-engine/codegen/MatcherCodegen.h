@@ -1,6 +1,5 @@
 // Deterministic MCH matcher-table-to-C++ generator.
 // It prints the loader's compiled table instead of parsing the artifact again.
-// See docs/codegen.md for table pairing and determinism guarantees.
 #pragma once
 
 #include "fixtures/IrLoader.h"

@@ -1,7 +1,7 @@
-// W6 TDD: mapKV dict adapter. STORE proven byte-identical to @ton/core
+// mapKV dict adapter. STORE is proven byte-identical to @ton/core
 // storeDict (dict built both sides -> same BOC); LOAD yields entries in
 // ascending key order (matching @ton/core's HashmapE order). uint8->uint8
-// key/value callbacks stand in for the W8 walker.
+// key/value callbacks stand in for the generated walker.
 
 #include "AbiTestSupport.h"
 

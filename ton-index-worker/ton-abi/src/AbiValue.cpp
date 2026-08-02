@@ -30,7 +30,7 @@ std::string lower(std::string s) {
 // Lossy UTF-8 decode matching Node Buffer.toString('utf8'). Invalid first
 // continuation bytes are reprocessed; after a valid continuation, a later
 // failure replaces the valid prefix and leaves the failing byte for the next
-// iteration. See MODULE-NOTES.md for the covered malformed-input cases.
+// iteration.
 std::string decode_utf8_lossy(const std::string &bytes) {
   std::string out;
   const std::size_t n = bytes.size();

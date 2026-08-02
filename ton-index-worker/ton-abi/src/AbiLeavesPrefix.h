@@ -2,8 +2,7 @@
 
 // Fail-closed struct-prefix checks and the non-consuming probe used by generated
 // union dispatch. Dispatch itself is baked into generated code. Prefix numbers
-// use uint64; widths above 64 require zero high bits. See MODULE-NOTES.md for
-// union dispatch ordering and void handling.
+// use uint64; widths above 64 require zero high bits.
 
 #include "td/utils/Status.h"
 

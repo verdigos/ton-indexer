@@ -3,7 +3,7 @@
 // Runtime support included by generated C++ pairs: CellOf<T>, typed custom
 // serializers, leaf operations, and AbiValue builders. Resolution and dispatch
 // are already baked into generated code, so the loader and kernel stay out of
-// the runtime dependency graph. See W11-SHAPE-SPEC.md.
+// the runtime dependency graph.
 
 #include "AbiValue.h"
 #include "AbiLeavesAddress.h"
