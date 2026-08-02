@@ -27,7 +27,12 @@ class InterblockTraceStore {
   std::unordered_map<td::Bits256, TraceIds> trace_ids_;
 };
 
-InterblockTraceStore& interblock_trace_store() {
+InterblockTraceStore& finalized_interblock_trace_store() {
+  static InterblockTraceStore store;
+  return store;
+}
+
+InterblockTraceStore& confirmed_interblock_trace_store() {
   static InterblockTraceStore store;
   return store;
 }
@@ -148,22 +153,29 @@ public:
 };
 
 McBlockEmulator::McBlockEmulator(schema::MasterchainBlockDataState mc_data_state,
-                                 std::function<void(Trace, td::Promise<td::Unit>, MeasurementPtr)> trace_processor,
-                                 td::Promise<> promise)
+                                 std::function<void(ton::BlockSeqno)>
+                                     trace_ids_resolved,
+                                 bool reuse_confirmed_state,
+                                 td::Promise<FinalizedBlockResult> promise)
     : mc_data_state_(std::move(mc_data_state)),
-      trace_processor_(std::move(trace_processor)),
+      trace_ids_resolved_(std::move(trace_ids_resolved)),
       promise_(std::move(promise)),
-      blocks_left_to_parse_(mc_data_state_.shard_blocks_diff_.size()) {
+      blocks_left_to_parse_(mc_data_state_.shard_blocks_diff_.size()),
+      reuse_confirmed_state_(reuse_confirmed_state) {
 }
 
 void McBlockEmulator::start_up() {
     start_time_ = td::Timestamp::now();
-    auto measurement = std::make_shared<Measurement>();
-    measurement->set_finality("finalized");
-    measurement->set_operation("read_finalized");
-    measurement->set_source("block");
+    measurement_ = std::make_shared<Measurement>();
+    measurement_->set_finality("finalized");
+    measurement_->set_operation("read_finalized");
+    measurement_->set_source("block");
     for (const auto& shard_state : mc_data_state_.shard_blocks_) {
         shard_states_.push_back(shard_state.block_state);
+    }
+    if (blocks_left_to_parse_ == 0) {
+        resolve_trace_ids();
+        return;
     }
     auto mc_block_seqno = mc_data_state_.shard_blocks_[0].handle->id().seqno();
     // The anchor keeps interior transaction cells readable after this actor stops.
@@ -176,13 +188,17 @@ void McBlockEmulator::start_up() {
     cell_anchor_ = std::move(cell_anchor);
     for (auto& block_data : mc_data_state_.shard_blocks_diff_) {
         LOG(INFO) << "Parsing block " << block_data.block_data->block_id().to_str();
-        auto block_measurement = measurement->clone();
+        auto block_measurement = measurement_->clone();
         auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), blk_id = block_data.block_data->block_id().id, block_measurement](td::Result<std::vector<TransactionInfo>> R) {
             if (R.is_error()) {
                 td::actor::send_closure(SelfId, &McBlockEmulator::parse_error, blk_id, R.move_as_error(), block_measurement);
                 return;
             }
-            td::actor::send_closure(SelfId, &McBlockEmulator::block_parsed, blk_id, R.move_as_ok(), block_measurement);
+            td::actor::send_closure(
+                SelfId,
+                &McBlockEmulator::block_parsed,
+                blk_id,
+                R.move_as_ok());
         });
         td::actor::create_actor<BlockParser>("BlockParser", block_data.block_data, mc_block_seqno, std::move(P), block_measurement).release();
     }
@@ -194,15 +210,17 @@ void McBlockEmulator::parse_error(ton::BlockId blkid, td::Status error, Measurem
     stop();
 }
 
-void McBlockEmulator::block_parsed(ton::BlockId, std::vector<TransactionInfo> txs, MeasurementPtr measurement) {
+void McBlockEmulator::block_parsed(
+    ton::BlockId,
+    std::vector<TransactionInfo> txs) {
     txs_.insert(txs_.end(), txs.begin(), txs.end());
     blocks_left_to_parse_--;
     if (blocks_left_to_parse_ == 0) {
-        process_txs(measurement);
+        resolve_trace_ids();
     }
 }
 
-void McBlockEmulator::process_txs(MeasurementPtr measurement) {
+void McBlockEmulator::resolve_trace_ids() {
     std::sort(txs_.begin(), txs_.end(), [](const TransactionInfo& a, const TransactionInfo& b) {
         return a.lt < b.lt;
     });
@@ -221,7 +239,8 @@ void McBlockEmulator::process_txs(MeasurementPtr measurement) {
             tx.trace_ids = tx_by_out_msg_hash_[tx.in_msg_hash].trace_ids;
         } else {
             TraceIds cached_ids;
-            if (interblock_trace_store().get(tx.in_msg_hash, cached_ids)) {
+            if (finalized_interblock_trace_store().get(
+                    tx.in_msg_hash, cached_ids)) {
                 tx.trace_ids = cached_ids;
             } else {
                 LOG(WARNING) << "Couldn't get ext_in_msg_hash_norm for tx " << tx.hash.to_hex() << ". This tx will be skipped.";
@@ -231,12 +250,36 @@ void McBlockEmulator::process_txs(MeasurementPtr measurement) {
         // write trace_id for out_msgs for interblock chains
         if (tx.trace_ids.has_value()) {
             for (const auto& out_msg : tx.out_msgs) {
-                interblock_trace_store().put(out_msg.hash, tx.trace_ids.value());
+                finalized_interblock_trace_store().put(
+                    out_msg.hash, tx.trace_ids.value());
+                confirmed_interblock_trace_store().put(
+                    out_msg.hash, tx.trace_ids.value());
             }
         }
         tx_by_in_msg_hash_.insert({tx.in_msg_hash, tx});
     }
-    emulate_traces(measurement);
+    auto mc_seqno =
+        mc_data_state_.shard_blocks_[0].handle->id().seqno();
+    trace_ids_resolved_(mc_seqno);
+    if (reuse_confirmed_state_) {
+        const auto has_masterchain_trace =
+            std::any_of(txs_.begin(), txs_.end(), [](const auto& tx) {
+                return tx.block_id.is_masterchain() &&
+                       tx.trace_ids.has_value();
+            });
+        if (!has_masterchain_trace) {
+            LOG(INFO) << "Reusing confirmed shard state for mc block "
+                      << mc_seqno
+                      << "; finalized trace emulation is not needed";
+            finish_block_if_done();
+            return;
+        }
+        LOG(INFO) << "Cannot fully reuse confirmed shard state for mc block "
+                  << mc_seqno
+                  << " because the masterchain block contributes to a trace";
+        reuse_confirmed_state_ = false;
+    }
+    emulate_traces(measurement_);
 }
 
 std::unique_ptr<TraceNode> McBlockEmulator::construct_commited_trace(const TransactionInfo& tx, std::vector<EmuRequest>& reqs, MeasurementPtr, size_t depth) {
@@ -420,26 +463,12 @@ void McBlockEmulator::trace_emulated(Trace trace, MeasurementPtr measurement) {
     trace.shard_states = shard_states_;
     trace.config = mc_data_state_.config_;
     measurement->end_otel_child_span("detect_interfaces");
-    measurement->start_otel_child_span("insert_trace");
-    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), trace_root_tx_hash = trace.root_tx_hash, measurement](td::Result<td::Unit> R) {
-        if (R.is_error()) {
-            auto error = R.move_as_error();
-            LOG(ERROR) << "Failed to insert trace " << td::base64_encode(trace_root_tx_hash.as_slice()) << ": " << error;
-            measurement->mark_otel_error("trace_emulator.insert_error", error.to_string());
-        } else {
-            LOG(DEBUG) << "Successfully inserted trace " << td::base64_encode(trace_root_tx_hash.as_slice());
-        }
-        measurement->end_otel_child_span("insert_trace");
-        td::actor::send_closure(SelfId, &McBlockEmulator::trace_finished, trace_root_tx_hash, measurement);
+    traces_.push_back(EmulatedTracePatch{
+        .trace = std::move(trace),
+        .measurement = std::move(measurement),
     });
-    trace_processor_(std::move(trace), std::move(P), measurement);
-}
-
-void McBlockEmulator::trace_finished(td::Bits256, MeasurementPtr measurement) {
     in_progress_cnt_--;
     traces_cnt_++;
-    measurement->emit_otel_span();
-
     finish_block_if_done();
 }
 
@@ -450,7 +479,21 @@ void McBlockEmulator::finish_block_if_done() {
     finished_ = true;
     auto blkid = mc_data_state_.shard_blocks_[0].block_data->block_id().id;
     LOG(INFO) << "Finished emulating block " << blkid.to_str() << ": " << traces_cnt_ << " traces in " << (td::Timestamp::now().at() - start_time_.at()) * 1000 << " ms";
-    promise_.set_value(td::Unit());
+    std::vector<ton::BlockIdExt> finalized_blocks;
+    finalized_blocks.reserve(mc_data_state_.shard_blocks_diff_.size());
+    std::vector<td::Ref<ton::validator::BlockData>> block_data_owners;
+    block_data_owners.reserve(mc_data_state_.shard_blocks_diff_.size());
+    for (const auto& block : mc_data_state_.shard_blocks_diff_) {
+        finalized_blocks.push_back(block.block_data->block_id());
+        block_data_owners.push_back(block.block_data);
+    }
+    promise_.set_value(FinalizedBlockResult{
+        .mc_seqno = blkid.seqno,
+        .finalized_blocks = std::move(finalized_blocks),
+        .traces = std::move(traces_),
+        .reused_confirmed_state = reuse_confirmed_state_,
+        .block_data_owners = std::move(block_data_owners),
+    });
     stop();
 }
 
@@ -480,16 +523,17 @@ void ConfirmedBlockEmulator::start_up() {
 
 void ConfirmedBlockEmulator::parse_error(td::Status error, MeasurementPtr) {
     LOG(ERROR) << "Failed to parse " << finality_label() << " block " << block_data_state_.block_data->block_id().to_str() << ": " << error;
+    head_finished_(block_data_state_.block_data->block_id());
     promise_.set_error(std::move(error));
     stop();
 }
 
 void ConfirmedBlockEmulator::block_parsed(std::vector<TransactionInfo> txs, MeasurementPtr measurement) {
     txs_ = std::move(txs);
-    process_txs(measurement);
+    resolve_trace_ids(measurement);
 }
 
-void ConfirmedBlockEmulator::process_txs(MeasurementPtr measurement) {
+void ConfirmedBlockEmulator::resolve_trace_ids(MeasurementPtr measurement) {
     std::sort(txs_.begin(), txs_.end(), [](const TransactionInfo& a, const TransactionInfo& b) {
         return a.lt < b.lt;
     });
@@ -508,20 +552,24 @@ void ConfirmedBlockEmulator::process_txs(MeasurementPtr measurement) {
             tx.trace_ids = tx_by_out_msg_hash_[tx.in_msg_hash].trace_ids;
         } else {
             TraceIds cached_ids;
-            if (interblock_trace_store().get(tx.in_msg_hash, cached_ids)) {
+            if (confirmed_interblock_trace_store().get(
+                    tx.in_msg_hash, cached_ids)) {
                 tx.trace_ids = cached_ids;
             } else {
                 LOG(WARNING) << "Couldn't get ext_in_msg_hash_norm for confirmed tx " << tx.hash.to_hex() << ". Skipping.";
+                reusable_ = false;
             }
         }
 
         if (tx.trace_ids.has_value()) {
             for (const auto& out_msg : tx.out_msgs) {
-                interblock_trace_store().put(out_msg.hash, tx.trace_ids.value());
+                confirmed_interblock_trace_store().put(
+                    out_msg.hash, tx.trace_ids.value());
             }
         }
         tx_by_in_msg_hash_.insert({tx.in_msg_hash, tx});
     }
+    head_finished_(block_data_state_.block_data->block_id());
     emulate_traces(measurement);
 }
 
@@ -554,6 +602,7 @@ void ConfirmedBlockEmulator::emulate_traces(MeasurementPtr measurement) {
 
         if (!config_ || shard_states_snapshot_.empty()) {
             LOG(ERROR) << "Missing config or shard state snapshot for " << finality_label() << " block tails";
+            reusable_ = false;
             children_emulated(std::move(parent_node), {}, tx.trace_ids.value(), {}, nullptr, tx_measurement);
             continue;
         }
@@ -597,7 +646,10 @@ void ConfirmedBlockEmulator::emulate_traces(MeasurementPtr measurement) {
 
     if (in_progress_cnt_ == 0) {
         LOG(DEBUG) << "No " << finality_label() << " traces built for block " << block_data_state_.block_data->block_id().to_str();
-        promise_.set_value(td::Unit());
+        promise_.set_value(ConfirmedBlockResult{
+            .reusable = reusable_,
+            .snapshots = std::move(snapshots_),
+        });
         stop();
     }
 }
@@ -619,6 +671,7 @@ std::unique_ptr<TraceNode> ConfirmedBlockEmulator::construct_confirmed_trace(con
         }
         if (destination_r.is_error()) {
             LOG(ERROR) << "Failed to fetch destination address for out_msg " << out_msg.hash.to_hex();
+            reusable_ = false;
             continue;
         }
 
@@ -702,7 +755,7 @@ void ConfirmedBlockEmulator::trace_error(td::Bits256 tx_hash, td::Bits256 trace_
                << " from tx " << tx_hash.to_hex() << ": " << error;
     measurement->mark_otel_error("trace_emulator.processing_error", error.to_string());
     measurement->end_otel_child_span("emulate_tail");
-    trace_finished(trace_root_tx_hash, measurement);
+    trace_finished(trace_root_tx_hash, {}, false, measurement);
 }
 
 void ConfirmedBlockEmulator::trace_interfaces_error(td::Bits256 trace_root_tx_hash, td::Status error, MeasurementPtr measurement) {
@@ -710,7 +763,7 @@ void ConfirmedBlockEmulator::trace_interfaces_error(td::Bits256 trace_root_tx_ha
                << td::base64_encode(trace_root_tx_hash.as_slice()) << ": " << error;
     measurement->mark_otel_error("trace_emulator.interface_error", error.to_string());
     measurement->end_otel_child_span("detect_interfaces");
-    trace_finished(trace_root_tx_hash, measurement);
+    trace_finished(trace_root_tx_hash, {}, false, measurement);
 }
 
 void ConfirmedBlockEmulator::trace_emulated(Trace trace, MeasurementPtr measurement) {
@@ -725,24 +778,45 @@ void ConfirmedBlockEmulator::trace_emulated(Trace trace, MeasurementPtr measurem
     measurement->end_otel_child_span("detect_interfaces");
     measurement->start_otel_child_span("insert_trace");
     auto root_hash = trace.root_tx_hash;
-    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), root_hash, label = std::string(finality_label()), measurement](td::Result<td::Unit> R) {
+    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), root_hash, label = std::string(finality_label()), measurement](td::Result<ConfirmedTraceSnapshot> R) {
+        bool success = true;
+        ConfirmedTraceSnapshot snapshot;
         if (R.is_error()) {
+            success = false;
             auto error = R.move_as_error();
             LOG(ERROR) << "Failed to insert " << label << " trace " << td::base64_encode(root_hash.as_slice()) << ": " << error;
             measurement->mark_otel_error("trace_emulator.insert_error", error.to_string());
         } else {
-            LOG(DEBUG) << "Inserted " << label << " trace " << td::base64_encode(root_hash.as_slice());
+            snapshot = R.move_as_ok();
+            // An empty successful snapshot means that this trace was
+            // intentionally skipped and does not make the block unusable.
+            LOG(DEBUG) << "Processed " << label << " trace "
+                       << td::base64_encode(root_hash.as_slice());
         }
         measurement->end_otel_child_span("insert_trace");
-        td::actor::send_closure(SelfId, &ConfirmedBlockEmulator::trace_finished, root_hash, measurement);
+        td::actor::send_closure(
+            SelfId,
+            &ConfirmedBlockEmulator::trace_finished,
+            root_hash,
+            std::move(snapshot),
+            success,
+            measurement);
     });
 
     trace_processor_(std::move(trace), std::move(P), measurement);
 }
 
-void ConfirmedBlockEmulator::trace_finished(td::Bits256, MeasurementPtr measurement) {
+void ConfirmedBlockEmulator::trace_finished(
+    td::Bits256,
+    ConfirmedTraceSnapshot snapshot,
+    bool success,
+    MeasurementPtr measurement) {
     if (in_progress_cnt_ == 0) {
         return;
+    }
+    reusable_ = reusable_ && success;
+    if (snapshot) {
+        snapshots_.push_back(std::move(snapshot));
     }
     in_progress_cnt_--;
     traces_cnt_++;
@@ -752,7 +826,10 @@ void ConfirmedBlockEmulator::trace_finished(td::Bits256, MeasurementPtr measurem
         LOG(INFO) << "Finished " << finality_label() << " block " << block_data_state_.block_data->block_id().to_str()
                   << ": " << traces_cnt_ << " traces in "
                   << (td::Timestamp::now().at() - start_time_.at()) * 1000 << " ms";
-        promise_.set_value(td::Unit());
+        promise_.set_value(ConfirmedBlockResult{
+            .reusable = reusable_,
+            .snapshots = std::move(snapshots_),
+        });
         stop();
     }
 }

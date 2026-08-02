@@ -9,8 +9,28 @@
 #include "DbScanner.h"
 #include "TraceScheduler.h"
 #include "TraceInserter.h"
-#include "GenMatchers.h"
-#include "emu/EmuShadow.h"
+
+#include <cmath>
+
+namespace {
+
+td::Status parse_positive_seconds(td::Slice value,
+                                  const char* option,
+                                  double& destination) {
+  try {
+    destination = std::stod(value.str());
+  } catch (...) {
+    return td::Status::Error(ton::ErrorCode::error,
+                             std::string("bad value for --") + option + ": not a number");
+  }
+  if (!std::isfinite(destination) || destination <= 0) {
+    return td::Status::Error(ton::ErrorCode::error,
+                             std::string("bad value for --") + option + ": must be positive");
+  }
+  return td::Status::OK();
+}
+
+}  // namespace
 
 
 int main(int argc, char *argv[]) {
@@ -25,14 +45,12 @@ int main(int argc, char *argv[]) {
   td::uint32 threads = 7;
   std::string redis_dsn = "tcp://127.0.0.1:6379";
   std::string redis_channel = "";
+  TraceRetentionConfig trace_retention;
   
   std::string global_config_path;
   std::string inet_addr;
   std::string db_event_fifo_path;
-  bool mch_disable = false;
-  bool mch_no_tier2 = false;
-  mch::Tier2Budget mch_tier2_budget;
-
+  
   td::OptionParser p;
   p.set_description("Emulate TON traces");
   p.add_option('\0', "help", "prints_help", [&]() {
@@ -63,12 +81,47 @@ int main(int argc, char *argv[]) {
     return td::Status::OK();
   });
 
-  p.add_option('\0', "redis", "Redis URI (default: 'tcp://127.0.0.1:6379')", [&](td::Slice fname) { 
+  p.add_option('\0', "redis",
+               "Redis URI; the selected database is cleared on startup "
+               "(default: 'tcp://127.0.0.1:6379')",
+               [&](td::Slice fname) {
     redis_dsn = fname.str();
   });
 
   p.add_option('\0', "redis-channel", "Redis channel name for input msgs", [&](td::Slice fname) { 
     redis_channel = fname.str();
+  });
+
+  p.add_checked_option('\0', "trace-root-pending-ttl",
+                       "Seconds to retain a trace whose canonical root is pending (default: 30)",
+                       [&](td::Slice value) {
+    return parse_positive_seconds(
+        value, "trace-root-pending-ttl", trace_retention.root_pending_seconds);
+  });
+
+  p.add_checked_option(
+      '\0',
+      "trace-root-replaced-confirmed-ttl",
+      "Seconds to wait for a confirmed root replaced by a finalized fork "
+      "(default: 30)",
+      [&](td::Slice value) {
+        return parse_positive_seconds(
+            value,
+            "trace-root-replaced-confirmed-ttl",
+            trace_retention.root_replaced_confirmed_seconds);
+      });
+
+  p.add_checked_option('\0', "trace-open-ttl",
+                       "Seconds to retain a real trace with a pending tail (default: 300)",
+                       [&](td::Slice value) {
+    return parse_positive_seconds(value, "trace-open-ttl", trace_retention.open_seconds);
+  });
+
+  p.add_checked_option('\0', "trace-completed-ttl",
+                       "Seconds to retain a completed trace in Redis (default: 30)",
+                       [&](td::Slice value) {
+    return parse_positive_seconds(
+        value, "trace-completed-ttl", trace_retention.completed_seconds);
   });
 
   p.add_option('\0', "global-config", "Path to global config json file (for listening overlay)", [&](td::Slice fname) { 
@@ -81,36 +134,6 @@ int main(int argc, char *argv[]) {
 
   p.add_option('\0', "db-event-fifo", "Path to FIFO pipe for DB events", [&](td::Slice fname) { 
     db_event_fifo_path = fname.str();
-  });
-
-  // This option leaves the classification decorator uninstalled.
-  p.add_option('\0', "mch-disable", "Disable in-process MCH classification", [&]() {
-    mch_disable = true;
-  });
-
-  // Tier-2 lookups are enabled by default and use configurable budgets.
-  p.add_option('\0', "mch-no-tier2", "Disable celldb tier-2 lookups (tier-1-only classification)", [&]() {
-    mch_no_tier2 = true;
-  });
-  p.add_checked_option('\0', "mch-tier2-fetches", "Celldb account reads per trace (default: 16)", [&](td::Slice value) {
-    int v;
-    try {
-      v = std::stoi(value.str());
-    } catch (...) {
-      return td::Status::Error(ton::ErrorCode::error, "bad value for --mch-tier2-fetches: not a number");
-    }
-    mch_tier2_budget.fetches = static_cast<std::size_t>(v < 0 ? 0 : v);
-    return td::Status::OK();
-  });
-  p.add_checked_option('\0', "mch-tier2-ms", "Celldb tier-2 wall-clock budget per trace, ms (default: 20)", [&](td::Slice value) {
-    int v;
-    try {
-      v = std::stoi(value.str());
-    } catch (...) {
-      return td::Status::Error(ton::ErrorCode::error, "bad value for --mch-tier2-ms: not a number");
-    }
-    mch_tier2_budget.wall_us = static_cast<std::int64_t>(v < 0 ? 0 : v) * 1000;
-    return td::Status::OK();
   });
 
 
@@ -135,35 +158,25 @@ int main(int argc, char *argv[]) {
     std::_Exit(2);
   }
 
-  mch::EmuShadowConfig mch_shadow;
-  if (mch_disable) {
-    LOG(WARNING) << "MCH classification DISABLED (--mch-disable): traces are inserted unclassified";
-  } else {
-    // Compiled matcher-table preparation must succeed when classification is enabled.
-    auto r_prep = mch::make_engine_prep();
-    if (r_prep.is_error()) {
-      LOG(FATAL) << "MCH engine prep failed: " << r_prep.move_as_error();
-    }
-    mch_shadow.prep = r_prep.move_as_ok();
-    mch_shadow.gate = std::make_shared<mch::EmuGate>();
-    mch_shadow.tier2 = !mch_no_tier2;
-    mch_shadow.tier2_budget = mch_tier2_budget;
-    LOG(INFO) << "MCH classification ENABLED (artifact sha " << mch::gen_matchers_ir_source_sha()
-              << "), insert gated on classification, celldb tier-2 "
-              << (mch_shadow.tier2 ? "ON" : "OFF") << " (budget "
-              << mch_shadow.tier2_budget.fetches << " fetches / "
-              << mch_shadow.tier2_budget.wall_us / 1000 << " ms per trace)";
+  // This must happen before any actor can subscribe to events or write a trace.
+  LOG(WARNING) << "Clearing pending Redis database before startup";
+  auto flush_status = flush_pending_redis_database(redis_dsn);
+  if (flush_status.is_error()) {
+    LOG(ERROR) << flush_status.move_as_error();
+    return 1;
   }
+  LOG(INFO) << "Pending Redis database cleared";
 
   td::actor::Scheduler scheduler({threads});
   td::actor::ActorOwn<DbScanner> db_scanner;
   td::actor::ActorOwn<ITraceInsertManager> insert_manager;
 
-  scheduler.run_in_context([&] {
+  scheduler.run_in_context([&] { 
     db_scanner = td::actor::create_actor<DbScanner>("scanner", db_root, dbs_secondary, working_dir, 0.05f);
-    insert_manager = td::actor::create_actor<RedisInsertManager>("RedisInsertManager", redis_dsn);
-    td::actor::create_actor<TraceEmulatorScheduler>("integritychecker", db_scanner.get(), insert_manager.get(),
-      global_config_path, inet_addr, redis_dsn, redis_channel, working_dir, db_event_fifo_path, mch_shadow).release();
+    insert_manager = td::actor::create_actor<RedisInsertManager>(
+        "RedisInsertManager", redis_dsn, trace_retention);
+    td::actor::create_actor<TraceEmulatorScheduler>("integritychecker", db_scanner.get(), insert_manager.get(), 
+      global_config_path, inet_addr, redis_dsn, redis_channel, working_dir, db_event_fifo_path).release();
   });
   
   scheduler.run();
