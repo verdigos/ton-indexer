@@ -44,34 +44,6 @@ constexpr const char* kActionsField = "actions";
 constexpr const char* kActionsFinalityField = "actions_finality";
 constexpr const char* kAaiPrefix = "_aai:";
 
-mch::EmuActionPayload shed_payload(const char* state, mch::EmuFinality finality, std::uint64_t update_seq) {
-  mch::EmuActionPayload payload;
-  payload.state = state;
-  payload.finality = static_cast<std::uint8_t>(finality);
-  payload.update_seq = update_seq;
-  return payload;
-}
-
-const char* admit_classification(mch::EmuGate& gate, std::int64_t now_us,
-                                 td::actor::ActorId<mch::EmuClassifierActor> classifier) {
-  if (gate.disabled.load(std::memory_order_relaxed)) {
-    td::actor::send_closure(classifier, &mch::EmuClassifierActor::note_shed,
-                            mch::EmuClassifyOutcome::bypassed_disabled);
-    return "disabled";
-  }
-  if (gate.in_flight.load(std::memory_order_relaxed) < mch::kMaxInFlightClassify) {
-    return nullptr;
-  }
-
-  const auto last = gate.last_response_us.load(std::memory_order_relaxed);
-  if (now_us - last > mch::kStallFailOpenUs && !gate.disabled.exchange(true, std::memory_order_relaxed)) {
-    LOG(ERROR) << "[mch-emu] classifier stalled (no response for " << (now_us - last) / 1000 << " ms with "
-               << mch::kMaxInFlightClassify << " requests in flight), classification DISABLED";
-  }
-  td::actor::send_closure(classifier, &mch::EmuClassifierActor::note_shed, mch::EmuClassifyOutcome::shed_admission);
-  return gate.disabled.load(std::memory_order_relaxed) ? "disabled" : "shed_admission";
-}
-
 std::string finality_name(FinalityState finality) {
   switch (finality) {
     case FinalityState::Emulated:
@@ -1180,27 +1152,14 @@ void TraceProcessor::start_next_operations() {
         continue;
       }
 
-      CHECK(impl_->classifier_config.gate);
-      const auto now_us = mch::emu_now_us();
-      if (const auto* shed = admit_classification(*impl_->classifier_config.gate, now_us, impl_->classifier.get())) {
-        td::actor::send_closure(actor_id(this), &TraceProcessor::classification_ready, trace_key,
-                                shed_payload(shed, full_trace_finality, update_seq));
-        continue;
-      }
-
-      full_trace.sent_us = now_us;
-      full_trace.deadline_us = now_us + mch::kClassifyDeadlineUs;
-      auto gate = impl_->classifier_config.gate;
-      gate->in_flight.fetch_add(1, std::memory_order_relaxed);
+      const auto enqueued_us = mch::emu_now_us();
       auto classification_promise = td::PromiseCreator::lambda(
-          [self = actor_id(this), gate, trace_key](td::Result<mch::EmuClassifyResult> result) mutable {
-            gate->in_flight.fetch_sub(1, std::memory_order_relaxed);
-            gate->last_response_us.store(mch::emu_now_us(), std::memory_order_relaxed);
+          [self = actor_id(this), trace_key](td::Result<mch::EmuClassifyResult> result) mutable {
             td::actor::send_closure(self, &TraceProcessor::classification_finished, std::move(trace_key),
                                     std::move(result));
           });
       td::actor::send_closure(impl_->classifier, &mch::EmuClassifierActor::classify, std::move(full_trace),
-                              std::move(classification_promise));
+                              enqueued_us, std::move(classification_promise));
       continue;
     } else {
       auto promotion_request = std::move(std::get<PromoteConfirmedRequest>(work));
@@ -1312,10 +1271,11 @@ void TraceProcessor::classification_finished(std::string trace_key, td::Result<m
   auto& work = *slot_it->second.classification;
   if (result.is_error()) {
     LOG(WARNING) << "[mch-emu] classify response lost for trace " << trace_key << ": " << result.move_as_error();
-    classification_ready(
-        std::move(trace_key),
-        shed_payload("response_lost", static_cast<mch::EmuFinality>(trace_finality(work.transition.next_trace)),
-                     work.transition.next_trace.update_seq));
+    mch::EmuActionPayload payload;
+    payload.state = "response_lost";
+    payload.finality = trace_finality(work.transition.next_trace);
+    payload.update_seq = work.transition.next_trace.update_seq;
+    classification_ready(std::move(trace_key), std::move(payload));
     return;
   }
 
