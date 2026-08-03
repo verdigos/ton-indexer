@@ -114,8 +114,8 @@ void classify_txs(const EmuClassifierConfig &cfg, const EmuTraceView &view,
     }
     ctx.root = init_block(ctx.arena, ctx.tree.root);
 
-    // Memoization and both tier-2 budgets are scoped to this classification.
-    EmuCelldbTier2 tier2(&view.shard_states, view.config, cfg.tier2_budget);
+    // Tier-2 memoization is scoped to this classification.
+    EmuCelldbTier2 tier2(&view.shard_states, view.config);
     ParsedBlockLookupSource::Tier2Hook hook;
     if (cfg.tier2) {
       hook = [&tier2](const std::string &kind, const std::vector<Value> &args) {
@@ -164,11 +164,6 @@ void classify_txs(const EmuClassifierConfig &cfg, const EmuTraceView &view,
   }
 }
 
-// Canonical account form shared by actions, AAI keys, and reference notifications.
-std::string addr_str(const block::StdAddress &a) {
-  return std::to_string(a.workchain) + ":" + a.addr.to_hex();
-}
-
 // Build the Redis writeback payload while the view remains alive.
 EmuActionPayload build_payload(const EmuTraceView &view, const std::vector<Action> &rows,
                                std::int64_t aai_score, ActionSerializeStats &st) {
@@ -177,24 +172,13 @@ EmuActionPayload build_payload(const EmuTraceView &view, const std::vector<Actio
   payload.aai_score = aai_score;
   payload.actions_blob = serialize_actions(rows, view, &st);
 
-  std::set<std::string> tx_accounts;
-  for (const EmuTxRef &node : view.nodes) {
-    tx_accounts.insert(addr_str(node.address));
-  }
-  std::set<std::string> referenced;
   for (const Action &a : rows) {
     // Preserve the action ID byte-for-byte in `<trace_key>:<action_id>` members.
     const std::string member = view.trace_id + ":" + a.action_id;
     for (const std::string &account : a.accounts) {
       payload.aai.emplace_back(account, member);
-      if (tx_accounts.count(account) == 0) {
-        referenced.insert(account);
-      }
     }
   }
-  // TraceInserter publishes these canonical accounts for AAI expiry cleanup.
-  // _aai:<account> set-index of trace hashes; consumers filter subscriptions by it.
-  payload.referenced_accounts.assign(referenced.begin(), referenced.end());
   return payload;
 }
 
@@ -202,14 +186,6 @@ EmuActionPayload build_payload(const EmuTraceView &view, const std::vector<Actio
 
 void EmuClassifierActor::start_up() {
   alarm_timestamp() = td::Timestamp::in(kStatsIntervalSec);
-}
-
-void EmuClassifierActor::note_shed(EmuClassifyOutcome why) {
-  switch (why) {
-    case EmuClassifyOutcome::shed_admission: stats_.shed_admission++; break;
-    case EmuClassifyOutcome::bypassed_disabled: stats_.bypassed_disabled++; break;
-    default: break;  // the classifier-side outcomes never come through here
-  }
 }
 
 bool EmuClassifierActor::remember_seen(const std::string &trace_id) {
@@ -224,19 +200,20 @@ bool EmuClassifierActor::remember_seen(const std::string &trace_id) {
   return true;
 }
 
-void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResult> promise) {
+void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
+                                  td::Promise<EmuClassifyResult> promise) {
   EmuClassifyResult res;
   res.trace_id = view.trace_id;
   // Derive payload and guard finality from the same view.
   res.payload.finality = static_cast<std::uint8_t>(view_finality(view));
+  res.payload.update_seq = view.update_seq;
 
   const std::int64_t started_us = emu_now_us();
-  res.queue_us = started_us - view.sent_us;
+  res.queue_us = started_us - enqueued_us;
   if (res.queue_us > 0 && static_cast<std::size_t>(res.queue_us) > stats_.queue_us_max) {
     stats_.queue_us_max = static_cast<std::size_t>(res.queue_us);
   }
 
-  // Count every actor admission, including requests later shed by deadline.
   stats_.emissions++;
   if (!remember_seen(view.trace_id)) {
     stats_.reemissions++;
@@ -248,22 +225,12 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
     stats_.tx_limit_exceeded++;
   }
 
-  // Shed work whose queue deadline expired before classification starts.
-  if (started_us > view.deadline_us) {
-    stats_.shed_deadline++;
-    res.outcome = EmuClassifyOutcome::shed_deadline;
-    // Record the shed reason without writing an action blob.
-    res.payload.state = "shed_deadline";
-    promise.set_value(std::move(res));
-    return;
-  }
-
   // Serialize rows before the view and its cell anchor leave scope.
   std::vector<Action> rows;
   bool unknown_row = false;
 
   // Catch vm::VmError explicitly because it does not derive from std::exception.
-  // Every path reaches the single response below and releases the gate slot.
+  // Every path reaches the single response below.
   try {
     auto r_txs = emu_to_schema_txs(view, cfg_.global_version);
     if (r_txs.is_error()) {
@@ -294,8 +261,10 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
       const std::int64_t ser_started_us = emu_now_us();
       ActionSerializeStats ser;
       const std::uint8_t finality = res.payload.finality;
+      const std::uint64_t update_seq = res.payload.update_seq;
       res.payload = build_payload(view, rows, aai_score, ser);
       res.payload.finality = finality;
+      res.payload.update_seq = update_seq;
       res.serialize_us = emu_now_us() - ser_started_us;
       if (res.serialize_us > 0) {
         auto us = static_cast<std::size_t>(res.serialize_us);
@@ -324,7 +293,6 @@ void EmuClassifierActor::classify(EmuTraceView view, td::Promise<EmuClassifyResu
       }
       stats_.tier2.fetched += res.tier2_stats.fetched;
       stats_.tier2.memo_hits += res.tier2_stats.memo_hits;
-      stats_.tier2.budget_exhausted += res.tier2_stats.budget_exhausted;
       if (scrubbed > 0) {
         stats_.arena_refs_scrubbed += scrubbed;
         LOG(WARNING) << "[mch-emu] trace=" << view.trace_id << " scrubbed " << scrubbed
@@ -420,13 +388,7 @@ void EmuClassifierActor::alarm() {
             << " tier2_rate=" << (resolved ? (100 * stats_.lookups.tier2_hits / resolved) : 0)
             << "%}"
             << " tier2{fetched=" << stats_.tier2.fetched
-            << " memo_hits=" << stats_.tier2.memo_hits
-            << " budget_exhausted=" << stats_.tier2.budget_exhausted << "}"
-            << " shed{admission=" << stats_.shed_admission
-            << " deadline=" << stats_.shed_deadline
-            << " disabled=" << stats_.bypassed_disabled << "}"
-            << " in_flight=" << cfg_.gate->in_flight.load(std::memory_order_relaxed)
-            << (cfg_.gate->disabled.load(std::memory_order_relaxed) ? " DISABLED" : "")
+            << " memo_hits=" << stats_.tier2.memo_hits << "}"
             << " queue_us{max=" << stats_.queue_us_max << "}"
             << " classify_us{avg="
             << (stats_.latency_samples ? stats_.classify_us_total / stats_.latency_samples : 0)
