@@ -13,6 +13,7 @@
 #include "GenMatchers.h"
 #include "emu/EmuClassifierBridge.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -55,6 +56,7 @@ int main(int argc, char *argv[]) {
   std::string db_event_fifo_path;
   bool mch_disable = false;
   bool mch_no_tier2 = false;
+  int mch_workers = 1;
   
   td::OptionParser p;
   p.set_description("Emulate TON traces");
@@ -151,6 +153,17 @@ int main(int argc, char *argv[]) {
     mch_no_tier2 = true;
   });
 
+  p.add_checked_option('\0', "mch-workers", "MCH classifier workers (default: 1)", [&](td::Slice value) {
+    int v;
+    try {
+      v = std::stoi(value.str());
+    } catch (...) {
+      return td::Status::Error(ton::ErrorCode::error, "bad value for --mch-workers: not a number");
+    }
+    mch_workers = std::clamp(v, 1, 64);
+    return td::Status::OK();
+  });
+
 
   auto S = p.run(argc, argv);
   if (S.is_error()) {
@@ -174,6 +187,7 @@ int main(int argc, char *argv[]) {
   }
 
   mch::EmuClassifierConfig mch_classifier_config;
+  mch_classifier_config.workers = mch_workers;
   if (mch_disable) {
     LOG(WARNING) << "MCH classification DISABLED (--mch-disable): traces are inserted unclassified";
   } else {
@@ -186,7 +200,8 @@ int main(int argc, char *argv[]) {
     mch_classifier_config.tier2 = !mch_no_tier2;
     LOG(INFO) << "MCH classification ENABLED (artifact sha " << mch::gen_matchers_ir_source_sha()
               << "), inserts wait for classification, celldb tier-2 "
-              << (mch_classifier_config.tier2 ? "ON" : "OFF");
+              << (mch_classifier_config.tier2 ? "ON" : "OFF")
+              << " workers=" << mch_classifier_config.workers;
   }
 
   // This must happen before any actor can subscribe to events or write a trace.

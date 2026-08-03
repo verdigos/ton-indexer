@@ -804,14 +804,20 @@ struct TraceProcessor::Impl {
       , retention(std::move(retention_config))
       , classifier_config(std::move(classifier_config)) {
     if (this->classifier_config.prep) {
-      classifier = td::actor::create_actor<mch::EmuClassifierActor>("MchEmuClassifier", this->classifier_config);
+      const auto worker_count = std::max(1, this->classifier_config.workers);
+      classifiers.reserve(worker_count);
+      for (int idx = 0; idx < worker_count; ++idx) {
+        classifiers.emplace_back(td::actor::create_actor<mch::EmuClassifierActor>(
+            "MchEmuClassifier-w" + std::to_string(idx), this->classifier_config, static_cast<std::size_t>(idx)));
+      }
     }
   }
 
   RedisMaterializer materializer;
   TraceRetentionConfig retention;
   mch::EmuClassifierConfig classifier_config;
-  td::actor::ActorOwn<mch::EmuClassifierActor> classifier;
+  std::vector<td::actor::ActorOwn<mch::EmuClassifierActor>> classifiers;
+  std::size_t next_classifier{0};
   std::unordered_map<std::string, TraceSlot> traces;
   std::unordered_map<std::string, td::Timestamp> oversized_traces;
   CompetingTraceSet candidates;
@@ -1144,7 +1150,7 @@ void TraceProcessor::start_next_operations() {
           .contains_real_root = real_root,
       });
 
-      if (impl_->classifier.empty()) {
+      if (impl_->classifiers.empty()) {
         mch::EmuActionPayload payload;
         payload.finality = static_cast<std::uint8_t>(full_trace_finality);
         payload.update_seq = update_seq;
@@ -1158,7 +1164,8 @@ void TraceProcessor::start_next_operations() {
             td::actor::send_closure(self, &TraceProcessor::classification_finished, std::move(trace_key),
                                     std::move(result));
           });
-      td::actor::send_closure(impl_->classifier, &mch::EmuClassifierActor::classify, std::move(full_trace),
+      auto& classifier = impl_->classifiers[impl_->next_classifier++ % impl_->classifiers.size()];
+      td::actor::send_closure(classifier, &mch::EmuClassifierActor::classify, std::move(full_trace),
                               enqueued_us, std::move(classification_promise));
       continue;
     } else {

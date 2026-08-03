@@ -241,7 +241,7 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       res.failure_category = FailureCategory::malformed_trace;
       res.failure_reason = r_txs.move_as_error().message().str();
       res.payload.state = "convert_failed";
-      LOG(WARNING) << "[mch-emu] trace=" << view.trace_id
+      LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
                    << " CONVERT FAILED: " << res.failure_reason;
     } else {
       auto txs = r_txs.move_as_ok();
@@ -276,7 +276,7 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       stats_.ser_cell_values += ser.cell_values;
       stats_.ser_unrenderable += ser.unrenderable;
       if (ser.float_values != 0 || ser.cell_values != 0 || ser.unrenderable != 0) {
-        LOG(WARNING) << "[mch-emu] trace=" << res.trace_id
+        LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << res.trace_id
                      << " serializer saw float=" << ser.float_values
                      << " cell=" << ser.cell_values << " unrenderable=" << ser.unrenderable;
       }
@@ -295,7 +295,8 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       stats_.tier2.memo_hits += res.tier2_stats.memo_hits;
       if (scrubbed > 0) {
         stats_.arena_refs_scrubbed += scrubbed;
-        LOG(WARNING) << "[mch-emu] trace=" << view.trace_id << " scrubbed " << scrubbed
+        LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
+                     << " scrubbed " << scrubbed
                      << " arena block reference(s) out of the action rows";
       }
       if (res.failure) {
@@ -304,7 +305,8 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
         res.outcome = EmuClassifyOutcome::classify_failed;
         // Classification failures write the basic-action fallback payload.
         res.payload.state = "fallback";
-        LOG(WARNING) << "[mch-emu] trace=" << view.trace_id << " FAILED ("
+        LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
+                     << " FAILED ("
                      << category_name(res.failure_category) << "): " << res.failure_reason;
       } else {
         stats_.classified++;
@@ -316,7 +318,8 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
           if (!names.empty()) names += ",";
           names += n;
         }
-        LOG(DEBUG) << "[mch-emu] trace=" << view.trace_id << " txs=" << txs.size()
+        LOG(DEBUG) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
+                   << " txs=" << txs.size()
                    << " actions=" << res.payload.action_count
                    << " serialize_us=" << res.serialize_us << " matchers=[" << names << "]";
       }
@@ -328,7 +331,8 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
     res.failure_category = FailureCategory::malformed_trace;
     res.failure_reason = std::string("exception (vm): ") + e.get_msg();
     res.payload.state = "convert_failed";
-    LOG(WARNING) << "[mch-emu] trace=" << view.trace_id << " EXCEPTION (vm): " << e.get_msg();
+    LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
+                 << " EXCEPTION (vm): " << e.get_msg();
   } catch (...) {
     stats_.convert_failed++;
     res.outcome = EmuClassifyOutcome::convert_failed;
@@ -336,7 +340,8 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
     res.failure_category = FailureCategory::malformed_trace;
     res.failure_reason = "unknown exception";
     res.payload.state = "convert_failed";
-    LOG(WARNING) << "[mch-emu] trace=" << view.trace_id << " EXCEPTION";
+    LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
+                 << " EXCEPTION";
   }
 
   res.classify_us = emu_now_us() - started_us;
@@ -367,7 +372,7 @@ void EmuClassifierActor::alarm() {
     miss_kinds += kind + "=" + std::to_string(n);
   }
   std::size_t resolved = stats_.lookups.tier1_hits + stats_.lookups.tier2_hits;
-  LOG(INFO) << "[mch-emu] emissions=" << stats_.emissions << " (+"
+  LOG(INFO) << "[mch-emu-w" << worker_index_ << "] emissions=" << stats_.emissions << " (+"
             << (stats_.emissions - prev_.emissions) << ")"
             << " reemissions=" << stats_.reemissions
             << " classified=" << stats_.classified << " (+"

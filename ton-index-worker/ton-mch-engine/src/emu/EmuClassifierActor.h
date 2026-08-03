@@ -35,7 +35,8 @@ struct EmuClassifierStats {
 
 class EmuClassifierActor : public td::actor::Actor {
  public:
-  explicit EmuClassifierActor(EmuClassifierConfig cfg) : cfg_(std::move(cfg)) {}
+  explicit EmuClassifierActor(EmuClassifierConfig cfg, std::size_t worker_index = 0)
+      : cfg_(std::move(cfg)), worker_index_(worker_index) {}
 
   // Request entry from scheduler integration. Always answers exactly once.
   void classify(EmuTraceView view, std::int64_t enqueued_us,
@@ -49,8 +50,10 @@ class EmuClassifierActor : public td::actor::Actor {
   bool remember_seen(const std::string &trace_id);
 
   EmuClassifierConfig cfg_;
+  std::size_t worker_index_;
   EmuClassifierStats stats_;
   EmuClassifierStats prev_;  // snapshot at the previous log line, for the delta
+  // Reemission dedup is per-worker, so round-robin pools undercount reemissions.
   std::unordered_set<std::string> seen_traces_;
   std::deque<std::string> seen_order_;
 };
