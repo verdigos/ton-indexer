@@ -13,7 +13,9 @@ TEST(StreamingHints, transaction_hint_is_a_named_msgpack_map) {
         .accounts = {"0:AAAA", "0:BBBB"},
     });
 
-    auto object = msgpack::unpack(packed.data(), packed.size()).get();
+    // Keep the handle alive: object references the zone the handle owns.
+    auto handle = msgpack::unpack(packed.data(), packed.size());
+    auto object = handle.get();
     ASSERT_EQ(msgpack::type::MAP, object.type);
 
     StreamingTransactionHint decoded;
