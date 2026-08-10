@@ -294,10 +294,15 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
     if (include.count(n) == 0) {
       continue;
     }
-    // The reference gate checks a JettonTransferBlock class, but IR transfers
-    // use the generic Block representation. That branch is therefore dead and
-    // only the DedustPayout call contributes an outgoing leg.
-    if (is_call_op(n, kDedustPayout)) {
+    // IR jetton transfers use the generic Block representation.
+    if (n->btype == "jetton_transfer") {
+      receiver_wallet = data_field(n, "receiver_wallet");
+      receiver = data_field(n, "receiver");
+      dex_outgoing_wallet = data_field(n, "sender");
+      dex_outgoing_jetton_wallet = data_field(n, "sender_wallet");
+      actual_asset_out = data_field(n, "asset");
+      actual_amount_out = data_field(n, "amount");
+    } else if (is_call_op(n, kDedustPayout)) {
       const Message *m = block_msg(n);
       dex_outgoing_wallet = account_from_opt(m != nullptr ? m->source : std::nullopt);
       receiver = account_from_opt(m != nullptr ? m->destination : std::nullopt);
