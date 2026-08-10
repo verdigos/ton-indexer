@@ -388,9 +388,7 @@ void test_memo_and_guards() {
     check("memo/kind_in_key", t.stats().memo_hits == 0 && f.reads == 1);
   }
   {
-    // Argument discipline: mirrors the tier-1 dispatch contract — Str or
-    // non-addr_none Account pass (ghost-fallback lookups send Account);
-    // anything else nulls before the account read.
+    // Mirrors the tier-1 dispatch contract
     Fixture f;
     auto t = f.make();
     check("guard/non_str_arg_null",
