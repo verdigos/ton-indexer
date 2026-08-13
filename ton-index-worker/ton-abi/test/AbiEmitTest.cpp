@@ -43,6 +43,20 @@ std::string emit_source_of(const std::string &fixture) {
   return r.move_as_ok().source;
 }
 
+td::Result<GeneratedFiles> emit_with_manifest(const ValidateManifest &manifest) {
+  auto box = std::make_unique<ContractABI>(load_fixture_abi("lots-of-wrappers"));
+  auto kernel = AbiKernel::create(*box).move_as_ok();
+  return emit_abi(*box, kernel, {}, manifest);
+}
+
+std::string edge_case_ints_from_slice_body(const std::string &src) {
+  auto start = src.find("EdgeCaseInts::from_slice(");
+  REQUIRE(start != std::string::npos);
+  auto end = src.find("\n}\n", start);
+  REQUIRE(end != std::string::npos);
+  return src.substr(start, end - start);
+}
+
 }  // namespace
 
 // (A) create() default materialization: a defaulted field left out of
@@ -54,6 +68,51 @@ TEST_CASE("emit: lots-of-messages IncreaseBy create()-with-default") {
   auto made = gen::lots_of_messages::IncreaseBy::create(args);
   CHECK(made.inc_by == 1);  // int32 -> td::int64, ABI default 1
   CHECK(made.counter_id == 7);
+}
+
+TEST_CASE("emit: manifest-marked default field adds validation after its load") {
+  auto r = emit_with_manifest({"EdgeCaseInts.maxUint"});
+  REQUIRE_MESSAGE(r.is_ok(), (r.is_error() ? r.error().message().str() : ""));
+  std::string body = edge_case_ints_from_slice_body(r.move_as_ok().source);
+
+  std::string load = "TRY_RESULT_PREFIX_ASSIGN(r.maxUint, (load_uint(cs, 256)), \"EdgeCaseInts.maxUint: \");";
+  std::string check =
+      "if (r.maxUint != td::dec_string_to_int256(std::string(\"115792089237316195423570985008687907853269984665640564039457584007913129639935\")))";
+  auto load_pos = body.find(load);
+  auto check_pos = body.find(check);
+  REQUIRE(load_pos != std::string::npos);
+  CHECK(check_pos != std::string::npos);
+  CHECK(check_pos > load_pos);
+}
+
+TEST_CASE("emit: manifest-marked default mismatch emits a field-prefixed error") {
+  auto r = emit_with_manifest({"EdgeCaseInts.maxInt"});
+  REQUIRE_MESSAGE(r.is_ok(), (r.is_error() ? r.error().message().str() : ""));
+  std::string body = edge_case_ints_from_slice_body(r.move_as_ok().source);
+
+  CHECK(body.find("return td::Status::Error(PSLICE() << \"EdgeCaseInts.maxInt: expected \"") != std::string::npos);
+  CHECK(body.find(" << \", got \"") != std::string::npos);
+}
+
+TEST_CASE("emit: default field absent from manifest gets no validation") {
+  auto r = emit_with_manifest({"EdgeCaseInts.maxUint"});
+  REQUIRE_MESSAGE(r.is_ok(), (r.is_error() ? r.error().message().str() : ""));
+  std::string body = edge_case_ints_from_slice_body(r.move_as_ok().source);
+
+  CHECK(body.find("if (r.maxUint !=") != std::string::npos);
+  CHECK(body.find("if (r.maxInt !=") == std::string::npos);
+  CHECK(body.find("if (r.minInt !=") == std::string::npos);
+}
+
+TEST_CASE("emit: validation manifest rejects unknown fields") {
+  auto r = emit_with_manifest({"EdgeCaseInts.notAField"});
+  REQUIRE(r.is_error());
+  CHECK(r.error().message().str().find("EdgeCaseInts.notAField") != std::string::npos);
+
+  auto no_default = emit_with_manifest({"JustUint5.value"});
+  REQUIRE(no_default.is_error());
+  CHECK(no_default.error().message().str().find("JustUint5.value") != std::string::npos);
+  CHECK(no_default.error().message().str().find("no default_value") != std::string::npos);
 }
 
 // (B) per-direction custom gate: do not port the reference bug
