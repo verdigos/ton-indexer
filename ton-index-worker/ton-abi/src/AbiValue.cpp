@@ -167,10 +167,11 @@ AbiValue AbiValue::make_cell(td::Ref<vm::Cell> c) {
   return r;
 }
 
-AbiValue AbiValue::make_cell_of(AbiValue inner_value) {
+AbiValue AbiValue::make_cell_of(AbiValue inner_value, td::Ref<vm::Cell> raw_cell) {
   AbiValue r;
   r.kind = AbiValueKind::CellOf;
   r.inner = std::make_unique<AbiValue>(std::move(inner_value));
+  r.cell_v = std::move(raw_cell);
   return r;
 }
 

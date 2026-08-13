@@ -9,6 +9,7 @@
 #include "AbiValue.h"
 #include "AbiLeavesAddress.h"
 
+#include "dedust_gen.h"
 #include "jetton_wallet_contract_gen.h"
 #include "lots_of_wrappers_gen.h"
 #include "dedust_v2_gen.h"  // DeDust V2 production pair
@@ -28,6 +29,7 @@ namespace {
 
 namespace jw = ton_abi::gen::jetton_wallet_contract;
 namespace lw = ton_abi::gen::lots_of_wrappers;
+namespace d = ton_abi::gen::dedust;
 namespace dv = ton_abi::gen::dedust_v2;
 using ton_abi::AbiAddress;
 using ton_abi::AbiAddressKind;
@@ -170,6 +172,14 @@ void test_adapter_direct() {
     check("adapter/cellof", v.t == VType::Obj && is_int(fld(v, "ref"), 5));
   }
   {
+    auto raw_cell = empty_cell();
+    Value v = abi_value_to_mch(
+        AbiValue::make_cell_of(AbiValue::make_int(td::make_refint(5)), raw_cell));
+    const Value *cell = fld(v, "cell");
+    check("adapter/cellof_raw_cell", cell && cell->t == VType::Cell && cell->cell.not_null() &&
+                                         cell->cell->get_hash() == raw_cell->get_hash());
+  }
+  {
     std::vector<AbiValue> items;
     items.push_back(AbiValue::make_int(td::make_refint(1)));
     items.push_back(AbiValue::make_int(td::make_refint(2)));
@@ -235,6 +245,50 @@ void test_abi_rows_dispatch() {
     }
     check("abi_rows/dispatch/" + row.first, routed);
   }
+}
+
+// DeDust swap notification: Cell<DedustSwapInfo> preserves both the decoded
+// payload and the exact raw child cell through generated load + registry parse.
+void test_dedust_swap_notification_cellof() {
+  auto info = d::DedustSwapInfo::create(
+      {test_addr(), test_addr(), td::make_refint(111), td::make_refint(222)});
+  vm::CellBuilder info_cb;
+  auto info_st = info.store(info_cb);
+  check("dedust/swap_notification/info_store_ok", info_st.is_ok());
+  auto info_cell = info_cb.finalize();
+
+  d::DedustSwapNotification::CreateArgs args;
+  args.asset_in = d::Asset{d::AssetTon::create({})};
+  args.asset_out = d::Asset{d::AssetTon::create({})};
+  args.amount_in = td::make_refint(1000);
+  args.amount_out = td::make_refint(900);
+  args.info = {std::make_shared<d::DedustSwapInfo>(std::move(info)), info_cell};
+
+  vm::CellBuilder cb;
+  auto st = d::DedustSwapNotification::create(std::move(args)).store(cb);
+  check("dedust/swap_notification/store_ok", st.is_ok());
+  auto r = parse_message_body("DedustSwapNotification", cb.finalize());
+  bool ok = r.is_ok();
+  check("dedust/swap_notification/parses", ok);
+  if (!ok) return;
+
+  const Value &v = r.ok();
+  const Value *info_v = fld(v, "info");
+  const Value *info_ref = info_v ? fld(*info_v, "ref") : nullptr;
+  const Value *raw_cell = info_v ? fld(*info_v, "cell") : nullptr;
+  check("dedust/swap_notification/info_ref",
+        info_ref && info_ref->t == VType::Obj && fld(*info_ref, "$") &&
+            fld(*info_ref, "$")->str == "DedustSwapInfo");
+  check("dedust/swap_notification/info_sender",
+        info_ref && is_account_str(fld(*info_ref, "sender_address"), kTestAddrCanon));
+  check("dedust/swap_notification/info_ref_address",
+        info_ref && is_account_str(fld(*info_ref, "ref_address"), kTestAddrCanon));
+  check("dedust/swap_notification/info_reserves",
+        info_ref && is_int(fld(*info_ref, "reserve_0"), 111) &&
+            is_int(fld(*info_ref, "reserve_1"), 222));
+  check("dedust/swap_notification/info_raw_cell",
+        raw_cell && raw_cell->t == VType::Cell && raw_cell->cell.not_null() &&
+            raw_cell->cell->get_hash() == info_cell->get_hash());
 }
 
 // DeDust CPMM V2 claim_reward
@@ -330,6 +384,7 @@ int run_abi_bridge_test() {
   test_hasvalue_union();
   test_structlabeled_union();
   test_adapter_direct();
+  test_dedust_swap_notification_cellof();
   test_dedust_v2_claim_reward();
   test_registry_policy();
   test_abi_rows_dispatch();

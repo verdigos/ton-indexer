@@ -707,14 +707,17 @@ class Emitter {
         int inner = std::get<TyInner>(t.data).inner_ty_idx;
         std::string it = cpp_type(inner);
         int k = ++uid_;
-        std::string cs = "__cs" + std::to_string(k), cv = "__cv" + std::to_string(k);
+        std::string cell = "__cell" + std::to_string(k), cs = "__cs" + std::to_string(k);
+        std::string cv = "__cv" + std::to_string(k);
         std::string s;
         s += "[&]() -> td::Result<ton_abi::gen::CellOf<" + it + ">> {\n";
         s += "    " + bind_res("__rs" + std::to_string(k), "__rr" + std::to_string(k),
-                                "load_ref_slice(" + sv + ")");
-        s += "    vm::CellSlice " + cs + " = *__rs" + std::to_string(k) + ";\n";
+                                "load_ref_cell_and_slice(" + sv + ")");
+        s += "    td::Ref<vm::Cell> " + cell + " = std::move(__rs" + std::to_string(k) + ".first);\n";
+        s += "    vm::CellSlice " + cs + " = *__rs" + std::to_string(k) + ".second;\n";
         s += "    " + bind_res(cv, "__rc" + std::to_string(k), load_expr(inner, cs, path, std::nullopt));
-        s += "    return ton_abi::gen::CellOf<" + it + ">{std::make_shared<" + it + ">(std::move(" + cv + "))};\n";
+        s += "    return ton_abi::gen::CellOf<" + it + ">{std::make_shared<" + it + ">(std::move(" + cv +
+             ")), std::move(" + cell + ")};\n";
         s += "  }()";
         return s;
       }
@@ -998,7 +1001,7 @@ class Emitter {
         s += "[&]() -> td::Result<AbiValue> {\n";
         s += "    " + bind_res(iv, "__ri" + std::to_string(k),
                                to_abi_expr(inner, "(*(" + expr + ".ref))", std::nullopt));
-        s += "    return AbiValue::make_cell_of(std::move(" + iv + "));\n";
+        s += "    return AbiValue::make_cell_of(std::move(" + iv + "), " + expr + ".cell);\n";
         s += "  }()";
         return s;
       }

@@ -54,16 +54,18 @@ TEST_CASE("cell: load with no ref present -> error") {
 
 // cellOf
 
-TEST_CASE("cellOf: load_ref_slice opens the inner cell for the walker") {
+TEST_CASE("cellOf: load_ref_cell_and_slice retains the raw cell and opens it for the walker") {
   vm::CellBuilder inner;
   REQUIRE(inner.store_long_bool(0x1234, 16));
+  auto child = inner.finalize();
   vm::CellBuilder cb;
-  REQUIRE(store_cell(cb, inner.finalize()).is_ok());
+  REQUIRE(store_cell(cb, child).is_ok());
   auto cs = vm::load_cell_slice(cb.finalize());
-  auto r = load_ref_slice(cs);
+  auto r = load_ref_cell_and_slice(cs);
   REQUIRE(r.is_ok());
-  CHECK(r.ok()->size() == 16);
-  CHECK(r.ok()->prefetch_ulong(16) == 0x1234);
+  CHECK(r.ok().first->get_hash() == child->get_hash());
+  CHECK(r.ok().second->size() == 16);
+  CHECK(r.ok().second->prefetch_ulong(16) == 0x1234);
 }
 
 // maybe_ref

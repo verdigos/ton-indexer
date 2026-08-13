@@ -83,11 +83,9 @@ Value abi_value_to_mch(const AbiValue &v) {
     case AbiValueKind::Cell:
       return Value::make_cell(v.cell_v);
     case AbiValueKind::CellOf: {
-      // Mirror AbiValue dump {"ref": inner}. `inner` is always set by the
-      // emitter for this kind; the guard keeps the adapter total (no UB) if a
-      // future producer ever hands over a moved-from value.
       Value::Fields f;
       f.emplace_back("ref", v.inner ? abi_value_to_mch(*v.inner) : Value::null());
+      f.emplace_back("cell", v.cell_v.not_null() ? Value::make_cell(v.cell_v) : Value::null());
       return Value::make_obj(std::move(f));
     }
     case AbiValueKind::Bits:

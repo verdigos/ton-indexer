@@ -36,13 +36,15 @@ namespace gen {
 
 // CellOf<T>: a value of type T that lives in a child cell (Tolk `Cell<T>`).
 // Emitted field type for the `cellOf` ABI kind. Holds the inner
-// value behind a shared_ptr indirection: cellOf is a cell-boundary, so a type
+// value behind a shared_ptr indirection and the raw child cell: cellOf is a
+// cell-boundary, so a type
 // may be recursive THROUGH a cellOf (e.g. `struct Node { next: Cell<Node> }`),
 // which an inline by-value member could not represent. The indirection also
 // means cellOf<Struct> only needs Struct forward-declared, not complete.
 template <class T>
 struct CellOf {
   std::shared_ptr<T> ref;
+  td::Ref<vm::Cell> cell;
 };
 
 // Typed custom-serializer registry.
