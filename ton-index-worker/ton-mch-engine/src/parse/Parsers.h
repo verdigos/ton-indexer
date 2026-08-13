@@ -14,10 +14,8 @@ namespace mch {
 // Only the kept-hand irregular / single-use parsers are declared below. The
 // protocol-owned generated ABI parsers are registered by AbiBridge.cpp.
 
-// Jetton family (ParseJettons.cpp): forward-payload-tail transfer and
-// nested-capture minter mint.
+// Jetton family (ParseJettons.cpp): forward-payload-tail transfer.
 td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body);
-td::Result<Value> parse_minter_jetton_mint(const td::Ref<vm::Cell> &body);
 
 // DNS family (ParseDns.cpp).
 td::Result<Value> parse_change_dns(const td::Ref<vm::Cell> &body);

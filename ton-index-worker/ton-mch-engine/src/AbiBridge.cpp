@@ -162,6 +162,33 @@ td::Result<Value> abi_parse_jetton_internal_transfer(const td::Ref<vm::Cell> &bo
   return abi_parse_body<ton_abi::gen::jetton::JettonInternalTransferEthena>(body);
 }
 
+td::Result<Value> abi_parse_minter_mint_legacy_shape(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(parsed,
+             abi_parse_body<ton_abi::gen::jetton::MinterJettonMint>(body));
+  const Value *query_id = parsed.field("query_id");
+  const Value *to_address = parsed.field("to_address");
+  const Value *ton_amount = parsed.field("ton_amount");
+  const Value *master_msg = parsed.field("master_msg");
+  const Value *master_msg_ref = master_msg ? master_msg->field("ref") : nullptr;
+  const Value *master_msg_cell = master_msg ? master_msg->field("cell") : nullptr;
+  const Value *master_msg_query_id =
+      master_msg_ref ? master_msg_ref->field("query_id") : nullptr;
+  const Value *master_msg_jetton_amount =
+      master_msg_ref ? master_msg_ref->field("jetton_amount") : nullptr;
+  if (!query_id || !to_address || !ton_amount || !master_msg_cell ||
+      !master_msg_query_id || !master_msg_jetton_amount) {
+    return td::Status::Error("abi bridge: unexpected MinterJettonMint value shape");
+  }
+  return Value::make_obj({
+      {"query_id", *query_id},
+      {"to_address", *to_address},
+      {"ton_amount", *ton_amount},
+      {"master_msg", *master_msg_cell},
+      {"master_msg_query_id", *master_msg_query_id},
+      {"master_msg_jetton_amount", *master_msg_jetton_amount},
+  });
+}
+
 template <class WithQuery, class NoQuery>
 td::Result<Value> abi_parse_conditional_query_id(const td::Ref<vm::Cell> &body) {
   if (body.is_null()) {
@@ -217,6 +244,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"JettonBurn", &abi_parse_body<jetton::JettonBurn>},
       {"JettonNotify", &abi_parse_body<jetton::JettonNotify>},
       {"JettonMint", &abi_parse_body<jetton::JettonMint>},
+      {"MinterJettonMint", &abi_parse_minter_mint_legacy_shape},
       {"MultisigNewOrder", &abi_parse_body<multisig::MultisigNewOrder>},
       {"MultisigInitOrder", &abi_parse_body<multisig::MultisigInitOrder>},
       {"MultisigApprove", &abi_parse_body<multisig::MultisigApprove>},

@@ -36,7 +36,3 @@ _ _:MsgAddressExt = MsgAddress;
 jetton_transfer$_ opcode:uint32 query_id:uint64 amount:(VarUInteger 16)
     destination:MsgAddress response:MsgAddress custom_payload:(Maybe ^Cell)
     forward_amount:(VarUInteger 16) = MchJettonTransfer;
-
-// MinterJettonMint (opcode 0x00000015). Nested master_msg fields hand-read.
-minter_jetton_mint$_ opcode:uint32 query_id:uint64 to_address:MsgAddress
-    ton_amount:(VarUInteger 16) master_msg:^Cell = MchMinterJettonMint;

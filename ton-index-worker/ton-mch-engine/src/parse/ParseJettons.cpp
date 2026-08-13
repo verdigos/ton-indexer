@@ -157,38 +157,8 @@ td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body) {
   return Value::make_obj(std::move(f));
 }
 
-// JettonInternalTransfer, JettonBurn, JettonNotify, and JettonMint use protocol
-// ABI rows. The forward-payload-tail transfer and nested-capture minter mint
-// require the hand-written parsers below.
-
-td::Result<Value> parse_minter_jetton_mint(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(ctx, open_body(body));
-  mchmsg::gen::MchMinterJettonMint::Record rec;
-  if (!mchmsg::gen::t_MchMinterJettonMint.unpack(ctx.cs, rec)) {
-    return td::Status::Error("tlb: minter mint unpack failed");
-  }
-  TRY_RESULT(to_address, addr_value(rec.to_address));
-  TRY_RESULT(ton_amount, var_uint16(rec.ton_amount));
-  bool special = false;
-  vm::CellSlice ms;
-  try {
-    ms = vm::load_cell_slice_special(rec.master_msg, special);
-  } catch (...) {
-    return td::Status::Error("minter mint: bad master_msg");
-  }
-  if (!ms.have(32) || !ms.advance(32) || !ms.have(64)) {
-    return td::Status::Error("minter mint: master_msg underflow");
-  }
-  auto master_query_id = ms.fetch_ulong(64);
-  TRY_RESULT(master_amount, load_coins_py(ms));
-  Value::Fields f;
-  f.emplace_back("query_id", Value::make_int(refint_u64(rec.query_id)));
-  f.emplace_back("to_address", std::move(to_address));
-  f.emplace_back("ton_amount", Value::make_int(std::move(ton_amount)));
-  f.emplace_back("master_msg", Value::make_cell(rec.master_msg));
-  f.emplace_back("master_msg_query_id", Value::make_int(refint_u64(master_query_id)));
-  f.emplace_back("master_msg_jetton_amount", Value::make_int(std::move(master_amount)));
-  return Value::make_obj(std::move(f));
-}
+// JettonInternalTransfer, JettonBurn, JettonNotify, JettonMint, and
+// MinterJettonMint use protocol ABI rows. The forward-payload-tail transfer
+// requires the hand-written parser above.
 
 }  // namespace mch

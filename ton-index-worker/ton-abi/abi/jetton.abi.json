@@ -102,6 +102,18 @@
     },
     {
       "kind": "StructRef",
+      "struct_name": "MinterJettonMint"
+    },
+    {
+      "kind": "StructRef",
+      "struct_name": "MinterJettonMintMasterMsg"
+    },
+    {
+      "kind": "cellOf",
+      "inner_ty_idx": 24
+    },
+    {
+      "kind": "StructRef",
       "struct_name": "Storage"
     },
     {
@@ -147,6 +159,25 @@
       "name": "JettonForwardTail",
       "ty_idx": 17,
       "target_ty_idx": 21
+    },
+    {
+      "kind": "struct",
+      "name": "MinterJettonMintMasterMsg",
+      "ty_idx": 24,
+      "fields": [
+        {
+          "name": "_op",
+          "ty_idx": 9
+        },
+        {
+          "name": "query_id",
+          "ty_idx": 11
+        },
+        {
+          "name": "jetton_amount",
+          "ty_idx": 6
+        }
+      ]
     },
     {
       "kind": "struct",
@@ -285,18 +316,45 @@
     },
     {
       "kind": "struct",
-      "name": "Storage",
+      "name": "MinterJettonMint",
       "ty_idx": 23,
+      "prefix": {
+        "prefix_num": 21,
+        "prefix_len": 32
+      },
+      "fields": [
+        {
+          "name": "query_id",
+          "ty_idx": 11
+        },
+        {
+          "name": "to_address",
+          "ty_idx": 13
+        },
+        {
+          "name": "ton_amount",
+          "ty_idx": 6
+        },
+        {
+          "name": "master_msg",
+          "ty_idx": 25
+        }
+      ]
+    },
+    {
+      "kind": "struct",
+      "name": "Storage",
+      "ty_idx": 26,
       "fields": [
         {
           "name": "dummy",
-          "ty_idx": 24
+          "ty_idx": 27
         }
       ]
     }
   ],
   "storage": {
-    "storage_ty_idx": 23
+    "storage_ty_idx": 26
   },
   "incoming_messages": [
     {
@@ -313,6 +371,9 @@
     },
     {
       "body_ty_idx": 22
+    },
+    {
+      "body_ty_idx": 23
     }
   ],
   "incoming_external": [],
@@ -327,5 +388,5 @@
   ],
   "compiler_name": "tolk",
   "compiler_version": "1.4.1",
-  "code_boc64": "te6ccgEBAgEAcQABFP8A9KQT9LzyyAsBAMTT+JHyQCDXLCC8aijMmDCEDwHHAPL04NcsJZLB9qyYMIQPAccA8vTg1ywiyvg95JgwhA8BxwDy9ODXLCObFoTkmDCEDwHHAPL04NcsIyFb6Dwxl4QPAccA8vTghA8BxwDy9A=="
+  "code_boc64": "te6ccgEBAgEAggABFP8A9KQT9LzyyAsBAObT+JHyQCDXLCC8aijMmDCEDwHHAPL04NcsJZLB9qyYMIQPAccA8vTg1ywiyvg95JgwhA8BxwDy9ODXLCObFoTkmDCEDwHHAPL04NcsIyFb6DyYMIQPAccA8vTg1ywgAAAArDGXhA8BxwDy9OCEDwHHAPL0"
 }
