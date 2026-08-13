@@ -22,11 +22,10 @@ target_compile_features(mch-codegen PRIVATE cxx_std_20)
 target_link_libraries(mch-codegen tdutils mch-ir-load)
 
 # --- generated sources ---------------------------------------------------------
-# EVERY generated file (mch-codegen tables + tlbc parsers) is a build step whose
-# output lives in the build tree (${CMAKE_CURRENT_BINARY_DIR}/generated/), never
-# in the source tree or git. The manifest/specs, conformance JSON, and
-# tlb/mch-msgs.tlb are version-controlled inputs; the production IR and .cpp
-# tables are derived artifacts.
+# EVERY generated mch-codegen table is a build step whose output lives in the
+# build tree (${CMAKE_CURRENT_BINARY_DIR}/generated/), never in the source tree
+# or git. The manifest/specs and conformance JSON are version-controlled inputs;
+# the production IR and .cpp tables are derived artifacts.
 #
 # Per-document tables: mch-codegen emits gen_*_<suffix>() symbols, so the tables
 # generated from the CLASSIFY artifact and the one from ir/build_vectors.json
@@ -121,32 +120,15 @@ add_custom_command(
     DEPENDS mch-codegen ${MCH_CLASSIFY_ARTIFACT}
     COMMENT "Generate the MCH matcher table from the IR artifact (mch-codegen --matchers)"
 )
-# TL-B jetton-family parsers from tlb/mch-msgs.tlb via tlbc (same build-tree
-# discipline as the mch-codegen outputs above).
-set(MCH_MSGS_TLB
-    ${MCH_GEN_DIR}/mch-msgs-tlb.cpp
-    ${MCH_GEN_DIR}/mch-msgs-tlb.h
-)
-add_custom_command(
-    WORKING_DIRECTORY ${MCH_GEN_DIR}
-    COMMAND tlbc -o mch-msgs-tlb -n mchmsg::gen -z ${CMAKE_CURRENT_SOURCE_DIR}/tlb/mch-msgs.tlb
-    COMMENT "Generate mch-msgs tlb source files"
-    OUTPUT ${MCH_MSGS_TLB}
-    DEPENDS tlbc ${CMAKE_CURRENT_SOURCE_DIR}/tlb/mch-msgs.tlb
-)
-
-# The generated matcher, build and where tables are linked by the classify loop;
-# the generated TL-B parsers are linked by the retained hand parser registry.
+# The generated matcher, build and where tables are linked by the classify loop.
 set(MCH_GENERATED_SOURCES
     ${MCH_GEN_DIR}/matchers_ir_generated.cpp
     ${MCH_GEN_DIR}/builds_ir_generated.cpp
     ${MCH_GEN_DIR}/wheres_ir_generated.cpp
-    ${MCH_GEN_DIR}/mch-msgs-tlb.cpp
 )
 add_custom_target(mch_generate_sources
     DEPENDS ${MCH_GENERATED_IR} ${MCH_GENERATED_IR_SECOND}
-            ${MCH_GENERATED_SOURCES}
-            ${MCH_GEN_DIR}/mch-msgs-tlb.h)
+            ${MCH_GENERATED_SOURCES})
 
 # --- mch-classify: the classification CORE static library (Phase G step 3,
 # The pure pipeline TUs (no CLI/dump/harness) - ton-index-
@@ -164,6 +146,7 @@ set(TON_ABI_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/../ton-abi/generated)
 # .abi.json is committed alongside the declaration; its generated pair is a build output).
 set(ABI_PROD_PAIRS
     ${TON_ABI_GENERATED_DIR}/jetton_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/jetton_payloads_gen.cpp
     ${TON_ABI_GENERATED_DIR}/multisig_gen.cpp
     ${TON_ABI_GENERATED_DIR}/pton_gen.cpp
     ${TON_ABI_GENERATED_DIR}/stonfi_gen.cpp
@@ -237,8 +220,6 @@ add_library(mch-classify STATIC
 )
 target_include_directories(mch-classify
     PUBLIC src
-    # Kept-hand parser TUs include "generated/mch-msgs-tlb.h" -> resolves into
-    # the build tree; nothing generated ever lands under src/.
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
     # AbiBridge.cpp includes the ABI_PROD_PAIRS generated headers.
     PRIVATE ${TON_ABI_GENERATED_DIR}
