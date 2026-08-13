@@ -37,23 +37,6 @@ jetton_transfer$_ opcode:uint32 query_id:uint64 amount:(VarUInteger 16)
     destination:MsgAddress response:MsgAddress custom_payload:(Maybe ^Cell)
     forward_amount:(VarUInteger 16) = MchJettonTransfer;
 
-// JettonInternalTransfer (opcode 0x178d4519). Python reads no forward_payload.
-jetton_internal_transfer$_ opcode:uint32 query_id:uint64 amount:(VarUInteger 16)
-    from_address:MsgAddress response_address:MsgAddress
-    forward_ton_amount:(VarUInteger 16) = MchJettonInternalTransfer;
-
-// JettonBurn (opcode 0x595f07bc). Python reads no custom_payload.
-jetton_burn$_ opcode:uint32 query_id:uint64 amount:(VarUInteger 16)
-    response_destination:MsgAddress = MchJettonBurn;
-
-// JettonNotify (opcode 0x7362d09c). forward_payload tail hand-read.
-jetton_notify$_ opcode:uint32 query_id:uint64 jetton_amount:(VarUInteger 16)
-    from_user:MsgAddress = MchJettonNotify;
-
-// JettonMint (opcode 0x642b7d07). Python reads no master_msg.
-jetton_mint$_ opcode:uint32 query_id:uint64 to_address:MsgAddress
-    ton_amount:(VarUInteger 16) = MchJettonMint;
-
 // MinterJettonMint (opcode 0x00000015). Nested master_msg fields hand-read.
 minter_jetton_mint$_ opcode:uint32 query_id:uint64 to_address:MsgAddress
     ton_amount:(VarUInteger 16) master_msg:^Cell = MchMinterJettonMint;

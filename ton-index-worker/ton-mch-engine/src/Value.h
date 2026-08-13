@@ -81,9 +81,8 @@ struct Value {
   std::string describe() const;
 };
 
-// Serialize a cell tree to standard BOC bytes (td std_boc_serialize, mode 0).
-// Cell-derived output fields are compared by root hash, so container byte order
-// is not significant and the deterministic native writer is used everywhere.
+// Serialize a cell tree to standard BOC bytes. Container mode (CRC32C on/off) is
+// the engine-wide kBocSerializeMode constant in Value.cpp — see ADR 0001.
 td::Result<std::string> td_boc_serialize(const td::Ref<vm::Cell> &root);
 
 // Normalize a raw TON address string "wc:hex64" to canonical "wc:HEX64".

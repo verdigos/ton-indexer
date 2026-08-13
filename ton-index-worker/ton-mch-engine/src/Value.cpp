@@ -149,13 +149,16 @@ const Value *Value::field(const std::string &name) const {
   return nullptr;
 }
 
+// Engine-wide BOC container mode (ADR 0001): CRC32C on = byte parity with what the
+// legacy classifier stored (pytoniq to_boc(hash_crc32=True)). Flip to 0 for bare
+// containers; cell content is identical either way.
+constexpr int kBocSerializeMode = vm::BagOfCells::Mode::WithCRC32C;
+
 td::Result<std::string> td_boc_serialize(const td::Ref<vm::Cell> &root) {
-  // Dumps render cell-derived fields by root hash, so use the deterministic
-  // native writer; BOC container byte order is not observable here.
   if (root.is_null()) {
     return td::Status::Error("td_boc_serialize: null cell");
   }
-  auto r = vm::std_boc_serialize(root, 0);
+  auto r = vm::std_boc_serialize(root, kBocSerializeMode);
   if (r.is_error()) {
     return r.move_as_error();
   }
