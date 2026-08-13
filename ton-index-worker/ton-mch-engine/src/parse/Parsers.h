@@ -24,13 +24,4 @@ td::Result<Value> parse_change_dns(const td::Ref<vm::Cell> &body);
 td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body);
 td::Result<Value> parse_vesting_add_whitelist(const td::Ref<vm::Cell> &body);
 
-// EVAA withdraw family (ParseEvaa.cpp): opcode-enum fail_excess only.
-td::Result<Value> parse_evaa_withdraw_fail_excess(const td::Ref<vm::Cell> &body);
-
-// LayerZero family (ParseLayerZero.cpp).
-td::Result<Value> parse_layerzero_oapp_execute_callback(const td::Ref<vm::Cell> &body);
-td::Result<Value> parse_layerzero_channel_send_callback(const td::Ref<vm::Cell> &body);
-td::Result<Value> parse_layerzero_channel_commit_packet(const td::Ref<vm::Cell> &body);
-td::Result<Value> parse_uln_connection_verify_callback(const td::Ref<vm::Cell> &body);
-
 }  // namespace mch

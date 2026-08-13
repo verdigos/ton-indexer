@@ -43,6 +43,7 @@ const PROD_DECLS = [
     'coffee_staking_withdraw3',
     'evaa',
     'evaa_supply_forward',
+    'layerzero',
     'jvault',
     'jvault_payload',
     'subscriptions',

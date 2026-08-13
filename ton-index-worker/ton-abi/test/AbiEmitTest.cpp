@@ -71,19 +71,20 @@ TEST_CASE("emit: lots-of-messages IncreaseBy create()-with-default") {
   CHECK(made.counter_id == 7);
 }
 
-TEST_CASE("emit: manifest-marked default field adds validation after its load") {
+TEST_CASE("emit: manifest-marked RefInt256 default uses value comparison after its load") {
   auto r = emit_with_manifest({"EdgeCaseInts.maxUint"});
   REQUIRE_MESSAGE(r.is_ok(), (r.is_error() ? r.error().message().str() : ""));
   std::string body = edge_case_ints_from_slice_body(r.move_as_ok().source);
 
   std::string load = "TRY_RESULT_PREFIX_ASSIGN(r.maxUint, (load_uint(cs, 256)), \"EdgeCaseInts.maxUint: \");";
   std::string check =
-      "if (r.maxUint != td::dec_string_to_int256(std::string(\"115792089237316195423570985008687907853269984665640564039457584007913129639935\")))";
+      "if (td::cmp(r.maxUint, td::dec_string_to_int256(std::string(\"115792089237316195423570985008687907853269984665640564039457584007913129639935\"))) != 0)";
   auto load_pos = body.find(load);
   auto check_pos = body.find(check);
   REQUIRE(load_pos != std::string::npos);
   CHECK(check_pos != std::string::npos);
   CHECK(check_pos > load_pos);
+  CHECK(body.find("if (r.maxUint !=") == std::string::npos);
 }
 
 TEST_CASE("emit: manifest-marked default mismatch emits a field-prefixed error") {
@@ -91,6 +92,7 @@ TEST_CASE("emit: manifest-marked default mismatch emits a field-prefixed error")
   REQUIRE_MESSAGE(r.is_ok(), (r.is_error() ? r.error().message().str() : ""));
   std::string body = edge_case_ints_from_slice_body(r.move_as_ok().source);
 
+  CHECK(body.find("if (td::cmp(r.maxInt,") != std::string::npos);
   CHECK(body.find("return td::Status::Error(PSLICE() << \"EdgeCaseInts.maxInt: expected \"") != std::string::npos);
   CHECK(body.find(" << \", got \"") != std::string::npos);
 }
@@ -100,9 +102,9 @@ TEST_CASE("emit: default field absent from manifest gets no validation") {
   REQUIRE_MESSAGE(r.is_ok(), (r.is_error() ? r.error().message().str() : ""));
   std::string body = edge_case_ints_from_slice_body(r.move_as_ok().source);
 
-  CHECK(body.find("if (r.maxUint !=") != std::string::npos);
-  CHECK(body.find("if (r.maxInt !=") == std::string::npos);
-  CHECK(body.find("if (r.minInt !=") == std::string::npos);
+  CHECK(body.find("td::cmp(r.maxUint,") != std::string::npos);
+  CHECK(body.find("td::cmp(r.maxInt,") == std::string::npos);
+  CHECK(body.find("td::cmp(r.minInt,") == std::string::npos);
 }
 
 TEST_CASE("emit: validation manifest rejects unknown fields") {
