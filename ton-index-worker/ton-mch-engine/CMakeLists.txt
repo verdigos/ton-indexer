@@ -183,6 +183,7 @@ set(ABI_PROD_PAIRS
     ${TON_ABI_GENERATED_DIR}/tonstakers_gen.cpp
     ${TON_ABI_GENERATED_DIR}/cocoon_gen.cpp
     ${TON_ABI_GENERATED_DIR}/dns_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/layerzero_gen.cpp
 )
 
 set_source_files_properties(${ABI_PROD_PAIRS} PROPERTIES GENERATED TRUE)
@@ -232,8 +233,6 @@ add_library(mch-classify STATIC
     src/parse/ParseDns.cpp
     src/parse/ParseVesting.cpp
     src/parse/ParseDedust.cpp
-    src/parse/ParseEvaa.cpp
-    src/parse/ParseLayerZero.cpp
     ${MCH_GENERATED_SOURCES}
 )
 target_include_directories(mch-classify
