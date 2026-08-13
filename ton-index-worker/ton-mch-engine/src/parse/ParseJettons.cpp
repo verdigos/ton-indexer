@@ -22,7 +22,8 @@ namespace {
 // bytes differ from pytoniq's on multi-ref trees, but payload fields are
 // compared/rendered by cell root hash, so the difference is invisible.
 td::Result<std::string> boc_bytes(const td::Ref<vm::Cell> &c) {
-  return td_boc_serialize(c);
+  // Parser pre-encoding layer: legacy stored these with CRC (ADR 0001).
+  return td_boc_serialize_crc(c);
 }
 
 td::Result<Value> addr_value(td::Ref<vm::CellSlice> csr) {

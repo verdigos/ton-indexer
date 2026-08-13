@@ -149,20 +149,32 @@ const Value *Value::field(const std::string &name) const {
   return nullptr;
 }
 
-// Engine-wide BOC container mode (ADR 0001): CRC32C on = byte parity with what the
-// legacy classifier stored (pytoniq to_boc(hash_crc32=True)). Flip to 0 for bare
-// containers; cell content is identical either way.
-constexpr int kBocSerializeMode = vm::BagOfCells::Mode::WithCRC32C;
+// BOC container modes (ADR 0001). Legacy python used TWO conventions by layer:
+// parser pre-encoding stored CRC32C containers (to_boc(hash_crc32=True)); spec-level
+// rendering (b64 builtin, cell dumps) stored bare containers. Byte parity with prod
+// history requires both. Cell content is identical either way; flip here to switch.
+constexpr int kBocRenderMode = 0;                                  // bare
+constexpr int kBocParseEncodeMode = vm::BagOfCells::Mode::WithCRC32C;
 
-td::Result<std::string> td_boc_serialize(const td::Ref<vm::Cell> &root) {
+namespace {
+td::Result<std::string> boc_with_mode(const td::Ref<vm::Cell> &root, int mode) {
   if (root.is_null()) {
     return td::Status::Error("td_boc_serialize: null cell");
   }
-  auto r = vm::std_boc_serialize(root, kBocSerializeMode);
+  auto r = vm::std_boc_serialize(root, mode);
   if (r.is_error()) {
     return r.move_as_error();
   }
   return r.move_as_ok().as_slice().str();
+}
+}  // namespace
+
+td::Result<std::string> td_boc_serialize(const td::Ref<vm::Cell> &root) {
+  return boc_with_mode(root, kBocRenderMode);
+}
+
+td::Result<std::string> td_boc_serialize_crc(const td::Ref<vm::Cell> &root) {
+  return boc_with_mode(root, kBocParseEncodeMode);
 }
 
 std::optional<std::string> normalize_raw_address(const std::string &s) {

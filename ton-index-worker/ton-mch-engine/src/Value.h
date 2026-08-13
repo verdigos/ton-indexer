@@ -81,9 +81,12 @@ struct Value {
   std::string describe() const;
 };
 
-// Serialize a cell tree to standard BOC bytes. Container mode (CRC32C on/off) is
-// the engine-wide kBocSerializeMode constant in Value.cpp — see ADR 0001.
+// Serialize a cell tree to standard BOC bytes. Two layer conventions (ADR 0001):
+// td_boc_serialize = render layer, bare container (spec b64, dumps, fallbacks);
+// td_boc_serialize_crc = parser pre-encoding layer, CRC32C container (payload
+// fields stored to actions, byte-parity with legacy to_boc(hash_crc32=True)).
 td::Result<std::string> td_boc_serialize(const td::Ref<vm::Cell> &root);
+td::Result<std::string> td_boc_serialize_crc(const td::Ref<vm::Cell> &root);
 
 // Normalize a raw TON address string "wc:hex64" to canonical "wc:HEX64".
 // Returns nullopt for anything that is not a well-formed raw address (the
