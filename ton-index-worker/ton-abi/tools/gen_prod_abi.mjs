@@ -45,6 +45,7 @@ const PROD_DECLS = [
     'evaa',
     'evaa_supply_forward',
     'layerzero',
+    'vesting',
     'jvault',
     'jvault_payload',
     'subscriptions',

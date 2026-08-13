@@ -113,6 +113,34 @@ td::Result<td::Ref<vm::Cell>> inline_jetton_transfer(
   return cb.finalize();
 }
 
+td::Result<td::Ref<vm::Cell>> vesting_whitelist_body(
+    td::uint64 query_id, const std::vector<AbiAddress> &addresses) {
+  if (addresses.empty()) {
+    return td::Status::Error("test: vesting whitelist requires a head node");
+  }
+
+  td::Ref<vm::Cell> next;
+  for (std::size_t i = addresses.size(); i-- > 1;) {
+    vm::CellBuilder node;
+    TRY_STATUS(ton_abi::store_address_any(node, addresses[i]));
+    if (next.not_null() && !node.store_ref_bool(next)) {
+      return td::Status::Error("test: cannot store vesting whitelist node ref");
+    }
+    next = node.finalize();
+  }
+
+  vm::CellBuilder body;
+  if (!body.store_long_bool(0x7258a69b, 32) ||
+      !body.store_ulong_rchk_bool(query_id, 64)) {
+    return td::Status::Error("test: cannot store vesting whitelist header");
+  }
+  TRY_STATUS(ton_abi::store_address_any(body, addresses[0]));
+  if (next.not_null() && !body.store_ref_bool(next)) {
+    return td::Status::Error("test: cannot store vesting whitelist head ref");
+  }
+  return body.finalize();
+}
+
 const Value *parsed_field(const td::Result<Value> &parsed, const char *name) {
   return parsed.is_ok() ? parsed.ok().field(name) : nullptr;
 }
@@ -245,6 +273,42 @@ void test_jetton_inline_copybug_regression() {
         parsed.is_ok() && fld(parsed.ok(), "comment") &&
             fld(parsed.ok(), "comment")->t == VType::Bytes &&
             fld(parsed.ok(), "comment")->str == "hi!!");
+}
+
+void test_vesting_add_whitelist_flattening() {
+  const AbiAddress addr1 = ton_abi::gen::address_from_string("0:" + std::string(64, '1'));
+  const AbiAddress addr2 = ton_abi::gen::address_from_string("0:" + std::string(64, '2'));
+  const AbiAddress addr3 = ton_abi::gen::address_from_string("0:" + std::string(64, '3'));
+
+  {
+    auto body = vesting_whitelist_body(17, {addr1, addr2, addr3});
+    auto parsed = body.is_ok()
+                      ? parse_message_body("VestingAddWhiteList", body.ok())
+                      : td::Result<Value>(body.move_as_error());
+    const Value *addresses = parsed_field(parsed, "addresses");
+    bool ordered = addresses && addresses->t == VType::List && addresses->items &&
+                   addresses->items->size() == 3 &&
+                   is_account_str(&(*addresses->items)[0], "0:" + std::string(64, '1')) &&
+                   is_account_str(&(*addresses->items)[1], "0:" + std::string(64, '2')) &&
+                   is_account_str(&(*addresses->items)[2], "0:" + std::string(64, '3'));
+    check("vesting_whitelist/three_node_parses", parsed.is_ok());
+    check("vesting_whitelist/three_node_query_id", is_int(parsed_field(parsed, "query_id"), 17));
+    check("vesting_whitelist/three_node_ordered_void_tail", ordered);
+  }
+
+  {
+    auto body = vesting_whitelist_body(23, {addr1});
+    auto parsed = body.is_ok()
+                      ? parse_message_body("VestingAddWhiteList", body.ok())
+                      : td::Result<Value>(body.move_as_error());
+    const Value *addresses = parsed_field(parsed, "addresses");
+    bool singleton = addresses && addresses->t == VType::List && addresses->items &&
+                     addresses->items->size() == 1 &&
+                     is_account_str(&(*addresses->items)[0], "0:" + std::string(64, '1'));
+    check("vesting_whitelist/single_node_parses", parsed.is_ok());
+    check("vesting_whitelist/single_node_query_id", is_int(parsed_field(parsed, "query_id"), 23));
+    check("vesting_whitelist/single_node_void_tail", singleton);
+  }
 }
 
 // Full-trampoline-path fixtures
@@ -576,6 +640,7 @@ int run_abi_bridge_test() {
   test_try_parse_first_jetton_payloads();
   test_jetton_snake_failure_keeps_boc();
   test_jetton_inline_copybug_regression();
+  test_vesting_add_whitelist_flattening();
   test_jetton_wallet_data();
   test_hasvalue_union();
   test_structlabeled_union();

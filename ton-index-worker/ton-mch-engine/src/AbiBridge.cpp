@@ -29,6 +29,7 @@
 #include "teleitem_gen.h"
 #include "tonco_gen.h"
 #include "tonstakers_gen.h"
+#include "vesting_gen.h"
 
 #include <string>
 #include <variant>
@@ -409,6 +410,45 @@ td::Result<Value> abi_parse_minter_mint_legacy_shape(const td::Ref<vm::Cell> &bo
   });
 }
 
+td::Status flatten_vesting_whitelist_node(const Value &node,
+                                          std::vector<Value> &addresses) {
+  const Value *addr = node.field("addr");
+  const Value *next = node.field("next");
+  const Value *tag = next ? next->field("$") : nullptr;
+  if (!addr || !next || !tag || tag->t != VType::Str) {
+    return td::Status::Error("abi bridge: unexpected VestingAddWhiteList node shape");
+  }
+  addresses.push_back(*addr);
+  if (tag->str == "void") {
+    return td::Status::OK();
+  }
+  if (tag->str != "Cell") {
+    return td::Status::Error("abi bridge: unexpected VestingAddWhiteList next tag");
+  }
+  const Value *value = next->field("value");
+  const Value *ref = value ? value->field("ref") : nullptr;
+  if (!ref) {
+    return td::Status::Error("abi bridge: unexpected VestingAddWhiteList Cell shape");
+  }
+  return flatten_vesting_whitelist_node(*ref, addresses);
+}
+
+td::Result<Value> abi_parse_vesting_add_whitelist(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(parsed,
+             abi_parse_body<ton_abi::gen::vesting::VestingAddWhiteList>(body));
+  const Value *query_id = parsed.field("query_id");
+  const Value *head = parsed.field("head");
+  if (!query_id || !head) {
+    return td::Status::Error("abi bridge: unexpected VestingAddWhiteList value shape");
+  }
+  std::vector<Value> addresses;
+  TRY_STATUS(flatten_vesting_whitelist_node(*head, addresses));
+  return Value::make_obj({
+      {"query_id", *query_id},
+      {"addresses", Value::make_list(std::move(addresses))},
+  });
+}
+
 template <class WithQuery, class NoQuery>
 td::Result<Value> abi_parse_conditional_query_id(const td::Ref<vm::Cell> &body) {
   if (body.is_null()) {
@@ -540,6 +580,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"NftReportStaticData", &abi_parse_body<nft_sale::NftReportStaticData>},
       {"TONStakersNftBurnNotification",
        &abi_parse_body<tonstakers::TONStakersNftBurnNotification>},
+      {"VestingAddWhiteList", &abi_parse_vesting_add_whitelist},
       {"CocoonPayoutPayload", &abi_parse_body<cocoon::CocoonPayoutPayload>},
       {"CocoonLastPayoutPayload", &abi_parse_body<cocoon::CocoonLastPayoutPayload>},
       {"CocoonWorkerProxyRequest", &abi_parse_body<cocoon::CocoonWorkerProxyRequest>},

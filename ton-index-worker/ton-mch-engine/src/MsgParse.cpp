@@ -24,8 +24,8 @@
 
 namespace mch {
 
-// The registered parser set = the kept-hand parsers (3) + ABI-generated rows
-// (82, under stable bare spec-facing names).
+// The registered parser set = the kept-hand parsers (2) + ABI-generated rows
+// (83, under stable bare spec-facing names).
 // First-source-wins on a collision; a key claimed by more than one source is
 // instead poisoned to a nullptr parser at merge time, so parse_message_body
 // fails closed on an ambiguous name with the same map lookup it already does.
@@ -39,7 +39,6 @@ const std::vector<std::pair<std::string, MsgParserFn>> &hand_message_parsers() {
   static const std::vector<std::pair<std::string, MsgParserFn>> rows = {
       {"ChangeDnsRecordMessage", parse_change_dns},
       {"VestingSendMessage", parse_vesting_send_message},
-      {"VestingAddWhiteList", parse_vesting_add_whitelist},  // unbounded ref chain
   };
   return rows;
 }
