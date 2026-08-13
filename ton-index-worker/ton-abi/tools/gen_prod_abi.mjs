@@ -33,6 +33,7 @@ async function compileTolk(absFileName) {
 // files such as _TEMPLATE.tolk out of the compile+--check set.
 const PROD_DECLS = [
     'jetton',
+    'jetton_payloads',
     'multisig',
     'pton',
     'dns',

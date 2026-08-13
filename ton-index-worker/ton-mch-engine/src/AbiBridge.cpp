@@ -3,6 +3,8 @@
 // decoupled from internal generated declaration names.
 #include "AbiBridge.h"
 #include "AbiProjection.h"
+#include "AbiTryFirst.h"
+#include "parse/Parsers.h"
 
 #include "common/refint.h"
 #include "vm/cells/CellBuilder.h"
@@ -29,7 +31,7 @@
 #include "tonstakers_gen.h"
 
 #include <string>
-#include <type_traits>
+#include <variant>
 
 namespace mch {
 
@@ -273,26 +275,26 @@ td::Result<Value> abi_parse_evaa_withdraw_fail_excess(const td::Ref<vm::Cell> &b
     return td::Status::Error("abi bridge: exotic cell not supported");
   }
 
-  auto matches = [&](auto *tag) {
-    using T = std::remove_pointer_t<decltype(tag)>;
-    vm::CellSlice cs = vm::load_cell_slice(body);
-    return T::from_slice(cs).is_ok();
-  };
-  if (matches(static_cast<evaa::EvaaWithdrawLockedExcess *>(nullptr))) {
+  auto match = try_parse_first<evaa::EvaaWithdrawLockedExcess,
+                               evaa::EvaaWithdrawNotCollateralizedExcess,
+                               evaa::EvaaWithdrawMissingPricesExcess,
+                               evaa::EvaaWithdrawExecutionCrashed>(body);
+  if (match && std::holds_alternative<evaa::EvaaWithdrawLockedExcess>(*match)) {
     return Value::make_obj({{"opcode", Value::make_int64(0x21e6)},
                             {"reason", Value::make_str("withdraw_locked_excess")}});
   }
-  if (matches(static_cast<evaa::EvaaWithdrawNotCollateralizedExcess *>(nullptr))) {
+  if (match &&
+      std::holds_alternative<evaa::EvaaWithdrawNotCollateralizedExcess>(*match)) {
     return Value::make_obj(
         {{"opcode", Value::make_int64(0x21e7)},
          {"reason", Value::make_str("withdraw_not_collateralized_excess")}});
   }
-  if (matches(static_cast<evaa::EvaaWithdrawMissingPricesExcess *>(nullptr))) {
+  if (match && std::holds_alternative<evaa::EvaaWithdrawMissingPricesExcess>(*match)) {
     return Value::make_obj(
         {{"opcode", Value::make_int64(0x21e8)},
          {"reason", Value::make_str("withdraw_missing_prices_excess")}});
   }
-  if (matches(static_cast<evaa::EvaaWithdrawExecutionCrashed *>(nullptr))) {
+  if (match && std::holds_alternative<evaa::EvaaWithdrawExecutionCrashed>(*match)) {
     return Value::make_obj({{"opcode", Value::make_int64(0x21ec)},
                             {"reason", Value::make_str("withdraw_execution_crashed")}});
   }
@@ -459,6 +461,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"ClaimRewardMessage", &abi_parse_body<dedust_v2::ClaimRewardMessage>},
       {"PayoutRewardMessage", &abi_parse_body<dedust_v2::PayoutRewardMessage>},
       {"PayoutMessage", &abi_parse_body<dedust_v2::PayoutMessage>},
+      {"JettonTransfer", &parse_jetton_transfer},
       {"JettonInternalTransfer", &abi_parse_jetton_internal_transfer},
       {"JettonBurn", &abi_parse_body<jetton::JettonBurn>},
       {"JettonNotify", &abi_parse_body<jetton::JettonNotify>},

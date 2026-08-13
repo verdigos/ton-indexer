@@ -11,10 +11,10 @@
 
 namespace mch {
 
-// Only the kept-hand irregular / single-use parsers are declared below. The
-// protocol-owned generated ABI parsers are registered by AbiBridge.cpp.
+// Semantic adapters and kept-hand parsers are declared below. Protocol-owned
+// rows, including JettonTransfer's adapter, are registered by AbiBridge.cpp.
 
-// Jetton family (ParseJettons.cpp): forward-payload-tail transfer.
+// Jetton family (ParseJettons.cpp): ABI prefix + semantic forward-payload tail.
 td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body);
 
 // DNS family (ParseDns.cpp).
