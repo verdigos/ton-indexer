@@ -167,6 +167,7 @@ set(ABI_PROD_PAIRS
     ${TON_ABI_GENERATED_DIR}/cocoon_gen.cpp
     ${TON_ABI_GENERATED_DIR}/dns_gen.cpp
     ${TON_ABI_GENERATED_DIR}/layerzero_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/vesting_gen.cpp
 )
 
 set_source_files_properties(${ABI_PROD_PAIRS} PROPERTIES GENERATED TRUE)
