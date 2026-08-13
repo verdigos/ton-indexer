@@ -19,6 +19,7 @@
 #include "AbiTestSupport.h"
 
 #include "lots_of_messages_gen.h"
+#include "lots_of_wrappers_gen.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -194,6 +195,14 @@ TEST_CASE("emit: err-cont-on-stack emits cleanly; callable field -> stub") {
   // is non-serializable, so it emits cleanly with no stub.
   std::string src2 = emit_source_of("err-cont-on-stack-2");
   CHECK(src2.find("not serializable") == std::string::npos);
+}
+
+TEST_CASE("emit: enum member names are available without restricting scalar values") {
+  auto known = gen::lots_of_wrappers::EStoredAsInt8_name_of(td::make_refint(-100));
+  REQUIRE(known.has_value());
+  CHECK(*known == "M100");
+
+  CHECK_FALSE(gen::lots_of_wrappers::EStoredAsInt8_name_of(td::make_refint(42)).has_value());
 }
 
 // The ton-abi-gen executable writes a pair to disk; the emitted header contains

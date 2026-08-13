@@ -2,6 +2,7 @@
 #include "AbiBridgeTest.h"
 
 #include "AbiBridge.h"
+#include "AbiProjection.h"
 #include "MsgParse.h"
 #include "Value.h"
 
@@ -202,6 +203,30 @@ void test_adapter_direct() {
   }
 }
 
+void test_abi_projection() {
+  Value enum_hit = enum_name(lw::EStoredAsInt8_name_table(), td::make_refint(-100));
+  check("projection/enum_hit", enum_hit.t == VType::Str && enum_hit.str == "M100");
+  check("projection/enum_miss",
+        enum_name(lw::EStoredAsInt8_name_table(), td::make_refint(42)).is_null());
+
+  Value zero_hex = minimal_hex(td::uint64{0});
+  check("projection/minimal_hex_zero", zero_hex.t == VType::Str && zero_hex.str == "0x0");
+  Value uint_hex = minimal_hex(td::uint64{0x123});
+  check("projection/minimal_hex_uint64", uint_hex.t == VType::Str && uint_hex.str == "0x123");
+  auto wide = td::dec_string_to_int256(std::string("1208925819614629174706177"));  // 2^80 + 1
+  Value wide_hex = minimal_hex(wide);
+  check("projection/minimal_hex_wide",
+        wide_hex.t == VType::Str && wide_hex.str == "0x100000000000000000001");
+
+  const unsigned char raw[] = {0x00, 0xa8};
+  vm::CellBuilder cb;
+  cb.store_bits(raw, 13);
+  auto bits = vm::load_cell_slice_ref(cb.finalize());
+  Value root_hex = root_bits_hex(*bits);
+  check("projection/root_bits_hex_partial_byte",
+        root_hex.t == VType::Str && root_hex.str == "0x00a8");
+}
+
 // Registry and trampoline-guard policy
 void test_registry_policy() {
   // Duplicate keys across parser sources are reported.
@@ -384,6 +409,7 @@ int run_abi_bridge_test() {
   test_hasvalue_union();
   test_structlabeled_union();
   test_adapter_direct();
+  test_abi_projection();
   test_dedust_swap_notification_cellof();
   test_dedust_v2_claim_reward();
   test_registry_policy();

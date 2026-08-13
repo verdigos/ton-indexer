@@ -1543,10 +1543,26 @@ class Emitter {
     h += "// enum " + t.orig_name + " (bigint-valued, encoded_as leaf scalar)\n";
     h += "td::Result<td::RefInt256> " + N + "_from_slice(vm::CellSlice& cs);\n";
     h += "td::Status " + N + "_store(vm::CellBuilder& cb, const td::RefInt256& self);\n";
-    h += "td::Result<AbiValue> " + N + "_to_abi_value(const td::RefInt256& self);";
+    h += "td::Result<AbiValue> " + N + "_to_abi_value(const td::RefInt256& self);\n";
+    h += "const ton_abi::gen::EnumNameTable& " + N + "_name_table();\n";
+    h += "std::optional<std::string> " + N + "_name_of(const td::RefInt256& value);";
     t.h_decl = h;
 
     std::string c;
+    // Metadata only: from_slice/store below deliberately never consult this
+    // table, so non-member scalar values retain their unchecked round-trip.
+    c += "static const ton_abi::gen::EnumNameTable " + N + "_name_table_data = {\n";
+    for (const auto &member : ed->members) {
+      c += "  {" + cpp_str_lit(member.name) + ", td::dec_string_to_int256(std::string(" +
+           cpp_str_lit(member.value->to_dec_string()) + "))},\n";
+    }
+    c += "};\n\n";
+    c += "const ton_abi::gen::EnumNameTable& " + N + "_name_table() {\n";
+    c += "  return " + N + "_name_table_data;\n";
+    c += "}\n\n";
+    c += "std::optional<std::string> " + N + "_name_of(const td::RefInt256& value) {\n";
+    c += "  return ton_abi::gen::enum_name_lookup(" + N + "_name_table_data, value);\n";
+    c += "}\n\n";
     c += "td::Result<td::RefInt256> " + N + "_from_slice(vm::CellSlice& cs) {\n";
     if (custom_unpack) {
       c += emit_custom_delegate("td::RefInt256", t.orig_name, CustomDir::Unpack);
