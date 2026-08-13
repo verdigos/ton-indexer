@@ -182,6 +182,7 @@ set(ABI_PROD_PAIRS
     ${TON_ABI_GENERATED_DIR}/nft_sale_gen.cpp
     ${TON_ABI_GENERATED_DIR}/tonstakers_gen.cpp
     ${TON_ABI_GENERATED_DIR}/cocoon_gen.cpp
+    ${TON_ABI_GENERATED_DIR}/dns_gen.cpp
 )
 
 set_source_files_properties(${ABI_PROD_PAIRS} PROPERTIES GENERATED TRUE)

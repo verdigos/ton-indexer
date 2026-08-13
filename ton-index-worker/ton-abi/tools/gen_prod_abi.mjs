@@ -35,6 +35,7 @@ const PROD_DECLS = [
     'jetton',
     'multisig',
     'pton',
+    'dns',
     'stonfi',
     'dedust',
     'dedust_v2',

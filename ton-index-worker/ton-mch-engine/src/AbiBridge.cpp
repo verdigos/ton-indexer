@@ -1,6 +1,6 @@
 // ton-abi bridge: AbiValue to mch::Value adapter and production
-// ABI parser rows. Registry keys are the stable, bare spec-facing declaration
-// names.
+// ABI parser rows. Registry keys are stable bare spec-facing names and may be
+// decoupled from internal generated declaration names.
 #include "AbiBridge.h"
 
 #include "common/refint.h"
@@ -11,6 +11,7 @@
 #include "coffee_staking_withdraw3_gen.h"
 #include "dedust_gen.h"
 #include "dedust_v2_gen.h"
+#include "dns_gen.h"
 #include "evaa_gen.h"
 #include "evaa_supply_forward_gen.h"
 #include "jetton_gen.h"
@@ -163,6 +164,30 @@ td::Result<Value> abi_parse_jetton_internal_transfer(const td::Ref<vm::Cell> &bo
   return abi_parse_body<ton_abi::gen::jetton::JettonInternalTransferEthena>(body);
 }
 
+template <class WithQuery, class NoQuery>
+td::Result<Value> abi_parse_conditional_query_id(const td::Ref<vm::Cell> &body) {
+  if (body.is_null()) {
+    return td::Status::Error("abi bridge: null body cell");
+  }
+  bool special = false;
+  auto with_query_cs = vm::load_cell_slice_special(body, special);
+  if (special) {
+    return td::Status::Error("abi bridge: exotic cell not supported");
+  }
+  auto with_query = WithQuery::from_slice(with_query_cs);
+  if (with_query.is_ok()) {
+    auto parsed = with_query.move_as_ok();
+    return Value::make_obj(
+        {{"query_id", abi_value_to_mch(ton_abi::gen::abi_v_int(parsed.query_id))}});
+  }
+  auto no_query_cs = vm::load_cell_slice(body);
+  auto no_query = NoQuery::from_slice(no_query_cs);
+  if (no_query.is_error()) {
+    return no_query.move_as_error();
+  }
+  return Value::make_obj({{"query_id", Value::null()}});
+}
+
 }  // namespace
 
 const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
@@ -171,6 +196,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
   namespace coffee_w3 = ton_abi::gen::coffee_staking_withdraw3;
   namespace dedust = ton_abi::gen::dedust;
   namespace dedust_v2 = ton_abi::gen::dedust_v2;
+  namespace dns = ton_abi::gen::dns;
   namespace evaa = ton_abi::gen::evaa;
   namespace evaa_forward = ton_abi::gen::evaa_supply_forward;
   namespace jetton = ton_abi::gen::jetton;
@@ -199,6 +225,12 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"MultisigApproveRejected", &abi_parse_body<multisig::MultisigApproveRejected>},
       {"MultisigExecute", &abi_parse_body<multisig::MultisigExecute>},
       {"PTonTransfer", &abi_parse_body<pton::PTonTransfer>},
+      {"AuctionFillUpMessage",
+       &abi_parse_conditional_query_id<dns::AuctionFillUpWithQuery,
+                                       dns::AuctionFillUpNoQuery>},
+      {"DnsReleaseBalanceMessage",
+       &abi_parse_conditional_query_id<dns::DnsReleaseBalanceWithQuery,
+                                       dns::DnsReleaseBalanceNoQuery>},
       {"StonfiV2ProvideLiquidity", &abi_parse_body<stonfi::StonfiV2ProvideLiquidity>},
       {"StonfiPaymentRequest", &abi_parse_body<stonfi::StonfiPaymentRequest>},
       {"StonfiSwapMessage", &abi_parse_body<stonfi::StonfiSwapMessage>},
