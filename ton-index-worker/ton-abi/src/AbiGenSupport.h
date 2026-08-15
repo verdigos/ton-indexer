@@ -53,13 +53,8 @@ inline std::optional<std::string> enum_name_lookup(const EnumNameTable &table, c
   return std::nullopt;
 }
 
-// CellOf<T>: a value of type T that lives in a child cell (Tolk `Cell<T>`).
-// Emitted field type for the `cellOf` ABI kind. Holds the inner
-// value behind a shared_ptr indirection and the raw child cell: cellOf is a
-// cell-boundary, so a type
-// may be recursive THROUGH a cellOf (e.g. `struct Node { next: Cell<Node> }`),
-// which an inline by-value member could not represent. The indirection also
-// means cellOf<Struct> only needs Struct forward-declared, not complete.
+// CellOf<T> mirrors Tolk Cell<T>, holding its decoded value and raw child cell.
+// Shared indirection permits cell-linked recursion and forward declarations.
 template <class T>
 struct CellOf {
   std::shared_ptr<T> ref;

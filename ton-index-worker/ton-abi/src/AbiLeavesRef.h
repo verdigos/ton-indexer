@@ -17,9 +17,8 @@ namespace ton_abi {
 td::Result<td::Ref<vm::Cell>> load_cell(vm::CellSlice &cs);
 td::Status store_cell(vm::CellBuilder &cb, td::Ref<vm::Cell> cell);  // also used for cellOf store
 
-// cellOf: fetch the raw ref and open it as a slice for the walker to parse the
-// inner type. Returns both without extra parsing. Rejects a special/exotic ref
-// (fail-closed). Store side = store_cell.
+// Load a Cell<T> as both its raw child cell and an ordinary slice for decoding.
+// Exotic children fail closed; storing uses store_cell().
 td::Result<std::pair<td::Ref<vm::Cell>, td::Ref<vm::CellSlice>>> load_ref_cell_and_slice(vm::CellSlice &cs);
 
 // maybe_ref: 1-bit presence, then an optional ref. Absent -> null Ref.

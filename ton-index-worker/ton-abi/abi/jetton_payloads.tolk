@@ -14,9 +14,9 @@ struct (0x25938561) StonfiSwapPayload {
     user_address: any_address;
 }
 
-// Payload fragments are not incoming-message registry candidates. This
-// placeholder satisfies the production declaration contract while Storage
-// keeps the fragment structs reachable for C++ codegen.
+// TextCommentPayload, EncryptedCommentPayload, and StonfiSwapPayload can't join
+// AllowedMessage (they are payload fragments, not messages). Storage exists only
+// to keep them visible to the C++ generator.
 struct (0xffffffff) JettonPayloadsCodegenAnchor {}
 
 type AllowedMessage = JettonPayloadsCodegenAnchor

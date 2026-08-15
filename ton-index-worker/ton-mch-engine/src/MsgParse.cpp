@@ -24,17 +24,12 @@
 
 namespace mch {
 
-// The registered parser set = the kept-hand parsers (2) + ABI-generated rows
-// (83, under stable bare spec-facing names).
-// First-source-wins on a collision; a key claimed by more than one source is
-// instead poisoned to a nullptr parser at merge time, so parse_message_body
-// fails closed on an ambiguous name with the same map lookup it already does.
-// The collision NAMES are kept alongside the map purely so validate_registries()
-// can list them at startup. The total registered set and
-// --surface / cpp_surface.json) is unchanged either way.
+// Merge handwritten and ABI-generated parsers by key. Duplicate keys map to a
+// null parser so dispatch fails closed; startup validation reports their names.
 namespace {
 
-// Kept hand parsers (irregular / single-use constructs).
+// Hand parsers still without an ABI declaration; everything else lives in
+// AbiBridge.cpp.
 const std::vector<std::pair<std::string, MsgParserFn>> &hand_message_parsers() {
   static const std::vector<std::pair<std::string, MsgParserFn>> rows = {
       {"ChangeDnsRecordMessage", parse_change_dns},

@@ -26,12 +26,9 @@ struct GeneratedFiles {
 // their declared defaults.
 using ValidateManifest = std::set<std::string>;
 
-// Emit the generated pair for `abi` (kernel resolves it). Fail-closed on
-// non-standard map keys and any resolution error. `out_name` (a fixture stem)
-// determines the output file basename + namespace -- NOT contract_name, since
-// distinct fixtures can share a contract_name (e.g. both err-cont-on-stack-*
-// are "Err"). When empty, falls back to the contract_name's snake form.
-// `validate_manifest` is opt-in; an empty set preserves existing output.
+// Emit C++ files for abi, failing on resolution or unsupported map keys. out_name
+// overrides the generated basename and namespace; validate_manifest selects
+// decoded fields whose declared defaults are enforced.
 td::Result<GeneratedFiles> emit_abi(const ContractABI &abi, const AbiKernel &kernel,
                                     const std::string &out_name = {},
                                     const ValidateManifest &validate_manifest = {});

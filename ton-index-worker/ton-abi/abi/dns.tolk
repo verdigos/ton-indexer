@@ -14,8 +14,9 @@ struct (0x4ed14b65) DnsReleaseBalanceNoQuery {}
 
 type AllowedMessage = AuctionFillUpWithQuery | DnsReleaseBalanceWithQuery
 
-// Same-opcode alternatives cannot share AllowedMessage. These unused fields
-// keep the prefix-only fallback declarations reachable for C++ codegen.
+// AuctionFillUpNoQuery and DnsReleaseBalanceNoQuery can't join AllowedMessage
+// (they share opcodes with their WithQuery twins). Storage exists only to keep
+// them visible to the C++ generator.
 struct Storage {
     auction_fill_up_no_query: AuctionFillUpNoQuery;
     dns_release_balance_no_query: DnsReleaseBalanceNoQuery;

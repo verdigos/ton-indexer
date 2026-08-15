@@ -149,12 +149,12 @@ const Value *Value::field(const std::string &name) const {
   return nullptr;
 }
 
-// BOC container modes (ADR 0001). Legacy python used TWO conventions by layer:
-// parser pre-encoding stored CRC32C containers (to_boc(hash_crc32=True)); spec-level
-// rendering (b64 builtin, cell dumps) stored bare containers. Byte parity with prod
-// history requires both. Cell content is identical either way; flip here to switch.
-constexpr int kBocRenderMode = 0;                                  // bare
-constexpr int kBocParseEncodeMode = vm::BagOfCells::Mode::WithCRC32C;
+// BOC container modes (ADR 0001): rendering uses bare containers; bytes stored
+// into parsed actions use CRC32C so they stay byte-identical with what the old
+// pipeline wrote. Cell content is identical either way; flip either constant
+// to change its mode.
+constexpr int kBocRenderMode = 0;  // bare container
+constexpr int kBocStoredMode = vm::BagOfCells::Mode::WithCRC32C;
 
 namespace {
 td::Result<std::string> boc_with_mode(const td::Ref<vm::Cell> &root, int mode) {
@@ -174,7 +174,7 @@ td::Result<std::string> td_boc_serialize(const td::Ref<vm::Cell> &root) {
 }
 
 td::Result<std::string> td_boc_serialize_crc(const td::Ref<vm::Cell> &root) {
-  return boc_with_mode(root, kBocParseEncodeMode);
+  return boc_with_mode(root, kBocStoredMode);
 }
 
 std::optional<std::string> normalize_raw_address(const std::string &s) {

@@ -1,5 +1,4 @@
-// Shared projections of generated ABI values into the legacy mch::Value
-// renderings required by classifier consumers.
+// Project generated ABI values into the mch::Value shapes used by classifiers.
 #pragma once
 
 #include "Value.h"
@@ -32,6 +31,7 @@ inline Value minimal_hex(td::uint64 value) {
   return minimal_hex(td::make_refint(value));
 }
 
+// Hex-encode only the root cell's bits, zero-padding the final partial byte.
 inline Value root_bits_hex(const vm::CellSlice &slice) {
   const unsigned bit_count = slice.size();
   const std::size_t byte_count = (bit_count + 7) / 8;
@@ -49,7 +49,5 @@ inline Value root_bits_hex(const vm::CellSlice &slice) {
   }
   return Value::make_str(std::move(result));
 }
-
-// S7 adds protocol-specific derived-field helpers here.
 
 }  // namespace mch

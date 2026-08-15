@@ -27,7 +27,7 @@ using MsgParserFn = td::Result<Value> (*)(const td::Ref<vm::Cell> &body);
 const std::map<std::string, MsgParserFn> &message_parsers();
 
 // Startup consistency check: succeeds unless a key is
-// registered by more than one source (kept-hand / ABI bridge), in
+// registered by both handwritten parsers and the ABI bridge, in
 // which case an error listing the ambiguous names. Called from startup paths;
 // NOT a gate on message_parsers() access (the Meyer's-static map cannot itself
 // surface an error, and the no-abort rule forbids failing inside it).

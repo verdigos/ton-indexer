@@ -89,9 +89,9 @@ struct UlnConnectionVerifyCallbackAbi {
 
 type AllowedMessage = LayerzeroChannelSendCallbackAbi
 
-// The three other registry entries intentionally have no opcode prefix. Keep
-// them reachable for C++ generation without pretending they are dispatchable
-// alternatives of the contract's incoming-message union.
+// LayerZeroOappExecuteCallbackAbi, ChannelCommitPacketAbi, and
+// UlnConnectionVerifyCallbackAbi can't join AllowedMessage (they carry no opcode
+// prefix). Storage exists only to keep them visible to the C++ generator.
 struct Storage {
     oapp_execute_callback: LayerZeroOappExecuteCallbackAbi;
     channel_commit_packet: ChannelCommitPacketAbi;

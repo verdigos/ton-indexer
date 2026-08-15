@@ -1,5 +1,6 @@
-// Jetton-family message-body parsers (jettons.py). See parse/PSlice.h for the
-// shared machinery and MsgParse.cpp's header for the pytoniq-parity catalogue.
+// Jetton-family parsers. parse_jetton_transfer decodes the fixed prefix via
+// the ABI and interprets the forward-payload tail. Shared machinery is in
+// parse/PSlice.h.
 #include "parse/Parsers.h"
 
 #include "AbiTryFirst.h"
@@ -24,7 +25,6 @@ namespace {
 // bytes differ from pytoniq's on multi-ref trees, but payload fields are
 // compared/rendered by cell root hash, so the difference is invisible.
 td::Result<std::string> boc_bytes(const td::Ref<vm::Cell> &c) {
-  // Parser pre-encoding layer: legacy stored these with CRC (ADR 0001).
   return td_boc_serialize_crc(c);
 }
 
@@ -153,7 +153,7 @@ td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body) {
                                         td::Status::Error("stonfi payload did not match"));
             if (decoded.is_ok()) {
               stonfi_swap_body = decoded.move_as_ok();
-              // Preserve the historical Python omission on Ston.fi success.
+              // No sum_type on Ston.fi success (python parity).
             } else {
               has_sum_type = true;
               sum_type = "Unknown";
@@ -184,8 +184,5 @@ td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body) {
   }
   return Value::make_obj(std::move(f));
 }
-
-// All Jetton-family message prefixes use protocol ABI declarations. Transfer's
-// forward-payload tail remains the semantic adapter above.
 
 }  // namespace mch

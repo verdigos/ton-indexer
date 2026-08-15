@@ -81,10 +81,7 @@ struct Value {
   std::string describe() const;
 };
 
-// Serialize a cell tree to standard BOC bytes. Two layer conventions (ADR 0001):
-// td_boc_serialize = render layer, bare container (spec b64, dumps, fallbacks);
-// td_boc_serialize_crc = parser pre-encoding layer, CRC32C container (payload
-// fields stored to actions, byte-parity with legacy to_boc(hash_crc32=True)).
+// Serialize cell trees as bare BOCs for rendering or CRC32C BOCs for parser fields.
 td::Result<std::string> td_boc_serialize(const td::Ref<vm::Cell> &root);
 td::Result<std::string> td_boc_serialize_crc(const td::Ref<vm::Cell> &root);
 

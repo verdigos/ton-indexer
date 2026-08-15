@@ -100,6 +100,8 @@ td::Result<Value> remaining_slice_cell(const vm::CellSlice &slice) {
   return Value::make_cell(cb.finalize());
 }
 
+// Re-decode from a fresh slice to find the decoder's stopping point; the
+// unconsumed remainder becomes the classifier's residual "s" field.
 template <class T>
 td::Result<Value> residual_after_decode(const td::Ref<vm::Cell> &cell) {
   if (cell.is_null()) {
@@ -202,6 +204,8 @@ Value abi_value_to_mch(const AbiValue &v) {
     case AbiValueKind::Cell:
       return Value::make_cell(v.cell_v);
     case AbiValueKind::CellOf: {
+      // "ref" and "cell" mirror the decoded inner value and raw cell; defensive null
+      // guards keep this conversion total but are not expected for decoded values.
       Value::Fields f;
       f.emplace_back("ref", v.inner ? abi_value_to_mch(*v.inner) : Value::null());
       f.emplace_back("cell", v.cell_v.not_null() ? Value::make_cell(v.cell_v) : Value::null());
@@ -383,6 +387,8 @@ td::Result<Value> abi_parse_jetton_internal_transfer(const td::Ref<vm::Cell> &bo
   return abi_parse_body<ton_abi::gen::jetton::JettonInternalTransferEthena>(body);
 }
 
+// Flatten the generated nested mint value into the classifier's flat public
+// field shape.
 td::Result<Value> abi_parse_minter_mint_legacy_shape(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(parsed,
              abi_parse_body<ton_abi::gen::jetton::MinterJettonMint>(body));
@@ -410,6 +416,7 @@ td::Result<Value> abi_parse_minter_mint_legacy_shape(const td::Ref<vm::Cell> &bo
   });
 }
 
+// Flatten the Cell<Node>|void whitelist linked list into a plain address list.
 td::Status flatten_vesting_whitelist_node(const Value &node,
                                           std::vector<Value> &addresses) {
   const Value *addr = node.field("addr");
@@ -449,6 +456,8 @@ td::Result<Value> abi_parse_vesting_add_whitelist(const td::Ref<vm::Cell> &body)
   });
 }
 
+// This opcode has with-query_id and without-query_id shapes; try the with-query
+// form first, then fall back to the prefix-only form.
 template <class WithQuery, class NoQuery>
 td::Result<Value> abi_parse_conditional_query_id(const td::Ref<vm::Cell> &body) {
   if (body.is_null()) {

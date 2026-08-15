@@ -1383,10 +1383,8 @@ class Emitter {
           int k = ++uid_;
           std::string expected_value = "__expected_default" + std::to_string(k);
           std::string got_value = "__got_value" + std::to_string(k);
-          // td::Ref<T>::operator!= compares the backing pointers. For RefInt256
-          // fields, force the bigint value comparator instead of relying on the
-          // free operator!= overload, which loses overload resolution to that
-          // non-template member when both operands are RefInt256.
+          // RefInt256's member operator!= compares backing pointers, so compare bigint
+          // values explicitly.
           std::string mismatch = cpp_type(fi.rf->ty_idx) == "td::RefInt256"
                                      ? "td::cmp(r." + mn + ", " + expected + ") != 0"
                                      : "r." + mn + " != " + expected;
