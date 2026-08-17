@@ -235,8 +235,9 @@ Value combine_deposits(const Value &first, const Value &final_d) {
 }
 
 void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block *> &removed) {
-  std::vector<Block *> firsts, finals;
+  std::vector<Block *> firsts;
   std::map<std::string, int> used;
+  std::map<std::string, Block *> final_by_key;
   auto contract_key = [](const Block *b) {
     Value c = pp_field(b->data, "deposit_contract");
     return c.t == VType::Account ? (c.addr_none ? std::string("addr_none") : c.str) : c.describe();
@@ -246,7 +247,7 @@ void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block 
       firsts.push_back(b);
       used[contract_key(b)]++;
     } else if (b->btype == mch::btype::kDedustDepositLiquidity) {
-      finals.push_back(b);
+      final_by_key.emplace(contract_key(b), b);
       used[contract_key(b)]++;
     }
   }
@@ -254,10 +255,8 @@ void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block 
     if (kv.second > 2) return;  // logger.warning + skip merging
   }
   for (Block *first : firsts) {
-    Block *final_b = nullptr;
-    for (Block *b : finals) {
-      if (contract_key(b) == contract_key(first)) { final_b = b; break; }
-    }
+    auto it = final_by_key.find(contract_key(first));
+    Block *final_b = (it != final_by_key.end()) ? it->second : nullptr;
     if (final_b == nullptr) continue;
     Value merged;
     try {
@@ -283,6 +282,7 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
                                       std::set<Block *> &removed) {
   std::vector<Block *> partials, finals;
   std::map<std::string, int> used;
+  std::map<std::string, Block *> partial_by_key;
   auto contract_key = [](const Block *b) {
     Value c = pp_field(b->data, "deposit_contract");
     return c.t == VType::Account ? (c.addr_none ? std::string("addr_none") : c.str) : c.describe();
@@ -290,6 +290,7 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
   for (Block *b : blocks) {
     if (b->btype == mch::btype::kDedustV2DepositLiquidityPartial) {
       partials.push_back(b);
+      partial_by_key.emplace(contract_key(b), b);
       used[contract_key(b)]++;
     } else if (b->btype == mch::btype::kDedustV2DepositLiquidity) {
       finals.push_back(b);
@@ -301,14 +302,10 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
     if (kv.second > 2) return;  // logger.warning + skip merging
   }
   for (Block *final_b : finals) {
-    Block *partial = nullptr;
-    for (Block *p : partials) {
-      // Python's `p in blocks`: a partial already folded into an earlier final
-      // is gone from the spine and must not be paired a second time.
-      if (std::find(blocks.begin(), blocks.end(), p) == blocks.end()) continue;
-      if (contract_key(p) == contract_key(final_b)) { partial = p; break; }
-    }
-    if (partial == nullptr) continue;
+    auto it = partial_by_key.find(contract_key(final_b));
+    if (it == partial_by_key.end()) continue;
+    Block *partial = it->second;
+    partial_by_key.erase(it);
 
     Value::Fields out;
     if (final_b->data.fields) out = *final_b->data.fields;

@@ -32,6 +32,24 @@ const char *category_name(FailureCategory c) {
   return "?";
 }
 
+void record_phase_exception(EmuClassifierStats &stats, EmuClassifyResult &res,
+                            const std::string &message, bool past_conversion) {
+  res.failure = true;
+  res.failure_reason = message;
+  if (!past_conversion) {
+    stats.convert_failed++;
+    res.outcome = EmuClassifyOutcome::convert_failed;
+    res.failure_category = FailureCategory::malformed_trace;
+    res.payload.state = "convert_failed";
+  } else {
+    stats.failed++;
+    res.outcome = EmuClassifyOutcome::classify_failed;
+    res.failure_category = FailureCategory::engine_fault;
+    stats.by_category[res.failure_category]++;
+    res.payload.state = "fallback";
+  }
+}
+
 // Scrub non-owning Block values before the TraceContext arena dies. Cells remain
 // valid through the view's anchor. Shared container payloads make this a repair,
 // not a pure observation, so arena_refs_scrubbed counts each replacement.
@@ -74,7 +92,7 @@ void classify_txs(const EmuClassifierConfig &cfg, const EmuTraceView &view,
                   std::vector<Action> &rows, std::vector<std::string> &matcher_names,
                   std::size_t &scrubbed, bool &unknown_row) {
   const MchEnginePrep &prep = *cfg.prep;
-  const ParsedBlockLookupSource::InterfaceMap &ifaces = view.interfaces;
+  const ParsedBlockLookupSource::InterfaceMap &ifaces = *view.interfaces;
   try {
     auto r_trace = schema_to_trace(res.trace_id, txs);
     if (r_trace.is_error()) {
@@ -133,6 +151,18 @@ void classify_txs(const EmuClassifierConfig &cfg, const EmuTraceView &view,
       rows.push_back(create_unknown_action(ctx.trace));
       unknown_row = true;
     }
+  } catch (const vm::VmError &e) {
+    res.failure = true;
+    res.failure_reason = std::string("vm exception: ") + e.get_msg();
+    res.failure_category = FailureCategory::engine_fault;
+  } catch (const vm::VmNoGas &e) {
+    res.failure = true;
+    res.failure_reason = std::string("vm exception: ") + e.get_msg();
+    res.failure_category = FailureCategory::engine_fault;
+  } catch (const vm::VmVirtError &e) {
+    res.failure = true;
+    res.failure_reason = std::string("vm exception: ") + e.get_msg();
+    res.failure_category = FailureCategory::engine_fault;
   } catch (const std::exception &e) {
     res.failure = true;
     res.failure_reason = std::string("exception: ") + e.what();
@@ -213,8 +243,9 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
   std::vector<Action> rows;
   bool unknown_row = false;
 
-  // Catch vm::VmError explicitly because it does not derive from std::exception.
+  // Catch VM fault types explicitly because they do not derive from std::exception.
   // Every path reaches the single response below.
+  bool past_conversion = false;
   try {
     auto r_txs = emu_to_schema_txs(view);
     if (r_txs.is_error()) {
@@ -229,6 +260,7 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
                    << " CONVERT FAILED: " << res.failure_reason;
     } else {
       auto txs = r_txs.move_as_ok();
+      past_conversion = true;
       std::vector<std::string> matcher_names;
       std::size_t scrubbed = 0;
       classify_txs(cfg_, view, txs, res, rows, matcher_names, scrubbed, unknown_row);
@@ -308,21 +340,23 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       }
     }
   } catch (const vm::VmError &e) {
-    stats_.convert_failed++;
-    res.outcome = EmuClassifyOutcome::convert_failed;
-    res.failure = true;
-    res.failure_category = FailureCategory::malformed_trace;
-    res.failure_reason = std::string("exception (vm): ") + e.get_msg();
-    res.payload.state = "convert_failed";
+    record_phase_exception(stats_, res, std::string("exception (vm): ") + e.get_msg(), past_conversion);
     LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
                  << " EXCEPTION (vm): " << e.get_msg();
+  } catch (const vm::VmNoGas &e) {
+    record_phase_exception(stats_, res, std::string("exception (vm): ") + e.get_msg(), past_conversion);
+    LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
+                 << " EXCEPTION (vm): " << e.get_msg();
+  } catch (const vm::VmVirtError &e) {
+    record_phase_exception(stats_, res, std::string("exception (vm): ") + e.get_msg(), past_conversion);
+    LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
+                 << " EXCEPTION (vm): " << e.get_msg();
+  } catch (const std::exception &e) {
+    record_phase_exception(stats_, res, std::string("exception: ") + e.what(), past_conversion);
+    LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
+                 << " EXCEPTION: " << e.what();
   } catch (...) {
-    stats_.convert_failed++;
-    res.outcome = EmuClassifyOutcome::convert_failed;
-    res.failure = true;
-    res.failure_category = FailureCategory::malformed_trace;
-    res.failure_reason = "unknown exception";
-    res.payload.state = "convert_failed";
+    record_phase_exception(stats_, res, "unknown exception", past_conversion);
     LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
                  << " EXCEPTION";
   }
