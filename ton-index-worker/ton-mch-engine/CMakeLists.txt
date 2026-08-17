@@ -144,31 +144,17 @@ set(TON_ABI_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/../ton-abi/generated)
 # registered in AbiBridge.cpp. Adding a NEW .tolk declaration file = one line here
 # (a new decl in an EXISTING contract needs no CMake edit at all; the
 # .abi.json is committed alongside the declaration; its generated pair is a build output).
-set(ABI_PROD_PAIRS
-    ${TON_ABI_GENERATED_DIR}/jetton_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/jetton_payloads_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/multisig_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/pton_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/stonfi_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/dedust_gen.cpp
-    # DeDust CPMM V2 claim_reward family.
-    ${TON_ABI_GENERATED_DIR}/dedust_v2_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/coffee_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/coffee_staking_withdraw3_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/evaa_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/evaa_supply_forward_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/jvault_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/jvault_payload_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/subscriptions_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/tonco_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/teleitem_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/nft_sale_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/tonstakers_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/cocoon_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/dns_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/layerzero_gen.cpp
-    ${TON_ABI_GENERATED_DIR}/vesting_gen.cpp
-)
+# Production ABI parser TUs: one per declaration file in ../ton-abi/abi/.
+# That directory is the single manifest — adding a .abi.json there adds the
+# generated pair here automatically.
+file(GLOB MCH_ABI_PROD_ABIS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../ton-abi/abi/*.abi.json)
+set(ABI_PROD_PAIRS)
+foreach(MCH_ABI_INPUT IN LISTS MCH_ABI_PROD_ABIS)
+    get_filename_component(MCH_ABI_NAME "${MCH_ABI_INPUT}" NAME)
+    string(REGEX REPLACE "\\.abi\\.json$" "" MCH_ABI_STEM "${MCH_ABI_NAME}")
+    string(REPLACE "-" "_" MCH_ABI_STEM "${MCH_ABI_STEM}")
+    list(APPEND ABI_PROD_PAIRS "${TON_ABI_GENERATED_DIR}/${MCH_ABI_STEM}_gen.cpp")
+endforeach()
 
 set_source_files_properties(${ABI_PROD_PAIRS} PROPERTIES GENERATED TRUE)
 
