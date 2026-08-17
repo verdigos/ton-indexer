@@ -37,10 +37,9 @@ bool omitted(const Value &v) {
     case VType::Null:
       return true;
     case VType::Amount:
-      return !v.amount_float && v.num.is_null();  // make_amount_none()
+      return v.num.is_null();  // make_amount_none()
     case VType::Bool:
     case VType::Int:
-    case VType::Float:
     case VType::Str:
     case VType::Account:
     case VType::Asset:
@@ -138,21 +137,10 @@ void pack_value(Packer &pk, const Value &v, bool as_decimal_string, ActionSerial
         pack_int(pk, v, st);
       }
       return;
-    case VType::Float:
-      // msgpack-c encodes integral doubles as integers and fractional values as
-      // float64. Flexible string fields accept both representations.
-      st.float_values++;
-      pk.pack(v.dnum);
-      return;
     case VType::Amount:
       // Value-domain by definition, so always a decimal string regardless of
       // the key. (ActionBuild's av_amount converts Amount -> Int before it ever
       // reaches a fill's output, so this arm is a backstop.)
-      if (v.amount_float) {
-        st.float_values++;
-        pk.pack(v.dnum);
-        return;
-      }
       if (v.num.is_null()) {
         pk.pack_nil();
         return;

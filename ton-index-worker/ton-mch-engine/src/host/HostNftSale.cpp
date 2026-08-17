@@ -64,7 +64,7 @@ std::string pick_version(const std::map<std::string, std::string> &table, const 
                          const char *latest) {
   if (code_hash.t == VType::Str) {
     auto it = table.find(code_hash.str);
-    if (it != table.end() && it->second != "latest") {
+    if (it != table.end()) {
       return it->second;
     }
   }

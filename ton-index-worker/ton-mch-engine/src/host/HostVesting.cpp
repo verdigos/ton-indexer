@@ -7,6 +7,7 @@
 #include "BlockTree.h"
 #include "TraceLoader.h"
 
+#include "common/refint.h"
 #include "td/utils/base64.h"
 #include "vm/boc.h"
 
@@ -81,7 +82,7 @@ EvalResult vesting_message_was_sent(BuildEnv &, const std::vector<Value> &args) 
     if (!have_hash) {
       // Could not hash the requested body - fall back to value matching.
       if (m->value && want_value != nullptr && !want_value->num.is_null() &&
-          want_value->num->to_dec_string() == std::to_string(*m->value)) {
+          td::cmp(want_value->num, td::make_refint(*m->value)) == 0) {
         return rt_ok(Value::make_bool(true));
       }
       continue;

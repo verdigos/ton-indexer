@@ -18,7 +18,7 @@
 #   it is reached on the post-step frontier) and again at the invocation site
 #   (single-hop routes, where the walk never steps; the frontier entry gate is
 #   the STEP head, so an exit-only recursion can never fire);
-# - the `where (.payload_opcode …)` clauses are what keep the exit-tried-first
+# - the direct integer `payload_opcode` comparisons keep the exit-tried-first
 #   order from mistaking an intermediate jetton carrier for the out leg (the
 #   premature exit: a pool-to-pool carrier rides a PayJetton
 #   (0xcbc33949) forward payload, the user-facing out leg does not;
@@ -57,9 +57,9 @@ opcode ExcessMessage     = 0xd53276db
 rule dv2_hop = (
     op DedustV2PayNative @hop
       -> { op DedustV2SwapEvent @ev -> maybe $dv2_hop }
-  ^ btype jetton_transfer @hop where (.payload_opcode == "0xcbc33949")
+  ^ btype jetton_transfer @hop where (.payload_opcode == 0xcbc33949)
       -> { op DedustV2SwapEvent @ev -> maybe $dv2_hop }
-  ^ btype jetton_transfer @exit_leg where (.payload_opcode != "0xcbc33949")
+  ^ btype jetton_transfer @exit_leg where (.payload_opcode != 0xcbc33949)
   ^ op DedustV2Payout @exit_leg
 )
 
@@ -73,7 +73,7 @@ matcher dedust_v2_swap {
     ( op DedustV2PayNative @carrier ^ btype jetton_transfer @carrier )
       -> { op DedustV2SwapEvent @ev0
            ( $dv2_hop
-           ^ btype jetton_transfer @final_leg where (.payload_opcode != "0xcbc33949")
+           ^ btype jetton_transfer @final_leg where (.payload_opcode != 0xcbc33949)
            ^ op DedustV2Payout @final_leg )
            maybe op ExcessMessage @excess }
 

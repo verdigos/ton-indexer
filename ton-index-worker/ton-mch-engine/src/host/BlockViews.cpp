@@ -5,6 +5,8 @@
 #include "host/HostCommon.h"
 
 #include <algorithm>
+#include <unordered_set>
+#include <utility>
 
 namespace mch {
 
@@ -53,10 +55,15 @@ const Block *first_next_call(const Block *b, std::uint32_t op) {
 }
 
 void unique_lt_sorted(std::vector<const Block *> &blocks) {
-  std::sort(blocks.begin(), blocks.end());
-  blocks.erase(std::unique(blocks.begin(), blocks.end()), blocks.end());
-  std::stable_sort(blocks.begin(), blocks.end(),
+  std::unordered_set<const Block *> seen;
+  std::vector<const Block *> out;
+  out.reserve(blocks.size());
+  for (const Block *b : blocks) {
+    if (seen.insert(b).second) out.push_back(b);
+  }
+  std::stable_sort(out.begin(), out.end(),
                    [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
+  blocks = std::move(out);
 }
 
 bool value_truthy(const Value &v) {

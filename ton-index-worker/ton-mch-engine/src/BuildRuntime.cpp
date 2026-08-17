@@ -52,9 +52,6 @@ EvalResult soft_parse(const Block *b, const std::vector<std::string> &types, Val
 }  // namespace
 
 EvalResult rt_parse(BuildEnv &env, const Value &target, const std::vector<std::string> &types) {
-  if (target.is_null()) {
-    return rt_ok(Value::null());  // absent optional capture: `.body` null-propagates
-  }
   if (target.t == VType::List) {
     for (const Value &el : *target.items) {
       if (el.t != VType::Block || el.block == nullptr) {
@@ -78,7 +75,8 @@ EvalResult rt_parse(BuildEnv &env, const Value &target, const std::vector<std::s
     env.bodies[target.block] = std::move(body);
     return rt_ok(Value::null());
   }
-  // Non-block target: Python's per-type try swallows the get_body attribute
+  // Null and other non-block targets leave the body unset.
+  // Python's per-type try swallows the get_body attribute
   // error, leaving the body unset for anything `.body` could reach — no-op.
   return rt_ok(Value::null());
 }
@@ -184,7 +182,6 @@ std::string lookup_key(const std::string &kind, const std::vector<Value> &args) 
       case VType::Dict:
       case VType::Obj:
       case VType::Block:
-      case VType::Float:
         frame(key, '?', a.describe());
         break;
     }

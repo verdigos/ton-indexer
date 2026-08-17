@@ -4,6 +4,7 @@
 #include "host/HostImpls.h"
 
 #include "host/BlockViews.h"
+#include "host/DexRecords.h"
 #include "host/DexPton.h"
 #include "host/HostCommon.h"
 
@@ -394,7 +395,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
           ex_amount = data_field(b, "amount");
           ex_asset = data_field(b, "asset");
         }
-        excesses.push_back(Value::make_list(std::vector<Value>{ex_asset, ex_amount}));
+        excesses.push_back(excess_pair(std::move(ex_asset), std::move(ex_amount)));
       }
     }
   }

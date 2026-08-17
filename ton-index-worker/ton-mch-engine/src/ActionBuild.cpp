@@ -30,15 +30,14 @@ Value av_addr(const Value &v) {
   return Value::null();
 }
 
-// Amount.value / _value(): Amount -> its underlying Int (or Float / Null);
+// Amount.value / _value(): Amount -> its underlying Int or Null;
 // a plain Int (jvault/evaa/tgbtc raw amounts) passes through unchanged.
 Value av_amount(const Value &v) {
   if (v.is_null()) return Value::null();
   if (v.t == VType::Amount) {
-    if (v.amount_float) return Value::make_float(v.dnum);
     return v.num.is_null() ? Value::null() : Value::make_int(v.num);
   }
-  return v;  // Int / Float passthrough
+  return v;  // Int passthrough
 }
 
 Value dg(const Value &d, const char *k) {
@@ -100,7 +99,7 @@ void fill_jetton_transfer(const Value &d, Action &a) {
   a.destination_secondary = has(d, "receiver_wallet") ? av_addr(dg(d, "receiver_wallet")) : Value::null();
   a.amount = av_amount(dg(d, "amount"));
   Value asset = dg(d, "asset");
-  a.asset = (asset.is_null() || (asset.t == VType::Asset && asset.is_ton)) ? Value::null() : av_addr(asset);
+  a.asset = av_addr(asset);
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("response_destination", av_addr(dg(d, "response_address")));
@@ -203,7 +202,7 @@ void fill_nft_transfer(const Value &d, Action &a) {
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("is_purchase", dg(d, "is_purchase"));
   f.emplace_back("price", (has(d, "price") && is_purchase) ? av_amount(dg(d, "price")) : Value::null());
-  f.emplace_back("nft_item_index", dg(nft, "index"));  // Float passthrough
+  f.emplace_back("nft_item_index", dg(nft, "index"));
   Value fwd = dg(d, "forward_amount");
   f.emplace_back("forward_amount", fwd.is_null() ? Value::null() : av_amount(fwd));
   f.emplace_back("custom_payload", dg(d, "custom_payload"));
@@ -331,11 +330,8 @@ void fill_dedust_v2_claim_reward(const Value &d, Action &a) {
   a.dex_withdraw_liquidity_data = mkdict(std::move(f));
 }
 
-// Tonco withdraw liquidity (block_tree_serializer _fill_tonco_withdraw_liquidity).
-// Reuses dex_withdraw_liquidity_data, whose tonco-only keys (burned_nft_*, the
-// tick range) the composite already carries. Unlike every other producer of this
-// composite it emits NO `is_refund` key and hard-nulls source_secondary/asset:
-// the tonco LP share lives in a position NFT, not an LP jetton.
+// Tonco LP shares live in position NFTs rather than LP jettons. Withdrawals
+// hard-null source_secondary/asset and always emit is_refund=false.
 void fill_tonco_withdraw(const Value &d, Action &a) {
   a.type = "dex_withdraw_liquidity";
   a.source = av_addr(dg(d, "sender"));
@@ -354,6 +350,7 @@ void fill_tonco_withdraw(const Value &d, Action &a) {
   f.emplace_back("dex_wallet_1", av_addr(dg(d, "dex_wallet_1")));
   f.emplace_back("dex_wallet_2", av_addr(dg(d, "dex_wallet_2")));
   f.emplace_back("dex_jetton_wallet_2", av_addr(dg(d, "dex_jetton_wallet_2")));
+  f.emplace_back("is_refund", Value::make_bool(false));
   f.emplace_back("lp_tokens_burnt", av_amount(dg(d, "liquidity_burnt")));
   f.emplace_back("burned_nft_index", dg(d, "burned_nft_index"));
   f.emplace_back("burned_nft_address", av_addr(dg(d, "burned_nft_address")));
@@ -553,13 +550,9 @@ void fill_layerzero_receive(const Value &d, Action &a) {
   a.layerzero_packet_data = dg(d, "packet_data");  // record dict passthrough
 }
 
-// The layerzero_send composite, shared by `layerzero_send` and, through the
-// nested `layerzero_send_data` record, by `layerzero_send_tokens`. The split
-// mirrors _fill_layerzero_send_action taking `data` rather than the block so
-// the tokens fill can reuse it. `msglib_manager`/`msglib` are hex STRINGS off
-// the lzSend payload, not accounts.
-void fill_layerzero_send_from(const Value &d, Action &a) {
-  a.source = av_addr(dg(d, "initiator"));
+// Populate the LayerZero send composites shared by native and token sends.
+// msglib_manager/msglib are payload hex strings, not accounts.
+void fill_layerzero_send_fields(const Value &d, Action &a) {
   Value::Fields f;
   f.emplace_back("send_request_id", dg(d, "send_request_id"));
   f.emplace_back("msglib_manager", dg(d, "msglib_manager"));
@@ -573,16 +566,18 @@ void fill_layerzero_send_from(const Value &d, Action &a) {
   a.layerzero_packet_data = dg(d, "packet_data");  // record dict passthrough
 }
 
-// SOURCE DOUBLE-WRITE, reproduced from _fill_layerzero_send_tokens_action: the
-// nested send fill writes `source` from the LayerZero initiator (the OApp) and
-// the jetton sender then overwrites it. The write order IS the behaviour.
+void fill_layerzero_send(const Value &d, Action &a) {
+  a.source = av_addr(dg(d, "initiator"));
+  fill_layerzero_send_fields(d, a);
+}
+
 void fill_layerzero_send_tokens(const Value &d, Action &a) {
   a.source_secondary = av_addr(dg(d, "sender_wallet"));
   a.destination = av_addr(dg(d, "oapp"));
   a.destination_secondary = av_addr(dg(d, "oapp_wallet"));
   a.amount = av_amount(dg(d, "amount"));
   a.asset = av_addr(dg(d, "asset"));
-  fill_layerzero_send_from(dg(d, "layerzero_send_data"), a);
+  fill_layerzero_send_fields(dg(d, "layerzero_send_data"), a);
   a.source = av_addr(dg(d, "sender"));
 }
 
@@ -1031,12 +1026,8 @@ Value bytes_hex(const Value &v) {
   return Value::make_str(std::move(out));
 }
 
-// _fill_change_dns_record_action. The record dict the parser produces carries
-// {schema, address, flags, dns_text} exactly as Python's does, so the branching
-// is a transcription. The key set always
-// emits value_schema/flags/address/key and appends `value` only for a schema it
-// recognises. `address` remains null but is retained so the decoded map preserves
-// its wire-facing key set.
+// DNS records always emit the four database fields. Unknown schemas carry a
+// null value and flags.
 void fill_change_dns(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "source"));
   a.destination = av_addr(dg(d, "destination"));
@@ -1047,10 +1038,12 @@ void fill_change_dns(const Value &d, Action &a) {
   const std::string s = schema.t == VType::Str ? schema.str : std::string();
 
   Value value_field = Value::null();
-  bool has_value_field = true;
   Value flags = Value::null();
   if (s == "DNSNextResolver" || s == "DNSSmcAddress") {
     value_field = av_addr(dg(rec, "address"));
+    if (s == "DNSSmcAddress") {
+      flags = dg(rec, "flags");
+    }
   } else if (s == "DNSAdnlAddress") {
     value_field = bytes_hex(dg(rec, "address"));
     flags = dg(rec, "flags");
@@ -1058,11 +1051,6 @@ void fill_change_dns(const Value &d, Action &a) {
     value_field = bytes_hex(dg(rec, "address"));
   } else if (s == "DNSText") {
     value_field = dg(rec, "dns_text");
-  } else {
-    has_value_field = false;  // "Unknown": Python never creates the key
-  }
-  if (s == "DNSSmcAddress") {
-    flags = dg(rec, "flags");  // a SECOND standalone `if` in Python, not an elif
   }
 
   Value::Fields f;
@@ -1071,11 +1059,8 @@ void fill_change_dns(const Value &d, Action &a) {
   // composite, which is what Python does and what Go's *string + ParseInt
   // expects. This field has the same numeric representation on both sides.
   f.emplace_back("flags", flags);
-  f.emplace_back("address", Value::null());
   f.emplace_back("key", bytes_hex(dg(d, "key")));
-  if (has_value_field) {
-    f.emplace_back("value", value_field);
-  }
+  f.emplace_back("value", value_field);
   a.change_dns_record_data = mkdict(std::move(f));
 }
 
@@ -1088,7 +1073,6 @@ void fill_delete_dns(const Value &d, Action &a) {
   Value::Fields f;
   f.emplace_back("value_schema", Value::null());
   f.emplace_back("flags", Value::null());
-  f.emplace_back("address", Value::null());
   f.emplace_back("key", bytes_hex(dg(d, "key")));
   a.change_dns_record_data = mkdict(std::move(f));
 }
@@ -1311,6 +1295,7 @@ void fill_nft_purchase(const Value &d, Action &a) {
   f.emplace_back("payout_comment_encrypted", dg(d, "payout_comment_encrypted"));
   f.emplace_back("payout_comment_encoded", dg(d, "payout_comment_encoded"));
   f.emplace_back("payout_comment", dg(d, "payout_comment"));
+  f.emplace_back("royalty_amount", Value::null());
   a.nft_transfer_data = mkdict(std::move(f));
 }
 
@@ -1321,7 +1306,21 @@ void fill_dns_release(const Value &d, Action &a) {
   a.asset = av_addr(dg(d, "nft_collection"));
   Value::Fields t;
   t.emplace_back("query_id", dg(d, "query_id"));
+  t.emplace_back("is_purchase", Value::null());
+  t.emplace_back("price", Value::null());
   t.emplace_back("nft_item_index", dg(d, "nft_index"));
+  t.emplace_back("forward_amount", Value::null());
+  t.emplace_back("custom_payload", Value::null());
+  t.emplace_back("forward_payload", Value::null());
+  t.emplace_back("response_destination", Value::null());
+  t.emplace_back("marketplace", Value::null());
+  t.emplace_back("marketplace_address", Value::null());
+  t.emplace_back("real_prev_owner", Value::null());
+  t.emplace_back("payout_amount", Value::null());
+  t.emplace_back("payout_comment_encrypted", Value::null());
+  t.emplace_back("payout_comment_encoded", Value::null());
+  t.emplace_back("payout_comment", Value::null());
+  t.emplace_back("royalty_amount", Value::null());
   a.nft_transfer_data = mkdict(std::move(t));
   a.value = av_amount(dg(d, "value"));
 }
@@ -1337,7 +1336,7 @@ void fill_nft_put_on_auction(const Value &d, Action &a) {
   t.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
   a.nft_transfer_data = mkdict(std::move(t));
   Value::Fields l;
-  l.emplace_back("nft_item_index", dg(d, "nft_index"));  // raw passthrough (Str in fixtures)
+  l.emplace_back("nft_item_index", dg(d, "nft_index"));  // Integer passthrough.
   l.emplace_back("mp_fee_factor", av_amount(dg(d, "mp_fee_factor")));
   l.emplace_back("mp_fee_base", av_amount(dg(d, "mp_fee_base")));
   l.emplace_back("royalty_fee_base", av_amount(dg(d, "royalty_fee_base")));
@@ -1368,7 +1367,22 @@ void fill_cancel_nft_trade(const Value &d, Action &a) {
   a.asset_secondary = av_addr(dg(d, "nft_address"));
   a.asset = av_addr(dg(d, "nft_collection"));
   Value::Fields f;
+  f.emplace_back("query_id", Value::null());
+  f.emplace_back("is_purchase", Value::null());
+  f.emplace_back("price", Value::null());
+  f.emplace_back("nft_item_index", Value::null());
+  f.emplace_back("forward_amount", Value::null());
+  f.emplace_back("custom_payload", Value::null());
+  f.emplace_back("forward_payload", Value::null());
+  f.emplace_back("response_destination", Value::null());
+  f.emplace_back("marketplace", Value::null());
   f.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
+  f.emplace_back("real_prev_owner", Value::null());
+  f.emplace_back("payout_amount", Value::null());
+  f.emplace_back("payout_comment_encrypted", Value::null());
+  f.emplace_back("payout_comment_encoded", Value::null());
+  f.emplace_back("payout_comment", Value::null());
+  f.emplace_back("royalty_amount", Value::null());
   a.nft_transfer_data = mkdict(std::move(f));
   push_account(a, a.asset_secondary);
 }
@@ -1411,12 +1425,36 @@ void fill_sale_update(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "sale_contract"));
   a.asset_secondary = av_addr(dg(d, "nft_address"));
   Value::Fields l;
+  l.emplace_back("nft_item_index", Value::null());
   l.emplace_back("full_price", av_amount(dg(d, "new_full_price")));
-  l.emplace_back("royalty_amount", av_amount(dg(d, "new_royalty_amount")));
   l.emplace_back("marketplace_fee", av_amount(dg(d, "new_marketplace_fee")));
+  l.emplace_back("royalty_amount", av_amount(dg(d, "new_royalty_amount")));
+  l.emplace_back("marketplace_fee_address", Value::null());
+  l.emplace_back("marketplace", Value::null());
+  l.emplace_back("royalty_address", Value::null());
+  l.emplace_back("mp_fee_factor", Value::null());
+  l.emplace_back("mp_fee_base", Value::null());
+  l.emplace_back("royalty_fee_base", Value::null());
+  l.emplace_back("max_bid", Value::null());
+  l.emplace_back("min_bid", Value::null());
   a.nft_listing_data = mkdict(std::move(l));
   Value::Fields t;
+  t.emplace_back("query_id", Value::null());
+  t.emplace_back("is_purchase", Value::null());
+  t.emplace_back("price", Value::null());
+  t.emplace_back("nft_item_index", Value::null());
+  t.emplace_back("forward_amount", Value::null());
+  t.emplace_back("custom_payload", Value::null());
+  t.emplace_back("forward_payload", Value::null());
+  t.emplace_back("response_destination", Value::null());
+  t.emplace_back("marketplace", Value::null());
   t.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
+  t.emplace_back("real_prev_owner", Value::null());
+  t.emplace_back("payout_amount", Value::null());
+  t.emplace_back("payout_comment_encrypted", Value::null());
+  t.emplace_back("payout_comment_encoded", Value::null());
+  t.emplace_back("payout_comment", Value::null());
+  t.emplace_back("royalty_amount", Value::null());
   a.nft_transfer_data = mkdict(std::move(t));
   push_account(a, a.asset_secondary);
 }
@@ -1461,7 +1499,22 @@ void fill_nft_discovery(const Value &d, Action &a) {
   a.asset = av_addr(dg(d, "result_collection"));
   a.asset_secondary = av_addr(dg(d, "nft"));
   Value::Fields t;
+  t.emplace_back("query_id", Value::null());
+  t.emplace_back("is_purchase", Value::null());
+  t.emplace_back("price", Value::null());
   t.emplace_back("nft_item_index", dg(d, "result_index"));
+  t.emplace_back("forward_amount", Value::null());
+  t.emplace_back("custom_payload", Value::null());
+  t.emplace_back("forward_payload", Value::null());
+  t.emplace_back("response_destination", Value::null());
+  t.emplace_back("marketplace", Value::null());
+  t.emplace_back("marketplace_address", Value::null());
+  t.emplace_back("real_prev_owner", Value::null());
+  t.emplace_back("payout_amount", Value::null());
+  t.emplace_back("payout_comment_encrypted", Value::null());
+  t.emplace_back("payout_comment_encoded", Value::null());
+  t.emplace_back("payout_comment", Value::null());
+  t.emplace_back("royalty_amount", Value::null());
   a.nft_transfer_data = mkdict(std::move(t));
 }
 
@@ -1469,8 +1522,7 @@ void fill_nft_discovery(const Value &d, Action &a) {
 // producer of the nft_mint_data composite. The reference serializer guards the source/collection
 // assignments on the AccountId being present; av_addr already answers Null for a
 // missing or addr_none value, so the unconditional form is equivalent. `opcode`
-// and `nft_item_index` are raw passthroughs (the index is a Float in the fixture
-// corpus and an Int in production. The serializer never coerces it.
+// and `nft_item_index` are raw passthroughs; the index is already an Int.
 void fill_nft_mint(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "source"));
   a.destination = av_addr(dg(d, "address"));
@@ -1546,7 +1598,7 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "jvault_claim") fill_jvault_claim(d, a);
   else if (t == "ethena_deposit") fill_ethena_deposit(d, a);
   else if (t == "layerzero_receive") fill_layerzero_receive(d, a);
-  else if (t == "layerzero_send") fill_layerzero_send_from(d, a);
+  else if (t == "layerzero_send") fill_layerzero_send(d, a);
   else if (t == "layerzero_send_tokens") fill_layerzero_send_tokens(d, a);
   else if (t == "layerzero_commit_packet") fill_layerzero_commit_packet(d, a);
   else if (t == "layerzero_dvn_verify") fill_layerzero_dvn_verify(d, a);

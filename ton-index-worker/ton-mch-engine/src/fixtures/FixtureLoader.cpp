@@ -2,9 +2,13 @@
 
 #include "td/utils/filesystem.h"
 #include "td/utils/format.h"
+#include "td/utils/logging.h"
 
 #include <lz4frame.h>
 #include <msgpack.hpp>
+
+#include <cmath>
+#include <cstdio>
 
 namespace mch {
 
@@ -192,11 +196,22 @@ Value msgpack_to_value(const msgpack::object &o) {
       return Value::make_dict(std::move(fs));
     }
     case msgpack::type::FLOAT32:
-    case msgpack::type::FLOAT64:
-      // Fixture interface data (e.g. a huge NftItem.index or NftSale.full_price)
-      // decodes to a Python float; kept as VType::Float so a bare one renders
-      // unrenderable exactly as the Python twin's render() raises.
-      return Value::make_float(o.via.f64);
+    case msgpack::type::FLOAT64: {
+      const double v = o.via.f64;
+      if (!std::isfinite(v) || std::trunc(v) != v) {
+        LOG(FATAL) << "fixture interface contains an unexpected non-integral float: " << v;
+      }
+      char buf[512];
+      const int n = std::snprintf(buf, sizeof(buf), "%.0f", v);
+      if (n <= 0 || static_cast<std::size_t>(n) >= sizeof(buf)) {
+        LOG(FATAL) << "fixture interface float is outside the integer conversion range: " << v;
+      }
+      auto value = td::dec_string_to_int256(std::string(buf, static_cast<std::size_t>(n)));
+      if (value.is_null() || !value->is_valid()) {
+        LOG(FATAL) << "fixture interface float is outside the RefInt256 range: " << v;
+      }
+      return Value::make_int(std::move(value));
+    }
     default:
       return Value::null();
   }

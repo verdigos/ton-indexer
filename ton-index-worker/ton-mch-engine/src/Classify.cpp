@@ -87,7 +87,6 @@ std::string render_action(const Action &a) {
     return out + "]";
   };
   std::vector<std::string> th = a.tx_hashes;
-  std::sort(th.begin(), th.end());
   f.emplace_back("tx_hashes", render_strings(th));
   std::vector<std::string> ac = a.accounts;
   std::sort(ac.begin(), ac.end());

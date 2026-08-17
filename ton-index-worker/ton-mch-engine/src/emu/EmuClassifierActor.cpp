@@ -256,13 +256,12 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
         stats_.serialize_us_max = std::max(stats_.serialize_us_max, us);
       }
       stats_.actions_blob_bytes += res.payload.actions_blob.size();
-      stats_.ser_float_values += ser.float_values;
       stats_.ser_cell_values += ser.cell_values;
       stats_.ser_unrenderable += ser.unrenderable;
-      if (ser.float_values != 0 || ser.cell_values != 0 || ser.unrenderable != 0) {
+      if (ser.cell_values != 0 || ser.unrenderable != 0) {
         LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << res.trace_id
-                     << " serializer saw float=" << ser.float_values
-                     << " cell=" << ser.cell_values << " unrenderable=" << ser.unrenderable;
+                     << " serializer saw cell=" << ser.cell_values
+                     << " unrenderable=" << ser.unrenderable;
       }
       stats_.actions += rows.size();
       if (res.used_fallback) {
@@ -386,7 +385,7 @@ void EmuClassifierActor::alarm() {
             << (stats_.latency_samples ? stats_.serialize_us_total / stats_.latency_samples : 0)
             << " max=" << stats_.serialize_us_max << "}"
             << " blob_bytes=" << stats_.actions_blob_bytes
-            << " ser{float=" << stats_.ser_float_values << " cell=" << stats_.ser_cell_values
+            << " ser{cell=" << stats_.ser_cell_values
             << " unrenderable=" << stats_.ser_unrenderable << "}";
   prev_ = stats_;
   alarm_timestamp() = td::Timestamp::in(kStatsIntervalSec);

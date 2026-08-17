@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -26,15 +27,6 @@ namespace {
 
 constexpr std::uint32_t kTeleitemBidInfoOpcode = 0x38127DE1;
 constexpr std::uint32_t kTelemintOpcode = 0x299a3e15;
-
-std::string upper_ascii_local(std::string s) {
-  for (char &c : s) {
-    if (c >= 'a' && c <= 'z') {
-      c = static_cast<char>(c - 'a' + 'A');
-    }
-  }
-  return s;
-}
 
 // AccountId(x): a raw-address Str -> normalized Account; anything else (Null,
 // non-address) -> addr_none, mirroring AccountId(None).
@@ -48,14 +40,10 @@ Value account_from_value(const Value &v) {
   return Value::make_account_none();
 }
 
-// Amount(x): int/amount value -> Amount; null -> Amount(None); a fixture float
-// (getgems price) -> Amount-of-float (Python Amount(float), renders %.17g).
+// Amount(x): an int/amount value becomes Amount; null becomes Amount(None).
 Value amount_or_none(const Value &v) {
   if (v.is_null()) {
     return Value::make_amount_none();
-  }
-  if (v.t == VType::Float) {
-    return Value::make_amount_float(v.dnum);
   }
   return to_amount(v);
 }
@@ -364,11 +352,9 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
         (pmsg != nullptr && pmsg->tx != nullptr) ? pmsg->tx->account
         : (pnode != nullptr && pnode->tx != nullptr) ? pnode->tx->account
                                                      : std::string{};
-    // owner = new_owner.to_str(False); source.upper() == owner.upper().
     bool owner_match =
         prev->btype == mch::btype::kTonTransfer && pmsg != nullptr && pmsg->source &&
-        !new_owner.addr_none && new_owner.t == VType::Account &&
-        upper_ascii_local(*pmsg->source) == new_owner.str;
+        same_account(account_from_opt(pmsg->source), new_owner);
 
     Value pd_marketplace = Value::null();
     Value pd_nft_address = Value::null();
@@ -519,15 +505,10 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
       std::vector<const Block *> payouts;
       if (payout_1 != nullptr) payouts.push_back(payout_1);
       if (payout_2 != nullptr) payouts.push_back(payout_2);
-      auto created_lt = [](const Block *b) -> std::int64_t {
-        const EventNode *n = (b == nullptr || b->event_nodes.empty()) ? nullptr : b->event_nodes.front();
-        if (n != nullptr && n->msg != nullptr && n->msg->created_lt) {
-          return *n->msg->created_lt;
-        }
-        return 0;
-      };
       std::stable_sort(payouts.begin(), payouts.end(),
-                       [&](const Block *a, const Block *b) { return created_lt(a) < created_lt(b); });
+                       [](const Block *a, const Block *b) {
+                         return *first_node(a)->msg->created_lt < *first_node(b)->msg->created_lt;
+                       });
       auto val = [](const Block *b) {
         const Value *v = b->data.field("value");
         return v != nullptr ? *v : Value::make_amount_none();
@@ -633,19 +614,15 @@ bool single_contract_deploy(const Block *b) {
   if (b == nullptr) {
     return false;
   }
-  const std::string *deployed = nullptr;
+  std::set<std::string> deployed;
   for (const EventNode *n : b->event_nodes) {
     const Transaction *tx = n != nullptr ? n->tx : nullptr;
     if (tx == nullptr || tx->orig_status == "active" || tx->end_status != "active") {
       continue;
     }
-    if (deployed == nullptr) {
-      deployed = &tx->account;
-    } else if (*deployed != tx->account) {
-      return false;  // The reference behavior requires exactly one deployment.
-    }
+    deployed.insert(tx->account);
   }
-  return deployed != nullptr;
+  return deployed.size() == 1;
 }
 
 }  // namespace mch

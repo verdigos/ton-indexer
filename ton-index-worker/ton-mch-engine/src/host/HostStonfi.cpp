@@ -458,23 +458,21 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
       {"destination", in_dest},
       {"destination_jetton_wallet", acc_wrap(sw.token_wallet)}};
 
-  Value::Fields outgoing{
-      {"asset", wallet_jetton_asset(actual_out_wallet, /*pton_conversion=*/false)},
-      {"amount", Value::make_amount(out_amt.is_null() ? td::make_refint(0) : out_amt)},
-      {"source", data_field(outgoing_jt, "sender")},
-      {"source_jetton_wallet", data_field(outgoing_jt, "sender_wallet")}};
+  TransferLeg outgoing{
+      wallet_jetton_asset(actual_out_wallet, /*pton_conversion=*/false),
+      Value::make_amount(out_amt.is_null() ? td::make_refint(0) : out_amt),
+      data_field(outgoing_jt, "sender"), data_field(outgoing_jt, "sender_wallet"),
+      Value::null(), Value::null()};
   if (!out_dest_jw.is_null()) {
-    outgoing.emplace_back("destination_jetton_wallet", out_dest_jw);
-    outgoing.emplace_back("destination", data_field(outgoing_jt, "receiver"));
+    outgoing.destination = data_field(outgoing_jt, "receiver");
+    outgoing.destination_jetton_wallet = out_dest_jw;
   } else {
     Value sb = data_field(in_jt, "stonfi_swap_body");
     if (sb.t == VType::Dict) {
       const Value *ua = sb.field("user_address");
-      outgoing.emplace_back("destination", acc_wrap(ua != nullptr ? *ua : Value::null()));
-      outgoing.emplace_back("destination_jetton_wallet", Value::null());
+      outgoing.destination = acc_wrap(ua != nullptr ? *ua : Value::null());
     } else {
-      outgoing.emplace_back("destination", acc_wrap(sw.from_user_address));
-      outgoing.emplace_back("destination_jetton_wallet", Value::null());
+      outgoing.destination = acc_wrap(sw.from_user_address);
     }
   }
 
@@ -494,7 +492,7 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   d.emplace_back("sender", acc_wrap(sw.from_real_user));
   d.emplace_back("receiver", acc_wrap(sw.from_user_address));
   d.emplace_back("dex_incoming_transfer", Value::make_dict(std::move(incoming)));
-  d.emplace_back("dex_outgoing_transfer", Value::make_dict(std::move(outgoing)));
+  d.emplace_back("dex_outgoing_transfer", outgoing.encode());
   d.emplace_back("destination_asset", std::move(target_asset));
   d.emplace_back("destination_wallet", out_addr.is_null() ? Value::null() : acc_wrap(out_addr));
   d.emplace_back("referral_amount",
@@ -564,9 +562,7 @@ namespace {
 // The bigger-amount (amount, token) of a pay_to's two out-legs (assets.sort by
 // amount desc, take [0]; stable on ties -> token0).
 std::pair<td::RefInt256, Value> bigger_leg(const PayTo &pt) {
-  bool zero0 = pt.amount0_out.is_null();
-  bool zero1 = pt.amount1_out.is_null();
-  int cmp = (zero0 || zero1) ? 0 : td::cmp(pt.amount0_out, pt.amount1_out);
+  int cmp = td::cmp(pt.amount0_out, pt.amount1_out);
   if (cmp >= 0) {
     return {pt.amount0_out, pt.token0};
   }

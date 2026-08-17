@@ -15,20 +15,6 @@
 
 namespace mch {
 
-namespace {
-
-// Canonical float text shared with the Python twin ("%.17g" both sides). Chosen
-// over shortest-round-trip (repr / to_chars) because those disagree on round
-// numbers (repr keeps a trailing ".0", to_chars drops it); %.17g is one agreed
-// format, byte-verified on the corpus values.
-std::string fmt_g17(double v) {
-  char buf[64];
-  std::snprintf(buf, sizeof(buf), "%.17g", v);
-  return std::string(buf);
-}
-
-}  // namespace
-
 std::string block_key(const Block *b) {
   std::string key = b->btype;
   if (b->opcode) {
@@ -48,14 +34,7 @@ std::string render_value(const Value &v, bool omit_null_fields) {
       return v.boolean ? "true" : "false";
     case VType::Int:
       return v.num.is_null() ? "nan" : v.num->to_dec_string();
-    case VType::Float:
-      // Bare Python float: "float:" plus shortest-safe %.17g. This keeps float
-      // fields usable by the NFT purchase and shaper paths.
-      return "float:" + fmt_g17(v.dnum);
     case VType::Amount:
-      if (v.amount_float) {
-        return "amount:" + fmt_g17(v.dnum);  // Python Amount(float): str(float)
-      }
       return "amount:" + (v.num.is_null() ? std::string("nan") : v.num->to_dec_string());
     case VType::Str:
       return "str:" + v.str;
@@ -157,7 +136,6 @@ std::string render_parse_value(const Value &v) {
       return render_parse_fields_sorted(*v.fields);
     case VType::List:
     case VType::Block:
-    case VType::Float:
       return v.describe();
   }
 }
@@ -295,8 +273,6 @@ bool structural_equal(const Value &a, const Value &b) {
       }
       return true;
     }
-    case VType::Float:
-      return false;
   }
   return false;
 }

@@ -12,7 +12,6 @@
 #include "vm/cells/CellBuilder.h"
 #include "vm/cellslice.h"
 
-#include <cstdio>
 #include <string>
 #include <utility>
 #include <variant>
@@ -48,8 +47,8 @@ td::Result<td::Ref<vm::Cell>> remaining_slice_to_cell(
 }
 
 td::Result<Value> decode_comment(const td::Ref<vm::CellSlice> &comment) {
-  TRY_RESULT(comment_cell, remaining_slice_to_cell(comment));
-  TRY_RESULT(bytes, load_snake_bytes(pslice_from_cell(comment_cell)));
+  vm::CellSlice comment_slice = *comment;
+  TRY_RESULT(bytes, load_snake_bytes(comment_slice));
   return Value::make_bytes(std::move(bytes));
 }
 
@@ -110,15 +109,11 @@ td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body) {
         sum_type = "Unknown";
       } else {
         auto st = static_cast<td::uint32>(ps.cs.fetch_ulong(32));
-        char buf[16];
-        std::snprintf(buf, sizeof(buf), "0x%x", st);  // Python hex()
-        payload_sum_type = Value::make_str(buf);
+        payload_sum_type = Value::make_int(refint_u64(st));
         if (st == 0 || st == 0x2167da4b || st == 0x25938561) {
           namespace payloads = ton_abi::gen::jetton_payloads;
-          auto match = try_parse_first<payloads::TextCommentPayload,
-                                       payloads::EncryptedCommentPayload,
-                                       payloads::StonfiSwapPayload>(payload_cell);
           if (st == 0) {
+            auto match = try_parse_first<payloads::TextCommentPayload>(payload_cell);
             has_sum_type = true;
             sum_type = "TextComment";
             const auto *parsed =
@@ -132,6 +127,7 @@ td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body) {
               sum_type = "Unknown";
             }
           } else if (st == 0x2167da4b) {
+            auto match = try_parse_first<payloads::EncryptedCommentPayload>(payload_cell);
             has_sum_type = true;
             sum_type = "EncryptedTextComment";
             const auto *parsed =
@@ -146,6 +142,7 @@ td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body) {
               sum_type = "Unknown";
             }
           } else {
+            auto match = try_parse_first<payloads::StonfiSwapPayload>(payload_cell);
             const auto *parsed =
                 match ? std::get_if<payloads::StonfiSwapPayload>(&*match) : nullptr;
             auto decoded = parsed ? adapt_stonfi_swap(*parsed)

@@ -5,7 +5,7 @@
 # arm). It is one matcher with a two-kind `test_self`:
 #
 #     (CallContractBlock and opcode == 0x6bc79e7e)
-#  or (JettonTransferBlock and int(data["payload_opcode"], 16) == 0x6bc79e7e)
+#  or (JettonTransferBlock and data["payload_opcode"] == 0x6bc79e7e)
 #
 # Each arm uses a separate matcher.
 # A mixed `(op X @m ^ btype jetton_transfer @m where …)` anchor group can only
@@ -23,12 +23,9 @@
 # their relative order carries nothing. Same construct as the
 # telegram_nft_purchase / telegram_nft_assigned split.
 #
-# `payload_opcode` string equality == the legacy int comparison: the field is
-# Python `hex(sum_type)` (messages/jettons.py:51) and C++ `"0x%x"`
-# (parse/ParseJettons.cpp:105) — both lowercase, unpadded, so "0x6bc79e7e" is
-# the one spelling either host can produce. A transfer with no forward payload
-# has the key present-null (=> test false); a legacy `int(None, 16)` raises and
-# is swallowed by the matcher's bare `except` (=> false too).
+# `payload_opcode` carries the parsed uint32, so the matcher compares it
+# directly with the hold-funds opcode. A missing forward payload remains null
+# and does not match.
 #
 # THE PARENT. `GenericMatcher(optional=True, test_self_func=lambda b: True,
 # child_matcher=ContractMatcher(CoffeeServiceFee))` — any parent block that also
@@ -82,7 +79,7 @@ matcher coffee_mev_protect_hold_funds_jetton {
     produces coffee_mev_protect_hold_funds
     entry    @transfer
 
-    btype jetton_transfer @transfer where (.payload_opcode == "0x6bc79e7e")
+    btype jetton_transfer @transfer where (.payload_opcode == 0x6bc79e7e)
       <- maybe ( any -> { op CoffeeServiceFee } )
 
     out {

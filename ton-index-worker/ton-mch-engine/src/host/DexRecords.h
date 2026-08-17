@@ -18,6 +18,9 @@ namespace mch {
 
 struct Block;  // BlockTree.h
 
+// An excess refund represented as the shared [asset, amount] pair.
+Value excess_pair(Value asset, Value amount);
+
 // {asset, amount}, a peer-swap hop's in/out side.
 struct SwapLeg {
   Value asset;

@@ -10,24 +10,10 @@
 
 namespace mch {
 
-// pytoniq Boc(str) decode order: bytes.fromhex first, base64 fallback (real
-// BOCs start "te6…" -> fromhex fails -> base64). Then one_from_boc.
+// Cell payload strings are base64-encoded BOCs.
 td::Result<td::Ref<vm::Cell>> cell_from_pystr(const std::string &s) {
-  auto is_hex = [](const std::string &x) {
-    if (x.empty() || x.size() % 2 != 0) return false;
-    for (char c : x) {
-      if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
-        return false;
-      }
-    }
-    return true;
-  };
   std::string raw;
-  if (is_hex(s)) {
-    TRY_RESULT_ASSIGN(raw, td::hex_decode(td::Slice(s)));
-  } else {
-    TRY_RESULT_ASSIGN(raw, td::base64_decode(td::Slice(s)));
-  }
+  TRY_RESULT_ASSIGN(raw, td::base64_decode(td::Slice(s)));
   return vm::std_boc_deserialize(raw);
 }
 

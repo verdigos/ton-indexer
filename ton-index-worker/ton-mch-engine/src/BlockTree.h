@@ -137,7 +137,7 @@ struct Block {
   // order instead of Python's set()).
   void compact_connections();
 
-  // Ports Block.insert_between (core.py:244): splices new_block between this
+  // Block.insert_between splices new_block between this
   // and each block in `targets` (each of which must currently be in
   // next_blocks). Grandchild edges from this block's children that reached a
   // target are redirected to new_block; each target's children that pointed

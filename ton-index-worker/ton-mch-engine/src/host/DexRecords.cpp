@@ -3,7 +3,13 @@
 
 #include "host/HostCommon.h"
 
+#include <utility>
+
 namespace mch {
+
+Value excess_pair(Value asset, Value amount) {
+  return Value::make_list(std::vector<Value>{std::move(asset), std::move(amount)});
+}
 
 TransferLeg TransferLeg::from_jetton_transfer(const Block *jt) {
   TransferLeg leg;

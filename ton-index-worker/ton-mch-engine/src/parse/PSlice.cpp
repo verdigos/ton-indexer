@@ -5,7 +5,6 @@
 
 #include "MsgParse.h"
 
-#include "crypto/block/block-parse.h"
 #include "common/refint.h"
 #include "td/utils/base64.h"
 #include "vm/cellslice.h"
@@ -124,14 +123,6 @@ td::Result<td::RefInt256> load_coins_py(vm::CellSlice &cs) {
   return v;
 }
 
-td::Result<td::RefInt256> var_uint16(const td::Ref<vm::CellSlice> &csr) {
-  auto v = block::tlb::t_VarUInteger_16.as_integer(csr);
-  if (v.is_null()) {
-    return td::Status::Error("VarUInteger16: bad slice");
-  }
-  return v;
-}
-
 PSlice pslice_from_cell(const td::Ref<vm::Cell> &c) {
   PSlice ps;
   bool special = false;
@@ -157,20 +148,20 @@ td::Result<td::Ref<vm::Cell>> pslice_to_cell(const PSlice &ps) {
 }
 
 // pytoniq Slice.load_snake_bytes(): byte-aligned, <=1 ref per link.
-td::Result<std::string> load_snake_bytes(PSlice ps) {
+td::Result<std::string> load_snake_bytes(vm::CellSlice &cs) {
   std::string out;
   for (;;) {
-    if (ps.cs.size() % 8 != 0) {
+    if (cs.size() % 8 != 0) {
       return td::Status::Error("snake: not byte-aligned");
     }
-    size_t nrefs = ps.refs.size() - ps.off;
+    size_t nrefs = cs.size_refs();
     if (nrefs > 1) {
       return td::Status::Error("snake: >1 ref");
     }
-    size_t n = ps.cs.size() / 8;
+    size_t n = cs.size() / 8;
     if (n > 0) {
       std::string chunk(n, '\0');
-      if (!ps.cs.fetch_bytes(reinterpret_cast<unsigned char *>(chunk.data()), static_cast<int>(n))) {
+      if (!cs.fetch_bytes(reinterpret_cast<unsigned char *>(chunk.data()), static_cast<int>(n))) {
         return td::Status::Error("snake: fetch failed");
       }
       out += chunk;
@@ -178,7 +169,12 @@ td::Result<std::string> load_snake_bytes(PSlice ps) {
     if (nrefs == 0) {
       return out;
     }
-    ps = pslice_from_cell(ps.refs[ps.off]);
+    bool special = false;
+    try {
+      cs = vm::load_cell_slice_special(cs.prefetch_ref(0), special);
+    } catch (...) {
+      return td::Status::Error("snake: bad continuation cell");
+    }
   }
 }
 
@@ -197,10 +193,6 @@ td::Result<BodyCtx> open_body(const td::Ref<vm::Cell> &body) {
     ctx.all_refs.push_back(ctx.cs.prefetch_ref(i));
   }
   return ctx;
-}
-
-td::Result<td::RefInt256> pyslice_load_coins(vm::CellSlice &cs) {
-  return load_coins_py(cs);
 }
 
 td::Result<vm::CellSlice> open_ref_cell(const td::Ref<vm::Cell> &c) {
@@ -345,12 +337,7 @@ std::optional<std::string> ton_transfer_comment(const td::Ref<vm::Cell> &body) {
         (cs.size_refs() == 0 || cs.size_refs() == 1))) {
     return std::nullopt;
   }
-  PSlice ps;
-  ps.cs = cs;
-  for (unsigned i = 0; i < cs.size_refs(); i++) {
-    ps.refs.push_back(cs.prefetch_ref(i));
-  }
-  auto r = load_snake_bytes(ps);
+  auto r = load_snake_bytes(cs);
   if (r.is_error()) {
     return std::nullopt;  // Python's inner try swallows
   }

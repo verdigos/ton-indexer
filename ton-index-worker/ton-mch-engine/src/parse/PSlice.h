@@ -27,10 +27,8 @@ td::Result<Value> load_address_py(vm::CellSlice &cs);
 // pytoniq Slice.load_coins(): len nibble 0 -> 0. Advances `cs`.
 td::Result<td::RefInt256> load_coins_py(vm::CellSlice &cs);
 
-td::Result<td::RefInt256> var_uint16(const td::Ref<vm::CellSlice> &csr);
-
 // pytoniq-Slice stand-in: `cs` carries the bit cursor, `refs`/`off` carry the
-// ref list SEPARATELY, because pytoniq's copy()/to_cell()/snake semantics do
+// ref list SEPARATELY, because pytoniq's copy()/to_cell() semantics do
 // not always agree with the CellSlice's own ref cursor (see MsgParse.cpp header).
 struct PSlice {
   vm::CellSlice cs;
@@ -44,7 +42,7 @@ PSlice pslice_from_cell(const td::Ref<vm::Cell> &c);
 td::Result<td::Ref<vm::Cell>> pslice_to_cell(const PSlice &ps);
 
 // pytoniq Slice.load_snake_bytes(): byte-aligned, <=1 ref per link.
-td::Result<std::string> load_snake_bytes(PSlice ps);
+td::Result<std::string> load_snake_bytes(vm::CellSlice &cs);
 
 struct BodyCtx {
   vm::CellSlice cs;

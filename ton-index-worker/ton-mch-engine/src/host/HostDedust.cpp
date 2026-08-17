@@ -36,38 +36,6 @@ constexpr std::uint32_t kDedustPayoutFromPool = 0xad4eb6f5;
 constexpr std::uint32_t kDedustPayout = 0x474f86cf;
 constexpr std::uint32_t kDedustSwapPayload = 0xe3a0d482;
 
-// Python int(str, 0): 0x/0o/0b prefix else decimal; nullopt on malformed.
-std::optional<std::uint64_t> py_int_base0(const std::string &s) {
-  if (s.empty()) {
-    return std::nullopt;
-  }
-  std::size_t i = 0;
-  int base = 10;
-  if (s.size() >= 2 && s[0] == '0') {
-    char c = s[1];
-    if (c == 'x' || c == 'X') { base = 16; i = 2; }
-    else if (c == 'o' || c == 'O') { base = 8; i = 2; }
-    else if (c == 'b' || c == 'B') { base = 2; i = 2; }
-  }
-  if (i >= s.size()) {
-    return std::nullopt;
-  }
-  std::uint64_t val = 0;
-  for (; i < s.size(); i++) {
-    char c = s[i];
-    int d;
-    if (c >= '0' && c <= '9') d = c - '0';
-    else if (c >= 'a' && c <= 'f') d = c - 'a' + 10;
-    else if (c >= 'A' && c <= 'F') d = c - 'A' + 10;
-    else return std::nullopt;
-    if (d >= base) {
-      return std::nullopt;
-    }
-    val = val * base + static_cast<std::uint64_t>(d);
-  }
-  return val;
-}
-
 // blocks/swaps.py _get_dedust_jetton_swap_sequence -> the FINAL (destination)
 // asset. The per-step dedust_pool lookup goes through the two-phase table
 // (env.lookups->get, recorded during the collect pass). Python raises when a
@@ -225,14 +193,10 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
     sender = data_field(in_transfer, "sender");
     asset_in = data_field(in_transfer, "asset");
     Value payload_opcode = data_field(in_transfer, "payload_opcode");
-    if (payload_opcode.t != VType::Str) {
-      return rt_fault("dedust legs: payload_opcode not a string");  // int(None,0) raises
+    if (payload_opcode.t != VType::Int || payload_opcode.num.is_null()) {
+      return rt_fault("dedust legs: payload_opcode not an integer");
     }
-    auto op = py_int_base0(payload_opcode.str);
-    if (!op) {
-      return rt_fault("dedust legs: payload_opcode unparseable");
-    }
-    if (*op != kDedustSwapPayload) {
+    if (payload_opcode.num != kDedustSwapPayload) {
       return rt_ok(Value::null());  // wrong payload -> reject
     }
     amount_in = data_field(in_transfer, "amount");
@@ -277,7 +241,7 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
     if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
       return rt_fault("dedust legs: swap_request header underflow");
     }
-    auto r_amt = pyslice_load_coins(cs);
+    auto r_amt = load_coins_py(cs);
     if (r_amt.is_error()) {
       return rt_fault("dedust legs: swap_request amount");
     }

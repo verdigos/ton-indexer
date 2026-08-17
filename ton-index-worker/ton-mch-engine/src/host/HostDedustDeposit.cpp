@@ -10,6 +10,7 @@
 #include "host/HostImpls.h"
 
 #include "host/BlockViews.h"
+#include "host/DexRecords.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -335,16 +336,14 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
         !sender.addr_none && dst.str == sender.str) {
       Value amt = tm->value ? Value::make_amount(td::make_refint(*tm->value))
                             : Value::make_amount_none();
-      excesses.push_back(Value::make_list(
-          std::vector<Value>{Value::make_asset_ton(), std::move(amt)}));
+      excesses.push_back(excess_pair(Value::make_asset_ton(), std::move(amt)));
     }
   }
   for (const Block *je : jetton_excesses) {
     Value recv = data_field(je, "receiver");
     if (recv.t == VType::Account && !recv.addr_none && sender.t == VType::Account &&
         !sender.addr_none && recv.str == sender.str) {
-      excesses.push_back(Value::make_list(
-          std::vector<Value>{data_field(je, "asset"), data_field(je, "amount")}));
+      excesses.push_back(excess_pair(data_field(je, "asset"), data_field(je, "amount")));
     }
   }
 

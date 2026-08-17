@@ -47,6 +47,21 @@ std::vector<Block *> collect_spine(Block *root) {
   return out;
 }
 
+// Sort children by trace-derived keys, using the pointer only as a total-order
+// tiebreaker, then remove duplicate block references.
+void sort_unique_children(std::vector<Block *> &children_blocks) {
+  std::sort(children_blocks.begin(), children_blocks.end(),
+            [](const Block *a, const Block *b) {
+              if (a->min_lt != b->min_lt) return a->min_lt < b->min_lt;
+              if (a->btype != b->btype) return a->btype < b->btype;
+              std::string ha = a->anchor_tx_hash(), hb = b->anchor_tx_hash();
+              if (ha != hb) return ha < hb;
+              return a < b;
+            });
+  children_blocks.erase(std::unique(children_blocks.begin(), children_blocks.end()),
+                        children_blocks.end());
+}
+
 bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *block,
                BlockArena &arena, const std::set<std::string> &kinds,
                const LookupSource &src, const WhereTable &wheres,
@@ -228,26 +243,7 @@ void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block 
     for (const EventNode *n : first->event_nodes) final_b->event_nodes.push_back(n);
     final_b->data = std::move(merged);
     for (Block *cb : first->children_blocks) final_b->children_blocks.push_back(cb);
-    // Python does `list(set(children_blocks))` here, i.e. an order nothing
-    // downstream can rely on, but the C++ substrate has to pick SOME order,
-    // and sorting raw Block* sorted by ARENA ADDRESS: run-to-run stable within
-    // one process, arbitrary across processes and across arena layouts. The
-    // order reaches action output (unwind_deployments, the fallback rows), so
-    // it must be a property of the trace, not of the allocator. Key: earliest
-    // event lt, then btype, then the anchor tx hash; the pointer stays as the
-    // final tiebreak so the ordering is total and the std::unique below still
-    // collapses duplicates of the SAME block (identical key -> adjacent).
-    std::sort(final_b->children_blocks.begin(), final_b->children_blocks.end(),
-              [](const Block *a, const Block *b) {
-                if (a->min_lt != b->min_lt) return a->min_lt < b->min_lt;
-                if (a->btype != b->btype) return a->btype < b->btype;
-                std::string ha = a->anchor_tx_hash(), hb = b->anchor_tx_hash();
-                if (ha != hb) return ha < hb;
-                return a < b;
-              });
-    final_b->children_blocks.erase(
-        std::unique(final_b->children_blocks.begin(), final_b->children_blocks.end()),
-        final_b->children_blocks.end());
+    sort_unique_children(final_b->children_blocks);
     final_b->calculate_min_max_lt();
   }
 }
@@ -315,20 +311,7 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
     // transaction-hash derivation.
     for (const EventNode *n : partial->event_nodes) final_b->event_nodes.push_back(n);
     for (Block *cb : partial->children_blocks) final_b->children_blocks.push_back(cb);
-    // Sort by trace properties rather than arena addresses. The pointer is only
-    // a final tiebreaker, keeping the order total so std::unique removes duplicate
-    // references to the same block.
-    std::sort(final_b->children_blocks.begin(), final_b->children_blocks.end(),
-              [](const Block *a, const Block *b) {
-                if (a->min_lt != b->min_lt) return a->min_lt < b->min_lt;
-                if (a->btype != b->btype) return a->btype < b->btype;
-                std::string ha = a->anchor_tx_hash(), hb = b->anchor_tx_hash();
-                if (ha != hb) return ha < hb;
-                return a < b;
-              });
-    final_b->children_blocks.erase(
-        std::unique(final_b->children_blocks.begin(), final_b->children_blocks.end()),
-        final_b->children_blocks.end());
+    sort_unique_children(final_b->children_blocks);
     final_b->calculate_min_max_lt();
   }
 }
@@ -449,7 +432,7 @@ void unwind_deployments(std::vector<Block *> &blocks) {
   }
 }
 
-// serialize_blocks' row filter (block_tree_serializer.py:1649-1655): a spine
+// serialize_blocks' row filter: a spine
 // block becomes a row UNLESS it is the root wrapper, an `empty` proxy, or a
 // call_contract whose message has a null source (the external-in leaf) or a null
 // destination (the log / notification leaves).
@@ -459,7 +442,7 @@ bool serializes_to_row(const Block *b) {
   return !pp_field(b->data, "source").is_null() && !pp_field(b->data, "destination").is_null();
 }
 
-// v1_ops (block_tree_serializer.py:1605-1643): the btypes whose merged children
+// v1_ops: the btypes whose merged children
 // stay merged. Every OTHER btype gets its children expanded into rows of their
 // own, the v1 API predates the composite actions, so a consumer that only knows
 // the v1 set still sees the legs a teleitem_start_auction / jvault_stake / …
@@ -526,7 +509,7 @@ std::vector<ActionRow> serialize_rows(const std::vector<Block *> &blocks,
       std::sort(c.ancestor_type.begin(), c.ancestor_type.end());
       c.ancestor_type.erase(std::unique(c.ancestor_type.begin(), c.ancestor_type.end()),
                             c.ancestor_type.end());
-      // Python raises here (:1682) rather than dropping the row: two rows with
+      // serialize_blocks raises here rather than dropping the row: two rows with
       // one action_id would collide on the actions PK, so the trace falls back.
       if (!ids.insert(calc_action_id(c.block)).second) {
         throw std::runtime_error("duplicate action id in child recursion");
@@ -597,8 +580,8 @@ std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource
     post_process_dedust_v2_liquidity(spine, removed);
     post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
     unwind_deployments(spine);
-    // FLAT, unlike the other two paths: try_classify_unknown_trace open-codes the
-    // row filter (:370-375) instead of calling serialize_blocks, so a ghost row
+    // FLAT, unlike the other two paths: try_classify_unknown_trace applies the
+    // row filter directly instead of calling serialize_blocks, so a ghost row
     // never recurses into children and never carries parent_action_id.
     for (Block *sb : spine) {
       if (serializes_to_row(sb)) out.push_back(ActionRow{sb, "", {}});
@@ -775,13 +758,13 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     result.failure_category = FailureCategory::engine_fault;
   }
   if (result.failure) {
-    result.actions.clear();  // event_processing.py discards the trace's actions
+    result.actions.clear();  // Failed traces discard their classified actions.
     result.action_rows.clear();
     result.fallback_rows = basic_classify_fallback(ctx);
   } else if (result.action_rows.empty() && !ctx.trace.transactions.empty()) {
-    // trace_processor.py:44-46, classification succeeded and serialized nothing.
+    // Classification succeeded and serialized nothing.
     // try_classify_unknown_trace tries the GHOST path first and only mints the
-    // `unknown` row when that yields nothing too (event_processing.py:367-388).
+    // `unknown` row when that yields nothing too.
     result.action_rows = ghost_external_rows(ctx, src);
     result.unknown_trace = result.action_rows.empty();
   }

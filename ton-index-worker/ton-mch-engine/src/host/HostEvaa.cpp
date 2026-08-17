@@ -27,7 +27,7 @@ namespace {
 // load_user_header: skip the EVAA user header (version coins + maybe
 // upgrade-info ref + 2 exec bits), leaving the cursor on the 32-bit opcode.
 bool skip_user_header(vm::CellSlice &cs) {
-  if (pyslice_load_coins(cs).is_error()) {  // user_version
+  if (load_coins_py(cs).is_error()) {  // user_version
     return false;
   }
   if (!cs.have(1)) {  // load_maybe_ref: the Maybe bit
@@ -267,14 +267,13 @@ bool evaa_supply_anchor(const Block *b) {
   if (r_cell.is_error()) {
     return false;
   }
-  bool special = false;
-  vm::CellSlice cs;
-  try {
-    cs = vm::load_cell_slice_special(r_cell.ok(), special);
-  } catch (...) {
+  auto r_ctx = open_body(r_cell.ok());
+  if (r_ctx.is_error()) {
     return false;
   }
-  return cs.have(32) && static_cast<td::uint32>(cs.fetch_ulong(32)) == kSupplyMaster;
+  auto ctx = r_ctx.move_as_ok();
+  return ctx.cs.have(32) &&
+         static_cast<td::uint32>(ctx.cs.fetch_ulong(32)) == kSupplyMaster;
 }
 
 bool evaa_liquidate_anchor(const Block *b) {

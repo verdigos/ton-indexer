@@ -14,20 +14,10 @@ namespace mch {
 
 namespace {
 
-// A float-backed Amount (make_amount_float): a render-only representation from
-// fixture data (getgems price). The language has no floats, so any USE of one
-// as an expression value (comparison, arithmetic, `.value` unwrap) faults.
-// Only rendering and structural comparison are allowed.
-bool amount_float_backed(const Value &v) {
-  return v.t == VType::Amount && v.amount_float;
-}
-
 // Python Amount(None): a present Amount object with a null value inside.
-// A float-backed Amount also carries a null `num`, but it is NOT Amount(None)
-// (it has a float payload). Exclude it so it faults at use instead of
-// silently comparing equal to Amount(None).
+// Float-backed Amounts cannot be constructed, so a null `num` is unambiguous.
 bool amount_none(const Value &v) {
-  return v.t == VType::Amount && v.num.is_null() && !v.amount_float;
+  return v.t == VType::Amount && v.num.is_null();
 }
 
 std::string to_lower(std::string s) {
@@ -157,10 +147,6 @@ EvalResult eq_result(const Value &l, const Value &r, bool want_eq) {
   bool eq;
   if (rt_is_null(l) || rt_is_null(r)) {
     eq = rt_is_null(l) && rt_is_null(r);
-  } else if (amount_float_backed(l) || amount_float_backed(r)) {
-    // The language has no floats. Comparing a float-backed Amount faults and
-    // never aliases Amount(None).
-    return rt_fault("'==' on a float-backed Amount (the language has no floats)");
   } else {
     // Asset-without-jetton-master vs string: Python Asset.__eq__ raises
     // (None.as_str()) before its is_ton clause -> EvalError -> fault.
@@ -198,10 +184,6 @@ EvalResult ord_result(const Value &l, const Value &r, const char *op) {
 // Amount(None) faults here (the Python reference would raise an uncaught
 // TypeError out of matching, a crash; we choose the containable outcome).
 bool coerce_int(const Value &v, td::RefInt256 &out, std::string &err) {
-  if (amount_float_backed(v)) {
-    err = "arithmetic operand is a float-backed Amount (the language has no floats)";
-    return false;
-  }
   if (amount_none(v)) {
     err = "arithmetic operand is Amount(None)";
     return false;
@@ -360,12 +342,6 @@ EvalResult rt_access(const Value &obj, const std::string &field) {
     // Amount.value unwraps the wrapper to its raw integer. The
     // inverse of amount(x). Amount(None) carries a null num -> yields null.
     if (field == "value") {
-      if (obj.amount_float) {
-        // A float-backed Amount has no integer value to unwrap; the language
-        // has no floats, so `.value` faults rather than yielding
-        // null (which would alias Amount(None).value).
-        return rt_fault("`.value` on a float-backed Amount (the language has no floats)");
-      }
       return rt_ok(obj.num.is_null() ? Value::null() : Value::make_int(obj.num));
     }
     return rt_fault("unknown Amount accessor '" + field + "' (expected value)");

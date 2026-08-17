@@ -156,7 +156,10 @@ EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
   }
   cs.advance(32);
   auto r_amt = load_coins_py(cs);
-  td::RefInt256 amount = r_amt.is_ok() ? r_amt.move_as_ok() : td::make_refint(0);
+  if (r_amt.is_error()) {
+    return rt_ok(Value::null());
+  }
+  td::RefInt256 amount = r_amt.move_as_ok();
   auto r_rcpt = load_address_py(cs);
   if (r_rcpt.is_error()) {
     return rt_ok(Value::null());

@@ -37,10 +37,6 @@ td::Status validate_registries();
 // or the parse fails (caller implements soft-parse alternatives on top).
 td::Result<Value> parse_message_body(const std::string &type_name, const td::Ref<vm::Cell> &body);
 
-// pytoniq Slice.load_coins() (len nibble 0 -> 0), exported for host predicates
-// that parse variable-length headers (HostRegistry, e.g. EVAA).
-td::Result<td::RefInt256> pyslice_load_coins(vm::CellSlice &cs);
-
 // TonTransferBlock.comment derivation (basic_blocks.py + common.py
 // TonTransferMessage): nullopt == comment None; encrypted comments come back
 // base64-encoded; plain comments are utf-8 decoded with backslashreplace and
