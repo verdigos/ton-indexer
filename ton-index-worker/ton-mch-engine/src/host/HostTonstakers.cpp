@@ -24,9 +24,6 @@ namespace mch {
 // product does satisfy an isinstance.) None/absent -> null, and the delayed arm
 // then marks the block failed.
 EvalResult tonstakers_minted_nft(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("tonstakers_minted_nft: bad arguments");
-  }
   const Block *delayed = as_block(args[0]);
   if (delayed == nullptr) {
     return rt_ok(Value::null());
@@ -56,9 +53,6 @@ EvalResult tonstakers_minted_nft(BuildEnv &, const std::vector<Value> &args) {
 // stop with null on any other block. The unbounded topology navigation is why
 // this remains a host fn.
 EvalResult tonstakers_pool_addr(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("tonstakers_pool_addr: bad arguments");
-  }
   const Block *notification = as_block(args[0]);
   if (notification == nullptr) {
     return rt_ok(Value::null());

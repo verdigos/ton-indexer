@@ -30,16 +30,21 @@ using HostPredFn = bool (*)(const Block *);
 const std::map<std::string, HostPredFn> &host_predicates();
 
 // Host `fn` implementations (Python registries.fns): the build-time escape
-// hatch. Unlike builtins, ARGUMENTS PASS THROUGH unchanged, a null arg is NOT
-// short-circuited (the fn decides). Signature takes the BuildEnv so a fn can
+// hatch. After fixed arity is validated, arguments pass through unchanged and
+// a null arg is not short-circuited. Signature takes the BuildEnv so a fn can
 // reach env.lookups (two-phase) / env.consumed. A thrown/faulted result is a
 // clean match rejection. Returning Null likewise rejects when the
 // spec `reject when`s the null.
 using HostFn = EvalResult (*)(BuildEnv &, const std::vector<Value> &);
 
+struct HostFnEntry {
+  HostFn fn;
+  int arity;  // -1 leaves arity validation to the host function
+};
+
 // Registered host fns, name -> fn (names are the Python registry keys). The IR
 // loader / build_skip_reason gate a matcher's inclusion on this registry.
-const std::map<std::string, HostFn> &host_fns();
+const std::map<std::string, HostFnEntry> &host_fns();
 
 // Host `shape` implementations (Python registries.shapers): a post-build
 // topology pass. The reference signature is `shaper(produced, match)`;

@@ -197,8 +197,7 @@ R coffee_swap(HostContext &, const ConsumedBlocks &consumed) {
                       r_rcpt.move_as_ok());
   } else if (is_call_op(out_transfer, kCoffeeNotification)) {
     const Message *m = block_msg(out_transfer);
-    Value amt = (m != nullptr && m->value) ? Value::make_amount(td::make_refint(*m->value))
-                                           : Value::make_amount_none();
+    Value amt = msg_value_amount(m);
     out_leg = ton_leg(std::move(amt), account_from_opt(m != nullptr ? m->source : std::nullopt),
                       account_from_opt(m != nullptr ? m->destination : std::nullopt));
   }

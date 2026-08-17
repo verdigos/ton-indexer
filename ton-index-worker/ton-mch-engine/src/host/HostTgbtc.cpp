@@ -10,6 +10,7 @@
 #include "host/HostImpls.h"
 
 #include "host/BlockViews.h"
+#include "host/HostAdapter.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -83,9 +84,6 @@ struct LogCursor {
 
 LogCursor open_log(const std::vector<Value> &args) {
   LogCursor lc;
-  if (args.size() != 1) {
-    return lc;
-  }
   const Block *b = as_block(args[0]);
   if (b == nullptr) {
     return lc;
@@ -112,16 +110,14 @@ LogCursor open_log(const std::vector<Value> &args) {
 // builders/tgbtc.py tgbtc_mint_data(consumed): the 9-field namespace, or Null
 // to reject (missing head/log/mint or unparseable log).
 EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1 || args[0].t != VType::List) {
+  if (args[0].t != VType::List) {
     return rt_fault("tgbtc_mint_data: bad arguments");
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) {
-      consumed.push_back(b);
-    }
+  auto decoded = decode_consumed_or_none(args);
+  if (!decoded) {
+    return rt_ok(Value::null());
   }
+  std::vector<const Block *> consumed = std::move(decoded->blocks);
   const Block *head = first_call(consumed, kTgbtcMintHead);
   const Block *success_log = first_call(consumed, kTgbtcMintSuccessLog);
   const Block *jetton_mint = nullptr;

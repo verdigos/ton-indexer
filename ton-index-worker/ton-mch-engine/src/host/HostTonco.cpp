@@ -6,6 +6,7 @@
 #include "host/BlockViews.h"
 #include "host/DexRecords.h"
 #include "host/DexPton.h"
+#include "host/HostAdapter.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -130,7 +131,7 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
   }
   td::RefInt256 min_out = r_min.move_as_ok();
   if (auto ts = acc_str(target)) {
-    out.emplace_back(*ts, min_out.is_null() ? td::make_refint(0) : min_out);
+    out.emplace_back(*ts, or_zero(std::move(min_out)));
   }
   auto r_rcpt = load_address_py(cs);  // recipient
   if (r_rcpt.is_error()) {
@@ -161,19 +162,14 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
 // returning None, so any parse/nav failure is a Null reject here. Deterministic
 // (input transfer read via btype/children_blocks/data, not event_nodes[0]).
 EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
+  auto decoded = decode_consumed_or_none(args);
+  if (!decoded) {
+    if (args[0].t == VType::List && !args[0].items->empty()) {
+      return host_reject("empty consumed");
+    }
     return host_reject("bad arguments");
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) {
-      consumed.push_back(b);
-    }
-  }
-  if (consumed.empty()) {
-    return host_reject("empty consumed");
-  }
+  std::vector<const Block *> consumed = std::move(decoded->blocks);
   const Block *block = consumed.front();
 
   // anchor <- FundAccount <- input transfer.
@@ -380,15 +376,8 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
         const Block *pton = first_call(b->next_blocks, kPTonTransfer);
         Value ex_amount, ex_asset;
         if (pton != nullptr) {
-          td::RefInt256 ta;
-          auto rb = block_body(pton);
-          if (rb.is_ok()) {
-            auto rp = parse_message_body("PTonTransfer", rb.ok());
-            if (rp.is_ok()) {
-              const Value *tav = rp.ok().field("ton_amount");
-              if (tav != nullptr && (tav->t == VType::Int || tav->t == VType::Amount)) ta = tav->num;
-            }
-          }
+          auto parsed = pton_ton_amount(pton);
+          td::RefInt256 ta = parsed.is_ok() ? parsed.move_as_ok() : td::RefInt256();
           ex_amount = amount_or_zero(ta);
           ex_asset = Value::make_asset_ton();
         } else {
@@ -432,16 +421,14 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
 // leg->slot reordering that depends on both. Python wraps the whole body in
 // try/except returning None, so any parse/nav failure is a Null reject here.
 EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
+  auto decoded = decode_consumed_or_none(args);
+  if (!decoded) {
+    if (args[0].t == VType::List && !args[0].items->empty()) {
+      return host_reject("no ROUTERV3_PAY_TO in consumed");
+    }
     return host_reject("bad arguments");
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) {
-      consumed.push_back(b);
-    }
-  }
+  std::vector<const Block *> consumed = std::move(decoded->blocks);
   const Block *pay_to = nullptr;
   for (const Block *b : consumed) {
     if (is_call_op(b, kV3PayTo)) { pay_to = b; break; }
@@ -496,15 +483,8 @@ EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args)
     if (legs[i] != nullptr) {
       const Block *pton = first_call(legs[i]->next_blocks, kPTonTransfer);
       if (pton != nullptr) {
-        td::RefInt256 ta;
-        auto pb = block_body(pton);
-        if (pb.is_ok()) {
-          auto rp = parse_message_body("PTonTransfer", pb.ok());
-          if (rp.is_ok()) {
-            const Value *tav = rp.ok().field("ton_amount");
-            if (tav != nullptr && (tav->t == VType::Int || tav->t == VType::Amount)) ta = tav->num;
-          }
-        }
+        auto parsed = pton_ton_amount(pton);
+        td::RefInt256 ta = parsed.is_ok() ? parsed.move_as_ok() : td::RefInt256();
         out_legs[i].amount = amount_or_zero(ta);
         out_legs[i].asset = Value::make_asset_ton();
       } else {
@@ -533,7 +513,8 @@ EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args)
   // Reorder into the pool's asset0/asset1 order: leg 1 is the one whose dex
   // jetton wallet is the asset0 wallet. (The reference logs when the swap does
   // not fix it and carries on; nothing observable follows from the log.)
-  if (acc_str(out_legs[0].dex_jetton_wallet) != acc_str(slots[0].wallet)) {
+  if (!same_account(account_from_opt(acc_str(out_legs[0].dex_jetton_wallet)),
+                    account_from_opt(acc_str(slots[0].wallet)))) {
     std::swap(out_legs[0], out_legs[1]);
   }
 
@@ -631,15 +612,14 @@ ToncoParts derive_tonco_parts(const std::vector<const Block *> &consumed) {
 // call message. Multi-hop peer_swaps + the failed-swap recursive-payload
 // fallback are supported; the corpus covers only single-hop swaps.
 EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 1 || args[0].t != VType::List) {
+  auto decoded = decode_consumed_or_none(args);
+  if (!decoded) {
+    if (args[0].t == VType::List) {
+      return host_reject("empty consumed");
+    }
     return host_reject("bad arguments");
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) consumed.push_back(b);
-  }
-  if (consumed.empty()) return host_reject("empty consumed");
+  std::vector<const Block *> consumed = std::move(decoded->blocks);
   ToncoParts parts = derive_tonco_parts(consumed);
 
   auto by_lt = [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; };
@@ -758,8 +738,8 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     if (!pt.amount0.is_null() && pt.jetton0.t == VType::Account) a.emplace_back(pt.amount0, pt.jetton0);
     if (!pt.amount1.is_null() && pt.jetton1.t == VType::Account) a.emplace_back(pt.amount1, pt.jetton1);
     std::stable_sort(a.begin(), a.end(), [](const auto &x, const auto &y) {
-      td::RefInt256 xa = x.first.is_null() ? td::make_refint(0) : x.first;
-      td::RefInt256 ya = y.first.is_null() ? td::make_refint(0) : y.first;
+      td::RefInt256 xa = or_zero(x.first);
+      td::RefInt256 ya = or_zero(y.first);
       return td::cmp(xa, ya) > 0;  // reverse
     });
     return a;

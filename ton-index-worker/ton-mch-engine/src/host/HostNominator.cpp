@@ -54,9 +54,6 @@ bool nominator_pool_withdraw_parent(const Block *b) {
 // builders/nominator.py nominator_withdraw_payout_amount: two payouts use the
 // canonical first child; one is immediate only when it exceeds the request.
 EvalResult nominator_withdraw_payout_amount(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("nominator_withdraw_payout_amount: bad arguments");
-  }
   const Block *request = as_block(args[0]);
   std::vector<Block *> payouts = classified_withdraw_payouts(request);
   if (payouts.size() == 2) {

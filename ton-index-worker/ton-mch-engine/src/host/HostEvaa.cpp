@@ -2,6 +2,7 @@
 // internal registry surface and HostRegistry.h for the public one.
 #include "host/HostImpls.h"
 
+#include "host/HostAdapter.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -307,19 +308,14 @@ bool evaa_liquidate_anchor(const Block *b) {
 // body in try/except returning None, so any parse/nav failure is a Null reject.
 EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
-  if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
+  auto decoded = decode_consumed_or_none(args);
+  if (!decoded) {
+    if (args[0].t == VType::List && !args[0].items->empty()) {
+      return host_reject("empty consumed");
+    }
     return host_reject("bad arguments");
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) {
-      consumed.push_back(b);
-    }
-  }
-  if (consumed.empty()) {
-    return host_reject("empty consumed");
-  }
+  std::vector<const Block *> consumed = std::move(decoded->blocks);
   const Block *block = consumed.front();
 
   // Label roles, derived structurally from the consumed set (the anchor is
@@ -462,16 +458,14 @@ EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args) {
 
 EvalResult evaa_liquidate_data(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
-  if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
+  auto decoded = decode_consumed_or_none(args);
+  if (!decoded) {
+    if (args[0].t == VType::List && !args[0].items->empty()) {
+      return host_reject("empty consumed");
+    }
     return host_reject("bad arguments");
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    if (const Block *b = as_block(v); b != nullptr) consumed.push_back(b);
-  }
-  if (consumed.empty()) {
-    return host_reject("empty consumed");
-  }
+  std::vector<const Block *> consumed = std::move(decoded->blocks);
   const Block *block = consumed.front();
   const bool is_ton = block->btype == mch::btype::kCallContract;
   Value liquidator;

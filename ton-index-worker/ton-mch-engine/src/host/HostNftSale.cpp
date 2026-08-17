@@ -413,7 +413,7 @@ bool auction_outbid_leg(const Block *b) {
 // first matching next block wins; no match returns Null.
 EvalResult nft_trade_returned(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
-  if (args.size() != 2 || args[1].t != VType::Str) {
+  if (args[1].t != VType::Str) {
     return rt_fault("nft_trade_returned: bad arguments");
   }
   const Block *anchor = as_block(args[0]);
@@ -465,9 +465,6 @@ EvalResult nft_trade_returned(BuildEnv &env, const std::vector<Value> &args) {
 // runs over the bid's next_blocks and the language has no quantifier for.
 EvalResult auction_outbid_data(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
-  if (args.size() != 1) {
-    return rt_fault("auction_outbid_data: bad arguments");
-  }
   const Block *leg = as_block(args[0]);
   if (leg == nullptr || leg->previous_block == nullptr) {
     return rt_ok(Value::null());
@@ -493,8 +490,7 @@ EvalResult auction_outbid_data(BuildEnv &env, const std::vector<Value> &args) {
   f.emplace_back("nft_collection", data_field(bid, "nft_collection"));
   f.emplace_back("bidder", account_from_opt(msg->destination));
   f.emplace_back("new_bidder", data_field(bid, "bidder"));
-  f.emplace_back("amount", msg->value ? Value::make_amount(td::make_refint(*msg->value))
-                                      : Value::make_amount_none());
+  f.emplace_back("amount", msg_value_amount(msg));
   // The fragment leg carries no comment (reference hardcodes None there).
   f.emplace_back("comment", getgems ? data_field(leg, "comment") : Value::null());
   f.emplace_back("auction_type", data_field(bid, "auction_type"));
@@ -503,9 +499,6 @@ EvalResult auction_outbid_data(BuildEnv &env, const std::vector<Value> &args) {
 
 EvalResult getgems_sale_init(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
-  if (args.size() != 2) {
-    return rt_fault("getgems_sale_init: bad arguments");
-  }
   const Block *b = as_block(args[0]);
   if (b == nullptr) {
     return rt_ok(Value::null());
@@ -520,9 +513,6 @@ EvalResult getgems_sale_init(BuildEnv &env, const std::vector<Value> &args) {
 
 EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
-  if (args.size() != 2) {
-    return rt_fault("getgems_auction_init: bad arguments");
-  }
   const Block *b = as_block(args[0]);
   if (b == nullptr) {
     return rt_ok(Value::null());
@@ -565,17 +555,13 @@ EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args) {
 // that interface carries. This is a lookup keyed on another lookup's result,
 // which the build language cannot express. Any rejected branch returns Null.
 EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("auction_bid_data: bad arguments");
-  }
   const Block *bid = as_block(args[0]);
   const Message *msg = block_msg(bid);
   const std::string *dest = msg_dest(bid);
   if (bid == nullptr || msg == nullptr || dest == nullptr) {
     return rt_ok(Value::null());
   }
-  Value amount = msg->value ? Value::make_amount(td::make_refint(*msg->value))
-                            : Value::make_amount_none();
+  Value amount = msg_value_amount(msg);
   Value bidder = account_from_opt(msg->source);
   Value auction_addr = account_from_opt(std::optional<std::string>(*dest));
 
@@ -638,9 +624,6 @@ EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args) {
 // outcomes (blocks/auction.py:407-411).
 EvalResult nft_trade_is_finish(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
-  if (args.size() != 1) {
-    return rt_fault("nft_trade_is_finish: bad arguments");
-  }
   const Block *b = as_block(args[0]);
   if (b == nullptr) {
     return rt_ok(Value::make_bool(false));

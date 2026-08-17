@@ -1,7 +1,7 @@
 // Typed host-authoring seam. Keeps the runtime
 // host ABI (EvalResult(BuildEnv&, args)) but lets a protocol core be written as
 //   HostResult<SwapRecord> core(HostContext&, const ConsumedBlocks&);
-// The adapter checks arity, decodes the `Value` args into typed inputs, applies
+// The registry checks arity; the adapter decodes `Value` args into typed inputs, applies
 // the null/reject policy, encodes the typed result back to a `Value`, and tags
 // faults with the binding name. See BuildRuntime.h for BuildEnv / EvalResult.
 #pragma once
@@ -10,6 +10,7 @@
 #include "Value.h"
 #include "host/DexRecords.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -52,11 +53,14 @@ struct HostResult {
   static HostResult fault(std::string m) { return HostResult{Kind::Fault, {}, std::move(m)}; }
 };
 
-// Decode the single-List-arg calling convention (Coffee / Stonfi v2 / DeDust
-// shape): args must be exactly one non-empty List, and it must contain at least
-// one Block. Faults (binding-tagged) otherwise.
+// Decode the single-List-arg calling convention after registry arity validation.
+// The list must be non-empty and contain at least one Block.
 EvalResult decode_consumed(const std::vector<Value> &args, const char *binding,
                            ConsumedBlocks &out);
+
+// Same decode as decode_consumed, but bad arguments or an empty consumed set
+// return nullopt for hosts that reject instead of faulting.
+std::optional<ConsumedBlocks> decode_consumed_or_none(const std::vector<Value> &args);
 
 // A swap-style typed core: single-List consumed set -> a SwapRecord result.
 using SwapCore = HostResult<SwapRecord> (*)(HostContext &, const ConsumedBlocks &);

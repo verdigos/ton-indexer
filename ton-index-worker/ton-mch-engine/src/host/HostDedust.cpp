@@ -3,6 +3,7 @@
 #include "host/HostImpls.h"
 
 #include "host/BlockViews.h"
+#include "host/HostAdapter.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -114,19 +115,12 @@ static td::Result<std::vector<std::string>> parse_dedust_steps(vm::CellSlice cs)
 // pool). SingleLevelWrapper never appears under the IR engine (spec note) so
 // include == the consumed set verbatim.
 EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 3 || args[0].t != VType::List || args[0].items->empty()) {
-    return rt_fault("dedust_swap_legs: bad arguments");
+  ConsumedBlocks decoded;
+  EvalResult decode = decode_consumed({args[0]}, "dedust_swap_legs", decoded);
+  if (decode.faulted) {
+    return decode;
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) {
-      consumed.push_back(b);
-    }
-  }
-  if (consumed.empty()) {
-    return rt_fault("dedust_swap_legs: empty consumed");
-  }
+  std::vector<const Block *> consumed = std::move(decoded.blocks);
   std::vector<const Block *> other_blocks(consumed.begin() + 1, consumed.end());
   std::unordered_set<const Block *> include(consumed.begin(), consumed.end());
 
@@ -148,6 +142,12 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
   std::stable_sort(notif_blocks.begin(), notif_blocks.end(),
                    [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
   std::vector<Value> peer_swaps;
+  Value first_in;
+  Value last_out;
+  Value first_in_amount;
+  Value first_in_asset;
+  Value last_out_amount;
+  Value last_out_asset;
   for (const Block *b : notif_blocks) {
     auto r_body = block_body(b);
     if (r_body.is_error()) {
@@ -170,10 +170,22 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
     EvalResult asset_out = rt_builtin_asset_of(*asset_out_f);
     if (asset_in.faulted) return asset_in;
     if (asset_out.faulted) return asset_out;
-    Value in_leg = Value::make_dict(Value::Fields{
-        {"amount", to_amount(*amount_in_f)}, {"asset", std::move(asset_in.value)}});
-    Value out_leg = Value::make_dict(Value::Fields{
-        {"amount", to_amount(*amount_out_f)}, {"asset", std::move(asset_out.value)}});
+    Value in_amount_value = to_amount(*amount_in_f);
+    Value in_asset_value = std::move(asset_in.value);
+    Value out_amount_value = to_amount(*amount_out_f);
+    Value out_asset_value = std::move(asset_out.value);
+    Value in_leg = Value::make_dict(
+        Value::Fields{{"amount", in_amount_value}, {"asset", in_asset_value}});
+    Value out_leg = Value::make_dict(
+        Value::Fields{{"amount", out_amount_value}, {"asset", out_asset_value}});
+    if (peer_swaps.empty()) {
+      first_in = in_leg;
+      first_in_amount = in_amount_value;
+      first_in_asset = in_asset_value;
+    }
+    last_out = out_leg;
+    last_out_amount = out_amount_value;
+    last_out_asset = out_asset_value;
     peer_swaps.push_back(Value::make_dict(Value::Fields{
         {"in", std::move(in_leg)}, {"out", std::move(out_leg)}}));
   }
@@ -312,41 +324,28 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
 
   // No successful hop at all: synthesize the single leg from actual values.
   if (peer_swaps.empty()) {
-    Value in_leg = Value::make_dict(Value::Fields{
-        {"amount", to_amount(amount_in)}, {"asset", asset_in}});
-    Value out_leg = Value::make_dict(Value::Fields{
-        {"amount", to_amount(actual_amount_out)}, {"asset", actual_asset_out}});
+    first_in_amount = to_amount(amount_in);
+    first_in_asset = asset_in;
+    last_out_amount = to_amount(actual_amount_out);
+    last_out_asset = actual_asset_out;
+    first_in = Value::make_dict(
+        Value::Fields{{"amount", first_in_amount}, {"asset", first_in_asset}});
+    last_out = Value::make_dict(
+        Value::Fields{{"amount", last_out_amount}, {"asset", last_out_asset}});
     peer_swaps.push_back(Value::make_dict(Value::Fields{
-        {"in", std::move(in_leg)}, {"out", std::move(out_leg)}}));
-  }
-
-  const Value *first_in_f = peer_swaps.front().field("in");
-  const Value *last_out_f = peer_swaps.back().field("out");
-  if (first_in_f == nullptr || last_out_f == nullptr) {
-    return rt_fault("dedust legs: missing in/out leg");
-  }
-  Value first_in = *first_in_f;
-  Value last_out = *last_out_f;
-
-  const Value *in_asset_f = first_in.field("asset");
-  const Value *in_amount_f = first_in.field("amount");
-  const Value *out_asset_f = last_out.field("asset");
-  const Value *out_amount_f = last_out.field("amount");
-  if (in_asset_f == nullptr || in_amount_f == nullptr || out_asset_f == nullptr ||
-      out_amount_f == nullptr) {
-    return rt_fault("dedust legs: leg missing amount/asset");
+        {"in", first_in}, {"out", last_out}}));
   }
 
   Value dex_incoming_transfer = Value::make_dict(Value::Fields{
-      {"asset", *in_asset_f},
-      {"amount", *in_amount_f},
+      {"asset", first_in_asset},
+      {"amount", first_in_amount},
       {"source", sender},
       {"source_jetton_wallet", sender_wallet},
       {"destination", dex_incoming_wallet},
       {"destination_jetton_wallet", dex_incoming_jetton_wallet}});
   Value dex_outgoing_transfer = Value::make_dict(Value::Fields{
-      {"asset", *out_asset_f},
-      {"amount", *out_amount_f},
+      {"asset", last_out_asset},
+      {"amount", last_out_amount},
       {"source", dex_outgoing_wallet},
       {"source_jetton_wallet", dex_outgoing_jetton_wallet},
       {"destination", receiver},
@@ -372,16 +371,14 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
 // builders/dedust.py _dedust_swap_failed: any SwapExternal/SwapPeer in the
 // consumed set lacking an in-include SwapNotification child.
 EvalResult dedust_swap_failed(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1 || args[0].t != VType::List) {
+  if (args[0].t != VType::List) {
     return rt_fault("dedust_swap_failed: bad arguments");
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) {
-      consumed.push_back(b);
-    }
+  auto decoded = decode_consumed_or_none(args);
+  if (!decoded) {
+    return rt_ok(Value::make_bool(false));
   }
+  const std::vector<const Block *> &consumed = decoded->blocks;
   std::unordered_set<const Block *> include(consumed.begin(), consumed.end());
   for (const Block *b : consumed) {
     if (!(is_call_op(b, kDedustSwapExternal) || is_call_op(b, kDedustSwapPeer))) {
@@ -517,9 +514,6 @@ td::Result<td::Ref<vm::Cell>> dv2_payload_cell(const Value &arg) {
 // chain is walked to its last step (same 16-step cap as the reference). A
 // payload that parses but whose chain does not yields min_out=null.
 EvalResult dedust_v2_swap_payload(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("dedust_v2_swap_payload: bad arguments");
-  }
   if (args[0].is_null()) {
     return rt_ok(Value::null());
   }
@@ -567,9 +561,6 @@ EvalResult dedust_v2_swap_payload(BuildEnv &, const std::vector<Value> &args) {
 // and fund rewards alike), which on the spec side drives both target amounts to
 // null, the reference's `payload is None` arm.
 EvalResult dedust_v2_deposit_payload(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("dedust_v2_deposit_payload: bad arguments");
-  }
   if (args[0].is_null()) {
     return rt_ok(Value::null());
   }

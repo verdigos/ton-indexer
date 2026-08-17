@@ -11,6 +11,7 @@
 
 #include "host/BlockViews.h"
 #include "host/DexRecords.h"
+#include "host/HostAdapter.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -130,19 +131,11 @@ td::Result<PoolDeposit> parse_pool_deposit(const td::Ref<vm::Cell> &body) {
 // blocks/liquidity.py build_dedust_deposit_liquidity_core, wired to
 // _dedust_deposit_final_data's structural role derivation.
 EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
+  auto decoded = decode_consumed_or_none(args);
+  if (!decoded) {
     return rt_ok(Value::null());
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) {
-      consumed.push_back(b);
-    }
-  }
-  if (consumed.empty()) {
-    return rt_ok(Value::null());
-  }
+  std::vector<const Block *> consumed = std::move(decoded->blocks);
   const Block *block = consumed.front();
 
   // anchor <- topup <- ask <- deposit leg (None on any missing link ==
@@ -300,8 +293,8 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     }
     // filter: message.source.upper() == sender.as_str()
     Value jsrc = account_from_opt(jm->source);
-    if (!(sender.t == VType::Account && jsrc.t == VType::Account && !sender.addr_none &&
-          !jsrc.addr_none && jsrc.str == sender.str)) {
+    if (sender.t != VType::Account || sender.addr_none || jsrc.t != VType::Account ||
+        jsrc.addr_none || !same_account(jsrc, sender)) {
       continue;
     }
     if (!jm->destination) {
@@ -333,16 +326,15 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     }
     Value dst = account_from_opt(tm->destination);
     if (dst.t == VType::Account && !dst.addr_none && sender.t == VType::Account &&
-        !sender.addr_none && dst.str == sender.str) {
-      Value amt = tm->value ? Value::make_amount(td::make_refint(*tm->value))
-                            : Value::make_amount_none();
+        !sender.addr_none && same_account(dst, sender)) {
+      Value amt = msg_value_amount(tm);
       excesses.push_back(excess_pair(Value::make_asset_ton(), std::move(amt)));
     }
   }
   for (const Block *je : jetton_excesses) {
     Value recv = data_field(je, "receiver");
     if (recv.t == VType::Account && !recv.addr_none && sender.t == VType::Account &&
-        !sender.addr_none && recv.str == sender.str) {
+        !sender.addr_none && same_account(recv, sender)) {
       excesses.push_back(excess_pair(data_field(je, "asset"), data_field(je, "amount")));
     }
   }
@@ -370,19 +362,11 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
 
 // blocks/liquidity.py build_dedust_deposit_partial_core.
 EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
+  auto decoded = decode_consumed_or_none(args);
+  if (!decoded) {
     return rt_ok(Value::null());
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) {
-      consumed.push_back(b);
-    }
-  }
-  if (consumed.empty()) {
-    return rt_ok(Value::null());
-  }
+  std::vector<const Block *> consumed = std::move(decoded->blocks);
   const Block *block = consumed.front();  // topup anchor
 
   const Block *p1 = block->previous_block;

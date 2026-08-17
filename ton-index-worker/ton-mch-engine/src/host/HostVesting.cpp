@@ -46,9 +46,6 @@ std::string out_body_hash(const Message &m) {
 // null, Python's MessageAny fallback) the match falls back to the TON value.
 // Args: (request block, its parsed VestingSendMessage body).
 EvalResult vesting_message_was_sent(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 2) {
-    return rt_fault("vesting_message_was_sent: bad arguments");
-  }
   const Block *send = as_block(args[0]);
   const Value &body = args[1];
   if (send == nullptr || (body.t != VType::Obj && body.t != VType::Dict)) {
@@ -70,13 +67,8 @@ EvalResult vesting_message_was_sent(BuildEnv &, const std::vector<Value> &args) 
     if (m->direction != "out" || !m->destination) {
       continue;
     }
-    // AccountId(dest) == AccountId(requested): canonical-string equality, with
-    // addr_none equal only to addr_none (Python compares as_str(), None==None).
     Value dest = account_from_opt(m->destination);
-    if (dest.addr_none != want_dest->addr_none) {
-      continue;
-    }
-    if (!dest.addr_none && dest.str != want_dest->str) {
+    if (!same_account(dest, *want_dest)) {
       continue;
     }
     if (!have_hash) {

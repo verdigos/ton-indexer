@@ -267,9 +267,6 @@ EvalResult get_nft_data(BuildEnv &env, const Value &nft_address) {
 // 13-key namespace, or Null to reject (unknown NFT item). Marketplace/price/
 // real_prev_owner are null on a plain transfer (out{} `?:` omits them).
 EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 2) {
-    return rt_fault("nft_transfer_data: bad arguments");
-  }
   const Block *transfer = as_block(args[0]);
   const Block *assigned = as_block(args[1]);
   if (transfer == nullptr) {
@@ -424,9 +421,6 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
 // payout_1, payout_2) -> the fixed 16-key namespace, or Null to reject (unknown
 // NFT item). Royalty pair present only for 2-payout traces (out{} `?:`).
 EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 4) {
-    return rt_fault("telegram_nft_purchase_data: bad arguments");
-  }
   const Block *assigned = as_block(args[0]);
   const Block *payment = as_block(args[1]);
   const Block *payout_1 = as_block(args[2]);
@@ -558,9 +552,6 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
 // this NEVER faults: the reference `_is_teleitem` returns False for a None content
 // instead of raising, and it is the only caller of this fn.
 EvalResult is_teleitem(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("is_teleitem: bad arguments");
-  }
   const Value *content = args[0].is_null() ? nullptr : args[0].field("content");
   if (content == nullptr || content->t != VType::Dict) {
     return rt_ok(Value::make_bool(false));

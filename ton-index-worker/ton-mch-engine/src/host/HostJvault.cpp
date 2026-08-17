@@ -20,9 +20,6 @@ namespace mch {
 // stake period. None -> null (an absent forward_payload). A malformed payload
 // raises in Python -> EvalError -> match rejection; here rt_fault does the same.
 EvalResult jvault_stake_period(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("jvault_stake_period: bad arguments");
-  }
   if (args[0].is_null()) {
     return rt_ok(Value::null());
   }

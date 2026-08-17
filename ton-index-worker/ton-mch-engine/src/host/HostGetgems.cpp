@@ -87,9 +87,6 @@ bool getgems_seller_payout(const Block *block) {
 // NftPurchaseData core, returned as the 18-field namespace, or Null to reject
 // (missing real_prev_owner / seller payout not found).
 EvalResult getgems_nft_purchase_data(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("getgems_nft_purchase_data: bad arguments");
-  }
   const Block *nft = as_block(args[0]);
   if (nft == nullptr || nft->data.is_null()) {
     return rt_ok(Value::null());

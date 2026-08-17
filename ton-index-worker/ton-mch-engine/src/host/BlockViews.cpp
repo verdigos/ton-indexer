@@ -10,26 +10,30 @@
 
 namespace mch {
 
+namespace {
+
+template <typename BlockPtr>
+const Block *first_call_impl(const std::vector<BlockPtr> &blocks, std::uint32_t op) {
+  for (const Block *b : blocks) {
+    if (is_call_op(b, op)) {
+      return b;
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
 bool block_in(const std::vector<const Block *> &v, const Block *b) {
   return std::find(v.begin(), v.end(), b) != v.end();
 }
 
 const Block *first_call(const std::vector<const Block *> &blocks, std::uint32_t op) {
-  for (const Block *b : blocks) {
-    if (is_call_op(b, op)) {
-      return b;
-    }
-  }
-  return nullptr;
+  return first_call_impl(blocks, op);
 }
 
 const Block *first_call(const std::vector<Block *> &blocks, std::uint32_t op) {
-  for (const Block *b : blocks) {
-    if (is_call_op(b, op)) {
-      return b;
-    }
-  }
-  return nullptr;
+  return first_call_impl(blocks, op);
 }
 
 std::vector<const Block *> all_calls(const std::vector<const Block *> &blocks, std::uint32_t op) {

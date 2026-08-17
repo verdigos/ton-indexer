@@ -2,6 +2,7 @@
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
+#include "MsgParse.h"
 #include "TraceLoader.h"
 #include "btypes_gen.h"
 
@@ -53,10 +54,29 @@ Value to_amount(const Value &v) {
                                                      : Value::make_amount_none();
 }
 
+Value msg_value_amount(const Message *m) {
+  return m != nullptr && m->value ? Value::make_amount(td::make_refint(*m->value))
+                                  : Value::make_amount_none();
+}
+
+td::RefInt256 or_zero(td::RefInt256 v) {
+  return v.is_null() ? td::make_refint(0) : std::move(v);
+}
+
 // Amount(x or 0): coins are never None, and `0 or 0 == 0`, so this is just
 // Amount(x), but keep the null-guard for parse-failure paths that reach here.
 Value amount_or_zero(td::RefInt256 v) {
-  return v.is_null() ? Value::make_amount(td::make_refint(0)) : Value::make_amount(std::move(v));
+  return Value::make_amount(or_zero(std::move(v)));
+}
+
+td::Result<td::RefInt256> pton_ton_amount(const Block *pton) {
+  TRY_RESULT(body, block_body(pton));
+  TRY_RESULT(parsed, parse_message_body("PTonTransfer", body));
+  const Value *amount = parsed.field("ton_amount");
+  if (amount == nullptr || (amount->t != VType::Int && amount->t != VType::Amount)) {
+    return td::Status::Error("PTonTransfer has no ton_amount");
+  }
+  return amount->num;
 }
 
 // Copy a field out of a Block's data Dict (Null when absent).

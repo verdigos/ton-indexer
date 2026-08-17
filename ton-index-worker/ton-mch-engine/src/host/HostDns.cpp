@@ -14,9 +14,6 @@
 namespace mch {
 
 EvalResult dns_purchase_buyer(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("dns_purchase_buyer: bad arguments");
-  }
   const Block *anchor = as_block(args[0]);
   if (anchor == nullptr) {
     return rt_ok(Value::null());

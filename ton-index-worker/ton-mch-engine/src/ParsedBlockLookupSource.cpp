@@ -4,6 +4,7 @@
 
 #include "convert-utils.h"  // convert::to_raw_address(block::StdAddress)
 
+#include <map>
 #include <variant>
 
 namespace mch {
@@ -67,8 +68,30 @@ Value dedust_asset(const std::optional<block::StdAddress> &a) {
 
 Value ParsedBlockLookupSource::iface_value(const std::string &kind,
                                            const schema::BlockchainInterfaceV2 &iface) {
-  {
-    if (kind == "jetton_wallet") {
+  enum class Handler {
+    JettonWallet,
+    NftItem,
+    NftSale,
+    NftAuction,
+    DedustPool,
+    NominatorPool,
+    MultisigOrder,
+  };
+  static const std::map<std::string, Handler> handlers = {
+      {"jetton_wallet", Handler::JettonWallet},
+      {"nft_item", Handler::NftItem},
+      {"nft_sale", Handler::NftSale},
+      {"nft_auction", Handler::NftAuction},
+      {"dedust_pool", Handler::DedustPool},
+      {"nominator_pool", Handler::NominatorPool},
+      {"multisig_order", Handler::MultisigOrder},
+  };
+  auto handler = handlers.find(kind);
+  if (handler == handlers.end()) {
+    return Value::null();
+  }
+  switch (handler->second) {
+    case Handler::JettonWallet:
       if (const auto *jw = std::get_if<schema::JettonWalletDataV2>(&iface)) {
         // FixtureLookupSource shape: Obj{balance, address, owner, jetton}.
         Value::Fields f;
@@ -79,7 +102,8 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         f.emplace_back("jetton", addr_str(jw->jetton));
         return Value::make_obj(std::move(f));
       }
-    } else if (kind == "nft_item") {
+      break;
+    case Handler::NftItem:
       if (const auto *nft = std::get_if<schema::NFTItemDataV2>(&iface)) {
         // Obj{address, init, index, collection_address, owner_address, content,
         // code_hash}.
@@ -94,7 +118,8 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         f.emplace_back("code_hash", code_hash_str(nft->code_hash));
         return Value::make_obj(std::move(f));
       }
-    } else if (kind == "nft_sale") {
+      break;
+    case Handler::NftSale:
       // Two GetGems sale variants share the fields the nft host fns read
       // (marketplace_address / nft_address / full_price / nft_owner_address /
       // code_hash).
@@ -118,7 +143,8 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         f.emplace_back("code_hash", code_hash_str(s->code_hash));
         return Value::make_obj(std::move(f));
       }
-    } else if (kind == "nft_auction") {
+      break;
+    case Handler::NftAuction:
       if (const auto *a = std::get_if<schema::GetGemsNftAuctionData>(&iface)) {
         // Obj{mp_addr, nft_addr, last_bid, nft_owner, code_hash}.
         Value::Fields f;
@@ -130,7 +156,8 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         f.emplace_back("code_hash", code_hash_str(a->code_hash));
         return Value::make_obj(std::move(f));
       }
-    } else if (kind == "dedust_pool") {
+      break;
+    case Handler::DedustPool:
       if (const auto *p = std::get_if<schema::DedustPoolData>(&iface)) {
         // Obj{assets: [ {is_ton, address}, ... ]}, HostDedust reads is_ton +
         // address per element; a nullopt asset slot is the TON side.
@@ -141,7 +168,8 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         f.emplace_back("assets", Value::make_list(std::move(assets)));
         return Value::make_obj(std::move(f));
       }
-    } else if (kind == "nominator_pool") {
+      break;
+    case Handler::NominatorPool:
       if (const auto *p = std::get_if<schema::NominatorPoolData>(&iface)) {
         // Obj{address}. The whole semantics is set membership: the one spec
         // that reads this lookup rejects on null and never touches a field
@@ -151,7 +179,8 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         f.emplace_back("address", addr_str(p->address));
         return Value::make_obj(std::move(f));
       }
-    } else if (kind == "multisig_order") {
+      break;
+    case Handler::MultisigOrder:
       if (const auto *p = std::get_if<schema::MultisigOrderData>(&iface)) {
         std::vector<Value> signers;
         for (const auto &s : p->signers) {
@@ -161,7 +190,7 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         f.emplace_back("signers", Value::make_list(std::move(signers)));
         return Value::make_obj(std::move(f));
       }
-    }
+      break;
   }
   return Value::null();  // no matching variant for this kind
 }

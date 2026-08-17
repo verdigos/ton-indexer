@@ -8,54 +8,54 @@
 
 namespace mch {
 
-const std::map<std::string, HostFn> &host_fns() {
-  static const std::map<std::string, HostFn> fns = {
-      {"dedust_swap_legs", dedust_swap_legs},
-      {"dedust_swap_failed", dedust_swap_failed},
-      {"dedust_v2_swap_payload", dedust_v2_swap_payload},
-      {"dedust_v2_deposit_payload", dedust_v2_deposit_payload},
-      {"layerzero_dst_oapp_matches", layerzero_dst_oapp_matches},
-      {"tonstakers_minted_nft", tonstakers_minted_nft},
-      {"tonstakers_pool_addr", tonstakers_pool_addr},
-      {"dns_purchase_buyer", dns_purchase_buyer},
-      {"vesting_message_was_sent", vesting_message_was_sent},
-      {"jvault_stake_period", jvault_stake_period},
-      {"nominator_withdraw_payout_amount", nominator_withdraw_payout_amount},
-      {"nft_transfer_data", nft_transfer_data},
-      {"getgems_nft_purchase_data", getgems_nft_purchase_data},
-      {"telegram_nft_purchase_data", telegram_nft_purchase_data},
-      {"is_teleitem", is_teleitem},
-      {"tgbtc_mint_data", tgbtc_mint_data},
-      {"tgbtc_mint_log", tgbtc_mint_log},
-      {"tgbtc_burn_log", tgbtc_burn_log},
-      {"tgbtc_new_key_log", tgbtc_new_key_log},
-      {"tgbtc_dkg_completed_log", tgbtc_dkg_completed_log},
-      {"coffee_swap_data", coffee_swap_data},
-      {"stonfi_v1_swap_data", stonfi_v1_swap_data},
-      {"dedust_deposit_final_data", dedust_deposit_final_data},
-      {"dedust_deposit_partial_data", dedust_deposit_partial_data},
-      {"tonco_deposit_liquidity_data", tonco_deposit_liquidity_data},
-      {"tonco_withdraw_payouts", tonco_withdraw_payouts},
-      {"evaa_supply_data", evaa_supply_data},
-      {"evaa_liquidate_data", evaa_liquidate_data},
-      {"tonco_swap_data", tonco_swap_data},
+const std::map<std::string, HostFnEntry> &host_fns() {
+  static const std::map<std::string, HostFnEntry> fns = {
+      {"dedust_swap_legs", {dedust_swap_legs, 3}},
+      {"dedust_swap_failed", {dedust_swap_failed, 1}},
+      {"dedust_v2_swap_payload", {dedust_v2_swap_payload, 1}},
+      {"dedust_v2_deposit_payload", {dedust_v2_deposit_payload, 1}},
+      {"layerzero_dst_oapp_matches", {layerzero_dst_oapp_matches, 2}},
+      {"tonstakers_minted_nft", {tonstakers_minted_nft, 1}},
+      {"tonstakers_pool_addr", {tonstakers_pool_addr, 1}},
+      {"dns_purchase_buyer", {dns_purchase_buyer, 1}},
+      {"vesting_message_was_sent", {vesting_message_was_sent, 2}},
+      {"jvault_stake_period", {jvault_stake_period, 1}},
+      {"nominator_withdraw_payout_amount", {nominator_withdraw_payout_amount, 1}},
+      {"nft_transfer_data", {nft_transfer_data, 2}},
+      {"getgems_nft_purchase_data", {getgems_nft_purchase_data, 1}},
+      {"telegram_nft_purchase_data", {telegram_nft_purchase_data, 4}},
+      {"is_teleitem", {is_teleitem, 1}},
+      {"tgbtc_mint_data", {tgbtc_mint_data, 1}},
+      {"tgbtc_mint_log", {tgbtc_mint_log, 1}},
+      {"tgbtc_burn_log", {tgbtc_burn_log, 1}},
+      {"tgbtc_new_key_log", {tgbtc_new_key_log, 1}},
+      {"tgbtc_dkg_completed_log", {tgbtc_dkg_completed_log, 1}},
+      {"coffee_swap_data", {coffee_swap_data, 1}},
+      {"stonfi_v1_swap_data", {stonfi_v1_swap_data, 2}},
+      {"dedust_deposit_final_data", {dedust_deposit_final_data, 1}},
+      {"dedust_deposit_partial_data", {dedust_deposit_partial_data, 1}},
+      {"tonco_deposit_liquidity_data", {tonco_deposit_liquidity_data, 1}},
+      {"tonco_withdraw_payouts", {tonco_withdraw_payouts, 1}},
+      {"evaa_supply_data", {evaa_supply_data, 1}},
+      {"evaa_liquidate_data", {evaa_liquidate_data, 1}},
+      {"tonco_swap_data", {tonco_swap_data, 1}},
       // stonfi_v2_swap_data reads the in-leg by block type
       // (swaps.py:404) instead of the hash-seed-dependent
       // in_transfer.event_nodes[0].message, so it is deterministic and matches
       // this block-type-driven implementation.
-      {"stonfi_v2_swap_data", stonfi_v2_swap_data},
+      {"stonfi_v2_swap_data", {stonfi_v2_swap_data, 1}},
       // specs/nft_sale.mch, GetGems StateInit readers, the chained-lookup bid
       // builder, and the cancel/finish switch discriminator.
-      {"getgems_sale_init", getgems_sale_init},
-      {"getgems_auction_init", getgems_auction_init},
-      {"auction_bid_data", auction_bid_data},
-      {"nft_trade_is_finish", nft_trade_is_finish},
-      {"nft_trade_returned", nft_trade_returned},
-      {"auction_outbid_data", auction_outbid_data},
+      {"getgems_sale_init", {getgems_sale_init, 2}},
+      {"getgems_auction_init", {getgems_auction_init, 2}},
+      {"auction_bid_data", {auction_bid_data, 1}},
+      {"nft_trade_is_finish", {nft_trade_is_finish, 1}},
+      {"nft_trade_returned", {nft_trade_returned, 2}},
+      {"auction_outbid_data", {auction_outbid_data, 1}},
       // specs/cocoon.mch, the expectedMyAddress string renderer (shared by
       // three matchers) and the nested withdraw-payload coins read.
-      {"cocoon_expected_address", cocoon_expected_address},
-      {"cocoon_withdraw_amount", cocoon_withdraw_amount},
+      {"cocoon_expected_address", {cocoon_expected_address, 1}},
+      {"cocoon_withdraw_amount", {cocoon_withdraw_amount, 1}},
   };
   return fns;
 }
@@ -72,7 +72,13 @@ EvalResult rt_call_hostfn(BuildEnv &env, const std::string &name,
   ctx.fn = &name;
   ctx.anchor = env.anchor;
   RejectScope scope(ctx);
-  EvalResult r = it->second(env, args);
+  if (it->second.arity >= 0 &&
+      args.size() != static_cast<std::size_t>(it->second.arity)) {
+    EvalResult r = rt_fault(name + ": bad arguments");
+    reject_log(r.message);
+    return r;
+  }
+  EvalResult r = it->second.fn(env, args);
   if (r.faulted) {
     reject_log(r.message);
   }

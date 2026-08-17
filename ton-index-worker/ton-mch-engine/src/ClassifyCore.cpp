@@ -21,10 +21,37 @@
 
 namespace mch {
 
+std::vector<Block *> gather_blocks(Block *root) {
+  std::vector<Block *> out;
+  std::unordered_set<Block *> seen;
+  std::deque<Block *> queue{root};
+  while (!queue.empty()) {
+    Block *cur = queue.front();
+    queue.pop_front();
+    if (!seen.insert(cur).second) {
+      continue;
+    }
+    out.push_back(cur);
+    std::vector<Block *> next = cur->next_blocks;
+    std::stable_sort(next.begin(), next.end(),
+                     [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
+    for (Block *block : next) {
+      queue.push_back(block);
+    }
+  }
+  return out;
+}
+
 namespace {
 
 constexpr std::uint32_t kExcessOpcode = 0xD53276DB;
 constexpr std::uint32_t kBounceOpcode = 0xFFFFFFFF;
+
+Block *wrap_root(BlockArena &arena, Block *root) {
+  Block *wrapper = arena.make(mch::btype::kRoot);
+  wrapper->connect(root);
+  return wrapper;
+}
 
 // The flat spine list in canonical BFS order: `root` plus everything reachable
 // through next_blocks. Every consumer of "the spine" (prefilter inventory,
@@ -526,8 +553,7 @@ std::vector<ActionRow> basic_classify_fallback(TraceContext &ctx) {
   std::vector<ActionRow> out;
   try {
     Block *root = init_block(ctx.arena, ctx.tree.root);
-    Block *wrap = ctx.arena.make(mch::btype::kRoot);
-    wrap->connect(root);
+    Block *wrap = wrap_root(ctx.arena, root);
     std::vector<Block *> spine = collect_spine(wrap);
     std::set<Block *> removed;
     post_process_dedust_liquidity(spine, removed);
@@ -559,8 +585,7 @@ std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource
       return out;
     }
     Block *b = init_block(ctx.arena, root_node);
-    Block *wrapper = ctx.arena.make(mch::btype::kRoot);
-    wrapper->connect(b);
+    Block *wrapper = wrap_root(ctx.arena, b);
     // matchers_for_failed_externals over the same BFS the main loop uses
     // (next_blocks read AFTER the build, parent-is-None guard).
     std::deque<Block *> queue{wrapper};
@@ -661,8 +686,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
   RejectScope reject_scope(rctx);
 
   // Synthetic root wrapper (process_event_async: Block('root').connect(...)).
-  Block *wrapper = ctx.arena.make(mch::btype::kRoot);
-  wrapper->connect(ctx.root);
+  Block *wrapper = wrap_root(ctx.arena, ctx.root);
 
   // B1 anchor prefilter inventory: the opcodes + btypes present on the spine
   // (blocks reachable via next_blocks, the outer BFS's anchor candidates). A

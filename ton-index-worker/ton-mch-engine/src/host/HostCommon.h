@@ -35,9 +35,18 @@ const Message *block_msg(const Block *b);
 // Amount(x): a numeric-carrying Value (Int/Amount) -> Amount with that value.
 Value to_amount(const Value &v);
 
+// Amount(msg.value), or Amount(None) for a null message or missing value.
+Value msg_value_amount(const Message *m);
+
+// Null RefInt256 values coalesce to zero for callers that continue computing.
+td::RefInt256 or_zero(td::RefInt256 v);
+
 // Amount(x or 0): coins are never None, and `0 or 0 == 0`, so this is just
 // Amount(x), but keep the null-guard for parse-failure paths that reach here.
 Value amount_or_zero(td::RefInt256 v);
+
+// Parse a pTON body as PTonTransfer and return its ton_amount field.
+td::Result<td::RefInt256> pton_ton_amount(const Block *pton);
 
 // Copy a field out of a Block's data Dict (Null when absent).
 Value data_field(const Block *b, const char *name);

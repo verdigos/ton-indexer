@@ -83,9 +83,6 @@ Value extern_address_object(const Value &v) {
 //   Address         -> to_str(False).upper()   == the canonical "wc:HEX"
 //   otherwise (addr_none, i.e. a pytoniq None) -> left as None
 EvalResult cocoon_expected_address(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("cocoon_expected_address: bad arguments");
-  }
   const Value &v = args[0];
   if (v.t == VType::Account) {
     return rt_ok(v.addr_none ? Value::null() : Value::make_str(v.str));
@@ -106,9 +103,6 @@ EvalResult cocoon_expected_address(BuildEnv &, const std::vector<Value> &args) {
 // including BOTH opcode asserts the two Python classes carry, every failure
 // path returns null, and the spec's `?? 0` supplies reference's fallback.
 EvalResult cocoon_withdraw_amount(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("cocoon_withdraw_amount: bad arguments");
-  }
   const Block *req = as_block(args[0]);
   if (req == nullptr) {
     return rt_ok(Value::null());
