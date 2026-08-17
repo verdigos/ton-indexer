@@ -40,8 +40,7 @@ int run_dump(const std::vector<std::string> &paths,
 // `--actions` serialized-action-row dump. Uses the same collect-to-final-pass
 // pipeline as run_classify; each surviving post-pass produced block is rendered
 // as an Action row, with one block_tree_serializer.py _fill_* port per supported
-// serialized btype. Python twin:
-// twins/py_actions.py. Dump line:
+// serialized btype. Gate: goldens/actions.golden byte-compares this dump. Dump line:
 //   ACTION anchor=<key> {id=..,type=..,<directional>,<composite maps>..}
 // Value rendering per fixtures/Render.h render_value (sorted keys). Rows are built
 // lib-side by ActionBuild.cpp. See its header block for what is and is not
