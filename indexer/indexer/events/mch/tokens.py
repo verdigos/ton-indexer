@@ -26,6 +26,7 @@ class TokenKind(Enum):
     KW_ANY = "any"
     # modifier / directive keywords
     KW_MAYBE = "maybe"
+    KW_PEEK = "peek"
     KW_WHERE = "where"
     KW_PRODUCES = "produces"
     KW_SWITCH = "switch"

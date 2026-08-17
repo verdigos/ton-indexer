@@ -102,7 +102,7 @@ def _collect_predicate_names(p: ast_.PatternExpr, out: set[str]) -> None:
             out.add(p.where_predicate)
         if isinstance(p.head, ast_.PredHead):
             out.add(p.head.name)
-    elif isinstance(p, ast_.Maybe):
+    elif isinstance(p, (ast_.Maybe, ast_.Peek)):
         _collect_predicate_names(p.inner, out)
     elif isinstance(p, ast_.Sequence):
         _collect_predicate_names(p.head, out)
@@ -210,6 +210,8 @@ def _emit_node(n: LNode, nodes: list[dict], memo: dict[int, int]) -> int:
 
     if n.optional:
         rec["optional"] = True
+    if n.peek:
+        rec["peek"] = True
     if n.capture is not None:
         rec["capture"] = n.capture
     if n.where is not None:

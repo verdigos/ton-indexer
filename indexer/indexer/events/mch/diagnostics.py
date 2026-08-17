@@ -77,8 +77,12 @@ shaper registry."""
 C012_CYCLIC_RULE_SHAPE = "C012_CYCLIC_RULE_SHAPE"
 """A `rule NAME cyclic = …` body violates the cyclic-descent shape rules:
 captures inside the body, a self-reference that is
-not the last atom of its chain, a `maybe`-wrapped self-reference, or a
+not the last atom of its chain, a `maybe`- or `peek`-wrapped self-reference, or a
 reference to another recursive rule."""
+
+C014_PEEK_SUBTREE_CONSUMES = "C014_PEEK_SUBTREE_CONSUMES"
+"""A `peek` node reaches another pattern node that is not itself `peek`, so
+the subtree would still consume blocks or absorb auxiliary siblings."""
 
 
 @dataclass(frozen=True)

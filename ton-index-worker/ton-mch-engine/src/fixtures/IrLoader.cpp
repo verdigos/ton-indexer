@@ -290,6 +290,11 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     std::string cap = jstr(nrec, "capture");
     cn.slot = (!cap.empty() && slot_of.count(cap)) ? slot_of[cap] : -1;
     cn.optional = jbool(nrec, "optional");
+    if (const Json *peek = jfield(nrec, "peek");
+        peek != nullptr && peek->type() != JType::Boolean) {
+      return td::Status::Error("matcher " + m.name + ": node 'peek' must be a bool");
+    }
+    cn.peek = jbool(nrec, "peek");
     cn.child = has(nrec, "child") ? rm(static_cast<int>(jint(nrec, "child"))) : -1;
     if (const Json *ch = jfield(nrec, "children"); ch != nullptr && ch->type() == JType::Array) {
       for (const auto &c : ch->get_array()) {
@@ -424,6 +429,28 @@ td::Status validate_btype_references(const std::vector<CompiledMatcher> &matcher
   return td::Status::OK();
 }
 
+td::Status validate_peek_invariants(const std::vector<CompiledMatcher> &matchers) {
+  for (const CompiledMatcher &matcher : matchers) {
+    if (!matcher.nodes.empty() && matcher.nodes[0].peek) {
+      return td::Status::Error("matcher " + matcher.name +
+                               ": root node cannot be peek (the entry is always consumed)");
+    }
+    for (int nid = 0; nid < static_cast<int>(matcher.nodes.size()); nid++) {
+      if (!matcher.nodes[nid].peek) {
+        continue;
+      }
+      for (int reached : reachable(matcher.nodes, nid)) {
+        if (!matcher.nodes[reached].peek) {
+          return td::Status::Error(
+              "matcher " + matcher.name +
+              ": a peek subtree contains a consuming node; every reachable node must also be peek");
+        }
+      }
+    }
+  }
+  return td::Status::OK();
+}
+
 }  // namespace
 
 td::Result<LoadedIr> load_ir(const std::string &path) {
@@ -480,6 +507,7 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
     TRY_STATUS(build_matcher(rec, pool, m));
     compiled.push_back(std::move(m));
   }
+  TRY_STATUS(validate_peek_invariants(compiled));
   TRY_STATUS(validate_btype_references(compiled));
 
   // registration_order (default: identity), then stable-sort by priority.

@@ -405,7 +405,9 @@ def _parse_sequence(s: _ParserState) -> ast_.PatternExpr:
 
 
 def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
-    """atom := node | '(' pattern_expr ')' | rule_ref | children_block | 'maybe' atom"""
+    """atom := node | '(' pattern_expr ')' | rule_ref | children_block
+               | ('maybe' | 'peek') atom
+    """
     t = s.peek()
 
     if t.kind is TokenKind.KW_MAYBE:
@@ -413,6 +415,12 @@ def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
         s.skip_newlines()
         inner = _parse_atom(s)
         return ast_.Maybe(inner=inner, span=_join(t.span, inner.span))
+
+    if t.kind is TokenKind.KW_PEEK:
+        s.i += 1
+        s.skip_newlines()
+        inner = _parse_atom(s)
+        return ast_.Peek(inner=inner, span=_join(t.span, inner.span))
 
     if t.kind is TokenKind.LPAREN:
         s.i += 1

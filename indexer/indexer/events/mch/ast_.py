@@ -217,6 +217,12 @@ class Maybe(PatternExpr):
 
 
 @dataclass(frozen=True)
+class Peek(PatternExpr):
+    inner: PatternExpr
+    span: Span
+
+
+@dataclass(frozen=True)
 class Sequence(PatternExpr):
     """One-or-more atoms connected by edges.
 

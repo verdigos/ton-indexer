@@ -37,6 +37,7 @@ struct CompiledNode {
   bool has_where_expr{false};  // inline `where (expr)`: the generated fn keyed by global_id
   int slot{-1};
   bool optional{false};
+  bool peek{false};
   int child{-1};
   std::vector<int> children;
   int parent{-1};

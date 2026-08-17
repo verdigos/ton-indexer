@@ -73,7 +73,9 @@ class MatchState {
     if (!test_head(nid, block)) {
       return false;
     }
-    consume(block);
+    if (!node.peek) {
+      consume(block);
+    }
     if (node.slot >= 0) {
       bind(node.slot, block);
     }
@@ -86,7 +88,7 @@ class MatchState {
     if (!match_parent_edge(node, block)) {
       return false;
     }
-    if (absorb) {
+    if (absorb && !node.peek) {
       absorb_aux(block);
     }
     return true;
