@@ -1,5 +1,5 @@
-// Nominator host predicate (builders/nominator.py). See host/HostImpls.h for
-// the internal registry surface and HostRegistry.h for the public one.
+// Nominator host helpers (builders/nominator.py). See host/HostImpls.h for the
+// internal registry surface and HostRegistry.h for the public one.
 #include "host/HostImpls.h"
 
 #include "host/HostCommon.h"
@@ -11,13 +11,10 @@
 #include "common/refint.h"
 
 #include <algorithm>
-#include <cstdint>
 
 namespace mch {
 
 namespace {
-
-constexpr std::uint32_t kProcessWithdrawRequestsOpcode = 0x00000002;
 
 // Shared arity classifier for both the amount fn and payout-absorb shaper.
 // Reference consumes every payout only for arity 1 or 2; 0 and >=3 consume none.
@@ -40,16 +37,6 @@ std::vector<Block *> classified_withdraw_payouts(const Block *request) {
 }
 
 }  // namespace
-
-// builders/nominator.py nominator_pool_withdraw_parent: the payout's
-// previous_block is the pool's ProcessWithdrawRequests call (opcode 0x2).
-// isinstance(parent, CallContractBlock) == btype "call_contract" (composed
-// blocks never carry that btype).
-bool nominator_pool_withdraw_parent(const Block *b) {
-  const Block *p = b->previous_block;
-  return p != nullptr && p->btype == mch::btype::kCallContract && p->opcode &&
-         *p->opcode == kProcessWithdrawRequestsOpcode;
-}
 
 // builders/nominator.py nominator_withdraw_payout_amount: two payouts use the
 // canonical first child; one is immediate only when it exceeds the request.

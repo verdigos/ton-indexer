@@ -379,14 +379,8 @@ bool auction_bid_candidate(const Block *b) {
          !is_cancel_comment(b);
 }
 
-// One outbid leg of a produced auction_bid, per AuctionOutbidMatcher's two
-// branches. The parent link is what carries the auction address, exactly like
-// nominator_pool_withdraw_parent reads `.previous_block`.
-bool auction_outbid_leg(const Block *b) {
-  if (b == nullptr) {
-    return false;
-  }
-  const Block *bid = b->previous_block;
+// The peeked auction_bid must have exactly one qualifying outbid child.
+bool auction_outbid_leg(const Block *bid) {
   if (bid == nullptr || bid->btype != mch::btype::kAuctionBid) {
     return false;
   }
@@ -395,107 +389,28 @@ bool auction_outbid_leg(const Block *b) {
   if (auction == nullptr || kind == nullptr || kind->t != VType::Str) {
     return false;
   }
-  Value src = data_field(b, "source");
-  if (!same_account(src, *auction)) {
-    return false;
+  int n = 0;
+  for (const Block *leg : bid->next_blocks) {
+    if (leg == nullptr || leg->previous_block != bid ||
+        !same_account(data_field(leg, "source"), *auction)) {
+      continue;
+    }
+    bool qualifies = false;
+    if (leg->btype == mch::btype::kTonTransfer) {
+      qualifies = kind->str == "getgems" &&
+                  block_comment(leg).find("Your bid has been outbid by another user") !=
+                      std::string::npos;
+    } else {
+      qualifies = kind->str == "fragment" && is_call_op(leg, 0x557CEA20);
+    }
+    if (qualifies && ++n > 1) {
+      return false;
+    }
   }
-  if (b->btype == mch::btype::kTonTransfer) {
-    return kind->str == "getgems" &&
-           block_comment(b).find("Your bid has been outbid by another user") != std::string::npos;
-  }
-  return kind->str == "fragment" && is_call_op(b, 0x557CEA20);
+  return n == 1;
 }
 
 // Registered functions
-
-// Find the NFT returned by cancel or finish without consuming it. A pattern edge
-// would consume the child and turn its top-level action into a child row. The
-// first matching next block wins; no match returns Null.
-EvalResult nft_trade_returned(BuildEnv &env, const std::vector<Value> &args) {
-  (void)env;
-  if (args[1].t != VType::Str) {
-    return rt_fault("nft_trade_returned: bad arguments");
-  }
-  const Block *anchor = as_block(args[0]);
-  if (anchor == nullptr) {
-    return rt_ok(Value::null());
-  }
-  const std::string &want = args[1].str;
-  for (const Block *n : anchor->next_blocks) {
-    if (n == nullptr || n->btype != want) {
-      continue;
-    }
-    Value nft_address, nft_collection;
-    if (want == "nft_transfer") {
-      // data.nft = {address, index, collection: {address} | null}
-      const Value *nft = n->data.field("nft");
-      if (nft == nullptr) {
-        continue;
-      }
-      const Value *addr = nft->field("address");
-      nft_address = addr != nullptr ? *addr : Value::null();
-      const Value *col = nft->field("collection");
-      // A null collection remains null instead of being indexed.
-      if (col != nullptr && !col->is_null()) {
-        const Value *ca = col->field("address");
-        nft_collection = ca != nullptr ? *ca : Value::null();
-      }
-    } else {
-      const Value *addr = n->data.field("nft_address");
-      const Value *col = n->data.field("collection_address");
-      nft_address = addr != nullptr ? *addr : Value::null();
-      nft_collection = col != nullptr ? *col : Value::null();
-    }
-    const Value *owner = n->data.field("new_owner");
-    Value::Fields f;
-    f.emplace_back("nft_address", nft_address);
-    f.emplace_back("nft_collection", nft_collection);
-    f.emplace_back("owner", owner != nullptr ? *owner : Value::null());
-    return rt_ok(Value::make_obj(std::move(f)));
-  }
-  return rt_ok(Value::null());
-}
-
-// AuctionOutbidMatcher's whole build. The matcher ANCHORS on the outbid leg,
-// not on the auction_bid: reference merges only the leg (`merge_blocks(include)`,
-// include == [outbid_transfer]) and leaves the auction_bid a spine block of its
-// own, which an anchor edge would consume. So the bid is reached through
-// `.previous_block` here, the nominator_pool_withdraw_parent precedent, and
-// this fn also carries the "exactly one, reject on duplicate" count that reference
-// runs over the bid's next_blocks and the language has no quantifier for.
-EvalResult auction_outbid_data(BuildEnv &env, const std::vector<Value> &args) {
-  (void)env;
-  const Block *leg = as_block(args[0]);
-  if (leg == nullptr || leg->previous_block == nullptr) {
-    return rt_ok(Value::null());
-  }
-  const Block *bid = leg->previous_block;
-  int n = 0;
-  for (const Block *sib : bid->next_blocks) {
-    if (auction_outbid_leg(sib) && ++n > 1) {
-      return rt_ok(Value::null());  // legacy bails on a second candidate
-    }
-  }
-  if (n != 1) {
-    return rt_ok(Value::null());
-  }
-  const Message *msg = block_msg(leg);
-  if (msg == nullptr) {
-    return rt_ok(Value::null());
-  }
-  const bool getgems = leg->btype == mch::btype::kTonTransfer;
-  Value::Fields f;
-  f.emplace_back("auction_address", data_field(bid, "auction"));
-  f.emplace_back("nft", data_field(bid, "nft_address"));
-  f.emplace_back("nft_collection", data_field(bid, "nft_collection"));
-  f.emplace_back("bidder", account_from_opt(msg->destination));
-  f.emplace_back("new_bidder", data_field(bid, "bidder"));
-  f.emplace_back("amount", msg_value_amount(msg));
-  // The fragment leg carries no comment (reference hardcodes None there).
-  f.emplace_back("comment", getgems ? data_field(leg, "comment") : Value::null());
-  f.emplace_back("auction_type", data_field(bid, "auction_type"));
-  return rt_ok(Value::make_obj(std::move(f)));
-}
 
 EvalResult getgems_sale_init(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;

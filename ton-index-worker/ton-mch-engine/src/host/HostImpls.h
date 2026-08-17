@@ -37,13 +37,11 @@ bool sale_contract_deploy(const Block *block);
 bool nft_trade_cancel_comment(const Block *block);
 bool nft_trade_finish_comment(const Block *block);
 bool auction_bid_candidate(const Block *block);
-bool auction_outbid_leg(const Block *block);
+bool auction_outbid_leg(const Block *bid);
 EvalResult getgems_sale_init(BuildEnv &env, const std::vector<Value> &args);
 EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args);
 EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args);
 EvalResult nft_trade_is_finish(BuildEnv &env, const std::vector<Value> &args);
-EvalResult nft_trade_returned(BuildEnv &env, const std::vector<Value> &args);
-EvalResult auction_outbid_data(BuildEnv &env, const std::vector<Value> &args);
 
 // tgBTC (HostTgbtc.cpp): mint host fn, the four shared event-log parse fns (one
 // per event opcode, each shared by a full matcher and its `*_log_only` fallback
@@ -72,7 +70,6 @@ EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args)
 EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args);
 
 // Nominator (HostNominator.cpp).
-bool nominator_pool_withdraw_parent(const Block *b);
 EvalResult nominator_withdraw_payout_amount(BuildEnv &env, const std::vector<Value> &args);
 void nominator_withdraw_absorb_payouts(Block *produced, const ShaperMatch &m);
 
@@ -104,11 +101,7 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
 EvalResult layerzero_dst_oapp_matches(BuildEnv &env, const std::vector<Value> &args);
 
 // Tonstakers (HostTonstakers.cpp).
-EvalResult tonstakers_minted_nft(BuildEnv &env, const std::vector<Value> &args);
 EvalResult tonstakers_pool_addr(BuildEnv &env, const std::vector<Value> &args);
-
-// DNS auction tail (HostDns.cpp).
-EvalResult dns_purchase_buyer(BuildEnv &env, const std::vector<Value> &args);
 
 // Vesting (HostVesting.cpp).
 EvalResult vesting_message_was_sent(BuildEnv &env, const std::vector<Value> &args);

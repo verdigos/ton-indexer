@@ -15,13 +15,11 @@ const std::map<std::string, HostFnEntry> &host_fns() {
       {"dedust_v2_swap_payload", {dedust_v2_swap_payload, 1}},
       {"dedust_v2_deposit_payload", {dedust_v2_deposit_payload, 1}},
       {"layerzero_dst_oapp_matches", {layerzero_dst_oapp_matches, 2}},
-      {"tonstakers_minted_nft", {tonstakers_minted_nft, 1}},
       {"tonstakers_pool_addr", {tonstakers_pool_addr, 1}},
-      {"dns_purchase_buyer", {dns_purchase_buyer, 1}},
       {"vesting_message_was_sent", {vesting_message_was_sent, 2}},
       {"jvault_stake_period", {jvault_stake_period, 1}},
       {"nominator_withdraw_payout_amount", {nominator_withdraw_payout_amount, 1}},
-      {"nft_transfer_data", {nft_transfer_data, 2}},
+      {"nft_transfer_data", {nft_transfer_data, 3}},
       {"getgems_nft_purchase_data", {getgems_nft_purchase_data, 1}},
       {"telegram_nft_purchase_data", {telegram_nft_purchase_data, 4}},
       {"is_teleitem", {is_teleitem, 1}},
@@ -50,8 +48,6 @@ const std::map<std::string, HostFnEntry> &host_fns() {
       {"getgems_auction_init", {getgems_auction_init, 2}},
       {"auction_bid_data", {auction_bid_data, 1}},
       {"nft_trade_is_finish", {nft_trade_is_finish, 1}},
-      {"nft_trade_returned", {nft_trade_returned, 2}},
-      {"auction_outbid_data", {auction_outbid_data, 1}},
       // specs/cocoon.mch, the expectedMyAddress string renderer (shared by
       // three matchers) and the nested withdraw-payload coins read.
       {"cocoon_expected_address", {cocoon_expected_address, 1}},
@@ -87,7 +83,6 @@ EvalResult rt_call_hostfn(BuildEnv &env, const std::string &name,
 
 const std::map<std::string, HostPredFn> &host_predicates() {
   static const std::map<std::string, HostPredFn> preds = {
-      {"nominator_pool_withdraw_parent", nominator_pool_withdraw_parent},
       {"evaa_user_withdraw_user", evaa_user_withdraw_user},
       {"evaa_user_withdraw_success", evaa_user_withdraw_success},
       {"evaa_user_withdraw_fail", evaa_user_withdraw_fail},

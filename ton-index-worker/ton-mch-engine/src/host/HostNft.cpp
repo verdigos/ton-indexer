@@ -263,12 +263,12 @@ EvalResult get_nft_data(BuildEnv &env, const Value &nft_address) {
 
 }  // namespace
 
-// builders/nft_transfer.py nft_transfer_data(transfer, assigned) -> the fixed
-// 13-key namespace, or Null to reject (unknown NFT item). Marketplace/price/
-// real_prev_owner are null on a plain transfer (out{} `?:` omits them).
+// builders/nft_transfer.py nft_transfer_data(transfer, assigned, funding_parent)
+// returns the fixed 13-key namespace, or Null for an unknown NFT item.
 EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
   const Block *transfer = as_block(args[0]);
   const Block *assigned = as_block(args[1]);
+  const Block *funding_parent = as_block(args[2]);
   if (transfer == nullptr) {
     return rt_fault("nft_transfer_data: null transfer");
   }
@@ -341,7 +341,7 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
   Value price = Value::null();
   Value real_prev_owner = Value::null();
 
-  const Block *prev = transfer->previous_block;
+  const Block *prev = funding_parent;
   if (prev != nullptr) {
     const EventNode *pnode = first_node(prev);
     const Message *pmsg = pnode != nullptr ? pnode->msg : nullptr;
@@ -427,12 +427,6 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
   const Block *payout_2 = as_block(args[3]);
   if (assigned == nullptr) {
     return rt_fault("telegram: null assigned");
-  }
-  // telegram_nft_assigned passes @payment unbound: its pattern deliberately has
-  // no parent edge (matching one would consume it), but the core still needs the
-  // parent to decide is_mint. Read it where reference reads it.
-  if (payment == nullptr) {
-    payment = assigned->previous_block;
   }
   const EventNode *anode = first_node(assigned);
   const Message *amsg = anode != nullptr ? anode->msg : nullptr;
