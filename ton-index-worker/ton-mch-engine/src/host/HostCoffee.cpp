@@ -16,6 +16,7 @@
 #include "BlockTree.h"
 #include "BuildRuntime.h"
 #include "ExprRuntime.h"
+#include "btypes_gen.h"
 #include "MsgParse.h"
 #include "parse/PSlice.h"
 
@@ -66,7 +67,7 @@ R coffee_swap(HostContext &, const ConsumedBlocks &consumed) {
   const Block *in_transfer = nullptr;
   const Block *prev = block->previous_block;
   if (prev != nullptr && block_in(others, prev) &&
-      (prev->btype == "jetton_transfer" || is_call_op(prev, kCoffeeSwapNative))) {
+      (prev->btype == mch::btype::kJettonTransfer || is_call_op(prev, kCoffeeSwapNative))) {
     in_transfer = prev;
   }
   // payout = first CoffeePayoutInternal in others.
@@ -77,7 +78,7 @@ R coffee_swap(HostContext &, const ConsumedBlocks &consumed) {
   if (payout != nullptr) {
     for (const Block *b : others) {
       if (b->previous_block == payout &&
-          (b->btype == "jetton_transfer" || is_call_op(b, kCoffeePayout) ||
+          (b->btype == mch::btype::kJettonTransfer || is_call_op(b, kCoffeePayout) ||
            is_call_op(b, kCoffeeNotification))) {
         out_transfer = b;
         break;
@@ -137,7 +138,7 @@ R coffee_swap(HostContext &, const ConsumedBlocks &consumed) {
   // (swaps.py gates on btype); otherwise use the CoffeeSwapNative TON arm.
   Value sender = Value::null();
   TransferLeg in_leg;
-  if (in_transfer->btype == "jetton_transfer") {
+  if (in_transfer->btype == mch::btype::kJettonTransfer) {
     sender = data_field(in_transfer, "sender");
     in_leg = TransferLeg::from_jetton_transfer(in_transfer);
   } else {  // is_call_op(in_transfer, kCoffeeSwapNative)
@@ -168,7 +169,7 @@ R coffee_swap(HostContext &, const ConsumedBlocks &consumed) {
   // For out_transfer_data, a jetton out-leg uses btype and data;
   // (swaps.py:1424); else CoffeePayout / CoffeeNotification TON arms.
   TransferLeg out_leg;
-  if (out_transfer->btype == "jetton_transfer") {
+  if (out_transfer->btype == mch::btype::kJettonTransfer) {
     out_leg = TransferLeg::from_jetton_transfer(out_transfer);
   } else if (is_call_op(out_transfer, kCoffeePayout)) {
     auto r_body = block_body(payout);

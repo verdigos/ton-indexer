@@ -114,6 +114,12 @@ add_custom_command(
     COMMENT "Generate MCH build-program functions from the IR artifact (mch-codegen --builds)"
 )
 add_custom_command(
+    OUTPUT ${MCH_GEN_DIR}/btypes_gen.h
+    COMMAND mch-codegen --btypes ${MCH_CLASSIFY_ARTIFACT} -o ${MCH_GEN_DIR}/btypes_gen.h
+    DEPENDS mch-codegen ${MCH_CLASSIFY_ARTIFACT}
+    COMMENT "Generate btype constants header (mch-codegen --btypes)"
+)
+add_custom_command(
     OUTPUT ${MCH_GEN_DIR}/matchers_ir_generated.cpp
     COMMAND mch-codegen --matchers ${MCH_CLASSIFY_ARTIFACT}
             --suffix ir -o ${MCH_GEN_DIR}/matchers_ir_generated.cpp
@@ -122,6 +128,7 @@ add_custom_command(
 )
 # The generated matcher, build and where tables are linked by the classify loop.
 set(MCH_GENERATED_SOURCES
+    ${MCH_GEN_DIR}/btypes_gen.h
     ${MCH_GEN_DIR}/matchers_ir_generated.cpp
     ${MCH_GEN_DIR}/builds_ir_generated.cpp
     ${MCH_GEN_DIR}/wheres_ir_generated.cpp
@@ -206,6 +213,8 @@ add_library(mch-classify STATIC
 )
 target_include_directories(mch-classify
     PUBLIC src
+    # btypes_gen.h; PUBLIC because harness and devtools TUs include it too.
+    PUBLIC ${MCH_GEN_DIR}
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
     # AbiBridge.cpp includes the ABI_PROD_PAIRS generated headers.
     PRIVATE ${TON_ABI_GENERATED_DIR}

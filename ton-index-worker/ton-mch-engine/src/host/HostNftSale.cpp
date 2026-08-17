@@ -14,6 +14,7 @@
 #include "BuildRuntime.h"
 #include "HostRegistry.h"
 #include "parse/PSlice.h"
+#include "btypes_gen.h"
 
 #include "td/utils/base64.h"
 #include "vm/boc.h"
@@ -352,18 +353,19 @@ Value account_of(const Value &v) {
 // `> 0`, not `== 1`, this is deliberately weaker than nft_mint's
 // `single_contract_deploy`.
 bool sale_contract_deploy(const Block *b) {
-  if (b == nullptr || (b->btype != "ton_transfer" && b->btype != "call_contract")) {
+  if (b == nullptr || (b->btype != mch::btype::kTonTransfer &&
+                       b->btype != mch::btype::kCallContract)) {
     return false;
   }
   return has_deployment(b);
 }
 
 bool nft_trade_cancel_comment(const Block *b) {
-  return b != nullptr && b->btype == "ton_transfer" && is_cancel_comment(b);
+  return b != nullptr && b->btype == mch::btype::kTonTransfer && is_cancel_comment(b);
 }
 
 bool nft_trade_finish_comment(const Block *b) {
-  if (b == nullptr || b->btype != "ton_transfer") {
+  if (b == nullptr || b->btype != mch::btype::kTonTransfer) {
     return false;
   }
   std::string c = block_comment(b);
@@ -373,7 +375,7 @@ bool nft_trade_finish_comment(const Block *b) {
 // The two cheap guards AuctionBidMatcher.build_block runs before it touches the
 // interface repository (blocks/auction.py:65-69).
 bool auction_bid_candidate(const Block *b) {
-  return b != nullptr && b->btype == "ton_transfer" && !has_deployment(b) &&
+  return b != nullptr && b->btype == mch::btype::kTonTransfer && !has_deployment(b) &&
          !is_cancel_comment(b);
 }
 
@@ -385,7 +387,7 @@ bool auction_outbid_leg(const Block *b) {
     return false;
   }
   const Block *bid = b->previous_block;
-  if (bid == nullptr || bid->btype != "auction_bid") {
+  if (bid == nullptr || bid->btype != mch::btype::kAuctionBid) {
     return false;
   }
   const Value *auction = bid->data.field("auction");
@@ -397,7 +399,7 @@ bool auction_outbid_leg(const Block *b) {
   if (!same_account(src, *auction)) {
     return false;
   }
-  if (b->btype == "ton_transfer") {
+  if (b->btype == mch::btype::kTonTransfer) {
     return kind->str == "getgems" &&
            block_comment(b).find("Your bid has been outbid by another user") != std::string::npos;
   }
@@ -484,7 +486,7 @@ EvalResult auction_outbid_data(BuildEnv &env, const std::vector<Value> &args) {
   if (msg == nullptr) {
     return rt_ok(Value::null());
   }
-  const bool getgems = leg->btype == "ton_transfer";
+  const bool getgems = leg->btype == mch::btype::kTonTransfer;
   Value::Fields f;
   f.emplace_back("auction_address", data_field(bid, "auction"));
   f.emplace_back("nft", data_field(bid, "nft_address"));
@@ -643,7 +645,7 @@ EvalResult nft_trade_is_finish(BuildEnv &env, const std::vector<Value> &args) {
   if (b == nullptr) {
     return rt_ok(Value::make_bool(false));
   }
-  if (b->btype == "ton_transfer") {
+  if (b->btype == mch::btype::kTonTransfer) {
     std::string c = block_comment(b);
     return rt_ok(Value::make_bool(c == "finish" || c == "stop"));
   }

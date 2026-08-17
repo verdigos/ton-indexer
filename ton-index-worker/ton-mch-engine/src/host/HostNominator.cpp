@@ -6,14 +6,18 @@
 
 #include "BlockTree.h"
 #include "HostRegistry.h"
+#include "btypes_gen.h"
 
 #include "common/refint.h"
 
 #include <algorithm>
+#include <cstdint>
 
 namespace mch {
 
 namespace {
+
+constexpr std::uint32_t kProcessWithdrawRequestsOpcode = 0x00000002;
 
 // Shared arity classifier for both the amount fn and payout-absorb shaper.
 // Reference consumes every payout only for arity 1 or 2; 0 and >=3 consume none.
@@ -23,7 +27,7 @@ std::vector<Block *> classified_withdraw_payouts(const Block *request) {
     return payouts;
   }
   for (Block *next : request->next_blocks) {
-    if (next->btype == "ton_transfer") {
+    if (next->btype == mch::btype::kTonTransfer) {
       payouts.push_back(next);
     }
   }
@@ -43,7 +47,8 @@ std::vector<Block *> classified_withdraw_payouts(const Block *request) {
 // blocks never carry that btype).
 bool nominator_pool_withdraw_parent(const Block *b) {
   const Block *p = b->previous_block;
-  return p != nullptr && p->btype == "call_contract" && p->opcode && *p->opcode == 0x00000002;
+  return p != nullptr && p->btype == mch::btype::kCallContract && p->opcode &&
+         *p->opcode == kProcessWithdrawRequestsOpcode;
 }
 
 // builders/nominator.py nominator_withdraw_payout_amount: two payouts use the

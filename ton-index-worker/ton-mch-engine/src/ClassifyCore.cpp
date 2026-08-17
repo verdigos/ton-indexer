@@ -8,6 +8,7 @@
 #include "GhostExternal.h"
 #include "HostRegistry.h"
 #include "Walker.h"
+#include "btypes_gen.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -100,7 +101,7 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
     std::stable_sort(nb.begin(), nb.end(),
                      [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
     for (Block *n : nb) {
-      if (n->btype != "call_contract" || !n->opcode) {
+      if (n->btype != mch::btype::kCallContract || !n->opcode) {
         continue;
       }
       if ((*n->opcode == kExcessOpcode && m.include_excess) ||
@@ -199,10 +200,10 @@ void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block 
     return c.t == VType::Account ? (c.addr_none ? std::string("addr_none") : c.str) : c.describe();
   };
   for (Block *b : blocks) {
-    if (b->btype == "dedust_deposit_liquidity_partial") {
+    if (b->btype == mch::btype::kDedustDepositLiquidityPartial) {
       firsts.push_back(b);
       used[contract_key(b)]++;
-    } else if (b->btype == "dedust_deposit_liquidity") {
+    } else if (b->btype == mch::btype::kDedustDepositLiquidity) {
       finals.push_back(b);
       used[contract_key(b)]++;
     }
@@ -264,10 +265,10 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
     return c.t == VType::Account ? (c.addr_none ? std::string("addr_none") : c.str) : c.describe();
   };
   for (Block *b : blocks) {
-    if (b->btype == "dedust_v2_deposit_liquidity_partial") {
+    if (b->btype == mch::btype::kDedustV2DepositLiquidityPartial) {
       partials.push_back(b);
       used[contract_key(b)]++;
-    } else if (b->btype == "dedust_v2_deposit_liquidity") {
+    } else if (b->btype == mch::btype::kDedustV2DepositLiquidity) {
       finals.push_back(b);
       used[contract_key(b)]++;
     }
@@ -336,7 +337,7 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
 // the `< 2 legs` guard returns immediately for every trace. KEEP (do not delete
 // as dead); exercising it requires a 2-leg fixture the corpus does not have yet.
 bool is_stonfi_v2_leg(const Block *b) {
-  if (b->btype != "dex_deposit_liquidity") return false;
+  if (b->btype != mch::btype::kDexDepositLiquidity) return false;
   Value dex = pp_field(b->data, "dex");
   return dex.t == VType::Str && dex.str == "stonfi_v2";
 }
@@ -396,7 +397,7 @@ void post_process_stonfi_v2_liquidity(std::vector<Block *> &blocks, BlockArena &
       Block *proxied = a->previous_block;
       if (pp_eq(as, bs) && pp_eq(ap, bp) && !pp_eq(al, bl)) {
         Block *in_transfer = stonfi_v2_leg_head(b, proxied);
-        Block *proxy = arena.make("empty");
+        Block *proxy = arena.make(mch::btype::kEmpty);
         if (proxied != nullptr && in_transfer != nullptr) {
           proxied->insert_between({a, in_transfer}, proxy);
         }
@@ -438,7 +439,7 @@ void unwind_deployments(std::vector<Block *> &blocks) {
     while (!queue.empty()) {
       Block *child = queue.front();
       queue.pop_front();
-      if (child->btype == "contract_deploy" && visited.count(child) == 0) {
+      if (child->btype == mch::btype::kContractDeploy && visited.count(child) == 0) {
         blocks.push_back(child);
       } else {
         for (Block *c : child->children_blocks) queue.push_back(c);
@@ -453,8 +454,8 @@ void unwind_deployments(std::vector<Block *> &blocks) {
 // call_contract whose message has a null source (the external-in leaf) or a null
 // destination (the log / notification leaves).
 bool serializes_to_row(const Block *b) {
-  if (b->btype == "root" || b->btype == "empty") return false;
-  if (b->btype != "call_contract") return true;
+  if (b->btype == mch::btype::kRoot || b->btype == mch::btype::kEmpty) return false;
+  if (b->btype != mch::btype::kCallContract) return true;
   return !pp_field(b->data, "source").is_null() && !pp_field(b->data, "destination").is_null();
 }
 
@@ -520,7 +521,7 @@ std::vector<ActionRow> serialize_rows(const std::vector<Block *> &blocks,
     ids.insert(id);
     if (is_v1_op(b->btype)) continue;
     for (ActionRow &c : serialize_rows(b->children_blocks, id)) {
-      if (c.block->btype == "contract_deploy") continue;
+      if (c.block->btype == mch::btype::kContractDeploy) continue;
       c.ancestor_type.push_back(b->btype);
       std::sort(c.ancestor_type.begin(), c.ancestor_type.end());
       c.ancestor_type.erase(std::unique(c.ancestor_type.begin(), c.ancestor_type.end()),
@@ -542,7 +543,7 @@ std::vector<ActionRow> basic_classify_fallback(TraceContext &ctx) {
   std::vector<ActionRow> out;
   try {
     Block *root = init_block(ctx.arena, ctx.tree.root);
-    Block *wrap = ctx.arena.make("root");
+    Block *wrap = ctx.arena.make(mch::btype::kRoot);
     wrap->connect(root);
     std::vector<Block *> spine = collect_spine(wrap);
     std::set<Block *> removed;
@@ -575,7 +576,7 @@ std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource
       return out;
     }
     Block *b = init_block(ctx.arena, root_node);
-    Block *wrapper = ctx.arena.make("root");
+    Block *wrapper = ctx.arena.make(mch::btype::kRoot);
     wrapper->connect(b);
     // matchers_for_failed_externals over the same BFS the main loop uses
     // (next_blocks read AFTER the build, parent-is-None guard).
@@ -677,7 +678,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
   RejectScope reject_scope(rctx);
 
   // Synthetic root wrapper (process_event_async: Block('root').connect(...)).
-  Block *wrapper = ctx.arena.make("root");
+  Block *wrapper = ctx.arena.make(mch::btype::kRoot);
   wrapper->connect(ctx.root);
 
   // B1 anchor prefilter inventory: the opcodes + btypes present on the spine

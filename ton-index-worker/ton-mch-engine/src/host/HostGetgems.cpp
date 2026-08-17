@@ -13,6 +13,7 @@
 #include "BlockTree.h"
 #include "BuildRuntime.h"
 #include "HostRegistry.h"
+#include "btypes_gen.h"
 
 #include <vector>
 
@@ -24,7 +25,7 @@ namespace {
 // finish/stop ton_transfer (the sale contract finalizing the deal).
 bool from_finish_stop_sale(const Block *nft_block) {
   const Block *prev = nft_block->previous_block;
-  if (prev == nullptr || prev->btype != "ton_transfer") {
+  if (prev == nullptr || prev->btype != mch::btype::kTonTransfer) {
     return false;
   }
   const Value *c = prev->data.field("comment");
@@ -44,7 +45,7 @@ Block *find_seller_payout(const Block *nft) {
     candidates = &nft->previous_block->next_blocks;
   }
   for (Block *n : *candidates) {
-    if (n == nft || n->btype != "ton_transfer") {
+    if (n == nft || n->btype != mch::btype::kTonTransfer) {
       continue;
     }
     const Value *dest = n->data.field("destination");
@@ -59,7 +60,7 @@ Block *find_seller_payout(const Block *nft) {
 
 // builders/getgems.py getgems_purchase predicate.
 bool getgems_purchase(const Block *block) {
-  if (block->btype != "nft_transfer" || block->data.is_null()) {
+  if (block->btype != mch::btype::kNftTransfer || block->data.is_null()) {
     return false;
   }
   const Value *ip = block->data.field("is_purchase");
@@ -70,7 +71,7 @@ bool getgems_purchase(const Block *block) {
 
 // builders/getgems.py getgems_seller_payout predicate (normal child branch only).
 bool getgems_seller_payout(const Block *block) {
-  if (block->btype != "ton_transfer") {
+  if (block->btype != mch::btype::kTonTransfer) {
     return false;
   }
   const Block *anchor = block->previous_block;
@@ -147,7 +148,7 @@ void getgems_proxy_insert(Block *produced, const ShaperMatch &m) {
     return;
   }
   Block *parent = produced->previous_block;  // finish/stop parent (post-merge)
-  if (parent == nullptr || parent->btype != "ton_transfer") {
+  if (parent == nullptr || parent->btype != mch::btype::kTonTransfer) {
     return;  // normal branch: no proxy, no surgery
   }
   const Value *cmt = parent->data.field("comment");
@@ -160,7 +161,7 @@ void getgems_proxy_insert(Block *produced, const ShaperMatch &m) {
   }
   Block *payout = nullptr;
   for (Block *n : parent->next_blocks) {
-    if (n == produced || n->btype != "ton_transfer") {
+    if (n == produced || n->btype != mch::btype::kTonTransfer) {
       continue;
     }
     const Value *dest = n->data.field("destination");
@@ -172,7 +173,7 @@ void getgems_proxy_insert(Block *produced, const ShaperMatch &m) {
   if (payout == nullptr || m.arena == nullptr) {
     return;
   }
-  Block *proxy = m.arena->make("empty");
+  Block *proxy = m.arena->make(mch::btype::kEmpty);
   parent->insert_between({produced, payout}, proxy);
   produced->merge_blocks({payout, proxy});
   produced->compact_connections();

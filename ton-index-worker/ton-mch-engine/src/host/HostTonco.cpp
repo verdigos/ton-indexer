@@ -12,6 +12,7 @@
 #include "ExprRuntime.h"
 #include "MsgParse.h"
 #include "parse/PSlice.h"
+#include "btypes_gen.h"
 
 #include "common/refint.h"
 #include "vm/cellslice.h"
@@ -180,7 +181,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
 
   const Block *nft_mint = nullptr;
   for (const Block *b : consumed) {
-    if (b->btype == "nft_mint") {
+    if (b->btype == mch::btype::kNftMint) {
       nft_mint = b;
       break;
     }
@@ -270,7 +271,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   }
   const Block *jetton_notify_block = nullptr;
   Value sender_wallet = Value::null();
-  if (input_transfer->btype == "jetton_transfer") {
+  if (input_transfer->btype == mch::btype::kJettonTransfer) {
     jetton_notify_block = first_call(input_transfer->children_blocks, kJettonNotify);
     sender_wallet = data_field(input_transfer, "sender_wallet");
   } else if (is_call_op(input_transfer, kJettonNotify)) {
@@ -373,7 +374,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
       int n = 0;
       for (const Block *b : consumed) {
         if (n >= 2) break;
-        if (b->btype != "jetton_transfer" || b->previous_block != pay_to) continue;
+        if (b->btype != mch::btype::kJettonTransfer || b->previous_block != pay_to) continue;
         n++;
         const Block *pton = first_call(b->next_blocks, kPTonTransfer);
         Value ex_amount, ex_asset;
@@ -483,7 +484,7 @@ EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args)
     int n = 0;
     for (const Block *b : consumed) {
       if (n >= 2) break;
-      if (b->btype != "jetton_transfer" || b->previous_block != pay_to) continue;
+      if (b->btype != mch::btype::kJettonTransfer || b->previous_block != pay_to) continue;
       legs[n++] = b;
     }
   }
@@ -593,7 +594,8 @@ ToncoParts derive_tonco_parts(const std::vector<const Block *> &consumed) {
   std::stable_sort(p.peer_swaps.begin(), p.peer_swaps.end(), by_lt);
   const Block *prev = p.anchor->previous_block;
   if (prev != nullptr) {
-    p.in_transfer = (prev->btype == "jetton_transfer") ? prev : prev->previous_block;
+    p.in_transfer =
+        (prev->btype == mch::btype::kJettonTransfer) ? prev : prev->previous_block;
   }
   auto leads_to_hop = [&](const Block *b) -> bool {
     for (Block *c : b->next_blocks) {
@@ -612,7 +614,7 @@ ToncoParts derive_tonco_parts(const std::vector<const Block *> &consumed) {
   };
   for (const Block *b : consumed) {
     if (b->previous_block != nullptr && payout_ids.count(b->previous_block) &&
-        (b->btype == "jetton_transfer" || is_call_op(b, kJettonTransfer))) {
+        (b->btype == mch::btype::kJettonTransfer || is_call_op(b, kJettonTransfer))) {
       if (!leads_to_hop(b)) p.out_transfers.push_back(b);  // intermediates unused downstream
     }
   }
@@ -688,7 +690,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   // --- incoming transfer ---
   Value sender, in_asset, in_amount, in_source, in_source_jw, in_dest, in_dest_jw;
   td::Ref<vm::Cell> in_payload;
-  if (in_transfer_block->btype == "jetton_transfer") {
+  if (in_transfer_block->btype == mch::btype::kJettonTransfer) {
     in_asset = tonco_leg_asset(data_field(in_transfer_block, "asset"));
     sender = data_field(in_transfer_block, "sender");
     in_amount = data_field(in_transfer_block, "amount");
@@ -734,7 +736,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   if (out_transfer == nullptr) {
     return host_reject("no out_transfer (payouts=" + std::to_string(all_payouts.size()) + ")");
   }
-  if (out_transfer->btype != "jetton_transfer") {
+  if (out_transfer->btype != mch::btype::kJettonTransfer) {
     // Unsupported out type. The out leg is found by btype, so a raw
     // call_contract here means the jetton_transfer matcher rejected that leg
     // (missing wallet interface) rather than the trace having an odd shape.

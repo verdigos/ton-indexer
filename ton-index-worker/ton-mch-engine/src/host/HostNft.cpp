@@ -9,6 +9,7 @@
 #include "HostRegistry.h"
 #include "MsgParse.h"
 #include "parse/PSlice.h"
+#include "btypes_gen.h"
 
 #include "td/utils/base64.h"
 #include "vm/boc.h"
@@ -22,6 +23,9 @@
 namespace mch {
 
 namespace {
+
+constexpr std::uint32_t kTeleitemBidInfoOpcode = 0x38127DE1;
+constexpr std::uint32_t kTelemintOpcode = 0x299a3e15;
 
 std::string upper_ascii_local(std::string s) {
   for (char &c : s) {
@@ -182,7 +186,7 @@ td::Result<OwnershipFull> parse_ownership_full(const td::Ref<vm::Cell> &body) {
   if (ps.cs.size() >= 32) {
     vm::CellSlice tmp = ps.cs;
     auto op = static_cast<std::uint32_t>(tmp.fetch_ulong(32));
-    if (op == 0x38127DE1) {
+    if (op == kTeleitemBidInfoOpcode) {
       auto r_bid = load_coins_py(tmp);
       if (r_bid.is_ok()) {
         out.bid = r_bid.move_as_ok();
@@ -362,7 +366,7 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
                                                      : std::string{};
     // owner = new_owner.to_str(False); source.upper() == owner.upper().
     bool owner_match =
-        prev->btype == "ton_transfer" && pmsg != nullptr && pmsg->source &&
+        prev->btype == mch::btype::kTonTransfer && pmsg != nullptr && pmsg->source &&
         !new_owner.addr_none && new_owner.t == VType::Account &&
         upper_ascii_local(*pmsg->source) == new_owner.str;
 
@@ -498,19 +502,20 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
     // Live on telegram_nft_assigned (the telemint mint variant); inert on
     // telegram_nft_purchase, whose pattern forces a ton_transfer/external parent.
     bool is_mint = payment != nullptr &&
-                   ((payment->btype == "call_contract" && payment->opcode &&
-                     *payment->opcode == 0x299a3e15) ||
-                    payment->btype == "nft_mint");
+                   ((payment->btype == mch::btype::kCallContract && payment->opcode &&
+                     *payment->opcode == kTelemintOpcode) ||
+                    payment->btype == mch::btype::kNftMint);
     if (is_mint) {
       is_purchase = false;
     }
     bool payment_is_source_none =
-        payment != nullptr && payment->btype == "call_contract" &&
+        payment != nullptr && payment->btype == mch::btype::kCallContract &&
         [&] {
           const Value *s = payment->data.field("source");
           return s == nullptr || s->is_null();
         }();
-    if (payment != nullptr && (payment->btype == "ton_transfer" || payment_is_source_none)) {
+    if (payment != nullptr &&
+        (payment->btype == mch::btype::kTonTransfer || payment_is_source_none)) {
       std::vector<const Block *> payouts;
       if (payout_1 != nullptr) payouts.push_back(payout_1);
       if (payout_2 != nullptr) payouts.push_back(payout_2);
@@ -601,14 +606,14 @@ void nft_transfer_parent_absorb(Block *produced, const ShaperMatch &) {
     return;
   }
   Block *parent = nullptr;
-  if (prev->btype == "ton_transfer") {
+  if (prev->btype == mch::btype::kTonTransfer) {
     const Value *c = prev->data.field("comment");
     std::string cs = (c != nullptr && c->t == VType::Str) ? c->str : std::string{};
     bool has = c != nullptr && c->t == VType::Str;
     if (!(has && (cs == "finish" || cs == "stop"))) {
       parent = prev;
     }
-  } else if (prev->btype == "call_contract") {
+  } else if (prev->btype == mch::btype::kCallContract) {
     const Value *src = prev->data.field("source");
     if (src == nullptr || src->is_null()) {
       parent = prev;

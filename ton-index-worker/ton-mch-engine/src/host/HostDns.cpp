@@ -6,6 +6,7 @@
 
 #include "BlockTree.h"
 #include "TraceLoader.h"
+#include "btypes_gen.h"
 
 #include <optional>
 #include <vector>
@@ -21,7 +22,7 @@ EvalResult dns_purchase_buyer(BuildEnv &, const std::vector<Value> &args) {
     return rt_ok(Value::null());
   }
   const Block *parent = anchor->previous_block;
-  if (parent == nullptr || parent->btype != "call_contract") {
+  if (parent == nullptr || parent->btype != mch::btype::kCallContract) {
     return rt_ok(Value::null());
   }
   const Message *m = block_msg(parent);

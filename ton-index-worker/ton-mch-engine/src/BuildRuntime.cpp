@@ -176,8 +176,17 @@ std::string lookup_key(const std::string &kind, const std::vector<Value> &args) 
       case VType::Amount:
         frame(key, 'm', a.num.is_null() ? "nan" : a.num->to_dec_string());
         break;
-      default:
+      case VType::Null:
+      case VType::Bool:
+      case VType::Asset:
+      case VType::Cell:
+      case VType::List:
+      case VType::Dict:
+      case VType::Obj:
+      case VType::Block:
+      case VType::Float:
         frame(key, '?', a.describe());
+        break;
     }
   }
   return key;

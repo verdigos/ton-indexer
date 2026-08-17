@@ -13,6 +13,7 @@
 #include "ExprRuntime.h"
 #include "MsgParse.h"
 #include "parse/PSlice.h"
+#include "btypes_gen.h"
 
 #include "common/refint.h"
 #include "vm/cellslice.h"
@@ -348,7 +349,7 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     if (!is_call_op(x, kStonfiPaymentRequest)) continue;
     bool has_jt = false;
     for (Block *nb : x->next_blocks) {
-      if (nb->btype == "jetton_transfer") { has_jt = true; break; }
+      if (nb->btype == mch::btype::kJettonTransfer) { has_jt = true; break; }
     }
     if (!has_jt) continue;
     auto rb = block_body(x);
@@ -361,7 +362,7 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
 
   auto first_jt_child = [](const Block *pb) -> const Block * {
     for (Block *b : pb->next_blocks) {
-      if (b->btype == "jetton_transfer") return b;
+      if (b->btype == mch::btype::kJettonTransfer) return b;
     }
     return nullptr;
   };
@@ -403,7 +404,7 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
 
   Value actual_out_addr = out_addr;
   // stonfi_swap_body override of out_addr (jetton_wallet), if present.
-  if (block->btype == "jetton_transfer") {
+  if (block->btype == mch::btype::kJettonTransfer) {
     Value sb = data_field(block, "stonfi_swap_body");
     if (sb.t == VType::Dict) {
       const Value *jw = sb.field("jetton_wallet");
@@ -646,11 +647,11 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     return rt_fault("stonfi_v2: anchor has no previous block");
   }
   const Block *in_transfer =
-      prev->btype == "jetton_transfer" ? prev : prev->previous_block;
+      prev->btype == mch::btype::kJettonTransfer ? prev : prev->previous_block;
   const Block *out_transfer = nullptr;
   std::int64_t best_lt = 0;
   for (const Block *b : consumed) {
-    if (b->btype == "jetton_transfer" && in_payouts(b->previous_block)) {
+    if (b->btype == mch::btype::kJettonTransfer && in_payouts(b->previous_block)) {
       if (out_transfer == nullptr || b->min_lt > best_lt) {
         out_transfer = b;
         best_lt = b->min_lt;
@@ -731,7 +732,7 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   }
   Value sender;
   Value in_data;
-  if (in_transfer->btype == "jetton_transfer") {
+  if (in_transfer->btype == mch::btype::kJettonTransfer) {
     Value asset_v = data_field(in_transfer, "asset");
     // asset.jetton_address.as_str(): a TON asset (jetton_address None) would
     // AttributeError before the pton test -> reject.

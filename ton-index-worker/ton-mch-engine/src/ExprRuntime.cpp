@@ -467,7 +467,6 @@ EvalResult rt_builtin_account(const Value &x) {
   if (rt_is_null(x)) return rt_ok(Value::null());
   if (x.t == VType::Account) return rt_ok(x);
   if (x.t == VType::Str) {
-    if (x.str == "addr_none") return rt_ok(Value::make_account_none());
     auto norm = normalize_raw_address(x.str);
     if (!norm) return rt_fault("account: invalid address " + x.str);
     return rt_ok(Value::make_account_raw(*norm));

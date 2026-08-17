@@ -3,6 +3,7 @@
 
 #include "BlockTree.h"
 #include "TraceLoader.h"
+#include "btypes_gen.h"
 
 #include "td/utils/base64.h"
 #include "vm/boc.h"
@@ -42,7 +43,8 @@ td::Result<td::Ref<vm::Cell>> block_body(const Block *b) {
 const Block *as_block(const Value &v) { return v.t == VType::Block ? v.block : nullptr; }
 
 bool is_call_op(const Block *b, std::uint32_t op) {
-  return b != nullptr && b->btype == "call_contract" && b->opcode && *b->opcode == op;
+  return b != nullptr && b->btype == mch::btype::kCallContract && b->opcode &&
+         *b->opcode == op;
 }
 
 // AccountId(envelope-address-str).as_str(): canonical "wc:HEX" upper; a null or

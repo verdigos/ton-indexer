@@ -16,6 +16,7 @@
 #include "BuildRuntime.h"
 #include "ExprRuntime.h"
 #include "MsgParse.h"
+#include "btypes_gen.h"
 #include "parse/PSlice.h"
 
 #include "vm/cellslice.h"
@@ -75,7 +76,7 @@ Leg resolve_leg(const Block *leg) {
     out.deposit = leg;
     return out;  // jt_calls = []
   }
-  if (leg != nullptr && leg->btype == "jetton_transfer") {
+  if (leg != nullptr && leg->btype == mch::btype::kJettonTransfer) {
     out.deposit = first_call(leg->children_blocks, kJettonNotify);
     for (const Block *b : leg->children_blocks) {
       if (is_call_op(b, kJettonTransfer)) {
@@ -194,7 +195,7 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     if (is_call_op(b, kDedustPayout) && in_returns(b->previous_block)) {
       ton_excesses.push_back(b);
     }
-    if (b->btype == "jetton_transfer" && in_returns(b->previous_block)) {
+    if (b->btype == mch::btype::kJettonTransfer && in_returns(b->previous_block)) {
       jetton_excesses.push_back(b);
     }
   }

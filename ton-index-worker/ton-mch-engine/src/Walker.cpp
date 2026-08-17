@@ -1,6 +1,7 @@
 #include "Walker.h"
 
 #include "HostRegistry.h"
+#include "btypes_gen.h"
 
 #include <algorithm>
 #include <map>
@@ -117,7 +118,8 @@ class MatchState {
     bool ok = false;
     switch (node.kind) {
       case NodeKind::Contract:
-        ok = block->btype == "call_contract" && block->opcode && *block->opcode == node.opcode;
+        ok = block->btype == mch::btype::kCallContract && block->opcode &&
+             *block->opcode == node.opcode;
         break;
       case NodeKind::BlockType:
         ok = block->btype == node.btype;
@@ -294,7 +296,7 @@ class MatchState {
 
   void absorb_aux(Block *block) {
     for (Block *nb : canonical(block->next_blocks)) {
-      if (nb->btype == "call_contract" && nb->opcode &&
+      if (nb->btype == mch::btype::kCallContract && nb->opcode &&
           (*nb->opcode == kExcessOpcode || *nb->opcode == kBounceOpcode)) {
         consume(nb);
       }
@@ -388,7 +390,8 @@ class MatchState {
 bool matcher_test_self(const CompiledMatcher &m, const Block *b) {
   switch (m.anchor_kind) {
     case AnchorKind::OpcodeSet:
-      return b->btype == "call_contract" && b->opcode && m.anchor_opcodes.count(*b->opcode) > 0;
+      return b->btype == mch::btype::kCallContract && b->opcode &&
+             m.anchor_opcodes.count(*b->opcode) > 0;
     case AnchorKind::BType:
       return m.anchor_btypes.count(b->btype) > 0;
     case AnchorKind::Pred: {
@@ -401,7 +404,8 @@ bool matcher_test_self(const CompiledMatcher &m, const Block *b) {
       // the matching branch's `where`, a head match whose predicate fails
       // falls through to a later branch sharing the head.
       for (const auto &br : m.anchor_branches) {
-        bool ok = br.is_op ? (b->btype == "call_contract" && b->opcode && *b->opcode == br.opcode)
+        bool ok = br.is_op ? (b->btype == mch::btype::kCallContract && b->opcode &&
+                              *b->opcode == br.opcode)
                            : (b->btype == br.btype);
         if (!ok) {
           continue;

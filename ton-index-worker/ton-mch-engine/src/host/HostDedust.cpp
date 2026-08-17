@@ -10,6 +10,7 @@
 #include "ExprRuntime.h"
 #include "MsgParse.h"
 #include "parse/PSlice.h"
+#include "btypes_gen.h"
 
 #include "td/utils/base64.h"
 #include "td/utils/misc.h"
@@ -322,7 +323,7 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
       continue;
     }
     // IR jetton transfers use the generic Block representation.
-    if (n->btype == "jetton_transfer") {
+    if (n->btype == mch::btype::kJettonTransfer) {
       receiver_wallet = data_field(n, "receiver_wallet");
       receiver = data_field(n, "receiver");
       dex_outgoing_wallet = data_field(n, "sender");

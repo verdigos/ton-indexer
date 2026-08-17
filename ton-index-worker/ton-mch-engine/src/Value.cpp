@@ -258,6 +258,8 @@ std::string Value::describe() const {
       }
       return out + "}";
     }
+    case VType::Float:
+      return "?";
   }
   return "?";
 }

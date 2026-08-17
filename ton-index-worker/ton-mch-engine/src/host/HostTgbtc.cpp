@@ -16,6 +16,7 @@
 #include "BuildRuntime.h"
 #include "HostRegistry.h"
 #include "MsgParse.h"
+#include "btypes_gen.h"
 #include "parse/PSlice.h"
 
 #include "common/bigint.hpp"
@@ -125,7 +126,7 @@ EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
   const Block *success_log = first_call(consumed, kTgbtcMintSuccessLog);
   const Block *jetton_mint = nullptr;
   for (const Block *b : consumed) {
-    if (b->btype == "jetton_mint") {
+    if (b->btype == mch::btype::kJettonMint) {
       jetton_mint = b;
       break;
     }
@@ -315,7 +316,7 @@ void tgbtc_deploy_absorb(Block *produced, const ShaperMatch &m) {
   std::vector<Block *> deploys;
   for (Block *b : m.consumed) {
     for (Block *c : b->children_blocks) {
-      if (c->btype == "contract_deploy") {
+      if (c->btype == mch::btype::kContractDeploy) {
         deploys.push_back(c);
       }
     }

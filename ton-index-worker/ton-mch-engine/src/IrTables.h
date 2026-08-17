@@ -4,14 +4,23 @@
 // normalized to unsigned 32-bit values.
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <map>
 #include <set>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
 namespace mch {
+
+// Engine-constructed btypes are valid independently of any one IR document.
+// Code generation and IR validation share that vocabulary from this table.
+inline constexpr std::array<std::string_view, 7> kLeafBtypes{
+    "call_contract", "contract_deploy", "empty", "jetton_transfer",
+    "root",          "tick_tock",       "ton_transfer",
+};
 
 enum class NodeKind { Contract, BlockType, Pred, Any, Or, Recursive };
 enum class RecStrategy { Frontier, Cyclic };

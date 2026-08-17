@@ -42,7 +42,16 @@ bool omitted(const Value &v) {
       return v.is_ton || !v.has_jetton;
     case VType::Amount:
       return !v.amount_float && v.num.is_null();  // make_amount_none()
-    default:
+    case VType::Bool:
+    case VType::Int:
+    case VType::Float:
+    case VType::Str:
+    case VType::Bytes:
+    case VType::Cell:
+    case VType::List:
+    case VType::Dict:
+    case VType::Obj:
+    case VType::Block:
       return false;
   }
 }
@@ -208,7 +217,6 @@ void pack_value(Packer &pk, const Value &v, bool as_decimal_string, ActionSerial
       pk.pack_nil();
       return;
   }
-  pk.pack_nil();
 }
 
 struct ActionField {

@@ -155,7 +155,9 @@ std::string render_parse_value(const Value &v) {
     case VType::Dict:
     case VType::Obj:
       return render_parse_fields_sorted(*v.fields);
-    default:
+    case VType::List:
+    case VType::Block:
+    case VType::Float:
       return v.describe();
   }
 }
@@ -293,6 +295,8 @@ bool structural_equal(const Value &a, const Value &b) {
       }
       return true;
     }
+    case VType::Float:
+      return false;
   }
   return false;
 }

@@ -1,6 +1,7 @@
 #include "BlockTree.h"
 
 #include "MsgParse.h"
+#include "btypes_gen.h"
 
 #include "td/utils/base64.h"
 #include "vm/boc.h"
@@ -356,7 +357,7 @@ Value account_or_null(const std::optional<std::string> &addr) {
 Value leaf_data(const std::string &btype, const EventNode *node,
                 std::optional<std::uint32_t> op) {
   const Message *msg = node->msg;
-  if (btype == "tick_tock") {
+  if (btype == mch::btype::kTickTock) {
     Value::Fields fs;
     if (node->tx != nullptr) {
       auto norm = normalize_raw_address(node->tx->account);
@@ -368,7 +369,7 @@ Value leaf_data(const std::string &btype, const EventNode *node,
     return Value::make_dict(std::move(fs));
   }
   Value::Fields fs;
-  if (btype != "ton_transfer") {
+  if (btype != mch::btype::kTonTransfer) {
     // CallContractBlock / ContractDeploy: data['opcode'] = get_opcode() (masked u32).
     fs.emplace_back("opcode", op ? Value::make_int64(static_cast<std::int64_t>(*op))
                                  : Value::null());
@@ -379,7 +380,7 @@ Value leaf_data(const std::string &btype, const EventNode *node,
   fs.emplace_back("value", (msg != nullptr && msg->value)
                                ? Value::make_amount(td::make_refint(*msg->value))
                                : Value::make_amount_none());
-  if (btype == "ton_transfer") {
+  if (btype == mch::btype::kTonTransfer) {
     // TonTransferBlock comment/encrypted/comment_encoded: needed by the getgems
     // purchase predicate + fn and the nft_transfer_parent_absorb shaper.
     LeafCommentInfo ci = leaf_comment_info(node);
@@ -398,10 +399,10 @@ Block *make_leaf_block(BlockArena &arena, const EventNode *node) {
 
   Block *b;
   if (node->is_tick_tock) {
-    b = arena.make("tick_tock");
+    b = arena.make(mch::btype::kTickTock);
     b->failed = node_failed(node);
   } else if (is_ton && msg != nullptr && msg->destination && msg->source) {
-    b = arena.make("ton_transfer");
+    b = arena.make(mch::btype::kTonTransfer);
     // TonTransferBlock failed logic (basic_blocks.py).
     if (node_failed(node)) {
       if (msg->bounce && *msg->bounce) {
@@ -416,7 +417,7 @@ Block *make_leaf_block(BlockArena &arena, const EventNode *node) {
       }
     }
   } else {
-    b = arena.make("call_contract");
+    b = arena.make(mch::btype::kCallContract);
     b->opcode = op;
     b->failed = node_failed(node);
     // CallContractBlock exception: a failed valueless call with a non-zero
@@ -434,10 +435,10 @@ Block *make_leaf_block(BlockArena &arena, const EventNode *node) {
   // ContractDeploy side-effect blocks live in children_blocks.
   if (!node->is_tick_tock && tx != nullptr && tx->end_status == "active" &&
       tx->orig_status != "active" && tx->orig_status != "frozen") {
-    Block *deploy = arena.make("contract_deploy");
+    Block *deploy = arena.make(mch::btype::kContractDeploy);
     deploy->opcode = op;
     deploy->failed = node_failed(node);
-    deploy->data = leaf_data("contract_deploy", node, op);
+    deploy->data = leaf_data(mch::btype::kContractDeploy, node, op);
     init_leaf(deploy, node);
     // NB: Python does not set .parent here — only merge_blocks does.
     b->children_blocks.push_back(deploy);

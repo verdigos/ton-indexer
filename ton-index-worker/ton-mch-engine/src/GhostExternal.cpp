@@ -14,6 +14,7 @@
 #include "host/HostCommon.h"
 #include "parse/PSlice.h"
 #include "parse/Parsers.h"
+#include "btypes_gen.h"
 
 #include "common/refint.h"
 #include "td/utils/base64.h"
@@ -256,7 +257,7 @@ std::size_t synthesize_ghost_children(EventTree &tree, EventNode *root) {
 }
 
 Block *fallback_jetton_transfer(Block *block, BlockArena &arena, const LookupSource &src) {
-  if (block->btype != "call_contract" || !block->opcode ||
+  if (block->btype != mch::btype::kCallContract || !block->opcode ||
       *block->opcode != kJettonTransferOpcode) {
     return nullptr;  // test_self
   }
@@ -307,7 +308,7 @@ Block *fallback_jetton_transfer(Block *block, BlockArena &arena, const LookupSou
   f.emplace_back("payload_opcode", fld("payload_sum_type"));
   f.emplace_back("stonfi_swap_body", fld("stonfi_swap_body"));
 
-  Block *produced = arena.make("jetton_transfer");
+  Block *produced = arena.make(mch::btype::kJettonTransfer);
   produced->data = Value::make_dict(std::move(f));
   if (!produced->merge_blocks({block})) return nullptr;
   produced->failed = block->failed;

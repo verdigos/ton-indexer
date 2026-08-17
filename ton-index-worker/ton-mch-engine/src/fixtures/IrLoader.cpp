@@ -8,6 +8,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <string_view>
 
 namespace mch {
 
@@ -386,6 +387,43 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
   return td::Status::OK();
 }
 
+td::Status validate_btype_references(const std::vector<CompiledMatcher> &matchers) {
+  std::unordered_set<std::string> known;
+  for (std::string_view btype : kLeafBtypes) {
+    known.emplace(btype);
+  }
+  for (const CompiledMatcher &matcher : matchers) {
+    known.insert(matcher.produces.begin(), matcher.produces.end());
+  }
+
+  for (const CompiledMatcher &matcher : matchers) {
+    auto validate = [&](const std::string &btype) -> td::Status {
+      if (known.count(btype) == 0) {
+        return td::Status::Error("matcher " + matcher.name + ": unknown btype reference '" +
+                                 btype + "'");
+      }
+      return td::Status::OK();
+    };
+    if (matcher.anchor_kind == AnchorKind::BType) {
+      for (const std::string &btype : matcher.anchor_btypes) {
+        TRY_STATUS(validate(btype));
+      }
+    } else if (matcher.anchor_kind == AnchorKind::Mixed) {
+      for (const CompiledMatcher::AnchorBranch &branch : matcher.anchor_branches) {
+        if (!branch.is_op) {
+          TRY_STATUS(validate(branch.btype));
+        }
+      }
+    }
+    for (const CompiledNode &node : matcher.nodes) {
+      if (node.kind == NodeKind::BlockType) {
+        TRY_STATUS(validate(node.btype));
+      }
+    }
+  }
+  return td::Status::OK();
+}
+
 }  // namespace
 
 td::Result<LoadedIr> load_ir(const std::string &path) {
@@ -442,6 +480,7 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
     TRY_STATUS(build_matcher(rec, pool, m));
     compiled.push_back(std::move(m));
   }
+  TRY_STATUS(validate_btype_references(compiled));
 
   // registration_order (default: identity), then stable-sort by priority.
   std::vector<int> reg_order;

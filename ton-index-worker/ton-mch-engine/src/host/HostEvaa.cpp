@@ -9,6 +9,7 @@
 #include "MsgParse.h"
 #include "TraceLoader.h"
 #include "parse/PSlice.h"
+#include "btypes_gen.h"
 
 #include "common/refint.h"
 #include "vm/cellslice.h"
@@ -47,7 +48,7 @@ bool skip_user_header(vm::CellSlice &cs) {
 
 // Open a user-contract body positioned on its 32-bit opcode.
 bool open_user_body(const Block *b, vm::CellSlice &cs) {
-  if (b->btype != "call_contract") {  // isinstance(block, CallContractBlock)
+  if (b->btype != mch::btype::kCallContract) {  // isinstance(block, CallContractBlock)
     return false;
   }
   auto r_body = block_body(b);
@@ -215,7 +216,7 @@ bool evaa_user_withdraw_fail(const Block *b) {
 // service comments (blocks/evaa.py EVAA_ACTION_COMMENTS). Comment derivation
 // mirrors TonTransferBlock exactly (ton_transfer_comment).
 bool evaa_service_comment(const Block *b) {
-  if (b->btype != "ton_transfer") {
+  if (b->btype != mch::btype::kTonTransfer) {
     return false;
   }
   auto r_body = block_body(b);
@@ -244,7 +245,7 @@ bool evaa_liquidate_success_header(const Block *b) {
 
 bool evaa_bounced_call(const Block *b) {
   const Message *m = block_msg(b);
-  return b->btype == "call_contract" && m != nullptr && m->bounced;
+  return b->btype == mch::btype::kCallContract && m != nullptr && m->bounced;
 }
 
 // EvaaSupplyBlockMatcher.test_self: the 0x1 supply_master call itself (TON side),
@@ -255,7 +256,7 @@ bool evaa_supply_anchor(const Block *b) {
   if (is_call_op(b, kSupplyMaster)) {
     return true;
   }
-  if (b->btype != "jetton_transfer") {
+  if (b->btype != mch::btype::kJettonTransfer) {
     return false;
   }
   Value fp = data_field(b, "forward_payload");
@@ -280,7 +281,7 @@ bool evaa_liquidate_anchor(const Block *b) {
   if (is_call_op(b, kLiquidateMaster)) {
     return true;
   }
-  if (b->btype != "jetton_transfer") {
+  if (b->btype != mch::btype::kJettonTransfer) {
     return false;
   }
   Value fp = data_field(b, "forward_payload");
@@ -330,13 +331,13 @@ EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args) {
     if (user == nullptr && opcode_after_user_header(b, kSupplyUser)) user = b;
     if (success == nullptr && is_call_op(b, kSupplySuccess)) success = b;
     if (fail == nullptr && is_call_op(b, kSupplyFail)) fail = b;
-    if (refund == nullptr && b->btype == "jetton_transfer") refund = b;
+    if (refund == nullptr && b->btype == mch::btype::kJettonTransfer) refund = b;
   }
   if (user == nullptr) {
     return host_reject("no supply_user block");
   }
 
-  bool is_ton = block->btype == "call_contract";
+  bool is_ton = block->btype == mch::btype::kCallContract;
   Value sender, recipient, master, asset;
   Value sender_jetton_wallet = Value::null();
   Value recipient_jetton_wallet = Value::null();
@@ -396,7 +397,7 @@ EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args) {
       // transfer the master sent out. (No corpus coverage; ported for parity.)
       for (std::size_t i = 1; i < consumed.size(); i++) {
         const Block *b = consumed[i];
-        if (b->btype != "jetton_transfer") continue;
+        if (b->btype != mch::btype::kJettonTransfer) continue;
         if (same_account(data_field(b, "sender_wallet"), master_jetton_wallet)) {
           recipient_jetton_wallet = data_field(b, "receiver_wallet");
           break;
@@ -473,7 +474,7 @@ EvalResult evaa_liquidate_data(BuildEnv &env, const std::vector<Value> &args) {
     return host_reject("empty consumed");
   }
   const Block *block = consumed.front();
-  const bool is_ton = block->btype == "call_contract";
+  const bool is_ton = block->btype == mch::btype::kCallContract;
   Value liquidator;
   td::Ref<vm::Cell> master_cell;
   if (is_ton) {
@@ -527,7 +528,7 @@ EvalResult evaa_liquidate_data(BuildEnv &env, const std::vector<Value> &args) {
     bool immediate = false;
     for (std::size_t i = 1; i < consumed.size(); i++) {
       immediate = immediate || evaa_bounced_call(consumed[i]) ||
-                  consumed[i]->btype == "jetton_transfer";
+                  consumed[i]->btype == mch::btype::kJettonTransfer;
     }
     if (!immediate) return host_reject("no immediate refund");
     return output(master.borrower, Value::null(), master.collateral_asset_id,

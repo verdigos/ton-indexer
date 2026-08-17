@@ -6,6 +6,7 @@
 
 #include "BlockTree.h"
 #include "TraceLoader.h"
+#include "btypes_gen.h"
 
 #include <cstdint>
 #include <optional>
@@ -32,7 +33,7 @@ EvalResult tonstakers_minted_nft(BuildEnv &, const std::vector<Value> &args) {
   }
   constexpr std::uint32_t kTonstakersInitNft = 0x132F9A45;
   for (const Block *n : delayed->next_blocks) {
-    if (n->btype == "nft_mint") {
+    if (n->btype == mch::btype::kNftMint) {
       const Message *m = block_msg(n);
       return rt_ok(account_from_opt(m != nullptr ? m->destination : std::nullopt));
     }
@@ -76,7 +77,7 @@ EvalResult tonstakers_pool_addr(BuildEnv &, const std::vector<Value> &args) {
       const Message *m = block_msg(current);
       return rt_ok(account_from_opt(m != nullptr ? m->source : std::nullopt));
     }
-    if (current->btype == "tonstakers_withdraw") {
+    if (current->btype == mch::btype::kTonstakersWithdraw) {
       return rt_ok(data_field(current, "pool"));
     }
     if (is_call_op(current, kNftBurnNotification) || is_call_op(current, kNftBurn) ||
