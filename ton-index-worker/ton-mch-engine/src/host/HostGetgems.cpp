@@ -55,11 +55,6 @@ Block *find_seller_payout(const Block *nft) {
   return nullptr;
 }
 
-Value copy_field(const Block *b, const char *name) {
-  const Value *f = b->data.field(name);
-  return f != nullptr ? *f : Value::null();
-}
-
 }  // namespace
 
 // builders/getgems.py getgems_purchase predicate.
@@ -124,21 +119,21 @@ EvalResult getgems_nft_purchase_data(BuildEnv &, const std::vector<Value> &args)
   ns.emplace_back("nft_address", addr != nullptr ? *addr : Value::null());
   ns.emplace_back("collection_address", std::move(collection_address));
   ns.emplace_back("nft_index", index != nullptr ? *index : Value::null());
-  ns.emplace_back("prev_owner", copy_field(nft, "prev_owner"));
-  ns.emplace_back("new_owner", copy_field(nft, "new_owner"));
-  ns.emplace_back("query_id", copy_field(nft, "query_id"));
-  ns.emplace_back("forward_amount", copy_field(nft, "forward_amount"));
-  ns.emplace_back("response_destination", copy_field(nft, "response_destination"));
-  ns.emplace_back("custom_payload", copy_field(nft, "custom_payload"));
-  ns.emplace_back("forward_payload", copy_field(nft, "forward_payload"));
-  ns.emplace_back("payout_amount", copy_field(payout, "value"));
-  ns.emplace_back("payout_comment_encrypted", copy_field(payout, "encrypted"));
-  ns.emplace_back("payout_comment_encoded", copy_field(payout, "comment_encoded"));
-  ns.emplace_back("payout_comment", copy_field(payout, "comment"));
-  ns.emplace_back("price", copy_field(nft, "price"));
-  ns.emplace_back("real_prev_owner", copy_field(nft, "real_prev_owner"));
-  ns.emplace_back("marketplace", copy_field(nft, "marketplace"));
-  ns.emplace_back("marketplace_address", copy_field(nft, "marketplace_address"));
+  ns.emplace_back("prev_owner", data_field(nft, "prev_owner"));
+  ns.emplace_back("new_owner", data_field(nft, "new_owner"));
+  ns.emplace_back("query_id", data_field(nft, "query_id"));
+  ns.emplace_back("forward_amount", data_field(nft, "forward_amount"));
+  ns.emplace_back("response_destination", data_field(nft, "response_destination"));
+  ns.emplace_back("custom_payload", data_field(nft, "custom_payload"));
+  ns.emplace_back("forward_payload", data_field(nft, "forward_payload"));
+  ns.emplace_back("payout_amount", data_field(payout, "value"));
+  ns.emplace_back("payout_comment_encrypted", data_field(payout, "encrypted"));
+  ns.emplace_back("payout_comment_encoded", data_field(payout, "comment_encoded"));
+  ns.emplace_back("payout_comment", data_field(payout, "comment"));
+  ns.emplace_back("price", data_field(nft, "price"));
+  ns.emplace_back("real_prev_owner", data_field(nft, "real_prev_owner"));
+  ns.emplace_back("marketplace", data_field(nft, "marketplace"));
+  ns.emplace_back("marketplace_address", data_field(nft, "marketplace_address"));
   return rt_ok(Value::make_obj(std::move(ns)));
 }
 

@@ -128,8 +128,8 @@ bool pp_eq(const Value &a, const Value &b) {
 }
 
 // blocks/liquidity.py combine_deposits: merge the partial (first) + final
-// deposit records. Throws on the consistency checks Python raises on (caller
-// catches -> the pair is left unmerged, matching a Python raise's net effect).
+// deposit records. Consistency failures leave this pair unmerged without
+// affecting other actions; Python instead fails the whole trace to basic actions.
 Value combine_deposits(const Value &first, const Value &final_d) {
   Value tf1 = pp_field(first, "target_asset_1"), tf2 = pp_field(first, "target_asset_2");
   Value tg1 = pp_field(final_d, "target_asset_1"), tg2 = pp_field(final_d, "target_asset_2");
@@ -220,7 +220,7 @@ void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block 
     try {
       merged = combine_deposits(first->data, final_b->data);
     } catch (const std::exception &) {
-      continue;  // Python raise -> pair unmerged (unreached over corpus)
+      continue;  // Leave only this pair unmerged; other actions remain.
     }
     blocks.erase(std::remove(blocks.begin(), blocks.end(), first), blocks.end());
     removed.insert(first);
@@ -332,10 +332,9 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
   }
 }
 
-// blocks/liquidity.py post_process_stonfi_v2_liquidity pairing pass. ZERO
-// corpus coverage, the `< 2 legs` guard returns immediately for every trace.
-// KEEP (do not delete as dead): it is the port of a live Python production pass;
-// gating it needs a 2-leg stonfi_v2 deposit fixture the corpus does not have yet.
+// Mirrors a twin-only stonfi_v2 liquidity pairing helper. ZERO corpus coverage:
+// the `< 2 legs` guard returns immediately for every trace. KEEP (do not delete
+// as dead); exercising it requires a 2-leg fixture the corpus does not have yet.
 bool is_stonfi_v2_leg(const Block *b) {
   if (b->btype != "dex_deposit_liquidity") return false;
   Value dex = pp_field(b->data, "dex");

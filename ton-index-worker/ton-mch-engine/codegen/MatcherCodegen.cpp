@@ -174,7 +174,6 @@ std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
   set_if(!m.owned_slots.empty(), "owned_slots", int_set(m.owned_slots));
   set_if(!m.include_excess, "include_excess", "false");
   set_if(!m.include_bounces, "include_bounces", "false");
-  set_if(m.priority != 100, "priority", std::to_string(m.priority));
   set_if(!m.ref_preds.empty(), "ref_preds", str_set(m.ref_preds));
   set_if(!m.ref_builders.empty(), "ref_builders", str_set(m.ref_builders));
   set_if(!m.ref_shapers.empty(), "ref_shapers", str_set(m.ref_shapers));

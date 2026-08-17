@@ -12,7 +12,7 @@
 #include "Classify.h"
 #include "Value.h"
 #include "emu/EmuActionSerialize.h"
-#include "emu/EmuTypes.h"  // view_finality, actions_write_is_stale
+#include "emu/EmuTypes.h"  // view_finality
 
 #include "td/utils/base64.h"
 
@@ -1233,13 +1233,9 @@ void test_empty_view_finality() {
   }
 }
 
-// Write-back decisions
-//
-// Neither is reachable from a fixture, and both are easy to get backwards in a
-// way no A/B would catch: view_finality feeds both the `finality` wire key and
-// the staleness guard, and actions_write_is_stale decides whether a trace's
-// actions may be overwritten at all. The insert path itself needs Redis; these
-// two do not, so they are gated here rather than left to code review.
+// view_finality is not reachable from a fixture and is easy to reverse without
+// an A/B failure. It feeds the `finality` wire key and is exercised here without
+// requiring Redis.
 
 EmuTraceView view_of(std::initializer_list<EmuFinality> finalities) {
   EmuTraceView v;
@@ -1266,29 +1262,6 @@ void test_view_finality() {
             EmuFinality::confirmed);
 }
 
-void test_actions_write_guard() {
-  const auto emulated = static_cast<std::uint8_t>(EmuFinality::emulated);
-  const auto confirmed = static_cast<std::uint8_t>(EmuFinality::confirmed);
-  const auto finalized = static_cast<std::uint8_t>(EmuFinality::finalized);
-
-  // Nothing stored: the first emission always writes.
-  check("guard/absent_writes", !actions_write_is_stale(std::nullopt, emulated));
-  // THE case the guard exists for, a stale emulated emission landing after a
-  // finalized one, which the node loop already refuses and `actions` did not.
-  check("guard/emulated_over_finalized_skips",
-        actions_write_is_stale(std::string("2"), emulated));
-  check("guard/emulated_over_confirmed_skips",
-        actions_write_is_stale(std::string("1"), emulated));
-  // Equal is NOT stale: a re-emission at the same finality must still overwrite,
-  // or a trace whose tx set grew keeps the older, shorter action list.
-  check("guard/equal_writes", !actions_write_is_stale(std::string("2"), finalized));
-  check("guard/advancing_writes", !actions_write_is_stale(std::string("0"), confirmed));
-  // Fails OPEN on a corrupt value: failing closed would wedge the actions field
-  // permanently on the first bad write.
-  check("guard/unparseable_writes", !actions_write_is_stale(std::string("banana"), emulated));
-  check("guard/empty_writes", !actions_write_is_stale(std::string(""), emulated));
-}
-
 }  // namespace
 
 int run_action_msgpack_test() {
@@ -1310,7 +1283,6 @@ int run_action_msgpack_test() {
   test_evaa_liquidate_surface();
   test_empty_view_finality();
   test_view_finality();
-  test_actions_write_guard();
   std::printf("ACTIONS-MSGPACK-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }

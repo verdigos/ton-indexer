@@ -271,7 +271,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   const Block *jetton_notify_block = nullptr;
   Value sender_wallet = Value::null();
   if (input_transfer->btype == "jetton_transfer") {
-    jetton_notify_block = find_call(input_transfer->children_blocks, kJettonNotify);
+    jetton_notify_block = first_call(input_transfer->children_blocks, kJettonNotify);
     sender_wallet = data_field(input_transfer, "sender_wallet");
   } else if (is_call_op(input_transfer, kJettonNotify)) {
     jetton_notify_block = input_transfer;
@@ -375,7 +375,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
         if (n >= 2) break;
         if (b->btype != "jetton_transfer" || b->previous_block != pay_to) continue;
         n++;
-        const Block *pton = find_call(b->next_blocks, kPTonTransfer);
+        const Block *pton = first_call(b->next_blocks, kPTonTransfer);
         Value ex_amount, ex_asset;
         if (pton != nullptr) {
           td::RefInt256 ta;
@@ -492,7 +492,7 @@ EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args)
   Leg out_legs[2];
   for (int i = 0; i < 2; i++) {
     if (legs[i] != nullptr) {
-      const Block *pton = find_call(legs[i]->next_blocks, kPTonTransfer);
+      const Block *pton = first_call(legs[i]->next_blocks, kPTonTransfer);
       if (pton != nullptr) {
         td::RefInt256 ta;
         auto pb = block_body(pton);

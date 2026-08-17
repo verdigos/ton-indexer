@@ -312,7 +312,7 @@ bool stonfi_v1_sender_payment(const Block *block) {
     return false;
   }
   std::uint32_t ec = r.ok();
-  return ec == kStonfiSwapOk || ec == kStonfiSwapNoLiq || ec == kStonfiSwapReserveErr;
+  return sender_related(ec);
 }
 
 // builders/stonfi_v1.py _stonfi_v1_swap_data -> blocks/swaps.py

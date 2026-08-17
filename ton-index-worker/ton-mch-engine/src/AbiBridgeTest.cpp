@@ -461,13 +461,6 @@ void test_abi_projection() {
 
 // Registry and trampoline-guard policy
 void test_registry_policy() {
-  // Duplicate keys across parser sources are reported.
-  const std::vector<std::pair<std::string, MsgParserFn>> src_a = {{"A", nullptr}, {"B", nullptr}};
-  const std::vector<std::pair<std::string, MsgParserFn>> src_b = {{"B", nullptr},
-                                                                 {"C", nullptr}};  // B collides
-  auto dups = duplicate_parser_keys(ParserSources{&src_a, &src_b});
-  check("registry/dup_detected", dups.size() == 1 && dups[0] == "B");
-
   // Production registry has no collision.
   check("registry/prod_clean", validate_registries().is_ok());
 

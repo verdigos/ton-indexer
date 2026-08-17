@@ -722,9 +722,8 @@ std::string generate_builds_file(const Json &root, const std::string &header,
   };
   std::vector<Entry> entries;
   // TODO: remove (harness): the `build_vectors` root is the TEST-ONLY document
-  // (ir/build_vectors.json -> mch-fixtures via fixtures/GenBuildsVectors.h). The
-  // production root is the `matchers` branch below. The dual-root shape is what
-  // forces --suffix to exist at all.
+  // consumed by the devtools vector runner. The production root is the `matchers`
+  // branch below. The dual-root shape is what forces --suffix to exist at all.
   if (const Json *cases = jfield(root, "build_vectors");
       cases != nullptr && cases->type() == JType::Array) {
     const auto &arr = cases->get_array();

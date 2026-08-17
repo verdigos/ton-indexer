@@ -21,6 +21,15 @@ const Block *first_call(const std::vector<const Block *> &blocks, std::uint32_t 
   return nullptr;
 }
 
+const Block *first_call(const std::vector<Block *> &blocks, std::uint32_t op) {
+  for (const Block *b : blocks) {
+    if (is_call_op(b, op)) {
+      return b;
+    }
+  }
+  return nullptr;
+}
+
 std::vector<const Block *> all_calls(const std::vector<const Block *> &blocks, std::uint32_t op) {
   std::vector<const Block *> out;
   for (const Block *b : blocks) {
@@ -50,10 +59,13 @@ void unique_lt_sorted(std::vector<const Block *> &blocks) {
                    [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
 }
 
-bool data_truthy(const Block *b, const char *field) {
-  Value v = data_field(b, field);
+bool value_truthy(const Value &v) {
   return (v.t == VType::Bool && v.boolean) ||
          (v.t == VType::Int && !v.num.is_null() && v.num->sgn() != 0);
+}
+
+bool data_truthy(const Block *b, const char *field) {
+  return value_truthy(data_field(b, field));
 }
 
 std::optional<std::string> acc_str(const Value &v) {

@@ -2,6 +2,7 @@
 // for the internal registry surface and HostRegistry.h for the public one.
 #include "host/HostImpls.h"
 
+#include "host/BlockViews.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -85,11 +86,7 @@ EvalResult dedust_seq_destination(BuildEnv &env, const std::vector<std::string> 
     for (const Value &a : *assets->items) {
       const Value *is_ton_v = a.field("is_ton");
       const Value *addr_v = a.field("address");
-      // Python truthiness of asset["is_ton"] (bool or int from msgpack).
-      bool is_ton = is_ton_v != nullptr &&
-                    ((is_ton_v->t == VType::Bool && is_ton_v->boolean) ||
-                     (is_ton_v->t == VType::Int && !is_ton_v->num.is_null() &&
-                      is_ton_v->num->sgn() != 0));
+      bool is_ton = is_ton_v != nullptr && value_truthy(*is_ton_v);
       bool prev_ton = prev.t == VType::Asset && prev.is_ton;
       if (is_ton && prev_ton) {
         continue;
@@ -111,6 +108,36 @@ EvalResult dedust_seq_destination(BuildEnv &env, const std::vector<std::string> 
 }
 
 }  // namespace
+
+// blocks/swaps.py _parse_dedust_steps: walk the SwapStep chain (already
+// positioned past the sum-type/header). Each link: pool addr, 1 flag bit,
+// coins, maybe-ref to the next step. Returns the pool addresses in walk order
+// (AccountId(load_address()).as_str(); addr_none -> "addr_none").
+static td::Result<std::vector<std::string>> parse_dedust_steps(vm::CellSlice cs) {
+  std::vector<std::string> steps;
+  for (;;) {
+    TRY_RESULT(addr, load_address_py(cs));  // pytoniq load_address
+    std::string pool = (addr.t == VType::Account && !addr.addr_none) ? addr.str : "addr_none";
+    if (!cs.have(1)) {
+      return td::Status::Error("dedust steps: flag bit underflow");
+    }
+    cs.advance(1);                    // load_bit
+    TRY_RESULT(_coins, load_coins_py(cs));
+    (void)_coins;
+    if (!cs.have(1)) {                // load_maybe_ref: the Maybe bit
+      return td::Status::Error("dedust steps: maybe-ref bit underflow");
+    }
+    bool has_next = cs.fetch_ulong(1) != 0;
+    steps.push_back(std::move(pool));
+    if (!has_next) {
+      return steps;
+    }
+    if (cs.size_refs() == 0) {
+      return td::Status::Error("dedust steps: next-step ref missing");
+    }
+    TRY_RESULT_ASSIGN(cs, open_ref_cell(cs.fetch_ref()));  // next_step.to_slice()
+  }
+}
 
 // builders/dedust.py _dedust_swap_legs. args = (consumed, in_transfer,
 // swap_request). Returns the SimpleNamespace-equivalent Obj, or Null to reject

@@ -236,7 +236,7 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
   // Catch vm::VmError explicitly because it does not derive from std::exception.
   // Every path reaches the single response below.
   try {
-    auto r_txs = emu_to_schema_txs(view, cfg_.global_version);
+    auto r_txs = emu_to_schema_txs(view);
     if (r_txs.is_error()) {
       stats_.convert_failed++;
       res.outcome = EmuClassifyOutcome::convert_failed;

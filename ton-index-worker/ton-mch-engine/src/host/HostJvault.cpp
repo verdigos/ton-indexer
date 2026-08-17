@@ -1,10 +1,6 @@
-// JVault host fns (builders/jvault.py). See host/HostImpls.h for the internal
-// registry surface and HostRegistry.h for the public one.
-//
-// Both functions take the composed
-// jetton_transfer's `data` scalars (a b64 string / an already-parsed address
-// list) rather than reaching the reference `.jetton_transfer_message` attribute the
-// generic IR block does not expose.
+// JVault stake-period host binding. It reads the composed jetton_transfer's
+// `forward_payload` b64 scalar instead of a reference attribute the generic IR
+// block does not expose.
 #include "host/HostImpls.h"
 
 #include "MsgParse.h"

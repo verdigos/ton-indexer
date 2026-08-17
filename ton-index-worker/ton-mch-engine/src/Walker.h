@@ -21,9 +21,8 @@ namespace mch {
 using WhereFn = EvalResult (*)(const WhereEnv &);
 using WhereTable = std::unordered_map<int, WhereFn>;
 
-// Thrown by the match recursion when the block-tree walk exceeds the depth cap
-// (Walker.cpp kMaxMatchDepth). Mirrors Python's RecursionError -> per-trace
-// fallback: the classify trace boundary catches it and marks the trace failed.
+// Stack guard for pathological block-tree recursion beyond kMaxMatchDepth.
+// The classify boundary catches it and marks the trace failed.
 struct MatchDepthExceeded : std::runtime_error {
   MatchDepthExceeded() : std::runtime_error("match recursion depth exceeded") {}
 };

@@ -9,6 +9,7 @@
 // renderings unavailable in the expression language.
 #include "host/HostImpls.h"
 
+#include "host/BlockViews.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -30,15 +31,6 @@ namespace {
 
 constexpr std::uint32_t kTgbtcMintHead = 0x3F781D24;
 constexpr std::uint32_t kTgbtcMintSuccessLog = 0x77A80EF3;
-
-const Block *first_call_op(const std::vector<const Block *> &consumed, std::uint32_t op) {
-  for (const Block *b : consumed) {
-    if (is_call_op(b, op)) {
-      return b;
-    }
-  }
-  return nullptr;
-}
 
 // int(txid).to_bytes(32, "little").hex(): 32-byte little-endian, lowercase hex.
 std::string txid_le_hex(const td::RefInt256 &v) {
@@ -129,8 +121,8 @@ EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
       consumed.push_back(b);
     }
   }
-  const Block *head = first_call_op(consumed, kTgbtcMintHead);
-  const Block *success_log = first_call_op(consumed, kTgbtcMintSuccessLog);
+  const Block *head = first_call(consumed, kTgbtcMintHead);
+  const Block *success_log = first_call(consumed, kTgbtcMintSuccessLog);
   const Block *jetton_mint = nullptr;
   for (const Block *b : consumed) {
     if (b->btype == "jetton_mint") {

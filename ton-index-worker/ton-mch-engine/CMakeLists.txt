@@ -216,7 +216,6 @@ add_library(mch-classify STATIC
     src/parse/ParseJettons.cpp
     src/parse/ParseDns.cpp
     src/parse/ParseVesting.cpp
-    src/parse/ParseDedust.cpp
     ${MCH_GENERATED_SOURCES}
 )
 target_include_directories(mch-classify

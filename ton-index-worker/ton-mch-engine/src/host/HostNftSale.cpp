@@ -7,6 +7,7 @@
 // expression language cannot represent.
 #include "host/HostImpls.h"
 
+#include "host/BlockViews.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -614,7 +615,7 @@ EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args) {
   }
   if (dns) {
     // A DNS bid requires the teleitem outbid notification.
-    if (find_call(bid->next_blocks, 0x557CEA20) == nullptr) {
+    if (first_call(bid->next_blocks, 0x557CEA20) == nullptr) {
       return rt_ok(Value::null());
     }
   }

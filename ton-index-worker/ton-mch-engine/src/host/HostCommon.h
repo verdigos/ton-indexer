@@ -27,16 +27,6 @@ const Block *as_block(const Value &v);
 
 bool is_call_op(const Block *b, std::uint32_t op);
 
-template <typename Vec>
-const Block *find_call(const Vec &blocks, std::uint32_t op) {
-  for (const Block *b : blocks) {
-    if (is_call_op(b, op)) {
-      return b;
-    }
-  }
-  return nullptr;
-}
-
 // AccountId(envelope-address-str).as_str(): canonical "wc:HEX" upper; a null or
 // unparseable address -> addr_none (AccountId(None)).
 Value account_from_opt(const std::optional<std::string> &s);

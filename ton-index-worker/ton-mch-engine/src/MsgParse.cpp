@@ -28,6 +28,22 @@ namespace mch {
 // null parser so dispatch fails closed; startup validation reports their names.
 namespace {
 
+using ParserSources = std::vector<const std::vector<std::pair<std::string, MsgParserFn>> *>;
+
+std::vector<std::string> duplicate_parser_keys(const ParserSources &sources) {
+  std::set<std::string> seen;
+  std::set<std::string> dup_set;
+  std::vector<std::string> dups;
+  for (const auto *src : sources) {
+    for (const auto &row : *src) {
+      if (!seen.insert(row.first).second && dup_set.insert(row.first).second) {
+        dups.push_back(row.first);
+      }
+    }
+  }
+  return dups;
+}
+
 // Hand parsers still without an ABI declaration; everything else lives in
 // AbiBridge.cpp.
 const std::vector<std::pair<std::string, MsgParserFn>> &hand_message_parsers() {
@@ -65,20 +81,6 @@ const BuiltRegistry &built_registry() {
 }
 
 }  // namespace
-
-std::vector<std::string> duplicate_parser_keys(const ParserSources &sources) {
-  std::set<std::string> seen;
-  std::set<std::string> dup_set;
-  std::vector<std::string> dups;
-  for (const auto *src : sources) {
-    for (const auto &row : *src) {
-      if (!seen.insert(row.first).second && dup_set.insert(row.first).second) {
-        dups.push_back(row.first);
-      }
-    }
-  }
-  return dups;
-}
 
 const std::map<std::string, MsgParserFn> &message_parsers() {
   return built_registry().map;

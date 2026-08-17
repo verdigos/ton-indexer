@@ -5,8 +5,7 @@
 
 namespace mch {
 
-td::Result<std::vector<schema::Transaction>> emu_to_schema_txs(const EmuTraceView &view,
-                                                               int global_version) {
+td::Result<std::vector<schema::Transaction>> emu_to_schema_txs(const EmuTraceView &view) {
   std::vector<schema::Transaction> txs;
   txs.reserve(view.nodes.size());
   for (std::size_t i = 0; i < view.nodes.size(); i++) {
@@ -20,7 +19,8 @@ td::Result<std::vector<schema::Transaction>> emu_to_schema_txs(const EmuTraceVie
           PSLICE() << "node " << i << " has an invalid transaction BOC: ");
     }
     auto tx_root = cell_result.move_as_ok();
-    auto r_tx = ParseQuery::parse_transaction(tx_root, node.address.workchain, global_version);
+    // Version 12 only selects message fields that no downstream consumer reads.
+    auto r_tx = ParseQuery::parse_transaction(tx_root, node.address.workchain, 12);
     if (r_tx.is_error()) {
       return r_tx.move_as_error_prefix(PSLICE() << "node " << i << ": ");
     }

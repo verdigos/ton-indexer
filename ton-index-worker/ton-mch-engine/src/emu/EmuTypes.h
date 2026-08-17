@@ -20,12 +20,6 @@
 
 namespace mch {
 
-// Constant global_version for the off-pipeline message parse. It selects
-// extra_flags vs reference ihr_fee in int_msg_info; neither field is read by
-// SchemaTraceLoader, so the choice cannot affect classification.
-// TODO: wire live config global_version
-inline constexpr int kEmuGlobalVersion = 12;
-
 // Monotonic microseconds used for classifier timing measurements.
 inline std::int64_t emu_now_us() {
   return static_cast<std::int64_t>(td::Clocks::monotonic() * 1e6);
@@ -94,7 +88,6 @@ struct EmuClassifyResult {
 struct EmuClassifierConfig {
   std::shared_ptr<const MchEnginePrep> prep;  // nullptr = feature off
   int workers{1};
-  int global_version{kEmuGlobalVersion};
   // Cell-db tier-2 lookups. Enabled by default; disabling them uses tier 1 only.
   bool tier2{true};
 };

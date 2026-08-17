@@ -9,6 +9,7 @@
 // parse/nav failure here is likewise a Null reject).
 #include "host/HostImpls.h"
 
+#include "host/BlockViews.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -75,7 +76,7 @@ Leg resolve_leg(const Block *leg) {
     return out;  // jt_calls = []
   }
   if (leg != nullptr && leg->btype == "jetton_transfer") {
-    out.deposit = find_call(leg->children_blocks, kJettonNotify);
+    out.deposit = first_call(leg->children_blocks, kJettonNotify);
     for (const Block *b : leg->children_blocks) {
       if (is_call_op(b, kJettonTransfer)) {
         out.jt_calls.push_back(b);
@@ -393,7 +394,7 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
   const Block *vault_call = lg.deposit;
 
   // Guard: final-deposit opcodes after the topup -> raise -> reject.
-  const Block *topup = find_call(consumed, kTopUp);
+  const Block *topup = first_call(consumed, kTopUp);
   if (topup == nullptr) {
     return rt_ok(Value::null());  // find_call_contract None -> .next_blocks AttributeError
   }
