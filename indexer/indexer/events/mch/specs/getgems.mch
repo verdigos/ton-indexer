@@ -37,7 +37,6 @@
 #   @nft      the getgems nft_transfer block (anchor; legacy test_self target)
 #   @payout   the seller ton_transfer, when it is a child (normal shape only)
 
-predicate getgems_purchase
 predicate getgems_seller_payout
 
 matcher getgems_nft_purchase {
@@ -45,7 +44,7 @@ matcher getgems_nft_purchase {
     shape    getgems_proxy_insert
     entry    @nft
 
-    btype nft_transfer @nft where getgems_purchase
+    btype nft_transfer @nft where (.is_purchase and .marketplace == "getgems")
       -> maybe btype ton_transfer @payout where getgems_seller_payout
 
     # HYBRID declarative build (C++-runnable). The imperative residue (seller

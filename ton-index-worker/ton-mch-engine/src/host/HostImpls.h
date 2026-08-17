@@ -15,9 +15,8 @@ struct Block;     // BlockTree.h
 struct BuildEnv;  // BuildRuntime.h
 struct ShaperMatch;  // HostRegistry.h
 
-// Getgems (HostGetgems.cpp): shaper + purchase/seller-payout preds + purchase fn.
+// Getgems (HostGetgems.cpp): shaper + seller-payout predicate + purchase fn.
 void getgems_proxy_insert(Block *produced, const ShaperMatch &m);
-bool getgems_purchase(const Block *block);
 bool getgems_seller_payout(const Block *block);
 EvalResult getgems_nft_purchase_data(BuildEnv &env, const std::vector<Value> &args);
 
@@ -41,7 +40,6 @@ bool auction_outbid_leg(const Block *bid);
 EvalResult getgems_sale_init(BuildEnv &env, const std::vector<Value> &args);
 EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args);
 EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args);
-EvalResult nft_trade_is_finish(BuildEnv &env, const std::vector<Value> &args);
 
 // tgBTC (HostTgbtc.cpp): mint host fn, the four shared event-log parse fns (one
 // per event opcode, each shared by a full matcher and its `*_log_only` fallback
@@ -77,7 +75,6 @@ void nominator_withdraw_absorb_payouts(Block *produced, const ShaperMatch &m);
 bool evaa_user_withdraw_user(const Block *b);
 bool evaa_user_withdraw_success(const Block *b);
 bool evaa_user_withdraw_fail(const Block *b);
-bool evaa_service_comment(const Block *b);
 bool evaa_supply_anchor(const Block *b);
 bool evaa_user_supply(const Block *b);
 bool evaa_liquidate_anchor(const Block *b);
@@ -89,7 +86,6 @@ EvalResult evaa_liquidate_data(BuildEnv &env, const std::vector<Value> &args);
 
 // DeDust (HostDedust.cpp).
 EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args);
-EvalResult dedust_swap_failed(BuildEnv &env, const std::vector<Value> &args);
 EvalResult dedust_v2_swap_payload(BuildEnv &env, const std::vector<Value> &args);
 EvalResult dedust_v2_deposit_payload(BuildEnv &env, const std::vector<Value> &args);
 

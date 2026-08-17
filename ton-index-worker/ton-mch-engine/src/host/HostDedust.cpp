@@ -368,36 +368,6 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
   return rt_ok(Value::make_obj(std::move(ns)));
 }
 
-// builders/dedust.py _dedust_swap_failed: any SwapExternal/SwapPeer in the
-// consumed set lacking an in-include SwapNotification child.
-EvalResult dedust_swap_failed(BuildEnv &, const std::vector<Value> &args) {
-  if (args[0].t != VType::List) {
-    return rt_fault("dedust_swap_failed: bad arguments");
-  }
-  auto decoded = decode_consumed_or_none(args);
-  if (!decoded) {
-    return rt_ok(Value::make_bool(false));
-  }
-  const std::vector<const Block *> &consumed = decoded->blocks;
-  std::unordered_set<const Block *> include(consumed.begin(), consumed.end());
-  for (const Block *b : consumed) {
-    if (!(is_call_op(b, kDedustSwapExternal) || is_call_op(b, kDedustSwapPeer))) {
-      continue;
-    }
-    bool has_notif = false;
-    for (const Block *n : b->next_blocks) {
-      if (include.count(n) != 0 && is_call_op(n, kDedustSwapNotification)) {
-        has_notif = true;
-        break;
-      }
-    }
-    if (!has_notif) {
-      return rt_ok(Value::make_bool(true));
-    }
-  }
-  return rt_ok(Value::make_bool(false));
-}
-
 namespace {
 
 constexpr std::uint32_t kDedustV2PayJetton = 0xcbc33949;

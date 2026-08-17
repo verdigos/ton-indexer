@@ -68,8 +68,6 @@
 #                                               nft_addr feeds an nft_item lookup,
 #                                               which the DSL forbids
 #                                               (B004_LOOKUP_DEPENDS_ON_LOOKUP)
-#   fn  nft_trade_is_finish(block)              opcode-set OR comment-set test on
-#                                               a mixed anchor, for the switch
 #   pred sale_contract_deploy                   btype in {ton_transfer,
 #                                               call_contract} AND
 #                                               len(contract_deployments) > 0
@@ -345,10 +343,10 @@ matcher nft_cancel_auction {
     reject when auction == null
     reject when account(ret.data.nft.address) != account(auction.nft_addr)
 
-    # Same data either way; only the produced btype differs (legacy picks the
-    # block class off the same opcode/comment test `nft_trade_is_finish` runs).
+    # Same data either way; only the produced btype differs based on the
+    # anchor's opcode or comment.
     produces switch {
-        when nft_trade_is_finish(cancel) => nft_finish_auction out {
+        when (cancel.btype == "ton_transfer" and (cancel.data.comment == "finish" or cancel.data.comment == "stop")) or (cancel.btype == "call_contract" and (cancel.data.opcode == 0xB95616B6 or cancel.data.opcode == 0x20C9EB18)) => nft_finish_auction out {
             nft_address:         ret.data.nft.address
             nft_collection:      ret.data.nft.collection.address if ret.data.nft.collection != null else null
             owner:               ret.data.new_owner

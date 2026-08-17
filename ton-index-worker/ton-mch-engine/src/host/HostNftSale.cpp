@@ -535,19 +535,4 @@ EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args) {
   return rt_ok(Value::make_obj(std::move(f)));
 }
 
-// The produces-switch discriminator shared by NftCancelAuctionMatcher's two
-// outcomes (blocks/auction.py:407-411).
-EvalResult nft_trade_is_finish(BuildEnv &env, const std::vector<Value> &args) {
-  (void)env;
-  const Block *b = as_block(args[0]);
-  if (b == nullptr) {
-    return rt_ok(Value::make_bool(false));
-  }
-  if (b->btype == mch::btype::kTonTransfer) {
-    std::string c = block_comment(b);
-    return rt_ok(Value::make_bool(c == "finish" || c == "stop"));
-  }
-  return rt_ok(Value::make_bool(is_call_op(b, 0xB95616B6) || is_call_op(b, 0x20C9EB18)));
-}
-
 }  // namespace mch

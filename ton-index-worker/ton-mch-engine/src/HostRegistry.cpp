@@ -11,7 +11,6 @@ namespace mch {
 const std::map<std::string, HostFnEntry> &host_fns() {
   static const std::map<std::string, HostFnEntry> fns = {
       {"dedust_swap_legs", {dedust_swap_legs, 3}},
-      {"dedust_swap_failed", {dedust_swap_failed, 1}},
       {"dedust_v2_swap_payload", {dedust_v2_swap_payload, 1}},
       {"dedust_v2_deposit_payload", {dedust_v2_deposit_payload, 1}},
       {"layerzero_dst_oapp_matches", {layerzero_dst_oapp_matches, 2}},
@@ -42,12 +41,11 @@ const std::map<std::string, HostFnEntry> &host_fns() {
       // in_transfer.event_nodes[0].message, so it is deterministic and matches
       // this block-type-driven implementation.
       {"stonfi_v2_swap_data", {stonfi_v2_swap_data, 1}},
-      // specs/nft_sale.mch, GetGems StateInit readers, the chained-lookup bid
-      // builder, and the cancel/finish switch discriminator.
+      // specs/nft_sale.mch, GetGems StateInit readers and chained-lookup bid
+      // builder.
       {"getgems_sale_init", {getgems_sale_init, 2}},
       {"getgems_auction_init", {getgems_auction_init, 2}},
       {"auction_bid_data", {auction_bid_data, 1}},
-      {"nft_trade_is_finish", {nft_trade_is_finish, 1}},
       // specs/cocoon.mch, the expectedMyAddress string renderer (shared by
       // three matchers) and the nested withdraw-payload coins read.
       {"cocoon_expected_address", {cocoon_expected_address, 1}},
@@ -86,14 +84,12 @@ const std::map<std::string, HostPredFn> &host_predicates() {
       {"evaa_user_withdraw_user", evaa_user_withdraw_user},
       {"evaa_user_withdraw_success", evaa_user_withdraw_success},
       {"evaa_user_withdraw_fail", evaa_user_withdraw_fail},
-      {"evaa_service_comment", evaa_service_comment},
       {"evaa_supply_anchor", evaa_supply_anchor},
       {"evaa_user_supply", evaa_user_supply},
       {"evaa_liquidate_anchor", evaa_liquidate_anchor},
       {"evaa_user_liquidate", evaa_user_liquidate},
       {"evaa_liquidate_success_header", evaa_liquidate_success_header},
       {"evaa_bounced_call", evaa_bounced_call},
-      {"getgems_purchase", getgems_purchase},
       {"getgems_seller_payout", getgems_seller_payout},
       // specs/nft_mint.mch's predicate anchor has no opcode or btype prefilter.
       {"single_contract_deploy", single_contract_deploy},

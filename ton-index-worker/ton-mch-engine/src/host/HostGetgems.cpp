@@ -58,17 +58,6 @@ Block *find_seller_payout(const Block *nft) {
 
 }  // namespace
 
-// builders/getgems.py getgems_purchase predicate.
-bool getgems_purchase(const Block *block) {
-  if (block->btype != mch::btype::kNftTransfer || block->data.is_null()) {
-    return false;
-  }
-  const Value *ip = block->data.field("is_purchase");
-  const Value *mp = block->data.field("marketplace");
-  return ip != nullptr && ip->t == VType::Bool && ip->boolean && mp != nullptr &&
-         mp->t == VType::Str && mp->str == "getgems";
-}
-
 // builders/getgems.py getgems_seller_payout predicate (normal child branch only).
 bool getgems_seller_payout(const Block *block) {
   if (block->btype != mch::btype::kTonTransfer) {
