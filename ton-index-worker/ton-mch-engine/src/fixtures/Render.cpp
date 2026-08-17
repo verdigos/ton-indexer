@@ -40,7 +40,7 @@ std::string block_key(const Block *b) {
   return key;
 }
 
-std::string render_value(const Value &v) {
+std::string render_value(const Value &v, bool omit_null_fields) {
   switch (v.t) {
     case VType::Null:
       return "null";
@@ -76,7 +76,7 @@ std::string render_value(const Value &v) {
       std::string out = "[";
       for (std::size_t i = 0; i < v.items->size(); i++) {
         if (i) out += ",";
-        out += render_value((*v.items)[i]);
+        out += render_value((*v.items)[i], omit_null_fields);
       }
       return out + "]";
     }
@@ -84,7 +84,7 @@ std::string render_value(const Value &v) {
     case VType::Obj: {
       std::vector<std::string> keys;
       for (const auto &kv : *v.fields) {
-        keys.push_back(kv.first);
+        if (!omit_null_fields || !kv.second.is_null()) keys.push_back(kv.first);
       }
       std::sort(keys.begin(), keys.end());
       std::string out = v.t == VType::Obj ? "obj{" : "{";
@@ -95,7 +95,7 @@ std::string render_value(const Value &v) {
         // Cell-derived BOC fields render as a cell hash.
         std::string rendered;
         if (is_boc_field(k)) rendered = boc_field_cellhash(*v.field(k));
-        if (rendered.empty()) rendered = render_value(*v.field(k));
+        if (rendered.empty()) rendered = render_value(*v.field(k), omit_null_fields);
         out += k + "=" + rendered;
       }
       return out + "}";

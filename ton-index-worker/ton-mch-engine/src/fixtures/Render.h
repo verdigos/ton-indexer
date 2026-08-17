@@ -15,8 +15,9 @@ struct Block;  // BlockTree.h
 // `<btype>[#<opcode-hex8>]@<min_lt>` canonical block key.
 std::string block_key(const Block *b);
 
-// Canonical outcome-value rendering (see BuildSmoke.h contract).
-std::string render_value(const Value &v);
+// Canonical outcome-value rendering (see BuildSmoke.h contract). Action rows
+// may opt into omitting null-valued map keys; the default preserves dump bytes.
+std::string render_value(const Value &v, bool omit_null_fields = false);
 
 // Canonical message-parse rendering (byte-for-byte twin of py_msg_dump.py).
 // Unlike render_value(), objects have no `obj` prefix and integers/amounts

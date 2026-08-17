@@ -55,33 +55,13 @@ std::size_t scrub_value(Value &v) {
   return n;
 }
 
-// Keep this field set and order synchronized with optional_fields().
 std::size_t scrub_arena_refs(Action &a) {
   std::size_t n = 0;
-  for (Value *v : {&a.source, &a.source_secondary, &a.destination, &a.destination_secondary,
-                   &a.asset, &a.asset_secondary, &a.asset2, &a.asset2_secondary, &a.amount,
-                   &a.value, &a.opcode, &a.ton_transfer_data, &a.jetton_transfer_data,
-                   &a.jetton_swap_data, &a.nft_transfer_data, &a.nft_listing_data,
-                   &a.nft_mint_data,
-                   &a.dex_deposit_liquidity_data, &a.dex_withdraw_liquidity_data, &a.staking_data,
-                   &a.evaa_supply_data, &a.evaa_withdraw_data, &a.evaa_liquidate_data,
-                   &a.vesting_send_message_data,
-                   &a.vesting_add_whitelist_data, &a.tonco_deploy_pool_data,
-                   &a.multisig_create_order_data, &a.multisig_approve_data,
-                   &a.multisig_execute_data,
-                   &a.cocoon_worker_payout_data, &a.cocoon_proxy_payout_data,
-                   &a.cocoon_proxy_charge_data, &a.cocoon_client_top_up_data,
-                   &a.cocoon_register_proxy_data, &a.cocoon_unregister_proxy_data,
-                   &a.cocoon_client_register_data,
-                   &a.cocoon_client_change_secret_hash_data,
-                   &a.cocoon_client_request_refund_data, &a.cocoon_grant_refund_data,
-                   &a.cocoon_client_increase_stake_data, &a.cocoon_client_withdraw_data,
-                   &a.layerzero_packet_data, &a.layerzero_send_data,
-                   &a.layerzero_dvn_verify_data,
-                   &a.jvault_stake_data, &a.jvault_claim_data, &a.change_dns_record_data,
-                   &a.coffee_create_pool_data, &a.coffee_staking_deposit_data,
-                   &a.coffee_staking_withdraw_data,
-                   &a.extra}) {
+  for (Value *v : {
+#define MCH_ACTION_REF(name) &a.name,
+           MCH_ACTION_VALUE_FIELDS(MCH_ACTION_REF)
+#undef MCH_ACTION_REF
+       }) {
     n += scrub_value(*v);
   }
   return n;

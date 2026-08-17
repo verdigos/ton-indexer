@@ -260,9 +260,9 @@ void test_child_row_fields() {
 void test_null_and_stringify() {
   Action a = base_action();
   a.type = "jetton_transfer";
-  a.source = Value::make_account_none();  // AccountId(None) -> as_str() is None
+  a.source = Value::null();  // av_addr(AccountId(None))
   a.destination = Value::make_account_raw(kAddrB);
-  a.asset = Value::make_asset_ton();  // TON asset -> None
+  a.asset = Value::null();  // av_addr(TON asset)
   a.asset2 = Value::make_asset_jetton(kAddrA);
   a.amount = Value::make_amount_none();  // Amount(None)
   // A jetton amount well above uint64: `value` is in the decimal-string set

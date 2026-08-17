@@ -35,16 +35,14 @@ int run_classify(const std::vector<std::string> &paths);
 // schema A/B gate reuses the exact rendering, keeping path B byte-comparable.
 int run_dump(const std::vector<std::string> &paths,
              bool actions_mode, const TraceContextLoader &load_ctx,
-             const LookupSourceFactory &lookup_factory = {});
+             const LookupSourceFactory &lookup_factory = {},
+             const std::string &output_dir = {});
 
 // `--actions` serialized-action-row dump. Uses the same collect-to-final-pass
 // pipeline as run_classify; each surviving post-pass produced block is rendered
 // as an Action row, with one block_tree_serializer.py _fill_* port per supported
-// serialized btype. Gate: goldens/actions.golden byte-compares this dump. Dump line:
-//   ACTION anchor=<key> {id=..,type=..,<directional>,<composite maps>..}
-// Value rendering per fixtures/Render.h render_value (sorted keys). Rows are built
-// lib-side by ActionBuild.cpp. See its header block for what is and is not
-// rendered (roles are not; accounts and the initiating-tx extension ARE).
-int run_actions(const std::vector<std::string> &paths);
+// serialized btype. Rows identify their matcher and omit null map keys. With an
+// output directory, each fixture body is written to `<fixture-stem>.golden`.
+int run_actions(const std::vector<std::string> &paths, const std::string &output_dir = {});
 
 }  // namespace mch

@@ -4,6 +4,7 @@
 
 #include "td/utils/base64.h"
 #include "td/utils/crypto.h"
+#include "td/utils/logging.h"
 
 #include "common/refint.h"
 
@@ -12,6 +13,7 @@
 #include <limits>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace mch {
@@ -1660,6 +1662,26 @@ bool build_action(Block *b, Action &a) {
   a.end_utime = b->event_nodes.empty() ? 0 : maxu;
   a.mc_seqno_end = b->event_nodes.empty() ? 0 : seqmax;
   if (!fill_action(b, a)) return false;
+
+  // Directional fields are strings by the time an action row exists; the
+  // serializer relies on this boundary.
+  const std::pair<const char *, const Value *> directional_fields[]{
+      {"source", &a.source},
+      {"source_secondary", &a.source_secondary},
+      {"destination", &a.destination},
+      {"destination_secondary", &a.destination_secondary},
+      {"asset", &a.asset},
+      {"asset_secondary", &a.asset_secondary},
+      {"asset2", &a.asset2},
+      {"asset2_secondary", &a.asset2_secondary},
+  };
+  for (const auto &[name, value] : directional_fields) {
+    if (value->t != VType::Str && value->t != VType::Null) {
+      LOG(ERROR) << "action build produced non-string directional field " << name
+                 << " for " << b->btype;
+      return false;
+    }
+  }
 
   // Assemble role-less accounts; no role
   // system on this branch). base = each event_node's tx account; + source/
