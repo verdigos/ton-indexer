@@ -4,6 +4,7 @@
 #include "td/utils/JsonBuilder.h"
 
 #include <string>
+#include <vector>
 
 namespace mch_codegen {
 
@@ -11,6 +12,15 @@ namespace mch_codegen {
 // byte (< 0x20 and 0x7F, NUL included) as a 3-digit octal escape. An adjacent
 // digit cannot extend it (the \x greedy-hex hazard). Verified by `--selftest`.
 std::string cstr(const std::string &s);
+
+inline std::string join(const std::vector<std::string> &parts, const std::string &sep) {
+  std::string out;
+  for (std::size_t i = 0; i < parts.size(); i++) {
+    if (i) out += sep;
+    out += parts[i];
+  }
+  return out;
+}
 
 std::string generate_function(const std::string &fn_name, const td::JsonValue &expr);
 

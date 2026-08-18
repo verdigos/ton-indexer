@@ -96,7 +96,7 @@ void fill_jetton_transfer(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "sender"));
   a.source_secondary = av_addr(dg(d, "sender_wallet"));
   a.destination = av_addr(dg(d, "receiver"));
-  a.destination_secondary = has(d, "receiver_wallet") ? av_addr(dg(d, "receiver_wallet")) : Value::null();
+  a.destination_secondary = av_addr(dg(d, "receiver_wallet"));
   a.amount = av_amount(dg(d, "amount"));
   Value asset = dg(d, "asset");
   a.asset = av_addr(asset);
@@ -163,10 +163,10 @@ void fill_jetton_swap(const Value &d, Action &a) {
   a.source_secondary = dg(in_conv, "source_jetton_wallet");
   a.destination = dg(out_conv, "destination");
   a.destination_secondary = dg(out_conv, "destination_jetton_wallet");
-  if (has(d, "destination_wallet") && !dg(d, "destination_wallet").is_null()) {
+  if (!dg(d, "destination_wallet").is_null()) {
     a.destination_secondary = av_addr(dg(d, "destination_wallet"));
   }
-  if (has(d, "destination_asset") && !dg(d, "destination_asset").is_null()) {
+  if (!dg(d, "destination_asset").is_null()) {
     a.asset2 = av_addr(dg(d, "destination_asset"));
   }
   Value min_out = Value::null();
@@ -177,7 +177,7 @@ void fill_jetton_swap(const Value &d, Action &a) {
   f.emplace_back("dex_incoming_transfer", in_conv);
   f.emplace_back("dex_outgoing_transfer", out_conv);
   f.emplace_back("min_out_amount", min_out);
-  if (has(d, "peer_swaps") && !dg(d, "peer_swaps").is_null()) {
+  if (!dg(d, "peer_swaps").is_null()) {
     Value ps = dg(d, "peer_swaps");
     std::vector<Value> conv;
     if (ps.items) {
@@ -189,7 +189,7 @@ void fill_jetton_swap(const Value &d, Action &a) {
 }
 
 void fill_nft_transfer(const Value &d, Action &a) {
-  if (has(d, "prev_owner") && !dg(d, "prev_owner").is_null()) {
+  if (!dg(d, "prev_owner").is_null()) {
     a.source = av_addr(dg(d, "prev_owner"));
   }
   a.destination = av_addr(dg(d, "new_owner"));
@@ -201,26 +201,26 @@ void fill_nft_transfer(const Value &d, Action &a) {
   Value::Fields f;
   f.emplace_back("query_id", dg(d, "query_id"));
   f.emplace_back("is_purchase", dg(d, "is_purchase"));
-  f.emplace_back("price", (has(d, "price") && is_purchase) ? av_amount(dg(d, "price")) : Value::null());
+  f.emplace_back("price", is_purchase ? av_amount(dg(d, "price")) : Value::null());
   f.emplace_back("nft_item_index", dg(nft, "index"));
   Value fwd = dg(d, "forward_amount");
-  f.emplace_back("forward_amount", fwd.is_null() ? Value::null() : av_amount(fwd));
+  f.emplace_back("forward_amount", av_amount(fwd));
   f.emplace_back("custom_payload", dg(d, "custom_payload"));
   f.emplace_back("forward_payload", dg(d, "forward_payload"));
   Value resp = dg(d, "response_destination");
-  f.emplace_back("response_destination", resp.is_null() ? Value::null() : av_addr(resp));
-  f.emplace_back("marketplace", (has(d, "marketplace") && !dg(d, "marketplace").is_null()) ? dg(d, "marketplace") : Value::null());
-  f.emplace_back("marketplace_address", (has(d, "marketplace_address") && !dg(d, "marketplace_address").is_null()) ? av_addr(dg(d, "marketplace_address")) : Value::null());
-  f.emplace_back("real_prev_owner", (has(d, "real_prev_owner") && !dg(d, "real_prev_owner").is_null()) ? av_addr(dg(d, "real_prev_owner")) : Value::null());
-  f.emplace_back("payout_amount", has(d, "payout_amount") ? av_amount(dg(d, "payout_amount")) : Value::null());
+  f.emplace_back("response_destination", av_addr(resp));
+  f.emplace_back("marketplace", dg(d, "marketplace"));
+  f.emplace_back("marketplace_address", av_addr(dg(d, "marketplace_address")));
+  f.emplace_back("real_prev_owner", av_addr(dg(d, "real_prev_owner")));
+  f.emplace_back("payout_amount", av_amount(dg(d, "payout_amount")));
   f.emplace_back("payout_comment_encrypted", dg(d, "payout_comment_encrypted"));
   f.emplace_back("payout_comment_encoded", dg(d, "payout_comment_encoded"));
   f.emplace_back("payout_comment", dg(d, "payout_comment"));
-  f.emplace_back("royalty_amount", has(d, "royalty_amount") ? av_amount(dg(d, "royalty_amount")) : Value::null());
+  f.emplace_back("royalty_amount", av_amount(dg(d, "royalty_amount")));
   a.nft_transfer_data = mkdict(std::move(f));
   Value::Fields l;
-  l.emplace_back("marketplace_fee_address", has(d, "payout_address") ? av_addr(dg(d, "payout_address")) : Value::null());
-  l.emplace_back("royalty_address", has(d, "royalty_address") ? av_addr(dg(d, "royalty_address")) : Value::null());
+  l.emplace_back("marketplace_fee_address", av_addr(dg(d, "payout_address")));
+  l.emplace_back("royalty_address", av_addr(dg(d, "royalty_address")));
   a.nft_listing_data = mkdict(std::move(l));
 }
 
@@ -436,9 +436,9 @@ void fill_evaa_supply(const Value &d, Action &a, bool block_failed) {
   f.emplace_back("asset_id", av_hex(dg(d, "asset_id")));
   f.emplace_back("master", av_addr(dg(d, "master")));
   Value rjw = dg(d, "recipient_jetton_wallet");
-  f.emplace_back("recipient_jetton_wallet", rjw.is_null() ? Value::null() : av_addr(rjw));
+  f.emplace_back("recipient_jetton_wallet", av_addr(rjw));
   Value mjw = dg(d, "master_jetton_wallet");
-  f.emplace_back("master_jetton_wallet", mjw.is_null() ? Value::null() : av_addr(mjw));
+  f.emplace_back("master_jetton_wallet", av_addr(mjw));
   a.evaa_supply_data = mkdict(std::move(f));
 }
 
@@ -454,9 +454,9 @@ void fill_evaa_withdraw(const Value &d, Action &a, bool block_failed) {
   Value::Fields f;
   f.emplace_back("is_ton", dg(d, "is_ton"));
   Value rjw = dg(d, "recipient_jetton_wallet");
-  f.emplace_back("recipient_jetton_wallet", rjw.is_null() ? Value::null() : av_addr(rjw));
+  f.emplace_back("recipient_jetton_wallet", av_addr(rjw));
   Value mjw = dg(d, "master_jetton_wallet");
-  f.emplace_back("master_jetton_wallet", mjw.is_null() ? Value::null() : av_addr(mjw));
+  f.emplace_back("master_jetton_wallet", av_addr(mjw));
   f.emplace_back("fail_reason", dg(d, "fail_reason"));
   f.emplace_back("master", av_addr(dg(d, "master")));
   f.emplace_back("asset_id", av_hex(dg(d, "asset_id")));

@@ -12,8 +12,6 @@ namespace mch {
 
 namespace {
 
-constexpr std::uint32_t kExcessOpcode = 0xD53276DB;
-constexpr std::uint32_t kBounceOpcode = 0xFFFFFFFF;
 constexpr long kExitIdx = -1;  // frame idx marker for the exit attempt
 
 // Match recursion depth cap. depth == block-tree depth reached through the

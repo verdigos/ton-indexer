@@ -27,6 +27,11 @@ td::Result<td::Ref<vm::Cell>> block_body(const Block *b) {
   return vm::std_boc_deserialize(raw);
 }
 
+bool fragment_uri(const Value *uri) {
+  return uri != nullptr && uri->t == VType::Str &&
+         uri->str.find("https://nft.fragment.com") != std::string::npos;
+}
+
 const Block *as_block(const Value &v) { return v.t == VType::Block ? v.block : nullptr; }
 
 bool is_call_op(const Block *b, std::uint32_t op) {

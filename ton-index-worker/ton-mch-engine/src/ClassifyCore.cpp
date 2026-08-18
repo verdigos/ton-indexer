@@ -44,9 +44,6 @@ std::vector<Block *> gather_blocks(Block *root) {
 
 namespace {
 
-constexpr std::uint32_t kExcessOpcode = 0xD53276DB;
-constexpr std::uint32_t kBounceOpcode = 0xFFFFFFFF;
-
 Block *wrap_root(BlockArena &arena, Block *root) {
   Block *wrapper = arena.make(mch::btype::kRoot);
   wrapper->connect(root);
@@ -234,28 +231,29 @@ Value combine_deposits(const Value &first, const Value &final_d) {
   return Value::make_dict(std::move(out));
 }
 
+std::string deposit_contract_key(const Block *b) {
+  Value c = pp_field(b->data, "deposit_contract");
+  return c.t == VType::Account ? (c.addr_none ? std::string("addr_none") : c.str) : c.describe();
+}
+
 void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block *> &removed) {
   std::vector<Block *> firsts;
   std::map<std::string, int> used;
   std::map<std::string, Block *> final_by_key;
-  auto contract_key = [](const Block *b) {
-    Value c = pp_field(b->data, "deposit_contract");
-    return c.t == VType::Account ? (c.addr_none ? std::string("addr_none") : c.str) : c.describe();
-  };
   for (Block *b : blocks) {
     if (b->btype == mch::btype::kDedustDepositLiquidityPartial) {
       firsts.push_back(b);
-      used[contract_key(b)]++;
+      used[deposit_contract_key(b)]++;
     } else if (b->btype == mch::btype::kDedustDepositLiquidity) {
-      final_by_key.emplace(contract_key(b), b);
-      used[contract_key(b)]++;
+      final_by_key.emplace(deposit_contract_key(b), b);
+      used[deposit_contract_key(b)]++;
     }
   }
   for (const auto &kv : used) {
     if (kv.second > 2) return;  // logger.warning + skip merging
   }
   for (Block *first : firsts) {
-    auto it = final_by_key.find(contract_key(first));
+    auto it = final_by_key.find(deposit_contract_key(first));
     Block *final_b = (it != final_by_key.end()) ? it->second : nullptr;
     if (final_b == nullptr) continue;
     Value merged;
@@ -283,18 +281,14 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
   std::vector<Block *> partials, finals;
   std::map<std::string, int> used;
   std::map<std::string, Block *> partial_by_key;
-  auto contract_key = [](const Block *b) {
-    Value c = pp_field(b->data, "deposit_contract");
-    return c.t == VType::Account ? (c.addr_none ? std::string("addr_none") : c.str) : c.describe();
-  };
   for (Block *b : blocks) {
     if (b->btype == mch::btype::kDedustV2DepositLiquidityPartial) {
       partials.push_back(b);
-      partial_by_key.emplace(contract_key(b), b);
-      used[contract_key(b)]++;
+      partial_by_key.emplace(deposit_contract_key(b), b);
+      used[deposit_contract_key(b)]++;
     } else if (b->btype == mch::btype::kDedustV2DepositLiquidity) {
       finals.push_back(b);
-      used[contract_key(b)]++;
+      used[deposit_contract_key(b)]++;
     }
   }
   if (partials.empty()) return;
@@ -302,7 +296,7 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
     if (kv.second > 2) return;  // logger.warning + skip merging
   }
   for (Block *final_b : finals) {
-    auto it = partial_by_key.find(contract_key(final_b));
+    auto it = partial_by_key.find(deposit_contract_key(final_b));
     if (it == partial_by_key.end()) continue;
     Block *partial = it->second;
     partial_by_key.erase(it);
@@ -456,6 +450,16 @@ void unwind_deployments(std::vector<Block *> &blocks) {
   }
 }
 
+// Order is load-bearing: V1 merge before V2 pairing, deployments unwound last.
+// unwind_deployments promotes nested ContractDeploy onto the spine.
+void run_post_processors(std::vector<Block *> &spine, BlockArena &arena,
+                         std::set<Block *> &removed) {
+  post_process_dedust_liquidity(spine, removed);
+  post_process_dedust_v2_liquidity(spine, removed);
+  post_process_stonfi_v2_liquidity(spine, arena, removed);
+  unwind_deployments(spine);
+}
+
 // serialize_blocks' row filter: a spine
 // block becomes a row UNLESS it is the root wrapper, an `empty` proxy, or a
 // call_contract whose message has a null source (the external-in leaf) or a null
@@ -553,10 +557,7 @@ std::vector<ActionRow> basic_classify_fallback(TraceContext &ctx) {
     Block *wrap = wrap_root(ctx.arena, root);
     std::vector<Block *> spine = collect_spine(wrap);
     std::set<Block *> removed;
-    post_process_dedust_liquidity(spine, removed);
-    post_process_dedust_v2_liquidity(spine, removed);
-    post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
-    unwind_deployments(spine);
+    run_post_processors(spine, ctx.arena, removed);
     // Use the recursive serialization path. Basic btypes are all v1_ops, so
     // recursion normally has no additional rows to visit.
     out = serialize_rows(spine, "");
@@ -598,10 +599,7 @@ std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource
     }
     std::vector<Block *> spine = collect_spine(wrapper);
     std::set<Block *> removed;
-    post_process_dedust_liquidity(spine, removed);
-    post_process_dedust_v2_liquidity(spine, removed);
-    post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
-    unwind_deployments(spine);
+    run_post_processors(spine, ctx.arena, removed);
     // FLAT, unlike the other two paths: try_classify_unknown_trace applies the
     // row filter directly instead of calling serialize_blocks, so a ghost row
     // never recurses into children and never carries parent_action_id.
@@ -750,10 +748,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     // Post-process the flat spine list ([root] + BFS).
     std::vector<Block *> spine = collect_spine(wrapper);
     std::set<Block *> removed;
-    post_process_dedust_liquidity(spine, removed);
-    post_process_dedust_v2_liquidity(spine, removed);
-    post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
-    unwind_deployments(spine);  // promotes nested ContractDeploy onto the spine
+    run_post_processors(spine, ctx.arena, removed);
     for (CoreAction &a : pending) {
       if (!removed.count(a.produced)) result.actions.push_back(std::move(a));
     }

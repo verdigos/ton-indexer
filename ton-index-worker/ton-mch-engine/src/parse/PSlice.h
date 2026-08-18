@@ -61,6 +61,10 @@ td::Result<vm::CellSlice> open_ref_cell(const td::Ref<vm::Cell> &c);
 // field is walked because Python parses (and can raise on) them all.
 td::Status skip_state_init_py(vm::CellSlice &cs);
 
+// After the StateInit prefix, skip the code maybe-ref and return the required
+// data cell.
+td::Result<td::Ref<vm::Cell>> state_init_data_cell(vm::CellSlice &cs);
+
 // pytoniq Slice.to_cell(): Cell(remaining bits, remaining refs).
 td::Result<td::Ref<vm::Cell>> slice_to_cell(const vm::CellSlice &cs);
 

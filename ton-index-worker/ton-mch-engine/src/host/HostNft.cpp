@@ -52,14 +52,6 @@ const EventNode *first_node(const Block *b) {
   return (b == nullptr || b->event_nodes.empty()) ? nullptr : b->event_nodes.front();
 }
 
-td::Result<td::Ref<vm::Cell>> node_body_cell(const EventNode *n) {
-  if (n == nullptr || n->msg == nullptr || !n->msg->content) {
-    return td::Status::Error("no body");
-  }
-  TRY_RESULT(raw, td::base64_decode(td::Slice(n->msg->content->body)));
-  return vm::std_boc_deserialize(raw);
-}
-
 // NftTransfer body parser
 
 struct NftTransferMsg {
@@ -215,8 +207,7 @@ EvalResult get_nft_data(BuildEnv &env, const Value &nft_address) {
       return rt_fault("nft content is not a dict");
     }
     const Value *uri = content->field("uri");
-    bool fragment = uri != nullptr && uri->t == VType::Str &&
-                    uri->str.find("https://nft.fragment.com") != std::string::npos;
+    bool fragment = fragment_uri(uri);
     if (fragment) {
       // tokens = uri.split("/"); name = tokens[-1][:-5]; type = tokens[-2].
       std::vector<std::string> toks;
@@ -278,7 +269,7 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
   }
 
   // NftTransfer parse (anchor body).
-  auto r_body = node_body_cell(tnode);
+  auto r_body = block_body(transfer);
   if (r_body.is_error()) {
     return rt_fault("nft_transfer_data: transfer body");
   }
@@ -292,8 +283,7 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
   // anchor message source.
   Value prev_owner;
   if (assigned != nullptr) {
-    const EventNode *anode = first_node(assigned);
-    auto r_ab = node_body_cell(anode);
+    auto r_ab = block_body(assigned);
     if (r_ab.is_error()) {
       return rt_fault("nft_transfer_data: assigned body");
     }
@@ -430,7 +420,7 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
   }
   const EventNode *anode = first_node(assigned);
   const Message *amsg = anode != nullptr ? anode->msg : nullptr;
-  auto r_body = node_body_cell(anode);
+  auto r_body = block_body(assigned);
   if (r_body.is_error()) {
     return rt_fault("telegram: assigned body");
   }
@@ -551,8 +541,7 @@ EvalResult is_teleitem(BuildEnv &, const std::vector<Value> &args) {
     return rt_ok(Value::make_bool(false));
   }
   const Value *uri = content->field("uri");
-  bool fragment = uri != nullptr && uri->t == VType::Str &&
-                  uri->str.find("https://nft.fragment.com") != std::string::npos;
+  bool fragment = fragment_uri(uri);
   return rt_ok(Value::make_bool(fragment));
 }
 

@@ -19,6 +19,9 @@ struct Message;   // TraceLoader.h
 
 td::Result<td::Ref<vm::Cell>> block_body(const Block *b);
 
+// True when uri is a Str containing the Fragment NFT host.
+bool fragment_uri(const Value *uri);
+
 // Decode a base64-encoded BOC string field into a cell.
 td::Result<td::Ref<vm::Cell>> cell_from_pystr(const std::string &s);
 

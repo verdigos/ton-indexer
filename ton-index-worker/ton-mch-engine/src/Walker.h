@@ -6,6 +6,7 @@
 #include "ExprRuntime.h"
 #include "IrTables.h"
 
+#include <cstdint>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -13,6 +14,10 @@
 #include <vector>
 
 namespace mch {
+
+// The two service opcodes the walker treats as aux and classify appends under include_excess / include_bounces.
+inline constexpr std::uint32_t kExcessOpcode = 0xD53276DB;
+inline constexpr std::uint32_t kBounceOpcode = 0xFFFFFFFF;
 
 // Generated where_expr functions keyed by artifact-global node id. Built once
 // per run by prepare_classify (from gen_wheres_ir) and carried in

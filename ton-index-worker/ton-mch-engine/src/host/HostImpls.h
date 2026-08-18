@@ -15,7 +15,7 @@ struct Block;     // BlockTree.h
 struct BuildEnv;  // BuildRuntime.h
 struct ShaperMatch;  // HostRegistry.h
 
-// Getgems (HostGetgems.cpp): finish/stop sibling-payout shaper.
+// Getgems (HostNftSale.cpp): finish/stop sibling-payout shaper.
 void getgems_proxy_insert(Block *produced, const ShaperMatch &m);
 
 // NFT (HostNft.cpp): base nft_transfer host fn + parent-absorb shaper + telegram.

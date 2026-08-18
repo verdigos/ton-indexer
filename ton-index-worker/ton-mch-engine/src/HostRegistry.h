@@ -7,7 +7,7 @@
 // this registry, a matcher whose pred names are all registered is runnable;
 // the missing names become its skip reason. The Python twins read the
 // registered-name list from twins/cpp_surface.json (CPP_PREDS), emitted by
-// `ton-mch-engine --surface` off THIS registry, not hand-mirrored.
+// `ton-mch-dev-engine --surface` off THIS registry, not hand-mirrored.
 #pragma once
 
 #include "ExprRuntime.h"
@@ -50,12 +50,10 @@ const std::map<std::string, HostFnEntry> &host_fns();
 // topology pass. The reference signature is `shaper(produced, match)`;
 // captured blocks are reached by name and an arena is needed to mint proxy
 // blocks (Python EmptyBlock() self-allocates; C++ blocks are arena-owned), so
-// both ride on ShaperMatch. The classify pipeline INVOKES them
-// from ClassifyCore::try_build after merge as the last build step. No
-// artifact matcher currently pairs a build_program with a `shape`, so the call
-// site is live but unexercised by the corpus. The --shape-test harness drives
-// them directly, and registration keeps build_skip_reason from reporting a
-// registered shaper as a missing binding.
+// both ride on ShaperMatch. Shapers run from ClassifyCore::try_build after
+// merge as the last build step. Spec matchers pair shapes with build programs;
+// the --shape-test harness also drives them directly. Registration keeps
+// build_skip_reason from reporting a registered shaper as missing.
 struct ShaperMatch {
   std::map<std::string, Block *> captures;  // capture name -> block (or absent)
   std::vector<Block *> consumed;            // match consumed set (`match.consumed`)

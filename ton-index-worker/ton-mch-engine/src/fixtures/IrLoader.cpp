@@ -1,7 +1,7 @@
 #include "fixtures/IrLoader.h"
+#include "fixtures/IrJson.h"
 
 #include "td/utils/JsonBuilder.h"
-#include "td/utils/crypto.h"
 
 #include <algorithm>
 #include <exception>
@@ -16,43 +16,6 @@ namespace {
 
 using Json = td::JsonValue;
 using JType = td::JsonValue::Type;
-
-const std::unordered_set<std::string> kBuiltins = {
-    "account", "amount", "asset", "ton_asset", "addr_none", "b64",
-    "asset_of", "tail_unwrap", "bytes_of", "first", "last", "len", "sum",
-    "zip", "map", "concat", "contains"};
-
-const Json *jfield(const Json &e, td::Slice name) {
-  if (e.type() != JType::Object) {
-    return nullptr;
-  }
-  for (const auto &kv : e.get_object().field_values_) {
-    if (kv.first == name) {
-      return &kv.second;
-    }
-  }
-  return nullptr;
-}
-
-bool has(const Json &e, td::Slice name) { return jfield(e, name) != nullptr; }
-
-std::string jstr(const Json &e, td::Slice name, const std::string &dflt = {}) {
-  const Json *f = jfield(e, name);
-  return (f != nullptr && f->type() == JType::String) ? f->get_string().str() : dflt;
-}
-
-std::int64_t jint(const Json &e, td::Slice name, std::int64_t dflt = 0) {
-  const Json *f = jfield(e, name);
-  if (f == nullptr || f->type() != JType::Number) {
-    return dflt;
-  }
-  return std::stoll(f->get_number().str());
-}
-
-bool jbool(const Json &e, td::Slice name, bool dflt = false) {
-  const Json *f = jfield(e, name);
-  return (f != nullptr && f->type() == JType::Boolean) ? f->get_boolean() : dflt;
-}
 
 // Parse a JSON Number token as int64. A malformed / overflowing token in a
 // corrupt artifact becomes a clean Status error instead of an uncaught
@@ -119,7 +82,7 @@ void scan_program(const Json &e, CompiledMatcher &m) {
     const std::string k = jstr(e, "k");
     if (k == "call") {
       std::string fn = jstr(e, "fn");
-      if (!fn.empty() && kBuiltins.count(fn) == 0) {
+      if (!fn.empty() && !is_builtin_name(fn)) {
         m.ref_fns.insert(fn);
       }
     } else if (k == "lookup") {
@@ -465,17 +428,8 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
   ss << in.rdbuf();
   std::string buf = ss.str();
 
-  std::string source_sha;
-  {
-    // Hash BEFORE json_decode mutates the buffer.
-    unsigned char digest[32];
-    td::sha256(td::Slice(buf), td::MutableSlice(digest, 32));
-    static const char *hex = "0123456789abcdef";
-    for (int i = 0; i < 32; i++) {
-      source_sha += hex[digest[i] >> 4];
-      source_sha += hex[digest[i] & 0xF];
-    }
-  }
+  // Hash BEFORE json_decode mutates the buffer.
+  std::string source_sha = sha256_hex(td::Slice(buf));
 
   auto r_root = td::json_decode(td::MutableSlice(buf));
   if (r_root.is_error()) {

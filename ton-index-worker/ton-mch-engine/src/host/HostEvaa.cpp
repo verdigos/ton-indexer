@@ -230,12 +230,13 @@ bool evaa_bounced_call(const Block *b) {
   return b->btype == mch::btype::kCallContract && m != nullptr && m->bounced;
 }
 
-// EvaaSupplyBlockMatcher.test_self: the 0x1 supply_master call itself (TON side),
-// or a jetton transfer whose FORWARD PAYLOAD starts with the supply_master
-// opcode (jetton side). btype, not isinstance, the reference JettonTransferBlock
-// check is dead under the IR engine.
-bool evaa_supply_anchor(const Block *b) {
-  if (is_call_op(b, kSupplyMaster)) {
+namespace {
+
+// The master call itself (TON side), or a jetton transfer whose FORWARD PAYLOAD
+// starts with that opcode (jetton side). btype, not isinstance, the reference
+// JettonTransferBlock check is dead under the IR engine.
+bool evaa_master_anchor(const Block *b, td::uint32 op) {
+  if (is_call_op(b, op)) {
     return true;
   }
   if (b->btype != mch::btype::kJettonTransfer) {
@@ -255,31 +256,15 @@ bool evaa_supply_anchor(const Block *b) {
   }
   auto ctx = r_ctx.move_as_ok();
   return ctx.cs.have(32) &&
-         static_cast<td::uint32>(ctx.cs.fetch_ulong(32)) == kSupplyMaster;
+         static_cast<td::uint32>(ctx.cs.fetch_ulong(32)) == op;
 }
 
+}  // namespace
+
+bool evaa_supply_anchor(const Block *b) { return evaa_master_anchor(b, kSupplyMaster); }
+
 bool evaa_liquidate_anchor(const Block *b) {
-  if (is_call_op(b, kLiquidateMaster)) {
-    return true;
-  }
-  if (b->btype != mch::btype::kJettonTransfer) {
-    return false;
-  }
-  Value fp = data_field(b, "forward_payload");
-  if (fp.t != VType::Str) {
-    return false;
-  }
-  auto r_cell = cell_from_pystr(fp.str);
-  if (r_cell.is_error()) {
-    return false;
-  }
-  auto r_ctx = open_body(r_cell.ok());
-  if (r_ctx.is_error()) {
-    return false;
-  }
-  auto ctx = r_ctx.move_as_ok();
-  return ctx.cs.have(32) &&
-         static_cast<td::uint32>(ctx.cs.fetch_ulong(32)) == kLiquidateMaster;
+  return evaa_master_anchor(b, kLiquidateMaster);
 }
 
 // builders/evaa.py _evaa_supply_data -> blocks/evaa.py build_evaa_supply_core.

@@ -15,6 +15,11 @@
 
 namespace mch {
 
+namespace {
+std::string boc_field_cellhash(const Value &v);
+}  // namespace
+
+
 std::string block_key(const Block *b) {
   std::string key = b->btype;
   if (b->opcode) {
@@ -85,6 +90,7 @@ std::string render_value(const Value &v, bool omit_null_fields) {
   return "?";
 }
 
+namespace {
 std::string render_parse_fields_sorted(const Value::Fields &fields) {
   std::vector<std::pair<std::string, std::string>> kv;
   kv.reserve(fields.size());
@@ -106,6 +112,8 @@ std::string render_parse_fields_sorted(const Value::Fields &fields) {
   out += "}";
   return out;
 }
+}  // namespace
+
 
 std::string render_parse_value(const Value &v) {
   switch (v.t) {
@@ -152,6 +160,11 @@ const std::set<std::string> &boc_field_names() {
 
 bool is_boc_field(const std::string &key) { return boc_field_names().count(key) != 0; }
 
+namespace {
+// Cell-derived BOC containers (b64 string from b64(), or raw BOC Bytes from
+// MsgParse) render as the cell's ROOT HASH ("cellhash:HEX-UPPER") so
+// serialization-order / CRC provenance is invisible. Returns "" if the value
+// is not a decodable BOC; the caller falls back to the normal render.
 std::string boc_field_cellhash(const Value &v) {
   auto hash_of = [](const td::Ref<vm::Cell> &cell) -> std::string {
     auto h = cell->get_hash();
@@ -190,6 +203,8 @@ std::string boc_field_cellhash(const Value &v) {
   }
   return std::string();  // null / other type → fall back to normal render
 }
+}  // namespace
+
 
 bool structural_equal(const Value &a, const Value &b) {
   // Mirrors the Python vector runner's _equal: expected type drives the check,

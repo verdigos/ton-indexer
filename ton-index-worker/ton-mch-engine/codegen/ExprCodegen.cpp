@@ -1,60 +1,25 @@
 #include "ExprCodegen.h"
 
+#include "fixtures/IrJson.h"
+
 #include <cctype>
 #include <cstdio>
 #include <map>
-#include <set>
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
 
 namespace mch_codegen {
 
+using mch::is_builtin_name;
+using mch::jbool;
+using mch::jfield;
+using mch::jstr;
+
 namespace {
 
 using Json = td::JsonValue;
 using JType = td::JsonValue::Type;
-
-const Json *jfield(const Json &e, td::Slice name) {
-  if (e.type() != JType::Object) {
-    return nullptr;
-  }
-  for (const auto &kv : e.get_object().field_values_) {
-    if (kv.first == name) {
-      return &kv.second;
-    }
-  }
-  return nullptr;
-}
-
-std::string jstr(const Json &e, const char *name) {
-  const Json *f = jfield(e, td::Slice(name));
-  return f != nullptr && f->type() == JType::String ? f->get_string().str() : std::string{};
-}
-
-bool jbool(const Json &e, const char *name, bool dflt = false) {
-  const Json *f = jfield(e, td::Slice(name));
-  return f != nullptr && f->type() == JType::Boolean ? f->get_boolean() : dflt;
-}
-
-// The fixed builtin set (rt_call_builtin's arity table). Anything else in a
-// `call` node is a host fn (registries.fns) in build programs.
-bool is_builtin(const std::string &name) {
-  static const std::set<std::string> builtins = {
-      "account", "amount", "asset", "ton_asset", "addr_none", "b64",
-      "asset_of", "tail_unwrap", "bytes_of", "first", "last", "len",
-      "sum", "zip", "map", "concat", "contains"};
-  return builtins.count(name) != 0;
-}
-
-std::string join(const std::vector<std::string> &parts, const std::string &sep) {
-  std::string out;
-  for (std::size_t i = 0; i < parts.size(); i++) {
-    if (i) out += sep;
-    out += parts[i];
-  }
-  return out;
-}
 
 // Ports cpp_expr_emit._Emitter: emits one function body, returning the Value
 // temp name for each subexpression. The temp counter is shared across nested
@@ -169,12 +134,12 @@ class Emitter {
       // Build mode: a non-builtin call is a host `fn` (registries.fns), emit
       // rt_call_hostfn (env-aware, NULL ARGS PASS THROUGH, unlike rt_call_builtin
       // which is null-strict). Vectors/Where modes only ever see builtins.
-      if (mode_ == EmitMode::Build && !is_builtin(fn)) {
+      if (mode_ == EmitMode::Build && !is_builtin_name(fn)) {
         return bind("rt_call_hostfn(env, " + cstr(fn) + ", std::vector<Value>{" + argv + "})");
       }
       // The builtin name and arity are known at emit time, so call the typed
       // core directly without name-keyed dispatch or a per-call heap vector.
-      // is_builtin() gates this; the argument temporaries are
+      // is_builtin_name() gates this; the argument temporaries are
       // Value locals passed by const-ref (rt_builtin_* take const Value&).
       return bind("rt_builtin_" + fn + "(" + argv + ")");
     }

@@ -177,7 +177,6 @@ add_library(mch-classify STATIC
     src/host/DexRecords.cpp
     src/host/BlockViews.cpp
     src/host/HostAdapter.cpp
-    src/host/HostGetgems.cpp
     src/host/HostNominator.cpp
     src/host/HostEvaa.cpp
     src/host/HostDedust.cpp
@@ -185,7 +184,6 @@ add_library(mch-classify STATIC
     src/host/HostTonstakers.cpp
     src/host/HostVesting.cpp
     src/host/HostCocoon.cpp
-    src/host/HostJvault.cpp
     src/host/HostNft.cpp
     src/host/HostNftSale.cpp
     src/host/HostTgbtc.cpp

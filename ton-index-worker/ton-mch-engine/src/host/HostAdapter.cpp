@@ -1,4 +1,4 @@
-// Typed host-authoring adapter (see host/HostAdapter.h).
+// Consumed-set decode helpers (see host/HostAdapter.h).
 #include "host/HostAdapter.h"
 
 #include "BuildRuntime.h"
@@ -38,27 +38,6 @@ std::optional<ConsumedBlocks> decode_consumed_or_none(const std::vector<Value> &
     return std::nullopt;
   }
   return out;
-}
-
-EvalResult run_swap_host(BuildEnv &env, const std::vector<Value> &args, const char *binding,
-                         SwapCore core) {
-  ConsumedBlocks consumed;
-  EvalResult decoded = decode_consumed(args, binding, consumed);
-  if (decoded.faulted) {
-    return decoded;
-  }
-  HostContext ctx{env, binding};
-  HostResult<SwapRecord> r = core(ctx, consumed);
-  switch (r.kind) {
-    case HostResult<SwapRecord>::Kind::Value:
-      return rt_ok(r.value.encode());
-    case HostResult<SwapRecord>::Kind::Reject:
-      // The typed Reject is the spec's `reject when r == null`, log it as one.
-      return host_reject("typed core reject");
-    case HostResult<SwapRecord>::Kind::Fault:
-      return rt_fault(std::string(binding) + ": " + r.message);
-  }
-  return rt_fault(std::string(binding) + ": unreachable");
 }
 
 }  // namespace mch

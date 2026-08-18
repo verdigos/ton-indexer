@@ -103,8 +103,7 @@ bool build_action(Block *b, Action &a);
 
 bool build_action(const ActionRow &row, Action &a);
 
-// Stage-A action-surface hook. Kept out of build_action dispatch until the
-// evaa_liquidate matcher lands separately.
+// Dispatched like the other fills; also driven directly by the serialize test.
 void fill_evaa_liquidate(const Value &data, Action &action);
 
 // create_unknown_action (block_tree_serializer.py:1683-1706): the synthetic row

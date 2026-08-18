@@ -20,15 +20,6 @@ using mch::CompiledNode;
 using mch::NodeKind;
 using mch::RecStrategy;
 
-std::string join(const std::vector<std::string> &parts, const std::string &sep) {
-  std::string out;
-  for (std::size_t i = 0; i < parts.size(); i++) {
-    if (i) out += sep;
-    out += parts[i];
-  }
-  return out;
-}
-
 std::string hex32(std::uint32_t v) {
   char buf[16];
   std::snprintf(buf, sizeof(buf), "0x%08xu", v);

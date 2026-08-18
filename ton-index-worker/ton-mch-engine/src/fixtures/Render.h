@@ -24,21 +24,12 @@ std::string render_value(const Value &v, bool omit_null_fields = false);
 // share their bare decimal spelling. Message-vector exact-value fixtures use
 // this same renderer so parse-dump and vector comparison cannot drift.
 std::string render_parse_value(const Value &v);
-std::string render_parse_fields_sorted(const Value::Fields &fields);
 
-// A produced or parsed field whose value is a
-// Cell-derived BOC container (a b64 string from the b64() builtin, or raw BOC
-// Bytes from MsgParse) is rendered in the dumps as the cell's ROOT HASH
-// ("cellhash:HEX-UPPER") instead of its exact bytes, so serialization-order /
-// CRC provenance is invisible to the comparison.
-// `is_boc_field` gates the render by field name (comment / bitcoin_txid / pubkey
-// are raw non-BOC bytes and stay as-is). `boc_field_cellhash` returns the
-// cellhash string, or "" if the value is not a decodable BOC (caller falls back
-// to the normal render).
+// `is_boc_field` gates BOC-as-cellhash render by field name (comment /
+// bitcoin_txid / pubkey are raw non-BOC bytes and stay as-is).
 bool is_boc_field(const std::string &key);
 // The BOC-field name set backing is_boc_field (surfaced by --surface for the twins).
 const std::set<std::string> &boc_field_names();
-std::string boc_field_cellhash(const Value &v);
 
 // Structural equality used by the conformance-vector comparator (mirrors the
 // Python runner's _equal: type-checked + deep). NOT the `==` operator.

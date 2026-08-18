@@ -204,7 +204,9 @@ td::Result<vm::CellSlice> open_ref_cell(const td::Ref<vm::Cell> &c) {
   }
 }
 
-td::Status skip_state_init_py(vm::CellSlice &cs) {
+namespace {
+
+td::Status skip_state_init_prefix(vm::CellSlice &cs) {
   if (!cs.have(1)) return td::Status::Error("state_init: split_depth underflow");
   if (cs.fetch_ulong(1)) {
     if (!cs.have(5)) return td::Status::Error("state_init: split_depth bits underflow");
@@ -213,8 +215,15 @@ td::Status skip_state_init_py(vm::CellSlice &cs) {
   if (!cs.have(1)) return td::Status::Error("state_init: special underflow");
   if (cs.fetch_ulong(1)) {
     if (!cs.have(2)) return td::Status::Error("state_init: tick_tock underflow");
-    cs.advance(2);  // TickTock: tick:Bool tock:Bool
+    cs.advance(2);
   }
+  return td::Status::OK();
+}
+
+}  // namespace
+
+td::Status skip_state_init_py(vm::CellSlice &cs) {
+  TRY_STATUS(skip_state_init_prefix(cs));
   for (int i = 0; i < 3; i++) {  // code, data, library
     if (!cs.have(1)) return td::Status::Error("state_init: maybe-ref underflow");
     if (cs.fetch_ulong(1)) {
@@ -223,6 +232,19 @@ td::Status skip_state_init_py(vm::CellSlice &cs) {
     }
   }
   return td::Status::OK();
+}
+
+td::Result<td::Ref<vm::Cell>> state_init_data_cell(vm::CellSlice &cs) {
+  TRY_STATUS(skip_state_init_prefix(cs));
+  if (!cs.have(1)) return td::Status::Error("state_init: code maybe underflow");
+  if (cs.fetch_ulong(1)) {
+    if (cs.size_refs() == 0) return td::Status::Error("state_init: code ref missing");
+    cs.fetch_ref();
+  }
+  if (!cs.have(1)) return td::Status::Error("state_init: data maybe underflow");
+  if (!cs.fetch_ulong(1)) return td::Status::Error("state_init: no data cell");
+  if (cs.size_refs() == 0) return td::Status::Error("state_init: data ref missing");
+  return cs.fetch_ref();
 }
 
 td::Result<td::Ref<vm::Cell>> slice_to_cell(const vm::CellSlice &cs) {

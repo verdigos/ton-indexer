@@ -105,6 +105,39 @@ LogCursor open_log(const std::vector<Value> &args) {
   return lc;
 }
 
+// TgBTCMintEvent tail after the 32-bit opcode: coins, recipient, uint256 txid.
+// Any step failure leaves ok false; callers return Null.
+struct MintLog {
+  td::RefInt256 amount;
+  Value recipient;
+  td::RefInt256 txid;
+  bool ok{false};
+};
+
+MintLog parse_mint_log(vm::CellSlice &cs) {
+  MintLog out;
+  auto r_amt = load_coins_py(cs);
+  if (r_amt.is_error()) {
+    return out;
+  }
+  auto r_rcpt = load_address_py(cs);
+  if (r_rcpt.is_error()) {
+    return out;
+  }
+  bool rcpt_ok = true;
+  out.recipient = account_id_of(r_rcpt.ok(), rcpt_ok);
+  if (!rcpt_ok || !cs.have(256)) {
+    return out;
+  }
+  out.txid = cs.fetch_int256(256, false);
+  if (out.txid.is_null()) {
+    return out;
+  }
+  out.amount = r_amt.move_as_ok();
+  out.ok = true;
+  return out;
+}
+
 }  // namespace
 
 // builders/tgbtc.py tgbtc_mint_data(consumed): the 9-field namespace, or Null
@@ -151,24 +184,13 @@ EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
     return rt_ok(Value::null());
   }
   cs.advance(32);
-  auto r_amt = load_coins_py(cs);
-  if (r_amt.is_error()) {
+  auto parsed = parse_mint_log(cs);
+  if (!parsed.ok) {
     return rt_ok(Value::null());
   }
-  td::RefInt256 amount = r_amt.move_as_ok();
-  auto r_rcpt = load_address_py(cs);
-  if (r_rcpt.is_error()) {
-    return rt_ok(Value::null());
-  }
-  bool rcpt_ok = true;
-  Value recipient = account_id_of(r_rcpt.ok(), rcpt_ok);
-  if (!rcpt_ok || !cs.have(256)) {
-    return rt_ok(Value::null());
-  }
-  auto txid = cs.fetch_int256(256, false);
-  if (txid.is_null()) {
-    return rt_ok(Value::null());
-  }
+  td::RefInt256 amount = std::move(parsed.amount);
+  Value recipient = std::move(parsed.recipient);
+  td::RefInt256 txid = std::move(parsed.txid);
 
   const Message *lmsg = block_msg(success_log);
   Value teleport_contract = account_from_opt(lmsg != nullptr ? lmsg->source : std::nullopt);
@@ -203,25 +225,14 @@ EvalResult tgbtc_mint_log(BuildEnv &, const std::vector<Value> &args) {
   if (!lc.ok) {
     return rt_ok(Value::null());
   }
-  auto &cs = lc.ctx.cs;
-  auto r_amt = load_coins_py(cs);
-  if (r_amt.is_error()) {
-    return rt_ok(Value::null());
-  }
-  auto r_rcpt = load_address_py(cs);
-  if (r_rcpt.is_error()) {
-    return rt_ok(Value::null());
-  }
-  bool rcpt_ok = true;
-  Value recipient = account_id_of(r_rcpt.ok(), rcpt_ok);
-  auto txid = cs.have(256) ? cs.fetch_int256(256, false) : td::RefInt256{};
-  if (!rcpt_ok || txid.is_null()) {
+  auto parsed = parse_mint_log(lc.ctx.cs);
+  if (!parsed.ok) {
     return rt_ok(Value::null());
   }
   Value::Fields ns;
-  ns.emplace_back("amount", Value::make_int(r_amt.move_as_ok()));
-  ns.emplace_back("recipient", std::move(recipient));
-  ns.emplace_back("bitcoin_txid", Value::make_str(txid_le_hex(txid)));
+  ns.emplace_back("amount", Value::make_int(std::move(parsed.amount)));
+  ns.emplace_back("recipient", std::move(parsed.recipient));
+  ns.emplace_back("bitcoin_txid", Value::make_str(txid_le_hex(parsed.txid)));
   return rt_ok(Value::make_obj(std::move(ns)));
 }
 

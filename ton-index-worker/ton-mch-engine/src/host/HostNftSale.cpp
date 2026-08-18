@@ -72,8 +72,7 @@ std::string pick_version(const std::map<std::string, std::string> &table, const 
 }
 
 // The StateInit `data` cell of a deploying message. Python's
-// `StateInit.deserialize(Slice.one_from_boc(boc)).data.to_slice()`: split_depth
-// / special are skipped, then code / data / library maybe-refs.
+// `StateInit.deserialize(Slice.one_from_boc(boc)).data.to_slice()`.
 td::Result<vm::CellSlice> state_init_data(const Block *b) {
   const Message *msg = block_msg(b);
   if (msg == nullptr || !msg->init_state) {
@@ -82,26 +81,8 @@ td::Result<vm::CellSlice> state_init_data(const Block *b) {
   TRY_RESULT(raw, td::base64_decode(td::Slice(msg->init_state->body)));
   TRY_RESULT(root, vm::std_boc_deserialize(raw));
   TRY_RESULT(cs, open_ref_cell(root));
-  if (!cs.have(1)) return td::Status::Error("state_init: split_depth underflow");
-  if (cs.fetch_ulong(1)) {
-    if (!cs.have(5)) return td::Status::Error("state_init: split_depth bits underflow");
-    cs.advance(5);
-  }
-  if (!cs.have(1)) return td::Status::Error("state_init: special underflow");
-  if (cs.fetch_ulong(1)) {
-    if (!cs.have(2)) return td::Status::Error("state_init: tick_tock underflow");
-    cs.advance(2);
-  }
-  // code: Maybe ^Cell (skipped), data: Maybe ^Cell (the one we want).
-  if (!cs.have(1)) return td::Status::Error("state_init: code maybe underflow");
-  if (cs.fetch_ulong(1)) {
-    if (cs.size_refs() == 0) return td::Status::Error("state_init: code ref missing");
-    cs.fetch_ref();
-  }
-  if (!cs.have(1)) return td::Status::Error("state_init: data maybe underflow");
-  if (!cs.fetch_ulong(1)) return td::Status::Error("state_init: no data cell");
-  if (cs.size_refs() == 0) return td::Status::Error("state_init: data ref missing");
-  return open_ref_cell(cs.fetch_ref());
+  TRY_RESULT(data, state_init_data_cell(cs));
+  return open_ref_cell(data);
 }
 
 // Fixed-width unsigned read; error == the Python parser raising.
@@ -318,16 +299,12 @@ bool is_dns_item(const Value &nft) {
   return col != nullptr && col->t == VType::Str && col->str == kDnsCollection;
 }
 
-// blocks/auction.py `_is_teleitem`, repeated here rather than shared with
-// HostNft.cpp's copy because that one takes a Value argument off the DSL.
 bool is_fragment_item(const Value &nft) {
   const Value *content = nft.field("content");
   if (content == nullptr || (content->t != VType::Dict && content->t != VType::Obj)) {
     return false;
   }
-  const Value *uri = content->field("uri");
-  return uri != nullptr && uri->t == VType::Str &&
-         uri->str.find("https://nft.fragment.com") != std::string::npos;
+  return fragment_uri(content->field("uri"));
 }
 
 const std::string *msg_dest(const Block *b) {
@@ -533,6 +510,28 @@ EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args) {
                  col != nullptr && !col->is_null() ? account_of(*col) : Value::null());
   f.emplace_back("auction_type", Value::make_str("fragment"));
   return rt_ok(Value::make_obj(std::move(f)));
+}
+
+// Finish/stop purchases place the seller payout beside the produced block.
+// Insert a proxy under the sale parent, then absorb the peeked payout and proxy.
+void getgems_proxy_insert(Block *produced, const ShaperMatch &m) {
+  Block *payout = m.capture("sib_payout");
+  if (produced == nullptr || payout == nullptr || m.arena == nullptr) {
+    return;
+  }
+  Block *parent = produced->previous_block;
+  if (parent == nullptr || parent->btype != mch::btype::kTonTransfer) {
+    return;
+  }
+  const Value *comment = parent->data.field("comment");
+  if (comment == nullptr || comment->t != VType::Str ||
+      (comment->str != "finish" && comment->str != "stop")) {
+    return;
+  }
+  Block *proxy = m.arena->make(mch::btype::kEmpty);
+  parent->insert_between({produced, payout}, proxy);
+  produced->merge_blocks({payout, proxy});
+  produced->compact_connections();
 }
 
 }  // namespace mch

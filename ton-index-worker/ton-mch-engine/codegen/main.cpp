@@ -4,9 +4,9 @@
 // tables feed the production classifier.
 #include "ExprCodegen.h"
 #include "MatcherCodegen.h"
+#include "fixtures/IrJson.h"
 
 #include "td/utils/JsonBuilder.h"
-#include "td/utils/crypto.h"
 
 #include <cstdio>
 #include <fstream>
@@ -183,16 +183,7 @@ int main(int argc, char *argv[]) {
 
   // Source identity, hashed BEFORE json_decode mutates the buffer. Emitted
   // into the generated table so runners can hard-fail on a wrong pairing.
-  std::string source_sha;
-  {
-    unsigned char digest[32];
-    td::sha256(td::Slice(buf), td::MutableSlice(digest, 32));
-    static const char *hex = "0123456789abcdef";
-    for (int i = 0; i < 32; i++) {
-      source_sha += hex[digest[i] >> 4];
-      source_sha += hex[digest[i] & 0xF];
-    }
-  }
+  std::string source_sha = mch::sha256_hex(td::Slice(buf));
 
   auto r_root = td::json_decode(td::MutableSlice(buf));
   if (r_root.is_error()) {
