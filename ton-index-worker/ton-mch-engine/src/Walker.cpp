@@ -51,7 +51,14 @@ std::vector<Block *> canonical(const std::vector<Block *> &v) {
 // immutable.
 class MatchState {
  public:
-  MatchState(const CompiledMatcher &m, const WhereTable &gen) : m_(m), gen_(gen) {
+  MatchState(const CompiledMatcher &m, const WhereTable &gen, Block *anchor)
+      : m_(m), gen_(gen), where_slots_(m.slot_names.size(), Value::null()) {
+    if (!m_.nodes.empty()) {
+      int entry_slot = m_.nodes[0].slot;
+      if (entry_slot >= 0 && entry_slot < static_cast<int>(where_slots_.size())) {
+        where_slots_[entry_slot] = Value::make_block(anchor);
+      }
+    }
   }
 
   bool match_node(int nid, Block *block, bool absorb = true) {
@@ -109,7 +116,7 @@ class MatchState {
     if (it == gen_.end()) {
       return false;  // coverage is validated at setup (prepare_classify)
     }
-    WhereEnv w{block, nullptr, 0};
+    WhereEnv w{block, where_slots_.data(), where_slots_.size()};
     EvalResult r = it->second(w);
     return !r.faulted && r.value.t == VType::Bool && r.value.boolean;
   }
@@ -379,6 +386,7 @@ class MatchState {
 
   const CompiledMatcher &m_;
   const WhereTable &gen_;
+  std::vector<Value> where_slots_;
   std::vector<std::tuple<int, Frame, Block *>> bindings_;
   std::vector<Block *> consumed_;
   std::unordered_set<Block *> visited_;
@@ -431,7 +439,7 @@ std::optional<MatchResult> matcher_match(const CompiledMatcher &m, Block *anchor
   if (!matcher_test_self(m, anchor)) {
     return std::nullopt;
   }
-  MatchState st(m, gen);
+  MatchState st(m, gen, anchor);
   // Root skips nested aux absorption (root-level excess/bounce are a build-
   // result concern, appended after build, not part of the match consumed set).
   if (!st.match_node(0, anchor, /*absorb=*/false)) {

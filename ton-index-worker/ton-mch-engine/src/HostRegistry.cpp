@@ -19,7 +19,6 @@ const std::map<std::string, HostFnEntry> &host_fns() {
       {"jvault_stake_period", {jvault_stake_period, 1}},
       {"nominator_withdraw_payout_amount", {nominator_withdraw_payout_amount, 1}},
       {"nft_transfer_data", {nft_transfer_data, 3}},
-      {"getgems_nft_purchase_data", {getgems_nft_purchase_data, 1}},
       {"telegram_nft_purchase_data", {telegram_nft_purchase_data, 4}},
       {"is_teleitem", {is_teleitem, 1}},
       {"tgbtc_mint_data", {tgbtc_mint_data, 1}},
@@ -90,7 +89,6 @@ const std::map<std::string, HostPredFn> &host_predicates() {
       {"evaa_user_liquidate", evaa_user_liquidate},
       {"evaa_liquidate_success_header", evaa_liquidate_success_header},
       {"evaa_bounced_call", evaa_bounced_call},
-      {"getgems_seller_payout", getgems_seller_payout},
       // specs/nft_mint.mch's predicate anchor has no opcode or btype prefilter.
       {"single_contract_deploy", single_contract_deploy},
       {"stonfi_v1_sender_payment", stonfi_v1_sender_payment},

@@ -84,6 +84,9 @@ C014_PEEK_SUBTREE_CONSUMES = "C014_PEEK_SUBTREE_CONSUMES"
 """A `peek` node reaches another pattern node that is not itself `peek`, so
 the subtree would still consume blocks or absorb auxiliary siblings."""
 
+C015_WHERE_EXPR_CAPTURE_NOT_ENTRY = "C015_WHERE_EXPR_CAPTURE_NOT_ENTRY"
+"""A capture name used in `where (expr)` is not the matcher's entry capture."""
+
 
 @dataclass(frozen=True)
 class Span:

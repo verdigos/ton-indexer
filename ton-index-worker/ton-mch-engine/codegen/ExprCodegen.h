@@ -16,9 +16,9 @@ std::string generate_function(const std::string &fn_name, const td::JsonValue &e
 
 // Emit one `EvalResult <fn_name>(const mch::WhereEnv &w)` for a node-level
 // inline `where (expr)`: `dotfield` reads the candidate block via rt_dotfield;
-// `name` / `lookup` fault (a where_expr is builtin-only and unbound, mirroring
-// the Python sync evaluator).
-std::string generate_where_function(const std::string &fn_name, const td::JsonValue &expr);
+// the named entry capture reads its fixed slot, and any other name faults.
+std::string generate_where_function(const std::string &fn_name, const td::JsonValue &expr,
+                                    const std::string &entry_name, int entry_slot);
 
 std::string generate_vectors_file(const td::JsonValue &root, const std::string &header);
 

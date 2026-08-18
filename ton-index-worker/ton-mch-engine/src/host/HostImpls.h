@@ -15,10 +15,8 @@ struct Block;     // BlockTree.h
 struct BuildEnv;  // BuildRuntime.h
 struct ShaperMatch;  // HostRegistry.h
 
-// Getgems (HostGetgems.cpp): shaper + seller-payout predicate + purchase fn.
+// Getgems (HostGetgems.cpp): finish/stop sibling-payout shaper.
 void getgems_proxy_insert(Block *produced, const ShaperMatch &m);
-bool getgems_seller_payout(const Block *block);
-EvalResult getgems_nft_purchase_data(BuildEnv &env, const std::vector<Value> &args);
 
 // NFT (HostNft.cpp): base nft_transfer host fn + parent-absorb shaper + telegram.
 EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args);

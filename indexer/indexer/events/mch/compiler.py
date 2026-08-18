@@ -90,6 +90,7 @@ class CompileCtx:
     registries: Registries
     recursion: RecursionStrategy
     bag: DiagnosticBag
+    where_entry_capture: str = ""
     # Names of recursive rules currently being lowered; used to break cycles
     # by treating self-refs inside step/exit branches as a recursion sentinel.
     lowering_recursive: set[str] = None  # type: ignore[assignment]
@@ -128,6 +129,7 @@ def compile_(
 
 def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     decl = rm.decl
+    ctx.where_entry_capture = rm.anchor_capture
 
     _check_no_capture_after_recursion(decl.pattern, decl.span, ctx)
     _check_no_bare_children_block(decl.pattern, ctx)
@@ -829,6 +831,16 @@ def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
     loader rejects the same artifacts, keeping both paths failing at the same
     compiler instead of silently never matching. Returns True
     when the expression is sync-evaluable."""
+    if isinstance(e, ast_.NameRef):
+        if e.name != ctx.where_entry_capture:
+            ctx.bag.error(
+                "C015_WHERE_EXPR_CAPTURE_NOT_ENTRY",
+                f"`where (expr)` may reference only entry capture "
+                f"@{ctx.where_entry_capture}; name {e.name!r} is not allowed",
+                e.span,
+            )
+            return False
+        return True
     if isinstance(e, ast_.LookupExpr):
         ctx.bag.error(
             "C013_WHERE_EXPR_NOT_SYNC",
@@ -874,6 +886,10 @@ def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
         return (_check_where_expr_sync(e.cond, span, ctx)
                 and _check_where_expr_sync(e.then, span, ctx)
                 and _check_where_expr_sync(e.orelse, span, ctx))
+    if isinstance(e, ast_.ListLit):
+        return all(_check_where_expr_sync(it, span, ctx) for it in e.elements)
+    if isinstance(e, ast_.RecordLit):
+        return all(_check_where_expr_sync(f.value, span, ctx) for f in e.fields)
     return True
 
 
