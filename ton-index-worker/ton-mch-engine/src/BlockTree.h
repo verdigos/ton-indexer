@@ -137,12 +137,12 @@ struct Block {
   // order instead of Python's set()).
   void compact_connections();
 
-  // Ports Block.insert_between (core.py:244): splices new_block between this
+  // Block.insert_between splices new_block between this
   // and each block in `targets` (each of which must currently be in
   // next_blocks). Grandchild edges from this block's children that reached a
   // target are redirected to new_block; each target's children that pointed
   // back at the target are reparented to new_block. Used by shapers
-  // (host/HostGetgems.cpp getgems_proxy_insert). No sort: mirrors Python's
+  // (host/HostNftSale.cpp getgems_proxy_insert). No sort: mirrors Python's
   // append-only connect() exactly so topology parity holds.
   void insert_between(const std::vector<Block *> &targets, Block *new_block);
 

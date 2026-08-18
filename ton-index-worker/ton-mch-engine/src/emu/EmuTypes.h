@@ -20,12 +20,6 @@
 
 namespace mch {
 
-// Constant global_version for the off-pipeline message parse. It selects
-// extra_flags vs reference ihr_fee in int_msg_info; neither field is read by
-// SchemaTraceLoader, so the choice cannot affect classification.
-// TODO: wire live config global_version
-inline constexpr int kEmuGlobalVersion = 12;
-
 // Monotonic microseconds used for classifier timing measurements.
 inline std::int64_t emu_now_us() {
   return static_cast<std::int64_t>(td::Clocks::monotonic() * 1e6);
@@ -36,7 +30,7 @@ enum class EmuFinality : std::uint8_t { emulated = 0, confirmed = 1, finalized =
 struct EmuTxRef {
   block::StdAddress address;
   // Standalone BOC: classifier input never depends on a source BlockData.
-  std::string tx_boc;
+  std::shared_ptr<const std::string> tx_boc;
   std::uint32_t mc_seqno{0};
   EmuFinality finality{EmuFinality::emulated};
 };
@@ -47,7 +41,8 @@ struct EmuTraceView {
   bool tx_limit_exceeded{false};
   // Pre-order nodes; to_tree reconstructs edges by message hash.
   std::vector<EmuTxRef> nodes;
-  ParsedBlockLookupSource::InterfaceMap interfaces;  // already V2-adapted
+  std::shared_ptr<const ParsedBlockLookupSource::InterfaceMap> interfaces =
+      std::make_shared<const ParsedBlockLookupSource::InterfaceMap>();  // already V2-adapted
   // Shared shard-state and config handles for tier-2 lookups. Listener traces
   // leave them empty and receive no tier-2 results.
   AllShardStates shard_states;
@@ -94,7 +89,6 @@ struct EmuClassifyResult {
 struct EmuClassifierConfig {
   std::shared_ptr<const MchEnginePrep> prep;  // nullptr = feature off
   int workers{1};
-  int global_version{kEmuGlobalVersion};
   // Cell-db tier-2 lookups. Enabled by default; disabling them uses tier 1 only.
   bool tier2{true};
 };

@@ -32,6 +32,24 @@ const char *category_name(FailureCategory c) {
   return "?";
 }
 
+void record_phase_exception(EmuClassifierStats &stats, EmuClassifyResult &res,
+                            const std::string &message, bool past_conversion) {
+  res.failure = true;
+  res.failure_reason = message;
+  if (!past_conversion) {
+    stats.convert_failed++;
+    res.outcome = EmuClassifyOutcome::convert_failed;
+    res.failure_category = FailureCategory::malformed_trace;
+    res.payload.state = "convert_failed";
+  } else {
+    stats.failed++;
+    res.outcome = EmuClassifyOutcome::classify_failed;
+    res.failure_category = FailureCategory::engine_fault;
+    stats.by_category[res.failure_category]++;
+    res.payload.state = "fallback";
+  }
+}
+
 // Scrub non-owning Block values before the TraceContext arena dies. Cells remain
 // valid through the view's anchor. Shared container payloads make this a repair,
 // not a pure observation, so arena_refs_scrubbed counts each replacement.
@@ -55,33 +73,13 @@ std::size_t scrub_value(Value &v) {
   return n;
 }
 
-// Keep this field set and order synchronized with optional_fields().
 std::size_t scrub_arena_refs(Action &a) {
   std::size_t n = 0;
-  for (Value *v : {&a.source, &a.source_secondary, &a.destination, &a.destination_secondary,
-                   &a.asset, &a.asset_secondary, &a.asset2, &a.asset2_secondary, &a.amount,
-                   &a.value, &a.opcode, &a.ton_transfer_data, &a.jetton_transfer_data,
-                   &a.jetton_swap_data, &a.nft_transfer_data, &a.nft_listing_data,
-                   &a.nft_mint_data,
-                   &a.dex_deposit_liquidity_data, &a.dex_withdraw_liquidity_data, &a.staking_data,
-                   &a.evaa_supply_data, &a.evaa_withdraw_data, &a.evaa_liquidate_data,
-                   &a.vesting_send_message_data,
-                   &a.vesting_add_whitelist_data, &a.tonco_deploy_pool_data,
-                   &a.multisig_create_order_data, &a.multisig_approve_data,
-                   &a.multisig_execute_data,
-                   &a.cocoon_worker_payout_data, &a.cocoon_proxy_payout_data,
-                   &a.cocoon_proxy_charge_data, &a.cocoon_client_top_up_data,
-                   &a.cocoon_register_proxy_data, &a.cocoon_unregister_proxy_data,
-                   &a.cocoon_client_register_data,
-                   &a.cocoon_client_change_secret_hash_data,
-                   &a.cocoon_client_request_refund_data, &a.cocoon_grant_refund_data,
-                   &a.cocoon_client_increase_stake_data, &a.cocoon_client_withdraw_data,
-                   &a.layerzero_packet_data, &a.layerzero_send_data,
-                   &a.layerzero_dvn_verify_data,
-                   &a.jvault_stake_data, &a.jvault_claim_data, &a.change_dns_record_data,
-                   &a.coffee_create_pool_data, &a.coffee_staking_deposit_data,
-                   &a.coffee_staking_withdraw_data,
-                   &a.extra}) {
+  for (Value *v : {
+#define MCH_ACTION_REF(name) &a.name,
+           MCH_ACTION_VALUE_FIELDS(MCH_ACTION_REF)
+#undef MCH_ACTION_REF
+       }) {
     n += scrub_value(*v);
   }
   return n;
@@ -94,7 +92,7 @@ void classify_txs(const EmuClassifierConfig &cfg, const EmuTraceView &view,
                   std::vector<Action> &rows, std::vector<std::string> &matcher_names,
                   std::size_t &scrubbed, bool &unknown_row) {
   const MchEnginePrep &prep = *cfg.prep;
-  const ParsedBlockLookupSource::InterfaceMap &ifaces = view.interfaces;
+  const ParsedBlockLookupSource::InterfaceMap &ifaces = *view.interfaces;
   try {
     auto r_trace = schema_to_trace(res.trace_id, txs);
     if (r_trace.is_error()) {
@@ -153,6 +151,18 @@ void classify_txs(const EmuClassifierConfig &cfg, const EmuTraceView &view,
       rows.push_back(create_unknown_action(ctx.trace));
       unknown_row = true;
     }
+  } catch (const vm::VmError &e) {
+    res.failure = true;
+    res.failure_reason = std::string("vm exception: ") + e.get_msg();
+    res.failure_category = FailureCategory::engine_fault;
+  } catch (const vm::VmNoGas &e) {
+    res.failure = true;
+    res.failure_reason = std::string("vm exception: ") + e.get_msg();
+    res.failure_category = FailureCategory::engine_fault;
+  } catch (const vm::VmVirtError &e) {
+    res.failure = true;
+    res.failure_reason = std::string("vm exception: ") + e.get_msg();
+    res.failure_category = FailureCategory::engine_fault;
   } catch (const std::exception &e) {
     res.failure = true;
     res.failure_reason = std::string("exception: ") + e.what();
@@ -233,10 +243,11 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
   std::vector<Action> rows;
   bool unknown_row = false;
 
-  // Catch vm::VmError explicitly because it does not derive from std::exception.
+  // Catch VM fault types explicitly because they do not derive from std::exception.
   // Every path reaches the single response below.
+  bool past_conversion = false;
   try {
-    auto r_txs = emu_to_schema_txs(view, cfg_.global_version);
+    auto r_txs = emu_to_schema_txs(view);
     if (r_txs.is_error()) {
       stats_.convert_failed++;
       res.outcome = EmuClassifyOutcome::convert_failed;
@@ -249,6 +260,7 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
                    << " CONVERT FAILED: " << res.failure_reason;
     } else {
       auto txs = r_txs.move_as_ok();
+      past_conversion = true;
       std::vector<std::string> matcher_names;
       std::size_t scrubbed = 0;
       classify_txs(cfg_, view, txs, res, rows, matcher_names, scrubbed, unknown_row);
@@ -276,13 +288,12 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
         stats_.serialize_us_max = std::max(stats_.serialize_us_max, us);
       }
       stats_.actions_blob_bytes += res.payload.actions_blob.size();
-      stats_.ser_float_values += ser.float_values;
       stats_.ser_cell_values += ser.cell_values;
       stats_.ser_unrenderable += ser.unrenderable;
-      if (ser.float_values != 0 || ser.cell_values != 0 || ser.unrenderable != 0) {
+      if (ser.cell_values != 0 || ser.unrenderable != 0) {
         LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << res.trace_id
-                     << " serializer saw float=" << ser.float_values
-                     << " cell=" << ser.cell_values << " unrenderable=" << ser.unrenderable;
+                     << " serializer saw cell=" << ser.cell_values
+                     << " unrenderable=" << ser.unrenderable;
       }
       stats_.actions += rows.size();
       if (res.used_fallback) {
@@ -329,21 +340,23 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       }
     }
   } catch (const vm::VmError &e) {
-    stats_.convert_failed++;
-    res.outcome = EmuClassifyOutcome::convert_failed;
-    res.failure = true;
-    res.failure_category = FailureCategory::malformed_trace;
-    res.failure_reason = std::string("exception (vm): ") + e.get_msg();
-    res.payload.state = "convert_failed";
+    record_phase_exception(stats_, res, std::string("exception (vm): ") + e.get_msg(), past_conversion);
     LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
                  << " EXCEPTION (vm): " << e.get_msg();
+  } catch (const vm::VmNoGas &e) {
+    record_phase_exception(stats_, res, std::string("exception (vm): ") + e.get_msg(), past_conversion);
+    LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
+                 << " EXCEPTION (vm): " << e.get_msg();
+  } catch (const vm::VmVirtError &e) {
+    record_phase_exception(stats_, res, std::string("exception (vm): ") + e.get_msg(), past_conversion);
+    LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
+                 << " EXCEPTION (vm): " << e.get_msg();
+  } catch (const std::exception &e) {
+    record_phase_exception(stats_, res, std::string("exception: ") + e.what(), past_conversion);
+    LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
+                 << " EXCEPTION: " << e.what();
   } catch (...) {
-    stats_.convert_failed++;
-    res.outcome = EmuClassifyOutcome::convert_failed;
-    res.failure = true;
-    res.failure_category = FailureCategory::malformed_trace;
-    res.failure_reason = "unknown exception";
-    res.payload.state = "convert_failed";
+    record_phase_exception(stats_, res, "unknown exception", past_conversion);
     LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
                  << " EXCEPTION";
   }
@@ -406,7 +419,7 @@ void EmuClassifierActor::alarm() {
             << (stats_.latency_samples ? stats_.serialize_us_total / stats_.latency_samples : 0)
             << " max=" << stats_.serialize_us_max << "}"
             << " blob_bytes=" << stats_.actions_blob_bytes
-            << " ser{float=" << stats_.ser_float_values << " cell=" << stats_.ser_cell_values
+            << " ser{cell=" << stats_.ser_cell_values
             << " unrenderable=" << stats_.ser_unrenderable << "}";
   prev_ = stats_;
   alarm_timestamp() = td::Timestamp::in(kStatsIntervalSec);

@@ -6,6 +6,7 @@
 #include "smc-interfaces/NominatorPool.h"
 #include "smc-interfaces/Tokens.h"
 
+#include <map>
 #include <utility>
 
 namespace mch {
@@ -42,13 +43,20 @@ const schema::AccountState *EmuCelldbTier2::account(const block::StdAddress &add
 }
 
 Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &addr) {
-  // JVault uses raw data-cell reads rather than a V2 detector result.
-  if (kind == "jvault_assets") {
-    return jvault_assets(addr);
-  }
-  // Reject unsupported kinds before reading an account.
-  if (kind != "jetton_wallet" && kind != "dedust_pool" && kind != "nominator_pool") {
+  enum class Handler { JvaultAssets, JettonWallet, DedustPool, NominatorPool };
+  static const std::map<std::string, Handler> handlers = {
+      {"jvault_assets", Handler::JvaultAssets},
+      {"jetton_wallet", Handler::JettonWallet},
+      {"dedust_pool", Handler::DedustPool},
+      {"nominator_pool", Handler::NominatorPool},
+  };
+  auto handler = handlers.find(kind);
+  if (handler == handlers.end()) {
     return Value::null();
+  }
+  // JVault uses raw data-cell reads rather than a V2 detector result.
+  if (handler->second == Handler::JvaultAssets) {
+    return jvault_assets(addr);
   }
 
   const schema::AccountState *st = account(addr);
@@ -59,27 +67,36 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
   // Run the scanner detector and render its V2 result through the tier-1 path.
   // Detectors that execute get-methods require config.
   std::optional<schema::BlockchainInterfaceV2> iface;
-  if (kind == "jetton_wallet") {
-    if (config_ == nullptr) {
-      return Value::null();
+  switch (handler->second) {
+    case Handler::JettonWallet: {
+      if (config_ == nullptr) {
+        return Value::null();
+      }
+      auto r = JettonWalletDetectorR::detect(addr, st->code, st->data, *shard_states_, config_);
+      if (r.is_ok()) {
+        iface = to_v2(r.move_as_ok());
+      }
+      break;
     }
-    auto r = JettonWalletDetectorR::detect(addr, st->code, st->data, *shard_states_, config_);
-    if (r.is_ok()) {
-      iface = to_v2(r.move_as_ok());
+    case Handler::DedustPool: {
+      if (config_ == nullptr) {
+        return Value::null();
+      }
+      auto r = DedustPoolDetector::detect(addr, st->code, st->data, *shard_states_, config_);
+      if (r.is_ok()) {
+        iface = to_v2(r.move_as_ok());
+      }
+      break;
     }
-  } else if (kind == "dedust_pool") {
-    if (config_ == nullptr) {
-      return Value::null();
+    case Handler::NominatorPool: {
+      auto r = NominatorPoolContract::detect(addr, st->code, st->data);
+      if (r.is_ok()) {
+        iface = to_v2(r.move_as_ok());
+      }
+      break;
     }
-    auto r = DedustPoolDetector::detect(addr, st->code, st->data, *shard_states_, config_);
-    if (r.is_ok()) {
-      iface = to_v2(r.move_as_ok());
-    }
-  } else if (kind == "nominator_pool") {
-    auto r = NominatorPoolContract::detect(addr, st->code, st->data);
-    if (r.is_ok()) {
-      iface = to_v2(r.move_as_ok());
-    }
+    case Handler::JvaultAssets:
+      break;
   }
   // Unsupported interface kinds remain tier-1-only.
   if (!iface) {
@@ -121,8 +138,8 @@ Value EmuCelldbTier2::jvault_assets(const block::StdAddress &stake_wallet) {
   if (jetton == nullptr || jetton->t != VType::Str) {
     return Value::null();  // get_jetton_wallet None -> .jetton raises -> None
   }
-  auto jn = normalize_raw_address(jetton->str);
-  return jvault_record(parts.staking_pool, Value::make_asset_jetton(jn ? *jn : jetton->str),
+  auto master = canonicalize_or_passthrough(jetton->str);
+  return jvault_record(parts.staking_pool, Value::make_asset_jetton(master),
                        std::move(jvault_asset));
 }
 

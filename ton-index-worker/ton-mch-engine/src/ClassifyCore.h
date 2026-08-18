@@ -83,6 +83,9 @@ struct ClassifySetup {
   std::string error;           // populated when table_missing/fn_missing
 };
 
+// Canonical BFS over the reachable graph, de-duplicated by block identity.
+std::vector<Block *> gather_blocks(Block *root);
+
 // Build the run prep from the compiled-in matcher table. No I/O. Pass the SAME
 // table classify_trace will get. `included` indexes into it. On a table/fn
 // mismatch, sets the *_missing flags + error and returns what it has (adapter

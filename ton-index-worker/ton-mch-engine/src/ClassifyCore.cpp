@@ -8,6 +8,7 @@
 #include "GhostExternal.h"
 #include "HostRegistry.h"
 #include "Walker.h"
+#include "btypes_gen.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -20,10 +21,34 @@
 
 namespace mch {
 
+std::vector<Block *> gather_blocks(Block *root) {
+  std::vector<Block *> out;
+  std::unordered_set<Block *> seen;
+  std::deque<Block *> queue{root};
+  while (!queue.empty()) {
+    Block *cur = queue.front();
+    queue.pop_front();
+    if (!seen.insert(cur).second) {
+      continue;
+    }
+    out.push_back(cur);
+    std::vector<Block *> next = cur->next_blocks;
+    std::stable_sort(next.begin(), next.end(),
+                     [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
+    for (Block *block : next) {
+      queue.push_back(block);
+    }
+  }
+  return out;
+}
+
 namespace {
 
-constexpr std::uint32_t kExcessOpcode = 0xD53276DB;
-constexpr std::uint32_t kBounceOpcode = 0xFFFFFFFF;
+Block *wrap_root(BlockArena &arena, Block *root) {
+  Block *wrapper = arena.make(mch::btype::kRoot);
+  wrapper->connect(root);
+  return wrapper;
+}
 
 // The flat spine list in canonical BFS order: `root` plus everything reachable
 // through next_blocks. Every consumer of "the spine" (prefilter inventory,
@@ -44,6 +69,21 @@ std::vector<Block *> collect_spine(Block *root) {
     }
   }
   return out;
+}
+
+// Sort children by trace-derived keys, using the pointer only as a total-order
+// tiebreaker, then remove duplicate block references.
+void sort_unique_children(std::vector<Block *> &children_blocks) {
+  std::sort(children_blocks.begin(), children_blocks.end(),
+            [](const Block *a, const Block *b) {
+              if (a->min_lt != b->min_lt) return a->min_lt < b->min_lt;
+              if (a->btype != b->btype) return a->btype < b->btype;
+              std::string ha = a->anchor_tx_hash(), hb = b->anchor_tx_hash();
+              if (ha != hb) return ha < hb;
+              return a < b;
+            });
+  children_blocks.erase(std::unique(children_blocks.begin(), children_blocks.end()),
+                        children_blocks.end());
 }
 
 bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *block,
@@ -100,7 +140,7 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
     std::stable_sort(nb.begin(), nb.end(),
                      [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
     for (Block *n : nb) {
-      if (n->btype != "call_contract" || !n->opcode) {
+      if (n->btype != mch::btype::kCallContract || !n->opcode) {
         continue;
       }
       if ((*n->opcode == kExcessOpcode && m.include_excess) ||
@@ -128,8 +168,8 @@ bool pp_eq(const Value &a, const Value &b) {
 }
 
 // blocks/liquidity.py combine_deposits: merge the partial (first) + final
-// deposit records. Throws on the consistency checks Python raises on (caller
-// catches -> the pair is left unmerged, matching a Python raise's net effect).
+// deposit records. Consistency failures leave this pair unmerged without
+// affecting other actions; Python instead fails the whole trace to basic actions.
 Value combine_deposits(const Value &first, const Value &final_d) {
   Value tf1 = pp_field(first, "target_asset_1"), tf2 = pp_field(first, "target_asset_2");
   Value tg1 = pp_field(final_d, "target_asset_1"), tg2 = pp_field(final_d, "target_asset_2");
@@ -191,62 +231,43 @@ Value combine_deposits(const Value &first, const Value &final_d) {
   return Value::make_dict(std::move(out));
 }
 
+std::string deposit_contract_key(const Block *b) {
+  Value c = pp_field(b->data, "deposit_contract");
+  return c.t == VType::Account ? (c.addr_none ? std::string("addr_none") : c.str) : c.describe();
+}
+
 void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block *> &removed) {
-  std::vector<Block *> firsts, finals;
+  std::vector<Block *> firsts;
   std::map<std::string, int> used;
-  auto contract_key = [](const Block *b) {
-    Value c = pp_field(b->data, "deposit_contract");
-    return c.t == VType::Account ? (c.addr_none ? std::string("addr_none") : c.str) : c.describe();
-  };
+  std::map<std::string, Block *> final_by_key;
   for (Block *b : blocks) {
-    if (b->btype == "dedust_deposit_liquidity_partial") {
+    if (b->btype == mch::btype::kDedustDepositLiquidityPartial) {
       firsts.push_back(b);
-      used[contract_key(b)]++;
-    } else if (b->btype == "dedust_deposit_liquidity") {
-      finals.push_back(b);
-      used[contract_key(b)]++;
+      used[deposit_contract_key(b)]++;
+    } else if (b->btype == mch::btype::kDedustDepositLiquidity) {
+      final_by_key.emplace(deposit_contract_key(b), b);
+      used[deposit_contract_key(b)]++;
     }
   }
   for (const auto &kv : used) {
     if (kv.second > 2) return;  // logger.warning + skip merging
   }
   for (Block *first : firsts) {
-    Block *final_b = nullptr;
-    for (Block *b : finals) {
-      if (contract_key(b) == contract_key(first)) { final_b = b; break; }
-    }
+    auto it = final_by_key.find(deposit_contract_key(first));
+    Block *final_b = (it != final_by_key.end()) ? it->second : nullptr;
     if (final_b == nullptr) continue;
     Value merged;
     try {
       merged = combine_deposits(first->data, final_b->data);
     } catch (const std::exception &) {
-      continue;  // Python raise -> pair unmerged (unreached over corpus)
+      continue;  // Leave only this pair unmerged; other actions remain.
     }
     blocks.erase(std::remove(blocks.begin(), blocks.end(), first), blocks.end());
     removed.insert(first);
     for (const EventNode *n : first->event_nodes) final_b->event_nodes.push_back(n);
     final_b->data = std::move(merged);
     for (Block *cb : first->children_blocks) final_b->children_blocks.push_back(cb);
-    // Python does `list(set(children_blocks))` here, i.e. an order nothing
-    // downstream can rely on, but the C++ substrate has to pick SOME order,
-    // and sorting raw Block* sorted by ARENA ADDRESS: run-to-run stable within
-    // one process, arbitrary across processes and across arena layouts. The
-    // order reaches action output (unwind_deployments, the fallback rows), so
-    // it must be a property of the trace, not of the allocator. Key: earliest
-    // event lt, then btype, then the anchor tx hash; the pointer stays as the
-    // final tiebreak so the ordering is total and the std::unique below still
-    // collapses duplicates of the SAME block (identical key -> adjacent).
-    std::sort(final_b->children_blocks.begin(), final_b->children_blocks.end(),
-              [](const Block *a, const Block *b) {
-                if (a->min_lt != b->min_lt) return a->min_lt < b->min_lt;
-                if (a->btype != b->btype) return a->btype < b->btype;
-                std::string ha = a->anchor_tx_hash(), hb = b->anchor_tx_hash();
-                if (ha != hb) return ha < hb;
-                return a < b;
-              });
-    final_b->children_blocks.erase(
-        std::unique(final_b->children_blocks.begin(), final_b->children_blocks.end()),
-        final_b->children_blocks.end());
+    sort_unique_children(final_b->children_blocks);
     final_b->calculate_min_max_lt();
   }
 }
@@ -259,17 +280,15 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
                                       std::set<Block *> &removed) {
   std::vector<Block *> partials, finals;
   std::map<std::string, int> used;
-  auto contract_key = [](const Block *b) {
-    Value c = pp_field(b->data, "deposit_contract");
-    return c.t == VType::Account ? (c.addr_none ? std::string("addr_none") : c.str) : c.describe();
-  };
+  std::map<std::string, Block *> partial_by_key;
   for (Block *b : blocks) {
-    if (b->btype == "dedust_v2_deposit_liquidity_partial") {
+    if (b->btype == mch::btype::kDedustV2DepositLiquidityPartial) {
       partials.push_back(b);
-      used[contract_key(b)]++;
-    } else if (b->btype == "dedust_v2_deposit_liquidity") {
+      partial_by_key.emplace(deposit_contract_key(b), b);
+      used[deposit_contract_key(b)]++;
+    } else if (b->btype == mch::btype::kDedustV2DepositLiquidity) {
       finals.push_back(b);
-      used[contract_key(b)]++;
+      used[deposit_contract_key(b)]++;
     }
   }
   if (partials.empty()) return;
@@ -277,14 +296,10 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
     if (kv.second > 2) return;  // logger.warning + skip merging
   }
   for (Block *final_b : finals) {
-    Block *partial = nullptr;
-    for (Block *p : partials) {
-      // Python's `p in blocks`: a partial already folded into an earlier final
-      // is gone from the spine and must not be paired a second time.
-      if (std::find(blocks.begin(), blocks.end(), p) == blocks.end()) continue;
-      if (contract_key(p) == contract_key(final_b)) { partial = p; break; }
-    }
-    if (partial == nullptr) continue;
+    auto it = partial_by_key.find(deposit_contract_key(final_b));
+    if (it == partial_by_key.end()) continue;
+    Block *partial = it->second;
+    partial_by_key.erase(it);
 
     Value::Fields out;
     if (final_b->data.fields) out = *final_b->data.fields;
@@ -314,30 +329,16 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
     // transaction-hash derivation.
     for (const EventNode *n : partial->event_nodes) final_b->event_nodes.push_back(n);
     for (Block *cb : partial->children_blocks) final_b->children_blocks.push_back(cb);
-    // Sort by trace properties rather than arena addresses. The pointer is only
-    // a final tiebreaker, keeping the order total so std::unique removes duplicate
-    // references to the same block.
-    std::sort(final_b->children_blocks.begin(), final_b->children_blocks.end(),
-              [](const Block *a, const Block *b) {
-                if (a->min_lt != b->min_lt) return a->min_lt < b->min_lt;
-                if (a->btype != b->btype) return a->btype < b->btype;
-                std::string ha = a->anchor_tx_hash(), hb = b->anchor_tx_hash();
-                if (ha != hb) return ha < hb;
-                return a < b;
-              });
-    final_b->children_blocks.erase(
-        std::unique(final_b->children_blocks.begin(), final_b->children_blocks.end()),
-        final_b->children_blocks.end());
+    sort_unique_children(final_b->children_blocks);
     final_b->calculate_min_max_lt();
   }
 }
 
-// blocks/liquidity.py post_process_stonfi_v2_liquidity pairing pass. ZERO
-// corpus coverage, the `< 2 legs` guard returns immediately for every trace.
-// KEEP (do not delete as dead): it is the port of a live Python production pass;
-// gating it needs a 2-leg stonfi_v2 deposit fixture the corpus does not have yet.
+// Mirrors a twin-only stonfi_v2 liquidity pairing helper. ZERO corpus coverage:
+// the `< 2 legs` guard returns immediately for every trace. KEEP (do not delete
+// as dead); exercising it requires a 2-leg fixture the corpus does not have yet.
 bool is_stonfi_v2_leg(const Block *b) {
-  if (b->btype != "dex_deposit_liquidity") return false;
+  if (b->btype != mch::btype::kDexDepositLiquidity) return false;
   Value dex = pp_field(b->data, "dex");
   return dex.t == VType::Str && dex.str == "stonfi_v2";
 }
@@ -397,7 +398,7 @@ void post_process_stonfi_v2_liquidity(std::vector<Block *> &blocks, BlockArena &
       Block *proxied = a->previous_block;
       if (pp_eq(as, bs) && pp_eq(ap, bp) && !pp_eq(al, bl)) {
         Block *in_transfer = stonfi_v2_leg_head(b, proxied);
-        Block *proxy = arena.make("empty");
+        Block *proxy = arena.make(mch::btype::kEmpty);
         if (proxied != nullptr && in_transfer != nullptr) {
           proxied->insert_between({a, in_transfer}, proxy);
         }
@@ -439,7 +440,7 @@ void unwind_deployments(std::vector<Block *> &blocks) {
     while (!queue.empty()) {
       Block *child = queue.front();
       queue.pop_front();
-      if (child->btype == "contract_deploy" && visited.count(child) == 0) {
+      if (child->btype == mch::btype::kContractDeploy && visited.count(child) == 0) {
         blocks.push_back(child);
       } else {
         for (Block *c : child->children_blocks) queue.push_back(c);
@@ -449,17 +450,27 @@ void unwind_deployments(std::vector<Block *> &blocks) {
   }
 }
 
-// serialize_blocks' row filter (block_tree_serializer.py:1649-1655): a spine
+// Order is load-bearing: V1 merge before V2 pairing, deployments unwound last.
+// unwind_deployments promotes nested ContractDeploy onto the spine.
+void run_post_processors(std::vector<Block *> &spine, BlockArena &arena,
+                         std::set<Block *> &removed) {
+  post_process_dedust_liquidity(spine, removed);
+  post_process_dedust_v2_liquidity(spine, removed);
+  post_process_stonfi_v2_liquidity(spine, arena, removed);
+  unwind_deployments(spine);
+}
+
+// serialize_blocks' row filter: a spine
 // block becomes a row UNLESS it is the root wrapper, an `empty` proxy, or a
 // call_contract whose message has a null source (the external-in leaf) or a null
 // destination (the log / notification leaves).
 bool serializes_to_row(const Block *b) {
-  if (b->btype == "root" || b->btype == "empty") return false;
-  if (b->btype != "call_contract") return true;
+  if (b->btype == mch::btype::kRoot || b->btype == mch::btype::kEmpty) return false;
+  if (b->btype != mch::btype::kCallContract) return true;
   return !pp_field(b->data, "source").is_null() && !pp_field(b->data, "destination").is_null();
 }
 
-// v1_ops (block_tree_serializer.py:1605-1643): the btypes whose merged children
+// v1_ops: the btypes whose merged children
 // stay merged. Every OTHER btype gets its children expanded into rows of their
 // own, the v1 API predates the composite actions, so a consumer that only knows
 // the v1 set still sees the legs a teleitem_start_auction / jvault_stake / …
@@ -521,12 +532,12 @@ std::vector<ActionRow> serialize_rows(const std::vector<Block *> &blocks,
     ids.insert(id);
     if (is_v1_op(b->btype)) continue;
     for (ActionRow &c : serialize_rows(b->children_blocks, id)) {
-      if (c.block->btype == "contract_deploy") continue;
+      if (c.block->btype == mch::btype::kContractDeploy) continue;
       c.ancestor_type.push_back(b->btype);
       std::sort(c.ancestor_type.begin(), c.ancestor_type.end());
       c.ancestor_type.erase(std::unique(c.ancestor_type.begin(), c.ancestor_type.end()),
                             c.ancestor_type.end());
-      // Python raises here (:1682) rather than dropping the row: two rows with
+      // serialize_blocks raises here rather than dropping the row: two rows with
       // one action_id would collide on the actions PK, so the trace falls back.
       if (!ids.insert(calc_action_id(c.block)).second) {
         throw std::runtime_error("duplicate action id in child recursion");
@@ -543,14 +554,10 @@ std::vector<ActionRow> basic_classify_fallback(TraceContext &ctx) {
   std::vector<ActionRow> out;
   try {
     Block *root = init_block(ctx.arena, ctx.tree.root);
-    Block *wrap = ctx.arena.make("root");
-    wrap->connect(root);
+    Block *wrap = wrap_root(ctx.arena, root);
     std::vector<Block *> spine = collect_spine(wrap);
     std::set<Block *> removed;
-    post_process_dedust_liquidity(spine, removed);
-    post_process_dedust_v2_liquidity(spine, removed);
-    post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
-    unwind_deployments(spine);
+    run_post_processors(spine, ctx.arena, removed);
     // Use the recursive serialization path. Basic btypes are all v1_ops, so
     // recursion normally has no additional rows to visit.
     out = serialize_rows(spine, "");
@@ -576,8 +583,7 @@ std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource
       return out;
     }
     Block *b = init_block(ctx.arena, root_node);
-    Block *wrapper = ctx.arena.make("root");
-    wrapper->connect(b);
+    Block *wrapper = wrap_root(ctx.arena, b);
     // matchers_for_failed_externals over the same BFS the main loop uses
     // (next_blocks read AFTER the build, parent-is-None guard).
     std::deque<Block *> queue{wrapper};
@@ -593,12 +599,9 @@ std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource
     }
     std::vector<Block *> spine = collect_spine(wrapper);
     std::set<Block *> removed;
-    post_process_dedust_liquidity(spine, removed);
-    post_process_dedust_v2_liquidity(spine, removed);
-    post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
-    unwind_deployments(spine);
-    // FLAT, unlike the other two paths: try_classify_unknown_trace open-codes the
-    // row filter (:370-375) instead of calling serialize_blocks, so a ghost row
+    run_post_processors(spine, ctx.arena, removed);
+    // FLAT, unlike the other two paths: try_classify_unknown_trace applies the
+    // row filter directly instead of calling serialize_blocks, so a ghost row
     // never recurses into children and never carries parent_action_id.
     for (Block *sb : spine) {
       if (serializes_to_row(sb)) out.push_back(ActionRow{sb, "", {}});
@@ -678,8 +681,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
   RejectScope reject_scope(rctx);
 
   // Synthetic root wrapper (process_event_async: Block('root').connect(...)).
-  Block *wrapper = ctx.arena.make("root");
-  wrapper->connect(ctx.root);
+  Block *wrapper = wrap_root(ctx.arena, ctx.root);
 
   // B1 anchor prefilter inventory: the opcodes + btypes present on the spine
   // (blocks reachable via next_blocks, the outer BFS's anchor candidates). A
@@ -746,10 +748,7 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     // Post-process the flat spine list ([root] + BFS).
     std::vector<Block *> spine = collect_spine(wrapper);
     std::set<Block *> removed;
-    post_process_dedust_liquidity(spine, removed);
-    post_process_dedust_v2_liquidity(spine, removed);
-    post_process_stonfi_v2_liquidity(spine, ctx.arena, removed);
-    unwind_deployments(spine);  // promotes nested ContractDeploy onto the spine
+    run_post_processors(spine, ctx.arena, removed);
     for (CoreAction &a : pending) {
       if (!removed.count(a.produced)) result.actions.push_back(std::move(a));
     }
@@ -775,13 +774,13 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     result.failure_category = FailureCategory::engine_fault;
   }
   if (result.failure) {
-    result.actions.clear();  // event_processing.py discards the trace's actions
+    result.actions.clear();  // Failed traces discard their classified actions.
     result.action_rows.clear();
     result.fallback_rows = basic_classify_fallback(ctx);
   } else if (result.action_rows.empty() && !ctx.trace.transactions.empty()) {
-    // trace_processor.py:44-46, classification succeeded and serialized nothing.
+    // Classification succeeded and serialized nothing.
     // try_classify_unknown_trace tries the GHOST path first and only mints the
-    // `unknown` row when that yields nothing too (event_processing.py:367-388).
+    // `unknown` row when that yields nothing too.
     result.action_rows = ghost_external_rows(ctx, src);
     result.unknown_trace = result.action_rows.empty();
   }

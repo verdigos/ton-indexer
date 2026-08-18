@@ -1179,8 +1179,6 @@ void TraceProcessor::start_next_operations() {
         continue;
       }
       auto full_trace = full_trace_result.move_as_ok();
-      const auto full_trace_finality = mch::view_finality(full_trace);
-      const auto update_seq = full_trace.update_seq;
 
       slot.classification.emplace(ClassificationWork{
           .trace = std::move(trace),
@@ -1193,8 +1191,8 @@ void TraceProcessor::start_next_operations() {
 
       if (impl_->classifiers.empty()) {
         mch::EmuActionPayload payload;
-        payload.finality = static_cast<std::uint8_t>(full_trace_finality);
-        payload.update_seq = update_seq;
+        payload.finality = static_cast<std::uint8_t>(mch::view_finality(full_trace));
+        payload.update_seq = full_trace.update_seq;
         td::actor::send_closure(actor_id(this), &TraceProcessor::classification_ready, trace_key, std::move(payload));
         continue;
       }

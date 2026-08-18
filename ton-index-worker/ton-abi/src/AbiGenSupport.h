@@ -34,15 +34,31 @@
 namespace ton_abi {
 namespace gen {
 
-// CellOf<T>: a value of type T that lives in a child cell (Tolk `Cell<T>`).
-// Emitted field type for the `cellOf` ABI kind. Holds the inner
-// value behind a shared_ptr indirection: cellOf is a cell-boundary, so a type
-// may be recursive THROUGH a cellOf (e.g. `struct Node { next: Cell<Node> }`),
-// which an inline by-value member could not represent. The indirection also
-// means cellOf<Struct> only needs Struct forward-declared, not complete.
+struct EnumNameEntry {
+  std::string name;
+  td::RefInt256 value;
+};
+
+using EnumNameTable = std::vector<EnumNameEntry>;
+
+inline std::optional<std::string> enum_name_lookup(const EnumNameTable &table, const td::RefInt256 &value) {
+  if (value.is_null()) {
+    return std::nullopt;
+  }
+  for (const auto &member : table) {
+    if (member.value.not_null() && td::cmp(member.value, value) == 0) {
+      return member.name;
+    }
+  }
+  return std::nullopt;
+}
+
+// CellOf<T> mirrors Tolk Cell<T>, holding its decoded value and raw child cell.
+// Shared indirection permits cell-linked recursion and forward declarations.
 template <class T>
 struct CellOf {
   std::shared_ptr<T> ref;
+  td::Ref<vm::Cell> cell;
 };
 
 // Typed custom-serializer registry.

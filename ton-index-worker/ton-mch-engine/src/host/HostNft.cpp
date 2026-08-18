@@ -9,6 +9,7 @@
 #include "HostRegistry.h"
 #include "MsgParse.h"
 #include "parse/PSlice.h"
+#include "btypes_gen.h"
 
 #include "td/utils/base64.h"
 #include "vm/boc.h"
@@ -16,6 +17,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -23,14 +25,8 @@ namespace mch {
 
 namespace {
 
-std::string upper_ascii_local(std::string s) {
-  for (char &c : s) {
-    if (c >= 'a' && c <= 'z') {
-      c = static_cast<char>(c - 'a' + 'A');
-    }
-  }
-  return s;
-}
+constexpr std::uint32_t kTeleitemBidInfoOpcode = 0x38127DE1;
+constexpr std::uint32_t kTelemintOpcode = 0x299a3e15;
 
 // AccountId(x): a raw-address Str -> normalized Account; anything else (Null,
 // non-address) -> addr_none, mirroring AccountId(None).
@@ -44,28 +40,16 @@ Value account_from_value(const Value &v) {
   return Value::make_account_none();
 }
 
-// Amount(x): int/amount value -> Amount; null -> Amount(None); a fixture float
-// (getgems price) -> Amount-of-float (Python Amount(float), renders %.17g).
+// Amount(x): an int/amount value becomes Amount; null becomes Amount(None).
 Value amount_or_none(const Value &v) {
   if (v.is_null()) {
     return Value::make_amount_none();
-  }
-  if (v.t == VType::Float) {
-    return Value::make_amount_float(v.dnum);
   }
   return to_amount(v);
 }
 
 const EventNode *first_node(const Block *b) {
   return (b == nullptr || b->event_nodes.empty()) ? nullptr : b->event_nodes.front();
-}
-
-td::Result<td::Ref<vm::Cell>> node_body_cell(const EventNode *n) {
-  if (n == nullptr || n->msg == nullptr || !n->msg->content) {
-    return td::Status::Error("no body");
-  }
-  TRY_RESULT(raw, td::base64_decode(td::Slice(n->msg->content->body)));
-  return vm::std_boc_deserialize(raw);
 }
 
 // NftTransfer body parser
@@ -96,7 +80,7 @@ td::Result<NftTransferMsg> parse_nft_transfer(const td::Ref<vm::Cell> &body) {
     return td::Status::Error("nft_transfer: bad custom_payload");
   }
   if (cp.not_null()) {
-    TRY_RESULT(cp_boc, td_boc_serialize(cp));
+    TRY_RESULT(cp_boc, td_boc_serialize_crc(cp));
     out.custom_payload = Value::make_bytes(std::move(cp_boc));
   }
   TRY_RESULT_ASSIGN(out.forward_amount, load_coins_py(cs));
@@ -116,7 +100,7 @@ td::Result<NftTransferMsg> parse_nft_transfer(const td::Ref<vm::Cell> &body) {
       ps.off = 0;
       TRY_RESULT_ASSIGN(fp_cell, pslice_to_cell(ps));
     }
-    TRY_RESULT(fp_boc, td_boc_serialize(fp_cell));
+    TRY_RESULT(fp_boc, td_boc_serialize_crc(fp_cell));
     out.forward_payload = Value::make_bytes(std::move(fp_boc));
   }
   return out;
@@ -172,7 +156,7 @@ td::Result<OwnershipFull> parse_ownership_full(const td::Ref<vm::Cell> &body) {
   if (r_cell.is_error()) {
     return out;
   }
-  auto r_boc = td_boc_serialize(r_cell.move_as_ok());
+  auto r_boc = td_boc_serialize_crc(r_cell.move_as_ok());
   if (r_boc.is_error()) {
     return out;
   }
@@ -182,7 +166,7 @@ td::Result<OwnershipFull> parse_ownership_full(const td::Ref<vm::Cell> &body) {
   if (ps.cs.size() >= 32) {
     vm::CellSlice tmp = ps.cs;
     auto op = static_cast<std::uint32_t>(tmp.fetch_ulong(32));
-    if (op == 0x38127DE1) {
+    if (op == kTeleitemBidInfoOpcode) {
       auto r_bid = load_coins_py(tmp);
       if (r_bid.is_ok()) {
         out.bid = r_bid.move_as_ok();
@@ -223,8 +207,7 @@ EvalResult get_nft_data(BuildEnv &env, const Value &nft_address) {
       return rt_fault("nft content is not a dict");
     }
     const Value *uri = content->field("uri");
-    bool fragment = uri != nullptr && uri->t == VType::Str &&
-                    uri->str.find("https://nft.fragment.com") != std::string::npos;
+    bool fragment = fragment_uri(uri);
     if (fragment) {
       // tokens = uri.split("/"); name = tokens[-1][:-5]; type = tokens[-2].
       std::vector<std::string> toks;
@@ -271,15 +254,12 @@ EvalResult get_nft_data(BuildEnv &env, const Value &nft_address) {
 
 }  // namespace
 
-// builders/nft_transfer.py nft_transfer_data(transfer, assigned) -> the fixed
-// 13-key namespace, or Null to reject (unknown NFT item). Marketplace/price/
-// real_prev_owner are null on a plain transfer (out{} `?:` omits them).
+// builders/nft_transfer.py nft_transfer_data(transfer, assigned, funding_parent)
+// returns the fixed 13-key namespace, or Null for an unknown NFT item.
 EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 2) {
-    return rt_fault("nft_transfer_data: bad arguments");
-  }
   const Block *transfer = as_block(args[0]);
   const Block *assigned = as_block(args[1]);
+  const Block *funding_parent = as_block(args[2]);
   if (transfer == nullptr) {
     return rt_fault("nft_transfer_data: null transfer");
   }
@@ -289,7 +269,7 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
   }
 
   // NftTransfer parse (anchor body).
-  auto r_body = node_body_cell(tnode);
+  auto r_body = block_body(transfer);
   if (r_body.is_error()) {
     return rt_fault("nft_transfer_data: transfer body");
   }
@@ -303,8 +283,7 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
   // anchor message source.
   Value prev_owner;
   if (assigned != nullptr) {
-    const EventNode *anode = first_node(assigned);
-    auto r_ab = node_body_cell(anode);
+    auto r_ab = block_body(assigned);
     if (r_ab.is_error()) {
       return rt_fault("nft_transfer_data: assigned body");
     }
@@ -352,7 +331,7 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
   Value price = Value::null();
   Value real_prev_owner = Value::null();
 
-  const Block *prev = transfer->previous_block;
+  const Block *prev = funding_parent;
   if (prev != nullptr) {
     const EventNode *pnode = first_node(prev);
     const Message *pmsg = pnode != nullptr ? pnode->msg : nullptr;
@@ -360,11 +339,9 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
         (pmsg != nullptr && pmsg->tx != nullptr) ? pmsg->tx->account
         : (pnode != nullptr && pnode->tx != nullptr) ? pnode->tx->account
                                                      : std::string{};
-    // owner = new_owner.to_str(False); source.upper() == owner.upper().
     bool owner_match =
-        prev->btype == "ton_transfer" && pmsg != nullptr && pmsg->source &&
-        !new_owner.addr_none && new_owner.t == VType::Account &&
-        upper_ascii_local(*pmsg->source) == new_owner.str;
+        prev->btype == mch::btype::kTonTransfer && pmsg != nullptr && pmsg->source &&
+        same_account(account_from_opt(pmsg->source), new_owner);
 
     Value pd_marketplace = Value::null();
     Value pd_nft_address = Value::null();
@@ -434,9 +411,6 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
 // payout_1, payout_2) -> the fixed 16-key namespace, or Null to reject (unknown
 // NFT item). Royalty pair present only for 2-payout traces (out{} `?:`).
 EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 4) {
-    return rt_fault("telegram_nft_purchase_data: bad arguments");
-  }
   const Block *assigned = as_block(args[0]);
   const Block *payment = as_block(args[1]);
   const Block *payout_1 = as_block(args[2]);
@@ -444,15 +418,9 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
   if (assigned == nullptr) {
     return rt_fault("telegram: null assigned");
   }
-  // telegram_nft_assigned passes @payment unbound: its pattern deliberately has
-  // no parent edge (matching one would consume it), but the core still needs the
-  // parent to decide is_mint. Read it where reference reads it.
-  if (payment == nullptr) {
-    payment = assigned->previous_block;
-  }
   const EventNode *anode = first_node(assigned);
   const Message *amsg = anode != nullptr ? anode->msg : nullptr;
-  auto r_body = node_body_cell(anode);
+  auto r_body = block_body(assigned);
   if (r_body.is_error()) {
     return rt_fault("telegram: assigned body");
   }
@@ -498,31 +466,27 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
     // Live on telegram_nft_assigned (the telemint mint variant); inert on
     // telegram_nft_purchase, whose pattern forces a ton_transfer/external parent.
     bool is_mint = payment != nullptr &&
-                   ((payment->btype == "call_contract" && payment->opcode &&
-                     *payment->opcode == 0x299a3e15) ||
-                    payment->btype == "nft_mint");
+                   ((payment->btype == mch::btype::kCallContract && payment->opcode &&
+                     *payment->opcode == kTelemintOpcode) ||
+                    payment->btype == mch::btype::kNftMint);
     if (is_mint) {
       is_purchase = false;
     }
     bool payment_is_source_none =
-        payment != nullptr && payment->btype == "call_contract" &&
+        payment != nullptr && payment->btype == mch::btype::kCallContract &&
         [&] {
           const Value *s = payment->data.field("source");
           return s == nullptr || s->is_null();
         }();
-    if (payment != nullptr && (payment->btype == "ton_transfer" || payment_is_source_none)) {
+    if (payment != nullptr &&
+        (payment->btype == mch::btype::kTonTransfer || payment_is_source_none)) {
       std::vector<const Block *> payouts;
       if (payout_1 != nullptr) payouts.push_back(payout_1);
       if (payout_2 != nullptr) payouts.push_back(payout_2);
-      auto created_lt = [](const Block *b) -> std::int64_t {
-        const EventNode *n = (b == nullptr || b->event_nodes.empty()) ? nullptr : b->event_nodes.front();
-        if (n != nullptr && n->msg != nullptr && n->msg->created_lt) {
-          return *n->msg->created_lt;
-        }
-        return 0;
-      };
       std::stable_sort(payouts.begin(), payouts.end(),
-                       [&](const Block *a, const Block *b) { return created_lt(a) < created_lt(b); });
+                       [](const Block *a, const Block *b) {
+                         return *first_node(a)->msg->created_lt < *first_node(b)->msg->created_lt;
+                       });
       auto val = [](const Block *b) {
         const Value *v = b->data.field("value");
         return v != nullptr ? *v : Value::make_amount_none();
@@ -572,16 +536,12 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
 // this NEVER faults: the reference `_is_teleitem` returns False for a None content
 // instead of raising, and it is the only caller of this fn.
 EvalResult is_teleitem(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("is_teleitem: bad arguments");
-  }
   const Value *content = args[0].is_null() ? nullptr : args[0].field("content");
   if (content == nullptr || content->t != VType::Dict) {
     return rt_ok(Value::make_bool(false));
   }
   const Value *uri = content->field("uri");
-  bool fragment = uri != nullptr && uri->t == VType::Str &&
-                  uri->str.find("https://nft.fragment.com") != std::string::npos;
+  bool fragment = fragment_uri(uri);
   return rt_ok(Value::make_bool(fragment));
 }
 
@@ -601,14 +561,14 @@ void nft_transfer_parent_absorb(Block *produced, const ShaperMatch &) {
     return;
   }
   Block *parent = nullptr;
-  if (prev->btype == "ton_transfer") {
+  if (prev->btype == mch::btype::kTonTransfer) {
     const Value *c = prev->data.field("comment");
     std::string cs = (c != nullptr && c->t == VType::Str) ? c->str : std::string{};
     bool has = c != nullptr && c->t == VType::Str;
     if (!(has && (cs == "finish" || cs == "stop"))) {
       parent = prev;
     }
-  } else if (prev->btype == "call_contract") {
+  } else if (prev->btype == mch::btype::kCallContract) {
     const Value *src = prev->data.field("source");
     if (src == nullptr || src->is_null()) {
       parent = prev;
@@ -628,19 +588,15 @@ bool single_contract_deploy(const Block *b) {
   if (b == nullptr) {
     return false;
   }
-  const std::string *deployed = nullptr;
+  std::set<std::string> deployed;
   for (const EventNode *n : b->event_nodes) {
     const Transaction *tx = n != nullptr ? n->tx : nullptr;
     if (tx == nullptr || tx->orig_status == "active" || tx->end_status != "active") {
       continue;
     }
-    if (deployed == nullptr) {
-      deployed = &tx->account;
-    } else if (*deployed != tx->account) {
-      return false;  // The reference behavior requires exactly one deployment.
-    }
+    deployed.insert(tx->account);
   }
-  return deployed != nullptr;
+  return deployed.size() == 1;
 }
 
 }  // namespace mch

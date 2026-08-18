@@ -16,9 +16,6 @@ namespace mch {
 // zero byte does NOT match its padded account form, quirk preserved. None on
 // either side -> False.
 EvalResult layerzero_dst_oapp_matches(BuildEnv &, const std::vector<Value> &args) {
-  if (args.size() != 2) {
-    return rt_fault("layerzero_dst_oapp_matches: bad arguments");
-  }
   if (args[0].is_null() || args[1].is_null()) {
     return rt_ok(Value::make_bool(false));
   }

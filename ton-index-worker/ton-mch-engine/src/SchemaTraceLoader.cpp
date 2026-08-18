@@ -116,14 +116,9 @@ td::Result<Trace> schema_to_trace(const std::string &trace_id,
     tx->lt = static_cast<std::int64_t>(st.lt);
     tx->now = static_cast<std::int64_t>(st.now);
     tx->mc_block_seqno = static_cast<std::int64_t>(st.mc_seqno);
-    // to_raw_address emits "wc:lowerhex"; the engine's canonical account form is
-    // uppercase hex (normalize_raw_address, applied wherever an account VALUE is
-    // read) and the fixtures store uppercase too. Normalize so the raw-string
-    // leaks (accounts assembly, msg.transaction.account expr) round-trip A==B.
-    tx->account = convert::to_raw_address(st.account);
-    if (auto norm = normalize_raw_address(tx->account)) {
-      tx->account = *norm;
-    }
+    // Keep transaction-account strings on the same canonical-or-original path
+    // as Account values before they leak into expressions or account assembly.
+    tx->account = canonicalize_or_passthrough(convert::to_raw_address(st.account));
     tx->orig_status = status_str(st.orig_status);
     tx->end_status = status_str(st.end_status);
     DescrInfo di = descr_info(st.description);

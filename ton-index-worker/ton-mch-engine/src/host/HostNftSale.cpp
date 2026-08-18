@@ -7,12 +7,14 @@
 // expression language cannot represent.
 #include "host/HostImpls.h"
 
+#include "host/BlockViews.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
 #include "BuildRuntime.h"
 #include "HostRegistry.h"
 #include "parse/PSlice.h"
+#include "btypes_gen.h"
 
 #include "td/utils/base64.h"
 #include "vm/boc.h"
@@ -62,7 +64,7 @@ std::string pick_version(const std::map<std::string, std::string> &table, const 
                          const char *latest) {
   if (code_hash.t == VType::Str) {
     auto it = table.find(code_hash.str);
-    if (it != table.end() && it->second != "latest") {
+    if (it != table.end()) {
       return it->second;
     }
   }
@@ -70,8 +72,7 @@ std::string pick_version(const std::map<std::string, std::string> &table, const 
 }
 
 // The StateInit `data` cell of a deploying message. Python's
-// `StateInit.deserialize(Slice.one_from_boc(boc)).data.to_slice()`: split_depth
-// / special are skipped, then code / data / library maybe-refs.
+// `StateInit.deserialize(Slice.one_from_boc(boc)).data.to_slice()`.
 td::Result<vm::CellSlice> state_init_data(const Block *b) {
   const Message *msg = block_msg(b);
   if (msg == nullptr || !msg->init_state) {
@@ -80,26 +81,8 @@ td::Result<vm::CellSlice> state_init_data(const Block *b) {
   TRY_RESULT(raw, td::base64_decode(td::Slice(msg->init_state->body)));
   TRY_RESULT(root, vm::std_boc_deserialize(raw));
   TRY_RESULT(cs, open_ref_cell(root));
-  if (!cs.have(1)) return td::Status::Error("state_init: split_depth underflow");
-  if (cs.fetch_ulong(1)) {
-    if (!cs.have(5)) return td::Status::Error("state_init: split_depth bits underflow");
-    cs.advance(5);
-  }
-  if (!cs.have(1)) return td::Status::Error("state_init: special underflow");
-  if (cs.fetch_ulong(1)) {
-    if (!cs.have(2)) return td::Status::Error("state_init: tick_tock underflow");
-    cs.advance(2);
-  }
-  // code: Maybe ^Cell (skipped), data: Maybe ^Cell (the one we want).
-  if (!cs.have(1)) return td::Status::Error("state_init: code maybe underflow");
-  if (cs.fetch_ulong(1)) {
-    if (cs.size_refs() == 0) return td::Status::Error("state_init: code ref missing");
-    cs.fetch_ref();
-  }
-  if (!cs.have(1)) return td::Status::Error("state_init: data maybe underflow");
-  if (!cs.fetch_ulong(1)) return td::Status::Error("state_init: no data cell");
-  if (cs.size_refs() == 0) return td::Status::Error("state_init: data ref missing");
-  return open_ref_cell(cs.fetch_ref());
+  TRY_RESULT(data, state_init_data_cell(cs));
+  return open_ref_cell(data);
 }
 
 // Fixed-width unsigned read; error == the Python parser raising.
@@ -316,16 +299,12 @@ bool is_dns_item(const Value &nft) {
   return col != nullptr && col->t == VType::Str && col->str == kDnsCollection;
 }
 
-// blocks/auction.py `_is_teleitem`, repeated here rather than shared with
-// HostNft.cpp's copy because that one takes a Value argument off the DSL.
 bool is_fragment_item(const Value &nft) {
   const Value *content = nft.field("content");
   if (content == nullptr || (content->t != VType::Dict && content->t != VType::Obj)) {
     return false;
   }
-  const Value *uri = content->field("uri");
-  return uri != nullptr && uri->t == VType::Str &&
-         uri->str.find("https://nft.fragment.com") != std::string::npos;
+  return fragment_uri(content->field("uri"));
 }
 
 const std::string *msg_dest(const Block *b) {
@@ -351,18 +330,19 @@ Value account_of(const Value &v) {
 // `> 0`, not `== 1`, this is deliberately weaker than nft_mint's
 // `single_contract_deploy`.
 bool sale_contract_deploy(const Block *b) {
-  if (b == nullptr || (b->btype != "ton_transfer" && b->btype != "call_contract")) {
+  if (b == nullptr || (b->btype != mch::btype::kTonTransfer &&
+                       b->btype != mch::btype::kCallContract)) {
     return false;
   }
   return has_deployment(b);
 }
 
 bool nft_trade_cancel_comment(const Block *b) {
-  return b != nullptr && b->btype == "ton_transfer" && is_cancel_comment(b);
+  return b != nullptr && b->btype == mch::btype::kTonTransfer && is_cancel_comment(b);
 }
 
 bool nft_trade_finish_comment(const Block *b) {
-  if (b == nullptr || b->btype != "ton_transfer") {
+  if (b == nullptr || b->btype != mch::btype::kTonTransfer) {
     return false;
   }
   std::string c = block_comment(b);
@@ -372,19 +352,13 @@ bool nft_trade_finish_comment(const Block *b) {
 // The two cheap guards AuctionBidMatcher.build_block runs before it touches the
 // interface repository (blocks/auction.py:65-69).
 bool auction_bid_candidate(const Block *b) {
-  return b != nullptr && b->btype == "ton_transfer" && !has_deployment(b) &&
+  return b != nullptr && b->btype == mch::btype::kTonTransfer && !has_deployment(b) &&
          !is_cancel_comment(b);
 }
 
-// One outbid leg of a produced auction_bid, per AuctionOutbidMatcher's two
-// branches. The parent link is what carries the auction address, exactly like
-// nominator_pool_withdraw_parent reads `.previous_block`.
-bool auction_outbid_leg(const Block *b) {
-  if (b == nullptr) {
-    return false;
-  }
-  const Block *bid = b->previous_block;
-  if (bid == nullptr || bid->btype != "auction_bid") {
+// The peeked auction_bid must have exactly one qualifying outbid child.
+bool auction_outbid_leg(const Block *bid) {
+  if (bid == nullptr || bid->btype != mch::btype::kAuctionBid) {
     return false;
   }
   const Value *auction = bid->data.field("auction");
@@ -392,117 +366,31 @@ bool auction_outbid_leg(const Block *b) {
   if (auction == nullptr || kind == nullptr || kind->t != VType::Str) {
     return false;
   }
-  Value src = data_field(b, "source");
-  if (!same_account(src, *auction)) {
-    return false;
+  int n = 0;
+  for (const Block *leg : bid->next_blocks) {
+    if (leg == nullptr || leg->previous_block != bid ||
+        !same_account(data_field(leg, "source"), *auction)) {
+      continue;
+    }
+    bool qualifies = false;
+    if (leg->btype == mch::btype::kTonTransfer) {
+      qualifies = kind->str == "getgems" &&
+                  block_comment(leg).find("Your bid has been outbid by another user") !=
+                      std::string::npos;
+    } else {
+      qualifies = kind->str == "fragment" && is_call_op(leg, 0x557CEA20);
+    }
+    if (qualifies && ++n > 1) {
+      return false;
+    }
   }
-  if (b->btype == "ton_transfer") {
-    return kind->str == "getgems" &&
-           block_comment(b).find("Your bid has been outbid by another user") != std::string::npos;
-  }
-  return kind->str == "fragment" && is_call_op(b, 0x557CEA20);
+  return n == 1;
 }
 
 // Registered functions
 
-// Find the NFT returned by cancel or finish without consuming it. A pattern edge
-// would consume the child and turn its top-level action into a child row. The
-// first matching next block wins; no match returns Null.
-EvalResult nft_trade_returned(BuildEnv &env, const std::vector<Value> &args) {
-  (void)env;
-  if (args.size() != 2 || args[1].t != VType::Str) {
-    return rt_fault("nft_trade_returned: bad arguments");
-  }
-  const Block *anchor = as_block(args[0]);
-  if (anchor == nullptr) {
-    return rt_ok(Value::null());
-  }
-  const std::string &want = args[1].str;
-  for (const Block *n : anchor->next_blocks) {
-    if (n == nullptr || n->btype != want) {
-      continue;
-    }
-    Value nft_address, nft_collection;
-    if (want == "nft_transfer") {
-      // data.nft = {address, index, collection: {address} | null}
-      const Value *nft = n->data.field("nft");
-      if (nft == nullptr) {
-        continue;
-      }
-      const Value *addr = nft->field("address");
-      nft_address = addr != nullptr ? *addr : Value::null();
-      const Value *col = nft->field("collection");
-      // A null collection remains null instead of being indexed.
-      if (col != nullptr && !col->is_null()) {
-        const Value *ca = col->field("address");
-        nft_collection = ca != nullptr ? *ca : Value::null();
-      }
-    } else {
-      const Value *addr = n->data.field("nft_address");
-      const Value *col = n->data.field("collection_address");
-      nft_address = addr != nullptr ? *addr : Value::null();
-      nft_collection = col != nullptr ? *col : Value::null();
-    }
-    const Value *owner = n->data.field("new_owner");
-    Value::Fields f;
-    f.emplace_back("nft_address", nft_address);
-    f.emplace_back("nft_collection", nft_collection);
-    f.emplace_back("owner", owner != nullptr ? *owner : Value::null());
-    return rt_ok(Value::make_obj(std::move(f)));
-  }
-  return rt_ok(Value::null());
-}
-
-// AuctionOutbidMatcher's whole build. The matcher ANCHORS on the outbid leg,
-// not on the auction_bid: reference merges only the leg (`merge_blocks(include)`,
-// include == [outbid_transfer]) and leaves the auction_bid a spine block of its
-// own, which an anchor edge would consume. So the bid is reached through
-// `.previous_block` here, the nominator_pool_withdraw_parent precedent, and
-// this fn also carries the "exactly one, reject on duplicate" count that reference
-// runs over the bid's next_blocks and the language has no quantifier for.
-EvalResult auction_outbid_data(BuildEnv &env, const std::vector<Value> &args) {
-  (void)env;
-  if (args.size() != 1) {
-    return rt_fault("auction_outbid_data: bad arguments");
-  }
-  const Block *leg = as_block(args[0]);
-  if (leg == nullptr || leg->previous_block == nullptr) {
-    return rt_ok(Value::null());
-  }
-  const Block *bid = leg->previous_block;
-  int n = 0;
-  for (const Block *sib : bid->next_blocks) {
-    if (auction_outbid_leg(sib) && ++n > 1) {
-      return rt_ok(Value::null());  // legacy bails on a second candidate
-    }
-  }
-  if (n != 1) {
-    return rt_ok(Value::null());
-  }
-  const Message *msg = block_msg(leg);
-  if (msg == nullptr) {
-    return rt_ok(Value::null());
-  }
-  const bool getgems = leg->btype == "ton_transfer";
-  Value::Fields f;
-  f.emplace_back("auction_address", data_field(bid, "auction"));
-  f.emplace_back("nft", data_field(bid, "nft_address"));
-  f.emplace_back("nft_collection", data_field(bid, "nft_collection"));
-  f.emplace_back("bidder", account_from_opt(msg->destination));
-  f.emplace_back("new_bidder", data_field(bid, "bidder"));
-  f.emplace_back("amount", msg->value ? Value::make_amount(td::make_refint(*msg->value))
-                                      : Value::make_amount_none());
-  // The fragment leg carries no comment (reference hardcodes None there).
-  f.emplace_back("comment", getgems ? data_field(leg, "comment") : Value::null());
-  f.emplace_back("auction_type", data_field(bid, "auction_type"));
-  return rt_ok(Value::make_obj(std::move(f)));
-}
-
 EvalResult getgems_sale_init(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
-  if (args.size() != 2) {
-    return rt_fault("getgems_sale_init: bad arguments");
-  }
   const Block *b = as_block(args[0]);
   if (b == nullptr) {
     return rt_ok(Value::null());
@@ -517,9 +405,6 @@ EvalResult getgems_sale_init(BuildEnv &env, const std::vector<Value> &args) {
 
 EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
-  if (args.size() != 2) {
-    return rt_fault("getgems_auction_init: bad arguments");
-  }
   const Block *b = as_block(args[0]);
   if (b == nullptr) {
     return rt_ok(Value::null());
@@ -562,17 +447,13 @@ EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args) {
 // that interface carries. This is a lookup keyed on another lookup's result,
 // which the build language cannot express. Any rejected branch returns Null.
 EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 1) {
-    return rt_fault("auction_bid_data: bad arguments");
-  }
   const Block *bid = as_block(args[0]);
   const Message *msg = block_msg(bid);
   const std::string *dest = msg_dest(bid);
   if (bid == nullptr || msg == nullptr || dest == nullptr) {
     return rt_ok(Value::null());
   }
-  Value amount = msg->value ? Value::make_amount(td::make_refint(*msg->value))
-                            : Value::make_amount_none();
+  Value amount = msg_value_amount(msg);
   Value bidder = account_from_opt(msg->source);
   Value auction_addr = account_from_opt(std::optional<std::string>(*dest));
 
@@ -614,7 +495,7 @@ EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args) {
   }
   if (dns) {
     // A DNS bid requires the teleitem outbid notification.
-    if (find_call(bid->next_blocks, 0x557CEA20) == nullptr) {
+    if (first_call(bid->next_blocks, 0x557CEA20) == nullptr) {
       return rt_ok(Value::null());
     }
   }
@@ -631,22 +512,26 @@ EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args) {
   return rt_ok(Value::make_obj(std::move(f)));
 }
 
-// The produces-switch discriminator shared by NftCancelAuctionMatcher's two
-// outcomes (blocks/auction.py:407-411).
-EvalResult nft_trade_is_finish(BuildEnv &env, const std::vector<Value> &args) {
-  (void)env;
-  if (args.size() != 1) {
-    return rt_fault("nft_trade_is_finish: bad arguments");
+// Finish/stop purchases place the seller payout beside the produced block.
+// Insert a proxy under the sale parent, then absorb the peeked payout and proxy.
+void getgems_proxy_insert(Block *produced, const ShaperMatch &m) {
+  Block *payout = m.capture("sib_payout");
+  if (produced == nullptr || payout == nullptr || m.arena == nullptr) {
+    return;
   }
-  const Block *b = as_block(args[0]);
-  if (b == nullptr) {
-    return rt_ok(Value::make_bool(false));
+  Block *parent = produced->previous_block;
+  if (parent == nullptr || parent->btype != mch::btype::kTonTransfer) {
+    return;
   }
-  if (b->btype == "ton_transfer") {
-    std::string c = block_comment(b);
-    return rt_ok(Value::make_bool(c == "finish" || c == "stop"));
+  const Value *comment = parent->data.field("comment");
+  if (comment == nullptr || comment->t != VType::Str ||
+      (comment->str != "finish" && comment->str != "stop")) {
+    return;
   }
-  return rt_ok(Value::make_bool(is_call_op(b, 0xB95616B6) || is_call_op(b, 0x20C9EB18)));
+  Block *proxy = m.arena->make(mch::btype::kEmpty);
+  parent->insert_between({produced, payout}, proxy);
+  produced->merge_blocks({payout, proxy});
+  produced->compact_connections();
 }
 
 }  // namespace mch

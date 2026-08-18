@@ -4,7 +4,9 @@
 #include "host/HostImpls.h"
 
 #include "host/BlockViews.h"
+#include "host/DexRecords.h"
 #include "host/DexPton.h"
+#include "host/HostAdapter.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -12,6 +14,7 @@
 #include "ExprRuntime.h"
 #include "MsgParse.h"
 #include "parse/PSlice.h"
+#include "btypes_gen.h"
 
 #include "common/refint.h"
 #include "vm/cellslice.h"
@@ -128,7 +131,7 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
   }
   td::RefInt256 min_out = r_min.move_as_ok();
   if (auto ts = acc_str(target)) {
-    out.emplace_back(*ts, min_out.is_null() ? td::make_refint(0) : min_out);
+    out.emplace_back(*ts, or_zero(std::move(min_out)));
   }
   auto r_rcpt = load_address_py(cs);  // recipient
   if (r_rcpt.is_error()) {
@@ -159,19 +162,14 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
 // returning None, so any parse/nav failure is a Null reject here. Deterministic
 // (input transfer read via btype/children_blocks/data, not event_nodes[0]).
 EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
+  auto decoded = decode_consumed_or_none(args);
+  if (!decoded) {
+    if (args[0].t == VType::List && !args[0].items->empty()) {
+      return host_reject("empty consumed");
+    }
     return host_reject("bad arguments");
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) {
-      consumed.push_back(b);
-    }
-  }
-  if (consumed.empty()) {
-    return host_reject("empty consumed");
-  }
+  std::vector<const Block *> consumed = std::move(decoded->blocks);
   const Block *block = consumed.front();
 
   // anchor <- FundAccount <- input transfer.
@@ -180,7 +178,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
 
   const Block *nft_mint = nullptr;
   for (const Block *b : consumed) {
-    if (b->btype == "nft_mint") {
+    if (b->btype == mch::btype::kNftMint) {
       nft_mint = b;
       break;
     }
@@ -270,8 +268,8 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
   }
   const Block *jetton_notify_block = nullptr;
   Value sender_wallet = Value::null();
-  if (input_transfer->btype == "jetton_transfer") {
-    jetton_notify_block = find_call(input_transfer->children_blocks, kJettonNotify);
+  if (input_transfer->btype == mch::btype::kJettonTransfer) {
+    jetton_notify_block = first_call(input_transfer->children_blocks, kJettonNotify);
     sender_wallet = data_field(input_transfer, "sender_wallet");
   } else if (is_call_op(input_transfer, kJettonNotify)) {
     jetton_notify_block = input_transfer;
@@ -373,27 +371,20 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
       int n = 0;
       for (const Block *b : consumed) {
         if (n >= 2) break;
-        if (b->btype != "jetton_transfer" || b->previous_block != pay_to) continue;
+        if (b->btype != mch::btype::kJettonTransfer || b->previous_block != pay_to) continue;
         n++;
-        const Block *pton = find_call(b->next_blocks, kPTonTransfer);
+        const Block *pton = first_call(b->next_blocks, kPTonTransfer);
         Value ex_amount, ex_asset;
         if (pton != nullptr) {
-          td::RefInt256 ta;
-          auto rb = block_body(pton);
-          if (rb.is_ok()) {
-            auto rp = parse_message_body("PTonTransfer", rb.ok());
-            if (rp.is_ok()) {
-              const Value *tav = rp.ok().field("ton_amount");
-              if (tav != nullptr && (tav->t == VType::Int || tav->t == VType::Amount)) ta = tav->num;
-            }
-          }
+          auto parsed = pton_ton_amount(pton);
+          td::RefInt256 ta = parsed.is_ok() ? parsed.move_as_ok() : td::RefInt256();
           ex_amount = amount_or_zero(ta);
           ex_asset = Value::make_asset_ton();
         } else {
           ex_amount = data_field(b, "amount");
           ex_asset = data_field(b, "asset");
         }
-        excesses.push_back(Value::make_list(std::vector<Value>{ex_asset, ex_amount}));
+        excesses.push_back(excess_pair(std::move(ex_asset), std::move(ex_amount)));
       }
     }
   }
@@ -430,16 +421,14 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
 // leg->slot reordering that depends on both. Python wraps the whole body in
 // try/except returning None, so any parse/nav failure is a Null reject here.
 EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
+  auto decoded = decode_consumed_or_none(args);
+  if (!decoded) {
+    if (args[0].t == VType::List && !args[0].items->empty()) {
+      return host_reject("no ROUTERV3_PAY_TO in consumed");
+    }
     return host_reject("bad arguments");
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) {
-      consumed.push_back(b);
-    }
-  }
+  std::vector<const Block *> consumed = std::move(decoded->blocks);
   const Block *pay_to = nullptr;
   for (const Block *b : consumed) {
     if (is_call_op(b, kV3PayTo)) { pay_to = b; break; }
@@ -483,7 +472,7 @@ EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args)
     int n = 0;
     for (const Block *b : consumed) {
       if (n >= 2) break;
-      if (b->btype != "jetton_transfer" || b->previous_block != pay_to) continue;
+      if (b->btype != mch::btype::kJettonTransfer || b->previous_block != pay_to) continue;
       legs[n++] = b;
     }
   }
@@ -492,17 +481,10 @@ EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args)
   Leg out_legs[2];
   for (int i = 0; i < 2; i++) {
     if (legs[i] != nullptr) {
-      const Block *pton = find_call(legs[i]->next_blocks, kPTonTransfer);
+      const Block *pton = first_call(legs[i]->next_blocks, kPTonTransfer);
       if (pton != nullptr) {
-        td::RefInt256 ta;
-        auto pb = block_body(pton);
-        if (pb.is_ok()) {
-          auto rp = parse_message_body("PTonTransfer", pb.ok());
-          if (rp.is_ok()) {
-            const Value *tav = rp.ok().field("ton_amount");
-            if (tav != nullptr && (tav->t == VType::Int || tav->t == VType::Amount)) ta = tav->num;
-          }
-        }
+        auto parsed = pton_ton_amount(pton);
+        td::RefInt256 ta = parsed.is_ok() ? parsed.move_as_ok() : td::RefInt256();
         out_legs[i].amount = amount_or_zero(ta);
         out_legs[i].asset = Value::make_asset_ton();
       } else {
@@ -531,7 +513,8 @@ EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args)
   // Reorder into the pool's asset0/asset1 order: leg 1 is the one whose dex
   // jetton wallet is the asset0 wallet. (The reference logs when the swap does
   // not fix it and carries on; nothing observable follows from the log.)
-  if (acc_str(out_legs[0].dex_jetton_wallet) != acc_str(slots[0].wallet)) {
+  if (!same_account(account_from_opt(acc_str(out_legs[0].dex_jetton_wallet)),
+                    account_from_opt(acc_str(slots[0].wallet)))) {
     std::swap(out_legs[0], out_legs[1]);
   }
 
@@ -593,7 +576,8 @@ ToncoParts derive_tonco_parts(const std::vector<const Block *> &consumed) {
   std::stable_sort(p.peer_swaps.begin(), p.peer_swaps.end(), by_lt);
   const Block *prev = p.anchor->previous_block;
   if (prev != nullptr) {
-    p.in_transfer = (prev->btype == "jetton_transfer") ? prev : prev->previous_block;
+    p.in_transfer =
+        (prev->btype == mch::btype::kJettonTransfer) ? prev : prev->previous_block;
   }
   auto leads_to_hop = [&](const Block *b) -> bool {
     for (Block *c : b->next_blocks) {
@@ -612,7 +596,7 @@ ToncoParts derive_tonco_parts(const std::vector<const Block *> &consumed) {
   };
   for (const Block *b : consumed) {
     if (b->previous_block != nullptr && payout_ids.count(b->previous_block) &&
-        (b->btype == "jetton_transfer" || is_call_op(b, kJettonTransfer))) {
+        (b->btype == mch::btype::kJettonTransfer || is_call_op(b, kJettonTransfer))) {
       if (!leads_to_hop(b)) p.out_transfers.push_back(b);  // intermediates unused downstream
     }
   }
@@ -628,15 +612,14 @@ ToncoParts derive_tonco_parts(const std::vector<const Block *> &consumed) {
 // call message. Multi-hop peer_swaps + the failed-swap recursive-payload
 // fallback are supported; the corpus covers only single-hop swaps.
 EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 1 || args[0].t != VType::List) {
+  auto decoded = decode_consumed_or_none(args);
+  if (!decoded) {
+    if (args[0].t == VType::List) {
+      return host_reject("empty consumed");
+    }
     return host_reject("bad arguments");
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) consumed.push_back(b);
-  }
-  if (consumed.empty()) return host_reject("empty consumed");
+  std::vector<const Block *> consumed = std::move(decoded->blocks);
   ToncoParts parts = derive_tonco_parts(consumed);
 
   auto by_lt = [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; };
@@ -688,7 +671,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   // --- incoming transfer ---
   Value sender, in_asset, in_amount, in_source, in_source_jw, in_dest, in_dest_jw;
   td::Ref<vm::Cell> in_payload;
-  if (in_transfer_block->btype == "jetton_transfer") {
+  if (in_transfer_block->btype == mch::btype::kJettonTransfer) {
     in_asset = tonco_leg_asset(data_field(in_transfer_block, "asset"));
     sender = data_field(in_transfer_block, "sender");
     in_amount = data_field(in_transfer_block, "amount");
@@ -734,7 +717,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   if (out_transfer == nullptr) {
     return host_reject("no out_transfer (payouts=" + std::to_string(all_payouts.size()) + ")");
   }
-  if (out_transfer->btype != "jetton_transfer") {
+  if (out_transfer->btype != mch::btype::kJettonTransfer) {
     // Unsupported out type. The out leg is found by btype, so a raw
     // call_contract here means the jetton_transfer matcher rejected that leg
     // (missing wallet interface) rather than the trace having an odd shape.
@@ -755,8 +738,8 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     if (!pt.amount0.is_null() && pt.jetton0.t == VType::Account) a.emplace_back(pt.amount0, pt.jetton0);
     if (!pt.amount1.is_null() && pt.jetton1.t == VType::Account) a.emplace_back(pt.amount1, pt.jetton1);
     std::stable_sort(a.begin(), a.end(), [](const auto &x, const auto &y) {
-      td::RefInt256 xa = x.first.is_null() ? td::make_refint(0) : x.first;
-      td::RefInt256 ya = y.first.is_null() ? td::make_refint(0) : y.first;
+      td::RefInt256 xa = or_zero(x.first);
+      td::RefInt256 ya = or_zero(y.first);
       return td::cmp(xa, ya) > 0;  // reverse
     });
     return a;

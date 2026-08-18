@@ -6,6 +6,8 @@
 #include "vm/boc.h"
 #include "vm/cellslice.h"
 
+#include <map>
+
 namespace mch {
 
 namespace {
@@ -42,8 +44,33 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
   if (interfaces_ == nullptr || !addr_arg) {
     return Value::null();  // see the non-Str deviation note in the header
   }
+  enum class Handler {
+    JettonWallet,
+    NftItem,
+    NftSale,
+    MultisigOrder,
+    NftAuction,
+    NominatorPool,
+    DedustPool,
+    JvaultAssets,
+  };
+  static const std::map<std::string, Handler> handlers = {
+      {"jetton_wallet", Handler::JettonWallet},
+      {"nft_item", Handler::NftItem},
+      {"nft_sale", Handler::NftSale},
+      {"multisig_order", Handler::MultisigOrder},
+      {"nft_auction", Handler::NftAuction},
+      {"nominator_pool", Handler::NominatorPool},
+      {"dedust_pool", Handler::DedustPool},
+      {"jvault_assets", Handler::JvaultAssets},
+  };
+  auto handler = handlers.find(kind);
+  if (handler == handlers.end()) {
+    return Value::null();
+  }
   const std::string &addr = args[0].str;
-  if (kind == "jetton_wallet") {
+  switch (handler->second) {
+    case Handler::JettonWallet: {
     auto it = interfaces_->find(upper_ascii(addr));
     if (it == interfaces_->end()) {
       return Value::null();
@@ -54,7 +81,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     }
     return iface_obj(*jw, {"balance", "address", "owner", "jetton"});
   }
-  if (kind == "nft_item") {
+    case Handler::NftItem: {
     auto it = interfaces_->find(addr);  // RAW key (dns.py variant, no .upper())
     if (it == interfaces_->end()) {
       return Value::null();
@@ -66,7 +93,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     return iface_obj(*nft, {"address", "init", "index", "collection_address",
                             "owner_address", "content", "code_hash"});
   }
-  if (kind == "nft_sale") {
+    case Handler::NftSale: {
     // TestInterfaceRepository.get_nft_sale: interfaces[addr]["NftSale"] (RAW key)
     // -> NftSale ORM. The nft host fns read marketplace_address / nft_address /
     // full_price / nft_owner_address / code_hash.
@@ -81,7 +108,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     return iface_obj(*sale, {"marketplace_address", "nft_address", "full_price",
                              "nft_owner_address", "code_hash"});
   }
-  if (kind == "multisig_order") {
+    case Handler::MultisigOrder: {
     // TestInterfaceRepository.get_multisig_order: interfaces[addr]["MultisigOrder"]
     // (RAW key) -> MultisigOrder ORM. Only `signers` is read.
     auto it = interfaces_->find(addr);
@@ -94,7 +121,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     }
     return iface_obj(*o, {"signers"});
   }
-  if (kind == "nft_auction") {
+    case Handler::NftAuction: {
     // TestInterfaceRepository.get_nft_auction: interfaces[addr]["NftAuction"]
     // (RAW key) -> NftAuction ORM. The nft host fns read mp_addr / nft_addr /
     // last_bid / nft_owner / code_hash.
@@ -108,14 +135,14 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     }
     return iface_obj(*auc, {"mp_addr", "nft_addr", "last_bid", "nft_owner", "code_hash"});
   }
-  if (kind == "nominator_pool") {
+    case Handler::NominatorPool: {
     auto it = interfaces_->find(addr);
     if (it == interfaces_->end() || it->second.field("NominatorPool") == nullptr) {
       return Value::null();
     }
     return it->second;  // the account's whole interfaces Dict
   }
-  if (kind == "dedust_pool") {
+    case Handler::DedustPool: {
     // TestInterfaceRepository.get_dedust_pool: interfaces[addr]["DedustPool"]
     // (RAW key == AccountId.as_str() upper) -> DedustPool(assets=data["assets"]).
     // Absent -> null; the host fn then rejects (Python None.assets raises).
@@ -129,7 +156,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     }
     return iface_obj(*pool, {"assets"});
   }
-  if (kind == "jvault_assets") {
+    case Handler::JvaultAssets: {
     // extract_jvault_assets (blocks/jvault.py) as a record lookup: read the
     // stake wallet's extra-data cell (b64 BOC string), parse two addresses
     // (staking_pool + minter), then chain a second extra-data read (pool ->
@@ -181,8 +208,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     }
     Value jvault_asset = Value::null();
     if (minter.t == VType::Account && !minter.addr_none) {
-      auto mn = normalize_raw_address(minter.str);
-      jvault_asset = Value::make_asset_jetton(mn ? *mn : minter.str);
+      jvault_asset = Value::make_asset_jetton(minter.str);
     }
     auto make_record = [&](Value asset) {
       Value::Fields f;
@@ -211,8 +237,8 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     if (jetton == nullptr || jetton->t != VType::Str) {
       return Value::null();
     }
-    auto jn = normalize_raw_address(jetton->str);
-    return make_record(Value::make_asset_jetton(jn ? *jn : jetton->str));
+    return make_record(Value::make_asset_jetton(jetton->str));
+  }
   }
   return Value::null();
 }

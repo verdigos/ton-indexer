@@ -11,6 +11,7 @@
 
 #include "td/utils/Status.h"
 
+#include <set>
 #include <string>
 
 namespace ton_abi {
@@ -21,12 +22,15 @@ struct GeneratedFiles {
   std::string source;          // <contract_snake>_gen.cpp contents
 };
 
-// Emit the generated pair for `abi` (kernel resolves it). Fail-closed on
-// non-standard map keys and any resolution error. `out_name` (a fixture stem)
-// determines the output file basename + namespace -- NOT contract_name, since
-// distinct fixtures can share a contract_name (e.g. both err-cont-on-stack-*
-// are "Err"). When empty, falls back to the contract_name's snake form.
+// ABI-facing "StructName.field" names whose decoded wire values must equal
+// their declared defaults.
+using ValidateManifest = std::set<std::string>;
+
+// Emit C++ files for abi, failing on resolution or unsupported map keys. out_name
+// overrides the generated basename and namespace; validate_manifest selects
+// decoded fields whose declared defaults are enforced.
 td::Result<GeneratedFiles> emit_abi(const ContractABI &abi, const AbiKernel &kernel,
-                                    const std::string &out_name = {});
+                                    const std::string &out_name = {},
+                                    const ValidateManifest &validate_manifest = {});
 
 }  // namespace ton_abi

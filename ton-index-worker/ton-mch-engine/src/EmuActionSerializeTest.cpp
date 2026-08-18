@@ -12,7 +12,7 @@
 #include "Classify.h"
 #include "Value.h"
 #include "emu/EmuActionSerialize.h"
-#include "emu/EmuTypes.h"  // view_finality, actions_write_is_stale
+#include "emu/EmuTypes.h"  // view_finality
 
 #include "td/utils/base64.h"
 
@@ -111,14 +111,6 @@ bool is_int(const msgpack::object *o, std::int64_t want) {
   }
   return o->type == msgpack::type::POSITIVE_INTEGER &&
          o->via.u64 == static_cast<std::uint64_t>(want);
-}
-
-// A native msgpack double. Go's decodeFlexString renders one with
-// strconv.FormatFloat, so the natural type reaches a *string field intact.
-bool is_double(const msgpack::object *o, double want) {
-  return o != nullptr &&
-         (o->type == msgpack::type::FLOAT64 || o->type == msgpack::type::FLOAT32) &&
-         o->via.f64 == want;
 }
 
 bool is_bool(const msgpack::object *o, bool want) {
@@ -260,9 +252,9 @@ void test_child_row_fields() {
 void test_null_and_stringify() {
   Action a = base_action();
   a.type = "jetton_transfer";
-  a.source = Value::make_account_none();  // AccountId(None) -> as_str() is None
+  a.source = Value::null();  // av_addr(AccountId(None))
   a.destination = Value::make_account_raw(kAddrB);
-  a.asset = Value::make_asset_ton();  // TON asset -> None
+  a.asset = Value::null();  // av_addr(TON asset)
   a.asset2 = Value::make_asset_jetton(kAddrA);
   a.amount = Value::make_amount_none();  // Amount(None)
   // A jetton amount well above uint64: `value` is in the decimal-string set
@@ -643,11 +635,11 @@ Action wire_fixture_action() {
                                         "340282366920938463463374607431768211456")))}));
   a.jvault_claim_data = Value::make_dict(std::move(jc));
 
-  // A float-backed value into a *string field (nft_item_index's real shape).
+  // NFT indices use the same decimal-string encoding as other wide integers.
   Value::Fields nt;
   nt.emplace_back("is_purchase", Value::make_bool(true));
   nt.emplace_back("price", Value::make_int(td::make_refint(2500000000LL)));
-  nt.emplace_back("nft_item_index", Value::make_float(1037.0));
+  nt.emplace_back("nft_item_index", Value::make_int64(1037));
   a.nft_transfer_data = Value::make_dict(std::move(nt));
 
   // Tick bounds: int24, one of them negative, into Go *string.
@@ -744,10 +736,8 @@ void test_wire_fixture() {
   check("wire/dns_flags_int", is_uint(at(*at(*row, "change_dns_record_data"), "flags"), 7));
   check("wire/claimed_amounts_all_str",
         is_str(elem(at(*at(*row, "jvault_claim_data"), "claimed_amounts"), 0), "1000"));
-  // msgpack-c normalizes an integral double to an INTEGER (see the Float arm in
-  // EmuActionSerialize.cpp); Go's *string field takes it either way.
-  check("wire/nft_index_integral_float_is_int",
-        is_uint(at(*at(*row, "nft_transfer_data"), "nft_item_index"), 1037));
+  check("wire/nft_index_str",
+        is_str(at(*at(*row, "nft_transfer_data"), "nft_item_index"), "1037"));
   check("wire/tick_lower_negative_int",
         is_int(at(*at(*row, "dex_deposit_liquidity_data"), "tick_lower"), -887220));
   const msgpack::object *dwd = at(*row, "dex_withdraw_liquidity_data");
@@ -803,14 +793,11 @@ void test_value_table() {
   check("table/finality_min_emulated", is_uint(at(*row, "finality"), 0));
 }
 
-// The two "should never reach an Action" shapes: serialized anyway, and counted
-// so a future fill that produces one is visible.
+// Unexpected cells are serialized and counted so a future fill is visible.
 void test_counters() {
   Action a = base_action();
-  a.amount = Value::make_amount_float(1.5);  // Python Amount(float)
   Value::Fields f;
   f.emplace_back("boc", Value::make_cell(vm::CellBuilder().finalize()));
-  f.emplace_back("ratio", Value::make_float(2.5));
   a.extra = Value::make_dict(std::move(f));
 
   ActionSerializeStats st;
@@ -820,22 +807,9 @@ void test_counters() {
   if (row == nullptr) {
     return;
   }
-  check("counters/floats_counted", st.float_values == 2);  // Amount(float) + Float
   check("counters/cells_counted", st.cell_values == 1);
   check("counters/nothing_unrenderable", st.unrenderable == 0);
-  // A NATIVE msgpack double, not a CPython repr(float) reproduction: every Go
-  // field that can carry one is *string, and decodeFlexString renders a
-  // Float/Double with strconv.FormatFloat. `amount` is in the decimal-string
-  // set, but a float-backed Amount has no integer to render, so the double is
-  // what it ships.
-  // FRACTIONAL doubles keep the 0xcb float64 encoding; the integral ones
-  // msgpack-c folds into integers (wire/nft_index_integral_float_is_int). Both
-  // reach Go's *string fields intact, which is why the writer does not fight
-  // the normalization, but the split is pinned here so a msgpack upgrade that
-  // changed it would be caught rather than shipped.
-  check("counters/amount_float_double", is_double(at(*row, "amount"), 1.5));
   const msgpack::object *ex = at(*row, "extra");
-  check("counters/float_double", is_double(at(*ex, "ratio"), 2.5));
   const msgpack::object *boc = at(*ex, "boc");
   // The real BOC bytes, base64'd, NOT the twin-diff root-hash substitution.
   check("counters/cell_is_b64_str", boc != nullptr && boc->type == msgpack::type::STR &&
@@ -1124,11 +1098,10 @@ void test_bucket_b_fills() {
     check("bucketB/change_dns/key_hex_lowercase", is_str_v(fld(c, "key"), "abababab"));
     check("bucketB/change_dns/value_schema", is_str_v(fld(c, "value_schema"), "DNSSmcAddress"));
     check("bucketB/change_dns/smc_value_is_address", is_str_v(fld(c, "value"), kAddrB));
-    // The second, standalone `if` in Python, an elif would have missed it.
+    // DNSSmcAddress carries its flags alongside the address value.
     check("bucketB/change_dns/smc_flags", fld(c, "flags").t == VType::Int);
-    // Dead on both sides, kept so the decoded map matches Python key for key.
-    check("bucketB/change_dns/address_key_present_and_null",
-          c.field("address") != nullptr && fld(c, "address").is_null());
+    // The database composite has no address field.
+    check("bucketB/change_dns/address_key_absent", c.field("address") == nullptr);
 
     Action t = row("change_dns",
                    {{"source", Value::make_account_raw(kAddrA)},
@@ -1151,14 +1124,15 @@ void test_bucket_b_fills() {
     check("bucketB/change_dns/adnl_value_is_hex",
           is_str_v(fld(adnl.change_dns_record_data, "value"), "abababab"));
 
-    // "Unknown" schema: Python never creates the `value` key at all.
+    // Unknown schemas carry an explicit null value.
     Action u = row("change_dns",
                    {{"source", Value::make_account_raw(kAddrA)},
                     {"destination", Value::make_account_raw(kAddrB)},
                     {"key", Value::make_bytes(key_bytes)},
                     {"value", rec({{"schema", Value::make_str("Unknown")}})}});
-    check("bucketB/change_dns/unknown_omits_value",
-          u.change_dns_record_data.field("value") == nullptr);
+    check("bucketB/change_dns/unknown_value_present_and_null",
+          u.change_dns_record_data.field("value") != nullptr &&
+              fld(u.change_dns_record_data, "value").is_null());
   }
   {
     // delete_dns: the same column, everything but the key nulled.
@@ -1233,13 +1207,9 @@ void test_empty_view_finality() {
   }
 }
 
-// Write-back decisions
-//
-// Neither is reachable from a fixture, and both are easy to get backwards in a
-// way no A/B would catch: view_finality feeds both the `finality` wire key and
-// the staleness guard, and actions_write_is_stale decides whether a trace's
-// actions may be overwritten at all. The insert path itself needs Redis; these
-// two do not, so they are gated here rather than left to code review.
+// view_finality is not reachable from a fixture and is easy to reverse without
+// an A/B failure. It feeds the `finality` wire key and is exercised here without
+// requiring Redis.
 
 EmuTraceView view_of(std::initializer_list<EmuFinality> finalities) {
   EmuTraceView v;
@@ -1266,29 +1236,6 @@ void test_view_finality() {
             EmuFinality::confirmed);
 }
 
-void test_actions_write_guard() {
-  const auto emulated = static_cast<std::uint8_t>(EmuFinality::emulated);
-  const auto confirmed = static_cast<std::uint8_t>(EmuFinality::confirmed);
-  const auto finalized = static_cast<std::uint8_t>(EmuFinality::finalized);
-
-  // Nothing stored: the first emission always writes.
-  check("guard/absent_writes", !actions_write_is_stale(std::nullopt, emulated));
-  // THE case the guard exists for, a stale emulated emission landing after a
-  // finalized one, which the node loop already refuses and `actions` did not.
-  check("guard/emulated_over_finalized_skips",
-        actions_write_is_stale(std::string("2"), emulated));
-  check("guard/emulated_over_confirmed_skips",
-        actions_write_is_stale(std::string("1"), emulated));
-  // Equal is NOT stale: a re-emission at the same finality must still overwrite,
-  // or a trace whose tx set grew keeps the older, shorter action list.
-  check("guard/equal_writes", !actions_write_is_stale(std::string("2"), finalized));
-  check("guard/advancing_writes", !actions_write_is_stale(std::string("0"), confirmed));
-  // Fails OPEN on a corrupt value: failing closed would wedge the actions field
-  // permanently on the first bad write.
-  check("guard/unparseable_writes", !actions_write_is_stale(std::string("banana"), emulated));
-  check("guard/empty_writes", !actions_write_is_stale(std::string(""), emulated));
-}
-
 }  // namespace
 
 int run_action_msgpack_test() {
@@ -1310,7 +1257,6 @@ int run_action_msgpack_test() {
   test_evaa_liquidate_surface();
   test_empty_view_finality();
   test_view_finality();
-  test_actions_write_guard();
   std::printf("ACTIONS-MSGPACK-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }

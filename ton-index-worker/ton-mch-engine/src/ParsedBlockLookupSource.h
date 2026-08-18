@@ -29,10 +29,6 @@ class ParsedBlockLookupSource : public LookupSource {
       : account_interfaces_(account_interfaces), tier2_(std::move(tier2)) {
   }
 
-  // The set of kinds this source recognises (== lookup_kinds(), so
-  // prepare_classify's skip table is identical on the production path).
-  static const std::set<std::string> &kinds();
-
   Value fetch(const std::string &kind, const std::vector<Value> &args) const override;
 
   // Tier-attribution telemetry: every resolved lookup

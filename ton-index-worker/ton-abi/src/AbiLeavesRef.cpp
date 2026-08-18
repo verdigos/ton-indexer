@@ -100,10 +100,10 @@ td::Status store_cell(vm::CellBuilder &cb, td::Ref<vm::Cell> cell) {
 
 // ---- cellOf ----
 
-td::Result<td::Ref<vm::CellSlice>> load_ref_slice(vm::CellSlice &cs) {
+td::Result<std::pair<td::Ref<vm::Cell>, td::Ref<vm::CellSlice>>> load_ref_cell_and_slice(vm::CellSlice &cs) {
   TRY_RESULT(cell, load_cell(cs));
   TRY_RESULT(inner, open_ordinary(cell));
-  return td::make_ref<vm::CellSlice>(std::move(inner));
+  return std::make_pair(std::move(cell), td::make_ref<vm::CellSlice>(std::move(inner)));
 }
 
 // ---- maybe_ref ----

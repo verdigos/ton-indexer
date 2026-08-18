@@ -21,12 +21,8 @@ struct EvalResult {
 using Env = std::map<std::string, Value>;
 using Lookups = std::map<std::string, Value>;
 
-// Evaluation context for a node-level inline `where (expr)`: the candidate block
-// plus slot-indexed
-// captures. Both the interpreter (ExprEval with a where context) and the
-// generated where-functions take this, one signature, so codegen never has to
-// change when slots land: `slots[i]` will hold the capture bound to slot i
-// (Null until bound), n_slots = the matcher's slot count.
+// Evaluation context for `where (expr)`: the candidate block plus a fixed slot
+// view containing the matcher entry capture and nulls elsewhere.
 struct Block;  // BlockTree.h
 struct WhereEnv {
   const Block *block{nullptr};

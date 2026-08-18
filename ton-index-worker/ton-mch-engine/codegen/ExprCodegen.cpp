@@ -1,54 +1,25 @@
 #include "ExprCodegen.h"
 
+#include "fixtures/IrJson.h"
+
 #include <cctype>
 #include <cstdio>
 #include <map>
-#include <set>
 #include <stdexcept>
+#include <unordered_set>
 #include <vector>
 
 namespace mch_codegen {
+
+using mch::is_builtin_name;
+using mch::jbool;
+using mch::jfield;
+using mch::jstr;
 
 namespace {
 
 using Json = td::JsonValue;
 using JType = td::JsonValue::Type;
-
-const Json *jfield(const Json &e, td::Slice name) {
-  if (e.type() != JType::Object) {
-    return nullptr;
-  }
-  for (const auto &kv : e.get_object().field_values_) {
-    if (kv.first == name) {
-      return &kv.second;
-    }
-  }
-  return nullptr;
-}
-
-std::string jstr(const Json &e, const char *name) {
-  const Json *f = jfield(e, td::Slice(name));
-  return f != nullptr && f->type() == JType::String ? f->get_string().str() : std::string{};
-}
-
-// The fixed builtin set (rt_call_builtin's arity table). Anything else in a
-// `call` node is a host fn (registries.fns) in build programs.
-bool is_builtin(const std::string &name) {
-  static const std::set<std::string> builtins = {
-      "account", "amount", "asset", "ton_asset", "addr_none", "b64",
-      "asset_of", "tail_unwrap", "bytes_of", "first", "last", "len",
-      "sum", "zip", "map", "concat", "contains"};
-  return builtins.count(name) != 0;
-}
-
-std::string join(const std::vector<std::string> &parts, const std::string &sep) {
-  std::string out;
-  for (std::size_t i = 0; i < parts.size(); i++) {
-    if (i) out += sep;
-    out += parts[i];
-  }
-  return out;
-}
 
 // Ports cpp_expr_emit._Emitter: emits one function body, returning the Value
 // temp name for each subexpression. The temp counter is shared across nested
@@ -59,12 +30,16 @@ class Emitter {
  public:
   // Modes change only the environment-dependent leaves + the fault return:
   //  - Vectors: name -> rt_name(env,..), lookup -> rt_lookup(lk,..);
-  //  - Where: dotfield -> rt_dotfield(w,..); name/lookup fault (Python sync
-  //    where evaluator has no env);
+  //  - Where: dotfield -> rt_dotfield(w,..); the entry capture reads its
+  //    fixed slot, while any other name and every lookup fault;
   //  - Build: name -> scope map (slot / let-local / well-known), attr ->
   //    rt_access_build (bodies-aware), lookup -> rt_lookup_build, and every
   //    fault returns BuildOutcome::rejected.
-  explicit Emitter(EmitMode mode = EmitMode::Vectors) : mode_(mode) {
+  explicit Emitter(EmitMode mode = EmitMode::Vectors,
+                   std::string where_entry_name = {}, int where_entry_slot = -1)
+      : mode_(mode),
+        where_entry_name_(std::move(where_entry_name)),
+        where_entry_slot_(where_entry_slot) {
   }
 
   std::vector<std::string> lines;
@@ -114,7 +89,15 @@ class Emitter {
         return "v" + num(i);
       }
       if (mode_ == EmitMode::Where) {
-        // No environment exists at test_self time (expr_eval._sync_eval).
+        if (id == where_entry_name_ && where_entry_slot_ >= 0) {
+          int i = fresh();
+          line("if (w.slots == nullptr || w.n_slots <= static_cast<std::size_t>(" +
+               std::to_string(where_entry_slot_) + ")) return rt_fault(\"entry capture '" +
+               id + "' is not available in this `where` clause\");");
+          line("const Value &v" + num(i) + " = w.slots[" +
+               std::to_string(where_entry_slot_) + "];");
+          return "v" + num(i);
+        }
         return bind("rt_fault(\"name '" + id + "' is not bound in a `where` clause\")");
       }
       if (mode_ == EmitMode::Build) {
@@ -151,12 +134,12 @@ class Emitter {
       // Build mode: a non-builtin call is a host `fn` (registries.fns), emit
       // rt_call_hostfn (env-aware, NULL ARGS PASS THROUGH, unlike rt_call_builtin
       // which is null-strict). Vectors/Where modes only ever see builtins.
-      if (mode_ == EmitMode::Build && !is_builtin(fn)) {
+      if (mode_ == EmitMode::Build && !is_builtin_name(fn)) {
         return bind("rt_call_hostfn(env, " + cstr(fn) + ", std::vector<Value>{" + argv + "})");
       }
       // The builtin name and arity are known at emit time, so call the typed
       // core directly without name-keyed dispatch or a per-call heap vector.
-      // is_builtin() gates this; the argument temporaries are
+      // is_builtin_name() gates this; the argument temporaries are
       // Value locals passed by const-ref (rt_builtin_* take const Value&).
       return bind("rt_builtin_" + fn + "(" + argv + ")");
     }
@@ -215,14 +198,17 @@ class Emitter {
       for (const auto &t : jfield(e, "types")->get_array()) {
         types.push_back(cstr(t.get_string().str()));
       }
+      const bool nullable = jbool(e, "nullable", false);
       return bind("rt_parse_expr(env, " + x + ", std::vector<std::string>{" +
-                  join(types, ", ") + "})");
+                  join(types, ", ") + "}, " + (nullable ? "true" : "false") + ")");
     }
     throw std::runtime_error("unsupported expression kind '" + k + "'");
   }
 
  private:
   EmitMode mode_ = EmitMode::Vectors;
+  std::string where_entry_name_;
+  int where_entry_slot_ = -1;
   int n_ = 0;
   // Comprehension element binders map names to C++ expressions yielding the
   // element Value (the lambda parameter). Checked first in the `name` branch,
@@ -628,8 +614,9 @@ std::string generate_function(const std::string &fn_name, const Json &expr) {
          "}\n";
 }
 
-std::string generate_where_function(const std::string &fn_name, const Json &expr) {
-  Emitter em(EmitMode::Where);
+std::string generate_where_function(const std::string &fn_name, const Json &expr,
+                                    const std::string &entry_name, int entry_slot) {
+  Emitter em(EmitMode::Where, entry_name, entry_slot);
   std::string result = em.emit(expr);
   std::vector<std::string> body;
   for (const auto &ln : em.lines) {
@@ -677,6 +664,72 @@ std::string generate_wheres_file(const Json &root, const std::string &header,
     throw std::runtime_error("IR artifact has no `nodes` array");
   }
   const auto &arr = nodes->get_array();
+  const Json *matchers = jfield(root, td::Slice("matchers"));
+  if (matchers == nullptr || matchers->type() != JType::Array) {
+    throw std::runtime_error("IR artifact has no `matchers` array");
+  }
+
+  auto index_of = [](const Json &v) -> std::size_t {
+    if (v.type() != JType::Number) {
+      throw std::runtime_error("IR node reference is not a number");
+    }
+    return static_cast<std::size_t>(std::stoull(v.get_number().str()));
+  };
+  std::map<std::size_t, std::pair<std::string, int>> where_entries;
+  for (const auto &matcher : matchers->get_array()) {
+    const Json *root_ref = jfield(matcher, td::Slice("root"));
+    if (root_ref == nullptr) {
+      throw std::runtime_error("IR matcher has no `root`");
+    }
+    const std::size_t matcher_root = index_of(*root_ref);
+    if (matcher_root >= arr.size()) {
+      throw std::runtime_error("IR matcher root is out of range");
+    }
+    const std::string entry_name = jstr(arr[matcher_root], "capture");
+    int entry_slot = -1;
+    if (const Json *caps = jfield(matcher, td::Slice("captures"));
+        caps != nullptr && caps->type() == JType::Array) {
+      int slot = 0;
+      for (const auto &cap : caps->get_array()) {
+        if (jstr(cap, "name") == entry_name) {
+          entry_slot = slot;
+          break;
+        }
+        slot++;
+      }
+    }
+
+    std::vector<std::size_t> pending{matcher_root};
+    std::unordered_set<std::size_t> seen;
+    while (!pending.empty()) {
+      const std::size_t id = pending.back();
+      pending.pop_back();
+      if (id >= arr.size() || !seen.insert(id).second) {
+        continue;
+      }
+      const Json &node = arr[id];
+      if (jfield(node, td::Slice("where_expr")) != nullptr) {
+        auto [it, inserted] = where_entries.emplace(
+            id, std::make_pair(entry_name, entry_slot));
+        if (!inserted && it->second != std::make_pair(entry_name, entry_slot)) {
+          throw std::runtime_error("where_expr node is shared by matchers with different entries");
+        }
+      }
+      for (const char *key : {"child", "parent", "step", "exit"}) {
+        if (const Json *ref = jfield(node, td::Slice(key)); ref != nullptr) {
+          pending.push_back(index_of(*ref));
+        }
+      }
+      for (const char *key : {"children", "branches"}) {
+        if (const Json *refs = jfield(node, td::Slice(key));
+            refs != nullptr && refs->type() == JType::Array) {
+          for (const auto &ref : refs->get_array()) {
+            pending.push_back(index_of(ref));
+          }
+        }
+      }
+    }
+  }
 
   std::vector<std::size_t> where_ids;
   for (std::size_t i = 0; i < arr.size(); i++) {
@@ -688,8 +741,12 @@ std::string generate_wheres_file(const Json &root, const std::string &header,
   std::vector<std::string> out = {
       header, "#include \"GenWheres.h\"", "", "namespace mch {", "namespace {", ""};
   for (std::size_t id : where_ids) {
+    auto it = where_entries.find(id);
+    const std::string entry_name = it != where_entries.end() ? it->second.first : std::string{};
+    const int entry_slot = it != where_entries.end() ? it->second.second : -1;
     out.push_back(generate_where_function("where_" + std::to_string(id),
-                                          *jfield(arr[id], td::Slice("where_expr"))));
+                                          *jfield(arr[id], td::Slice("where_expr")),
+                                          entry_name, entry_slot));
   }
   const std::string table_fn = "gen_wheres_" + sanitize_ident(suffix);
   out.push_back("}  // namespace");
@@ -722,9 +779,8 @@ std::string generate_builds_file(const Json &root, const std::string &header,
   };
   std::vector<Entry> entries;
   // TODO: remove (harness): the `build_vectors` root is the TEST-ONLY document
-  // (ir/build_vectors.json -> mch-fixtures via fixtures/GenBuildsVectors.h). The
-  // production root is the `matchers` branch below. The dual-root shape is what
-  // forces --suffix to exist at all.
+  // consumed by the devtools vector runner. The production root is the `matchers`
+  // branch below. The dual-root shape is what forces --suffix to exist at all.
   if (const Json *cases = jfield(root, "build_vectors");
       cases != nullptr && cases->type() == JType::Array) {
     const auto &arr = cases->get_array();

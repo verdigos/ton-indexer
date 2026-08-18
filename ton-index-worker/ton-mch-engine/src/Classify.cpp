@@ -28,6 +28,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace mch {
@@ -65,98 +66,57 @@ void emit_action(const CoreAction &a) {
 
 }  // namespace
 
-// Dump-side render of an Action row (built lib-side by ActionBuild). Fixed
-// column set; unset fields are Null, rendered "null".
+// Dump-side render of an Action row (built lib-side by ActionBuild).
 std::string render_action(const Action &a) {
-  Value::Fields f;
-  f.emplace_back("id", Value::make_str(a.action_id));
-  f.emplace_back("type", Value::make_str(a.type));
-  f.emplace_back("success", Value::make_bool(a.success));
-  f.emplace_back("start_lt", Value::make_int64(a.start_lt));
-  f.emplace_back("end_lt", Value::make_int64(a.end_lt));
-  f.emplace_back("start_utime", Value::make_int64(a.start_utime));
-  f.emplace_back("end_utime", Value::make_int64(a.end_utime));
-  f.emplace_back("mc_seqno_end", Value::make_int64(a.mc_seqno_end));
+  std::vector<std::pair<std::string, std::string>> f;
+  f.emplace_back("id", "str:" + a.action_id);
+  f.emplace_back("type", "str:" + a.type);
+  f.emplace_back("success", a.success ? "true" : "false");
+  f.emplace_back("start_lt", std::to_string(a.start_lt));
+  f.emplace_back("end_lt", std::to_string(a.end_lt));
+  f.emplace_back("start_utime", std::to_string(a.start_utime));
+  f.emplace_back("end_utime", std::to_string(a.end_utime));
+  f.emplace_back("mc_seqno_end", std::to_string(a.mc_seqno_end));
+
+  auto render_strings = [](const std::vector<std::string> &values) {
+    std::string out = "[";
+    for (std::size_t i = 0; i < values.size(); i++) {
+      if (i) out += ",";
+      out += "str:" + values[i];
+    }
+    return out + "]";
+  };
   std::vector<std::string> th = a.tx_hashes;
-  std::sort(th.begin(), th.end());
-  std::vector<Value> thv;
-  for (const std::string &s : th) thv.push_back(Value::make_str(s));
-  f.emplace_back("tx_hashes", Value::make_list(std::move(thv)));
+  f.emplace_back("tx_hashes", render_strings(th));
   std::vector<std::string> ac = a.accounts;
   std::sort(ac.begin(), ac.end());
-  std::vector<Value> acv;
-  for (const std::string &s : ac) acv.push_back(Value::make_str(s));
-  f.emplace_back("accounts", Value::make_list(std::move(acv)));
-  f.emplace_back("source", a.source);
-  f.emplace_back("source_secondary", a.source_secondary);
-  f.emplace_back("destination", a.destination);
-  f.emplace_back("destination_secondary", a.destination_secondary);
-  f.emplace_back("asset", a.asset);
-  f.emplace_back("asset_secondary", a.asset_secondary);
-  f.emplace_back("asset2", a.asset2);
-  f.emplace_back("asset2_secondary", a.asset2_secondary);
-  f.emplace_back("amount", a.amount);
-  f.emplace_back("value", a.value);
-  f.emplace_back("opcode", a.opcode);
-  f.emplace_back("ton_transfer_data", a.ton_transfer_data);
-  f.emplace_back("jetton_transfer_data", a.jetton_transfer_data);
-  f.emplace_back("jetton_swap_data", a.jetton_swap_data);
-  f.emplace_back("nft_transfer_data", a.nft_transfer_data);
-  f.emplace_back("nft_listing_data", a.nft_listing_data);
-  f.emplace_back("nft_mint_data", a.nft_mint_data);
-  f.emplace_back("dex_deposit_liquidity_data", a.dex_deposit_liquidity_data);
-  f.emplace_back("dex_withdraw_liquidity_data", a.dex_withdraw_liquidity_data);
-  f.emplace_back("staking_data", a.staking_data);
-  f.emplace_back("evaa_supply_data", a.evaa_supply_data);
-  f.emplace_back("evaa_withdraw_data", a.evaa_withdraw_data);
-  f.emplace_back("evaa_liquidate_data", a.evaa_liquidate_data);
-  f.emplace_back("vesting_send_message_data", a.vesting_send_message_data);
-  f.emplace_back("vesting_add_whitelist_data", a.vesting_add_whitelist_data);
-  f.emplace_back("tonco_deploy_pool_data", a.tonco_deploy_pool_data);
-  f.emplace_back("multisig_create_order_data", a.multisig_create_order_data);
-  f.emplace_back("multisig_approve_data", a.multisig_approve_data);
-  f.emplace_back("multisig_execute_data", a.multisig_execute_data);
-  f.emplace_back("cocoon_worker_payout_data", a.cocoon_worker_payout_data);
-  f.emplace_back("cocoon_proxy_payout_data", a.cocoon_proxy_payout_data);
-  f.emplace_back("cocoon_proxy_charge_data", a.cocoon_proxy_charge_data);
-  f.emplace_back("cocoon_client_top_up_data", a.cocoon_client_top_up_data);
-  f.emplace_back("cocoon_register_proxy_data", a.cocoon_register_proxy_data);
-  f.emplace_back("cocoon_unregister_proxy_data", a.cocoon_unregister_proxy_data);
-  f.emplace_back("cocoon_client_register_data", a.cocoon_client_register_data);
-  f.emplace_back("cocoon_client_change_secret_hash_data", a.cocoon_client_change_secret_hash_data);
-  f.emplace_back("cocoon_client_request_refund_data", a.cocoon_client_request_refund_data);
-  f.emplace_back("cocoon_grant_refund_data", a.cocoon_grant_refund_data);
-  f.emplace_back("cocoon_client_increase_stake_data", a.cocoon_client_increase_stake_data);
-  f.emplace_back("cocoon_client_withdraw_data", a.cocoon_client_withdraw_data);
-  f.emplace_back("layerzero_packet_data", a.layerzero_packet_data);
-  f.emplace_back("layerzero_send_data", a.layerzero_send_data);
-  f.emplace_back("layerzero_dvn_verify_data", a.layerzero_dvn_verify_data);
-  f.emplace_back("jvault_stake_data", a.jvault_stake_data);
-  f.emplace_back("jvault_claim_data", a.jvault_claim_data);
-  f.emplace_back("change_dns_record_data", a.change_dns_record_data);
-  f.emplace_back("coffee_create_pool_data", a.coffee_create_pool_data);
-  f.emplace_back("coffee_staking_deposit_data", a.coffee_staking_deposit_data);
-  f.emplace_back("coffee_staking_withdraw_data", a.coffee_staking_withdraw_data);
-  f.emplace_back("extra", a.extra);
-  // Child-action recursion columns: null / empty list on a top-level row.
-  f.emplace_back("parent_action_id", a.parent_action_id.empty()
-                                         ? Value::null()
-                                         : Value::make_str(a.parent_action_id));
-  std::vector<Value> anc;
-  for (const std::string &s : a.ancestor_type) anc.push_back(Value::make_str(s));
-  f.emplace_back("ancestor_type", Value::make_list(std::move(anc)));
-  return render_value(Value::make_dict(std::move(f)));
+  f.emplace_back("accounts", render_strings(ac));
+#define MCH_RENDER_ACTION_FIELD(name) \
+  if (!a.name.is_null()) f.emplace_back(#name, render_value(a.name, /*omit_null_fields=*/true));
+  MCH_ACTION_VALUE_FIELDS(MCH_RENDER_ACTION_FIELD)
+#undef MCH_RENDER_ACTION_FIELD
+  // Child rows carry a parent id; top-level rows omit it.
+  if (!a.parent_action_id.empty()) {
+    f.emplace_back("parent_action_id", "str:" + a.parent_action_id);
+  }
+  f.emplace_back("ancestor_type", render_strings(a.ancestor_type));
+
+  std::sort(f.begin(), f.end(), [](const auto &lhs, const auto &rhs) {
+    return lhs.first < rhs.first;
+  });
+  std::string out = "{";
+  for (std::size_t i = 0; i < f.size(); i++) {
+    if (i) out += ",";
+    out += f[i].first + "=" + f[i].second;
+  }
+  return out + "}";
 }
 
-// Shared CLI dump adapter over ClassifyCore. The core computes a buffered
-// per-trace ClassifyResult; this reproduces the
-// stdout byte-for-byte (SKIP header, `=== fixture`, ERROR/TRACE_FAIL lines, then
-// per surviving action either the classify line (emit_action) or the serialized
-// Action row (build_action + render_action)). --classify and --actions differ
-// ONLY in the per-action render, so they share this.
+// Shared CLI dump adapter over ClassifyCore. Without an output directory it
+// preserves the fixture stream; per-fixture output omits only each header line.
 int run_dump(const std::vector<std::string> &paths,
              bool actions_mode, const TraceContextLoader &load_ctx,
-             const LookupSourceFactory &lookup_factory) {
+             const LookupSourceFactory &lookup_factory, const std::string &output_dir) {
   const std::vector<CompiledMatcher> &matchers = gen_matchers_ir();
   warn_missing_artifact_parsers(matchers);
 
@@ -170,6 +130,16 @@ int run_dump(const std::vector<std::string> &paths,
   }
 
   namespace fs = std::filesystem;
+  const bool per_fixture_output = actions_mode && !output_dir.empty();
+  if (per_fixture_output) {
+    std::error_code ec;
+    fs::create_directories(output_dir, ec);
+    if (ec) {
+      std::fprintf(stderr, "failed to create actions output directory %s: %s\n",
+                   output_dir.c_str(), ec.message().c_str());
+      return 2;
+    }
+  }
   std::vector<std::string> fixtures;
   for (const std::string &p : paths) {
     std::error_code ec;
@@ -188,10 +158,24 @@ int run_dump(const std::vector<std::string> &paths,
   }
 
   for (const std::string &f : fixtures) {
-    std::printf("=== %s\n", fs::path(f).filename().string().c_str());
+    using FilePtr = std::unique_ptr<std::FILE, int (*)(std::FILE *)>;
+    FilePtr fixture_output(nullptr, &std::fclose);
+    std::FILE *out = stdout;
+    if (per_fixture_output) {
+      fs::path output_path = fs::path(output_dir) / (fs::path(f).stem().string() + ".golden");
+      fixture_output.reset(std::fopen(output_path.string().c_str(), "wb"));
+      if (!fixture_output) {
+        std::fprintf(stderr, "failed to open actions output file %s\n",
+                     output_path.string().c_str());
+        return 2;
+      }
+      out = fixture_output.get();
+    } else {
+      std::fprintf(out, "=== %s\n", fs::path(f).filename().string().c_str());
+    }
     auto r_ctx = load_ctx(f);
     if (r_ctx.is_error()) {
-      std::printf("ERROR: %s\n", r_ctx.error().message().c_str());
+      std::fprintf(out, "ERROR: %s\n", r_ctx.error().message().c_str());
       continue;
     }
     auto ctx = r_ctx.move_as_ok();
@@ -207,19 +191,19 @@ int run_dump(const std::vector<std::string> &paths,
     ClassifyResult res = classify_trace(ctx, matchers, setup, *src);
     if (res.failure) {
       // Per-trace exception boundary (event_processing.py): buffered, the
-      // regular actions are discarded, a single TRACE_FAIL on stdout, the reason
-      // on stderr (A/B channel stays byte-comparable). In --actions mode the
+      // regular actions are discarded, a single TRACE_FAIL on the dump channel,
+      // and the reason on stderr. In --actions mode the
       // Basic-action fallback rows follow behind a FALLBACK tag.
       // No corpus trace triggers this, the fallback path is ungated.
-      std::printf("TRACE_FAIL\n");
+      std::fprintf(out, "TRACE_FAIL\n");
       std::fprintf(stderr, "TRACE_FAIL %s: %s\n", fs::path(f).filename().string().c_str(),
                    res.failure_reason.c_str());
       if (actions_mode) {
         for (const ActionRow &r : res.fallback_rows) {
           Action act;
           if (!build_action(r, act)) continue;
-          std::printf("FALLBACK anchor=%s %s\n", block_key(r.block).c_str(),
-                      render_action(act).c_str());
+          std::fprintf(out, "FALLBACK anchor=%s matcher=- %s\n", block_key(r.block).c_str(),
+                       render_action(act).c_str());
         }
       }
       continue;
@@ -231,14 +215,22 @@ int run_dump(const std::vector<std::string> &paths,
       // compact_connections rebuilds next_blocks through a `set()`), and no
       // consumer of the rows depends on their order.
       std::vector<std::string> lines;
+      std::unordered_map<const Block *, const std::string *> matcher_names;
+      for (const CoreAction &a : res.actions) {
+        matcher_names.emplace(a.produced, &a.matcher_name);
+      }
       for (const ActionRow &r : res.action_rows) {
         Action act;
         if (!build_action(r, act)) continue;  // btype outside ported set
-        lines.push_back("ACTION anchor=" + block_key(r.block) + " " + render_action(act));
+        auto matcher = matcher_names.find(r.block);
+        const std::string matcher_name =
+            matcher != matcher_names.end() ? *matcher->second : std::string("-");
+        lines.push_back("ACTION anchor=" + block_key(r.block) + " matcher=" + matcher_name +
+                        " " + render_action(act));
       }
       std::sort(lines.begin(), lines.end());
       for (const std::string &line : lines) {
-        std::printf("%s\n", line.c_str());
+        std::fprintf(out, "%s\n", line.c_str());
       }
     } else {
       for (const CoreAction &a : res.actions) {
@@ -250,7 +242,7 @@ int run_dump(const std::vector<std::string> &paths,
     // prints the same) instead of a block_key.
     if (actions_mode && res.unknown_trace) {
       Action act = create_unknown_action(ctx.trace);
-      std::printf("ACTION anchor=unknown %s\n", render_action(act).c_str());
+      std::fprintf(out, "ACTION anchor=unknown matcher=- %s\n", render_action(act).c_str());
     }
   }
   return 0;
@@ -260,8 +252,8 @@ int run_classify(const std::vector<std::string> &paths) {
   return run_dump(paths, /*actions_mode=*/false, load_trace_context);
 }
 
-int run_actions(const std::vector<std::string> &paths) {
-  return run_dump(paths, /*actions_mode=*/true, load_trace_context);
+int run_actions(const std::vector<std::string> &paths, const std::string &output_dir) {
+  return run_dump(paths, /*actions_mode=*/true, load_trace_context, {}, output_dir);
 }
 
 }  // namespace mch

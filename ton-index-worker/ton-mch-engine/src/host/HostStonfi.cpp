@@ -6,6 +6,7 @@
 #include "host/BlockViews.h"
 #include "host/DexPton.h"
 #include "host/DexRecords.h"
+#include "host/HostAdapter.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -13,6 +14,7 @@
 #include "ExprRuntime.h"
 #include "MsgParse.h"
 #include "parse/PSlice.h"
+#include "btypes_gen.h"
 
 #include "common/refint.h"
 #include "vm/cellslice.h"
@@ -312,7 +314,7 @@ bool stonfi_v1_sender_payment(const Block *block) {
     return false;
   }
   std::uint32_t ec = r.ok();
-  return ec == kStonfiSwapOk || ec == kStonfiSwapNoLiq || ec == kStonfiSwapReserveErr;
+  return sender_related(ec);
 }
 
 // builders/stonfi_v1.py _stonfi_v1_swap_data -> blocks/swaps.py
@@ -321,9 +323,6 @@ bool stonfi_v1_sender_payment(const Block *block) {
 // declarative jetton_transfer block. There is no try/except in the Python
 // wrapper, so any nav/parse/lookup miss raises -> rt_fault -> match rejection.
 EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 2) {
-    return rt_fault("stonfi_v1_swap_data: bad arguments");
-  }
   const Block *block = as_block(args[0]);  // in_transfer (anchor jetton_transfer)
   const Block *swap = as_block(args[1]);   // StonfiSwap call
   if (block == nullptr || swap == nullptr) {
@@ -348,7 +347,7 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     if (!is_call_op(x, kStonfiPaymentRequest)) continue;
     bool has_jt = false;
     for (Block *nb : x->next_blocks) {
-      if (nb->btype == "jetton_transfer") { has_jt = true; break; }
+      if (nb->btype == mch::btype::kJettonTransfer) { has_jt = true; break; }
     }
     if (!has_jt) continue;
     auto rb = block_body(x);
@@ -361,7 +360,7 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
 
   auto first_jt_child = [](const Block *pb) -> const Block * {
     for (Block *b : pb->next_blocks) {
-      if (b->btype == "jetton_transfer") return b;
+      if (b->btype == mch::btype::kJettonTransfer) return b;
     }
     return nullptr;
   };
@@ -403,7 +402,7 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
 
   Value actual_out_addr = out_addr;
   // stonfi_swap_body override of out_addr (jetton_wallet), if present.
-  if (block->btype == "jetton_transfer") {
+  if (block->btype == mch::btype::kJettonTransfer) {
     Value sb = data_field(block, "stonfi_swap_body");
     if (sb.t == VType::Dict) {
       const Value *jw = sb.field("jetton_wallet");
@@ -451,41 +450,35 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
 
   Value::Fields incoming{
       {"asset", wallet_jetton_asset(dex_in_wallet, /*pton_conversion=*/false)},
-      {"amount", Value::make_amount(sw.amount.is_null() ? td::make_refint(0) : sw.amount)},
+      {"amount", amount_or_zero(sw.amount)},
       {"source", acc_wrap(sw.from_real_user)},
       {"source_jetton_wallet", in_source_jw},
       {"destination", in_dest},
       {"destination_jetton_wallet", acc_wrap(sw.token_wallet)}};
 
-  Value::Fields outgoing{
-      {"asset", wallet_jetton_asset(actual_out_wallet, /*pton_conversion=*/false)},
-      {"amount", Value::make_amount(out_amt.is_null() ? td::make_refint(0) : out_amt)},
-      {"source", data_field(outgoing_jt, "sender")},
-      {"source_jetton_wallet", data_field(outgoing_jt, "sender_wallet")}};
+  TransferLeg outgoing{
+      wallet_jetton_asset(actual_out_wallet, /*pton_conversion=*/false),
+      amount_or_zero(out_amt),
+      data_field(outgoing_jt, "sender"), data_field(outgoing_jt, "sender_wallet"),
+      Value::null(), Value::null()};
   if (!out_dest_jw.is_null()) {
-    outgoing.emplace_back("destination_jetton_wallet", out_dest_jw);
-    outgoing.emplace_back("destination", data_field(outgoing_jt, "receiver"));
+    outgoing.destination = data_field(outgoing_jt, "receiver");
+    outgoing.destination_jetton_wallet = out_dest_jw;
   } else {
     Value sb = data_field(in_jt, "stonfi_swap_body");
     if (sb.t == VType::Dict) {
       const Value *ua = sb.field("user_address");
-      outgoing.emplace_back("destination", acc_wrap(ua != nullptr ? *ua : Value::null()));
-      outgoing.emplace_back("destination_jetton_wallet", Value::null());
+      outgoing.destination = acc_wrap(ua != nullptr ? *ua : Value::null());
     } else {
-      outgoing.emplace_back("destination", acc_wrap(sw.from_user_address));
-      outgoing.emplace_back("destination_jetton_wallet", Value::null());
+      outgoing.destination = acc_wrap(sw.from_user_address);
     }
   }
 
   // target/destination asset from out_wallet (no pton conversion; None when the
   // wallet is absent or carries no jetton master).
   Value target_asset = Value::null();
-  if (!out_wallet.is_null()) {
-    const Value *jf = out_wallet.field("jetton");
-    if (jf != nullptr && jf->t == VType::Str) {
-      auto norm = normalize_raw_address(jf->str);
-      target_asset = Value::make_asset_jetton(norm ? *norm : jf->str);
-    }
+  if (auto master = wallet_jetton_master_str(out_wallet)) {
+    target_asset = Value::make_asset_jetton(*master);
   }
 
   Value::Fields d;
@@ -493,7 +486,7 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   d.emplace_back("sender", acc_wrap(sw.from_real_user));
   d.emplace_back("receiver", acc_wrap(sw.from_user_address));
   d.emplace_back("dex_incoming_transfer", Value::make_dict(std::move(incoming)));
-  d.emplace_back("dex_outgoing_transfer", Value::make_dict(std::move(outgoing)));
+  d.emplace_back("dex_outgoing_transfer", outgoing.encode());
   d.emplace_back("destination_asset", std::move(target_asset));
   d.emplace_back("destination_wallet", out_addr.is_null() ? Value::null() : acc_wrap(out_addr));
   d.emplace_back("referral_amount",
@@ -527,8 +520,7 @@ bool pton_self_transfer(const Block *block) {
   std::optional<std::string> dst = m != nullptr ? m->destination : std::nullopt;
   Value dst_acc = account_from_opt(dst);
   // AccountId(receiver) != message.destination -> canonical compare.
-  auto rs = acc_str(recv), ds = acc_str(dst_acc);
-  if (rs != ds) {
+  if (!same_account(account_from_opt(acc_str(recv)), account_from_opt(acc_str(dst_acc)))) {
     return false;
   }
   auto r_body = block_body(block);
@@ -563,9 +555,7 @@ namespace {
 // The bigger-amount (amount, token) of a pay_to's two out-legs (assets.sort by
 // amount desc, take [0]; stable on ties -> token0).
 std::pair<td::RefInt256, Value> bigger_leg(const PayTo &pt) {
-  bool zero0 = pt.amount0_out.is_null();
-  bool zero1 = pt.amount1_out.is_null();
-  int cmp = (zero0 || zero1) ? 0 : td::cmp(pt.amount0_out, pt.amount1_out);
+  int cmp = td::cmp(pt.amount0_out, pt.amount1_out);
   if (cmp >= 0) {
     return {pt.amount0_out, pt.token0};
   }
@@ -594,19 +584,12 @@ Value asset_from_wallet_jetton(const Value &wallet) {
 // selects the leg construction: jetton_transfer reads the produced block data;
 // the pTON call path synthesizes the message-backed TON leg.
 EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
-    return rt_fault("stonfi_v2_swap_data: bad arguments");
+  ConsumedBlocks decoded;
+  EvalResult decode = decode_consumed(args, "stonfi_v2_swap_data", decoded);
+  if (decode.faulted) {
+    return decode;
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) {
-      consumed.push_back(b);
-    }
-  }
-  if (consumed.empty()) {
-    return rt_fault("stonfi_v2_swap_data: empty consumed");
-  }
+  std::vector<const Block *> consumed = std::move(decoded.blocks);
   const Block *anchor = consumed.front();
 
   // --- _derive_parts ---
@@ -646,11 +629,11 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     return rt_fault("stonfi_v2: anchor has no previous block");
   }
   const Block *in_transfer =
-      prev->btype == "jetton_transfer" ? prev : prev->previous_block;
+      prev->btype == mch::btype::kJettonTransfer ? prev : prev->previous_block;
   const Block *out_transfer = nullptr;
   std::int64_t best_lt = 0;
   for (const Block *b : consumed) {
-    if (b->btype == "jetton_transfer" && in_payouts(b->previous_block)) {
+    if (b->btype == mch::btype::kJettonTransfer && in_payouts(b->previous_block)) {
       if (out_transfer == nullptr || b->min_lt > best_lt) {
         out_transfer = b;
         best_lt = b->min_lt;
@@ -731,7 +714,9 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   }
   Value sender;
   Value in_data;
-  if (in_transfer->btype == "jetton_transfer") {
+  Value in_asset_value;
+  Value in_amount_value;
+  if (in_transfer->btype == mch::btype::kJettonTransfer) {
     Value asset_v = data_field(in_transfer, "asset");
     // asset.jetton_address.as_str(): a TON asset (jetton_address None) would
     // AttributeError before the pton test -> reject.
@@ -743,17 +728,17 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
                       " receiver_wallet=" +
                       acc_str(data_field(in_transfer, "receiver_wallet")).value_or("none") + ")");
     }
-    Value in_asset = is_pton_master(asset_v.str) ? Value::make_asset_ton() : asset_v;
+    in_asset_value = is_pton_master(asset_v.str) ? Value::make_asset_ton() : asset_v;
+    in_amount_value = data_field(in_transfer, "amount");
     sender = data_field(in_transfer, "sender");
     TransferLeg leg = TransferLeg::from_jetton_transfer(in_transfer);
-    leg.asset = std::move(in_asset);  // pton-normalized asset overrides the data field
+    leg.asset = in_asset_value;  // pton-normalized asset overrides the data field
     in_data = leg.encode();
   } else {
     const Message *im = block_msg(in_transfer);
     if (im == nullptr) {
       return rt_fault("stonfi_v2: in_transfer has no message");
     }
-    Value in_amount;
     if (im->opcode32() && *im->opcode32() == kPTonTransfer) {
       auto rb = block_body(in_transfer);
       if (rb.is_error()) {
@@ -764,16 +749,16 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
         return rt_fault("stonfi_v2: pton in parse");
       }
       const Value *ta = r.ok().field("ton_amount");
-      in_amount = ta != nullptr ? to_amount(*ta) : Value::make_amount_none();
+      in_amount_value = ta != nullptr ? to_amount(*ta) : Value::make_amount_none();
     } else {
-      in_amount = im->value ? Value::make_amount(td::make_refint(*im->value))
-                            : Value::make_amount_none();
+      in_amount_value = msg_value_amount(im);
     }
+    in_asset_value = Value::make_asset_ton();
     sender = account_from_opt(im->source);
     const Message *anchor_msg = block_msg(anchor);
     in_data = Value::make_dict(Value::Fields{
-        {"asset", Value::make_asset_ton()},
-        {"amount", std::move(in_amount)},
+        {"asset", in_asset_value},
+        {"amount", in_amount_value},
         {"source", account_from_opt(im->source)},
         {"source_jetton_wallet", Value::null()},
         {"destination",
@@ -801,15 +786,11 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
                       acc_str(big.second).value_or("none") + " pool_map=" +
                       std::to_string(pool_map.size()) + "/" + std::to_string(steps.size()) + ")");
     }
-    Value out_leg = leg_dict(Value::make_amount(big.first.is_null() ? td::make_refint(0)
-                                                                     : big.first),
-                             *oa);
-    const Value *ia = in_data.field("amount");
-    const Value *ias = in_data.field("asset");
+    Value out_leg = leg_dict(amount_or_zero(big.first), *oa);
     peer_swaps.push_back(Value::make_dict(Value::Fields{
-        {"in", leg_dict(ia != nullptr ? *ia : Value::null(),
-                        ias != nullptr ? *ias : Value::null())},
+        {"in", leg_dict(in_amount_value, in_asset_value)},
         {"out", out_leg}}));
+    Value previous_out = out_leg;
     if (steps[0].pay_to.exit_code == kStonfiSwapOk) {
       for (std::size_t i = 0; i + 1 < steps.size(); i++) {
         const PayTo &pti = steps[i + 1].pay_to;
@@ -824,12 +805,10 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
                           std::to_string(pool_map.size()) + "/" + std::to_string(steps.size()) +
                           ")");
         }
-        const Value *prev_out = peer_swaps.back().field("out");
-        Value out2 = leg_dict(Value::make_amount(b2.first.is_null() ? td::make_refint(0)
-                                                                    : b2.first),
-                              *oa2);
+        Value out2 = leg_dict(amount_or_zero(b2.first), *oa2);
         peer_swaps.push_back(Value::make_dict(Value::Fields{
-            {"in", prev_out != nullptr ? *prev_out : Value::null()}, {"out", out2}}));
+            {"in", previous_out}, {"out", out2}}));
+        previous_out = std::move(out2);
       }
     }
   }
@@ -887,16 +866,16 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     }
     const Value *ta = r.ok().field("ton_amount");
     const Message *pm = block_msg(pton_transfer);
-    out_data = Value::make_dict(Value::Fields{
-        {"asset", Value::make_asset_ton()},
-        {"amount", ta != nullptr ? to_amount(*ta) : Value::make_amount_none()},
-        {"source", data_field(out_transfer, "sender")},
-        {"source_jetton_wallet", data_field(out_transfer, "sender_wallet")},
-        {"destination", account_from_opt(pm != nullptr ? pm->destination : std::nullopt)},
-        {"destination_jetton_wallet", Value::null()}});
+    TransferLeg leg;
+    leg.asset = Value::make_asset_ton();
+    leg.amount = ta != nullptr ? to_amount(*ta) : Value::make_amount_none();
+    leg.source = data_field(out_transfer, "sender");
+    leg.source_jetton_wallet = data_field(out_transfer, "sender_wallet");
+    leg.destination = account_from_opt(pm != nullptr ? pm->destination : std::nullopt);
+    leg.destination_jetton_wallet = Value::null();
+    out_data = leg.encode();
   }
 
-  const Value *src_asset = in_data.field("asset");
   Value dst_asset = [&]() {
     const Value *a = out_data.field("asset");
     return a != nullptr ? *a : Value::null();
@@ -914,12 +893,8 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
         if (tw) {
           Value jw =
               env.lookups->get("jetton_wallet", std::vector<Value>{Value::make_str(*tw)});
-          if (!jw.is_null()) {
-            const Value *jf = jw.field("jetton");
-            if (jf != nullptr && jf->t == VType::Str) {
-              auto norm = normalize_raw_address(jf->str);
-              dst_asset = Value::make_asset_jetton(norm ? *norm : jf->str);
-            }
+          if (auto master = wallet_jetton_master_str(jw)) {
+            dst_asset = Value::make_asset_jetton(*master);
           }
         }
       }
@@ -929,7 +904,7 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   Value::Fields d;
   d.emplace_back("failed", Value::make_bool(!ok));
   d.emplace_back("dex", Value::make_str("stonfi_v2"));
-  d.emplace_back("source_asset", src_asset != nullptr ? *src_asset : Value::null());
+  d.emplace_back("source_asset", in_asset_value);
   d.emplace_back("destination_asset", std::move(dst_asset));
   d.emplace_back("sender", std::move(sender));
   d.emplace_back("dex_incoming_transfer", std::move(in_data));

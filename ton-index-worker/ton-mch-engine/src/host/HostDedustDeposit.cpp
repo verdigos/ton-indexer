@@ -9,12 +9,17 @@
 // parse/nav failure here is likewise a Null reject).
 #include "host/HostImpls.h"
 
+#include "host/BlockViews.h"
+#include "host/DexPton.h"
+#include "host/DexRecords.h"
+#include "host/HostAdapter.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
 #include "BuildRuntime.h"
 #include "ExprRuntime.h"
 #include "MsgParse.h"
+#include "btypes_gen.h"
 #include "parse/PSlice.h"
 
 #include "vm/cellslice.h"
@@ -74,8 +79,8 @@ Leg resolve_leg(const Block *leg) {
     out.deposit = leg;
     return out;  // jt_calls = []
   }
-  if (leg != nullptr && leg->btype == "jetton_transfer") {
-    out.deposit = find_call(leg->children_blocks, kJettonNotify);
+  if (leg != nullptr && leg->btype == mch::btype::kJettonTransfer) {
+    out.deposit = first_call(leg->children_blocks, kJettonNotify);
     for (const Block *b : leg->children_blocks) {
       if (is_call_op(b, kJettonTransfer)) {
         out.jt_calls.push_back(b);
@@ -127,19 +132,11 @@ td::Result<PoolDeposit> parse_pool_deposit(const td::Ref<vm::Cell> &body) {
 // blocks/liquidity.py build_dedust_deposit_liquidity_core, wired to
 // _dedust_deposit_final_data's structural role derivation.
 EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
+  auto decoded = decode_consumed_or_none(args);
+  if (!decoded) {
     return rt_ok(Value::null());
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) {
-      consumed.push_back(b);
-    }
-  }
-  if (consumed.empty()) {
-    return rt_ok(Value::null());
-  }
+  std::vector<const Block *> consumed = std::move(decoded->blocks);
   const Block *block = consumed.front();
 
   // anchor <- topup <- ask <- deposit leg (None on any missing link ==
@@ -193,7 +190,7 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     if (is_call_op(b, kDedustPayout) && in_returns(b->previous_block)) {
       ton_excesses.push_back(b);
     }
-    if (b->btype == "jetton_transfer" && in_returns(b->previous_block)) {
+    if (b->btype == mch::btype::kJettonTransfer && in_returns(b->previous_block)) {
       jetton_excesses.push_back(b);
     }
   }
@@ -276,12 +273,11 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
       return rt_ok(Value::null());
     }
     Value jw = env.lookups->get("jetton_wallet", std::vector<Value>{Value::make_str(*dm->source)});
-    const Value *jetton = jw.is_null() ? nullptr : jw.field("jetton");
-    if (jetton == nullptr || jetton->t != VType::Str) {
+    auto master = wallet_jetton_master_str(jw);
+    if (!master) {
       return rt_ok(Value::null());  // wallet_info.jetton AttributeError -> None
     }
-    auto norm = normalize_raw_address(jetton->str);
-    actual_asset = Value::make_asset_jetton(norm ? *norm : jetton->str);
+    actual_asset = Value::make_asset_jetton(*master);
   }
 
   // user_jetton_wallet_0: the jetton deposit whose wallet's jetton == actual_asset.
@@ -297,8 +293,8 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     }
     // filter: message.source.upper() == sender.as_str()
     Value jsrc = account_from_opt(jm->source);
-    if (!(sender.t == VType::Account && jsrc.t == VType::Account && !sender.addr_none &&
-          !jsrc.addr_none && jsrc.str == sender.str)) {
+    if (sender.t != VType::Account || sender.addr_none || jsrc.t != VType::Account ||
+        jsrc.addr_none || !same_account(jsrc, sender)) {
       continue;
     }
     if (!jm->destination) {
@@ -306,16 +302,11 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     }
     Value jw = env.lookups->get("jetton_wallet",
                                 std::vector<Value>{Value::make_str(*jm->destination)});
-    if (jw.is_null()) {
+    auto jw_master = wallet_jetton_master_str(jw);
+    if (!jw_master) {
       continue;
     }
-    const Value *jetton = jw.field("jetton");
-    if (jetton == nullptr || jetton->t != VType::Str) {
-      continue;
-    }
-    auto norm = normalize_raw_address(jetton->str);
-    std::string jw_master = norm ? *norm : jetton->str;
-    if (!actual_master.empty() && jw_master == actual_master) {
+    if (!actual_master.empty() && *jw_master == actual_master) {
       user_jw_0 = account_from_opt(*jm->destination);
     }
   }
@@ -330,19 +321,16 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     }
     Value dst = account_from_opt(tm->destination);
     if (dst.t == VType::Account && !dst.addr_none && sender.t == VType::Account &&
-        !sender.addr_none && dst.str == sender.str) {
-      Value amt = tm->value ? Value::make_amount(td::make_refint(*tm->value))
-                            : Value::make_amount_none();
-      excesses.push_back(Value::make_list(
-          std::vector<Value>{Value::make_asset_ton(), std::move(amt)}));
+        !sender.addr_none && same_account(dst, sender)) {
+      Value amt = msg_value_amount(tm);
+      excesses.push_back(excess_pair(Value::make_asset_ton(), std::move(amt)));
     }
   }
   for (const Block *je : jetton_excesses) {
     Value recv = data_field(je, "receiver");
     if (recv.t == VType::Account && !recv.addr_none && sender.t == VType::Account &&
-        !sender.addr_none && recv.str == sender.str) {
-      excesses.push_back(Value::make_list(
-          std::vector<Value>{data_field(je, "asset"), data_field(je, "amount")}));
+        !sender.addr_none && same_account(recv, sender)) {
+      excesses.push_back(excess_pair(data_field(je, "asset"), data_field(je, "amount")));
     }
   }
 
@@ -369,19 +357,11 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
 
 // blocks/liquidity.py build_dedust_deposit_partial_core.
 EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &args) {
-  if (args.size() != 1 || args[0].t != VType::List || args[0].items->empty()) {
+  auto decoded = decode_consumed_or_none(args);
+  if (!decoded) {
     return rt_ok(Value::null());
   }
-  std::vector<const Block *> consumed;
-  for (const Value &v : *args[0].items) {
-    const Block *b = as_block(v);
-    if (b != nullptr) {
-      consumed.push_back(b);
-    }
-  }
-  if (consumed.empty()) {
-    return rt_ok(Value::null());
-  }
+  std::vector<const Block *> consumed = std::move(decoded->blocks);
   const Block *block = consumed.front();  // topup anchor
 
   const Block *p1 = block->previous_block;
@@ -393,7 +373,7 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
   const Block *vault_call = lg.deposit;
 
   // Guard: final-deposit opcodes after the topup -> raise -> reject.
-  const Block *topup = find_call(consumed, kTopUp);
+  const Block *topup = first_call(consumed, kTopUp);
   if (topup == nullptr) {
     return rt_ok(Value::null());  // find_call_contract None -> .next_blocks AttributeError
   }
@@ -528,12 +508,11 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
     }
     Value jw = env.lookups->get("jetton_wallet",
                                 std::vector<Value>{Value::make_str(*vm_msg->source)});
-    const Value *jetton = jw.is_null() ? nullptr : jw.field("jetton");
-    if (jetton == nullptr || jetton->t != VType::Str) {
+    auto master = wallet_jetton_master_str(jw);
+    if (!master) {
       return rt_ok(Value::null());  // dex_jetton_wallet.jetton AttributeError -> None
     }
-    auto norm = normalize_raw_address(jetton->str);
-    actual_asset = Value::make_asset_jetton(norm ? *norm : jetton->str);
+    actual_asset = Value::make_asset_jetton(*master);
   }
 
   Value::Fields d;

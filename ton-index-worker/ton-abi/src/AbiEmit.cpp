@@ -140,10 +140,12 @@ std::string kind_render(TyKind k) {
 // Emitter
 class Emitter {
  public:
-  Emitter(const ContractABI &abi, const AbiKernel &kernel, std::string out_name)
-      : abi_(abi), kernel_(kernel), out_name_(std::move(out_name)) {}
+  Emitter(const ContractABI &abi, const AbiKernel &kernel, std::string out_name,
+          const ValidateManifest &validate_manifest)
+      : abi_(abi), kernel_(kernel), out_name_(std::move(out_name)), validate_manifest_(validate_manifest) {}
 
   GeneratedFiles run() {
+    validate_manifest();
     snake_ = out_name_.empty() ? snake_case(abi_.contract_name) : snake_case(out_name_);
     ns_ = "ton_abi::gen::" + snake_;
     collect_targets();
@@ -198,6 +200,7 @@ class Emitter {
   const ContractABI &abi_;
   const AbiKernel &kernel_;
   std::string out_name_;
+  const ValidateManifest &validate_manifest_;
   std::string snake_;
   std::string ns_;
 
@@ -218,6 +221,35 @@ class Emitter {
   std::vector<int> order_;  // combined emit order (target indices + union ids offset)
 
   const Ty &ty(int idx) const { return *kernel_.ty_by_idx(idx).move_as_ok(); }
+
+  void validate_manifest() {
+    for (const auto &key : validate_manifest_) {
+      auto dot = key.rfind('.');
+      if (dot == std::string::npos || dot == 0 || dot + 1 == key.size()) {
+        throw HardFail{"invalid validation manifest entry '" + key + "' (expected StructName.field)"};
+      }
+
+      std::string struct_name = key.substr(0, dot);
+      std::string field_name = key.substr(dot + 1);
+      auto rs = kernel_.get_struct(struct_name);
+      if (rs.is_error()) {
+        throw HardFail{"validation manifest entry '" + key + "': " + rs.error().message().str()};
+      }
+      const ABIStruct *sd = rs.move_as_ok();
+      auto it = std::find_if(sd->fields.begin(), sd->fields.end(), [&](const ABIStructField &field) {
+        return field.name == field_name;
+      });
+      if (it == sd->fields.end()) {
+        throw HardFail{"validation manifest entry '" + key + "': field not found"};
+      }
+      if (!it->default_value.has_value()) {
+        throw HardFail{"validation manifest entry '" + key + "': field has no default_value"};
+      }
+      if (!default_supported(it->ty_idx)) {
+        throw HardFail{"validation manifest entry '" + key + "': field default is not materializable"};
+      }
+    }
+  }
 
   std::string uniq_name(std::string base) {
     if (used_names_.insert(base).second) {
@@ -707,14 +739,17 @@ class Emitter {
         int inner = std::get<TyInner>(t.data).inner_ty_idx;
         std::string it = cpp_type(inner);
         int k = ++uid_;
-        std::string cs = "__cs" + std::to_string(k), cv = "__cv" + std::to_string(k);
+        std::string cell = "__cell" + std::to_string(k), cs = "__cs" + std::to_string(k);
+        std::string cv = "__cv" + std::to_string(k);
         std::string s;
         s += "[&]() -> td::Result<ton_abi::gen::CellOf<" + it + ">> {\n";
         s += "    " + bind_res("__rs" + std::to_string(k), "__rr" + std::to_string(k),
-                                "load_ref_slice(" + sv + ")");
-        s += "    vm::CellSlice " + cs + " = *__rs" + std::to_string(k) + ";\n";
+                                "load_ref_cell_and_slice(" + sv + ")");
+        s += "    td::Ref<vm::Cell> " + cell + " = std::move(__rs" + std::to_string(k) + ".first);\n";
+        s += "    vm::CellSlice " + cs + " = *__rs" + std::to_string(k) + ".second;\n";
         s += "    " + bind_res(cv, "__rc" + std::to_string(k), load_expr(inner, cs, path, std::nullopt));
-        s += "    return ton_abi::gen::CellOf<" + it + ">{std::make_shared<" + it + ">(std::move(" + cv + "))};\n";
+        s += "    return ton_abi::gen::CellOf<" + it + ">{std::make_shared<" + it + ">(std::move(" + cv +
+             ")), std::move(" + cell + ")};\n";
         s += "  }()";
         return s;
       }
@@ -998,7 +1033,7 @@ class Emitter {
         s += "[&]() -> td::Result<AbiValue> {\n";
         s += "    " + bind_res(iv, "__ri" + std::to_string(k),
                                to_abi_expr(inner, "(*(" + expr + ".ref))", std::nullopt));
-        s += "    return AbiValue::make_cell_of(std::move(" + iv + "));\n";
+        s += "    return AbiValue::make_cell_of(std::move(" + iv + "), " + expr + ".cell);\n";
         s += "  }()";
         return s;
       }
@@ -1334,9 +1369,35 @@ class Emitter {
       c += "  " + N + " r;\n";
       for (const auto &fi : finfo) {
         std::string mn = member_name(fi.rf->name());
-        std::string le = load_expr(fi.rf->ty_idx, "cs", t.orig_name + "." + fi.rf->name(), fi.rf->u_label_ty_idx);
+        std::string manifest_key = t.orig_name + "." + fi.rf->name();
+        std::string le = load_expr(fi.rf->ty_idx, "cs", manifest_key, fi.rf->u_label_ty_idx);
         c += "  TRY_RESULT_PREFIX_ASSIGN(r." + mn + ", (" + le + "), " +
-             cpp_str_lit(t.orig_name + "." + fi.rf->name() + ": ") + ");\n";
+             cpp_str_lit(manifest_key + ": ") + ");\n";
+        bool validate_default = validate_manifest_.count(manifest_key) != 0;
+        if (validate_default &&
+            (!fi.rf->orig->default_value.has_value() || !default_supported(fi.rf->ty_idx))) {
+          throw HardFail{"validation manifest entry '" + manifest_key + "': resolved field default is not materializable"};
+        }
+        if (validate_default) {
+          std::string expected = const_expr(*fi.rf->orig->default_value, fi.rf->ty_idx);
+          int k = ++uid_;
+          std::string expected_value = "__expected_default" + std::to_string(k);
+          std::string got_value = "__got_value" + std::to_string(k);
+          // RefInt256's member operator!= compares backing pointers, so compare bigint
+          // values explicitly.
+          std::string mismatch = cpp_type(fi.rf->ty_idx) == "td::RefInt256"
+                                     ? "td::cmp(r." + mn + ", " + expected + ") != 0"
+                                     : "r." + mn + " != " + expected;
+          c += "  if (" + mismatch + ") {\n";
+          c += "    TRY_RESULT(" + expected_value + ", (" +
+               to_abi_expr(fi.rf->ty_idx, expected, fi.rf->u_label_ty_idx) + "));\n";
+          c += "    TRY_RESULT(" + got_value + ", (" +
+               to_abi_expr(fi.rf->ty_idx, "r." + mn, fi.rf->u_label_ty_idx) + "));\n";
+          c += "    return td::Status::Error(PSLICE() << " + cpp_str_lit(manifest_key + ": expected ") + " << " +
+               expected_value + ".to_json() << " + cpp_str_lit(", got ") + " << " + got_value +
+               ".to_json());\n";
+          c += "  }\n";
+        }
       }
       c += "  return r;\n";
     }
@@ -1487,10 +1548,26 @@ class Emitter {
     h += "// enum " + t.orig_name + " (bigint-valued, encoded_as leaf scalar)\n";
     h += "td::Result<td::RefInt256> " + N + "_from_slice(vm::CellSlice& cs);\n";
     h += "td::Status " + N + "_store(vm::CellBuilder& cb, const td::RefInt256& self);\n";
-    h += "td::Result<AbiValue> " + N + "_to_abi_value(const td::RefInt256& self);";
+    h += "td::Result<AbiValue> " + N + "_to_abi_value(const td::RefInt256& self);\n";
+    h += "const ton_abi::gen::EnumNameTable& " + N + "_name_table();\n";
+    h += "std::optional<std::string> " + N + "_name_of(const td::RefInt256& value);";
     t.h_decl = h;
 
     std::string c;
+    // Metadata only: from_slice/store below deliberately never consult this
+    // table, so non-member scalar values retain their unchecked round-trip.
+    c += "static const ton_abi::gen::EnumNameTable " + N + "_name_table_data = {\n";
+    for (const auto &member : ed->members) {
+      c += "  {" + cpp_str_lit(member.name) + ", td::dec_string_to_int256(std::string(" +
+           cpp_str_lit(member.value->to_dec_string()) + "))},\n";
+    }
+    c += "};\n\n";
+    c += "const ton_abi::gen::EnumNameTable& " + N + "_name_table() {\n";
+    c += "  return " + N + "_name_table_data;\n";
+    c += "}\n\n";
+    c += "std::optional<std::string> " + N + "_name_of(const td::RefInt256& value) {\n";
+    c += "  return ton_abi::gen::enum_name_lookup(" + N + "_name_table_data, value);\n";
+    c += "}\n\n";
     c += "td::Result<td::RefInt256> " + N + "_from_slice(vm::CellSlice& cs) {\n";
     if (custom_unpack) {
       c += emit_custom_delegate("td::RefInt256", t.orig_name, CustomDir::Unpack);
@@ -1761,9 +1838,10 @@ class Emitter {
 
 }  // namespace
 
-td::Result<GeneratedFiles> emit_abi(const ContractABI &abi, const AbiKernel &kernel, const std::string &out_name) {
+td::Result<GeneratedFiles> emit_abi(const ContractABI &abi, const AbiKernel &kernel, const std::string &out_name,
+                                    const ValidateManifest &validate_manifest) {
   try {
-    Emitter em(abi, kernel, out_name);
+    Emitter em(abi, kernel, out_name, validate_manifest);
     return em.run();
   } catch (const HardFail &hf) {
     return td::Status::Error(PSLICE() << "ton-abi-gen: " << hf.msg);

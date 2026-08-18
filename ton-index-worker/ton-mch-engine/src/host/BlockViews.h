@@ -21,6 +21,7 @@ bool block_in(const std::vector<const Block *> &v, const Block *b);
 
 // The first call_contract block in `blocks` whose opcode == `op`, or nullptr.
 const Block *first_call(const std::vector<const Block *> &blocks, std::uint32_t op);
+const Block *first_call(const std::vector<Block *> &blocks, std::uint32_t op);
 
 // Every call_contract block in `blocks` whose opcode == `op`, in input order.
 std::vector<const Block *> all_calls(const std::vector<const Block *> &blocks, std::uint32_t op);
@@ -32,6 +33,9 @@ const Block *first_next_call(const Block *b, std::uint32_t op);
 // is the exact HostCoffee swap-ordering (sort-by-ptr + unique + stable min_lt
 // sort), reproduced so the peer-swap order is byte-identical.
 void unique_lt_sorted(std::vector<const Block *> &blocks);
+
+// Truthiness of a Value: a true Bool or a non-zero Int.
+bool value_truthy(const Value &v);
 
 // Truthiness of a block data field (Python `bool(block.data[field])` for the
 // bool/int carriers the specs use): a true Bool or a non-zero Int. Absent /

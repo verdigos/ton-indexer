@@ -2641,8 +2641,7 @@ class CoffeeMevProtectHoldFundsMatcher(BlockMatcher):
                 and block.opcode == CoffeeMevProtectHoldFunds.opcode
             ) or (
                 isinstance(block, JettonTransferBlock)
-                and int(block.data["payload_opcode"], 16)
-                == CoffeeMevProtectHoldFunds.opcode
+                and block.data["payload_opcode"] == CoffeeMevProtectHoldFunds.opcode
             )
         except:
             return False
@@ -2696,8 +2695,7 @@ class CoffeeMevProtectFailedSwapMatcher(BlockMatcher):
                 and block.opcode == CoffeeMevProtectFailedSwap.opcode
             ) or (
                 isinstance(block, JettonTransferBlock)
-                and int(block.data["payload_opcode"], 16)
-                == CoffeeMevProtectFailedSwap.opcode
+                and block.data["payload_opcode"] == CoffeeMevProtectFailedSwap.opcode
             )
         except:
             return False

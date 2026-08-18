@@ -7,6 +7,7 @@
 
 #include "Value.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -16,6 +17,10 @@ namespace mch {
 // and Tonco treat a jetton wallet on one of these masters as a native TON asset.
 const std::vector<std::string> &pton_masters();
 bool is_pton_master(const std::string &s);
+
+// The normalized wallet.jetton master, or nullopt for a lookup miss or a
+// non-string jetton field. pTON conversion and Asset wrapping stay with callers.
+std::optional<std::string> wallet_jetton_master_str(const Value &wallet);
 
 // A jetton_wallet lookup record's `jetton` master -> Asset, with the two
 // correlated DEX conventions selected by `pton_conversion`:
