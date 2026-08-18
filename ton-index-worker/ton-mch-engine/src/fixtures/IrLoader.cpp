@@ -128,7 +128,10 @@ void scan_program(const Json &e, CompiledMatcher &m) {
         m.ref_lookups.insert(nm);
       }
     }
-    if (jstr(e, "s") == "parse") {
+    if (k == "parse" || jstr(e, "s") == "parse") {
+      // Expression artifacts predating nullable parse default to strict.
+      const bool nullable = k == "parse" && jbool(e, "nullable", false);
+      (void)nullable;
       if (const Json *types = jfield(e, "types"); types != nullptr && types->type() == JType::Array) {
         for (const auto &t : types->get_array()) {
           if (t.type() == JType::String) {

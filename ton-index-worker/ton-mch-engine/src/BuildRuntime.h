@@ -135,14 +135,11 @@ struct BuildEnv {
 // next; all fail -> body Null. An UNREGISTERED type name faults (rejection).
 EvalResult rt_parse(BuildEnv &env, const Value &target, const std::vector<std::string> &types);
 
-// `parse TARGET as T1|T2` as a build expression. Unlike the
-// statement form, this RETURNS the parsed message Obj directly and FAULTS on
-// total failure instead of returning a soft null. A null or non-block
-// target -> fault; every type alternative failing to parse -> fault; an
-// unregistered type name -> fault. Stateless (no env.bodies side table); env is
-// accepted only for signature symmetry with the other build-mode rt_* leaves.
+// `[try] parse TARGET as T1|T2` as a build expression. Block, Cell, and
+// base64-BOC Str targets are accepted. The nullable form returns Null for
+// target resolution or total parse failure; the strict form faults.
 EvalResult rt_parse_expr(BuildEnv &env, const Value &target,
-                         const std::vector<std::string> &types);
+                         const std::vector<std::string> &types, bool nullable);
 
 // Attribute access in build context: `.body` on a Block/List resolves through
 // env.bodies (missing entry == "was not parse'd" fault, exactly expr_eval's

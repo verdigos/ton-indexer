@@ -283,10 +283,9 @@ bool evaa_liquidate_anchor(const Block *b) {
 }
 
 // builders/evaa.py _evaa_supply_data -> blocks/evaa.py build_evaa_supply_core.
-// The whole build of specs/evaa.mch's `evaa_supply`: the TON-vs-jetton
-// discriminator threads through nearly every field, and the jetton arm has to
-// parse a forward-payload BOC, which the DSL has no form for. Python wraps the
-// body in try/except returning None, so any parse/nav failure is a Null reject.
+// The whole build of specs/evaa.mch's `evaa_supply`; the spec supplies the
+// parsed jetton recipient while the TON-vs-jetton discriminator and role
+// derivation remain here.
 EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
   auto decoded = decode_consumed_or_none(args);
@@ -349,23 +348,7 @@ EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args) {
     amount = amt.num;  // Amount.value
     master = data_field(block, "receiver");
     asset = data_field(block, "asset");
-    Value fp = data_field(block, "forward_payload");
-    if (fp.t != VType::Str) {
-      return host_reject("no forward_payload in jetton supply");
-    }
-    auto r_cell = cell_from_pystr(fp.str);
-    if (r_cell.is_error()) {
-      return host_reject("forward_payload BOC");
-    }
-    auto rm = parse_message_body("EvaaSupplyJettonForward", r_cell.ok());
-    if (rm.is_error()) {
-      return host_reject("forward_payload parse");
-    }
-    const Value *ra = rm.ok().field("recipient_address");
-    if (ra == nullptr) {
-      return host_reject("forward_payload recipient");
-    }
-    recipient = *ra;
+    recipient = args[1];
     if (same_account(sender, recipient)) {
       recipient_jetton_wallet = sender_jetton_wallet;
     } else {

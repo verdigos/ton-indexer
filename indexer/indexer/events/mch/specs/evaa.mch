@@ -101,7 +101,9 @@ matcher evaa_supply {
            | op EvaaSupplyFail @fail
            | btype jetton_transfer @refund )
 
-    let r = evaa_supply_data(consumed)
+    let supply_fwd = (try parse master.data.forward_payload as EvaaSupplyJettonForward) if master.btype == "jetton_transfer" else null
+    reject when master.btype == "jetton_transfer" and supply_fwd == null
+    let r = evaa_supply_data(consumed, supply_fwd.recipient_address)
     reject when r == null
     out {
         sender:                  r.sender

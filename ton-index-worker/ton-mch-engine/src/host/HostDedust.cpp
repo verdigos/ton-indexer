@@ -371,42 +371,6 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
 namespace {
 
 constexpr std::uint32_t kDedustV2PayJetton = 0xcbc33949;
-constexpr std::uint32_t kDedustV2SwapPayload = 0xc442500f;
-constexpr std::uint32_t kDedustV2DepositPayload = 0xc9a015da;
-
-// blocks/messages/dedust_v2.py DedustV2SwapPayload: op(32) already consumed,
-// then minimal_amount_out:Coins deadline:uint40 next:(Maybe ^SwapStep)
-// partner:(Maybe (uint256,uint16)) referrer:(Maybe (uint256,uint16)). The
-// trailing configs are read even though nothing uses them, a body too short
-// for them raises in the reference too, which is what makes the whole payload
-// "not a swap payload".
-td::Status dv2_read_payload(vm::CellSlice &cs, td::RefInt256 &min_out,
-                            td::Ref<vm::Cell> &next) {
-  TRY_RESULT(amount, load_coins_py(cs));
-  min_out = std::move(amount);
-  if (!cs.have(40)) {
-    return td::Status::Error("swap payload: deadline underflow");
-  }
-  cs.advance(40);
-  if (!cs.have(1)) {
-    return td::Status::Error("swap payload: next flag underflow");
-  }
-  if (cs.fetch_ulong(1) == 1) {
-    next = cs.fetch_ref();
-    if (next.is_null()) {
-      return td::Status::Error("swap payload: next ref missing");
-    }
-  }
-  for (int i = 0; i < 2; i++) {  // partner_config, referrer_config
-    if (!cs.have(1)) {
-      return td::Status::Error("swap payload: config flag underflow");
-    }
-    if (cs.fetch_ulong(1) == 1 && !(cs.have(256 + 16) && cs.advance(256 + 16))) {
-      return td::Status::Error("swap payload: config underflow");
-    }
-  }
-  return td::Status::OK();
-}
 
 // DedustV2SwapStep: pool:MsgAddressInt minimal_amount_out:Coins deadline:uint40
 // next:(Maybe ^SwapStep), an inline struct, so no opcode prefix.
@@ -432,29 +396,10 @@ td::Status dv2_read_step(vm::CellSlice &cs, td::RefInt256 &min_out,
   return td::Status::OK();
 }
 
-// blocks/messages/dedust_v2.py DedustV2DepositPayload: op(32) already consumed,
-// then amount_x:Coins amount_y:Coins minimal_liquidity:Coins
-// locked_liquidity_share:uint16. The last two are read but unused, the
-// reference's class reads them too, so a body too short for them is "not a
-// deposit payload" on both sides.
-td::Status dv2_read_deposit_payload(vm::CellSlice &cs, td::RefInt256 &amount_x,
-                                    td::RefInt256 &amount_y) {
-  TRY_RESULT(ax, load_coins_py(cs));
-  amount_x = std::move(ax);
-  TRY_RESULT(ay, load_coins_py(cs));
-  amount_y = std::move(ay);
-  TRY_RESULT(min_liq, load_coins_py(cs));
-  (void)min_liq;
-  if (!(cs.have(16) && cs.advance(16))) {
-    return td::Status::Error("deposit payload: locked_liquidity_share underflow");
-  }
-  return td::Status::OK();
-}
-
 // The payload cell behind a carrier: the argument is either a PayNative body's
 // payment_payload ref (a Cell) or a jetton carrier's b64 forward_payload (a Str
 // carrying the PayJetton wrapper, whose own payment_payload holds the payload).
-td::Result<td::Ref<vm::Cell>> dv2_payload_cell(const Value &arg) {
+td::Result<td::Ref<vm::Cell>> resolve_dv2_payload_cell(const Value &arg) {
   if (arg.t == VType::Cell) {
     return arg.cell;
   }
@@ -477,33 +422,40 @@ td::Result<td::Ref<vm::Cell>> dv2_payload_cell(const Value &arg) {
 
 }  // namespace
 
-// builders/dedust_v2.py dedust_v2_swap_payload: the carrier's swap payload, or
-// Null when the carrier is not a swap. PayNative also carries deposits and
-// fund rewards. `min_out` is the final
-// minimal_amount_out: the entry payload carries only hop 1's, so the SwapStep
-// chain is walked to its last step (same 16-step cap as the reference). A
-// payload that parses but whose chain does not yields min_out=null.
-EvalResult dedust_v2_swap_payload(BuildEnv &, const std::vector<Value> &args) {
+EvalResult dedust_v2_payload_cell(BuildEnv &, const std::vector<Value> &args) {
   if (args[0].is_null()) {
     return rt_ok(Value::null());
   }
-  auto cell = dv2_payload_cell(args[0]);
-  if (cell.is_error()) {
+  auto cell = resolve_dv2_payload_cell(args[0]);
+  if (cell.is_error() || cell.ok().is_null()) {
     return rt_ok(Value::null());
   }
-  auto payload_cs = open_ref_cell(cell.move_as_ok());
-  if (payload_cs.is_error()) {
+  return rt_ok(Value::make_cell(cell.move_as_ok()));
+}
+
+// Return the final minimum output from a parsed swap payload's step chain.
+EvalResult dedust_v2_swap_min_out(BuildEnv &, const std::vector<Value> &args) {
+  if (args[0].is_null()) {
     return rt_ok(Value::null());
   }
-  vm::CellSlice cs = payload_cs.move_as_ok();
-  if (!cs.have(32) || cs.fetch_ulong(32) != kDedustV2SwapPayload) {
+  const Value *min_out_value = args[0].field("minimal_amount_out");
+  const Value *next_value = args[0].field("next");
+  if (min_out_value == nullptr || min_out_value->t != VType::Int ||
+      min_out_value->num.is_null() || next_value == nullptr) {
     return rt_ok(Value::null());
   }
-  td::RefInt256 min_out;
+
+  td::RefInt256 min_out = min_out_value->num;
   td::Ref<vm::Cell> next;
-  if (dv2_read_payload(cs, min_out, next).is_error()) {
+  if (next_value->t == VType::Cell) {
+    next = next_value->cell;
+    if (next.is_null()) {
+      return rt_ok(Value::null());
+    }
+  } else if (!next_value->is_null()) {
     return rt_ok(Value::null());
   }
+
   bool chain_ok = true;
   for (int depth = 0; !next.is_null() && depth < 16; depth++) {
     auto step_cs = open_ref_cell(next);
@@ -518,42 +470,8 @@ EvalResult dedust_v2_swap_payload(BuildEnv &, const std::vector<Value> &args) {
       break;
     }
   }
-  Value::Fields f;
-  f.emplace_back("min_out",
-                 chain_ok ? Value::make_int(std::move(min_out)) : Value::null());
-  return rt_ok(Value::make_obj(std::move(f)));
-}
-
-// builders/dedust_v2.py dedust_v2_deposit_payload: the carrier's DEPOSIT
-// payload (the desired amount_x/amount_y), or Null when the carrier is not a
-// deposit. Same two carrier shapes and the same "wrong opcode / unparseable ->
-// Null" contract as the swap payload above (PayNative carries swaps, deposits
-// and fund rewards alike), which on the spec side drives both target amounts to
-// null, the reference's `payload is None` arm.
-EvalResult dedust_v2_deposit_payload(BuildEnv &, const std::vector<Value> &args) {
-  if (args[0].is_null()) {
-    return rt_ok(Value::null());
-  }
-  auto cell = dv2_payload_cell(args[0]);
-  if (cell.is_error()) {
-    return rt_ok(Value::null());
-  }
-  auto payload_cs = open_ref_cell(cell.move_as_ok());
-  if (payload_cs.is_error()) {
-    return rt_ok(Value::null());
-  }
-  vm::CellSlice cs = payload_cs.move_as_ok();
-  if (!cs.have(32) || cs.fetch_ulong(32) != kDedustV2DepositPayload) {
-    return rt_ok(Value::null());
-  }
-  td::RefInt256 amount_x, amount_y;
-  if (dv2_read_deposit_payload(cs, amount_x, amount_y).is_error()) {
-    return rt_ok(Value::null());
-  }
-  Value::Fields f;
-  f.emplace_back("amount_x", Value::make_int(std::move(amount_x)));
-  f.emplace_back("amount_y", Value::make_int(std::move(amount_y)));
-  return rt_ok(Value::make_obj(std::move(f)));
+  return chain_ok ? rt_ok(Value::make_int(std::move(min_out)))
+                  : rt_ok(Value::null());
 }
 
 }  // namespace mch

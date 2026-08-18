@@ -128,6 +128,45 @@ def build_stub_registries(files: list[ast_.File]) -> Registries:
     """Permissive Registries covering every name the given files reference."""
     reg = Registries()
     predicate_names: set[str] = set()
+
+    def stub_expr(e: ast_.Expr) -> None:
+        if isinstance(e, ast_.FieldAccess):
+            stub_expr(e.target)
+        elif isinstance(e, ast_.Call):
+            if not isinstance(e.callee, ast_.NameRef):
+                stub_expr(e.callee)
+            for arg in e.args:
+                stub_expr(arg)
+        elif isinstance(e, ast_.LookupExpr):
+            for arg in e.args:
+                stub_expr(arg)
+        elif isinstance(e, ast_.UnaryOp):
+            stub_expr(e.operand)
+        elif isinstance(e, ast_.BinaryOp):
+            stub_expr(e.left)
+            stub_expr(e.right)
+        elif isinstance(e, ast_.Ternary):
+            stub_expr(e.cond)
+            stub_expr(e.then)
+            stub_expr(e.orelse)
+        elif isinstance(e, ast_.ListLit):
+            for item in e.elements:
+                stub_expr(item)
+        elif isinstance(e, ast_.RecordLit):
+            for field in e.fields:
+                stub_expr(field.value)
+        elif isinstance(e, ast_.ParseExpr):
+            stub_expr(e.target)
+            for msg_type in e.msg_types:
+                reg.message_types.setdefault(msg_type, _StubMessage)
+        elif isinstance(e, ast_.Comprehension):
+            stub_expr(e.xs)
+            stub_expr(e.body)
+
+    def stub_fields(fields: tuple[ast_.OutField, ...]) -> None:
+        for field in fields:
+            stub_expr(field.value)
+
     for f in files:
         for pd in f.predicates:
             predicate_names.add(pd.name)
@@ -147,6 +186,17 @@ def build_stub_registries(files: list[ast_.File]) -> Registries:
                 if isinstance(stmt, ast_.ParseStmt):
                     for t in stmt.msg_types:
                         reg.message_types.setdefault(t, _StubMessage)
+                elif isinstance(stmt, ast_.LetStmt):
+                    stub_expr(stmt.value)
+                elif isinstance(stmt, (ast_.RejectStmt, ast_.FailedStmt, ast_.BrokenStmt)):
+                    stub_expr(stmt.condition)
+                elif isinstance(stmt, ast_.OutStmt):
+                    stub_fields(stmt.fields)
+                elif isinstance(stmt, ast_.SwitchStmt):
+                    for branch in stmt.branches:
+                        if branch.condition is not None:
+                            stub_expr(branch.condition)
+                        stub_fields(branch.out.fields)
     for name in sorted(predicate_names):
         reg.predicates[name] = lambda _block: True
     return reg

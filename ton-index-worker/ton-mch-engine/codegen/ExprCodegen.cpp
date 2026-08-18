@@ -32,6 +32,11 @@ std::string jstr(const Json &e, const char *name) {
   return f != nullptr && f->type() == JType::String ? f->get_string().str() : std::string{};
 }
 
+bool jbool(const Json &e, const char *name, bool dflt = false) {
+  const Json *f = jfield(e, td::Slice(name));
+  return f != nullptr && f->type() == JType::Boolean ? f->get_boolean() : dflt;
+}
+
 // The fixed builtin set (rt_call_builtin's arity table). Anything else in a
 // `call` node is a host fn (registries.fns) in build programs.
 bool is_builtin(const std::string &name) {
@@ -228,8 +233,9 @@ class Emitter {
       for (const auto &t : jfield(e, "types")->get_array()) {
         types.push_back(cstr(t.get_string().str()));
       }
+      const bool nullable = jbool(e, "nullable", false);
       return bind("rt_parse_expr(env, " + x + ", std::vector<std::string>{" +
-                  join(types, ", ") + "})");
+                  join(types, ", ") + "}, " + (nullable ? "true" : "false") + ")");
     }
     throw std::runtime_error("unsupported expression kind '" + k + "'");
   }

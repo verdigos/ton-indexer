@@ -37,6 +37,7 @@ class TokenKind(Enum):
     KW_INCLUDE_BOUNCES = "include_bounces"
     KW_SHAPE = "shape"
     # Build-language keywords parsed here and ignored by the pattern compiler.
+    KW_TRY = "try"
     KW_PARSE = "parse"
     KW_AS = "as"
     KW_LET = "let"

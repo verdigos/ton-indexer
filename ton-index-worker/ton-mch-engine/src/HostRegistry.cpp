@@ -11,12 +11,11 @@ namespace mch {
 const std::map<std::string, HostFnEntry> &host_fns() {
   static const std::map<std::string, HostFnEntry> fns = {
       {"dedust_swap_legs", {dedust_swap_legs, 3}},
-      {"dedust_v2_swap_payload", {dedust_v2_swap_payload, 1}},
-      {"dedust_v2_deposit_payload", {dedust_v2_deposit_payload, 1}},
+      {"dedust_v2_payload_cell", {dedust_v2_payload_cell, 1}},
+      {"dedust_v2_swap_min_out", {dedust_v2_swap_min_out, 1}},
       {"layerzero_dst_oapp_matches", {layerzero_dst_oapp_matches, 2}},
       {"tonstakers_pool_addr", {tonstakers_pool_addr, 1}},
       {"vesting_message_was_sent", {vesting_message_was_sent, 2}},
-      {"jvault_stake_period", {jvault_stake_period, 1}},
       {"nominator_withdraw_payout_amount", {nominator_withdraw_payout_amount, 1}},
       {"nft_transfer_data", {nft_transfer_data, 3}},
       {"telegram_nft_purchase_data", {telegram_nft_purchase_data, 4}},
@@ -32,7 +31,7 @@ const std::map<std::string, HostFnEntry> &host_fns() {
       {"dedust_deposit_partial_data", {dedust_deposit_partial_data, 1}},
       {"tonco_deposit_liquidity_data", {tonco_deposit_liquidity_data, 1}},
       {"tonco_withdraw_payouts", {tonco_withdraw_payouts, 1}},
-      {"evaa_supply_data", {evaa_supply_data, 1}},
+      {"evaa_supply_data", {evaa_supply_data, 2}},
       {"evaa_liquidate_data", {evaa_liquidate_data, 1}},
       {"tonco_swap_data", {tonco_swap_data, 1}},
       // stonfi_v2_swap_data reads the in-leg by block type
@@ -45,10 +44,9 @@ const std::map<std::string, HostFnEntry> &host_fns() {
       {"getgems_sale_init", {getgems_sale_init, 2}},
       {"getgems_auction_init", {getgems_auction_init, 2}},
       {"auction_bid_data", {auction_bid_data, 1}},
-      // specs/cocoon.mch, the expectedMyAddress string renderer (shared by
-      // three matchers) and the nested withdraw-payload coins read.
+      // specs/cocoon.mch, the expectedMyAddress string renderer shared by
+      // three matchers.
       {"cocoon_expected_address", {cocoon_expected_address, 1}},
-      {"cocoon_withdraw_amount", {cocoon_withdraw_amount, 1}},
   };
   return fns;
 }

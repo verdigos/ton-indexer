@@ -84,8 +84,8 @@ EvalResult evaa_liquidate_data(BuildEnv &env, const std::vector<Value> &args);
 
 // DeDust (HostDedust.cpp).
 EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args);
-EvalResult dedust_v2_swap_payload(BuildEnv &env, const std::vector<Value> &args);
-EvalResult dedust_v2_deposit_payload(BuildEnv &env, const std::vector<Value> &args);
+EvalResult dedust_v2_payload_cell(BuildEnv &env, const std::vector<Value> &args);
+EvalResult dedust_v2_swap_min_out(BuildEnv &env, const std::vector<Value> &args);
 
 // DeDust liquidity deposit (HostDedustDeposit.cpp).
 EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &args);
@@ -100,12 +100,7 @@ EvalResult tonstakers_pool_addr(BuildEnv &env, const std::vector<Value> &args);
 // Vesting (HostVesting.cpp).
 EvalResult vesting_message_was_sent(BuildEnv &env, const std::vector<Value> &args);
 
-// JVault (HostJvault.cpp). jvault_account_list is defined by a spec G-LC map.
-EvalResult jvault_stake_period(BuildEnv &env, const std::vector<Value> &args);
-
-// Cocoon (HostCocoon.cpp): the shared expectedMyAddress renderer and the nested
-// ClientProxyRequest.payload -> ClientProxyRefundGranted coins read.
+// Cocoon (HostCocoon.cpp): the shared expectedMyAddress renderer.
 EvalResult cocoon_expected_address(BuildEnv &env, const std::vector<Value> &args);
-EvalResult cocoon_withdraw_amount(BuildEnv &env, const std::vector<Value> &args);
 
 }  // namespace mch
