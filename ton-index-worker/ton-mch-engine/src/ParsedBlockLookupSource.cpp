@@ -17,10 +17,7 @@ namespace {
 // FixtureLookupSource's iface_obj which copies the fixture's raw string verbatim.
 Value addr_str(const block::StdAddress &a) {
   std::string raw = convert::to_raw_address(a);
-  if (auto norm = normalize_raw_address(raw)) {
-    return Value::make_str(*norm);
-  }
-  return Value::make_str(raw);
+  return Value::make_str(canonicalize_or_passthrough(raw));
 }
 
 Value addr_str_opt(const std::optional<block::StdAddress> &a) {

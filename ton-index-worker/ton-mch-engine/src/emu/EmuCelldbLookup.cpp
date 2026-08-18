@@ -138,8 +138,8 @@ Value EmuCelldbTier2::jvault_assets(const block::StdAddress &stake_wallet) {
   if (jetton == nullptr || jetton->t != VType::Str) {
     return Value::null();  // get_jetton_wallet None -> .jetton raises -> None
   }
-  auto jn = normalize_raw_address(jetton->str);
-  return jvault_record(parts.staking_pool, Value::make_asset_jetton(jn ? *jn : jetton->str),
+  auto master = canonicalize_or_passthrough(jetton->str);
+  return jvault_record(parts.staking_pool, Value::make_asset_jetton(master),
                        std::move(jvault_asset));
 }
 

@@ -68,8 +68,7 @@ EvalResult dedust_seq_destination(BuildEnv &env, const std::vector<std::string> 
         prev = Value::make_asset_ton();
       } else {
         std::string addr = addr_v != nullptr && addr_v->t == VType::Str ? addr_v->str : std::string{};
-        auto norm = normalize_raw_address(addr);
-        prev = Value::make_asset_jetton(norm ? *norm : addr);
+        prev = Value::make_asset_jetton(addr);
       }
       break;
     }

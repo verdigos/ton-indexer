@@ -477,12 +477,8 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   // target/destination asset from out_wallet (no pton conversion; None when the
   // wallet is absent or carries no jetton master).
   Value target_asset = Value::null();
-  if (!out_wallet.is_null()) {
-    const Value *jf = out_wallet.field("jetton");
-    if (jf != nullptr && jf->t == VType::Str) {
-      auto norm = normalize_raw_address(jf->str);
-      target_asset = Value::make_asset_jetton(norm ? *norm : jf->str);
-    }
+  if (auto master = wallet_jetton_master_str(out_wallet)) {
+    target_asset = Value::make_asset_jetton(*master);
   }
 
   Value::Fields d;
@@ -897,12 +893,8 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
         if (tw) {
           Value jw =
               env.lookups->get("jetton_wallet", std::vector<Value>{Value::make_str(*tw)});
-          if (!jw.is_null()) {
-            const Value *jf = jw.field("jetton");
-            if (jf != nullptr && jf->t == VType::Str) {
-              auto norm = normalize_raw_address(jf->str);
-              dst_asset = Value::make_asset_jetton(norm ? *norm : jf->str);
-            }
+          if (auto master = wallet_jetton_master_str(jw)) {
+            dst_asset = Value::make_asset_jetton(*master);
           }
         }
       }

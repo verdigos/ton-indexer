@@ -60,8 +60,7 @@ Value adapt_address(const ton_abi::AbiAddress &a) {
     case AbiAddressKind::Std: {
       // "wc:hex" -> canonical "wc:HEX" (uppercase raw form, AccountId.as_str parity).
       std::string raw = std::to_string(a.workchain) + ":" + a.hash.to_hex();
-      auto canon = normalize_raw_address(raw);
-      return Value::make_account_raw(canon ? *canon : raw);
+      return Value::make_account_raw(raw);
     }
     case AbiAddressKind::None:
       // Present-but-empty address (addr_none from any_address). This is not null;

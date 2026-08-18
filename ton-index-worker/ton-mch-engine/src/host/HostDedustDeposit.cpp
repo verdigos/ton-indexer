@@ -10,6 +10,7 @@
 #include "host/HostImpls.h"
 
 #include "host/BlockViews.h"
+#include "host/DexPton.h"
 #include "host/DexRecords.h"
 #include "host/HostAdapter.h"
 #include "host/HostCommon.h"
@@ -272,12 +273,11 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
       return rt_ok(Value::null());
     }
     Value jw = env.lookups->get("jetton_wallet", std::vector<Value>{Value::make_str(*dm->source)});
-    const Value *jetton = jw.is_null() ? nullptr : jw.field("jetton");
-    if (jetton == nullptr || jetton->t != VType::Str) {
+    auto master = wallet_jetton_master_str(jw);
+    if (!master) {
       return rt_ok(Value::null());  // wallet_info.jetton AttributeError -> None
     }
-    auto norm = normalize_raw_address(jetton->str);
-    actual_asset = Value::make_asset_jetton(norm ? *norm : jetton->str);
+    actual_asset = Value::make_asset_jetton(*master);
   }
 
   // user_jetton_wallet_0: the jetton deposit whose wallet's jetton == actual_asset.
@@ -302,16 +302,11 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     }
     Value jw = env.lookups->get("jetton_wallet",
                                 std::vector<Value>{Value::make_str(*jm->destination)});
-    if (jw.is_null()) {
+    auto jw_master = wallet_jetton_master_str(jw);
+    if (!jw_master) {
       continue;
     }
-    const Value *jetton = jw.field("jetton");
-    if (jetton == nullptr || jetton->t != VType::Str) {
-      continue;
-    }
-    auto norm = normalize_raw_address(jetton->str);
-    std::string jw_master = norm ? *norm : jetton->str;
-    if (!actual_master.empty() && jw_master == actual_master) {
+    if (!actual_master.empty() && *jw_master == actual_master) {
       user_jw_0 = account_from_opt(*jm->destination);
     }
   }
@@ -513,12 +508,11 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
     }
     Value jw = env.lookups->get("jetton_wallet",
                                 std::vector<Value>{Value::make_str(*vm_msg->source)});
-    const Value *jetton = jw.is_null() ? nullptr : jw.field("jetton");
-    if (jetton == nullptr || jetton->t != VType::Str) {
+    auto master = wallet_jetton_master_str(jw);
+    if (!master) {
       return rt_ok(Value::null());  // dex_jetton_wallet.jetton AttributeError -> None
     }
-    auto norm = normalize_raw_address(jetton->str);
-    actual_asset = Value::make_asset_jetton(norm ? *norm : jetton->str);
+    actual_asset = Value::make_asset_jetton(*master);
   }
 
   Value::Fields d;

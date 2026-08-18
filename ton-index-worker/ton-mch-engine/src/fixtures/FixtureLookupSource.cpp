@@ -208,8 +208,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     }
     Value jvault_asset = Value::null();
     if (minter.t == VType::Account && !minter.addr_none) {
-      auto mn = normalize_raw_address(minter.str);
-      jvault_asset = Value::make_asset_jetton(mn ? *mn : minter.str);
+      jvault_asset = Value::make_asset_jetton(minter.str);
     }
     auto make_record = [&](Value asset) {
       Value::Fields f;
@@ -238,8 +237,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     if (jetton == nullptr || jetton->t != VType::Str) {
       return Value::null();
     }
-    auto jn = normalize_raw_address(jetton->str);
-    return make_record(Value::make_asset_jetton(jn ? *jn : jetton->str));
+    return make_record(Value::make_asset_jetton(jetton->str));
   }
   }
   return Value::null();

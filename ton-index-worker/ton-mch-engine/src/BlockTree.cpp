@@ -346,8 +346,7 @@ Value account_or_null(const std::optional<std::string> &addr) {
   if (!addr) {
     return Value::null();
   }
-  auto norm = normalize_raw_address(*addr);
-  return Value::make_account_raw(norm ? *norm : *addr);
+  return Value::make_account_raw(*addr);
 }
 
 // Leaf-block data dicts mirror the basic_blocks.py constructors so a where_expr
@@ -360,9 +359,7 @@ Value leaf_data(const std::string &btype, const EventNode *node,
   if (btype == mch::btype::kTickTock) {
     Value::Fields fs;
     if (node->tx != nullptr) {
-      auto norm = normalize_raw_address(node->tx->account);
-      fs.emplace_back("account",
-                      Value::make_account_raw(norm ? *norm : node->tx->account));
+      fs.emplace_back("account", Value::make_account_raw(node->tx->account));
     } else {
       fs.emplace_back("account", Value::null());
     }

@@ -64,10 +64,10 @@ Value Value::make_block(const Block *b) {
   return v;
 }
 
-Value Value::make_account_raw(std::string canonical) {
+Value Value::make_account_raw(std::string raw) {
   Value v;
   v.t = VType::Account;
-  v.str = std::move(canonical);
+  v.str = canonicalize_or_passthrough(raw);
   return v;
 }
 
@@ -85,12 +85,12 @@ Value Value::make_asset_ton() {
   return v;
 }
 
-Value Value::make_asset_jetton(std::string canonical_master) {
+Value Value::make_asset_jetton(std::string raw_master) {
   Value v;
   v.t = VType::Asset;
   v.is_ton = false;
   v.has_jetton = true;
-  v.str = std::move(canonical_master);
+  v.str = canonicalize_or_passthrough(raw_master);
   return v;
 }
 
@@ -196,6 +196,11 @@ std::optional<std::string> normalize_raw_address(const std::string &s) {
     up.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
   }
   return wc_part + ":" + up;
+}
+
+std::string canonicalize_or_passthrough(const std::string &raw) {
+  auto norm = normalize_raw_address(raw);
+  return norm ? *norm : raw;
 }
 
 std::string Value::describe() const {

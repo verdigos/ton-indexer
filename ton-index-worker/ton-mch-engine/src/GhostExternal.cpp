@@ -282,8 +282,7 @@ Block *fallback_jetton_transfer(Block *block, BlockArena &arena, const LookupSou
   if (!wallet.is_null()) {
     const Value *jetton = wallet.field("jetton");
     if (jetton != nullptr && jetton->t == VType::Str) {
-      auto norm = normalize_raw_address(jetton->str);
-      asset = Value::make_asset_jetton(norm ? *norm : jetton->str);
+      asset = Value::make_asset_jetton(jetton->str);
     }
   }
 
