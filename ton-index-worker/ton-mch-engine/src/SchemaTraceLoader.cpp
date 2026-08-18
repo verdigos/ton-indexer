@@ -32,6 +32,7 @@ std::string status_str(schema::AccountStatus s) {
 struct DescrInfo {
   std::string descr;                   // "ord" | "tick_tock" | "other"
   std::optional<std::int64_t> exit_code;
+  std::optional<std::string> skipped_reason;
   bool aborted{false};
 };
 
@@ -49,13 +50,32 @@ DescrInfo descr_info(const schema::TransactionDescr &d) {
     }
     return std::nullopt;  // skipped compute phase -> no exit code
   };
+  auto skipped_reason_of = [](const schema::TrComputePhase &cp) -> std::optional<std::string> {
+    const auto *skipped = std::get_if<schema::TrComputePhase_skipped>(&cp);
+    if (skipped == nullptr) {
+      return std::nullopt;
+    }
+    switch (skipped->reason) {
+      case schema::cskip_no_state:
+        return "no_state";
+      case schema::cskip_bad_state:
+        return "bad_state";
+      case schema::cskip_no_gas:
+        return "no_gas";
+      case schema::cskip_suspended:
+        return "suspended";
+    }
+    return std::nullopt;
+  };
   if (const auto *ord = std::get_if<schema::TransactionDescr_ord>(&d)) {
     r.descr = "ord";
     r.exit_code = exit_of(ord->compute_ph);
+    r.skipped_reason = skipped_reason_of(ord->compute_ph);
     r.aborted = ord->aborted;
   } else if (const auto *tt = std::get_if<schema::TransactionDescr_tick_tock>(&d)) {
     r.descr = "tick_tock";
     r.exit_code = exit_of(tt->compute_ph);
+    r.skipped_reason = skipped_reason_of(tt->compute_ph);
     r.aborted = tt->aborted;
   } else {
     r.descr = "other";
@@ -124,8 +144,9 @@ td::Result<Trace> schema_to_trace(const std::string &trace_id,
     DescrInfo di = descr_info(st.description);
     tx->descr = di.descr;
     tx->compute_exit_code = di.exit_code;
+    tx->skipped_reason = std::move(di.skipped_reason);
     tx->aborted = di.aborted;
-    // skipped_reason is absent from the schema (always null in fixtures too).
+    // Compute-skip reasons use the same strings as fixture-loaded transactions.
 
     Transaction *tx_raw = tx.get();
     if (st.in_msg) {

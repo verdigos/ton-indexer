@@ -69,7 +69,7 @@ struct Transaction {
   std::string descr;  // "ord" | "tick_tock" | ...
   std::string orig_status;
   std::string end_status;
-  std::optional<std::string> skipped_reason;  // absent from fixtures (always null in tests)
+  std::optional<std::string> skipped_reason;  // "no_state" | "bad_state" | "no_gas" | "suspended"
   std::optional<std::int64_t> compute_exit_code;
   bool aborted{false};
   std::vector<std::unique_ptr<Message>> messages;

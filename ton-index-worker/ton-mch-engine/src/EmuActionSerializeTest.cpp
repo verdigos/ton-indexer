@@ -10,6 +10,7 @@
 #include "ActionBuild.h"
 #include "BlockTree.h"
 #include "Classify.h"
+#include "SchemaTraceLoader.h"
 #include "Value.h"
 #include "emu/EmuActionSerialize.h"
 #include "emu/EmuTypes.h"  // view_finality
@@ -900,6 +901,71 @@ void test_unknown_action() {
   check("unknown/no_optional_keys", row->via.map.size == 12);
 }
 
+void test_schema_no_gas_ton_transfer() {
+  auto bits = [](unsigned char marker) {
+    td::Bits256 value;
+    value.set_zero();
+    value.data()[31] = marker;
+    return value;
+  };
+  auto ordinary = [](schema::ComputeSkipReason reason, bool aborted) {
+    schema::TransactionDescr_ord descr{};
+    descr.compute_ph = schema::TrComputePhase_skipped{reason};
+    descr.aborted = aborted;
+    return schema::TransactionDescr{descr};
+  };
+
+  schema::Message transfer{};
+  transfer.hash = bits(3);
+  transfer.source = kAddrA;
+  transfer.destination = kAddrB;
+  transfer.created_lt = 150;
+  transfer.bounce = false;
+
+  schema::Transaction root{};
+  root.hash = bits(1);
+  root.account = block::StdAddress(0, bits(4));
+  root.lt = 100;
+  root.now = 1000;
+  root.mc_seqno = 10;
+  root.orig_status = schema::AccountStatus::active;
+  root.end_status = schema::AccountStatus::active;
+  root.description = ordinary(schema::cskip_no_state, false);
+  root.out_msgs.push_back(transfer);
+
+  schema::Transaction child{};
+  child.hash = bits(2);
+  child.account = block::StdAddress(0, bits(5));
+  child.lt = 200;
+  child.now = 1001;
+  child.mc_seqno = 10;
+  child.orig_status = schema::AccountStatus::active;
+  child.end_status = schema::AccountStatus::active;
+  child.description = ordinary(schema::cskip_no_gas, true);
+  child.in_msg = transfer;
+
+  auto loaded = schema_to_trace("schema-no-gas", {root, child});
+  check("schema_no_gas/loads", loaded.is_ok());
+  if (loaded.is_error()) {
+    return;
+  }
+
+  TraceContext ctx;
+  ctx.trace = loaded.move_as_ok();
+  check("schema_no_gas/reason_loaded",
+        ctx.trace.transactions.size() == 2 &&
+            ctx.trace.transactions[1]->skipped_reason == std::optional<std::string>("no_gas"));
+  ctx.tree = to_tree(ctx.trace);
+  check("schema_no_gas/tree_has_root", ctx.tree.root != nullptr);
+  if (ctx.tree.root == nullptr) {
+    return;
+  }
+  ctx.root = init_block(ctx.arena, ctx.tree.root);
+  check("schema_no_gas/incoming_ton_transfer_not_failed",
+        ctx.root != nullptr && ctx.root->next_blocks.size() == 1 &&
+            !ctx.root->next_blocks.front()->failed);
+}
+
 // Action fills without fixture-corpus coverage are exercised directly here.
 void test_bucket_b_fills() {
   BlockArena arena;
@@ -1253,6 +1319,7 @@ int run_action_msgpack_test() {
   test_counters();
   test_multiple_actions();
   test_unknown_action();
+  test_schema_no_gas_ton_transfer();
   test_bucket_b_fills();
   test_evaa_liquidate_surface();
   test_empty_view_finality();

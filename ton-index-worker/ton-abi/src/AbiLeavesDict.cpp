@@ -12,8 +12,9 @@ td::Status load_dict(vm::CellSlice &cs, int key_bits,
   }
   // Reads the HashmapE maybe-bit (+ ref if present) from cs and advances it --
   // the loadDict equivalent (@ton/core).
-  vm::Dictionary dict{vm::DictAdvance{}, cs, key_bits};
-  if (!dict.is_valid()) {
+  // Explicit validation keeps malformed roots on the Status error path.
+  vm::Dictionary dict{vm::DictAdvance{}, cs, key_bits, false};
+  if (!dict.validate()) {
     return td::Status::Error("map: malformed dictionary");
   }
 

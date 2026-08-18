@@ -79,6 +79,16 @@ TEST_CASE("mapKV: empty dict loads to zero entries") {
   CHECK(calls == 0);
 }
 
+TEST_CASE("mapKV: malformed dict returns an error without throwing") {
+  vm::CellBuilder malformed;
+  REQUIRE(malformed.store_long_bool(1, 1));  // Non-empty HashmapE without its root reference.
+  auto cs = vm::load_cell_slice(malformed.finalize());
+  auto on_entry = [](vm::CellSlice &, vm::CellSlice &) { return td::Status::OK(); };
+  td::Status status;
+  CHECK_NOTHROW(status = load_dict(cs, 8, on_entry));
+  CHECK(status.is_error());
+}
+
 TEST_CASE("mapKV: store rejects duplicate key") {
   std::vector<std::pair<int, int>> entries{{1, 0xAA}, {1, 0xBB}};
   auto emit = [&](std::size_t idx, vm::CellBuilder &kb, vm::CellBuilder &vb) -> td::Status {

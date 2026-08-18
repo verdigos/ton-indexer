@@ -1,14 +1,19 @@
 #include "ClassifyCore.h"
 
 #include "BuildDriver.h"
+#include "EnginePrep.h"
 #include "ExprRuntime.h"
 #include "GenBuilds.h"
 #include "GenMatchers.h"
 #include "GenWheres.h"
 #include "GhostExternal.h"
 #include "HostRegistry.h"
+#include "ParsedBlockLookupSource.h"
+#include "SchemaTraceLoader.h"
 #include "Walker.h"
 #include "btypes_gen.h"
+
+#include "vm/excno.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -84,6 +89,39 @@ void sort_unique_children(std::vector<Block *> &children_blocks) {
             });
   children_blocks.erase(std::unique(children_blocks.begin(), children_blocks.end()),
                         children_blocks.end());
+}
+
+// Scrub non-owning Block values before the TraceContext arena dies. Shared
+// container payloads make this a repair, so the count tracks every replacement.
+std::size_t scrub_value(Value &v) {
+  if (v.t == VType::Block) {
+    v = Value::null();
+    return 1;
+  }
+  std::size_t n = 0;
+  if (v.items) {
+    for (Value &item : *v.items) {
+      n += scrub_value(item);
+    }
+  }
+  if (v.fields) {
+    for (auto &[key, field] : *v.fields) {
+      n += scrub_value(field);
+    }
+  }
+  return n;
+}
+
+std::size_t scrub_arena_refs(Action &a) {
+  std::size_t n = 0;
+  for (Value *v : {
+#define MCH_ACTION_REF(name) &a.name,
+           MCH_ACTION_VALUE_FIELDS(MCH_ACTION_REF)
+#undef MCH_ACTION_REF
+       }) {
+    n += scrub_value(*v);
+  }
+  return n;
 }
 
 bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *block,
@@ -758,6 +796,18 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     // recursion brings it back as a CHILD row; a leaf no matcher consumed emits
     // a basic row.
     result.action_rows = serialize_rows(spine, "");
+  } catch (const vm::VmError &e) {
+    result.failure = true;
+    result.failure_reason = std::string("vm exception: ") + e.get_msg();
+    result.failure_category = FailureCategory::engine_fault;
+  } catch (const vm::VmNoGas &e) {
+    result.failure = true;
+    result.failure_reason = std::string("vm exception: ") + e.get_msg();
+    result.failure_category = FailureCategory::engine_fault;
+  } catch (const vm::VmVirtError &e) {
+    result.failure = true;
+    result.failure_reason = std::string("vm exception: ") + e.get_msg();
+    result.failure_category = FailureCategory::engine_fault;
   } catch (const std::exception &e) {
     result.failure = true;
     result.failure_reason = e.what();
@@ -783,6 +833,85 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     // `unknown` row when that yields nothing too.
     result.action_rows = ghost_external_rows(ctx, src);
     result.unknown_trace = result.action_rows.empty();
+  }
+  return result;
+}
+
+SchemaClassifyResult classify_schema_trace(
+    const MchEnginePrep &prep, const std::string &trace_id,
+    const std::vector<schema::Transaction> &txs, const ParsedBlockLookupSource &src,
+    std::vector<Action> &rows, std::vector<std::string> &matcher_names,
+    std::size_t &scrubbed, bool &unknown_row) {
+  SchemaClassifyResult result;
+  try {
+    auto r_trace = schema_to_trace(trace_id, txs);
+    if (r_trace.is_error()) {
+      result.failure = true;
+      result.failure_reason = r_trace.move_as_error().message().str();
+      result.failure_category = FailureCategory::malformed_trace;
+      return result;
+    }
+    TraceContext ctx;
+    ctx.trace = r_trace.move_as_ok();
+    ctx.tree = to_tree(ctx.trace);
+    if (ctx.tree.root == nullptr) {
+      result.failure = true;
+      result.failure_reason = "empty event tree";
+      result.failure_category = FailureCategory::malformed_trace;
+      return result;
+    }
+    ctx.root = init_block(ctx.arena, ctx.tree.root);
+
+    ClassifyResult classified = classify_trace(ctx, *prep.matchers, prep.setup, src);
+    result.failure = classified.failure;
+    result.failure_reason = classified.failure_reason;
+    result.failure_category = classified.failure_category;
+    result.used_fallback = classified.failure;
+
+    // Classification failure replaces regular actions with basic fallback rows.
+    const std::vector<ActionRow> &core =
+        classified.failure ? classified.fallback_rows : classified.action_rows;
+    for (const ActionRow &row : core) {
+      Action action;
+      if (!build_action(row, action)) {
+        result.unported_btypes++;
+        continue;
+      }
+      scrubbed += scrub_arena_refs(action);
+      rows.push_back(std::move(action));
+    }
+
+    // Record every fired matcher, including matches absorbed by later rules.
+    std::set<std::string> names;
+    for (const CoreAction &action : classified.actions) {
+      names.insert(action.matcher_name);
+    }
+    matcher_names.assign(names.begin(), names.end());
+    // A clean unmatched trace receives one synthetic unknown action.
+    if (classified.unknown_trace) {
+      rows.push_back(create_unknown_action(ctx.trace));
+      unknown_row = true;
+    }
+  } catch (const vm::VmError &e) {
+    result.failure = true;
+    result.failure_reason = std::string("vm exception: ") + e.get_msg();
+    result.failure_category = FailureCategory::engine_fault;
+  } catch (const vm::VmNoGas &e) {
+    result.failure = true;
+    result.failure_reason = std::string("vm exception: ") + e.get_msg();
+    result.failure_category = FailureCategory::engine_fault;
+  } catch (const vm::VmVirtError &e) {
+    result.failure = true;
+    result.failure_reason = std::string("vm exception: ") + e.get_msg();
+    result.failure_category = FailureCategory::engine_fault;
+  } catch (const std::exception &e) {
+    result.failure = true;
+    result.failure_reason = std::string("exception: ") + e.what();
+    result.failure_category = FailureCategory::engine_fault;
+  } catch (...) {
+    result.failure = true;
+    result.failure_reason = "unknown exception";
+    result.failure_category = FailureCategory::engine_fault;
   }
   return result;
 }
