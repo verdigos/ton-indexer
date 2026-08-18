@@ -679,12 +679,9 @@ class Emitter {
     }
   }
 
-  // ---- field-path helpers -------------------------------------------------
-  static std::string fpath(const std::string &base, const std::string &f) { return base + "." + f; }
-
   // ---- load expression (returns C++ expr of td::Result<CppType>) ---------
   // `sv` is the vm::CellSlice lvalue name in scope.
-  std::string load_expr(int ty_idx, const std::string &sv, const std::string &path, std::optional<int> u_label) {
+  std::string load_expr(int ty_idx, const std::string &sv, const std::string &path) {
     DepthGuard __g(depth_, ty_idx);
     const Ty &t = ty(ty_idx);
     switch (t.kind) {
@@ -730,7 +727,7 @@ class Emitter {
         s += "    " + bind_res("__pres" + std::to_string(k), "__rp" + std::to_string(k),
                                 "load_maybe_prefix(" + sv + ")");
         s += "    if (!__pres" + std::to_string(k) + ") { return std::optional<" + it + ">(); }\n";
-        s += "    " + bind_res(nv, "__r" + std::to_string(k), load_expr(inner, sv, path, std::nullopt));
+        s += "    " + bind_res(nv, "__r" + std::to_string(k), load_expr(inner, sv, path));
         s += "    return std::optional<" + it + ">(std::move(" + nv + "));\n";
         s += "  }()";
         return s;
@@ -747,7 +744,7 @@ class Emitter {
                                 "load_ref_cell_and_slice(" + sv + ")");
         s += "    td::Ref<vm::Cell> " + cell + " = std::move(__rs" + std::to_string(k) + ".first);\n";
         s += "    vm::CellSlice " + cs + " = *__rs" + std::to_string(k) + ".second;\n";
-        s += "    " + bind_res(cv, "__rc" + std::to_string(k), load_expr(inner, cs, path, std::nullopt));
+        s += "    " + bind_res(cv, "__rc" + std::to_string(k), load_expr(inner, cs, path));
         s += "    return ton_abi::gen::CellOf<" + it + ">{std::make_shared<" + it + ">(std::move(" + cv +
              ")), std::move(" + cell + ")};\n";
         s += "  }()";
@@ -765,7 +762,7 @@ class Emitter {
         s += "    std::vector<" + it + "> " + out + ";\n";
         s += "    " + bind_stat("__ls" + std::to_string(k),
                                 leaf + "(" + sv + ", [&](vm::CellSlice& " + e + ") -> td::Status {\n" + "      " +
-                                    bind_res(ev, "__re" + std::to_string(k), load_expr(inner, e, path, std::nullopt)) +
+                                    bind_res(ev, "__re" + std::to_string(k), load_expr(inner, e, path)) +
                                     "      " + out + ".push_back(std::move(" + ev + "));\n" +
                                     "      return td::Status::OK();\n    })");
         s += "\n    return " + out + ";\n";
@@ -782,7 +779,7 @@ class Emitter {
         for (std::size_t i = 0; i < items.size(); ++i) {
           std::string ti = "__t" + std::to_string(k) + "_" + std::to_string(i);
           s += "    " + bind_res(ti, "__rt" + std::to_string(k) + "_" + std::to_string(i),
-                                 load_expr(items[i], sv, path, std::nullopt));
+                                 load_expr(items[i], sv, path));
         }
         s += "    return " + tt + "(";
         for (std::size_t i = 0; i < items.size(); ++i) {
@@ -814,7 +811,7 @@ class Emitter {
         }
         std::string body;
         body += "      " + bind_res(keyv, "__rk" + std::to_string(k), key_load);
-        body += "      " + bind_res(valv, "__rv" + std::to_string(k), load_expr(m.value_ty_idx, vc, path, std::nullopt));
+        body += "      " + bind_res(valv, "__rv" + std::to_string(k), load_expr(m.value_ty_idx, vc, path));
         body += "      " + out + ".emplace_back(std::move(" + keyv + "), std::move(" + valv + "));\n";
         body += "      return td::Status::OK();\n    }";
         std::string s;
@@ -833,8 +830,7 @@ class Emitter {
   }
 
   // ---- store statement ----------------------------------------------------
-  std::string store_stmt(int ty_idx, const std::string &expr, const std::string &bv, const std::string &path,
-                         std::optional<int> u_label) {
+  std::string store_stmt(int ty_idx, const std::string &expr, const std::string &bv, const std::string &path) {
     DepthGuard __g(depth_, ty_idx);
     const Ty &t = ty(ty_idx);
     auto W = [&]() { return std::to_string(std::get<TyWidth>(t.data).n); };
@@ -872,7 +868,7 @@ class Emitter {
         std::string s;
         s += "if (" + expr + ") {\n";
         s += "    TRY_STATUS(store_maybe_prefix(" + bv + ", true));\n";
-        s += "    " + store_stmt(inner, "(*" + expr + ")", bv, path, std::nullopt) + "\n";
+        s += "    " + store_stmt(inner, "(*" + expr + ")", bv, path) + "\n";
         s += "  } else {\n";
         s += "    TRY_STATUS(store_maybe_prefix(" + bv + ", false));\n";
         s += "  }";
@@ -885,7 +881,7 @@ class Emitter {
         std::string s;
         s += "{\n";
         s += "    vm::CellBuilder " + icb + ";\n";
-        s += "    " + store_stmt(inner, "(*(" + expr + ".ref))", icb, path, std::nullopt) + "\n";
+        s += "    " + store_stmt(inner, "(*(" + expr + ".ref))", icb, path) + "\n";
         s += "    " + bind_stat("__cs" + std::to_string(k), "store_cell(" + bv + ", " + icb + ".finalize())") + "\n";
         s += "  }";
         return s;
@@ -899,7 +895,7 @@ class Emitter {
         std::string lam;
         lam += leaf + "(" + bv + ", " + expr + ".size(), [&](vm::CellBuilder& " + e + ", std::size_t " + i +
                ") -> td::Status {\n";
-        lam += "    " + store_stmt(inner, "(" + expr + "[" + i + "])", e, path, std::nullopt) + "\n";
+        lam += "    " + store_stmt(inner, "(" + expr + "[" + i + "])", e, path) + "\n";
         lam += "    return td::Status::OK();\n  })";
         return bind_stat("__as" + std::to_string(k), lam);
       }
@@ -909,7 +905,7 @@ class Emitter {
         std::string s;
         for (std::size_t i = 0; i < items.size(); ++i) {
           if (i) s += "\n  ";
-          s += store_stmt(items[i], "std::get<" + std::to_string(i) + ">(" + expr + ")", bv, path, std::nullopt);
+          s += store_stmt(items[i], "std::get<" + std::to_string(i) + ">(" + expr + ")", bv, path);
         }
         return s;
       }
@@ -937,7 +933,7 @@ class Emitter {
                ", vm::CellBuilder& " + ko + ", vm::CellBuilder& " + vo + ") -> td::Status {\n";
         lam += "    const auto& " + ent + " = " + expr + "[" + i + "];\n";
         lam += "    " + key_store + "\n";
-        lam += "    " + store_stmt(m.value_ty_idx, ent + ".second", vo, path, std::nullopt) + "\n";
+        lam += "    " + store_stmt(m.value_ty_idx, ent + ".second", vo, path) + "\n";
         lam += "    return td::Status::OK();\n  })";
         return bind_stat("__ms" + std::to_string(k), lam);
       }
@@ -1370,7 +1366,7 @@ class Emitter {
       for (const auto &fi : finfo) {
         std::string mn = member_name(fi.rf->name());
         std::string manifest_key = t.orig_name + "." + fi.rf->name();
-        std::string le = load_expr(fi.rf->ty_idx, "cs", manifest_key, fi.rf->u_label_ty_idx);
+        std::string le = load_expr(fi.rf->ty_idx, "cs", manifest_key);
         c += "  TRY_RESULT_PREFIX_ASSIGN(r." + mn + ", (" + le + "), " +
              cpp_str_lit(manifest_key + ": ") + ");\n";
         bool validate_default = validate_manifest_.count(manifest_key) != 0;
@@ -1416,8 +1412,7 @@ class Emitter {
       }
       for (const auto &fi : finfo) {
         std::string mn = member_name(fi.rf->name());
-        c += "  " + store_stmt(fi.rf->ty_idx, "this->" + mn, "cb", t.orig_name + "." + fi.rf->name(),
-                               fi.rf->u_label_ty_idx) +
+        c += "  " + store_stmt(fi.rf->ty_idx, "this->" + mn, "cb", t.orig_name + "." + fi.rf->name()) +
              "\n";
       }
       c += "  return td::Status::OK();\n";
@@ -1493,7 +1488,7 @@ class Emitter {
     } else if (!rep) {
       c += "  return td::Status::Error(\"" + N + ": not serializable (alias target unrepresentable)\");\n";
     } else {
-      c += "  return " + load_expr(tgt_ty, "cs", t.orig_name, target.u_label_ty_idx) + ";\n";
+      c += "  return " + load_expr(tgt_ty, "cs", t.orig_name) + ";\n";
     }
     c += "}\n\n";
     // store
@@ -1504,7 +1499,7 @@ class Emitter {
     } else if (!rep) {
       c += "  return td::Status::Error(\"" + N + ": not serializable (alias target unrepresentable)\");\n";
     } else {
-      c += "  " + store_stmt(tgt_ty, "self", "cb", t.orig_name, target.u_label_ty_idx) + "\n";
+      c += "  " + store_stmt(tgt_ty, "self", "cb", t.orig_name) + "\n";
       c += "  return td::Status::OK();\n";
     }
     c += "}\n\n";
@@ -1573,7 +1568,7 @@ class Emitter {
       c += emit_custom_delegate("td::RefInt256", t.orig_name, CustomDir::Unpack);
       c += "  return __e->unpack(cs);\n";
     } else {
-      c += "  return " + (enc_int ? enc_load : load_expr(enc, "cs", t.orig_name, std::nullopt)) + ";\n";
+      c += "  return " + (enc_int ? enc_load : load_expr(enc, "cs", t.orig_name)) + ";\n";
     }
     c += "}\n\n";
     c += "td::Status " + N + "_store(vm::CellBuilder& cb, const td::RefInt256& self) {\n";
@@ -1581,7 +1576,7 @@ class Emitter {
       c += emit_custom_delegate("td::RefInt256", t.orig_name, CustomDir::Pack);
       c += "  return __e->pack(self, cb);\n";
     } else {
-      c += "  " + (enc_int ? "TRY_STATUS(" + enc_store + ");" : store_stmt(enc, "self", "cb", t.orig_name, std::nullopt)) +
+      c += "  " + (enc_int ? "TRY_STATUS(" + enc_store + ");" : store_stmt(enc, "self", "cb", t.orig_name)) +
            "\n";
       c += "  return td::Status::OK();\n";
     }
@@ -1631,7 +1626,7 @@ class Emitter {
         c += "  if (!cs.advance(" + std::to_string(t0.prefix_len) +
              ")) { return td::Status::Error(\"union: truncated T|void prefix\"); }\n";
       }
-      c += "  { TRY_RESULT(__v0, (" + load_expr(t0.variant_ty_idx, "cs", N, std::nullopt) +
+      c += "  { TRY_RESULT(__v0, (" + load_expr(t0.variant_ty_idx, "cs", N) +
            ")); __u.emplace<0>(std::move(__v0)); }\n";
       c += "  return __u;\n";
     } else {
@@ -1643,7 +1638,7 @@ class Emitter {
           c += "    if (!cs.advance(" + std::to_string(v.prefix_len) +
                ")) { return td::Status::Error(\"union: truncated implicit prefix\"); }\n";
         }
-        c += "    TRY_RESULT(__v, (" + load_expr(v.variant_ty_idx, "cs", N, std::nullopt) + "));\n";
+        c += "    TRY_RESULT(__v, (" + load_expr(v.variant_ty_idx, "cs", N) + "));\n";
         c += "    __u.emplace<" + std::to_string(idx) + ">(std::move(__v));\n";
         c += "    return __u;\n";
         c += "  }\n";
@@ -1671,8 +1666,7 @@ class Emitter {
                std::to_string(v.prefix_len) + "));\n";
         }
         if (vt.kind != TyKind::Void) {
-          c += "      " + store_stmt(v.variant_ty_idx, "std::get<" + std::to_string(i) + ">(u)", "cb", N,
-                                     std::nullopt) +
+          c += "      " + store_stmt(v.variant_ty_idx, "std::get<" + std::to_string(i) + ">(u)", "cb", N) +
                "\n";
         }
       }

@@ -8,22 +8,6 @@
 
 namespace ton_abi {
 
-namespace {
-
-td::Result<vm::CellSlice> open_ordinary(const td::Ref<vm::Cell> &cell) {
-  if (cell.is_null()) {
-    return td::Status::Error("container: null cell");
-  }
-  bool is_special = false;
-  vm::CellSlice cs = vm::load_cell_slice_special(cell, is_special);
-  if (is_special) {
-    return td::Status::Error("container: special/exotic cell not supported");
-  }
-  return cs;
-}
-
-}  // namespace
-
 // ---- arrayOf ----
 
 td::Status load_array(vm::CellSlice &cs, const std::function<td::Status(vm::CellSlice &)> &unpack_one) {
@@ -36,7 +20,7 @@ td::Status load_array(vm::CellSlice &cs, const std::function<td::Status(vm::Cell
   std::size_t count = 0;
   td::Ref<vm::Cell> cur = std::move(head);
   while (cur.not_null()) {
-    TRY_RESULT(hs, open_ordinary(cur));
+    TRY_RESULT(hs, open_ordinary(cur, "container"));
     // FIRST the next-chunk ref, THEN drain this cell's elements (accepts both
     // the 1-elem/ref and the compiler-chunked forms).
     TRY_RESULT(next, load_maybe_ref(hs));
@@ -87,7 +71,7 @@ td::Status load_lisp_list(vm::CellSlice &cs, const std::function<td::Status(vm::
   std::vector<vm::CellSlice> nodes;
   td::Ref<vm::Cell> cur = std::move(head_ref);
   for (;;) {
-    TRY_RESULT(hs, open_ordinary(cur));
+    TRY_RESULT(hs, open_ordinary(cur, "container"));
     if (hs.size_refs() == 0) {
       break;  // terminator node (empty cell)
     }

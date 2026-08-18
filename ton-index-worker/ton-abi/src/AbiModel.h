@@ -41,11 +41,10 @@ struct TyWidth {
   int n = 0;
 };
 
-// { kind: 'nullable'; inner_ty_idx: number; stack_type_id?: number; stack_width?: number }
+// { kind: 'nullable'; inner_ty_idx: number } -- the JSON's optional stack_*
+// keys are get-method-side data, out of this module's scope (AbiKernel.h note).
 struct TyNullable {
   int inner_ty_idx = 0;
-  std::optional<int> stack_type_id;
-  std::optional<int> stack_width;
 };
 
 // { kind: 'cellOf' | 'arrayOf' | 'lispListOf'; inner_ty_idx: number }
@@ -92,14 +91,11 @@ struct UnionVariant {
   std::uint32_t prefix_num = 0;
   int prefix_len = 0;
   bool is_prefix_implicit = false;
-  std::optional<int> stack_type_id;
-  std::optional<int> stack_width;
 };
 
-// { kind: 'union'; variants: UnionVariant[]; stack_width?: number }
+// { kind: 'union'; variants: UnionVariant[] } -- stack_* keys ignored, as above.
 struct TyUnion {
   std::vector<UnionVariant> variants;
-  std::optional<int> stack_width;
 };
 
 struct Ty {

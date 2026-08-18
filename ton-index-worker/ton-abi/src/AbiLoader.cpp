@@ -176,14 +176,6 @@ td::Result<Ty> parse_ty(const Json &j, int idx) {
     TRY_RESULT(inner, jint_req(j, "inner_ty_idx"));
     TyNullable n;
     n.inner_ty_idx = static_cast<int>(inner);
-    if (has(j, "stack_type_id")) {
-      TRY_RESULT(v, jint_req(j, "stack_type_id"));
-      n.stack_type_id = static_cast<int>(v);
-    }
-    if (has(j, "stack_width")) {
-      TRY_RESULT(v, jint_req(j, "stack_width"));
-      n.stack_width = static_cast<int>(v);
-    }
     ty.kind = TyKind::Nullable;
     ty.data = n;
     return ty;
@@ -257,20 +249,8 @@ td::Result<Ty> parse_ty(const Json &j, int idx) {
                                            << "]: prefix_len=" << uv.prefix_len << " out of [0,32]");
       }
       uv.is_prefix_implicit = jbool(vj, "is_prefix_implicit", false);
-      if (has(vj, "stack_type_id")) {
-        TRY_RESULT(v, jint_req(vj, "stack_type_id"));
-        uv.stack_type_id = static_cast<int>(v);
-      }
-      if (has(vj, "stack_width")) {
-        TRY_RESULT(v, jint_req(vj, "stack_width"));
-        uv.stack_width = static_cast<int>(v);
-      }
       u.variants.push_back(uv);
       ++vi;
-    }
-    if (has(j, "stack_width")) {
-      TRY_RESULT(v, jint_req(j, "stack_width"));
-      u.stack_width = static_cast<int>(v);
     }
     // Union prefix-freedom (loader invariant): no variant's prefix bit-string
     // may be a strict prefix of another's -- see validate_union_prefix_freedom.

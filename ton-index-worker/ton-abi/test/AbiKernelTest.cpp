@@ -29,13 +29,7 @@ const ton_abi::TyUnion &union_at(const AbiKernel &k, int ty_idx) {
 // create() smoke
 
 TEST_CASE("AbiKernel create: all committed fixture ABIs build a kernel") {
-  for (const std::string &name : {
-           "client-type-anno", "debug-print-demos", "err-cont-on-stack-1", "err-cont-on-stack-2",
-           "err-invalid-map-key-1", "err-invalid-map-key-2", "generic-union-labels", "has-not-init-storage",
-           "jetton-minter-contract", "jetton-wallet-contract", "lots-of-annotations", "lots-of-getters",
-           "lots-of-messages", "lots-of-storage", "lots-of-throws", "lots-of-wrappers", "only-header",
-           "tolk_counter",
-       }) {
+  for (const std::string &name : ton_abi_test::kLoadableFixtures) {
     CAPTURE(name);
     ContractABI abi = load_fixture_abi(name);
     auto kr = AbiKernel::create(abi);

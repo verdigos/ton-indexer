@@ -8,26 +8,12 @@ namespace ton_abi {
 
 namespace {
 
-// Open a ref as an ordinary slice, fail-closed on special/exotic cells (the
-// reference assumes none; the top-level body open also rejects exotic cells).
-td::Result<vm::CellSlice> open_ordinary(const td::Ref<vm::Cell> &cell) {
-  if (cell.is_null()) {
-    return td::Status::Error("ref: null cell");
-  }
-  bool is_special = false;
-  vm::CellSlice cs = vm::load_cell_slice_special(cell, is_special);
-  if (is_special) {
-    return td::Status::Error("ref: special/exotic cell not supported");
-  }
-  return cs;
-}
-
 // Snake reader: byte-aligned bytes per cell + at most one continuation ref
 // (@ton/core strings.js readBuffer).
 td::Result<std::string> read_snake(td::Ref<vm::Cell> cell) {
   std::string out;
   for (;;) {
-    TRY_RESULT(cs, open_ordinary(cell));
+    TRY_RESULT(cs, open_ordinary(cell, "ref"));
     if (cs.size() % 8 != 0) {
       return td::Status::Error(PSLICE() << "string: invalid length, " << cs.size() << " bits not byte-aligned");
     }
@@ -102,7 +88,7 @@ td::Status store_cell(vm::CellBuilder &cb, td::Ref<vm::Cell> cell) {
 
 td::Result<std::pair<td::Ref<vm::Cell>, td::Ref<vm::CellSlice>>> load_ref_cell_and_slice(vm::CellSlice &cs) {
   TRY_RESULT(cell, load_cell(cs));
-  TRY_RESULT(inner, open_ordinary(cell));
+  TRY_RESULT(inner, open_ordinary(cell, "ref"));
   return std::make_pair(std::move(cell), td::make_ref<vm::CellSlice>(std::move(inner)));
 }
 

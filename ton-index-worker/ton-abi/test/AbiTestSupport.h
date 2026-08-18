@@ -69,4 +69,16 @@ inline ton_abi::ContractABI load_fixture_abi(const std::string &stem) {
   return r.move_as_ok();
 }
 
+// All 18 fixtures that compile to a valid ABI (of the 26 .tolk files copied
+// from the reference repo -- 19 top-level + 7 imports/; imports/ are not
+// independently-compilable top-level contracts and small.tolk is a genuine
+// Tolk compiler error unrelated to ABI loading, see gen_vectors.mjs).
+inline constexpr const char *kLoadableFixtures[] = {
+    "client-type-anno", "debug-print-demos", "err-cont-on-stack-1", "err-cont-on-stack-2",
+    "err-invalid-map-key-1", "err-invalid-map-key-2", "generic-union-labels", "has-not-init-storage",
+    "jetton-minter-contract", "jetton-wallet-contract", "lots-of-annotations", "lots-of-getters",
+    "lots-of-messages", "lots-of-storage", "lots-of-throws", "lots-of-wrappers", "only-header",
+    "tolk_counter",
+};
+
 }  // namespace ton_abi_test
