@@ -100,6 +100,7 @@ add_subdirectory(tondb-scanner)
 add_subdirectory(ton-kvrocks-state)
 add_subdirectory(ton-marker)
 add_subdirectory(ton-observability)
+add_subdirectory(index-engine)  # index-engine-core, consumed by ton-mch-index
 add_subdirectory(ton-abi)  # standalone Tolk-ABI message (de)serialization library; must precede ton-mch-engine, which links it
 add_subdirectory(ton-mch-engine)  # defines mch-classify (linked by ton-index-postgres shadow mode)
 add_subdirectory(ton-mch-index)  # batch classifier CLI over a node RocksDB seqno range
@@ -110,8 +111,6 @@ add_subdirectory(ton-smc-scanner)
 add_subdirectory(ton-trace-emulator)
 add_subdirectory(ton-trace-task-emulator)
 add_subdirectory(celldb-migrate)
-add_subdirectory(index-engine)
-
 if (PGTON)
     message("Building pgton")
     add_subdirectory(pgton)

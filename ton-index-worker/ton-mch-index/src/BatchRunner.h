@@ -4,11 +4,17 @@
 #include "DbScanner.h"
 #include "TraceAssembler.h"
 
+#include "ClassifyCore.h"
+#include "EnginePrep.h"
+#include "ParsedBlockLookupSource.h"
+
 #include "td/actor/actor.h"
 
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <fstream>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -17,9 +23,10 @@
 class BatchRunner : public td::actor::Actor {
  public:
   BatchRunner(td::actor::ActorId<DbScanner> db_scanner, td::actor::ActorId<ParseManager> parse_manager,
-              td::actor::ActorId<TraceAssembler> trace_assembler, std::uint32_t read_start,
-              std::uint32_t seqno_from, std::uint32_t seqno_to, std::shared_ptr<std::atomic_int> exit_code,
-              std::shared_ptr<td::Destructor> watcher);
+              td::actor::ActorId<TraceAssembler> trace_assembler,
+              std::shared_ptr<const mch::MchEnginePrep> prep, std::string output_path,
+              std::uint32_t read_start, std::uint32_t seqno_from, std::uint32_t seqno_to,
+              std::shared_ptr<std::atomic_int> exit_code, std::shared_ptr<td::Destructor> watcher);
 
   void start_up() override;
 
@@ -27,13 +34,18 @@ class BatchRunner : public td::actor::Actor {
   void fetch_seqno();
   void seqno_fetched(std::uint32_t seqno, schema::MasterchainBlockDataState block_data_state);
   void seqno_parsed(std::uint32_t seqno, ParsedBlockPtr parsed_block);
-  void seqno_assembled(std::uint32_t seqno, ParsedBlockPtr parsed_block);
+  void seqno_traces_assembled(std::uint32_t seqno, ParsedBlockPtr parsed_block);
+  void seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr parsed_block);
+  void classify_trace(const std::string &trace_key, std::vector<schema::Transaction> txs);
   void fail(std::uint32_t seqno, const char *stage, td::Status error);
   void finish();
 
   td::actor::ActorId<DbScanner> db_scanner_;
   td::actor::ActorId<ParseManager> parse_manager_;
   td::actor::ActorId<TraceAssembler> trace_assembler_;
+  std::shared_ptr<const mch::MchEnginePrep> prep_;
+  std::string output_path_;
+  std::ofstream output_;
   std::uint32_t read_start_;
   std::uint32_t seqno_from_;
   std::uint32_t seqno_to_;
@@ -43,8 +55,6 @@ class BatchRunner : public td::actor::Actor {
 
   std::unordered_map<td::Bits256, std::vector<schema::Transaction>, Bits256Hasher> transactions_by_trace_;
 
-  // Wave 2 will merge per-seqno rows here with last-write-wins semantics. The map stays empty in
-  // wave 1 because this pipeline does not run BlockInterfaceProcessor.
   std::unordered_map<block::StdAddress, std::vector<schema::BlockchainInterfaceV2>> account_interfaces_;
 
   std::uint64_t total_blocks_{0};
@@ -53,4 +63,10 @@ class BatchRunner : public td::actor::Actor {
   std::uint64_t complete_out_of_range_{0};
   std::uint64_t broken_{0};
   std::size_t peak_accumulator_size_{0};
+  std::uint64_t classified_ok_{0};
+  std::uint64_t classified_failed_{0};
+  std::map<mch::FailureCategory, std::uint64_t> classification_failures_by_category_;
+  std::uint64_t total_actions_emitted_{0};
+  mch::ParsedBlockLookupSource::LookupStats lookup_stats_;
+  std::vector<std::string> failed_trace_keys_;
 };

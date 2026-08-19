@@ -8,8 +8,10 @@
 #include "crypto/vm/cp0.h"
 
 #include "BatchRunner.h"
+#include "ClassifyCore.h"
 #include "DataParser.h"
 #include "DbScanner.h"
+#include "EnginePrep.h"
 #include "TraceAssembler.h"
 
 #include <algorithm>
@@ -22,6 +24,11 @@ int main(int argc, char *argv[]) {
   SET_VERBOSITY_LEVEL(verbosity_INFO);
   td::set_default_failure_signal_handler().ensure();
   CHECK(vm::init_op_cp0());
+  auto r_prep = mch::make_engine_prep();
+  if (r_prep.is_error()) {
+    LOG(FATAL) << "MCH engine prep failed: " << r_prep.move_as_error();
+  }
+  std::shared_ptr<const mch::MchEnginePrep> prep = r_prep.move_as_ok();
 
   std::string db_root;
   std::string workdir;
@@ -107,8 +114,8 @@ int main(int argc, char *argv[]) {
   });
   scheduler.run_in_context([&, watcher = std::move(watcher)] {
     td::actor::create_actor<BatchRunner>("mch_batch_runner", db_scanner.get(), parse_manager.get(),
-                                         trace_assembler.get(), read_start, seqno_from, seqno_to, exit_code,
-                                         std::move(watcher))
+                                         trace_assembler.get(), prep, out_path, read_start, seqno_from,
+                                         seqno_to, exit_code, std::move(watcher))
         .release();
   });
 
