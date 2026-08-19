@@ -1,4 +1,3 @@
-// Shared JSON leaf accessors, builtin-name set, and SHA-256 hex for IR artifacts.
 #pragma once
 
 #include "td/utils/JsonBuilder.h"

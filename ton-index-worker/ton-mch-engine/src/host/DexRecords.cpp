@@ -1,4 +1,3 @@
-// Typed DEX swap records + encoders (see host/DexRecords.h).
 #include "host/DexRecords.h"
 
 #include "host/HostCommon.h"

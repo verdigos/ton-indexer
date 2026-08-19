@@ -1,5 +1,4 @@
-// DNS-record message parser (messages/dns.py). See parse/PSlice.h for shared
-// machinery and MsgParse.cpp's header for the pytoniq-parity catalogue.
+// DNS-record message parser. Shared machinery is in parse/PSlice.h.
 #include "parse/Parsers.h"
 
 #include "parse/PSlice.h"
@@ -14,8 +13,7 @@ namespace mch {
 
 namespace {
 
-// str.decode() parity: Python's strict utf-8 decode raises on invalid bytes,
-// failing the whole parse.
+// Strict UTF-8: invalid bytes fail the whole parse. Intentional/parity-frozen.
 bool valid_utf8(const std::string &s) {
   size_t i = 0;
   while (i < s.size()) {
@@ -40,7 +38,7 @@ bool valid_utf8(const std::string &s) {
         return false;
       }
     }
-    // Reject overlongs / surrogates / >U+10FFFF like Python's strict decoder.
+    // Reject overlongs, surrogates, and code points above U+10FFFF.
     if (n == 2) {
       unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
       if ((c == 0xE0 && c1 < 0xA0) || (c == 0xED && c1 >= 0xA0)) {
@@ -69,9 +67,8 @@ td::Result<std::string> fetch_bytes_str(vm::CellSlice &cs, int n) {
   return out;
 }
 
-// AccountId(load_address()) as dns's value dicts wrap it: None -> AccountId(None)
-// (addr_none Account, NOT null); an extern address string raises in the
-// AccountId ctor -> the whole parse fails.
+// DNS value dicts wrap addresses: addr_none becomes an Account none (not null);
+// an extern address string fails the whole parse. Intentional/parity-frozen.
 td::Result<Value> account_id_of(Value addr) {
   if (addr.is_null()) {
     return Value::make_account_none();
@@ -84,11 +81,9 @@ td::Result<Value> account_id_of(Value addr) {
 
 }  // namespace
 
-// ChangeDnsRecordMessage (messages/dns.py). The DNSText chunk walk reproduces
-// the Python loop verbatim: every chunk's length+text is read from the SAME
-// value slice; the first extra chunk consumes one of ITS refs into the dead
-// value_slice variable; a third chunk calls load_ref on a Cell and always
-// raises (-> parse fail).
+// DNSText chunk walk (intentional, parity-frozen): every chunk's length+text
+// is read from the SAME value slice; the first extra chunk consumes one of
+// ITS refs into a dead variable; a third chunk always fails the parse.
 td::Result<Value> parse_change_dns(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(ctx, open_body(body));
   auto &cs = ctx.cs;
@@ -158,7 +153,7 @@ td::Result<Value> parse_change_dns(const td::Ref<vm::Cell> &body) {
         chunks--;
         if (chunks > 0) {
           if (value_slice_is_cell) {
-            // Python: Cell.load_ref does not exist -> AttributeError.
+            // A Cell has no load_ref; this path always fails.
             return td::Status::Error("dns: load_ref on a cell");
           }
           if (vs.size_refs() == 0) {

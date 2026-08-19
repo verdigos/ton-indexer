@@ -10,18 +10,15 @@ namespace ton_abi {
 namespace {
 
 // StructRef.struct_name / AliasRef.alias_name are ALWAYS plain declared names
-// (verified across all fixtures: the mangled monomorph name "ResetTo<int64>"
-// lives ONLY in struct_instantiations[].struct_name, which we match by ty_idx,
-// never by name). So no <...> stripping is
-// needed on SymTable lookups; doing it would diverge from the reference
-// (types-kernel.ts getStruct takes the name verbatim) and could mask a bug.
+// (the mangled monomorph name "ResetTo<int64>" lives ONLY in
+// struct_instantiations[].struct_name, matched by ty_idx, never by name).
+// Lookups take the name verbatim; stripping <...> would mask a bug.
 
 const std::string &struct_ref_name(const Ty &ty) { return std::get<TyStructRef>(ty.data).struct_name; }
 const std::string &alias_ref_name(const Ty &ty) { return std::get<TyAliasRef>(ty.data).alias_name; }
 
 }  // namespace
 
-// SymTable lookups (types-kernel.ts:35-61)
 
 td::Result<const ABIStruct *> AbiKernel::get_struct(const std::string &name) const {
   auto it = structs_.find(name);
@@ -54,7 +51,6 @@ td::Result<const Ty *> AbiKernel::ty_by_idx(int ty_idx) const {
   return &abi_->unique_types[static_cast<std::size_t>(ty_idx)];
 }
 
-// structFieldsOf (types-kernel.ts:69-95), cell side
 
 td::Result<std::vector<ResolvedField>> AbiKernel::compute_struct_fields(int ty_idx) const {
   TRY_RESULT(ty, ty_by_idx(ty_idx));
@@ -107,7 +103,6 @@ td::Result<const std::vector<ResolvedField> *> AbiKernel::struct_fields_of(int t
   return td::Status::Error(PSLICE() << "struct_fields_of: ty_idx=" << ty_idx << " not resolved");
 }
 
-// aliasTargetOf (types-kernel.ts:103-120)
 
 td::Result<AliasTarget> AbiKernel::compute_alias_target(int ty_idx) const {
   TRY_RESULT(ty, ty_by_idx(ty_idx));
@@ -132,7 +127,6 @@ td::Result<AliasTarget> AbiKernel::alias_target_of(int ty_idx) const {
   return compute_alias_target(ty_idx);  // yields the proper "not an AliasRef" error
 }
 
-// renderTy / createLabel / isStructWithItsOwnLabel (types-kernel.ts:129-230)
 
 std::string AbiKernel::render_type_args(const std::vector<int> &args) const {
   if (args.empty()) {
@@ -271,7 +265,6 @@ bool AbiKernel::is_struct_with_own_label(int ty_idx) const {
   return false;
 }
 
-// createLabelsForUnion (types-kernel.ts:235-277)
 
 td::Result<std::vector<LabeledVariant>> AbiKernel::create_labels_for_union(
     const std::vector<UnionVariant> &variants, std::optional<int> u_label_ty_idx) const {
@@ -335,13 +328,11 @@ td::Result<std::vector<LabeledVariant>> AbiKernel::create_labels_for_union(
   return out;
 }
 
-// Union dispatch table
 
 void AbiKernel::build_union_dispatch(int union_ty_idx) {
   const auto &u = std::get<TyUnion>(ty_ref(union_ty_idx).data);
   // A trailing `void` variant (always last) does not participate in prefix
-  // dispatch -- it's matched by an empty slice at runtime (see dynamicUnpack
-  // union, dynamic-serialization.ts:378-411).
+  // dispatch -- it's matched by an empty slice at runtime.
   bool has_void = !u.variants.empty() && ty_ref(u.variants.back().variant_ty_idx).kind == TyKind::Void;
 
   std::vector<std::size_t> order;
@@ -385,7 +376,6 @@ td::Result<ResolvedUnion> AbiKernel::resolve_union(int union_ty_idx, std::option
   return out;
 }
 
-// Construction and eager resolution
 
 td::Status AbiKernel::build_index() {
   for (const auto &d : abi_->declarations) {

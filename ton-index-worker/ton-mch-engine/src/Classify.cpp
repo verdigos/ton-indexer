@@ -190,11 +190,10 @@ int run_dump(const std::vector<std::string> &paths,
 
     ClassifyResult res = classify_trace(ctx, matchers, setup, *src);
     if (res.failure) {
-      // Per-trace exception boundary (event_processing.py): buffered, the
-      // regular actions are discarded, a single TRACE_FAIL on the dump channel,
-      // and the reason on stderr. In --actions mode the
-      // Basic-action fallback rows follow behind a FALLBACK tag.
-      // No corpus trace triggers this, the fallback path is ungated.
+      // Per-trace exception boundary: regular actions discarded, a single
+      // TRACE_FAIL on the dump channel, reason on stderr. In --actions mode
+      // basic-action fallback rows follow behind a FALLBACK tag. No corpus
+      // trace triggers this; the fallback path is ungated.
       std::fprintf(out, "TRACE_FAIL\n");
       std::fprintf(stderr, "TRACE_FAIL %s: %s\n", fs::path(f).filename().string().c_str(),
                    res.failure_reason.c_str());
@@ -208,12 +207,10 @@ int run_dump(const std::vector<std::string> &paths,
       }
       continue;
     }
-    // --actions renders the serialize_blocks ROW set (spine); --classify renders
-    // the matcher FIRE list. The two sets differ (ClassifyCore.h action_rows).
+    // --actions renders the spine row set; --classify renders the matcher
+    // fire list. The two sets differ.
     if (actions_mode) {
-      // SORTED: spine order is not comparable against Python (its
-      // compact_connections rebuilds next_blocks through a `set()`), and no
-      // consumer of the rows depends on their order.
+      // Sorted: no consumer of the rows depends on their order.
       std::vector<std::string> lines;
       std::unordered_map<const Block *, const std::string *> matcher_names;
       for (const CoreAction &a : res.actions) {
@@ -237,9 +234,8 @@ int run_dump(const std::vector<std::string> &paths,
         emit_action(a);
       }
     }
-    // The trace classified cleanly and matched nothing. The synthetic `unknown`
-    // row has no Block, so it prints the literal anchor `unknown` (the twin
-    // prints the same) instead of a block_key.
+    // The trace classified cleanly and matched nothing. The synthetic
+    // `unknown` row has no Block, so it prints the literal anchor `unknown`.
     if (actions_mode && res.unknown_trace) {
       Action act = create_unknown_action(ctx.trace);
       std::fprintf(out, "ACTION anchor=unknown matcher=- %s\n", render_action(act).c_str());

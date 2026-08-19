@@ -53,9 +53,8 @@ bool omitted(const Value &v) {
   }
 }
 
-// Keys in this set encode integer values as decimal strings at every map depth.
-// Other integers use native msgpack types. See
-// Plain MsgPack payload; integers that can exceed int64 are decimal strings by field name.
+// Plain MsgPack payload. Integers that can exceed int64 are decimal strings
+// by field name; other integers use native msgpack types.
 bool decimal_string_key(const std::string &k) {
   static const std::set<std::string> keys{
       // top level
@@ -165,8 +164,7 @@ void pack_value(Packer &pk, const Value &v, bool as_decimal_string, ActionSerial
       pack_text(pk, v.str);
       return;
     case VType::Bytes:
-      // Python holds these as base64 str already (jettons.py custom_payload /
-      // forward_payload); the C++ side carries the raw bytes.
+      // Bytes fields are encoded as base64 text.
       pack_text(pk, td::base64_encode(td::Slice(v.str)));
       return;
     case VType::Cell: {

@@ -8,7 +8,6 @@
 
 namespace ton_abi {
 
-// ---- arrayOf ----
 
 td::Status load_array(vm::CellSlice &cs, const std::function<td::Status(vm::CellSlice &)> &unpack_one) {
   unsigned long long len = 0;
@@ -60,7 +59,6 @@ td::Status store_array(vm::CellBuilder &cb, std::size_t count,
   return store_maybe_ref(cb, std::move(tail));
 }
 
-// ---- lispListOf ----
 
 td::Status load_lisp_list(vm::CellSlice &cs, const std::function<td::Status(vm::CellSlice &)> &unpack_one) {
   TRY_RESULT(head_ref, load_cell(cs));

@@ -1,16 +1,8 @@
-// ton-abi-gen: CLI front end for the ton-abi emitter. Loads one or
-// more Tolk ABI JSON files, resolves each via AbiKernel, and emits the committed
-// C++ struct pair generated/<contract_snake>_gen.{h,cpp}.
-//
-//   ton-abi-gen <abi.json>... --out-dir <dir>   write the pairs
-//   ton-abi-gen <abi.json>... --out-dir <dir> --check
-//                                               regen to memory + byte-compare
-//                                               the committed files; exit != 0
-//                                               on drift or absence.
-// For each <name>.abi.json input, an optional sibling <name>.validate.json is
-// a JSON array of ABI-facing "StructName.field" names to validate on decode.
-//
-// Errors to stderr, non-zero exit. No aborts (fail-closed td::Status).
+// ton-abi-gen: load ABI JSON, resolve, emit generated/<stem>_gen.{h,cpp}.
+//   ton-abi-gen <abi.json>... --out-dir <dir>         write
+//   ton-abi-gen <abi.json>... --out-dir <dir> --check  regen in memory, fail on drift
+// Optional sibling <name>.validate.json lists "StructName.field" names to
+// validate on decode. Fail-closed; errors to stderr.
 
 #include "AbiEmit.h"
 #include "AbiKernel.h"

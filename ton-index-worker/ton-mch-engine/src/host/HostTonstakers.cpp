@@ -1,5 +1,3 @@
-// Tonstakers host fns (builders/tonstakers.py). See host/HostImpls.h for the
-// internal registry surface and HostRegistry.h for the public one.
 #include "host/HostImpls.h"
 
 #include "host/HostCommon.h"
@@ -14,14 +12,10 @@
 
 namespace mch {
 
-// blocks/staking.py find_tonstakers_pool_addr(notification), reached through
-// builders/tonstakers.py _tonstakers_pool_addr: walk `previous_block` upward
-// from the NFT-burn notification. The walk can land on an already-built
-// tonstakers_withdraw block, whose `pool` field is returned directly instead of
-// continuing. Otherwise, return the source of the "start asset distribution"
-// call, continue only through the three burn/distribution opcodes below, and
-// stop with null on any other block. The unbounded topology navigation is why
-// this remains a host fn.
+// Walk previous_block upward from the NFT-burn notification. An already-built
+// tonstakers_withdraw returns its `pool` field. Otherwise return the source of
+// the start-asset-distribution call, continue only through the three
+// burn/distribution opcodes below, and stop with null on any other block.
 EvalResult tonstakers_pool_addr(BuildEnv &, const std::vector<Value> &args) {
   const Block *notification = as_block(args[0]);
   if (notification == nullptr) {

@@ -1,4 +1,3 @@
-// Cocoon expected-address rendering used by specs/cocoon.mch.
 #include "host/HostImpls.h"
 
 #include "vm/cellslice.h"
@@ -10,9 +9,8 @@ namespace mch {
 
 namespace {
 
-// "extern:<len>:<hex>" (the MsgParse.h contract for an addr_extern) ->
-// Python's `f"{addr.len};{hex(addr.external_address)[2:]}"`. Both halves are
-// already in the Value; only the separator differs (colon -> SEMICOLON).
+// MsgParse addr_extern "extern:<len>:<hex>" -> "len;hex". Both halves are
+// already in the Value; only the separator changes (colon -> semicolon).
 Value extern_address_string(const std::string &s) {
   static const std::string kPrefix = "extern:";
   if (s.compare(0, kPrefix.size(), kPrefix) != 0) {
@@ -63,12 +61,8 @@ Value extern_address_object(const Value &v) {
 
 }  // namespace
 
-// `expected_address` for cocoon_worker_payout / cocoon_proxy_charge /
-// cocoon_grant_refund. The three reference builds render `expectedMyAddress`
-// identically (blocks/cocoon.py:134, :373, :1170):
-//   ExternalAddress -> f"{len};{hex(value)[2:]}"
-//   Address         -> to_str(False).upper()   == the canonical "wc:HEX"
-//   otherwise (addr_none, i.e. a pytoniq None) -> left as None
+// expected_address for worker payout / proxy charge / grant refund:
+// extern -> "len;hex", account -> canonical "wc:HEX", addr_none stays null.
 EvalResult cocoon_expected_address(BuildEnv &, const std::vector<Value> &args) {
   const Value &v = args[0];
   if (v.t == VType::Account) {

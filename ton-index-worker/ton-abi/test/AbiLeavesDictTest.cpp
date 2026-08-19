@@ -1,7 +1,5 @@
-// mapKV dict adapter. STORE is proven byte-identical to @ton/core
-// storeDict (dict built both sides -> same BOC); LOAD yields entries in
-// ascending key order (matching @ton/core's HashmapE order). uint8->uint8
-// key/value callbacks stand in for the generated walker.
+// mapKV dict adapter. STORE is proven byte-identical via root cell hash;
+// LOAD yields entries in ascending key order.
 
 #include "AbiTestSupport.h"
 

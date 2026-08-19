@@ -22,7 +22,6 @@ struct HardFail {
   std::string msg;
 };
 
-// Identifier rules
 bool is_safe_ident(const std::string &s) {
   if (s.empty()) {
     return false;
@@ -137,7 +136,6 @@ std::string kind_render(TyKind k) {
   }
 }
 
-// Emitter
 class Emitter {
  public:
   Emitter(const ContractABI &abi, const AbiKernel &kernel, std::string out_name,
@@ -169,7 +167,6 @@ class Emitter {
   }
 
  private:
-  // Target model
   enum class TKind { Struct, Alias, Enum };
   struct Target {
     TKind kind;
@@ -263,7 +260,6 @@ class Emitter {
     }
   }
 
-  // ---- collect the set of named C++ types to emit ------------------------
   void collect_targets() {
     for (const auto &d : abi_.declarations) {
       if (d.kind == DeclKind::Struct && d.as_struct.type_params.empty()) {
@@ -345,12 +341,10 @@ class Emitter {
     return id;
   }
 
-  // encode combined graph index
   int gi_target(int t) const { return t; }
   int gi_union(int u) const { return kUnionBase + u; }
   bool is_union_gi(int gi) const { return gi >= kUnionBase; }
 
-  // ---- name resolution for a referenced ty -------------------------------
   std::string name_for_ref(int ty_idx) {
     const Ty &t = ty(ty_idx);
     if (t.kind == TyKind::EnumRef) {
@@ -425,7 +419,6 @@ class Emitter {
     return concrete_alias_.at(ar.alias_name);
   }
 
-  // ---- can this type be represented as a C++ member? ----------------------
   bool member_representable(int ty_idx) {
     DepthGuard __g(depth_, ty_idx);
     const Ty &t = ty(ty_idx);
@@ -512,7 +505,6 @@ class Emitter {
     return "";
   }
 
-  // ---- C++ type string ----------------------------------------------------
   std::string cpp_type(int ty_idx) {
     DepthGuard __g(depth_, ty_idx);
     const Ty &t = ty(ty_idx);
@@ -603,7 +595,6 @@ class Emitter {
     throw HardFail{"'" + field_path + "' is 'map<non-standard-key>': such a map key can not be handled (map-key)"};
   }
 
-  // ---- union type construction -------------------------------------------
   void build_union_type(int union_local_id) {
     // NB: cpp_type / collect_type_deps below may create NESTED union items and
     // push_back into union_items_, reallocating it -- so we must NOT hold a
@@ -630,7 +621,6 @@ class Emitter {
     ui.h_decl = "using " + name + " = std::variant<" + list + ">;";
   }
 
-  // ---- dependency collection (by-value completeness) ---------------------
   void collect_type_deps(int ty_idx, std::set<int> &out) {
     DepthGuard __g(depth_, ty_idx);
     const Ty &t = ty(ty_idx);
@@ -679,7 +669,6 @@ class Emitter {
     }
   }
 
-  // ---- load expression (returns C++ expr of td::Result<CppType>) ---------
   // `sv` is the vm::CellSlice lvalue name in scope.
   std::string load_expr(int ty_idx, const std::string &sv, const std::string &path) {
     DepthGuard __g(depth_, ty_idx);
@@ -829,7 +818,6 @@ class Emitter {
     }
   }
 
-  // ---- store statement ----------------------------------------------------
   std::string store_stmt(int ty_idx, const std::string &expr, const std::string &bv, const std::string &path) {
     DepthGuard __g(depth_, ty_idx);
     const Ty &t = ty(ty_idx);
@@ -998,7 +986,6 @@ class Emitter {
     }
   }
 
-  // ---- to_abi_value expression (returns C++ expr of td::Result<AbiValue>) -
   std::string to_abi_expr(int ty_idx, const std::string &expr, std::optional<int> u_label) {
     DepthGuard __g(depth_, ty_idx);
     const Ty &t = ty(ty_idx);
@@ -1118,7 +1105,6 @@ class Emitter {
     }
   }
 
-  // ---- const-expr materialization for create() defaults -------------------
   std::string const_expr(const ABIConstExpression &ce, int ty_idx) {
     DepthGuard __g(depth_, ty_idx);
     // A non-null default for a nullable field carries the INNER value's
@@ -1206,7 +1192,6 @@ class Emitter {
     return "{}";
   }
 
-  // ---- emit bodies for one target ----------------------------------------
   void emit_target_bodies(int ti) {
     Target &t = targets_[ti];
     switch (t.kind) {
@@ -1298,7 +1283,6 @@ class Emitter {
     bool custom_unpack = has_custom(sd ? sd->custom_pack_unpack : std::nullopt, false);
     bool custom_pack = has_custom(sd ? sd->custom_pack_unpack : std::nullopt, true);
 
-    // Header
     std::string h;
     h += "struct " + t.cpp_name + " {\n";
     if (sd && sd->prefix) {
@@ -1310,7 +1294,6 @@ class Emitter {
         h += "  " + cpp_type(fi.rf->ty_idx) + " " + member_name(fi.rf->name()) + ";\n";
       }
     }
-    // create() args + factory (over present fields)
     h += "\n  struct CreateArgs {\n";
     for (const auto &fi : finfo) {
       if (!fi.representable) continue;
@@ -1330,11 +1313,9 @@ class Emitter {
     h += "};";
     t.h_decl = h;
 
-    // Bodies
     std::string c;
     const std::string &N = t.cpp_name;
 
-    // create()
     c += N + " " + N + "::create(CreateArgs args) {\n";
     c += "  " + N + " r;\n";
     for (const auto &fi : finfo) {
@@ -1350,7 +1331,6 @@ class Emitter {
     }
     c += "  return r;\n}\n\n";
 
-    // from_slice
     c += "td::Result<" + N + "> " + N + "::from_slice(vm::CellSlice& cs) {\n";
     if (any_omitted) {
       c += "  return td::Status::Error(\"" + N + ": not serializable: " + omitted_reason(finfo) + "\");\n";
@@ -1399,7 +1379,6 @@ class Emitter {
     }
     c += "}\n\n";
 
-    // store
     c += "td::Status " + N + "::store(vm::CellBuilder& cb) const {\n";
     if (any_omitted) {
       c += "  return td::Status::Error(\"" + N + ": not serializable: " + omitted_reason(finfo) + "\");\n";
@@ -1419,7 +1398,6 @@ class Emitter {
     }
     c += "}\n\n";
 
-    // to_abi_value
     c += "td::Result<AbiValue> " + N + "::to_abi_value() const {\n";
     if (any_omitted) {
       c += "  return td::Status::Error(\"" + N + ": not representable as AbiValue\");\n";
@@ -1480,7 +1458,6 @@ class Emitter {
     t.h_decl = h;
 
     std::string c;
-    // from_slice
     c += "td::Result<" + N + "> " + N + "_from_slice(vm::CellSlice& cs) {\n";
     if (custom_unpack) {
       c += emit_custom_delegate(N, t.orig_name, CustomDir::Unpack);
@@ -1491,7 +1468,6 @@ class Emitter {
       c += "  return " + load_expr(tgt_ty, "cs", t.orig_name) + ";\n";
     }
     c += "}\n\n";
-    // store
     c += "td::Status " + N + "_store(vm::CellBuilder& cb, const " + N + "& self) {\n";
     if (custom_pack) {
       c += emit_custom_delegate(N, t.orig_name, CustomDir::Pack);
@@ -1503,7 +1479,6 @@ class Emitter {
       c += "  return td::Status::OK();\n";
     }
     c += "}\n\n";
-    // to_abi_value
     c += "td::Result<AbiValue> " + N + "_to_abi_value(const " + N + "& self) {\n";
     if (custom_unpack) {
       c += emit_custom_delegate(N, t.orig_name, CustomDir::ToAbiValue);
@@ -1593,7 +1568,6 @@ class Emitter {
     collect_type_deps(enc, t.deps);  // scalar -> no deps, but keep uniform
   }
 
-  // ---- union load/store bodies -------------------------------------------
   void emit_union_bodies(int local_id) {
     // Same use-after-realloc hazard as build_union_type: load_expr / store_stmt
     // may create nested union items and reallocate union_items_. Snapshot the
@@ -1606,7 +1580,6 @@ class Emitter {
     h_extra += "\ntd::Result<" + N + "> load_union_" + std::to_string(local_id) + "(vm::CellSlice& cs);";
     h_extra += "\ntd::Status store_union_" + std::to_string(local_id) + "(const " + N + "& u, vm::CellBuilder& cb);";
 
-    // find void variant index (trailing)
     int void_idx = -1;
     for (std::size_t i = 0; i < ru.variants.size(); ++i) {
       if (ty(ru.variants[i].variant_ty_idx).kind == TyKind::Void) {
@@ -1615,7 +1588,6 @@ class Emitter {
     }
 
     std::string c;
-    // load
     c += "td::Result<" + N + "> load_union_" + std::to_string(local_id) + "(vm::CellSlice& cs) {\n";
     c += "  " + N + " __u;\n";
     c += "  const bool __empty = cs.size() == 0 && cs.size_refs() == 0;\n";
@@ -1650,7 +1622,6 @@ class Emitter {
     }
     c += "}\n\n";
 
-    // store
     c += "td::Status store_union_" + std::to_string(local_id) + "(const " + N + "& u, vm::CellBuilder& cb) {\n";
     c += "  switch (u.index()) {\n";
     for (std::size_t i = 0; i < ru.variants.size(); ++i) {
@@ -1681,7 +1652,6 @@ class Emitter {
     ui.cpp_body = c;
   }
 
-  // ---- member / default helpers ------------------------------------------
   std::string member_name(const std::string &field) {
     std::string s = sanitize_ident(field);
     static const std::set<std::string> reserved = {
@@ -1726,9 +1696,7 @@ class Emitter {
     return "non-representable field";
   }
 
-  // ---- topological emit order --------------------------------------------
   void build_order() {
-    // combined nodes: targets 0..T-1, unions kUnionBase+0..
     int T = static_cast<int>(targets_.size());
     int U = static_cast<int>(union_items_.size());
     std::map<int, std::set<int>> deps;      // node -> deps (nodes)
@@ -1775,7 +1743,6 @@ class Emitter {
     }
   }
 
-  // ---- assembly -----------------------------------------------------------
   std::string assemble_header() {
     std::string fixture = snake_;
     std::string s;

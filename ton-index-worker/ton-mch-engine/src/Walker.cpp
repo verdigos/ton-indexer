@@ -16,8 +16,7 @@ constexpr long kExitIdx = -1;  // frame idx marker for the exit attempt
 
 // Match recursion depth cap. depth == block-tree depth reached through the
 // mutual recursion (match_node -> child/children/parent/or/recursive edges).
-// Python's default recursion limit is 1000 with several frames per level;
-// 500 here trips well before either runtime's native stack fails. No corpus
+// 500 trips well before either runtime's native stack fails. No corpus
 // trace is anywhere near this (max depth 2); this only guards pathological
 // inputs, converting an undefined stack overflow into a clean per-trace fail.
 constexpr int kMaxMatchDepth = 500;
@@ -107,7 +106,6 @@ class MatchState {
   }
 
  private:
-  // where_expr evaluation
   // Never raises/aborts: a fault or a non-bool result is simply False.
   bool eval_where(const CompiledNode &node, Block *block) const {
     auto it = gen_.find(node.global_id);
@@ -119,7 +117,6 @@ class MatchState {
     return !r.faulted && r.value.t == VType::Bool && r.value.boolean;
   }
 
-  // Head test (no edges)
   bool test_head(int nid, Block *block) const {
     const CompiledNode &node = m_.nodes[nid];
     bool ok = false;
@@ -162,9 +159,9 @@ class MatchState {
     if (!ok) {
       return false;
     }
-    // Named `where` predicate (engine.py: `node.where(block)`), then inline
-    // where_exprs compose onto the head test. Loader gates runnability
-    // on the registry, so a missing name here means an unrunnable matcher.
+    // Named `where` predicate, then inline where_exprs compose onto the head
+    // test. Loader gates runnability on the registry, so a missing name here
+    // means an unrunnable matcher.
     if (!node.where_name.empty()) {
       auto it = host_predicates().find(node.where_name);
       if (it == host_predicates().end() || !it->second(block)) {
@@ -244,7 +241,7 @@ class MatchState {
 
   bool match_recursive(int nid, const CompiledNode &node, Block *entry) {
     // Entry gate: the recursive node's own where clauses run against the entry
-    // block before the strategy dispatch (engine.py _match_recursive).
+    // block before the strategy dispatch.
     if (!node.where_name.empty()) {
       auto it = host_predicates().find(node.where_name);
       if (it == host_predicates().end() || !it->second(entry)) {
@@ -403,7 +400,7 @@ bool matcher_test_self(const CompiledMatcher &m, const Block *b) {
     case AnchorKind::BType:
       return m.anchor_btypes.count(b->btype) > 0;
     case AnchorKind::Pred: {
-      // engine.py test_self: full-scan predicate anchor, no prefilter.
+      // Full-scan predicate anchor, no prefilter.
       auto it = host_predicates().find(m.anchor_pred);
       return it != host_predicates().end() && it->second(b);
     }

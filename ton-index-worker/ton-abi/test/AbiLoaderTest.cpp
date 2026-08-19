@@ -51,9 +51,8 @@ TEST_CASE("AbiLoader accept: all 18 committed fixture ABIs load") {
     CHECK(abi.abi_schema_version == "1.0");
     CHECK_FALSE(abi.unique_types.empty());
     // NOT declarations.empty(): err-cont-on-stack-2 legitimately has zero
-    // struct/alias/enum declarations (a getter-only fixture, out of
-    // message-parsing scope per the plan -- just the stack-level `cont`
-    // type, no ABI declarations at all).
+    // struct/alias/enum declarations (a getter-only fixture -- just the
+    // stack-level `cont` type, no ABI declarations at all).
   }
 }
 

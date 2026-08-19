@@ -238,8 +238,7 @@ void test_jvault_parsers() {
     }
   }
   {
-    // addr_none pool: Python's staking_pool.to_str() raises into the outer
-    // except, so the WHOLE record is None, not a partial one.
+    // addr_none pool: the whole record is rejected, not a partial one.
     check("jvault/wallet_addr_none_pool_rejects",
           parse_jvault_stake_wallet(stake_wallet_data(std::nullopt, minter)).is_error());
   }
@@ -405,7 +404,7 @@ void test_memo_and_guards() {
           t.fetch("nft_item", {Value::make_str(raw_of('A'))}).is_null());
     check("guard/no_reads_on_guarded", f.reads == 0 && t.stats().fetched == 0);
     // An Account-typed argument must pass the guard and reach the account
-    // read (regression: tier 2 used to null all Account args unconditionally).
+    // read.
     t.fetch("nominator_pool", {Value::make_account_raw(raw_of('A'))});
     check("guard/account_arg_reaches_read", f.reads == 1);
   }

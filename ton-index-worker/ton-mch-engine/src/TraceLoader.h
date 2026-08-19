@@ -42,16 +42,15 @@ struct Message {
   bool bounced{false};
   bool has_extra_currencies{false};  // value_extra_currencies map is non-empty
   std::optional<MsgContent> content;
-  // The StateInit BOC of a deploying message (Python Message.init_state, a
-  // MessageContent relationship). Separate from `content`, which is the body:
-  // TL-B unpacks the two independently (DataParser.cpp). Read only by the
-  // GetGems sale/auction state-init parsers.
+  // The StateInit BOC of a deploying message. Separate from `content`,
+  // which is the body: TL-B unpacks the two independently. Read only by
+  // the GetGems sale/auction state-init parsers.
   std::optional<MsgContent> init_state;
 
-  // Owning transaction, wired after decode (Python Message.transaction).
+  // Owning transaction, wired after decode.
   Transaction *tx{nullptr};
 
-  // Opcode masked to 32 bits (matches Python EventNode.get_opcode).
+  // Opcode masked to 32 bits.
   std::optional<std::uint32_t> opcode32() const {
     if (!opcode) {
       return std::nullopt;

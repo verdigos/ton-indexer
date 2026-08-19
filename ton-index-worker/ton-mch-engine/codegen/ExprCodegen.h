@@ -32,12 +32,9 @@ std::string generate_where_function(const std::string &fn_name, const td::JsonVa
 
 std::string generate_vectors_file(const td::JsonValue &root, const std::string &header);
 
-// Emit the whole wheres_<suffix>_generated.cpp from a decoded IR artifact root:
-// one where-function per `nodes[i]` carrying a `where_expr`, keyed by the global
-// node index i (== CompiledNode::global_id), plus the `gen_wheres_<suffix>()` /
-// `gen_wheres_<suffix>_source_sha()` accessors. `suffix` pairs the table with its
-// document exactly like generate_builds_file (ir artifact / testbed artifact), so
-// both tables link into one binary and are selected at run time by source sha.
+// One where-function per `nodes[i]` with a `where_expr`, keyed by global node
+// index i. `suffix` pairs the table with its document like generate_builds_file
+// so both tables can link into one binary and be selected by source sha.
 std::string generate_wheres_file(const td::JsonValue &root, const std::string &header,
                                  const std::string &source_sha, const std::string &suffix);
 

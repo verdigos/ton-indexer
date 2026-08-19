@@ -24,12 +24,11 @@ Value addr_str_opt(const std::optional<block::StdAddress> &a) {
   return a ? addr_str(*a) : Value::null();
 }
 
-// The `code_hash` field is base64 of the account's code-cell hash, compared
-// against literal b64 constants (auction.py DNS_CODE_HASH, getgems.py's sale /
-// auction version tables). An all-zero Bits256 is the emulator adapter's
-// value-initialized tail, never a real code hash, so it renders as null. This is a miss
-// the reader can reject on, not a b64 string that would silently pick the
-// "latest" parser branch.
+// `code_hash` is base64 of the account's code-cell hash, compared against
+// literal b64 constants. An all-zero Bits256 is the emulator adapter's
+// value-initialized tail, never a real code hash, so it renders as null.
+// This is a miss the reader can reject on, not a b64 string that would
+// silently pick the "latest" parser branch.
 Value code_hash_str(const td::Bits256 &h) {
   if (h.is_zero()) {
     return Value::null();

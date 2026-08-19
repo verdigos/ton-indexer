@@ -1,4 +1,3 @@
-// Shared low-level helpers for the host binding TUs (see host/HostCommon.h).
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -39,8 +38,7 @@ bool is_call_op(const Block *b, std::uint32_t op) {
          *b->opcode == op;
 }
 
-// AccountId(envelope-address-str).as_str(): canonical "wc:HEX" upper; a null or
-// unparseable address -> addr_none (AccountId(None)).
+// Canonical "wc:HEX" upper; a null or unparseable address is addr_none.
 Value account_from_opt(const std::optional<std::string> &s) {
   if (!s) {
     return Value::make_account_none();
@@ -53,7 +51,7 @@ const Message *block_msg(const Block *b) {
   return b->event_nodes.empty() ? nullptr : b->event_nodes.front()->msg;
 }
 
-// Amount(x): a numeric-carrying Value (Int/Amount) -> Amount with that value.
+// Int/Amount becomes Amount; anything else becomes Amount-none.
 Value to_amount(const Value &v) {
   return (v.t == VType::Int || v.t == VType::Amount) ? Value::make_amount(v.num)
                                                      : Value::make_amount_none();
@@ -68,8 +66,7 @@ td::RefInt256 or_zero(td::RefInt256 v) {
   return v.is_null() ? td::make_refint(0) : std::move(v);
 }
 
-// Amount(x or 0): coins are never None, and `0 or 0 == 0`, so this is just
-// Amount(x), but keep the null-guard for parse-failure paths that reach here.
+// Coins are never none; keep the null-guard for parse-failure paths.
 Value amount_or_zero(td::RefInt256 v) {
   return Value::make_amount(or_zero(std::move(v)));
 }
@@ -90,8 +87,7 @@ Value data_field(const Block *b, const char *name) {
   return f != nullptr ? *f : Value::null();
 }
 
-// Two Account values are equal iff same addr_none state and canonical string
-// (mirrors AccountId.__eq__ over the canonical "wc:HEX" form).
+// Equal iff same addr_none state and canonical "wc:HEX" string.
 bool same_account(const Value &a, const Value &b) {
   return a.t == VType::Account && b.t == VType::Account && a.addr_none == b.addr_none &&
          a.str == b.str;

@@ -1,5 +1,3 @@
-// Nominator host helpers (builders/nominator.py). See host/HostImpls.h for the
-// internal registry surface and HostRegistry.h for the public one.
 #include "host/HostImpls.h"
 
 #include "host/HostCommon.h"
@@ -38,8 +36,8 @@ std::vector<Block *> classified_withdraw_payouts(const Block *request) {
 
 }  // namespace
 
-// builders/nominator.py nominator_withdraw_payout_amount: two payouts use the
-// canonical first child; one is immediate only when it exceeds the request.
+// Two payouts use the canonical first child; one is immediate only when it
+// exceeds the request.
 EvalResult nominator_withdraw_payout_amount(BuildEnv &, const std::vector<Value> &args) {
   const Block *request = as_block(args[0]);
   std::vector<Block *> payouts = classified_withdraw_payouts(request);

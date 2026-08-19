@@ -17,15 +17,14 @@ namespace mch {
 
 namespace {
 
-// TonTransferMessage.encrypted_opcode — an encrypted-comment plain transfer.
+// Encrypted-comment plain-transfer opcode.
 constexpr std::uint32_t kEncryptedTonOpcode = 0x2167da4b;
 
-// TonTransferBlock.comment/encrypted/comment_encoded (basic_blocks.py): parse
-// the leaf's message body. `comment` is decoded (base64 when encrypted, else
-// utf-8 backslashreplace with U+0000 stripped) exactly as ton_transfer_comment
-// does; `encrypted` is the op == TonTransferMessage.encrypted_opcode flag;
-// `comment_encoded` is set only when a comment is present AND encrypted. Any BOC
-// failure == Python's inner try swallowing -> comment None, encrypted false.
+// Parse the leaf's message body. `comment` is decoded (base64 when encrypted,
+// else utf-8 backslashreplace with U+0000 stripped) exactly as
+// ton_transfer_comment does; `encrypted` is the op == kEncryptedTonOpcode
+// flag; `comment_encoded` is set only when a comment is present AND encrypted.
+// Any BOC failure yields comment none, encrypted false.
 struct LeafCommentInfo {
   std::optional<std::string> comment;
   bool encrypted{false};
@@ -48,7 +47,7 @@ LeafCommentInfo leaf_comment_info(const EventNode *node) {
   }
   td::Ref<vm::Cell> cell = r_cell.move_as_ok();
   info.comment = ton_transfer_comment(cell);
-  // TonTransferMessage.encrypted: op == 0x2167da4b (peek the first 32 bits).
+  // Peek the first 32 bits for the encrypted-comment opcode.
   bool special = false;
   try {
     vm::CellSlice cs = vm::load_cell_slice_special(cell, special);
@@ -62,8 +61,6 @@ LeafCommentInfo leaf_comment_info(const EventNode *node) {
 }
 
 }  // namespace
-
-// EventNode tree
 
 EventTree to_tree(const Trace &trace) {
   EventTree tree;
@@ -135,8 +132,7 @@ EventTree to_tree(const Trace &trace) {
   }
   tree.root = root;
 
-  // Python asserts a single root; we tolerate orphan subtrees but surface
-  // them (silent loss is the worst kind of parity bug).
+  // Tolerate orphan subtrees but surface them (silent loss hides a real bug).
   std::size_t reachable = 0;
   std::deque<const EventNode *> queue{root};
   while (!queue.empty()) {
@@ -150,8 +146,6 @@ EventTree to_tree(const Trace &trace) {
   tree.unlinked = tree.nodes.size() - reachable;
   return tree;
 }
-
-// Block
 
 int Block::direction() const {
   if (event_nodes.size() == 1) {
@@ -184,10 +178,10 @@ void Block::compact_connections() {
 }
 
 void Block::insert_between(const std::vector<Block *> &targets, Block *new_block) {
-  // Rewire grandchild edges: any child of this block whose next_blocks holds a
-  // target has that edge redirected to new_block. Python removes the first
-  // occurrence and appends new_block per (child, target) hit — mirror exactly
-  // (a child can end up with new_block appended more than once).
+  // Rewire grandchild edges: any child whose next_blocks holds a target has
+  // that edge redirected to new_block. Remove the first occurrence and append
+  // new_block per (child, target) hit (a child can end up with new_block more
+  // than once).
   for (Block *child : children_blocks) {
     for (Block *t : targets) {
       auto &nb = child->next_blocks;
@@ -198,7 +192,6 @@ void Block::insert_between(const std::vector<Block *> &targets, Block *new_block
       }
     }
   }
-  // Drop every target from this block's next_blocks.
   std::unordered_set<const Block *> target_set(targets.begin(), targets.end());
   std::vector<Block *> kept;
   kept.reserve(next_blocks.size());
@@ -208,7 +201,6 @@ void Block::insert_between(const std::vector<Block *> &targets, Block *new_block
     }
   }
   next_blocks = std::move(kept);
-  // Reparent each target's children that pointed back at the target.
   for (Block *t : targets) {
     for (Block *child : t->children_blocks) {
       if (child->previous_block == t) {
@@ -305,9 +297,8 @@ bool Block::merge_blocks(const std::vector<Block *> &blocks) {
     fb->previous_block = this;
   }
   previous_block = earliest->previous_block;
-  // core.py merge_blocks: the merged block inherits initiating_event_node from
-  // the earliest merged block (Step 2a) and ORs is_ghost_block over the nodes
-  // it absorbed.
+  // Merged block inherits initiating_event_node from the earliest merged
+  // block and ORs is_ghost_block over the nodes it absorbed.
   initiating_event_node = earliest->initiating_event_node;
   for (const EventNode *n : event_nodes) {
     if (n->ghost) {
@@ -325,20 +316,18 @@ bool Block::merge_blocks(const std::vector<Block *> &blocks) {
 
 namespace {
 
-// EventNode.failed in Python: message.transaction.aborted (for a tick_tock
-// node: the tick-tock transaction's aborted flag). Our node->tx is exactly
-// that transaction in both cases.
+// Failed is tx->aborted (tick_tock uses the tick-tock transaction).
 bool node_failed(const EventNode *node) {
   return node->forced_failed || (node->tx != nullptr && node->tx->aborted);
 }
 
 void init_leaf(Block *b, const EventNode *node) {
   b->event_nodes.push_back(node);
-  b->is_ghost_block = node->ghost;  // core.py: len(nodes) == 1 and nodes[0].ghost_node
+  b->is_ghost_block = node->ghost;
   b->min_lt = node->lt();
   b->min_lt_without_initiating_tx = node->tx != nullptr ? node->tx->lt : node->lt();
-  // core.py Block.__init__: a single-node block's initiating_event_node is that
-  // node's tree parent (nullptr at the root). (Step 2a.)
+  // A single-node block's initiating_event_node is that node's tree parent
+  // (nullptr at the root).
   b->initiating_event_node = node->parent;
 }
 
@@ -349,10 +338,9 @@ Value account_or_null(const std::optional<std::string> &addr) {
   return Value::make_account_raw(*addr);
 }
 
-// Leaf-block data dicts mirror the basic_blocks.py constructors so a where_expr
-// dotfield reads the same values as Python. extra_currencies remains omitted
-// because its map is not decoded. For ton_transfer, leaf_comment_info populates
-// comment, encrypted, and encoded state (`comment_encoded`).
+// Leaf-block data dicts so a where_expr dotfield reads the same values.
+// extra_currencies remains omitted because its map is not decoded. For
+// ton_transfer, leaf_comment_info populates comment/encrypted/comment_encoded.
 Value leaf_data(const std::string &btype, const EventNode *node,
                 std::optional<std::uint32_t> op) {
   const Message *msg = node->msg;
@@ -367,7 +355,7 @@ Value leaf_data(const std::string &btype, const EventNode *node,
   }
   Value::Fields fs;
   if (btype != mch::btype::kTonTransfer) {
-    // CallContractBlock / ContractDeploy: data['opcode'] = get_opcode() (masked u32).
+    // opcode is the masked u32 (absent on ton_transfer).
     fs.emplace_back("opcode", op ? Value::make_int64(static_cast<std::int64_t>(*op))
                                  : Value::null());
   }
@@ -378,8 +366,8 @@ Value leaf_data(const std::string &btype, const EventNode *node,
                                ? Value::make_amount(td::make_refint(*msg->value))
                                : Value::make_amount_none());
   if (btype == mch::btype::kTonTransfer) {
-    // TonTransferBlock comment/encrypted/comment_encoded: needed by the getgems
-    // purchase predicate + fn and the nft_transfer_parent_absorb shaper.
+    // comment/encrypted/comment_encoded: needed by the getgems purchase
+    // predicate + fn and the nft_transfer_parent_absorb shaper.
     LeafCommentInfo ci = leaf_comment_info(node);
     fs.emplace_back("comment", ci.comment ? Value::make_str(*ci.comment) : Value::null());
     fs.emplace_back("encrypted", Value::make_bool(ci.encrypted));
@@ -400,7 +388,7 @@ Block *make_leaf_block(BlockArena &arena, const EventNode *node) {
     b->failed = node_failed(node);
   } else if (is_ton && msg != nullptr && msg->destination && msg->source) {
     b = arena.make(mch::btype::kTonTransfer);
-    // TonTransferBlock failed logic (basic_blocks.py).
+    // Incoming ton-transfer failed logic.
     if (node_failed(node)) {
       if (msg->bounce && *msg->bounce) {
         b->failed = true;
@@ -417,8 +405,8 @@ Block *make_leaf_block(BlockArena &arena, const EventNode *node) {
     b = arena.make(mch::btype::kCallContract);
     b->opcode = op;
     b->failed = node_failed(node);
-    // CallContractBlock exception: a failed valueless call with a non-zero
-    // opcode and no extra currencies is not marked failed (log/event leaves).
+    // A failed valueless call with a non-zero opcode and no extra currencies
+    // is not marked failed (log/event leaves).
     bool has_value = msg != nullptr && msg->value && *msg->value != 0;
     bool opcode_truthy = op && *op != 0;
     bool has_extra = msg != nullptr && msg->has_extra_currencies;
@@ -437,7 +425,7 @@ Block *make_leaf_block(BlockArena &arena, const EventNode *node) {
     deploy->failed = node_failed(node);
     deploy->data = leaf_data(mch::btype::kContractDeploy, node, op);
     init_leaf(deploy, node);
-    // NB: Python does not set .parent here — only merge_blocks does.
+    // parent is not set here — only merge_blocks does.
     b->children_blocks.push_back(deploy);
   }
   return b;

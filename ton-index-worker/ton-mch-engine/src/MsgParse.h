@@ -18,12 +18,12 @@ namespace mch {
 using MsgParserFn = td::Result<Value> (*)(const td::Ref<vm::Cell> &body);
 
 // Message-type registry: IR `parse.types[]` name -> parser. Names are the
-// Python class names (Registries.message_types keys), plus the ABI-bridge rows
-// under bare declaration names. First-source-wins on a key collision, except that a
-// key claimed by more than one source maps to a nullptr parser (ambiguous, see
+// registered type keys plus ABI-bridge rows under bare declaration names.
+// First-source-wins on a key collision, except that a key claimed by more
+// than one source maps to a nullptr parser (ambiguous, see
 // validate_registries): the name stays registered, calling it is what fails.
-// Callers that only test membership are unaffected; anyone dereferencing a
-// mapped value directly instead of via parse_message_body must null-check.
+// Anyone dereferencing a mapped value directly instead of via
+// parse_message_body must null-check.
 const std::map<std::string, MsgParserFn> &message_parsers();
 
 // Startup consistency check: succeeds unless a key is
@@ -37,11 +37,9 @@ td::Status validate_registries();
 // or the parse fails (caller implements soft-parse alternatives on top).
 td::Result<Value> parse_message_body(const std::string &type_name, const td::Ref<vm::Cell> &body);
 
-// TonTransferBlock.comment derivation (basic_blocks.py + common.py
-// TonTransferMessage): nullopt == comment None; encrypted comments come back
-// base64-encoded; plain comments are utf-8 decoded with backslashreplace and
-// U+0000 stripped, exactly the string Python compares. Parse trouble that
-// Python's inner try swallows yields nullopt.
+// Ton-transfer comment: nullopt == none; encrypted comments come back
+// base64-encoded; plain comments are utf-8 decoded with backslashreplace
+// and U+0000 stripped. Parse trouble yields nullopt.
 std::optional<std::string> ton_transfer_comment(const td::Ref<vm::Cell> &body);
 
 // Decode raw comment bytes with Python's bytes.decode("utf-8",

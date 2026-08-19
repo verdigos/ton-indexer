@@ -107,9 +107,8 @@ std::string btype_constant_name(const std::string &btype) {
   return out;
 }
 
-// One builder function per matcher. Only fields that differ from the struct's
-// declared default are assigned, the defaults ARE the contract (IrTables.h),
-// and the equivalence ctest is what proves the two agree.
+// One builder per matcher. Only fields that differ from the struct default
+// are assigned; the defaults are the contract (IrTables.h).
 std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
   std::vector<std::string> out;
   auto line = [&out](const std::string &s) { out.push_back("  " + s); };

@@ -1,10 +1,7 @@
-// --actions-msgpack-test: the write-back writer self-test.
-//
-// Every assertion is made on the DECODED map, never on the bytes: this is a
-// GO-CONTRACT gate, not a Python-parity gate. It is the only thing standing
-// between the writer and a wire-type slip that silently drops whole traces,
-// because msgpack maps are order-insensitive to ton-index-go's decoder but its
-// field TYPES are not negotiable.
+// --actions-msgpack-test: write-back writer self-test.
+// Assertions run on the DECODED map, never on the bytes: a Go-decoder
+// contract gate. Field TYPES matter; map order does not. A type slip
+// silently drops whole traces.
 #include "EmuActionSerializeTest.h"
 
 #include "ActionBuild.h"
@@ -523,8 +520,8 @@ Action wire_fixture_action() {
   lzs.emplace_back("channel", Value::null());
   a.layerzero_send_data = Value::make_dict(std::move(lzs));
 
-  // A bounded *int64 nonce beside a mapped status STRING (the PARSER, not the
-  // expression language, produces that string, see specs/layerzero.mch).
+  // A bounded *int64 nonce beside a mapped status STRING (the parser, not
+  // the expression language, produces that string).
   Value::Fields lzv;
   lzv.emplace_back("nonce", Value::make_int64(125));
   lzv.emplace_back("status", Value::make_str("succeeded"));
@@ -772,10 +769,9 @@ void test_value_table() {
   check("table/bool_stays_bool", is_bool(at(*ttd, "encrypted"), false));
   check("table/bytes_base64",
         is_str(at(*ttd, "payload"), td::base64_encode(td::Slice("\x01\x02\xff", 3))));
-  // The two-level presence rule: a composite is a literal dict on the Python
-  // side, so its key set is fixed by the fill and an unfilled field is
-  // present-as-NIL. Contrast test_fixed_keys, where an unfilled TOP-LEVEL field
-  // is dropped entirely (Python never assigns the attribute).
+  // The two-level presence rule: a composite's key set is fixed by the fill
+  // and an unfilled field is present-as-NIL. Contrast test_fixed_keys, where
+  // an unfilled TOP-LEVEL field is dropped entirely.
   check("table/null_key_is_nil", is_nil(at(*ttd, "content")));
   check("table/addr_none_key_is_nil", is_nil(at(*ttd, "owner")));
   const msgpack::object *items = at(*ttd, "items");
@@ -845,8 +841,8 @@ void test_multiple_actions() {
   check("multi/shared_trace_key", is_str(at(*r1, "trace_external_hash_norm"), kTraceKey));
 }
 
-// create_unknown_action's row shape, gated hermetically, the corpus twin
-// covers it on 50 real fixtures, but that gate needs Python and the fixtures.
+// create_unknown_action's row shape, gated hermetically. The corpus twin
+// covers it on 50 real fixtures.
 void test_unknown_action() {
   Trace trace;
   trace.trace_id = kTraceKey;

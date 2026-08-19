@@ -1,5 +1,3 @@
-// DeDust host fns (builders/dedust.py + blocks/swaps.py). See host/HostImpls.h
-// for the internal registry surface and HostRegistry.h for the public one.
 #include "host/HostImpls.h"
 
 #include "host/BlockViews.h"
@@ -28,7 +26,6 @@ namespace mch {
 
 namespace {
 
-// DeDust swap host functions
 
 constexpr std::uint32_t kDedustSwapExternal = 0x61ee542d;
 constexpr std::uint32_t kDedustSwapPeer = 0x72aca8aa;
@@ -37,13 +34,11 @@ constexpr std::uint32_t kDedustPayoutFromPool = 0xad4eb6f5;
 constexpr std::uint32_t kDedustPayout = 0x474f86cf;
 constexpr std::uint32_t kDedustSwapPayload = 0xe3a0d482;
 
-// blocks/swaps.py _get_dedust_jetton_swap_sequence -> the FINAL (destination)
-// asset. The per-step dedust_pool lookup goes through the two-phase table
-// (env.lookups->get, recorded during the collect pass). Python raises when a
-// pool is absent (None.assets) -> fault -> rejection.
+// Walk the step list to the final (destination) asset. A missing pool
+// lookup faults and rejects.
 EvalResult dedust_seq_destination(BuildEnv &env, const std::vector<std::string> &steps,
                                   const Value &seed) {
-  Value prev = seed;  // Asset
+  Value prev = seed;
   for (const std::string &step : steps) {
     Value pool = env.lookups->get("dedust_pool", std::vector<Value>{Value::make_str(step)});
     if (pool.is_null()) {
@@ -78,22 +73,21 @@ EvalResult dedust_seq_destination(BuildEnv &env, const std::vector<std::string> 
 
 }  // namespace
 
-// blocks/swaps.py _parse_dedust_steps: walk the SwapStep chain (already
-// positioned past the sum-type/header). Each link: pool addr, 1 flag bit,
-// coins, maybe-ref to the next step. Returns the pool addresses in walk order
-// (AccountId(load_address()).as_str(); addr_none -> "addr_none").
+// Walk the SwapStep chain (already positioned past the sum-type/header).
+// Each link: pool addr, 1 flag bit, coins, maybe-ref to the next step.
+// Returns pool addresses in walk order (addr_none -> "addr_none").
 static td::Result<std::vector<std::string>> parse_dedust_steps(vm::CellSlice cs) {
   std::vector<std::string> steps;
   for (;;) {
-    TRY_RESULT(addr, load_address_py(cs));  // pytoniq load_address
+    TRY_RESULT(addr, load_address_py(cs));
     std::string pool = (addr.t == VType::Account && !addr.addr_none) ? addr.str : "addr_none";
     if (!cs.have(1)) {
       return td::Status::Error("dedust steps: flag bit underflow");
     }
-    cs.advance(1);                    // load_bit
+    cs.advance(1);
     TRY_RESULT(_coins, load_coins_py(cs));
     (void)_coins;
-    if (!cs.have(1)) {                // load_maybe_ref: the Maybe bit
+    if (!cs.have(1)) {                // maybe-ref bit
       return td::Status::Error("dedust steps: maybe-ref bit underflow");
     }
     bool has_next = cs.fetch_ulong(1) != 0;
@@ -104,15 +98,13 @@ static td::Result<std::vector<std::string>> parse_dedust_steps(vm::CellSlice cs)
     if (cs.size_refs() == 0) {
       return td::Status::Error("dedust steps: next-step ref missing");
     }
-    TRY_RESULT_ASSIGN(cs, open_ref_cell(cs.fetch_ref()));  // next_step.to_slice()
+    TRY_RESULT_ASSIGN(cs, open_ref_cell(cs.fetch_ref()));
   }
 }
 
-// builders/dedust.py _dedust_swap_legs. args = (consumed, in_transfer,
-// swap_request). Returns the SimpleNamespace-equivalent Obj, or Null to reject
-// (payload opcode mismatch), or faults to reject (malformed trace / missing
-// pool). SingleLevelWrapper never appears under the IR engine (spec note) so
-// include == the consumed set verbatim.
+// args = (consumed, in_transfer, swap_request). Returns the swap-legs
+// object, or Null to reject (payload opcode mismatch), or faults to reject
+// (malformed trace / missing pool). include == the consumed set verbatim.
 EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
   ConsumedBlocks decoded;
   EvalResult decode = decode_consumed({args[0]}, "dedust_swap_legs", decoded);
@@ -150,7 +142,7 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
   for (const Block *b : notif_blocks) {
     auto r_body = block_body(b);
     if (r_body.is_error()) {
-      return rt_fault("dedust notify: body");  // find_messages parses -> raises
+      return rt_fault("dedust notify: body");
     }
     auto r = parse_message_body("DedustSwapNotification", r_body.ok());
     if (r.is_error()) {
@@ -189,7 +181,6 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
         {"in", std::move(in_leg)}, {"out", std::move(out_leg)}}));
   }
 
-  // In leg.
   Value sender = Value::null();
   Value sender_wallet = Value::null();
   Value dex_incoming_jetton_wallet = Value::null();
@@ -208,7 +199,7 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
       return rt_fault("dedust legs: payload_opcode not an integer");
     }
     if (payload_opcode.num != kDedustSwapPayload) {
-      return rt_ok(Value::null());  // wrong payload -> reject
+      return rt_ok(Value::null());
     }
     amount_in = data_field(in_transfer, "amount");
     Value fp = data_field(in_transfer, "forward_payload");
@@ -265,7 +256,6 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
     asset_in = Value::make_asset_ton();
   }
 
-  // Payout resolution.
   std::vector<const Block *> payout_from_pool;
   for (const Block *b : other_blocks) {
     if (is_call_op(b, kDedustPayoutFromPool)) {
@@ -412,7 +402,7 @@ td::Result<td::Ref<vm::Cell>> resolve_dv2_payload_cell(const Value &arg) {
     return td::Status::Error("dedust_v2 payload: not a PayJetton wrapper");
   }
   td::Ref<vm::Cell> payload = cs.fetch_ref();
-  td::Ref<vm::Cell> payout_config = cs.fetch_ref();  // read like the reference
+  td::Ref<vm::Cell> payout_config = cs.fetch_ref();  // must consume this ref
   if (payload.is_null() || payout_config.is_null()) {
     return td::Status::Error("dedust_v2 payload: PayJetton refs missing");
   }

@@ -1,5 +1,3 @@
-// EVAA host predicates (builders/evaa.py). See host/HostImpls.h for the
-// internal registry surface and HostRegistry.h for the public one.
 #include "host/HostImpls.h"
 
 #include "host/HostAdapter.h"
@@ -25,8 +23,8 @@ namespace mch {
 
 namespace {
 
-// load_user_header: skip the EVAA user header (version coins + maybe
-// upgrade-info ref + 2 exec bits), leaving the cursor on the 32-bit opcode.
+// Skip the EVAA user header (version coins + maybe upgrade-info ref + 2 exec
+// bits), leaving the cursor on the 32-bit opcode.
 bool skip_user_header(vm::CellSlice &cs) {
   if (load_coins_py(cs).is_error()) {  // user_version
     return false;
@@ -49,7 +47,7 @@ bool skip_user_header(vm::CellSlice &cs) {
 
 // Open a user-contract body positioned on its 32-bit opcode.
 bool open_user_body(const Block *b, vm::CellSlice &cs) {
-  if (b->btype != mch::btype::kCallContract) {  // isinstance(block, CallContractBlock)
+  if (b->btype != mch::btype::kCallContract) {
     return false;
   }
   auto r_body = block_body(b);
@@ -65,8 +63,8 @@ bool open_user_body(const Block *b, vm::CellSlice &cs) {
   return skip_user_header(cs);
 }
 
-// _opcode_after_user_header: skip the header, then compare the 32-bit opcode.
-// Any malformed body never matches (Python's blanket except).
+// Skip the header, then compare the 32-bit opcode. Any malformed body
+// never matches.
 bool opcode_after_user_header(const Block *b, td::uint32 opcode) {
   vm::CellSlice cs;
   if (!open_user_body(b, cs)) {
@@ -202,15 +200,15 @@ td::Result<std::string> parse_liquidation_reason(const td::Ref<vm::Cell> &body) 
 }  // namespace
 
 bool evaa_user_withdraw_user(const Block *b) {
-  return opcode_after_user_header(b, 0x21);  // EvaaWithdrawUser.opcode
+  return opcode_after_user_header(b, 0x21);
 }
 
 bool evaa_user_withdraw_success(const Block *b) {
-  return opcode_after_user_header(b, 0x211a);  // EvaaWithdrawSuccess.opcode
+  return opcode_after_user_header(b, 0x211a);
 }
 
 bool evaa_user_withdraw_fail(const Block *b) {
-  return opcode_after_user_header(b, 0x211f);  // EvaaWithdrawFail.opcode
+  return opcode_after_user_header(b, 0x211f);
 }
 
 bool evaa_user_supply(const Block *b) {
@@ -232,9 +230,8 @@ bool evaa_bounced_call(const Block *b) {
 
 namespace {
 
-// The master call itself (TON side), or a jetton transfer whose FORWARD PAYLOAD
-// starts with that opcode (jetton side). btype, not isinstance, the reference
-// JettonTransferBlock check is dead under the IR engine.
+// The master call itself (TON side), or a jetton transfer whose forward
+// payload starts with that opcode (jetton side). Match on btype.
 bool evaa_master_anchor(const Block *b, td::uint32 op) {
   if (is_call_op(b, op)) {
     return true;
@@ -267,10 +264,8 @@ bool evaa_liquidate_anchor(const Block *b) {
   return evaa_master_anchor(b, kLiquidateMaster);
 }
 
-// builders/evaa.py _evaa_supply_data -> blocks/evaa.py build_evaa_supply_core.
-// The whole build of specs/evaa.mch's `evaa_supply`; the spec supplies the
-// parsed jetton recipient while the TON-vs-jetton discriminator and role
-// derivation remain here.
+// Spec supplies the parsed jetton recipient; the TON-vs-jetton discriminator
+// and role derivation remain here.
 EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
   auto decoded = decode_consumed_or_none(args);
@@ -330,7 +325,7 @@ EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args) {
     sender_jetton_wallet = data_field(block, "sender_wallet");
     master_jetton_wallet = data_field(block, "receiver_wallet");
     Value amt = data_field(block, "amount");
-    amount = amt.num;  // Amount.value
+    amount = amt.num;
     master = data_field(block, "receiver");
     asset = data_field(block, "asset");
     recipient = args[1];
@@ -338,7 +333,7 @@ EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args) {
       recipient_jetton_wallet = sender_jetton_wallet;
     } else {
       // Supplying on someone else's behalf: name their wallet from the sibling
-      // transfer the master sent out. (No corpus coverage; ported for parity.)
+      // transfer the master sent out.
       for (std::size_t i = 1; i < consumed.size(); i++) {
         const Block *b = consumed[i];
         if (b->btype != mch::btype::kJettonTransfer) continue;
@@ -386,7 +381,7 @@ EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args) {
     }
     amount = as->num;  // the authoritative amount
   } else if (fail == nullptr && refund == nullptr) {
-    return host_reject("supply not completed");  // no outcome yet
+    return host_reject("supply not completed");
   }
 
   Value::Fields d;

@@ -1,8 +1,4 @@
-// Shared pTON master list + wallet->asset conversion for the DEX host TUs.
-//
-// The pTON master address list and the jetton-wallet -> Asset conversion were
-// duplicated VERBATIM across HostStonfi.cpp and HostTonco.cpp (three call-site
-// variants). This is the single home; see BuildRuntime.h for the Value model.
+// Shared pTON master list and wallet-to-asset conversion for DEX hosts.
 #pragma once
 
 #include "Value.h"
@@ -22,13 +18,12 @@ bool is_pton_master(const std::string &s);
 // non-string jetton field. pTON conversion and Asset wrapping stay with callers.
 std::optional<std::string> wallet_jetton_master_str(const Value &wallet);
 
-// A jetton_wallet lookup record's `jetton` master -> Asset, with the two
-// correlated DEX conventions selected by `pton_conversion`:
+// A jetton_wallet lookup's `jetton` master -> Asset, selected by
+// `pton_conversion`:
 //  - true  (Stonfi v2 / Tonco): a pTON-master wallet becomes Asset(TON); an
 //    absent jetton master yields Null (caller treats it as "no asset").
-//  - false (Stonfi v1): NO pTON conversion (a real pTON wallet stays a jetton
-//    asset), and an absent jetton master yields Asset(is_ton=True), Python
-//    builds `Asset(is_ton = jetton is None)` directly.
+//  - false (Stonfi v1): no pTON conversion (a real pTON wallet stays a jetton
+//    asset); an absent jetton master yields Asset(is_ton=True).
 // `wallet` may be Null (a lookup miss): jetton is then absent.
 Value wallet_jetton_asset(const Value &wallet, bool pton_conversion);
 

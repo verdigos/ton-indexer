@@ -34,18 +34,14 @@ const std::map<std::string, HostFnEntry> &host_fns() {
       {"evaa_supply_data", {evaa_supply_data, 2}},
       {"evaa_liquidate_data", {evaa_liquidate_data, 1}},
       {"tonco_swap_data", {tonco_swap_data, 1}},
-      // stonfi_v2_swap_data reads the in-leg by block type
-      // (swaps.py:404) instead of the hash-seed-dependent
-      // in_transfer.event_nodes[0].message, so it is deterministic and matches
-      // this block-type-driven implementation.
+      // stonfi_v2_swap_data reads the in-leg by block type instead of a
+      // hash-seed-dependent first event node, so it is deterministic.
       {"stonfi_v2_swap_data", {stonfi_v2_swap_data, 1}},
-      // specs/nft_sale.mch, GetGems StateInit readers and chained-lookup bid
-      // builder.
+      // GetGems StateInit readers and chained-lookup bid builder.
       {"getgems_sale_init", {getgems_sale_init, 2}},
       {"getgems_auction_init", {getgems_auction_init, 2}},
       {"auction_bid_data", {auction_bid_data, 1}},
-      // specs/cocoon.mch, the expectedMyAddress string renderer shared by
-      // three matchers.
+      // expectedMyAddress string renderer shared by three matchers.
       {"cocoon_expected_address", {cocoon_expected_address, 1}},
   };
   return fns;
@@ -87,13 +83,12 @@ const std::map<std::string, HostPredFn> &host_predicates() {
       {"evaa_user_liquidate", evaa_user_liquidate},
       {"evaa_liquidate_success_header", evaa_liquidate_success_header},
       {"evaa_bounced_call", evaa_bounced_call},
-      // specs/nft_mint.mch's predicate anchor has no opcode or btype prefilter.
+      // Predicate anchor has no opcode or btype prefilter.
       {"single_contract_deploy", single_contract_deploy},
       {"stonfi_v1_sender_payment", stonfi_v1_sender_payment},
       // pton_self_transfer gates stonfi_v2_swap; no_internal_transfer is an
       // inline where expression.
       {"pton_self_transfer", pton_self_transfer},
-      // specs/nft_sale.mch.
       {"sale_contract_deploy", sale_contract_deploy},
       {"nft_trade_cancel_comment", nft_trade_cancel_comment},
       {"nft_trade_finish_comment", nft_trade_finish_comment},

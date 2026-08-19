@@ -21,7 +21,6 @@ namespace ton_abi {
 // alive by the non-owning ref the kernel holds) and carries name/default_value/
 // description/original-client_ty_idx; `ty_idx` is the RESOLVED type (monomorph
 // then cell-side client swap); `u_label_ty_idx` is the union-label back-ref.
-// Mirrors the objects structFieldsOf returns (types-kernel.ts:69-95).
 struct ResolvedField {
   const ABIStructField *orig = nullptr;
   int ty_idx = 0;
@@ -30,16 +29,15 @@ struct ResolvedField {
   const std::string &name() const { return orig->name; }
 };
 
-// aliasTargetOf result (types-kernel.ts:103-120).
+// Alias-target result.
 struct AliasTarget {
   int ty_idx = 0;
   std::optional<int> u_label_ty_idx;
 };
 
-// One union variant plus its computed TS-style `$` label. `variant_ty_idx` and
+// One union variant plus its computed `$` label. `variant_ty_idx` and
 // the prefix fields are the ACTUAL (instantiated) variant; `label_str` /
-// `has_value_field` come from createLabelsForUnion (types-kernel.ts:235-277)
-// and may derive from the GENERIC variant when uLabelTyIdx is supplied.
+// `has_value_field` may derive from the GENERIC variant when uLabelTyIdx is supplied.
 struct LabeledVariant {
   int variant_ty_idx = 0;
   std::uint32_t prefix_num = 0;
@@ -53,8 +51,7 @@ struct LabeledVariant {
 // DECLARATION order (index-stable for the emitter's std::variant and for label
 // correctness). `dispatch_order` holds indices into `variants`, sorted ascending
 // by (prefix_len, prefix_num), EXCLUDING a trailing `void` variant. `has_void`
-// mirrors the reference's "trailing void variant" special case
-// (dynamic-serialization.ts:378-411) -- when true, variants.back() is that void.
+// is the trailing-void special case -- when true, variants.back() is that void.
 struct ResolvedUnion {
   std::vector<LabeledVariant> variants;
   std::vector<std::size_t> dispatch_order;
@@ -76,21 +73,19 @@ class AbiKernel {
   AbiKernel(const AbiKernel &) = delete;
   AbiKernel &operator=(const AbiKernel &) = delete;
 
-  // ---- SymTable lookups (types-kernel.ts:35-61) ----
   td::Result<const ABIStruct *> get_struct(const std::string &name) const;
   td::Result<const ABIAlias *> get_alias(const std::string &name) const;
   td::Result<const ABIEnum *> get_enum(const std::string &name) const;
   td::Result<const Ty *> ty_by_idx(int ty_idx) const;
 
-  // ---- resolution ----
-  // structFieldsOf, CELL side. Returns a pointer to the cached resolved-field
+  // Cell-side struct fields. Returns a pointer to the cached resolved-field
   // vector. Errors if ty_idx is not a StructRef.
   td::Result<const std::vector<ResolvedField> *> struct_fields_of(int ty_idx) const;
 
-  // aliasTargetOf. Errors if ty_idx is not an AliasRef.
+  // Alias target. Errors if ty_idx is not an AliasRef.
   td::Result<AliasTarget> alias_target_of(int ty_idx) const;
 
-  // createLabelsForUnion. Computed per call (labels are a USE-SITE property --
+  // Union labels. Computed per call (labels are a USE-SITE property --
   // invariant (i)); `u_label_ty_idx` points to the original (generic) union
   // whose variant labels to borrow, when set.
   td::Result<std::vector<LabeledVariant>> create_labels_for_union(
@@ -106,7 +101,6 @@ class AbiKernel {
   // recursion where threading a Result through every switch arm would be noise.
   const Ty &ty_ref(int idx) const { return abi_->unique_types[static_cast<std::size_t>(idx)]; }
 
-  // renderTy / createLabel / isStructWithItsOwnLabel (types-kernel.ts:129-230).
   std::string render_ty(int ty_idx) const;
   std::string render_type_args(const std::vector<int> &args) const;
   std::string create_label(int ty_idx) const;

@@ -22,14 +22,12 @@ void getgems_proxy_insert(Block *produced, const ShaperMatch &m);
 EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args);
 void nft_transfer_parent_absorb(Block *produced, const ShaperMatch &m);
 EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &args);
-// specs/teleitem_auction.mch: blocks/auction.py `_is_teleitem` (a substring test
-// the expression language deliberately cannot express).
+// Substring test the expression language cannot express.
 EvalResult is_teleitem(BuildEnv &env, const std::vector<Value> &args);
-// specs/nft_mint.mch anchor: NftMintBlockMatcher.test_self — exactly one
-// distinct contract deployment across the block's event nodes.
+// Exactly one distinct contract deployment across the block's event nodes.
 bool single_contract_deploy(const Block *block);
 
-// GetGems sale/auction family (HostNftSale.cpp), specs/nft_sale.mch.
+// GetGems sale/auction family (HostNftSale.cpp).
 bool sale_contract_deploy(const Block *block);
 bool nft_trade_cancel_comment(const Block *block);
 bool nft_trade_finish_comment(const Block *block);
@@ -53,8 +51,7 @@ void tgbtc_deploy_absorb(Block *produced, const ShaperMatch &m);
 EvalResult coffee_swap_data(BuildEnv &env, const std::vector<Value> &args);
 
 // Stonfi (HostStonfi.cpp): v1 sender-payment pred + v1 swap fn;
-// v2 pton_self_transfer pred + v2 swap fn. (no_internal_transfer moved to an
-// inline where expression.)
+// v2 pton_self_transfer pred + v2 swap fn.
 bool stonfi_v1_sender_payment(const Block *block);
 EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args);
 bool pton_self_transfer(const Block *block);

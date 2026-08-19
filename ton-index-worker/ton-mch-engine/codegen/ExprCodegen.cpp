@@ -21,20 +21,16 @@ namespace {
 using Json = td::JsonValue;
 using JType = td::JsonValue::Type;
 
-// Ports cpp_expr_emit._Emitter: emits one function body, returning the Value
-// temp name for each subexpression. The temp counter is shared across nested
-// blocks so names never collide (byte-parity with the Python numbering).
+// Emits one function body, returning the Value temp name for each subexpression.
+// The temp counter is shared across nested blocks so names never collide
+// (numbering is parity-frozen).
 enum class EmitMode { Vectors, Where, Build };
 
 class Emitter {
  public:
-  // Modes change only the environment-dependent leaves + the fault return:
-  //  - Vectors: name -> rt_name(env,..), lookup -> rt_lookup(lk,..);
-  //  - Where: dotfield -> rt_dotfield(w,..); the entry capture reads its
-  //    fixed slot, while any other name and every lookup fault;
-  //  - Build: name -> scope map (slot / let-local / well-known), attr ->
-  //    rt_access_build (bodies-aware), lookup -> rt_lookup_build, and every
-  //    fault returns BuildOutcome::rejected.
+  // Modes change only env-dependent leaves and the fault return: Vectors uses
+  // env/lookups; Where uses rt_dotfield plus the entry slot (other names and
+  // lookups fault); Build uses the scope map and rejects on every fault.
   explicit Emitter(EmitMode mode = EmitMode::Vectors,
                    std::string where_entry_name = {}, int where_entry_slot = -1)
       : mode_(mode),
@@ -106,10 +102,8 @@ class Emitter {
           return bind("rt_fault(\"name '" + id + "' is not bound\")");
         }
         int i = fresh();
-        // Bind by const reference. A name read (env.slots[k],
-        // consumed / a let alias / a lifetime-extended anchor temporary) is only
-        // ever read or copied downstream, never moved-from, so this elides a
-        // ~120-byte Value copy per reference on the build hot path.
+        // Bind by const reference. Name reads are never moved-from, so this
+        // elides a Value copy per reference on the build hot path.
         line("const Value &v" + num(i) + " = " + it->second + ";");
         return "v" + num(i);
       }
@@ -131,16 +125,14 @@ class Emitter {
     if (k == "call") {
       const std::string fn = jstr(e, "fn");
       std::string argv = emit_args(*jfield(e, "args"));
-      // Build mode: a non-builtin call is a host `fn` (registries.fns), emit
-      // rt_call_hostfn (env-aware, NULL ARGS PASS THROUGH, unlike rt_call_builtin
-      // which is null-strict). Vectors/Where modes only ever see builtins.
+      // Build mode: a non-builtin call is a host fn via rt_call_hostfn
+      // (null args pass through; rt_call_builtin is null-strict).
+      // Vectors/Where modes only ever see builtins.
       if (mode_ == EmitMode::Build && !is_builtin_name(fn)) {
         return bind("rt_call_hostfn(env, " + cstr(fn) + ", std::vector<Value>{" + argv + "})");
       }
-      // The builtin name and arity are known at emit time, so call the typed
-      // core directly without name-keyed dispatch or a per-call heap vector.
-      // is_builtin_name() gates this; the argument temporaries are
-      // Value locals passed by const-ref (rt_builtin_* take const Value&).
+      // Builtin name and arity are known at emit time: call the typed core
+      // directly (no name-keyed dispatch, no per-call heap vector).
       return bind("rt_builtin_" + fn + "(" + argv + ")");
     }
     if (k == "lookup") {
@@ -223,10 +215,9 @@ class Emitter {
   static std::string num(int i) { return std::to_string(i); }
   void line(const std::string &s) { lines.push_back(s); }
 
-  // Early return on a faulted EvalResult temp: expression fns propagate the
-  // EvalResult; a build fn's fault is a clean rejection (program.py EvalError).
-  // Inside a comprehension body lambda (EvalResult-returning), a Build-mode
-  // fault still returns the EvalResult. rt_mapc and rt_quant propagate it.
+  // Early return on a faulted EvalResult temp: expression fns propagate it;
+  // a build fn's fault is a clean rejection. Inside a comprehension lambda,
+  // a Build-mode fault still returns the EvalResult (rt_mapc / rt_quant).
   std::string fault_line(const std::string &res) const {
     if (mode_ == EmitMode::Build && !in_lambda_) {
       return "if (" + res + ".faulted) return BuildOutcome::rejected(std::move(" + res +
@@ -381,13 +372,11 @@ class Emitter {
   }
 };
 
-// Build-statement generator
-// Ports program.py BuildProgram.run statement-for-statement into straight-line
-// C++ over BuildRuntime/ExprRuntime. One BuildGen per matcher record.
+// Build-statement generator. One BuildGen per matcher record, statement-for-statement.
 class BuildGen {
  public:
   explicit BuildGen(const Json &matcher) : em_(EmitMode::Build) {
-    // Well-known env names first; captures shadow them (engine.py setdefault).
+    // Well-known env names first; captures shadow them. Intentional/parity-frozen.
     em_.scope["consumed"] = "env.consumed";
     em_.scope["anchor"] = "Value::make_block(env.anchor)";
     if (const Json *caps = jfield(matcher, "captures"); caps != nullptr && caps->type() == JType::Array) {
@@ -439,8 +428,8 @@ class BuildGen {
     }
   }
 
-  // Evaluate a bool condition (program.py eval_bool: non-bool -> EvalError ->
-  // rejection); returns the EvalResult temp holding the checked bool.
+  // Evaluate a bool condition: non-bool is a rejection. Returns the EvalResult
+  // temp holding the checked bool.
   std::string emit_bool(const Json &expr) {
     std::string val = em_.emit(expr);
     int i = em_.fresh_public();
@@ -449,8 +438,8 @@ class BuildGen {
     return "sb" + std::to_string(i);
   }
 
-  // `out` / switch-branch fields -> a Value::Fields temp (program.py
-  // _eval_out_fields: an `optional` field whose value is null is omitted).
+  // `out` / switch-branch fields -> a Value::Fields temp. An `optional` field
+  // whose value is null is omitted.
   std::string emit_fields(const Json &fields) {
     int i = em_.fresh_public();
     std::string fs = "fs" + std::to_string(i);
@@ -470,8 +459,8 @@ class BuildGen {
   }
 
   // `produces switch`: first branch whose `when` is true (else arm has no
-  // `when`); LAZY, later branch conditions must not evaluate once one
-  // matched; no branch -> fault -> rejection (program.py _eval_switch).
+  // `when`); later conditions must not evaluate once one matched; no branch
+  // is a rejection.
   void emit_switch(const td::JsonArray &branches, std::size_t idx) {
     if (idx == branches.size()) {
       em_.line_public(
@@ -506,7 +495,7 @@ class BuildGen {
       const std::string target = jstr(stmt, "target");
       auto it = em_.scope.find(target);
       if (it == em_.scope.end()) {
-        // program.py _do_parse: env.get(target) is None -> no-op.
+        // Unbound parse target is a no-op.
         em_.line_public("// parse target '" + target + "' is unbound: no-op");
         return;
       }
@@ -534,8 +523,7 @@ class BuildGen {
       return;
     }
     if (s == "failed" || s == "broken") {
-      // program.py: `failed = failed or await eval_bool(...)`, the condition
-      // is NOT evaluated once the flag is already true (short-circuit).
+      // Condition is not evaluated once the flag is already true (short-circuit).
       const std::string flag = s == "failed" ? "o.failed" : "o.broken";
       auto body = buffered([&] {
         std::string cond = emit_bool(*jfield(stmt, "when"));
@@ -584,11 +572,9 @@ std::string cstr(const std::string &s) {
     } else if (ch == '\r') {
       out += "\\r";
     } else if (uc < 0x20 || uc == 0x7f) {
-      // Every other control byte (incl. NUL, a real past bug) as a 3-digit
-      // octal escape. Octal is used instead of \x because \x greedily consumes
-      // ALL following hex digits: `\x0` before a literal 'a' would parse as
-      // \x0a. A 3-digit octal escape reads at most 3 digits, so an adjacent
-      // digit can never extend it.
+      // Every other control byte (incl. NUL) as a 3-digit octal escape. `\x`
+      // greedily consumes following hex digits; a 3-digit octal cannot be
+      // extended by an adjacent digit.
       char buf[5];
       std::snprintf(buf, sizeof(buf), "\\%03o", uc);
       out += buf;

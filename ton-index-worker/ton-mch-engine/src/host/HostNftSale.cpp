@@ -1,10 +1,6 @@
-// GetGems and Fragment sale/auction host bindings. See host/HostImpls.h
-// for the internal registry surface and HostRegistry.h for the public one.
-//
-// StateInit readers obtain immutable listing parameters from the deployment
-// message and select the layout by code hash. Parse failures return Null. The
-// remaining bindings are predicates and a chained auction-to-NFT lookup that the
-// expression language cannot represent.
+// StateInit readers take listing parameters from the deployment message and
+// select the layout by code hash. Parse failures return Null. The rest are
+// predicates and a chained auction-to-NFT lookup the language cannot express.
 #include "host/HostImpls.h"
 
 #include "host/BlockViews.h"
@@ -29,14 +25,12 @@ namespace mch {
 
 namespace {
 
-// blocks/auction.py DNS_CODE_HASH / DNS_COLLECTION.
 constexpr char kDnsCodeHash[] = "i1/8nr/TkGTY1fVuRlnIJrt1k5I/XKSHKL5NYK9vUfk=";
 constexpr char kDnsCollection[] =
     "0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF";
 
-// messages/getgems.py SALE_VERSION_MAPPING / AUCTION_VERSION_MAPPING. An
-// unlisted hash (including a MISSING one, Python's `.get(None, "latest")`)
-// falls back to "latest", which each reader resolves to its newest layout.
+// Unlisted or missing code hash falls back to "latest", which each reader
+// resolves to its newest layout.
 const std::map<std::string, std::string> &sale_versions() {
   static const std::map<std::string, std::string> m = {
       {"2pufziLofEllctIDZSWVebzO+RpyA1fMvowFLvyb4I8=", "v1"},
@@ -71,8 +65,7 @@ std::string pick_version(const std::map<std::string, std::string> &table, const 
   return latest;
 }
 
-// The StateInit `data` cell of a deploying message. Python's
-// `StateInit.deserialize(Slice.one_from_boc(boc)).data.to_slice()`.
+// StateInit data cell of a deploying message.
 td::Result<vm::CellSlice> state_init_data(const Block *b) {
   const Message *msg = block_msg(b);
   if (msg == nullptr || !msg->init_state) {
@@ -85,7 +78,7 @@ td::Result<vm::CellSlice> state_init_data(const Block *b) {
   return open_ref_cell(data);
 }
 
-// Fixed-width unsigned read; error == the Python parser raising.
+// Fixed-width unsigned read; underflow is a parse reject.
 td::Result<td::RefInt256> load_uint_py(vm::CellSlice &cs, int bits) {
   if (!cs.have(bits)) return td::Status::Error("uint underflow");
   return cs.fetch_int256(bits, false);
@@ -118,7 +111,6 @@ td::Result<vm::CellSlice> load_ref_slice(vm::CellSlice &cs) {
   return open_ref_cell(cs.fetch_ref());
 }
 
-// get_sale_data
 
 td::Result<Value> parse_sale_data(vm::CellSlice cs, const std::string &version) {
   Value marketplace_address{Value::null()};
@@ -138,9 +130,8 @@ td::Result<Value> parse_sale_data(vm::CellSlice cs, const std::string &version) 
     TRY_RESULT(stat, load_ref_slice(cs));
     TRY_RESULT_ASSIGN(marketplace_fee_address, load_address_py(stat));
     TRY_RESULT_ASSIGN(royalty_address, load_address_py(stat));
-    // fee_percent / royalty_percent are read by Python but never reach the
-    // block, and the reader returns EARLY, marketplace_fee / royalty_amount
-    // stay None on this version.
+    // fee_percent / royalty_percent never reach the block; the reader returns
+    // early, so marketplace_fee / royalty_amount stay null on this version.
     TRY_STATUS(skip_bits(stat, 17));
     TRY_STATUS(skip_bits(stat, 17));
   } else {
@@ -176,7 +167,6 @@ td::Result<Value> parse_sale_data(vm::CellSlice cs, const std::string &version) 
   return Value::make_obj(std::move(f));
 }
 
-// get_auction_data
 
 struct AuctionInit {
   Value mp_fee_addr{Value::null()};
@@ -263,7 +253,6 @@ td::Status parse_auction_v4r1(vm::CellSlice &cs, AuctionInit &d) {
   return td::Status::OK();
 }
 
-// auction_bid_data helpers
 
 std::string block_comment(const Block *b) {
   const Value *c = b != nullptr ? b->data.field("comment") : nullptr;
@@ -288,8 +277,7 @@ bool has_deployment(const Block *b) {
   return false;
 }
 
-// blocks/auction.py `_is_dns_item`: the item's code hash OR its collection
-// identifies it as a TON DNS domain.
+// The item's code hash or its collection identifies it as a TON DNS domain.
 bool is_dns_item(const Value &nft) {
   const Value *ch = nft.field("code_hash");
   if (ch != nullptr && ch->t == VType::Str && ch->str == kDnsCodeHash) {
@@ -312,8 +300,7 @@ const std::string *msg_dest(const Block *b) {
   return (m != nullptr && m->destination) ? &*m->destination : nullptr;
 }
 
-// AccountId(x) over an interface field, which the lookup shapes render as a raw
-// address Str (or Null for a missing optional).
+// Interface-field address: a raw-address Str, or Null for a missing optional.
 Value account_of(const Value &v) {
   if (v.t != VType::Str) {
     return Value::null();
@@ -323,12 +310,10 @@ Value account_of(const Value &v) {
 
 }  // namespace
 
-// Registered predicates
 
-// The reference sale_init GenericMatcher (blocks/auction.py:237): a plain
-// ton_transfer/call_contract leaf that deployed at least one contract. NOTE
-// `> 0`, not `== 1`, this is deliberately weaker than nft_mint's
-// `single_contract_deploy`.
+// A plain ton_transfer/call_contract leaf that deployed at least one
+// contract. `> 0`, not `== 1`: deliberately weaker than nft_mint's
+// single_contract_deploy.
 bool sale_contract_deploy(const Block *b) {
   if (b == nullptr || (b->btype != mch::btype::kTonTransfer &&
                        b->btype != mch::btype::kCallContract)) {
@@ -349,8 +334,7 @@ bool nft_trade_finish_comment(const Block *b) {
   return c == "finish" || c == "stop";
 }
 
-// The two cheap guards AuctionBidMatcher.build_block runs before it touches the
-// interface repository (blocks/auction.py:65-69).
+// Cheap guards before the auction-bid path touches the interface repository.
 bool auction_bid_candidate(const Block *b) {
   return b != nullptr && b->btype == mch::btype::kTonTransfer && !has_deployment(b) &&
          !is_cancel_comment(b);
@@ -387,7 +371,6 @@ bool auction_outbid_leg(const Block *bid) {
   return n == 1;
 }
 
-// Registered functions
 
 EvalResult getgems_sale_init(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
@@ -397,7 +380,7 @@ EvalResult getgems_sale_init(BuildEnv &env, const std::vector<Value> &args) {
   }
   auto r_data = state_init_data(b);
   if (r_data.is_error()) {
-    return rt_ok(Value::null());  // Python: the whole reader is try/except -> None
+    return rt_ok(Value::null());  // StateInit parse failure is Null
   }
   auto r = parse_sale_data(r_data.move_as_ok(), pick_version(sale_versions(), args[1], "v4r1"));
   return rt_ok(r.is_ok() ? r.move_as_ok() : Value::null());
@@ -414,8 +397,7 @@ EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args) {
     return rt_ok(Value::null());
   }
   vm::CellSlice cs = r_data.move_as_ok();
-  // "v2" is in Python's table but has no branch in get_auction_data, so it
-  // returns None there, reproduced by rejecting it here.
+  // "v2" is in the version table but has no auction-data branch, so reject it.
   const std::string version = pick_version(auction_versions(), args[1], "v3r3");
   AuctionInit d;
   td::Status st = td::Status::Error("unsupported auction version");
@@ -442,9 +424,8 @@ EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args) {
   return rt_ok(Value::make_obj(std::move(f)));
 }
 
-// AuctionBidMatcher.build_block (blocks/auction.py:60) as one fn: the getgems
-// branch reads the auction interface and then looks the ITEM up by the address
-// that interface carries. This is a lookup keyed on another lookup's result,
+// Getgems branch reads the auction interface and looks the item up by the
+// address that interface carries. A lookup keyed on another lookup's result,
 // which the build language cannot express. Any rejected branch returns Null.
 EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args) {
   const Block *bid = as_block(args[0]);

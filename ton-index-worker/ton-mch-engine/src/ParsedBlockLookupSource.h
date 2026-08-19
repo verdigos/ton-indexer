@@ -17,9 +17,7 @@ namespace mch {
 
 class ParsedBlockLookupSource : public LookupSource {
  public:
-  // Tier-2 resolver: same signature as fetch. Empty == no fallback (production
-  // stub until the DB/kvrocks round is wired; the offline gate injects a
-  // fixture-backed fallback for the tier-2-only kinds).
+  // Tier-2 resolver hook, same signature as fetch. Empty == no fallback.
   using Tier2Hook = std::function<Value(const std::string &kind, const std::vector<Value> &args)>;
 
   using InterfaceMap =

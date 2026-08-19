@@ -32,9 +32,8 @@ td::Result<std::int64_t> num_i64(const Json &n) {
   }
 }
 
-// Node ids referenced by a node record, in the fixed order Python's _edge_refs
-// uses (child, children..., parent, branches..., step, exit), remap discovery
-// order depends on it.
+// Node ids in a fixed order (child, children..., parent, branches..., step,
+// exit). Remap discovery order depends on it. Intentional/parity-frozen.
 std::vector<int> edge_refs(const Json &rec) {
   std::vector<int> out;
   if (has(rec, "child")) {
@@ -75,8 +74,6 @@ td::Result<NodeKind> parse_kind(const std::string &k) {
   return td::Status::Error("unknown node kind '" + k + "'");
 }
 
-// Recursively collect host-fn / lookup / parse-type names from a build_program
-// JSON subtree for dependency discovery.
 void scan_program(const Json &e, CompiledMatcher &m) {
   if (e.type() == JType::Object) {
     const std::string k = jstr(e, "k");
@@ -92,7 +89,7 @@ void scan_program(const Json &e, CompiledMatcher &m) {
       }
     }
     if (k == "parse" || jstr(e, "s") == "parse") {
-      // Expression artifacts predating nullable parse default to strict.
+      // Missing `nullable` defaults to strict parse.
       const bool nullable = k == "parse" && jbool(e, "nullable", false);
       (void)nullable;
       if (const Json *types = jfield(e, "types"); types != nullptr && types->type() == JType::Array) {
@@ -114,7 +111,7 @@ void scan_program(const Json &e, CompiledMatcher &m) {
 }
 
 // Local reachability over every edge kind (child/parent/step/exit/children/
-// branches), mirroring IrMatcher._reachable, cycle-safe, discovery order.
+// branches), cycle-safe, discovery order. Intentional/parity-frozen.
 std::vector<int> reachable(const std::vector<CompiledNode> &nodes, int start) {
   std::vector<int> out{start};
   std::unordered_set<int> seen{start};
@@ -208,8 +205,8 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
   }
 
   // Reachable subgraph remapped to local ids (root = 0), discovery order over
-  // edge_refs, mirrors IrMatcher.__init__. A missing or out-of-range root is
-  // a corrupt artifact, not a default to node 0.
+  // edge_refs. A missing or out-of-range root is a corrupt artifact, not a
+  // default to node 0.
   if (!has(rec, "root")) {
     return td::Status::Error("matcher " + m.name + ": missing 'root'");
   }
@@ -249,9 +246,8 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
       cn.pred_name = jstr(nrec, "pred");
     }
     cn.where_name = jstr(nrec, "where");
-    // Only the PRESENCE of an inline where is compiled: the tree itself is
-    // emitted as a generated function keyed by cn.global_id (GenWheres.h), and
-    // nothing reads the JSON subtree any more.
+    // Only the presence of an inline where is compiled; the tree is a generated
+    // function keyed by cn.global_id (GenWheres.h).
     cn.has_where_expr = jfield(nrec, "where_expr") != nullptr;
     std::string cap = jstr(nrec, "capture");
     cn.slot = (!cap.empty() && slot_of.count(cap)) ? slot_of[cap] : -1;
@@ -342,11 +338,9 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     scan_program(*bp, m);
   }
 
-  // Match-phase host dependencies: named predicates (the anchor's, already in
-  // ref_preds for pred/mixed anchors, plus every `pred` / named-`where` node).
-  // Whether the linked host supplies them is match_skip_reason()'s call, not the
-  // loader's. Inline where_exprs are evaluated by the generated where table, so
-  // they are not host dependencies at all.
+  // Match-phase host dependencies: named predicates plus every `pred` /
+  // named-`where` node. Inline where_exprs are not host dependencies
+  // (generated where table). Host presence is match_skip_reason()'s call.
   for (const CompiledNode &n : m.nodes) {
     if (n.kind == NodeKind::Pred && !n.pred_name.empty()) {
       m.ref_preds.insert(n.pred_name);

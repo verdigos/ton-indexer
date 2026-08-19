@@ -1,20 +1,9 @@
-// ton-abi-gen emitter units cover codegen-level facts that the
-// vector gate structurally CANNOT see, because they are about the emitted TEXT
-// or about generation failing, not about wire behaviour.
-//  (A) create() default materialization: defaults live only in
-//      the ABI's ConstExprs, never on the wire, so no vector can reach them.
-//      (The wire-behaviour cases that used to sit here -- IncreaseCounter,
-//      IncreaseBy, EmptyMsg, MsgPair, MsgAliasInt16 round-trips and the prefix
-//      mismatch -- were hand-copies of conformance vectors and were deleted;
-//      AbiABGateTest drives those same shapes from testdata/abi_vectors.json,
-//      and it is also where "every generated pair compiles + links" is proven.)
-//  (B) Per-direction custom gate: a ONE-SIDED
-//      custom STRUCT delegates ONLY the registered direction to the typed
-//      registry; the other direction keeps the normal baked path. This is the
-//      reference-emitter bug (unpack gated on the pack flag) that we must NOT
-//      port -- proven at codegen level since the A/B gate cannot catch it.
-//  (C) Decl-level non-standard map key -> HARD generation failure.
-//  (D) Non-serializable field (callable) -> compiling stubs, both directions.
+// Emitter units cover codegen-level facts the vector gate cannot see:
+// (A) create() default materialization (defaults never on the wire),
+// (B) one-sided custom gate delegates only the registered direction
+//     (do not port the reference-emitter bug),
+// (C) non-standard map key = hard generation failure,
+// (D) non-serializable field = compiling stubs.
 
 #include "AbiTestSupport.h"
 
@@ -60,9 +49,6 @@ std::string edge_case_ints_from_slice_body(const std::string &src) {
 
 }  // namespace
 
-// (A) create() default materialization: a defaulted field left out of
-// CreateArgs is filled from the ABI's ConstExpr. Defaults never appear on the
-// wire, so this is unreachable from the vector corpus.
 TEST_CASE("emit: lots-of-messages IncreaseBy create()-with-default") {
   gen::lots_of_messages::IncreaseBy::CreateArgs args;
   args.counter_id = 7;  // int8 -> td::int64
@@ -173,7 +159,7 @@ TEST_CASE("emit: unpack-only custom struct delegates ONLY from_slice, not store"
   CHECK(body_mentions(src, "S::store(", "store_uint"));               // normal baked path
 }
 
-// (C) decl-level non-standard map key -> HARD failure (ErrorsAtCodegen parity)
+// (C) decl-level non-standard map key -> HARD failure
 TEST_CASE("emit: err-invalid-map-key hard-fails with map-key error") {
   for (const char *fx : {"err-invalid-map-key-1", "err-invalid-map-key-2"}) {
     auto box = std::make_unique<ContractABI>(load_fixture_abi(fx));

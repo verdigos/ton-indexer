@@ -1,4 +1,3 @@
-// Consumed-set decode helpers (see host/HostAdapter.h).
 #include "host/HostAdapter.h"
 
 #include "BuildRuntime.h"

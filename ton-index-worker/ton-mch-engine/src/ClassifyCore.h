@@ -24,7 +24,7 @@ class ParsedBlockLookupSource;
 
 // Trace-terminal failure categories used by production-classifier telemetry:
 //   - lookup_infra_fail:  two-phase lookup did not converge (infra error).
-//   - engine_fault:       a mid-trace exception (Python's per-trace fallback).
+//   - engine_fault:       a mid-trace exception (per-trace fallback).
 //   - malformed_trace:    the trace could not be loaded into an event tree
 //                         (schema map / empty tree), set caller/actor-side.
 // Matcher skips are setup-level facts, while clean rejection, parse-null, and

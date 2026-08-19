@@ -1,10 +1,8 @@
 #pragma once
 
 // Generates committed C++ source pairs from a loaded ContractABI and AbiKernel.
-// Resolution and dispatch are baked into typed from_slice, store, and
-// to_abi_value bodies. Non-standard map keys fail generation; unsupported
-// per-direction fields produce compiling runtime-error stubs. Generated code
-// has no dependency on the loader or kernel.
+// Resolution/dispatch are baked into typed from_slice/store/to_abi_value.
+// Non-standard map keys fail generation; unsupported fields become compiling stubs.
 
 #include "AbiKernel.h"
 #include "AbiModel.h"

@@ -1,6 +1,6 @@
 tolk 1.0
 
-// Subset of DeDust CPMM V2 declarations used by the claim_reward spec.
+// Subset of DeDust CPMM V2 declarations.
 
 struct (0x909fdb65) ClaimRewardMessage {
     queryId: uint64;

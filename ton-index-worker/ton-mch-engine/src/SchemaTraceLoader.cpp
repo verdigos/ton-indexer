@@ -13,8 +13,8 @@ namespace {
 // td::Bits256 -> the base64 string form the fixtures/engine use for tx/msg hashes.
 std::string b256(const td::Bits256 &h) { return td::base64_encode(h.as_slice()); }
 
-// schema::AccountStatus enum -> the orig_status/end_status strings the engine
-// reads (basic_blocks.py: "uninit"/"active"/... via TraceLoader).
+// schema::AccountStatus enum -> the orig_status/end_status strings the
+// engine reads ("uninit"/"active"/...).
 std::string status_str(schema::AccountStatus s) {
   switch (s) {
     case schema::AccountStatus::uninit:
@@ -105,17 +105,13 @@ void map_message(Message *m, const schema::Message &s, const std::string &owner_
                                : std::nullopt;
   m->bounce = s.bounce;
   m->bounced = s.bounced.value_or(false);
-  // MsgContent: the engine carries the body as a base64 BOC string and decodes
-  // it in MsgParse. Cell-hash rendering hides BOC writer-order differences, so
-  // use the already-serialized body_boc directly. No cell
-  // re-serialization, ClassifyCore untouched.
+  // Body is the already-serialized body_boc (base64 BOC). No cell
+  // re-serialization.
   MsgContent c;
   c.hash = b256(s.hash);
   c.body = s.body_boc;
   m->content = c;
-  // Same treatment for the StateInit of a deploying message. This one read
-  // covers BOTH the schema/prod path and the emulator path, which funnels its
-  // re-parsed transactions through this same mapper.
+  // Same treatment for the StateInit of a deploying message.
   if (s.init_state_boc && s.init_state.not_null()) {
     MsgContent init;
     init.hash = b256(s.init_state->get_hash().bits());
@@ -146,7 +142,6 @@ td::Result<Trace> schema_to_trace(const std::string &trace_id,
     tx->compute_exit_code = di.exit_code;
     tx->skipped_reason = std::move(di.skipped_reason);
     tx->aborted = di.aborted;
-    // Compute-skip reasons use the same strings as fixture-loaded transactions.
 
     Transaction *tx_raw = tx.get();
     if (st.in_msg) {

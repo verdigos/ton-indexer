@@ -23,7 +23,7 @@ enum class VType {
   Int,      // td::RefInt256
   Str,      // utf-8 text
   Bytes,    // raw bytes (b64 input)
-  Amount,   // td::RefInt256 nanoton-style amount; null num == Python Amount(None)
+  Amount,   // td::RefInt256 nanoton-style amount; null num == Amount-none
   Account,  // AccountId (raw addr or addr_none)
   Asset,    // TON | jetton-master
   Cell,     // td::Ref<vm::Cell>
@@ -48,7 +48,6 @@ struct Value {
   std::shared_ptr<Fields> fields;             // Dict / Obj
   const Block *block{nullptr};                // Block (non-owning; arena outlives values)
 
-  // --- factories ---
   static Value null() { return Value{}; }
   static Value make_bool(bool b);
   static Value make_int(td::RefInt256 v);
@@ -56,7 +55,7 @@ struct Value {
   static Value make_str(std::string s);
   static Value make_bytes(std::string raw);
   static Value make_amount(td::RefInt256 v);
-  static Value make_amount_none();  // Python Amount(None): == only to itself
+  static Value make_amount_none();  // present Amount with null num; == only itself
   static Value make_block(const Block *b);
   static Value make_account_raw(std::string raw);  // stores canonical or malformed-as-given
   static Value make_account_none();

@@ -1,4 +1,3 @@
-// Read-only block/consumed-set views (see host/BlockViews.h).
 #include "host/BlockViews.h"
 
 #include "BlockTree.h"
