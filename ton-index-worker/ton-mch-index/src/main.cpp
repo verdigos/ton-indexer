@@ -1,11 +1,21 @@
 #include "td/utils/port/signals.h"
+#include "td/actor/actor.h"
 #include "td/utils/OptionParser.h"
 #include "td/utils/logging.h"
 #include "td/utils/check.h"
+#include "td/utils/port/path.h"
 
 #include "crypto/vm/cp0.h"
 
+#include "BatchRunner.h"
+#include "DataParser.h"
+#include "DbScanner.h"
+#include "TraceAssembler.h"
+
+#include <algorithm>
+#include <atomic>
 #include <cstdint>
+#include <memory>
 #include <string>
 
 int main(int argc, char *argv[]) {
@@ -34,10 +44,10 @@ int main(int argc, char *argv[]) {
   };
 
   td::OptionParser p;
-  p.set_description("mch batch classifier over a node RocksDB seqno range");
+  p.set_description("mch trace assembly over a node RocksDB seqno range");
   p.add_option('D', "db", "node database root", [&](td::Slice v) { db_root = v.str(); });
   p.add_option('W', "workdir", "private secondary-mode workdir", [&](td::Slice v) { workdir = v.str(); });
-  p.add_option('o', "out", "output JSONL path", [&](td::Slice v) { out_path = v.str(); });
+  p.add_option('o', "out", "reserved output path", [&](td::Slice v) { out_path = v.str(); });
   p.add_checked_option('f', "from", "first masterchain seqno (trace end attribution)",
                        uint_option(seqno_from, "from"));
   p.add_checked_option('t', "to", "last masterchain seqno (inclusive)", uint_option(seqno_to, "to"));
@@ -59,14 +69,49 @@ int main(int argc, char *argv[]) {
     LOG(ERROR) << status.error().message();
     return 1;
   }
-  if (db_root.empty() || out_path.empty() || seqno_from == 0 || seqno_to < seqno_from) {
-    LOG(ERROR) << "required: --db, --out, --from, --to (with to >= from)";
+  if (db_root.empty() || workdir.empty() || out_path.empty() || seqno_from == 0 || seqno_to < seqno_from ||
+      threads <= 0) {
+    LOG(ERROR) << "required: --db, --workdir, --out, --from, --to (with to >= from), and --threads > 0";
     return 1;
   }
 
-  LOG(INFO) << "ton-mch-index: db=" << db_root << " range=[" << seqno_from << "," << seqno_to
-            << "] prewarm=" << prewarm << " threads=" << threads << " out=" << out_path
-            << " tier2=" << (no_tier2 ? "off" : "on");
-  LOG(ERROR) << "pipeline not wired yet (scaffold)";
-  return 2;
+  const auto read_start = std::max<std::uint32_t>(1, seqno_from > prewarm ? seqno_from - prewarm : 1);
+
+  LOG(INFO) << "ton-mch-index: db=" << db_root << " workdir=" << workdir << " range=[" << seqno_from
+            << "," << seqno_to << "] prewarm=" << prewarm << " threads=" << threads
+            << " out=" << out_path << " tier2=" << (no_tier2 ? "off" : "on");
+
+  auto mkdir_status = td::mkpath(workdir + "/");
+  if (mkdir_status.is_error()) {
+    LOG(ERROR) << "Failed to create workdir " << workdir << ": " << mkdir_status.move_as_error();
+    return 7;
+  }
+
+  auto exit_code = std::make_shared<std::atomic_int>(7);
+  auto watcher = td::create_shared_destructor([] { td::actor::SchedulerContext::get().stop(); });
+
+  td::actor::Scheduler scheduler({threads});
+  td::actor::ActorOwn<ParseManager> parse_manager;
+  td::actor::ActorOwn<DbScanner> db_scanner;
+  td::actor::ActorOwn<TraceAssembler> trace_assembler;
+
+  scheduler.run_in_context(
+      [&] { parse_manager = td::actor::create_actor<ParseManager>("mch_parse_manager"); });
+  scheduler.run_in_context([&] {
+    db_scanner = td::actor::create_actor<DbScanner>("mch_db_scanner", db_root, dbs_secondary,
+                                                    workdir + "/secondary_logs", 60.0f, false);
+  });
+  scheduler.run_in_context([&] {
+    trace_assembler =
+        td::actor::create_actor<TraceAssembler>("mch_trace_assembler", workdir + "/trace_assembler", 100);
+  });
+  scheduler.run_in_context([&, watcher = std::move(watcher)] {
+    td::actor::create_actor<BatchRunner>("mch_batch_runner", db_scanner.get(), parse_manager.get(),
+                                         trace_assembler.get(), read_start, seqno_from, seqno_to, exit_code,
+                                         std::move(watcher))
+        .release();
+  });
+
+  scheduler.run();
+  return exit_code->load();
 }

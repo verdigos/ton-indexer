@@ -1,10 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
-# Batch CLI: read a masterchain seqno range from a node RocksDB the way the
-# indexer does, assemble traces, classify with the mch engine, write actions
-# to a JSONL file. No postgres, no scheduler.
+# Batch CLI for the mch read, trace assembly, and classification pipeline.
 add_executable(ton-mch-index
     src/main.cpp
+    src/BatchRunner.cpp
 )
 
 target_compile_features(ton-mch-index PRIVATE cxx_std_20)
