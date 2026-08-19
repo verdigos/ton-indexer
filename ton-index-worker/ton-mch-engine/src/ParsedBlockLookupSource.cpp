@@ -234,6 +234,7 @@ Value ParsedBlockLookupSource::fetch(const std::string &kind, const std::vector<
   Value r = tier2_ ? tier2_(kind, args) : Value::null();
   if (!r.is_null()) {
     stats_.tier2_hits++;
+    stats_.tier2_hits_by_kind[kind]++;
   } else {
     stats_.misses++;
     stats_.misses_by_kind[kind]++;

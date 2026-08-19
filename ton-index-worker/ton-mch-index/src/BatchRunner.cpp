@@ -2,6 +2,7 @@
 
 #include "BlockInterfacesDetector.h"
 #include "emu/EmuActionSerialize.h"
+#include "emu/EmuCelldbLookup.h"
 #include "emu/EmuTypes.h"
 
 #include "vm/excno.hpp"  // vm::VmError is not a std::exception.
@@ -39,6 +40,7 @@ BatchRunner::BatchRunner(td::actor::ActorId<DbScanner> db_scanner,
                          td::actor::ActorId<TraceAssembler> trace_assembler,
                          std::shared_ptr<const mch::MchEnginePrep> prep, std::string output_path,
                          std::uint32_t read_start, std::uint32_t seqno_from, std::uint32_t seqno_to,
+                         bool tier2_enabled,
                          std::shared_ptr<std::atomic_int> exit_code, std::shared_ptr<td::Destructor> watcher)
     : db_scanner_(db_scanner)
     , parse_manager_(parse_manager)
@@ -49,6 +51,7 @@ BatchRunner::BatchRunner(td::actor::ActorId<DbScanner> db_scanner,
     , seqno_from_(seqno_from)
     , seqno_to_(seqno_to)
     , current_seqno_(read_start)
+    , tier2_enabled_(tier2_enabled)
     , exit_code_(std::move(exit_code))
     , watcher_(std::move(watcher)) {
 }
@@ -170,7 +173,7 @@ void BatchRunner::seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr
                   << " at masterchain seqno " << trace.mc_seqno_end;
         std::stable_sort(txs.begin(), txs.end(),
                          [](const auto &left, const auto &right) { return left.lt < right.lt; });
-        classify_trace(trace_key, std::move(txs));
+        classify_trace(trace_key, std::move(txs), parsed_block);
       } else {
         ++complete_out_of_range_;
       }
@@ -188,8 +191,20 @@ void BatchRunner::seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr
   fetch_seqno();
 }
 
-void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schema::Transaction> txs) {
-  mch::ParsedBlockLookupSource src(&account_interfaces_, {});
+void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schema::Transaction> txs,
+                                 const ParsedBlockPtr &parsed_block) {
+  AllShardStates shard_states;
+  for (const auto &sb : parsed_block->mc_block_.shard_blocks_) {
+    shard_states.push_back(sb.block_state);
+  }
+  mch::EmuCelldbTier2 tier2(&shard_states, parsed_block->mc_block_.config_);
+  mch::ParsedBlockLookupSource::Tier2Hook hook;
+  if (tier2_enabled_) {
+    hook = [&tier2](const std::string &kind, const std::vector<mch::Value> &args) {
+      return tier2.fetch(kind, args);
+    };
+  }
+  mch::ParsedBlockLookupSource src(&account_interfaces_, std::move(hook));
   std::vector<mch::Action> rows;
   std::vector<std::string> matcher_names;
   std::size_t scrubbed = 0;
@@ -229,6 +244,9 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
   const auto &stats = src.stats();
   lookup_stats_.tier1_hits += stats.tier1_hits;
   lookup_stats_.tier2_hits += stats.tier2_hits;
+  for (const auto &[kind, count] : stats.tier2_hits_by_kind) {
+    lookup_stats_.tier2_hits_by_kind[kind] += count;
+  }
   lookup_stats_.misses += stats.misses;
   for (const auto &[kind, count] : stats.misses_by_kind) {
     lookup_stats_.misses_by_kind[kind] += count;
@@ -288,6 +306,14 @@ void BatchRunner::finish() {
   const auto range_seqnos = static_cast<std::uint64_t>(seqno_to_) - seqno_from_ + 1;
   const auto pending_at_eof = transactions_by_trace_.size();
 
+  std::string tier2_hits_by_kind;
+  for (const auto &[kind, count] : lookup_stats_.tier2_hits_by_kind) {
+    if (!tier2_hits_by_kind.empty()) {
+      tier2_hits_by_kind += ",";
+    }
+    tier2_hits_by_kind += kind + "=" + std::to_string(count);
+  }
+
   std::string misses_by_kind;
   for (const auto &[kind, count] : lookup_stats_.misses_by_kind) {
     if (!misses_by_kind.empty()) {
@@ -316,7 +342,8 @@ void BatchRunner::finish() {
           << "; account interfaces=" << account_interfaces_.size()
           << "; lookups{tier1_hits=" << lookup_stats_.tier1_hits
           << ",tier2_hits=" << lookup_stats_.tier2_hits << ",misses=" << lookup_stats_.misses
-          << ",misses_by_kind={" << misses_by_kind << "}}";
+          << ",misses_by_kind={" << misses_by_kind << "}}"
+          << ";tier2_by_kind={" << tier2_hits_by_kind << "}";
 
   LOG(INFO) << summary.str();
   std::cout << summary.str() << std::endl;

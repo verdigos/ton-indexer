@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
     return td::Status::OK();
   });
   p.add_option('\0', "no-tier2", "disable shard-state tier-2 interface lookups (diagnostic)",
-               [&](td::Slice) { no_tier2 = true; });
+               [&]() { no_tier2 = true; });
 
   auto status = p.run(argc, argv);
   if (status.is_error()) {
@@ -115,7 +115,7 @@ int main(int argc, char *argv[]) {
   scheduler.run_in_context([&, watcher = std::move(watcher)] {
     td::actor::create_actor<BatchRunner>("mch_batch_runner", db_scanner.get(), parse_manager.get(),
                                          trace_assembler.get(), prep, out_path, read_start, seqno_from,
-                                         seqno_to, exit_code, std::move(watcher))
+                                         seqno_to, !no_tier2, exit_code, std::move(watcher))
         .release();
   });
 

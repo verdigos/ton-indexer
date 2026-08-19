@@ -26,6 +26,7 @@ class BatchRunner : public td::actor::Actor {
               td::actor::ActorId<TraceAssembler> trace_assembler,
               std::shared_ptr<const mch::MchEnginePrep> prep, std::string output_path,
               std::uint32_t read_start, std::uint32_t seqno_from, std::uint32_t seqno_to,
+              bool tier2_enabled,
               std::shared_ptr<std::atomic_int> exit_code, std::shared_ptr<td::Destructor> watcher);
 
   void start_up() override;
@@ -36,7 +37,8 @@ class BatchRunner : public td::actor::Actor {
   void seqno_parsed(std::uint32_t seqno, ParsedBlockPtr parsed_block);
   void seqno_traces_assembled(std::uint32_t seqno, ParsedBlockPtr parsed_block);
   void seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr parsed_block);
-  void classify_trace(const std::string &trace_key, std::vector<schema::Transaction> txs);
+  void classify_trace(const std::string &trace_key, std::vector<schema::Transaction> txs,
+                      const ParsedBlockPtr &parsed_block);
   void fail(std::uint32_t seqno, const char *stage, td::Status error);
   void finish();
 
@@ -50,6 +52,7 @@ class BatchRunner : public td::actor::Actor {
   std::uint32_t seqno_from_;
   std::uint32_t seqno_to_;
   std::uint32_t current_seqno_;
+  bool tier2_enabled_;
   std::shared_ptr<std::atomic_int> exit_code_;
   std::shared_ptr<td::Destructor> watcher_;
 

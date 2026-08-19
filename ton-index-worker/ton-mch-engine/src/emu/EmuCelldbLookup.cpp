@@ -4,6 +4,7 @@
 #include "EmuJvaultChain.h"
 
 #include "smc-interfaces/NominatorPool.h"
+#include "smc-interfaces/NftSale.h"
 #include "smc-interfaces/Tokens.h"
 
 #include <map>
@@ -43,12 +44,14 @@ const schema::AccountState *EmuCelldbTier2::account(const block::StdAddress &add
 }
 
 Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &addr) {
-  enum class Handler { JvaultAssets, JettonWallet, DedustPool, NominatorPool };
+  enum class Handler { JvaultAssets, JettonWallet, DedustPool, NominatorPool, NftItem, NftAuction };
   static const std::map<std::string, Handler> handlers = {
       {"jvault_assets", Handler::JvaultAssets},
       {"jetton_wallet", Handler::JettonWallet},
       {"dedust_pool", Handler::DedustPool},
       {"nominator_pool", Handler::NominatorPool},
+      {"nft_item", Handler::NftItem},
+      {"nft_auction", Handler::NftAuction},
   };
   auto handler = handlers.find(kind);
   if (handler == handlers.end()) {
@@ -68,6 +71,26 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
   // Detectors that execute get-methods require config.
   std::optional<schema::BlockchainInterfaceV2> iface;
   switch (handler->second) {
+    case Handler::NftItem: {
+      if (config_ == nullptr) {
+        return Value::null();
+      }
+      auto r = NftItemDetectorR::detect(addr, st->code, st->data, *shard_states_, config_);
+      if (r.is_ok()) {
+        iface = to_v2(r.move_as_ok());
+      }
+      break;
+    }
+    case Handler::NftAuction: {
+      if (config_ == nullptr) {
+        return Value::null();
+      }
+      auto r = GetGemsNftAuction::detect(addr, st->code, st->data, config_);
+      if (r.is_ok()) {
+        iface = to_v2(r.move_as_ok());
+      }
+      break;
+    }
     case Handler::JettonWallet: {
       if (config_ == nullptr) {
         return Value::null();

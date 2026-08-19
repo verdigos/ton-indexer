@@ -103,6 +103,12 @@ public:
 
   void start_up() override;
 
+  static td::Result<Result> detect(const block::StdAddress& address,
+                                   const td::Ref<vm::Cell>& code_cell,
+                                   const td::Ref<vm::Cell>& data_cell,
+                                   const AllShardStates& shard_states,
+                                   const std::shared_ptr<block::ConfigInfo>& config);
+
 private:
   void got_collection(Result item_data, td::Ref<vm::Cell> ind_content, td::Ref<vm::Cell> collection_code, td::Ref<vm::Cell> collection_data);
   td::Status verify_with_collection(block::StdAddress collection_address, td::Ref<vm::Cell> collection_code, td::Ref<vm::Cell> collection_data, td::RefInt256 index);

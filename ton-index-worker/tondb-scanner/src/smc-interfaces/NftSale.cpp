@@ -100,15 +100,15 @@ GetGemsNftAuction::GetGemsNftAuction(block::StdAddress address,
   address_(std::move(address)), code_cell_(std::move(code_cell)), data_cell_(std::move(data_cell)),
   shard_states_(std::move(shard_states)), config_(std::move(config)), promise_(std::move(promise)) {}
 
-void GetGemsNftAuction::start_up() {
-  if (code_cell_.is_null() || data_cell_.is_null()) {
-    promise_.set_error(td::Status::Error("Code or data null"));
-    stop();
-    return;
+td::Result<GetGemsNftAuction::Result> GetGemsNftAuction::detect(
+    const block::StdAddress& address, const td::Ref<vm::Cell>& code_cell,
+    const td::Ref<vm::Cell>& data_cell, const std::shared_ptr<block::ConfigInfo>& config) {
+  if (code_cell.is_null() || data_cell.is_null()) {
+    return td::Status::Error("Code or data null");
   }
 
   // Try V4 method first (get_auction_data_v4)
-  auto stack_v4_r = execute_smc_method<26>(address_, code_cell_, data_cell_, config_, "get_auction_data_v4", {},
+  auto stack_v4_r = execute_smc_method<26>(address, code_cell, data_cell, config, "get_auction_data_v4", {},
             {vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_slice,
             vm::StackEntry::Type::t_slice, vm::StackEntry::Type::t_slice, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_slice,
             vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_slice, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int,
@@ -120,7 +120,7 @@ void GetGemsNftAuction::start_up() {
   if (stack_v4_r.is_ok()) {
     auto stack = stack_v4_r.move_as_ok();
     Result data;
-    data.address = address_;
+    data.address = address;
 
     // No magic number check for V4
     data.activated = stack[0].as_int()->to_long() != 0;
@@ -128,16 +128,12 @@ void GetGemsNftAuction::start_up() {
     data.end_time = stack[2].as_int()->to_long();
     auto marketplace_address = convert::to_std_address(stack[3].as_slice());
     if (marketplace_address.is_error()) {
-      promise_.set_error(marketplace_address.move_as_error_prefix("marketplace address parsing failed: "));
-      stop();
-      return;
+      return marketplace_address.move_as_error_prefix("marketplace address parsing failed: ");
     }
     data.mp_addr = marketplace_address.move_as_ok();
     auto nft_address = convert::to_std_address(stack[4].as_slice());
     if (nft_address.is_error()) {
-      promise_.set_error(nft_address.move_as_error_prefix("nft address parsing failed: "));
-      stop();
-      return;
+      return nft_address.move_as_error_prefix("nft address parsing failed: ");
     }
     data.nft_addr = nft_address.move_as_ok();
     auto nft_owner_address_cs = stack[5].as_slice();
@@ -146,9 +142,7 @@ void GetGemsNftAuction::start_up() {
     } else {
       auto nft_owner_address = convert::to_std_address(stack[5].as_slice());
       if (nft_owner_address.is_error()) {
-        promise_.set_error(nft_owner_address.move_as_error_prefix("nft owner address parsing failed: "));
-        stop();
-        return;
+        return nft_owner_address.move_as_error_prefix("nft owner address parsing failed: ");
       }
       data.nft_owner = nft_owner_address.move_as_ok();
     }
@@ -159,27 +153,21 @@ void GetGemsNftAuction::start_up() {
     } else {
       auto last_member_address = convert::to_std_address(stack[7].as_slice());
       if (last_member_address.is_error()) {
-        promise_.set_error(last_member_address.move_as_error_prefix("last member address parsing failed: "));
-        stop();
-        return;
+        return last_member_address.move_as_error_prefix("last member address parsing failed: ");
       }
       data.last_member = last_member_address.move_as_ok();
     }
     data.min_step = stack[8].as_int()->to_long();
     auto mp_fee_address = convert::to_std_address(stack[9].as_slice());
     if (mp_fee_address.is_error()) {
-      promise_.set_error(mp_fee_address.move_as_error_prefix("marketplace fee address parsing failed: "));
-      stop();
-      return;
+      return mp_fee_address.move_as_error_prefix("marketplace fee address parsing failed: ");
     }
     data.mp_fee_addr = mp_fee_address.move_as_ok();
     data.mp_fee_factor = stack[10].as_int()->to_long();
     data.mp_fee_base = stack[11].as_int()->to_long();
     auto royalty_fee_address = convert::to_std_address(stack[12].as_slice());
     if (royalty_fee_address.is_error()) {
-      promise_.set_error(royalty_fee_address.move_as_error_prefix("royalty fee address parsing failed: "));
-      stop();
-      return;
+      return royalty_fee_address.move_as_error_prefix("royalty fee address parsing failed: ");
     }
     data.royalty_fee_addr = royalty_fee_address.move_as_ok();
     data.royalty_fee_factor = stack[13].as_int()->to_long();
@@ -199,9 +187,7 @@ void GetGemsNftAuction::start_up() {
     } else {
       auto jetton_wallet = convert::to_std_address(stack[22].as_slice());
       if (jetton_wallet.is_error()) {
-        promise_.set_error(jetton_wallet.move_as_error_prefix("jetton wallet address parsing failed: "));
-        stop();
-        return;
+        return jetton_wallet.move_as_error_prefix("jetton wallet address parsing failed: ");
       }
       data.jetton_wallet = jetton_wallet.move_as_ok();
     }
@@ -212,22 +198,18 @@ void GetGemsNftAuction::start_up() {
     } else {
       auto jetton_master = convert::to_std_address(stack[23].as_slice());
       if (jetton_master.is_error()) {
-        promise_.set_error(jetton_master.move_as_error_prefix("jetton master address parsing failed: "));
-        stop();
-        return;
+        return jetton_master.move_as_error_prefix("jetton master address parsing failed: ");
       }
       data.jetton_master = jetton_master.move_as_ok();
     }
 
     data.is_broken_state = stack[24].as_int()->to_long() != 0;
     data.public_key = stack[25].as_int();
-    promise_.set_value(std::move(data));
-    stop();
-    return;
+    return data;
   }
 
   // Fallback to V1-V3 method (get_sale_data)
-  auto stack_r = execute_smc_method<20>(address_, code_cell_, data_cell_, config_, "get_sale_data", {},
+  auto stack_r = execute_smc_method<20>(address, code_cell, data_cell, config, "get_sale_data", {},
             {vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_slice,
             vm::StackEntry::Type::t_slice, vm::StackEntry::Type::t_slice, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_slice,
             vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_slice, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int,
@@ -235,33 +217,25 @@ void GetGemsNftAuction::start_up() {
             vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int});
 
   if (stack_r.is_error()) {
-    promise_.set_error(stack_r.move_as_error());
-    stop();
-    return;
+    return stack_r.move_as_error();
   }
   auto stack = stack_r.move_as_ok();
 
   Result data;
-  data.address = address_;
+  data.address = address;
   if (stack[0].as_int()->to_long() != 0x415543) {
-    promise_.set_error(td::Status::Error("get_sale_data: invalid magic"));
-    stop();
-    return;
+    return td::Status::Error("get_sale_data: invalid magic");
   }
   data.end = stack[1].as_int()->to_long() != 0;
   data.end_time = stack[2].as_int()->to_long();
   auto marketplace_address = convert::to_std_address(stack[3].as_slice());
   if (marketplace_address.is_error()) {
-    promise_.set_error(marketplace_address.move_as_error_prefix("marketplace address parsing failed: "));
-    stop();
-    return;
+    return marketplace_address.move_as_error_prefix("marketplace address parsing failed: ");
   }
   data.mp_addr = marketplace_address.move_as_ok();
   auto nft_address = convert::to_std_address(stack[4].as_slice());
   if (nft_address.is_error()) {
-    promise_.set_error(nft_address.move_as_error_prefix("nft address parsing failed: "));
-    stop();
-    return;
+    return nft_address.move_as_error_prefix("nft address parsing failed: ");
   }
   data.nft_addr = nft_address.move_as_ok();
   auto nft_owner_address_cs = stack[5].as_slice();
@@ -270,9 +244,7 @@ void GetGemsNftAuction::start_up() {
   } else {
     auto nft_owner_address = convert::to_std_address(stack[5].as_slice());
     if (nft_owner_address.is_error()) {
-      promise_.set_error(nft_owner_address.move_as_error_prefix("nft owner address parsing failed: "));
-      stop();
-      return;
+      return nft_owner_address.move_as_error_prefix("nft owner address parsing failed: ");
     }
     data.nft_owner = nft_owner_address.move_as_ok();
   }
@@ -283,27 +255,21 @@ void GetGemsNftAuction::start_up() {
   } else {
     auto last_member_address = convert::to_std_address(stack[7].as_slice());
     if (last_member_address.is_error()) {
-      promise_.set_error(last_member_address.move_as_error_prefix("last member address parsing failed: "));
-      stop();
-      return;
+      return last_member_address.move_as_error_prefix("last member address parsing failed: ");
     }
     data.last_member = last_member_address.move_as_ok();
   }
   data.min_step = stack[8].as_int()->to_long();
   auto mp_fee_address = convert::to_std_address(stack[9].as_slice());
   if (mp_fee_address.is_error()) {
-    promise_.set_error(mp_fee_address.move_as_error_prefix("marketplace fee address parsing failed: "));
-    stop();
-    return;
+    return mp_fee_address.move_as_error_prefix("marketplace fee address parsing failed: ");
   }
   data.mp_fee_addr = mp_fee_address.move_as_ok();
   data.mp_fee_factor = stack[10].as_int()->to_long();
   data.mp_fee_base = stack[11].as_int()->to_long();
   auto royalty_fee_address = convert::to_std_address(stack[12].as_slice());
   if (royalty_fee_address.is_error()) {
-    promise_.set_error(royalty_fee_address.move_as_error_prefix("royalty fee address parsing failed: "));
-    stop();
-    return;
+    return royalty_fee_address.move_as_error_prefix("royalty fee address parsing failed: ");
   }
   data.royalty_fee_addr = royalty_fee_address.move_as_ok();
   data.royalty_fee_factor = stack[13].as_int()->to_long();
@@ -323,6 +289,10 @@ void GetGemsNftAuction::start_up() {
   data.is_broken_state = std::nullopt;
   data.public_key = std::nullopt;
 
-  promise_.set_value(std::move(data));
+  return data;
+}
+
+void GetGemsNftAuction::start_up() {
+  promise_.set_result(detect(address_, code_cell_, data_cell_, config_));
   stop();
 }
