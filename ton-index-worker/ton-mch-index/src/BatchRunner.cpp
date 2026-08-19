@@ -195,7 +195,10 @@ void BatchRunner::seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr
           continue;
         }
         ++complete_selected_;
-        const auto output_hash = trace.external_hash_norm.value_or(trace.external_hash.value_or(trace.trace_id));
+        // trace_id (root tx hash) is the identifier for finalized traces:
+        // external_hash_norm is unique only in pending/emulated scope — the
+        // same signed external can be re-sent, so historically it collides.
+        const auto output_hash = trace.trace_id;
         const std::string trace_key = td::base64_encode(output_hash.as_slice());
         LOG(INFO) << "Selected complete trace " << trace_key
                   << " at masterchain seqno " << trace.mc_seqno_end;
