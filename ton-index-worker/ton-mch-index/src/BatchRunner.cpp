@@ -40,7 +40,7 @@ BatchRunner::BatchRunner(td::actor::ActorId<DbScanner> db_scanner,
                          td::actor::ActorId<TraceAssembler> trace_assembler,
                          std::shared_ptr<const mch::MchEnginePrep> prep, std::string output_path,
                          std::uint32_t read_start, std::uint32_t seqno_from, std::uint32_t seqno_to,
-                         bool tier2_enabled,
+                         bool tier2_enabled, bool emit_tick_tock,
                          std::shared_ptr<std::atomic_int> exit_code, std::shared_ptr<td::Destructor> watcher)
     : db_scanner_(db_scanner)
     , parse_manager_(parse_manager)
@@ -52,6 +52,7 @@ BatchRunner::BatchRunner(td::actor::ActorId<DbScanner> db_scanner,
     , seqno_to_(seqno_to)
     , current_seqno_(read_start)
     , tier2_enabled_(tier2_enabled)
+    , emit_tick_tock_(emit_tick_tock)
     , exit_code_(std::move(exit_code))
     , watcher_(std::move(watcher)) {
 }
@@ -166,6 +167,13 @@ void BatchRunner::seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr
       }
       if (trace.mc_seqno_end >= static_cast<std::int32_t>(seqno_from_) &&
           trace.mc_seqno_end <= static_cast<std::int32_t>(seqno_to_)) {
+        if (!trace.external_hash.has_value() && !emit_tick_tock_) {
+          // Tick-tock-rooted traces: production stores no actions for this
+          // class (policy undecided — python saves only some of them), so the
+          // default mirrors prod. --emit-tick-tock restores full emission.
+          ++tick_tock_skipped_;
+          continue;
+        }
         ++complete_selected_;
         const auto output_hash = trace.external_hash_norm.value_or(trace.external_hash.value_or(trace.trace_id));
         const std::string trace_key = td::base64_encode(output_hash.as_slice());
@@ -331,7 +339,7 @@ void BatchRunner::finish() {
   summary << "ton-mch-index stats: seqnos read prewarm=" << prewarm_seqnos << " range=" << range_seqnos
           << "; blocks parsed=" << total_blocks_ << "; transactions seen=" << total_transactions_
           << "; traces complete-selected=" << complete_selected_
-          << " complete-out-of-range=" << complete_out_of_range_ << " pending-at-eof=" << pending_at_eof
+          << " complete-out-of-range=" << complete_out_of_range_ << " tick-tock-skipped=" << tick_tock_skipped_ << " pending-at-eof=" << pending_at_eof
           << " broken=" << broken_ << "; peak accumulator size=" << peak_accumulator_size_
           << "; classified ok=" << classified_ok_ << " failed=" << classified_failed_
           << " failures{none=" << failures(mch::FailureCategory::none)

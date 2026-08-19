@@ -38,6 +38,7 @@ int main(int argc, char *argv[]) {
   std::uint32_t prewarm = 50;
   std::int32_t threads = 7;
   bool no_tier2 = false;
+  bool emit_tick_tock = false;
 
   auto uint_option = [](std::uint32_t &dst, const char *name) {
     return [&dst, name](td::Slice v) {
@@ -70,6 +71,8 @@ int main(int argc, char *argv[]) {
   });
   p.add_option('\0', "no-tier2", "disable shard-state tier-2 interface lookups (diagnostic)",
                [&]() { no_tier2 = true; });
+  p.add_option('\0', "emit-tick-tock", "classify and emit tick-tock-rooted traces (production stores none; policy undecided)",
+               [&]() { emit_tick_tock = true; });
 
   auto status = p.run(argc, argv);
   if (status.is_error()) {
@@ -115,7 +118,7 @@ int main(int argc, char *argv[]) {
   scheduler.run_in_context([&, watcher = std::move(watcher)] {
     td::actor::create_actor<BatchRunner>("mch_batch_runner", db_scanner.get(), parse_manager.get(),
                                          trace_assembler.get(), prep, out_path, read_start, seqno_from,
-                                         seqno_to, !no_tier2, exit_code, std::move(watcher))
+                                         seqno_to, !no_tier2, emit_tick_tock, exit_code, std::move(watcher))
         .release();
   });
 

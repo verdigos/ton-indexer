@@ -26,7 +26,7 @@ class BatchRunner : public td::actor::Actor {
               td::actor::ActorId<TraceAssembler> trace_assembler,
               std::shared_ptr<const mch::MchEnginePrep> prep, std::string output_path,
               std::uint32_t read_start, std::uint32_t seqno_from, std::uint32_t seqno_to,
-              bool tier2_enabled,
+              bool tier2_enabled, bool emit_tick_tock,
               std::shared_ptr<std::atomic_int> exit_code, std::shared_ptr<td::Destructor> watcher);
 
   void start_up() override;
@@ -53,6 +53,8 @@ class BatchRunner : public td::actor::Actor {
   std::uint32_t seqno_to_;
   std::uint32_t current_seqno_;
   bool tier2_enabled_;
+  bool emit_tick_tock_;
+  std::size_t tick_tock_skipped_{0};
   std::shared_ptr<std::atomic_int> exit_code_;
   std::shared_ptr<td::Destructor> watcher_;
 
