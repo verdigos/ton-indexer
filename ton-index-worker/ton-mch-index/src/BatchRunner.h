@@ -55,6 +55,11 @@ class BatchRunner : public td::actor::Actor {
   bool tier2_enabled_;
   bool emit_tick_tock_;
   std::size_t tick_tock_skipped_{0};
+  // Wall-clock accumulators per pipeline stage, seconds. Sequential pipeline:
+  // stage_started_ marks the last dispatch, handlers bank the delta.
+  double stage_started_{0};
+  double t_fetch_{0}, t_parse_{0}, t_assemble_{0}, t_interfaces_{0}, t_classify_{0};
+  double run_started_{0};
   std::shared_ptr<std::atomic_int> exit_code_;
   std::shared_ptr<td::Destructor> watcher_;
 

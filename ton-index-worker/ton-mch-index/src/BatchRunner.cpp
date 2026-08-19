@@ -1,5 +1,9 @@
 #include "BatchRunner.h"
 
+#include "td/utils/Time.h"
+
+#include <cstdio>
+
 #include "BlockInterfacesDetector.h"
 #include "emu/EmuActionSerialize.h"
 #include "emu/EmuCelldbLookup.h"
@@ -57,6 +61,12 @@ BatchRunner::BatchRunner(td::actor::ActorId<DbScanner> db_scanner,
     , watcher_(std::move(watcher)) {
 }
 
+namespace {
+double now_s() {
+  return td::Time::now();
+}
+}  // namespace
+
 void BatchRunner::start_up() {
   output_.open(output_path_, std::ios::out | std::ios::trunc);
   if (!output_) {
@@ -68,6 +78,7 @@ void BatchRunner::start_up() {
 
   td::actor::send_closure(trace_assembler_, &TraceAssembler::reset_state);
   td::actor::send_closure(trace_assembler_, &TraceAssembler::set_expected_seqno, read_start_);
+  run_started_ = now_s();
   fetch_seqno();
 }
 
@@ -81,10 +92,13 @@ void BatchRunner::fetch_seqno() {
         }
         td::actor::send_closure(self_id, &BatchRunner::seqno_fetched, seqno, result.move_as_ok());
       });
+  stage_started_ = now_s();
   td::actor::send_closure(db_scanner_, &DbScanner::fetch_seqno, seqno, std::move(promise));
 }
 
 void BatchRunner::seqno_fetched(std::uint32_t seqno, schema::MasterchainBlockDataState block_data_state) {
+  t_fetch_ += now_s() - stage_started_;
+  stage_started_ = now_s();
   LOG(DEBUG) << "Fetched seqno " << seqno;
 
   auto parse_promise = td::PromiseCreator::lambda(
@@ -112,6 +126,8 @@ void BatchRunner::seqno_fetched(std::uint32_t seqno, schema::MasterchainBlockDat
 }
 
 void BatchRunner::seqno_parsed(std::uint32_t seqno, ParsedBlockPtr parsed_block) {
+  t_parse_ += now_s() - stage_started_;
+  stage_started_ = now_s();
   LOG(DEBUG) << "Parsed seqno " << seqno;
 
   auto promise = td::PromiseCreator::lambda([self_id = actor_id(this), seqno](td::Result<ParsedBlockPtr> result) {
@@ -126,6 +142,8 @@ void BatchRunner::seqno_parsed(std::uint32_t seqno, ParsedBlockPtr parsed_block)
 }
 
 void BatchRunner::seqno_traces_assembled(std::uint32_t seqno, ParsedBlockPtr parsed_block) {
+  t_assemble_ += now_s() - stage_started_;
+  stage_started_ = now_s();
   LOG(DEBUG) << "Assembled traces for seqno " << seqno;
 
   auto promise = td::PromiseCreator::lambda([self_id = actor_id(this), seqno](td::Result<ParsedBlockPtr> result) {
@@ -141,6 +159,8 @@ void BatchRunner::seqno_traces_assembled(std::uint32_t seqno, ParsedBlockPtr par
 }
 
 void BatchRunner::seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr parsed_block) {
+  t_interfaces_ += now_s() - stage_started_;
+  stage_started_ = now_s();
   LOG(DEBUG) << "Interfaces processed for seqno " << seqno;
 
   // Keep the latest detected state for every account seen across the full read window.
@@ -181,7 +201,9 @@ void BatchRunner::seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr
                   << " at masterchain seqno " << trace.mc_seqno_end;
         std::stable_sort(txs.begin(), txs.end(),
                          [](const auto &left, const auto &right) { return left.lt < right.lt; });
+        const double classify_started = now_s();
         classify_trace(trace_key, std::move(txs), parsed_block);
+        t_classify_ += now_s() - classify_started;
       } else {
         ++complete_out_of_range_;
       }
@@ -352,6 +374,19 @@ void BatchRunner::finish() {
           << ",tier2_hits=" << lookup_stats_.tier2_hits << ",misses=" << lookup_stats_.misses
           << ",misses_by_kind={" << misses_by_kind << "}}"
           << ";tier2_by_kind={" << tier2_hits_by_kind << "}";
+  const double wall = now_s() - run_started_;
+  const double other = wall - (t_fetch_ + t_parse_ + t_assemble_ + t_interfaces_ + t_classify_);
+  char perf[512];
+  std::snprintf(perf, sizeof(perf),
+                "ton-mch-index perf: wall=%.1fs fetch=%.1fs parse=%.1fs assemble=%.1fs interfaces=%.1fs "
+                "classify=%.1fs other=%.1fs | %.2f seqnos/s, %.1f traces/s, %.2f ms/trace(classify)",
+                wall, t_fetch_, t_parse_, t_assemble_, t_interfaces_, t_classify_, other,
+                (seqno_to_ - read_start_ + 1) / wall,
+                (complete_selected_ + complete_out_of_range_ + tick_tock_skipped_) / wall,
+                complete_selected_ ? t_classify_ * 1000.0 / complete_selected_ : 0.0);
+  LOG(INFO) << perf;
+  std::puts(perf);
+
 
   LOG(INFO) << summary.str();
   std::cout << summary.str() << std::endl;
