@@ -39,6 +39,7 @@ int main(int argc, char *argv[]) {
   std::int32_t threads = 7;
   bool no_tier2 = false;
   bool emit_tick_tock = false;
+  bool tier1_completion_only = false;
 
   auto uint_option = [](std::uint32_t &dst, const char *name) {
     return [&dst, name](td::Slice v) {
@@ -73,6 +74,8 @@ int main(int argc, char *argv[]) {
                [&]() { no_tier2 = true; });
   p.add_option('\0', "emit-tick-tock", "classify and emit tick-tock-rooted traces (production stores none; policy undecided)",
                [&]() { emit_tick_tock = true; });
+  p.add_option('\0', "tier1-completion-only", "tier-1 lookups see only the completion block's interfaces (A/B diagnostic)",
+               [&]() { tier1_completion_only = true; });
 
   auto status = p.run(argc, argv);
   if (status.is_error()) {
@@ -118,7 +121,8 @@ int main(int argc, char *argv[]) {
   scheduler.run_in_context([&, watcher = std::move(watcher)] {
     td::actor::create_actor<BatchRunner>("mch_batch_runner", db_scanner.get(), parse_manager.get(),
                                          trace_assembler.get(), prep, out_path, read_start, seqno_from,
-                                         seqno_to, !no_tier2, emit_tick_tock, exit_code, std::move(watcher))
+                                         seqno_to, !no_tier2, emit_tick_tock, tier1_completion_only,
+                                         exit_code, std::move(watcher))
         .release();
   });
 

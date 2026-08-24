@@ -26,7 +26,7 @@ class BatchRunner : public td::actor::Actor {
               td::actor::ActorId<TraceAssembler> trace_assembler,
               std::shared_ptr<const mch::MchEnginePrep> prep, std::string output_path,
               std::uint32_t read_start, std::uint32_t seqno_from, std::uint32_t seqno_to,
-              bool tier2_enabled, bool emit_tick_tock,
+              bool tier2_enabled, bool emit_tick_tock, bool tier1_completion_only,
               std::shared_ptr<std::atomic_int> exit_code, std::shared_ptr<td::Destructor> watcher);
 
   void start_up() override;
@@ -54,6 +54,7 @@ class BatchRunner : public td::actor::Actor {
   std::uint32_t current_seqno_;
   bool tier2_enabled_;
   bool emit_tick_tock_;
+  bool tier1_completion_only_;
   std::size_t tick_tock_skipped_{0};
   // Wall-clock accumulators per stage (seconds).
   double stage_started_{0};

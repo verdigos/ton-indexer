@@ -44,7 +44,7 @@ BatchRunner::BatchRunner(td::actor::ActorId<DbScanner> db_scanner,
                          td::actor::ActorId<TraceAssembler> trace_assembler,
                          std::shared_ptr<const mch::MchEnginePrep> prep, std::string output_path,
                          std::uint32_t read_start, std::uint32_t seqno_from, std::uint32_t seqno_to,
-                         bool tier2_enabled, bool emit_tick_tock,
+                         bool tier2_enabled, bool emit_tick_tock, bool tier1_completion_only,
                          std::shared_ptr<std::atomic_int> exit_code, std::shared_ptr<td::Destructor> watcher)
     : db_scanner_(db_scanner)
     , parse_manager_(parse_manager)
@@ -57,6 +57,7 @@ BatchRunner::BatchRunner(td::actor::ActorId<DbScanner> db_scanner,
     , current_seqno_(read_start)
     , tier2_enabled_(tier2_enabled)
     , emit_tick_tock_(emit_tick_tock)
+    , tier1_completion_only_(tier1_completion_only)
     , exit_code_(std::move(exit_code))
     , watcher_(std::move(watcher)) {
 }
@@ -163,8 +164,10 @@ void BatchRunner::seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr
   stage_started_ = now_s();
   LOG(DEBUG) << "Interfaces processed for seqno " << seqno;
 
-  for (auto &kv : parsed_block->account_interfaces_) {
-    account_interfaces_[kv.first] = std::move(kv.second);
+  if (!tier1_completion_only_) {
+    for (auto &kv : parsed_block->account_interfaces_) {
+      account_interfaces_[kv.first] = std::move(kv.second);
+    }
   }
 
   total_blocks_ += parsed_block->blocks_.size();
@@ -231,7 +234,8 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
       return tier2.fetch(kind, args);
     };
   }
-  mch::ParsedBlockLookupSource src(&account_interfaces_, std::move(hook));
+  auto &tier1_map = tier1_completion_only_ ? parsed_block->account_interfaces_ : account_interfaces_;
+  mch::ParsedBlockLookupSource src(&tier1_map, std::move(hook));
   std::vector<mch::Action> rows;
   std::vector<std::string> matcher_names;
   std::size_t scrubbed = 0;
