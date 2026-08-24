@@ -687,7 +687,7 @@ td::Result<DedustPoolDetector::Result> DedustPoolDetector::detect(
   data.address = address;
 
   if (is_v2) {
-    // get_pool_data returns 19 entries, only first 11 checked. No factory verification for V2
+    // get_pool_data returns 19 entries, only first 11 checked.
     TRY_RESULT(stack, execute_smc_method_nullable<11>(address, code_cell, data_cell, config, "get_pool_data", {}, {
                                             vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int,
                                             vm::StackEntry::Type::t_slice, vm::StackEntry::Type::t_slice,
@@ -748,7 +748,6 @@ td::Result<DedustPoolDetector::Result> DedustPoolDetector::detect(
     }
   }
 
-  // Fetch factory account and validate pool
   TRY_RESULT(factory, lookup_account(shard_states, DEDUST_FACTORY_ADDRESS));
   TRY_STATUS(verify_dedust_with_factory(factory.code, factory.data, config, address, data));
   return data;

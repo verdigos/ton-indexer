@@ -24,7 +24,6 @@ public:
 
   void start_up() override;
 
-  // Synchronous wallet detection verifies the master-derived wallet address.
   static td::Result<Result> detect(const block::StdAddress& address,
                                    const td::Ref<vm::Cell>& code_cell,
                                    const td::Ref<vm::Cell>& data_cell,
@@ -183,7 +182,7 @@ public:
 
   void start_up() override;
 
-  // Synchronous pool detection verifies V1 through its factory; V2 is self-contained.
+  // V1 pools require factory verification; V2 pools are self-contained.
   static td::Result<Result> detect(const block::StdAddress& address,
                                    const td::Ref<vm::Cell>& code_cell,
                                    const td::Ref<vm::Cell>& data_cell,

@@ -57,7 +57,6 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
   if (handler == handlers.end()) {
     return Value::null();
   }
-  // JVault uses raw data-cell reads rather than a V2 detector result.
   if (handler->second == Handler::JvaultAssets) {
     return jvault_assets(addr);
   }
@@ -67,7 +66,6 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
     return Value::null();
   }
 
-  // Run the scanner detector and render its V2 result through the tier-1 path.
   // Detectors that execute get-methods require config.
   std::optional<schema::BlockchainInterfaceV2> iface;
   switch (handler->second) {
@@ -121,7 +119,6 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
     case Handler::JvaultAssets:
       break;
   }
-  // Unsupported interface kinds remain tier-1-only.
   if (!iface) {
     return Value::null();
   }
@@ -152,14 +149,12 @@ Value EmuCelldbTier2::jvault_assets(const block::StdAddress &stake_wallet) {
 
   auto r_lock = parse_jvault_pool_lock_wallet(pool->data);
   if (r_lock.is_error()) {
-    // Python's KeyError on ['lock_wallet_address'] -> outer except -> None.
     return Value::null();
   }
-  // Resolve the lock wallet through fetch() to share memo state.
   Value jw = fetch("jetton_wallet", {Value::make_str(r_lock.move_as_ok())});
   const Value *jetton = jw.field("jetton");
   if (jetton == nullptr || jetton->t != VType::Str) {
-    return Value::null();  // get_jetton_wallet None -> .jetton raises -> None
+    return Value::null();
   }
   auto master = canonicalize_or_passthrough(jetton->str);
   return jvault_record(parts.staking_pool, Value::make_asset_jetton(master),
@@ -168,9 +163,8 @@ Value EmuCelldbTier2::jvault_assets(const block::StdAddress &stake_wallet) {
 
 Value EmuCelldbTier2::fetch(const std::string &kind, const std::vector<Value> &args) {
   if (shard_states_ == nullptr || shard_states_->empty()) {
-    return Value::null();  // listener-emulated trace: no states to read
+    return Value::null();
   }
-  // One argument - str address or a non-addr_none Account
   if (args.size() != 1 ||
       !(args[0].t == VType::Str ||
         (args[0].t == VType::Account && !args[0].addr_none))) {
@@ -195,7 +189,6 @@ Value EmuCelldbTier2::fetch(const std::string &kind, const std::vector<Value> &a
   } catch (...) {
     v = Value::null();
   }
-  // Memoize misses so fixpoint rounds do not repeat failed detection.
   value_memo_.emplace(key, v);
   return v;
 }

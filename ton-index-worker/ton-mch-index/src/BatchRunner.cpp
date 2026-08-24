@@ -163,7 +163,6 @@ void BatchRunner::seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr
   stage_started_ = now_s();
   LOG(DEBUG) << "Interfaces processed for seqno " << seqno;
 
-  // Keep the latest detected state for every account seen across the full read window.
   for (auto &kv : parsed_block->account_interfaces_) {
     account_interfaces_[kv.first] = std::move(kv.second);
   }
@@ -188,16 +187,11 @@ void BatchRunner::seqno_interfaces_processed(std::uint32_t seqno, ParsedBlockPtr
       if (trace.mc_seqno_end >= static_cast<std::int32_t>(seqno_from_) &&
           trace.mc_seqno_end <= static_cast<std::int32_t>(seqno_to_)) {
         if (!trace.external_hash.has_value() && !emit_tick_tock_) {
-          // Tick-tock-rooted traces: production stores no actions for this
-          // class (policy undecided — python saves only some of them), so the
-          // default mirrors prod. --emit-tick-tock restores full emission.
+          // Tick-tock traces are omitted by default; --emit-tick-tock restores them.
           ++tick_tock_skipped_;
           continue;
         }
         ++complete_selected_;
-        // trace_id (root tx hash) is the identifier for finalized traces:
-        // external_hash_norm is unique only in pending/emulated scope — the
-        // same signed external can be re-sent, so historically it collides.
         const auto output_hash = trace.trace_id;
         const std::string trace_key = td::base64_encode(output_hash.as_slice());
         LOG(INFO) << "Selected complete trace " << trace_key
@@ -307,7 +301,6 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
   tx_hash_b64.reserve(txs.size());
   for (const auto &tx : txs) {
     if (tx.in_msg) {
-      // Production joins traces to the plain inbound message hash.
       tx_hash_b64.push_back(td::base64_encode(tx.in_msg->hash.as_slice()));
     }
   }

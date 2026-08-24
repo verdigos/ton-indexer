@@ -107,7 +107,6 @@ td::Result<GetGemsNftAuction::Result> GetGemsNftAuction::detect(
     return td::Status::Error("Code or data null");
   }
 
-  // Try V4 method first (get_auction_data_v4)
   auto stack_v4_r = execute_smc_method<26>(address, code_cell, data_cell, config, "get_auction_data_v4", {},
             {vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_slice,
             vm::StackEntry::Type::t_slice, vm::StackEntry::Type::t_slice, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_slice,
@@ -180,7 +179,6 @@ td::Result<GetGemsNftAuction::Result> GetGemsNftAuction::detect(
     data.step_time = stack[20].as_int()->to_long();
     data.last_query_id = stack[21].as_int()->to_long();
 
-    // Handle jetton_wallet
     auto jetton_wallet_cs = stack[22].as_slice();
     if (jetton_wallet_cs->size() == 2 && jetton_wallet_cs->prefetch_ulong(2) == 0) {
       data.jetton_wallet = std::nullopt;
@@ -208,7 +206,6 @@ td::Result<GetGemsNftAuction::Result> GetGemsNftAuction::detect(
     return data;
   }
 
-  // Fallback to V1-V3 method (get_sale_data)
   auto stack_r = execute_smc_method<20>(address, code_cell, data_cell, config, "get_sale_data", {},
             {vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_slice,
             vm::StackEntry::Type::t_slice, vm::StackEntry::Type::t_slice, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_slice,
@@ -280,7 +277,6 @@ td::Result<GetGemsNftAuction::Result> GetGemsNftAuction::detect(
   data.last_bid_at = stack[18].as_int()->to_long();
   data.is_canceled = stack[19].as_int()->to_long() != 0;
 
-  // V1-V3 dont have these fields
   data.activated = std::nullopt;
   data.step_time = std::nullopt;
   data.last_query_id = std::nullopt;

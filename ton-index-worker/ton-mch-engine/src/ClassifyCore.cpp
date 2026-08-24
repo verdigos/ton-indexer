@@ -805,12 +805,11 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     result.failure_category = FailureCategory::engine_fault;
   }
   if (result.failure) {
-    result.actions.clear();  // Failed traces discard their classified actions.
+    result.actions.clear();
     result.action_rows.clear();
     result.fallback_rows = basic_classify_fallback(ctx);
   } else if (result.action_rows.empty() && !ctx.trace.transactions.empty()) {
-    // Classification succeeded and serialized nothing. Try the ghost path
-    // first; mint the `unknown` row only when that yields nothing too.
+    // Fall back to ghost external rows before minting the unknown action.
     result.action_rows = ghost_external_rows(ctx, src);
     result.unknown_trace = result.action_rows.empty();
   }
@@ -848,7 +847,6 @@ SchemaClassifyResult classify_schema_trace(
     result.failure_category = classified.failure_category;
     result.used_fallback = classified.failure;
 
-    // Classification failure replaces regular actions with basic fallback rows.
     const std::vector<ActionRow> &core =
         classified.failure ? classified.fallback_rows : classified.action_rows;
     for (const ActionRow &row : core) {
@@ -861,13 +859,12 @@ SchemaClassifyResult classify_schema_trace(
       rows.push_back(std::move(action));
     }
 
-    // Record every fired matcher, including matches absorbed by later rules.
+    // Collect all fired matchers, including absorbed matches.
     std::set<std::string> names;
     for (const CoreAction &action : classified.actions) {
       names.insert(action.matcher_name);
     }
     matcher_names.assign(names.begin(), names.end());
-    // A clean unmatched trace receives one synthetic unknown action.
     if (classified.unknown_trace) {
       rows.push_back(create_unknown_action(ctx.trace));
       unknown_row = true;
