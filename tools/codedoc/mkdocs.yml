@@ -1,0 +1,29 @@
+site_name: ton-index-worker code reference
+docs_dir: ../../ton-index-worker/docs/code
+site_dir: /tmp/codedoc-site
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+markdown_extensions:
+  - toc:
+      permalink: true
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+plugins:
+  - search
