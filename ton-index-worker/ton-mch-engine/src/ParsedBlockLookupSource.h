@@ -36,6 +36,9 @@ class ParsedBlockLookupSource : public LookupSource {
   struct LookupStats {
     std::size_t tier1_hits{0};  // served from account_interfaces_ (in-block)
     std::size_t tier2_hits{0};  // served from the tier-2 fallback (DB/kvrocks / fixture)
+    // Tier-2 hit attribution per lookup kind. Only served kinds get an entry,
+    // and the values sum to `tier2_hits` exactly.
+    std::map<std::string, std::size_t> tier2_hits_by_kind;
     std::size_t misses{0};      // unresolved after both tiers (null result)
     // Miss attribution per lookup kind, so a production run can tell an expected
     // gap (a kind with no tier-1 source) from a real resolution failure. Only

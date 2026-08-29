@@ -401,12 +401,20 @@ void test_memo_and_guards() {
           t.fetch("no_such_kind", {Value::make_str(raw_of('A'))}).is_null());
     // The tier-1-only kinds are gated before the account read.
     check("guard/tier1_only_kind_null",
-          t.fetch("nft_item", {Value::make_str(raw_of('A'))}).is_null());
+          t.fetch("multisig_order", {Value::make_str(raw_of('A'))}).is_null());
     check("guard/no_reads_on_guarded", f.reads == 0 && t.stats().fetched == 0);
     // An Account-typed argument must pass the guard and reach the account
     // read.
     t.fetch("nominator_pool", {Value::make_account_raw(raw_of('A'))});
     check("guard/account_arg_reaches_read", f.reads == 1);
+  }
+  for (const std::string kind : {"nft_item", "nft_auction"}) {
+    Fixture f;
+    auto t = f.make();
+    check("dispatch/" + kind + "/absent_is_null",
+          t.fetch(kind, {Value::make_str(raw_of('A'))}).is_null());
+    check("dispatch/" + kind + "/reaches_account_read",
+          f.reads == 1 && t.stats().fetched == 1);
   }
   {
     // A listener-emulated trace has no shard states and therefore no tier 2.
@@ -450,6 +458,8 @@ void test_two_tier_routing() {
   Value t2 = src.fetch("nominator_pool", {Value::make_str(raw_of('D'))});
   check("routing/tier2_serves", !t2.is_null() && hook_calls == 1);
   check("routing/tier2_counted", src.stats().tier2_hits == 1);
+  check("routing/tier2_kind_counted",
+        src.stats().tier2_hits_by_kind.at("nominator_pool") == 1);
   // The tier-2 answer is the SAME shape tier 1 would have produced.
   schema::NominatorPoolData p{};
   p.address = addr_of('D');
