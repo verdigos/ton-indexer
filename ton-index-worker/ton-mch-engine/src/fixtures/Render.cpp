@@ -1,5 +1,4 @@
-// Dump renderers + vector comparator (see fixtures/Render.h for why they are here
-// and not in the product lib). Split out of BuildDriver.cpp and Value.cpp.
+// Dump renderers + vector comparator. See fixtures/Render.h.
 #include "fixtures/Render.h"
 
 #include "BlockTree.h"
@@ -161,20 +160,15 @@ const std::set<std::string> &boc_field_names() {
 bool is_boc_field(const std::string &key) { return boc_field_names().count(key) != 0; }
 
 namespace {
-// Cell-derived BOC containers (b64 string from b64(), or raw BOC Bytes from
-// MsgParse) render as the cell's ROOT HASH ("cellhash:HEX-UPPER") so
-// serialization-order / CRC provenance is invisible. Returns "" if the value
-// is not a decodable BOC; the caller falls back to the normal render.
+// Cell-derived BOC containers render as the cell's root hash ("cellhash:HEX-UPPER")
+// so serialization-order / CRC is invisible. Returns "" if not a decodable BOC.
 std::string boc_field_cellhash(const Value &v) {
   auto hash_of = [](const td::Ref<vm::Cell> &cell) -> std::string {
     auto h = cell->get_hash();
     return "cellhash:" + hex_upper(h.as_slice().ubegin(), h.as_slice().size());
   };
-  // Decode-fail marker (never throws, the dump must not abort/trace-fail on a
-  // bad BOC field). A short deterministic prefix aids diagnosis; both engines
-  // compute it identically from the same value type (str → the b64 string;
-  // bytes → base64 of the raw), so a fail-case would still be A/B-comparable.
-  // Never fires over the corpus (all BOC fields decode), defensive only.
+  // Decode-fail marker (never throws). Prefix is deterministic: str uses the
+  // b64 string, bytes use base64 of the raw, so fail-cases stay A/B-comparable.
   auto decode_fail = [](const std::string &enc_prefix_src) {
     return "cellhash:DECODE_FAIL:" + enc_prefix_src.substr(0, 12);
   };
@@ -207,8 +201,8 @@ std::string boc_field_cellhash(const Value &v) {
 
 
 bool structural_equal(const Value &a, const Value &b) {
-  // Mirrors the Python vector runner's _equal: expected type drives the check,
-  // actual must match that type and be deeply equal.
+  // Expected type drives the check; actual must match that type and be deeply
+  // equal. Intentional/parity-frozen.
   switch (b.t) {
     case VType::Null:
       return a.t == VType::Null;
@@ -267,7 +261,7 @@ bool structural_equal(const Value &a, const Value &b) {
       return true;
     }
     case VType::Block:
-      // Python Block.__eq__ is object identity.
+      // Blocks compare by object identity. Intentional/parity-frozen.
       return a.t == VType::Block && a.block == b.block;
     case VType::Dict:
     case VType::Obj: {

@@ -1,9 +1,8 @@
 #include "EmuClassifierActor.h"
 
-#include "BlockTree.h"
+#include "ClassifyCore.h"
 #include "EmuActionSerialize.h"
 #include "EmuTraceConvert.h"
-#include "SchemaTraceLoader.h"
 
 #include "vm/excno.hpp"  // vm::VmError is not a std::exception.
 
@@ -11,7 +10,6 @@
 
 #include <algorithm>
 #include <exception>
-#include <set>
 #include <string>
 #include <utility>
 
@@ -50,43 +48,6 @@ void record_phase_exception(EmuClassifierStats &stats, EmuClassifyResult &res,
   }
 }
 
-// Scrub non-owning Block values before the TraceContext arena dies. Cells remain
-// valid through the view's anchor. Shared container payloads make this a repair,
-// not a pure observation, so arena_refs_scrubbed counts each replacement.
-std::size_t scrub_value(Value &v) {
-  if (v.t == VType::Block) {
-    v = Value::null();
-    return 1;
-  }
-  std::size_t n = 0;
-  // Composite action fields require a recursive container walk.
-  if (v.items) {
-    for (Value &item : *v.items) {
-      n += scrub_value(item);
-    }
-  }
-  if (v.fields) {
-    for (auto &[key, field] : *v.fields) {
-      n += scrub_value(field);
-    }
-  }
-  return n;
-}
-
-std::size_t scrub_arena_refs(Action &a) {
-  std::size_t n = 0;
-  for (Value *v : {
-#define MCH_ACTION_REF(name) &a.name,
-           MCH_ACTION_VALUE_FIELDS(MCH_ACTION_REF)
-#undef MCH_ACTION_REF
-       }) {
-    n += scrub_value(*v);
-  }
-  return n;
-}
-
-// Builds and classifies the trace, then materializes actions while the arena is
-// alive. All failures are mapped onto the result; this function never throws.
 void classify_txs(const EmuClassifierConfig &cfg, const EmuTraceView &view,
                   const std::vector<schema::Transaction> &txs, EmuClassifyResult &res,
                   std::vector<Action> &rows, std::vector<std::string> &matcher_names,
@@ -94,24 +55,6 @@ void classify_txs(const EmuClassifierConfig &cfg, const EmuTraceView &view,
   const MchEnginePrep &prep = *cfg.prep;
   const ParsedBlockLookupSource::InterfaceMap &ifaces = *view.interfaces;
   try {
-    auto r_trace = schema_to_trace(res.trace_id, txs);
-    if (r_trace.is_error()) {
-      res.failure = true;
-      res.failure_reason = r_trace.move_as_error().message().str();
-      res.failure_category = FailureCategory::malformed_trace;
-      return;
-    }
-    TraceContext ctx;
-    ctx.trace = r_trace.move_as_ok();
-    ctx.tree = to_tree(ctx.trace);
-    if (ctx.tree.root == nullptr) {
-      res.failure = true;
-      res.failure_reason = "empty event tree";
-      res.failure_category = FailureCategory::malformed_trace;
-      return;
-    }
-    ctx.root = init_block(ctx.arena, ctx.tree.root);
-
     // Tier-2 memoization is scoped to this classification.
     EmuCelldbTier2 tier2(&view.shard_states, view.config);
     ParsedBlockLookupSource::Tier2Hook hook;
@@ -121,36 +64,15 @@ void classify_txs(const EmuClassifierConfig &cfg, const EmuTraceView &view,
       };
     }
     ParsedBlockLookupSource src(&ifaces, std::move(hook));
-    ClassifyResult cres = classify_trace(ctx, *prep.matchers, prep.setup, src);
-    res.failure = cres.failure;
-    res.failure_reason = cres.failure_reason;
-    res.failure_category = cres.failure_category;
+    SchemaClassifyResult classified = classify_schema_trace(
+        prep, res.trace_id, txs, src, rows, matcher_names, scrubbed, unknown_row);
+    res.failure = classified.failure;
+    res.failure_reason = std::move(classified.failure_reason);
+    res.failure_category = classified.failure_category;
+    res.used_fallback = classified.used_fallback;
+    res.unported_btypes += classified.unported_btypes;
     res.lookup_stats = src.stats();
     res.tier2_stats = tier2.stats();
-
-    // Classification failure replaces regular actions with basic fallback rows.
-    res.used_fallback = cres.failure;
-    const std::vector<ActionRow> &core = cres.failure ? cres.fallback_rows : cres.action_rows;
-    for (const ActionRow &r : core) {
-      Action act;
-      if (!build_action(r, act)) {  // btype outside the ported fill set
-        res.unported_btypes++;
-        continue;
-      }
-      scrubbed += scrub_arena_refs(act);
-      rows.push_back(std::move(act));
-    }
-    // Record every fired matcher, including matches absorbed by later rules.
-    std::set<std::string> names;
-    for (const CoreAction &a : cres.actions) {
-      names.insert(a.matcher_name);
-    }
-    matcher_names.assign(names.begin(), names.end());
-    // A clean unmatched trace receives one synthetic unknown action.
-    if (cres.unknown_trace) {
-      rows.push_back(create_unknown_action(ctx.trace));
-      unknown_row = true;
-    }
   } catch (const vm::VmError &e) {
     res.failure = true;
     res.failure_reason = std::string("vm exception: ") + e.get_msg();

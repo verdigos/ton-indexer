@@ -1,4 +1,3 @@
-// Shared pTON master list + wallet->asset conversion (see host/DexPton.h).
 #include "host/DexPton.h"
 
 #include <algorithm>
@@ -30,8 +29,8 @@ Value wallet_jetton_asset(const Value &wallet, bool pton_conversion) {
   const Value *jf = wallet.is_null() ? nullptr : wallet.field("jetton");
   auto master = wallet_jetton_master_str(wallet);
   if (!master) {
-    // v1 (no conversion): AccountId(None) -> Asset(is_ton=True).
-    // v2/tonco (conversion): wallet.jetton absent -> caller-visible Null.
+    // v1 (no conversion): missing jetton -> Asset(is_ton=True).
+    // v2/tonco (conversion): missing jetton -> caller-visible Null.
     return pton_conversion ? Value::null() : Value::make_asset_ton();
   }
   // Preserve the existing exact-spelling pTON check; normalization only

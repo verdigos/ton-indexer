@@ -1,14 +1,19 @@
 #include "ClassifyCore.h"
 
 #include "BuildDriver.h"
+#include "EnginePrep.h"
 #include "ExprRuntime.h"
 #include "GenBuilds.h"
 #include "GenMatchers.h"
 #include "GenWheres.h"
 #include "GhostExternal.h"
 #include "HostRegistry.h"
+#include "ParsedBlockLookupSource.h"
+#include "SchemaTraceLoader.h"
 #include "Walker.h"
 #include "btypes_gen.h"
+
+#include "vm/excno.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -54,9 +59,8 @@ Block *wrap_root(BlockArena &arena, Block *root) {
 // through next_blocks. Every consumer of "the spine" (prefilter inventory,
 // post-process input, basic-actions fallback) wants exactly this.
 //
-// This is not usable for the matcher walk, which must read next_blocks after
-// try_build ran on the node, because a merge mutates the tree mid-walk (Python
-// generator resume order).
+// Not usable for the matcher walk, which must read next_blocks after try_build
+// ran on the node, because a merge mutates the tree mid-walk.
 std::vector<Block *> collect_spine(Block *root) {
   std::vector<Block *> out;
   std::deque<Block *> queue{root};
@@ -86,11 +90,44 @@ void sort_unique_children(std::vector<Block *> &children_blocks) {
                         children_blocks.end());
 }
 
+// Scrub non-owning Block values before the TraceContext arena dies. Shared
+// container payloads make this a repair, so the count tracks every replacement.
+std::size_t scrub_value(Value &v) {
+  if (v.t == VType::Block) {
+    v = Value::null();
+    return 1;
+  }
+  std::size_t n = 0;
+  if (v.items) {
+    for (Value &item : *v.items) {
+      n += scrub_value(item);
+    }
+  }
+  if (v.fields) {
+    for (auto &[key, field] : *v.fields) {
+      n += scrub_value(field);
+    }
+  }
+  return n;
+}
+
+std::size_t scrub_arena_refs(Action &a) {
+  std::size_t n = 0;
+  for (Value *v : {
+#define MCH_ACTION_REF(name) &a.name,
+           MCH_ACTION_VALUE_FIELDS(MCH_ACTION_REF)
+#undef MCH_ACTION_REF
+       }) {
+    n += scrub_value(*v);
+  }
+  return n;
+}
+
 bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *block,
                BlockArena &arena, const std::set<std::string> &kinds,
                const LookupSource &src, const WhereTable &wheres,
                std::vector<CoreAction> &out) {
-  auto res = matcher_match(m, block, wheres);  // root absorb=false
+  auto res = matcher_match(m, block, wheres);
   if (!res) {
     return false;
   }
@@ -115,7 +152,7 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
   produced->failed = o.failed;
   produced->broken = o.broken;
   if (!produced->merge_blocks(res->consumed)) {
-    return false;  // Python: merge raises -> try_build catches -> clean rejection
+    return false;  // merge failure is a clean rejection
   }
 
   if (!m.ref_shapers.empty()) {
@@ -132,8 +169,8 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
     }
   }
 
-  // Root-level excess/bounce auto-append (engine.py try_build): from the
-  // ANCHOR's next_blocks (unchanged by the merge), canonical order.
+  // Root-level excess/bounce auto-append: from the ANCHOR's next_blocks
+  // (unchanged by the merge), canonical order.
   std::vector<Block *> aux;
   {
     std::vector<Block *> nb = block->next_blocks;
@@ -154,7 +191,6 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
   return true;
 }
 
-// Host post-processing passes
 // Value flows and contract-deployment collection are outside this pipeline.
 // All surgery is throw-safe (no aborts).
 
@@ -167,9 +203,9 @@ bool pp_eq(const Value &a, const Value &b) {
   return !r.faulted && r.value.t == VType::Bool && r.value.boolean;
 }
 
-// blocks/liquidity.py combine_deposits: merge the partial (first) + final
-// deposit records. Consistency failures leave this pair unmerged without
-// affecting other actions; Python instead fails the whole trace to basic actions.
+// Merge the partial (first) + final deposit records. Consistency failures
+// leave this pair unmerged without affecting other actions (do not fail the
+// whole trace).
 Value combine_deposits(const Value &first, const Value &final_d) {
   Value tf1 = pp_field(first, "target_asset_1"), tf2 = pp_field(first, "target_asset_2");
   Value tg1 = pp_field(final_d, "target_asset_1"), tg2 = pp_field(final_d, "target_asset_2");
@@ -250,7 +286,7 @@ void post_process_dedust_liquidity(std::vector<Block *> &blocks, std::set<Block 
     }
   }
   for (const auto &kv : used) {
-    if (kv.second > 2) return;  // logger.warning + skip merging
+    if (kv.second > 2) return;  // skip merging
   }
   for (Block *first : firsts) {
     auto it = final_by_key.find(deposit_contract_key(first));
@@ -293,7 +329,7 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
   }
   if (partials.empty()) return;
   for (const auto &kv : used) {
-    if (kv.second > 2) return;  // logger.warning + skip merging
+    if (kv.second > 2) return;  // skip merging
   }
   for (Block *final_b : finals) {
     auto it = partial_by_key.find(deposit_contract_key(final_b));
@@ -324,9 +360,9 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
 
     blocks.erase(std::remove(blocks.begin(), blocks.end(), partial), blocks.end());
     removed.insert(partial);
-    // Extend event_nodes without appending initiating_event_node or deduplicating.
-    // Keep this aligned with the V1 pass because both feed action account and
-    // transaction-hash derivation.
+    // Extend event_nodes without appending initiating_event_node or
+    // deduplicating. Keep aligned with the V1 pass: both feed action account
+    // and transaction-hash derivation.
     for (const EventNode *n : partial->event_nodes) final_b->event_nodes.push_back(n);
     for (Block *cb : partial->children_blocks) final_b->children_blocks.push_back(cb);
     sort_unique_children(final_b->children_blocks);
@@ -334,9 +370,9 @@ void post_process_dedust_v2_liquidity(std::vector<Block *> &blocks,
   }
 }
 
-// Mirrors a twin-only stonfi_v2 liquidity pairing helper. ZERO corpus coverage:
-// the `< 2 legs` guard returns immediately for every trace. KEEP (do not delete
-// as dead); exercising it requires a 2-leg fixture the corpus does not have yet.
+// Stonfi v2 liquidity pairing. ZERO corpus coverage: the `< 2 legs` guard
+// returns immediately for every trace. KEEP; exercising it needs a 2-leg
+// fixture the corpus does not have yet.
 bool is_stonfi_v2_leg(const Block *b) {
   if (b->btype != mch::btype::kDexDepositLiquidity) return false;
   Value dex = pp_field(b->data, "dex");
@@ -425,13 +461,9 @@ void post_process_stonfi_v2_liquidity(std::vector<Block *> &blocks, BlockArena &
   }
 }
 
-// event_processing.py unwind_deployments (3rd production post-processor, Step
-// 2b): promote ContractDeploy blocks nested in children up to the top-level
-// spine list. The Python `for block in blocks` loop SEES appends (it re-scans
-// the promoted deploys), so the C++ index loop must too. NOTE: a no-op for the
-// classify/actions DUMP, the dump emits matcher-produced blocks (`pending`),
-// and this only appends to the spine, which the dump never walks; ported to
-// keep the post-processor chain aligned with production.
+// Promote ContractDeploy blocks nested in children to the top-level spine.
+// The index loop must see appends (it re-scans the promoted deploys). A
+// no-op for the classify/actions dump, which never walks the spine.
 void unwind_deployments(std::vector<Block *> &blocks) {
   std::set<Block *> visited;
   for (std::size_t i = 0; i < blocks.size(); i++) {  // index loop: sees appends
@@ -460,22 +492,18 @@ void run_post_processors(std::vector<Block *> &spine, BlockArena &arena,
   unwind_deployments(spine);
 }
 
-// serialize_blocks' row filter: a spine
-// block becomes a row UNLESS it is the root wrapper, an `empty` proxy, or a
-// call_contract whose message has a null source (the external-in leaf) or a null
-// destination (the log / notification leaves).
+// A spine block becomes a row unless it is the root wrapper, an `empty`
+// proxy, or a call_contract whose message has a null source (external-in)
+// or a null destination (log / notification).
 bool serializes_to_row(const Block *b) {
   if (b->btype == mch::btype::kRoot || b->btype == mch::btype::kEmpty) return false;
   if (b->btype != mch::btype::kCallContract) return true;
   return !pp_field(b->data, "source").is_null() && !pp_field(b->data, "destination").is_null();
 }
 
-// v1_ops: the btypes whose merged children
-// stay merged. Every OTHER btype gets its children expanded into rows of their
-// own, the v1 API predates the composite actions, so a consumer that only knows
-// the v1 set still sees the legs a teleitem_start_auction / jvault_stake / …
-// absorbed. Keep in sync with the Python list; a btype missing here silently
-// starts emitting child rows.
+// Btypes whose merged children stay merged. Every other btype expands
+// children into their own rows so a v1 consumer still sees absorbed legs.
+// A btype missing here silently starts emitting child rows.
 bool is_v1_op(const std::string &t) {
   static const std::set<std::string> ops{
       "call_contract",
@@ -537,8 +565,8 @@ std::vector<ActionRow> serialize_rows(const std::vector<Block *> &blocks,
       std::sort(c.ancestor_type.begin(), c.ancestor_type.end());
       c.ancestor_type.erase(std::unique(c.ancestor_type.begin(), c.ancestor_type.end()),
                             c.ancestor_type.end());
-      // serialize_blocks raises here rather than dropping the row: two rows with
-      // one action_id would collide on the actions PK, so the trace falls back.
+      // Raise rather than drop: two rows with one action_id collide on the
+      // actions PK, so the trace falls back.
       if (!ids.insert(calc_action_id(c.block)).second) {
         throw std::runtime_error("duplicate action id in child recursion");
       }
@@ -558,11 +586,11 @@ std::vector<ActionRow> basic_classify_fallback(TraceContext &ctx) {
     std::vector<Block *> spine = collect_spine(wrap);
     std::set<Block *> removed;
     run_post_processors(spine, ctx.arena, removed);
-    // Use the recursive serialization path. Basic btypes are all v1_ops, so
-    // recursion normally has no additional rows to visit.
+    // Recursive serialization; basic btypes are all v1_ops, so recursion
+    // normally has no additional rows.
     out = serialize_rows(spine, "");
   } catch (...) {
-    out.clear();  // Python: fallback returns [] on any exception
+    out.clear();  // fallback returns empty on any exception
   }
   return out;
 }
@@ -584,8 +612,8 @@ std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource
     }
     Block *b = init_block(ctx.arena, root_node);
     Block *wrapper = wrap_root(ctx.arena, b);
-    // matchers_for_failed_externals over the same BFS the main loop uses
-    // (next_blocks read AFTER the build, parent-is-None guard).
+    // Same BFS as the main loop (next_blocks read AFTER the build,
+    // parent-is-None guard).
     std::deque<Block *> queue{wrapper};
     while (!queue.empty()) {
       Block *cur = queue.front();
@@ -600,9 +628,8 @@ std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource
     std::vector<Block *> spine = collect_spine(wrapper);
     std::set<Block *> removed;
     run_post_processors(spine, ctx.arena, removed);
-    // FLAT, unlike the other two paths: try_classify_unknown_trace applies the
-    // row filter directly instead of calling serialize_blocks, so a ghost row
-    // never recurses into children and never carries parent_action_id.
+    // Flat: apply the row filter directly, so a ghost row never recurses
+    // into children and never carries parent_action_id.
     for (Block *sb : spine) {
       if (serializes_to_row(sb)) out.push_back(ActionRow{sb, "", {}});
     }
@@ -616,11 +643,9 @@ std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource
 
 ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers) {
   ClassifySetup s;
-  // The matcher / build / where tables are three views of ONE document, wired up
-  // by the same CMake step (MCH_CLASSIFY_ARTIFACT). Three shas that disagree mean
-  // the build regenerated some of them and not others, the tables would then run
-  // matchers against another document's build programs, which is silent
-  // wrongness, so it is a hard setup error.
+  // Matcher / build / where tables are three views of one document. Disagreeing
+  // shas mean the tables would run matchers against another document's build
+  // programs — a hard setup error.
   const std::string sha = gen_matchers_ir_source_sha();
   if (sha != gen_builds_ir_source_sha() || sha != gen_wheres_ir_source_sha()) {
     s.table_missing = true;
@@ -675,22 +700,19 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
                               const ClassifySetup &setup, const LookupSource &src) {
   ClassifyResult result;
 
-  // Name the trace on every [mch-reject] line this classify emits (BuildRuntime.h).
+  // Name the trace on every [mch-reject] line this classify emits.
   RejectCtx rctx;
   rctx.trace_id = &ctx.trace.trace_id;
   RejectScope reject_scope(rctx);
 
-  // Synthetic root wrapper (process_event_async: Block('root').connect(...)).
   Block *wrapper = wrap_root(ctx.arena, ctx.root);
 
-  // B1 anchor prefilter inventory: the opcodes + btypes present on the spine
-  // (blocks reachable via next_blocks, the outer BFS's anchor candidates). A
-  // matcher whose opcode/btype anchor intersects neither can match nothing, so
-  // its whole traversal is skipped. Opcodes are STATIC (produced composite blocks
-  // carry no opcode); btypes GROW as matchers fire (a later matcher may anchor on
-  // a produced btype), so produced btypes are folded in after each matcher. The
-  // inventory is a conservative superset, consumed blocks are never removed, so
-  // a skip only ever fires when the traversal provably matches nothing.
+  // Anchor prefilter: opcodes + btypes on the spine. A matcher whose
+  // opcode/btype anchor intersects neither can match nothing, so its
+  // traversal is skipped. Opcodes are static (produced composites carry
+  // none); btypes grow as matchers fire, so produced btypes are folded in
+  // after each matcher. Consumed blocks are never removed, so a skip only
+  // fires when the traversal provably matches nothing.
   std::unordered_set<std::uint32_t> inv_opcodes;
   std::unordered_set<std::string> inv_btypes;
   for (Block *b : collect_spine(wrapper)) {
@@ -725,8 +747,8 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
       }
       auto fn = setup.build_fns.at(m.artifact_index);
       std::size_t produced_from = pending.size();
-      // Python bfs_iter port: FIFO; cur's next_blocks are read AFTER try_build
-      // ran on cur (generator resume order), merges mutate the tree mid-walk.
+      // FIFO; cur's next_blocks are read after try_build ran on cur. Merges
+      // mutate the tree mid-walk.
       std::deque<Block *> queue{wrapper};
       while (!queue.empty()) {
         Block *cur = queue.front();
@@ -745,25 +767,34 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
       }
     }
 
-    // Post-process the flat spine list ([root] + BFS).
     std::vector<Block *> spine = collect_spine(wrapper);
     std::set<Block *> removed;
     run_post_processors(spine, ctx.arena, removed);
     for (CoreAction &a : pending) {
       if (!removed.count(a.produced)) result.actions.push_back(std::move(a));
     }
-    // serialize_blocks: the ROW set is the spine, not the fire list. A fire whose
-    // product a later matcher consumed is off the spine and emits no row of its
-    // own, unless its consumer's btype is outside v1_ops, in which case the
-    // recursion brings it back as a CHILD row; a leaf no matcher consumed emits
-    // a basic row.
+    // Row set is the spine, not the fire list. A fire whose product a later
+    // matcher consumed is off the spine unless its consumer's btype is
+    // outside v1_ops, in which case recursion brings it back as a child row;
+    // a leaf no matcher consumed emits a basic row.
     result.action_rows = serialize_rows(spine, "");
+  } catch (const vm::VmError &e) {
+    result.failure = true;
+    result.failure_reason = std::string("vm exception: ") + e.get_msg();
+    result.failure_category = FailureCategory::engine_fault;
+  } catch (const vm::VmNoGas &e) {
+    result.failure = true;
+    result.failure_reason = std::string("vm exception: ") + e.get_msg();
+    result.failure_category = FailureCategory::engine_fault;
+  } catch (const vm::VmVirtError &e) {
+    result.failure = true;
+    result.failure_reason = std::string("vm exception: ") + e.get_msg();
+    result.failure_category = FailureCategory::engine_fault;
   } catch (const std::exception &e) {
     result.failure = true;
     result.failure_reason = e.what();
     // The two-phase driver throws this exact message on non-convergence, an
-    // infra fault, distinct from a spec/parse engine fault. Everything else is
-    // a generic engine_fault (Python's per-trace fallback boundary).
+    // infra fault, distinct from a spec/parse engine fault.
     result.failure_category =
         result.failure_reason.find("two-phase lookup did not converge") != std::string::npos
             ? FailureCategory::lookup_infra_fail
@@ -778,11 +809,89 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     result.action_rows.clear();
     result.fallback_rows = basic_classify_fallback(ctx);
   } else if (result.action_rows.empty() && !ctx.trace.transactions.empty()) {
-    // Classification succeeded and serialized nothing.
-    // try_classify_unknown_trace tries the GHOST path first and only mints the
-    // `unknown` row when that yields nothing too.
+    // Classification succeeded and serialized nothing. Try the ghost path
+    // first; mint the `unknown` row only when that yields nothing too.
     result.action_rows = ghost_external_rows(ctx, src);
     result.unknown_trace = result.action_rows.empty();
+  }
+  return result;
+}
+
+SchemaClassifyResult classify_schema_trace(
+    const MchEnginePrep &prep, const std::string &trace_id,
+    const std::vector<schema::Transaction> &txs, const ParsedBlockLookupSource &src,
+    std::vector<Action> &rows, std::vector<std::string> &matcher_names,
+    std::size_t &scrubbed, bool &unknown_row) {
+  SchemaClassifyResult result;
+  try {
+    auto r_trace = schema_to_trace(trace_id, txs);
+    if (r_trace.is_error()) {
+      result.failure = true;
+      result.failure_reason = r_trace.move_as_error().message().str();
+      result.failure_category = FailureCategory::malformed_trace;
+      return result;
+    }
+    TraceContext ctx;
+    ctx.trace = r_trace.move_as_ok();
+    ctx.tree = to_tree(ctx.trace);
+    if (ctx.tree.root == nullptr) {
+      result.failure = true;
+      result.failure_reason = "empty event tree";
+      result.failure_category = FailureCategory::malformed_trace;
+      return result;
+    }
+    ctx.root = init_block(ctx.arena, ctx.tree.root);
+
+    ClassifyResult classified = classify_trace(ctx, *prep.matchers, prep.setup, src);
+    result.failure = classified.failure;
+    result.failure_reason = classified.failure_reason;
+    result.failure_category = classified.failure_category;
+    result.used_fallback = classified.failure;
+
+    // Classification failure replaces regular actions with basic fallback rows.
+    const std::vector<ActionRow> &core =
+        classified.failure ? classified.fallback_rows : classified.action_rows;
+    for (const ActionRow &row : core) {
+      Action action;
+      if (!build_action(row, action)) {
+        result.unported_btypes++;
+        continue;
+      }
+      scrubbed += scrub_arena_refs(action);
+      rows.push_back(std::move(action));
+    }
+
+    // Record every fired matcher, including matches absorbed by later rules.
+    std::set<std::string> names;
+    for (const CoreAction &action : classified.actions) {
+      names.insert(action.matcher_name);
+    }
+    matcher_names.assign(names.begin(), names.end());
+    // A clean unmatched trace receives one synthetic unknown action.
+    if (classified.unknown_trace) {
+      rows.push_back(create_unknown_action(ctx.trace));
+      unknown_row = true;
+    }
+  } catch (const vm::VmError &e) {
+    result.failure = true;
+    result.failure_reason = std::string("vm exception: ") + e.get_msg();
+    result.failure_category = FailureCategory::engine_fault;
+  } catch (const vm::VmNoGas &e) {
+    result.failure = true;
+    result.failure_reason = std::string("vm exception: ") + e.get_msg();
+    result.failure_category = FailureCategory::engine_fault;
+  } catch (const vm::VmVirtError &e) {
+    result.failure = true;
+    result.failure_reason = std::string("vm exception: ") + e.get_msg();
+    result.failure_category = FailureCategory::engine_fault;
+  } catch (const std::exception &e) {
+    result.failure = true;
+    result.failure_reason = std::string("exception: ") + e.what();
+    result.failure_category = FailureCategory::engine_fault;
+  } catch (...) {
+    result.failure = true;
+    result.failure_reason = "unknown exception";
+    result.failure_category = FailureCategory::engine_fault;
   }
   return result;
 }

@@ -39,10 +39,10 @@ int run_dump(const std::vector<std::string> &paths,
              const std::string &output_dir = {});
 
 // `--actions` serialized-action-row dump. Uses the same collect-to-final-pass
-// pipeline as run_classify; each surviving post-pass produced block is rendered
-// as an Action row, with one block_tree_serializer.py _fill_* port per supported
-// serialized btype. Rows identify their matcher and omit null map keys. With an
-// output directory, each fixture body is written to `<fixture-stem>.golden`.
+// pipeline as run_classify; each surviving post-pass produced block is
+// rendered as an Action row. Rows identify their matcher and omit null map
+// keys. With an output directory, each fixture body is written to
+// `<fixture-stem>.golden`.
 int run_actions(const std::vector<std::string> &paths, const std::string &output_dir = {});
 
 }  // namespace mch

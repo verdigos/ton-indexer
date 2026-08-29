@@ -4,7 +4,7 @@
 // downstream consumers. The compact JSON representation is the conformance
 // vector format.
 
-#include "AbiLeavesAddress.h"  // AbiAddress
+#include "AbiLeavesAddress.h"
 
 #include "common/refint.h"
 

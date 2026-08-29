@@ -13,8 +13,8 @@ namespace {
 // td::Bits256 -> the base64 string form the fixtures/engine use for tx/msg hashes.
 std::string b256(const td::Bits256 &h) { return td::base64_encode(h.as_slice()); }
 
-// schema::AccountStatus enum -> the orig_status/end_status strings the engine
-// reads (basic_blocks.py: "uninit"/"active"/... via TraceLoader).
+// schema::AccountStatus enum -> the orig_status/end_status strings the
+// engine reads ("uninit"/"active"/...).
 std::string status_str(schema::AccountStatus s) {
   switch (s) {
     case schema::AccountStatus::uninit:
@@ -32,6 +32,7 @@ std::string status_str(schema::AccountStatus s) {
 struct DescrInfo {
   std::string descr;                   // "ord" | "tick_tock" | "other"
   std::optional<std::int64_t> exit_code;
+  std::optional<std::string> skipped_reason;
   bool aborted{false};
 };
 
@@ -49,13 +50,32 @@ DescrInfo descr_info(const schema::TransactionDescr &d) {
     }
     return std::nullopt;  // skipped compute phase -> no exit code
   };
+  auto skipped_reason_of = [](const schema::TrComputePhase &cp) -> std::optional<std::string> {
+    const auto *skipped = std::get_if<schema::TrComputePhase_skipped>(&cp);
+    if (skipped == nullptr) {
+      return std::nullopt;
+    }
+    switch (skipped->reason) {
+      case schema::cskip_no_state:
+        return "no_state";
+      case schema::cskip_bad_state:
+        return "bad_state";
+      case schema::cskip_no_gas:
+        return "no_gas";
+      case schema::cskip_suspended:
+        return "suspended";
+    }
+    return std::nullopt;
+  };
   if (const auto *ord = std::get_if<schema::TransactionDescr_ord>(&d)) {
     r.descr = "ord";
     r.exit_code = exit_of(ord->compute_ph);
+    r.skipped_reason = skipped_reason_of(ord->compute_ph);
     r.aborted = ord->aborted;
   } else if (const auto *tt = std::get_if<schema::TransactionDescr_tick_tock>(&d)) {
     r.descr = "tick_tock";
     r.exit_code = exit_of(tt->compute_ph);
+    r.skipped_reason = skipped_reason_of(tt->compute_ph);
     r.aborted = tt->aborted;
   } else {
     r.descr = "other";
@@ -85,17 +105,13 @@ void map_message(Message *m, const schema::Message &s, const std::string &owner_
                                : std::nullopt;
   m->bounce = s.bounce;
   m->bounced = s.bounced.value_or(false);
-  // MsgContent: the engine carries the body as a base64 BOC string and decodes
-  // it in MsgParse. Cell-hash rendering hides BOC writer-order differences, so
-  // use the already-serialized body_boc directly. No cell
-  // re-serialization, ClassifyCore untouched.
+  // Body is the already-serialized body_boc (base64 BOC). No cell
+  // re-serialization.
   MsgContent c;
   c.hash = b256(s.hash);
   c.body = s.body_boc;
   m->content = c;
-  // Same treatment for the StateInit of a deploying message. This one read
-  // covers BOTH the schema/prod path and the emulator path, which funnels its
-  // re-parsed transactions through this same mapper.
+  // Same treatment for the StateInit of a deploying message.
   if (s.init_state_boc && s.init_state.not_null()) {
     MsgContent init;
     init.hash = b256(s.init_state->get_hash().bits());
@@ -124,8 +140,8 @@ td::Result<Trace> schema_to_trace(const std::string &trace_id,
     DescrInfo di = descr_info(st.description);
     tx->descr = di.descr;
     tx->compute_exit_code = di.exit_code;
+    tx->skipped_reason = std::move(di.skipped_reason);
     tx->aborted = di.aborted;
-    // skipped_reason is absent from the schema (always null in fixtures too).
 
     Transaction *tx_raw = tx.get();
     if (st.in_msg) {

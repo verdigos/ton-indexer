@@ -68,7 +68,7 @@ Value adapt_address(const ton_abi::AbiAddress &a) {
       return Value::make_account_none();
     case AbiAddressKind::Extern: {
       // There is no native external-address VType. Mirror
-      // AbiValue's {"extern":{bits,value}} as an Obj without the pytoniq string.
+      // AbiValue's {"extern":{bits,value}} as an Obj.
       Value::Fields f;
       f.emplace_back("bits", Value::make_int(td::make_refint(a.ext_bits)));
       f.emplace_back("value", cell_from_slice(a.ext_value));

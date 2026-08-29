@@ -1,6 +1,4 @@
-// Jetton-family parsers. parse_jetton_transfer decodes the fixed prefix via
-// the ABI and interprets the forward-payload tail. Shared machinery is in
-// parse/PSlice.h.
+// Jetton-family parsers. Shared machinery is in parse/PSlice.h.
 #include "parse/Parsers.h"
 
 #include "AbiTryFirst.h"
@@ -20,9 +18,8 @@ namespace mch {
 
 namespace {
 
-// Serialized BOC bytes use the native writer. The container
-// bytes differ from pytoniq's on multi-ref trees, but payload fields are
-// compared/rendered by cell root hash, so the difference is invisible.
+// Native BOC writer: container bytes differ on multi-ref trees, but payload
+// fields are compared by cell root hash, so the difference is invisible.
 td::Result<std::string> boc_bytes(const td::Ref<vm::Cell> &c) {
   return td_boc_serialize_crc(c);
 }
@@ -64,8 +61,6 @@ td::Result<Value> adapt_stonfi_swap(
 }
 
 }  // namespace
-
-// Per-family adapters
 
 td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(ctx, open_body(body));
@@ -150,7 +145,7 @@ td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body) {
                                         td::Status::Error("stonfi payload did not match"));
             if (decoded.is_ok()) {
               stonfi_swap_body = decoded.move_as_ok();
-              // No sum_type on Ston.fi success (python parity).
+              // No sum_type on Ston.fi success. Intentional/parity-frozen.
             } else {
               has_sum_type = true;
               sum_type = "Unknown";

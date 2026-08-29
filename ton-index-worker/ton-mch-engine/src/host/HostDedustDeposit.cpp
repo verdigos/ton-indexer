@@ -1,12 +1,6 @@
-// DeDust liquidity-deposit host fns (builders/dedust.py _dedust_deposit_* +
-// blocks/liquidity.py build_dedust_deposit_{liquidity,partial}_core). See
-// host/HostImpls.h for the internal registry surface.
-//
-// Both fns take the consumed set and reconstruct the reference label roles by
-// previous_block / children_blocks navigation. They return the field record
-// object on success or Null to reject, matching the reference
-// `return None` (its try/except swallows every exception into None, so any
-// parse/nav failure here is likewise a Null reject).
+// Both fns reconstruct label roles via previous_block / children_blocks
+// navigation and return Null to reject. Any parse/nav failure is a Null
+// reject (intentional, parity-frozen).
 #include "host/HostImpls.h"
 
 #include "host/BlockViews.h"
@@ -44,8 +38,7 @@ constexpr std::uint32_t kDedustPayout = 0x474f86cf;
 constexpr std::uint32_t kRejection = 0xe1a36cd4;
 constexpr std::uint32_t kJettonForwardPayload = 0x40e108d6;
 
-// messages/liquidity.py load_asset: 4-bit kind (0 -> TON, else wc:uint8 +
-// account_id:32 bytes). Advances cs.
+// 4-bit kind (0 -> TON, else wc:uint8 + account_id:32 bytes). Advances cs.
 td::Result<Value> load_asset_4(vm::CellSlice &cs) {
   if (!cs.have(4)) {
     return td::Status::Error("asset: kind underflow");
@@ -65,14 +58,12 @@ td::Result<Value> load_asset_4(vm::CellSlice &cs) {
   return Value::make_asset_jetton(std::to_string(wc) + ":" + hex_upper(id, 32));
 }
 
-// _dedust_deposit_leg resolution result.
 struct Leg {
   const Block *deposit{nullptr};       // vault-facing call the cores parse
   std::vector<const Block *> jt_calls; // raw user JettonTransfer calls
   bool jt_none{false};                 // jt_calls must come from consumed
 };
 
-// builders/dedust.py _dedust_deposit_leg.
 Leg resolve_leg(const Block *leg) {
   Leg out;
   if (is_call_op(leg, kDepositTONToVault)) {
@@ -100,7 +91,6 @@ struct PoolDeposit {
   Value asset0, asset1;
   td::RefInt256 asset0_amount, asset1_amount;
 };
-// ABI-faithful DedustDepositLiquidityToPool unpacker.
 td::Result<PoolDeposit> parse_pool_deposit(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(v, parse_message_body("DedustDepositLiquidityToPool", body));
   const Value *field4_cell = v.field("field4");
@@ -129,8 +119,6 @@ td::Result<PoolDeposit> parse_pool_deposit(const td::Ref<vm::Cell> &body) {
 
 }  // namespace
 
-// blocks/liquidity.py build_dedust_deposit_liquidity_core, wired to
-// _dedust_deposit_final_data's structural role derivation.
 EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &args) {
   auto decoded = decode_consumed_or_none(args);
   if (!decoded) {
@@ -139,8 +127,7 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
   std::vector<const Block *> consumed = std::move(decoded->blocks);
   const Block *block = consumed.front();
 
-  // anchor <- topup <- ask <- deposit leg (None on any missing link ==
-  // Python AttributeError on None.previous_block -> return None).
+  // anchor <- topup <- ask <- deposit leg (null on any missing link -> Null reject).
   const Block *p1 = block->previous_block;
   const Block *p2 = p1 != nullptr ? p1->previous_block : nullptr;
   const Block *leg = p2 != nullptr ? p2->previous_block : nullptr;
@@ -171,10 +158,8 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
       rejection = b;
     }
   }
-  // Both TON and jetton excess
-  // legs hang off a DedustReturnExcessFromVault: the ton excess is a DedustPayout
-  // child, the jetton excess is a jetton_transfer child (labeled 'jetton_excess'
-  // in the reference implementation and matched by block type here).
+  // Both TON and jetton excess legs hang off a DedustReturnExcessFromVault:
+  // TON excess is a DedustPayout child, jetton excess is a jetton_transfer child.
   std::vector<const Block *> returns;
   for (const Block *b : consumed) {
     if (is_call_op(b, kReturnExcessFromVault)) {
@@ -195,7 +180,6 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     }
   }
 
-  // --- build_dedust_deposit_liquidity_core ---
   auto r_anchor_body = block_body(block);
   if (r_anchor_body.is_error()) {
     return rt_ok(Value::null());
@@ -205,7 +189,7 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     return rt_ok(Value::null());
   }
   PoolDeposit pd = r_pd.move_as_ok();
-  Value sender = pd.owner;  // AccountId(owner_addr)
+  Value sender = pd.owner;
   const Message *anchor_msg = block_msg(block);
   Value deposit_contract = account_from_opt(anchor_msg != nullptr ? anchor_msg->source
                                                                   : std::nullopt);
@@ -227,9 +211,9 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
   } else if (rejection != nullptr) {
     const Message *rm = block_msg(rejection);
     lpool = account_from_opt(rm != nullptr ? rm->source : std::nullopt);
-    lp_tokens = Value::null();  // None
+    lp_tokens = Value::null();
   } else {
-    return rt_ok(Value::null());  // raise -> return None
+    return rt_ok(Value::null());  // unrecognized outcome -> Null reject
   }
 
   // actual asset/amount from the deposit leg head.
@@ -256,7 +240,7 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     actual_amount = Value::make_amount(r_amt.move_as_ok());
   } else {
     if (lg.deposit == nullptr) {
-      return rt_ok(Value::null());  // deposit.get_body() on None -> except
+      return rt_ok(Value::null());  // missing deposit -> Null reject
     }
     auto r_body = block_body(lg.deposit);
     if (r_body.is_error()) {
@@ -275,7 +259,7 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     Value jw = env.lookups->get("jetton_wallet", std::vector<Value>{Value::make_str(*dm->source)});
     auto master = wallet_jetton_master_str(jw);
     if (!master) {
-      return rt_ok(Value::null());  // wallet_info.jetton AttributeError -> None
+      return rt_ok(Value::null());  // wallet with no jetton master -> Null reject
     }
     actual_asset = Value::make_asset_jetton(*master);
   }
@@ -291,7 +275,7 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     if (jm == nullptr || !jm->source) {
       continue;
     }
-    // filter: message.source.upper() == sender.as_str()
+    // Keep only transfers whose source equals sender.
     Value jsrc = account_from_opt(jm->source);
     if (sender.t != VType::Account || sender.addr_none || jsrc.t != VType::Account ||
         jsrc.addr_none || !same_account(jsrc, sender)) {
@@ -311,8 +295,8 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
     }
   }
 
-  // vault_excesses: TON excesses first (Python loop order), then jetton excesses
-  // whose receiver == sender, each as (asset, amount) from the leg's data.
+  // vault_excesses: TON excesses first, then jetton excesses whose receiver
+  // equals sender, each as (asset, amount) from the leg's data.
   std::vector<Value> excesses;
   for (const Block *te : ton_excesses) {
     const Message *tm = block_msg(te);
@@ -355,7 +339,6 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
   return rt_ok(Value::make_obj(std::move(d)));
 }
 
-// blocks/liquidity.py build_dedust_deposit_partial_core.
 EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &args) {
   auto decoded = decode_consumed_or_none(args);
   if (!decoded) {
@@ -372,10 +355,10 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
   Leg lg = resolve_leg(leg);
   const Block *vault_call = lg.deposit;
 
-  // Guard: final-deposit opcodes after the topup -> raise -> reject.
+  // Guard: final-deposit opcodes after the topup reject.
   const Block *topup = first_call(consumed, kTopUp);
   if (topup == nullptr) {
-    return rt_ok(Value::null());  // find_call_contract None -> .next_blocks AttributeError
+    return rt_ok(Value::null());
   }
   for (const Block *n : topup->next_blocks) {
     if (is_call_op(n, kDepositLiquidityToPool) || is_call_op(n, kRejection)) {
@@ -395,16 +378,15 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
   Value user_jw_1 = Value::make_account_none();
 
   if (vault_call == nullptr) {
-    return rt_ok(Value::null());  // vault_call.get_message() on None -> except -> None
+    return rt_ok(Value::null());
   }
   auto r_body = block_body(vault_call);
   if (r_body.is_error()) {
     return rt_ok(Value::null());
   }
 
-  // Python tries DedustDepositTONToVault first; on ANY failure falls to the
-  // jetton branch. Distinguish by opcode (a TON-to-vault call parses cleanly,
-  // else it is a JettonNotify).
+  // Try TON-to-vault first; on any failure fall to the jetton branch.
+  // Distinguish by opcode (a TON-to-vault call parses cleanly, else JettonNotify).
   bool ton_branch = is_call_op(vault_call, kDepositTONToVault);
   if (ton_branch) {
     const Message *vm_msg = block_msg(vault_call);
@@ -460,7 +442,7 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
     sender = fu != nullptr ? *fu : Value::make_account_none();
     actual_amount = ja != nullptr ? to_amount(*ja) : Value::make_amount_none();
     if (fp == nullptr) {
-      return rt_ok(Value::null());  // load_ref().begin_parse() on None -> except
+      return rt_ok(Value::null());  // missing forward payload -> Null reject
     }
     EvalResult unwrapped = rt_builtin_tail_unwrap(*fp);
     if (unwrapped.faulted || unwrapped.value.t != VType::Cell) {
@@ -493,7 +475,7 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
     asset0_amount = r_t0.move_as_ok();
     asset1_amount = r_t1.move_as_ok();
 
-    // user_asset_wallet_0 = vault_call.previous_block.get_message().source
+    // user wallet is the vault call's previous-block source
     const Block *vprev = vault_call->previous_block;
     if (vprev == nullptr) {
       return rt_ok(Value::null());
@@ -510,7 +492,7 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
                                 std::vector<Value>{Value::make_str(*vm_msg->source)});
     auto master = wallet_jetton_master_str(jw);
     if (!master) {
-      return rt_ok(Value::null());  // dex_jetton_wallet.jetton AttributeError -> None
+      return rt_ok(Value::null());  // dex wallet with no jetton master -> Null reject
     }
     actual_asset = Value::make_asset_jetton(*master);
   }

@@ -301,13 +301,13 @@ set_source_files_properties(${ABI_BRIDGE_TEST_FIXTURES} PROPERTIES GENERATED TRU
 
 add_executable(ton-mch-engine
     src/main.cpp
-    src/Classify.cpp
-    src/AbiBridgeTest.cpp
-    src/EmuActionSerializeTest.cpp
-    src/EmuCelldbLookupTest.cpp
+    harness/Classify.cpp
+    harness/AbiBridgeTest.cpp
+    harness/EmuActionSerializeTest.cpp
+    harness/EmuCelldbLookupTest.cpp
     ${ABI_BRIDGE_TEST_FIXTURES}
 )
-target_include_directories(ton-mch-engine PRIVATE src ${CMAKE_CURRENT_BINARY_DIR} ${TON_ABI_GENERATED_DIR})
+target_include_directories(ton-mch-engine PRIVATE src harness ${CMAKE_CURRENT_BINARY_DIR} ${TON_ABI_GENERATED_DIR})
 target_compile_features(ton-mch-engine PRIVATE cxx_std_20)
 # mch-emu (not just mch-classify): --actions-msgpack-test gates the write-back
 # writer, which lives there. Still no emulator dependency — mch-emu-bridge is

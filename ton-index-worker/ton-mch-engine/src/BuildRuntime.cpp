@@ -15,9 +15,8 @@ namespace mch {
 
 namespace {
 
-// Block.get_body(): the first event node's message body cell. Any failure
-// (no node / no content / undecodable BOC) behaves like Python's get_body()
-// raising INSIDE the per-type try of _soft_parse: that alternative fails.
+// First event node's message body cell. Any failure (no node / no content /
+// undecodable BOC) fails that soft-parse alternative.
 td::Result<td::Ref<vm::Cell>> block_body_cell(const Block *b) {
   if (b->event_nodes.empty() || b->event_nodes.front()->msg == nullptr ||
       !b->event_nodes.front()->msg->content) {
@@ -97,8 +96,6 @@ EvalResult rt_parse(BuildEnv &env, const Value &target, const std::vector<std::s
     return rt_ok(Value::null());
   }
   // Null and other non-block targets leave the body unset.
-  // Python's per-type try swallows the get_body attribute
-  // error, leaving the body unset for anything `.body` could reach — no-op.
   return rt_ok(Value::null());
 }
 
@@ -153,7 +150,6 @@ EvalResult rt_access_build(const BuildEnv &env, const Value &obj, const std::str
   return rt_access(obj, field);
 }
 
-// Two-phase lookup runtime
 
 std::string lookup_key(const std::string &kind, const std::vector<Value> &args) {
   // Type-tagged, length-prefixed encoding. An embedded NUL, a differing arity, or the same

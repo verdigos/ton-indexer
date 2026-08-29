@@ -1,15 +1,13 @@
-// --actions-msgpack-test: the write-back writer self-test.
-//
-// Every assertion is made on the DECODED map, never on the bytes: this is a
-// GO-CONTRACT gate, not a Python-parity gate. It is the only thing standing
-// between the writer and a wire-type slip that silently drops whole traces,
-// because msgpack maps are order-insensitive to ton-index-go's decoder but its
-// field TYPES are not negotiable.
+// --actions-msgpack-test: write-back writer self-test.
+// Assertions run on the DECODED map, never on the bytes: a Go-decoder
+// contract gate. Field TYPES matter; map order does not. A type slip
+// silently drops whole traces.
 #include "EmuActionSerializeTest.h"
 
 #include "ActionBuild.h"
 #include "BlockTree.h"
 #include "Classify.h"
+#include "SchemaTraceLoader.h"
 #include "Value.h"
 #include "emu/EmuActionSerialize.h"
 #include "emu/EmuTypes.h"  // view_finality
@@ -522,8 +520,8 @@ Action wire_fixture_action() {
   lzs.emplace_back("channel", Value::null());
   a.layerzero_send_data = Value::make_dict(std::move(lzs));
 
-  // A bounded *int64 nonce beside a mapped status STRING (the PARSER, not the
-  // expression language, produces that string, see specs/layerzero.mch).
+  // A bounded *int64 nonce beside a mapped status STRING (the parser, not
+  // the expression language, produces that string).
   Value::Fields lzv;
   lzv.emplace_back("nonce", Value::make_int64(125));
   lzv.emplace_back("status", Value::make_str("succeeded"));
@@ -771,10 +769,9 @@ void test_value_table() {
   check("table/bool_stays_bool", is_bool(at(*ttd, "encrypted"), false));
   check("table/bytes_base64",
         is_str(at(*ttd, "payload"), td::base64_encode(td::Slice("\x01\x02\xff", 3))));
-  // The two-level presence rule: a composite is a literal dict on the Python
-  // side, so its key set is fixed by the fill and an unfilled field is
-  // present-as-NIL. Contrast test_fixed_keys, where an unfilled TOP-LEVEL field
-  // is dropped entirely (Python never assigns the attribute).
+  // The two-level presence rule: a composite's key set is fixed by the fill
+  // and an unfilled field is present-as-NIL. Contrast test_fixed_keys, where
+  // an unfilled TOP-LEVEL field is dropped entirely.
   check("table/null_key_is_nil", is_nil(at(*ttd, "content")));
   check("table/addr_none_key_is_nil", is_nil(at(*ttd, "owner")));
   const msgpack::object *items = at(*ttd, "items");
@@ -844,8 +841,8 @@ void test_multiple_actions() {
   check("multi/shared_trace_key", is_str(at(*r1, "trace_external_hash_norm"), kTraceKey));
 }
 
-// create_unknown_action's row shape, gated hermetically, the corpus twin
-// covers it on 50 real fixtures, but that gate needs Python and the fixtures.
+// create_unknown_action's row shape, gated hermetically. The corpus twin
+// covers it on 50 real fixtures.
 void test_unknown_action() {
   Trace trace;
   trace.trace_id = kTraceKey;
@@ -898,6 +895,71 @@ void test_unknown_action() {
   // It sets no directional or composite field at all, so the row is exactly the
   // fixed key set, the same shape Python's create_unknown_action produces.
   check("unknown/no_optional_keys", row->via.map.size == 12);
+}
+
+void test_schema_no_gas_ton_transfer() {
+  auto bits = [](unsigned char marker) {
+    td::Bits256 value;
+    value.set_zero();
+    value.data()[31] = marker;
+    return value;
+  };
+  auto ordinary = [](schema::ComputeSkipReason reason, bool aborted) {
+    schema::TransactionDescr_ord descr{};
+    descr.compute_ph = schema::TrComputePhase_skipped{reason};
+    descr.aborted = aborted;
+    return schema::TransactionDescr{descr};
+  };
+
+  schema::Message transfer{};
+  transfer.hash = bits(3);
+  transfer.source = kAddrA;
+  transfer.destination = kAddrB;
+  transfer.created_lt = 150;
+  transfer.bounce = false;
+
+  schema::Transaction root{};
+  root.hash = bits(1);
+  root.account = block::StdAddress(0, bits(4));
+  root.lt = 100;
+  root.now = 1000;
+  root.mc_seqno = 10;
+  root.orig_status = schema::AccountStatus::active;
+  root.end_status = schema::AccountStatus::active;
+  root.description = ordinary(schema::cskip_no_state, false);
+  root.out_msgs.push_back(transfer);
+
+  schema::Transaction child{};
+  child.hash = bits(2);
+  child.account = block::StdAddress(0, bits(5));
+  child.lt = 200;
+  child.now = 1001;
+  child.mc_seqno = 10;
+  child.orig_status = schema::AccountStatus::active;
+  child.end_status = schema::AccountStatus::active;
+  child.description = ordinary(schema::cskip_no_gas, true);
+  child.in_msg = transfer;
+
+  auto loaded = schema_to_trace("schema-no-gas", {root, child});
+  check("schema_no_gas/loads", loaded.is_ok());
+  if (loaded.is_error()) {
+    return;
+  }
+
+  TraceContext ctx;
+  ctx.trace = loaded.move_as_ok();
+  check("schema_no_gas/reason_loaded",
+        ctx.trace.transactions.size() == 2 &&
+            ctx.trace.transactions[1]->skipped_reason == std::optional<std::string>("no_gas"));
+  ctx.tree = to_tree(ctx.trace);
+  check("schema_no_gas/tree_has_root", ctx.tree.root != nullptr);
+  if (ctx.tree.root == nullptr) {
+    return;
+  }
+  ctx.root = init_block(ctx.arena, ctx.tree.root);
+  check("schema_no_gas/incoming_ton_transfer_not_failed",
+        ctx.root != nullptr && ctx.root->next_blocks.size() == 1 &&
+            !ctx.root->next_blocks.front()->failed);
 }
 
 // Action fills without fixture-corpus coverage are exercised directly here.
@@ -1253,6 +1315,7 @@ int run_action_msgpack_test() {
   test_counters();
   test_multiple_actions();
   test_unknown_action();
+  test_schema_no_gas_ton_transfer();
   test_bucket_b_fills();
   test_evaa_liquidate_surface();
   test_empty_view_finality();

@@ -70,7 +70,6 @@ async function main() {
             throw new Error(`PROD_DECLS lists '${stem}' but ${declPath} does not exist`);
         }
         const abi = await compileTolk(declPath);
-        // Locked decision 15 pins the schema version exactly.
         if (abi.abi_schema_version !== '1.0') {
             throw new Error(`unexpected abi_schema_version '${abi.abi_schema_version}' for ${stem}`);
         }

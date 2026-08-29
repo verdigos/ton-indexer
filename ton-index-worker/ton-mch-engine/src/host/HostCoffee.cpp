@@ -1,10 +1,5 @@
-// Coffee swap host fn (builders/coffee.py + blocks/swaps.py
-// build_coffee_swap_core). See host/HostImpls.h for the internal registry
-// surface. Message bodies are parsed inline (the spec parses none of them).
-//
-// coffee_swap_data decodes the consumed set and runs the typed coffee_swap
-// core, which derives a SwapRecord instead of assembling + mutating generic
-// `Value` dicts through SwapRecord::fill_peer_out_assets.
+// Message bodies are parsed inline (the spec parses none of them).
+// coffee_swap_data decodes the consumed set and derives a SwapRecord.
 #include "host/HostImpls.h"
 
 #include "host/BlockViews.h"
@@ -52,10 +47,9 @@ TransferLeg ton_leg(Value amount, Value source, Value dest) {
   return leg;
 }
 
-// builders/coffee.py _coffee_swap_data + blocks/swaps.py build_coffee_swap_core.
-// TON-arm reachable under the IR engine (CoffeeSwapNative in, CoffeePayout /
-// CoffeeNotification out); the jetton legs need the skipped jetton_transfer
-// block. Returns an encoded SwapRecord, or Null where a role is missing / no hop.
+// TON-arm is reachable (CoffeeSwapNative in, CoffeePayout / CoffeeNotification
+// out); jetton legs need a jetton_transfer block. Encoded SwapRecord, or Null
+// where a role is missing / no hop.
 EvalResult coffee_swap(const ConsumedBlocks &consumed) {
   const Block *block = consumed.anchor();
   std::vector<const Block *> others = consumed.others();
@@ -83,7 +77,6 @@ EvalResult coffee_swap(const ConsumedBlocks &consumed) {
     }
   }
 
-  // --- build_coffee_swap_core ---
   if (in_transfer == nullptr || payout == nullptr || out_transfer == nullptr) {
     return host_reject("coffee_swap_data: missing role");
   }
@@ -130,9 +123,8 @@ EvalResult coffee_swap(const ConsumedBlocks &consumed) {
     return host_reject("coffee_swap_data: no hop");
   }
 
-  // For in_transfer_data, a jetton in-leg is a generic Block
-  // with btype "jetton_transfer" whose `.data` carries the transfer fields
-  // (swaps.py gates on btype); otherwise use the CoffeeSwapNative TON arm.
+  // Jetton in-leg is a jetton_transfer whose data carries the transfer fields;
+  // otherwise use the CoffeeSwapNative TON arm.
   Value sender = Value::null();
   TransferLeg in_leg;
   if (in_transfer->btype == mch::btype::kJettonTransfer) {
@@ -163,8 +155,7 @@ EvalResult coffee_swap(const ConsumedBlocks &consumed) {
                      account_from_opt(m != nullptr ? m->destination : std::nullopt));
   }
 
-  // For out_transfer_data, a jetton out-leg uses btype and data;
-  // (swaps.py:1424); else CoffeePayout / CoffeeNotification TON arms.
+  // Jetton out-leg uses btype and data; else CoffeePayout / CoffeeNotification.
   TransferLeg out_leg;
   if (out_transfer->btype == mch::btype::kJettonTransfer) {
     out_leg = TransferLeg::from_jetton_transfer(out_transfer);
@@ -211,7 +202,6 @@ EvalResult coffee_swap(const ConsumedBlocks &consumed) {
   rec.referral_address = Value::null();
   rec.failed = !ok;
   // Fill peer out-assets from the next hop or final payout.
-  // const_cast on generic Value storage).
   rec.fill_peer_out_assets();
   return rt_ok(rec.encode());
 }

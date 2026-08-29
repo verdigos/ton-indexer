@@ -75,30 +75,27 @@ struct Action {
 #define MCH_DECL(name) Value name;
   MCH_ACTION_VALUE_FIELDS(MCH_DECL)
 #undef MCH_DECL
-  // Child-action recursion (serialize_blocks, block_tree_serializer.py:1668-1682).
   // Empty on a top-level row; on a child row, the action_id of the block that
   // consumed it and the btypes of every ancestor up the consumption chain.
   std::string parent_action_id;
   std::vector<std::string> ancestor_type;
 };
 
-// One row serialize_blocks emits: the block plus the two fields that are NOT a
-// property of the block alone but of WHERE it sits in the consumption tree.
-// Lives here rather than in ClassifyCore.h so ActionBuild owns the whole Action
-// vocabulary (and the core can build a row without depending on rendering).
+// One serialized row: the block plus the two fields that are not a property
+// of the block alone but of where it sits in the consumption tree.
 struct ActionRow {
   Block *block{nullptr};
   std::string parent_action_id;
   std::vector<std::string> ancestor_type;
 };
 
-// _calc_action_id (block_tree_serializer.py:110-120): base64(sha256(the lowest-lt
-// event node's msg_hash|tx_hash + btype)). A pure function of the block, which is
-// what lets the serializer link a child to its parent before either is built.
+// base64(sha256(the lowest-lt event node's msg_hash|tx_hash + btype)). A pure
+// function of the block, so the serializer can link a child to its parent
+// before either is built.
 std::string calc_action_id(const Block *b);
 
-// _base_block_to_action + block_to_action dispatch, over a produced block.
-// Returns false for a btype outside the ported fill set (skip-table entry).
+// Dispatch over a produced block. Returns false for a btype outside the fill
+// set (skip-table entry).
 bool build_action(Block *b, Action &a);
 
 bool build_action(const ActionRow &row, Action &a);
@@ -106,13 +103,12 @@ bool build_action(const ActionRow &row, Action &a);
 // Dispatched like the other fills; also driven directly by the serialize test.
 void fill_evaa_liquidate(const Value &data, Action &action);
 
-// create_unknown_action (block_tree_serializer.py:1683-1706): the synthetic row
-// a trace gets when classification SUCCEEDS but produces nothing. Emitted by
-// the adapter when ClassifyResult::unknown_trace is set.
+// Synthetic row a trace gets when classification succeeds but produces
+// nothing. Emitted when ClassifyResult::unknown_trace is set.
 //
-// Carries the ONLY action_id in the system not derived from a hash: Python uses
-// the trace id (`:1690`), which on the emulated path is also the Redis trace
-// key. The lt/utime/mc_seqno_end range comes from the Trace, so every loader must
+// Carries the only action_id in the system not derived from a hash: the
+// trace id, which on the emulated path is also the Redis trace key. The
+// lt/utime/mc_seqno_end range comes from the Trace, so every loader must
 // populate those fields; see TraceLoader.h.
 Action create_unknown_action(const Trace &trace);
 

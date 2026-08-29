@@ -13,8 +13,8 @@ namespace mch {
 struct Block;  // BlockTree.h
 
 // The consumed match set handed to a swap-style host fn: the single List arg
-// decoded into its Block elements (non-Block elements dropped, matching the old
-// hand loops). The anchor is element 0; `others` is the tail.
+// decoded into its Block elements (non-Block elements dropped). The anchor is
+// element 0; `others` is the tail.
 struct ConsumedBlocks {
   std::vector<const Block *> blocks;
 

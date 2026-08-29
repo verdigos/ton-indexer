@@ -1,5 +1,3 @@
-// NFT host fns (builders/nft_transfer.py + blocks/nft.py). See host/HostImpls.h
-// for the internal registry surface and HostRegistry.h for the public one.
 #include "host/HostImpls.h"
 
 #include "host/HostCommon.h"
@@ -28,8 +26,8 @@ namespace {
 constexpr std::uint32_t kTeleitemBidInfoOpcode = 0x38127DE1;
 constexpr std::uint32_t kTelemintOpcode = 0x299a3e15;
 
-// AccountId(x): a raw-address Str -> normalized Account; anything else (Null,
-// non-address) -> addr_none, mirroring AccountId(None).
+// Raw-address Str -> normalized Account; anything else (null, non-address)
+// becomes addr_none.
 Value account_from_value(const Value &v) {
   if (v.t == VType::Str) {
     return account_from_opt(std::optional<std::string>(v.str));
@@ -40,7 +38,7 @@ Value account_from_value(const Value &v) {
   return Value::make_account_none();
 }
 
-// Amount(x): an int/amount value becomes Amount; null becomes Amount(None).
+// Int/Amount becomes Amount; null becomes Amount-none.
 Value amount_or_none(const Value &v) {
   if (v.is_null()) {
     return Value::make_amount_none();
@@ -52,7 +50,6 @@ const EventNode *first_node(const Block *b) {
   return (b == nullptr || b->event_nodes.empty()) ? nullptr : b->event_nodes.front();
 }
 
-// NftTransfer body parser
 
 struct NftTransferMsg {
   td::RefInt256 query_id;
@@ -74,7 +71,7 @@ td::Result<NftTransferMsg> parse_nft_transfer(const td::Ref<vm::Cell> &body) {
   out.query_id = refint_u64(cs.fetch_ulong(64));
   TRY_RESULT_ASSIGN(out.new_owner, load_address_py(cs));
   TRY_RESULT_ASSIGN(out.response_destination, load_address_py(cs));
-  // custom_payload = load_maybe_ref -> to_boc(hash_crc32=True).
+  // custom_payload maybe-ref, encoded as BOC with crc32.
   td::Ref<vm::Cell> cp;
   if (!cs.fetch_maybe_ref(cp)) {
     return td::Status::Error("nft_transfer: bad custom_payload");
@@ -84,7 +81,7 @@ td::Result<NftTransferMsg> parse_nft_transfer(const td::Ref<vm::Cell> &body) {
     out.custom_payload = Value::make_bytes(std::move(cp_boc));
   }
   TRY_RESULT_ASSIGN(out.forward_amount, load_coins_py(cs));
-  // forward_payload: is_right ? load_ref() : copy().to_cell(), then to_boc.
+  // forward_payload: either a ref or the remaining slice, then BOC with crc32.
   if (cs.size() > 0) {
     bool is_right = cs.fetch_ulong(1) != 0;
     td::Ref<vm::Cell> fp_cell;
@@ -106,10 +103,9 @@ td::Result<NftTransferMsg> parse_nft_transfer(const td::Ref<vm::Cell> &body) {
   return out;
 }
 
-// NftOwnershipAssigned: only prev_owner is read by the nft_transfer core.
-// ABI-faithful NftOwnershipAssignedPrevOwner parser. (The FULL
-// ownership+payload parse for the telegram core stays hand because it is a
-// soft partial parse.)
+// Only prev_owner is read by the nft_transfer core. The full
+// ownership+payload parse for the telegram core stays hand-written because
+// it is a soft partial parse.
 td::Result<Value> parse_ownership_prev_owner(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(v, parse_message_body("NftOwnershipAssignedPrevOwner", body));
   return *v.field("prev_owner");
@@ -120,7 +116,7 @@ struct OwnershipFull {
   td::RefInt256 query_id;
   Value prev_owner{Value::null()};   // Account (empty -> addr_none)
   bool has_payload{false};
-  std::string payload_raw_boc;       // NftPayload.raw = to_cell().to_boc(crc32)
+  std::string payload_raw_boc;       // payload cell as BOC with crc32
   bool is_bid{false};
   td::RefInt256 bid;
 };
@@ -135,15 +131,15 @@ td::Result<OwnershipFull> parse_ownership_full(const td::Ref<vm::Cell> &body) {
   cs.advance(32);
   out.query_id = refint_u64(cs.fetch_ulong(64));
   TRY_RESULT_ASSIGN(out.prev_owner, load_address_py(cs));
-  // nft_payload (Python wraps this whole block in try/except -> None on failure).
+  // Payload parse is soft: any failure leaves nft_payload unset.
   if (!cs.have(1)) {
-    return out;  // no bit -> nft_payload None
+    return out;  // no bit -> nft_payload unset
   }
   bool in_ref = cs.fetch_ulong(1) != 0;
   PSlice ps;
   if (in_ref) {
     if (cs.size_refs() == 0) {
-      return out;  // load_ref would raise -> nft_payload None
+      return out;  // missing ref -> nft_payload unset
     }
     ps = pslice_from_cell(cs.fetch_ref());
   } else {
@@ -151,7 +147,7 @@ td::Result<OwnershipFull> parse_ownership_full(const td::Ref<vm::Cell> &body) {
     ps.refs = ctx.all_refs;
     ps.off = 0;
   }
-  // NftPayload(ps): raw = to_cell().to_boc(crc32).
+  // payload_raw_boc is the payload cell as BOC with crc32.
   auto r_cell = pslice_to_cell(ps);
   if (r_cell.is_error()) {
     return out;
@@ -177,17 +173,14 @@ td::Result<OwnershipFull> parse_ownership_full(const td::Ref<vm::Cell> &body) {
   return out;
 }
 
-// _get_nft_data
 
-// Returns the `nft` dict Value, or faults on a malformed content (Python's
-// `"uri" in None` TypeError -> rejection).
+// Returns the `nft` dict Value, or faults on a malformed content.
 EvalResult get_nft_data(BuildEnv &env, const Value &nft_address) {
-  const std::string &addr_str = nft_address.str;  // AccountId.as_str()
+  const std::string &addr_str = nft_address.str;
   Value nft = env.lookups->get("nft_item", std::vector<Value>{Value::make_str(addr_str)});
 
   Value::Fields d;
   d.emplace_back("address", nft_address);
-  // index / collection / exists / (name,type | meta) filled below.
   Value index = Value::null();
   Value collection = Value::null();
   bool exists = false;
@@ -203,13 +196,13 @@ EvalResult get_nft_data(BuildEnv &env, const Value &nft_address) {
     index = idx != nullptr ? *idx : Value::null();
     const Value *content = nft.field("content");
     if (content == nullptr || content->t != VType::Dict) {
-      // Python: `"uri" in nft.content` on a non-dict raises -> rejection.
+      // Non-dict content faults (the uri membership test would be undefined).
       return rt_fault("nft content is not a dict");
     }
     const Value *uri = content->field("uri");
     bool fragment = fragment_uri(uri);
     if (fragment) {
-      // tokens = uri.split("/"); name = tokens[-1][:-5]; type = tokens[-2].
+      // Last path segment minus 5 chars is name; previous segment is type.
       std::vector<std::string> toks;
       std::string cur;
       for (char c : uri->str) {
@@ -254,8 +247,7 @@ EvalResult get_nft_data(BuildEnv &env, const Value &nft_address) {
 
 }  // namespace
 
-// builders/nft_transfer.py nft_transfer_data(transfer, assigned, funding_parent)
-// returns the fixed 13-key namespace, or Null for an unknown NFT item.
+// Fixed 13-key record, or Null for an unknown NFT item.
 EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
   const Block *transfer = as_block(args[0]);
   const Block *assigned = as_block(args[1]);
@@ -268,7 +260,6 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
     return rt_fault("nft_transfer_data: transfer has no node");
   }
 
-  // NftTransfer parse (anchor body).
   auto r_body = block_body(transfer);
   if (r_body.is_error()) {
     return rt_fault("nft_transfer_data: transfer body");
@@ -407,9 +398,8 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
   return rt_ok(Value::make_obj(std::move(ns)));
 }
 
-// builders/telegram_nft.py telegram_nft_purchase_data(assigned, payment,
-// payout_1, payout_2) -> the fixed 16-key namespace, or Null to reject (unknown
-// NFT item). Royalty pair present only for 2-payout traces (out{} `?:`).
+// Fixed 16-key record, or Null for an unknown NFT item. Royalty pair present
+// only for 2-payout traces.
 EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &args) {
   const Block *assigned = as_block(args[0]);
   const Block *payment = as_block(args[1]);
@@ -426,7 +416,7 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
   }
   auto r_own = parse_ownership_full(r_body.move_as_ok());
   if (r_own.is_error()) {
-    return rt_fault("telegram: ownership parse");  // NftOwnershipAssigned header raise
+    return rt_fault("telegram: ownership parse");
   }
   OwnershipFull own = r_own.move_as_ok();
 
@@ -461,9 +451,9 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
     is_purchase = true;
     price = to_amount(Value::make_int(own.bid));
     marketplace = Value::make_str("fragment");
-    // real_prev_owner stays null (Python sets it to None explicitly).
-    // is_mint: telemint call (0x299a3e15) or nft_mint parent -> not a purchase.
-    // Live on telegram_nft_assigned (the telemint mint variant); inert on
+    // real_prev_owner stays null.
+    // is_mint: telemint call or nft_mint parent -> not a purchase.
+    // Live on telegram_nft_assigned (telemint mint variant); inert on
     // telegram_nft_purchase, whose pattern forces a ton_transfer/external parent.
     bool is_mint = payment != nullptr &&
                    ((payment->btype == mch::btype::kCallContract && payment->opcode &&
@@ -527,14 +517,10 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
   return rt_ok(Value::make_obj(std::move(ns)));
 }
 
-// _is_teleitem
 
-// `is_teleitem(nft)`, the looked-up nft_item Obj in, a Bool out. Mirrors the
-// reference predicate exactly: a null item or a missing/absent `content` is false,
-// otherwise the metadata `uri` must contain "https://nft.fragment.com" (the same
-// test get_nft_data above already runs on the same field). Unlike get_nft_data
-// this NEVER faults: the reference `_is_teleitem` returns False for a None content
-// instead of raising, and it is the only caller of this fn.
+// Looked-up nft_item in, Bool out. Null item or missing/absent content is
+// false; otherwise the metadata uri must contain the Fragment NFT host.
+// Never faults: missing content is false.
 EvalResult is_teleitem(BuildEnv &, const std::vector<Value> &args) {
   const Value *content = args[0].is_null() ? nullptr : args[0].field("content");
   if (content == nullptr || content->t != VType::Dict) {
@@ -545,9 +531,8 @@ EvalResult is_teleitem(BuildEnv &, const std::vector<Value> &args) {
   return rt_ok(Value::make_bool(fragment));
 }
 
-// builders/nft_transfer.py nft_transfer_parent_absorb shaper: purchase branch
-// only, absorb the funding parent (produced.previous_block) unless it is a
-// finish/stop sale-contract ton_transfer.
+// Purchase branch only: absorb the funding parent (produced.previous_block)
+// unless it is a finish/stop sale-contract ton_transfer.
 void nft_transfer_parent_absorb(Block *produced, const ShaperMatch &) {
   if (produced->data.is_null()) {
     return;

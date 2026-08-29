@@ -30,27 +30,23 @@ struct WhereEnv {
   std::size_t n_slots{0};
 };
 
-// --- result helpers ---
 inline EvalResult rt_ok(Value v) { return EvalResult{false, std::move(v), {}}; }
 EvalResult rt_fault(const std::string &msg);
 inline bool rt_is_null(const Value &v) { return v.t == VType::Null; }
 
-// --- name / access / lookup ---
 EvalResult rt_name(const Env &env, const std::string &id);
 EvalResult rt_access(const Value &obj, const std::string &field);
 EvalResult rt_lookup(const Lookups &lk, const std::string &name, const std::vector<Value> &args);
 
 // Leading-dot field access inside a `where (expr)`: reads the candidate
-// block's data (mirrors expr_eval._sync_eval "dotfield": null data -> null,
-// dict data -> key lookup with missing-key fault, other data -> rt_access).
+// block's data (null data -> null, dict data -> key lookup with missing-key
+// fault, other data -> rt_access).
 EvalResult rt_dotfield(const WhereEnv &w, const std::string &name);
 
-// --- unary ---
 EvalResult rt_neg(const Value &x);
 EvalResult rt_not(const Value &x);
 EvalResult rt_require_bool(const Value &x);
 
-// --- binary strict operators (lazy and/or/??/ternary live at the call site) ---
 EvalResult rt_eq(const Value &l, const Value &r);
 EvalResult rt_ne(const Value &l, const Value &r);
 EvalResult rt_lt(const Value &l, const Value &r);
@@ -61,10 +57,9 @@ EvalResult rt_add(const Value &l, const Value &r);
 EvalResult rt_sub(const Value &l, const Value &r);
 EvalResult rt_mul(const Value &l, const Value &r);
 
-// --- builtins (null-strict: any null argument short-circuits to null) ---
-// Per-builtin cores. The interpreter dispatches through rt_call_builtin; the
-// generated code calls the typed rt_builtin_<name> directly, without a name
-// string or per-call argument vector. Both paths run the same core.
+// Builtins (null-strict: any null argument short-circuits to null).
+// The interpreter dispatches through rt_call_builtin; generated code calls
+// the typed rt_builtin_<name> directly. Both paths run the same core.
 EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &args);
 EvalResult rt_builtin_account(const Value &x);
 // Comprehensions

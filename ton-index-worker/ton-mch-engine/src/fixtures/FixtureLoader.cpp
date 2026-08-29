@@ -260,8 +260,7 @@ td::Result<Trace> load_trace(const std::string &path) {
   const auto *trace_obj = map_get(root, "trace");
   if (!is_nil(trace_obj)) {
     trace.trace_id = get_str(*trace_obj, "trace_id");
-    // The header is authoritative here, exactly as Python's Trace ROW is
-    // (deserialize_trace, tests/utils/trace_deserializer.py).
+    // The header is authoritative for these timestamps. Intentional/parity-frozen.
     trace.start_lt = get_i64(*trace_obj, "start_lt");
     trace.end_lt = get_i64(*trace_obj, "end_lt");
     trace.start_utime = get_i64(*trace_obj, "start_utime");

@@ -63,8 +63,7 @@ bool is_bool(const Value *v, bool want) {
 bool is_account(const Value *v) {  // non-none Account
   return v && v->t == VType::Account && !v->addr_none && !v->str.empty();
 }
-// Exact canonical raw rendering: the
-// adapter must yield "WC:HEX_UPPER" == Python AccountId.as_str().upper().
+// Exact canonical raw rendering: the adapter must yield "WC:HEX_UPPER".
 bool is_account_str(const Value *v, const std::string &want) {
   return v && v->t == VType::Account && !v->addr_none && v->str == want;
 }
@@ -74,7 +73,7 @@ const Value *fld(const Value &v, const char *name) { return v.field(name); }
 td::Ref<vm::Cell> empty_cell() { return vm::CellBuilder().finalize(); }
 td::Ref<vm::CellSlice> empty_slice() { return vm::load_cell_slice_ref(empty_cell()); }
 AbiAddress test_addr() { return ton_abi::gen::address_from_string("0:" + std::string(64, 'a')); }
-// The canonical render of test_addr(): uppercase raw, == Python AccountId.as_str().
+// The canonical render of test_addr(): uppercase raw.
 const std::string kTestAddrCanon = "0:" + std::string(64, 'A');
 
 template <class T>

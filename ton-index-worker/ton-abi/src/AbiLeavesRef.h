@@ -13,6 +13,21 @@
 
 namespace ton_abi {
 
+// Open a ref as an ordinary slice, fail-closed on special/exotic cells (the
+// reference assumes none; the top-level body open also rejects exotic cells).
+// `who` prefixes the error messages ("ref", "container", ...).
+inline td::Result<vm::CellSlice> open_ordinary(const td::Ref<vm::Cell> &cell, const char *who) {
+  if (cell.is_null()) {
+    return td::Status::Error(PSLICE() << who << ": null cell");
+  }
+  bool is_special = false;
+  vm::CellSlice cs = vm::load_cell_slice_special(cell, is_special);
+  if (is_special) {
+    return td::Status::Error(PSLICE() << who << ": special/exotic cell not supported");
+  }
+  return cs;
+}
+
 // cell: an opaque whole cell, stored/loaded as a ref (no inner parse).
 td::Result<td::Ref<vm::Cell>> load_cell(vm::CellSlice &cs);
 td::Status store_cell(vm::CellBuilder &cb, td::Ref<vm::Cell> cell);  // also used for cellOf store

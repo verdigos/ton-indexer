@@ -15,7 +15,6 @@ namespace {
 using Json = td::JsonValue;
 using JType = td::JsonValue::Type;
 
-// JSON helpers
 
 const Json *jfield(const Json &e, td::Slice name) {
   if (e.type() != JType::Object) {
@@ -74,8 +73,8 @@ td::Result<std::string> jstr_req(const Json &e, td::Slice name) {
   return f->get_string().str();
 }
 
-// Parses a JSON string field as a decimal-bigint (`bigint_as_string`, abi-
-// types.ts:9); malformed-bigint invariant lives here.
+// Parses a JSON string field as a decimal-bigint; malformed-bigint invariant
+// lives here.
 td::Result<td::RefInt256> jbigint_req(const Json &e, td::Slice name) {
   TRY_RESULT(s, jstr_req(e, name));
   td::RefInt256 v = td::dec_string_to_int256(s);
@@ -85,7 +84,6 @@ td::Result<td::RefInt256> jbigint_req(const Json &e, td::Slice name) {
   return v;
 }
 
-// Ty (abi-types.ts:12-45)
 
 td::Result<Ty> parse_ty(const Json &j, int idx) {
   if (j.type() != JType::Object) {
@@ -146,10 +144,8 @@ td::Result<Ty> parse_ty(const Json &j, int idx) {
   };
 
   // Width bounds (loader invariant): 256-bit cell integers +/- sign bit is
-  // the actual TON limit (LotsOfWrappers.spec.ts exercises storeUint(...,256)
-  // and storeInt(...,257) at the edges); bitsN/varintN/varuintN bounds are
-  // this loader's own sanity fence, not something the reference enumerates
-  // explicitly -- revisit if a real fixture needs wider.
+  // the actual TON limit; bitsN/varintN/varuintN bounds are this loader's
+  // own sanity fence -- revisit if a real fixture needs wider.
   if (kind == "int") return no_payload(TyKind::Int);
   if (kind == "intN") return width(TyKind::IntN, 1, 257);
   if (kind == "uintN") return width(TyKind::UintN, 1, 256);
@@ -176,14 +172,6 @@ td::Result<Ty> parse_ty(const Json &j, int idx) {
     TRY_RESULT(inner, jint_req(j, "inner_ty_idx"));
     TyNullable n;
     n.inner_ty_idx = static_cast<int>(inner);
-    if (has(j, "stack_type_id")) {
-      TRY_RESULT(v, jint_req(j, "stack_type_id"));
-      n.stack_type_id = static_cast<int>(v);
-    }
-    if (has(j, "stack_width")) {
-      TRY_RESULT(v, jint_req(j, "stack_width"));
-      n.stack_width = static_cast<int>(v);
-    }
     ty.kind = TyKind::Nullable;
     ty.data = n;
     return ty;
@@ -248,32 +236,19 @@ td::Result<Ty> parse_ty(const Json &j, int idx) {
       TRY_RESULT_PREFIX(pl, jint_req(vj, "prefix_len"),
                          PSLICE() << "unique_types[" << idx << "].variants[" << vi << "]: ");
       uv.prefix_len = static_cast<int>(pl);
-      // prefix_len must fit in 32 bits. prefix_num is a float64 in the JS-side
-      // JSON, so a wider
-      // prefix here would be un-representable by the oracle; reject rather
-      // than silently truncate.
+      // prefix_len must fit in 32 bits. prefix_num is a float64 in the JSON,
+      // so a wider prefix would be un-representable; reject rather than
+      // silently truncate.
       if (uv.prefix_len < 0 || uv.prefix_len > 32) {
         return td::Status::Error(PSLICE() << "unique_types[" << idx << "].variants[" << vi
                                            << "]: prefix_len=" << uv.prefix_len << " out of [0,32]");
       }
       uv.is_prefix_implicit = jbool(vj, "is_prefix_implicit", false);
-      if (has(vj, "stack_type_id")) {
-        TRY_RESULT(v, jint_req(vj, "stack_type_id"));
-        uv.stack_type_id = static_cast<int>(v);
-      }
-      if (has(vj, "stack_width")) {
-        TRY_RESULT(v, jint_req(vj, "stack_width"));
-        uv.stack_width = static_cast<int>(v);
-      }
       u.variants.push_back(uv);
       ++vi;
     }
-    if (has(j, "stack_width")) {
-      TRY_RESULT(v, jint_req(j, "stack_width"));
-      u.stack_width = static_cast<int>(v);
-    }
     // Union prefix-freedom (loader invariant): no variant's prefix bit-string
-    // may be a strict prefix of another's -- see validate_union_prefix_freedom.
+    // may be a strict prefix of another's.
     TRY_STATUS(([&]() -> td::Status {
       for (std::size_t a = 0; a < u.variants.size(); ++a) {
         for (std::size_t b = a + 1; b < u.variants.size(); ++b) {
@@ -301,7 +276,6 @@ td::Result<Ty> parse_ty(const Json &j, int idx) {
   return td::Status::Error(PSLICE() << "unique_types[" << idx << "]: unknown Ty kind '" << kind << "'");
 }
 
-// ABIConstExpression (abi-types.ts:71-90)
 
 td::Result<ABIConstExpression> parse_const_expr(const Json &j) {
   if (j.type() != JType::Object) {
@@ -394,7 +368,6 @@ td::Result<ABIConstExpression> parse_const_expr(const Json &j) {
   return td::Status::Error(PSLICE() << "const expression: unknown kind '" << kind << "'");
 }
 
-// ABIStruct / ABIAlias / ABIEnum (abi-types.ts:105-178)
 
 td::Result<ABICustomSerializers> parse_custom_pack_unpack(const Json &j) {
   ABICustomSerializers c;
@@ -658,9 +631,9 @@ td::Result<ABIStorage> parse_storage(const Json &j) {
 }
 
 // ABIInternalMessage/ABIExternalMessage/ABIOutgoingMessage are distinct types
-// (abi.ts:45-61) that all happen to be `{ body_ty_idx: number }` -- a
-// template avoids either duplicating this loop 4x or reinterpret_cast'ing
-// between unrelated vector<T> element types (which would be UB).
+// that all happen to be `{ body_ty_idx: number }` -- a template avoids either
+// duplicating this loop 4x or reinterpret_cast'ing between unrelated vector<T>
+// element types (which would be UB).
 template <typename MsgT>
 td::Status parse_msg_array(const Json &root, td::Slice field_name, std::vector<MsgT> *out) {
   const Json *arr = jfield(root, field_name);
@@ -694,7 +667,6 @@ td::Result<ABIThrownError> parse_thrown_error(const Json &j) {
   return e;
 }
 
-// Post-parse validation
 
 // Every ty_idx a Ty can reference (single helper so OOB-index and future
 // passes stay in one place).
@@ -807,9 +779,8 @@ td::Status validate_duplicate_decl_names(const ContractABI &abi) {
 
 // struct_instantiations[i].struct_name / alias_instantiations[i].alias_name
 // are MANGLED monomorph names ("ResetTo<int64>"), not the plain declared
-// name ("ResetTo") -- verified against the actual compiler output (the
-// abi-types.ts doc comment's simplified example elides this). The generic
-// declaration is looked up by the part before the first '<'.
+// name ("ResetTo"). The generic declaration is looked up by the part before
+// the first '<'.
 std::string base_name(const std::string &mangled) {
   auto lt = mangled.find('<');
   return lt == std::string::npos ? mangled : mangled.substr(0, lt);

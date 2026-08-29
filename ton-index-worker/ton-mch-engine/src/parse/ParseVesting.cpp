@@ -1,5 +1,4 @@
-// Vesting message parser (messages/vesting.py). See parse/PSlice.h for shared
-// machinery and MsgParse.cpp's header for the pytoniq-parity catalogue.
+// Vesting message parser. Shared machinery is in parse/PSlice.h.
 #include "parse/Parsers.h"
 
 #include "parse/PSlice.h"
@@ -11,14 +10,9 @@
 
 namespace mch {
 
-// VestingSendMessage (messages/vesting.py): the inner message cell is read as a
-// full MessageAny (header + init + body), yielding message_body_hash alongside
-// destination/value; when only the int_msg_info header parses, Python falls back
-// to InternalMsgInfo and leaves message_body_hash None. The header prefix is
-// identical in both paths, so the fallback here is just a null hash.
-// Deviation (documented): a present extra-currency dict ref is consumed but
-// not deep-validated (Python's HashMap.parse would validate; vesting inner
-// messages never carry extra currencies in practice).
+// Inner message is a full MessageAny (header + init + body) yielding
+// message_body_hash with dest/value; header-only parse leaves the hash null.
+// Extra-currency dict refs are consumed but not deep-validated (intentional).
 td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body) {
   TRY_RESULT(ctx, open_body(body));
   auto &cs = ctx.cs;
@@ -39,8 +33,8 @@ td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body) {
   } catch (...) {
     return td::Status::Error("vesting: bad message cell");
   }
-  // InternalMsgInfo.deserialize: tag bit 0, ihr_disabled/bounce/bounced,
-  // src, dest, value (grams + extra dict), ihr_fee, fwd_fee, lt, at.
+  // int_msg_info: tag bit 0, ihr_disabled/bounce/bounced, src, dest,
+  // value (grams + extra dict), ihr_fee, fwd_fee, lt, at.
   if (!ms.have(4)) {
     return td::Status::Error("vesting: msg info underflow");
   }
@@ -70,7 +64,7 @@ td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body) {
   }
   ms.advance(64 + 32);
 
-  // MessageAny tail; any failure = Python's `except` branch (hash stays null).
+  // MessageAny tail; any failure leaves the hash null. Intentional/parity-frozen.
   Value body_hash = Value::null();
   auto r_body = message_any_body(ms);
   if (r_body.is_ok()) {

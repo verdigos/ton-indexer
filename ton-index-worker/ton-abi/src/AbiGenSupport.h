@@ -61,14 +61,11 @@ struct CellOf {
   td::Ref<vm::Cell> cell;
 };
 
-// Typed custom-serializer registry.
-//
-// One registry PER value type T (a function-local static, so no global-init
-// ordering issues). Keys have the form "<contract_name>::<decl name>".
-// pack / unpack / to_abi_value are independently optional. Missing registration
-// or a missing operation at call time is
-// a runtime td::Status error -- NEVER a compile/link error (reference
-// semantics: registerCustomPackUnpack is a runtime map, not a specialization).
+// Typed custom-serializer registry. One registry per value type T (function-local
+// static; no global-init ordering). Keys are "<contract_name>::<decl name>".
+// pack/unpack/to_abi_value are independently optional. Missing registration or
+// operation is a runtime Status error, never a compile/link error: the registry
+// is a runtime map, not a specialization.
 template <class T>
 struct AbiCustomEntry {
   std::function<td::Status(const T &, vm::CellBuilder &)> pack;
@@ -146,13 +143,13 @@ inline AbiAddress address_from_string(const std::string &s) {
   AbiAddress a;
   auto colon = s.find(':');
   if (colon == std::string::npos) {
-    return a;  // None
+    return a;
   }
   unsigned char buf[64];
   std::string hex = s.substr(colon + 1);
   long bits = td::bitstring::parse_bitstring_hex_literal(buf, sizeof(buf), hex.data(), hex.data() + hex.size());
   if (bits != 256) {
-    return a;  // None
+    return a;
   }
   a.kind = AbiAddressKind::Std;
   a.workchain = std::atoi(s.substr(0, colon).c_str());

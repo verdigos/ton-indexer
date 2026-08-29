@@ -53,7 +53,7 @@ Value Value::make_amount(td::RefInt256 n) {
 
 Value Value::make_amount_none() {
   Value v;
-  v.t = VType::Amount;  // num stays null == Python Amount(None)
+  v.t = VType::Amount;  // num stays null == Amount-none
   return v;
 }
 
@@ -134,10 +134,9 @@ const Value *Value::field(const std::string &name) const {
   return nullptr;
 }
 
-// BOC container modes (ADR 0001): rendering uses bare containers; bytes stored
-// into parsed actions use CRC32C so they stay byte-identical with what the old
-// pipeline wrote. Cell content is identical either way; flip either constant
-// to change its mode.
+// BOC container modes: rendering uses bare containers; bytes stored into
+// parsed actions use CRC32C so they stay byte-identical with the old pipeline.
+// Cell content is identical either way; flip either constant to change its mode.
 constexpr int kBocRenderMode = 0;  // bare container
 constexpr int kBocStoredMode = vm::BagOfCells::Mode::WithCRC32C;
 
