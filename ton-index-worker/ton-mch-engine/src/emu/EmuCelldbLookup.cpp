@@ -3,8 +3,10 @@
 #include "EmuInterfaces.h"
 #include "EmuJvaultChain.h"
 
+#include "smc-interfaces/Multisig.h"
 #include "smc-interfaces/NominatorPool.h"
 #include "smc-interfaces/NftSale.h"
+#include "smc-interfaces/NftSaleV4.h"
 #include "smc-interfaces/Tokens.h"
 
 #include <map>
@@ -44,7 +46,16 @@ const schema::AccountState *EmuCelldbTier2::account(const block::StdAddress &add
 }
 
 Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &addr) {
-  enum class Handler { JvaultAssets, JettonWallet, DedustPool, NominatorPool, NftItem, NftAuction };
+  enum class Handler {
+    JvaultAssets,
+    JettonWallet,
+    DedustPool,
+    NominatorPool,
+    NftItem,
+    NftAuction,
+    NftSale,
+    MultisigOrder,
+  };
   static const std::map<std::string, Handler> handlers = {
       {"jvault_assets", Handler::JvaultAssets},
       {"jetton_wallet", Handler::JettonWallet},
@@ -52,6 +63,8 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
       {"nominator_pool", Handler::NominatorPool},
       {"nft_item", Handler::NftItem},
       {"nft_auction", Handler::NftAuction},
+      {"nft_sale", Handler::NftSale},
+      {"multisig_order", Handler::MultisigOrder},
   };
   auto handler = handlers.find(kind);
   if (handler == handlers.end()) {
@@ -111,6 +124,31 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
     }
     case Handler::NominatorPool: {
       auto r = NominatorPoolContract::detect(addr, st->code, st->data);
+      if (r.is_ok()) {
+        iface = to_v2(r.move_as_ok());
+      }
+      break;
+    }
+    case Handler::NftSale: {
+      if (config_ == nullptr) {
+        return Value::null();
+      }
+      auto r = GetGemsNftFixPriceSale::detect(addr, st->code, st->data, config_);
+      if (r.is_ok()) {
+        iface = to_v2(r.move_as_ok());
+        break;
+      }
+      auto r4 = GetGemsNftFixPriceSaleV4::detect(addr, st->code, st->data, config_);
+      if (r4.is_ok()) {
+        iface = to_v2(r4.move_as_ok());
+      }
+      break;
+    }
+    case Handler::MultisigOrder: {
+      if (config_ == nullptr) {
+        return Value::null();
+      }
+      auto r = MultisigOrder::detect(addr, st->code, st->data, *shard_states_, config_);
       if (r.is_ok()) {
         iface = to_v2(r.move_as_ok());
       }
