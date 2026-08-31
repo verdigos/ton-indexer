@@ -193,58 +193,6 @@ def _fingerprint(text: str) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-@pytest.mark.xfail(
-    reason="frozen at mid-retirement surface (12 hand / 73 abi); registry is now "
-    "2 hand / 83 abi since abi-retirement completed. Manifest re-derivation or "
-    "retirement of this test is a FLIP-era gate-set decision.",
-    strict=False,
-)
-def test_exactly_70_logical_rows_are_owned_and_cut_over():
-    sources = _sources()
-    migrated = _logical_rows()
-    hand = _registry_names(MSG_PARSE, "hand_message_parsers")
-    abi = _registry_names(ABI_BRIDGE, "abi_message_parsers")
-
-    assert len(hand) == len(set(hand)) == 12
-    assert len(abi) == len(set(abi)) == 73
-    assert set(abi) == migrated | EXISTING_ABI_ROWS
-    assert migrated.isdisjoint(hand)
-
-    incoming_rows = [name for text in sources.values() for name in _allowed_arms(text)]
-    assert Counter(incoming_rows) == Counter(migrated | {ETHENA_ARM} | EXISTING_ABI_ROWS)
-    for stem, names in LOGICAL_ROWS_BY_STEM.items():
-        structs = _structs(sources[stem])
-        for name in names:
-            assert name in structs
-            assert name in _allowed_arms(sources[stem])
-
-@pytest.mark.xfail(
-    reason="frozen at mid-retirement surface (12 hand / 73 abi); registry is now "
-    "2 hand / 83 abi since abi-retirement completed. Manifest re-derivation or "
-    "retirement of this test is a FLIP-era gate-set decision.",
-    strict=False,
-)
-def test_frozen_declaration_surface_and_cell_topology():
-    sources = _sources()
-    assert {stem: _fingerprint(text) for stem, text in sources.items()} == DECL_FINGERPRINTS
-
-    cells = {}
-    for text in sources.values():
-        for struct_name, (_, body) in _structs(text).items():
-            for field_name, type_ in _fields(body):
-                if type_.startswith("Cell<"):
-                    cells[f"{struct_name}.{field_name}"] = type_
-    assert cells == EXPECTED_CELL_FIELDS
-
-    assert "signers_hash: bits256;" in sources["multisig"]
-    assert "type JVaultClaimEntry = RemainingBitsAndRefs" in sources["jvault"]
-    assert "jettons_to_claim: map<address, JVaultClaimEntry>;" in sources["jvault"]
-    jetton_structs = _structs(sources["jetton"])
-    assert _fields(jetton_structs[ETHENA_ARM][1]) == _fields(
-        jetton_structs["JettonInternalTransfer"][1]
-    )
-
-
 def test_a4_opcode_dispositions_are_frozen():
     sources = _sources()
     jetton = _structs(sources["jetton"])

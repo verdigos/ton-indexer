@@ -61,8 +61,7 @@ bool account_eq_str(const Value &acc, const std::string &s) {
   return norm.has_value() && acc.str == *norm;
 }
 
-// Runtime-owned container `==` for the language; do not borrow the harness
-// comparator `structural_equal`.
+// Language `==` semantics differ from the harness comparator `structural_equal`.
 bool container_eq(const Value &l, const Value &r);
 
 // Structural `==` on two non-null values.
@@ -143,7 +142,6 @@ EvalResult eq_result(const Value &l, const Value &r, bool want_eq) {
     eq = rt_is_null(l) && rt_is_null(r);
   } else {
     // TON asset (no jetton master) vs string: fault, never true/false.
-    // Intentional, parity-frozen.
     if ((l.t == VType::Asset && !l.has_jetton && r.t == VType::Str) ||
         (r.t == VType::Asset && !r.has_jetton && l.t == VType::Str)) {
       return rt_fault("'==' failed: asset has no jetton master string");
