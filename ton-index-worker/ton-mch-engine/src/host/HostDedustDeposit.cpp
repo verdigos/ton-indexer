@@ -1,6 +1,6 @@
 // Both fns reconstruct label roles via previous_block / children_blocks
 // navigation and return Null to reject. Any parse/nav failure is a Null
-// reject (intentional, parity-frozen).
+// reject (intentional).
 #include "host/HostImpls.h"
 
 #include "host/BlockViews.h"

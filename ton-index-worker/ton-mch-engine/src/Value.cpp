@@ -135,7 +135,7 @@ const Value *Value::field(const std::string &name) const {
 }
 
 // BOC container modes: rendering uses bare containers; bytes stored into
-// parsed actions use CRC32C so they stay byte-identical with the old pipeline.
+// parsed actions use CRC32C so the stored bytes stay byte-stable.
 // Cell content is identical either way; flip either constant to change its mode.
 constexpr int kBocRenderMode = 0;  // bare container
 constexpr int kBocStoredMode = vm::BagOfCells::Mode::WithCRC32C;

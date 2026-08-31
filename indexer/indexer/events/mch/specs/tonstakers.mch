@@ -8,8 +8,8 @@
 # TONStakersWithdrawMatcher (idx 5) ahead of JettonBurnBlockMatcher (idx 17), so
 # without a priority < 90 the jetton family consumed the burn first and the whole
 # withdraw family silently produced `jetton_burn` + loose call_contract rows
-# instead — the state both corpus withdraw fixtures (GO-NI0Ej…, oND3Z5gM…) were
-# frozen in. The parity sweep cannot see this: it runs one spec's matchers in
+# instead — which is the row shape recorded in corpus fixtures GO-NI0Ej… /
+# oND3Z5gM…. Per-spec testing cannot see this: it runs one spec's matchers in
 # isolation, never the registered set.
 # The other two anchors (0x47d54391, 0xdb3b8abd) are claimed by nothing else, so
 # 85 is faithfulness rather than necessity there; W010 (three matchers sharing a

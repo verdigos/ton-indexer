@@ -84,7 +84,7 @@ add_custom_command(
 )
 
 # The document the CLASSIFY tables (matchers + builds + wheres) are generated
-# from. -DMCH_TESTBED_IR=<artifact.json> lets a phase run classify against an
+# from. -DMCH_TESTBED_IR=<artifact.json> lets a build run classify against an
 # experimental artifact without replacing the generated production IR; the table
 # SYMBOLS are unchanged, so swapping the document is all the knob does and no
 # run-time table selection is needed. All three tables come from this one

@@ -145,7 +145,7 @@ td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body) {
                                         td::Status::Error("stonfi payload did not match"));
             if (decoded.is_ok()) {
               stonfi_swap_body = decoded.move_as_ok();
-              // No sum_type on Ston.fi success. Intentional/parity-frozen.
+              // No sum_type on Ston.fi success. Intentional.
             } else {
               has_sum_type = true;
               sum_type = "Unknown";

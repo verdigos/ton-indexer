@@ -202,7 +202,7 @@ std::string boc_field_cellhash(const Value &v) {
 
 bool structural_equal(const Value &a, const Value &b) {
   // Expected type drives the check; actual must match that type and be deeply
-  // equal. Intentional/parity-frozen.
+  // equal. Intentional.
   switch (b.t) {
     case VType::Null:
       return a.t == VType::Null;
@@ -261,7 +261,7 @@ bool structural_equal(const Value &a, const Value &b) {
       return true;
     }
     case VType::Block:
-      // Blocks compare by object identity. Intentional/parity-frozen.
+      // Blocks compare by object identity. Intentional.
       return a.t == VType::Block && a.block == b.block;
     case VType::Dict:
     case VType::Obj: {

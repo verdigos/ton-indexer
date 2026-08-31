@@ -33,7 +33,7 @@ td::Result<std::int64_t> num_i64(const Json &n) {
 }
 
 // Node ids in a fixed order (child, children..., parent, branches..., step,
-// exit). Remap discovery order depends on it. Intentional/parity-frozen.
+// exit). Remap discovery order depends on it. Intentional.
 std::vector<int> edge_refs(const Json &rec) {
   std::vector<int> out;
   if (has(rec, "child")) {
@@ -111,7 +111,7 @@ void scan_program(const Json &e, CompiledMatcher &m) {
 }
 
 // Local reachability over every edge kind (child/parent/step/exit/children/
-// branches), cycle-safe, discovery order. Intentional/parity-frozen.
+// branches), cycle-safe, discovery order. Intentional.
 std::vector<int> reachable(const std::vector<CompiledNode> &nodes, int start) {
   std::vector<int> out{start};
   std::unordered_set<int> seen{start};

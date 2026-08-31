@@ -73,7 +73,7 @@ Value decode(const Json &e) {
   }
 
   if (has_tag(e, "$amount")) {
-    // {"$amount": null} encodes Amount(None) (F2 amount_value_null vector); a
+    // {"$amount": null} encodes Amount(None) (the amount_value_null vector); a
     // number encodes a concrete amount. get_number() on the null node would
     // CHECK/abort, so branch on the node type.
     const auto *v = jfield(e, "$amount");

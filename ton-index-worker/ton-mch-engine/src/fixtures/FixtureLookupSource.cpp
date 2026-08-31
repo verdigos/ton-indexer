@@ -138,7 +138,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
   }
     case Handler::DedustPool: {
     // DedustPool: lookup by the address as given. Absent is null; the host
-    // then rejects. Intentional/parity-frozen.
+    // then rejects. Intentional.
     auto it = interfaces_->find(addr);
     if (it == interfaces_->end()) {
       return Value::null();
@@ -190,7 +190,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
       return Value::null();
     }
     Value minter = r_minter.move_as_ok();
-    // addr_none pool fails the whole lookup (no string form). Intentional/parity-frozen.
+    // addr_none pool fails the whole lookup (no string form). Intentional.
     if (pool.t != VType::Account || pool.addr_none) {
       return Value::null();
     }

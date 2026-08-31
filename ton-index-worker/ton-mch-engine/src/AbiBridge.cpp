@@ -58,7 +58,7 @@ Value cell_from_slice(const td::Ref<vm::CellSlice> &slice) {
 Value adapt_address(const ton_abi::AbiAddress &a) {
   switch (a.kind) {
     case AbiAddressKind::Std: {
-      // "wc:hex" -> canonical "wc:HEX" (uppercase raw form, AccountId.as_str parity).
+      // "wc:hex" -> canonical "wc:HEX" (uppercase raw form, identical to AccountId.as_str).
       std::string raw = std::to_string(a.workchain) + ":" + a.hash.to_hex();
       return Value::make_account_raw(raw);
     }

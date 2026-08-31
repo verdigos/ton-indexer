@@ -64,7 +64,7 @@ td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body) {
   }
   ms.advance(64 + 32);
 
-  // MessageAny tail; any failure leaves the hash null. Intentional/parity-frozen.
+  // MessageAny tail; any failure leaves the hash null. Intentional.
   Value body_hash = Value::null();
   auto r_body = message_any_body(ms);
   if (r_body.is_ok()) {

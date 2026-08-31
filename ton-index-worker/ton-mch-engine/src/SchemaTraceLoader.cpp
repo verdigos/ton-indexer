@@ -123,7 +123,7 @@ td::Result<Trace> schema_to_trace(const std::string &trace_id,
     tx->lt = static_cast<std::int64_t>(st.lt);
     tx->now = static_cast<std::int64_t>(st.now);
     tx->mc_block_seqno = static_cast<std::int64_t>(st.mc_seqno);
-    // Same canonical-or-original path as Account values (expression parity).
+    // Same canonical-or-original path as Account values.
     tx->account = canonicalize_or_passthrough(convert::to_raw_address(st.account));
     tx->orig_status = status_str(st.orig_status);
     tx->end_status = status_str(st.end_status);

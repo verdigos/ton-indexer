@@ -86,8 +86,7 @@ ARM_NAMES = {
 
 # Hashes cover the normalized declaration surface only: struct order, prefixes,
 # visible field order/types, and aliases. Compiler scaffolding and comments do
-# not affect them. This is the steady-state replacement for the deleted source
-# census and freezes all 70 declarations without another schema frontend.
+# not affect them. The fingerprints pin all 70 declarations.
 DECL_FINGERPRINTS = {
     "jetton": "28ff2075dadedd370f9ad0b66cf4a1ae4999489e0c8ee13e34e0d9316e2df856",
     "multisig": "66138be810df1efc2cc6832edba8a3808dafa6a2068bb246b129d0d93fbb96b6",

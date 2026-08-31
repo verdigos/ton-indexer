@@ -13,7 +13,7 @@ namespace mch {
 
 namespace {
 
-// Strict UTF-8: invalid bytes fail the whole parse. Intentional/parity-frozen.
+// Strict UTF-8: invalid bytes fail the whole parse. Intentional.
 bool valid_utf8(const std::string &s) {
   size_t i = 0;
   while (i < s.size()) {
@@ -68,7 +68,7 @@ td::Result<std::string> fetch_bytes_str(vm::CellSlice &cs, int n) {
 }
 
 // DNS value dicts wrap addresses: addr_none becomes an Account none (not null);
-// an extern address string fails the whole parse. Intentional/parity-frozen.
+// an extern address string fails the whole parse. Intentional.
 td::Result<Value> account_id_of(Value addr) {
   if (addr.is_null()) {
     return Value::make_account_none();
@@ -81,7 +81,7 @@ td::Result<Value> account_id_of(Value addr) {
 
 }  // namespace
 
-// DNSText chunk walk (intentional, parity-frozen): every chunk's length+text
+// DNSText chunk walk (intentional): every chunk's length+text
 // is read from the SAME value slice; the first extra chunk consumes one of
 // ITS refs into a dead variable; a third chunk always fails the parse.
 td::Result<Value> parse_change_dns(const td::Ref<vm::Cell> &body) {
