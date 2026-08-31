@@ -35,7 +35,7 @@ from indexer.events.mch.registry import Registries
 # this module's directory. ORDER IS THE CONTRACT: it equals matcher registration
 # order, and equal-priority matchers tie-break on this order.
 #
-# specs/jetton_transfer.mch and specs/jettons.mch are deliberately omitted (A4).
+# specs/jetton_transfer.mch and specs/jettons.mch are deliberately omitted.
 # They are builder-tier conformance references that duplicate the
 # jetton_transfer/burn/mint matchers in specs/jettons_decl.mch. They are
 # permanently C++-skipped and inert in Python because the priority-90

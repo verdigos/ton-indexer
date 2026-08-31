@@ -138,9 +138,7 @@ schema::MultisigOrderData to_v2(const MultisigOrder::Result &r) {
   v.approvals_mask = r.approvals_mask;
   v.approvals_num = r.approvals_num;
   v.expiration_date = r.expiration_date;
-  // `order` is deliberately not copied: it can be a lazy cell backed by the
-  // source BlockData, and classifier interfaces live across trace patches, so
-  // keeping it could later access a destroyed StaticBagOfCellsDb. Only `signers` is read.
+  // `order` is deliberately not copied (lazy-cell lifetime; see mch-docs engine/architecture.md).
   v.signers = r.signers;
   return v;
 }

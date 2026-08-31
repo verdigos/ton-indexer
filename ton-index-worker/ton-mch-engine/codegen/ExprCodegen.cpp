@@ -23,7 +23,7 @@ using JType = td::JsonValue::Type;
 
 // Emits one function body, returning the Value temp name for each subexpression.
 // The temp counter is shared across nested blocks so names never collide
-// (numbering is parity-frozen).
+// (numbering is fixed by design).
 enum class EmitMode { Vectors, Where, Build };
 
 class Emitter {
@@ -376,7 +376,7 @@ class Emitter {
 class BuildGen {
  public:
   explicit BuildGen(const Json &matcher) : em_(EmitMode::Build) {
-    // Well-known env names first; captures shadow them. Intentional/parity-frozen.
+    // Well-known env names first; captures shadow them. Intentional.
     em_.scope["consumed"] = "env.consumed";
     em_.scope["anchor"] = "Value::make_block(env.anchor)";
     if (const Json *caps = jfield(matcher, "captures"); caps != nullptr && caps->type() == JType::Array) {

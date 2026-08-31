@@ -30,7 +30,7 @@ td::RefInt256 refint_u64(unsigned long long v) {
 }
 
 // Load an address; advances `cs`. Error fails the whole message parse, or
-// the enclosing try downgrades it. Intentional/parity-frozen.
+// the enclosing try downgrades it. Intentional.
 td::Result<Value> load_address_py(vm::CellSlice &cs) {
   if (!cs.have(2)) {
     return td::Status::Error("address: underflow");
@@ -52,7 +52,7 @@ td::Result<Value> load_address_py(vm::CellSlice &cs) {
     }
     // addr_extern is an unsigned big-endian integer of exactly `len` bits (1..511).
     // RefInt256 cannot hold it (signed 257-bit), so the Str carries the value in
-    // hex: lowercase, no leading zeros, "0" for zero. Intentional/parity-frozen.
+    // hex: lowercase, no leading zeros, "0" for zero. Intentional.
     static const char kHexDigits[] = "0123456789abcdef";
     std::string hex;
     hex.reserve(static_cast<size_t>(len) / 4 + 1);

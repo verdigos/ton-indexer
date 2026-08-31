@@ -31,7 +31,7 @@ bool is_boc_field(const std::string &key);
 const std::set<std::string> &boc_field_names();
 
 // Structural equality for the conformance-vector comparator: type-checked
-// and deep. Not the `==` operator. Intentional/parity-frozen.
+// and deep. Not the `==` operator. Intentional.
 bool structural_equal(const Value &a, const Value &b);
 
 // One-shot stderr diagnostic for parse types a matcher references that are

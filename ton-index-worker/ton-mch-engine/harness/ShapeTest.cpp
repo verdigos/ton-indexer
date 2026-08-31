@@ -1,6 +1,6 @@
 // --shape-test: parity checks for Block::insert_between and the registered
 // getgems_proxy_insert shaper. See ShapeTest.h. Mirrors tests/mch_ir/test_shape.py
-// (R06/R07): the proxy lands between the parent and the target(s), the target's
+// the proxy lands between the parent and the target(s), the target's
 // back-edge is reparented, and after the getgems surgery the proxy + sibling
 // payout are absorbed into the produced block.
 #include "ShapeTest.h"
@@ -36,7 +36,7 @@ bool contains(const std::vector<Block *> &v, const Block *b) {
   return std::find(v.begin(), v.end(), b) != v.end();
 }
 
-// R06 core mechanic: insert_between must splice the proxy, redirect grandchild
+// Core mechanic: insert_between must splice the proxy, redirect grandchild
 // edges, and reparent the target's back-edge. Mirrors the insert_proxy shaper's
 // observable effect in test_ir_engine_invokes_shaper_post_merge.
 void test_insert_between() {

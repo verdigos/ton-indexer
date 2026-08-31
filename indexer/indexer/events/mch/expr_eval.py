@@ -264,7 +264,7 @@ def _eq_result(op: str, left: Any, right: Any) -> bool:
     elif (isinstance(left, Amount) and isinstance(left.value, float)) or \
             (isinstance(right, Amount) and isinstance(right.value, float)):
         # The language has no floats. Comparing a float-backed Amount faults
-        # to preserve C++ parity rather than silently comparing float values.
+        # rather than silently comparing float values.
         raise EvalError("'==' on a float-backed Amount (the language has no floats)")
     else:
         try:
@@ -417,7 +417,7 @@ def _access(obj: Any, field: str, bodies: dict[int, Any]) -> Any:
             if isinstance(obj.value, float):
                 # The language has no floats; a float-backed Amount (getgems
                 # price) is render-only, so `.value` faults instead of leaking
-                # a float into an integer output field, preserving C++ parity.
+                # a float into an integer output field.
                 raise EvalError("`.value` on a float-backed Amount (the language has no floats)")
             return obj.value
         raise EvalError(f"unknown Amount accessor {field!r} (expected value)")

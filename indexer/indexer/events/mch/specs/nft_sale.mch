@@ -56,7 +56,7 @@
 # was created at, so reading the interface instead would silently produce a
 # different number than Python on exactly the traces that matter. `init_state` is
 # therefore plumbed onto the mch `Message` (TraceLoader.h) and read by two host
-# fns — no DSL surface change, per the ruling. The data was already present on
+# fns — no DSL surface change. The data was already present on
 # all three loader paths (fixture .lz4, schema/prod, emulator); only the readers
 # were missing.
 #

@@ -12,7 +12,7 @@ namespace mch {
 
 int run_classify_schema(const std::vector<std::string> &paths);
 
-// FULL production-path gate (slice 3): schema loader trace + ParsedBlockLookupSource
+// FULL production-path gate: schema loader trace + ParsedBlockLookupSource
 // (synthesized account_interfaces_ tier-1 + fixture-backed tier-2 fallback),
 // diffed against `--classify` / `--actions`. Proves the production lookup adapter
 // reproduces the fixture source's shapes end-to-end. Expected diff 0.

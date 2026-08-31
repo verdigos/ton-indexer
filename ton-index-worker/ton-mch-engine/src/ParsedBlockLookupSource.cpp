@@ -213,7 +213,7 @@ Value ParsedBlockLookupSource::tier1(const std::string &kind, const std::string 
 }
 
 Value ParsedBlockLookupSource::fetch(const std::string &kind, const std::vector<Value> &args) const {
-  // FixtureLookupSource parity guard: every registered lookup passes exactly one
+  // FixtureLookupSource agreement guard: every registered lookup passes exactly one
   // address, Str, or the Account a `.data` address field yields (same raw
   // uppercase text); anything else is a null result on both sources.
   if (args.size() != 1 ||

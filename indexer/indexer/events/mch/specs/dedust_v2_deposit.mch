@@ -50,7 +50,7 @@
 # implemented by one `reject when … != initiator` per leg
 # here, which is the same total check. Elements are 2-element LISTS where the
 # reference builds tuples; the expression language has no tuple literal, the
-# serializer indexes them identically, and the parity comparison treats the two
+# serializer indexes them identically, and both engines treat the two
 # as one value. The rejected matcher additionally requires at least
 # one refund leg (`len(...) == 0` reject), mirroring its "no refund legs found"
 # bail.

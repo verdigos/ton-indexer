@@ -307,7 +307,7 @@ class EvaaSupplyBlockMatcher(BlockMatcher):
         if data is None:
             return []
         new_block = EvaaSupplyBlock(data)
-        # The fail path used to append jetton_return / fail_block a second time;
+        # The fail path can append jetton_return / fail_block a second time;
         # merge_blocks dedups through set(), so one pass is the same merge.
         new_block.merge_blocks([block] + other_blocks)
         return [new_block]

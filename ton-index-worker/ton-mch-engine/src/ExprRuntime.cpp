@@ -40,7 +40,7 @@ bool asset_eq(const Value &l, const Value &r) {
 
 // Asset == string: case-insensitive compare of the jetton master's raw string.
 // Comparing a TON asset (no jetton master) against any string faults the
-// evaluation — never returns true/false. Intentional, parity-frozen.
+// evaluation — never returns true/false. Intentional.
 // eq_result faults that pair before reaching here.
 bool asset_eq_str(const Value &asset, const std::string &s) {
   return asset.has_jetton && to_lower(asset.str) == to_lower(s);
@@ -61,8 +61,7 @@ bool account_eq_str(const Value &acc, const std::string &s) {
   return norm.has_value() && acc.str == *norm;
 }
 
-// Runtime-owned container `==` for the language; do not borrow the harness
-// comparator `structural_equal`.
+// Language `==` semantics differ from the harness comparator `structural_equal`.
 bool container_eq(const Value &l, const Value &r);
 
 // Structural `==` on two non-null values.
@@ -143,7 +142,6 @@ EvalResult eq_result(const Value &l, const Value &r, bool want_eq) {
     eq = rt_is_null(l) && rt_is_null(r);
   } else {
     // TON asset (no jetton master) vs string: fault, never true/false.
-    // Intentional, parity-frozen.
     if ((l.t == VType::Asset && !l.has_jetton && r.t == VType::Str) ||
         (r.t == VType::Asset && !r.has_jetton && l.t == VType::Str)) {
       return rt_fault("'==' failed: asset has no jetton master string");
@@ -480,7 +478,7 @@ EvalResult rt_builtin_asset_of(const Value &x) {
     return rt_fault("asset_of: ABI object '$' tag must be a string");
   }
 
-  // Frozen F1 declaration arm names.
+  // ABI declaration arm names.
   static const std::string ton_tag = "AssetTon";
   static const std::string jetton_tag = "AssetJetton";
   if (tag->str == ton_tag) return rt_ok(Value::make_asset_ton());
@@ -517,7 +515,7 @@ EvalResult rt_builtin_tail_unwrap(const Value &x) {
   }
 
   enum class TailPolicy { Ref, Bits, Refs };
-  // Frozen F1 declaration arm names and empty-inline policies.
+  // ABI declaration arm names and empty-inline policies.
   static const std::map<std::string, TailPolicy> tail_tags = {
       {"JettonForwardPayloadRef", TailPolicy::Ref},
       {"JettonForwardPayloadInline", TailPolicy::Bits},
