@@ -52,10 +52,10 @@ matcher dns_purchase {
     entry    @anchor
 
     op AuctionFillUp @anchor
+      <- peek btype call_contract @purchase_parent
 
     parse anchor as AuctionFillUpMessage
-    let buyer = dns_purchase_buyer(anchor)
-    reject when buyer == null
+    let buyer = account(purchase_parent.msg.source) ?? addr_none()
     let nft = lookup nft_item(anchor.msg.source)
     reject when nft == null or (nft.code_hash != "i1/8nr/TkGTY1fVuRlnIJrt1k5I/XKSHKL5NYK9vUfk=" and nft.collection_address != "0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF")
     failed when anchor.failed

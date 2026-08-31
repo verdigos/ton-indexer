@@ -1,5 +1,4 @@
-// Dump renderers + vector comparator (see fixtures/Render.h for why they are here
-// and not in the product lib). Split out of BuildDriver.cpp and Value.cpp.
+// Dump renderers + vector comparator. See fixtures/Render.h.
 #include "fixtures/Render.h"
 
 #include "BlockTree.h"
@@ -16,18 +15,9 @@
 namespace mch {
 
 namespace {
-
-// Canonical float text shared with the Python twin ("%.17g" both sides). Chosen
-// over shortest-round-trip (repr / to_chars) because those disagree on round
-// numbers (repr keeps a trailing ".0", to_chars drops it); %.17g is one agreed
-// format, byte-verified on the corpus values.
-std::string fmt_g17(double v) {
-  char buf[64];
-  std::snprintf(buf, sizeof(buf), "%.17g", v);
-  return std::string(buf);
-}
-
+std::string boc_field_cellhash(const Value &v);
 }  // namespace
+
 
 std::string block_key(const Block *b) {
   std::string key = b->btype;
@@ -40,7 +30,7 @@ std::string block_key(const Block *b) {
   return key;
 }
 
-std::string render_value(const Value &v) {
+std::string render_value(const Value &v, bool omit_null_fields) {
   switch (v.t) {
     case VType::Null:
       return "null";
@@ -48,14 +38,7 @@ std::string render_value(const Value &v) {
       return v.boolean ? "true" : "false";
     case VType::Int:
       return v.num.is_null() ? "nan" : v.num->to_dec_string();
-    case VType::Float:
-      // Bare Python float: "float:" plus shortest-safe %.17g. This keeps float
-      // fields usable by the NFT purchase and shaper paths.
-      return "float:" + fmt_g17(v.dnum);
     case VType::Amount:
-      if (v.amount_float) {
-        return "amount:" + fmt_g17(v.dnum);  // Python Amount(float): str(float)
-      }
       return "amount:" + (v.num.is_null() ? std::string("nan") : v.num->to_dec_string());
     case VType::Str:
       return "str:" + v.str;
@@ -76,7 +59,7 @@ std::string render_value(const Value &v) {
       std::string out = "[";
       for (std::size_t i = 0; i < v.items->size(); i++) {
         if (i) out += ",";
-        out += render_value((*v.items)[i]);
+        out += render_value((*v.items)[i], omit_null_fields);
       }
       return out + "]";
     }
@@ -84,7 +67,7 @@ std::string render_value(const Value &v) {
     case VType::Obj: {
       std::vector<std::string> keys;
       for (const auto &kv : *v.fields) {
-        keys.push_back(kv.first);
+        if (!omit_null_fields || !kv.second.is_null()) keys.push_back(kv.first);
       }
       std::sort(keys.begin(), keys.end());
       std::string out = v.t == VType::Obj ? "obj{" : "{";
@@ -95,7 +78,7 @@ std::string render_value(const Value &v) {
         // Cell-derived BOC fields render as a cell hash.
         std::string rendered;
         if (is_boc_field(k)) rendered = boc_field_cellhash(*v.field(k));
-        if (rendered.empty()) rendered = render_value(*v.field(k));
+        if (rendered.empty()) rendered = render_value(*v.field(k), omit_null_fields);
         out += k + "=" + rendered;
       }
       return out + "}";
@@ -106,6 +89,7 @@ std::string render_value(const Value &v) {
   return "?";
 }
 
+namespace {
 std::string render_parse_fields_sorted(const Value::Fields &fields) {
   std::vector<std::pair<std::string, std::string>> kv;
   kv.reserve(fields.size());
@@ -127,6 +111,8 @@ std::string render_parse_fields_sorted(const Value::Fields &fields) {
   out += "}";
   return out;
 }
+}  // namespace
+
 
 std::string render_parse_value(const Value &v) {
   switch (v.t) {
@@ -155,7 +141,8 @@ std::string render_parse_value(const Value &v) {
     case VType::Dict:
     case VType::Obj:
       return render_parse_fields_sorted(*v.fields);
-    default:
+    case VType::List:
+    case VType::Block:
       return v.describe();
   }
 }
@@ -172,16 +159,16 @@ const std::set<std::string> &boc_field_names() {
 
 bool is_boc_field(const std::string &key) { return boc_field_names().count(key) != 0; }
 
+namespace {
+// Cell-derived BOC containers render as the cell's root hash ("cellhash:HEX-UPPER")
+// so serialization-order / CRC is invisible. Returns "" if not a decodable BOC.
 std::string boc_field_cellhash(const Value &v) {
   auto hash_of = [](const td::Ref<vm::Cell> &cell) -> std::string {
     auto h = cell->get_hash();
     return "cellhash:" + hex_upper(h.as_slice().ubegin(), h.as_slice().size());
   };
-  // Decode-fail marker (never throws, the dump must not abort/trace-fail on a
-  // bad BOC field). A short deterministic prefix aids diagnosis; both engines
-  // compute it identically from the same value type (str → the b64 string;
-  // bytes → base64 of the raw), so a fail-case would still be A/B-comparable.
-  // Never fires over the corpus (all BOC fields decode), defensive only.
+  // Decode-fail marker (never throws). Prefix is deterministic: str uses the
+  // b64 string, bytes use base64 of the raw, so fail-cases stay A/B-comparable.
   auto decode_fail = [](const std::string &enc_prefix_src) {
     return "cellhash:DECODE_FAIL:" + enc_prefix_src.substr(0, 12);
   };
@@ -210,10 +197,12 @@ std::string boc_field_cellhash(const Value &v) {
   }
   return std::string();  // null / other type → fall back to normal render
 }
+}  // namespace
+
 
 bool structural_equal(const Value &a, const Value &b) {
-  // Mirrors the Python vector runner's _equal: expected type drives the check,
-  // actual must match that type and be deeply equal.
+  // Expected type drives the check; actual must match that type and be deeply
+  // equal. Intentional.
   switch (b.t) {
     case VType::Null:
       return a.t == VType::Null;
@@ -272,7 +261,7 @@ bool structural_equal(const Value &a, const Value &b) {
       return true;
     }
     case VType::Block:
-      // Python Block.__eq__ is object identity.
+      // Blocks compare by object identity. Intentional.
       return a.t == VType::Block && a.block == b.block;
     case VType::Dict:
     case VType::Obj: {
