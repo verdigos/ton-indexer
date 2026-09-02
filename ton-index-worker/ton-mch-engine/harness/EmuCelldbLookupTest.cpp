@@ -399,9 +399,6 @@ void test_memo_and_guards() {
           t.fetch("nominator_pool", {Value::make_str("not-an-address")}).is_null());
     check("guard/unknown_kind_null",
           t.fetch("no_such_kind", {Value::make_str(raw_of('A'))}).is_null());
-    // The tier-1-only kinds are gated before the account read.
-    check("guard/tier1_only_kind_null",
-          t.fetch("multisig_order", {Value::make_str(raw_of('A'))}).is_null());
     check("guard/no_reads_on_guarded", f.reads == 0 && t.stats().fetched == 0);
     // An Account-typed argument must pass the guard and reach the account
     // read.

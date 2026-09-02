@@ -321,8 +321,6 @@ add_dependencies(ton-mch-engine mch_generate_sources)
 
 # --- CTest wiring --------------------------------------------------------------
 # The deterministic, self-contained gate modes as native tests (`ctest -R mch`).
-# The differential A/B gates (parse-dump / classify vs the Python twins) stay
-# OUT — they need the fixture corpus and Python and are run from the harness.
 enable_testing()
 add_test(NAME mch_abi_bridge
     COMMAND ton-mch-engine --abi-bridge-test)
