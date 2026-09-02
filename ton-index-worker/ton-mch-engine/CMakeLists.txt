@@ -210,7 +210,7 @@ add_library(mch-classify STATIC
 )
 target_include_directories(mch-classify
     PUBLIC src
-    # btypes_gen.h; PUBLIC because harness and devtools TUs include it too.
+    # btypes_gen.h; PUBLIC because harness TUs include it too.
     PUBLIC ${MCH_GEN_DIR}
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
     # AbiBridge.cpp includes the ABI_PROD_PAIRS generated headers.
@@ -340,7 +340,3 @@ add_test(NAME mch_ir_equivalence
     COMMAND "${CMAKE_COMMAND}" -E compare_files
             "${MCH_GENERATED_IR}" "${MCH_GENERATED_IR_SECOND}")
 
-
-if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/devtools/CMakeLists.txt)
-    add_subdirectory(devtools)  # local-only dev engine + tools (devtools overlay)
-endif()
