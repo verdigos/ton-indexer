@@ -9,7 +9,9 @@
 #include "vm/boc.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
 namespace mch {
@@ -87,6 +89,124 @@ std::string render_value(const Value &v, bool omit_null_fields) {
       return "block:" + (v.block != nullptr ? block_key(v.block) : std::string("null"));
   }
   return "?";
+}
+
+std::string yaml_str(const std::string &s) {
+  auto is_number = [](const std::string &x) {
+    std::size_t i = (x[0] == '-' || x[0] == '+') ? 1 : 0;
+    if (i >= x.size()) return false;
+    if (x.compare(i, 2, "0x") == 0 || x.compare(i, 2, "0o") == 0) {
+      return x.size() > i + 2 && std::all_of(x.begin() + i + 2, x.end(), ::isxdigit);
+    }
+    bool digit = false;
+    for (; i < x.size(); i++) {
+      char c = x[i];
+      if (std::isdigit(static_cast<unsigned char>(c))) digit = true;
+      else if (c != '.' && c != 'e' && c != 'E' && c != '+' && c != '-' && c != '_') return false;
+    }
+    return digit;
+  };
+  bool plain = !s.empty();
+  if (plain) {
+    static const char *const words[] = {"true", "false", "null", "~", "yes", "no", "on", "off",
+                                        "True", "False", "Null", "Yes", "No", "On", "Off",
+                                        ".inf", ".nan", "-.inf"};
+    for (const char *w : words) if (s == w) plain = false;
+    if (is_number(s)) plain = false;
+    unsigned char first = s.front(), last = s.back();
+    if (std::strchr("-?:,[]{}#&*!|>'\"%@`", first) || std::isspace(first) || std::isspace(last) ||
+        last == ':') {
+      plain = false;
+    }
+    if (s.find(": ") != std::string::npos || s.find(" #") != std::string::npos) plain = false;
+    for (unsigned char c : s) if (c < 0x20 || c == 0x7f) plain = false;
+  }
+  if (plain) return s;
+  std::string out = "\"";
+  for (unsigned char c : s) {
+    if (c == '"' || c == '\\') { out += '\\'; out += static_cast<char>(c); }
+    else if (c == '\n') out += "\\n";
+    else if (c == '\t') out += "\\t";
+    else if (c < 0x20 || c == 0x7f) {
+      char buf[8];
+      std::snprintf(buf, sizeof(buf), "\\x%02x", c);
+      out += buf;
+    } else out += static_cast<char>(c);
+  }
+  return out + "\"";
+}
+
+namespace {
+bool yaml_block(const Value &v) {
+  return v.t == VType::Dict || v.t == VType::Obj || (v.t == VType::List && !v.items->empty());
+}
+
+std::string yaml_scalar(const Value &v) {
+  switch (v.t) {
+    case VType::Null: return "null";
+    case VType::Bool: return v.boolean ? "true" : "false";
+    case VType::Int:
+    case VType::Amount: return v.num.is_null() ? "null" : v.num->to_dec_string();
+    case VType::Str: return yaml_str(v.str);
+    case VType::Bytes: return yaml_str(td::base64_encode(td::Slice(v.str)));
+    case VType::Account: return v.addr_none ? "addr_none" : yaml_str(v.str);
+    case VType::Asset: return v.is_ton ? "TON" : yaml_str(v.str);
+    case VType::Cell: {
+      if (v.cell.is_null()) return "null";
+      auto h = v.cell->get_hash();
+      return hex_upper(h.as_slice().ubegin(), h.as_slice().size());
+    }
+    case VType::List: return "[]";
+    case VType::Dict:
+    case VType::Obj: return "{}";
+    case VType::Block: return v.block != nullptr ? block_key(v.block) : "null";
+  }
+  return "null";
+}
+
+void yaml_body(const Value &v, int indent, std::string &out);
+
+void yaml_dict_body(const Value &v, int indent, std::string &out) {
+  std::vector<std::string> keys;
+  for (const auto &kv : *v.fields) keys.push_back(kv.first);
+  std::sort(keys.begin(), keys.end());
+  for (const std::string &k : keys) {
+    const Value &f = *v.field(k);
+    std::string hash = is_boc_field(k) ? boc_field_cellhash(f) : std::string();
+    if (!hash.empty()) {
+      out += std::string(indent, ' ') + k + ": " + hash + "\n";
+    } else {
+      render_yaml_field(k, f, indent, out);
+    }
+  }
+}
+
+void yaml_body(const Value &v, int indent, std::string &out) {
+  if (v.t == VType::List) {
+    for (const Value &item : *v.items) {
+      if (!yaml_block(item)) {
+        out += std::string(indent, ' ') + "- " + yaml_scalar(item) + "\n";
+        continue;
+      }
+      std::string sub;
+      yaml_body(item, indent + 2, sub);
+      sub.replace(indent, 2, "- ");  // first line rides the dash
+      out += sub;
+    }
+    return;
+  }
+  yaml_dict_body(v, indent, out);
+}
+}  // namespace
+
+void render_yaml_field(const std::string &key, const Value &v, int indent, std::string &out) {
+  out += std::string(indent, ' ') + key + ":";
+  if (!yaml_block(v)) {
+    out += " " + yaml_scalar(v) + "\n";
+    return;
+  }
+  out += "\n";
+  yaml_body(v, indent + 2, out);
 }
 
 namespace {

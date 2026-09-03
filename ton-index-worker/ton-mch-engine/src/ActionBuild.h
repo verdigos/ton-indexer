@@ -87,11 +87,17 @@ struct ActionRow {
   Block *block{nullptr};
   std::string parent_action_id;
   std::vector<std::string> ancestor_type;
+  // action_id of the gasless_request marker this row is an immediate result
+  // of (empty otherwise); rendered as extra.parent_gasless_action.
+  std::string parent_gasless_action;
 };
 
-// base64(sha256(the lowest-lt event node's msg_hash|tx_hash + btype)). A pure
-// function of the block, so the serializer can link a child to its parent
-// before either is built.
+// The block's lowest-lt event node (nullptr for an empty block).
+const EventNode *root_event_node(const Block *b);
+
+// base64(sha256(root_event_node's msg_hash|tx_hash + btype)). A pure function
+// of the block, so the serializer can link a child to its parent before either
+// is built.
 std::string calc_action_id(const Block *b);
 
 // Dispatch over a produced block. Returns false for a btype outside the fill

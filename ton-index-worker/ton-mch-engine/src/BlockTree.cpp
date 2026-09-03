@@ -60,6 +60,46 @@ LeafCommentInfo leaf_comment_info(const EventNode *node) {
   return info;
 }
 
+// Telegram wallet (tg-wallet-contract) request opcodes. A request body starts
+// with a 512-bit signature, so the stored message opcode is a slice of that
+// signature; the real opcode follows it. E = external, I = relayed internal.
+constexpr std::uint32_t kTgWalletSendOneI = 0x63896E74, kTgWalletSendOneE = 0x63896E75,
+                        kTgWalletSendBulkI = 0x73896E74, kTgWalletSendBulkE = 0x73896E75,
+                        kTgWalletChangeKeyI = 0xFBBA99C7, kTgWalletChangeKeyE = 0xFBBA99C8;
+// Wallet v5 signed request delivered as an internal message ('sint').
+constexpr std::uint32_t kWalletV5SignedInternal = 0x73696E74;
+
+std::optional<std::uint32_t> tg_wallet_request_opcode(const Message *msg) {
+  if (msg == nullptr || !msg->content) return std::nullopt;
+  auto r_raw = td::base64_decode(td::Slice(msg->content->body));
+  if (r_raw.is_error()) return std::nullopt;
+  auto r_cell = vm::std_boc_deserialize(r_raw.move_as_ok());
+  if (r_cell.is_error()) return std::nullopt;
+  try {
+    bool special = false;
+    vm::CellSlice cs = vm::load_cell_slice_special(r_cell.move_as_ok(), special);
+    if (cs.size() < 512 + 32) return std::nullopt;
+    cs.skip_first(512);
+    auto op = static_cast<std::uint32_t>(cs.fetch_ulong(32));
+    switch (op) {
+      case kTgWalletSendOneI: case kTgWalletSendOneE: case kTgWalletSendBulkI:
+      case kTgWalletSendBulkE: case kTgWalletChangeKeyI: case kTgWalletChangeKeyE:
+        return op;
+      default:
+        return std::nullopt;
+    }
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
+// A signed wallet request that arrived as an internal message: a relayer sent
+// the owner's request and attached the TON that pays for the gas.
+bool is_gasless_request(std::optional<std::uint32_t> op) {
+  return op && (*op == kTgWalletSendOneI || *op == kTgWalletSendBulkI ||
+                *op == kTgWalletChangeKeyI || *op == kWalletV5SignedInternal);
+}
+
 }  // namespace
 
 EventTree to_tree(const Trace &trace) {
@@ -354,8 +394,8 @@ Value leaf_data(const std::string &btype, const EventNode *node,
     return Value::make_dict(std::move(fs));
   }
   Value::Fields fs;
-  if (btype != mch::btype::kTonTransfer) {
-    // opcode is the masked u32 (absent on ton_transfer).
+  if (btype != mch::btype::kTonTransfer && btype != mch::btype::kGaslessRequest) {
+    // opcode is the masked u32 (absent on ton_transfer / gasless_request).
     fs.emplace_back("opcode", op ? Value::make_int64(static_cast<std::int64_t>(*op))
                                  : Value::null());
   }
@@ -402,6 +442,9 @@ Block *make_leaf_block(BlockArena &arena, const EventNode *node) {
       }
     }
   } else {
+    // A tg-wallet request keeps its opcode behind the signature; the stored
+    // one is meaningless for externals and relayed internals alike.
+    if (auto tg = tg_wallet_request_opcode(msg)) op = tg;
     b = arena.make(mch::btype::kCallContract);
     b->opcode = op;
     b->failed = node_failed(node);
@@ -413,6 +456,14 @@ Block *make_leaf_block(BlockArena &arena, const EventNode *node) {
     if (b->failed && !has_value && opcode_truthy && !has_extra) {
       b->failed = false;
     }
+    // Marker on the relayed request; the wallet's own sends stay separate.
+    if (msg != nullptr && msg->source && is_gasless_request(op)) {
+      Block *gasless = arena.make(mch::btype::kGaslessRequest);
+      gasless->failed = node_failed(node);
+      gasless->data = leaf_data(mch::btype::kGaslessRequest, node, std::nullopt);
+      init_leaf(gasless, node);
+      b->children_blocks.push_back(gasless);
+    }
   }
   b->data = leaf_data(b->btype, node, op);
   init_leaf(b, node);
@@ -421,9 +472,9 @@ Block *make_leaf_block(BlockArena &arena, const EventNode *node) {
   if (!node->is_tick_tock && tx != nullptr && tx->end_status == "active" &&
       tx->orig_status != "active" && tx->orig_status != "frozen") {
     Block *deploy = arena.make(mch::btype::kContractDeploy);
-    deploy->opcode = op;
+    deploy->opcode = node->opcode();  // stored opcode, not the recovered one
     deploy->failed = node_failed(node);
-    deploy->data = leaf_data(mch::btype::kContractDeploy, node, op);
+    deploy->data = leaf_data(mch::btype::kContractDeploy, node, node->opcode());
     init_leaf(deploy, node);
     // parent is not set here — only merge_blocks does.
     b->children_blocks.push_back(deploy);

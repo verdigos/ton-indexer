@@ -19,6 +19,15 @@ std::string block_key(const Block *b);
 // may opt into omitting null-valued map keys; the default preserves dump bytes.
 std::string render_value(const Value &v, bool omit_null_fields = false);
 
+// YAML spelling of a string: plain when no YAML reader could mistake it for
+// syntax or another type, double-quoted (escaped) otherwise.
+std::string yaml_str(const std::string &s);
+
+// `key: <value>` in YAML block style at `indent` spaces, appended to `out`.
+// Dict keys sorted, nulls explicit, lists one item per line, BOC fields as
+// their cell hash. The actions golden is written through this.
+void render_yaml_field(const std::string &key, const Value &v, int indent, std::string &out);
+
 // Canonical message-parse rendering. Unlike render_value(), objects have no
 // `obj` prefix and integers/amounts share their bare decimal spelling. Parse-dump
 // and vector comparison share this renderer so they cannot drift.

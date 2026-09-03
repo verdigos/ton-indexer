@@ -3,7 +3,7 @@
 file(REMOVE_RECURSE "${WORK_DIR}")
 file(MAKE_DIRECTORY "${WORK_DIR}")
 execute_process(
-    COMMAND "${ENGINE}" --actions -T "${TRACES}" -O "${WORK_DIR}"
+    COMMAND "${ENGINE}" --actions -T "${TRACES}" -O "${WORK_DIR}" --fixtures "${FIXTURES}"
     RESULT_VARIABLE run_rc ERROR_VARIABLE run_err)
 if(NOT run_rc EQUAL 0)
     message(FATAL_ERROR "--actions run failed (${run_rc}):\n${run_err}")
@@ -13,5 +13,5 @@ execute_process(
     RESULT_VARIABLE diff_rc OUTPUT_VARIABLE diff_out)
 if(NOT diff_rc EQUAL 0)
     message(FATAL_ERROR "actions golden diverged:\n${diff_out}\n"
-        "Regen: ton-mch-engine --actions -T <traces> -O goldens/actions")
+        "Regen: ton-mch-engine --actions -T <traces> -O goldens/actions --fixtures goldens/fixtures.json")
 endif()

@@ -210,7 +210,7 @@ add_library(mch-classify STATIC
 )
 target_include_directories(mch-classify
     PUBLIC src
-    # btypes_gen.h; PUBLIC because harness and devtools TUs include it too.
+    # btypes_gen.h; PUBLIC because harness TUs include it too.
     PUBLIC ${MCH_GEN_DIR}
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
     # AbiBridge.cpp includes the ABI_PROD_PAIRS generated headers.
@@ -321,8 +321,6 @@ add_dependencies(ton-mch-engine mch_generate_sources)
 
 # --- CTest wiring --------------------------------------------------------------
 # The deterministic, self-contained gate modes as native tests (`ctest -R mch`).
-# The differential A/B gates (parse-dump / classify vs the Python twins) stay
-# OUT — they need the fixture corpus and Python and are run from the harness.
 enable_testing()
 add_test(NAME mch_abi_bridge
     COMMAND ton-mch-engine --abi-bridge-test)
@@ -335,6 +333,7 @@ add_test(NAME mch_actions_golden
             -DENGINE=$<TARGET_FILE:ton-mch-engine>
             -DTRACES=${CMAKE_CURRENT_SOURCE_DIR}/../../indexer/tests/traces
             -DGOLDEN_DIR=${CMAKE_CURRENT_SOURCE_DIR}/goldens/actions
+            -DFIXTURES=${CMAKE_CURRENT_SOURCE_DIR}/goldens/fixtures.json
             -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/actions_golden_check
             -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ActionsGoldenCheck.cmake)
 
@@ -342,7 +341,3 @@ add_test(NAME mch_ir_equivalence
     COMMAND "${CMAKE_COMMAND}" -E compare_files
             "${MCH_GENERATED_IR}" "${MCH_GENERATED_IR_SECOND}")
 
-
-if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/devtools/CMakeLists.txt)
-    add_subdirectory(devtools)  # local-only dev engine + tools (devtools overlay)
-endif()

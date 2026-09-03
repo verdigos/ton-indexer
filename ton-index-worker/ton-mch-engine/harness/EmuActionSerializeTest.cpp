@@ -1239,7 +1239,7 @@ void test_evaa_liquidate_surface() {
   check("evaa_liquidate/asset_id",
         asset_id != nullptr && asset_id->t == VType::Str && asset_id->str == "0x1234");
   check("evaa_liquidate/render_column",
-        render_action(a).find("evaa_liquidate_data={") != std::string::npos);
+        render_action(a).find("evaa_liquidate_data:") != std::string::npos);
 
   Decoded d(serialize_actions({a}, make_view({EmuFinality::finalized})));
   const msgpack::object *row = first_row(d);
