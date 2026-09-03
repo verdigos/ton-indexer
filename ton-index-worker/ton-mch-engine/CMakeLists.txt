@@ -168,6 +168,7 @@ set_source_files_properties(${ABI_PROD_PAIRS} PROPERTIES GENERATED TRUE)
 add_library(mch-classify STATIC
     src/TraceAggregates.cpp
     src/BlockTree.cpp
+    src/WalletRequest.cpp
     src/Value.cpp
     src/ExprRuntime.cpp
     src/Walker.cpp
@@ -305,6 +306,7 @@ add_executable(ton-mch-engine
     harness/AbiBridgeTest.cpp
     harness/EmuActionSerializeTest.cpp
     harness/EmuCelldbLookupTest.cpp
+    harness/GhostExternalTest.cpp
     ${ABI_BRIDGE_TEST_FIXTURES}
 )
 target_include_directories(ton-mch-engine PRIVATE src harness ${CMAKE_CURRENT_BINARY_DIR} ${TON_ABI_GENERATED_DIR})
@@ -328,6 +330,8 @@ add_test(NAME mch_actions_msgpack
     COMMAND ton-mch-engine --actions-msgpack-test)
 add_test(NAME mch_celldb_tier2
     COMMAND ton-mch-engine --celldb-tier2-test)
+add_test(NAME mch_ghost_external
+    COMMAND ton-mch-engine --ghost-external-test)
 add_test(NAME mch_actions_golden
     COMMAND "${CMAKE_COMMAND}"
             -DENGINE=$<TARGET_FILE:ton-mch-engine>
