@@ -25,7 +25,10 @@ using LookupSourceFactory = std::function<std::shared_ptr<LookupSource>(TraceCon
 
 // Dump-side fixed-column Action renderer, exposed for hermetic action-surface
 // tests that must not enter the matcher pipeline.
-std::string render_action(const Action &action);
+// One YAML list item for an Action row (see goldens/README.md for the layout).
+// matcher/anchor are the dump's attribution keys; empty omits them.
+std::string render_action(const Action &action, const std::string &matcher = {},
+                          const std::string &anchor = {});
 
 // Renders the intermediate matcher-fire view rather than serialized action rows.
 int run_classify(const std::vector<std::string> &paths);
@@ -36,13 +39,15 @@ int run_classify(const std::vector<std::string> &paths);
 int run_dump(const std::vector<std::string> &paths,
              bool actions_mode, const TraceContextLoader &load_ctx,
              const LookupSourceFactory &lookup_factory = {},
-             const std::string &output_dir = {});
+             const std::string &output_dir = {},
+             const std::string &fixtures_manifest = {});
 
 // `--actions` serialized-action-row dump. Uses the same collect-to-final-pass
 // pipeline as run_classify; each surviving post-pass produced block is
-// rendered as an Action row. Rows identify their matcher and omit null map
-// keys. With an output directory, each fixture body is written to
-// `<fixture-stem>.golden`.
-int run_actions(const std::vector<std::string> &paths, const std::string &output_dir = {});
+// rendered as an Action row. With an output directory, each fixture is written
+// to `<group>/<slug>.<id8>.yaml` per the fixture manifest (`misc/<id>.yaml`
+// when unlisted).
+int run_actions(const std::vector<std::string> &paths, const std::string &output_dir = {},
+                const std::string &fixtures_manifest = {});
 
 }  // namespace mch
