@@ -1,6 +1,6 @@
 tolk 1.0
 
-// Subset of DeDust CPMM V2 declarations used by the claim_reward spec.
+// Subset of DeDust CPMM V2 declarations.
 
 struct (0x909fdb65) ClaimRewardMessage {
     queryId: uint64;
@@ -38,6 +38,15 @@ struct (0x78e79ba4) DedustV2SwapEvent {
     _x_to_y: bits1;
     amount_in: coins;
     amount_out: coins;
+}
+
+@overflow1023_policy("suppress")
+struct (0xc442500f) DedustV2SwapPayload {
+    minimal_amount_out: coins;
+    _deadline: bits40;
+    next: cell?;
+    _partner_config: bits272?;
+    _referrer_config: bits272?;
 }
 
 @overflow1023_policy("suppress")
@@ -94,10 +103,19 @@ struct (0x35df2e12) DedustV2DepositEvent {
     _next_state: cell;
 }
 
+@overflow1023_policy("suppress")
+struct (0xc9a015da) DedustV2DepositPayload {
+    amount_x: coins;
+    amount_y: coins;
+    _minimal_liquidity: coins;
+    _locked_liquidity_share: bits16;
+}
+
 type AllowedMessage = ClaimRewardMessage | PayoutRewardMessage | PayoutMessage
-    | DedustV2PayNative | DedustV2SwapEvent | DedustV2PayoutPositionFees
+    | DedustV2PayNative | DedustV2SwapEvent | DedustV2SwapPayload
+    | DedustV2PayoutPositionFees
     | DedustV2Withdraw | DedustV2WithdrawalEvent | DedustV2CreditAsset
-    | DedustV2JoinLiquidity | DedustV2DepositEvent
+    | DedustV2JoinLiquidity | DedustV2DepositEvent | DedustV2DepositPayload
 
 struct Storage {
     dummy: uint1
@@ -126,6 +144,9 @@ fun onInternalMessage(in: InMessage) {
         DedustV2SwapEvent => {
             assert (msg.amount_in >= 0) throw 0xFFFF
         }
+        DedustV2SwapPayload => {
+            assert (msg.minimal_amount_out >= 0) throw 0xFFFF
+        }
         DedustV2PayoutPositionFees => {
             assert (msg.x_fees >= 0) throw 0xFFFF
         }
@@ -143,6 +164,9 @@ fun onInternalMessage(in: InMessage) {
         }
         DedustV2DepositEvent => {
             assert (msg.liquidity >= 0) throw 0xFFFF
+        }
+        DedustV2DepositPayload => {
+            assert (msg.amount_x >= 0) throw 0xFFFF
         }
         else => {
             assert (in.body.isEmpty()) throw 0xFFFF

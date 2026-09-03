@@ -28,6 +28,8 @@ int main(int argc, char *argv[]) {
   bool actions_msgpack_test_mode = false;
   bool celldb_tier2_test_mode = false;
   std::vector<std::string> trace_paths;
+  std::string actions_output_dir;
+  std::string fixtures_manifest;
 
   td::OptionParser p;
   p.set_description("MCH matcher IR engine");
@@ -53,6 +55,11 @@ int main(int argc, char *argv[]) {
   p.add_option('T', "trace", "Path to an .lz4 trace fixture (repeatable)", [&](td::Slice value) {
     trace_paths.push_back(value.str());
   });
+  p.add_option('O', "output-dir", "Write --actions output per fixture", [&](td::Slice value) {
+    actions_output_dir = value.str();
+  });
+  p.add_option('\0', "fixtures", "Fixture manifest (goldens/fixtures.json): names + layout for -O",
+               [&](td::Slice value) { fixtures_manifest = value.str(); });
 
   auto status = p.run(argc, argv);
   if (status.is_error()) {
@@ -69,7 +76,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (actions_mode) {
-    return mch::run_actions(trace_paths);
+    return mch::run_actions(trace_paths, actions_output_dir, fixtures_manifest);
   }
   if (abi_bridge_test_mode) {
     return mch::run_abi_bridge_test();
