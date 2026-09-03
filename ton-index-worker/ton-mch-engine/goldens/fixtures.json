@@ -1142,6 +1142,18 @@
    "group": "dedust-liquidities",
    "name": "First deposit",
    "slug": "first-deposit"
+  },
+  "MCv1dU2InQwPfgQCpgjEVVqBkIyp4yWMqI-R5-cT-jk=": {
+   "group": "dns",
+   "name": "DNS purchase 4 (change_dns parent)",
+   "slug": "dns-purchase-4",
+   "note": "AuctionFillUp whose parent is the winner's ChangeDnsRecord; dns_purchase must register before change_dns"
+  },
+  "yfdIWpnHBPwfCVOofQ4XhwxGW-3MfWR3WTxUC6qVWjE=": {
+   "group": "dns",
+   "name": "DNS purchase 5 (change_dns parent)",
+   "slug": "dns-purchase-5",
+   "note": "same shape, second live trace"
   }
  }
 }
