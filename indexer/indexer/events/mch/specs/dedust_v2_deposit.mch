@@ -55,7 +55,7 @@
 # one refund leg (`len(...) == 0` reject), mirroring its "no refund legs found"
 # bail.
 #
-# TARGET AMOUNTS. The carrier helper unwraps PayJetton while `try parse`
+# TARGET AMOUNTS. `try parse` unwraps the PayJetton wrapper and then
 # validates the deposit payload. An absent or invalid payload yields null, so
 # both target amounts become null. The PARTIAL matcher does not read it.
 #
@@ -139,7 +139,7 @@ matcher dedust_v2_deposit_final {
     let leg_asset  = carrier.data.asset if jetton_in else ton_asset()
     let leg_wallet = carrier.data.sender_wallet if jetton_in else null
 
-    let carrier_cell = dedust_v2_payload_cell(carrier.data.forward_payload) if jetton_in else dedust_v2_payload_cell(carrier.body.payment_payload)
+    let carrier_cell = (try parse carrier.data.forward_payload as DedustV2PayJetton).payment_payload if jetton_in else carrier.body.payment_payload
     let payload      = try parse carrier_cell as DedustV2DepositPayload
 
     # Every refund leg must be addressed to the initiator, jetton and TON alike.
@@ -206,7 +206,7 @@ matcher dedust_v2_deposit_rejected {
     let leg_asset  = carrier.data.asset if jetton_in else ton_asset()
     let leg_wallet = carrier.data.sender_wallet if jetton_in else null
 
-    let carrier_cell = dedust_v2_payload_cell(carrier.data.forward_payload) if jetton_in else dedust_v2_payload_cell(carrier.body.payment_payload)
+    let carrier_cell = (try parse carrier.data.forward_payload as DedustV2PayJetton).payment_payload if jetton_in else carrier.body.payment_payload
     let payload      = try parse carrier_cell as DedustV2DepositPayload
 
     reject when refund_jt_1 != null and refund_jt_1.data.receiver != initiator

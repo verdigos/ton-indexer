@@ -33,6 +33,14 @@ struct (0xa5a7cbf8) DedustV2PayNative {
     payment_payload: cell;
 }
 
+// Jetton carrier: rides as the forward payload of the TEP-74 transfer the pool
+// receives; payment_payload holds the swap / deposit payload.
+@overflow1023_policy("suppress")
+struct (0xcbc33949) DedustV2PayJetton {
+    payment_payload: cell;
+    _payout_config: cell;
+}
+
 @overflow1023_policy("suppress")
 struct (0x78e79ba4) DedustV2SwapEvent {
     _x_to_y: bits1;
@@ -112,7 +120,7 @@ struct (0xc9a015da) DedustV2DepositPayload {
 }
 
 type AllowedMessage = ClaimRewardMessage | PayoutRewardMessage | PayoutMessage
-    | DedustV2PayNative | DedustV2SwapEvent | DedustV2SwapPayload
+    | DedustV2PayNative | DedustV2PayJetton | DedustV2SwapEvent | DedustV2SwapPayload
     | DedustV2PayoutPositionFees
     | DedustV2Withdraw | DedustV2WithdrawalEvent | DedustV2CreditAsset
     | DedustV2JoinLiquidity | DedustV2DepositEvent | DedustV2DepositPayload
@@ -140,6 +148,9 @@ fun onInternalMessage(in: InMessage) {
         }
         DedustV2PayNative => {
             assert (msg.amount >= 0) throw 0xFFFF
+        }
+        DedustV2PayJetton => {
+            assert (!msg.payment_payload.beginParse().isEmpty()) throw 0xFFFF
         }
         DedustV2SwapEvent => {
             assert (msg.amount_in >= 0) throw 0xFFFF
