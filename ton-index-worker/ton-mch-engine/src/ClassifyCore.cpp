@@ -461,10 +461,11 @@ void post_process_stonfi_v2_liquidity(std::vector<Block *> &blocks, BlockArena &
   }
 }
 
-// Promote ContractDeploy blocks nested in children to the top-level spine.
-// The index loop must see appends (it re-scans the promoted deploys). A
-// no-op for the classify/actions dump, which never walks the spine.
-void unwind_deployments(std::vector<Block *> &blocks) {
+// Promote marker blocks of one btype (contract_deploy, gasless_request) nested
+// in children to the top-level spine. The index loop must see appends (it
+// re-scans the promoted markers). A no-op for the classify/actions dump, which
+// never walks the spine.
+void unwind_markers(std::vector<Block *> &blocks, const char *btype) {
   std::set<Block *> visited;
   for (std::size_t i = 0; i < blocks.size(); i++) {  // index loop: sees appends
     std::deque<Block *> queue(blocks[i]->children_blocks.begin(),
@@ -472,7 +473,7 @@ void unwind_deployments(std::vector<Block *> &blocks) {
     while (!queue.empty()) {
       Block *child = queue.front();
       queue.pop_front();
-      if (child->btype == mch::btype::kContractDeploy && visited.count(child) == 0) {
+      if (child->btype == btype && visited.count(child) == 0) {
         blocks.push_back(child);
       } else {
         for (Block *c : child->children_blocks) queue.push_back(c);
@@ -482,14 +483,14 @@ void unwind_deployments(std::vector<Block *> &blocks) {
   }
 }
 
-// Order is load-bearing: V1 merge before V2 pairing, deployments unwound last.
-// unwind_deployments promotes nested ContractDeploy onto the spine.
+// Order is load-bearing: V1 merge before V2 pairing, markers unwound last.
 void run_post_processors(std::vector<Block *> &spine, BlockArena &arena,
                          std::set<Block *> &removed) {
   post_process_dedust_liquidity(spine, removed);
   post_process_dedust_v2_liquidity(spine, removed);
   post_process_stonfi_v2_liquidity(spine, arena, removed);
-  unwind_deployments(spine);
+  unwind_markers(spine, mch::btype::kContractDeploy);
+  unwind_markers(spine, mch::btype::kGaslessRequest);
 }
 
 // A spine block becomes a row unless it is the root wrapper, an `empty`
@@ -543,8 +544,34 @@ bool is_v1_op(const std::string &t) {
       "tonco_deposit_liquidity",
       "tonco_withdraw_liquidity",
       "coffee_deposit_liquidity",
+      "change_wallet_key",
+      "gasless_request",
   };
   return ops.count(t) != 0;
+}
+
+// Links every row that is the immediate result of a relayed (gas-free) request
+// to its gasless_request marker: the request message itself (when a matcher
+// merged it into a composite) and its direct children. Anything deeper is the
+// receiving wallet's own step. Nested relaying chains marker to marker.
+void link_gasless_parents(const std::vector<Block *> &spine, std::vector<ActionRow> &rows) {
+  std::map<const EventNode *, std::string> marker_ids;
+  for (const Block *b : spine) {
+    if (b->btype == mch::btype::kGaslessRequest) marker_ids[root_event_node(b)] = calc_action_id(b);
+  }
+  if (marker_ids.empty()) return;
+  for (ActionRow &row : rows) {
+    const EventNode *node = root_event_node(row.block);
+    const std::string &t = row.block->btype;
+    auto it = marker_ids.end();
+    if (t != mch::btype::kGaslessRequest && t != mch::btype::kCallContract) {
+      it = marker_ids.find(node);
+    }
+    if (it == marker_ids.end() && node != nullptr && node->parent != nullptr) {
+      it = marker_ids.find(node->parent);
+    }
+    if (it != marker_ids.end()) row.parent_gasless_action = it->second;
+  }
 }
 
 // Filter and recursively serialize action rows.
@@ -560,7 +587,11 @@ std::vector<ActionRow> serialize_rows(const std::vector<Block *> &blocks,
     ids.insert(id);
     if (is_v1_op(b->btype)) continue;
     for (ActionRow &c : serialize_rows(b->children_blocks, id)) {
-      if (c.block->btype == mch::btype::kContractDeploy) continue;
+      // Markers were unwound onto the spine; a second copy here would collide.
+      if (c.block->btype == mch::btype::kContractDeploy ||
+          c.block->btype == mch::btype::kGaslessRequest) {
+        continue;
+      }
       c.ancestor_type.push_back(b->btype);
       std::sort(c.ancestor_type.begin(), c.ancestor_type.end());
       c.ancestor_type.erase(std::unique(c.ancestor_type.begin(), c.ancestor_type.end()),
@@ -573,6 +604,7 @@ std::vector<ActionRow> serialize_rows(const std::vector<Block *> &blocks,
       out.push_back(std::move(c));
     }
   }
+  if (parent_id.empty()) link_gasless_parents(blocks, out);  // top-level call only
   return out;
 }
 

@@ -1508,7 +1508,10 @@ void fill_tick_tock(const Value &d, Action &a) {
 bool fill_action(Block *b, Action &a) {
   const Value &d = b->data;
   const std::string &t = b->btype;
-  if (t == "call_contract" || t == "contract_deploy") fill_call_contract(d, a);
+  if (t == "call_contract" || t == "contract_deploy" || t == "gasless_request" ||
+      t == "change_wallet_key") {
+    fill_call_contract(d, a);  // the two wallet types carry only source/destination/value
+  }
   else if (t == "ton_transfer") fill_ton_transfer(d, a);
   else if (t == "tick_tock") fill_tick_tock(d, a);
   else if (t == "jetton_transfer") fill_jetton_transfer(d, a);
@@ -1602,11 +1605,16 @@ bool fill_action(Block *b, Action &a) {
 }
 }  // namespace
 
-std::string calc_action_id(const Block *b) {
+const EventNode *root_event_node(const Block *b) {
   const EventNode *root = nullptr;
   for (const EventNode *n : b->event_nodes) {
     if (root == nullptr || n->lt() < root->lt()) root = n;
   }
+  return root;
+}
+
+std::string calc_action_id(const Block *b) {
+  const EventNode *root = root_event_node(b);
   std::string key;
   if (root != nullptr) {
     key = (root->msg != nullptr) ? root->msg->msg_hash : root->tx_hash();
@@ -1695,6 +1703,11 @@ bool build_action(const ActionRow &row, Action &a) {
   if (!build_action(row.block, a)) return false;
   a.parent_action_id = row.parent_action_id;
   a.ancestor_type = row.ancestor_type;
+  if (!row.parent_gasless_action.empty()) {
+    Value::Fields f = a.extra.fields ? *a.extra.fields : Value::Fields{};
+    f.emplace_back("parent_gasless_action", Value::make_str(row.parent_gasless_action));
+    a.extra = mkdict(std::move(f));
+  }
   return true;
 }
 
