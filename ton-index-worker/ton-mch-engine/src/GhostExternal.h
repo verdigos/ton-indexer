@@ -12,7 +12,7 @@ namespace mch {
 
 class LookupSource;  // BuildRuntime.h
 
-// Forces `root` failed, parses its message body as a wallet v3/v4/v5r1
+// Forces `root` failed, parses its message body as a tg-wallet/v3/v4/v5r1
 // external and appends one ghost child per decoded payload. Returns the
 // number of children appended; 0 means the body is not a wallet external,
 // carries no messages, or does not parse. Never throws.
