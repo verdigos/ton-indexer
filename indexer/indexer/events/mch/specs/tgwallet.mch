@@ -19,7 +19,11 @@ matcher change_wallet_key {
 
     (op TgWalletChangePublicKeyInternal @req | op TgWalletChangePublicKeyExternal @req)
 
-    failed when req.failed
+    # A valueless call_contract leaf clears its own `failed` flag (log/event
+    # leaves), and wallet requests are valueless, so read the transaction's
+    # status directly: an aborted key rotation must not look successful.
+    # Deliberate departure from the python matcher, which copies the leaf flag.
+    failed when (req.msg.transaction.aborted ?? false)
 
     out {
         source:      account(req.msg.source)
