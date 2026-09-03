@@ -139,7 +139,8 @@ matcher dedust_v2_deposit_final {
     let leg_asset  = carrier.data.asset if jetton_in else ton_asset()
     let leg_wallet = carrier.data.sender_wallet if jetton_in else null
 
-    let payload = try parse (dedust_v2_payload_cell(carrier.data.forward_payload) if jetton_in else dedust_v2_payload_cell(carrier.body.payment_payload)) as DedustV2DepositPayload
+    let carrier_cell = dedust_v2_payload_cell(carrier.data.forward_payload) if jetton_in else dedust_v2_payload_cell(carrier.body.payment_payload)
+    let payload      = try parse carrier_cell as DedustV2DepositPayload
 
     # Every refund leg must be addressed to the initiator, jetton and TON alike.
     # The two jetton slots are separate captures (one name cannot bind twice in
@@ -205,7 +206,8 @@ matcher dedust_v2_deposit_rejected {
     let leg_asset  = carrier.data.asset if jetton_in else ton_asset()
     let leg_wallet = carrier.data.sender_wallet if jetton_in else null
 
-    let payload = try parse (dedust_v2_payload_cell(carrier.data.forward_payload) if jetton_in else dedust_v2_payload_cell(carrier.body.payment_payload)) as DedustV2DepositPayload
+    let carrier_cell = dedust_v2_payload_cell(carrier.data.forward_payload) if jetton_in else dedust_v2_payload_cell(carrier.body.payment_payload)
+    let payload      = try parse carrier_cell as DedustV2DepositPayload
 
     reject when refund_jt_1 != null and refund_jt_1.data.receiver != initiator
     reject when refund_jt_2 != null and refund_jt_2.data.receiver != initiator

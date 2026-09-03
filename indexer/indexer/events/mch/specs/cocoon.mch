@@ -247,12 +247,15 @@ matcher cocoon_client_withdraw {
          -> { maybe op CocoonReturnExcessesBack @excesses
             ; op CocoonPayout @payout }
 
-    parse wd as CocoonOwnerClientWithdraw
+    parse wd             as CocoonOwnerClientWithdraw
+    parse client_request as CocoonClientProxyRequest
+    # A refund grant rides inside the proxy request; anything else leaves the amount at 0.
+    let granted = try parse client_request.body.payload as CocoonClientProxyRefundGranted
     failed when (wd.msg.transaction.aborted ?? false)
     out {
         owner:           account(wd.body.send_excesses_to) ?? addr_none()
         client_contract: account(wd.msg.destination) ?? addr_none()
         query_id:        wd.body.query_id
-        withdraw_amount: amount((try parse (try parse client_request as CocoonClientProxyRequest).payload as CocoonClientProxyRefundGranted).coins ?? 0)
+        withdraw_amount: amount(granted.coins ?? 0)
     }
 }
