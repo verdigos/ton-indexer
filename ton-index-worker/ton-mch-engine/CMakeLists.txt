@@ -333,6 +333,7 @@ add_test(NAME mch_actions_golden
             -DENGINE=$<TARGET_FILE:ton-mch-engine>
             -DTRACES=${CMAKE_CURRENT_SOURCE_DIR}/../../indexer/tests/traces
             -DGOLDEN_DIR=${CMAKE_CURRENT_SOURCE_DIR}/goldens/actions
+            -DFIXTURES=${CMAKE_CURRENT_SOURCE_DIR}/goldens/fixtures.json
             -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/actions_golden_check
             -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ActionsGoldenCheck.cmake)
 
