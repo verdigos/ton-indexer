@@ -359,8 +359,6 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
 
 namespace {
 
-constexpr std::uint32_t kDedustV2PayJetton = 0xcbc33949;
-
 // DedustV2SwapStep: pool:MsgAddressInt minimal_amount_out:Coins deadline:uint40
 // next:(Maybe ^SwapStep), an inline struct, so no opcode prefix.
 td::Status dv2_read_step(vm::CellSlice &cs, td::RefInt256 &min_out,
@@ -385,42 +383,7 @@ td::Status dv2_read_step(vm::CellSlice &cs, td::RefInt256 &min_out,
   return td::Status::OK();
 }
 
-// The payload cell behind a carrier: the argument is either a PayNative body's
-// payment_payload ref (a Cell) or a jetton carrier's b64 forward_payload (a Str
-// carrying the PayJetton wrapper, whose own payment_payload holds the payload).
-td::Result<td::Ref<vm::Cell>> resolve_dv2_payload_cell(const Value &arg) {
-  if (arg.t == VType::Cell) {
-    return arg.cell;
-  }
-  if (arg.t != VType::Str) {
-    return td::Status::Error("dedust_v2 payload: expected a cell or a b64 string");
-  }
-  TRY_RESULT(raw, td::base64_decode(td::Slice(arg.str)));
-  TRY_RESULT(wrapper, vm::std_boc_deserialize(raw));
-  TRY_RESULT(cs, open_ref_cell(wrapper));
-  if (!cs.have(32) || cs.fetch_ulong(32) != kDedustV2PayJetton) {
-    return td::Status::Error("dedust_v2 payload: not a PayJetton wrapper");
-  }
-  td::Ref<vm::Cell> payload = cs.fetch_ref();
-  td::Ref<vm::Cell> payout_config = cs.fetch_ref();  // must consume this ref
-  if (payload.is_null() || payout_config.is_null()) {
-    return td::Status::Error("dedust_v2 payload: PayJetton refs missing");
-  }
-  return payload;
-}
-
 }  // namespace
-
-EvalResult dedust_v2_payload_cell(BuildEnv &, const std::vector<Value> &args) {
-  if (args[0].is_null()) {
-    return rt_ok(Value::null());
-  }
-  auto cell = resolve_dv2_payload_cell(args[0]);
-  if (cell.is_error() || cell.ok().is_null()) {
-    return rt_ok(Value::null());
-  }
-  return rt_ok(Value::make_cell(cell.move_as_ok()));
-}
 
 // Return the final minimum output from a parsed swap payload's step chain.
 EvalResult dedust_v2_swap_min_out(BuildEnv &, const std::vector<Value> &args) {

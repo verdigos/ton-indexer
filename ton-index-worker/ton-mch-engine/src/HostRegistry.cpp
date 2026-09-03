@@ -11,7 +11,6 @@ namespace mch {
 const std::map<std::string, HostFnEntry> &host_fns() {
   static const std::map<std::string, HostFnEntry> fns = {
       {"dedust_swap_legs", {dedust_swap_legs, 3}},
-      {"dedust_v2_payload_cell", {dedust_v2_payload_cell, 1}},
       {"dedust_v2_swap_min_out", {dedust_v2_swap_min_out, 1}},
       {"layerzero_dst_oapp_matches", {layerzero_dst_oapp_matches, 2}},
       {"tonstakers_pool_addr", {tonstakers_pool_addr, 1}},

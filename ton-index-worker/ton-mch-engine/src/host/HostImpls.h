@@ -81,7 +81,6 @@ EvalResult evaa_liquidate_data(BuildEnv &env, const std::vector<Value> &args);
 
 // DeDust (HostDedust.cpp).
 EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args);
-EvalResult dedust_v2_payload_cell(BuildEnv &env, const std::vector<Value> &args);
 EvalResult dedust_v2_swap_min_out(BuildEnv &env, const std::vector<Value> &args);
 
 // DeDust liquidity deposit (HostDedustDeposit.cpp).

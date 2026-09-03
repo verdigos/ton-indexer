@@ -39,7 +39,7 @@
 # builds the same pairing by scanning the consumed set and sorting on min_lt;
 # on a linear route (a pool forwards to exactly one continuation) the two agree.
 #
-# The carrier helper unwraps PayJetton while `try parse` validates the payload.
+# `try parse` unwraps the PayJetton wrapper and then validates the payload.
 # The loop-only min-out helper walks the payload's `next` SwapStep chain to its
 # final minimal_amount_out.
 #
@@ -85,7 +85,7 @@ matcher dedust_v2_swap {
 
     let jetton_in    = carrier.btype == "jetton_transfer"
     let source_asset = carrier.data.asset if jetton_in else ton_asset()
-    let carrier_cell = dedust_v2_payload_cell(carrier.data.forward_payload) if jetton_in else dedust_v2_payload_cell(carrier.body.payment_payload)
+    let carrier_cell = (try parse carrier.data.forward_payload as DedustV2PayJetton).payment_payload if jetton_in else carrier.body.payment_payload
     let payload       = try parse carrier_cell as DedustV2SwapPayload
     # PayNative also carries deposits and fund rewards; only a swap payload is ours.
     reject when not jetton_in and payload == null
@@ -95,7 +95,8 @@ matcher dedust_v2_swap {
     let out_jetton = out_leg.btype == "jetton_transfer"
     let out_asset  = out_leg.data.asset if out_jetton else ton_asset()
     # An out leg still carrying a SwapPayload means the route failed mid-hop.
-    reject when out_jetton and (try parse dedust_v2_payload_cell(out_leg.data.forward_payload) as DedustV2SwapPayload) != null
+    let out_wrapper = (try parse out_leg.data.forward_payload as DedustV2PayJetton) if out_jetton else null
+    reject when (try parse out_wrapper.payment_payload as DedustV2SwapPayload) != null
 
     let amounts_in  = concat([ev0.body.amount_in],  map(ev.body, "amount_in"))
     let amounts_out = concat([ev0.body.amount_out], map(ev.body, "amount_out"))
@@ -164,7 +165,7 @@ matcher dedust_v2_failed_swap {
 
     let jetton_in    = carrier.btype == "jetton_transfer"
     let source_asset = carrier.data.asset if jetton_in else ton_asset()
-    let carrier_cell = dedust_v2_payload_cell(carrier.data.forward_payload) if jetton_in else dedust_v2_payload_cell(carrier.body.payment_payload)
+    let carrier_cell = (try parse carrier.data.forward_payload as DedustV2PayJetton).payment_payload if jetton_in else carrier.body.payment_payload
     let payload       = try parse carrier_cell as DedustV2SwapPayload
     reject when payload == null
 
