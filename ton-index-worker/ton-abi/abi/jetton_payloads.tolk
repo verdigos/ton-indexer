@@ -1,4 +1,4 @@
-tolk 1.0
+tolk 1.4
 
 struct (0x00000000) TextCommentPayload {
     comment: RemainingBitsAndRefs;

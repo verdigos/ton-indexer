@@ -1,4 +1,4 @@
-tolk 1.0
+tolk 1.4
 
 struct TeleitemAuctionConfig {
     beneficiary_address: any_address;
