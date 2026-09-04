@@ -55,7 +55,7 @@ foreach(TON_ABI_DECL IN LISTS TON_ABI_PROD_DECLS)
         OUTPUT "${TON_ABI_JSON}"
         BYPRODUCTS "${TON_ABI_JSON_DIR}/${TON_ABI_STEM}.fif"
         COMMAND ${CMAKE_COMMAND} -E env "TOLK_STDLIB=${TON_ABI_TOLK_STDLIB}"
-                $<TARGET_FILE:tolk> --no-symbol-types
+                $<TARGET_FILE:tolk> --allow-no-entrypoint --no-symbol-types
                 -o "${TON_ABI_JSON_DIR}/${TON_ABI_STEM}.fif" "${TON_ABI_DECL}"
         DEPENDS tolk "${TON_ABI_DECL}"
         COMMENT "Compile ${TON_ABI_STEM}.tolk -> ${TON_ABI_STEM}.abi.json"

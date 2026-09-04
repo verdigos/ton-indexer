@@ -120,7 +120,7 @@ def _fields(body: str) -> list[tuple[str, str]]:
 
 def _allowed_arms(text: str) -> list[str]:
     match = re.search(
-        r"\btype\s+AllowedMessage\s*=\s*(.*?)\n\s*\n\s*struct\s+Storage\b",
+        r"\btype\s+AllowedMessage\s*=\s*(.*?)\n\s*\n\s*contract\b",
         text,
         re.DOTALL,
     )

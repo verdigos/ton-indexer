@@ -51,29 +51,6 @@ struct (0xb56b9598) DedustDepositLiquidityToPool {
 
 type AllowedMessage = DedustPayoutFromPool | DedustSwapNotification | DedustDepositLiquidityToPool
 
-struct Storage {
-    dummy: uint1
-}
-
 contract DedustMessages {
     incomingMessages: AllowedMessage
-    storage: Storage
-}
-
-fun onInternalMessage(in: InMessage) {
-    val msg = lazy AllowedMessage.fromSlice(in.body);
-    match (msg) {
-        DedustPayoutFromPool => {
-            assert (in.body.isEmpty()) throw 0xFFFF
-        }
-        DedustSwapNotification => {
-            assert (in.body.isEmpty()) throw 0xFFFF
-        }
-        DedustDepositLiquidityToPool => {
-            assert (in.body.isEmpty()) throw 0xFFFF
-        }
-        else => {
-            assert (in.body.isEmpty()) throw 0xFFFF
-        }
-    }
 }
