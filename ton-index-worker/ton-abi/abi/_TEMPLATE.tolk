@@ -1,7 +1,7 @@
 tolk 1.0
 
-// Copy this template to abi/<contract>.tolk, add authoritative declarations,
-// list their names in AllowedMessage, and add the stem to PROD_DECLS.
+// Copy this template to abi/<contract>.tolk, add authoritative declarations
+// and list their names in AllowedMessage; the build picks the file up by glob.
 struct (0x00000001) ExampleMessage {
     queryId: uint64;
     amount: coins;
