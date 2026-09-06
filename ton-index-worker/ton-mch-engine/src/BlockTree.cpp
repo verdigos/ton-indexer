@@ -170,6 +170,11 @@ void Block::compact_connections() {
       continue;
     }
     Block *tp = n->topmost_parent();
+    // A grandchild's topmost parent is this block. The resulting self-edge would
+    // make find_frontier loop; normal traces never reach it.
+    if (tp == this) {
+      continue;
+    }
     if (seen.insert(tp).second) {
       out.push_back(tp);
     }
@@ -223,11 +228,14 @@ std::vector<Block *> Block::find_frontier(const std::vector<Block *> &in_set) co
   while (!queue.empty()) {
     Block *cur = queue.front();
     queue.pop_front();
+    if (!seen.insert(cur).second) {
+      continue;  // Marks in-set nodes too, so a cycle in next_blocks terminates.
+    }
     if (set.count(cur) != 0) {
       for (Block *c : cur->next_blocks) {
         queue.push_back(c);
       }
-    } else if (seen.insert(cur).second) {
+    } else {
       out.push_back(cur);
     }
   }

@@ -854,6 +854,7 @@ SchemaClassifyResult classify_schema_trace(
     std::vector<Action> &rows, std::vector<std::string> &matcher_names,
     std::size_t &scrubbed, bool &unknown_row) {
   SchemaClassifyResult result;
+  bool completed = false;
   try {
     auto r_trace = schema_to_trace(trace_id, txs);
     if (r_trace.is_error()) {
@@ -901,6 +902,7 @@ SchemaClassifyResult classify_schema_trace(
       rows.push_back(create_unknown_action(ctx.trace));
       unknown_row = true;
     }
+    completed = true;
   } catch (const vm::VmError &e) {
     result.failure = true;
     result.failure_reason = std::string("vm exception: ") + e.get_msg();
@@ -921,6 +923,13 @@ SchemaClassifyResult classify_schema_trace(
     result.failure = true;
     result.failure_reason = "unknown exception";
     result.failure_category = FailureCategory::engine_fault;
+  }
+  if (!completed) {
+    // A throw mid-loop leaves a partial prefix in the caller's rows, which the
+    // actor would publish as the fallback payload. This path owns no output.
+    rows.clear();
+    matcher_names.clear();
+    unknown_row = false;
   }
   return result;
 }

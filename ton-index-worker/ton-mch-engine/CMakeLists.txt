@@ -301,6 +301,7 @@ add_executable(ton-mch-engine
     harness/AbiBridgeTest.cpp
     harness/EmuActionSerializeTest.cpp
     harness/EmuCelldbLookupTest.cpp
+    harness/ClassifyCoreTest.cpp
     harness/GhostExternalTest.cpp
     ${ABI_BRIDGE_TEST_FIXTURES}
 )
@@ -327,6 +328,8 @@ add_test(NAME mch_celldb_tier2
     COMMAND ton-mch-engine --celldb-tier2-test)
 add_test(NAME mch_ghost_external
     COMMAND ton-mch-engine --ghost-external-test)
+add_test(NAME mch_classify_core
+    COMMAND ton-mch-engine --classify-core-test)
 add_test(NAME mch_actions_golden
     COMMAND "${CMAKE_COMMAND}"
             -DENGINE=$<TARGET_FILE:ton-mch-engine>

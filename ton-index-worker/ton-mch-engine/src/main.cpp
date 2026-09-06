@@ -10,6 +10,7 @@
 #include "Classify.h"
 #include "EmuActionSerializeTest.h"
 #include "EmuCelldbLookupTest.h"
+#include "ClassifyCoreTest.h"
 #include "GhostExternalTest.h"
 #include "MsgParse.h"
 
@@ -29,6 +30,7 @@ int main(int argc, char *argv[]) {
   bool actions_msgpack_test_mode = false;
   bool celldb_tier2_test_mode = false;
   bool ghost_external_test_mode = false;
+  bool classify_core_test_mode = false;
   std::vector<std::string> trace_paths;
   std::string actions_output_dir;
   std::string fixtures_manifest;
@@ -50,6 +52,9 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "ghost-external-test",
                "Wallet request/ghost self-test (tg-wallet single/bulk/opcode/gasless)",
                [&]() { ghost_external_test_mode = true; });
+  p.add_option('\0', "classify-core-test",
+               "Classify core self-test (block-tree topology guards, failure fallback)",
+               [&]() { classify_core_test_mode = true; });
   p.add_option('\0', "help", "prints help", [&]() {
     char b[10240];
     td::StringBuilder sb(td::MutableSlice{b, 10000});
@@ -91,6 +96,9 @@ int main(int argc, char *argv[]) {
   }
   if (celldb_tier2_test_mode) {
     return mch::run_celldb_tier2_test();
+  }
+  if (classify_core_test_mode) {
+    return mch::run_classify_core_test();
   }
   if (ghost_external_test_mode) {
     return mch::run_ghost_external_test();
