@@ -38,11 +38,12 @@
 #
 # `code_hash`
 # -----------
-# `nft_item.code_hash`, `nft_sale.code_hash` and `nft_auction.code_hash` did not
-# are required on the C++ lookup shapes. They are supplied by
-# ParsedBlockLookupSource.cpp, fixtures/FixtureLookupSource.cpp, and
-# emu/EmuClassifierBridge.cpp. No detector Result carries a code hash, so the emulator
-# leg computes it from the account state cell the detector ran on). Zero renders
+# `nft_item.code_hash`, `nft_sale.code_hash` and `nft_auction.code_hash` are
+# required on the C++ lookup shapes. They are supplied by
+# ParsedBlockLookupSource.cpp, fixtures/FixtureLookupSource.cpp,
+# emu/EmuClassifierBridge.cpp (tier 1) and emu/EmuCelldbLookup.cpp (tier 2). No
+# detector Result carries a code hash, so both emulator legs compute it from the
+# account state the detector ran on. Zero renders
 # as null, so an unknown code hash reads as a MISS, never as a wrong version
 # string. Consumers: the DNS-item test inside `auction_bid_data`, and the GetGems
 # StateInit version dispatch in `getgems_sale_init` / `getgems_auction_init`.

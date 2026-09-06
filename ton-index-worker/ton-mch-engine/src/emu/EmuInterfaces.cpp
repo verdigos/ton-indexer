@@ -1,5 +1,7 @@
 #include "EmuInterfaces.h"
 
+#include <variant>
+
 namespace mch {
 
 schema::JettonWalletDataV2 to_v2(const JettonWalletDetectorR::Result &r) {
@@ -141,6 +143,26 @@ schema::MultisigOrderData to_v2(const MultisigOrder::Result &r) {
   // `order` is deliberately not copied (lazy-cell lifetime; see mch-docs engine/architecture.md).
   v.signers = r.signers;
   return v;
+}
+
+void set_nft_code_hash(schema::BlockchainInterfaceV2 &iface, const schema::AccountState &state) {
+  td::Bits256 code_hash;
+  if (state.code_hash) {
+    code_hash = *state.code_hash;
+  } else if (state.code.not_null()) {
+    code_hash = td::Bits256{state.code->get_hash().bits()};
+  } else {
+    return;
+  }
+  if (auto *v = std::get_if<schema::NFTItemDataV2>(&iface)) {
+    v->code_hash = code_hash;
+  } else if (auto *v = std::get_if<schema::GetGemsNftFixPriceSaleData>(&iface)) {
+    v->code_hash = code_hash;
+  } else if (auto *v = std::get_if<schema::GetGemsNftFixPriceSaleV4Data>(&iface)) {
+    v->code_hash = code_hash;
+  } else if (auto *v = std::get_if<schema::GetGemsNftAuctionData>(&iface)) {
+    v->code_hash = code_hash;
+  }
 }
 
 }  // namespace mch

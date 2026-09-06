@@ -6,16 +6,20 @@
 #include "ParsedBlockLookupSource.h"
 #include "Value.h"
 #include "emu/EmuCelldbLookup.h"
+#include "emu/EmuInterfaces.h"
 #include "emu/EmuJvaultChain.h"
 #include "fixtures/Render.h"
 
 #include "common/refint.h"
+#include "td/utils/base64.h"
 #include "vm/cells/CellBuilder.h"
 
 #include <cstdio>
 #include <map>
 #include <optional>
 #include <string>
+#include <tuple>
+#include <variant>
 #include <vector>
 
 namespace mch {
@@ -202,6 +206,68 @@ void test_tier_shapes() {
     jw.address = a;
     check("tier_shape/wrong_kind_is_null",
           ParsedBlockLookupSource::iface_value("dedust_pool", jw).is_null());
+  }
+}
+
+// NFT code hash
+
+// Detector Results carry no code hash, so tier 2 fills it from the account state
+// it ran the detector on. Detection itself needs a real config, out of reach
+// here, so this pins the adapter the tier-2 path calls on its way to rendering.
+void test_nft_code_hash() {
+  const block::StdAddress a = addr_of('A');
+  const schema::AccountState st = account_with_data(a, stake_wallet_data(a, addr_of('B')));
+  const td::Bits256 from_cell{st.code->get_hash().bits()};
+
+  auto rendered_hash = [](const std::string &kind, schema::BlockchainInterfaceV2 iface,
+                          const schema::AccountState &state) {
+    set_nft_code_hash(iface, state);
+    Value v = ParsedBlockLookupSource::iface_value(kind, iface);
+    const Value *h = v.field("code_hash");
+    return h == nullptr ? Value::null() : *h;
+  };
+
+  schema::NFTItemDataV2 nft{};
+  nft.address = a;
+  schema::GetGemsNftFixPriceSaleData sale{};
+  sale.address = a;
+  schema::GetGemsNftFixPriceSaleV4Data sale_v4{};
+  sale_v4.address = a;
+  schema::GetGemsNftAuctionData auction{};
+  auction.address = a;
+
+  const std::vector<std::tuple<std::string, std::string, schema::BlockchainInterfaceV2>> shapes{
+      {"nft_item", "nft_item", nft},
+      {"nft_sale", "nft_sale", sale},
+      {"nft_sale_v4", "nft_sale", sale_v4},
+      {"nft_auction", "nft_auction", auction},
+  };
+  const std::string expected = td::base64_encode(from_cell.as_slice());
+  for (const auto &[name, kind, iface] : shapes) {
+    Value h = rendered_hash(kind, iface, st);
+    check("code_hash/" + name + "/from_code_cell", h.t == VType::Str && h.str == expected);
+  }
+
+  {
+    // A state that already carries the parsed hash is taken verbatim.
+    schema::AccountState parsed = st;
+    parsed.code_hash = addr_of('7').addr;
+    Value h = rendered_hash("nft_item", nft, parsed);
+    check("code_hash/parsed_hash_wins",
+          h.t == VType::Str && h.str == td::base64_encode(parsed.code_hash.value().as_slice()));
+  }
+  {
+    // No code cell leaves the hash zero, which renders as a miss.
+    schema::AccountState codeless{};
+    codeless.account = a;
+    check("code_hash/no_code_is_null", rendered_hash("nft_item", nft, codeless).is_null());
+  }
+  {
+    // Variants with no code-hash consumer stay untouched.
+    schema::BlockchainInterfaceV2 pool = schema::DedustPoolData{};
+    set_nft_code_hash(pool, st);
+    check("code_hash/other_variant_untouched",
+          std::get<schema::DedustPoolData>(pool).code_hash.is_zero());
   }
 }
 
@@ -474,6 +540,7 @@ void test_two_tier_routing() {
 int run_celldb_tier2_test() {
   g_fail = 0;
   test_tier_shapes();
+  test_nft_code_hash();
   test_nominator_predicate();
   test_jvault_parsers();
   test_jvault_hook();

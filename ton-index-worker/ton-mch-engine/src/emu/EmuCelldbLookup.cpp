@@ -160,6 +160,9 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
   if (!iface) {
     return Value::null();
   }
+  // Tier 1 fills the NFT code hash from the trace's account state; here it comes
+  // from the cell-db state the detector just ran on.
+  set_nft_code_hash(*iface, *st);
   return ParsedBlockLookupSource::iface_value(kind, *iface);
 }
 
