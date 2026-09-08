@@ -8,6 +8,7 @@
 #include "crypto/vm/cp0.h"
 
 #include "../../index-engine/src/IndexScheduler.h"
+#include "EnginePrep.h"
 #include "DataParser.h"
 #include "DbScanner.h"
 #include "FailoverWatchdog.h"
@@ -41,6 +42,8 @@ int main(int argc, char *argv[]) {
   td::uint32 from_seqno = 0;
   td::uint32 to_seqno = 0;
   td::uint32 prewarm_count = 50;
+  bool mch_classify = false;
+  mch::ClassifyPolicy mch_policy;
   bool force_index = false;
   bool no_leader = false;
   bool custom_types = false;
@@ -476,6 +479,28 @@ int main(int argc, char *argv[]) {
     return td::Status::OK();
   });
   
+  // in-process classification
+  p.add_option('\0', "mch-classify", "Classify completed traces in-process and write actions in the block transaction", [&]() {
+    mch_classify = true;
+  });
+  auto mch_uint_option = [&](td::Slice name, td::Slice help, auto setter) {
+    p.add_checked_option('\0', name, help, [&, name, setter](td::Slice value) {
+      std::uint64_t v;
+      try {
+        v = std::stoull(value.str());
+      } catch (...) {
+        return td::Status::Error(ton::ErrorCode::error, PSLICE() << "bad value for --" << name << ": not a number");
+      }
+      setter(v);
+      return td::Status::OK();
+    });
+  };
+  mch_uint_option("mch-workers", "Classification workers (default: 4)", [&](std::uint64_t v) { mch_policy.workers = static_cast<std::uint32_t>(v); });
+  mch_uint_option("mch-lifetime-w", "Collector lifetime in masterchain blocks (default: 256)", [&](std::uint64_t v) { mch_policy.lifetime_w = static_cast<std::uint32_t>(v); });
+  mch_uint_option("mch-trace-cap", "Per-trace transaction cap (default: 4000)", [&](std::uint64_t v) { mch_policy.trace_cap = v; });
+  mch_uint_option("mch-job-timeout", "Seconds after which a classification is logged as slow (default: 5)", [&](std::uint64_t v) { mch_policy.job_timeout_s = static_cast<double>(v); });
+  mch_uint_option("mch-rss-budget-gb", "Process RSS ceiling in GiB; exceeding it aborts the run (default: 16)", [&](std::uint64_t v) { mch_policy.rss_budget_bytes = v << 30; });
+
   // scheduler settings
   p.add_checked_option('t', "threads", "Scheduler threads (default: 7)", [&](td::Slice fname) { 
     int v;
@@ -541,6 +566,10 @@ int main(int argc, char *argv[]) {
     LOG(ERROR) << "--from must be less than or equal to --to";
     std::_Exit(2);
   }
+  if (mch_classify && bounded_archive_range) {
+    LOG(ERROR) << "--mch-classify cannot be combined with a bounded --from/--to range";
+    std::_Exit(2);
+  }
   if (no_leader && !bounded_archive_range) {
     LOG(ERROR) << "--no-leader is only valid when both --from and --to are specified";
     std::_Exit(2);
@@ -594,9 +623,26 @@ int main(int argc, char *argv[]) {
                                                      !bounded_archive_range);
   });
 
+  std::optional<mch::ReplayRun> mch_run;
+  std::shared_ptr<const mch::MchEnginePrep> mch_prep;
+  if (mch_classify) {
+    auto r_prep = mch::make_engine_prep();
+    if (r_prep.is_error()) {
+      LOG(ERROR) << "MCH engine prep failed: " << r_prep.move_as_error();
+      std::_Exit(2);
+    }
+    mch_prep = r_prep.move_as_ok();
+    mch_run.emplace();
+    mch_run->mode = mch::RunMode::live;
+    mch_run->policy = mch_policy;
+    LOG(INFO) << "In-process classification enabled: workers=" << mch_policy.workers
+              << " lifetime_w=" << mch_policy.lifetime_w << " trace_cap=" << mch_policy.trace_cap
+              << " job_timeout_s=" << mch_policy.job_timeout_s
+              << " rss_budget_bytes=" << mch_policy.rss_budget_bytes;
+  }
   scheduler.run_in_context([&, watcher = std::move(watcher)] { index_scheduler_ = td::actor::create_actor<IndexScheduler>("indexscheduler", db_scanner_.get(),
     insert_manager_.get(), parse_manager_.get(), working_dir, from_seqno, to_seqno, force_index, max_active_tasks, max_queue, stats_timeout, watcher, prewarm_count,
-    db_event_fifo_path);
+    db_event_fifo_path, mch_run, mch_prep);
   });
   if (!bounded_archive_range && failover_check_interval > 0) {
     scheduler.run_in_context([&] {
