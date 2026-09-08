@@ -288,6 +288,10 @@ void IndexScheduler::start_from_seqno(ton::BlockSeqno seqno, bool reset_trace_as
     }
     if (reset_trace_assembler) {
         td::actor::send_closure(trace_assembler_, &TraceAssembler::reset_state);
+        if (classify_policy_) {
+            collector_.emplace(*classify_policy_);
+            classify_outcomes_.clear();
+        }
     }
     read_from_seqno_ = static_cast<std::int32_t>(seqno);
     last_known_seqno_ = read_from_seqno_ - 1;
@@ -481,24 +485,6 @@ void IndexScheduler::seqno_parsed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_
     LOG(DEBUG) << "Parsed seqno " << mc_seqno;
     apply_otel_processing_lag(mc_seqno, *parsed_block);
     finish_seqno_otel_stage(mc_seqno);
-    start_seqno_otel_stage(mc_seqno, "assemble_traces");
-
-    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), mc_seqno](td::Result<ParsedBlockPtr> R) {
-        if (R.is_error()) {
-            auto error = R.move_as_error();
-            LOG(ERROR) << "Failed to asseble traces for seqno " << mc_seqno << ": " << error;
-            td::actor::send_closure(SelfId, &IndexScheduler::handle_seqno_failure, mc_seqno,
-                                    std::string("index_postgres.trace_assembly_error"), std::move(error), false);
-            return;
-        }
-        td::actor::send_closure(SelfId, &IndexScheduler::seqno_traces_assembled, mc_seqno, R.move_as_ok());
-    });
-    td::actor::send_closure(trace_assembler_, &TraceAssembler::assemble, mc_seqno, std::move(parsed_block), std::move(P));
-}
-
-void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block) {
-    LOG(DEBUG) << "Assembled traces for seqno " << mc_seqno;
-    finish_seqno_otel_stage(mc_seqno);
     start_seqno_otel_stage(mc_seqno, "detect_interfaces");
 
     auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), mc_seqno](td::Result<ParsedBlockPtr> R) {
@@ -517,6 +503,34 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
 void IndexScheduler::seqno_interfaces_processed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block) {
     LOG(DEBUG) << "Interfaces processed for seqno " << mc_seqno;
     finish_seqno_otel_stage(mc_seqno);
+    start_seqno_otel_stage(mc_seqno, "assemble_traces");
+
+    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), mc_seqno](td::Result<ParsedBlockPtr> R) {
+        if (R.is_error()) {
+            auto error = R.move_as_error();
+            LOG(ERROR) << "Failed to asseble traces for seqno " << mc_seqno << ": " << error;
+            td::actor::send_closure(SelfId, &IndexScheduler::handle_seqno_failure, mc_seqno,
+                                    std::string("index_postgres.trace_assembly_error"), std::move(error), false);
+            return;
+        }
+        td::actor::send_closure(SelfId, &IndexScheduler::seqno_traces_assembled, mc_seqno, R.move_as_ok());
+    });
+    td::actor::send_closure(trace_assembler_, &TraceAssembler::assemble, mc_seqno, std::move(parsed_block), std::move(P));
+}
+
+void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block) {
+    LOG(DEBUG) << "Assembled traces for seqno " << mc_seqno;
+    finish_seqno_otel_stage(mc_seqno);
+    if (collector_) {
+        auto inputs = collector_->add_block(mc_seqno, *parsed_block);
+        for (const auto &input : inputs) {
+            if (input.skipped) {
+                ++classify_outcomes_[*input.skipped];
+            }
+            LOG(DEBUG) << "Collected trace " << input.trace.trace_id << " at seqno " << mc_seqno
+                       << ": " << (input.skipped ? mch::trace_outcome_name(*input.skipped) : "admitted");
+        }
+    }
     start_seqno_otel_stage(mc_seqno, "detect_actions");
 
     auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), mc_seqno](td::Result<ParsedBlockPtr> R) {
@@ -646,6 +660,16 @@ void IndexScheduler::print_stats() {
     }
     if (!db_event_fifo_path_.empty()) {
         sb << (mc_applied_events_fresh() ? "\tev[ok]" : "\tev[stale]");
+    }
+    if (collector_) {
+        const auto &c = collector_->counters();
+        sb << "\tcollector[entries=" << c.entries << " buffered_txs=" << c.buffered_txs
+           << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted
+           << " capped=" << c.capped << " expired=" << c.expired << " broken=" << c.broken
+           << " incomplete=" << c.incomplete << " missing_root=" << c.missing_root << "]";
+        for (const auto &[outcome, count] : classify_outcomes_) {
+            sb << " " << mch::trace_outcome_name(outcome) << "=" << count;
+        }
     }
     LOG(INFO) << sb.as_cslice().str();
 }

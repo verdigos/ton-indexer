@@ -1,4 +1,5 @@
 #pragma once
+#include <map>
 #include <memory>
 #include <optional>
 #include <queue>
@@ -16,6 +17,7 @@
 #include "smc-interfaces/InterfacesDetector.h"
 #include "Otel.h"
 #include "ReplayRun.h"
+#include "TraceCollector.h"
 
 using Detector = InterfacesDetector<JettonWalletDetectorR, JettonMasterDetectorR,
                                       NftItemDetectorR, NftCollectionDetectorR,
@@ -35,6 +37,9 @@ private:
   td::actor::ActorId<InsertManagerInterface> insert_manager_;
   td::actor::ActorId<ParseManager> parse_manager_;
   td::actor::ActorOwn<TraceAssembler> trace_assembler_;
+  std::optional<mch::ClassifyPolicy> classify_policy_;
+  std::optional<mch::TraceCollector> collector_;
+  std::map<mch::TraceOutcome, std::uint64_t> classify_outcomes_;
   std::shared_ptr<td::Destructor> watcher_;
 
   std::string working_dir_;
@@ -85,11 +90,17 @@ public:
   IndexScheduler(td::actor::ActorId<DbScanner> db_scanner, td::actor::ActorId<InsertManagerInterface> insert_manager,
       td::actor::ActorId<ParseManager> parse_manager, std::string working_dir, std::int32_t from_seqno = 0, std::int32_t to_seqno = 0, bool force_index = false,
       std::uint32_t max_active_tasks = 32, QueueState max_queue = QueueState{30000, 30000, 500000, 500000}, std::int32_t stats_timeout = 10,
-      std::shared_ptr<td::Destructor> watcher = nullptr, std::uint32_t prewarm_count = 50, std::string db_event_fifo_path = {})
-    : db_scanner_(db_scanner), insert_manager_(insert_manager), parse_manager_(parse_manager), working_dir_(std::move(working_dir)),
+      std::shared_ptr<td::Destructor> watcher = nullptr, std::uint32_t prewarm_count = 50, std::string db_event_fifo_path = {},
+      std::optional<mch::ClassifyPolicy> classify_policy = std::nullopt)
+    : db_scanner_(db_scanner), insert_manager_(insert_manager), parse_manager_(parse_manager),
+      classify_policy_(classify_policy), working_dir_(std::move(working_dir)),
       from_seqno_(from_seqno), to_seqno_(to_seqno), force_index_(force_index), max_active_tasks_(max_active_tasks),
       prewarm_count_(prewarm_count), max_queue_(std::move(max_queue)), stats_timeout_(stats_timeout), watcher_(watcher),
-      db_event_fifo_path_(std::move(db_event_fifo_path)) {};
+      db_event_fifo_path_(std::move(db_event_fifo_path)) {
+        if (classify_policy_) {
+          collector_.emplace(*classify_policy_);
+        }
+      };
 
   void start_up() override;
   void alarm() override;
@@ -103,8 +114,8 @@ private:
   void reschedule_seqno(std::uint32_t mc_seqno, bool silent = false);
   void seqno_fetched(std::uint32_t mc_seqno, schema::MasterchainBlockDataState block_data_state);
   void seqno_parsed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block);
-  void seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block);
   void seqno_interfaces_processed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block);
+  void seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block);
   void seqno_actions_processed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block);
   void seqno_queued_to_insert(std::uint32_t mc_seqno, QueueState status);
   void set_seqno_otel_attribute(std::uint32_t mc_seqno, const std::string& key,

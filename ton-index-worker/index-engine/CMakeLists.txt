@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 add_library(index-engine-core
         src/IndexScheduler.cpp
+        src/TraceCollector.cpp
         src/BlockInterfacesDetector.cpp
 )
 target_include_directories(index-engine-core
