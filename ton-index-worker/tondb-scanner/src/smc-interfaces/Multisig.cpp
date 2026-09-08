@@ -149,7 +149,10 @@ td::Result<MultisigOrder::Result> MultisigOrder::detect(
   }
 
   TRY_RESULT(multisig, lookup_account(shard_states, data.multisig_address));
-  TRY_STATUS(verify_multisig_order(address, data.multisig_address, multisig.code, multisig.data,
+  if (!multisig) {
+    return td::Status::Error("Account not found in accounts_dict");
+  }
+  TRY_STATUS(verify_multisig_order(address, data.multisig_address, multisig->code, multisig->data,
                                    data.order_seqno, config));
   return data;
 }

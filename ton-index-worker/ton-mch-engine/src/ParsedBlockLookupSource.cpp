@@ -231,7 +231,9 @@ Value ParsedBlockLookupSource::fetch(const std::string &kind, const std::vector<
     return v;
   }
   // Tier-2-only kinds (nominator_pool, jvault_assets) and every tier-1 miss.
-  Value r = tier2_ ? tier2_(kind, args) : Value::null();
+  auto result = tier2_ ? tier2_(kind, args) : Tier2Result{Value::null(), false};
+  history_unavailable_ |= result.unavailable;
+  Value r = std::move(result.value);
   if (!r.is_null()) {
     stats_.tier2_hits++;
     stats_.tier2_hits_by_kind[kind]++;

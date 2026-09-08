@@ -3,7 +3,7 @@
 #include "DataParser.h"
 
 
-td::Result<schema::AccountState> lookup_account(const AllShardStates& shard_states,
+td::Result<std::optional<schema::AccountState>> lookup_account(const AllShardStates& shard_states,
                                                 const block::StdAddress& address)
 {
     auto addr_prefix = ton::extract_addr_prefix(address.workchain, address.addr);
@@ -26,7 +26,7 @@ td::Result<schema::AccountState> lookup_account(const AllShardStates& shard_stat
         auto shard_account_csr = accounts_dict.lookup(address.addr);
         if (shard_account_csr.is_null())
         {
-            return td::Status::Error("Account not found in accounts_dict");
+            return std::optional<schema::AccountState>{};
         }
 
         block::gen::ShardAccount::Record acc_info;
@@ -39,10 +39,12 @@ td::Result<schema::AccountState> lookup_account(const AllShardStates& shard_stat
         switch (account_tag)
         {
         case block::gen::Account::account_none:
-            return td::Status::Error("Account is empty");
-        case block::gen::Account::account:
-            return ParseQuery::parse_account(acc_info.account, sstate.gen_utime, acc_info.last_trans_hash,
-                                             acc_info.last_trans_lt);
+            return std::optional<schema::AccountState>{};
+        case block::gen::Account::account: {
+            TRY_RESULT(account, ParseQuery::parse_account(acc_info.account, sstate.gen_utime,
+                                                         acc_info.last_trans_hash, acc_info.last_trans_lt));
+            return std::optional<schema::AccountState>{std::move(account)};
+        }
         default:
             return td::Status::Error("Unknown account tag");
         }
@@ -52,6 +54,13 @@ td::Result<schema::AccountState> lookup_account(const AllShardStates& shard_stat
 
 void FetchAccountFromShardV2::start_up()
 {
-    promise_.set_result(lookup_account(shard_states_, address_));
+    auto result = lookup_account(shard_states_, address_);
+    if (result.is_error()) {
+        promise_.set_error(result.move_as_error());
+    } else if (auto account = result.move_as_ok()) {
+        promise_.set_value(std::move(*account));
+    } else {
+        promise_.set_error(td::Status::Error("Account not found in accounts_dict"));
+    }
     stop();
 }

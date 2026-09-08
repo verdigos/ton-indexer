@@ -1,15 +1,20 @@
-// --classify-core-test: exercises the compact_connections / find_frontier
-// topology guards and the childless-root branch of the classify failure path.
-// No fixture corpus, database or node is needed.
+// Classify-core gate: topology guards, fallback and owned schema outcomes.
 #include "ClassifyCoreTest.h"
 
 #include "BlockTree.h"
 #include "ClassifyCore.h"
+#include "EnginePrep.h"
+#include "ParsedBlockLookupSource.h"
 #include "IrTables.h"
 #include "TraceLoader.h"
 #include "fixtures/FixtureLookupSource.h"
+#include "fixtures/FixtureLoader.h"
+
+#include "td/utils/base64.h"
 
 #include <cstdio>
+#include <filesystem>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -119,6 +124,108 @@ void test_childless_root_failure_serializes_root() {
   check("classify/childless_root_failure/no_unknown_trace", !result.unknown_trace);
 }
 
+void test_schema_tick_tock() {
+  const std::vector<CompiledMatcher> matchers;
+  MchEnginePrep prep{&matchers, {}};
+  ParsedBlockLookupSource src(nullptr);
+  schema::Transaction root{};
+  root.hash.set_zero();
+  root.account = block::StdAddress(0, root.hash);
+  root.description = schema::TransactionDescr_tick_tock{};
+  auto lone = classify_schema_trace(prep, "tick-tock", {root}, src);
+  check("schema/lone_tick_tock/skipped", lone.outcome == TraceOutcome::skipped_lone_tick_tock);
+  check("schema/lone_tick_tock/no_rows", lone.rows.empty());
+
+  schema::Transaction child = root;
+  child.hash.data()[31] = 1;
+  child.lt = 1;
+  child.description = schema::TransactionDescr_ord{};
+  schema::Message message{};
+  message.hash = child.hash;
+  message.source = "0:" + root.hash.to_hex();
+  message.destination = message.source;
+  child.in_msg = message;
+  root.out_msgs.push_back(message);
+  auto pair = classify_schema_trace(prep, "tick-tock-child", {root, child}, src);
+  check("schema/tick_tock_with_child/not_skipped",
+        pair.outcome != TraceOutcome::skipped_lone_tick_tock);
+}
+
+void test_schema_history_precedence() {
+  const auto fixture = std::filesystem::path(__FILE__).parent_path() /
+      "../../../indexer/tests/traces/CFl6PQXQyJ4FQFj9YsZwblnCg3m8Po9wuiBmrR4zGz4=.lz4";
+  auto loaded = load_trace(fixture.string());
+  check("schema/history/fixture_loaded", loaded.is_ok());
+  if (loaded.is_error()) return;
+  auto trace = loaded.move_as_ok();
+  check("schema/history/fixture_nonempty", !trace.transactions.empty());
+  if (trace.transactions.empty()) return;
+  auto hash = [](const std::string &encoded) {
+    auto bytes = td::base64_decode(encoded).move_as_ok();
+    td::Bits256 value;
+    value.as_slice().copy_from(td::Slice(bytes));
+    return value;
+  };
+  const std::map<std::string, schema::AccountStatus> statuses{
+      {"active", schema::AccountStatus::active}, {"uninit", schema::AccountStatus::uninit},
+      {"frozen", schema::AccountStatus::frozen}, {"nonexist", schema::AccountStatus::nonexist}};
+  std::vector<schema::Transaction> txs;
+  for (const auto &tx : trace.transactions) {
+    schema::Transaction st{};
+    st.hash = hash(tx->hash);
+    st.account = block::StdAddress::parse(td::Slice(tx->account)).move_as_ok();
+    st.lt = tx->lt;
+    st.now = tx->now;
+    st.mc_seqno = tx->mc_block_seqno;
+    st.orig_status = statuses.at(tx->orig_status);
+    st.end_status = statuses.at(tx->end_status);
+    schema::TransactionDescr_ord descr{};
+    schema::TrComputePhase_vm compute{};
+    compute.exit_code = tx->compute_exit_code.value_or(0);
+    descr.compute_ph = compute;
+    if (tx->skipped_reason) {
+      const std::map<std::string, schema::ComputeSkipReason> reasons{
+          {"no_state", schema::cskip_no_state}, {"bad_state", schema::cskip_bad_state},
+          {"no_gas", schema::cskip_no_gas}, {"suspended", schema::cskip_suspended}};
+      descr.compute_ph = schema::TrComputePhase_skipped{reasons.at(*tx->skipped_reason)};
+    }
+    descr.aborted = tx->aborted;
+    st.description = descr;
+    for (const auto &msg : tx->messages) {
+      schema::Message sm{};
+      sm.hash = hash(msg->msg_hash);
+      sm.source = msg->source;
+      sm.destination = msg->destination;
+      sm.opcode = msg->opcode;
+      if (msg->value) sm.value = schema::CurrencyCollection{td::make_refint(*msg->value), {}};
+      sm.created_lt = msg->created_lt;
+      sm.created_at = msg->created_at;
+      sm.bounce = msg->bounce;
+      sm.bounced = msg->bounced;
+      if (msg->content) sm.body_boc = msg->content->body;
+      if (msg->direction == "in") st.in_msg = std::move(sm);
+      else st.out_msgs.push_back(std::move(sm));
+    }
+    txs.push_back(std::move(st));
+  }
+  auto prepared = make_engine_prep();
+  check("schema/history/prepared", prepared.is_ok());
+  if (prepared.is_error()) return;
+  auto prep = prepared.move_as_ok();
+  ParsedBlockLookupSource available(nullptr);
+  auto normal = classify_schema_trace(*prep, trace.trace_id, txs, available);
+  check("schema/history/classified", normal.outcome == TraceOutcome::classified);
+  check("schema/history/normal_rows", !normal.rows.empty());
+  ParsedBlockLookupSource unavailable(nullptr,
+      [](const std::string &, const std::vector<Value> &) {
+        return ParsedBlockLookupSource::Tier2Result{Value::null(), true};
+      });
+  unavailable.fetch("nominator_pool", {Value::make_str(trace.transactions.front()->account)});
+  auto result = classify_schema_trace(*prep, trace.trace_id, txs, unavailable);
+  check("schema/history/outcome", result.outcome == TraceOutcome::history_unavailable);
+  check("schema/history/rows_retained", !result.rows.empty() && result.rows.size() == normal.rows.size());
+}
+
 }  // namespace
 
 int run_classify_core_test() {
@@ -126,6 +233,8 @@ int run_classify_core_test() {
   test_compact_connections_drops_self_edge();
   test_find_frontier_terminates_on_self_edge();
   test_childless_root_failure_serializes_root();
+  test_schema_tick_tock();
+  test_schema_history_precedence();
   std::printf("CLASSIFY-CORE-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }

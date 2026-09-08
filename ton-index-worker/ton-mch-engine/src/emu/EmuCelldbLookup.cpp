@@ -39,9 +39,15 @@ const schema::AccountState *EmuCelldbTier2::account(const block::StdAddress &add
     return it->second ? &*it->second : nullptr;
   }
   stats_.fetched++;
-  auto r = account_source_(addr);
-  auto [pos, _] = account_memo_.emplace(
-      addr, r.is_ok() ? std::optional<schema::AccountState>(r.move_as_ok()) : std::nullopt);
+  std::optional<schema::AccountState> state;
+  try {
+    auto r = account_source_(addr);
+    history_unavailable_ |= r.is_error();
+    if (r.is_ok()) state = r.move_as_ok();
+  } catch (...) {
+    history_unavailable_ = true;
+  }
+  auto [pos, _] = account_memo_.emplace(addr, std::move(state));
   return pos->second ? &*pos->second : nullptr;
 }
 
@@ -192,7 +198,7 @@ Value EmuCelldbTier2::jvault_assets(const block::StdAddress &stake_wallet) {
   if (r_lock.is_error()) {
     return Value::null();
   }
-  Value jw = fetch("jetton_wallet", {Value::make_str(r_lock.move_as_ok())});
+  Value jw = fetch("jetton_wallet", {Value::make_str(r_lock.move_as_ok())}).value;
   const Value *jetton = jw.field("jetton");
   if (jetton == nullptr || jetton->t != VType::Str) {
     return Value::null();
@@ -202,18 +208,20 @@ Value EmuCelldbTier2::jvault_assets(const block::StdAddress &stake_wallet) {
                        std::move(jvault_asset));
 }
 
-Value EmuCelldbTier2::fetch(const std::string &kind, const std::vector<Value> &args) {
+ParsedBlockLookupSource::Tier2Result EmuCelldbTier2::fetch(
+    const std::string &kind, const std::vector<Value> &args) {
+  // No states at all (listener-emulated view) is a plain miss, not a read fault.
   if (shard_states_ == nullptr || shard_states_->empty()) {
-    return Value::null();
+    return {Value::null(), false};
   }
   if (args.size() != 1 ||
       !(args[0].t == VType::Str ||
         (args[0].t == VType::Account && !args[0].addr_none))) {
-    return Value::null();
+    return {Value::null(), history_unavailable_};
   }
   auto r_addr = block::StdAddress::parse(td::Slice(args[0].str));
   if (r_addr.is_error()) {
-    return Value::null();
+    return {Value::null(), history_unavailable_};
   }
   block::StdAddress addr = r_addr.move_as_ok();
 
@@ -221,9 +229,9 @@ Value EmuCelldbTier2::fetch(const std::string &kind, const std::vector<Value> &a
   auto it = value_memo_.find(key);
   if (it != value_memo_.end()) {
     stats_.memo_hits++;
-    return it->second;
+    return {it->second, history_unavailable_};
   }
-  // Any tier-2 parse failure is a miss and must not fail the whole trace.
+  // Detector parse failures remain misses.
   Value v;
   try {
     v = resolve(kind, addr);
@@ -231,7 +239,7 @@ Value EmuCelldbTier2::fetch(const std::string &kind, const std::vector<Value> &a
     v = Value::null();
   }
   value_memo_.emplace(key, v);
-  return v;
+  return {std::move(v), history_unavailable_};
 }
 
 }  // namespace mch

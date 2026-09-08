@@ -133,11 +133,14 @@ struct ClassifyResult {
 };
 
 struct SchemaClassifyResult {
-  bool failure{false};
+  TraceOutcome outcome{TraceOutcome::classified};
+  std::vector<Action> rows;
+  std::vector<std::string> matcher_names;
+  std::size_t scrubbed{0};
+  std::size_t unported_btypes{0};
+  bool unknown_row{false};
   std::string failure_reason;
   FailureCategory failure_category{FailureCategory::none};
-  bool used_fallback{false};
-  std::size_t unported_btypes{0};
 };
 
 // Trace-independent run prep computed once from the matcher table: the runnable
@@ -169,13 +172,13 @@ ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers);
 ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatcher> &matchers,
                               const ClassifySetup &setup, const LookupSource &src);
 
+// No-throw contract: exceptions become terminal outcomes with no rows.
+// History unavailability overrides the outcome while retaining computed rows.
 // `prep` is process-lifetime const and shareable across threads.
 // The interface map behind `src` is shareable iff immutable.
 // `src` and its Tier2Hook capture are for one classify call on one thread only.
 SchemaClassifyResult classify_schema_trace(
     const MchEnginePrep &prep, const std::string &trace_id,
-    const std::vector<schema::Transaction> &txs, const ParsedBlockLookupSource &src,
-    std::vector<Action> &rows, std::vector<std::string> &matcher_names,
-    std::size_t &scrubbed, bool &unknown_row);
+    const std::vector<schema::Transaction> &txs, ParsedBlockLookupSource &src);
 
 }  // namespace mch

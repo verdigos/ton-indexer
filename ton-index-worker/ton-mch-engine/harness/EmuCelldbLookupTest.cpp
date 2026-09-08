@@ -355,13 +355,13 @@ struct Fixture {
 
   EmuCelldbTier2 make() {
     EmuCelldbTier2 t(&states, nullptr);
-    t.set_account_source([this](const block::StdAddress &a) -> td::Result<schema::AccountState> {
+    t.set_account_source([this](const block::StdAddress &a) -> td::Result<std::optional<schema::AccountState>> {
       reads++;
       auto it = accounts.find(std::to_string(a.workchain) + ":" + a.addr.to_hex());
       if (it == accounts.end()) {
-        return td::Status::Error("absent");
+        return std::optional<schema::AccountState>{};
       }
-      return it->second;
+      return std::optional<schema::AccountState>{it->second};
     });
     return t;
   }
@@ -379,13 +379,13 @@ void test_jvault_hook() {
   {
     Fixture f;  // stake wallet absent
     auto t = f.make();
-    check("jvault_hook/wallet_absent_null", t.fetch("jvault_assets", wallet_arg).is_null());
+    check("jvault_hook/wallet_absent_null", t.fetch("jvault_assets", wallet_arg).value.is_null());
   }
   {
     Fixture f;  // stake wallet present, pool state absent -> PARTIAL record
     f.put('9', stake_wallet_data(pool, minter));
     auto t = f.make();
-    Value v = t.fetch("jvault_assets", wallet_arg);
+    Value v = t.fetch("jvault_assets", wallet_arg).value;
     const Value *sp = v.field("staking_pool");
     const Value *asset = v.field("asset");
     const Value *jv = v.field("jvault_asset");
@@ -402,7 +402,7 @@ void test_jvault_hook() {
     f.put('1', junk.finalize());
     auto t = f.make();
     check("jvault_hook/pool_data_malformed_null",
-          t.fetch("jvault_assets", wallet_arg).is_null());
+          t.fetch("jvault_assets", wallet_arg).value.is_null());
   }
   {
     Fixture f;  // full chain, but the lock wallet is not a jetton wallet
@@ -413,7 +413,7 @@ void test_jvault_hook() {
     f.put('3', junk.finalize());
     auto t = f.make();
     check("jvault_hook/lock_not_jetton_wallet_null",
-          t.fetch("jvault_assets", wallet_arg).is_null());
+          t.fetch("jvault_assets", wallet_arg).value.is_null());
   }
 }
 
@@ -457,14 +457,14 @@ void test_memo_and_guards() {
     Fixture f;
     auto t = f.make();
     check("guard/non_str_arg_null",
-          t.fetch("nominator_pool", {Value::make_int(td::make_refint(1))}).is_null());
-    check("guard/wrong_arity_null", t.fetch("nominator_pool", {}).is_null());
+          t.fetch("nominator_pool", {Value::make_int(td::make_refint(1))}).value.is_null());
+    check("guard/wrong_arity_null", t.fetch("nominator_pool", {}).value.is_null());
     check("guard/account_none_null",
-          t.fetch("nominator_pool", {Value::make_account_none()}).is_null());
+          t.fetch("nominator_pool", {Value::make_account_none()}).value.is_null());
     check("guard/malformed_addr_null",
-          t.fetch("nominator_pool", {Value::make_str("not-an-address")}).is_null());
+          t.fetch("nominator_pool", {Value::make_str("not-an-address")}).value.is_null());
     check("guard/unknown_kind_null",
-          t.fetch("no_such_kind", {Value::make_str(raw_of('A'))}).is_null());
+          t.fetch("no_such_kind", {Value::make_str(raw_of('A'))}).value.is_null());
     check("guard/no_reads_on_guarded", f.reads == 0 && t.stats().fetched == 0);
     // An Account-typed argument must pass the guard and reach the account
     // read.
@@ -475,16 +475,44 @@ void test_memo_and_guards() {
     Fixture f;
     auto t = f.make();
     check("dispatch/" + kind + "/absent_is_null",
-          t.fetch(kind, {Value::make_str(raw_of('A'))}).is_null());
+          t.fetch(kind, {Value::make_str(raw_of('A'))}).value.is_null());
     check("dispatch/" + kind + "/reaches_account_read",
           f.reads == 1 && t.stats().fetched == 1);
   }
   {
-    // A listener-emulated trace has no shard states and therefore no tier 2.
+    // A listener-emulated trace has no shard states: a plain miss, no read.
     AllShardStates none;
     EmuCelldbTier2 t(&none, nullptr);
     check("guard/no_shard_states_null",
-          t.fetch("nominator_pool", {Value::make_str(raw_of('A'))}).is_null());
+          t.fetch("nominator_pool", {Value::make_str(raw_of('A'))}).value.is_null());
+    check("guard/no_shard_states_not_unavailable",
+          !t.history_unavailable() && t.stats().fetched == 0);
+  }
+}
+
+void test_account_lookup_states() {
+  const std::vector<Value> arg{Value::make_str(raw_of('A'))};
+  for (bool unavailable : {false, true}) {
+    Fixture f;
+    auto t = f.make();
+    t.set_account_source([&](const block::StdAddress &)
+                             -> td::Result<std::optional<schema::AccountState>> {
+      f.reads++;
+      if (unavailable) return td::Status::Error("read failed");
+      return std::optional<schema::AccountState>{};
+    });
+    ParsedBlockLookupSource src(nullptr, [&](const std::string &kind, const std::vector<Value> &args) {
+      return t.fetch(kind, args);
+    });
+    const std::string name = unavailable ? "account/unavailable/" : "account/absent/";
+    check(name + "null", src.fetch("nominator_pool", arg).is_null());
+    check(name + "tier2_flag", t.history_unavailable() == unavailable);
+    check(name + "source_flag", src.history_unavailable() == unavailable);
+    check(name + "memoized_null", src.fetch("nominator_pool", arg).is_null());
+    check(name + "one_read", f.reads == 1 && t.stats().memo_hits == 1);
+    check(name + "account_memo_null", src.fetch("nft_item", arg).is_null() && f.reads == 1);
+    check(name + "sticky", t.history_unavailable() == unavailable &&
+                               src.history_unavailable() == unavailable);
   }
 }
 
@@ -503,14 +531,14 @@ void test_two_tier_routing() {
 
   int hook_calls = 0;
   ParsedBlockLookupSource::Tier2Hook hook = [&](const std::string &kind,
-                                                const std::vector<Value> &) {
+                                                const std::vector<Value> &) -> ParsedBlockLookupSource::Tier2Result {
     hook_calls++;
     if (kind != "nominator_pool") {
-      return Value::null();
+      return {Value::null(), false};
     }
     schema::NominatorPoolData p{};
     p.address = addr_of('D');
-    return ParsedBlockLookupSource::iface_value(kind, p);
+    return {ParsedBlockLookupSource::iface_value(kind, p), false};
   };
   ParsedBlockLookupSource src(&map, std::move(hook));
 
@@ -546,6 +574,7 @@ int run_celldb_tier2_test() {
   test_jvault_hook();
   test_memo_and_guards();
   test_two_tier_routing();
+  test_account_lookup_states();
   std::printf("CELLDB-TIER2-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }

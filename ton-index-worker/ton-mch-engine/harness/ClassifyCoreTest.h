@@ -1,5 +1,5 @@
-// --classify-core-test: block-tree topology guards and the classify-failure
-// fallback contract, over synthetic blocks and traces. Needs no fixtures.
+// Classify-core gate: topology, fallback and schema outcomes, using synthetic
+// traces and the simple TON-transfer fixture.
 #pragma once
 
 namespace mch {

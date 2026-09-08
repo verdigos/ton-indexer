@@ -73,8 +73,7 @@ class BatchRunner : public td::actor::Actor {
   std::uint64_t complete_out_of_range_{0};
   std::uint64_t broken_{0};
   std::size_t peak_accumulator_size_{0};
-  std::uint64_t classified_ok_{0};
-  std::uint64_t classified_failed_{0};
+  std::map<mch::TraceOutcome, std::uint64_t> classification_outcomes_;
   std::map<mch::FailureCategory, std::uint64_t> classification_failures_by_category_;
   std::uint64_t total_actions_emitted_{0};
   mch::ParsedBlockLookupSource::LookupStats lookup_stats_;

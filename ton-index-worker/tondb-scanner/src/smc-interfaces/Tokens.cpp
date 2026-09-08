@@ -76,7 +76,10 @@ td::Result<JettonWalletDetectorR::Result> JettonWalletDetectorR::detect(
   }
 
   TRY_RESULT(master, lookup_account(shard_states, data.jetton));
-  TRY_STATUS(verify_jetton_wallet_with_master(master.code, master.data, config, data));
+  if (!master) {
+    return td::Status::Error("Account not found in accounts_dict");
+  }
+  TRY_STATUS(verify_jetton_wallet_with_master(master->code, master->data, config, data));
   return data;
 }
 
@@ -200,9 +203,12 @@ td::Result<NftItemDetectorR::Result> NftItemDetectorR::detect(
 
   auto ind_content = stack[4].as_cell();
   TRY_RESULT(collection, lookup_account(shard_states, *data.collection_address));
+  if (!collection) {
+    return td::Status::Error("Account not found in accounts_dict");
+  }
 
-  TRY_RESULT(address_stack, execute_smc_method<1>(*data.collection_address, collection.code,
-      collection.data, config, "get_nft_address_by_index", {vm::StackEntry(data.index)},
+  TRY_RESULT(address_stack, execute_smc_method<1>(*data.collection_address, collection->code,
+      collection->data, config, "get_nft_address_by_index", {vm::StackEntry(data.index)},
       {vm::StackEntry::Type::t_slice}));
   auto nft_address = convert::to_std_address(address_stack[0].as_slice());
   if (nft_address.is_error()) {
@@ -212,8 +218,8 @@ td::Result<NftItemDetectorR::Result> NftItemDetectorR::detect(
     return td::Status::Error("NFT Item doesn't belong to the referred collection");
   }
 
-  auto content_stack_r = execute_smc_method<1>(*data.collection_address, collection.code,
-      collection.data, config, "get_nft_content",
+  auto content_stack_r = execute_smc_method<1>(*data.collection_address, collection->code,
+      collection->data, config, "get_nft_content",
       {vm::StackEntry(data.index), vm::StackEntry(ind_content)},
       {vm::StackEntry::Type::t_cell});
   if (content_stack_r.is_error()) {
@@ -749,7 +755,10 @@ td::Result<DedustPoolDetector::Result> DedustPoolDetector::detect(
   }
 
   TRY_RESULT(factory, lookup_account(shard_states, DEDUST_FACTORY_ADDRESS));
-  TRY_STATUS(verify_dedust_with_factory(factory.code, factory.data, config, address, data));
+  if (!factory) {
+    return td::Status::Error("Account not found in accounts_dict");
+  }
+  TRY_STATUS(verify_dedust_with_factory(factory->code, factory->data, config, address, data));
   return data;
 }
 

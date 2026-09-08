@@ -17,8 +17,12 @@ namespace mch {
 
 class ParsedBlockLookupSource : public LookupSource {
  public:
-  // Tier-2 resolver hook, same signature as fetch. Empty == no fallback.
-  using Tier2Hook = std::function<Value(const std::string &kind, const std::vector<Value> &args)>;
+  struct Tier2Result {
+    Value value;
+    bool unavailable{false};
+  };
+  // Empty hook means no fallback.
+  using Tier2Hook = std::function<Tier2Result(const std::string &kind, const std::vector<Value> &args)>;
 
   using InterfaceMap =
       std::unordered_map<block::StdAddress, std::vector<schema::BlockchainInterfaceV2>>;
@@ -46,6 +50,7 @@ class ParsedBlockLookupSource : public LookupSource {
     std::map<std::string, std::size_t> misses_by_kind;
   };
   const LookupStats &stats() const { return stats_; }
+  bool history_unavailable() const { return history_unavailable_; }
 
   // Shared V2-to-Value shape map for tier 1 and tier 2.
   // Null == this variant does not answer this kind. A tier-2 hook that produces
@@ -61,6 +66,7 @@ class ParsedBlockLookupSource : public LookupSource {
 
   const InterfaceMap *account_interfaces_;
   Tier2Hook tier2_;
+  mutable bool history_unavailable_{false};
   mutable LookupStats stats_;  // fetch() is const; counters are telemetry
 };
 

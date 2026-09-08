@@ -9,14 +9,11 @@
 #include "emu/EmuCelldbLookup.h"
 #include "emu/EmuTypes.h"
 
-#include "vm/excno.hpp"  // vm::VmError is not a std::exception.
-
 #include "td/utils/JsonBuilder.h"
 #include "td/utils/base64.h"
 #include "td/utils/logging.h"
 
 #include <algorithm>
-#include <exception>
 #include <iostream>
 #include <sstream>
 #include <utility>
@@ -236,42 +233,7 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
   }
   auto &tier1_map = tier1_completion_only_ ? parsed_block->account_interfaces_ : account_interfaces_;
   mch::ParsedBlockLookupSource src(&tier1_map, std::move(hook));
-  std::vector<mch::Action> rows;
-  std::vector<std::string> matcher_names;
-  std::size_t scrubbed = 0;
-  bool unknown_row = false;
-  mch::SchemaClassifyResult classified;
-  bool threw = false;
-  try {
-    classified = mch::classify_schema_trace(*prep_, trace_key, txs, src, rows, matcher_names, scrubbed,
-                                            unknown_row);
-  } catch (const vm::VmError &e) {
-    threw = true;
-    classified.failure = true;
-    classified.failure_reason = std::string("vm exception: ") + e.get_msg();
-    classified.failure_category = mch::FailureCategory::engine_fault;
-  } catch (const vm::VmNoGas &e) {
-    threw = true;
-    classified.failure = true;
-    classified.failure_reason = std::string("vm exception: ") + e.get_msg();
-    classified.failure_category = mch::FailureCategory::engine_fault;
-  } catch (const vm::VmVirtError &e) {
-    threw = true;
-    classified.failure = true;
-    classified.failure_reason = std::string("vm exception: ") + e.get_msg();
-    classified.failure_category = mch::FailureCategory::engine_fault;
-  } catch (const std::exception &e) {
-    threw = true;
-    classified.failure = true;
-    classified.failure_reason = std::string("exception: ") + e.what();
-    classified.failure_category = mch::FailureCategory::engine_fault;
-  } catch (...) {
-    threw = true;
-    classified.failure = true;
-    classified.failure_reason = "unknown exception";
-    classified.failure_category = mch::FailureCategory::engine_fault;
-  }
-
+  auto classified = mch::classify_schema_trace(*prep_, trace_key, txs, src);
   const auto &stats = src.stats();
   lookup_stats_.tier1_hits += stats.tier1_hits;
   lookup_stats_.tier2_hits += stats.tier2_hits;
@@ -283,23 +245,25 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
     lookup_stats_.misses_by_kind[kind] += count;
   }
 
-  if (threw || classified.failure) {
-    ++classified_failed_;
+  ++classification_outcomes_[classified.outcome];
+  LOG(DEBUG) << "trace=" << trace_key << " outcome=" << mch::trace_outcome_name(classified.outcome);
+  if (classified.outcome == mch::TraceOutcome::fallback ||
+      classified.outcome == mch::TraceOutcome::terminal_failure_empty) {
     ++classification_failures_by_category_[classified.failure_category];
     failed_trace_keys_.push_back(trace_key);
-    LOG(WARNING) << "trace=" << trace_key << " FAILED (" << category_name(classified.failure_category)
+    LOG(WARNING) << "trace=" << trace_key << " " << mch::trace_outcome_name(classified.outcome)
+                 << " (" << category_name(classified.failure_category)
                  << "): " << classified.failure_reason;
     return;
   }
 
-  ++classified_ok_;
-  total_actions_emitted_ += rows.size();
+  total_actions_emitted_ += classified.rows.size();
 
   mch::EmuTraceView view;
   view.trace_id = trace_key;
   view.nodes.push_back(mch::EmuTxRef{.finality = mch::EmuFinality::finalized});
   mch::ActionSerializeStats ser_stats;
-  const std::string actions_blob = mch::serialize_actions(rows, view, &ser_stats);
+  const std::string actions_blob = mch::serialize_actions(classified.rows, view, &ser_stats);
 
   std::vector<std::string> tx_hash_b64;
   tx_hash_b64.reserve(txs.size());
@@ -357,13 +321,19 @@ void BatchRunner::finish() {
     return it == classification_failures_by_category_.end() ? 0 : it->second;
   };
 
+  std::string outcomes;
+  for (const auto &[outcome, count] : classification_outcomes_) {
+    if (!outcomes.empty()) outcomes += ",";
+    outcomes += std::string(mch::trace_outcome_name(outcome)) + "=" + std::to_string(count);
+  }
+
   std::ostringstream summary;
   summary << "ton-mch-index stats: seqnos read prewarm=" << prewarm_seqnos << " range=" << range_seqnos
           << "; blocks parsed=" << total_blocks_ << "; transactions seen=" << total_transactions_
           << "; traces complete-selected=" << complete_selected_
           << " complete-out-of-range=" << complete_out_of_range_ << " tick-tock-skipped=" << tick_tock_skipped_ << " pending-at-eof=" << pending_at_eof
           << " broken=" << broken_ << "; peak accumulator size=" << peak_accumulator_size_
-          << "; classified ok=" << classified_ok_ << " failed=" << classified_failed_
+          << "; outcomes{" << outcomes << "}"
           << " failures{none=" << failures(mch::FailureCategory::none)
           << ",lookup_infra_fail=" << failures(mch::FailureCategory::lookup_infra_fail)
           << ",engine_fault=" << failures(mch::FailureCategory::engine_fault)

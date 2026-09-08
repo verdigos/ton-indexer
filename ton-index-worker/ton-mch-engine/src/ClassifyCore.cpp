@@ -23,6 +23,7 @@
 #include <map>
 #include <stdexcept>
 #include <unordered_set>
+#include <variant>
 
 namespace mch {
 
@@ -850,15 +851,18 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
 
 SchemaClassifyResult classify_schema_trace(
     const MchEnginePrep &prep, const std::string &trace_id,
-    const std::vector<schema::Transaction> &txs, const ParsedBlockLookupSource &src,
-    std::vector<Action> &rows, std::vector<std::string> &matcher_names,
-    std::size_t &scrubbed, bool &unknown_row) {
+    const std::vector<schema::Transaction> &txs, ParsedBlockLookupSource &src) {
   SchemaClassifyResult result;
+  if (txs.size() == 1 &&
+      std::holds_alternative<schema::TransactionDescr_tick_tock>(txs.front().description)) {
+    result.outcome = TraceOutcome::skipped_lone_tick_tock;
+    return result;
+  }
   bool completed = false;
   try {
     auto r_trace = schema_to_trace(trace_id, txs);
     if (r_trace.is_error()) {
-      result.failure = true;
+      result.outcome = TraceOutcome::terminal_failure_empty;
       result.failure_reason = r_trace.move_as_error().message().str();
       result.failure_category = FailureCategory::malformed_trace;
       return result;
@@ -867,7 +871,7 @@ SchemaClassifyResult classify_schema_trace(
     ctx.trace = r_trace.move_as_ok();
     ctx.tree = to_tree(ctx.trace);
     if (ctx.tree.root == nullptr) {
-      result.failure = true;
+      result.outcome = TraceOutcome::terminal_failure_empty;
       result.failure_reason = "empty event tree";
       result.failure_category = FailureCategory::malformed_trace;
       return result;
@@ -875,10 +879,9 @@ SchemaClassifyResult classify_schema_trace(
     ctx.root = init_block(ctx.arena, ctx.tree.root);
 
     ClassifyResult classified = classify_trace(ctx, *prep.matchers, prep.setup, src);
-    result.failure = classified.failure;
+    result.outcome = classified.failure ? TraceOutcome::fallback : TraceOutcome::classified;
     result.failure_reason = classified.failure_reason;
     result.failure_category = classified.failure_category;
-    result.used_fallback = classified.failure;
 
     const std::vector<ActionRow> &core =
         classified.failure ? classified.fallback_rows : classified.action_rows;
@@ -888,8 +891,8 @@ SchemaClassifyResult classify_schema_trace(
         result.unported_btypes++;
         continue;
       }
-      scrubbed += scrub_arena_refs(action);
-      rows.push_back(std::move(action));
+      result.scrubbed += scrub_arena_refs(action);
+      result.rows.push_back(std::move(action));
     }
 
     // Collect all fired matchers, including absorbed matches.
@@ -897,39 +900,43 @@ SchemaClassifyResult classify_schema_trace(
     for (const CoreAction &action : classified.actions) {
       names.insert(action.matcher_name);
     }
-    matcher_names.assign(names.begin(), names.end());
+    result.matcher_names.assign(names.begin(), names.end());
     if (classified.unknown_trace) {
-      rows.push_back(create_unknown_action(ctx.trace));
-      unknown_row = true;
+      result.rows.push_back(create_unknown_action(ctx.trace));
+      result.unknown_row = true;
+    }
+    if (classified.failure && result.rows.empty()) {
+      result.outcome = TraceOutcome::terminal_failure_empty;
     }
     completed = true;
   } catch (const vm::VmError &e) {
-    result.failure = true;
+    result.outcome = TraceOutcome::terminal_failure_empty;
     result.failure_reason = std::string("vm exception: ") + e.get_msg();
     result.failure_category = FailureCategory::engine_fault;
   } catch (const vm::VmNoGas &e) {
-    result.failure = true;
+    result.outcome = TraceOutcome::terminal_failure_empty;
     result.failure_reason = std::string("vm exception: ") + e.get_msg();
     result.failure_category = FailureCategory::engine_fault;
   } catch (const vm::VmVirtError &e) {
-    result.failure = true;
+    result.outcome = TraceOutcome::terminal_failure_empty;
     result.failure_reason = std::string("vm exception: ") + e.get_msg();
     result.failure_category = FailureCategory::engine_fault;
   } catch (const std::exception &e) {
-    result.failure = true;
+    result.outcome = TraceOutcome::terminal_failure_empty;
     result.failure_reason = std::string("exception: ") + e.what();
     result.failure_category = FailureCategory::engine_fault;
   } catch (...) {
-    result.failure = true;
+    result.outcome = TraceOutcome::terminal_failure_empty;
     result.failure_reason = "unknown exception";
     result.failure_category = FailureCategory::engine_fault;
   }
   if (!completed) {
-    // A throw mid-loop leaves a partial prefix in the caller's rows, which the
-    // actor would publish as the fallback payload. This path owns no output.
-    rows.clear();
-    matcher_names.clear();
-    unknown_row = false;
+    result.rows.clear();
+    result.matcher_names.clear();
+    result.unknown_row = false;
+  }
+  if (src.history_unavailable()) {
+    result.outcome = TraceOutcome::history_unavailable;
   }
   return result;
 }

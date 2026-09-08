@@ -48,52 +48,29 @@ void record_phase_exception(EmuClassifierStats &stats, EmuClassifyResult &res,
   }
 }
 
-void classify_txs(const EmuClassifierConfig &cfg, const EmuTraceView &view,
-                  const std::vector<schema::Transaction> &txs, EmuClassifyResult &res,
-                  std::vector<Action> &rows, std::vector<std::string> &matcher_names,
-                  std::size_t &scrubbed, bool &unknown_row) {
+SchemaClassifyResult classify_txs(const EmuClassifierConfig &cfg, const EmuTraceView &view,
+                                  const std::vector<schema::Transaction> &txs, EmuClassifyResult &res) {
   const MchEnginePrep &prep = *cfg.prep;
   const ParsedBlockLookupSource::InterfaceMap &ifaces = *view.interfaces;
-  try {
-    // Tier-2 memoization is scoped to this classification.
-    EmuCelldbTier2 tier2(&view.shard_states, view.config);
-    ParsedBlockLookupSource::Tier2Hook hook;
-    if (cfg.tier2) {
-      hook = [&tier2](const std::string &kind, const std::vector<Value> &args) {
-        return tier2.fetch(kind, args);
-      };
-    }
-    ParsedBlockLookupSource src(&ifaces, std::move(hook));
-    SchemaClassifyResult classified = classify_schema_trace(
-        prep, res.trace_id, txs, src, rows, matcher_names, scrubbed, unknown_row);
-    res.failure = classified.failure;
-    res.failure_reason = std::move(classified.failure_reason);
-    res.failure_category = classified.failure_category;
-    res.used_fallback = classified.used_fallback;
-    res.unported_btypes += classified.unported_btypes;
-    res.lookup_stats = src.stats();
-    res.tier2_stats = tier2.stats();
-  } catch (const vm::VmError &e) {
-    res.failure = true;
-    res.failure_reason = std::string("vm exception: ") + e.get_msg();
-    res.failure_category = FailureCategory::engine_fault;
-  } catch (const vm::VmNoGas &e) {
-    res.failure = true;
-    res.failure_reason = std::string("vm exception: ") + e.get_msg();
-    res.failure_category = FailureCategory::engine_fault;
-  } catch (const vm::VmVirtError &e) {
-    res.failure = true;
-    res.failure_reason = std::string("vm exception: ") + e.get_msg();
-    res.failure_category = FailureCategory::engine_fault;
-  } catch (const std::exception &e) {
-    res.failure = true;
-    res.failure_reason = std::string("exception: ") + e.what();
-    res.failure_category = FailureCategory::engine_fault;
-  } catch (...) {
-    res.failure = true;
-    res.failure_reason = "unknown exception";
-    res.failure_category = FailureCategory::engine_fault;
+  // Tier-2 memoization is scoped to this classification.
+  EmuCelldbTier2 tier2(&view.shard_states, view.config);
+  ParsedBlockLookupSource::Tier2Hook hook;
+  if (cfg.tier2) {
+    hook = [&tier2](const std::string &kind, const std::vector<Value> &args) {
+      return tier2.fetch(kind, args);
+    };
   }
+  ParsedBlockLookupSource src(&ifaces, std::move(hook));
+  SchemaClassifyResult classified = classify_schema_trace(prep, res.trace_id, txs, src);
+  res.failure = classified.outcome == TraceOutcome::fallback ||
+                classified.outcome == TraceOutcome::terminal_failure_empty;
+  res.failure_reason = std::move(classified.failure_reason);
+  res.failure_category = classified.failure_category;
+  res.used_fallback = classified.outcome == TraceOutcome::fallback;
+  res.unported_btypes += classified.unported_btypes;
+  res.lookup_stats = src.stats();
+  res.tier2_stats = tier2.stats();
+  return classified;
 }
 
 // Build the Redis writeback payload while the view remains alive.
@@ -161,10 +138,6 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
     stats_.tx_limit_exceeded++;
   }
 
-  // Serialize rows before the view and its cell anchor leave scope.
-  std::vector<Action> rows;
-  bool unknown_row = false;
-
   // Catch VM fault types explicitly because they do not derive from std::exception.
   // Every path reaches the single response below.
   bool past_conversion = false;
@@ -183,9 +156,10 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
     } else {
       auto txs = r_txs.move_as_ok();
       past_conversion = true;
-      std::vector<std::string> matcher_names;
-      std::size_t scrubbed = 0;
-      classify_txs(cfg_, view, txs, res, rows, matcher_names, scrubbed, unknown_row);
+      auto classified = classify_txs(cfg_, view, txs, res);
+      if (classified.outcome == TraceOutcome::history_unavailable) {
+        stats_.history_unavailable++;
+      }
       // AAI uses the minimum transaction LT as the trace-start score. Redis
       // sorted-set scores lose integer precision above 2^53.
       std::int64_t aai_score = 0;
@@ -200,7 +174,7 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       ActionSerializeStats ser;
       const std::uint8_t finality = res.payload.finality;
       const std::uint64_t update_seq = res.payload.update_seq;
-      res.payload = build_payload(view, rows, aai_score, ser);
+      res.payload = build_payload(view, classified.rows, aai_score, ser);
       res.payload.finality = finality;
       res.payload.update_seq = update_seq;
       res.serialize_us = emu_now_us() - ser_started_us;
@@ -217,9 +191,9 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
                      << " serializer saw cell=" << ser.cell_values
                      << " unrenderable=" << ser.unrenderable;
       }
-      stats_.actions += rows.size();
+      stats_.actions += classified.rows.size();
       if (res.used_fallback) {
-        stats_.fallback_actions += rows.size();
+        stats_.fallback_actions += classified.rows.size();
       }
       stats_.unported_btypes += res.unported_btypes;
       stats_.lookups.tier1_hits += res.lookup_stats.tier1_hits;
@@ -230,10 +204,10 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
       }
       stats_.tier2.fetched += res.tier2_stats.fetched;
       stats_.tier2.memo_hits += res.tier2_stats.memo_hits;
-      if (scrubbed > 0) {
-        stats_.arena_refs_scrubbed += scrubbed;
+      if (classified.scrubbed > 0) {
+        stats_.arena_refs_scrubbed += classified.scrubbed;
         LOG(WARNING) << "[mch-emu-w" << worker_index_ << "] trace=" << view.trace_id
-                     << " scrubbed " << scrubbed
+                     << " scrubbed " << classified.scrubbed
                      << " arena block reference(s) out of the action rows";
       }
       if (res.failure) {
@@ -249,9 +223,9 @@ void EmuClassifierActor::classify(EmuTraceView view, std::int64_t enqueued_us,
         stats_.classified++;
         res.outcome = EmuClassifyOutcome::classified;
         // The state distinguishes a synthetic unknown row from protocol actions.
-        res.payload.state = unknown_row ? "unknown" : "ok";
+        res.payload.state = classified.unknown_row ? "unknown" : "ok";
         std::string names;
-        for (const std::string &n : matcher_names) {
+        for (const std::string &n : classified.matcher_names) {
           if (!names.empty()) names += ",";
           names += n;
         }
@@ -326,6 +300,7 @@ void EmuClassifierActor::alarm() {
             << " confirmed=" << stats_.by_finality[1]
             << " finalized=" << stats_.by_finality[2] << "}"
             << " [" << cats << "]"
+            << " history_unavailable=" << stats_.history_unavailable
             << " lookups{tier1=" << stats_.lookups.tier1_hits
             << " tier2=" << stats_.lookups.tier2_hits << " miss=" << stats_.lookups.misses
             << " miss_by_kind={" << miss_kinds << "}"

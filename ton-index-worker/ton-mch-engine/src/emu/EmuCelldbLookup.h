@@ -22,15 +22,16 @@ struct Tier2Stats {
 class EmuCelldbTier2 {
  public:
   // Injectable account reader; production uses lookup_account.
-  using AccountSource = std::function<td::Result<schema::AccountState>(const block::StdAddress &)>;
+  using AccountSource = std::function<td::Result<std::optional<schema::AccountState>>(const block::StdAddress &)>;
 
   // `shard_states` and `config` must outlive this object (they are the view's).
   EmuCelldbTier2(const AllShardStates *shard_states, std::shared_ptr<block::ConfigInfo> config);
 
-  // Tier2Hook shape. Every failure becomes a null tier-2 miss.
-  Value fetch(const std::string &kind, const std::vector<Value> &args);
+  // Detector misses are null; account read errors also flag unavailable history.
+  ParsedBlockLookupSource::Tier2Result fetch(const std::string &kind, const std::vector<Value> &args);
 
   const Tier2Stats &stats() const { return stats_; }
+  bool history_unavailable() const { return history_unavailable_; }
   void set_account_source(AccountSource src) { account_source_ = std::move(src); }
 
  private:
@@ -48,6 +49,7 @@ class EmuCelldbTier2 {
   std::unordered_map<block::StdAddress, std::optional<schema::AccountState>> account_memo_;
   std::unordered_map<std::string, Value> value_memo_;
   Tier2Stats stats_;
+  bool history_unavailable_{false};
 };
 
 }  // namespace mch
