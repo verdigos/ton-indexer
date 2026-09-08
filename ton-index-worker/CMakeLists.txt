@@ -102,6 +102,7 @@ add_subdirectory(ton-marker)
 add_subdirectory(ton-observability)
 add_subdirectory(ton-abi)  # standalone Tolk-ABI message (de)serialization library; must precede ton-mch-engine, which links it
 add_subdirectory(ton-mch-engine)  # defines mch-classify (linked by ton-index-postgres shadow mode)
+add_subdirectory(ton-mch-index)  # batch classifier CLI over a node RocksDB seqno range
 add_subdirectory(ton-index-postgres)
 add_subdirectory(ton-index-clickhouse)
 add_subdirectory(ton-integrity-checker)
