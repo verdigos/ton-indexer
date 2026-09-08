@@ -1486,14 +1486,24 @@ void fill_call_contract(const Value &d, Action &a) {
   a.value = av_amount(dg(d, "value"));
   a.source = av_addr(dg(d, "source"));
   a.destination = av_addr(dg(d, "destination"));
-  // value_extra_currencies is not a rendered column; `extra_currencies` is
-  // absent from the leaf data.
+  const Value currencies = dg(d, "extra_currencies");
+  if (currencies.t == VType::Dict) {
+    for (const auto &[id, amount] : *currencies.fields) {
+      a.value_extra_currencies.emplace(static_cast<std::uint32_t>(std::stoul(id)), amount.str);
+    }
+  }
 }
 
 void fill_ton_transfer(const Value &d, Action &a) {
   a.value = av_amount(dg(d, "value"));
   a.source = av_addr(dg(d, "source"));
   a.destination = av_addr(dg(d, "destination"));
+  const Value currencies = dg(d, "extra_currencies");
+  if (currencies.t == VType::Dict) {
+    for (const auto &[id, amount] : *currencies.fields) {
+      a.value_extra_currencies.emplace(static_cast<std::uint32_t>(std::stoul(id)), amount.str);
+    }
+  }
   Value::Fields f;
   f.emplace_back("content", dg(d, "comment"));  // leaf_comment_info already strips U+0000
   f.emplace_back("encrypted", dg(d, "encrypted"));

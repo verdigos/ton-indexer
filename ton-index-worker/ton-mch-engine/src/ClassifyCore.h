@@ -78,6 +78,19 @@ constexpr bool outcome_writes_rows(TraceOutcome o) {
          o == TraceOutcome::terminal_failure_empty;
 }
 
+struct ClassifiedTrace {
+  schema::Trace trace;
+  TraceOutcome outcome;
+  std::vector<Action> rows;
+  std::string failure_reason;
+};
+
+struct BlockClassification {
+  std::vector<ClassifiedTrace> traces;
+};
+
+bool task_eligible(const BlockClassification &bc);
+
 constexpr const char *trace_outcome_name(TraceOutcome o) {
   switch (o) {
     case TraceOutcome::classified: return "classified";

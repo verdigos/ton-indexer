@@ -1,11 +1,11 @@
-// Action-row construction shared by the production actor and dump harness.
-// Rendering and stdout output remain harness concerns.
+// Action-row construction shared by classification and output adapters.
 #pragma once
 
 #include "BlockTree.h"
 #include "Value.h"
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -72,6 +72,7 @@ struct Action {
   std::int64_t start_lt{0}, end_lt{0}, start_utime{0}, end_utime{0}, mc_seqno_end{0};
   std::vector<std::string> tx_hashes;
   std::vector<std::string> accounts;  // role-less action_accounts set
+  std::map<std::uint32_t, std::string> value_extra_currencies;
 #define MCH_DECL(name) Value name;
   MCH_ACTION_VALUE_FIELDS(MCH_DECL)
 #undef MCH_DECL

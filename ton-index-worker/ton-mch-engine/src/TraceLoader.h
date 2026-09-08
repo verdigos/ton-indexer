@@ -41,6 +41,7 @@ struct Message {
   std::optional<bool> bounce;
   bool bounced{false};
   bool has_extra_currencies{false};  // value_extra_currencies map is non-empty
+  std::map<std::uint32_t, std::string> extra_currencies;
   std::optional<MsgContent> content;
   // The StateInit BOC of a deploying message. Separate from `content`,
   // which is the body: TL-B unpacks the two independently. Read only by

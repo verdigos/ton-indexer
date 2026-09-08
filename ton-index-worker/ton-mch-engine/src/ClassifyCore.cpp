@@ -27,6 +27,13 @@
 
 namespace mch {
 
+bool task_eligible(const BlockClassification &bc) {
+  return std::all_of(bc.traces.begin(), bc.traces.end(), [](const ClassifiedTrace &trace) {
+    return outcome_writes_rows(trace.outcome) || trace.outcome == TraceOutcome::skipped_capped ||
+           trace.outcome == TraceOutcome::skipped_lone_tick_tock;
+  });
+}
+
 std::vector<Block *> gather_blocks(Block *root) {
   std::vector<Block *> out;
   std::unordered_set<Block *> seen;

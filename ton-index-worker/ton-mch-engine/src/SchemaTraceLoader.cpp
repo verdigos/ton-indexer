@@ -91,6 +91,9 @@ void map_message(Message *m, const schema::Message &s, const std::string &owner_
                    ? std::nullopt
                    : std::optional<std::int64_t>(s.value->grams->to_long());
     m->has_extra_currencies = !s.value->extra_currencies.empty();
+    for (const auto &[id, amount] : s.value->extra_currencies) {
+      m->extra_currencies.emplace(id, amount->to_dec_string());
+    }
   }
   m->created_lt = s.created_lt ? std::optional<std::int64_t>(static_cast<std::int64_t>(*s.created_lt))
                                : std::nullopt;

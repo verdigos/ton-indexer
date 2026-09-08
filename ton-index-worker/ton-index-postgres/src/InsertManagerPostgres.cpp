@@ -2,6 +2,7 @@
 #include "td/utils/crypto.h"
 #include "td/utils/misc.h"
 #include "InsertManagerPostgres.h"
+#include "ClassifiedSink.h"
 #include "convert-utils.h"
 #include "Statistics.h"
 #include "version.h"
@@ -3069,6 +3070,19 @@ void InsertBatchPostgres::commit_prepared_batch() {
 
   td::Timer data_timer;
   pqxx::work txn(c);
+  std::vector<std::pair<std::uint32_t, const mch::BlockClassification *>> classifications;
+  std::vector<std::uint32_t> classify_seqnos;
+  for (const auto &task : insert_tasks_) {
+    if (task.parsed_block_->classification_) {
+      classify_seqnos.push_back(task.mc_seqno_);
+      classifications.emplace_back(task.mc_seqno_, task.parsed_block_->classification_.get());
+    }
+  }
+  mch::classify_lock_blocks(txn, classify_seqnos);
+  std::stable_sort(classifications.begin(), classifications.end(), [](const auto &a, const auto &b) {
+    return a.first < b.first;
+  });
+  mch::LiveSinkStats classify_stats;
   if (disable_progress_advance_) {
     txn.exec0("SET LOCAL ton_indexer.advance_progress = 'off'");
   }
@@ -3088,6 +3102,9 @@ void InsertBatchPostgres::commit_prepared_batch() {
   insert_nominator_pool_validator_events(txn, with_copy_);
   insert_validator_events(txn, with_copy_);
   insert_traces(txn, with_copy_);
+  for (const auto &[seqno, classification] : classifications) {
+    mch::classify_live_write(txn, seqno, *classification, classify_stats);
+  }
   if (write_postgres_state_tables) {
     insert_contract_methods(txn);
   }
@@ -3124,6 +3141,13 @@ void InsertBatchPostgres::commit_prepared_batch() {
   }
   txn.commit();
   commit_timer.pause();
+
+  if (!classifications.empty()) {
+    LOG(INFO) << "Classification batch: blocks_written=" << classify_stats.blocks_written
+              << " blocks_already_marked=" << classify_stats.blocks_already_marked
+              << " rows=" << classify_stats.rows << " account_rows=" << classify_stats.account_rows
+              << " failed_traces=" << classify_stats.failed_traces;
+  }
 
   advance_progress_after_commit(c);
   publish_split_after_commit(c);

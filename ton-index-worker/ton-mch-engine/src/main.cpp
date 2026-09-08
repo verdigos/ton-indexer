@@ -7,6 +7,7 @@
 #include "crypto/vm/cp0.h"
 
 #include "AbiBridgeTest.h"
+#include "ActionJsonTest.h"
 #include "Classify.h"
 #include "EmuActionSerializeTest.h"
 #include "EmuCelldbLookupTest.h"
@@ -28,6 +29,7 @@ int main(int argc, char *argv[]) {
   bool actions_mode = false;
   bool abi_bridge_test_mode = false;
   bool actions_msgpack_test_mode = false;
+  bool actions_json_test_mode = false;
   bool celldb_tier2_test_mode = false;
   bool ghost_external_test_mode = false;
   bool classify_core_test_mode = false;
@@ -46,6 +48,8 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "actions-msgpack-test",
                "Write-back writer self-test (mch::Action -> the msgpack `actions` blob)",
                [&]() { actions_msgpack_test_mode = true; });
+  p.add_option('\0', "actions-json-test", "Action JSON rows against PostgreSQL DDL",
+               [&]() { actions_json_test_mode = true; });
   p.add_option('\0', "celldb-tier2-test",
                "Celldb tier-2 lookup self-test (tier shape equality, jvault chain, memo/budget)",
                [&]() { celldb_tier2_test_mode = true; });
@@ -93,6 +97,9 @@ int main(int argc, char *argv[]) {
   }
   if (actions_msgpack_test_mode) {
     return mch::run_action_msgpack_test();
+  }
+  if (actions_json_test_mode) {
+    return mch::run_actions_json_test();
   }
   if (celldb_tier2_test_mode) {
     return mch::run_celldb_tier2_test();

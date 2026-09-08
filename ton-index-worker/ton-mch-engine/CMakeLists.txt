@@ -190,6 +190,7 @@ add_library(mch-classify STATIC
     src/BuildRuntime.cpp
     src/BuildDriver.cpp
     src/ActionBuild.cpp
+    src/ActionJson.cpp
     src/GhostExternal.cpp
     src/ClassifyCore.cpp
     src/SchemaTraceLoader.cpp
@@ -302,11 +303,17 @@ add_executable(ton-mch-engine
     harness/EmuActionSerializeTest.cpp
     harness/EmuCelldbLookupTest.cpp
     harness/ClassifyCoreTest.cpp
+    harness/ActionJsonTest.cpp
     harness/GhostExternalTest.cpp
     ${ABI_BRIDGE_TEST_FIXTURES}
 )
 target_include_directories(ton-mch-engine PRIVATE src harness ${CMAKE_CURRENT_BINARY_DIR} ${TON_ABI_GENERATED_DIR})
 target_compile_features(ton-mch-engine PRIVATE cxx_std_20)
+target_compile_definitions(ton-mch-engine PRIVATE
+    MCH_ACTION_DDL="${CMAKE_CURRENT_SOURCE_DIR}/../ton-index-postgres/src/migrate.cpp"
+    MCH_ACTION_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/goldens/fixtures.json"
+    MCH_ACTION_TRACES="${CMAKE_CURRENT_SOURCE_DIR}/../../indexer/tests/traces"
+)
 # mch-emu (not just mch-classify): --actions-msgpack-test gates the write-back
 # writer, which lives there. Still no emulator dependency — mch-emu-bridge is
 # the only target that knows ::Trace. mch-fixtures is linked HERE and only here.
@@ -324,6 +331,8 @@ add_test(NAME mch_abi_bridge
     COMMAND ton-mch-engine --abi-bridge-test)
 add_test(NAME mch_actions_msgpack
     COMMAND ton-mch-engine --actions-msgpack-test)
+add_test(NAME mch_actions_json
+    COMMAND ton-mch-engine --actions-json-test)
 add_test(NAME mch_celldb_tier2
     COMMAND ton-mch-engine --celldb-tier2-test)
 add_test(NAME mch_ghost_external

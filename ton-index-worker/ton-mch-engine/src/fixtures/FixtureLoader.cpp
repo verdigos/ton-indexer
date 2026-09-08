@@ -135,6 +135,19 @@ std::unique_ptr<Message> parse_message(const msgpack::object &m) {
   const auto *extra = map_get(m, "value_extra_currencies");
   msg->has_extra_currencies =
       !is_nil(extra) && extra->type == msgpack::type::MAP && extra->via.map.size > 0;
+  if (msg->has_extra_currencies) {
+    for (std::uint32_t i = 0; i < extra->via.map.size; ++i) {
+      const auto &kv = extra->via.map.ptr[i];
+      const auto id = kv.key.type == msgpack::type::POSITIVE_INTEGER
+                          ? static_cast<std::uint32_t>(kv.key.via.u64)
+                          : static_cast<std::uint32_t>(std::stoul(as_str(kv.key)));
+      std::string amount = kv.val.type == msgpack::type::POSITIVE_INTEGER
+                               ? std::to_string(kv.val.via.u64)
+                               : kv.val.type == msgpack::type::NEGATIVE_INTEGER
+                                     ? std::to_string(kv.val.via.i64) : as_str(kv.val);
+      msg->extra_currencies.emplace(id, std::move(amount));
+    }
+  }
   const auto *content = map_get(m, "message_content");
   if (!is_nil(content)) {
     MsgContent c;

@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <memory>
 #include <variant>
 #include <set>
 #include "crypto/common/refcnt.hpp"
@@ -9,6 +10,8 @@
 #include "crypto/block/block-auto.h"
 #include "crypto/block/block-parse.h"
 #include "smc-interfaces/InterfacesDetector.h"
+
+namespace mch { struct BlockClassification; }
 
 namespace schema {
 
@@ -854,6 +857,7 @@ struct ParsedBlock {
   std::vector<schema::MasterchainBlockShard> shard_state_;
 
   std::vector<schema::Trace> traces_;
+  std::shared_ptr<mch::BlockClassification> classification_;
 
   std::vector<schema::BlockchainEvent> events_;
   std::vector<schema::ValidatorElection> validator_elections_;
