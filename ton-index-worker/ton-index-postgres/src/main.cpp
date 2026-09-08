@@ -15,8 +15,10 @@
 #include "InsertManagerPostgres.h"
 #include "KvrocksClient.h"
 #include "TraceAssembler.h"
+#include "TaskRunner.h"
 
 #include <atomic>
+#include <charconv>
 #include <limits>
 
 int main(int argc, char *argv[]) {
@@ -30,6 +32,7 @@ int main(int argc, char *argv[]) {
   td::actor::ActorOwn<InsertManagerPostgres> insert_manager_;
   td::actor::ActorOwn<IndexScheduler> index_scheduler_;
   td::actor::ActorOwn<FailoverWatchdog> failover_watchdog_;
+  td::actor::ActorOwn<TaskRunner> task_runner_;
 
   // options
   td::uint32 threads = 7;
@@ -43,6 +46,9 @@ int main(int argc, char *argv[]) {
   td::uint32 to_seqno = 0;
   td::uint32 prewarm_count = 50;
   bool mch_classify = false;
+  bool mch_task_mode = false, mch_task_once = false;
+  double mch_task_poll = 5;
+  std::optional<std::uint32_t> enqueue_from;
   mch::ClassifyPolicy mch_policy;
   bool force_index = false;
   bool no_leader = false;
@@ -80,6 +86,9 @@ int main(int argc, char *argv[]) {
     db_root = fname.str();
   });
   p.add_option('W', "working-dir", "Path to index working dir for secondary rocksdb logs", [&](td::Slice fname) {
+    working_dir = fname.str();
+  });
+  p.add_option('\0', "workdir", "Path to index working dir for secondary rocksdb logs", [&](td::Slice fname) {
     working_dir = fname.str();
   });
   p.add_option('\0', "db-event-fifo", "Path to TON node DB events FIFO (validator-engine --db-event-fifo) for low-latency event-driven indexing; polling remains as a fallback", [&](td::Slice fname) {
@@ -501,6 +510,37 @@ int main(int argc, char *argv[]) {
   mch_uint_option("mch-job-timeout", "Seconds after which a classification is logged as slow (default: 5)", [&](std::uint64_t v) { mch_policy.job_timeout_s = static_cast<double>(v); });
   mch_uint_option("mch-rss-budget-gb", "Process RSS ceiling in GiB; exceeding it aborts the run (default: 16)", [&](std::uint64_t v) { mch_policy.rss_budget_bytes = v << 30; });
 
+  p.add_option('\0', "mch-task-mode", "Replay and replace explicit classifier tasks", [&]() {
+    mch_task_mode = true;
+  });
+  p.add_option('\0', "mch-task-once", "Exit when no classifier tasks are ready to claim", [&]() {
+    mch_task_once = true;
+  });
+  const auto task_seqno = [](td::Slice value) -> td::Result<std::uint32_t> {
+    std::uint32_t seqno = 0;
+    const auto parsed = std::from_chars(value.data(), value.data() + value.size(), seqno);
+    if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size() || seqno == 0 || seqno >= INT32_MAX) {
+      return td::Status::Error("Task seqnos must be positive and less than INT32_MAX");
+    }
+    return seqno;
+  };
+  p.add_checked_option('\0', "mch-task-poll", "Seconds between empty task claims (default: 5)", [&](td::Slice value) {
+    std::uint32_t seconds = 0;
+    const auto parsed = std::from_chars(value.data(), value.data() + value.size(), seconds);
+    if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size() || seconds == 0) {
+      return td::Status::Error("--mch-task-poll requires a positive integer");
+    }
+    mch_task_poll = seconds;
+    return td::Status::OK();
+  });
+  p.add_checked_option('\0', "mch-enqueue-range", "A B: enqueue inclusive seqno range, then exit", [&](td::Slice value) {
+    auto seqno = task_seqno(value);
+    if (seqno.is_error()) return seqno.move_as_error();
+    if (enqueue_from) return td::Status::Error("Specify --mch-enqueue-range only once");
+    enqueue_from = seqno.move_as_ok();
+    return td::Status::OK();
+  });
+
   // scheduler settings
   p.add_checked_option('t', "threads", "Scheduler threads (default: 7)", [&](td::Slice fname) { 
     int v;
@@ -538,6 +578,42 @@ int main(int argc, char *argv[]) {
     LOG(ERROR) << "failed to parse options: " << S.move_as_error();
     std::_Exit(2);
   }
+  if (enqueue_from) {
+    if (S.ok().size() != 1) {
+      LOG(ERROR) << "--mch-enqueue-range requires two seqnos: A B";
+      return 2;
+    }
+    auto to = task_seqno(td::Slice(S.ok().front()));
+    if (to.is_error() || to.ok() < *enqueue_from) {
+      LOG(ERROR) << "Invalid --mch-enqueue-range end seqno";
+      return 2;
+    }
+    try {
+      const auto rows = TaskRunner::enqueue_range(credential.get_connection_string(), *enqueue_from, to.ok());
+      LOG(INFO) << "Enqueued " << rows << " classifier tasks";
+      return 0;
+    } catch (const std::exception &e) {
+      LOG(ERROR) << "Enqueue failed: " << e.what();
+      return 1;
+    }
+  }
+  if (!S.ok().empty()) {
+    LOG(ERROR) << "Unexpected positional arguments";
+    return 2;
+  }
+  if (mch_task_once && !mch_task_mode) {
+    LOG(ERROR) << "--mch-task-once requires --mch-task-mode";
+    return 2;
+  }
+  if (mch_task_mode && (from_seqno || to_seqno || force_index || db_root.empty())) {
+    LOG(ERROR) << "Task mode requires --db; --from, --to and --force are unsupported";
+    return 2;
+  }
+  if ((mch_classify || mch_task_mode) && (!mch_policy.workers || !mch_policy.lifetime_w ||
+      !mch_policy.trace_cap || !mch_policy.rss_budget_bytes)) {
+    LOG(ERROR) << "Classification workers, lifetime, trace cap and RSS budget must be positive";
+    return 2;
+  }
   if (kvrocks_config.enabled) {
     if (kvrocks_config.use_sentinel() && kvrocks_config.uri.size() > 0) {
       LOG(ERROR) << "Use either --kvrocks or --kvrocks-sentinels, not both";
@@ -570,7 +646,7 @@ int main(int argc, char *argv[]) {
     LOG(ERROR) << "--mch-classify cannot be combined with a bounded --from/--to range";
     std::_Exit(2);
   }
-  if (no_leader && !bounded_archive_range) {
+  if (no_leader && !bounded_archive_range && !mch_task_mode) {
     LOG(ERROR) << "--no-leader is only valid when both --from and --to are specified";
     std::_Exit(2);
   }
@@ -582,7 +658,7 @@ int main(int argc, char *argv[]) {
     LOG(WARNING) << "--db-event-fifo is ignored with bounded archive indexing (--from and --to)";
     db_event_fifo_path.clear();
   }
-  const float db_catch_up_interval = bounded_archive_range ? 60.0f : 1.0f;
+  const float db_catch_up_interval = (bounded_archive_range || mch_task_mode) ? 60.0f : 1.0f;
   td::mkpath(working_dir + "/").ensure();
 
   if (max_queue_size > 0) {
@@ -604,6 +680,7 @@ int main(int argc, char *argv[]) {
   NftItemDetectorR::is_testnet = testnet;
 
   auto finish_requested = std::make_shared<std::atomic_bool>(false);
+  auto exit_status = std::make_shared<std::atomic_int>(0);
   auto watcher = td::create_shared_destructor([finish_requested] {
     finish_requested->store(true);
   });
@@ -611,7 +688,7 @@ int main(int argc, char *argv[]) {
   auto failover_baseline = std::make_shared<FailoverBaseline>();
 
   td::actor::Scheduler scheduler({td::actor::Scheduler::NodeInfo{threads, io_workers}});
-  scheduler.run_in_context([&] {
+  if (!mch_task_mode) scheduler.run_in_context([&] {
     insert_manager_ = td::actor::create_actor<InsertManagerPostgres>(
         "insertmanager", credential, kvrocks_config, partition_config, no_leader, bounded_archive_range,
         kvrocks_skip_current_tables, pg_no_copy, failover_baseline);
@@ -620,60 +697,78 @@ int main(int argc, char *argv[]) {
   scheduler.run_in_context([&] {
     db_scanner_ = td::actor::create_actor<DbScanner>("scanner", db_root, dbs_secondary,
                                                      working_dir + "/secondary_logs", db_catch_up_interval,
-                                                     !bounded_archive_range);
+                                                     !bounded_archive_range && !mch_task_mode);
   });
 
   std::optional<mch::ReplayRun> mch_run;
   std::shared_ptr<const mch::MchEnginePrep> mch_prep;
-  if (mch_classify) {
+  if (mch_classify || mch_task_mode) {
     auto r_prep = mch::make_engine_prep();
     if (r_prep.is_error()) {
       LOG(ERROR) << "MCH engine prep failed: " << r_prep.move_as_error();
       std::_Exit(2);
     }
     mch_prep = r_prep.move_as_ok();
-    mch_run.emplace();
-    mch_run->mode = mch::RunMode::live;
-    mch_run->policy = mch_policy;
+    if (!mch_task_mode) {
+      mch_run.emplace();
+      mch_run->mode = mch::RunMode::live;
+      mch_run->policy = mch_policy;
+    }
     LOG(INFO) << "In-process classification enabled: workers=" << mch_policy.workers
               << " lifetime_w=" << mch_policy.lifetime_w << " trace_cap=" << mch_policy.trace_cap
               << " job_timeout_s=" << mch_policy.job_timeout_s
               << " rss_budget_bytes=" << mch_policy.rss_budget_bytes;
   }
-  scheduler.run_in_context([&, watcher = std::move(watcher)] { index_scheduler_ = td::actor::create_actor<IndexScheduler>("indexscheduler", db_scanner_.get(),
-    insert_manager_.get(), parse_manager_.get(), working_dir, from_seqno, to_seqno, force_index, max_active_tasks, max_queue, stats_timeout, watcher, prewarm_count,
-    db_event_fifo_path, mch_run, mch_prep);
-  });
-  if (!bounded_archive_range && failover_check_interval > 0) {
+  if (mch_task_mode) {
     scheduler.run_in_context([&] {
-      std::shared_ptr<sw::redis::Redis> watchdog_kvrocks;
-      if (kvrocks_config.enabled && !kvrocks_skip_current_tables) {
-        auto watchdog_kvrocks_config = kvrocks_config;
-        watchdog_kvrocks_config.pool_size = 2;
-        watchdog_kvrocks = KvrocksClient(watchdog_kvrocks_config).make_redis();
-      }
-      auto scheduler_actor = index_scheduler_.get();
-      FailoverWatchdog::ContiguousIndexedSeqnoGetter getter = [scheduler_actor](td::Promise<std::int32_t> promise) {
-        td::actor::send_closure(scheduler_actor, &IndexScheduler::get_contiguous_indexed_seqno, std::move(promise));
-      };
-      failover_watchdog_ = td::actor::create_actor<FailoverWatchdog>(
-          "failoverwatchdog", credential.get_connection_string(), std::move(watchdog_kvrocks), std::move(getter),
-          failover_baseline, FailoverWatchdog::Options{failover_check_interval, failover_strikes});
+      auto done = td::PromiseCreator::lambda([finish_requested, exit_status](td::Result<td::Unit> result) {
+        if (result.is_error()) {
+          LOG(ERROR) << "Task runner failed: " << result.error();
+          exit_status->store(1);
+        }
+        finish_requested->store(true);
+      });
+      task_runner_ = td::actor::create_actor<TaskRunner>(
+          "mch-tasks", credential.get_connection_string(), working_dir, db_scanner_.get(), parse_manager_.get(),
+          mch_policy, mch_prep, mch_task_once, mch_task_poll, std::move(done));
     });
+  } else {
+    scheduler.run_in_context([&, watcher = std::move(watcher)] { index_scheduler_ = td::actor::create_actor<IndexScheduler>("indexscheduler", db_scanner_.get(),
+      insert_manager_.get(), parse_manager_.get(), working_dir, from_seqno, to_seqno, force_index, max_active_tasks, max_queue, stats_timeout, watcher, prewarm_count,
+      db_event_fifo_path, mch_run, mch_prep);
+    });
+    if (!bounded_archive_range && failover_check_interval > 0) {
+      scheduler.run_in_context([&] {
+        std::shared_ptr<sw::redis::Redis> watchdog_kvrocks;
+        if (kvrocks_config.enabled && !kvrocks_skip_current_tables) {
+          auto watchdog_kvrocks_config = kvrocks_config;
+          watchdog_kvrocks_config.pool_size = 2;
+          watchdog_kvrocks = KvrocksClient(watchdog_kvrocks_config).make_redis();
+        }
+        auto scheduler_actor = index_scheduler_.get();
+        FailoverWatchdog::ContiguousIndexedSeqnoGetter getter = [scheduler_actor](td::Promise<std::int32_t> promise) {
+          td::actor::send_closure(scheduler_actor, &IndexScheduler::get_contiguous_indexed_seqno, std::move(promise));
+        };
+        failover_watchdog_ = td::actor::create_actor<FailoverWatchdog>(
+            "failoverwatchdog", credential.get_connection_string(), std::move(watchdog_kvrocks), std::move(getter),
+            failover_baseline, FailoverWatchdog::Options{failover_check_interval, failover_strikes});
+      });
+    }
+    scheduler.run_in_context([&] {
+      td::actor::send_closure(insert_manager_, &InsertManagerPostgres::set_parallel_inserts_actors, max_insert_actors);
+      td::actor::send_closure(insert_manager_, &InsertManagerPostgres::set_insert_batch_size, batch_size);
+      td::actor::send_closure(insert_manager_, &InsertManagerPostgres::set_max_data_depth, max_data_depth);
+      td::actor::send_closure(insert_manager_, &InsertManagerPostgres::print_info);
+    });
+    scheduler.run_in_context([&] { td::actor::send_closure(index_scheduler_, &IndexScheduler::run); });
   }
-  scheduler.run_in_context([&] { 
-    td::actor::send_closure(insert_manager_, &InsertManagerPostgres::set_parallel_inserts_actors, max_insert_actors);
-    td::actor::send_closure(insert_manager_, &InsertManagerPostgres::set_insert_batch_size, batch_size);
-    td::actor::send_closure(insert_manager_, &InsertManagerPostgres::set_max_data_depth, max_data_depth);
-    td::actor::send_closure(insert_manager_, &InsertManagerPostgres::print_info);
-  });
-  scheduler.run_in_context([&] { td::actor::send_closure(index_scheduler_, &IndexScheduler::run); });
   
   while(!finish_requested->load() && scheduler.run(1)) {
     // do something
   }
   if (finish_requested->load()) {
     scheduler.run_in_context([&] {
+      task_runner_.reset();
       failover_watchdog_.reset();
       index_scheduler_.reset();
       insert_manager_.reset();
@@ -684,5 +779,5 @@ int main(int argc, char *argv[]) {
     scheduler.run();
   }
   LOG(INFO) << "Done!";
-  return 0;
+  return exit_status->load();
 }

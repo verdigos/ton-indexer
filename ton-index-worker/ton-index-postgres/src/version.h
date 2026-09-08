@@ -1,3 +1,5 @@
+#pragma once
+
 #include "td/utils/logging.h"
 #include <tuple>
 #include <optional>
@@ -24,9 +26,9 @@ struct Version {
 };
 
 // Defines the latest version of the database schema.
-const Version latest_version{1, 3, 0};
+const Version latest_version{1, 3, 1};
 
-std::optional<Version> get_current_db_version(const std::string& connection_string) {
+inline std::optional<Version> get_current_db_version(const std::string& connection_string) {
   try {
     pqxx::connection conn(connection_string);
     pqxx::work txn(conn);

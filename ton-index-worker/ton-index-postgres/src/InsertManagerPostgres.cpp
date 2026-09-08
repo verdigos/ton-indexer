@@ -4731,26 +4731,7 @@ void InsertManagerPostgres::get_trace_inventory(std::uint32_t from_seqno, std::u
                                                td::Promise<std::vector<TraceInventoryRow>> promise) {
   try {
     pqxx::connection c(credential_.get_connection_string());
-    pqxx::read_transaction txn(c);
-    const auto rows = txn.exec(
-        "SELECT trace_id, mc_seqno_start, mc_seqno_end, nodes_ FROM traces "
-        "WHERE mc_seqno_end BETWEEN $1 AND $2 AND state = 'complete'",
-        pqxx::params{from_seqno, to_seqno});
-    std::vector<TraceInventoryRow> inventory;
-    inventory.reserve(rows.size());
-    for (const auto& row : rows) {
-      auto decoded = td::base64_decode(row[0].as<std::string>());
-      if (decoded.is_error() || decoded.ok().size() != 32) {
-        throw std::runtime_error("Invalid trace_id in trace inventory");
-      }
-      TraceInventoryRow trace;
-      trace.trace_id.as_slice().copy_from(td::Slice(decoded.ok()));
-      trace.mc_seqno_start = row[1].as<std::uint32_t>();
-      trace.mc_seqno_end = row[2].as<std::uint32_t>();
-      trace.nodes = row[3].as<std::uint32_t>();
-      inventory.push_back(std::move(trace));
-    }
-    promise.set_result(std::move(inventory));
+    promise.set_result(read_trace_inventory(c, from_seqno, to_seqno));
   } catch (const std::exception& e) {
     promise.set_error(td::Status::Error(ErrorCode::DB_ERROR, PSLICE() << "Error reading trace inventory: " << e.what()));
   }
@@ -4764,4 +4745,28 @@ void InsertManagerPostgres::get_partitioned_seqno_bounds(
   } catch (const std::exception& e) {
     promise.set_error(td::Status::Error(ErrorCode::DB_ERROR, PSLICE() << "Error reading actions partition bounds: " << e.what()));
   }
+}
+
+std::vector<InsertManagerInterface::TraceInventoryRow> InsertManagerPostgres::read_trace_inventory(
+    pqxx::connection &c, std::uint32_t from_seqno, std::uint32_t to_seqno) {
+  pqxx::read_transaction txn(c);
+  const auto rows = txn.exec(
+      "SELECT trace_id, mc_seqno_start, mc_seqno_end, nodes_ FROM traces "
+      "WHERE mc_seqno_end BETWEEN $1 AND $2 AND state = 'complete'",
+      pqxx::params{from_seqno, to_seqno});
+  std::vector<TraceInventoryRow> inventory;
+  inventory.reserve(rows.size());
+  for (const auto& row : rows) {
+    auto decoded = td::base64_decode(row[0].as<std::string>());
+    if (decoded.is_error() || decoded.ok().size() != 32) {
+      throw std::runtime_error("Invalid trace_id in trace inventory");
+    }
+    TraceInventoryRow trace;
+    trace.trace_id.as_slice().copy_from(td::Slice(decoded.ok()));
+    trace.mc_seqno_start = row[1].as<std::uint32_t>();
+    trace.mc_seqno_end = row[2].as<std::uint32_t>();
+    trace.nodes = row[3].as<std::uint32_t>();
+    inventory.push_back(std::move(trace));
+  }
+  return inventory;
 }

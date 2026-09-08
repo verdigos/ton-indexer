@@ -1575,6 +1575,24 @@ EXECUTE FUNCTION update_nft_real_owner();
   LOG(INFO) << "Migration to version 1.3.0 completed successfully.";
 }
 
+void run_1_3_1_migrations(const std::string& connection_string, bool dry_run) {
+  const auto query = "ALTER TABLE blocks DISABLE TRIGGER on_new_mc_block;\n" + set_version_query({1, 3, 1});
+  if (dry_run) {
+    std::cout << query << std::endl;
+    return;
+  }
+  try {
+    pqxx::connection c(connection_string);
+    pqxx::work txn(c);
+    txn.exec(query).no_rows();
+    txn.commit();
+  } catch (const std::exception &e) {
+    LOG(ERROR) << "Error while migrating database: " << e.what();
+    std::exit(1);
+  }
+  LOG(INFO) << "Migration to version 1.3.1 completed; classifier task trigger disabled.";
+}
+
 void create_indexes(std::string connection_string, bool dry_run) {
   try {
     pqxx::connection c(connection_string);
@@ -1794,16 +1812,15 @@ int main(int argc, char *argv[]) {
   if (current_version.has_value() && *current_version == latest_version && !rerun_last_migration) {
     LOG(INFO) << "Database is already at the latest version. No migrations needed.";
   } else {
-    if (!current_version.has_value() || rerun_last_migration || migration_needed(current_version, Version{1, 3, 0})) {
+    if (!current_version.has_value() || migration_needed(current_version, Version{1, 3, 0})) {
       run_1_3_0_migrations(pg_connection_string, custom_types, dry_run);
       current_version = Version{1, 3, 0};
     }
 
-    // In future, more migrations will be added here
-    // not every version must have migrations
-    // name of a function should have target version of migration,
-    // f.e. run_1_3_1_migrations sets version to 1.3.1
-    // and so on...
+    if (rerun_last_migration || migration_needed(current_version, Version{1, 3, 1})) {
+      run_1_3_1_migrations(pg_connection_string, dry_run);
+      current_version = Version{1, 3, 1};
+    }
 
     // finally, we bump a version to the latest
     ensure_latest_version(pg_connection_string, dry_run);

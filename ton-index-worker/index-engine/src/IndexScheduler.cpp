@@ -99,7 +99,7 @@ void IndexScheduler::alarm() {
         print_stats();
         next_print_stats_ = td::Timestamp::in(stats_timeout_);
     }
-    if (next_statistics_flush_.is_in_past()) {
+    if ((!run_ || run_->mode != mch::RunMode::task) && next_statistics_flush_.is_in_past()) {
         ton::delay_action([working_dir = this->working_dir_]() {
             auto stats = g_statistics.generate_report_and_reset();
             auto path = working_dir + "/" + "stats.txt";
@@ -128,6 +128,10 @@ void IndexScheduler::alarm() {
 }
 
 void IndexScheduler::request_insert_queue_state() {
+    if (run_ && run_->mode == mch::RunMode::task) {
+        schedule_next_seqnos();
+        return;
+    }
     auto P = td::PromiseCreator::lambda([SelfId = actor_id(this)](td::Result<QueueState> R){
         R.ensure();
         td::actor::send_closure(SelfId, &IndexScheduler::got_insert_queue_state, R.move_as_ok());
@@ -593,8 +597,7 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
                        << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted
                        << " capped=" << c.capped << " expired=" << c.expired << " broken=" << c.broken
                        << " incomplete=" << c.incomplete << " missing_root=" << c.missing_root;
-            watcher_.reset();
-            stop();
+            abort_classification(mc_seqno, td::Status::Error("Classification RSS budget exceeded"));
             return;
         }
         auto inputs = collector_->add_block(mc_seqno, *parsed_block);
@@ -661,6 +664,7 @@ void IndexScheduler::seqno_trace_classified(std::uint32_t mc_seqno, td::Result<m
 
 void IndexScheduler::abort_classification(std::uint32_t mc_seqno, td::Status error) {
     LOG(ERROR) << "Classification aborted seqno=" << mc_seqno << ": " << error;
+    if (run_ && run_->mode == mch::RunMode::task) run_done_.set_error(std::move(error));
     watcher_.reset();
     stop();
 }
@@ -908,6 +912,10 @@ void IndexScheduler::get_contiguous_indexed_seqno(td::Promise<std::int32_t> prom
 
 void IndexScheduler::handle_seqno_failure(std::uint32_t mc_seqno, std::string error_type, td::Status error, bool silent) {
     fail_seqno_otel_trace(mc_seqno, error_type, error, silent);
+    if (run_ && run_->mode == mch::RunMode::task) {
+        abort_classification(mc_seqno, std::move(error));
+        return;
+    }
     inserting_seqnos_.erase(mc_seqno);
     reschedule_seqno(mc_seqno, silent);
 }

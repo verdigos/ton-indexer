@@ -5,6 +5,7 @@ add_library(index-engine-core
         src/TraceCollector.cpp
         src/ClassifyWorker.cpp
         src/ReplayRun.cpp
+        src/TaskPlanning.cpp
         src/BlockInterfacesDetector.cpp
 )
 target_include_directories(index-engine-core
