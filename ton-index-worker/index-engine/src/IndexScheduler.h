@@ -15,6 +15,7 @@
 #include "DataParser.h"
 #include "smc-interfaces/InterfacesDetector.h"
 #include "Otel.h"
+#include "ReplayRun.h"
 
 using Detector = InterfacesDetector<JettonWalletDetectorR, JettonMasterDetectorR,
                                       NftItemDetectorR, NftCollectionDetectorR,
