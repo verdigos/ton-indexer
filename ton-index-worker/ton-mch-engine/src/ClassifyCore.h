@@ -44,7 +44,7 @@ enum class FailureCategory {
 // rows (possibly zero) and are written; every other outcome only counts.
 //   classified / fallback / terminal_failure_empty: classify_schema_trace ran
 //     (normal rows / basic-action fallback rows / failure with nothing usable).
-//   timeout:              the job exceeded the configured budget.
+//   timeout:              reserved; the worker keeps results of slow jobs.
 //   history_unavailable:  a state read failed (tri-state lookup); a live-mode
 //                         skip, a task-mode failure with retry.
 //   skipped_*:            assembly-side rejections, never classified:
@@ -84,6 +84,7 @@ struct ClassifiedTrace {
   TraceOutcome outcome;
   std::vector<Action> rows;
   std::string failure_reason;
+  bool slow{false};  // Wall-clock telemetry; never changes the outcome or rows.
 };
 
 struct BlockClassification {

@@ -34,7 +34,8 @@ struct ClassifyPolicy {
   std::size_t trace_cap = 4000;
   // Classification workers; the block barrier waits for all jobs of a block.
   std::uint32_t workers = 4;
-  // Per-job wall-clock budget; exceeding it yields `timeout`.
+  // Per-job wall-clock warning threshold; slow jobs retain their outcome and rows.
+  // Wall-clock cutoffs would make replay nondeterministic.
   double job_timeout_s = 5.0;
   // Process RSS ceiling sampled once per block; exceeding it fails the run.
   std::uint64_t rss_budget_bytes = std::uint64_t{16} << 30;

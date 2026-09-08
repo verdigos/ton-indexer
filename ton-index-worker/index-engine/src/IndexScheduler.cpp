@@ -2,11 +2,14 @@
 #include "BlockInterfacesDetector.h"
 #include "Statistics.h"
 #include "common/delay.h"
+#include "td/actor/MultiPromise.h"
 #include "td/utils/StringBuilder.h"
 #include "td/utils/Time.h"
 #include "td/utils/filesystem.h"
+#include "td/utils/port/Stat.h"
 #include "ton/ton-tl.hpp"
 #include <chrono>
+#include <exception>
 
 namespace {
 
@@ -30,6 +33,12 @@ std::int64_t processing_lag_ms(std::int32_t gen_utime) {
 }  // namespace
 
 void IndexScheduler::start_up() {
+    if (run_) {
+        for (std::uint32_t i = 0; i < run_->policy.workers; ++i) {
+            classify_workers_.push_back(td::actor::create_actor<mch::ClassifyWorker>(
+                "classify_worker", prep_, run_->policy));
+        }
+    }
     trace_assembler_ = td::actor::create_actor<TraceAssembler>("trace_assembler", working_dir_ + "/trace_assembler", max_queue_.mc_blocks_, !run_);
 }
 
@@ -336,9 +345,8 @@ void IndexScheduler::start_from_seqno(ton::BlockSeqno seqno, bool reset_trace_as
             collector_.emplace(run_->policy);
             classify_outcomes_.clear();
             block_results_.clear();
-            pending_jobs_.clear();
             run_report_ = {};
-            suppressed_ = jobs_dropped_ = 0;
+            suppressed_ = jobs_dispatched_ = jobs_done_ = slow_jobs_ = blocks_waited_ = 0;
         }
     }
     read_from_seqno_ = static_cast<std::int32_t>(seqno);
@@ -566,10 +574,29 @@ void IndexScheduler::seqno_interfaces_processed(std::uint32_t mc_seqno, ParsedBl
     td::actor::send_closure(trace_assembler_, &TraceAssembler::assemble, mc_seqno, std::move(parsed_block), std::move(P));
 }
 
-void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block) {
+void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block) try {
     LOG(DEBUG) << "Assembled traces for seqno " << mc_seqno;
     finish_seqno_otel_stage(mc_seqno);
+    std::vector<mch::ClassifyInput> jobs;
     if (collector_) {
+        start_seqno_otel_stage(mc_seqno, "classify");
+        auto memory = td::mem_stat();
+        if (memory.is_error()) {
+            abort_classification(mc_seqno, memory.move_as_error());
+            return;
+        }
+        if (memory.ok().resident_size_ > run_->policy.rss_budget_bytes) {
+            const auto &c = collector_->counters();
+            LOG(ERROR) << "Classification RSS budget exceeded seqno=" << mc_seqno
+                       << " rss=" << memory.ok().resident_size_ << " budget=" << run_->policy.rss_budget_bytes
+                       << " entries=" << c.entries << " buffered_txs=" << c.buffered_txs
+                       << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted
+                       << " capped=" << c.capped << " expired=" << c.expired << " broken=" << c.broken
+                       << " incomplete=" << c.incomplete << " missing_root=" << c.missing_root;
+            watcher_.reset();
+            stop();
+            return;
+        }
         auto inputs = collector_->add_block(mc_seqno, *parsed_block);
         for (auto &input : inputs) {
             if (input.trace.mc_seqno_end < run_->classify_from || input.trace.mc_seqno_end > run_->classify_to ||
@@ -581,10 +608,81 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
                 ++classify_outcomes_[*input.skipped];
                 block_results_[mc_seqno].traces.push_back({std::move(input.trace), *input.skipped, {}, ""});
             } else {
-                pending_jobs_[mc_seqno].push_back(std::move(input));
+                jobs.push_back(std::move(input));
             }
         }
     }
+    if (jobs.empty()) {
+        seqno_classified(mc_seqno, std::move(parsed_block), td::Unit());
+        return;
+    }
+    ++blocks_waited_;
+    td::MultiPromise barrier;
+    auto guard = barrier.init_guard();
+    guard.add_promise(td::PromiseCreator::lambda(
+        [SelfId = actor_id(this), mc_seqno, parsed_block](td::Result<td::Unit> result) mutable {
+            td::actor::send_closure(SelfId, &IndexScheduler::seqno_classified,
+                                    mc_seqno, std::move(parsed_block), std::move(result));
+        }));
+    for (auto &input : jobs) {
+        auto promise = td::PromiseCreator::lambda(
+            [SelfId = actor_id(this), mc_seqno, done = guard.get_promise()]
+            (td::Result<mch::ClassifiedTrace> result) mutable {
+                td::actor::send_closure(SelfId, &IndexScheduler::seqno_trace_classified,
+                                        mc_seqno, std::move(result), std::move(done));
+            });
+        td::actor::send_closure(classify_workers_[jobs_dispatched_ % classify_workers_.size()].get(), &mch::ClassifyWorker::classify,
+                                mch::ClassifyJob{std::move(input), parsed_block}, std::move(promise));
+        ++jobs_dispatched_;
+    }
+} catch (const std::exception &e) {
+    abort_classification(mc_seqno, td::Status::Error(td::Slice(e.what())));
+} catch (...) {
+    abort_classification(mc_seqno, td::Status::Error("Unknown classification dispatch exception"));
+}
+
+void IndexScheduler::seqno_trace_classified(std::uint32_t mc_seqno, td::Result<mch::ClassifiedTrace> result,
+                                            td::Promise<td::Unit> promise) try {
+    if (result.is_error()) {
+        abort_classification(mc_seqno, result.move_as_error());
+        return;
+    }
+    auto trace = result.move_as_ok();
+    ++jobs_done_;
+    slow_jobs_ += trace.slow;
+    ++classify_outcomes_[trace.outcome];
+    block_results_[mc_seqno].traces.push_back(std::move(trace));
+    promise.set_value(td::Unit());
+} catch (const std::exception &e) {
+    abort_classification(mc_seqno, td::Status::Error(td::Slice(e.what())));
+} catch (...) {
+    abort_classification(mc_seqno, td::Status::Error("Unknown classification result exception"));
+}
+
+void IndexScheduler::abort_classification(std::uint32_t mc_seqno, td::Status error) {
+    LOG(ERROR) << "Classification aborted seqno=" << mc_seqno << ": " << error;
+    watcher_.reset();
+    stop();
+}
+
+void IndexScheduler::seqno_classified(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block,
+                                      td::Result<td::Unit> result) try {
+    if (result.is_error()) {
+        abort_classification(mc_seqno, result.move_as_error());
+        return;
+    }
+    auto block = block_results_.extract(mc_seqno);
+    if (!block.empty() && !block.mapped().traces.empty()) {
+        parsed_block->classification_ = std::make_shared<mch::BlockClassification>(std::move(block.mapped()));
+    }
+    if (run_ && run_->mode == mch::RunMode::task &&
+        mc_seqno >= run_->classify_from && mc_seqno <= run_->classify_to) {
+        auto &report = run_report_.blocks[mc_seqno];
+        if (parsed_block->classification_) {
+            report = *parsed_block->classification_;
+        }
+    }
+    finish_seqno_otel_stage(mc_seqno);
     start_seqno_otel_stage(mc_seqno, "detect_actions");
 
     auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), mc_seqno](td::Result<ParsedBlockPtr> R) {
@@ -598,6 +696,10 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
         td::actor::send_closure(SelfId, &IndexScheduler::seqno_actions_processed, mc_seqno, R.move_as_ok());
     });
     td::actor::create_actor<ActionDetector>("ActionDetector", std::move(parsed_block), std::move(P)).release();
+} catch (const std::exception &e) {
+    abort_classification(mc_seqno, td::Status::Error(td::Slice(e.what())));
+} catch (...) {
+    abort_classification(mc_seqno, td::Status::Error("Unknown classification barrier exception"));
 }
 
 void IndexScheduler::seqno_actions_processed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block) {
@@ -649,7 +751,6 @@ void IndexScheduler::seqno_processed_without_insert(std::uint32_t mc_seqno, cons
     set_seqno_otel_attribute(mc_seqno, "ton.indexer.insert.skip_reason", std::string(reason), true);
     finish_seqno_otel_trace(mc_seqno);
     note_indexed_block_utime(block_gen_utime);
-    finish_classification_block(mc_seqno);
     processing_seqnos_.erase(mc_seqno);
     indexed_seqnos_.insert(mc_seqno);
     if (mc_seqno > static_cast<std::uint32_t>(last_indexed_seqno_)) {
@@ -659,29 +760,6 @@ void IndexScheduler::seqno_processed_without_insert(std::uint32_t mc_seqno, cons
     g_statistics.record_time(PROCESS_SEQNO, timers_[mc_seqno].elapsed() * 1e3);
     timers_.erase(mc_seqno);
     schedule_next_seqnos();
-}
-
-void IndexScheduler::finish_classification_block(std::uint32_t mc_seqno) {
-    if (!run_) {
-        return;
-    }
-    const bool report_block = run_->mode == mch::RunMode::task &&
-        mc_seqno >= run_->classify_from && mc_seqno <= run_->classify_to;
-    if (auto it = pending_jobs_.find(mc_seqno); it != pending_jobs_.end()) {
-        jobs_dropped_ += it->second.size();
-        if (report_block) {
-            for (auto &input : it->second) {
-                ++classify_outcomes_[mch::TraceOutcome::skipped_incomplete];
-                block_results_[mc_seqno].traces.push_back(
-                    {std::move(input.trace), mch::TraceOutcome::skipped_incomplete, {}, ""});
-            }
-        }
-        pending_jobs_.erase(it);
-    }
-    if (report_block) {
-        run_report_.blocks[mc_seqno] = std::move(block_results_[mc_seqno]);
-    }
-    block_results_.erase(mc_seqno);
 }
 
 bool IndexScheduler::is_bounded_archive_range() const {
@@ -717,8 +795,8 @@ void IndexScheduler::maybe_finish_run() {
         return;
     }
     if (run_ && run_->mode == mch::RunMode::task) {
-        collector_.reset();
         print_stats();
+        collector_.reset();
         run_report_.outcomes = std::move(classify_outcomes_);
         run_report_.suppressed = suppressed_;
         run_done_.set_result(std::move(run_report_));
@@ -756,16 +834,19 @@ void IndexScheduler::print_stats() {
         sb << "\tcollector[entries=" << c.entries << " buffered_txs=" << c.buffered_txs
            << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted
            << " capped=" << c.capped << " expired=" << c.expired << " broken=" << c.broken
-           << " incomplete=" << c.incomplete << " missing_root=" << c.missing_root << "]";
+           << " incomplete=" << c.incomplete << " missing_root=" << c.missing_root
+           << " jobs_dispatched=" << jobs_dispatched_ << " jobs_done=" << jobs_done_
+           << " slow_jobs=" << slow_jobs_ << " blocks_waited=" << blocks_waited_;
+        for (const auto &[outcome, count] : classify_outcomes_) {
+            sb << " " << mch::trace_outcome_name(outcome) << "=" << count;
+        }
+        sb << "]";
     }
     if (run_) {
         sb << "\trun[scan=" << run_->scan_from << ".." << run_->scan_to
            << " classify=" << run_->classify_from << ".." << run_->classify_to
            << " no_insert_below=" << run_->no_insert_below
-           << " suppressed=" << suppressed_ << " jobs_dropped=" << jobs_dropped_ << "]";
-        for (const auto &[outcome, count] : classify_outcomes_) {
-            sb << " " << mch::trace_outcome_name(outcome) << "=" << count;
-        }
+           << " suppressed=" << suppressed_ << "]";
     }
     LOG(INFO) << sb.as_cslice().str();
 }
@@ -804,7 +885,6 @@ void IndexScheduler::seqno_inserted(std::uint32_t mc_seqno, std::int32_t block_g
     finish_seqno_otel_stage(mc_seqno);
     finish_seqno_otel_trace(mc_seqno);
     note_indexed_block_utime(block_gen_utime);
-    finish_classification_block(mc_seqno);
     inserting_seqnos_.erase(mc_seqno);
     indexed_seqnos_.insert(mc_seqno);
     if (mc_seqno > last_indexed_seqno_) {
