@@ -1,5 +1,6 @@
 #include "td/utils/JsonBuilder.h"
 #include "td/utils/crypto.h"
+#include "td/utils/base64.h"
 #include "td/utils/misc.h"
 #include "InsertManagerPostgres.h"
 #include "ClassifiedSink.h"
@@ -4692,8 +4693,10 @@ void InsertManagerPostgres::get_resume_seqno(td::Promise<InsertManagerInterface:
     // Kvrocks projection. Replayed blocks are idempotent on both sides.
     auto resume_seqno = pg_resume_seqno;
     bool kvrocks_rewind = false;
+    std::optional<std::uint32_t> kvrocks_next_seqno;
     auto watermark = ensure_kvrocks_progress_initialized(finalized_seqno);
     if (watermark.has_value()) {
+      kvrocks_next_seqno = static_cast<std::uint32_t>(*watermark + 1);
       const auto floor_seqno = static_cast<std::int64_t>(initialized_from_cli ? initial_from_seqno
                                                                               : first_indexable_mc_seqno);
       auto kvrocks_resume_seqno = *watermark + 1;
@@ -4717,8 +4720,48 @@ void InsertManagerPostgres::get_resume_seqno(td::Promise<InsertManagerInterface:
 
     const auto starts_exactly_from_cli =
         initialized_from_cli && finalized_seqno == finalized_before_fast_forward && !kvrocks_rewind;
-    promise.set_result(InsertManagerInterface::ResumeState{resume_seqno, starts_exactly_from_cli});
+    promise.set_result(InsertManagerInterface::ResumeState{resume_seqno, starts_exactly_from_cli,
+                                                         pg_resume_seqno, kvrocks_next_seqno});
   } catch (const std::exception &e) {
     promise.set_error(td::Status::Error(ErrorCode::DB_ERROR, PSLICE() << "Error reading resume state: " << e.what()));
+  }
+}
+
+void InsertManagerPostgres::get_trace_inventory(std::uint32_t from_seqno, std::uint32_t to_seqno,
+                                               td::Promise<std::vector<TraceInventoryRow>> promise) {
+  try {
+    pqxx::connection c(credential_.get_connection_string());
+    pqxx::read_transaction txn(c);
+    const auto rows = txn.exec(
+        "SELECT trace_id, mc_seqno_start, mc_seqno_end, nodes_ FROM traces "
+        "WHERE mc_seqno_end BETWEEN $1 AND $2 AND state = 'complete'",
+        pqxx::params{from_seqno, to_seqno});
+    std::vector<TraceInventoryRow> inventory;
+    inventory.reserve(rows.size());
+    for (const auto& row : rows) {
+      auto decoded = td::base64_decode(row[0].as<std::string>());
+      if (decoded.is_error() || decoded.ok().size() != 32) {
+        throw std::runtime_error("Invalid trace_id in trace inventory");
+      }
+      TraceInventoryRow trace;
+      trace.trace_id.as_slice().copy_from(td::Slice(decoded.ok()));
+      trace.mc_seqno_start = row[1].as<std::uint32_t>();
+      trace.mc_seqno_end = row[2].as<std::uint32_t>();
+      trace.nodes = row[3].as<std::uint32_t>();
+      inventory.push_back(std::move(trace));
+    }
+    promise.set_result(std::move(inventory));
+  } catch (const std::exception& e) {
+    promise.set_error(td::Status::Error(ErrorCode::DB_ERROR, PSLICE() << "Error reading trace inventory: " << e.what()));
+  }
+}
+
+void InsertManagerPostgres::get_partitioned_seqno_bounds(
+    td::Promise<std::pair<std::uint32_t, std::uint32_t>> promise) {
+  try {
+    pqxx::connection c(credential_.get_connection_string());
+    promise.set_result(PartitionManagerPostgres::get_action_seqno_bounds(c));
+  } catch (const std::exception& e) {
+    promise.set_error(td::Status::Error(ErrorCode::DB_ERROR, PSLICE() << "Error reading actions partition bounds: " << e.what()));
   }
 }

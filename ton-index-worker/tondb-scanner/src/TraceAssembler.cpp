@@ -41,13 +41,17 @@ schema::Trace TraceImpl::to_schema() const {
     return result;
 }
 
-TraceAssembler::TraceAssembler(std::string db_path, size_t gc_distance) : 
-        db_path_(db_path), gc_distance_(gc_distance) {
-    td::mkdir(db_path).ensure();
+TraceAssembler::TraceAssembler(std::string db_path, size_t gc_distance, bool persist_state) :
+        db_path_(db_path), gc_distance_(gc_distance), persist_state_(persist_state) {
+    if (persist_state_) {
+        td::mkdir(db_path).ensure();
+    }
 }
 
 void TraceAssembler::start_up() {
-    alarm_timestamp() = td::Timestamp::in(10.0);
+    if (persist_state_) {
+        alarm_timestamp() = td::Timestamp::in(10.0);
+    }
 }
 
 td::Status gc_states(std::string db_path, ton::BlockSeqno current_seqno, size_t keep_last) {

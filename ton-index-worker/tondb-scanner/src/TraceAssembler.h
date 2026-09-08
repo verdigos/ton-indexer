@@ -84,6 +84,7 @@ class TraceAssembler: public td::actor::Actor {
 
     std::string db_path_;
     size_t gc_distance_;
+    bool persist_state_;
     ton::BlockSeqno expected_seqno_{0};
     std::map<ton::BlockSeqno, Task> queue_;
     size_t broken_count_{0};
@@ -91,7 +92,7 @@ class TraceAssembler: public td::actor::Actor {
     std::unordered_map<td::Bits256, TraceImplPtr, Bits256Hasher> pending_traces_;
     std::unordered_map<td::Bits256, TraceEdgeImpl, Bits256Hasher> pending_edges_;
 public:
-    TraceAssembler(std::string db_path, size_t gc_distance);
+    TraceAssembler(std::string db_path, size_t gc_distance, bool persist_state = true);
     
     void assemble(ton::BlockSeqno mc_seqno, ParsedBlockPtr mc_block_, td::Promise<ParsedBlockPtr> promise);
     

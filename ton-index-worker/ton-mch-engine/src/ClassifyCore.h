@@ -12,6 +12,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -87,6 +88,12 @@ struct ClassifiedTrace {
 
 struct BlockClassification {
   std::vector<ClassifiedTrace> traces;
+};
+
+struct RunReport {
+  std::map<TraceOutcome, std::uint64_t> outcomes;
+  std::uint64_t suppressed{0};
+  std::map<std::uint32_t, BlockClassification> blocks;
 };
 
 bool task_eligible(const BlockClassification &bc);

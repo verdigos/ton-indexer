@@ -468,7 +468,7 @@ void InsertManagerClickhouse::get_resume_seqno(td::Promise<InsertManagerInterfac
                 break;
             }
         }
-        promise.set_result(InsertManagerInterface::ResumeState{next_seqno, false});
+        promise.set_result(InsertManagerInterface::ResumeState{next_seqno, false, next_seqno, std::nullopt});
     } catch (std::exception& e) {
        promise.set_error(td::Status::Error(DB_ERROR, PSLICE() << "Failed to fetch resume seqno: " << e.what()));
     }
@@ -1910,4 +1910,14 @@ void InsertBatchClickhouse::insert_jettons(clickhouse::Client &client) {
         
         client.Insert("jetton_burns", block);
     }
+}
+
+void InsertManagerClickhouse::get_trace_inventory(std::uint32_t from_seqno, std::uint32_t to_seqno,
+                                                 td::Promise<std::vector<TraceInventoryRow>> promise) {
+    promise.set_error(td::Status::Error("not supported"));
+}
+
+void InsertManagerClickhouse::get_partitioned_seqno_bounds(
+    td::Promise<std::pair<std::uint32_t, std::uint32_t>> promise) {
+    promise.set_error(td::Status::Error("not supported"));
 }

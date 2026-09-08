@@ -1,5 +1,6 @@
 #pragma once
 #include <optional>
+#include <utility>
 #include "td/actor/actor.h"
 #include "queue_state.h"
 #include "IndexData.h"
@@ -26,8 +27,19 @@ public:
   struct ResumeState {
     std::uint32_t next_seqno;
     bool initialized_from_cli;
+    std::uint32_t pg_next_seqno;
+    std::optional<std::uint32_t> kvrocks_next_seqno;
   };
 
+  struct TraceInventoryRow {
+    td::Bits256 trace_id;
+    std::uint32_t mc_seqno_start, mc_seqno_end, nodes;
+  };
+
+  virtual void get_trace_inventory(std::uint32_t from_seqno, std::uint32_t to_seqno,
+                                   td::Promise<std::vector<TraceInventoryRow>> promise) = 0;
+  virtual void get_partitioned_seqno_bounds(
+      td::Promise<std::pair<std::uint32_t, std::uint32_t>> promise) = 0;
   virtual void insert(std::uint32_t mc_seqno, ParsedBlockPtr block_ds, bool force, td::Promise<QueueState> queued_promise,
                       td::Promise<InsertResult> inserted_promise) = 0;
   virtual void get_insert_queue_state(td::Promise<QueueState> promise) = 0;

@@ -30,7 +30,7 @@ std::int64_t processing_lag_ms(std::int32_t gen_utime) {
 }  // namespace
 
 void IndexScheduler::start_up() {
-    trace_assembler_ = td::actor::create_actor<TraceAssembler>("trace_assembler", working_dir_ + "/trace_assembler", max_queue_.mc_blocks_);
+    trace_assembler_ = td::actor::create_actor<TraceAssembler>("trace_assembler", working_dir_ + "/trace_assembler", max_queue_.mc_blocks_, !run_);
 }
 
 std::string get_time_string(double seconds) {
@@ -138,14 +138,19 @@ const ton::BlockSeqno FIRST_INDEXABLE_MC_SEQNO = 1;
 //   If the row is missing, it is initialized from --from and indexing starts
 //   exactly there. Once the row exists, --from is only a deployment default and
 //   is ignored on restart.
-// - Forced mode still starts from CLI --from, but first ensures that the
+// - Without ReplayRun, forced mode starts from CLI --from, but first ensures that the
 //   progress row exists so the Postgres trigger can keep advancing it.
 // - Masterchain seqno 0 is not readable from the node DB, so all starts are
 //   clamped to FIRST_INDEXABLE_MC_SEQNO.
-// - On restart, --prewarm controls how far TraceAssembler may move the start
+// - ReplayRun uses both durable frontiers and retained history with a fresh assembler.
+// - Without ReplayRun, --prewarm controls how far TraceAssembler may move the start
 //   point backwards. If no suitable state exists, the assembler is reset and
 //   the same bounded fallback is used.
 void IndexScheduler::run() {
+    if (run_ && run_->mode == mch::RunMode::task) {
+        start_from_seqno(run_->scan_from, true);
+        return;
+    }
     if (is_bounded_archive_range()) {
         LOG(INFO) << "Bounded archive indexing enabled: from=" << from_seqno_
                   << ", to=" << to_seqno_ << ", prewarm=" << prewarm_count_;
@@ -162,7 +167,7 @@ void IndexScheduler::run() {
         return;
     }
 
-    if (force_index_) {
+    if (force_index_ && !run_) {
         LOG(WARNING) << "Force reindexing enabled";
         const auto start_seqno = from_seqno_ > 0 ? static_cast<ton::BlockSeqno>(from_seqno_) : FIRST_INDEXABLE_MC_SEQNO;
         auto P = td::PromiseCreator::lambda(
@@ -199,6 +204,14 @@ void IndexScheduler::process_resume_seqno(td::Result<InsertManagerInterface::Res
     }
 
     auto resume_state = R.move_as_ok();
+    if (run_) {
+        auto P = td::PromiseCreator::lambda(
+            [SelfId = actor_id(this), resume_state](td::Result<ton::BlockSeqno> oldest) {
+                td::actor::send_closure(SelfId, &IndexScheduler::process_replay_resume, resume_state, std::move(oldest));
+            });
+        td::actor::send_closure(db_scanner_, &DbScanner::get_oldest_mc_seqno, std::move(P));
+        return;
+    }
     auto next_seqno = resume_state.next_seqno;
     if (next_seqno < FIRST_INDEXABLE_MC_SEQNO) {
         LOG(WARNING) << "Resume seqno " << next_seqno << " is below first indexable masterchain seqno "
@@ -245,6 +258,37 @@ void IndexScheduler::process_resume_seqno(td::Result<InsertManagerInterface::Res
     td::actor::send_closure(trace_assembler_, &TraceAssembler::restore_state, next_seqno - 1, std::move(P));
 }
 
+void IndexScheduler::process_replay_resume(InsertManagerInterface::ResumeState resume,
+                                         td::Result<ton::BlockSeqno> oldest) {
+    if (oldest.is_error()) {
+        LOG(ERROR) << "Error reading oldest masterchain seqno: " << oldest.move_as_error();
+        watcher_.reset();
+        stop();
+        return;
+    }
+    const auto oldest_available = std::max(oldest.move_as_ok(), FIRST_INDEXABLE_MC_SEQNO);
+    const auto next_seqno = std::max(resume.next_seqno, FIRST_INDEXABLE_MC_SEQNO);
+    if (resume.initialized_from_cli || next_seqno == FIRST_INDEXABLE_MC_SEQNO) {
+        run_->scan_from = next_seqno;
+        run_->no_insert_below = run_->classify_from = next_seqno;
+    } else {
+        const auto bounds = mch::live_bounds(resume.pg_next_seqno, resume.kvrocks_next_seqno,
+                                             oldest_available, run_->policy.lifetime_w);
+        run_->scan_from = bounds.scan_from;
+        run_->no_insert_below = bounds.no_insert_below;
+        run_->classify_from = bounds.classify_from;
+        if (std::int64_t{resume.pg_next_seqno} - run_->policy.lifetime_w < oldest_available) {
+            LOG(WARNING) << "Replay history begins at " << oldest_available
+                         << "; older trace roots will be counted as expired or missing_root";
+        }
+    }
+    run_->scan_to = run_->classify_to = UINT32_MAX;
+    LOG(INFO) << "Replay bounds: scan_from=" << run_->scan_from
+              << " no_insert_below=" << run_->no_insert_below << " classify_from=" << run_->classify_from
+              << " oldest_available=" << oldest_available;
+    start_from_seqno(run_->scan_from, true);
+}
+
 void IndexScheduler::process_archive_existing_seqnos(td::Result<std::vector<std::uint32_t>> R) {
     if (R.is_error()) {
         LOG(ERROR) << "Error reading existing archive seqnos: " << R.move_as_error();
@@ -288,9 +332,13 @@ void IndexScheduler::start_from_seqno(ton::BlockSeqno seqno, bool reset_trace_as
     }
     if (reset_trace_assembler) {
         td::actor::send_closure(trace_assembler_, &TraceAssembler::reset_state);
-        if (classify_policy_) {
-            collector_.emplace(*classify_policy_);
+        if (run_) {
+            collector_.emplace(run_->policy);
             classify_outcomes_.clear();
+            block_results_.clear();
+            pending_jobs_.clear();
+            run_report_ = {};
+            suppressed_ = jobs_dropped_ = 0;
         }
     }
     read_from_seqno_ = static_cast<std::int32_t>(seqno);
@@ -397,7 +445,7 @@ void IndexScheduler::got_newest_mc_seqno(std::uint32_t newest_mc_seqno) {
         effective_newest_seqno = static_cast<std::uint32_t>(to_seqno_);
     }
     if (to_seqno_ > 0 && last_known_seqno_ >= to_seqno_) {
-        maybe_finish_bounded_range();
+        maybe_finish_run();
         return;
     }
     if (last_known_seqno_ >= static_cast<std::int32_t>(effective_newest_seqno)) {
@@ -523,12 +571,18 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
     finish_seqno_otel_stage(mc_seqno);
     if (collector_) {
         auto inputs = collector_->add_block(mc_seqno, *parsed_block);
-        for (const auto &input : inputs) {
+        for (auto &input : inputs) {
+            if (input.trace.mc_seqno_end < run_->classify_from || input.trace.mc_seqno_end > run_->classify_to ||
+                (run_->classify_filter && input.trace.trace_id != *run_->classify_filter)) {
+                ++suppressed_;
+                continue;
+            }
             if (input.skipped) {
                 ++classify_outcomes_[*input.skipped];
+                block_results_[mc_seqno].traces.push_back({std::move(input.trace), *input.skipped, {}, ""});
+            } else {
+                pending_jobs_[mc_seqno].push_back(std::move(input));
             }
-            LOG(DEBUG) << "Collected trace " << input.trace.trace_id << " at seqno " << mc_seqno
-                       << ": " << (input.skipped ? mch::trace_outcome_name(*input.skipped) : "admitted");
         }
     }
     start_seqno_otel_stage(mc_seqno, "detect_actions");
@@ -551,6 +605,10 @@ void IndexScheduler::seqno_actions_processed(std::uint32_t mc_seqno, ParsedBlock
     finish_seqno_otel_stage(mc_seqno);
     const auto* mc_block = find_masterchain_block(*parsed_block);
     const std::int32_t block_gen_utime = mc_block ? mc_block->gen_utime : 0;
+    if (run_ && mc_seqno < run_->no_insert_below) {
+        seqno_processed_without_insert(mc_seqno, "replay", block_gen_utime);
+        return;
+    }
     if (!should_insert_seqno(mc_seqno)) {
         seqno_processed_without_insert(mc_seqno, mc_seqno < static_cast<std::uint32_t>(from_seqno_) ? "prewarm" : "already_present", block_gen_utime);
         return;
@@ -591,6 +649,7 @@ void IndexScheduler::seqno_processed_without_insert(std::uint32_t mc_seqno, cons
     set_seqno_otel_attribute(mc_seqno, "ton.indexer.insert.skip_reason", std::string(reason), true);
     finish_seqno_otel_trace(mc_seqno);
     note_indexed_block_utime(block_gen_utime);
+    finish_classification_block(mc_seqno);
     processing_seqnos_.erase(mc_seqno);
     indexed_seqnos_.insert(mc_seqno);
     if (mc_seqno > static_cast<std::uint32_t>(last_indexed_seqno_)) {
@@ -600,6 +659,29 @@ void IndexScheduler::seqno_processed_without_insert(std::uint32_t mc_seqno, cons
     g_statistics.record_time(PROCESS_SEQNO, timers_[mc_seqno].elapsed() * 1e3);
     timers_.erase(mc_seqno);
     schedule_next_seqnos();
+}
+
+void IndexScheduler::finish_classification_block(std::uint32_t mc_seqno) {
+    if (!run_) {
+        return;
+    }
+    const bool report_block = run_->mode == mch::RunMode::task &&
+        mc_seqno >= run_->classify_from && mc_seqno <= run_->classify_to;
+    if (auto it = pending_jobs_.find(mc_seqno); it != pending_jobs_.end()) {
+        jobs_dropped_ += it->second.size();
+        if (report_block) {
+            for (auto &input : it->second) {
+                ++classify_outcomes_[mch::TraceOutcome::skipped_incomplete];
+                block_results_[mc_seqno].traces.push_back(
+                    {std::move(input.trace), mch::TraceOutcome::skipped_incomplete, {}, ""});
+            }
+        }
+        pending_jobs_.erase(it);
+    }
+    if (report_block) {
+        run_report_.blocks[mc_seqno] = std::move(block_results_[mc_seqno]);
+    }
+    block_results_.erase(mc_seqno);
 }
 
 bool IndexScheduler::is_bounded_archive_range() const {
@@ -626,15 +708,23 @@ ton::BlockSeqno IndexScheduler::prewarm_start_seqno(ton::BlockSeqno seqno) const
     return seqno - prewarm_count_;
 }
 
-void IndexScheduler::maybe_finish_bounded_range() {
-    if (!is_bounded_archive_range()) {
+void IndexScheduler::maybe_finish_run() {
+    if (!is_bounded_archive_range() && !(run_ && run_->mode == mch::RunMode::task && to_seqno_ > 0)) {
         return;
     }
     if (last_known_seqno_ < to_seqno_ || !queued_seqnos_.empty() || !processing_seqnos_.empty() || !inserting_seqnos_.empty()
         || cur_queue_state_.blocks_ != 0) {
         return;
     }
-    LOG(INFO) << "Finished bounded archive range " << from_seqno_ << ".." << to_seqno_;
+    if (run_ && run_->mode == mch::RunMode::task) {
+        collector_.reset();
+        print_stats();
+        run_report_.outcomes = std::move(classify_outcomes_);
+        run_report_.suppressed = suppressed_;
+        run_done_.set_result(std::move(run_report_));
+    } else {
+        LOG(INFO) << "Finished bounded archive range " << from_seqno_ << ".." << to_seqno_;
+    }
     watcher_.reset();
     stop();
 }
@@ -667,6 +757,12 @@ void IndexScheduler::print_stats() {
            << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted
            << " capped=" << c.capped << " expired=" << c.expired << " broken=" << c.broken
            << " incomplete=" << c.incomplete << " missing_root=" << c.missing_root << "]";
+    }
+    if (run_) {
+        sb << "\trun[scan=" << run_->scan_from << ".." << run_->scan_to
+           << " classify=" << run_->classify_from << ".." << run_->classify_to
+           << " no_insert_below=" << run_->no_insert_below
+           << " suppressed=" << suppressed_ << " jobs_dropped=" << jobs_dropped_ << "]";
         for (const auto &[outcome, count] : classify_outcomes_) {
             sb << " " << mch::trace_outcome_name(outcome) << "=" << count;
         }
@@ -708,6 +804,7 @@ void IndexScheduler::seqno_inserted(std::uint32_t mc_seqno, std::int32_t block_g
     finish_seqno_otel_stage(mc_seqno);
     finish_seqno_otel_trace(mc_seqno);
     note_indexed_block_utime(block_gen_utime);
+    finish_classification_block(mc_seqno);
     inserting_seqnos_.erase(mc_seqno);
     indexed_seqnos_.insert(mc_seqno);
     if (mc_seqno > last_indexed_seqno_) {
@@ -716,7 +813,7 @@ void IndexScheduler::seqno_inserted(std::uint32_t mc_seqno, std::int32_t block_g
     advance_contiguous_indexed_seqno();
     g_statistics.record_time(PROCESS_SEQNO, timers_[mc_seqno].elapsed() * 1e3);
     timers_.erase(mc_seqno);
-    maybe_finish_bounded_range();
+    maybe_finish_run();
 }
 
 void IndexScheduler::advance_contiguous_indexed_seqno() {
@@ -743,7 +840,7 @@ void IndexScheduler::schedule_next_seqnos() {
         schedule_seqno(seqno);
     }
 
-    maybe_finish_bounded_range();
+    maybe_finish_run();
 }
 
 void IndexScheduler::start_seqno_otel_trace(std::uint32_t mc_seqno, bool is_in_sync) {

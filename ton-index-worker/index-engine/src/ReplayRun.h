@@ -17,6 +17,7 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace mch {
@@ -76,5 +77,26 @@ struct ReplayRun {
   std::string state_dir;
   ClassifyPolicy policy;
 };
+
+ReplayRun live_bounds(std::uint32_t pg_next_seqno, std::optional<std::uint32_t> kvrocks_next_seqno,
+                      std::uint32_t oldest_available, std::uint32_t lifetime_w);
+
+struct TaskPlanInput {
+  std::uint32_t from, to;
+  std::vector<TraceInventory> inventory;
+  std::uint32_t oldest_available;
+  std::pair<std::uint32_t, std::uint32_t> partitioned;
+  std::uint32_t live_frontier;
+  std::optional<td::Bits256> trace_filter;
+};
+
+enum class TaskPlanRefusal { none, no_partition, inside_live_window, history_unavailable };
+
+struct TaskPlan {
+  ReplayRun run;
+  TaskPlanRefusal refusal;
+};
+
+TaskPlan plan_task_run(const TaskPlanInput &in, const ClassifyPolicy &policy);
 
 }  // namespace mch

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <utility>
 
 namespace pqxx {
 class connection;
@@ -18,6 +19,8 @@ struct PartitionManagerConfig {
 class PartitionManagerPostgres {
 public:
   explicit PartitionManagerPostgres(PartitionManagerConfig config) : config_(config) {}
+
+  static std::pair<std::uint32_t, std::uint32_t> get_action_seqno_bounds(pqxx::connection& c);
 
   void ensure_partitions(pqxx::connection& c, std::uint32_t min_seqno, std::uint32_t max_seqno) const;
   void drop_old_partitions(pqxx::connection& c) const;

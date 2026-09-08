@@ -37,7 +37,13 @@ private:
   td::actor::ActorId<InsertManagerInterface> insert_manager_;
   td::actor::ActorId<ParseManager> parse_manager_;
   td::actor::ActorOwn<TraceAssembler> trace_assembler_;
-  std::optional<mch::ClassifyPolicy> classify_policy_;
+  std::optional<mch::ReplayRun> run_;
+  td::Promise<mch::RunReport> run_done_;
+  mch::RunReport run_report_;
+  std::map<std::uint32_t, mch::BlockClassification> block_results_;
+  std::map<std::uint32_t, std::vector<mch::ClassifyInput>> pending_jobs_;
+  std::uint64_t suppressed_{0};
+  std::uint64_t jobs_dropped_{0};
   std::optional<mch::TraceCollector> collector_;
   std::map<mch::TraceOutcome, std::uint64_t> classify_outcomes_;
   std::shared_ptr<td::Destructor> watcher_;
@@ -91,14 +97,22 @@ public:
       td::actor::ActorId<ParseManager> parse_manager, std::string working_dir, std::int32_t from_seqno = 0, std::int32_t to_seqno = 0, bool force_index = false,
       std::uint32_t max_active_tasks = 32, QueueState max_queue = QueueState{30000, 30000, 500000, 500000}, std::int32_t stats_timeout = 10,
       std::shared_ptr<td::Destructor> watcher = nullptr, std::uint32_t prewarm_count = 50, std::string db_event_fifo_path = {},
-      std::optional<mch::ClassifyPolicy> classify_policy = std::nullopt)
+      std::optional<mch::ReplayRun> run = std::nullopt, td::Promise<mch::RunReport> run_done = {})
     : db_scanner_(db_scanner), insert_manager_(insert_manager), parse_manager_(parse_manager),
-      classify_policy_(classify_policy), working_dir_(std::move(working_dir)),
+      run_(std::move(run)), run_done_(std::move(run_done)), working_dir_(std::move(working_dir)),
       from_seqno_(from_seqno), to_seqno_(to_seqno), force_index_(force_index), max_active_tasks_(max_active_tasks),
       prewarm_count_(prewarm_count), max_queue_(std::move(max_queue)), stats_timeout_(stats_timeout), watcher_(watcher),
       db_event_fifo_path_(std::move(db_event_fifo_path)) {
-        if (classify_policy_) {
-          collector_.emplace(*classify_policy_);
+        CHECK((!run_ || !is_bounded_archive_range()) && "ReplayRun and bounded archive mode are mutually exclusive");
+        if (run_) {
+          to_seqno_ = 0;
+          if (run_->mode == mch::RunMode::task) {
+            CHECK((run_->scan_from > 0 && run_->scan_from <= run_->scan_to &&
+                   run_->scan_to < static_cast<std::uint32_t>(INT32_MAX)) && "Task scan bounds must fit the scheduler");
+            CHECK(run_->no_insert_below == UINT32_MAX && "Task runs must disable inserts");
+            from_seqno_ = 0;
+            to_seqno_ = static_cast<std::int32_t>(run_->scan_to);
+          }
         }
       };
 
@@ -133,6 +147,8 @@ private:
 
   void process_force_resume_state_initialized(td::Result<bool> R, ton::BlockSeqno start_seqno);
   void process_resume_seqno(td::Result<InsertManagerInterface::ResumeState> R);
+  void process_replay_resume(InsertManagerInterface::ResumeState resume, td::Result<ton::BlockSeqno> oldest);
+  void finish_classification_block(std::uint32_t mc_seqno);
   void process_archive_existing_seqnos(td::Result<std::vector<std::uint32_t>> R);
   void start_from_seqno(ton::BlockSeqno seqno, bool reset_trace_assembler);
   void got_newest_mc_seqno(std::uint32_t newest_mc_seqno);
@@ -140,7 +156,7 @@ private:
   bool should_insert_seqno(std::uint32_t mc_seqno) const;
   ton::BlockSeqno prewarm_start_seqno(ton::BlockSeqno seqno) const;
   void seqno_processed_without_insert(std::uint32_t mc_seqno, const char* reason, std::int32_t block_gen_utime);
-  void maybe_finish_bounded_range();
+  void maybe_finish_run();
 
   void got_insert_queue_state(QueueState status);
 
