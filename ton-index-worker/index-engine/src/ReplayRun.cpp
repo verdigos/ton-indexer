@@ -27,17 +27,10 @@ TaskPlan plan_task_run(const TaskPlanInput &in, const ClassifyPolicy &policy) {
   run.expected = in.inventory;
   run.classify_filter = in.trace_filter;
 
-  std::int64_t earliest = std::int64_t{in.from} - policy.lifetime_w;
-  std::uint64_t max_span = 0;
+  std::int64_t earliest = in.from;
   if (!in.inventory.empty()) {
     earliest = UINT32_MAX;
-    for (const auto &trace : in.inventory) {
-      earliest = std::min<std::int64_t>(earliest, trace.mc_seqno_start);
-      max_span = std::max<std::uint64_t>(max_span,
-          std::max<std::int64_t>(0, std::int64_t{trace.mc_seqno_end} - trace.mc_seqno_start));
-    }
-    run.policy.lifetime_w = std::max<std::uint64_t>(policy.lifetime_w,
-        std::min<std::uint64_t>(UINT32_MAX, max_span + policy.span_margin));
+    for (const auto &t : in.inventory) earliest = std::min<std::int64_t>(earliest, t.mc_seqno_start);
   }
   run.scan_from = std::max<std::int64_t>(std::max(in.oldest_available, std::uint32_t{1}), earliest);
 
@@ -45,7 +38,7 @@ TaskPlan plan_task_run(const TaskPlanInput &in, const ClassifyPolicy &policy) {
     plan.refusal = TaskPlanRefusal::no_partition;
   } else if (std::int64_t{in.to} > std::int64_t{in.live_frontier} - policy.live_margin) {
     plan.refusal = TaskPlanRefusal::inside_live_window;
-  } else if (!in.inventory.empty() && run.scan_from > earliest) {
+  } else if (run.scan_from > earliest) {
     plan.refusal = TaskPlanRefusal::history_unavailable;
   }
   return plan;

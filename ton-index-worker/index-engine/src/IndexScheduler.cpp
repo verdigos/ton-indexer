@@ -594,8 +594,9 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
             LOG(ERROR) << "Classification RSS budget exceeded seqno=" << mc_seqno
                        << " rss=" << memory.ok().resident_size_ << " budget=" << run_->policy.rss_budget_bytes
                        << " entries=" << c.entries << " buffered_txs=" << c.buffered_txs
+                       << " buffered_memo=" << c.buffered_memo_accounts
                        << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted
-                       << " capped=" << c.capped << " expired=" << c.expired << " broken=" << c.broken
+                       << " capped=" << c.capped << " evicted=" << c.evicted << " broken=" << c.broken
                        << " incomplete=" << c.incomplete << " missing_root=" << c.missing_root;
             abort_classification(mc_seqno, td::Status::Error("Classification RSS budget exceeded"));
             return;
@@ -836,8 +837,9 @@ void IndexScheduler::print_stats() {
     if (collector_) {
         const auto &c = collector_->counters();
         sb << "\tcollector[entries=" << c.entries << " buffered_txs=" << c.buffered_txs
+           << " buffered_memo=" << c.buffered_memo_accounts
            << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted
-           << " capped=" << c.capped << " expired=" << c.expired << " broken=" << c.broken
+           << " capped=" << c.capped << " evicted=" << c.evicted << " broken=" << c.broken
            << " incomplete=" << c.incomplete << " missing_root=" << c.missing_root
            << " jobs_dispatched=" << jobs_dispatched_ << " jobs_done=" << jobs_done_
            << " slow_jobs=" << slow_jobs_ << " blocks_waited=" << blocks_waited_;

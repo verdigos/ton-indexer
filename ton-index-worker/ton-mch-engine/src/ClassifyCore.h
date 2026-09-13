@@ -50,7 +50,7 @@ enum class FailureCategory {
 //   skipped_*:            assembly-side rejections, never classified:
 //     missing_root  — no legitimate root transaction;
 //     broken        — the assembler published the trace as broken;
-//     expired       — root older than the lifetime window when completed;
+//     evicted       — payload dropped under memory pressure; never classified;
 //     capped        — transaction count exceeded the per-trace cap;
 //     incomplete    — collector count != assembler node count, or (task mode)
 //                     identity / count / end mismatch against the inventory;
@@ -67,7 +67,7 @@ enum class TraceOutcome {
   history_unavailable,
   skipped_missing_root,
   skipped_broken,
-  skipped_expired,
+  skipped_evicted,
   skipped_capped,
   skipped_incomplete,
   skipped_unexpected_trace,
@@ -108,7 +108,7 @@ constexpr const char *trace_outcome_name(TraceOutcome o) {
     case TraceOutcome::history_unavailable: return "history_unavailable";
     case TraceOutcome::skipped_missing_root: return "skipped_missing_root";
     case TraceOutcome::skipped_broken: return "skipped_broken";
-    case TraceOutcome::skipped_expired: return "skipped_expired";
+    case TraceOutcome::skipped_evicted: return "skipped_evicted";
     case TraceOutcome::skipped_capped: return "skipped_capped";
     case TraceOutcome::skipped_incomplete: return "skipped_incomplete";
     case TraceOutcome::skipped_unexpected_trace: return "skipped_unexpected_trace";

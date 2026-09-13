@@ -43,8 +43,6 @@ struct ClassifyPolicy {
   std::uint32_t run_max_seqnos = 256;
   // Task mode: refuse completion seqnos above `C_live - live_margin`.
   std::uint32_t live_margin = 256;
-  // Task mode: extra window on top of the inventory's widest span.
-  std::uint32_t span_margin = 8;
 };
 
 enum class RunMode { live, task };
