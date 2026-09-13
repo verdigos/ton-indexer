@@ -37,6 +37,11 @@ class TraceCollector {
   void seed(const td::Bits256 &trace_id, TraceOutcome outcome);
   std::size_t retain_pending(const std::vector<td::Bits256> &sorted_ids);
 
+  // Drop payloads of the largest non-sticky entries until at least `target_txs`
+  // buffered transactions are freed. Each evicted entry becomes a sticky
+  // `skipped_evicted`. Returns the number of entries evicted.
+  std::size_t evict(std::size_t target_txs);
+
  private:
   struct Entry {
     std::vector<schema::Transaction> txs;

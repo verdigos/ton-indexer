@@ -33,7 +33,7 @@ struct ClassifyPolicy {
   // Per-job wall-clock warning threshold; slow jobs retain their outcome and rows.
   // Wall-clock cutoffs would make replay nondeterministic.
   double job_timeout_s = 5.0;
-  // Process RSS ceiling sampled once per block; exceeding it fails the run.
+  // Process RSS budget; live evicts pending trace payloads, task aborts (default: 16 GiB).
   std::uint64_t rss_budget_bytes = std::uint64_t{16} << 30;
   // Task mode: most seqnos claimed by one worker in one claim transaction.
   std::uint32_t run_max_seqnos = 256;

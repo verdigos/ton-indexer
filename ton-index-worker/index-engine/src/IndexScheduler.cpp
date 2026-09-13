@@ -5,6 +5,7 @@
 #include "td/actor/MultiPromise.h"
 #include "td/utils/StringBuilder.h"
 #include "td/utils/Time.h"
+#include "td/utils/base64.h"
 #include "td/utils/filesystem.h"
 #include "td/utils/port/Stat.h"
 #include "ton/ton-tl.hpp"
@@ -637,15 +638,36 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
         }
         if (memory.ok().resident_size_ > run_->policy.rss_budget_bytes) {
             const auto &c = collector_->counters();
-            LOG(ERROR) << "Classification RSS budget exceeded seqno=" << mc_seqno
-                       << " rss=" << memory.ok().resident_size_ << " budget=" << run_->policy.rss_budget_bytes
-                       << " entries=" << c.entries << " buffered_txs=" << c.buffered_txs
-                       << " buffered_memo=" << c.buffered_memo_accounts
-                       << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted
-                       << " capped=" << c.capped << " evicted=" << c.evicted << " broken=" << c.broken
-                       << " incomplete=" << c.incomplete << " missing_root=" << c.missing_root;
-            abort_classification(mc_seqno, td::Status::Error("Classification RSS budget exceeded"));
-            return;
+            if (run_->mode == mch::RunMode::task) {
+                LOG(ERROR) << "Classification RSS budget exceeded seqno=" << mc_seqno
+                           << " rss=" << memory.ok().resident_size_ << " budget=" << run_->policy.rss_budget_bytes
+                           << " entries=" << c.entries << " buffered_txs=" << c.buffered_txs
+                           << " buffered_memo=" << c.buffered_memo_accounts
+                           << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted
+                           << " capped=" << c.capped << " evicted=" << c.evicted << " broken=" << c.broken
+                           << " incomplete=" << c.incomplete << " missing_root=" << c.missing_root;
+                abort_classification(mc_seqno, td::Status::Error("Classification RSS budget exceeded"));
+                return;
+            }
+            const auto before = c.buffered_txs;
+            if (before == 0) {
+                if (rss_over_budget_blocks_++ % 100 == 0) {
+                    LOG(ERROR) << "RSS budget exceeded with an empty collector seqno=" << mc_seqno
+                               << " rss=" << memory.ok().resident_size_
+                               << " budget=" << run_->policy.rss_budget_bytes
+                               << "; eviction cannot help, memory is held elsewhere";
+                }
+            } else {
+                const auto evicted = collector_->evict(before / 2 + 1);
+                LOG(ERROR) << "Classification RSS budget exceeded seqno=" << mc_seqno
+                           << " rss=" << memory.ok().resident_size_ << " budget=" << run_->policy.rss_budget_bytes
+                           << " entries=" << c.entries << " buffered_txs=" << c.buffered_txs
+                           << " buffered_memo=" << c.buffered_memo_accounts
+                           << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted
+                           << " capped=" << c.capped << " evicted=" << c.evicted << " broken=" << c.broken
+                           << " incomplete=" << c.incomplete << " missing_root=" << c.missing_root
+                           << "; evicted=" << evicted << " buffered_txs " << before << " -> " << c.buffered_txs;
+            }
         }
         auto inputs = collector_->add_block(mc_seqno, *parsed_block);
         for (auto &input : inputs) {
@@ -676,10 +698,10 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
         }));
     for (auto &input : jobs) {
         auto promise = td::PromiseCreator::lambda(
-            [SelfId = actor_id(this), mc_seqno, done = guard.get_promise()]
+            [SelfId = actor_id(this), mc_seqno, original = input.trace, done = guard.get_promise()]
             (td::Result<mch::ClassifiedTrace> result) mutable {
                 td::actor::send_closure(SelfId, &IndexScheduler::seqno_trace_classified,
-                                        mc_seqno, std::move(result), std::move(done));
+                                        mc_seqno, std::move(original), std::move(result), std::move(done));
             });
         td::actor::send_closure(classify_workers_[jobs_dispatched_ % classify_workers_.size()].get(), &mch::ClassifyWorker::classify,
                                 mch::ClassifyJob{std::move(input), parsed_block}, std::move(promise));
@@ -691,11 +713,20 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
     abort_classification(mc_seqno, td::Status::Error("Unknown classification dispatch exception"));
 }
 
-void IndexScheduler::seqno_trace_classified(std::uint32_t mc_seqno, td::Result<mch::ClassifiedTrace> result,
+void IndexScheduler::seqno_trace_classified(std::uint32_t mc_seqno, schema::Trace original,
+                                            td::Result<mch::ClassifiedTrace> result,
                                             td::Promise<td::Unit> promise) try {
     if (result.is_error()) {
-        abort_classification(mc_seqno, result.move_as_error());
-        return;
+        if (run_ && run_->mode == mch::RunMode::task) {
+            abort_classification(mc_seqno, result.move_as_error());
+            return;
+        }
+        ++worker_errors_;
+        auto error = result.move_as_error();
+        LOG(ERROR) << "Classification worker error seqno=" << mc_seqno
+                   << " trace=" << td::base64_encode(original.trace_id.as_slice()) << ": " << error;
+        result = mch::ClassifiedTrace{std::move(original), mch::TraceOutcome::skipped_incomplete,
+                                      {}, error.message().str()};
     }
     auto trace = result.move_as_ok();
     ++jobs_done_;
@@ -926,7 +957,7 @@ void IndexScheduler::print_stats() {
            << " no_insert_below=" << run_->no_insert_below
            << " suppressed=" << suppressed_
            << " snapshot=" << snapshot_seqno_ << " warmup=" << warmup_until_
-           << " restore_failures=" << restore_failures_ << "]";
+           << " restore_failures=" << restore_failures_ << " worker_errors=" << worker_errors_ << "]";
     }
     LOG(INFO) << sb.as_cslice().str();
 }

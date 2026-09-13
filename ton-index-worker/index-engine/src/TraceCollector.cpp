@@ -122,4 +122,23 @@ std::size_t TraceCollector::retain_pending(const std::vector<td::Bits256> &sorte
   return erased;
 }
 
+std::size_t TraceCollector::evict(std::size_t target_txs) {
+  std::vector<std::pair<std::size_t, const td::Bits256 *>> victims;
+  victims.reserve(entries_.size());
+  for (const auto &[id, entry] : entries_) {
+    if (!entry.sticky && !entry.txs.empty()) victims.emplace_back(entry.txs.size(), &id);
+  }
+  std::sort(victims.begin(), victims.end(),
+            [](const auto &l, const auto &r) { return l.first > r.first; });
+  std::size_t freed = 0, count = 0;
+  for (const auto &[size, id] : victims) {
+    if (freed >= target_txs) break;
+    seed(*id, TraceOutcome::skipped_evicted);  // frees txs + memo, marks sticky
+    ++counters_.evicted;
+    freed += size;
+    ++count;
+  }
+  return count;
+}
+
 }  // namespace mch

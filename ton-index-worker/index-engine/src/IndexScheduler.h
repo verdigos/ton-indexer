@@ -57,6 +57,7 @@ private:
   std::vector<td::Bits256> warmup_pending_ids_;
   std::uint64_t restore_failures_{0};
   std::uint64_t worker_errors_{0};
+  std::uint64_t rss_over_budget_blocks_{0};
   std::optional<mch::TraceCollector> collector_;
   std::map<mch::TraceOutcome, std::uint64_t> classify_outcomes_;
   std::shared_ptr<td::Destructor> watcher_;
@@ -146,7 +147,7 @@ private:
   void seqno_parsed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block);
   void seqno_interfaces_processed(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block);
   void seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block);
-  void seqno_trace_classified(std::uint32_t mc_seqno, td::Result<mch::ClassifiedTrace> result,
+  void seqno_trace_classified(std::uint32_t mc_seqno, schema::Trace original, td::Result<mch::ClassifiedTrace> result,
                               td::Promise<td::Unit> promise);
   void seqno_classified(std::uint32_t mc_seqno, ParsedBlockPtr parsed_block, td::Result<td::Unit> result);
   void abort_classification(std::uint32_t mc_seqno, td::Status error);
