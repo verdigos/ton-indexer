@@ -39,7 +39,7 @@ void IndexScheduler::start_up() {
                 "classify_worker", prep_, run_->policy));
         }
     }
-    trace_assembler_ = td::actor::create_actor<TraceAssembler>("trace_assembler", working_dir_ + "/trace_assembler", max_queue_.mc_blocks_, !run_);
+    trace_assembler_ = td::actor::create_actor<TraceAssembler>("trace_assembler", working_dir_ + "/trace_assembler", !run_);
 }
 
 std::string get_time_string(double seconds) {
@@ -97,6 +97,7 @@ void IndexScheduler::alarm() {
 
     if (next_print_stats_.is_in_past()) {
         print_stats();
+        td::actor::send_closure(trace_assembler_, &TraceAssembler::set_gc_floor, static_cast<ton::BlockSeqno>(std::max(contiguous_indexed_seqno_, 0)));
         next_print_stats_ = td::Timestamp::in(stats_timeout_);
     }
     if ((!run_ || run_->mode != mch::RunMode::task) && next_statistics_flush_.is_in_past()) {

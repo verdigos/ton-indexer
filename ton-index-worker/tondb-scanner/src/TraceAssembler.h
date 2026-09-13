@@ -74,6 +74,18 @@ struct TraceImpl {
 };
 MSGPACK_ADD_ENUM(TraceImpl::State);
 
+struct RestoredState {
+    ton::BlockSeqno seqno{0};
+    std::unordered_map<td::Bits256, TraceImplPtr, Bits256Hasher> pending_traces;
+    std::unordered_map<td::Bits256, TraceEdgeImpl, Bits256Hasher> pending_edges;
+};
+
+std::string pack_state(const std::unordered_map<td::Bits256, TraceImplPtr, Bits256Hasher> &pending_traces,
+                       const std::unordered_map<td::Bits256, TraceEdgeImpl, Bits256Hasher> &pending_edges);
+td::Status save_state(const std::string &db_path, ton::BlockSeqno seqno, const std::string &packed);
+td::Status gc_states(const std::string &db_path, size_t keep_last, ton::BlockSeqno floor);
+td::Result<RestoredState> read_state(const std::string &db_path, ton::BlockSeqno seqno);
+
 
 class TraceAssembler: public td::actor::Actor {
     struct Task {
@@ -83,8 +95,8 @@ class TraceAssembler: public td::actor::Actor {
     };
 
     std::string db_path_;
-    size_t gc_distance_;
     bool persist_state_;
+    ton::BlockSeqno gc_floor_{0};
     ton::BlockSeqno expected_seqno_{0};
     std::map<ton::BlockSeqno, Task> queue_;
     size_t broken_count_{0};
@@ -92,7 +104,9 @@ class TraceAssembler: public td::actor::Actor {
     std::unordered_map<td::Bits256, TraceImplPtr, Bits256Hasher> pending_traces_;
     std::unordered_map<td::Bits256, TraceEdgeImpl, Bits256Hasher> pending_edges_;
 public:
-    TraceAssembler(std::string db_path, size_t gc_distance, bool persist_state = true);
+    TraceAssembler(std::string db_path, bool persist_state = true);
+    void set_gc_floor(ton::BlockSeqno floor) { gc_floor_ = floor; }
+    void start_persisting(ton::BlockSeqno floor);
     
     void assemble(ton::BlockSeqno mc_seqno, ParsedBlockPtr mc_block_, td::Promise<ParsedBlockPtr> promise);
     

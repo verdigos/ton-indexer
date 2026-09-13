@@ -116,7 +116,7 @@ int main(int argc, char *argv[]) {
   });
   scheduler.run_in_context([&] {
     trace_assembler =
-        td::actor::create_actor<TraceAssembler>("mch_trace_assembler", workdir + "/trace_assembler", 100);
+        td::actor::create_actor<TraceAssembler>("mch_trace_assembler", workdir + "/trace_assembler");
   });
   scheduler.run_in_context([&, watcher = std::move(watcher)] {
     td::actor::create_actor<BatchRunner>("mch_batch_runner", db_scanner.get(), parse_manager.get(),
