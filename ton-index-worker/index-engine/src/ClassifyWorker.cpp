@@ -29,7 +29,7 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<ClassifiedTrace> prom
         });
     const auto key = td::base64_encode(job.input.trace.trace_id.as_slice());
     auto r = classify_schema_trace(*prep_, key, job.input.txs, src);
-    ClassifiedTrace result{std::move(job.input.trace), r.outcome, std::move(r.rows), std::move(r.failure_reason)};
+    ClassifiedTrace result{std::move(job.input.trace), r.outcome, std::move(r.rows), std::move(r.failure_reason), false, std::move(r.rescue)};
     const double seconds = timer.elapsed();
     result.slow = seconds > policy_.job_timeout_s;
     if (result.slow) {

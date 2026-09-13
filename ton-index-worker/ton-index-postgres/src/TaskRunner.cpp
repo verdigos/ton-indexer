@@ -300,5 +300,6 @@ void TaskRunner::print_stats() {
             << " no_partition=" << refusals_[static_cast<std::size_t>(mch::TaskPlanRefusal::no_partition)]
             << " inside_live_window=" << refusals_[static_cast<std::size_t>(mch::TaskPlanRefusal::inside_live_window)]
             << " history_unavailable=" << refusals_[static_cast<std::size_t>(mch::TaskPlanRefusal::history_unavailable)]
-            << " rows=" << sink_stats_.rows << " account_rows=" << sink_stats_.account_rows;
+            << " rows=" << sink_stats_.rows << " account_rows=" << sink_stats_.account_rows
+            << " rejected=" << sink_stats_.rejected_traces;
 }

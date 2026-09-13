@@ -1,8 +1,10 @@
 #include "ClassifiedSink.h"
 
 #include "ActionJson.h"
+#include "td/utils/logging.h"
 
 #include <algorithm>
+#include <utility>
 
 namespace mch {
 namespace {
@@ -24,23 +26,67 @@ constexpr auto kDeleteActions = "DELETE FROM actions WHERE trace_id = $1 AND tra
 constexpr auto kDeleteAccounts = "DELETE FROM action_accounts WHERE trace_id = $1 AND trace_mc_seqno_end = $2";
 constexpr auto kDeleteTasks = "DELETE FROM _classifier_tasks WHERE id = ANY($1)";
 
-void insert_trace(pqxx::work &txn, const ClassifiedTrace &trace, LiveSinkStats &st) {
-  if (!outcome_writes_rows(trace.outcome)) return;
-  const auto ctx = row_context(trace.trace);
-  if (!trace.rows.empty()) {
-    st.rows += txn.exec(kInsertActions, pqxx::params{action_rows_json(trace.rows, ctx)}).affected_rows();
-    for (const auto &row : trace.rows) {
+std::pair<std::uint64_t, std::uint64_t> insert_rows(
+    pqxx::dbtransaction &txn, const std::vector<Action> &rows, const ActionRowContext &ctx) {
+  std::uint64_t row_count = 0, account_count = 0;
+  if (!rows.empty()) {
+    row_count = txn.exec(kInsertActions, pqxx::params{action_rows_json(rows, ctx)}).affected_rows();
+    for (const auto &row : rows) {
       if (!row.accounts.empty()) {
-        st.account_rows += txn.exec(kInsertAccounts, pqxx::params{action_account_rows_json(row, ctx)}).affected_rows();
+        account_count += txn.exec(kInsertAccounts, pqxx::params{action_account_rows_json(row, ctx)}).affected_rows();
       }
     }
   }
-  if (trace.outcome == TraceOutcome::fallback || trace.outcome == TraceOutcome::terminal_failure_empty) {
-    st.failed_traces += txn.exec(kInsertFailure, pqxx::params{ctx.trace_id, trace.failure_reason}).affected_rows();
+  return {row_count, account_count};
+}
+
+void insert_trace(pqxx::work &txn, const ClassifiedTrace &trace, LiveSinkStats &st) {
+  if (!outcome_writes_rows(trace.outcome)) return;
+  const auto ctx = row_context(trace.trace);
+  try {
+    pqxx::subtransaction sub(txn, "trace");
+    const auto [rows, accounts] = insert_rows(sub, trace.rows, ctx);
+    std::uint64_t failed = 0;
+    if (trace.outcome == TraceOutcome::fallback || trace.outcome == TraceOutcome::terminal_failure_empty) {
+      failed = sub.exec(kInsertFailure, pqxx::params{ctx.trace_id, trace.failure_reason}).affected_rows();
+    }
+    sub.commit();
+    st.rows += rows;
+    st.account_rows += accounts;
+    st.failed_traces += failed;
+  } catch (const pqxx::sql_error &e) {
+    if (!insert_rejected(e.sqlstate())) throw;
+    std::string message = e.what();
+    message = message.substr(0, message.find_first_of("\r\n"));
+    const auto reason = "insert_rejected: " + e.sqlstate() + " " + message;
+    try {
+      pqxx::subtransaction sub(txn, "rescue");
+      const auto [rows, accounts] = insert_rows(sub, {trace.rescue}, ctx);
+      const auto failed = sub.exec(kInsertFailure, pqxx::params{ctx.trace_id, reason}).affected_rows();
+      sub.commit();
+      st.rows += rows;
+      st.account_rows += accounts;
+      st.failed_traces += failed;
+      LOG(WARNING) << "Classification insert rejected trace=" << ctx.trace_id
+                   << " sqlstate=" << e.sqlstate() << " message=" << message;
+    } catch (const pqxx::sql_error &rescue_error) {
+      if (!insert_rejected(rescue_error.sqlstate())) throw;
+      std::string rescue_message = rescue_error.what();
+      rescue_message = rescue_message.substr(0, rescue_message.find_first_of("\r\n"));
+      const auto rescue_reason = "insert_rejected_unknown: " + rescue_error.sqlstate() + " " + rescue_message;
+      st.failed_traces += txn.exec(kInsertFailure, pqxx::params{ctx.trace_id, rescue_reason}).affected_rows();
+      LOG(ERROR) << "Classification unknown insert rejected trace=" << ctx.trace_id
+                 << " sqlstate=" << rescue_error.sqlstate() << " message=" << rescue_message;
+    }
+    ++st.rejected_traces;
   }
 }
 
 }  // namespace
+
+bool insert_rejected(const std::string &sqlstate) {
+  return sqlstate.starts_with("22") || sqlstate.starts_with("23");
+}
 
 void classify_lock_blocks(pqxx::work &txn, const std::vector<std::uint32_t> &seqnos) {
   auto sorted = seqnos;

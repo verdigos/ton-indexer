@@ -3147,7 +3147,7 @@ void InsertBatchPostgres::commit_prepared_batch() {
     LOG(INFO) << "Classification batch: blocks_written=" << classify_stats.blocks_written
               << " blocks_already_marked=" << classify_stats.blocks_already_marked
               << " rows=" << classify_stats.rows << " account_rows=" << classify_stats.account_rows
-              << " failed_traces=" << classify_stats.failed_traces;
+              << " failed_traces=" << classify_stats.failed_traces << " rejected=" << classify_stats.rejected_traces;
   }
 
   advance_progress_after_commit(c);

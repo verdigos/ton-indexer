@@ -30,7 +30,7 @@ namespace mch {
 bool task_eligible(const BlockClassification &bc) {
   return std::all_of(bc.traces.begin(), bc.traces.end(), [](const ClassifiedTrace &trace) {
     return outcome_writes_rows(trace.outcome) || trace.outcome == TraceOutcome::skipped_capped ||
-           trace.outcome == TraceOutcome::skipped_lone_tick_tock;
+           trace.outcome == TraceOutcome::skipped_lone_tick_tock || trace.outcome == TraceOutcome::skipped_broken;
   });
 }
 
@@ -915,6 +915,7 @@ SchemaClassifyResult classify_schema_trace(
     if (classified.failure && result.rows.empty()) {
       result.outcome = TraceOutcome::terminal_failure_empty;
     }
+    result.rescue = create_unknown_action(ctx.trace);
     completed = true;
   } catch (const vm::VmError &e) {
     result.outcome = TraceOutcome::terminal_failure_empty;

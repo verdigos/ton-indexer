@@ -42,6 +42,8 @@ enum class FailureCategory {
 // one per admitted or rejected trace input; precedence when several apply:
 // history unavailable > classification state > rows. The first three carry
 // rows (possibly zero) and are written; every other outcome only counts.
+// Task completion accepts written outcomes and broken, capped, or lone tick-tock
+// skips. Missing roots and other skips remain ineligible.
 //   classified / fallback / terminal_failure_empty: classify_schema_trace ran
 //     (normal rows / basic-action fallback rows / failure with nothing usable).
 //   timeout:              reserved; the worker keeps results of slow jobs.
@@ -85,6 +87,9 @@ struct ClassifiedTrace {
   std::vector<Action> rows;
   std::string failure_reason;
   bool slow{false};  // Wall-clock telemetry; never changes the outcome or rows.
+  // The unknown action for the whole trace; the sink writes it instead of
+  // `rows` when PostgreSQL rejects them.
+  Action rescue;
 };
 
 struct BlockClassification {
@@ -162,6 +167,7 @@ struct SchemaClassifyResult {
   bool unknown_row{false};
   std::string failure_reason;
   FailureCategory failure_category{FailureCategory::none};
+  Action rescue;  // create_unknown_action of the trace; set when classification ran.
 };
 
 // Trace-independent run prep computed once from the matcher table: the runnable
