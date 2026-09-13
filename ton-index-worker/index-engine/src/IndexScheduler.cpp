@@ -757,6 +757,9 @@ void IndexScheduler::seqno_classified(std::uint32_t mc_seqno, ParsedBlockPtr par
     auto block = block_results_.extract(mc_seqno);
     if (!block.empty() && !block.mapped().traces.empty()) {
         parsed_block->classification_ = std::make_shared<mch::BlockClassification>(std::move(block.mapped()));
+    } else if (run_ && run_->mode == mch::RunMode::live &&
+               mc_seqno >= run_->classify_from && mc_seqno <= run_->classify_to) {
+        parsed_block->classification_ = std::make_shared<mch::BlockClassification>();
     }
     if (run_ && run_->mode == mch::RunMode::task &&
         mc_seqno >= run_->classify_from && mc_seqno <= run_->classify_to) {

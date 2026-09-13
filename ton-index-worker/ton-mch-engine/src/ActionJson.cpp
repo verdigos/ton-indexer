@@ -31,7 +31,12 @@ std::string value_json(const Value &v) {
         else out << v.num->to_dec_string();
         break;
       case VType::Str:
-        out << v.str;
+        if (v.str.find('\0') == std::string::npos) out << v.str;
+        else {
+          auto text = v.str;
+          std::erase(text, '\0');
+          out << text;
+        }
         break;
       case VType::Account:
         if (v.addr_none) out << td::JsonNull();

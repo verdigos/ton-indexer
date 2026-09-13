@@ -232,6 +232,14 @@ int run_actions_json_test() {
     action.value_extra_currencies = {{239, "1000"}, {240, "5"}};
     action.accounts = {"0:" + std::string(64, 'a'), "0:" + std::string(64, 'A')};
     check_action(action, context, ddl);
+    action.ton_transfer_data = Value::make_dict({{"content", Value::make_str(std::string("a\0b", 3))}});
+    auto comment_json = action_row_json(action, context);
+    require(comment_json.find("\\u0000") == std::string::npos,
+            action.action_id + ".ton_transfer_data.content", "JSON contains escaped NUL");
+    auto comment_row = parse(comment_json, action.action_id);
+    const auto *transfer = jfield(comment_row, "ton_transfer_data");
+    require(transfer != nullptr && jstr(*transfer, "content") == "ab",
+            action.action_id + ".ton_transfer_data.content", "NUL must be stripped");
     action.extra = Value::make_dict({{"parent_gasless_action", Value::make_str(context.trace_id)}});
     auto extra_json = action_row_json(action, context);
     auto extra_row = parse(extra_json, action.action_id);
