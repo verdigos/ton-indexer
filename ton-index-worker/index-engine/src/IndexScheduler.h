@@ -89,6 +89,7 @@ private:
   td::Timestamp last_alarm_timestamp_;
   std::double_t avg_tps_{0};
   std::int64_t last_indexed_seqno_count_{0};
+  std::uint64_t indexed_total_{0};
 
   QueueState max_queue_{30000, 30000, 500000, 500000};
   QueueState cur_queue_state_;

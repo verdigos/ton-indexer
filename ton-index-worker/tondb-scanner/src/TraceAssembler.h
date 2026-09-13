@@ -91,7 +91,7 @@ struct PendingSummary {
 
 PendingSummary summarize_pending(
     const std::unordered_map<td::Bits256, TraceImplPtr, Bits256Hasher> &pending_traces,
-    std::size_t cap, std::uint32_t floor);
+    std::size_t cap, std::uint32_t floor, bool collect_ids);
 
 std::string pack_state(const std::unordered_map<td::Bits256, TraceImplPtr, Bits256Hasher> &pending_traces,
                        const std::unordered_map<td::Bits256, TraceEdgeImpl, Bits256Hasher> &pending_edges);
@@ -109,6 +109,8 @@ class TraceAssembler: public td::actor::Actor {
 
     std::string db_path_;
     bool persist_state_;
+    bool save_in_flight_{false};
+    std::uint64_t persist_errors_{0};
     ton::BlockSeqno gc_floor_{0};
     ton::BlockSeqno expected_seqno_{0};
     std::map<ton::BlockSeqno, Task> queue_;
@@ -121,12 +123,14 @@ public:
     TraceAssembler(std::string db_path, bool persist_state = true);
     void set_gc_floor(ton::BlockSeqno floor) { gc_floor_ = floor; }
     void start_persisting(ton::BlockSeqno floor);
+    void state_saved(td::Status status);
     
     void assemble(ton::BlockSeqno mc_seqno, ParsedBlockPtr mc_block_, td::Promise<ParsedBlockPtr> promise);
     
     td::Result<ton::BlockSeqno> restore_state(ton::BlockSeqno expected_seqno);
     td::Result<PendingSummary> preload_state(ton::BlockSeqno seqno, std::size_t cap, std::uint32_t floor);
     void install_preloaded();
+    void discard_preloaded() { preloaded_ = {}; }
     void reset_state();
     void set_expected_seqno(ton::BlockSeqno expected_seqno);
     void start_up() override;

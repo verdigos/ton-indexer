@@ -13,7 +13,7 @@ namespace fs = std::filesystem;
 
 PendingSummary summarize_pending(
     const std::unordered_map<td::Bits256, TraceImplPtr, Bits256Hasher> &pending_traces,
-    std::size_t cap, std::uint32_t floor) {
+    std::size_t cap, std::uint32_t floor, bool collect_ids) {
     PendingSummary summary;
     summary.total = pending_traces.size();
     for (const auto &[id, t] : pending_traces) {
@@ -21,7 +21,9 @@ PendingSummary summarize_pending(
             continue;
         }
         if (t->state != TraceImpl::State::broken) {
-            summary.pending_ids.push_back(t->trace_id);
+            if (collect_ids) {
+                summary.pending_ids.push_back(t->trace_id);
+            }
             if (t->nodes <= cap) {
                 ++summary.healthy;
                 if (t->mc_seqno_start >= floor) {
@@ -29,11 +31,13 @@ PendingSummary summarize_pending(
                 }
             }
         }
-        if (t->nodes > cap) {
+        if (collect_ids && t->nodes > cap) {
             summary.capped.push_back(t->trace_id);
         }
     }
-    std::sort(summary.pending_ids.begin(), summary.pending_ids.end());
+    if (collect_ids) {
+        std::sort(summary.pending_ids.begin(), summary.pending_ids.end());
+    }
     return summary;
 }
 
@@ -87,6 +91,7 @@ void TraceAssembler::start_persisting(ton::BlockSeqno floor) {
         return;
     }
     if (auto S = td::mkdir(db_path_); S.is_error()) {
+        ++persist_errors_;
         LOG(ERROR) << "TraceAssembler cannot create " << db_path_ << ": " << S.move_as_error()
                    << "; continuing without snapshots";
         return;
@@ -99,47 +104,51 @@ void TraceAssembler::start_persisting(ton::BlockSeqno floor) {
 
 td::Status gc_states(const std::string &db_path, size_t keep_last, ton::BlockSeqno floor) {
     td::Timer timer;
-    std::map<int, fs::path, std::greater<int>> fileMap;
+    try {
+        std::map<int, fs::path, std::greater<int>> fileMap;
 
-    for (const auto& entry : fs::directory_iterator(db_path)) {
-        if (fs::is_regular_file(entry.status())) {
-            auto filename = entry.path().stem().string();
-            auto extension = entry.path().extension().string();
+        for (const auto& entry : fs::directory_iterator(db_path)) {
+            if (fs::is_regular_file(entry.status())) {
+                auto filename = entry.path().stem().string();
+                auto extension = entry.path().extension().string();
 
-            if (extension == ".tastate") {
-                try {
-                    int seqno = std::stoi(filename);
-                    fileMap[seqno] = entry.path();
-                } catch (const std::exception& e) {
-                    LOG(ERROR) << "Error reading seqno of trace assembler state " << entry.path().string();
+                if (extension == ".tastate") {
+                    try {
+                        int seqno = std::stoi(filename);
+                        fileMap[seqno] = entry.path();
+                    } catch (const std::exception& e) {
+                        LOG(ERROR) << "Error reading seqno of trace assembler state " << entry.path().string();
+                    }
                 }
             }
         }
-    }
 
-    int anchor = -1;
-    for (const auto &[seqno, path] : fileMap) {
-        if (static_cast<std::int64_t>(seqno) <= static_cast<std::int64_t>(floor)) {
-            anchor = seqno;
-            break;
+        int anchor = -1;
+        for (const auto &[seqno, path] : fileMap) {
+            if (static_cast<std::int64_t>(seqno) <= static_cast<std::int64_t>(floor)) {
+                anchor = seqno;
+                break;
+            }
         }
+        size_t count = 0;
+        for (const auto &[seqno, filepath] : fileMap) {
+            if (count < keep_last) {
+                ++count;
+                LOG(DEBUG) << "Keeping state: " << filepath.string();
+                continue;
+            }
+            if (seqno == anchor) {
+                LOG(DEBUG) << "Keeping progress anchor state: " << filepath.string();
+                continue;
+            }
+            fs::remove(filepath);
+            LOG(DEBUG) << "Deleting old state: " << filepath.string();
+        }
+        g_statistics.record_time(TRACE_ASSEMBLER_GC_STATE, timer.elapsed() * 1e6);
+        return td::Status::OK();
+    } catch (const std::exception &e) {
+        return td::Status::Error(PSLICE() << "gc_states: " << e.what());
     }
-    size_t count = 0;
-    for (const auto &[seqno, filepath] : fileMap) {
-        if (count < keep_last) {
-            ++count;
-            LOG(DEBUG) << "Keeping state: " << filepath.string();
-            continue;
-        }
-        if (seqno == anchor) {
-            LOG(DEBUG) << "Keeping progress anchor state: " << filepath.string();
-            continue;
-        }
-        fs::remove(filepath);
-        LOG(DEBUG) << "Deleting old state: " << filepath.string();
-    }
-    g_statistics.record_time(TRACE_ASSEMBLER_GC_STATE, timer.elapsed() * 1e6);
-    return td::Status::OK();
 }
 
 std::string pack_state(const std::unordered_map<td::Bits256, TraceImplPtr, Bits256Hasher> &pending_traces,
@@ -162,22 +171,33 @@ void TraceAssembler::alarm() {
     if (expected_seqno_ == 0) {
         return;
     }
+    if (save_in_flight_) return;
     auto packed = pack_state(pending_traces_, pending_edges_);
+    save_in_flight_ = true;
     ton::delay_action([db_path = db_path_, seqno = expected_seqno_ - 1, floor = gc_floor_,
-                       packed = std::move(packed)]() mutable {
-        if (auto S = save_state(db_path, seqno, packed); S.is_error()) {
-            LOG(ERROR) << "Error while saving Trace Assembler state: " << S.move_as_error();
+                       packed = std::move(packed), self = actor_id(this)]() mutable {
+        auto status = save_state(db_path, seqno, packed);
+        auto gc_status = gc_states(db_path, 100, floor);
+        if (status.is_ok()) {
+            status = std::move(gc_status);
         }
-        if (auto G = gc_states(db_path, 100, floor); G.is_error()) {
-            LOG(ERROR) << "Error while garbage collecting Trace Assembler states: " << G.move_as_error();
-        }
+        td::actor::send_closure(self, &TraceAssembler::state_saved, std::move(status));
     }, td::Timestamp::now());
-    const auto s = summarize_pending(pending_traces_, SIZE_MAX, 0);
+    const auto s = summarize_pending(pending_traces_, SIZE_MAX, 0, false);
     LOG(INFO) << "Expected seqno: " << expected_seqno_
               << " Pending traces: " << pending_traces_.size()
               << " Pending edges: " << pending_edges_.size()
               << " Broken traces: " << broken_count_
-              << " Healthy: " << s.healthy << " Oldest healthy root: " << s.oldest_healthy;
+              << " Nonbroken: " << s.healthy << " Oldest nonbroken root: " << s.oldest_healthy
+              << " Snapshot errors: " << persist_errors_;
+}
+
+void TraceAssembler::state_saved(td::Status status) {
+    save_in_flight_ = false;
+    if (status.is_error()) {
+        ++persist_errors_;
+        LOG(ERROR) << "TraceAssembler snapshot maintenance: " << status;
+    }
 }
 
 void TraceAssembler::assemble(ton::BlockSeqno seqno, ParsedBlockPtr block, td::Promise<ParsedBlockPtr> promise) {
@@ -211,7 +231,7 @@ td::Result<PendingSummary> TraceAssembler::preload_state(ton::BlockSeqno seqno, 
                                                        std::uint32_t floor) {
     TRY_RESULT(state, read_state(db_path_, seqno));
     preloaded_ = std::move(state);
-    auto summary = summarize_pending(preloaded_.pending_traces, cap, floor);
+    auto summary = summarize_pending(preloaded_.pending_traces, cap, floor, true);
     summary.seqno = preloaded_.seqno;
     return summary;
 }

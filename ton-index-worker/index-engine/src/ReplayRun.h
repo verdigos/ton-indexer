@@ -61,7 +61,7 @@ struct ReplayRun {
   std::uint32_t classify_from = 0;
   std::uint32_t classify_to = std::numeric_limits<std::uint32_t>::max();
   // Live mode: seqnos below this are processed without any insert (replay).
-  // `min(kvrocks_frontier, pg_progress) + 1` at start-up.
+  // `resume.next_seqno` at start-up (the insert manager already applied the Kvrocks rewind).
   std::uint32_t no_insert_below = 0;
   // Task mode trace task: classify only this trace id; empty = every trace.
   std::optional<td::Bits256> classify_filter;

@@ -81,7 +81,7 @@ void IndexScheduler::alarm() {
 
     constexpr double alpha = 0.99; // Decay factor per second
 
-    auto current_count = indexed_seqnos_.size();
+    auto current_count = indexed_total_;
 
     if (last_indexed_seqno_count_ == 0) {
         last_indexed_seqno_count_ = current_count;
@@ -315,6 +315,7 @@ void IndexScheduler::process_replay_snapshot(std::uint32_t N, std::uint32_t C1, 
                          << " next_seqno=" << N << " oldest_healthy=" << snap->oldest_healthy
                          << "); starting fresh at " << N;
             snap.reset();
+            td::actor::send_closure(trace_assembler_, &TraceAssembler::discard_preloaded);
             warmup_seeds_.clear();
         } else if (snap->oldest_healthy <= snap->seqno) {
             warmup_pending_ids_ = std::move(s.pending_ids);
@@ -835,6 +836,7 @@ void IndexScheduler::seqno_processed_without_insert(std::uint32_t mc_seqno, cons
     note_indexed_block_utime(block_gen_utime);
     processing_seqnos_.erase(mc_seqno);
     indexed_seqnos_.insert(mc_seqno);
+    ++indexed_total_;
     if (mc_seqno > static_cast<std::uint32_t>(last_indexed_seqno_)) {
         last_indexed_seqno_ = static_cast<std::int32_t>(mc_seqno);
     }
@@ -998,6 +1000,7 @@ void IndexScheduler::seqno_inserted(std::uint32_t mc_seqno, std::int32_t block_g
     note_indexed_block_utime(block_gen_utime);
     inserting_seqnos_.erase(mc_seqno);
     indexed_seqnos_.insert(mc_seqno);
+    ++indexed_total_;
     if (mc_seqno > last_indexed_seqno_) {
         last_indexed_seqno_ = mc_seqno;
     }
@@ -1009,6 +1012,7 @@ void IndexScheduler::seqno_inserted(std::uint32_t mc_seqno, std::int32_t block_g
 
 void IndexScheduler::advance_contiguous_indexed_seqno() {
     while (indexed_seqnos_.count(static_cast<std::uint32_t>(contiguous_indexed_seqno_ + 1)) > 0) {
+        indexed_seqnos_.erase(static_cast<std::uint32_t>(contiguous_indexed_seqno_ + 1));
         ++contiguous_indexed_seqno_;
     }
 }
