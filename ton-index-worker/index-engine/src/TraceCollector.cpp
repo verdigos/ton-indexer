@@ -106,4 +106,20 @@ void TraceCollector::seed(const td::Bits256 &trace_id, TraceOutcome outcome) {
   counters_.peak_entries = std::max(counters_.peak_entries, counters_.entries);
 }
 
+std::size_t TraceCollector::retain_pending(const std::vector<td::Bits256> &sorted_ids) {
+  std::size_t erased = 0;
+  for (auto it = entries_.begin(); it != entries_.end();) {
+    if (!it->second.sticky && !std::binary_search(sorted_ids.begin(), sorted_ids.end(), it->first)) {
+      counters_.buffered_txs -= it->second.txs.size();
+      counters_.buffered_memo_accounts -= it->second.memo.size();
+      it = entries_.erase(it);
+      ++erased;
+    } else {
+      ++it;
+    }
+  }
+  counters_.entries = entries_.size();
+  return erased;
+}
+
 }  // namespace mch

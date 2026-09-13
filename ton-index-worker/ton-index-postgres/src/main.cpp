@@ -505,7 +505,6 @@ int main(int argc, char *argv[]) {
     });
   };
   mch_uint_option("mch-workers", "Classification workers (default: 4)", [&](std::uint64_t v) { mch_policy.workers = static_cast<std::uint32_t>(v); });
-  mch_uint_option("mch-lifetime-w", "Collector lifetime in masterchain blocks (default: 256)", [&](std::uint64_t v) { mch_policy.lifetime_w = static_cast<std::uint32_t>(v); });
   mch_uint_option("mch-trace-cap", "Per-trace transaction cap (default: 4000)", [&](std::uint64_t v) { mch_policy.trace_cap = v; });
   mch_uint_option("mch-job-timeout", "Seconds after which a classification is logged as slow (default: 5)", [&](std::uint64_t v) { mch_policy.job_timeout_s = static_cast<double>(v); });
   mch_uint_option("mch-rss-budget-gb", "Process RSS ceiling in GiB; exceeding it aborts the run (default: 16)", [&](std::uint64_t v) { mch_policy.rss_budget_bytes = v << 30; });
@@ -609,9 +608,9 @@ int main(int argc, char *argv[]) {
     LOG(ERROR) << "Task mode requires --db; --from, --to and --force are unsupported";
     return 2;
   }
-  if ((mch_classify || mch_task_mode) && (!mch_policy.workers || !mch_policy.lifetime_w ||
+  if ((mch_classify || mch_task_mode) && (!mch_policy.workers ||
       !mch_policy.trace_cap || !mch_policy.rss_budget_bytes)) {
-    LOG(ERROR) << "Classification workers, lifetime, trace cap and RSS budget must be positive";
+    LOG(ERROR) << "Classification workers, trace cap and RSS budget must be positive";
     return 2;
   }
   if (kvrocks_config.enabled) {
@@ -715,7 +714,7 @@ int main(int argc, char *argv[]) {
       mch_run->policy = mch_policy;
     }
     LOG(INFO) << "In-process classification enabled: workers=" << mch_policy.workers
-              << " lifetime_w=" << mch_policy.lifetime_w << " trace_cap=" << mch_policy.trace_cap
+              << " trace_cap=" << mch_policy.trace_cap
               << " job_timeout_s=" << mch_policy.job_timeout_s
               << " rss_budget_bytes=" << mch_policy.rss_budget_bytes;
   }

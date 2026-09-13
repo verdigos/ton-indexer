@@ -4,14 +4,20 @@
 
 namespace mch {
 
-ReplayRun live_bounds(std::uint32_t pg_next_seqno, std::optional<std::uint32_t> kvrocks_next_seqno,
-                      std::uint32_t oldest_available, std::uint32_t lifetime_w) {
+bool snapshot_usable(const SnapshotInfo &s, std::uint32_t next_seqno, std::uint32_t oldest_available) {
+  const auto floor = std::max(oldest_available, std::uint32_t{1});
+  return std::uint64_t{s.seqno} + 1 >= floor && s.seqno < next_seqno;
+}
+
+ReplayRun live_bounds(std::uint32_t next_seqno, std::uint32_t pg_next_seqno,
+                      std::uint32_t oldest_available, std::optional<SnapshotInfo> snapshot) {
   ReplayRun run;
-  run.policy.lifetime_w = lifetime_w;
-  run.no_insert_below = std::min(pg_next_seqno, kvrocks_next_seqno.value_or(pg_next_seqno));
-  run.classify_from = pg_next_seqno;
-  run.scan_from = std::max<std::int64_t>(std::max(oldest_available, std::uint32_t{1}),
-      std::min<std::int64_t>(std::int64_t{pg_next_seqno} - lifetime_w, run.no_insert_below));
+  const auto floor = std::max(oldest_available, std::uint32_t{1});
+  run.no_insert_below = std::max(next_seqno, std::uint32_t{1});
+  run.classify_from = std::max(pg_next_seqno, std::uint32_t{1});
+  run.scan_from = snapshot && snapshot_usable(*snapshot, run.no_insert_below, floor)
+      ? std::min(snapshot->oldest_healthy, snapshot->seqno + 1)
+      : run.no_insert_below;
   return run;
 }
 

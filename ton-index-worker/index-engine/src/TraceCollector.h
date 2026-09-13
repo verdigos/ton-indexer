@@ -35,6 +35,7 @@ class TraceCollector {
   // Insert or overwrite a terminal marker for a trace whose payload is gone
   // (snapshot cap seed, eviction). A sticky entry buffers nothing.
   void seed(const td::Bits256 &trace_id, TraceOutcome outcome);
+  std::size_t retain_pending(const std::vector<td::Bits256> &sorted_ids);
 
  private:
   struct Entry {

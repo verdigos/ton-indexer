@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <map>
 #include <filesystem>
 #include "TraceAssembler.h"
@@ -9,6 +10,32 @@
 #include "Statistics.h"
 
 namespace fs = std::filesystem;
+
+PendingSummary summarize_pending(
+    const std::unordered_map<td::Bits256, TraceImplPtr, Bits256Hasher> &pending_traces,
+    std::size_t cap, std::uint32_t floor) {
+    PendingSummary summary;
+    summary.total = pending_traces.size();
+    for (const auto &[id, t] : pending_traces) {
+        if (!t) {
+            continue;
+        }
+        if (t->state != TraceImpl::State::broken) {
+            summary.pending_ids.push_back(t->trace_id);
+            if (t->nodes <= cap) {
+                ++summary.healthy;
+                if (t->mc_seqno_start >= floor) {
+                    summary.oldest_healthy = std::min(summary.oldest_healthy, t->mc_seqno_start);
+                }
+            }
+        }
+        if (t->nodes > cap) {
+            summary.capped.push_back(t->trace_id);
+        }
+    }
+    std::sort(summary.pending_ids.begin(), summary.pending_ids.end());
+    return summary;
+}
 
 schema::TraceEdge TraceEdgeImpl::to_schema() const {
     schema::TraceEdge result;
@@ -145,10 +172,12 @@ void TraceAssembler::alarm() {
             LOG(ERROR) << "Error while garbage collecting Trace Assembler states: " << G.move_as_error();
         }
     }, td::Timestamp::now());
+    const auto s = summarize_pending(pending_traces_, SIZE_MAX, 0);
     LOG(INFO) << "Expected seqno: " << expected_seqno_
               << " Pending traces: " << pending_traces_.size()
               << " Pending edges: " << pending_edges_.size()
-              << " Broken traces: " << broken_count_;
+              << " Broken traces: " << broken_count_
+              << " Healthy: " << s.healthy << " Oldest healthy root: " << s.oldest_healthy;
 }
 
 void TraceAssembler::assemble(ton::BlockSeqno seqno, ParsedBlockPtr block, td::Promise<ParsedBlockPtr> promise) {
@@ -176,6 +205,22 @@ td::Result<ton::BlockSeqno> TraceAssembler::restore_state(ton::BlockSeqno seqno)
     pending_traces_ = std::move(state.pending_traces);
     pending_edges_ = std::move(state.pending_edges);
     return state.seqno;
+}
+
+td::Result<PendingSummary> TraceAssembler::preload_state(ton::BlockSeqno seqno, std::size_t cap,
+                                                       std::uint32_t floor) {
+    TRY_RESULT(state, read_state(db_path_, seqno));
+    preloaded_ = std::move(state);
+    auto summary = summarize_pending(preloaded_.pending_traces, cap, floor);
+    summary.seqno = preloaded_.seqno;
+    return summary;
+}
+
+void TraceAssembler::install_preloaded() {
+    pending_traces_ = std::move(preloaded_.pending_traces);
+    pending_edges_ = std::move(preloaded_.pending_edges);
+    preloaded_ = {};
+    broken_count_ = 0;
 }
 
 td::Result<RestoredState> read_state(const std::string &db_path, ton::BlockSeqno seqno) {

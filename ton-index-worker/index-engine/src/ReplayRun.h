@@ -25,10 +25,6 @@ namespace mch {
 // Tunables with their defaults. Every value is a configuration constant, not a
 // measurement; change here or through the CLI, never per trace.
 struct ClassifyPolicy {
-  // Collector lifetime in masterchain blocks, measured from the root's block.
-  // A trace whose root is older than this when it completes is `expired`.
-  // Observed spans (hot DB, 300k seqnos): p99.9 = 2, max = 132.
-  std::uint32_t lifetime_w = 256;
   // Per-trace transaction cap; exceeding it makes the trace `capped` (python's
   // `big_traces_threshold`).
   std::size_t trace_cap = 4000;
@@ -77,8 +73,17 @@ struct ReplayRun {
   ClassifyPolicy policy;
 };
 
-ReplayRun live_bounds(std::uint32_t pg_next_seqno, std::optional<std::uint32_t> kvrocks_next_seqno,
-                      std::uint32_t oldest_available, std::uint32_t lifetime_w);
+struct SnapshotInfo {
+  std::uint32_t seqno;
+  std::uint32_t oldest_healthy;
+};
+
+// The snapshot precedes the insert range, and its next block is still retained.
+bool snapshot_usable(const SnapshotInfo &snapshot, std::uint32_t next_seqno,
+                     std::uint32_t oldest_available);
+
+ReplayRun live_bounds(std::uint32_t next_seqno, std::uint32_t pg_next_seqno,
+                      std::uint32_t oldest_available, std::optional<SnapshotInfo> snapshot);
 
 struct TaskPlanInput {
   std::uint32_t from, to;

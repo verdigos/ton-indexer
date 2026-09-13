@@ -156,7 +156,7 @@ const ton::BlockSeqno FIRST_INDEXABLE_MC_SEQNO = 1;
 //   progress row exists so the Postgres trigger can keep advancing it.
 // - Masterchain seqno 0 is not readable from the node DB, so all starts are
 //   clamped to FIRST_INDEXABLE_MC_SEQNO.
-// - ReplayRun uses both durable frontiers and retained history with a fresh assembler.
+// - Live ReplayRun restores an assembler snapshot and warms the collector from retained history.
 // - Without ReplayRun, --prewarm controls how far TraceAssembler may move the start
 //   point backwards. If no suitable state exists, the assembler is reset and
 //   the same bounded fallback is used.
@@ -280,27 +280,69 @@ void IndexScheduler::process_replay_resume(InsertManagerInterface::ResumeState r
         stop();
         return;
     }
-    const auto oldest_available = std::max(oldest.move_as_ok(), FIRST_INDEXABLE_MC_SEQNO);
-    const auto next_seqno = std::max(resume.next_seqno, FIRST_INDEXABLE_MC_SEQNO);
-    if (resume.initialized_from_cli || next_seqno == FIRST_INDEXABLE_MC_SEQNO) {
-        run_->scan_from = next_seqno;
-        run_->no_insert_below = run_->classify_from = next_seqno;
+    const auto A = std::max(oldest.move_as_ok(), FIRST_INDEXABLE_MC_SEQNO);
+    const auto N = std::max(resume.next_seqno, FIRST_INDEXABLE_MC_SEQNO);
+    const auto C1 = std::max(resume.pg_next_seqno, FIRST_INDEXABLE_MC_SEQNO);
+    auto P = td::PromiseCreator::lambda(
+        [SelfId = actor_id(this), N, C1, A](td::Result<PendingSummary> summary) {
+            td::actor::send_closure(SelfId, &IndexScheduler::process_replay_snapshot, N, C1, A,
+                                    std::move(summary));
+        });
+    td::actor::send_closure(trace_assembler_, &TraceAssembler::preload_state,
+                            N - 1, run_->policy.trace_cap, A, std::move(P));
+}
+
+void IndexScheduler::process_replay_snapshot(std::uint32_t N, std::uint32_t C1, std::uint32_t A,
+                                             td::Result<PendingSummary> r) {
+    std::optional<mch::SnapshotInfo> snap;
+    if (r.is_error()) {
+        ++restore_failures_;
+        LOG(WARNING) << "No usable TraceAssembler snapshot below " << N << ": " << r.move_as_error()
+                     << "; starting fresh, traces straddling " << N << " become broken roots";
     } else {
-        const auto bounds = mch::live_bounds(resume.pg_next_seqno, resume.kvrocks_next_seqno,
-                                             oldest_available, run_->policy.lifetime_w);
-        run_->scan_from = bounds.scan_from;
-        run_->no_insert_below = bounds.no_insert_below;
-        run_->classify_from = bounds.classify_from;
-        if (std::int64_t{resume.pg_next_seqno} - run_->policy.lifetime_w < oldest_available) {
-            LOG(WARNING) << "Replay history begins at " << oldest_available
-                         << "; older trace roots will be counted as expired or missing_root";
+        auto s = r.move_as_ok();
+        snapshot_seqno_ = s.seqno;
+        snapshot_healthy_ = s.healthy;
+        warmup_seeds_ = std::move(s.capped);
+        snap = mch::SnapshotInfo{s.seqno,
+            s.oldest_healthy == UINT32_MAX ? s.seqno + 1 : s.oldest_healthy};
+        if (!mch::snapshot_usable(*snap, N, A) ||
+            snap->oldest_healthy < FIRST_INDEXABLE_MC_SEQNO ||
+            std::uint64_t{snap->oldest_healthy} > std::uint64_t{s.seqno} + 1) {
+            ++restore_failures_;
+            LOG(WARNING) << "TraceAssembler snapshot " << s.seqno << " unusable (oldest_available=" << A
+                         << " next_seqno=" << N << " oldest_healthy=" << snap->oldest_healthy
+                         << "); starting fresh at " << N;
+            snap.reset();
+            warmup_seeds_.clear();
+        } else if (snap->oldest_healthy <= snap->seqno) {
+            warmup_pending_ids_ = std::move(s.pending_ids);
         }
     }
+    const auto bounds = mch::live_bounds(N, C1, A, snap);
+    run_->scan_from = bounds.scan_from;
+    run_->no_insert_below = bounds.no_insert_below;
+    run_->classify_from = bounds.classify_from;
     run_->scan_to = run_->classify_to = UINT32_MAX;
+    warmup_scan_from_ = bounds.scan_from;
+    warmup_until_ = (snap && bounds.scan_from <= snap->seqno) ? snap->seqno : 0;
     LOG(INFO) << "Replay bounds: scan_from=" << run_->scan_from
-              << " no_insert_below=" << run_->no_insert_below << " classify_from=" << run_->classify_from
-              << " oldest_available=" << oldest_available;
+              << " no_insert_below=" << run_->no_insert_below
+              << " classify_from=" << run_->classify_from
+              << " oldest_available=" << A
+              << " snapshot=" << (snap ? std::to_string(snap->seqno) : std::string("none"))
+              << " healthy=" << snapshot_healthy_ << " seeds=" << warmup_seeds_.size()
+              << " warmup=" << (warmup_until_ ? "on" : "off");
     start_from_seqno(run_->scan_from, true);
+    if (!warmup_until_) {
+        if (snap) {
+            td::actor::send_closure(trace_assembler_, &TraceAssembler::install_preloaded);
+            for (const auto &id : warmup_seeds_) collector_->seed(id, mch::TraceOutcome::skipped_capped);
+            warmup_seeds_.clear();
+        }
+        td::actor::send_closure(trace_assembler_, &TraceAssembler::start_persisting,
+            static_cast<ton::BlockSeqno>(std::max(contiguous_indexed_seqno_, 0)));
+    }
 }
 
 void IndexScheduler::process_archive_existing_seqnos(td::Result<std::vector<std::uint32_t>> R) {
@@ -454,6 +496,9 @@ void IndexScheduler::event_catch_up_finished(ton::BlockSeqno mc_seqno, td::Resul
 
 void IndexScheduler::got_newest_mc_seqno(std::uint32_t newest_mc_seqno) {
     auto effective_newest_seqno = newest_mc_seqno;
+    if (warmup_until_ && effective_newest_seqno > warmup_until_) {
+        effective_newest_seqno = warmup_until_;
+    }
     if (to_seqno_ > 0 && effective_newest_seqno > static_cast<std::uint32_t>(to_seqno_)) {
         effective_newest_seqno = static_cast<std::uint32_t>(to_seqno_);
     }
@@ -792,7 +837,33 @@ ton::BlockSeqno IndexScheduler::prewarm_start_seqno(ton::BlockSeqno seqno) const
     return seqno - prewarm_count_;
 }
 
+void IndexScheduler::maybe_finish_warmup() {
+    if (!warmup_until_ || contiguous_indexed_seqno_ < static_cast<std::int32_t>(warmup_until_)) {
+        return;
+    }
+    const auto S = warmup_until_;
+    warmup_until_ = 0;
+    td::actor::send_closure(trace_assembler_, &TraceAssembler::set_expected_seqno, S + 1);
+    td::actor::send_closure(trace_assembler_, &TraceAssembler::install_preloaded);
+    const auto orphans = collector_->retain_pending(warmup_pending_ids_);
+    for (const auto &id : warmup_seeds_) collector_->seed(id, mch::TraceOutcome::skipped_capped);
+    td::actor::send_closure(trace_assembler_, &TraceAssembler::start_persisting,
+        static_cast<ton::BlockSeqno>(std::max(contiguous_indexed_seqno_, 0)));
+    const auto &c = collector_->counters();
+    LOG(INFO) << "Warmup complete: snapshot=" << S << " scan_from=" << warmup_scan_from_
+              << " depth=" << (S - warmup_scan_from_ + 1) << " healthy=" << snapshot_healthy_
+              << " seeds=" << warmup_seeds_.size() << " orphans=" << orphans
+              << " no_insert_below=" << run_->no_insert_below
+              << " classify_from=" << run_->classify_from
+              << " collector_entries=" << c.entries << " buffered_txs=" << c.buffered_txs;
+    warmup_seeds_.clear();
+    warmup_seeds_.shrink_to_fit();
+    warmup_pending_ids_.clear();
+    warmup_pending_ids_.shrink_to_fit();
+}
+
 void IndexScheduler::maybe_finish_run() {
+    maybe_finish_warmup();
     if (!is_bounded_archive_range() && !(run_ && run_->mode == mch::RunMode::task && to_seqno_ > 0)) {
         return;
     }
@@ -853,7 +924,9 @@ void IndexScheduler::print_stats() {
         sb << "\trun[scan=" << run_->scan_from << ".." << run_->scan_to
            << " classify=" << run_->classify_from << ".." << run_->classify_to
            << " no_insert_below=" << run_->no_insert_below
-           << " suppressed=" << suppressed_ << "]";
+           << " suppressed=" << suppressed_
+           << " snapshot=" << snapshot_seqno_ << " warmup=" << warmup_until_
+           << " restore_failures=" << restore_failures_ << "]";
     }
     LOG(INFO) << sb.as_cslice().str();
 }

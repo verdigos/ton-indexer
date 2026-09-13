@@ -80,6 +80,19 @@ struct RestoredState {
     std::unordered_map<td::Bits256, TraceEdgeImpl, Bits256Hasher> pending_edges;
 };
 
+struct PendingSummary {
+    ton::BlockSeqno seqno{0};
+    std::size_t total{0};
+    std::size_t healthy{0};
+    std::uint32_t oldest_healthy{UINT32_MAX};
+    std::vector<td::Bits256> capped;
+    std::vector<td::Bits256> pending_ids;
+};
+
+PendingSummary summarize_pending(
+    const std::unordered_map<td::Bits256, TraceImplPtr, Bits256Hasher> &pending_traces,
+    std::size_t cap, std::uint32_t floor);
+
 std::string pack_state(const std::unordered_map<td::Bits256, TraceImplPtr, Bits256Hasher> &pending_traces,
                        const std::unordered_map<td::Bits256, TraceEdgeImpl, Bits256Hasher> &pending_edges);
 td::Status save_state(const std::string &db_path, ton::BlockSeqno seqno, const std::string &packed);
@@ -103,6 +116,7 @@ class TraceAssembler: public td::actor::Actor {
 
     std::unordered_map<td::Bits256, TraceImplPtr, Bits256Hasher> pending_traces_;
     std::unordered_map<td::Bits256, TraceEdgeImpl, Bits256Hasher> pending_edges_;
+    RestoredState preloaded_;
 public:
     TraceAssembler(std::string db_path, bool persist_state = true);
     void set_gc_floor(ton::BlockSeqno floor) { gc_floor_ = floor; }
@@ -111,6 +125,8 @@ public:
     void assemble(ton::BlockSeqno mc_seqno, ParsedBlockPtr mc_block_, td::Promise<ParsedBlockPtr> promise);
     
     td::Result<ton::BlockSeqno> restore_state(ton::BlockSeqno expected_seqno);
+    td::Result<PendingSummary> preload_state(ton::BlockSeqno seqno, std::size_t cap, std::uint32_t floor);
+    void install_preloaded();
     void reset_state();
     void set_expected_seqno(ton::BlockSeqno expected_seqno);
     void start_up() override;

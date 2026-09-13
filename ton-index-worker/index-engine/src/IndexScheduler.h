@@ -49,6 +49,14 @@ private:
   std::uint64_t jobs_done_{0};
   std::uint64_t slow_jobs_{0};
   std::uint64_t blocks_waited_{0};
+  std::uint32_t warmup_until_{0};
+  std::uint32_t warmup_scan_from_{0};
+  std::uint32_t snapshot_seqno_{0};
+  std::size_t snapshot_healthy_{0};
+  std::vector<td::Bits256> warmup_seeds_;
+  std::vector<td::Bits256> warmup_pending_ids_;
+  std::uint64_t restore_failures_{0};
+  std::uint64_t worker_errors_{0};
   std::optional<mch::TraceCollector> collector_;
   std::map<mch::TraceOutcome, std::uint64_t> classify_outcomes_;
   std::shared_ptr<td::Destructor> watcher_;
@@ -160,6 +168,8 @@ private:
   void process_force_resume_state_initialized(td::Result<bool> R, ton::BlockSeqno start_seqno);
   void process_resume_seqno(td::Result<InsertManagerInterface::ResumeState> R);
   void process_replay_resume(InsertManagerInterface::ResumeState resume, td::Result<ton::BlockSeqno> oldest);
+  void process_replay_snapshot(std::uint32_t next_seqno, std::uint32_t pg_next_seqno,
+                               std::uint32_t oldest_available, td::Result<PendingSummary> summary);
   void process_archive_existing_seqnos(td::Result<std::vector<std::uint32_t>> R);
   void start_from_seqno(ton::BlockSeqno seqno, bool reset_trace_assembler);
   void got_newest_mc_seqno(std::uint32_t newest_mc_seqno);
@@ -168,6 +178,7 @@ private:
   ton::BlockSeqno prewarm_start_seqno(ton::BlockSeqno seqno) const;
   void seqno_processed_without_insert(std::uint32_t mc_seqno, const char* reason, std::int32_t block_gen_utime);
   void maybe_finish_run();
+  void maybe_finish_warmup();
 
   void got_insert_queue_state(QueueState status);
 
