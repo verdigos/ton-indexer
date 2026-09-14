@@ -185,6 +185,8 @@ private:
                                               td::Result<std::shared_ptr<LatestAccountStatesChunkPreparedResult>> result);
   void maybe_commit_prepared_batch();
   void commit_prepared_batch();
+  void write_classifications(pqxx::connection &c,
+      const std::vector<std::pair<std::uint32_t, const mch::BlockClassification *>> &classifications);
   void reset_prepare_state(bool keep_prepared_batch = false);
   void acquire_leader_heartbeat();
   void release_leader_heartbeat();
@@ -3072,18 +3074,14 @@ void InsertBatchPostgres::commit_prepared_batch() {
   td::Timer data_timer;
   pqxx::work txn(c);
   std::vector<std::pair<std::uint32_t, const mch::BlockClassification *>> classifications;
-  std::vector<std::uint32_t> classify_seqnos;
   for (const auto &task : insert_tasks_) {
     if (task.parsed_block_->classification_) {
-      classify_seqnos.push_back(task.mc_seqno_);
       classifications.emplace_back(task.mc_seqno_, task.parsed_block_->classification_.get());
     }
   }
-  mch::classify_lock_blocks(txn, classify_seqnos);
   std::stable_sort(classifications.begin(), classifications.end(), [](const auto &a, const auto &b) {
     return a.first < b.first;
   });
-  mch::ClassifierWriterStats classify_stats;
   if (disable_progress_advance_) {
     txn.exec0("SET LOCAL ton_indexer.advance_progress = 'off'");
   }
@@ -3103,9 +3101,6 @@ void InsertBatchPostgres::commit_prepared_batch() {
   insert_nominator_pool_validator_events(txn, with_copy_);
   insert_validator_events(txn, with_copy_);
   insert_traces(txn, with_copy_);
-  for (const auto &[seqno, classification] : classifications) {
-    mch::classify_live_write(txn, seqno, *classification, classify_stats);
-  }
   if (write_postgres_state_tables) {
     insert_contract_methods(txn);
   }
@@ -3143,13 +3138,6 @@ void InsertBatchPostgres::commit_prepared_batch() {
   txn.commit();
   commit_timer.pause();
 
-  if (!classifications.empty()) {
-    LOG(INFO) << "Classification batch: blocks_written=" << classify_stats.blocks_written
-              << " blocks_already_marked=" << classify_stats.blocks_already_marked
-              << " rows=" << classify_stats.rows << " account_rows=" << classify_stats.account_rows
-              << " failed_traces=" << classify_stats.failed_traces << " rejected=" << classify_stats.rejected_traces;
-  }
-
   advance_progress_after_commit(c);
   publish_split_after_commit(c);
   drop_old_partitions_after_commit(c);
@@ -3159,12 +3147,66 @@ void InsertBatchPostgres::commit_prepared_batch() {
   }
   promise_.set_result(get_insert_result());
 
+  write_classifications(c, classifications);
+
   g_statistics.record_time(INSERT_BATCH_CONNECT, connect_timer.elapsed() * 1e3);
   g_statistics.record_time(INSERT_BATCH_EXEC_DATA, data_timer.elapsed() * 1e3);
   g_statistics.record_time(INSERT_BATCH_EXEC_STATES, states_timer.elapsed() * 1e3);
   g_statistics.record_time(INSERT_BATCH_COMMIT, commit_timer.elapsed() * 1e3);
 
   stop();
+}
+
+namespace {
+constexpr auto kClassificationStatementTimeout = "SET LOCAL statement_timeout = '30s'";
+constexpr auto kClassificationLockTimeout = "SET LOCAL lock_timeout = '10s'";
+}  // namespace
+
+void InsertBatchPostgres::write_classifications(pqxx::connection &c,
+    const std::vector<std::pair<std::uint32_t, const mch::BlockClassification *>> &classifications) {
+  const auto record_failure = [&](const char *what) {
+    try {
+      std::string reason(what);
+      reason = reason.substr(0, reason.find_first_of("\r\n"));
+      LOG(ERROR) << "Classification write failed: " << reason;
+      reason = "action_write_failed: " + reason.substr(0, 200);
+      pqxx::work txn(c);
+      for (const auto &[seqno, classification] : classifications) {
+        mch::record_block_issue(txn, seqno, reason);
+      }
+      txn.commit();
+    } catch (...) {
+    }
+  };
+  try {
+    if (classifications.empty()) return;
+    pqxx::work txn(c);
+    txn.exec(kClassificationStatementTimeout);
+    txn.exec(kClassificationLockTimeout);
+    std::vector<std::uint32_t> seqnos;
+    for (const auto &[seqno, classification] : classifications) {
+      seqnos.push_back(seqno);
+    }
+    mch::classify_lock_blocks(txn, seqnos);
+    mch::ClassifierWriterStats st;
+    for (const auto &[seqno, classification] : classifications) {
+      mch::classify_live_write(txn, seqno, *classification, st);
+    }
+    if (!no_leader_) {
+      ensure_still_leader(txn, worker_id_);
+    }
+    txn.commit();
+    LOG(INFO) << "Classification batch: blocks_written=" << st.blocks_written
+              << " blocks_already_marked=" << st.blocks_already_marked
+              << " rows=" << st.rows << " account_rows=" << st.account_rows
+              << " failed_traces=" << st.failed_traces << " rejected=" << st.rejected_traces
+              << " blocks_unmarked=" << st.blocks_unmarked << " rescue_unset=" << st.rescue_unset
+              << " rescue_rejected=" << st.rescue_rejected;
+  } catch (const std::exception &e) {
+    record_failure(e.what());
+  } catch (...) {
+    record_failure("unknown exception");
+  }
 }
 
 void InsertBatchPostgres::insert_kvrocks() {

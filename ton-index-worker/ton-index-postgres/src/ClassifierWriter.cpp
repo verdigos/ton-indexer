@@ -168,6 +168,10 @@ void classify_lock_blocks(pqxx::work &txn, const std::vector<std::uint32_t> &seq
   }
 }
 
+void record_block_issue(pqxx::work &txn, std::uint32_t mc_seqno, const std::string &reason) {
+  txn.exec(kInsertIssue, pqxx::params{mc_seqno, reason});
+}
+
 void classify_live_write(pqxx::work &txn, std::uint32_t mc_seqno,
                          const BlockClassification &bc, ClassifierWriterStats &st) {
   if (!txn.exec(kHasMarker, pqxx::params{mc_seqno}).empty()) {

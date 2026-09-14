@@ -8,9 +8,10 @@
 #include <string>
 #include <vector>
 
-// Writes classification results to PostgreSQL inside the caller's transaction:
-// live mode appends one block's rows and its `_blocks_classified` marker; task
-// mode replaces rows of one completion seqno. Each trace has its own savepoint.
+// Writes classification results to PostgreSQL inside a caller-owned transaction
+// that carries no block data. Live mode appends one block's rows and its
+// `_blocks_classified` marker; task mode replaces rows of one completion seqno.
+// Each trace has its own savepoint.
 // SQLSTATE classes 22, 23, 54 and rendering failures get a bounded `unknown`
 // rescue plus a `_classifier_failed_traces` record. Persistable empty results
 // get the rescue too. Unset rescues are skipped and counted; rejected rescues
@@ -23,9 +24,11 @@
 // drift propagate to the caller and abort its transaction. The writer never retries.
 // A trace-scoped task refuses a seqno with no marker; a whole-seqno task writes
 // the marker and clears its issues.
+// record_block_issue records a seqno and reason if that pair is absent.
 namespace mch {
 
 void classify_lock_blocks(pqxx::work &txn, const std::vector<std::uint32_t> &seqnos);
+void record_block_issue(pqxx::work &txn, std::uint32_t mc_seqno, const std::string &reason);
 
 struct ClassifierWriterStats {
   std::uint64_t blocks_written{0}, blocks_already_marked{0}, rows{0}, account_rows{0}, failed_traces{0};
