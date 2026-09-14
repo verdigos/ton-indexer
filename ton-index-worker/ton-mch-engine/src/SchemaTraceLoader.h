@@ -21,6 +21,9 @@
 
 namespace mch {
 
+// Hash, canonical account and aborted status used by the loader and rescue.
+void fill_transaction_fields(Transaction &tx, const schema::Transaction &st);
+
 // Map a trace's schema::Transactions -> the engine Trace (transactions only;
 // `interfaces` is the LookupSource's concern, filled separately). Field map is
 // documented per-field in the .cpp. Never throws, returns a Trace.

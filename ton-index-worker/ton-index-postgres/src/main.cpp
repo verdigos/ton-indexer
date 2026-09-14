@@ -505,7 +505,7 @@ int main(int argc, char *argv[]) {
     });
   };
   mch_uint_option("mch-workers", "Classification workers (default: 4)", [&](std::uint64_t v) { mch_policy.workers = static_cast<std::uint32_t>(v); });
-  mch_uint_option("mch-trace-cap", "Per-trace transaction cap (default: 4000)", [&](std::uint64_t v) { mch_policy.trace_cap = v; });
+  mch_uint_option("mch-trace-cap", "Per-trace transaction cap (default: 8000)", [&](std::uint64_t v) { mch_policy.trace_cap = v; });
   mch_uint_option("mch-slow-job-threshold", "Seconds after which a classification is logged as slow (default: 5)", [&](std::uint64_t v) { mch_policy.slow_job_threshold_s = static_cast<double>(v); });
   mch_uint_option("mch-rss-budget-gb", "Process RSS budget in GiB; live evicts pending trace payloads, task aborts (default: 16)", [&](std::uint64_t v) { mch_policy.rss_budget_bytes = v << 30; });
 

@@ -27,7 +27,7 @@ namespace mch {
 struct ClassifyPolicy {
   // Per-trace transaction cap; exceeding it makes the trace `capped` (python's
   // `big_traces_threshold`).
-  std::size_t trace_cap = 4000;
+  std::size_t trace_cap = 8000;
   // Classification workers; the block barrier waits for all jobs of a block.
   std::uint32_t workers = 4;
   // Per-job wall-clock warning threshold; slow jobs retain their outcome and rows.
@@ -37,8 +37,8 @@ struct ClassifyPolicy {
   std::uint64_t rss_budget_bytes = std::uint64_t{16} << 30;
   // Task mode: most seqnos claimed by one worker in one claim transaction.
   std::uint32_t run_max_seqnos = 256;
-  // Task mode: refuse completion seqnos above `C_live - live_margin`.
-  std::uint32_t live_margin = 256;
+  // Task mode: refuse completion seqnos above the finalized frontier.
+  std::uint32_t live_margin = 0;
 };
 
 enum class RunMode { live, task };

@@ -860,6 +860,7 @@ SchemaClassifyResult classify_schema_trace(
     const MchEnginePrep &prep, const std::string &trace_id,
     const std::vector<schema::Transaction> &txs, ParsedBlockLookupSource &src) {
   SchemaClassifyResult result;
+  result.rescue = create_unknown_action(trace_id, txs);
   if (txs.size() == 1 &&
       std::holds_alternative<schema::TransactionDescr_tick_tock>(txs.front().description)) {
     result.outcome = TraceOutcome::skipped_lone_tick_tock;
@@ -867,15 +868,8 @@ SchemaClassifyResult classify_schema_trace(
   }
   bool completed = false;
   try {
-    auto r_trace = schema_to_trace(trace_id, txs);
-    if (r_trace.is_error()) {
-      result.outcome = TraceOutcome::terminal_failure_empty;
-      result.failure_reason = r_trace.move_as_error().message().str();
-      result.failure_category = FailureCategory::malformed_trace;
-      return result;
-    }
     TraceContext ctx;
-    ctx.trace = r_trace.move_as_ok();
+    ctx.trace = schema_to_trace(trace_id, txs).move_as_ok();
     ctx.tree = to_tree(ctx.trace);
     if (ctx.tree.root == nullptr) {
       result.outcome = TraceOutcome::terminal_failure_empty;
@@ -915,7 +909,6 @@ SchemaClassifyResult classify_schema_trace(
     if (classified.failure && result.rows.empty()) {
       result.outcome = TraceOutcome::terminal_failure_empty;
     }
-    result.rescue = create_unknown_action(ctx.trace);
     completed = true;
   } catch (const vm::VmError &e) {
     result.outcome = TraceOutcome::terminal_failure_empty;

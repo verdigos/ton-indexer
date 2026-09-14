@@ -116,25 +116,28 @@ void map_message(Message *m, const schema::Message &s, const std::string &owner_
 
 }  // namespace
 
+void fill_transaction_fields(Transaction &tx, const schema::Transaction &st) {
+  tx.hash = b256(st.hash);
+  tx.account = canonicalize_or_passthrough(convert::to_raw_address(st.account));
+  tx.aborted = descr_info(st.description).aborted;
+}
+
 td::Result<Trace> schema_to_trace(const std::string &trace_id,
                                   const std::vector<schema::Transaction> &txs) {
   Trace trace;
   trace.trace_id = trace_id;
   for (const auto &st : txs) {
     auto tx = std::make_unique<Transaction>();
-    tx->hash = b256(st.hash);
+    fill_transaction_fields(*tx, st);
     tx->lt = static_cast<std::int64_t>(st.lt);
     tx->now = static_cast<std::int64_t>(st.now);
     tx->mc_block_seqno = static_cast<std::int64_t>(st.mc_seqno);
-    // Same canonical-or-original path as Account values.
-    tx->account = canonicalize_or_passthrough(convert::to_raw_address(st.account));
     tx->orig_status = status_str(st.orig_status);
     tx->end_status = status_str(st.end_status);
     DescrInfo di = descr_info(st.description);
     tx->descr = di.descr;
     tx->compute_exit_code = di.exit_code;
     tx->skipped_reason = std::move(di.skipped_reason);
-    tx->aborted = di.aborted;
 
     Transaction *tx_raw = tx.get();
     if (st.in_msg) {

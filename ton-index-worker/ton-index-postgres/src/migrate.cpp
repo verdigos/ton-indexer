@@ -1228,6 +1228,15 @@ create table if not exists _blocks_classified
     mc_seqno integer not null primary key
 );
 
+create table if not exists _classifier_block_issues
+(
+    id         serial primary key,
+    mc_seqno   integer not null,
+    reason     varchar not null,
+    created_at timestamp not null default now()
+);
+create index if not exists _classifier_block_issues_mc_seqno_idx on _classifier_block_issues (mc_seqno);
+
 create table if not exists _classifier_tasks
 (
     id          serial primary key,
@@ -1593,6 +1602,32 @@ void run_1_3_1_migrations(const std::string& connection_string, bool dry_run) {
   LOG(INFO) << "Migration to version 1.3.1 completed; classifier task trigger disabled.";
 }
 
+void run_1_3_2_migrations(const std::string& connection_string, bool dry_run) {
+  const auto query = R"SQL(create table if not exists _classifier_block_issues
+(
+    id         serial primary key,
+    mc_seqno   integer not null,
+    reason     varchar not null,
+    created_at timestamp not null default now()
+);
+create index if not exists _classifier_block_issues_mc_seqno_idx on _classifier_block_issues (mc_seqno);
+)SQL" + set_version_query({1, 3, 2});
+  if (dry_run) {
+    std::cout << query << std::endl;
+    return;
+  }
+  try {
+    pqxx::connection c(connection_string);
+    pqxx::work txn(c);
+    txn.exec(query).no_rows();
+    txn.commit();
+  } catch (const std::exception &e) {
+    LOG(ERROR) << "Error while migrating database: " << e.what();
+    std::exit(1);
+  }
+  LOG(INFO) << "Migration to version 1.3.2 completed; classifier block issues table created.";
+}
+
 void create_indexes(std::string connection_string, bool dry_run) {
   try {
     pqxx::connection c(connection_string);
@@ -1820,6 +1855,11 @@ int main(int argc, char *argv[]) {
     if (rerun_last_migration || migration_needed(current_version, Version{1, 3, 1})) {
       run_1_3_1_migrations(pg_connection_string, dry_run);
       current_version = Version{1, 3, 1};
+    }
+
+    if (rerun_last_migration || migration_needed(current_version, Version{1, 3, 2})) {
+      run_1_3_2_migrations(pg_connection_string, dry_run);
+      current_version = Version{1, 3, 2};
     }
 
     // finally, we bump a version to the latest

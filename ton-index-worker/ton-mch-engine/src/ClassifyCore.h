@@ -88,7 +88,7 @@ struct TraceClassificationResult {
   std::string failure_reason;
   bool slow{false};  // Wall-clock telemetry; never changes the outcome or rows.
   // The unknown action for the whole trace; ClassifierWriter writes it instead of
-  // `rows` when PostgreSQL rejects them.
+  // `rows` when empty, rejected by PostgreSQL or unrenderable.
   Action rescue;
 };
 
@@ -167,7 +167,7 @@ struct SchemaClassifyResult {
   bool unknown_row{false};
   std::string failure_reason;
   FailureCategory failure_category{FailureCategory::none};
-  Action rescue;  // create_unknown_action of the trace; set when classification ran.
+  Action rescue;  // Built from schema transactions before classification.
 };
 
 // Trace-independent run prep computed once from the matcher table: the runnable
@@ -199,7 +199,8 @@ ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers);
 ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatcher> &matchers,
                               const ClassifySetup &setup, const LookupSource &src);
 
-// No-throw contract: exceptions become terminal outcomes with no rows.
+// Classification exceptions become terminal outcomes with no rows. Rescue
+// construction precedes classification and may throw on allocation failure.
 // History unavailability overrides the outcome while retaining computed rows.
 // `prep` is process-lifetime const and shareable across threads.
 // The interface map behind `src` is shareable iff immutable.

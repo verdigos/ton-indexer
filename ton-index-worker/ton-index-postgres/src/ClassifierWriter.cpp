@@ -4,6 +4,7 @@
 #include "td/utils/logging.h"
 
 #include <algorithm>
+#include <set>
 #include <utility>
 
 namespace mch {
@@ -25,6 +26,38 @@ constexpr auto kInsertMarker =
 constexpr auto kDeleteActions = "DELETE FROM actions WHERE trace_id = $1 AND trace_mc_seqno_end = $2";
 constexpr auto kDeleteAccounts = "DELETE FROM action_accounts WHERE trace_id = $1 AND trace_mc_seqno_end = $2";
 constexpr auto kDeleteTasks = "DELETE FROM _classifier_tasks WHERE id = ANY($1)";
+constexpr auto kInsertIssue =
+    "INSERT INTO _classifier_block_issues(mc_seqno, reason) SELECT $1::integer, $2::varchar "
+    "WHERE NOT EXISTS (SELECT 1 FROM _classifier_block_issues WHERE mc_seqno = $1 AND reason = $2)";
+constexpr auto kDeleteIssues = "DELETE FROM _classifier_block_issues WHERE mc_seqno = $1";
+
+bool recoverable_skip(TraceOutcome outcome) {
+  return outcome == TraceOutcome::history_unavailable || outcome == TraceOutcome::skipped_evicted ||
+         outcome == TraceOutcome::skipped_incomplete || outcome == TraceOutcome::skipped_missing_root;
+}
+
+std::pair<std::uint64_t, std::uint64_t> insert_capped(
+    pqxx::dbtransaction &txn, const schema::Trace &trace, const ActionRowContext &ctx) {
+  const auto rows = txn.exec(
+      "INSERT INTO actions (trace_id, action_id, type, start_lt, end_lt, start_utime, end_utime, "
+      "mc_seqno_end, trace_end_lt, trace_end_utime, trace_mc_seqno_end, trace_external_hash, "
+      "trace_external_hash_norm, tx_hashes, ancestor_type) "
+      "VALUES ($1::tonhash, $1::tonhash, 'unknown', $2::bigint, $3::bigint, $4::integer, $5::integer, "
+      "$6::integer, $3::bigint, $5::integer, $6::integer, $7::tonhash, $8::tonhash, '{}', '{}') "
+      "ON CONFLICT DO NOTHING",
+      pqxx::params{ctx.trace_id, trace.start_lt, ctx.trace_end_lt, trace.start_utime,
+                   ctx.trace_end_utime, ctx.trace_mc_seqno_end, ctx.trace_external_hash,
+                   ctx.trace_external_hash_norm}).affected_rows();
+  const auto accounts = txn.exec(
+      "INSERT INTO action_accounts(action_id, trace_id, account, trace_end_lt, action_end_lt, "
+      "trace_end_utime, trace_mc_seqno_end, action_end_utime) "
+      "SELECT DISTINCT $1::tonhash, $1::tonhash, account, $2::bigint, $3::bigint, $4::integer, $5::integer, "
+      "$6::bigint FROM transactions WHERE trace_id = $1::tonhash "
+      "ON CONFLICT DO NOTHING",
+      pqxx::params{ctx.trace_id, ctx.trace_end_lt, ctx.trace_end_lt, ctx.trace_end_utime,
+                   ctx.trace_mc_seqno_end, ctx.trace_end_utime}).affected_rows();
+  return {rows, accounts};
+}
 
 std::pair<std::uint64_t, std::uint64_t> insert_rows(
     pqxx::dbtransaction &txn, const std::vector<Action> &rows, const ActionRowContext &ctx) {
@@ -41,11 +74,18 @@ std::pair<std::uint64_t, std::uint64_t> insert_rows(
 }
 
 void insert_trace(pqxx::work &txn, const TraceClassificationResult &trace, ClassifierWriterStats &st) {
-  if (!should_persist_outcome(trace.outcome)) return;
-  const auto ctx = row_context(trace.trace);
+  const bool capped = trace.outcome == TraceOutcome::skipped_capped;
+  if (!should_persist_outcome(trace.outcome) && !capped) return;
+  if (!capped && trace.rows.empty() && trace.rescue.action_id.empty()) {
+    ++st.rescue_unset;
+    return;
+  }
+  std::string reason;
   try {
+    const auto ctx = row_context(trace.trace);
     pqxx::subtransaction sub(txn, "trace");
-    const auto [rows, accounts] = insert_rows(sub, trace.rows, ctx);
+    const auto [rows, accounts] = capped ? insert_capped(sub, trace.trace, ctx)
+        : trace.rows.empty() ? insert_rows(sub, {trace.rescue}, ctx) : insert_rows(sub, trace.rows, ctx);
     std::uint64_t failed = 0;
     if (trace.outcome == TraceOutcome::fallback || trace.outcome == TraceOutcome::terminal_failure_empty) {
       failed = sub.exec(kInsertFailure, pqxx::params{ctx.trace_id, trace.failure_reason}).affected_rows();
@@ -54,38 +94,69 @@ void insert_trace(pqxx::work &txn, const TraceClassificationResult &trace, Class
     st.rows += rows;
     st.account_rows += accounts;
     st.failed_traces += failed;
+    return;
+  } catch (const pqxx::broken_connection &) {
+    throw;
+  } catch (const pqxx::in_doubt_error &) {
+    throw;
   } catch (const pqxx::sql_error &e) {
     if (!insert_rejected(e.sqlstate())) throw;
-    std::string message = e.what();
-    message = message.substr(0, message.find_first_of("\r\n"));
-    const auto reason = "insert_rejected: " + e.sqlstate() + " " + message;
-    try {
-      pqxx::subtransaction sub(txn, "rescue");
-      const auto [rows, accounts] = insert_rows(sub, {trace.rescue}, ctx);
-      const auto failed = sub.exec(kInsertFailure, pqxx::params{ctx.trace_id, reason}).affected_rows();
-      sub.commit();
-      st.rows += rows;
-      st.account_rows += accounts;
-      st.failed_traces += failed;
-      LOG(WARNING) << "Classification insert rejected trace=" << ctx.trace_id
-                   << " sqlstate=" << e.sqlstate() << " message=" << message;
-    } catch (const pqxx::sql_error &rescue_error) {
-      if (!insert_rejected(rescue_error.sqlstate())) throw;
-      std::string rescue_message = rescue_error.what();
-      rescue_message = rescue_message.substr(0, rescue_message.find_first_of("\r\n"));
-      const auto rescue_reason = "insert_rejected_unknown: " + rescue_error.sqlstate() + " " + rescue_message;
-      st.failed_traces += txn.exec(kInsertFailure, pqxx::params{ctx.trace_id, rescue_reason}).affected_rows();
-      LOG(ERROR) << "Classification unknown insert rejected trace=" << ctx.trace_id
-                 << " sqlstate=" << rescue_error.sqlstate() << " message=" << rescue_message;
-    }
-    ++st.rejected_traces;
+    reason = "insert_rejected: " + e.sqlstate() + " " + e.what();
+  } catch (const std::exception &e) {
+    reason = std::string("insert_failed: ") + e.what();
+  }
+  reason = reason.substr(0, reason.find_first_of("\r\n"));
+  LOG(WARNING) << "Classification insert failed: " << reason;
+  ++st.rejected_traces;
+  if (!capped && trace.rescue.action_id.empty()) {
+    ++st.rescue_unset;
+    return;
+  }
+  try {
+    const auto ctx = row_context(trace.trace);
+    pqxx::subtransaction sub(txn, "rescue");
+    const auto [rows, accounts] = capped ? insert_capped(sub, trace.trace, ctx)
+                                        : insert_rows(sub, {trace.rescue}, ctx);
+    const auto failed = sub.exec(kInsertFailure, pqxx::params{ctx.trace_id, reason}).affected_rows();
+    sub.commit();
+    st.rows += rows;
+    st.account_rows += accounts;
+    st.failed_traces += failed;
+    return;
+  } catch (const pqxx::broken_connection &) {
+    throw;
+  } catch (const pqxx::in_doubt_error &) {
+    throw;
+  } catch (const pqxx::sql_error &e) {
+    if (!insert_rejected(e.sqlstate())) throw;
+    reason = "insert_rejected_unknown: " + e.sqlstate() + " " + e.what();
+  } catch (const std::exception &e) {
+    reason = std::string("insert_failed_unknown: ") + e.what();
+  }
+  ++st.rescue_rejected;
+  reason = reason.substr(0, reason.find_first_of("\r\n"));
+  LOG(ERROR) << "Classification unknown insert failed: " << reason;
+  try {
+    pqxx::subtransaction sub(txn, "failure_record");
+    const auto failed = sub.exec(kInsertFailure, pqxx::params{row_context(trace.trace).trace_id, reason}).affected_rows();
+    sub.commit();
+    st.failed_traces += failed;
+  } catch (const pqxx::broken_connection &) {
+    throw;
+  } catch (const pqxx::in_doubt_error &) {
+    throw;
+  } catch (const pqxx::sql_error &e) {
+    if (!insert_rejected(e.sqlstate())) throw;
+    LOG(ERROR) << "Classification failure record rejected: " << e.what();
+  } catch (const std::exception &e) {
+    LOG(ERROR) << "Classification failure record failed: " << e.what();
   }
 }
 
 }  // namespace
 
 bool insert_rejected(const std::string &sqlstate) {
-  return sqlstate.starts_with("22") || sqlstate.starts_with("23");
+  return sqlstate.starts_with("22") || sqlstate.starts_with("23") || sqlstate.starts_with("54");
 }
 
 void classify_lock_blocks(pqxx::work &txn, const std::vector<std::uint32_t> &seqnos) {
@@ -103,12 +174,26 @@ void classify_live_write(pqxx::work &txn, std::uint32_t mc_seqno,
     ++st.blocks_already_marked;
     return;
   }
-  for (const auto &trace : bc.traces) insert_trace(txn, trace, st);
+  std::set<TraceOutcome> issues;
+  for (const auto &trace : bc.traces) {
+    insert_trace(txn, trace, st);
+    if (recoverable_skip(trace.outcome)) issues.insert(trace.outcome);
+  }
+  if (!issues.empty()) {
+    for (const auto outcome : issues) {
+      txn.exec(kInsertIssue, pqxx::params{mc_seqno, trace_outcome_name(outcome)});
+    }
+    ++st.blocks_unmarked;
+    return;
+  }
   st.blocks_written += txn.exec(kInsertMarker, pqxx::params{mc_seqno}).affected_rows();
 }
 
 TaskWriteResult classify_task_replace(pqxx::work &txn, const TaskWrite &w, ClassifierWriterStats &st) {
   classify_lock_blocks(txn, {w.mc_seqno});
+  if (!w.whole_seqno && txn.exec(kHasMarker, pqxx::params{w.mc_seqno}).empty()) {
+    return TaskWriteResult::ineligible;
+  }
   if (!outcomes_allow_replacement(*w.bc)) return TaskWriteResult::ineligible;
   for (const auto &trace : w.bc->traces) {
     const auto ctx = row_context(trace.trace);
@@ -117,6 +202,7 @@ TaskWriteResult classify_task_replace(pqxx::work &txn, const TaskWrite &w, Class
     insert_trace(txn, trace, st);
   }
   if (w.whole_seqno) {
+    txn.exec(kDeleteIssues, pqxx::params{w.mc_seqno});
     st.blocks_written += txn.exec(kInsertMarker, pqxx::params{w.mc_seqno}).affected_rows();
   }
   txn.exec(kDeleteTasks, pqxx::params{w.task_ids});
