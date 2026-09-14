@@ -42,7 +42,7 @@ enum class FailureCategory {
 // one per admitted or rejected trace input; precedence when several apply:
 // history unavailable > classification state > rows. The first three carry
 // rows (possibly zero) and are written; every other outcome only counts.
-// Task completion accepts written outcomes and broken, capped, or lone tick-tock
+// Task replacement accepts persisted outcomes and broken, capped, or lone tick-tock
 // skips. Missing roots and other skips remain ineligible.
 //   classified / fallback / terminal_failure_empty: classify_schema_trace ran
 //     (normal rows / basic-action fallback rows / failure with nothing usable).
@@ -54,7 +54,7 @@ enum class FailureCategory {
 //     broken        — the assembler published the trace as broken;
 //     evicted       — payload dropped under memory pressure; never classified;
 //     capped        — transaction count exceeded the per-trace cap;
-//     incomplete    — collector count != assembler node count, or (task mode)
+//     incomplete    — payload buffer count != assembler node count, or (task mode)
 //                     identity / count / end mismatch against the inventory;
 //     unexpected_trace — (task mode) completed trace absent from the inventory;
 //     lone_tick_tock — the trace is exactly one tick-tock transaction; python
@@ -76,24 +76,24 @@ enum class TraceOutcome {
   skipped_lone_tick_tock,
 };
 
-constexpr bool outcome_writes_rows(TraceOutcome o) {
+constexpr bool should_persist_outcome(TraceOutcome o) {
   return o == TraceOutcome::classified || o == TraceOutcome::fallback ||
          o == TraceOutcome::terminal_failure_empty;
 }
 
-struct ClassifiedTrace {
+struct TraceClassificationResult {
   schema::Trace trace;
   TraceOutcome outcome;
   std::vector<Action> rows;
   std::string failure_reason;
   bool slow{false};  // Wall-clock telemetry; never changes the outcome or rows.
-  // The unknown action for the whole trace; the sink writes it instead of
+  // The unknown action for the whole trace; ClassifierWriter writes it instead of
   // `rows` when PostgreSQL rejects them.
   Action rescue;
 };
 
 struct BlockClassification {
-  std::vector<ClassifiedTrace> traces;
+  std::vector<TraceClassificationResult> traces;
 };
 
 struct RunReport {
@@ -102,7 +102,7 @@ struct RunReport {
   std::map<std::uint32_t, BlockClassification> blocks;
 };
 
-bool task_eligible(const BlockClassification &bc);
+bool outcomes_allow_replacement(const BlockClassification &bc);
 
 constexpr const char *trace_outcome_name(TraceOutcome o) {
   switch (o) {

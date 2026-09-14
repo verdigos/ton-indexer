@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 add_library(index-engine-core
         src/IndexScheduler.cpp
-        src/TraceCollector.cpp
+        src/TracePayloadBuffer.cpp
         src/ClassifyWorker.cpp
         src/ReplayRun.cpp
         src/TaskPlanning.cpp

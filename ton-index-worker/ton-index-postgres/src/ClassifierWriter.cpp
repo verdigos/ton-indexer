@@ -1,4 +1,4 @@
-#include "ClassifiedSink.h"
+#include "ClassifierWriter.h"
 
 #include "ActionJson.h"
 #include "td/utils/logging.h"
@@ -40,8 +40,8 @@ std::pair<std::uint64_t, std::uint64_t> insert_rows(
   return {row_count, account_count};
 }
 
-void insert_trace(pqxx::work &txn, const ClassifiedTrace &trace, LiveSinkStats &st) {
-  if (!outcome_writes_rows(trace.outcome)) return;
+void insert_trace(pqxx::work &txn, const TraceClassificationResult &trace, ClassifierWriterStats &st) {
+  if (!should_persist_outcome(trace.outcome)) return;
   const auto ctx = row_context(trace.trace);
   try {
     pqxx::subtransaction sub(txn, "trace");
@@ -98,7 +98,7 @@ void classify_lock_blocks(pqxx::work &txn, const std::vector<std::uint32_t> &seq
 }
 
 void classify_live_write(pqxx::work &txn, std::uint32_t mc_seqno,
-                         const BlockClassification &bc, LiveSinkStats &st) {
+                         const BlockClassification &bc, ClassifierWriterStats &st) {
   if (!txn.exec(kHasMarker, pqxx::params{mc_seqno}).empty()) {
     ++st.blocks_already_marked;
     return;
@@ -107,9 +107,9 @@ void classify_live_write(pqxx::work &txn, std::uint32_t mc_seqno,
   st.blocks_written += txn.exec(kInsertMarker, pqxx::params{mc_seqno}).affected_rows();
 }
 
-TaskWriteResult classify_task_replace(pqxx::work &txn, const TaskWrite &w, LiveSinkStats &st) {
+TaskWriteResult classify_task_replace(pqxx::work &txn, const TaskWrite &w, ClassifierWriterStats &st) {
   classify_lock_blocks(txn, {w.mc_seqno});
-  if (!task_eligible(*w.bc)) return TaskWriteResult::ineligible;
+  if (!outcomes_allow_replacement(*w.bc)) return TaskWriteResult::ineligible;
   for (const auto &trace : w.bc->traces) {
     const auto ctx = row_context(trace.trace);
     txn.exec(kDeleteActions, pqxx::params{ctx.trace_id, w.mc_seqno});

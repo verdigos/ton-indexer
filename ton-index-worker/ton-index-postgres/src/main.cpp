@@ -15,7 +15,7 @@
 #include "InsertManagerPostgres.h"
 #include "KvrocksClient.h"
 #include "TraceAssembler.h"
-#include "TaskRunner.h"
+#include "ClassificationTaskRunner.h"
 
 #include <atomic>
 #include <charconv>
@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
   td::actor::ActorOwn<InsertManagerPostgres> insert_manager_;
   td::actor::ActorOwn<IndexScheduler> index_scheduler_;
   td::actor::ActorOwn<FailoverWatchdog> failover_watchdog_;
-  td::actor::ActorOwn<TaskRunner> task_runner_;
+  td::actor::ActorOwn<ClassificationTaskRunner> task_runner_;
 
   // options
   td::uint32 threads = 7;
@@ -506,7 +506,7 @@ int main(int argc, char *argv[]) {
   };
   mch_uint_option("mch-workers", "Classification workers (default: 4)", [&](std::uint64_t v) { mch_policy.workers = static_cast<std::uint32_t>(v); });
   mch_uint_option("mch-trace-cap", "Per-trace transaction cap (default: 4000)", [&](std::uint64_t v) { mch_policy.trace_cap = v; });
-  mch_uint_option("mch-job-timeout", "Seconds after which a classification is logged as slow (default: 5)", [&](std::uint64_t v) { mch_policy.job_timeout_s = static_cast<double>(v); });
+  mch_uint_option("mch-slow-job-threshold", "Seconds after which a classification is logged as slow (default: 5)", [&](std::uint64_t v) { mch_policy.slow_job_threshold_s = static_cast<double>(v); });
   mch_uint_option("mch-rss-budget-gb", "Process RSS budget in GiB; live evicts pending trace payloads, task aborts (default: 16)", [&](std::uint64_t v) { mch_policy.rss_budget_bytes = v << 30; });
 
   p.add_option('\0', "mch-task-mode", "Replay and replace explicit classifier tasks", [&]() {
@@ -588,7 +588,7 @@ int main(int argc, char *argv[]) {
       return 2;
     }
     try {
-      const auto rows = TaskRunner::enqueue_range(credential.get_connection_string(), *enqueue_from, to.ok());
+      const auto rows = ClassificationTaskRunner::enqueue_range(credential.get_connection_string(), *enqueue_from, to.ok());
       LOG(INFO) << "Enqueued " << rows << " classifier tasks";
       return 0;
     } catch (const std::exception &e) {
@@ -715,7 +715,7 @@ int main(int argc, char *argv[]) {
     }
     LOG(INFO) << "In-process classification enabled: workers=" << mch_policy.workers
               << " trace_cap=" << mch_policy.trace_cap
-              << " job_timeout_s=" << mch_policy.job_timeout_s
+              << " slow_job_threshold_s=" << mch_policy.slow_job_threshold_s
               << " rss_budget_bytes=" << mch_policy.rss_budget_bytes;
   }
   if (mch_task_mode) {
@@ -727,7 +727,7 @@ int main(int argc, char *argv[]) {
         }
         finish_requested->store(true);
       });
-      task_runner_ = td::actor::create_actor<TaskRunner>(
+      task_runner_ = td::actor::create_actor<ClassificationTaskRunner>(
           "mch-tasks", credential.get_connection_string(), working_dir, db_scanner_.get(), parse_manager_.get(),
           mch_policy, mch_prep, mch_task_once, mch_task_poll, std::move(done));
     });

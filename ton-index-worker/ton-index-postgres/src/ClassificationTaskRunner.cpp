@@ -1,4 +1,4 @@
-#include "TaskRunner.h"
+#include "ClassificationTaskRunner.h"
 
 #include "InsertManagerPostgres.h"
 #include "version.h"
@@ -47,7 +47,7 @@ const char *refusal_name(mch::TaskPlanRefusal reason) {
 
 }  // namespace
 
-std::uint64_t TaskRunner::enqueue_range(const std::string &connection_string, std::uint32_t from, std::uint32_t to) {
+std::uint64_t ClassificationTaskRunner::enqueue_range(const std::string &connection_string, std::uint32_t from, std::uint32_t to) {
   if (from == 0 || from > to || to >= INT32_MAX) throw std::runtime_error("Invalid task range");
   pqxx::connection c(connection_string);
   pqxx::work txn(c);
@@ -61,7 +61,7 @@ std::uint64_t TaskRunner::enqueue_range(const std::string &connection_string, st
   return count;
 }
 
-void TaskRunner::start_up() {
+void ClassificationTaskRunner::start_up() {
   try {
     const auto version = get_current_db_version(connection_string_);
     if (!version || !(*version == latest_version)) {
@@ -74,12 +74,12 @@ void TaskRunner::start_up() {
   }
 }
 
-void TaskRunner::alarm() {
+void ClassificationTaskRunner::alarm() {
   if (pending_.empty()) claim();
   else prepare_run();
 }
 
-void TaskRunner::claim() {
+void ClassificationTaskRunner::claim() {
   try {
     pqxx::connection c(connection_string_);
     pqxx::work txn(c);
@@ -146,7 +146,7 @@ void TaskRunner::claim() {
   }
 }
 
-void TaskRunner::prepare_run() {
+void ClassificationTaskRunner::prepare_run() {
   const auto &run = pending_.front();
   try {
     pqxx::connection c(connection_string_);
@@ -169,7 +169,7 @@ void TaskRunner::prepare_run() {
     const auto live = frontier[0][0].as<std::uint32_t>();
     input_ = mch::TaskPlanInput{run.from, run.to, std::move(inventory), 0, partitioned, live, run.trace_filter};
     auto promise = td::PromiseCreator::lambda([self = actor_id(this)](td::Result<ton::BlockSeqno> oldest) {
-      td::actor::send_closure(self, &TaskRunner::oldest_received, std::move(oldest));
+      td::actor::send_closure(self, &ClassificationTaskRunner::oldest_received, std::move(oldest));
     });
     td::actor::send_closure(scanner_, &DbScanner::get_oldest_mc_seqno, std::move(promise));
   } catch (const std::exception &e) {
@@ -180,7 +180,7 @@ void TaskRunner::prepare_run() {
   }
 }
 
-void TaskRunner::oldest_received(td::Result<ton::BlockSeqno> oldest) {
+void ClassificationTaskRunner::oldest_received(td::Result<ton::BlockSeqno> oldest) {
   const auto &run = pending_.front();
   if (oldest.is_error()) {
     ++refusals_[static_cast<std::size_t>(mch::TaskPlanRefusal::history_unavailable)];
@@ -204,7 +204,7 @@ void TaskRunner::oldest_received(td::Result<ton::BlockSeqno> oldest) {
     std::filesystem::create_directories(run_dir_);
     plan.run.state_dir = run_dir_;
     auto promise = td::PromiseCreator::lambda([self = actor_id(this)](td::Result<mch::RunReport> report) {
-      td::actor::send_closure(self, &TaskRunner::run_finished, std::move(report));
+      td::actor::send_closure(self, &ClassificationTaskRunner::run_finished, std::move(report));
     });
     scheduler_ = td::actor::create_actor<IndexScheduler>(
         "taskrun-" + std::to_string(run.from) + "-" + std::to_string(run.to), scanner_,
@@ -218,7 +218,7 @@ void TaskRunner::oldest_received(td::Result<ton::BlockSeqno> oldest) {
   }
 }
 
-void TaskRunner::run_finished(td::Result<mch::RunReport> result) {
+void ClassificationTaskRunner::run_finished(td::Result<mch::RunReport> result) {
   const auto &run = pending_.front();
   if (result.is_error()) {
     ++run_errors_;
@@ -245,10 +245,10 @@ void TaskRunner::run_finished(td::Result<mch::RunReport> result) {
       mch::validate_against_inventory(bc, inventory);
       pqxx::connection c(connection_string_);
       pqxx::work txn(c);
-      auto stats = sink_stats_;
+      auto stats = writer_stats_;
       if (mch::classify_task_replace(txn, {k, &bc, whole_seqno, ids}, stats) == mch::TaskWriteResult::done) {
         txn.commit();
-        sink_stats_ = stats;
+        writer_stats_ = stats;
         ++seqnos_done_;
         for (const auto id : ids) attempts_.erase(id);
       } else {
@@ -265,7 +265,7 @@ void TaskRunner::run_finished(td::Result<mch::RunReport> result) {
   finish_run();
 }
 
-void TaskRunner::defer(const std::vector<std::int32_t> &ids, bool refused) {
+void ClassificationTaskRunner::defer(const std::vector<std::int32_t> &ids, bool refused) {
   try {
     pqxx::connection c(connection_string_);
     pqxx::work txn(c);
@@ -280,7 +280,7 @@ void TaskRunner::defer(const std::vector<std::int32_t> &ids, bool refused) {
   }
 }
 
-void TaskRunner::finish_run() {
+void ClassificationTaskRunner::finish_run() {
   scheduler_.reset();
   if (!run_dir_.empty()) {
     std::error_code error;
@@ -293,13 +293,13 @@ void TaskRunner::finish_run() {
   alarm_timestamp() = td::Timestamp::now();
 }
 
-void TaskRunner::print_stats() {
+void ClassificationTaskRunner::print_stats() {
   LOG(INFO) << "MCH tasks: runs=" << runs_ << " seqnos_done=" << seqnos_done_
             << " seqnos_ineligible=" << seqnos_ineligible_ << " malformed=" << malformed_
             << " missing_metadata=" << missing_metadata_ << " run_errors=" << run_errors_
             << " no_partition=" << refusals_[static_cast<std::size_t>(mch::TaskPlanRefusal::no_partition)]
             << " inside_live_window=" << refusals_[static_cast<std::size_t>(mch::TaskPlanRefusal::inside_live_window)]
             << " history_unavailable=" << refusals_[static_cast<std::size_t>(mch::TaskPlanRefusal::history_unavailable)]
-            << " rows=" << sink_stats_.rows << " account_rows=" << sink_stats_.account_rows
-            << " rejected=" << sink_stats_.rejected_traces;
+            << " rows=" << writer_stats_.rows << " account_rows=" << writer_stats_.account_rows
+            << " rejected=" << writer_stats_.rejected_traces;
 }

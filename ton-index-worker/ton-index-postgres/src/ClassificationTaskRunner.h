@@ -1,18 +1,21 @@
 #pragma once
 
-#include "ClassifiedSink.h"
+#include "ClassifierWriter.h"
 #include "IndexScheduler.h"
 #include "TaskPlanning.h"
 
 #include <array>
 #include <deque>
 
-class TaskRunner : public td::actor::Actor {
+// Claims `_classifier_tasks` rows, replays their seqno window through a task-mode
+// ReplayRun and replaces the rows via ClassifierWriter; deferred with backoff on
+// refusal or error.
+class ClassificationTaskRunner : public td::actor::Actor {
  public:
-  TaskRunner(std::string connection_string, std::string working_dir,
-             td::actor::ActorId<DbScanner> scanner, td::actor::ActorId<ParseManager> parser,
-             mch::ClassifyPolicy policy, std::shared_ptr<const mch::MchEnginePrep> prep,
-             bool once, double poll_seconds, td::Promise<td::Unit> done)
+  ClassificationTaskRunner(std::string connection_string, std::string working_dir,
+                           td::actor::ActorId<DbScanner> scanner, td::actor::ActorId<ParseManager> parser,
+                           mch::ClassifyPolicy policy, std::shared_ptr<const mch::MchEnginePrep> prep,
+                           bool once, double poll_seconds, td::Promise<td::Unit> done)
       : connection_string_(std::move(connection_string)), working_dir_(std::move(working_dir)),
         scanner_(scanner), parser_(parser), policy_(policy), prep_(std::move(prep)),
         once_(once), poll_seconds_(poll_seconds), done_(std::move(done)) {}
@@ -44,5 +47,5 @@ class TaskRunner : public td::actor::Actor {
   std::map<std::int32_t, unsigned> attempts_;
   std::uint64_t runs_{0}, seqnos_done_{0}, seqnos_ineligible_{0}, malformed_{0}, missing_metadata_{0}, run_errors_{0};
   std::array<std::uint64_t, 4> refusals_{};
-  mch::LiveSinkStats sink_stats_;
+  mch::ClassifierWriterStats writer_stats_;
 };

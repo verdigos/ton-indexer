@@ -1,11 +1,11 @@
-#include "TraceCollector.h"
+#include "TracePayloadBuffer.h"
 
 #include <algorithm>
 #include <utility>
 
 namespace mch {
 namespace {
-void free_payload(TraceCollector::Counters &counters, auto &entry) {
+void free_payload(TracePayloadBuffer::Counters &counters, auto &entry) {
   counters.buffered_txs -= entry.txs.size();
   counters.buffered_memo_accounts -= entry.memo.size();
   entry.txs.clear();
@@ -14,7 +14,7 @@ void free_payload(TraceCollector::Counters &counters, auto &entry) {
 }
 }  // namespace
 
-std::vector<ClassifyInput> TraceCollector::add_block(std::uint32_t mc_seqno, const ParsedBlock &block) {
+std::vector<ClassifyInput> TracePayloadBuffer::add_block(std::uint32_t mc_seqno, const ParsedBlock &block) {
   for (const auto &shard_block : block.blocks_) {
     for (const auto &tx : shard_block.transactions) {
       auto &entry = entries_[tx.trace_id];
@@ -98,7 +98,7 @@ std::vector<ClassifyInput> TraceCollector::add_block(std::uint32_t mc_seqno, con
   return inputs;
 }
 
-void TraceCollector::seed(const td::Bits256 &trace_id, TraceOutcome outcome) {
+void TracePayloadBuffer::seed(const td::Bits256 &trace_id, TraceOutcome outcome) {
   auto &entry = entries_[trace_id];
   free_payload(counters_, entry);
   entry.sticky = outcome;
@@ -106,7 +106,7 @@ void TraceCollector::seed(const td::Bits256 &trace_id, TraceOutcome outcome) {
   counters_.peak_entries = std::max(counters_.peak_entries, counters_.entries);
 }
 
-std::size_t TraceCollector::retain_pending(const std::vector<td::Bits256> &sorted_ids) {
+std::size_t TracePayloadBuffer::retain_pending(const std::vector<td::Bits256> &sorted_ids) {
   std::size_t erased = 0;
   for (auto it = entries_.begin(); it != entries_.end();) {
     if (!it->second.sticky && !std::binary_search(sorted_ids.begin(), sorted_ids.end(), it->first)) {
@@ -122,7 +122,7 @@ std::size_t TraceCollector::retain_pending(const std::vector<td::Bits256> &sorte
   return erased;
 }
 
-std::size_t TraceCollector::evict(std::size_t target_txs) {
+std::size_t TracePayloadBuffer::evict(std::size_t target_txs) {
   std::vector<std::pair<std::size_t, const td::Bits256 *>> victims;
   victims.reserve(entries_.size());
   for (const auto &[id, entry] : entries_) {

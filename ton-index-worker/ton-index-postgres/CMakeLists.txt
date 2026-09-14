@@ -4,8 +4,8 @@ add_executable(ton-index-postgres
     src/main.cpp
     src/FailoverWatchdog.cpp
     src/InsertManagerPostgres.cpp
-    src/ClassifiedSink.cpp
-    src/TaskRunner.cpp
+    src/ClassifierWriter.cpp
+    src/ClassificationTaskRunner.cpp
     src/KvrocksClient.cpp
     src/KvrocksProgress.cpp
     src/PartitionManagerPostgres.cpp

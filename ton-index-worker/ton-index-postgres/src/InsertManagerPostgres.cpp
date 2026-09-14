@@ -3,7 +3,7 @@
 #include "td/utils/base64.h"
 #include "td/utils/misc.h"
 #include "InsertManagerPostgres.h"
-#include "ClassifiedSink.h"
+#include "ClassifierWriter.h"
 #include "convert-utils.h"
 #include "Statistics.h"
 #include "version.h"
@@ -3083,7 +3083,7 @@ void InsertBatchPostgres::commit_prepared_batch() {
   std::stable_sort(classifications.begin(), classifications.end(), [](const auto &a, const auto &b) {
     return a.first < b.first;
   });
-  mch::LiveSinkStats classify_stats;
+  mch::ClassifierWriterStats classify_stats;
   if (disable_progress_advance_) {
     txn.exec0("SET LOCAL ton_indexer.advance_progress = 'off'");
   }

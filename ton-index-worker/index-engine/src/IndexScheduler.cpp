@@ -157,7 +157,7 @@ const ton::BlockSeqno FIRST_INDEXABLE_MC_SEQNO = 1;
 //   progress row exists so the Postgres trigger can keep advancing it.
 // - Masterchain seqno 0 is not readable from the node DB, so all starts are
 //   clamped to FIRST_INDEXABLE_MC_SEQNO.
-// - Live ReplayRun restores an assembler snapshot and warms the collector from retained history.
+// - Live ReplayRun restores an assembler snapshot and warms the payload buffer from retained history.
 // - Without ReplayRun, --prewarm controls how far TraceAssembler may move the start
 //   point backwards. If no suitable state exists, the assembler is reset and
 //   the same bounded fallback is used.
@@ -339,7 +339,7 @@ void IndexScheduler::process_replay_snapshot(std::uint32_t N, std::uint32_t C1, 
     if (!warmup_until_) {
         if (snap) {
             td::actor::send_closure(trace_assembler_, &TraceAssembler::install_preloaded);
-            for (const auto &id : warmup_seeds_) collector_->seed(id, mch::TraceOutcome::skipped_capped);
+            for (const auto &id : warmup_seeds_) payload_buffer_->seed(id, mch::TraceOutcome::skipped_capped);
             warmup_seeds_.clear();
         }
         td::actor::send_closure(trace_assembler_, &TraceAssembler::start_persisting,
@@ -391,7 +391,7 @@ void IndexScheduler::start_from_seqno(ton::BlockSeqno seqno, bool reset_trace_as
     if (reset_trace_assembler) {
         td::actor::send_closure(trace_assembler_, &TraceAssembler::reset_state);
         if (run_) {
-            collector_.emplace(run_->policy);
+            payload_buffer_.emplace(run_->policy);
             classify_outcomes_.clear();
             block_results_.clear();
             run_report_ = {};
@@ -630,7 +630,7 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
     LOG(DEBUG) << "Assembled traces for seqno " << mc_seqno;
     finish_seqno_otel_stage(mc_seqno);
     std::vector<mch::ClassifyInput> jobs;
-    if (collector_) {
+    if (payload_buffer_) {
         start_seqno_otel_stage(mc_seqno, "classify");
         auto memory = td::mem_stat();
         if (memory.is_error()) {
@@ -638,7 +638,7 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
             return;
         }
         if (memory.ok().resident_size_ > run_->policy.rss_budget_bytes) {
-            const auto &c = collector_->counters();
+            const auto &c = payload_buffer_->counters();
             if (run_->mode == mch::RunMode::task) {
                 LOG(ERROR) << "Classification RSS budget exceeded seqno=" << mc_seqno
                            << " rss=" << memory.ok().resident_size_ << " budget=" << run_->policy.rss_budget_bytes
@@ -653,13 +653,13 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
             const auto before = c.buffered_txs;
             if (before == 0) {
                 if (rss_over_budget_blocks_++ % 100 == 0) {
-                    LOG(ERROR) << "RSS budget exceeded with an empty collector seqno=" << mc_seqno
+                    LOG(ERROR) << "RSS budget exceeded with an empty payload buffer seqno=" << mc_seqno
                                << " rss=" << memory.ok().resident_size_
                                << " budget=" << run_->policy.rss_budget_bytes
                                << "; eviction cannot help, memory is held elsewhere";
                 }
             } else {
-                const auto evicted = collector_->evict(before / 2 + 1);
+                const auto evicted = payload_buffer_->evict(before / 2 + 1);
                 LOG(ERROR) << "Classification RSS budget exceeded seqno=" << mc_seqno
                            << " rss=" << memory.ok().resident_size_ << " budget=" << run_->policy.rss_budget_bytes
                            << " entries=" << c.entries << " buffered_txs=" << c.buffered_txs
@@ -670,7 +670,7 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
                            << "; evicted=" << evicted << " buffered_txs " << before << " -> " << c.buffered_txs;
             }
         }
-        auto inputs = collector_->add_block(mc_seqno, *parsed_block);
+        auto inputs = payload_buffer_->add_block(mc_seqno, *parsed_block);
         for (auto &input : inputs) {
             if (input.trace.mc_seqno_end < run_->classify_from || input.trace.mc_seqno_end > run_->classify_to ||
                 (run_->classify_filter && input.trace.trace_id != *run_->classify_filter)) {
@@ -700,7 +700,7 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
     for (auto &input : jobs) {
         auto promise = td::PromiseCreator::lambda(
             [SelfId = actor_id(this), mc_seqno, original = input.trace, done = guard.get_promise()]
-            (td::Result<mch::ClassifiedTrace> result) mutable {
+            (td::Result<mch::TraceClassificationResult> result) mutable {
                 td::actor::send_closure(SelfId, &IndexScheduler::seqno_trace_classified,
                                         mc_seqno, std::move(original), std::move(result), std::move(done));
             });
@@ -715,7 +715,7 @@ void IndexScheduler::seqno_traces_assembled(std::uint32_t mc_seqno, ParsedBlockP
 }
 
 void IndexScheduler::seqno_trace_classified(std::uint32_t mc_seqno, schema::Trace original,
-                                            td::Result<mch::ClassifiedTrace> result,
+                                            td::Result<mch::TraceClassificationResult> result,
                                             td::Promise<td::Unit> promise) try {
     if (result.is_error()) {
         if (run_ && run_->mode == mch::RunMode::task) {
@@ -726,7 +726,7 @@ void IndexScheduler::seqno_trace_classified(std::uint32_t mc_seqno, schema::Trac
         auto error = result.move_as_error();
         LOG(ERROR) << "Classification worker error seqno=" << mc_seqno
                    << " trace=" << td::base64_encode(original.trace_id.as_slice()) << ": " << error;
-        result = mch::ClassifiedTrace{std::move(original), mch::TraceOutcome::skipped_incomplete,
+        result = mch::TraceClassificationResult{std::move(original), mch::TraceOutcome::skipped_incomplete,
                                       {}, error.message().str()};
     }
     auto trace = result.move_as_ok();
@@ -881,11 +881,11 @@ void IndexScheduler::maybe_finish_warmup() {
     warmup_until_ = 0;
     td::actor::send_closure(trace_assembler_, &TraceAssembler::set_expected_seqno, S + 1);
     td::actor::send_closure(trace_assembler_, &TraceAssembler::install_preloaded);
-    const auto orphans = collector_->retain_pending(warmup_pending_ids_);
-    for (const auto &id : warmup_seeds_) collector_->seed(id, mch::TraceOutcome::skipped_capped);
+    const auto orphans = payload_buffer_->retain_pending(warmup_pending_ids_);
+    for (const auto &id : warmup_seeds_) payload_buffer_->seed(id, mch::TraceOutcome::skipped_capped);
     td::actor::send_closure(trace_assembler_, &TraceAssembler::start_persisting,
         static_cast<ton::BlockSeqno>(std::max(contiguous_indexed_seqno_, 0)));
-    const auto &c = collector_->counters();
+    const auto &c = payload_buffer_->counters();
     LOG(INFO) << "Warmup complete: snapshot=" << S << " scan_from=" << warmup_scan_from_
               << " depth=" << (S - warmup_scan_from_ + 1) << " healthy=" << snapshot_healthy_
               << " seeds=" << warmup_seeds_.size() << " orphans=" << orphans
@@ -909,7 +909,7 @@ void IndexScheduler::maybe_finish_run() {
     }
     if (run_ && run_->mode == mch::RunMode::task) {
         print_stats();
-        collector_.reset();
+        payload_buffer_.reset();
         run_report_.outcomes = std::move(classify_outcomes_);
         run_report_.suppressed = suppressed_;
         run_done_.set_result(std::move(run_report_));
@@ -942,8 +942,8 @@ void IndexScheduler::print_stats() {
     if (!db_event_fifo_path_.empty()) {
         sb << (mc_applied_events_fresh() ? "\tev[ok]" : "\tev[stale]");
     }
-    if (collector_) {
-        const auto &c = collector_->counters();
+    if (payload_buffer_) {
+        const auto &c = payload_buffer_->counters();
         sb << "\tcollector[entries=" << c.entries << " buffered_txs=" << c.buffered_txs
            << " buffered_memo=" << c.buffered_memo_accounts
            << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted

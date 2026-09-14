@@ -1,7 +1,7 @@
 // Parameters of one classification replay run and the policy constants it
 // obeys. A run drives the scanner pipeline over an inclusive seqno window,
 // classifies every trace that completes inside [classify_from, classify_to]
-// and hands rows to the sink chosen by `mode`. Live mode inserts; task mode
+// and hands rows to the writer chosen by `mode`. Live mode inserts; task mode
 // replaces rows per completion seqno. One controller and one assembler per
 // run; an aborted run is destroyed, never resumed.
 //
@@ -32,7 +32,7 @@ struct ClassifyPolicy {
   std::uint32_t workers = 4;
   // Per-job wall-clock warning threshold; slow jobs retain their outcome and rows.
   // Wall-clock cutoffs would make replay nondeterministic.
-  double job_timeout_s = 5.0;
+  double slow_job_threshold_s = 5.0;
   // Process RSS budget; live evicts pending trace payloads, task aborts (default: 16 GiB).
   std::uint64_t rss_budget_bytes = std::uint64_t{16} << 30;
   // Task mode: most seqnos claimed by one worker in one claim transaction.

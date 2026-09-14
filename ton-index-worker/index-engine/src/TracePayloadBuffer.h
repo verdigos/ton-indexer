@@ -19,9 +19,13 @@ struct ClassifyInput {
   std::optional<TraceOutcome> skipped;
 };
 
-class TraceCollector {
+// Holds the transactions and interface data of every pending trace until the
+// assembler reports the trace terminal, then hands the payload to a classifier
+// worker as one ClassifyInput. Payloads are the only per-trace memory the live
+// run keeps; the RSS budget evicts them, snapshots seed them.
+class TracePayloadBuffer {
  public:
-  explicit TraceCollector(const ClassifyPolicy &policy) : policy_(policy) {}
+  explicit TracePayloadBuffer(const ClassifyPolicy &policy) : policy_(policy) {}
 
   // Feed assembled blocks in masterchain order; drain terminal traces.
   std::vector<ClassifyInput> add_block(std::uint32_t mc_seqno, const ParsedBlock &block);
