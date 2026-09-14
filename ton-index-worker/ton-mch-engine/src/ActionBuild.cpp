@@ -1,7 +1,6 @@
 #include "ActionBuild.h"
 
 #include "MsgParse.h"
-#include "SchemaTraceLoader.h"
 
 #include "td/utils/base64.h"
 #include "td/utils/crypto.h"
@@ -1722,21 +1721,6 @@ bool build_action(const ActionRow &row, Action &a) {
   return true;
 }
 
-Action create_unknown_action(const std::string &trace_id, const std::vector<schema::Transaction> &txs) {
-  Trace trace;
-  trace.trace_id = trace_id;
-  for (const auto &st : txs) {
-    auto tx = std::make_unique<Transaction>();
-    fill_transaction_fields(*tx, st);
-    tx->lt = static_cast<std::int64_t>(st.lt);
-    tx->now = static_cast<std::int64_t>(st.now);
-    tx->mc_block_seqno = static_cast<std::int64_t>(st.mc_seqno);
-    trace.transactions.push_back(std::move(tx));
-  }
-  fill_trace_aggregates(trace);
-  return create_unknown_action(trace);
-}
-
 Action create_unknown_action(const Trace &trace) {
   Action a;
   a.type = "unknown";
@@ -1758,7 +1742,7 @@ Action create_unknown_action(const Trace &trace) {
   a.success = !failed;
   // Sorted for determinism; consumers and A/B comparators sort anyway.
   std::sort(a.tx_hashes.begin(), a.tx_hashes.end());
-  if (a.tx_hashes.size() > 64) a.tx_hashes.resize(64);
+  a.tx_hashes.erase(std::unique(a.tx_hashes.begin(), a.tx_hashes.end()), a.tx_hashes.end());
   a.accounts.assign(accts.begin(), accts.end());
   return a;
 }

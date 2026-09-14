@@ -15,6 +15,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <new>
 #include <optional>
 #include <sstream>
 #include <string_view>
@@ -3165,12 +3166,17 @@ constexpr auto kClassificationLockTimeout = "SET LOCAL lock_timeout = '10s'";
 void InsertBatchPostgres::write_classifications(pqxx::connection &c,
     const std::vector<std::pair<std::uint32_t, const mch::BlockClassification *>> &classifications) {
   const auto record_failure = [&](const char *what) {
+    LOG(ERROR) << "Classification write failed: seqnos=" << classifications.front().first
+               << ".." << classifications.back().first << " count=" << classifications.size()
+               << " " << what;
     try {
       std::string reason(what);
       reason = reason.substr(0, reason.find_first_of("\r\n"));
-      LOG(ERROR) << "Classification write failed: " << reason;
       reason = "action_write_failed: " + reason.substr(0, 200);
-      pqxx::work txn(c);
+      pqxx::connection failure_connection(connection_string_);
+      pqxx::work txn(failure_connection);
+      txn.exec(kClassificationStatementTimeout);
+      txn.exec(kClassificationLockTimeout);
       for (const auto &[seqno, classification] : classifications) {
         mch::record_block_issue(txn, seqno, reason);
       }
@@ -3190,7 +3196,25 @@ void InsertBatchPostgres::write_classifications(pqxx::connection &c,
     mch::classify_lock_blocks(txn, seqnos);
     mch::ClassifierWriterStats st;
     for (const auto &[seqno, classification] : classifications) {
-      mch::classify_live_write(txn, seqno, *classification, st);
+      const auto before = st;
+      try {
+        pqxx::subtransaction sub(txn, "classification");
+        mch::classify_live_write(sub, seqno, *classification, st);
+        sub.commit();
+      } catch (const pqxx::broken_connection &) {
+        throw;
+      } catch (const pqxx::in_doubt_error &) {
+        throw;
+      } catch (const std::bad_alloc &) {
+        throw;
+      } catch (const std::exception &e) {
+        std::string reason(e.what());
+        reason = "action_write_failed: " + reason.substr(0, reason.find_first_of("\r\n")).substr(0, 200);
+        mch::record_block_issue(txn, seqno, reason);
+        LOG(ERROR) << "Classification write failed: seqno=" << seqno << " " << reason;
+        st = before;
+        ++st.blocks_unmarked;
+      }
     }
     if (!no_leader_) {
       ensure_still_leader(txn, worker_id_);

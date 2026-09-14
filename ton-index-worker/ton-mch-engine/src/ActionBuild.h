@@ -9,8 +9,6 @@
 #include <string>
 #include <vector>
 
-namespace schema { struct Transaction; }
-
 namespace mch {
 
 // Single source for the struct, serializer table, scrub, and renderer.
@@ -119,8 +117,7 @@ void fill_evaa_liquidate(const Value &data, Action &action);
 // trace id, which on the emulated path is also the Redis trace key. The
 // lt/utime/mc_seqno_end range comes from the Trace, so every loader must
 // populate those fields; see TraceLoader.h.
-// Also used as the writer rescue; keeps the first 64 sorted transaction hashes.
+// Also used as the writer rescue; keeps all sorted distinct transaction hashes.
 Action create_unknown_action(const Trace &trace);
-Action create_unknown_action(const std::string &trace_id, const std::vector<schema::Transaction> &txs);
 
 }  // namespace mch

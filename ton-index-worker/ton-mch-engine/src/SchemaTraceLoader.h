@@ -10,6 +10,7 @@
 // edges are not needed.
 #pragma once
 
+#include "ActionBuild.h"
 #include "TraceLoader.h"
 
 #include "IndexData.h"  // schema::Transaction (tondb-scanner, PUBLIC include)
@@ -21,8 +22,11 @@
 
 namespace mch {
 
-// Hash, canonical account and aborted status used by the loader and rescue.
+// Hash, canonical account and aborted status for a schema transaction.
 void fill_transaction_fields(Transaction &tx, const schema::Transaction &st);
+
+// Rescue row with all sorted distinct hashes, without constructing a Trace.
+Action create_unknown_action(const std::string &trace_id, const std::vector<schema::Transaction> &txs);
 
 // Map a trace's schema::Transactions -> the engine Trace (transactions only;
 // `interfaces` is the LookupSource's concern, filled separately). Field map is

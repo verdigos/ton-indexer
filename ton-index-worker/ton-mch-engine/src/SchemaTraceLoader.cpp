@@ -4,6 +4,8 @@
 
 #include "td/utils/base64.h"
 
+#include <algorithm>
+#include <set>
 #include <variant>
 
 namespace mch {
@@ -120,6 +122,32 @@ void fill_transaction_fields(Transaction &tx, const schema::Transaction &st) {
   tx.hash = b256(st.hash);
   tx.account = canonicalize_or_passthrough(convert::to_raw_address(st.account));
   tx.aborted = descr_info(st.description).aborted;
+}
+
+Action create_unknown_action(const std::string &trace_id, const std::vector<schema::Transaction> &txs) {
+  Action a;
+  a.type = "unknown";
+  a.action_id = trace_id;
+  std::set<std::string> accounts;
+  bool first = true;
+  for (const auto &tx : txs) {
+    a.tx_hashes.push_back(b256(tx.hash));
+    accounts.insert(canonicalize_or_passthrough(convert::to_raw_address(tx.account)));
+    if (descr_info(tx.description).aborted) a.success = false;
+    const auto lt = static_cast<std::int64_t>(tx.lt);
+    const auto utime = static_cast<std::int64_t>(tx.now);
+    const auto seqno = static_cast<std::int64_t>(tx.mc_seqno);
+    a.start_lt = first ? lt : std::min(a.start_lt, lt);
+    a.end_lt = first ? lt : std::max(a.end_lt, lt);
+    a.start_utime = first ? utime : std::min(a.start_utime, utime);
+    a.end_utime = first ? utime : std::max(a.end_utime, utime);
+    a.mc_seqno_end = first ? seqno : std::max(a.mc_seqno_end, seqno);
+    first = false;
+  }
+  std::sort(a.tx_hashes.begin(), a.tx_hashes.end());
+  a.tx_hashes.erase(std::unique(a.tx_hashes.begin(), a.tx_hashes.end()), a.tx_hashes.end());
+  a.accounts.assign(accounts.begin(), accounts.end());
+  return a;
 }
 
 td::Result<Trace> schema_to_trace(const std::string &trace_id,
