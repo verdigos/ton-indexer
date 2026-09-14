@@ -891,7 +891,7 @@ void IndexScheduler::maybe_finish_warmup() {
               << " seeds=" << warmup_seeds_.size() << " orphans=" << orphans
               << " no_insert_below=" << run_->no_insert_below
               << " classify_from=" << run_->classify_from
-              << " collector_entries=" << c.entries << " buffered_txs=" << c.buffered_txs;
+              << " payload_buffer_entries=" << c.entries << " buffered_txs=" << c.buffered_txs;
     warmup_seeds_.clear();
     warmup_seeds_.shrink_to_fit();
     warmup_pending_ids_.clear();
@@ -944,7 +944,7 @@ void IndexScheduler::print_stats() {
     }
     if (payload_buffer_) {
         const auto &c = payload_buffer_->counters();
-        sb << "\tcollector[entries=" << c.entries << " buffered_txs=" << c.buffered_txs
+        sb << "\tpayload_buffer[entries=" << c.entries << " buffered_txs=" << c.buffered_txs
            << " buffered_memo=" << c.buffered_memo_accounts
            << " peak_entries=" << c.peak_entries << " admitted=" << c.admitted
            << " capped=" << c.capped << " evicted=" << c.evicted << " broken=" << c.broken

@@ -48,7 +48,8 @@ void validate_against_inventory(BlockClassification &bc, const std::vector<Trace
   for (auto &trace : bc.traces) {
     const auto it = expected.find(trace.trace.trace_id);
     if (it == expected.end()) {
-      trace.outcome = TraceOutcome::skipped_unexpected_trace;
+      // The inventory lists complete traces only; a broken trace is absent by design.
+      if (trace.outcome != TraceOutcome::skipped_broken) trace.outcome = TraceOutcome::skipped_unexpected_trace;
     } else {
       const auto &row = *it->second;
       if (counts[row.trace_id] != 1 || trace.trace.nodes_ != row.nodes ||
