@@ -47,15 +47,6 @@
 # keeps send_tokens behind the priority-90 jetton family that builds the
 # `jetton_transfer` parent it binds.
 #
-# Hand parsers. `LayerzeroChannelSendCallback`,
-# `ChannelCommitPacket` and `UlnConnectionVerifyCallbackParser` are all
-# kept hand-side because each emits a nested named object
-# (LayerZeroPacket / LayerZeroPath / LayerZeroMDLzSend), reaches its payload
-# through a raw `refs[0].refs[0].refs[0]` walk, and formats 256-bit fields as
-# Python `hex()` minimal-digit strings. They join the hand table in
-# src/parse/ParseLayerZero.cpp next to the receive parser and reuse its
-# `lz_parse_packet` / `lz_hex_min` unchanged.
-#
 # `layerzero_dvn_verify.status` is one of "succeeded" /
 # "nonce_out_of_range" / "dvn_not_configured" / "unknown_<decimal code>". The
 # expression language has no string operations at all, so the mapping

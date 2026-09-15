@@ -42,7 +42,7 @@ btype. Left unresolved it would silently emit the class name itself as the
 produced btype, which the serializer and
 legacy blocks never key on. Add the entry, or use the bare btype string."""
 
-R023_PARSE_TARGET_COMPOSED_BLOCK = "R023_PARSE_TARGET_COMPOSED_BLOCK"
+R023_PARSE_TARGET_NOT_BASE_BLOCK = "R023_PARSE_TARGET_NOT_BASE_BLOCK"
 """A `parse X as T` statement targets a capture bound by a `btype` node: a
 composed block built by an earlier matcher. A produced block's `get_body()`
 reads `event_nodes[0]`, whose identity after the

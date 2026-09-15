@@ -926,7 +926,7 @@ def _check_build_stmts(
                   and captures[stmt.capture].head.name not in
                   ("ton_transfer", "call_contract", "tick_tock")):
                 bag.error(
-                    diagnostics.R023_PARSE_TARGET_COMPOSED_BLOCK,
+                    diagnostics.R023_PARSE_TARGET_NOT_BASE_BLOCK,
                     f"parse target {stmt.capture!r} is a produced block "
                     f"(captured by `btype {captures[stmt.capture].head.name}`); "
                     f"only base blocks (ton_transfer, call_contract, tick_tock) can be parsed. "
