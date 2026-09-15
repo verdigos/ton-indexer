@@ -360,14 +360,15 @@ def _parse_bool_literal(s: _ParserState) -> bool:
     raise CompileError(s.bag)
 
 
-def _parse_pattern_expr(s: _ParserState, entry_position: bool = False) -> ast_.PatternExpr:
+def _parse_pattern_expr(s: _ParserState, entry_position: bool = False,
+                        relation_item: bool = False) -> ast_.PatternExpr:
     """pattern_expr := sequence (('|' | '^') sequence)*
 
     The separator kind is decided by the first separator seen.
     Mixing '|' and '^' at the same nesting level emits P010.
     """
     s.skip_newlines()
-    branches = [_parse_sequence(s, entry_position=entry_position)]
+    branches = [_parse_sequence(s, entry_position=entry_position, relation_item=relation_item)]
     separator_kind: TokenKind | None = None
 
     while True:
@@ -388,7 +389,7 @@ def _parse_pattern_expr(s: _ParserState, entry_position: bool = False) -> ast_.P
                 raise CompileError(s.bag)
             s.i += 1  # consume separator
             s.skip_newlines()
-            branches.append(_parse_sequence(s))
+            branches.append(_parse_sequence(s, relation_item=relation_item))
         else:
             s.i = save_i
             break
@@ -403,11 +404,15 @@ def _parse_pattern_expr(s: _ParserState, entry_position: bool = False) -> ast_.P
     )
 
 
-def _parse_sequence(s: _ParserState, entry_position: bool = False) -> ast_.PatternExpr:
+def _parse_sequence(s: _ParserState, entry_position: bool = False,
+                    relation_item: bool = False) -> ast_.PatternExpr:
     """sequence := atom ( edge atom )*"""
     head = _parse_atom(s)
     tail: list[tuple[ast_.Edge, ast_.PatternExpr]] = []
     while True:
+        # Newlines separate relation items; nested groups parse their own sequences.
+        if relation_item and s.at(TokenKind.NEWLINE):
+            break
         save_i = s.i
         s.skip_newlines()
         t = s.peek()
@@ -480,7 +485,7 @@ def _ends_in_relations(p: ast_.PatternExpr) -> bool:
 
 def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
     """atom := node | '(' pattern_expr ')' | rule_ref | children_block
-               | 'choice' 'head_unique'? children_block | ('maybe' | 'peek') atom
+               | ('or' | 'xor') children_block | ('maybe' | 'peek') atom
     """
     t = s.peek()
 
@@ -496,17 +501,15 @@ def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
         inner = _parse_atom(s)
         return ast_.Peek(inner=inner, span=_join(t.span, inner.span))
 
-    if t.kind is TokenKind.IDENT and t.text == "choice":
+    if (s.peek(1).kind is TokenKind.LBRACE
+            and (t.kind is TokenKind.KW_OR or (t.kind is TokenKind.IDENT and t.text == "xor"))):
         s.i += 1
-        exclusive = s.at(TokenKind.IDENT) and s.peek().text == "head_unique"
-        if exclusive:
-            s.i += 1
         block = _parse_items_block(s)
         span = _join(t.span, block.span)
         if len(block.items) < 2:
-            s.bag.error("P021_CHOICE_NEEDS_TWO_ARMS", "choice must contain at least two arms", span)
+            s.bag.error("P021_CHOICE_NEEDS_TWO_ARMS", "or/xor block needs at least two arms", span)
             raise CompileError(s.bag)
-        return ast_.Alternative(branches=block.items, span=span, exclusive=exclusive)
+        return ast_.Alternative(branches=block.items, span=span, exclusive=t.text == "xor")
 
     if t.kind is TokenKind.LPAREN:
         s.i += 1
@@ -644,11 +647,50 @@ def _parse_node(s: _ParserState) -> ast_.Node:
 
 
 def _parse_relations(s: _ParserState) -> ast_.Relations:
-    """relations := '{' sep* clause (sep* clause)* sep* '}'.
-
-    Each clause closes its own block; newlines and semicolons are optional.
-    """
+    """relations := '{' sep* item (sep+ item)* sep* '}'."""
     start = s.eat(TokenKind.LBRACE).span
+    while s.at(TokenKind.SEMI) or s.at(TokenKind.NEWLINE):
+        s.i += 1
+    if s.at(TokenKind.IDENT) and s.peek().text in ("children", "parent"):
+        return _parse_deprecated_relation_clauses(s, start)
+    relations = {}
+    while True:
+        arrow = s.peek()
+        if arrow.kind not in (TokenKind.ARROW_R, TokenKind.ARROW_L):
+            s.bag.error("P001_UNEXPECTED_TOKEN", "expected -> or <- relation item", arrow.span)
+            raise CompileError(s.bag)
+        s.i += 1
+        target = _parse_pattern_expr(s, relation_item=True)
+        if arrow.kind is TokenKind.ARROW_R and isinstance(target, ast_.ChildrenBlock):
+            relations["children_first"] = relations.get("children_first", ()) + target.items
+        else:
+            kind = "children_all" if arrow.kind is TokenKind.ARROW_R else "parent"
+            if kind in relations:
+                message = ("one child chain per node; use a children set `-> { … }` for several children"
+                           if kind == "children_all" else "one parent per node")
+                s.bag.error("P018_DUPLICATE_RELATION_CLAUSE", message, arrow.span)
+                raise CompileError(s.bag)
+            relations[kind] = target
+        if s.at(TokenKind.RBRACE):
+            break
+        if not (s.at(TokenKind.SEMI) or s.at(TokenKind.NEWLINE)):
+            s.bag.error("P001_UNEXPECTED_TOKEN", "expected newline or ';' between relation items", s.peek().span)
+            raise CompileError(s.bag)
+        while s.at(TokenKind.SEMI) or s.at(TokenKind.NEWLINE):
+            s.i += 1
+        if s.at(TokenKind.RBRACE):
+            break
+    end = s.eat(TokenKind.RBRACE).span
+    return ast_.Relations(
+        children_all=relations.get("children_all"),
+        children_first=relations.get("children_first"),
+        parent=relations.get("parent"),
+        span=_join(start, end),
+    )
+
+
+def _parse_deprecated_relation_clauses(s: _ParserState, start: Span) -> ast_.Relations:
+    # deprecated clause spelling, removed with the corpus migration
     clauses = {}
     while True:
         while s.at(TokenKind.SEMI) or s.at(TokenKind.NEWLINE):

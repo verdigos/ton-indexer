@@ -178,6 +178,8 @@ def build_stub_registries(files: list[ast_.File]) -> Registries:
             stub_expr(field.value)
 
     for f in files:
+        for fn in f.fns:
+            stub_expr(fn.body)
         for pd in f.predicates:
             predicate_names.add(pd.name)
         for r in f.rules:
