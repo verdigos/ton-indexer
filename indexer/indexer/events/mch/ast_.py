@@ -236,6 +236,7 @@ class Alternative(PatternExpr):
     branches: tuple[PatternExpr, ...]
     span: Span
     exclusive: bool = False
+    opcode_set: bool = False
 
 
 @dataclass(frozen=True)

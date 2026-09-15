@@ -67,6 +67,9 @@ R025_BUILTIN_OPCODE_REDECLARED = "R025_BUILTIN_OPCODE_REDECLARED"
 # A user declaration gives a built-in opcode a different value.
 R026_BUILTIN_OPCODE_MISMATCH = "R026_BUILTIN_OPCODE_MISMATCH"
 
+# Two opcode-set members resolve to the same unsigned 32-bit value.
+R027_DUPLICATE_OPCODE_SET_MEMBER = "R027_DUPLICATE_OPCODE_SET_MEMBER"
+
 P011_DUPLICATE_DIRECTIVE = "P011_DUPLICATE_DIRECTIVE"
 """A matcher declares the same at-most-once directive more than once
 (currently `shape`)."""
@@ -84,6 +87,10 @@ P014_MEMBERSHIP_MEMBER_NOT_LITERAL = "P014_MEMBERSHIP_MEMBER_NOT_LITERAL"
 
 # Strict parsing is only allowed in expression position.
 P015_STRICT_PARSE_STATEMENT = "P015_STRICT_PARSE_STATEMENT"
+
+# Opcode sets require at least one member and cannot carry a predicate.
+P016_EMPTY_OPCODE_SET = "P016_EMPTY_OPCODE_SET"
+P017_WHERE_ON_OPCODE_SET = "P017_WHERE_ON_OPCODE_SET"
 
 C011_UNKNOWN_SHAPER = "C011_UNKNOWN_SHAPER"
 """The `shape` directive names a shaper that is not present in the host's

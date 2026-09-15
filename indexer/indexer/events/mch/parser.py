@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+from dataclasses import replace
 from typing import Iterable
 
 from indexer.events.mch import ast_
@@ -44,6 +46,7 @@ class _ParserState:
         self.path = path
         self.bag = bag
         self.i = 0
+        self.opcode_sets: dict[int, tuple[ast_.OpHead, ...]] = {}
 
     def peek(self, offset: int = 0) -> Token:
         j = self.i + offset
@@ -294,7 +297,7 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
             break
         s.skip_newlines()
 
-    pattern = _parse_pattern_expr(s)
+    pattern = _parse_pattern_expr(s, entry_position=True)
     build_stmts = _parse_build_stmts(s)
     s.skip_newlines()
     end = s.eat(TokenKind.RBRACE).span
@@ -337,14 +340,14 @@ def _parse_bool_literal(s: _ParserState) -> bool:
     raise CompileError(s.bag)
 
 
-def _parse_pattern_expr(s: _ParserState) -> ast_.PatternExpr:
+def _parse_pattern_expr(s: _ParserState, entry_position: bool = False) -> ast_.PatternExpr:
     """pattern_expr := sequence (('|' | '^') sequence)*
 
     The separator kind is decided by the first separator seen.
     Mixing '|' and '^' at the same nesting level emits P010.
     """
     s.skip_newlines()
-    branches = [_parse_sequence(s)]
+    branches = [_parse_sequence(s, entry_position=entry_position)]
     separator_kind: TokenKind | None = None
 
     while True:
@@ -380,7 +383,7 @@ def _parse_pattern_expr(s: _ParserState) -> ast_.PatternExpr:
     )
 
 
-def _parse_sequence(s: _ParserState) -> ast_.PatternExpr:
+def _parse_sequence(s: _ParserState, entry_position: bool = False) -> ast_.PatternExpr:
     """sequence := atom ( edge atom )*"""
     head = _parse_atom(s)
     tail: list[tuple[ast_.Edge, ast_.PatternExpr]] = []
@@ -399,6 +402,35 @@ def _parse_sequence(s: _ParserState) -> ast_.PatternExpr:
         else:
             s.i = save_i
             break
+    # Fold from the right so distributed tails already contain expanded sets.
+    for i in range(len(tail), -1, -1):
+        atom = head if i == 0 else tail[i - 1][1]
+        modifiers = []
+        node = atom
+        while isinstance(node, (ast_.Maybe, ast_.Peek)):
+            modifiers.append(node)
+            node = node.inner
+        members = s.opcode_sets.pop(id(node), ())
+        if not members:
+            continue
+        branch_tail = () if entry_position and i == 0 else tuple(tail[i:])
+        span = _join(node.span, branch_tail[-1][1].span) if branch_tail else node.span
+        branches = []
+        for member in members:
+            branch = replace(node, head=member)
+            if branch_tail:
+                branch = ast_.Sequence(head=branch, tail=deepcopy(branch_tail), span=span)
+            branches.append(branch)
+        atom = ast_.Alternative(branches=tuple(branches), span=span,
+                                exclusive=True, opcode_set=True)
+        for modifier in reversed(modifiers):
+            atom = replace(modifier, inner=atom, span=_join(modifier.span, atom.span))
+        if i == 0:
+            head = atom
+        else:
+            tail[i - 1] = (tail[i - 1][0], atom)
+        if branch_tail:
+            del tail[i:]
     if not tail:
         return head
     last_span = tail[-1][1].span
@@ -430,7 +462,7 @@ def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
         s.skip_newlines()
         end = s.eat(TokenKind.RPAREN).span
         if isinstance(inner, ast_.Alternative):
-            return ast_.Alternative(branches=inner.branches, span=_join(t.span, end), exclusive=inner.exclusive)
+            return replace(inner, span=_join(t.span, end))
         if isinstance(inner, ast_.Sequence):
             return ast_.Sequence(head=inner.head, tail=inner.tail, span=_join(t.span, end))
         return inner
@@ -446,27 +478,43 @@ def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
     return _parse_node(s)
 
 
+def _parse_op_head(s: _ParserState, start: Span) -> ast_.OpHead:
+    ref = s.peek()
+    if ref.kind not in (TokenKind.IDENT, TokenKind.HEX, TokenKind.DEC):
+        s.bag.error("P001_UNEXPECTED_TOKEN", "expected identifier or numeric literal after 'op'", ref.span)
+        raise CompileError(s.bag)
+    s.i += 1
+    value = ref.text if ref.kind is TokenKind.IDENT else int(ref.text, 16 if ref.kind is TokenKind.HEX else 10)
+    return ast_.OpHead(ref=value, span=_join(start, ref.span))
+
+
 def _parse_node(s: _ParserState) -> ast_.Node:
     """node := node_head capture? predicate_clause?"""
     t = s.peek()
     head: ast_.NodeHead
     head_start_span = t.span
+    members: list[ast_.OpHead] = []
 
     if t.kind is TokenKind.KW_OP:
         s.i += 1
-        ref_tok = s.peek()
-        if ref_tok.kind is TokenKind.IDENT:
-            s.i += 1
-            head = ast_.OpHead(ref=ref_tok.text, span=_join(t.span, ref_tok.span))
-        elif ref_tok.kind is TokenKind.HEX:
-            s.i += 1
-            head = ast_.OpHead(ref=int(ref_tok.text, 16), span=_join(t.span, ref_tok.span))
-        elif ref_tok.kind is TokenKind.DEC:
-            s.i += 1
-            head = ast_.OpHead(ref=int(ref_tok.text, 10), span=_join(t.span, ref_tok.span))
+        if s.try_eat(TokenKind.LBRACKET):
+            s.skip_newlines()
+            if s.at(TokenKind.RBRACKET):
+                s.bag.error("P016_EMPTY_OPCODE_SET", "opcode set must contain at least one member",
+                            _join(t.span, s.peek().span))
+                raise CompileError(s.bag)
+            while True:
+                members.append(_parse_op_head(s, s.peek().span))
+                s.skip_newlines()
+                if not s.try_eat(TokenKind.COMMA):
+                    break
+                s.skip_newlines()
+                if s.at(TokenKind.RBRACKET):
+                    break
+            head_start_span = _join(t.span, s.eat(TokenKind.RBRACKET).span)
+            head = members[0]
         else:
-            s.bag.error("P001_UNEXPECTED_TOKEN", f"expected identifier or numeric literal after 'op'", ref_tok.span)
-            raise CompileError(s.bag)
+            head = _parse_op_head(s, t.span)
     elif t.kind is TokenKind.KW_BTYPE:
         s.i += 1
         name_tok = s.eat(TokenKind.IDENT)
@@ -492,6 +540,10 @@ def _parse_node(s: _ParserState) -> ast_.Node:
     where_predicate: str | None = None
     where_expr: ast_.Expr | None = None
     if s.at(TokenKind.KW_WHERE):
+        if members:
+            s.bag.error("P017_WHERE_ON_OPCODE_SET",
+                        "put the predicate on a branch of an explicit alternative", s.peek().span)
+            raise CompileError(s.bag)
         s.i += 1
         if s.at(TokenKind.LPAREN):
             s.i += 1
@@ -505,13 +557,16 @@ def _parse_node(s: _ParserState) -> ast_.Node:
             where_predicate = pred_tok.text
             head_start_span = _join(head_start_span, pred_tok.span)
 
-    return ast_.Node(
+    node = ast_.Node(
         head=head,
         capture=capture,
         where_predicate=where_predicate,
         span=head_start_span,
         where_expr=where_expr,
     )
+    if len(members) > 1:
+        s.opcode_sets[id(node)] = tuple(members)
+    return node
 
 
 def _parse_children_block(s: _ParserState) -> ast_.ChildrenBlock:

@@ -40,6 +40,12 @@ class _CaptureOccurrence:
     under_nonexclusive_alt: bool = False
 
 
+def _resolve_opcode_ref(ref: str | int, opcodes: dict[str, int], registries: Registries) -> int | None:
+    if isinstance(ref, int):
+        return ref
+    return opcodes.get(ref) if ref in opcodes else registries.opcodes.get(ref)
+
+
 def _alternative_is_exclusive(
     alt: ast_.Alternative,
     opcodes: dict[str, int],
@@ -62,10 +68,7 @@ def _alternative_is_exclusive(
             return False
         head = b.head
         if isinstance(head, ast_.OpHead):
-            ref = head.ref
-            op = ref if isinstance(ref, int) else (
-                opcodes.get(ref) if opcodes.get(ref) is not None else registries.opcodes.get(ref)
-            )
+            op = _resolve_opcode_ref(head.ref, opcodes, registries)
             if op is None or op in seen_ops:
                 return False
             seen_ops.add(op)
@@ -253,6 +256,42 @@ def _resolve_opcodes(file: ast_.File, registries: Registries, bag: DiagnosticBag
                 o.span,
             )
         opcodes[o.name] = o.value
+
+    reported: set[Span] = set()
+
+    def visit(p: ast_.PatternExpr) -> None:
+        if isinstance(p, ast_.Alternative):
+            if p.opcode_set:
+                members: dict[int, Span] = {}
+                for branch in p.branches:
+                    node = branch.head if isinstance(branch, ast_.Sequence) else branch
+                    head = node.head
+                    value = _resolve_opcode_ref(head.ref, opcodes, registries)
+                    if value is None:
+                        continue
+                    value &= 0xffffffff
+                    if value in members:
+                        for span in (members[value], head.span):
+                            if span not in reported:
+                                bag.error("R027_DUPLICATE_OPCODE_SET_MEMBER",
+                                          f"opcode set repeats unsigned opcode {hex(value)}", span)
+                                reported.add(span)
+                    else:
+                        members[value] = head.span
+            for branch in p.branches:
+                visit(branch)
+        elif isinstance(p, (ast_.Maybe, ast_.Peek)):
+            visit(p.inner)
+        elif isinstance(p, ast_.Sequence):
+            visit(p.head)
+            for _edge, atom in p.tail:
+                visit(atom)
+        elif isinstance(p, ast_.ChildrenBlock):
+            for item in p.items:
+                visit(item)
+
+    for decl in (*file.rules, *file.matchers):
+        visit(decl.pattern)
     return opcodes
 
 
