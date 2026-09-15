@@ -72,11 +72,6 @@ td::Result<PaymentReq> parse_payment_request(const td::Ref<vm::Cell> &body) {
   return pr;
 }
 
-td::Result<std::uint32_t> stonfi_payment_exit_code(const td::Ref<vm::Cell> &body) {
-  TRY_RESULT(pr, parse_payment_request(body));
-  return pr.exit_code;
-}
-
 // v1 swap body fields the core reads: from_user_address, token_wallet,
 // amount, from_real_user (in the ref).
 struct SwapV1 {
@@ -274,22 +269,6 @@ std::optional<std::string> extract_target_wallet(const td::Ref<vm::Cell> &body) 
 }
 
 }  // namespace
-
-// Parse the payment-request body abort-safely and accept sender-related exit
-// codes (ok / no_liq / reserve_err). The ok_ref referral payment fails this
-// gate. Any parse failure is False.
-bool stonfi_v1_sender_payment(const Block *block) {
-  auto r_body = block_body(block);
-  if (r_body.is_error()) {
-    return false;
-  }
-  auto r = stonfi_payment_exit_code(r_body.ok());
-  if (r.is_error()) {
-    return false;
-  }
-  std::uint32_t ec = r.ok();
-  return sender_related(ec);
-}
 
 // Args are the in_transfer anchor and StonfiSwap call. Resolve the outgoing
 // transfer by btype. Any nav/parse/lookup miss is rt_fault (match rejection).

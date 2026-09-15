@@ -54,7 +54,7 @@ ABI_PREFIXES = {
 # belongs only to the honest prefixless payload row.
 HOST_CALLS = (
     HostCall("HostStonfi.cpp", 1, "StonfiPaymentRequest", (0xF93BB43F,),
-             "both helper callers use the StonfiPaymentRequest op node/is_call_op filter"),
+             "the helper caller filters payment requests with is_call_op"),
     HostCall("HostStonfi.cpp", 1, "StonfiSwapMessage", (0x25938561,),
              "the helper input is the matcher's kStonfiSwap contract capture"),
     HostCall("HostStonfi.cpp", 1, "StonfiV2PayTo", (0x657B54F5,),

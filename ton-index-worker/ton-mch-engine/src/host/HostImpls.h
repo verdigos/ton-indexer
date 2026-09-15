@@ -40,9 +40,7 @@ EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args);
 EvalResult tgbtc_mint_data(BuildEnv &env, const std::vector<Value> &args);
 void tgbtc_deploy_absorb(Block *produced, const ShaperMatch &m);
 
-// Stonfi (HostStonfi.cpp): v1 sender-payment pred + v1 swap fn;
-// v2 pton_self_transfer pred + v2 swap fn.
-bool stonfi_v1_sender_payment(const Block *block);
+// Stonfi (HostStonfi.cpp): v1/v2 swap fns and v2 pton_self_transfer pred.
 EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args);
 bool pton_self_transfer(const Block *block);
 EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args);

@@ -12,9 +12,8 @@
 # amount/address from the UNCONSUMED sibling through the tree (the swap
 # call's next_blocks) without consuming it.
 #
-# Exit-code parsing needs the message body, so the gate is a host predicate:
-# Inline `.field` predicates see only block.data, and a CallContractBlock
-# carries none. The body-parsing check therefore stays in a host predicate.
+# The where parses the payment-request body and accepts sender-related exit
+# codes. Parse failures and referral payments fail the gate.
 #
 # The payment-request edge accumulates multiple matches: when the referral is
 # paid through a second SENDER-RELATED payment request (legacy's out_amt<amount
@@ -23,8 +22,6 @@
 
 opcode StonfiSwap           = 0x25938561
 opcode StonfiPaymentRequest = 0xf93bb43f
-
-predicate stonfi_v1_sender_payment
 
 # HYBRID declarative build. The pattern, the failed flag and the out-field
 # mapping are declarative; the imperative residue stays in one named host fn
@@ -41,7 +38,7 @@ matcher stonfi_v1_swap {
 
     btype jetton_transfer @in_transfer
       -> op StonfiSwap @swap
-      -> op StonfiPaymentRequest @req where stonfi_v1_sender_payment
+      -> op StonfiPaymentRequest @req where ((parse? . as StonfiPaymentRequest).exit_code in [0xc64370e5, 0x5ffe1295, 0x38976e9b])
       -> btype jetton_transfer @out
 
     let d = stonfi_v1_swap_data(in_transfer, swap)
