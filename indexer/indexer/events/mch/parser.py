@@ -34,6 +34,7 @@ _BUILD_STMT_HEADS: frozenset[TokenKind] = frozenset({
     TokenKind.KW_PARSE, TokenKind.KW_LET, TokenKind.KW_REJECT,
     TokenKind.KW_FAILED, TokenKind.KW_BROKEN, TokenKind.KW_OUT,
     TokenKind.KW_PRODUCES,
+    TokenKind.KW_REQUIRE, TokenKind.KW_PARSE_NULLABLE, TokenKind.KW_PARSE_STRICT,
 })
 
 
@@ -545,10 +546,26 @@ def _parse_build_stmts(s: _ParserState) -> tuple[ast_.BuildStmt, ...]:
         t = s.peek()
         if t.kind not in _BUILD_STMT_HEADS:
             break
-        if t.kind is TokenKind.KW_PARSE:
+        if t.kind in (TokenKind.KW_PARSE, TokenKind.KW_PARSE_NULLABLE):
             stmts.append(_parse_parse_stmt(s))
-        elif t.kind is TokenKind.KW_LET:
-            stmts.append(_parse_let_stmt(s))
+        elif t.kind is TokenKind.KW_PARSE_STRICT:
+            s.bag.error(
+                "P015_STRICT_PARSE_STATEMENT",
+                "strict parse is an expression; use `let v = parse! ...`",
+                t.span,
+            )
+            raise CompileError(s.bag)
+        elif t.kind in (TokenKind.KW_LET, TokenKind.KW_REQUIRE):
+            stmt = _parse_let_stmt(s)
+            stmts.append(stmt)
+            if t.kind is TokenKind.KW_REQUIRE:
+                stmts.append(ast_.RejectStmt(
+                    condition=ast_.BinaryOp(
+                        op="==", left=ast_.NameRef(name=stmt.name, span=stmt.span),
+                        right=ast_.NullLit(span=stmt.span), span=stmt.span,
+                    ),
+                    span=stmt.span,
+                ))
         elif t.kind is TokenKind.KW_REJECT:
             stmts.append(_parse_guard_stmt(s, TokenKind.KW_REJECT, ast_.RejectStmt))
         elif t.kind is TokenKind.KW_FAILED:
@@ -563,7 +580,7 @@ def _parse_build_stmts(s: _ParserState) -> tuple[ast_.BuildStmt, ...]:
 
 
 def _parse_parse_stmt(s: _ParserState) -> ast_.ParseStmt:
-    start = s.eat(TokenKind.KW_PARSE).span
+    start = s.eat(s.peek().kind).span
     cap = s.eat_name()
     s.eat(TokenKind.KW_AS)
     msg = s.eat(TokenKind.IDENT)
@@ -578,7 +595,7 @@ def _parse_parse_stmt(s: _ParserState) -> ast_.ParseStmt:
 
 
 def _parse_let_stmt(s: _ParserState) -> ast_.LetStmt:
-    start = s.eat(TokenKind.KW_LET).span
+    start = s.eat(s.peek().kind).span
     name = s.eat_name()
     s.eat(TokenKind.EQ)
     value = _parse_expr(s)
@@ -718,6 +735,41 @@ def _parse_not(s: _ParserState) -> ast_.Expr:
 
 def _parse_cmp(s: _ParserState) -> ast_.Expr:
     left = _parse_additive(s)
+    negated = (s.at(TokenKind.KW_NOT)
+               and s.peek(1).kind is TokenKind.IDENT and s.peek(1).text == "in")
+    if negated or (s.peek().kind is TokenKind.IDENT and s.peek().text == "in"):
+        root = left
+        while isinstance(root, ast_.FieldAccess):
+            root = root.target
+        if not isinstance(root, (ast_.NameRef, ast_.FieldRef)):
+            s.bag.error(
+                "P013_MEMBERSHIP_LEFT_OPERAND",
+                "membership left operand must be a name or field path",
+                left.span,
+            )
+            raise CompileError(s.bag)
+        s.i += 2 if negated else 1
+        members = _parse_list_lit(s)
+        span = _join(left.span, members.span)
+        result: ast_.Expr = ast_.BoolLit(value=negated, span=span)
+        for i, member in enumerate(members.elements):
+            if (isinstance(member, ast_.UnaryOp) and member.op == "-"
+                    and isinstance(member.operand, ast_.IntLit)):
+                member = ast_.IntLit(value=-member.operand.value, span=member.span)
+            if not isinstance(member, (ast_.IntLit, ast_.StrLit, ast_.BoolLit, ast_.NullLit)):
+                s.bag.error(
+                    "P014_MEMBERSHIP_MEMBER_NOT_LITERAL",
+                    "membership members must be literal scalars",
+                    member.span,
+                )
+                raise CompileError(s.bag)
+            comparison = ast_.BinaryOp(
+                op="!=" if negated else "==", left=left, right=member, span=span,
+            )
+            result = comparison if i == 0 else ast_.BinaryOp(
+                op="and" if negated else "or", left=result, right=comparison, span=span,
+            )
+        return result
     op = _CMP_OPS.get(s.peek().kind)
     if op is not None:
         s.i += 1
@@ -850,8 +902,14 @@ def _parse_comprehension(s: _ParserState) -> ast_.Comprehension:
 
 
 def _parse_parse_expr(s: _ParserState, *, nullable: bool = False) -> ast_.ParseExpr:
-    """`[try] parse <target> as T (| T)*` in expression position."""
-    start = s.eat(TokenKind.KW_PARSE).span
+    """`[try] parse`, `parse?`, or `parse!` followed by a target and types."""
+    start = s.peek().span
+    if s.try_eat(TokenKind.KW_TRY):
+        s.eat(TokenKind.KW_PARSE)
+        nullable = True
+    else:
+        head = s.eat(s.peek().kind)
+        nullable = nullable or head.kind is TokenKind.KW_PARSE_NULLABLE
     target = _parse_postfix(s)
     s.eat(TokenKind.KW_AS)
     msg = s.eat(TokenKind.IDENT)
@@ -873,16 +931,8 @@ def _parse_parse_expr(s: _ParserState, *, nullable: bool = False) -> ast_.ParseE
 def _parse_primary(s: _ParserState) -> ast_.Expr:
     if _at_comprehension(s):
         return _parse_comprehension(s)
-    if s.at(TokenKind.KW_TRY):
-        start = s.eat(TokenKind.KW_TRY).span
-        parsed = _parse_parse_expr(s, nullable=True)
-        return ast_.ParseExpr(
-            target=parsed.target,
-            msg_types=parsed.msg_types,
-            span=_join(start, parsed.span),
-            nullable=True,
-        )
-    if s.at(TokenKind.KW_PARSE):
+    if s.peek().kind in (TokenKind.KW_TRY, TokenKind.KW_PARSE,
+                         TokenKind.KW_PARSE_NULLABLE, TokenKind.KW_PARSE_STRICT):
         return _parse_parse_expr(s)
     t = s.peek()
     if t.kind is TokenKind.HEX:

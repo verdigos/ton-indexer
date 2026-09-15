@@ -61,6 +61,12 @@ comprehension (either the outer `xs` or `body`). Nested comprehensions are
 forbidden: exactly one bound element var per comprehension, no
 comprehension in the iterated list or the body."""
 
+# A user declaration repeats a built-in opcode with its built-in value.
+R025_BUILTIN_OPCODE_REDECLARED = "R025_BUILTIN_OPCODE_REDECLARED"
+
+# A user declaration gives a built-in opcode a different value.
+R026_BUILTIN_OPCODE_MISMATCH = "R026_BUILTIN_OPCODE_MISMATCH"
+
 P011_DUPLICATE_DIRECTIVE = "P011_DUPLICATE_DIRECTIVE"
 """A matcher declares the same at-most-once directive more than once
 (currently `shape`)."""
@@ -69,6 +75,15 @@ P012_STITCH_REMOVED = "P012_STITCH_REMOVED"
 """A `stitch` declaration was encountered. Cross-trace joining is unsupported;
 host post-process code merges paired results. The words `stitch partial final
 key ttl merge` remain reserved so this error is targeted."""
+
+# Membership requires a name or a field path on the left.
+P013_MEMBERSHIP_LEFT_OPERAND = "P013_MEMBERSHIP_LEFT_OPERAND"
+
+# Membership lists contain only literal scalars.
+P014_MEMBERSHIP_MEMBER_NOT_LITERAL = "P014_MEMBERSHIP_MEMBER_NOT_LITERAL"
+
+# Strict parsing is only allowed in expression position.
+P015_STRICT_PARSE_STATEMENT = "P015_STRICT_PARSE_STATEMENT"
 
 C011_UNKNOWN_SHAPER = "C011_UNKNOWN_SHAPER"
 """The `shape` directive names a shaper that is not present in the host's

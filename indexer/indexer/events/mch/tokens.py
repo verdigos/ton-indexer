@@ -39,8 +39,11 @@ class TokenKind(Enum):
     # Build-language keywords parsed here and ignored by the pattern compiler.
     KW_TRY = "try"
     KW_PARSE = "parse"
+    KW_PARSE_NULLABLE = "parse?"
+    KW_PARSE_STRICT = "parse!"
     KW_AS = "as"
     KW_LET = "let"
+    KW_REQUIRE = "require"
     KW_OUT = "out"
     KW_REJECT = "reject"
     KW_FAILED = "failed"

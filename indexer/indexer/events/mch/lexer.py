@@ -223,6 +223,8 @@ def _read_identifier_or_keyword(cur: _Cursor) -> Token:
         else:
             break
     text = cur.text[start_i:cur.i]
+    if text == "parse" and cur.peek() in ("?", "!"):
+        text += cur.advance()
     kind = KEYWORDS.get(text, TokenKind.IDENT)
     return Token(kind, text, cur.span_from(start_i, start_line, start_col))
 

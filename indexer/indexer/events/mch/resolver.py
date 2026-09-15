@@ -221,7 +221,8 @@ def resolve(file: ast_.File, registries: Registries) -> ResolvedFile:
 
 
 def _resolve_opcodes(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> dict[str, int]:
-    seen: dict[str, int] = {}
+    opcodes = {"Excess": 0xd53276db, "Bounce": 0xffffffff}
+    seen: set[str] = set()
     for o in file.opcodes:
         if o.name in seen:
             bag.error(
@@ -230,14 +231,29 @@ def _resolve_opcodes(file: ast_.File, registries: Registries, bag: DiagnosticBag
                 o.span,
             )
             continue
+        seen.add(o.name)
+        if o.name in opcodes:
+            if o.value == opcodes[o.name]:
+                bag.warning(
+                    "R025_BUILTIN_OPCODE_REDECLARED",
+                    f"opcode {o.name!r} is built in; drop the declaration",
+                    o.span,
+                )
+            else:
+                bag.error(
+                    "R026_BUILTIN_OPCODE_MISMATCH",
+                    f"opcode {o.name!r} is built in as {hex(opcodes[o.name])}, "
+                    f"not {hex(o.value)}",
+                    o.span,
+                )
         if o.name in registries.opcodes and registries.opcodes[o.name] != o.value:
             bag.error(
                 "R002_OPCODE_VALUE_MISMATCH",
                 f"opcode {o.name!r} declared as {hex(o.value)} but host registry has {hex(registries.opcodes[o.name])}",
                 o.span,
             )
-        seen[o.name] = o.value
-    return seen
+        opcodes[o.name] = o.value
+    return opcodes
 
 
 def _check_predicates(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> None:
