@@ -5,9 +5,9 @@
 
 #include "BlockTree.h"
 #include "BuildRuntime.h"
-#include "MsgParse.h"
 #include "TraceLoader.h"
 #include "parse/PSlice.h"
+#include "parse/Parsers.h"
 #include "btypes_gen.h"
 
 #include "common/refint.h"
@@ -78,8 +78,6 @@ bool opcode_after_user_header(const Block *b, td::uint32 opcode) {
 
 constexpr td::uint32 kSupplyMaster = 0x1;
 constexpr td::uint32 kSupplyUser = 0x11;
-constexpr td::uint32 kSupplySuccess = 0x11a;
-constexpr td::uint32 kSupplyFail = 0x11f;
 constexpr td::uint32 kLiquidateMaster = 0x3;
 constexpr td::uint32 kLiquidateUser = 0x31;
 constexpr td::uint32 kLiquidateSatisfied = 0x311;
@@ -199,6 +197,20 @@ td::Result<std::string> parse_liquidation_reason(const td::Ref<vm::Cell> &body) 
 
 }  // namespace
 
+td::Result<Value> parse_evaa_supply_user_hdr(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!skip_user_header(cs) || !cs.have(32 + 64 + 256)) {
+    return td::Status::Error("supply_user underflow");
+  }
+  cs.advance(32 + 64);  // opcode + query_id
+  auto asset_id = cs.fetch_int256(256, false);
+  if (asset_id.is_null()) {
+    return td::Status::Error("supply_user asset_id");
+  }
+  return Value::make_obj({{"asset_id", Value::make_int(std::move(asset_id))}});
+}
+
 bool evaa_user_withdraw_user(const Block *b) {
   return opcode_after_user_header(b, 0x21);
 }
@@ -262,142 +274,6 @@ bool evaa_supply_anchor(const Block *b) { return evaa_master_anchor(b, kSupplyMa
 
 bool evaa_liquidate_anchor(const Block *b) {
   return evaa_master_anchor(b, kLiquidateMaster);
-}
-
-// Spec supplies the parsed jetton recipient; the TON-vs-jetton discriminator
-// and role derivation remain here.
-EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args) {
-  (void)env;
-  auto decoded = decode_consumed_or_none(args);
-  if (!decoded) {
-    if (args[0].t == VType::List && !args[0].items->empty()) {
-      return host_reject("empty consumed");
-    }
-    return host_reject("bad arguments");
-  }
-  std::vector<const Block *> consumed = std::move(decoded->blocks);
-  const Block *block = consumed.front();
-
-  // Label roles, derived structurally from the consumed set (the anchor is
-  // excluded, on the jetton arm it is itself a jetton_transfer).
-  const Block *user = nullptr, *success = nullptr, *fail = nullptr, *refund = nullptr;
-  for (std::size_t i = 1; i < consumed.size(); i++) {
-    const Block *b = consumed[i];
-    if (user == nullptr && opcode_after_user_header(b, kSupplyUser)) user = b;
-    if (success == nullptr && is_call_op(b, kSupplySuccess)) success = b;
-    if (fail == nullptr && is_call_op(b, kSupplyFail)) fail = b;
-    if (refund == nullptr && b->btype == mch::btype::kJettonTransfer) refund = b;
-  }
-  if (user == nullptr) {
-    return host_reject("no supply_user block");
-  }
-
-  bool is_ton = block->btype == mch::btype::kCallContract;
-  Value sender, recipient, master, asset;
-  Value sender_jetton_wallet = Value::null();
-  Value recipient_jetton_wallet = Value::null();
-  Value master_jetton_wallet = Value::null();
-  td::RefInt256 amount;
-
-  const Message *bm = block_msg(block);
-  if (is_ton) {
-    auto rb = block_body(block);
-    if (rb.is_error()) {
-      return host_reject("supply_master body");
-    }
-    auto rm = parse_message_body("EvaaSupplyMaster", rb.ok());
-    if (rm.is_error()) {
-      return host_reject("supply_master parse");
-    }
-    Value m = rm.move_as_ok();
-    const Value *sa = m.field("supply_amount");
-    const Value *ra = m.field("recipient_address");
-    if (sa == nullptr || ra == nullptr) {
-      return host_reject("supply_master fields");
-    }
-    sender = account_from_opt(bm != nullptr ? bm->source : std::nullopt);
-    amount = sa->num;
-    recipient = *ra;
-    master = account_from_opt(bm != nullptr ? bm->destination : std::nullopt);
-    asset = Value::make_asset_ton();
-  } else {
-    sender = data_field(block, "sender");
-    sender_jetton_wallet = data_field(block, "sender_wallet");
-    master_jetton_wallet = data_field(block, "receiver_wallet");
-    Value amt = data_field(block, "amount");
-    amount = amt.num;
-    master = data_field(block, "receiver");
-    asset = data_field(block, "asset");
-    recipient = args[1];
-    if (same_account(sender, recipient)) {
-      recipient_jetton_wallet = sender_jetton_wallet;
-    } else {
-      // Supplying on someone else's behalf: name their wallet from the sibling
-      // transfer the master sent out.
-      for (std::size_t i = 1; i < consumed.size(); i++) {
-        const Block *b = consumed[i];
-        if (b->btype != mch::btype::kJettonTransfer) continue;
-        if (same_account(data_field(b, "sender_wallet"), master_jetton_wallet)) {
-          recipient_jetton_wallet = data_field(b, "receiver_wallet");
-          break;
-        }
-      }
-    }
-  }
-
-  const Message *um = block_msg(user);
-  Value recipient_contract =
-      account_from_opt(um != nullptr ? um->destination : std::nullopt);
-
-  // The user's asset_id sits behind the variable header, so no ABI row exists.
-  td::RefInt256 asset_id;
-  {
-    vm::CellSlice cs;
-    if (!open_user_body(user, cs)) {
-      return host_reject("supply_user body");
-    }
-    if (!cs.have(32 + 64 + 256)) {
-      return host_reject("supply_user underflow");
-    }
-    cs.advance(32 + 64);  // opcode + query_id
-    asset_id = cs.fetch_int256(256, false);
-    if (asset_id.is_null()) {
-      return host_reject("supply_user asset_id");
-    }
-  }
-
-  if (success != nullptr) {
-    auto rb = block_body(success);
-    if (rb.is_error()) {
-      return host_reject("supply_success body");
-    }
-    auto rs = parse_message_body("EvaaSupplySuccess", rb.ok());
-    if (rs.is_error()) {
-      return host_reject("supply_success parse");
-    }
-    const Value *as = rs.ok().field("amount_supplied");
-    if (as == nullptr) {
-      return host_reject("supply_success amount");
-    }
-    amount = as->num;  // the authoritative amount
-  } else if (fail == nullptr && refund == nullptr) {
-    return host_reject("supply not completed");
-  }
-
-  Value::Fields d;
-  d.emplace_back("sender", std::move(sender));
-  d.emplace_back("recipient", std::move(recipient));
-  d.emplace_back("recipient_contract", std::move(recipient_contract));
-  d.emplace_back("amount", Value::make_int(std::move(amount)));
-  d.emplace_back("is_success", Value::make_bool(success != nullptr));
-  d.emplace_back("is_ton", Value::make_bool(is_ton));
-  d.emplace_back("asset_id", Value::make_int(std::move(asset_id)));
-  d.emplace_back("sender_jetton_wallet", std::move(sender_jetton_wallet));
-  d.emplace_back("recipient_jetton_wallet", std::move(recipient_jetton_wallet));
-  d.emplace_back("master_jetton_wallet", std::move(master_jetton_wallet));
-  d.emplace_back("master", std::move(master));
-  d.emplace_back("asset", std::move(asset));
-  return rt_ok(Value::make_obj(std::move(d)));
 }
 
 EvalResult evaa_liquidate_data(BuildEnv &env, const std::vector<Value> &args) {

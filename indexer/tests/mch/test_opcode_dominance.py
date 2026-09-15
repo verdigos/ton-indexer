@@ -53,10 +53,6 @@ ABI_PREFIXES = {
 # count of this message within this file, not a line number. The empty guard
 # belongs only to the honest prefixless payload row.
 HOST_CALLS = (
-    HostCall("HostEvaa.cpp", 1, "EvaaSupplyMaster", (0x00000001,),
-             "evaa_supply_anchor accepts the call arm only through is_call_op(kSupplyMaster)"),
-    HostCall("HostEvaa.cpp", 1, "EvaaSupplySuccess", (0x0000011A,),
-             "success is assigned only by is_call_op(kSupplySuccess)"),
     HostCall("HostStonfi.cpp", 1, "StonfiPaymentRequest", (0xF93BB43F,),
              "both helper callers use the StonfiPaymentRequest op node/is_call_op filter"),
     HostCall("HostStonfi.cpp", 1, "StonfiSwapMessage", (0x25938561,),

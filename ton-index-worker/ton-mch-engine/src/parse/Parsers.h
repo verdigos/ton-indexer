@@ -13,6 +13,8 @@ td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body);
 
 td::Result<Value> parse_change_dns(const td::Ref<vm::Cell> &body);
 
+td::Result<Value> parse_evaa_supply_user_hdr(const td::Ref<vm::Cell> &body);
+
 td::Result<Value> parse_tgbtc_burn_event(const td::Ref<vm::Cell> &body);
 td::Result<Value> parse_tgbtc_new_key_event(const td::Ref<vm::Cell> &body);
 td::Result<Value> parse_tgbtc_dkg_completed_event(const td::Ref<vm::Cell> &body);

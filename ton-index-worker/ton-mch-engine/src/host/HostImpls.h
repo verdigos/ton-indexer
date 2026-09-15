@@ -66,7 +66,6 @@ bool evaa_liquidate_anchor(const Block *b);
 bool evaa_user_liquidate(const Block *b);
 bool evaa_liquidate_success_header(const Block *b);
 bool evaa_bounced_call(const Block *b);
-EvalResult evaa_supply_data(BuildEnv &env, const std::vector<Value> &args);
 EvalResult evaa_liquidate_data(BuildEnv &env, const std::vector<Value> &args);
 
 // DeDust (HostDedust.cpp).

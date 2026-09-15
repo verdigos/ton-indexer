@@ -23,7 +23,6 @@ const std::map<std::string, HostFnEntry> &host_fns() {
       {"dedust_deposit_partial_data", {dedust_deposit_partial_data, 1}},
       {"tonco_deposit_liquidity_data", {tonco_deposit_liquidity_data, 1}},
       {"tonco_withdraw_payouts", {tonco_withdraw_payouts, 1}},
-      {"evaa_supply_data", {evaa_supply_data, 2}},
       {"evaa_liquidate_data", {evaa_liquidate_data, 1}},
       {"tonco_swap_data", {tonco_swap_data, 1}},
       // stonfi_v2_swap_data reads the in-leg by block type instead of a
