@@ -35,6 +35,7 @@ class _CaptureOccurrence:
     under_peek: bool
     under_recursive: bool
     branch_path: tuple[tuple[int, int, int], ...]
+    alt_path: tuple[tuple[int, int, int], ...]
     # True when any enclosing alternative is NOT exclusive (plain `|` failing the
     # ExclusiveOr-upgrade heuristic). Such positions can never anchor.
     under_nonexclusive_alt: bool = False
@@ -82,9 +83,9 @@ def _alternative_is_exclusive(
 
 
 def _occurrences_mutually_exclusive(a: _CaptureOccurrence, b: _CaptureOccurrence) -> bool:
-    """True if a and b sit in different branches of some common exclusive alternative."""
-    b_by_alt = {alt_id: idx for alt_id, idx, _n in b.branch_path}
-    for alt_id, idx, _n in a.branch_path:
+    """True if a and b sit in different branches of some common alternative."""
+    b_by_alt = {alt_id: idx for alt_id, idx, _n in b.alt_path}
+    for alt_id, idx, _n in a.alt_path:
         if alt_id in b_by_alt and b_by_alt[alt_id] != idx:
             return True
     return False
@@ -520,6 +521,7 @@ def _resolve_matcher(
         under_peek: bool,
         under_recursive: bool,
         branch_path: tuple[tuple[int, int, int], ...],
+        alt_path: tuple[tuple[int, int, int], ...],
         under_nonexclusive_alt: bool = False,
     ) -> None:
         if isinstance(p, ast_.Node):
@@ -544,44 +546,44 @@ def _resolve_matcher(
                     under_peek=under_peek,
                     under_recursive=under_recursive,
                     branch_path=branch_path,
+                    alt_path=alt_path,
                     under_nonexclusive_alt=under_nonexclusive_alt,
                 ))
         elif isinstance(p, ast_.Maybe):
             visit(
-                p.inner, True, under_peek, under_recursive, branch_path,
+                p.inner, True, under_peek, under_recursive, branch_path, alt_path,
                 under_nonexclusive_alt,
             )
         elif isinstance(p, ast_.Peek):
             visit(
-                p.inner, under_maybe, True, under_recursive, branch_path,
+                p.inner, under_maybe, True, under_recursive, branch_path, alt_path,
                 under_nonexclusive_alt,
             )
         elif isinstance(p, ast_.Sequence):
             visit(
-                p.head, under_maybe, under_peek, under_recursive, branch_path,
+                p.head, under_maybe, under_peek, under_recursive, branch_path, alt_path,
                 under_nonexclusive_alt,
             )
             for _e, atom in p.tail:
                 visit(
-                    atom, under_maybe, under_peek, under_recursive, branch_path,
+                    atom, under_maybe, under_peek, under_recursive, branch_path, alt_path,
                     under_nonexclusive_alt,
                 )
         elif isinstance(p, ast_.Alternative):
             exclusive = _alternative_is_exclusive(p, opcodes, registries)
+            alt_id = alt_ids.setdefault(id(p), len(alt_ids))
             if exclusive:
-                alt_id = alt_ids.setdefault(id(p), len(alt_ids))
                 alt_nodes[alt_id] = p
             for idx, b in enumerate(p.branches):
-                if exclusive:
-                    visit(b, under_maybe, under_peek, under_recursive,
-                          branch_path + ((alt_id, idx, len(p.branches)),),
-                          under_nonexclusive_alt)
-                else:
-                    visit(b, under_maybe, under_peek, under_recursive, branch_path, True)
+                branch = ((alt_id, idx, len(p.branches)),)
+                visit(b, under_maybe, under_peek, under_recursive,
+                      branch_path + branch if exclusive else branch_path,
+                      alt_path + branch,
+                      under_nonexclusive_alt or not exclusive)
         elif isinstance(p, ast_.ChildrenBlock):
             for it in p.items:
                 visit(
-                    it, under_maybe, under_peek, under_recursive, branch_path,
+                    it, under_maybe, under_peek, under_recursive, branch_path, alt_path,
                     under_nonexclusive_alt,
                 )
         elif isinstance(p, ast_.RuleRef):
@@ -595,10 +597,12 @@ def _resolve_matcher(
                 target_class = rule_recursion.get(target.name, RecursionClass.NONE)
                 if target_class is RecursionClass.NONE:
                     visit(target.pattern, under_maybe, under_peek, under_recursive=False,
-                          branch_path=branch_path, under_nonexclusive_alt=under_nonexclusive_alt)
+                          branch_path=branch_path, alt_path=alt_path,
+                          under_nonexclusive_alt=under_nonexclusive_alt)
                 else:
                     visit(target.pattern, under_maybe, under_peek, under_recursive=True,
-                          branch_path=branch_path, under_nonexclusive_alt=under_nonexclusive_alt)
+                          branch_path=branch_path, alt_path=alt_path,
+                          under_nonexclusive_alt=under_nonexclusive_alt)
 
     visit(
         m.pattern,
@@ -606,13 +610,14 @@ def _resolve_matcher(
         under_peek=False,
         under_recursive=False,
         branch_path=(),
+        alt_path=(),
     )
 
     captures: dict[str, CaptureInfo] = {}
     for cap_name, occs in occurrences.items():
         if len(occs) > 1:
-            # Legal only when every pair of occurrences is separated by an
-            # exclusive alternative AND all agree on recursion context.
+            # Every pair must occupy different branches of a common alternative
+            # and agree on recursion context.
             same_recursion = all(o.under_recursive == occs[0].under_recursive for o in occs)
             offending: ast_.Node | None = None if same_recursion else occs[1].node
             if offending is None:
@@ -627,7 +632,7 @@ def _resolve_matcher(
                 bag.error(
                     "R005_DUP_CAPTURE",
                     f"capture {cap_name!r} defined more than once in matcher {m.name!r} "
-                    f"(occurrences are not in mutually exclusive alternative branches)",
+                    f"(occurrences are not in different branches of a common alternative)",
                     offending.span,
                 )
                 first = occs[0]
