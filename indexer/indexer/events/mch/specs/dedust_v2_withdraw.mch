@@ -62,10 +62,8 @@
 # include_excess=false spec, so it stays out of this port.
 #
 # ORDERING. The 0x20b5ef89 anchor is claimed by no other spec and neither are
-# the three inner opcodes, so this file's position in the built-in source list
-# carries no tie-break of its own; it is listed right after
-# specs/dedust_v2_swap.mch, which mirrors dedust_v2.matchers() (swap,
-# failed swap, withdraw). The manifest keeps this matcher after the jetton
+# the three inner opcodes, so its position in specs/manifest.yaml carries no
+# tie-break of its own. The manifest keeps this matcher after the jetton
 # family, which builds its jetton_transfer payout legs.
 
 import "lib/leg.mch"

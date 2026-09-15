@@ -11,8 +11,7 @@
 # honest ABI union and the real ref groups remain visible to consumers.
 #
 # Anchor claims: 0xc0ffee27 (deposit) and 0xc0ffee06 (create vault) are claimed
-# by no other spec, so this file's position in the built-in source list carries no
-# tie-break.
+# by no other spec, so their positions in specs/manifest.yaml carry no tie-break.
 
 import "lib/leg.mch"
 

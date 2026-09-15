@@ -75,7 +75,7 @@ struct CompiledMatcher {
 
   std::vector<CompiledNode> nodes;      // local pool, remapped, root == 0
   std::vector<std::string> slot_names;  // slot id -> capture name (decl order)
-  std::vector<std::string> cards;       // slot id -> "one"|"opt"|"many"
+  std::vector<std::string> cards;       // slot id -> "one"|"many"
 
   // Recursion capture ownership (per recursive node id -> owned slot ids).
   std::map<int, std::set<int>> step_slots;

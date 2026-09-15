@@ -32,7 +32,7 @@ struct MatchDepthExceeded : std::runtime_error {
   MatchDepthExceeded() : std::runtime_error("match recursion depth exceeded") {}
 };
 
-// One assembled capture. A scalar (`one`/`opt`) has is_list=false and exactly
+// One assembled capture. A scalar (`one`) has is_list=false and exactly
 // one entry in `vals` (nullptr == unbound/None). A `many` capture has
 // is_list=true and `vals` in assembly order (nullptr == gap-aligned None).
 struct Capture {

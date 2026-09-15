@@ -12,8 +12,8 @@
 #
 # Ordering
 # --------
-# Position in the built-in source list: AFTER specs/getgems.mch and
-# specs/nft_transfer.mch, listed next to specs/teleitem_auction.mch.
+# specs/manifest.yaml lists these matchers after the GetGems, NFT transfer,
+# and Teleitem matchers.
 #
 #  - `nft_put_on_sale` anchors `btype nft_transfer`, the same anchor
 #    specs/getgems.mch uses. Legacy runs GetgemsNftPurchaseBlockMatcher first, so

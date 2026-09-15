@@ -65,11 +65,9 @@
 # absorbed.
 #
 # ORDERING. Both anchors (0x25251ee0, 0xdc5ddba1) are claimed by no other spec,
-# and no other spec binds a block this one produces, so this file's slot in
-# the built-in source list carries no tie-break of its own; it is listed right
-# after specs/dedust_v2_withdraw.mch, mirroring dedust_v2.matchers() (swap,
-# failed swap, withdraw, deposit, rejected deposit, partial deposit). The
-# manifest keeps these matchers after the jetton family, which builds their
+# and no other spec binds a block this one produces, so their positions in
+# specs/manifest.yaml carry no tie-break of their own. The manifest keeps
+# these matchers after the jetton family, which builds their
 # jetton_transfer carriers and refund legs. The
 # two claim specs sit BEFORE this one in the manifest while the reference lists
 # them after; their anchors (0x5652f1df / 0x909fdb65) are disjoint from this

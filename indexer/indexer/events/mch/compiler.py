@@ -257,7 +257,7 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         source_span=decl.span,
         produces=tuple(decl.produces),
         captures=tuple(
-            (cname, "many" if ci.list_binding else ("opt" if ci.optional else "one"))
+            (cname, "many" if ci.list_binding else "one")
             for cname, ci in rm.captures.items()
         ),
         include_excess=bool(decl.include_excess),

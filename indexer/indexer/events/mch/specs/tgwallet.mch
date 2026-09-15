@@ -7,8 +7,8 @@
 # engine-made gasless_request marker; change_wallet_key is a v1 op, so the
 # marker is not expanded as a child row and is unwound onto the spine instead.
 #
-# Listed last in the source list: it only claims a change-key call that no
-# composite matcher wanted.
+# Listed last in specs/manifest.yaml: it claims change-key calls left by
+# composite matchers.
 
 import "lib/common.mch"
 

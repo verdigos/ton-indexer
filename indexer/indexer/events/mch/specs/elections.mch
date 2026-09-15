@@ -32,10 +32,8 @@
 # btypes are in `v1_ops` on both engines, so neither expands child rows.
 #
 # ORDERING. None of the four opcodes is claimed by any other spec, and neither
-# matcher binds a block another matcher produces, so the file's position in
-# the built-in source list carries no tie-break; it is listed where the file-name
-# sort puts it. The reference registers the pair between ChangeDnsRecordMatcher
-# and SubscriptionBlockMatcher, neither of which shares an anchor with it.
+# matcher binds a block another matcher produces, so their positions in
+# specs/manifest.yaml carry no tie-break.
 #
 # Capture -> reference role map:
 #   @req    the anchor call (`test_self` target, `block` in build_block)
