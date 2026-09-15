@@ -4,9 +4,6 @@
 # - anchor moved out of the recursive rule (entry cannot be a list binding);
 #   the first hop's swap/payout/out-alternative live in the matcher pattern,
 #   hops 2..n repeat via $swap_hop;
-# - the anchor's child chain is wrapped in a one-item children set so the
-#   parent edge stays attached to the anchor; a bare
-#   `-> ... <-` chain is C009;
 # - the idealized `op JettonInternalTransfer` out-arm is implemented as
 #   `btype jetton_transfer` + an inline `where (not .has_internal_transfer)`
 #   (the former `no_internal_transfer` host predicate, folded into the language
@@ -66,18 +63,23 @@ matcher stonfi_v2_swap {
     produces JettonSwapBlock
     entry    @swap
 
-    op StonfiV2Swap @swap
-      -> { op StonfiV2PayTo @payout
-             -> ( btype jetton_transfer @out_transfer where (not .has_internal_transfer)
-                    -> pred pton_self_transfer
-                    -> op JettonNotify
-                    -> maybe $swap_hop
-                ^ btype jetton_transfer @out_transfer
-                    -> { maybe op PTonTransfer }
-                    -> maybe $swap_hop
-                ^ $swap_hop ) }
-      <- ( btype jetton_transfer @in_transfer
-         ^ op JettonNotify <- op PTonTransfer @in_transfer )
+    op StonfiV2Swap @swap {
+        children first {
+            op StonfiV2PayTo @payout
+                -> ( btype jetton_transfer @out_transfer where (not .has_internal_transfer)
+                        -> pred pton_self_transfer
+                        -> op JettonNotify
+                        -> maybe $swap_hop
+                   ^ btype jetton_transfer @out_transfer
+                        -> { maybe op PTonTransfer }
+                        -> maybe $swap_hop
+                   ^ $swap_hop )
+        }
+        parent {
+            ( btype jetton_transfer @in_transfer
+            ^ op JettonNotify <- op PTonTransfer @in_transfer )
+        }
+    }
 
     let d = stonfi_v2_swap_data(consumed)
     failed when d.failed

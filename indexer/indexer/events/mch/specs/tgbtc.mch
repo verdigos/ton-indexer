@@ -186,11 +186,7 @@ matcher tgbtc_burn {
 # The dkg log is a SIBLING of the anchor, so it is reached through the anchor's
 # parent — legacy's `parent_matcher=GenericMatcher(test_self=True,
 # child_matcher=<dkg log>)`, i.e. "the anchor's parent, whatever it is, must
-# also have a dkg-log child". `any @p` is that untyped parent. The shape is
-# This is legal because a children block does not advance the chain
-# cursor, so `@k -> {…}` still leaves the parent edge attached to the anchor,
-# and the trailing `-> {…}` attaches to @p — not the C009 shape, which needs a
-# parent edge hanging off a node reached BY a child edge.
+# also have a dkg-log child". `any @p` is that untyped parent.
 #
 # Deviation, unobservable on the corpus: legacy's `child_matcher` consumes EVERY
 # matching child of @p, this children block consumes the first. No trace carries
@@ -203,12 +199,17 @@ matcher tgbtc_new_key {
     produces tgbtc_new_key
     entry    @k
 
-    op TgBTCNewKeyRequest @k
-      -> { op TgBTCNewKeyLog @log
-         ; maybe op TgBTCPayout
-             -> { maybe op TgBTCPayoutNotify ; maybe btype ton_transfer } }
-      <- any @p
-        -> { op TgBTCDkgCompletedLog @dkg }
+    op TgBTCNewKeyRequest @k {
+        children first {
+            op TgBTCNewKeyLog @log
+            ; maybe op TgBTCPayout
+                -> { maybe op TgBTCPayoutNotify ; maybe btype ton_transfer }
+        }
+        parent {
+            any @p
+                -> { op TgBTCDkgCompletedLog @dkg }
+        }
+    }
 
     let n = tgbtc_new_key_log(log)
     let g = tgbtc_dkg_completed_log(dkg)

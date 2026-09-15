@@ -175,15 +175,17 @@ matcher cocoon_client_change_secret_hash {
 
 # The OwnerWalletSendMessage anchor arm is structurally dead: its only child is
 # the refund call, so it cannot satisfy the required children set below.
-# Keep the children block before the parent edge so it attaches to the anchor.
 matcher cocoon_client_request_refund {
     produces cocoon_client_request_refund
     entry    @refund
 
-    op [CocoonOwnerWalletSendMessage, CocoonOwnerClientRequestRefund] @refund
-      -> { op CocoonReturnExcessesBack @excesses
-         ; op CocoonClientProxyRequest @client_request }
-      <- maybe op CocoonOwnerWalletSendMessage @wallet
+    op [CocoonOwnerWalletSendMessage, CocoonOwnerClientRequestRefund] @refund {
+        children first {
+            op CocoonReturnExcessesBack @excesses
+            ; op CocoonClientProxyRequest @client_request
+        }
+        parent { maybe op CocoonOwnerWalletSendMessage @wallet }
+    }
 
     parse refund as CocoonOwnerClientRequestRefund
     failed when (refund.msg.transaction.aborted ?? false)

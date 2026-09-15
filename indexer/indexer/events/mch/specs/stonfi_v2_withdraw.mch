@@ -71,10 +71,13 @@ matcher stonfi_v2_withdraw_refund {
     produces dex_withdraw_liquidity
     entry    @refund
 
-    op StonfiV2WithdrawRefund @refund
-      -> { op StonfiV2PayTo @payout_1 -> btype jetton_transfer @jt_1 -> maybe op PTonTransfer @pton_1
-         ; op StonfiV2PayTo @payout_2 -> btype jetton_transfer @jt_2 -> maybe op PTonTransfer @pton_2 }
-      <- op StonfiV2WithdrawRefundParent @refund_parent
+    op StonfiV2WithdrawRefund @refund {
+        children first {
+            op StonfiV2PayTo @payout_1 -> btype jetton_transfer @jt_1 -> maybe op PTonTransfer @pton_1
+            ; op StonfiV2PayTo @payout_2 -> btype jetton_transfer @jt_2 -> maybe op PTonTransfer @pton_2
+        }
+        parent { op StonfiV2WithdrawRefundParent @refund_parent }
+    }
 
     parse pton_1 as PTonTransfer
     parse pton_2 as PTonTransfer

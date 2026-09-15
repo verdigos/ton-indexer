@@ -43,12 +43,15 @@ matcher coffee_swap {
     produces JettonSwapBlock
     entry    @swap
 
-    op CoffeeSwapInternal @swap
-      -> { op CoffeeSwapSuccessfulEvent @event
-         ; ( $swap_chain
-           | op CoffeePayoutInternal @payout
-               -> ( btype jetton_transfer @out ^ op CoffeePayout @out ^ op CoffeeNotification @out ) ) }
-      <- ( btype jetton_transfer @in_transfer ^ op CoffeeSwapNative @in_transfer )
+    op CoffeeSwapInternal @swap {
+        children first {
+            op CoffeeSwapSuccessfulEvent @event
+            ; ( $swap_chain
+              | op CoffeePayoutInternal @payout
+                -> ( btype jetton_transfer @out ^ op CoffeePayout @out ^ op CoffeeNotification @out ) )
+        }
+        parent { ( btype jetton_transfer @in_transfer ^ op CoffeeSwapNative @in_transfer ) }
+    }
 
     require d = coffee_swap_data(consumed)
     failed when d.failed

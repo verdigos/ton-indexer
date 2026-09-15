@@ -15,9 +15,7 @@
 # - anchor duplication: the first hop's payout/out-alternative lives in the
 #   matcher pattern (`entry` cannot live inside a rule), hops 2..n repeat via
 #   $tonco_hop;
-# - the anchor's child chain is wrapped in a one-item children set so the
-#   parent edge stays attached to the anchor (a bare `-> … <-` chain is C009);
-#   the children set consumes ONE payout child per anchor where legacy
+# - the children set consumes ONE payout child per anchor where legacy
 #   child_matcher consumes every matching child — identical while a pool
 #   answers a swap message with exactly one ROUTERV3_PAY_TO (protocol
 #   behavior, holds across the corpus);
@@ -69,14 +67,19 @@ matcher tonco_swap {
     produces jetton_swap
     entry    @swap
 
-    op ToncoPoolV3Swap @swap
-      -> { op ToncoRouterV3PayTo
-             -> ( btype jetton_transfer -> op PTonTransfer -> op JettonNotify -> $tonco_hop
-                | btype jetton_transfer -> $tonco_hop
-                | op JettonTransfer -> op PTonTransfer
-                | btype jetton_transfer -> { maybe op PTonTransfer } ) }
-      <- ( btype jetton_transfer @in_transfer
-         ^ op JettonNotify <- op PTonTransfer @in_transfer )
+    op ToncoPoolV3Swap @swap {
+        children first {
+            op ToncoRouterV3PayTo
+                -> ( btype jetton_transfer -> op PTonTransfer -> op JettonNotify -> $tonco_hop
+                   | btype jetton_transfer -> $tonco_hop
+                   | op JettonTransfer -> op PTonTransfer
+                   | btype jetton_transfer -> { maybe op PTonTransfer } )
+        }
+        parent {
+            ( btype jetton_transfer @in_transfer
+            ^ op JettonNotify <- op PTonTransfer @in_transfer )
+        }
+    }
 
     require r = tonco_swap_data(consumed)
     failed when r.failed

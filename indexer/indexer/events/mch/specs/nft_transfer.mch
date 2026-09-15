@@ -50,10 +50,13 @@ matcher nft_transfer {
     entry           @transfer
     include_excess  false
 
-    op NftTransfer @transfer
-      -> { maybe op NftOwnershipAssigned @assigned
-         ; maybe op Excess @excess }
-      <- maybe peek any @funding_parent
+    op NftTransfer @transfer {
+        children first {
+            maybe op NftOwnershipAssigned @assigned
+            ; maybe op Excess @excess
+        }
+        parent { maybe peek any @funding_parent }
+    }
 
     # HYBRID declarative build (C++-runnable). The core (NftTransfer/ownership
     # parse, nft-item lookup, nft_sale/nft_auction purchase detection) is the one

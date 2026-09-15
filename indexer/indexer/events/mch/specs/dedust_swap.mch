@@ -44,14 +44,15 @@ matcher dedust_swap {
     produces JettonSwapBlock
     entry    @ext
 
-    op DedustSwapExternal @ext
-      -> {
-           ( op DedustPayoutFromPool @payout
-               -> ( btype jetton_transfer @out_jetton | op DedustPayout @out_ton )
-           | $peer_chain )
-           maybe op DedustSwapNotification @notification
-         }
-      <- ( btype jetton_transfer @in_transfer | op DedustSwap @swap_request )
+    op DedustSwapExternal @ext {
+        children first {
+            ( op DedustPayoutFromPool @payout
+                -> ( btype jetton_transfer @out_jetton | op DedustPayout @out_ton )
+            | $peer_chain )
+            maybe op DedustSwapNotification @notification
+        }
+        parent { ( btype jetton_transfer @in_transfer | op DedustSwap @swap_request ) }
+    }
 
     require legs = dedust_swap_legs(consumed, in_transfer, swap_request)
     failed when notification == null or any(peer_notification as n => n == null)

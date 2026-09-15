@@ -111,13 +111,16 @@ matcher dedust_v2_deposit_final {
     entry           @join
     include_excess  false
 
-    op DedustV2JoinLiquidity @join
-      -> { maybe op DedustV2DepositEvent @event
-         ; maybe op DedustV2CreditLiquidity
-         ; maybe btype jetton_transfer @refund_jt_1
-         ; maybe btype jetton_transfer @refund_jt_2
-         ; maybe op PayoutMessage @refund_ton }
-      <- $dv2_credit_parent
+    op DedustV2JoinLiquidity @join {
+        children first {
+            maybe op DedustV2DepositEvent @event
+            ; maybe op DedustV2CreditLiquidity
+            ; maybe btype jetton_transfer @refund_jt_1
+            ; maybe btype jetton_transfer @refund_jt_2
+            ; maybe op PayoutMessage @refund_ton
+        }
+        parent { $dv2_credit_parent }
+    }
 
     parse join       as DedustV2JoinLiquidity
     parse event      as DedustV2DepositEvent
@@ -180,13 +183,16 @@ matcher dedust_v2_deposit_rejected {
     entry           @join
     include_excess  false
 
-    op DedustV2JoinLiquidity @join
-      -> { maybe btype jetton_transfer @refund_jt_1
-         ; maybe btype jetton_transfer @refund_jt_2
-         ; maybe op PayoutMessage @refund_ton
-         ; maybe op DedustV2DepositEvent @event
-         ; maybe op Excess }
-      <- $dv2_credit_parent
+    op DedustV2JoinLiquidity @join {
+        children first {
+            maybe btype jetton_transfer @refund_jt_1
+            ; maybe btype jetton_transfer @refund_jt_2
+            ; maybe op PayoutMessage @refund_ton
+            ; maybe op DedustV2DepositEvent @event
+            ; maybe op Excess
+        }
+        parent { $dv2_credit_parent }
+    }
 
     parse join       as DedustV2JoinLiquidity
     parse credit     as DedustV2CreditAsset
@@ -250,9 +256,10 @@ matcher dedust_v2_deposit_partial {
     entry           @credit
     include_excess  false
 
-    op DedustV2CreditAsset @credit
-      -> { maybe op Excess }
-      <- $dv2_deposit_carrier
+    op DedustV2CreditAsset @credit {
+        children first { maybe op Excess }
+        parent { $dv2_deposit_carrier }
+    }
 
     parse credit  as DedustV2CreditAsset
     parse carrier as DedustV2PayNative

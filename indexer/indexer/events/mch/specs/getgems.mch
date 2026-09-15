@@ -9,10 +9,13 @@ matcher getgems_nft_purchase {
     shape    getgems_proxy_insert
     entry    @nft
 
-    btype nft_transfer @nft where (.is_purchase and .marketplace == "getgems")
-      -> { maybe btype ton_transfer @payout where (.destination == nft.data.real_prev_owner) }
-      <- maybe peek btype ton_transfer where (.comment in ["finish", "stop"])
-           -> { maybe peek btype ton_transfer @sib_payout where (.destination == nft.data.real_prev_owner) }
+    btype nft_transfer @nft where (.is_purchase and .marketplace == "getgems") {
+        children first { maybe btype ton_transfer @payout where (.destination == nft.data.real_prev_owner) }
+        parent {
+            maybe peek btype ton_transfer where (.comment in ["finish", "stop"])
+                -> { maybe peek btype ton_transfer @sib_payout where (.destination == nft.data.real_prev_owner) }
+        }
+    }
 
     require seller_payout = sib_payout ?? payout
     out {

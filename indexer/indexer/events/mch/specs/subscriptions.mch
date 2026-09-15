@@ -11,7 +11,10 @@ matcher subscribe {
     produces subscribe
     entry    @resp
 
-    op Response @resp -> { op Payment @pay } <- maybe op Request @req
+    op Response @resp {
+        children first { op Payment @pay }
+        parent { maybe op Request @req }
+    }
 
     parse req as SubscriptionPaymentRequest
     failed when req != null and req.failed

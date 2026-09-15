@@ -103,6 +103,11 @@ def _collect_predicate_names(p: ast_.PatternExpr, out: set[str]) -> None:
             out.add(p.where_predicate)
         if isinstance(p.head, ast_.PredHead):
             out.add(p.head.name)
+        if p.relations is not None:
+            r = p.relations
+            for target in (r.children_all, *(r.children_first or ()), r.parent):
+                if target is not None:
+                    _collect_predicate_names(target, out)
     elif isinstance(p, (ast_.Maybe, ast_.Peek)):
         _collect_predicate_names(p.inner, out)
     elif isinstance(p, ast_.Sequence):

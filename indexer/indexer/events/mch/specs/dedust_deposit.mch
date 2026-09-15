@@ -79,16 +79,21 @@ matcher dedust_deposit_final {
     produces dedust_deposit_liquidity
     entry    @pool
 
-    op DedustDepositLiquidityToPool @pool
-      -> { ( op JettonInternalTransfer @lp_transfer -> maybe op JettonNotify
-           | op DedustRejection @rejection
-               -> { maybe btype ton_transfer ; $vault_excess ; $vault_excess } )
-         ; maybe op DedustDestroyLiquidityDepositContract
-             -> { maybe btype ton_transfer ; $vault_excess ; $vault_excess } }
-      <- op DedustTopUpLiquidityDepositContract
-      <- op DedustAskLiquidityFactory
-         -> { maybe op DedustDeployDepositContract }
-         <- $deposit_leg
+    op DedustDepositLiquidityToPool @pool {
+        children first {
+            ( op JettonInternalTransfer @lp_transfer -> maybe op JettonNotify
+            | op DedustRejection @rejection
+                -> { maybe btype ton_transfer ; $vault_excess ; $vault_excess } )
+            ; maybe op DedustDestroyLiquidityDepositContract
+                -> { maybe btype ton_transfer ; $vault_excess ; $vault_excess }
+        }
+        parent {
+            op DedustTopUpLiquidityDepositContract
+                <- op DedustAskLiquidityFactory
+                    -> { maybe op DedustDeployDepositContract }
+                    <- $deposit_leg
+        }
+    }
 
     require r = dedust_deposit_final_data(consumed)
     failed when not r.success
@@ -118,9 +123,10 @@ matcher dedust_deposit_partial {
     entry    @topup
 
     op DedustTopUpLiquidityDepositContract @topup
-      <- op DedustAskLiquidityFactory
-         -> { op DedustDeployDepositContract }
-         <- $deposit_leg
+        <- op DedustAskLiquidityFactory {
+            children first { op DedustDeployDepositContract }
+            parent { $deposit_leg }
+        }
 
     require r = dedust_deposit_partial_data(consumed)
     out {

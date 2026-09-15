@@ -85,15 +85,12 @@ matcher coffee_create_pool_creator {
     produces coffee_create_pool_creator
     entry    @request
 
-    # `-> { op CoffeeDeploy }` rather than `-> op CoffeeDeploy`: a children block
-    # does not advance the chain cursor, so the `<-` leg edge still belongs to
-    # the ANCHOR instead of tripping C009 on the deploy node, as in the
-    # coffee_liquidity / dedust_deposit matchers. Legacy's single
-    # `child_matcher` and a one-item children block differ only when several
-    # 0xc0ffee22 children exist, which the factory never emits.
-    op CoffeeCreatePoolCreatorRequest @request
-      -> { op CoffeeDeploy @deploy }
-      <- ( btype jetton_transfer @in_jt ^ op CoffeeCreatePoolNative @in_native )
+    # Legacy's single `child_matcher` and a one-item children block differ only
+    # when several 0xc0ffee22 children exist, which the factory never emits.
+    op CoffeeCreatePoolCreatorRequest @request {
+        children first { op CoffeeDeploy @deploy }
+        parent { ( btype jetton_transfer @in_jt ^ op CoffeeCreatePoolNative @in_native ) }
+    }
 
     parse request as CoffeeCreatePoolCreatorRequest
     let pool_first  = asset_of(request.body.pool_first)

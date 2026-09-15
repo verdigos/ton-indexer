@@ -7,9 +7,6 @@
 # JettonTransferBlockMatcher, PTonTransferMatcher).
 #
 # Shape notes:
-# - the anchor's optional MinAndRefund child chain is wrapped in a one-item
-#   children set so the parent edge stays attached to the anchor; a bare
-#   `-> ... <-` chain is C009 — dedust_swap precedent;
 # - each refund transfer carries `-> { maybe op PTonTransfer }`: legacy
 #   output_ton_or_jetton has an optional PTonTransfer child_matcher;
 # - `maybe op Excess` mirrors the legacy explicit children item — the
@@ -46,18 +43,23 @@ matcher tonco_deposit_liquidity {
     produces tonco_deposit_liquidity
     entry    @add_liquidity
 
-    op ToncoAccountV3AddLiquidity @add_liquidity
-      -> { maybe op ToncoPoolV3MinAndRefund
-             -> { maybe op ToncoRouterV3PayTo @refund_router_call
-                    -> { maybe btype jetton_transfer @excess_transfer_0
-                           -> { maybe op PTonTransfer }
-                       ; maybe btype jetton_transfer @excess_transfer_1
-                           -> { maybe op PTonTransfer } }
-                ; btype nft_mint @nft_mint
-                ; maybe op Excess } }
-      <- op ToncoPoolV3FundAccount
-      <- ( op JettonNotify @ton_input <- op PTonTransfer @ton_input_addition
-         | btype jetton_transfer @jetton_input )
+    op ToncoAccountV3AddLiquidity @add_liquidity {
+        children first {
+            maybe op ToncoPoolV3MinAndRefund
+                -> { maybe op ToncoRouterV3PayTo @refund_router_call
+                        -> { maybe btype jetton_transfer @excess_transfer_0
+                                -> { maybe op PTonTransfer }
+                           ; maybe btype jetton_transfer @excess_transfer_1
+                                -> { maybe op PTonTransfer } }
+                   ; btype nft_mint @nft_mint
+                   ; maybe op Excess }
+        }
+        parent {
+            op ToncoPoolV3FundAccount
+                <- ( op JettonNotify @ton_input <- op PTonTransfer @ton_input_addition
+                   | btype jetton_transfer @jetton_input )
+        }
+    }
 
     require r = tonco_deposit_liquidity_data(consumed)
     out {

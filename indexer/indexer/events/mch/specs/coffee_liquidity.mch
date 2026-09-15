@@ -37,14 +37,10 @@ opcode TakeWalletAddress                      = 0xd1735400
 # excess back. So a two-asset deposit produces TWO of these blocks: the first
 # leg's has no 0xc0ffee29 subtree at all (pool/lp null), the second leg's has it.
 #
-# Legacy `child_matcher=deploy` is written here as a one-item children block
-# (`-> { op CoffeeDeploy ... }`): a children block does not advance the chain
-# cursor, so the `<-` in-transfer edge still belongs to the ANCHOR, as in the
-# dedust_deposit matcher, instead of tripping
-# C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED on the deploy node. With a single
-# item the two lowerings differ only when several 0xc0ffee22 children exist
-# (legacy would consume them all; its build reads only the first via
-# get_labeled) — never observed.
+# Legacy `child_matcher=deploy` is written here as a one-item children block.
+# With a single item the two lowerings differ only when several 0xc0ffee22
+# children exist (legacy would consume them all; its build reads only the
+# first via get_labeled) — never observed.
 #
 # Slot assignment: the legacy build compares `str(in_asset)` against
 # `str(pool_params.first/second)` and rejects when the incoming asset is in
@@ -69,16 +65,19 @@ matcher coffee_deposit_liquidity {
     produces coffee_deposit_liquidity
     entry    @request
 
-    op CoffeeCreateLiquidityDepositoryRequest @request
-      -> { op CoffeeDeploy @deploy
-             -> maybe op CoffeeDepositLiquidityInternal
-                  -> { op JettonInternalTransfer -> maybe op Excess
-                     ; op CoffeeDepositLiquiditySuccessfulEvent @success
-                     ; maybe op CoffeePayoutInternal @payout
-                         -> ( btype jetton_transfer @out_jt
-                            ^ op CoffeePayout @out_call
-                            ^ op CoffeeNotification @out_call ) } }
-      <- ( op CoffeeDepositLiquidityNative @in_native ^ btype jetton_transfer @in_jt )
+    op CoffeeCreateLiquidityDepositoryRequest @request {
+        children first {
+            op CoffeeDeploy @deploy
+                -> maybe op CoffeeDepositLiquidityInternal
+                    -> { op JettonInternalTransfer -> maybe op Excess
+                       ; op CoffeeDepositLiquiditySuccessfulEvent @success
+                       ; maybe op CoffeePayoutInternal @payout
+                            -> ( btype jetton_transfer @out_jt
+                               ^ op CoffeePayout @out_call
+                               ^ op CoffeeNotification @out_call ) }
+        }
+        parent { ( op CoffeeDepositLiquidityNative @in_native ^ btype jetton_transfer @in_jt ) }
+    }
 
     parse request as CoffeeCreateLiquidityDepositoryRequest
     parse success as CoffeeDepositLiquiditySuccessfulEvent
