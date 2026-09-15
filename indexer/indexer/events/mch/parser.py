@@ -489,9 +489,7 @@ def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
 
     if t.kind is TokenKind.LPAREN:
         s.i += 1
-        s.skip_newlines()
         inner = _parse_pattern_expr(s)
-        s.skip_newlines()
         end = s.eat(TokenKind.RPAREN).span
         if isinstance(inner, ast_.Alternative):
             return replace(inner, span=_join(t.span, end))
@@ -530,17 +528,14 @@ def _parse_node(s: _ParserState) -> ast_.Node:
     if t.kind is TokenKind.KW_OP:
         s.i += 1
         if s.try_eat(TokenKind.LBRACKET):
-            s.skip_newlines()
             if s.at(TokenKind.RBRACKET):
                 s.bag.error("P016_EMPTY_OPCODE_SET", "opcode set must contain at least one member",
                             _join(t.span, s.peek().span))
                 raise CompileError(s.bag)
             while True:
                 members.append(_parse_op_head(s, s.peek().span))
-                s.skip_newlines()
                 if not s.try_eat(TokenKind.COMMA):
                     break
-                s.skip_newlines()
                 if s.at(TokenKind.RBRACKET):
                     break
             head_start_span = _join(t.span, s.eat(TokenKind.RBRACKET).span)
@@ -595,9 +590,7 @@ def _parse_node(s: _ParserState) -> ast_.Node:
         s.i += 1
         if s.at(TokenKind.LPAREN):
             s.i += 1
-            s.skip_newlines()
             where_expr = _parse_expr(s)
-            s.skip_newlines()
             rp = s.eat(TokenKind.RPAREN)
             head_start_span = _join(head_start_span, rp.span)
         else:
@@ -1001,15 +994,12 @@ def _parse_postfix(s: _ParserState) -> ast_.Expr:
 
 def _parse_arg_list(s: _ParserState) -> tuple[tuple[ast_.Expr, ...], Span]:
     """Parse `expr (, expr)*` up to and including the closing ')'."""
-    s.skip_newlines()
     args: list[ast_.Expr] = []
     if not s.at(TokenKind.RPAREN):
         args.append(_parse_expr(s))
         while s.at(TokenKind.COMMA):
             s.i += 1
-            s.skip_newlines()
             args.append(_parse_expr(s))
-    s.skip_newlines()
     end = s.eat(TokenKind.RPAREN).span
     return tuple(args), end
 
@@ -1053,14 +1043,11 @@ def _parse_comprehension(s: _ParserState) -> ast_.Comprehension:
     kind = "any" if head.kind is TokenKind.KW_ANY else head.text  # map | all
     s.i += 1
     s.eat(TokenKind.LPAREN)
-    s.skip_newlines()
     xs = _parse_expr(s)
     s.eat(TokenKind.KW_AS)
     var_tok = s.eat(TokenKind.IDENT)
     s.eat(TokenKind.FATARROW)
-    s.skip_newlines()
     body = _parse_expr(s)
-    s.skip_newlines()
     end = s.eat(TokenKind.RPAREN).span
     return ast_.Comprehension(kind=kind, xs=xs, var=var_tok.text, body=body,
                               span=_join(head.span, end))
@@ -1128,9 +1115,7 @@ def _parse_primary(s: _ParserState) -> ast_.Expr:
         return ast_.FieldRef(field=name.text, span=_join(t.span, name.span))
     if t.kind is TokenKind.LPAREN:
         s.i += 1
-        s.skip_newlines()
         inner = _parse_expr(s)
-        s.skip_newlines()
         s.eat(TokenKind.RPAREN)
         return inner
     if t.kind is TokenKind.LBRACKET:
@@ -1156,19 +1141,15 @@ def _parse_list_lit(s: _ParserState) -> ast_.ListLit:
     """Parse a list literal, allowing a trailing comma and newlines."""
     start = s.eat(TokenKind.LBRACKET).span
     elements: list[ast_.Expr] = []
-    s.skip_newlines()
     if not s.at(TokenKind.RBRACKET):
         elements.append(_parse_expr(s))
         while True:
-            s.skip_newlines()
             if not s.at(TokenKind.COMMA):
                 break
             s.i += 1
-            s.skip_newlines()
             if s.at(TokenKind.RBRACKET):
                 break  # trailing comma
             elements.append(_parse_expr(s))
-    s.skip_newlines()
     end = s.eat(TokenKind.RBRACKET).span
     return ast_.ListLit(elements=tuple(elements), span=_join(start, end))
 

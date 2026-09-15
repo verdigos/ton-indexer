@@ -73,21 +73,23 @@ class _Cursor:
 
 def tokenize(text: str, path: str) -> Iterator[Token]:
     cur = _Cursor(text, path)
+    brackets: list[str] = []
 
     while not cur.at_end():
         ch = cur.peek()
 
-        # Comment: consume to (but not including) newline; the newline becomes a NEWLINE token below.
+        # Comments stop before the newline.
         if ch == "#":
             while not cur.at_end() and cur.peek() != "\n":
                 cur.advance()
             continue
 
-        # Newlines become NEWLINE tokens.
+        # The innermost bracket controls whether newlines separate items.
         if ch == "\n":
             start_i, start_line, start_col = cur.i, cur.line, cur.col
             cur.advance()
-            yield Token(TokenKind.NEWLINE, "\n", cur.span_from(start_i, start_line, start_col))
+            if not brackets or brackets[-1] == "{":
+                yield Token(TokenKind.NEWLINE, "\n", cur.span_from(start_i, start_line, start_col))
             continue
 
         # Other whitespace consumed silently.
@@ -105,6 +107,10 @@ def tokenize(text: str, path: str) -> Iterator[Token]:
         if ch in _SINGLE_CHAR:
             start_i, start_line, start_col = cur.i, cur.line, cur.col
             cur.advance()
+            if ch in "([{":
+                brackets.append(ch)
+            elif brackets and brackets[-1] == {")": "(", "]": "[", "}": "{"}.get(ch):
+                brackets.pop()
             yield Token(_SINGLE_CHAR[ch], ch, cur.span_from(start_i, start_line, start_col))
             continue
 
