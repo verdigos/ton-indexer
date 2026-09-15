@@ -242,7 +242,6 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
     produces: tuple[str, ...] | None = None
     entry:    str | None = None
     shape:    str | None = None
-    priority: int | None = None
     include_excess  = True
     include_bounces = True
     seen_include_directives: set[str] = set()
@@ -285,16 +284,6 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
                 raise CompileError(s.bag)
             s.i += 1
             shape = s.eat(TokenKind.IDENT).text
-        elif t.kind is TokenKind.KW_PRIORITY:
-            if priority is not None:
-                s.bag.error(
-                    "P011_DUPLICATE_DIRECTIVE",
-                    f"matcher {name_tok.text!r} declares more than one `priority` directive",
-                    t.span,
-                )
-                raise CompileError(s.bag)
-            s.i += 1
-            priority = int(s.eat(TokenKind.DEC).text)
         elif t.kind is TokenKind.KW_INCLUDE_EXCESS:
             if "include_excess" in seen_include_directives:
                 s.bag.error(
@@ -344,7 +333,6 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
         span=_join(start, end),
         build_stmts=build_stmts,
         shape=shape,
-        priority=100 if priority is None else priority,
     )
 
 

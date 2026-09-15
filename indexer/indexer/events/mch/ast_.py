@@ -404,9 +404,6 @@ class MatcherDecl:
     # engine after merge, for post-build tree surgery on the produced block's
     # region. None when absent.
     shape: str | None = None
-    # `priority DEC` directive: registration-order weight, lower
-    # runs earlier; ties broken by (file name, source position). Default 100.
-    priority: int = 100
 
     @property
     def produces_primary(self) -> str:

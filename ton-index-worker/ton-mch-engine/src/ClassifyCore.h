@@ -175,7 +175,7 @@ struct SchemaClassifyResult {
 // map, the generated where_expr table the walker evaluates, and the union of
 // referenced lookup kinds.
 struct ClassifySetup {
-  std::vector<int> included;  // indices into the matcher table, priority order
+  std::vector<int> included;  // indices into the matcher table, manifest order
   std::vector<std::pair<std::string, std::string>> skips;
   std::unordered_map<int, BuildOutcome (*)(BuildEnv &)> build_fns;
   WhereTable where_fns;  // node global_id -> generated where fn (GenWheres.h)

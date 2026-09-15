@@ -1,0 +1,156 @@
+# Top runs first.
+order:
+  # Claim deploying leaves before jetton and DEX matchers absorb them.
+  - nft_mint
+
+  # Claim raw transfer, mint and burn calls before the jetton family wraps them.
+  - ethena_withdrawal_request
+  - tonstakers_delayed_withdrawal
+  - tonstakers_deposit
+  - tonstakers_withdraw
+
+  # Build jetton blocks before their consumers. The shared transfer anchor
+  # gives jetton_transfer the first claim, then pton_transfer handles pTON.
+  - jetton_transfer
+  - jetton_burn
+  - jetton_mint
+  - pton_transfer
+
+  # Coffee liquidity and swaps.
+  - coffee_deposit_liquidity
+  - coffee_create_vault
+  - coffee_swap
+  - coffee_withdraw_liquidity
+
+  # DeDust finals claim completed deposits before partials take the remainder.
+  - dedust_deposit_final
+  - dedust_deposit_partial
+  - dedust_swap
+  - dedust_withdraw
+
+  # DeDust V2.
+  - dedust_v2_claim_fees
+  - dedust_v2_claim_reward
+  - dedust_v2_swap
+  - dedust_v2_failed_swap
+  - dedust_v2_withdraw
+  # Final and rejected deposits claim CreditAsset parents before partials.
+  - dedust_v2_deposit_final
+  - dedust_v2_deposit_rejected
+  - dedust_v2_deposit_partial
+
+  # DNS, elections, subscriptions and lending.
+  # Purchase peeks the raw parent before change_dns consumes it.
+  - dns_purchase
+  - change_dns
+  - dns_release
+  - election_deposit
+  - election_recover
+  - subscribe
+  - unsubscribe
+  - ethena_deposit
+  - evaa_supply
+  - evaa_withdraw
+  - evaa_liquidate
+
+  # Build NFT transfers before purchases and sales consume them.
+  - nft_transfer
+
+  # JVault.
+  - jvault_stake
+  - jvault_unstake
+  - jvault_claim
+  - jvault_unstake_request
+
+  # LayerZero send_tokens consumes the block built by send.
+  - layerzero_receive
+  - layerzero_send
+  - layerzero_send_tokens
+  - layerzero_commit_packet
+  - layerzero_dvn_verify
+
+  # Multisig and nominator pools.
+  - multisig_create_order
+  - multisig_approve
+  - multisig_approve_comment
+  - multisig_execute
+  - nominator_pool_withdraw
+  - nominator_pool_deposit
+  - nominator_pool_withdraw_request
+
+  # STON.fi finals consume completed legs before partials take the remainder.
+  - stonfi_v1_swap
+  - stonfi_v2_provide_final
+  - stonfi_v2_provide_partial
+  - stonfi_v2_swap
+  - stonfi_v2_withdraw
+  - stonfi_v2_withdraw_refund
+
+  # Telegram purchases claim assignments before the non-consuming matcher.
+  - telegram_nft_purchase
+  - telegram_nft_assigned
+  # GetGems consumes NFT transfers, including those built by Telegram.
+  # It gets the first claim on the anchor shared with nft_put_on_sale.
+  - getgems_nft_purchase
+  - teleitem_start_auction
+  - teleitem_cancel_auction
+
+  # NFT sales and auctions run after transfer and purchase producers.
+  - nft_update_sale
+  - nft_put_on_sale
+  - nft_discovery
+  # Outbid reads the preceding auction_bid block.
+  - auction_bid
+  - auction_outbid
+  - nft_cancel_sale
+  # Finish wins over cancel when their shared anchor has both linked blocks.
+  - nft_finish_auction
+  - nft_cancel_auction
+
+  # TgBTC full chains consume logs before the log-only fallbacks claim them.
+  # new_key also consumes the DKG log used by dkg_log_only.
+  - tgbtc_mint
+  - tgbtc_burn
+  - tgbtc_new_key
+  - tgbtc_mint_log_only
+  - tgbtc_burn_log_only
+  - tgbtc_new_key_log_only
+  - tgbtc_dkg_log_only
+
+  # TONCO and vesting.
+  - tonco_deposit_liquidity
+  - tonco_deploy_pool
+  - tonco_withdraw_liquidity
+  - tonco_swap
+  - vesting_send_message
+  - vesting_add_whitelist
+
+  # Pool creation consumes the creator block.
+  - coffee_create_pool_creator
+  - coffee_create_pool
+  # MEV protection follows Ethena, JVault and swaps on the shared jetton anchor.
+  - coffee_mev_protect_hold_funds
+  - coffee_mev_protect_hold_funds_jetton
+  - coffee_mev_protect_failed_swap
+  - coffee_mev_protect_failed_swap_jetton
+  # Staking follows all other consumers competing for the jetton anchor.
+  - coffee_staking_deposit
+  - coffee_staking_withdraw
+  - coffee_staking_claim_rewards
+
+  # Cocoon.
+  - cocoon_worker_payout
+  - cocoon_proxy_payout
+  - cocoon_proxy_charge
+  - cocoon_client_top_up
+  - cocoon_register_proxy
+  - cocoon_unregister_proxy
+  - cocoon_client_register
+  - cocoon_client_change_secret_hash
+  - cocoon_client_request_refund
+  - cocoon_grant_refund
+  - cocoon_client_increase_stake
+  - cocoon_client_withdraw
+
+  # Claim only change-key calls left by every other matcher.
+  - change_wallet_key

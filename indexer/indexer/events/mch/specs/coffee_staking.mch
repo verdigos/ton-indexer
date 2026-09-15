@@ -9,7 +9,7 @@
 # `btype jetton_transfer` (the legacy `test_self` is a naked
 # `isinstance(block, JettonTransferBlock)`) — the widest anchor in the family,
 # which is why the required 0xf9471134 child does all the discrimination.
-# `btype nft_mint` binds the block the priority-80 specs/nft_mint.mch builds, so
+# `btype nft_mint` binds the block nft_mint builds earlier in manifest order, so
 # both `minted_item_address` and `minted_item_index` come off it for free.
 #
 # withdraw
@@ -51,9 +51,8 @@
 # What IS load-bearing is the deposit's bare `btype jetton_transfer` anchor,
 # shared with ethena_deposit, jvault_stake, stonfi_v1_swap, dedust_v2_swap/
 # failed_swap and coffee_mev_protect_hold_funds_jetton. This file must run after
-# all of them. The default priority 100 also keeps it behind the
-# priority-90 jetton family (which builds the anchor) and the priority-80
-# nft_mint spec (which builds the child it binds).
+# all of them in the manifest, after the jetton family builds the anchor and
+# nft_mint builds the child it binds.
 
 opcode CoffeeStakingDeposit             = 0xF9471134
 opcode CoffeeStakingPositionWithdraw    = 0xCB03BFAF

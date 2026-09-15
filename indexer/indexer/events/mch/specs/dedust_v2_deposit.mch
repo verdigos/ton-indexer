@@ -68,10 +68,9 @@
 # and no other spec binds a block this one produces, so this file's slot in
 # the built-in source list carries no tie-break of its own; it is listed right
 # after specs/dedust_v2_withdraw.mch, mirroring dedust_v2.matchers() (swap,
-# failed swap, withdraw, deposit, rejected deposit, partial deposit). What IS
-# load-bearing is that it stays after the priority-90 jetton specs — the jetton
-# carriers and the jetton refund legs are `btype jetton_transfer` blocks those
-# must have built first — which the default priority 100 gives for free. The
+# failed swap, withdraw, deposit, rejected deposit, partial deposit). The
+# manifest keeps these matchers after the jetton family, which builds their
+# jetton_transfer carriers and refund legs. The
 # two claim specs sit BEFORE this one in the manifest while the reference lists
 # them after; their anchors (0x5652f1df / 0x909fdb65) are disjoint from this
 # family's and neither binds a jetton_transfer the deposit carriers could be, so

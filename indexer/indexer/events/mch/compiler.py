@@ -76,7 +76,6 @@ class CompiledMatcher:
     include_bounces: bool = True
     build_stmts: tuple = ()
     shape_fn_name: str | None = None
-    priority: int = 100
     # Anchor record representation. Exactly one of
     # these is set for a group/predicate anchor; a plain single op/btype anchor
     # leaves them all None and the emitter reads the root node's kind.
@@ -265,7 +264,6 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         include_bounces=bool(decl.include_bounces),
         build_stmts=tuple(decl.build_stmts),
         shape_fn_name=decl.shape,
-        priority=decl.priority,
         anchor_pred=anchor_pred,
         anchor_branches=anchor_branches,
         anchor_opcodes=anchor_opcodes,

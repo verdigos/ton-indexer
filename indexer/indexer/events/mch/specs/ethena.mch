@@ -41,16 +41,10 @@ matcher ethena_deposit {
 #
 # a `child_sequence_matcher` in the reference, i.e. a plain required chain here.
 #
-# WIDE ANCHOR + `priority 85`, and both are load-bearing. `op JettonTransfer`
-# is the raw 0x0f8a7ea5 CALL and `op JettonMint` the raw 0x642b7d07 one, so the
-# whole chain has to be claimed BEFORE the priority-90 jetton family turns those
-# calls into `jetton_transfer` / `jetton_mint` blocks. The legacy list interleaves
-# them — JettonTransferBlockMatcher 14, THIS 48, JettonMintBlockMatcher 49,
-# EthenaDepositBlockMatcher 50 — which a single priority per spec file cannot
-# reproduce, because the mch jetton family is one file at one priority. 85 puts
-# this matcher ahead of all three jetton matchers instead of between two of them.
+# The manifest puts this wide anchor before the jetton family so it claims raw
+# JettonTransfer and JettonMint calls before they become composed blocks.
 #
-# That deviation is UNOBSERVABLE, and by construction rather than by luck. Guard
+# The relative order with jetton_transfer is unobservable. Guard
 # 3 below requires the source wallet's jetton MASTER to equal the internal
 # transfer's DESTINATION — i.e. the tsUSDe leg lands on the master, not on a
 # jetton wallet. build_jetton_transfer_core rejects exactly that shape: it looks
@@ -92,7 +86,6 @@ opcode EthenaTimelockTransfer  = 0xb2583ed5
 matcher ethena_withdrawal_request {
     produces ethena_withdrawal_request
     entry    @transfer
-    priority 85
 
     op JettonTransfer @transfer
       -> op JettonInternalTransfer @internal_transfer as JettonInternalTransfer

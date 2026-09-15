@@ -213,8 +213,6 @@ def resolve(file: ast_.File, registries: Registries) -> ResolvedFile:
     for m in file.matchers:
         resolved_matchers.append(_resolve_matcher(m, opcodes, file, registries, bag, rule_recursion))
 
-    _check_priorities(file, bag)
-
     if bag.has_errors:
         raise CompileError(bag)
 
@@ -1067,25 +1065,6 @@ def _check_build_stmts(
                     f"proven; add an `else`)",
                     stmt.span,
                 )
-
-
-def _check_priorities(file: ast_.File, bag: DiagnosticBag) -> None:
-    """Warn when two matchers share a NON-default `priority`: their
-    relative order then falls back to source position, usually not the author's
-    intent. Default-100 matchers are the norm and never warned."""
-    seen: dict[int, str] = {}
-    for m in file.matchers:
-        if m.priority == 100:
-            continue
-        if m.priority in seen:
-            bag.warning(
-                "W010_DUPLICATE_PRIORITY",
-                f"matchers {seen[m.priority]!r} and {m.name!r} both declare "
-                f"priority {m.priority}; their order falls back to source position",
-                m.span,
-            )
-        else:
-            seen[m.priority] = m.name
 
 
 def _check_out_fields(fields: tuple[ast_.OutField, ...], available: set[str],

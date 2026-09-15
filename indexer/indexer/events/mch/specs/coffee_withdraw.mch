@@ -1,7 +1,7 @@
 # Coffee withdraw liquidity matcher with a declarative build.
 #
-# The LP burn (the prebuilt `jetton_burn` block the priority-90 jetton family
-# produces) whose pool answers with two 0xc0ffee21 payouts and the 0xc0ffee35
+# The LP burn (the `jetton_burn` block built earlier in manifest order)
+# whose pool answers with two 0xc0ffee21 payouts and the 0xc0ffee35
 # withdrawal log. Same `jetton_burn`-anchored, positionally-bound shape as
 # specs/stonfi_v2_withdraw.mch, which this file follows field for field.
 #

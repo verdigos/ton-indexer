@@ -8,8 +8,7 @@
 
 namespace mch {
 
-// Table from ir/mch_ir.json, in priority order (registration_order, then a
-// stable sort by priority). This is the classifier's matcher order.
+// Table from ir/mch_ir.json, in manifest order from registration_order.
 const std::vector<CompiledMatcher> &gen_matchers_ir();
 
 // SHA-256 (hex) of the document this table was generated from. Read by the

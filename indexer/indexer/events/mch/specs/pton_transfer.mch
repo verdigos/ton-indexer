@@ -7,10 +7,8 @@
 # DEX swap stays an unconsumed call_contract and every consumer that binds
 # `btype jetton_transfer` — stonfi v1/v2, dedust, tonco — loses its TON-side leg.
 #
-# Same anchor opcode as `jetton_transfer`, so registration order decides: this
-# spec is listed AFTER specs/jettons_decl.mch in the built-in source list and
-# shares its `priority 90`, which reproduces the legacy list order (JettonTransferBlock-
-# Matcher, then PTonTransferMatcher, both ahead of the swap matchers).
+# The manifest puts pton_transfer after jetton_transfer on their shared anchor,
+# and before the swap matchers that consume their blocks.
 #
 # The pTON master allowlist is what makes the match safe on an opcode this
 # common: only a wallet whose master is one of the three canonical pTON masters
@@ -27,7 +25,6 @@ opcode JettonNotify   = 0x7362d09c
 
 matcher pton_transfer {
     produces JettonTransferBlock
-    priority 90
     entry    @transfer
 
     op JettonTransfer @transfer as JettonTransfer -> maybe op JettonNotify @notify

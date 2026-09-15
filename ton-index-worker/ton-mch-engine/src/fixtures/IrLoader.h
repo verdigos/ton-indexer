@@ -13,7 +13,7 @@
 namespace mch {
 
 struct LoadedIr {
-  std::vector<CompiledMatcher> matchers;  // priority order (stable by priority)
+  std::vector<CompiledMatcher> matchers;  // manifest order
 
   // SHA-256 (hex) of the artifact file bytes. This is the identity the generated
   // table records (gen_matchers_ir_source_sha), so the equivalence gate can

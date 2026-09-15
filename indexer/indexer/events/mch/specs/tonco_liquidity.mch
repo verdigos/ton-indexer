@@ -114,8 +114,7 @@ matcher tonco_deposit_liquidity {
 # ORDERING. 0x2e3034ef and 0x441c39ed are claimed by no other spec. Within this
 # file the matcher sits between deposit and withdraw, exactly where
 # event_processing.matchers puts it (deposit 64, deploy 65, withdraw 66). It
-# binds no prebuilt block, so unlike its two neighbours it does not even depend
-# on the priority-90 jetton specs.
+# binds no prebuilt block, so its manifest position has no jetton dependency.
 # -----------------------------------------------------------------------------
 matcher tonco_deploy_pool {
     produces tonco_deploy_pool
@@ -197,9 +196,8 @@ matcher tonco_deploy_pool {
 # three it is a non-anchor child of a different parent, and one message has one
 # parent, so the three uses are disjoint. Within this file the withdraw matcher
 # is listed after the deposit one, mirroring event_processing.matchers (deposit
-# 64, deploy-pool 65, withdraw 66). What IS load-bearing is the default priority
-# 100: the payout legs are `btype jetton_transfer`, so the priority-90 jetton
-# specs must have built them first.
+# 64, deploy-pool 65, withdraw 66). The manifest keeps withdraw after the jetton
+# family, which builds its jetton_transfer payout legs.
 
 matcher tonco_withdraw_liquidity {
     produces tonco_withdraw_liquidity

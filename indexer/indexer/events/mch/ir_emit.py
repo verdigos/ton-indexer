@@ -20,63 +20,17 @@ import argparse
 import json
 from pathlib import Path
 
+import yaml
+
 from indexer.events.mch import ast_
 from indexer.events.mch.btypes import produces_btype
 from indexer.events.mch.compile import compile_file
 from indexer.events.mch.compiler import CompiledMatcher, LNode
+from indexer.events.mch.diagnostics import CompileError, DiagnosticBag, R042_MANIFEST_ORDER, Span
 from indexer.events.mch.expr_ir import IR_VERSION, emit_expr as _emit_expr
 from indexer.events.mch.lexer import tokenize
 from indexer.events.mch.parser import parse
 from indexer.events.mch.registry import Registries
-
-
-# Reproducible source list for build-time IR emission. Paths are relative to
-# this module's directory. ORDER IS THE CONTRACT: it equals matcher registration
-# order, and equal-priority matchers tie-break on this order.
-DEFAULT_SPEC_PATHS = [
-    "specs/nft_mint.mch",
-    "specs/jettons_decl.mch",
-    "specs/pton_transfer.mch",
-    "specs/coffee_liquidity.mch",
-    "specs/coffee_swap.mch",
-    "specs/coffee_withdraw.mch",
-    "specs/dedust_deposit.mch",
-    "specs/dedust_swap.mch",
-    "specs/dedust_withdraw.mch",
-    "specs/dedust_v2_claim_fees.mch",
-    "specs/dedust_v2_claim_reward.mch",
-    "specs/dedust_v2_swap.mch",
-    "specs/dedust_v2_withdraw.mch",
-    "specs/dedust_v2_deposit.mch",
-    "specs/dns.mch",
-    "specs/elections.mch",
-    "specs/subscriptions.mch",
-    "specs/ethena.mch",
-    "specs/evaa.mch",
-    "specs/nft_transfer.mch",
-    "specs/jvault.mch",
-    "specs/layerzero.mch",
-    "specs/multisig.mch",
-    "specs/nominator.mch",
-    "specs/stonfi_v1_swap.mch",
-    "specs/stonfi_v2_provide.mch",
-    "specs/stonfi_v2_swap.mch",
-    "specs/stonfi_v2_withdraw.mch",
-    "specs/telegram_nft.mch",
-    "specs/getgems.mch",
-    "specs/teleitem_auction.mch",
-    "specs/nft_sale.mch",
-    "specs/tgbtc.mch",
-    "specs/tonco_liquidity.mch",
-    "specs/tonco_swap.mch",
-    "specs/tonstakers.mch",
-    "specs/vesting.mch",
-    "specs/coffee_create_pool.mch",
-    "specs/coffee_mev.mch",
-    "specs/coffee_staking.mch",
-    "specs/cocoon.mch",
-    "specs/tgwallet.mch",  # last: claims only a change-key call nothing else wanted
-]
 
 
 def _unsigned32(opcode: int) -> int:
@@ -399,10 +353,6 @@ def emit_ir(
             "include_excess": bool(cm.include_excess),
             "include_bounces": bool(cm.include_bounces),
         }
-        # `priority`: emitted only when non-default (100), keeping existing
-        # artifacts byte-identical. The loader defaults an absent key to 100.
-        if cm.priority != 100:
-            rec["priority"] = cm.priority
         if stmts:
             rec["build_program"] = [_emit_stmt(s) for s in stmts]
         # `shape` contains a registered shaper name. Omit it when absent;
@@ -420,10 +370,8 @@ def emit_ir(
 
 
 def _emit_paths(paths: list[Path], source_files: list[str]) -> dict:
-    """Compile the given .mch files IN THE GIVEN ORDER and emit IR.
+    """Compile the given .mch files in path and declaration order.
 
-    Emission order == matcher registration order (source-position tie-break for
-    equal `priority`), so callers control ordering by ordering `paths`.
     `source_files` is the label list written to `frontend.source_files`.
     """
     files = [
@@ -446,31 +394,35 @@ def emit_dir(specs_dir: Path) -> dict:
 
 
 def emit_manifest(manifest_path: Path) -> dict:
-    """Compile the spec files listed in a manifest and emit IR.
-
-    Manifest = JSON ``{"specs": ["<rel>", ...]}``; each entry is a spec path
-    relative to the mch package dir (this file's parent), resolved so the
-    artifact is reproducible from committed sources. The list order IS the
-    registration order; `frontend.source_files` = the entries verbatim.
-    """
-    data = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-    rels: list[str] = data["specs"]
-    base = Path(__file__).resolve().parent
-    paths = [base / r for r in rels]
-    missing = [str(p) for p in paths if not p.is_file()]
-    if missing:
-        raise FileNotFoundError(f"manifest references missing spec files: {missing}")
-    return _emit_paths(paths, list(rels))
+    """Compile adjacent .mch files and emit matchers in YAML manifest order."""
+    manifest_path = Path(manifest_path)
+    data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    order = data.get("order") if isinstance(data, dict) else None
+    bag = DiagnosticBag()
+    span = Span(str(manifest_path), 1, 1, 1, 1, 0, 0)
+    if not isinstance(order, list) or not all(isinstance(name, str) for name in order):
+        bag.error(R042_MANIFEST_ORDER, "manifest order must be a list of strings", span)
+        raise CompileError(bag)
+    artifact = emit_dir(manifest_path.parent)
+    matchers = {m["name"]: m for m in artifact["matchers"]}
+    seen: set[str] = set()
+    for name in order:
+        if name in seen:
+            bag.error(R042_MANIFEST_ORDER, f"matcher {name!r} is listed twice", span)
+        seen.add(name)
+        if name not in matchers:
+            bag.error(R042_MANIFEST_ORDER, f"listed name {name!r} has no matcher", span)
+    for name in sorted(matchers.keys() - seen):
+        bag.error(R042_MANIFEST_ORDER, f"matcher {name!r} is missing from manifest order", span)
+    if bag.has_errors:
+        raise CompileError(bag)
+    artifact["matchers"] = [matchers[name] for name in order]
+    return artifact
 
 
 def emit_default() -> dict:
-    """Compile the built-in production spec list and emit IR."""
-    base = Path(__file__).resolve().parent
-    paths = [base / rel for rel in DEFAULT_SPEC_PATHS]
-    missing = [str(path) for path in paths if not path.is_file()]
-    if missing:
-        raise FileNotFoundError(f"built-in manifest references missing spec files: {missing}")
-    return _emit_paths(paths, list(DEFAULT_SPEC_PATHS))
+    """Compile every production spec and emit matchers in manifest order."""
+    return emit_manifest(Path(__file__).resolve().parent / "specs" / "manifest.yaml")
 
 
 def render_json(artifact: dict) -> str:
@@ -480,13 +432,12 @@ def render_json(artifact: dict) -> str:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="python -m indexer.events.mch.ir_emit",
-        description="Emit MCH IR from the built-in production list or specified .mch specs.",
+        description="Emit MCH IR from the production manifest or specified .mch specs.",
     )
     ap.add_argument("specs_dir", nargs="?", help="directory containing .mch spec files")
     ap.add_argument(
         "--manifest",
-        help="JSON manifest listing spec files in registration order "
-        "(paths relative to the mch package dir); reproducible artifact source",
+        help="YAML matcher order manifest beside the .mch spec files",
     )
     ap.add_argument("-o", "--output", required=True, help="output JSON path")
     args = ap.parse_args(argv)

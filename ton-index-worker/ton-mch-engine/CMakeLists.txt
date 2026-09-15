@@ -80,6 +80,7 @@ add_custom_command(
             -o "${MCH_GENERATED_IR_SECOND}"
     WORKING_DIRECTORY "${MCH_INDEXER_ROOT}"
     DEPENDS ${MCH_SPEC_SOURCES} ${MCH_FRONTEND_PY_SOURCES}
+            "${MCH_INDEXER_ROOT}/indexer/events/mch/specs/manifest.yaml"
     COMMENT "Generate deterministic MCH IR from .mch specs"
     VERBATIM
 )

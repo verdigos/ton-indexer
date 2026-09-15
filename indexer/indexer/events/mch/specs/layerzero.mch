@@ -42,10 +42,8 @@
 # claim no btype another matcher builds, and nothing consumes their products —
 # so `layerzero_receive` keeping its historical first slot (rather than the
 # legacy list's third) is inert. No opcode declared here appears in any other
-# spec (grep over specs/), so the file's slot in the built-in source list
-# carries no cross-spec tie-break. Default priority 100
-# keeps send_tokens behind the priority-90 jetton family that builds the
-# `jetton_transfer` parent it binds.
+# spec. The manifest keeps send_tokens behind the jetton family that builds
+# the `jetton_transfer` parent it binds.
 #
 # `layerzero_dvn_verify.status` is one of "succeeded" /
 # "nonce_out_of_range" / "dvn_not_configured" / "unknown_<decimal code>". The

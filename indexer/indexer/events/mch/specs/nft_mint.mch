@@ -25,11 +25,8 @@
 #
 # Registration order
 # ------------------
-# `priority 80` — the legacy matcher is FIRST in `event_processing.matchers`,
-# ahead of the priority-90 declarative jetton family, so it must run before both
-# tiers. That order is what lets it claim a deploying leaf before the jetton /
-# DEX matchers can absorb it, and it is what makes `btype nft_mint` available to
-# the specs that bind it downstream (specs/tonco_liquidity.mch).
+# The manifest puts nft_mint first so it claims deploying leaves before jetton
+# and DEX matchers absorb them, and builds nft_mint blocks for their consumers.
 #
 # opcode: signed envelope -> unsigned
 # ----------------------------------
@@ -50,7 +47,6 @@ predicate single_contract_deploy
 matcher nft_mint {
     produces  nft_mint
     entry     @mint
-    priority  80
 
     pred single_contract_deploy @mint
 

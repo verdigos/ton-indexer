@@ -2,20 +2,9 @@
 # the legacy list order (event_processing.matchers): TONStakersDelayedWithdrawal
 # (idx 1), TONStakersDeposit (idx 4), TONStakersWithdraw (idx 5).
 #
-# PRIORITY 85 on all three, and it is load-bearing on the withdraw matcher:
-# JettonBurn 0x595f07bc is ALSO the anchor of specs/jettons_decl.mch's
-# `jetton_burn`, which carries `priority 90`. Legacy registers
-# TONStakersWithdrawMatcher (idx 5) ahead of JettonBurnBlockMatcher (idx 17), so
-# without a priority < 90 the jetton family consumed the burn first and the whole
-# withdraw family silently produced `jetton_burn` + loose call_contract rows
-# instead — which is the row shape recorded in corpus fixtures GO-NI0Ej… /
-# oND3Z5gM…. Per-spec testing cannot see this: it runs one spec's matchers in
-# isolation, never the registered set.
-# The other two anchors (0x47d54391, 0xdb3b8abd) are claimed by nothing else, so
-# 85 is faithfulness rather than necessity there; W010 (three matchers sharing a
-# non-default priority) is expected — their relative order falls back to source
-# position, which is exactly the legacy order reproduced above, and their anchors
-# and reachable node sets are disjoint so the order is unobservable anyway.
+# The manifest puts all three before the jetton family. Withdraw must claim
+# the raw JettonBurn call before jetton_burn wraps it. The other two anchors
+# and their reachable nodes are disjoint, so their relative order is unobservable.
 
 opcode JettonBurn                    = 0x595f07bc
 opcode JettonBurnNotification        = 0x7bdd97de
@@ -55,7 +44,6 @@ opcode TONStakersDistributedAsset    = 0xdb3b8abd
 # ---------------------------------------------------------------------------
 matcher tonstakers_delayed_withdrawal {
     produces tonstakers_withdraw
-    priority 85
     entry    @distributed
 
     op TONStakersDistributedAsset @distributed
@@ -98,7 +86,6 @@ matcher tonstakers_delayed_withdrawal {
 # ---------------------------------------------------------------------------
 matcher tonstakers_deposit {
     produces tonstakers_deposit
-    priority 85
     entry    @deposit
 
     op TONStakersDepositRequest @deposit
@@ -121,7 +108,7 @@ matcher tonstakers_deposit {
 
 # ---------------------------------------------------------------------------
 # tonstakers_withdraw — legacy TONStakersWithdrawMatcher. HYBRID declarative
-# build. Anchors on the raw JettonBurn call (see the priority note at the top:
+# build. Anchors on the raw JettonBurn call (see the manifest order note above:
 # it must beat the jetton family to it), then a fixed child chain to the pool's
 # withdraw request, which forks into an immediate pool withdrawal or a delayed
 # withdrawal that mints a request NFT.
@@ -135,7 +122,6 @@ matcher tonstakers_deposit {
 # ---------------------------------------------------------------------------
 matcher tonstakers_withdraw {
     produces tonstakers_withdraw | tonstakers_withdraw_request
-    priority 85
     entry    @burn
 
     op JettonBurn @burn as JettonBurn

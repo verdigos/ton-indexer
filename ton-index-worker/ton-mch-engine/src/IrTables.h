@@ -84,7 +84,6 @@ struct CompiledMatcher {
 
   bool include_excess{true};
   bool include_bounces{true};
-  int priority{100};
 
   // Host bindings referenced. `ref_preds` is the MATCH-phase dependency set
   // (anchor predicates + every reachable `pred` / named-`where` node) and gates

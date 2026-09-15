@@ -41,11 +41,8 @@
 # ORDERING. 0x6bc79e7e is claimed by no other spec. The jetton arm anchors on
 # `btype jetton_transfer`, shared with ethena_deposit, jvault_stake,
 # stonfi_v1_swap, dedust_v2_swap/failed_swap and coffee_staking_deposit — and
-# the legacy list puts CoffeeMevProtectHoldFundsMatcher AFTER every one of those
-# except the staking family, so this file is listed near the END of
-# the built-in source list, before specs/coffee_staking.mch. Being behind the
-# priority-90 jetton specs (default priority 100) is what makes the
-# jetton_transfer blocks exist at all.
+# the manifest puts this matcher after those consumers and before staking.
+# The jetton family runs earlier to build the jetton_transfer blocks.
 #
 # Failed-swap recipients are parsed strictly from the call body or the jetton
 # transfer's base64 forward payload.

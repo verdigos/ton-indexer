@@ -3,7 +3,6 @@
 
 #include "td/utils/JsonBuilder.h"
 
-#include <algorithm>
 #include <exception>
 #include <fstream>
 #include <set>
@@ -324,12 +323,6 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
 
   m.include_excess = jbool(rec, "include_excess", true);
   m.include_bounces = jbool(rec, "include_bounces", true);
-  // A present-but-non-numeric priority is corruption, not a silent default-100
-  // Absence still defaults to 100.
-  if (const Json *pf = jfield(rec, "priority"); pf != nullptr && pf->type() != JType::Number) {
-    return td::Status::Error("matcher " + m.name + ": 'priority' must be a number");
-  }
-  m.priority = static_cast<int>(jint(rec, "priority", 100));
   if (has(rec, "shape")) {
     m.ref_shapers.insert(jstr(rec, "shape"));
   }
@@ -462,12 +455,10 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
   TRY_STATUS(validate_peek_invariants(compiled));
   TRY_STATUS(validate_btype_references(compiled));
 
-  // registration_order (default: identity), then stable-sort by priority.
+  // Manifest order from registration_order (default: identity).
   std::vector<int> reg_order;
   if (const Json *ro = jfield(root, "registration_order"); ro != nullptr && ro->type() == JType::Array) {
-    // Must be a permutation of [0, matchers): a stray/out-of-range/duplicate
-    // index would index compiled[] out of bounds (or drop a matcher) during
-    // the priority sort below. Fail closed instead.
+    // Every matcher appears exactly once.
     std::vector<bool> seen(compiled.size(), false);
     for (const auto &mi : ro->get_array()) {
       TRY_RESULT(idx64, num_i64(mi));
@@ -489,9 +480,6 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
       reg_order.push_back(i);
     }
   }
-  std::stable_sort(reg_order.begin(), reg_order.end(),
-                   [&](int a, int b) { return compiled[a].priority < compiled[b].priority; });
-
   for (int mi : reg_order) {
     out.matchers.push_back(std::move(compiled[mi]));
   }

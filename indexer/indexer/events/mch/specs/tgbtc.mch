@@ -50,13 +50,9 @@
 # eats 0x77A80EF3, `tgbtc_burn` eats 0xCA444CE6, and `tgbtc_new_key` eats both
 # 0x27756729 and 0x453443A6. A full matcher must
 # claim its chain before the fallback can claim the naked log, or every complete
-# trace would also emit a crippled `*_fallback` row. Equal priority (all default
-# 100) ⇒ the tie-break is (file, source position), which is exactly what the
-# single-file layout pins. No other spec declares any of these nine opcodes
-# (grep over specs/), and nothing binds a tgbtc btype, so the file's slot in the
-# built-in source list carries no cross-spec tie-break — only
-# `tgbtc_burn`'s `btype jetton_burn` anchor matters, and that must stay behind
-# the priority-90 jetton family that builds it (it does: default 100).
+# trace would also emit a log-only row. The manifest keeps full matchers before
+# their fallbacks and tgbtc_burn after the jetton family that builds its anchor.
+# No other spec declares these opcodes or binds a tgbtc btype.
 #
 # Burn and new_key allow the same optional payout subtree,
 # `0xBE44E7A6 -> { maybe 0x1A84C0E0 ; maybe ton_transfer }`, and both

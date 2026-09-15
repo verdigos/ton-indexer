@@ -66,12 +66,9 @@
 # legacy build has the branch) it falls back to the pool's own order and swaps
 # nothing. All three cases are reproduced.
 #
-# ORDERING. 0xc0ffee23 is claimed by no other spec, and `btype
-# coffee_create_pool_creator` is produced only by the matcher above it in this
-# file — source order inside the file is the tie-break that makes the serial
-# pair work. The creator's parent alternative binds `btype jetton_transfer`, so
-# the file must stay behind the priority-90 jetton specs; the default priority
-# 100 gives that.
+# ORDERING. The manifest puts coffee_create_pool_creator before its consumer,
+# coffee_create_pool. Both follow the jetton family, which builds the creator's
+# jetton_transfer parent. No other spec claims the 0xc0ffee23 anchor.
 
 opcode CoffeeCreatePoolNative                = 0xC0FFEE02
 opcode CoffeeDeploy                          = 0xC0FFEE22

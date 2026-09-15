@@ -65,10 +65,8 @@
 # the three inner opcodes, so this file's position in the built-in source list
 # carries no tie-break of its own; it is listed right after
 # specs/dedust_v2_swap.mch, which mirrors dedust_v2.matchers() (swap,
-# failed swap, withdraw). What IS load-bearing is that it stays after the
-# priority-90 jetton specs, since the jetton payout legs are `btype
-# jetton_transfer` blocks those must have built first — the default priority 100
-# gives that for free.
+# failed swap, withdraw). The manifest keeps this matcher after the jetton
+# family, which builds its jetton_transfer payout legs.
 
 import "lib/leg.mch"
 

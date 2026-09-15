@@ -1,7 +1,6 @@
 # Jetton family matchers with declarative builds.
 #
-# Each matcher declares `priority 90` (< default 100) so it registers ahead of
-# the priority-100 specs regardless of emission order.
+# The manifest puts these matchers before consumers of their jetton blocks.
 
 opcode JettonTransfer         = 0x0f8a7ea5
 opcode JettonInternalTransfer = 0x178d4519
@@ -26,7 +25,6 @@ opcode MinterJettonMint       = 0x00000015
 # ---------------------------------------------------------------------------
 matcher jetton_transfer {
     produces JettonTransferBlock
-    priority 90
     entry    @transfer
 
     op JettonTransfer @transfer as JettonTransfer
@@ -69,7 +67,6 @@ matcher jetton_transfer {
 # ---------------------------------------------------------------------------
 matcher jetton_burn {
     produces JettonBurnBlock
-    priority 90
     entry    @burn
 
     op JettonBurn @burn as JettonBurn -> maybe op JettonBurnNotification @notification
@@ -100,7 +97,6 @@ matcher jetton_burn {
 # ---------------------------------------------------------------------------
 matcher jetton_mint {
     produces JettonMintBlock
-    priority 90
     entry    @mint
 
     op [JettonMint, MinterJettonMint] @mint as MinterJettonMint | JettonMint
