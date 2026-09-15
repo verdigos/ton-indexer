@@ -60,7 +60,7 @@ rule deposit_leg = or {
 # transfer) and/or optional TON payout. Legacy: ContractMatcher(optional,
 # ReturnExcessFromVault, children=[jetton_excess(optional), ton_excess(optional)]).
 rule vault_excess =
-    maybe op DedustReturnExcessFromVault
+    op DedustReturnExcessFromVault
       -> { maybe btype jetton_transfer
          ; maybe op DedustPayout }
 
@@ -84,10 +84,10 @@ matcher dedust_deposit_final {
             or {
                 op JettonInternalTransfer @lp_transfer -> maybe op JettonNotify
                 op DedustRejection @rejection
-                  -> { maybe btype ton_transfer ; $vault_excess ; $vault_excess }
+                  -> { maybe btype ton_transfer ; maybe many $vault_excess }
             }
             ; maybe op DedustDestroyLiquidityDepositContract
-                -> { maybe btype ton_transfer ; $vault_excess ; $vault_excess }
+                -> { maybe btype ton_transfer ; maybe many $vault_excess }
         }
         <- op DedustTopUpLiquidityDepositContract <- op DedustAskLiquidityFactory -> { maybe op DedustDeployDepositContract } <- $deposit_leg
     }

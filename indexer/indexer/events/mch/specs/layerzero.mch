@@ -121,16 +121,10 @@ matcher layerzero_receive {
 # back up to the OApp.
 #
 #     0xdd4ea3b4 -> 0x536feb09 -> 0x4002b790 -> 0x5de68393 -> 0x421c1a25
-#         -> { PacketSent event ; 5x maybe ton_transfer ; oapp callback -> {…} }
+#         -> { PacketSent event ; maybe many ton_transfer ; oapp callback -> {…} }
 #
-# The children set is written out with FIVE separate `maybe btype ton_transfer`
-# items because the legacy matcher declares five (`excess_transfer_1..5`) — the
-# ULN fans gas remainders out to the workers it paid, and the count varies per
-# send (the two fixtures carry four and three). The language has no
-# `zero_or_more` quantifier, so the legacy fixed-arity form is reproduced
-# literally. Item order matters: the required PacketSent event goes first and
-# the required oapp callback last, exactly as legacy declares them, so the
-# optional slots in between can absorb whatever ton_transfers are present.
+# `maybe many btype ton_transfer` consumes all remaining refund transfers
+# between the required PacketSent event and the required OApp callback.
 #
 # msglib_send / send_callback carry legacy labels but are NOT captured here:
 # the build reads neither. The legacy body computes
@@ -153,11 +147,7 @@ matcher layerzero_send {
           -> op UlnUlnSend @uln_send
             -> op ChannelMsglibSendCallback
               -> { op LayerZeroEventMsgBody
-                 ; maybe btype ton_transfer
-                 ; maybe btype ton_transfer
-                 ; maybe btype ton_transfer
-                 ; maybe btype ton_transfer
-                 ; maybe btype ton_transfer
+                 ; maybe many btype ton_transfer
                  ; op LayerzeroChannelSendCallback @oapp_callback as LayerzeroChannelSendCallback
                      -> { maybe op LayerZeroEventMsgBody
                         ; maybe btype ton_transfer } }
@@ -191,7 +181,7 @@ matcher layerzero_send {
 # transfer that funded it, presented as one "sent tokens over LayerZero" action
 # instead of a transfer plus an opaque send.
 #
-#     btype layerzero_send @send  <- btype jetton_transfer @jetton -> { OFTSent }
+#     btype layerzero_send @send  <- btype jetton_transfer @jetton -> { many OFTSent }
 #
 # `send.data` binds the whole record the matcher above produced and is written
 # straight through — the legacy build likewise stores the SAME LayerZeroSendData
@@ -203,13 +193,6 @@ matcher layerzero_send {
 # jetton sender — so the jetton sender wins. Both C++ and Python fills apply the
 # writes in that order, which matters because for a token send the initiator is
 # the OApp, not the user.
-#
-# DEVIATION (unobservable on the corpus): the legacy `child_matcher` on the
-# jetton transfer consumes EVERY 0xe33b9873 child; the children block here
-# consumes the first. A parent edge may only be followed by a CHILDREN BLOCK —
-# the compiler silently drops a plain child edge in that position
-# (compiler.py `_lower_parent_chain_from`) — so this is the only available form.
-# The one fixture's jetton transfer has exactly one OFTSent event child.
 # -----------------------------------------------------------------------------
 matcher layerzero_send_tokens {
     produces LayerZeroSendTokensBlock
@@ -217,7 +200,7 @@ matcher layerzero_send_tokens {
 
     btype layerzero_send @send
       <- btype jetton_transfer @jetton
-        -> { op LayerZeroEventMsgBody }
+        -> { many op LayerZeroEventMsgBody }
 
     out {
         sender:              jetton.data.sender
