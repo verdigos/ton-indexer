@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Iterable
 
@@ -644,8 +644,26 @@ def _resolve_matcher(
         alt_path=(),
     )
 
+    prelude: dict[str, ast_.ParseStmt] = {}
     captures: dict[str, CaptureInfo] = {}
     for cap_name, occs in occurrences.items():
+        for o in occs:
+            node = o.node
+            if node.parse_types is None:
+                continue
+            if not isinstance(node.head, ast_.OpHead):
+                bag.error(
+                    diagnostics.R030_PARSE_ANNOTATION_ON_COMPOSED,
+                    "parse annotations require an `op` node; read composed fields via `.data`",
+                    node.span,
+                )
+            stmt = ast_.ParseStmt(cap_name, node.parse_types, node.span)
+            if prelude.setdefault(cap_name, stmt).msg_types != node.parse_types:
+                bag.error(
+                    diagnostics.R028_PARSE_ANNOTATION_CONFLICT,
+                    f"capture {cap_name!r} has conflicting parse annotations",
+                    node.span,
+                )
         if len(occs) > 1:
             # Every pair must occupy different branches of a common alternative
             # and agree on recursion context.
@@ -757,6 +775,15 @@ def _resolve_matcher(
                 # every candidate block.
             anchor_node = ci.source
 
+    for stmt in m.build_stmts:
+        if isinstance(stmt, ast_.ParseStmt) and stmt.capture in prelude:
+            bag.error(
+                diagnostics.R029_PARSE_ANNOTATION_AND_STATEMENT,
+                f"capture {stmt.capture!r} has both a parse annotation and a parse statement",
+                stmt.span,
+            )
+    if prelude:
+        m = replace(m, build_stmts=tuple(prelude.values()) + m.build_stmts)
     _check_build_stmts(m, captures, registries, bag)
 
     return ResolvedMatcher(

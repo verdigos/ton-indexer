@@ -202,6 +202,7 @@ class Node(PatternExpr):
     # `where_predicate` form; the compiler ignores it in v0.
     where_expr: Expr | None = None
     relations: Relations | None = None
+    parse_types: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)

@@ -70,6 +70,16 @@ R026_BUILTIN_OPCODE_MISMATCH = "R026_BUILTIN_OPCODE_MISMATCH"
 # Two opcode-set members resolve to the same unsigned 32-bit value.
 R027_DUPLICATE_OPCODE_SET_MEMBER = "R027_DUPLICATE_OPCODE_SET_MEMBER"
 
+# A capture has conflicting parser lists. Rule-body annotations contribute to
+# every matcher referencing the rule; each matcher has one list per capture.
+R028_PARSE_ANNOTATION_CONFLICT = "R028_PARSE_ANNOTATION_CONFLICT"
+
+# A capture has both a parse annotation and a written parse statement.
+R029_PARSE_ANNOTATION_AND_STATEMENT = "R029_PARSE_ANNOTATION_AND_STATEMENT"
+
+# Only op nodes support parse annotations; composed bodies do not round-trip.
+R030_PARSE_ANNOTATION_ON_COMPOSED = "R030_PARSE_ANNOTATION_ON_COMPOSED"
+
 P011_DUPLICATE_DIRECTIVE = "P011_DUPLICATE_DIRECTIVE"
 """A matcher declares the same at-most-once directive more than once
 (currently `shape`)."""
@@ -94,6 +104,9 @@ P017_WHERE_ON_OPCODE_SET = "P017_WHERE_ON_OPCODE_SET"
 
 P018_DUPLICATE_RELATION_CLAUSE = "P018_DUPLICATE_RELATION_CLAUSE"
 P019_ARROW_AFTER_RELATION_BLOCK = "P019_ARROW_AFTER_RELATION_BLOCK"
+
+# A node needs a capture before its parse annotation.
+P020_PARSE_ANNOTATION_NEEDS_CAPTURE = "P020_PARSE_ANNOTATION_NEEDS_CAPTURE"
 
 C011_UNKNOWN_SHAPER = "C011_UNKNOWN_SHAPER"
 """The `shape` directive names a shaper that is not present in the host's

@@ -558,6 +558,22 @@ def _parse_node(s: _ParserState) -> ast_.Node:
         capture = cap_tok.text
         head_start_span = _join(head_start_span, cap_tok.span)
 
+    parse_types: tuple[str, ...] | None = None
+    if s.at(TokenKind.KW_AS):
+        start = s.eat(TokenKind.KW_AS).span
+        if capture is None:
+            s.bag.error("P020_PARSE_ANNOTATION_NEEDS_CAPTURE",
+                        "parse annotation requires a capture", start)
+            raise CompileError(s.bag)
+        msg = s.eat(TokenKind.IDENT)
+        types = [msg.text]
+        while s.at(TokenKind.PIPE) and s.peek(1).kind is TokenKind.IDENT:
+            s.i += 1
+            msg = s.eat(TokenKind.IDENT)
+            types.append(msg.text)
+        parse_types = tuple(types)
+        head_start_span = _join(head_start_span, msg.span)
+
     where_predicate: str | None = None
     where_expr: ast_.Expr | None = None
     if s.at(TokenKind.KW_WHERE):
@@ -588,6 +604,7 @@ def _parse_node(s: _ParserState) -> ast_.Node:
         span=head_start_span,
         where_expr=where_expr,
         relations=relations,
+        parse_types=parse_types,
     )
     if len(members) > 1:
         s.opcode_sets[id(node)] = tuple(members)
