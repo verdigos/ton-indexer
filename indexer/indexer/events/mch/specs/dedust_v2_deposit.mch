@@ -85,16 +85,10 @@ opcode DedustV2JoinLiquidity   = 0x25251ee0
 opcode DedustV2DepositEvent    = 0x35df2e12
 opcode DedustV2CreditLiquidity = 0x855afcbd
 opcode PayoutMessage           = 0x3216ca09
-# One deposit leg's carrier: the TON-side PayNative or a prebuilt jetton
-# transfer. Bare concrete nodes with distinct heads, so `^` (the compiler would
-# upgrade `|` to it anyway) and at most one arm can ever bind.
-#
-# ARM ORDER IS LOAD-BEARING, though not semantically: it is the reverse of the
-# reference's _deposit_carrier_matcher and matches specs/dedust_v2_swap.mch
-# instead, because `parse carrier as DedustV2PayNative` below resolves against
-# the FIRST arm's head — a `btype` head there trips R023 (parsing a composed
-# block's body does not round-trip). The PayNative parse is harmless on the
-# jetton arm: every value it feeds is read only under `jetton_in == false`.
+# One deposit leg's carrier is an `xor` of the TON PayNative node and a jetton
+# transfer. PayNative comes first so `parse carrier as DedustV2PayNative`
+# resolves against a non-`btype` head. The parse is harmless on the jetton arm
+# because the matchers read the PayNative body only on the TON arm.
 rule dv2_deposit_carrier = xor {
                                op DedustV2PayNative @carrier
                                btype jetton_transfer @carrier
