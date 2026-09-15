@@ -63,15 +63,8 @@ EvalResult rt_call_hostfn(BuildEnv &env, const std::string &name,
 
 const std::map<std::string, HostPredFn> &host_predicates() {
   static const std::map<std::string, HostPredFn> preds = {
-      {"evaa_user_withdraw_user", evaa_user_withdraw_user},
-      {"evaa_user_withdraw_success", evaa_user_withdraw_success},
-      {"evaa_user_withdraw_fail", evaa_user_withdraw_fail},
       {"evaa_supply_anchor", evaa_supply_anchor},
-      {"evaa_user_supply", evaa_user_supply},
       {"evaa_liquidate_anchor", evaa_liquidate_anchor},
-      {"evaa_user_liquidate", evaa_user_liquidate},
-      {"evaa_liquidate_success_header", evaa_liquidate_success_header},
-      {"evaa_bounced_call", evaa_bounced_call},
       // Predicate anchor has no opcode or btype prefilter.
       {"single_contract_deploy", single_contract_deploy},
       {"stonfi_v1_sender_payment", stonfi_v1_sender_payment},

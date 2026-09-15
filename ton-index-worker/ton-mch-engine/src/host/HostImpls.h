@@ -57,15 +57,8 @@ EvalResult nominator_withdraw_payout_amount(BuildEnv &env, const std::vector<Val
 void nominator_withdraw_absorb_payouts(Block *produced, const ShaperMatch &m);
 
 // EVAA (HostEvaa.cpp).
-bool evaa_user_withdraw_user(const Block *b);
-bool evaa_user_withdraw_success(const Block *b);
-bool evaa_user_withdraw_fail(const Block *b);
 bool evaa_supply_anchor(const Block *b);
-bool evaa_user_supply(const Block *b);
 bool evaa_liquidate_anchor(const Block *b);
-bool evaa_user_liquidate(const Block *b);
-bool evaa_liquidate_success_header(const Block *b);
-bool evaa_bounced_call(const Block *b);
 EvalResult evaa_liquidate_data(BuildEnv &env, const std::vector<Value> &args);
 
 // DeDust (HostDedust.cpp).

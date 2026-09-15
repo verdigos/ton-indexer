@@ -77,7 +77,6 @@ bool opcode_after_user_header(const Block *b, td::uint32 opcode) {
 }
 
 constexpr td::uint32 kSupplyMaster = 0x1;
-constexpr td::uint32 kSupplyUser = 0x11;
 constexpr td::uint32 kLiquidateMaster = 0x3;
 constexpr td::uint32 kLiquidateUser = 0x31;
 constexpr td::uint32 kLiquidateSatisfied = 0x311;
@@ -211,21 +210,16 @@ td::Result<Value> parse_evaa_supply_user_hdr(const td::Ref<vm::Cell> &body) {
   return Value::make_obj({{"asset_id", Value::make_int(std::move(asset_id))}});
 }
 
-bool evaa_user_withdraw_user(const Block *b) {
-  return opcode_after_user_header(b, 0x21);
+td::Result<Value> parse_evaa_user_op(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!skip_user_header(cs) || !cs.have(32)) {
+    return td::Status::Error("user_op underflow");
+  }
+  return Value::make_obj({{"op", Value::make_int(refint_u64(cs.fetch_ulong(32)))}});
 }
 
-bool evaa_user_withdraw_success(const Block *b) {
-  return opcode_after_user_header(b, 0x211a);
-}
-
-bool evaa_user_withdraw_fail(const Block *b) {
-  return opcode_after_user_header(b, 0x211f);
-}
-
-bool evaa_user_supply(const Block *b) {
-  return opcode_after_user_header(b, kSupplyUser);
-}
+namespace {
 
 bool evaa_user_liquidate(const Block *b) {
   return opcode_after_user_header(b, kLiquidateUser);
@@ -239,8 +233,6 @@ bool evaa_bounced_call(const Block *b) {
   const Message *m = block_msg(b);
   return b->btype == mch::btype::kCallContract && m != nullptr && m->bounced;
 }
-
-namespace {
 
 // The master call itself (TON side), or a jetton transfer whose forward
 // payload starts with that opcode (jetton side). Match on btype.

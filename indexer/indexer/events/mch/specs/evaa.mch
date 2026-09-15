@@ -1,20 +1,14 @@
 # EVAA withdrawal matcher corresponding to EvaaWithdrawBlockMatcher.
 #
 # Differences from EvaaWithdrawBlockMatcher:
-# - EVAA user-contract messages prefix the 32-bit opcode with a variable-length
-#   header (version coins + maybe upgrade-info ref + 2 bits), so a plain `op`
-#   node cannot see the opcode. Legacy uses EvaaContractWithHeaderMatcher
-#   (test_self override); here those three nodes are `pred` nodes backed by
-#   host predicates (evaa_user_withdraw_*) with exactly the legacy test logic.
-#   Inline predicates cannot replace them because they require body parsing.
+# - EvaaUserOp skips the variable-length user header (version coins + maybe
+#   upgrade-info ref + 2 bits) and exposes the opcode for inline where tests.
 # - The EVAA service-comment ton_transfer tests the parsed comment inline.
 # - Legacy's withdraw_fail_on_user_excesses GenericMatcher (opcode-set
 #   membership over 4 error opcodes) is an opcode set sharing one capture
 #   (@fail_excess); same block matched,
 #   same consumed set, and only the winning branch binds.
-# - `^` mirrors legacy's ExclusiveOrMatcher use. As an edge target the
-#   exclusivity gate is try_build-inert, so branch order is
-#   first-match-wins exactly like legacy.
+# - `xor` edge targets use first-match-wins branch order.
 #
 # Capture -> legacy label map:
 #   @master        (anchor)                      | @user      withdraw_on_user
@@ -50,18 +44,11 @@ opcode EvaaLiquidateUnsatisfied            = 0x31f
 opcode EvaaLiquidateSuccessReport          = 0x311d
 opcode EvaaLiquidateFail                   = 0x311f
 
-predicate evaa_user_withdraw_user
-predicate evaa_user_withdraw_success
-predicate evaa_user_withdraw_fail
 predicate evaa_supply_anchor
-predicate evaa_user_supply
 predicate evaa_liquidate_anchor
-predicate evaa_user_liquidate
-predicate evaa_liquidate_success_header
-predicate evaa_bounced_call
 
 # EVAA supply starts with a TON call or a jetton transfer carrying a supply
-# payload. The user predicate checks the opcode behind the variable header.
+# payload. The user node parses the opcode behind the variable header.
 # Outcomes are success with an optional service comment, failure, or refund.
 # The build reads the recipient and asset ID from parsed bodies and transfer
 # fields from leg(master). Success supplies the final amount; an on-behalf
@@ -72,7 +59,7 @@ matcher evaa_supply {
     entry    @master
 
     pred evaa_supply_anchor @master
-      -> pred evaa_user_supply @user
+      -> btype call_contract @user where ((parse? . as EvaaUserOp).op == 0x11)
         -> or {
                op EvaaSupplySuccess @success as EvaaSupplySuccess
                  -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
@@ -109,7 +96,7 @@ matcher evaa_withdraw {
     entry    @master
 
     op EvaaWithdrawMaster @master as EvaaWithdrawMaster
-      -> pred evaa_user_withdraw_user @user
+      -> btype call_contract @user where ((parse? . as EvaaUserOp).op == 0x21)
       -> xor {
              op EvaaWithdrawCollateralized @coll_ok as EvaaWithdrawCollateralized
                -> { xor {
@@ -117,9 +104,9 @@ matcher evaa_withdraw {
                         op EvaaWithdrawSuccess @ton_payout
                           -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
                     }
-                    pred evaa_user_withdraw_success -> btype ton_transfer }
+                    btype call_contract where ((parse? . as EvaaUserOp).op == 0x211a) -> btype ton_transfer }
              op EvaaWithdrawCollateralized @coll_fail
-               -> pred evaa_user_withdraw_fail
+               -> btype call_contract where ((parse? . as EvaaUserOp).op == 0x211f)
                -> op EvaaWithdrawNoFundsExcess
              op [EvaaWithdrawLockedExcess, EvaaWithdrawNotCollateralizedExcess, EvaaWithdrawMissingPricesExcess, EvaaWithdrawExecutionCrashed] @fail_excess as EvaaWithdrawFailExcess
          }
@@ -154,19 +141,18 @@ matcher evaa_withdraw {
     }
 }
 
-# EVAA liquidation — the legacy structure verbatim. In particular, the two
-# satisfied arms share 0x311, but only the success arm applies the variable
-# user header before testing 0x311a; the fail arm tests plain 0x311f.
+# The liquidation satisfied arms share 0x311. The success arm parses the user
+# header before testing 0x311a; the fail arm tests plain 0x311f.
 matcher evaa_liquidate {
     produces evaa_liquidate
     entry    @master
 
     pred evaa_liquidate_anchor @master
       -> xor {
-             pred evaa_user_liquidate @user
+             btype call_contract @user where ((parse? . as EvaaUserOp).op == 0x31)
                -> xor {
                       op EvaaLiquidateSatisfied @satisfied_success
-                        -> { pred evaa_liquidate_success_header
+                        -> { btype call_contract where ((parse? . as EvaaUserOp).op == 0x311a)
                                -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
                              xor {
                                  op EvaaLiquidateSuccessReport @finish
@@ -188,7 +174,7 @@ matcher evaa_liquidate {
                            }
                   }
              xor {
-                 pred evaa_bounced_call @immediate
+                 btype call_contract @immediate where (.msg.bounced)
                  btype jetton_transfer @immediate
              }
          }
