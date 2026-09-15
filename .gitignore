@@ -17,6 +17,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!indexer/indexer/events/mch/specs/lib/
 lib64/
 parts/
 sdist/

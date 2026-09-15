@@ -1,13 +1,5 @@
 # Jetton family matchers with declarative builds.
 #
-# Same patterns as specs/jettons.mch, but the produced-block data/flags are
-# expressed with build statements + `out {...}` instead of a registered `build`
-# directive. Field-for-field parity with the legacy imperative cores in
-# blocks/jettons.py (build_jetton_transfer_core / _get_jetton_burn_data /
-# _get_jetton_mint_data). The separate specs/jettons.mch builder-tier
-# conformance reference is excluded from the production source list to avoid
-# duplicate anchors.
-#
 # Each matcher declares `priority 90` (< default 100) so it registers ahead of
 # the priority-100 specs regardless of emission order.
 

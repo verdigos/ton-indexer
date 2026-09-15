@@ -11,9 +11,8 @@ CLI::
     python -m indexer.events.mch.ir_emit -o <out.json>
 
 The CLI self-provisions permissive Registries: it pre-parses the spec files and
-registers always-true predicate stubs, no-op async builder stubs, and dummy
-block types for every referenced name, so specs compile without the production
-host registries.
+registers predicate stubs, host-function stubs, and dummy block types for every
+referenced name, so specs compile without the production host registries.
 """
 from __future__ import annotations
 
@@ -34,15 +33,6 @@ from indexer.events.mch.registry import Registries
 # Reproducible source list for build-time IR emission. Paths are relative to
 # this module's directory. ORDER IS THE CONTRACT: it equals matcher registration
 # order, and equal-priority matchers tie-break on this order.
-#
-# specs/jetton_transfer.mch and specs/jettons.mch are deliberately omitted.
-# They are builder-tier conformance references that duplicate the
-# jetton_transfer/burn/mint matchers in specs/jettons_decl.mch. They are
-# permanently C++-skipped and inert in Python because the priority-90
-# declarative jetton matchers consume the blocks first. Including them only
-# produced duplicate/ambiguous name-keyed shadow counters and dead SKIP lines.
-# They remain in specs/ for the Python conformance suite, which references them
-# by matcher name, so suffixing was not an option.
 DEFAULT_SPEC_PATHS = [
     "specs/nft_mint.mch",
     "specs/jettons_decl.mch",
@@ -188,10 +178,6 @@ def build_stub_registries(files: list[ast_.File]) -> Registries:
             _collect_pattern_names(m.pattern, predicate_names, annotated_types)
             for produced in m.produces:
                 reg.block_types.setdefault(produced, object)
-            if m.build is not None and m.build not in reg.builders:
-                async def _stub_builder(match, _name=m.build):
-                    return None
-                reg.builders[m.build] = _stub_builder
             if m.shape is not None and m.shape not in reg.shapers:
                 reg.shapers[m.shape] = lambda produced, match: None
             for stmt in m.build_stmts:
@@ -408,11 +394,6 @@ def emit_ir(
         # artifacts byte-identical. The loader defaults an absent key to 100.
         if cm.priority != 100:
             rec["priority"] = cm.priority
-        # Declarative matchers (build statements, no registered builder) have
-        # no builder name; per the container rule (no nulls for absent
-        # fields), omit rather than emit "builder": null.
-        if cm.build_fn_name is not None:
-            rec["builder"] = cm.build_fn_name
         if stmts:
             rec["build_program"] = [_emit_stmt(s) for s in stmts]
         # `shape` contains a registered shaper name. Omit it when absent;

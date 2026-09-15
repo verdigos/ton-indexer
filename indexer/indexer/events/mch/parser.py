@@ -240,7 +240,6 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
     s.skip_newlines()
 
     produces: tuple[str, ...] | None = None
-    build:    str | None = None
     entry:    str | None = None
     shape:    str | None = None
     priority: int | None = None
@@ -265,16 +264,6 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
                 s.i += 1
                 names.append(s.eat(TokenKind.IDENT).text)
             produces = tuple(names)
-        elif t.kind is TokenKind.KW_BUILD:
-            if build is not None:
-                s.bag.error(
-                    "P011_DUPLICATE_DIRECTIVE",
-                    f"matcher {name_tok.text!r} declares more than one `build` directive",
-                    t.span,
-                )
-                raise CompileError(s.bag)
-            s.i += 1
-            build = s.eat(TokenKind.IDENT).text
         elif t.kind is TokenKind.KW_ENTRY:
             if entry is not None:
                 s.bag.error(
@@ -337,13 +326,10 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
     s.skip_newlines()
     end = s.eat(TokenKind.RBRACE).span
 
-    # `build` is optional when build statements are present in declarative form;
-    # the resolver enforces the finer rules (out required, no mixing).
-    if produces is None or (build is None and not build_stmts):
+    if produces is None:
         s.bag.error(
             "P001_UNEXPECTED_TOKEN",
-            f"matcher {name_tok.text!r} missing required directive "
-            f"(produces, and either build or build statements)",
+            f"matcher {name_tok.text!r} missing required directive `produces`",
             _join(start, end),
         )
         raise CompileError(s.bag)
@@ -351,7 +337,6 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
     return ast_.MatcherDecl(
         name=name_tok.text,
         produces=produces,
-        build=build,
         entry=entry,
         include_excess=include_excess,
         include_bounces=include_bounces,

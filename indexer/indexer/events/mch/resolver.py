@@ -421,21 +421,11 @@ def _check_produces_union(file: ast_.File, registries: Registries, bag: Diagnost
                     m.span,
                 )
             elif (
-                m.build is None
-                and is_class_name(name)
+                is_class_name(name)
                 and name not in CLASS_TO_BTYPE
                 and _is_real_block_class(registries.block_types[name])
             ):
-                # DECLARATIVE matcher (no host `build` fn) whose `produces` names
-                # A real typed block class (not a stub `object`/generic `Block`)
-                # absent from the map: the engine stamps this btype on the block
-                # it constructs, so an unresolved class name would silently emit
-                # the class-name string as the produced btype. The serializer
-                # does not key on that value. Builder
-                # matchers construct their own block, so their `produces` btype
-                # is documentation only and keeps the identity fallback; stubs
-                # and generic-Block producers likewise (their intended btype IS
-                # the name), so this never fires on the synthetic test matchers.
+                # Typed block classes must normalize to the engine's btype.
                 bag.error(
                     diagnostics.R022_UNNORMALIZED_PRODUCES_CLASS,
                     f"matcher {m.name!r}: declarative `produces` class {name!r} "
@@ -901,22 +891,14 @@ def _check_build_stmts(
     - `let` names must not collide with captures or earlier lets (R013).
     - `out` fields must be unique (R014); at most one `out` block (R017).
       it may sit anywhere among the statements, evaluation stays source-order.
-    - Exactly one of `build` directive / build statements (R015); declarative
-      matchers must have an `out` (R016).
+    - Matchers must have an `out` or `produces switch` (R016).
     """
-    if m.build is not None and m.build_stmts:
-        bag.error(
-            "R015_BUILD_AMBIGUOUS",
-            f"matcher {m.name!r} declares both a `build` directive and build "
-            f"statements; use a registered builder or a declarative build, not both",
-            m.span,
-        )
     has_out = any(isinstance(s, ast_.OutStmt) for s in m.build_stmts)
     has_switch = any(isinstance(s, ast_.SwitchStmt) for s in m.build_stmts)
-    if m.build is None and m.build_stmts and not (has_out or has_switch):
+    if not (has_out or has_switch):
         bag.error(
             "R016_BUILD_NO_OUT",
-            f"matcher {m.name!r} has build statements but no `out` block or "
+            f"matcher {m.name!r} has no `out` block or "
             f"`produces switch`; nothing to produce",
             m.span,
         )

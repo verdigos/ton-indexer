@@ -29,7 +29,6 @@ class TokenKind(Enum):
     KW_PRODUCES = "produces"
     KW_SWITCH = "switch"
     KW_PRIORITY = "priority"
-    KW_BUILD = "build"
     KW_ENTRY = "entry"
     KW_INCLUDE_EXCESS = "include_excess"
     KW_INCLUDE_BOUNCES = "include_bounces"

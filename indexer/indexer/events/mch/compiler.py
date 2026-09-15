@@ -65,7 +65,6 @@ class LNode:
 class CompiledMatcher:
     name: str
     root: LNode
-    build_fn_name: str | None
     produces_cls_name: str
     source_span: Span
     produces: tuple[str, ...] = ()
@@ -140,12 +139,6 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         ctx.bag.error(
             "C003_UNKNOWN_BLOCK_TYPE",
             f"matcher {decl.name!r}: produces type {decl.produces_primary!r} is not registered",
-            decl.span,
-        )
-    if decl.build is not None and decl.build not in ctx.registries.builders:
-        ctx.bag.error(
-            "C002_UNKNOWN_BUILDER",
-            f"matcher {decl.name!r}: builder {decl.build!r} is not registered",
             decl.span,
         )
     if decl.shape is not None and decl.shape not in ctx.registries.shapers:
@@ -258,7 +251,6 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     return CompiledMatcher(
         name=decl.name,
         root=root,
-        build_fn_name=decl.build,
         produces_cls_name=decl.produces_primary,
         source_span=decl.span,
         produces=tuple(decl.produces),
@@ -1111,7 +1103,7 @@ def _check_cyclic_rule_body(target: ast_.RuleDecl, ctx: CompileCtx) -> None:
             if p.capture is not None:
                 err(
                     f"capture @{p.capture} inside a cyclic rule body never binds; "
-                    f"drive the builder from Match._mch_consumed",
+                    f"use `consumed` in output expressions",
                     p.span,
                 )
             if p.relations is not None:

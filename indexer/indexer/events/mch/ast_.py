@@ -380,15 +380,12 @@ class SwitchStmt(BuildStmt):
 class MatcherDecl:
     name: str
     produces: tuple[str, ...]
-    # None when the matcher is declarative (build statements with an `out`
-    # block instead of a registered-builder reference).
-    build: str | None
     entry: str | None
     include_excess: bool
     include_bounces: bool
     pattern: PatternExpr
     span: Span
-    # Build statements in source order. Empty for builder-based matchers.
+    # Build statements in source order.
     build_stmts: tuple[BuildStmt, ...] = ()
     # `shape IDENT` names a registered shaper invoked by the
     # engine after merge, for post-build tree surgery on the produced block's
@@ -402,8 +399,7 @@ class MatcherDecl:
     def produces_primary(self) -> str:
         """First declared `produces` name. Convenience accessor for code that
         needs a single type (e.g. `CompiledMatcher.produces_cls_name`); the
-        union is documentation plus registry validation, and
-        selecting among the declared types at build time is the builder's job."""
+        union is validated against the registry and selected by `produces switch`."""
         return self.produces[0]
 
 

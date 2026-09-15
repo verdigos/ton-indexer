@@ -13,7 +13,6 @@ class Registries:
     opcodes:       dict[str, int]                                    = field(default_factory=dict)
     predicates:    dict[str, Callable[[Any], bool]]                  = field(default_factory=dict)
     block_types:   dict[str, type]                                   = field(default_factory=dict)
-    builders:      dict[str, Callable[..., Awaitable[Any]]]          = field(default_factory=dict)
     # message_types: message parser class by name; constructed from a pytoniq_core Slice.
     # lookups: async interface resolvers, e.g. await lookups["jetton_wallet"](addr).
     # Both empty by default; populate via default_message_types()/default_lookups().
@@ -34,14 +33,6 @@ class Registries:
             if name in self.predicates:
                 raise KeyError(f"predicate {name!r} already registered")
             self.predicates[name] = fn  # type: ignore[assignment]
-            return fn
-        return deco
-
-    def register_builder(self, name: str) -> Callable[[F], F]:
-        def deco(fn: F) -> F:
-            if name in self.builders:
-                raise KeyError(f"builder {name!r} already registered")
-            self.builders[name] = fn  # type: ignore[assignment]
             return fn
         return deco
 

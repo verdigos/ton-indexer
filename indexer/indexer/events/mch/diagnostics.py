@@ -29,13 +29,8 @@ R013_DUP_LET = "R013_DUP_LET"
 R014_DUP_OUT_FIELD = "R014_DUP_OUT_FIELD"
 """The same field name appears more than once in an `out` block."""
 
-R015_BUILD_AMBIGUOUS = "R015_BUILD_AMBIGUOUS"
-"""A matcher declares both a `build` directive (registered builder) and build
-statements. Use exactly one form."""
-
 R016_BUILD_NO_OUT = "R016_BUILD_NO_OUT"
-"""A declarative matcher (no `build` directive) has build statements but no
-`out` block, so there is nothing to produce."""
+"""A matcher has no `out` block or `produces switch`, so there is nothing to produce."""
 
 R017_MULTIPLE_OUT = "R017_MULTIPLE_OUT"
 """More than one `out` block in a matcher body; exactly one is allowed."""
