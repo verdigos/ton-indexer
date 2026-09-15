@@ -108,6 +108,9 @@ P019_ARROW_AFTER_RELATION_BLOCK = "P019_ARROW_AFTER_RELATION_BLOCK"
 # A node needs a capture before its parse annotation.
 P020_PARSE_ANNOTATION_NEEDS_CAPTURE = "P020_PARSE_ANNOTATION_NEEDS_CAPTURE"
 
+# A choice block needs at least two arms.
+P021_CHOICE_NEEDS_TWO_ARMS = "P021_CHOICE_NEEDS_TWO_ARMS"
+
 C011_UNKNOWN_SHAPER = "C011_UNKNOWN_SHAPER"
 """The `shape` directive names a shaper that is not present in the host's
 shaper registry."""

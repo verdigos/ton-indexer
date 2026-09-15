@@ -460,7 +460,7 @@ def _ends_in_relations(p: ast_.PatternExpr) -> bool:
 
 def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
     """atom := node | '(' pattern_expr ')' | rule_ref | children_block
-               | ('maybe' | 'peek') atom
+               | 'choice' 'head_unique'? children_block | ('maybe' | 'peek') atom
     """
     t = s.peek()
 
@@ -475,6 +475,18 @@ def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
         s.skip_newlines()
         inner = _parse_atom(s)
         return ast_.Peek(inner=inner, span=_join(t.span, inner.span))
+
+    if t.kind is TokenKind.IDENT and t.text == "choice":
+        s.i += 1
+        exclusive = s.at(TokenKind.IDENT) and s.peek().text == "head_unique"
+        if exclusive:
+            s.i += 1
+        block = _parse_items_block(s)
+        span = _join(t.span, block.span)
+        if len(block.items) < 2:
+            s.bag.error("P021_CHOICE_NEEDS_TWO_ARMS", "choice must contain at least two arms", span)
+            raise CompileError(s.bag)
+        return ast_.Alternative(branches=block.items, span=span, exclusive=exclusive)
 
     if t.kind is TokenKind.LPAREN:
         s.i += 1
@@ -654,6 +666,14 @@ def _parse_relations(s: _ParserState) -> ast_.Relations:
 
 
 def _parse_children_block(s: _ParserState) -> ast_.ChildrenBlock:
+    block = _parse_items_block(s)
+    if not block.items:
+        s.bag.error("P002_EMPTY_CHILDREN_ITEM", "children block must contain at least one item", block.span)
+        raise CompileError(s.bag)
+    return block
+
+
+def _parse_items_block(s: _ParserState) -> ast_.ChildrenBlock:
     start = s.eat(TokenKind.LBRACE).span
     items: list[ast_.PatternExpr] = []
     while True:
@@ -667,9 +687,6 @@ def _parse_children_block(s: _ParserState) -> ast_.ChildrenBlock:
         item = _parse_pattern_expr(s)
         items.append(item)
     end = s.eat(TokenKind.RBRACE).span
-    if not items:
-        s.bag.error("P002_EMPTY_CHILDREN_ITEM", "children block must contain at least one item", _join(start, end))
-        raise CompileError(s.bag)
     return ast_.ChildrenBlock(items=tuple(items), span=_join(start, end))
 
 
