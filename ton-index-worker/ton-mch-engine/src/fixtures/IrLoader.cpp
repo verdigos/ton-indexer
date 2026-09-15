@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <exception>
 #include <fstream>
+#include <set>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -112,12 +113,13 @@ void scan_program(const Json &e, CompiledMatcher &m) {
 
 // Local reachability over every edge kind (child/parent/step/exit/children/
 // branches), cycle-safe, discovery order. Intentional.
-std::vector<int> reachable(const std::vector<CompiledNode> &nodes, int start) {
+std::vector<int> reachable(const std::vector<CompiledNode> &nodes, int start, bool scalar = false) {
   std::vector<int> out{start};
   std::unordered_set<int> seen{start};
   std::size_t qi = 0;
   while (qi < out.size()) {
     const CompiledNode &n = nodes[out[qi++]];
+    if (scalar && n.many) continue;
     std::vector<int> refs;
     if (n.child >= 0) refs.push_back(n.child);
     if (n.parent >= 0) refs.push_back(n.parent);
@@ -257,6 +259,22 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
       return td::Status::Error("matcher " + m.name + ": node 'peek' must be a bool");
     }
     cn.peek = jbool(nrec, "peek");
+    const std::string where = "matcher " + m.name + ": node " + std::to_string(old) + ": ";
+    if (const Json *many = jfield(nrec, "many"); many && many->type() != JType::Boolean) {
+      return td::Status::Error(where + "many must be a bool");
+    }
+    cn.many = jbool(nrec, "many");
+    if (const Json *cap = jfield(nrec, "max")) {
+      if (!cn.many || cap->type() != JType::Number ||
+          cap->get_number().str().find_first_not_of("0123456789") != std::string::npos) {
+        return td::Status::Error(where + "max must be an integer and requires many");
+      }
+      auto value = num_i64(*cap);
+      if (value.is_error() || value.ok() < 1 || value.ok() > 2147483647) {
+        return td::Status::Error(where + "max must be in [1, 2147483647]");
+      }
+      cn.max = static_cast<int>(value.ok());
+    }
     cn.child = has(nrec, "child") ? rm(static_cast<int>(jint(nrec, "child"))) : -1;
     if (const Json *ch = jfield(nrec, "children"); ch != nullptr && ch->type() == JType::Array) {
       for (const auto &c : ch->get_array()) {
@@ -318,6 +336,69 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     owned.insert(es.begin(), es.end());
   }
   m.owned_slots = owned;
+
+  std::set<int> captured;
+  for (int nid = 0; nid < static_cast<int>(m.nodes.size()); ++nid) {
+    const auto &node = m.nodes[nid];
+    auto error = [&](const std::string &message) {
+      return td::Status::Error("matcher " + m.name + ": node " +
+                               std::to_string(node.global_id) + ": " + message);
+    };
+    if (node.peek || node.kind == NodeKind::Recursive) {
+      for (int r : reachable(m.nodes, nid)) {
+        if (m.nodes[r].many) return error("many cannot be under recursion or peek");
+      }
+    }
+    if (!node.many) continue;
+    if (nid == 0) return error("many cannot be a matcher root");
+    if (slot_of.size() != m.slot_names.size()) return error("duplicate capture names with many");
+    for (const Json *source : pool) {
+      for (td::Slice key : {td::Slice("child"), td::Slice("parent"), td::Slice("step"), td::Slice("exit")}) {
+        if (has(*source, key) && jint(*source, key) == node.global_id)
+          return error("many requires only children-item incoming edges");
+      }
+      if (const Json *branches = jfield(*source, "branches"); branches && branches->type() == JType::Array) {
+        for (const auto &branch : branches->get_array()) {
+          if (std::stoll(branch.get_number().str()) == node.global_id)
+            return error("many requires only children-item incoming edges");
+        }
+      }
+    }
+    std::set<int> heads{nid};
+    std::vector<int> pending{nid};
+    for (std::size_t i = 0; i < pending.size(); ++i) {
+      for (int r : m.nodes[pending[i]].branches) {
+        if (heads.insert(r).second) pending.push_back(r);
+      }
+    }
+    for (int r : reachable(m.nodes, nid)) {
+      const auto &n = m.nodes[r];
+      for (int target : edge_refs(*pool[n.global_id])) {
+        const auto closure = reachable(m.nodes, rm(target));
+        if (std::find(closure.begin(), closure.end(), r) != closure.end())
+          return error("many operand contains a cycle");
+      }
+      if (n.kind == NodeKind::Recursive || (heads.count(r) && n.peek))
+        return error("many cannot contain recursion or repeat a peek head");
+      if (has(*pool[n.global_id], "capture")) {
+        if (!heads.count(r) || n.slot < 0 || m.cards[n.slot] != "many" || owned.count(n.slot))
+          return error("many captures must sit on the repeated block with card many and no recursion owner");
+        captured.insert(r);
+      }
+    }
+  }
+  const auto scalar = reachable(m.nodes, 0, true);
+  for (int r : captured) {
+    for (int nid = 0; nid < static_cast<int>(m.nodes.size()); ++nid) {
+      if (m.nodes[nid].slot == m.nodes[r].slot &&
+          (!captured.count(nid) || (!m.nodes[nid].many &&
+           std::find(scalar.begin(), scalar.end(), nid) != scalar.end()))) {
+        return td::Status::Error("matcher " + m.name + ": node " +
+                                 std::to_string(m.nodes[nid].global_id) +
+                                 ": many capture also has a scalar binding");
+      }
+    }
+  }
 
   m.include_excess = jbool(rec, "include_excess", true);
   m.include_bounces = jbool(rec, "include_bounces", true);

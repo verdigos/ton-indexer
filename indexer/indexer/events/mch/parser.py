@@ -415,7 +415,7 @@ def _parse_sequence(s: _ParserState, entry_position: bool = False,
         atom = head if i == 0 else tail[i - 1][1]
         modifiers = []
         node = atom
-        while isinstance(node, (ast_.Maybe, ast_.Peek)):
+        while isinstance(node, (ast_.Maybe, ast_.Peek, ast_.Many)):
             modifiers.append(node)
             node = node.inner
         members = s.opcode_sets.pop(id(node), ())
@@ -442,13 +442,25 @@ def _parse_sequence(s: _ParserState, entry_position: bool = False,
     if not tail:
         return head
     last_span = tail[-1][1].span
+    modifiers = []
+    inner = head
+    while isinstance(inner, (ast_.Maybe, ast_.Peek)):
+        modifiers.append(inner)
+        inner = inner.inner
+    if isinstance(inner, ast_.Many):
+        inner = replace(inner, inner=ast_.Sequence(inner.inner, tuple(tail),
+                                                  _join(inner.inner.span, last_span)),
+                        span=_join(inner.span, last_span))
+        for modifier in reversed(modifiers):
+            inner = replace(modifier, inner=inner)
+        return replace(inner, span=_join(head.span, last_span))
     return ast_.Sequence(head=head, tail=tuple(tail), span=_join(head.span, last_span))
 
 
 def _ends_in_relations(p: ast_.PatternExpr) -> bool:
     if isinstance(p, ast_.Node):
         return p.relations is not None
-    if isinstance(p, (ast_.Maybe, ast_.Peek)):
+    if isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
         return _ends_in_relations(p.inner)
     if isinstance(p, ast_.Sequence):
         return _ends_in_relations(p.tail[-1][1] if p.tail else p.head)
@@ -462,6 +474,26 @@ def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
                | ('or' | 'xor') children_block | ('maybe' | 'peek') atom
     """
     t = s.peek()
+
+    if t.kind is TokenKind.IDENT and t.text == "many":
+        s.i += 1
+        s.skip_newlines()
+        cap = None
+        if s.try_eat(TokenKind.LBRACKET):
+            s.skip_newlines()
+            n = s.peek()
+            if n.kind is not TokenKind.DEC or not 1 <= int(n.text) <= 2147483647:
+                s.bag.error("P028_MANY_CAP", "many cap must be a DEC in [1, 2147483647]", n.span)
+                raise CompileError(s.bag)
+            cap = int(n.text)
+            s.i += 1
+            s.skip_newlines()
+            if not s.try_eat(TokenKind.RBRACKET):
+                s.bag.error("P028_MANY_CAP", "many cap must be a single DEC in brackets", s.peek().span)
+                raise CompileError(s.bag)
+            s.skip_newlines()
+        inner = _parse_atom(s)
+        return ast_.Many(inner, cap, _join(t.span, inner.span))
 
     if t.kind in (TokenKind.KW_MAYBE, TokenKind.KW_PEEK):
         s.i += 1

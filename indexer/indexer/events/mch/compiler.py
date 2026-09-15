@@ -52,6 +52,9 @@ class LNode:
     target: "LNode | None" = None          # cyclic_ref back-edge target
     optional: bool = False
     peek: bool = False
+    many: bool = False
+    max: int | None = None
+    many_span: Span | None = None
     peek_span: Span | None = None
     capture: str | None = None
     where: str | None = None
@@ -308,7 +311,7 @@ def _find_anchor_path(pattern: ast_.PatternExpr, anchor: ast_.PatternExpr) -> li
                 r = search(atom, path + [p])
                 if r:
                     return r
-        elif isinstance(p, (ast_.Maybe, ast_.Peek)):
+        elif isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
             return search(p.inner, path + [p])
         elif isinstance(p, ast_.Alternative):
             for b in p.branches:
@@ -633,6 +636,12 @@ def _check_peek_subtree_closure(root: LNode, matcher_name: str, ctx: CompileCtx)
         stack.extend(_lnode_refs(node))
 
     for origin in all_nodes:
+        for node in (root, origin.child, origin.parent, origin.step, origin.exit_,
+                     *(origin.branches or ())):
+            if node is not None and node.many:
+                ctx.bag.error("C017_MANY", "`many` requires only children-item incoming edges",
+                              node.many_span)
+                raise CompileError(ctx.bag)
         if not origin.peek:
             continue
         seen = {id(origin)}
@@ -701,6 +710,15 @@ def _anchor_group_branch_descs(
 
 
 def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
+    if isinstance(p, ast_.Many):
+        inner = _lower_atom(p.inner, ctx)
+        if inner.optional:
+            ctx.bag.error("C017_MANY", "write `maybe many`, not `many maybe`", p.span)
+            raise CompileError(ctx.bag)
+        inner.many = True
+        inner.max = p.max
+        inner.many_span = p.span
+        return inner
     if isinstance(p, ast_.Node):
         return _lower_node(p, ctx)
     if isinstance(p, ast_.Maybe):
@@ -939,7 +957,7 @@ def _check_no_capture_after_recursion(
     def is_direct_recursive_ref(p: ast_.PatternExpr) -> bool:
         if isinstance(p, ast_.RuleRef):
             return ctx.resolved.rule_recursion.get(p.name) is RecursionClass.DIRECT_RECURSIVE
-        if isinstance(p, (ast_.Maybe, ast_.Peek)):
+        if isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
             return is_direct_recursive_ref(p.inner)
         return False
 
@@ -951,7 +969,7 @@ def _check_no_capture_after_recursion(
                 for target in (r.children_all, *(r.children_first or ()), r.parent)
                 if target is not None
             ))
-        if isinstance(p, (ast_.Maybe, ast_.Peek)):
+        if isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
             return contains_capture(p.inner)
         if isinstance(p, ast_.Sequence):
             if contains_capture(p.head):
@@ -986,7 +1004,7 @@ def _check_no_capture_after_recursion(
                 if is_direct_recursive_ref(atom):
                     recursion_seen = True
                 walk(atom)
-        elif isinstance(p, (ast_.Maybe, ast_.Peek)):
+        elif isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
             walk(p.inner)
         elif isinstance(p, ast_.Alternative):
             for b in p.branches:
@@ -1026,7 +1044,7 @@ def _check_no_bare_children_block(
                 walk(atom, in_chain_left=previous_was_atom)
                 if not _is_cb_atom(atom):
                     previous_was_atom = True
-        elif isinstance(p, (ast_.Maybe, ast_.Peek)):
+        elif isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
             walk(p.inner, in_chain_left=False)
         elif isinstance(p, ast_.Alternative):
             for b in p.branches:
@@ -1067,7 +1085,7 @@ def _mark_rule_seen(name: str, ctx: CompileCtx) -> None:
 
 def _is_maybe_self_ref(p: ast_.PatternExpr, rule_name: str) -> bool:
     saw_maybe = False
-    while isinstance(p, (ast_.Maybe, ast_.Peek)):
+    while isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
         if isinstance(p, ast_.Maybe):
             saw_maybe = True
         p = p.inner
@@ -1106,7 +1124,7 @@ def _check_cyclic_rule_body(target: ast_.RuleDecl, ctx: CompileCtx) -> None:
     name = target.name
 
     def is_self_ref(a: ast_.PatternExpr) -> bool:
-        if isinstance(a, (ast_.Maybe, ast_.Peek)):
+        if isinstance(a, (ast_.Maybe, ast_.Peek, ast_.Many)):
             return is_self_ref(a.inner)
         return isinstance(a, ast_.RuleRef) and a.name == name
 
@@ -1152,7 +1170,7 @@ def _check_cyclic_rule_body(target: ast_.RuleDecl, ctx: CompileCtx) -> None:
                     p.span,
                 )
             walk(p.inner)
-        elif isinstance(p, ast_.Peek):
+        elif isinstance(p, (ast_.Peek, ast_.Many)):
             if is_self_ref(p.inner):
                 err(
                     "`peek` on a self-reference inside a cyclic body is not "
@@ -1323,7 +1341,7 @@ def _contains_rule_ref(p: ast_.PatternExpr, name: str) -> bool:
         )
     if isinstance(p, ast_.RuleRef):
         return p.name == name
-    if isinstance(p, (ast_.Maybe, ast_.Peek)):
+    if isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
         return _contains_rule_ref(p.inner, name)
     if isinstance(p, ast_.Sequence):
         if _contains_rule_ref(p.head, name):

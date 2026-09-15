@@ -137,7 +137,7 @@ def _collect_pattern_names(p: ast_.PatternExpr, out: set[str], msg_types: set[st
             for target in (r.children_all, *(r.children_first or ()), r.parent):
                 if target is not None:
                     _collect_pattern_names(target, out, msg_types)
-    elif isinstance(p, (ast_.Maybe, ast_.Peek)):
+    elif isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
         _collect_pattern_names(p.inner, out, msg_types)
     elif isinstance(p, ast_.Sequence):
         _collect_pattern_names(p.head, out, msg_types)
@@ -267,6 +267,10 @@ def _emit_node(n: LNode, nodes: list[dict], memo: dict[int, int]) -> int:
         rec["optional"] = True
     if n.peek:
         rec["peek"] = True
+    if n.many:
+        rec["many"] = True
+    if n.max is not None:
+        rec["max"] = n.max
     if n.capture is not None:
         rec["capture"] = n.capture
     if n.where is not None:

@@ -38,6 +38,8 @@ struct CompiledNode {
   int slot{-1};
   bool optional{false};
   bool peek{false};
+  bool many{false};
+  int max{0};
   int child{-1};
   std::vector<int> children;
   int parent{-1};

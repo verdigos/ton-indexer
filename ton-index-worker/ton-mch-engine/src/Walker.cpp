@@ -196,6 +196,27 @@ class MatchState {
     }
     std::vector<Block *> working = canonical(block->next_blocks);
     for (int item : node.children) {
+      const auto &spec = m_.nodes[item];
+      if (spec.many) {
+        Mark start = mark();
+        std::vector<Block *> taken;
+        for (Block *cand : working) {
+          Mark mk = mark();
+          if (match_node(item, cand)) {
+            taken.push_back(cand);
+            if (spec.max > 0 && taken.size() > static_cast<std::size_t>(spec.max)) {
+              rollback(start);
+              taken.clear();
+              break;
+            }
+          } else {
+            rollback(mk);
+          }
+        }
+        if (taken.empty() && !spec.optional) return false;
+        for (Block *cand : taken) working.erase(std::find(working.begin(), working.end(), cand));
+        continue;
+      }
       bool matched = false;
       for (std::size_t i = 0; i < working.size(); i++) {
         Mark mk = mark();

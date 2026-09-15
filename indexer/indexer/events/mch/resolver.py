@@ -35,6 +35,7 @@ class _CaptureOccurrence:
     under_maybe: bool
     under_peek: bool
     under_recursive: bool
+    under_many: bool
     branch_path: tuple[tuple[int, int, int], ...]
     alt_path: tuple[tuple[int, int, int], ...]
     # True when any enclosing alternative is NOT exclusive (plain `|` failing the
@@ -364,7 +365,7 @@ def _resolve_opcodes(file: ast_.File, registries: Registries, bag: DiagnosticBag
                         members[value] = head.span
             for branch in p.branches:
                 visit(branch)
-        elif isinstance(p, (ast_.Maybe, ast_.Peek)):
+        elif isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
             visit(p.inner)
         elif isinstance(p, ast_.Sequence):
             visit(p.head)
@@ -459,7 +460,7 @@ def _classify_rules(file: ast_.File, bag: DiagnosticBag) -> dict[str, RecursionC
             refs.append((p.name, under_maybe))
         elif isinstance(p, ast_.Maybe):
             collect_refs(p.inner, refs, True)
-        elif isinstance(p, ast_.Peek):
+        elif isinstance(p, (ast_.Peek, ast_.Many)):
             collect_refs(p.inner, refs, under_maybe)
         elif isinstance(p, ast_.Alternative):
             for b in p.branches:
@@ -574,7 +575,7 @@ def _check_rule_patterns(
                 for target in (r.children_all, *(r.children_first or ()), r.parent):
                     if target is not None:
                         visit(target)
-        elif isinstance(p, (ast_.Maybe, ast_.Peek)):
+        elif isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
             visit(p.inner)
         elif isinstance(p, ast_.Sequence):
             visit(p.head)
@@ -591,6 +592,68 @@ def _check_rule_patterns(
         visit(r.pattern)
 
 
+def _check_many(pattern, file, recursion, bag):
+    rules = {r.name: r.pattern for r in file.rules}
+
+    def walk(p, item=False, repeated=False, head=False, peek=False, recursive=False, path=()):
+        def error(message):
+            bag.error("C017_MANY", message, p.span)
+            raise CompileError(bag)
+
+        if isinstance(p, ast_.Many):
+            if peek or isinstance(p.inner, ast_.Peek):
+                error("`peek many` / `many peek` is not supported")
+            if recursive:
+                error("`many` cannot be under or contain a recursive rule")
+            inner = p.inner.head if isinstance(p.inner, ast_.Sequence) else p.inner
+            if isinstance(inner, ast_.Maybe):
+                error("write `maybe many`, not `many maybe`")
+            if not item:
+                error("`many` requires a children-set item; `->` already takes every match; "
+                      "write `-> { many X @xs }` for a list")
+            walk(p.inner, repeated=True, head=not repeated, path=path)
+        elif isinstance(p, (ast_.Maybe, ast_.Peek)):
+            if repeated and head and isinstance(p, ast_.Peek):
+                error("`peek many` / `many peek` is not supported")
+            if repeated and isinstance(p, ast_.Maybe):
+                head = False
+            walk(p.inner, item, repeated, head, peek or isinstance(p, ast_.Peek), recursive, path)
+        elif isinstance(p, ast_.Node):
+            if repeated and p.capture and not head:
+                error("a capture inside `many` must sit on the repeated block")
+            if p.relations:
+                r = p.relations
+                for target in (r.children_all, r.parent):
+                    if target is not None:
+                        walk(target, repeated=repeated, peek=peek, recursive=recursive, path=path)
+                for target in r.children_first or ():
+                    walk(target, True, repeated, peek=peek, recursive=recursive, path=path)
+        elif isinstance(p, ast_.Sequence):
+            walk(p.head, item, repeated, head, peek, recursive, path)
+            previous = p.head
+            for _, target in p.tail:
+                while isinstance(previous, (ast_.Maybe, ast_.Peek, ast_.Many)):
+                    previous = previous.inner
+                recursive |= (isinstance(previous, ast_.RuleRef) and
+                              recursion.get(previous.name, RecursionClass.NONE) is not RecursionClass.NONE)
+                walk(target, repeated=repeated, peek=peek, recursive=recursive, path=path)
+                previous = target
+        elif isinstance(p, ast_.Alternative):
+            for branch in p.branches:
+                walk(branch, repeated=repeated, head=head, peek=peek, recursive=recursive, path=path)
+        elif isinstance(p, ast_.ChildrenBlock):
+            for target in p.items:
+                walk(target, True, repeated, peek=peek, recursive=recursive, path=path)
+        elif isinstance(p, ast_.RuleRef) and p.name in rules:
+            rec = recursion.get(p.name, RecursionClass.NONE) is not RecursionClass.NONE
+            if repeated and rec:
+                error("`many` cannot be under or contain a recursive rule")
+            if p.name not in path:
+                walk(rules[p.name], item, repeated, head, peek, recursive or rec, path + (p.name,))
+
+    walk(pattern)
+
+
 def _resolve_matcher(
     m: ast_.MatcherDecl,
     opcodes: dict[str, int],
@@ -599,10 +662,12 @@ def _resolve_matcher(
     bag: DiagnosticBag,
     rule_recursion: dict[str, RecursionClass],
 ) -> ResolvedMatcher:
+    _check_many(m.pattern, file, rule_recursion, bag)
     occurrences: dict[str, list[_CaptureOccurrence]] = {}
     alt_ids: dict[int, int] = {}  # id(Alternative) -> stable sequential id
     alt_nodes: dict[int, ast_.Alternative] = {}  # stable id -> Alternative node
     relation_depth = 0
+    under_many = False
 
     def visit(
         p: ast_.PatternExpr,
@@ -613,7 +678,7 @@ def _resolve_matcher(
         alt_path: tuple[tuple[int, int, int], ...],
         under_nonexclusive_alt: bool = False,
     ) -> None:
-        nonlocal relation_depth
+        nonlocal relation_depth, under_many
         if isinstance(p, ast_.Node):
             head = p.head
             if isinstance(head, ast_.OpHead) and isinstance(head.ref, str):
@@ -641,6 +706,7 @@ def _resolve_matcher(
                     under_maybe=under_maybe,
                     under_peek=under_peek,
                     under_recursive=under_recursive,
+                    under_many=under_many,
                     branch_path=branch_path,
                     alt_path=alt_path,
                     under_nonexclusive_alt=under_nonexclusive_alt,
@@ -653,6 +719,12 @@ def _resolve_matcher(
                         visit(target, under_maybe, under_peek, under_recursive,
                               branch_path, alt_path, under_nonexclusive_alt)
                 relation_depth -= 1
+        elif isinstance(p, ast_.Many):
+            saved = under_many
+            under_many = True
+            visit(p.inner, under_maybe, under_peek, under_recursive,
+                  branch_path, alt_path, under_nonexclusive_alt)
+            under_many = saved
         elif isinstance(p, ast_.Maybe):
             visit(
                 p.inner, True, under_peek, under_recursive, branch_path, alt_path,
@@ -740,7 +812,8 @@ def _resolve_matcher(
         if len(occs) > 1:
             # Every pair must occupy different branches of a common alternative
             # and agree on recursion context.
-            same_recursion = all(o.under_recursive == occs[0].under_recursive for o in occs)
+            same_recursion = all((o.under_recursive, o.under_many) ==
+                                 (occs[0].under_recursive, occs[0].under_many) for o in occs)
             offending: ast_.Node | None = None if same_recursion else occs[1].node
             if offending is None:
                 for i in range(len(occs)):
@@ -763,7 +836,7 @@ def _resolve_matcher(
                     head=first.node.head,
                     optional=first.under_maybe,
                     peek=first.under_peek,
-                    list_binding=first.under_recursive,
+                    list_binding=first.under_recursive or first.under_many,
                     source=first.node,
                 )
                 continue
@@ -772,7 +845,7 @@ def _resolve_matcher(
                 head=occs[0].node.head,
                 optional=_merged_optional(occs),
                 peek=any(o.under_peek for o in occs),
-                list_binding=occs[0].under_recursive,
+                list_binding=occs[0].under_recursive or occs[0].under_many,
                 source=occs[0].node,
             )
         else:
@@ -782,7 +855,7 @@ def _resolve_matcher(
                 head=o.node.head,
                 optional=o.under_maybe or bool(o.branch_path),
                 peek=o.under_peek,
-                list_binding=o.under_recursive,
+                list_binding=o.under_recursive or o.under_many,
                 source=o.node,
             )
 
@@ -1109,7 +1182,7 @@ def _is_recursive_set(file: ast_.File) -> set[str]:
     def collect_refs(p: ast_.PatternExpr, refs: set[str]) -> None:
         if isinstance(p, ast_.RuleRef):
             refs.add(p.name)
-        elif isinstance(p, (ast_.Maybe, ast_.Peek)):
+        elif isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
             collect_refs(p.inner, refs)
         elif isinstance(p, ast_.Alternative):
             for b in p.branches:

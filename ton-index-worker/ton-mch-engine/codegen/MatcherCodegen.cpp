@@ -164,6 +164,8 @@ std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
     nset(n.slot >= 0, "slot", std::to_string(n.slot));
     nset(n.optional, "optional", "true");
     nset(n.peek, "peek", "true");
+    nset(n.many, "many", "true");
+    nset(n.max > 0, "max", std::to_string(n.max));
     nset(n.child >= 0, "child", std::to_string(n.child));
     nset(!n.children.empty(), "children", int_list(n.children));
     nset(n.parent >= 0, "parent", std::to_string(n.parent));
