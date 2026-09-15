@@ -67,7 +67,7 @@ matcher jvault_stake {
         stake_wallet:  account(receive.msg.destination)
         staking_pool:  account(receive.msg.source)
         staked_amount: transfer.data.desired_amount.value
-        period:        parse transfer.data.forward_payload as JVaultStakePeriodPayload.stake_period
+        period:        parse! transfer.data.forward_payload as JVaultStakePeriodPayload.stake_period
     }
 }
 

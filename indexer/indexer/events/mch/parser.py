@@ -362,46 +362,20 @@ def _parse_bool_literal(s: _ParserState) -> bool:
 
 def _parse_pattern_expr(s: _ParserState, entry_position: bool = False,
                         relation_item: bool = False) -> ast_.PatternExpr:
-    """pattern_expr := sequence (('|' | '^') sequence)*
-
-    The separator kind is decided by the first separator seen.
-    Mixing '|' and '^' at the same nesting level emits P010.
-    """
+    """pattern_expr := sequence"""
     s.skip_newlines()
-    branches = [_parse_sequence(s, entry_position=entry_position, relation_item=relation_item)]
-    separator_kind: TokenKind | None = None
-
-    while True:
-        save_i = s.i
-        s.skip_newlines()
-        if s.at(TokenKind.PIPE) or s.at(TokenKind.CARET):
-            current_sep = s.tokens[s.i].kind
-            if separator_kind is None:
-                separator_kind = current_sep
-            elif current_sep is not separator_kind:
-                offending_tok = s.tokens[s.i]
-                s.bag.error(
-                    "P010_ALTERNATIVE_SEPARATOR_MIX",
-                    "cannot mix '|' and '^' at the same nesting level; "
-                    "use parentheses to nest alternatives",
-                    offending_tok.span,
-                )
-                raise CompileError(s.bag)
-            s.i += 1  # consume separator
-            s.skip_newlines()
-            branches.append(_parse_sequence(s, relation_item=relation_item))
-        else:
-            s.i = save_i
-            break
-
-    if len(branches) == 1:
-        return branches[0]
-    span = _join(branches[0].span, branches[-1].span)
-    return ast_.Alternative(
-        branches=tuple(branches),
-        span=span,
-        exclusive=(separator_kind is TokenKind.CARET),
-    )
+    sequence = _parse_sequence(s, entry_position=entry_position, relation_item=relation_item)
+    save_i = s.i
+    s.skip_newlines()
+    if s.at(TokenKind.PIPE) or s.at(TokenKind.CARET):
+        s.bag.error(
+            "P022_ALTERNATIVE_OPERATOR_REMOVED",
+            "write `or { … }` / `xor { … }`",
+            s.peek().span,
+        )
+        raise CompileError(s.bag)
+    s.i = save_i
+    return sequence
 
 
 def _parse_sequence(s: _ParserState, entry_position: bool = False,
@@ -1080,14 +1054,10 @@ def _parse_comprehension(s: _ParserState) -> ast_.Comprehension:
 
 
 def _parse_parse_expr(s: _ParserState, *, nullable: bool = False) -> ast_.ParseExpr:
-    """`[try] parse`, `parse?`, or `parse!` followed by a target and types."""
-    start = s.peek().span
-    if s.try_eat(TokenKind.KW_TRY):
-        s.eat(TokenKind.KW_PARSE)
-        nullable = True
-    else:
-        head = s.eat(s.peek().kind)
-        nullable = nullable or head.kind is TokenKind.KW_PARSE_NULLABLE
+    """`parse?` or `parse!` followed by a target and types."""
+    head = s.eat(s.peek().kind)
+    start = head.span
+    nullable = nullable or head.kind is TokenKind.KW_PARSE_NULLABLE
     target = _parse_postfix(s)
     s.eat(TokenKind.KW_AS)
     msg = s.eat(TokenKind.IDENT)
@@ -1109,10 +1079,16 @@ def _parse_parse_expr(s: _ParserState, *, nullable: bool = False) -> ast_.ParseE
 def _parse_primary(s: _ParserState) -> ast_.Expr:
     if _at_comprehension(s):
         return _parse_comprehension(s)
-    if s.peek().kind in (TokenKind.KW_TRY, TokenKind.KW_PARSE,
-                         TokenKind.KW_PARSE_NULLABLE, TokenKind.KW_PARSE_STRICT):
-        return _parse_parse_expr(s)
     t = s.peek()
+    if t.kind is TokenKind.KW_PARSE:
+        s.bag.error(
+            "P023_BARE_PARSE_EXPRESSION",
+            "write `parse! …` (faults) or `parse? …` (null)",
+            t.span,
+        )
+        raise CompileError(s.bag)
+    if t.kind in (TokenKind.KW_PARSE_NULLABLE, TokenKind.KW_PARSE_STRICT):
+        return _parse_parse_expr(s)
     if t.kind is TokenKind.HEX:
         s.i += 1
         return ast_.IntLit(value=int(t.text, 16), span=t.span)

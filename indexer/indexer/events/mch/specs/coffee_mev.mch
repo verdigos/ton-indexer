@@ -100,7 +100,7 @@ matcher coffee_mev_protect_failed_swap {
     op CoffeeMevProtectFailedSwap @call
 
     out {
-        recipient: (parse call as CoffeeMevProtectFailedSwap).recipient
+        recipient: (parse! call as CoffeeMevProtectFailedSwap).recipient
         asset:     ton_asset()
     }
 }
@@ -113,7 +113,7 @@ matcher coffee_mev_protect_failed_swap_jetton {
     btype jetton_transfer @transfer where (.payload_opcode == 0xee51ce51)
 
     out {
-        recipient: (parse transfer.data.forward_payload as CoffeeMevProtectFailedSwap).recipient
+        recipient: (parse! transfer.data.forward_payload as CoffeeMevProtectFailedSwap).recipient
         asset:     transfer.data.asset
     }
 }
