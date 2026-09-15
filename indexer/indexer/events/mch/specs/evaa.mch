@@ -9,8 +9,8 @@
 #   Inline predicates cannot replace them because they require body parsing.
 # - The EVAA service-comment ton_transfer tests the parsed comment inline.
 # - Legacy's withdraw_fail_on_user_excesses GenericMatcher (opcode-set
-#   membership over 4 error opcodes) is an exclusive alternative of the four
-#   concrete `op` nodes sharing one capture (@fail_excess); same block matched,
+#   membership over 4 error opcodes) is an opcode set sharing one capture
+#   (@fail_excess); same block matched,
 #   same consumed set, and only the winning branch binds.
 # - `^` mirrors legacy's ExclusiveOrMatcher use. As an edge target the
 #   exclusivity gate is try_build-inert, so branch order is
@@ -134,10 +134,7 @@ matcher evaa_withdraw {
          ^ op EvaaWithdrawCollateralized @coll_fail
              -> pred evaa_user_withdraw_fail
              -> op EvaaWithdrawNoFundsExcess
-         ^ ( op EvaaWithdrawLockedExcess @fail_excess
-           ^ op EvaaWithdrawNotCollateralizedExcess @fail_excess
-           ^ op EvaaWithdrawMissingPricesExcess @fail_excess
-           ^ op EvaaWithdrawExecutionCrashed @fail_excess ) )
+         ^ op [EvaaWithdrawLockedExcess, EvaaWithdrawNotCollateralizedExcess, EvaaWithdrawMissingPricesExcess, EvaaWithdrawExecutionCrashed] @fail_excess )
 
     # Declarative build, field-for-field with build_evaa_withdraw_core.
     # The IR engine binds @coll_ok / @coll_fail / @fail_excess per the winning

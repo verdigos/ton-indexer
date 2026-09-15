@@ -131,11 +131,11 @@ rule mint_chain = (
 # The notify head comes in two flavours, 0x7BDD97DE (the standard
 # JettonBurnNotification, forwarded a SECOND time master -> teleport; the first
 # wallet -> master hop is already inside the jetton_burn block) and 0x587643A2
-# (the "strange notification" of the TDsLHsBM… fixture). `^` NOT `|`: both
-# branches bind the SAME @log/@notify names, and a duplicated capture across
-# alternatives is only legal when the compiler can prove exclusivity (R005).
-# The children set is written out inside each branch rather than after the
-# group, mirroring the legacy `OrMatcher([ContractMatcher(children_matchers=…),
+# (the "strange notification" of the TDsLHsBM… fixture). The opcode set lowers
+# to `^` branches that bind the SAME @log/@notify names; the compiler can prove
+# exclusivity, so the duplicated captures are legal (R005).
+# The children set is written once and distributed into each member branch,
+# mirroring the legacy `OrMatcher([ContractMatcher(children_matchers=…),
 # ContractMatcher(children_matchers=…)])` shape exactly.
 #
 # AMOUNT — reproduced, not fixed. Legacy takes the jetton_burn's amount when it
@@ -154,14 +154,10 @@ matcher tgbtc_burn {
     entry    @burn
 
     btype jetton_burn @burn
-      -> ( op JettonBurnNotify @notify
-             -> { op TgBTCBurnLog @log
-                ; maybe op TgBTCPayout
-                    -> { maybe op TgBTCPayoutNotify ; maybe btype ton_transfer } }
-         ^ op TgBTCBurnNotify @notify
-             -> { op TgBTCBurnLog @log
-                ; maybe op TgBTCPayout
-                    -> { maybe op TgBTCPayoutNotify ; maybe btype ton_transfer } } )
+      -> op [JettonBurnNotify, TgBTCBurnNotify] @notify
+           -> { op TgBTCBurnLog @log
+              ; maybe op TgBTCPayout
+                  -> { maybe op TgBTCPayoutNotify ; maybe btype ton_transfer } }
 
     require b = tgbtc_burn_log(log)
     let chain_amount = burn.data.amount.value

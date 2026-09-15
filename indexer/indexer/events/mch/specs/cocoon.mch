@@ -28,7 +28,7 @@ matcher cocoon_worker_payout {
     produces cocoon_worker_payout
     entry    @start
 
-    ( op CocoonPayoutPayload @start ^ op CocoonLastPayoutPayload @start )
+    op [CocoonPayoutPayload, CocoonLastPayoutPayload] @start
       -> op CocoonWorkerProxyRequest @wreq
          -> { op CocoonPayout @payout
             ; maybe op CocoonReturnExcessesBack @excesses }
@@ -180,8 +180,7 @@ matcher cocoon_client_request_refund {
     produces cocoon_client_request_refund
     entry    @refund
 
-    ( op CocoonOwnerWalletSendMessage @refund
-    ^ op CocoonOwnerClientRequestRefund @refund )
+    op [CocoonOwnerWalletSendMessage, CocoonOwnerClientRequestRefund] @refund
       -> { op CocoonReturnExcessesBack @excesses
          ; op CocoonClientProxyRequest @client_request }
       <- maybe op CocoonOwnerWalletSendMessage @wallet

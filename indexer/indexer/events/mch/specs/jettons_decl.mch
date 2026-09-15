@@ -114,7 +114,7 @@ matcher jetton_mint {
     priority 90
     entry    @mint
 
-    (op JettonMint @mint ^ op MinterJettonMint @mint)
+    op [JettonMint, MinterJettonMint] @mint
       -> maybe ( op JettonNotify @notify
                | op JettonInternalTransfer @internal -> maybe op JettonNotify @internal_notify )
 

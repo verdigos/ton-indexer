@@ -17,7 +17,7 @@ matcher change_wallet_key {
     produces change_wallet_key
     entry    @req
 
-    (op TgWalletChangePublicKeyInternal @req | op TgWalletChangePublicKeyExternal @req)
+    op [TgWalletChangePublicKeyInternal, TgWalletChangePublicKeyExternal] @req
 
     # A valueless call_contract leaf clears its own `failed` flag (log/event
     # leaves), and wallet requests are valueless, so read the transaction's
