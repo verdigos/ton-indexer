@@ -50,6 +50,7 @@ endif()
 
 file(GLOB MCH_SPEC_SOURCES CONFIGURE_DEPENDS
     "${MCH_INDEXER_ROOT}/indexer/events/mch/specs/*.mch"
+    "${MCH_INDEXER_ROOT}/indexer/events/mch/specs/lib/*.mch"
 )
 set(MCH_FRONTEND_PY_SOURCES
     "${MCH_INDEXER_ROOT}/indexer/__init__.py"

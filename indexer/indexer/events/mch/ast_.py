@@ -254,12 +254,14 @@ class OpcodeDecl:
     name: str
     value: int
     span: Span
+    exported: bool = False
 
 
 @dataclass(frozen=True)
 class PredicateDecl:
     name: str
     span: Span
+    exported: bool = False
 
 
 @dataclass(frozen=True)
@@ -268,6 +270,7 @@ class FnDecl:
     params: tuple[str, ...]
     body: Expr
     span: Span
+    exported: bool = False
 
 
 @dataclass(frozen=True)
@@ -281,6 +284,7 @@ class RuleDecl:
     # contextual modifier `rule NAME cyclic = …`; ignored for non-recursive
     # rules.
     strategy: str = "frontier"
+    exported: bool = False
 
 
 # Build statements appear in a matcher body after the pattern.
@@ -404,6 +408,12 @@ class MatcherDecl:
 
 
 @dataclass(frozen=True)
+class ImportDecl:
+    path: str
+    span: Span
+
+
+@dataclass(frozen=True)
 class File:
     path: str
     opcodes:    tuple[OpcodeDecl, ...]
@@ -411,3 +421,4 @@ class File:
     rules:      tuple[RuleDecl, ...]
     matchers:   tuple[MatcherDecl, ...]
     fns:        tuple[FnDecl, ...] = ()
+    imports:    tuple[ImportDecl, ...] = ()

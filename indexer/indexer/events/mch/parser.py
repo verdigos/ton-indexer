@@ -116,20 +116,41 @@ def parse(tokens: Iterable[Token], path: str) -> ast_.File:
     rules:      list[ast_.RuleDecl] = []
     matchers:   list[ast_.MatcherDecl] = []
     fns:        list[ast_.FnDecl] = []
+    imports:    list[ast_.ImportDecl] = []
 
     s.skip_newlines()
     while not s.at(TokenKind.EOF):
         t = s.peek()
+        if t.kind is TokenKind.IDENT and t.text == "import":
+            if opcodes or predicates or rules or matchers or fns:
+                bag.error("P026_IMPORT_AFTER_DECLARATION",
+                          "imports must precede declarations", t.span)
+                raise CompileError(bag)
+            s.i += 1
+            path_tok = s.eat(TokenKind.STRING)
+            imports.append(ast_.ImportDecl(_decode_string(path_tok.text),
+                                           _join(t.span, path_tok.span)))
+            s.skip_newlines()
+            continue
+        exported = t.kind is TokenKind.IDENT and t.text == "export"
+        if exported:
+            s.i += 1
+            t = s.peek()
+            if not (t.kind in (TokenKind.KW_OPCODE, TokenKind.KW_PREDICATE, TokenKind.KW_RULE)
+                    or (t.kind is TokenKind.IDENT and t.text == "fn")):
+                bag.error("P027_EXPORT_NOT_ALLOWED",
+                          "export requires an opcode, predicate, rule, or fn declaration", t.span)
+                raise CompileError(bag)
         if t.kind is TokenKind.KW_OPCODE:
-            opcodes.append(_parse_opcode_decl(s))
+            opcodes.append(replace(_parse_opcode_decl(s), exported=exported))
         elif t.kind is TokenKind.KW_PREDICATE:
-            predicates.append(_parse_predicate_decl(s))
+            predicates.append(replace(_parse_predicate_decl(s), exported=exported))
         elif t.kind is TokenKind.KW_RULE:
-            rules.append(_parse_rule_decl(s))
+            rules.append(replace(_parse_rule_decl(s), exported=exported))
         elif t.kind is TokenKind.KW_MATCHER:
             matchers.append(_parse_matcher_decl(s))
         elif t.kind is TokenKind.IDENT and t.text == "fn":
-            fns.append(_parse_fn_decl(s))
+            fns.append(replace(_parse_fn_decl(s), exported=exported))
         else:
             s.bag.error(
                 "P001_UNEXPECTED_TOKEN",
@@ -149,6 +170,7 @@ def parse(tokens: Iterable[Token], path: str) -> ast_.File:
         rules=tuple(rules),
         matchers=tuple(matchers),
         fns=tuple(fns),
+        imports=tuple(imports),
     )
 
 

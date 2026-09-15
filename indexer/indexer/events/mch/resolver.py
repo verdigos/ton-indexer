@@ -320,7 +320,8 @@ def _resolve_opcodes(file: ast_.File, registries: Registries, bag: DiagnosticBag
         seen.add(o.name)
         if o.name in opcodes:
             if o.value == opcodes[o.name]:
-                bag.warning(
+                report = bag.error if o.exported else bag.warning
+                report(
                     "R025_BUILTIN_OPCODE_REDECLARED",
                     f"opcode {o.name!r} is built in; drop the declaration",
                     o.span,
