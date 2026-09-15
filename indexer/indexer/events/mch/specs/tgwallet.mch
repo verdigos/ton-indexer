@@ -10,6 +10,8 @@
 # Listed last in the source list: it only claims a change-key call that no
 # composite matcher wanted.
 
+import "lib/common.mch"
+
 opcode TgWalletChangePublicKeyInternal = 0xFBBA99C7
 opcode TgWalletChangePublicKeyExternal = 0xFBBA99C8
 
@@ -23,7 +25,7 @@ matcher change_wallet_key {
     # leaves), and wallet requests are valueless, so read the transaction's
     # status directly: an aborted key rotation must not look successful.
     # Deliberate departure from the python matcher, which copies the leaf flag.
-    failed when (req.msg.transaction.aborted ?? false)
+    failed when tx_failed(req)
 
     out {
         source:      req.msg.source

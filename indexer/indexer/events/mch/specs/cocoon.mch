@@ -4,6 +4,8 @@
 # cocoon_expected_address preserves external-address formatting. Nested
 # nullable parses recover the withdraw amount from the optional refund payload.
 
+import "lib/common.mch"
+
 opcode CocoonPayoutPayload              = 0xA040AD28
 opcode CocoonLastPayoutPayload          = 0xF5F26A36
 opcode CocoonWorkerProxyRequest         = 0x4D725D2C
@@ -33,7 +35,7 @@ matcher cocoon_worker_payout {
          -> { op CocoonPayout @payout
             ; maybe op CocoonReturnExcessesBack @excesses }
 
-    failed when (payout.msg.transaction.aborted ?? false)
+    failed when tx_failed(payout)
     out {
         proxy_contract:   start.msg.source ?? addr_none()
         worker_contract:  start.msg.destination ?? addr_none()
@@ -56,7 +58,7 @@ matcher cocoon_proxy_payout {
       -> { op CocoonPayout @payout
          ; op CocoonReturnExcessesBack @excesses }
 
-    failed when (payout.msg.transaction.aborted ?? false)
+    failed when tx_failed(payout)
     out {
         proxy_contract:     req.msg.destination ?? addr_none()
         proxy_owner:        payout.msg.destination ?? addr_none()
@@ -74,7 +76,7 @@ matcher cocoon_proxy_charge {
       -> { op CocoonReturnExcessesBack @excesses
          ; op CocoonClientProxyRequest @client_request }
 
-    failed when (charge.msg.transaction.aborted ?? false)
+    failed when tx_failed(charge)
     out {
         proxy_contract:   charge.msg.destination ?? addr_none()
         client_contract:  client_request.msg.destination ?? addr_none()
@@ -92,7 +94,7 @@ matcher cocoon_client_top_up {
       -> op CocoonClientProxyRequest @preq
          -> { op CocoonReturnExcessesBack @excesses }
 
-    failed when (topup.msg.transaction.aborted ?? false)
+    failed when tx_failed(topup)
     out {
         client_contract: topup.msg.destination ?? addr_none()
         proxy_contract:  preq.msg.destination ?? addr_none()
@@ -108,7 +110,7 @@ matcher cocoon_register_proxy {
 
     op CocoonRegisterProxy @reg as CocoonRegisterProxy -> op CocoonReturnExcessesBack @excesses
 
-    failed when (reg.msg.transaction.aborted ?? false)
+    failed when tx_failed(reg)
     out {
         root_contract: reg.msg.destination ?? addr_none()
         query_id:      reg.body.query_id
@@ -121,7 +123,7 @@ matcher cocoon_unregister_proxy {
 
     op CocoonUnregisterProxy @unreg as CocoonUnregisterProxy -> op CocoonReturnExcessesBack @excesses
 
-    failed when (unreg.msg.transaction.aborted ?? false)
+    failed when tx_failed(unreg)
     out {
         root_contract: unreg.msg.destination ?? addr_none()
         query_id:      unreg.body.query_id
@@ -137,7 +139,7 @@ matcher cocoon_client_register {
       -> { op CocoonReturnExcessesBack @excesses
          ; op CocoonClientProxyRequest @client_request }
 
-    failed when (reg.msg.transaction.aborted ?? false)
+    failed when tx_failed(reg)
     out {
         client_contract: reg.msg.destination ?? addr_none()
         owner:           account(reg.body.send_excesses_to) ?? addr_none()
@@ -155,7 +157,7 @@ matcher cocoon_client_change_secret_hash {
       -> { op CocoonReturnExcessesBack @excesses
          ; op CocoonClientProxyRequest @client_request }
 
-    failed when (chg.msg.transaction.aborted ?? false)
+    failed when tx_failed(chg)
     out {
         client_contract: chg.msg.destination ?? addr_none()
         owner:           account(chg.body.send_excesses_to) ?? addr_none()
@@ -178,7 +180,7 @@ matcher cocoon_client_request_refund {
         <- maybe op CocoonOwnerWalletSendMessage @wallet
     }
 
-    failed when (refund.msg.transaction.aborted ?? false)
+    failed when tx_failed(refund)
     out {
         client_contract: refund.msg.destination ?? addr_none()
         owner:           account(refund.body.send_excesses_to) ?? addr_none()
@@ -196,7 +198,7 @@ matcher cocoon_grant_refund {
          -> { op CocoonPayout @payout
             ; op CocoonReturnExcessesBack @excesses }
 
-    failed when (payout.msg.transaction.aborted ?? false)
+    failed when tx_failed(payout)
     out {
         proxy_contract:   grant.msg.destination ?? addr_none()
         client_contract:  client_request.msg.destination ?? addr_none()
@@ -216,7 +218,7 @@ matcher cocoon_client_increase_stake {
       -> { op CocoonReturnExcessesBack @excesses
          ; op CocoonClientProxyRequest @client_request }
 
-    failed when (inc.msg.transaction.aborted ?? false)
+    failed when tx_failed(inc)
     out {
         owner:           account(inc.body.send_excesses_to) ?? addr_none()
         client_contract: inc.msg.destination ?? addr_none()
@@ -238,7 +240,7 @@ matcher cocoon_client_withdraw {
 
     # A refund grant rides inside the proxy request; anything else leaves the amount at 0.
     let granted = parse? client_request.body.payload as CocoonClientProxyRefundGranted
-    failed when (wd.msg.transaction.aborted ?? false)
+    failed when tx_failed(wd)
     out {
         owner:           account(wd.body.send_excesses_to) ?? addr_none()
         client_contract: wd.msg.destination ?? addr_none()

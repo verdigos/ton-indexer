@@ -72,6 +72,8 @@
 # `shape tgbtc_deploy_absorb` here. `unwind_deployments` surfaces them later.
 # =============================================================================
 
+import "lib/common.mch"
+
 opcode TgBTCMintHead       = 0x3F781D24
 opcode TgBTCMintTail       = 0xE42A879B
 opcode TgBTCMintSuccessLog = 0x77A80EF3
@@ -162,7 +164,7 @@ matcher tgbtc_burn {
     require b = log.body
     let chain_amount = burn.data.amount.value
     let use_log      = (chain_amount ?? 0) == 0
-    let min_amount   = chain_amount if chain_amount < b.amount else b.amount
+    let min_amount   = min(chain_amount, b.amount)
     out {
         sender:         burn.data.owner
         jetton_wallet:  burn.data.jetton_wallet

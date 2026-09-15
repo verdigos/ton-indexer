@@ -102,6 +102,8 @@
 #   @leg        the outbid leg (getgems ton_transfer OR fragment call)
 #   @ret        the returned nft_transfer / nft_purchase, peeked without consuming
 
+import "lib/common.mch"
+
 opcode SaleUpdate          = 0x6C6C2080
 opcode NftDiscovery        = 0x2FCB26A2
 opcode NftReportStaticData = 0x8B771735
@@ -124,7 +126,7 @@ matcher nft_update_sale {
     op SaleUpdate @upd as SaleUpdateMessage
 
     require sale = lookup nft_sale(upd.msg.destination)
-    failed when (upd.msg.transaction.aborted ?? false)
+    failed when tx_failed(upd)
     out {
         sender:              upd.msg.source ?? addr_none()
         sale_contract:       upd.msg.destination ?? addr_none()

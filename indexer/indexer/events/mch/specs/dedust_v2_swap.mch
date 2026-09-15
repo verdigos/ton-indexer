@@ -46,6 +46,8 @@
 # `out` keys are the reference matcher's JettonSwapBlock data keys, so the same
 # serializer fill (_fill_jetton_swap_action) serves both builds.
 
+import "lib/common.mch"
+
 opcode DedustV2PayNative = 0xa5a7cbf8
 opcode DedustV2SwapEvent = 0x78e79ba4
 opcode DedustV2Payout    = 0x3216ca09
@@ -104,8 +106,8 @@ matcher dedust_v2_swap {
     let in_assets   = concat([source_asset], leg_assets)
     let hops        = zip(zip(amounts_in, amounts_out), zip(in_assets, leg_assets))
 
-    failed when (ev0.msg.transaction.aborted ?? false) or (ev0.msg.exit_code ?? 0) != 0
-    failed when any(ev as e => (e.msg.transaction.aborted ?? false) or (e.msg.exit_code ?? 0) != 0)
+    failed when tx_failed(ev0) or (ev0.msg.exit_code ?? 0) != 0
+    failed when any(ev as e => tx_failed(e) or (e.msg.exit_code ?? 0) != 0)
 
     out {
         dex:               "dedust_v2"

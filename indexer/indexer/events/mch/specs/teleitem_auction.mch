@@ -57,7 +57,7 @@ matcher teleitem_start_auction {
     # becomes addr_none (present-but-empty), not null.
     let item  = auction.msg.destination ?? addr_none()
     let owner = auction.msg.source ?? addr_none()
-    failed when (auction.msg.transaction.aborted ?? false)
+    failed when tx_failed(auction)
     out {
         nft_address:         item
         nft_index:           nft.index
@@ -87,7 +87,7 @@ matcher teleitem_cancel_auction {
     require nft = lookup nft_item(cancel.msg.destination)
     reject when not is_fragment_item(nft)
     let item = cancel.msg.destination ?? addr_none()
-    failed when (cancel.msg.transaction.aborted ?? false)
+    failed when tx_failed(cancel)
     out {
         nft_address:         item
         # Unconditional AccountId in the legacy build (unlike the start
