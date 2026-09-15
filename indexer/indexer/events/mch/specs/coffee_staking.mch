@@ -50,9 +50,8 @@
 # ORDERING. 0xf9471134 / 0xcb03bfaf / 0xb30c7310 are claimed by no other spec.
 # What IS load-bearing is the deposit's bare `btype jetton_transfer` anchor,
 # shared with ethena_deposit, jvault_stake, stonfi_v1_swap, dedust_v2_swap/
-# failed_swap and coffee_mev_protect_hold_funds_jetton: the legacy list puts
-# CoffeeStakingDepositMatcher after every one of them, so this file is LAST in
-# the built-in source list. The default priority 100 also keeps it behind the
+# failed_swap and coffee_mev_protect_hold_funds_jetton. This file must run after
+# all of them. The default priority 100 also keeps it behind the
 # priority-90 jetton family (which builds the anchor) and the priority-80
 # nft_mint spec (which builds the child it binds).
 
