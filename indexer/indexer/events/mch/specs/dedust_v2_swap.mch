@@ -50,14 +50,14 @@ opcode DedustV2PayNative = 0xa5a7cbf8
 opcode DedustV2SwapEvent = 0x78e79ba4
 opcode DedustV2Payout    = 0x3216ca09
 # One pool hop per unrolling (step arms), then the terminal out leg (exit arms).
-rule dv2_hop = (
-    op DedustV2PayNative @hop
-      -> { op DedustV2SwapEvent @ev -> maybe $dv2_hop }
-  ^ btype jetton_transfer @hop where (.payload_opcode == 0xcbc33949)
-      -> { op DedustV2SwapEvent @ev -> maybe $dv2_hop }
-  ^ btype jetton_transfer @exit_leg where (.payload_opcode != 0xcbc33949)
-  ^ op DedustV2Payout @exit_leg
-)
+rule dv2_hop = xor {
+                   op DedustV2PayNative @hop
+                     -> { op DedustV2SwapEvent @ev -> maybe $dv2_hop }
+                   btype jetton_transfer @hop where (.payload_opcode == 0xcbc33949)
+                     -> { op DedustV2SwapEvent @ev -> maybe $dv2_hop }
+                   btype jetton_transfer @exit_leg where (.payload_opcode != 0xcbc33949)
+                   op DedustV2Payout @exit_leg
+               }
 
 matcher dedust_v2_swap {
     produces JettonSwapBlock
@@ -66,11 +66,16 @@ matcher dedust_v2_swap {
                                   # INTO the swap block (explicit child below),
                                   # not as a sibling of the result
 
-    ( op DedustV2PayNative @carrier as DedustV2PayNative ^ btype jetton_transfer @carrier )
+    xor {
+        op DedustV2PayNative @carrier as DedustV2PayNative
+        btype jetton_transfer @carrier
+    }
       -> { op DedustV2SwapEvent @ev0 as DedustV2SwapEvent
-           ( $dv2_hop
-           ^ btype jetton_transfer @final_leg where (.payload_opcode != 0xcbc33949)
-           ^ op DedustV2Payout @final_leg )
+           xor {
+               $dv2_hop
+               btype jetton_transfer @final_leg where (.payload_opcode != 0xcbc33949)
+               op DedustV2Payout @final_leg
+           }
            maybe op Excess @excess }
 
     # A jetton carrier is a composed block: its `.msg`/`.body` are not reliable
@@ -146,8 +151,14 @@ matcher dedust_v2_failed_swap {
     entry    @carrier
     include_excess false
 
-    ( op DedustV2PayNative @carrier as DedustV2PayNative ^ btype jetton_transfer @carrier )
-      -> { ( op DedustV2Payout @refund_ton as PayoutMessage | btype jetton_transfer @refund_jt )
+    xor {
+        op DedustV2PayNative @carrier as DedustV2PayNative
+        btype jetton_transfer @carrier
+    }
+      -> { or {
+               op DedustV2Payout @refund_ton as PayoutMessage
+               btype jetton_transfer @refund_jt
+           }
            maybe op DedustV2SwapEvent @swapped
            maybe op Excess @excess }
 

@@ -67,10 +67,12 @@ matcher telegram_nft_purchase {
     # alternative: `_match_or` walks branches only, so children recorded on the
     # `or` node itself would never match and never consume.
     op NftOwnershipAssigned @assigned
-      <- ( btype ton_transfer @payment
-             -> { op AuctionFillUp @payout_1 ; maybe op AuctionFillUp @payout_2 }
-         ^ btype call_contract @payment where (.source == null)
-             -> { op AuctionFillUp @payout_1 ; maybe op AuctionFillUp @payout_2 } )
+      <- xor {
+             btype ton_transfer @payment
+               -> { op AuctionFillUp @payout_1 ; maybe op AuctionFillUp @payout_2 }
+             btype call_contract @payment where (.source == null)
+               -> { op AuctionFillUp @payout_1 ; maybe op AuctionFillUp @payout_2 }
+         }
 
     # HYBRID declarative build (C++-runnable). The core (nft-data lookup, teleitem
     # payload dispatch, payout ordering) is the one host fn; fields map from its

@@ -33,7 +33,10 @@ matcher dedust_v2_claim_reward {
     op ClaimRewardMessage @claim as ClaimRewardMessage
       -> op ClaimPositionReward @cpr
       -> op PayoutRewardMessage @payout_reward as PayoutRewardMessage
-      -> maybe ( op PayoutMessage @ton as PayoutMessage | btype jetton_transfer @jt )
+      -> maybe or {
+                   op PayoutMessage @ton as PayoutMessage
+                   btype jetton_transfer @jt
+               }
 
     out {
         dex:               "dedust_v2"

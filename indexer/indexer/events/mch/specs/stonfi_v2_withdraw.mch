@@ -70,11 +70,11 @@ matcher stonfi_v2_withdraw_refund {
     entry    @refund
 
     op StonfiV2WithdrawRefund @refund {
-        children first {
+        -> {
             op StonfiV2PayTo @payout_1 -> btype jetton_transfer @jt_1 -> maybe op PTonTransfer @pton_1 as PTonTransfer
             ; op StonfiV2PayTo @payout_2 -> btype jetton_transfer @jt_2 -> maybe op PTonTransfer @pton_2 as PTonTransfer
         }
-        parent { op StonfiV2WithdrawRefundParent @refund_parent }
+        <- op StonfiV2WithdrawRefundParent @refund_parent
     }
 
     out {

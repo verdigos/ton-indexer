@@ -66,17 +66,22 @@ matcher coffee_deposit_liquidity {
     entry    @request
 
     op CoffeeCreateLiquidityDepositoryRequest @request as CoffeeCreateLiquidityDepositoryRequest {
-        children first {
+        -> {
             op CoffeeDeploy @deploy
                 -> maybe op CoffeeDepositLiquidityInternal
                     -> { op JettonInternalTransfer -> maybe op Excess
                        ; op CoffeeDepositLiquiditySuccessfulEvent @success as CoffeeDepositLiquiditySuccessfulEvent
                        ; maybe op CoffeePayoutInternal @payout
-                            -> ( btype jetton_transfer @out_jt
-                               ^ op CoffeePayout @out_call
-                               ^ op CoffeeNotification @out_call ) }
+                            -> xor {
+                                   btype jetton_transfer @out_jt
+                                   op CoffeePayout @out_call
+                                   op CoffeeNotification @out_call
+                               } }
         }
-        parent { ( op CoffeeDepositLiquidityNative @in_native ^ btype jetton_transfer @in_jt ) }
+        <- xor {
+               op CoffeeDepositLiquidityNative @in_native
+               btype jetton_transfer @in_jt
+           }
     }
 
 

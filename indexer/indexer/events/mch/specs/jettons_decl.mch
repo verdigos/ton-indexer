@@ -112,8 +112,10 @@ matcher jetton_mint {
     entry    @mint
 
     op [JettonMint, MinterJettonMint] @mint as MinterJettonMint | JettonMint
-      -> maybe ( op JettonNotify @notify
-               | op JettonInternalTransfer @internal as JettonInternalTransfer -> maybe op JettonNotify @internal_notify )
+      -> maybe or {
+                   op JettonNotify @notify
+                   op JettonInternalTransfer @internal as JettonInternalTransfer -> maybe op JettonNotify @internal_notify
+               }
 
     let use_internal = not mint.failed and internal != null
     let rjwallet     = lookup jetton_wallet(internal.msg.destination)

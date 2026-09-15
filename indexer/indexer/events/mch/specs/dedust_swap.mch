@@ -21,15 +21,18 @@ opcode DedustPayout           = 0x474f86cf
 
 # One pool hop per unrolling: a peer (or nested external) swap request with an
 # optional notification child; exit = the terminal payout chain.
-rule peer_chain = (
-    op DedustSwapPeer @peer
-      -> { maybe op DedustSwapNotification @peer_notification }
-      -> maybe $peer_chain
-  ^ op DedustSwapExternal @peer
-      -> { maybe op DedustSwapNotification @peer_notification }
-      -> maybe $peer_chain
-  ^ op DedustPayoutFromPool -> ( op DedustPayout | btype jetton_transfer )
-)
+rule peer_chain = xor {
+                      op DedustSwapPeer @peer
+                        -> { maybe op DedustSwapNotification @peer_notification }
+                        -> maybe $peer_chain
+                      op DedustSwapExternal @peer
+                        -> { maybe op DedustSwapNotification @peer_notification }
+                        -> maybe $peer_chain
+                      op DedustPayoutFromPool -> or {
+                                                     op DedustPayout
+                                                     btype jetton_transfer
+                                                 }
+                  }
 
 # HYBRID declarative build. The reject/failed wiring, `dex`, and the TON-in
 # sender/source_asset and notification failure detection are declarative; the
@@ -45,13 +48,21 @@ matcher dedust_swap {
     entry    @ext
 
     op DedustSwapExternal @ext {
-        children first {
-            ( op DedustPayoutFromPool @payout
-                -> ( btype jetton_transfer @out_jetton | op DedustPayout @out_ton )
-            | $peer_chain )
+        -> {
+            or {
+                op DedustPayoutFromPool @payout
+                  -> or {
+                         btype jetton_transfer @out_jetton
+                         op DedustPayout @out_ton
+                     }
+                $peer_chain
+            }
             maybe op DedustSwapNotification @notification
         }
-        parent { ( btype jetton_transfer @in_transfer | op DedustSwap @swap_request ) }
+        <- or {
+               btype jetton_transfer @in_transfer
+               op DedustSwap @swap_request
+           }
     }
 
     require legs = dedust_swap_legs(consumed, in_transfer, swap_request)

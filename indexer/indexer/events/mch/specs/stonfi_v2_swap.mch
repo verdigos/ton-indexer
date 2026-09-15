@@ -32,22 +32,22 @@ predicate pton_self_transfer
 
 # One router hop per unrolling: swap request + payment, then continuation via
 # a validated intermediate pton chain, a plain jetton transfer, or directly.
-rule swap_hop = (
-    op StonfiV2Swap @peer_swap
-      -> op StonfiV2PayTo @peer_payout
-      -> btype jetton_transfer @peer_out where (not .has_internal_transfer)
-      -> pred pton_self_transfer
-      -> op JettonNotify
-      -> maybe $swap_hop
-  ^ op StonfiV2Swap @peer_swap
-      -> op StonfiV2PayTo @peer_payout
-      -> btype jetton_transfer @peer_out
-      -> { maybe op PTonTransfer }
-      -> maybe $swap_hop
-  ^ op StonfiV2Swap @peer_swap
-      -> op StonfiV2PayTo @peer_payout
-      -> maybe $swap_hop
-)
+rule swap_hop = xor {
+                    op StonfiV2Swap @peer_swap
+                      -> op StonfiV2PayTo @peer_payout
+                      -> btype jetton_transfer @peer_out where (not .has_internal_transfer)
+                      -> pred pton_self_transfer
+                      -> op JettonNotify
+                      -> maybe $swap_hop
+                    op StonfiV2Swap @peer_swap
+                      -> op StonfiV2PayTo @peer_payout
+                      -> btype jetton_transfer @peer_out
+                      -> { maybe op PTonTransfer }
+                      -> maybe $swap_hop
+                    op StonfiV2Swap @peer_swap
+                      -> op StonfiV2PayTo @peer_payout
+                      -> maybe $swap_hop
+                }
 
 # HYBRID declarative build. The pattern, the failed flag and the out-field
 # mapping are declarative; the imperative residue stays in one named host fn
@@ -64,21 +64,23 @@ matcher stonfi_v2_swap {
     entry    @swap
 
     op StonfiV2Swap @swap {
-        children first {
+        -> {
             op StonfiV2PayTo @payout
-                -> ( btype jetton_transfer @out_transfer where (not .has_internal_transfer)
-                        -> pred pton_self_transfer
-                        -> op JettonNotify
-                        -> maybe $swap_hop
-                   ^ btype jetton_transfer @out_transfer
-                        -> { maybe op PTonTransfer }
-                        -> maybe $swap_hop
-                   ^ $swap_hop )
+                -> xor {
+                       btype jetton_transfer @out_transfer where (not .has_internal_transfer)
+                          -> pred pton_self_transfer
+                          -> op JettonNotify
+                          -> maybe $swap_hop
+                       btype jetton_transfer @out_transfer
+                          -> { maybe op PTonTransfer }
+                          -> maybe $swap_hop
+                       $swap_hop
+                   }
         }
-        parent {
-            ( btype jetton_transfer @in_transfer
-            ^ op JettonNotify <- op PTonTransfer @in_transfer )
-        }
+        <- xor {
+               btype jetton_transfer @in_transfer
+               op JettonNotify <- op PTonTransfer @in_transfer
+           }
     }
 
     let d = stonfi_v2_swap_data(consumed)

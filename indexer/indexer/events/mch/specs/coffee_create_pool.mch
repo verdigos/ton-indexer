@@ -88,8 +88,11 @@ matcher coffee_create_pool_creator {
     # Legacy's single `child_matcher` and a one-item children block differ only
     # when several 0xc0ffee22 children exist, which the factory never emits.
     op CoffeeCreatePoolCreatorRequest @request as CoffeeCreatePoolCreatorRequest {
-        children first { op CoffeeDeploy @deploy }
-        parent { ( btype jetton_transfer @in_jt ^ op CoffeeCreatePoolNative @in_native ) }
+        -> { op CoffeeDeploy @deploy }
+        <- xor {
+               btype jetton_transfer @in_jt
+               op CoffeeCreatePoolNative @in_native
+           }
     }
 
     let pool_first  = asset_of(request.body.pool_first)

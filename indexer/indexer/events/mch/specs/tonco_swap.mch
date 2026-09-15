@@ -57,10 +57,12 @@ opcode PTonTransfer       = 0x01f3835d
 rule tonco_hop cyclic = (
     op ToncoPoolV3Swap
       -> op ToncoRouterV3PayTo
-      -> ( btype jetton_transfer -> op PTonTransfer -> op JettonNotify -> $tonco_hop
-         | btype jetton_transfer -> $tonco_hop
-         | op JettonTransfer -> op PTonTransfer
-         | btype jetton_transfer -> { maybe op PTonTransfer } )
+      -> or {
+             btype jetton_transfer -> op PTonTransfer -> op JettonNotify -> $tonco_hop
+             btype jetton_transfer -> $tonco_hop
+             op JettonTransfer -> op PTonTransfer
+             btype jetton_transfer -> { maybe op PTonTransfer }
+         }
 )
 
 matcher tonco_swap {
@@ -68,17 +70,19 @@ matcher tonco_swap {
     entry    @swap
 
     op ToncoPoolV3Swap @swap {
-        children first {
+        -> {
             op ToncoRouterV3PayTo
-                -> ( btype jetton_transfer -> op PTonTransfer -> op JettonNotify -> $tonco_hop
-                   | btype jetton_transfer -> $tonco_hop
-                   | op JettonTransfer -> op PTonTransfer
-                   | btype jetton_transfer -> { maybe op PTonTransfer } )
+                -> or {
+                       btype jetton_transfer -> op PTonTransfer -> op JettonNotify -> $tonco_hop
+                       btype jetton_transfer -> $tonco_hop
+                       op JettonTransfer -> op PTonTransfer
+                       btype jetton_transfer -> { maybe op PTonTransfer }
+                   }
         }
-        parent {
-            ( btype jetton_transfer @in_transfer
-            ^ op JettonNotify <- op PTonTransfer @in_transfer )
-        }
+        <- xor {
+               btype jetton_transfer @in_transfer
+               op JettonNotify <- op PTonTransfer @in_transfer
+           }
     }
 
     require r = tonco_swap_data(consumed)

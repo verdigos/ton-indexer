@@ -51,8 +51,14 @@ matcher dedust_v2_claim_fees {
     op ClaimPositionFees @claim
       -> op ClaimAvailableFees
         -> op DedustV2PayoutPositionFees @payout_fees as DedustV2PayoutPositionFees
-          -> { maybe ( op PayoutMessage @ton_1 as PayoutMessage | btype jetton_transfer @jt_1 )
-             ; maybe ( op PayoutMessage @ton_2 as PayoutMessage | btype jetton_transfer @jt_2 ) }
+          -> { maybe or {
+                         op PayoutMessage @ton_1 as PayoutMessage
+                         btype jetton_transfer @jt_1
+                     }
+             ; maybe or {
+                         op PayoutMessage @ton_2 as PayoutMessage
+                         btype jetton_transfer @jt_2
+                     } }
 
 
     # Per-leg projection (parse_payout_leg, dedust_v2/common.py:28): a jetton leg

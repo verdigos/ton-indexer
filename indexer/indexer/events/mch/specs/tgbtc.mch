@@ -113,11 +113,11 @@ matcher tgbtc_mint {
 # Descend the trunk: each hop is any block that is not the tail; recursion
 # terminates on the tail node (exclusive exit branch), which carries the success
 # log and the jetton_mint block as a children set.
-rule mint_chain = (
-    any @mid -> maybe $mint_chain
-  ^ op TgBTCMintTail @tail
-      -> { op TgBTCMintSuccessLog @log ; btype jetton_mint @mint }
-)
+rule mint_chain = xor {
+                      any @mid -> maybe $mint_chain
+                      op TgBTCMintTail @tail
+                        -> { op TgBTCMintSuccessLog @log ; btype jetton_mint @mint }
+                  }
 
 # -----------------------------------------------------------------------------
 # tgbtc_burn — blocks/tgbtc.py:210 TgBTCBurnBlockMatcher.
@@ -200,15 +200,12 @@ matcher tgbtc_new_key {
     entry    @k
 
     op TgBTCNewKeyRequest @k {
-        children first {
+        -> {
             op TgBTCNewKeyLog @log
             ; maybe op TgBTCPayout
                 -> { maybe op TgBTCPayoutNotify ; maybe btype ton_transfer }
         }
-        parent {
-            any @p
-                -> { op TgBTCDkgCompletedLog @dkg }
-        }
+        <- any @p -> { op TgBTCDkgCompletedLog @dkg }
     }
 
     let n = tgbtc_new_key_log(log)

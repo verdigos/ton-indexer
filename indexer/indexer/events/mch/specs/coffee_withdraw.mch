@@ -35,9 +35,17 @@ matcher coffee_withdraw_liquidity {
 
     btype jetton_burn @burn
       -> { op CoffeePayoutInternal @payout_1
-             -> ( btype jetton_transfer @jt_1 ^ op CoffeePayout @ton_1 ^ op CoffeeNotification )
+             -> xor {
+                    btype jetton_transfer @jt_1
+                    op CoffeePayout @ton_1
+                    op CoffeeNotification
+                }
          ; op CoffeePayoutInternal @payout_2
-             -> ( btype jetton_transfer @jt_2 ^ op CoffeePayout @ton_2 ^ op CoffeeNotification )
+             -> xor {
+                    btype jetton_transfer @jt_2
+                    op CoffeePayout @ton_2
+                    op CoffeeNotification
+                }
          ; op CoffeeLiquidityWithdrawalEvent @event as CoffeeLiquidityWithdrawalEvent }
 
     out {

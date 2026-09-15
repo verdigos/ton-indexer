@@ -44,7 +44,7 @@ matcher tonco_deposit_liquidity {
     entry    @add_liquidity
 
     op ToncoAccountV3AddLiquidity @add_liquidity {
-        children first {
+        -> {
             maybe op ToncoPoolV3MinAndRefund
                 -> { maybe op ToncoRouterV3PayTo @refund_router_call
                         -> { maybe btype jetton_transfer @excess_transfer_0
@@ -54,11 +54,10 @@ matcher tonco_deposit_liquidity {
                    ; btype nft_mint @nft_mint
                    ; maybe op Excess }
         }
-        parent {
-            op ToncoPoolV3FundAccount
-                <- ( op JettonNotify @ton_input <- op PTonTransfer @ton_input_addition
-                   | btype jetton_transfer @jetton_input )
-        }
+        <- op ToncoPoolV3FundAccount <- or {
+                                            op JettonNotify @ton_input <- op PTonTransfer @ton_input_addition
+                                            btype jetton_transfer @jetton_input
+                                        }
     }
 
     require r = tonco_deposit_liquidity_data(consumed)

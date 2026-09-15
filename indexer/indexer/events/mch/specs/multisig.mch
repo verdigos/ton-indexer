@@ -79,8 +79,10 @@ matcher multisig_approve {
     entry    @vote
 
     op MultisigApprove @vote as MultisigApprove
-      -> ( op MultisigApproveAccepted @accepted
-         ^ op MultisigApproveRejected @rejected as MultisigApproveRejected )
+      -> xor {
+             op MultisigApproveAccepted @accepted
+             op MultisigApproveRejected @rejected as MultisigApproveRejected
+         }
 
     require order = lookup multisig_order(vote.msg.destination)
     out {
@@ -98,8 +100,10 @@ matcher multisig_approve_comment {
     entry    @vote
 
     btype ton_transfer @vote where (.comment == "approve")
-      -> ( op MultisigApproveAccepted @accepted
-         ^ op MultisigApproveRejected @rejected as MultisigApproveRejected )
+      -> xor {
+             op MultisigApproveAccepted @accepted
+             op MultisigApproveRejected @rejected as MultisigApproveRejected
+         }
 
     require order = lookup multisig_order(vote.msg.destination)
     out {

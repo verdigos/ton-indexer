@@ -34,10 +34,10 @@ opcode JVaultSendClaimedRewards    = 0x44BC1FE3
 
 # Pool referrer-update fan-out: a linear chain of request/update referrer
 # messages (each auto-consuming its excess/bounce), terminated by exhaustion.
-rule jvault_referrals = (
-    op JVaultRequestUpdateReferrer @ref -> maybe $jvault_referrals
-  ^ op JVaultUpdateReferrer @refupd -> maybe $jvault_referrals
-)
+rule jvault_referrals = xor {
+                            op JVaultRequestUpdateReferrer @ref -> maybe $jvault_referrals
+                            op JVaultUpdateReferrer @refupd -> maybe $jvault_referrals
+                        }
 
 matcher jvault_stake {
     produces jvault_stake
@@ -45,10 +45,12 @@ matcher jvault_stake {
 
     btype jetton_transfer @transfer
       -> { op JVaultReceiveJettons @receive
-             -> ( op JVaultRequestUpdateRewards @request
-                    -> { maybe $jvault_referrals ; op JVaultUpdateRewards @update }
-                | op JVaultStakeCancel @cancel
-                    -> maybe btype jetton_transfer @cancel_transfer )
+             -> or {
+                    op JVaultRequestUpdateRewards @request
+                      -> { maybe $jvault_referrals ; op JVaultUpdateRewards @update }
+                    op JVaultStakeCancel @cancel
+                      -> maybe btype jetton_transfer @cancel_transfer
+                }
          ; maybe op JVaultSetData @setdata }
 
     # The composed transfer supplies sender, asset, amount, and the b64 payload.

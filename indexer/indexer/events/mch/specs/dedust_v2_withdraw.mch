@@ -85,8 +85,14 @@ matcher dedust_v2_withdraw {
       -> op DedustV2WithdrawLiquidity
         -> op DedustV2ExitLiquidity
           -> { maybe op DedustV2WithdrawalEvent @event as DedustV2WithdrawalEvent
-             ; maybe ( op PayoutMessage @ton_1 as PayoutMessage | btype jetton_transfer @jt_1 )
-             ; maybe ( op PayoutMessage @ton_2 as PayoutMessage | btype jetton_transfer @jt_2 ) }
+             ; maybe or {
+                         op PayoutMessage @ton_1 as PayoutMessage
+                         btype jetton_transfer @jt_1
+                     }
+             ; maybe or {
+                         op PayoutMessage @ton_2 as PayoutMessage
+                         btype jetton_transfer @jt_2
+                     } }
 
 
     reject when withdraw.body.auto_claim_fees

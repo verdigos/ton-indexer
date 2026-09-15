@@ -51,11 +51,11 @@ matcher nft_transfer {
     include_excess  false
 
     op NftTransfer @transfer {
-        children first {
+        -> {
             maybe op NftOwnershipAssigned @assigned
             ; maybe op Excess @excess
         }
-        parent { maybe peek any @funding_parent }
+        <- maybe peek any @funding_parent
     }
 
     # HYBRID declarative build (C++-runnable). The core (NftTransfer/ownership

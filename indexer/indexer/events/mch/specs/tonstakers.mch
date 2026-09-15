@@ -141,10 +141,12 @@ matcher tonstakers_withdraw {
     op JettonBurn @burn as JettonBurn
       -> op JettonBurnNotification
         -> op TONStakersWithdrawRequest @request
-          -> ( op TONStakersPoolWithdrawal @immediate_withdrawal
-             ^ op TONStakersMintNFT @delayed_withdrawal
-                 -> { maybe peek btype nft_mint @minted_block
-                    ; maybe peek op TONStakersInitNFT @minted_call } )
+          -> xor {
+                 op TONStakersPoolWithdrawal @immediate_withdrawal
+                 op TONStakersMintNFT @delayed_withdrawal
+                   -> { maybe peek btype nft_mint @minted_block
+                      ; maybe peek op TONStakersInitNFT @minted_call }
+             }
 
     let minted = (account(minted_block.msg.destination) ?? addr_none()) if minted_block != null else ((account(minted_call.msg.destination) ?? addr_none()) if minted_call != null else null)
     failed when burn.failed

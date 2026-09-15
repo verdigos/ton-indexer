@@ -260,8 +260,10 @@ matcher auction_outbid {
     produces auction_outbid
     entry    @leg
 
-    ( btype ton_transfer @leg
-    ^ op TeleitemOutbid @leg )
+    xor {
+        btype ton_transfer @leg
+        op TeleitemOutbid @leg
+    }
       <- peek btype auction_bid @bid where auction_outbid_leg
 
     let getgems = leg.btype == "ton_transfer"
@@ -308,9 +310,11 @@ matcher nft_finish_auction {
     produces nft_finish_auction
     entry    @cancel
 
-    ( btype ton_transfer @cancel where nft_trade_finish_comment
-    ^ op NftAuctionStop @cancel
-    ^ op NftAuctionFinish @cancel )
+    xor {
+        btype ton_transfer @cancel where nft_trade_finish_comment
+        op NftAuctionStop @cancel
+        op NftAuctionFinish @cancel
+    }
       -> peek btype nft_purchase @ret
 
     require auction = lookup nft_auction(cancel.msg.destination)
@@ -328,10 +332,12 @@ matcher nft_cancel_auction {
     produces nft_cancel_auction | nft_finish_auction
     entry    @cancel
 
-    ( btype ton_transfer @cancel where nft_trade_cancel_comment
-    ^ op NftAuctionCancel @cancel
-    ^ op NftAuctionFinish @cancel
-    ^ op NftAuctionStop @cancel )
+    xor {
+        btype ton_transfer @cancel where nft_trade_cancel_comment
+        op NftAuctionCancel @cancel
+        op NftAuctionFinish @cancel
+        op NftAuctionStop @cancel
+    }
       -> peek btype nft_transfer @ret
 
     require auction = lookup nft_auction(cancel.msg.destination)

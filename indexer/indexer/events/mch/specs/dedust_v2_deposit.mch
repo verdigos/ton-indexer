@@ -93,10 +93,10 @@ opcode PayoutMessage           = 0x3216ca09
 # the FIRST arm's head — a `btype` head there trips R023 (parsing a composed
 # block's body does not round-trip). The PayNative parse is harmless on the
 # jetton arm: every value it feeds is read only under `jetton_in == false`.
-rule dv2_deposit_carrier = (
-    op DedustV2PayNative @carrier
-  ^ btype jetton_transfer @carrier
-)
+rule dv2_deposit_carrier = xor {
+                               op DedustV2PayNative @carrier
+                               btype jetton_transfer @carrier
+                           }
 
 # The CreditAsset hop plus its carrier, i.e. the parent chain both JoinLiquidity
 # matchers hang off (the reference's _deposit_credit_parent).
@@ -112,14 +112,14 @@ matcher dedust_v2_deposit_final {
     include_excess  false
 
     op DedustV2JoinLiquidity @join as DedustV2JoinLiquidity {
-        children first {
+        -> {
             maybe op DedustV2DepositEvent @event as DedustV2DepositEvent
             ; maybe op DedustV2CreditLiquidity
             ; maybe btype jetton_transfer @refund_jt_1
             ; maybe btype jetton_transfer @refund_jt_2
             ; maybe op PayoutMessage @refund_ton
         }
-        parent { $dv2_credit_parent }
+        <- $dv2_credit_parent
     }
 
     parse credit     as DedustV2CreditAsset
@@ -182,14 +182,14 @@ matcher dedust_v2_deposit_rejected {
     include_excess  false
 
     op DedustV2JoinLiquidity @join as DedustV2JoinLiquidity {
-        children first {
+        -> {
             maybe btype jetton_transfer @refund_jt_1
             ; maybe btype jetton_transfer @refund_jt_2
             ; maybe op PayoutMessage @refund_ton
             ; maybe op DedustV2DepositEvent @event
             ; maybe op Excess
         }
-        parent { $dv2_credit_parent }
+        <- $dv2_credit_parent
     }
 
     parse credit     as DedustV2CreditAsset
@@ -254,8 +254,8 @@ matcher dedust_v2_deposit_partial {
     include_excess  false
 
     op DedustV2CreditAsset @credit as DedustV2CreditAsset {
-        children first { maybe op Excess }
-        parent { $dv2_deposit_carrier }
+        -> { maybe op Excess }
+        <- $dv2_deposit_carrier
     }
 
     parse carrier as DedustV2PayNative

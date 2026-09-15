@@ -96,10 +96,12 @@ matcher evaa_supply {
 
     pred evaa_supply_anchor @master
       -> pred evaa_user_supply @user
-        -> ( op EvaaSupplySuccess @success
-               -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
-           | op EvaaSupplyFail @fail
-           | btype jetton_transfer @refund )
+        -> or {
+               op EvaaSupplySuccess @success
+                 -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
+               op EvaaSupplyFail @fail
+               btype jetton_transfer @refund
+           }
 
     let supply_fwd = (parse? master.data.forward_payload as EvaaSupplyJettonForward) if master.btype == "jetton_transfer" else null
     reject when master.btype == "jetton_transfer" and supply_fwd == null
@@ -126,15 +128,19 @@ matcher evaa_withdraw {
 
     op EvaaWithdrawMaster @master as EvaaWithdrawMaster
       -> pred evaa_user_withdraw_user @user
-      -> ( op EvaaWithdrawCollateralized @coll_ok as EvaaWithdrawCollateralized
-             -> { ( btype jetton_transfer @jetton_payout
-                  ^ op EvaaWithdrawSuccess @ton_payout
-                      -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."]) )
-                  pred evaa_user_withdraw_success -> btype ton_transfer }
-         ^ op EvaaWithdrawCollateralized @coll_fail
-             -> pred evaa_user_withdraw_fail
-             -> op EvaaWithdrawNoFundsExcess
-         ^ op [EvaaWithdrawLockedExcess, EvaaWithdrawNotCollateralizedExcess, EvaaWithdrawMissingPricesExcess, EvaaWithdrawExecutionCrashed] @fail_excess as EvaaWithdrawFailExcess )
+      -> xor {
+             op EvaaWithdrawCollateralized @coll_ok as EvaaWithdrawCollateralized
+               -> { xor {
+                        btype jetton_transfer @jetton_payout
+                        op EvaaWithdrawSuccess @ton_payout
+                          -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
+                    }
+                    pred evaa_user_withdraw_success -> btype ton_transfer }
+             op EvaaWithdrawCollateralized @coll_fail
+               -> pred evaa_user_withdraw_fail
+               -> op EvaaWithdrawNoFundsExcess
+             op [EvaaWithdrawLockedExcess, EvaaWithdrawNotCollateralizedExcess, EvaaWithdrawMissingPricesExcess, EvaaWithdrawExecutionCrashed] @fail_excess as EvaaWithdrawFailExcess
+         }
 
     # Declarative build, field-for-field with build_evaa_withdraw_core.
     # The IR engine binds @coll_ok / @coll_fail / @fail_excess per the winning
@@ -174,24 +180,36 @@ matcher evaa_liquidate {
     entry    @master
 
     pred evaa_liquidate_anchor @master
-      -> ( pred evaa_user_liquidate @user
-             -> ( op EvaaLiquidateSatisfied @satisfied_success
-                    -> { pred evaa_liquidate_success_header
-                           -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
-                         ( op EvaaLiquidateSuccessReport @finish
-                         ^ op EvaaLiquidateFail @finish
-                         ^ btype jetton_transfer @finish ) }
-                ^ op EvaaLiquidateSatisfied @satisfied_fail
-                    -> { op EvaaLiquidateFail
-                         ( op EvaaLiquidateSuccessReport @finish
-                         ^ op EvaaLiquidateFail @finish
-                         ^ btype jetton_transfer @finish ) }
-                ^ op EvaaLiquidateUnsatisfied @unsatisfied
-                    -> ( op EvaaLiquidateSuccessReport @finish
-                       ^ op EvaaLiquidateFail @finish
-                       ^ btype jetton_transfer @finish ) )
-           ^ ( pred evaa_bounced_call @immediate
-             ^ btype jetton_transfer @immediate ) )
+      -> xor {
+             pred evaa_user_liquidate @user
+               -> xor {
+                      op EvaaLiquidateSatisfied @satisfied_success
+                        -> { pred evaa_liquidate_success_header
+                               -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
+                             xor {
+                                 op EvaaLiquidateSuccessReport @finish
+                                 op EvaaLiquidateFail @finish
+                                 btype jetton_transfer @finish
+                             } }
+                      op EvaaLiquidateSatisfied @satisfied_fail
+                        -> { op EvaaLiquidateFail
+                             xor {
+                                 op EvaaLiquidateSuccessReport @finish
+                                 op EvaaLiquidateFail @finish
+                                 btype jetton_transfer @finish
+                             } }
+                      op EvaaLiquidateUnsatisfied @unsatisfied
+                        -> xor {
+                               op EvaaLiquidateSuccessReport @finish
+                               op EvaaLiquidateFail @finish
+                               btype jetton_transfer @finish
+                           }
+                  }
+             xor {
+                 pred evaa_bounced_call @immediate
+                 btype jetton_transfer @immediate
+             }
+         }
 
     require r = evaa_liquidate_data(consumed)
     out {

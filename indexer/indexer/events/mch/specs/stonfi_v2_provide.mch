@@ -60,24 +60,26 @@ opcode PTonTransfer             = 0x01f3835d
 # The incoming deposit transfer feeding the router (legacy OrMatcher order):
 # pTON leg (raw notify fronted by the 0x01f3835d call), a prebuilt jetton
 # transfer, or a raw notify chain behind a prebuilt transfer.
-rule in_leg = (
-    op JettonNotify @notify_pton <- op PTonTransfer @in_pton
-  | btype jetton_transfer @in_jt
-  | op JettonNotify @notify_raw <- op JettonInternalTransfer @internal_raw <- btype jetton_transfer @in_jt_raw
-)
+rule in_leg = or {
+                  op JettonNotify @notify_pton <- op PTonTransfer @in_pton
+                  btype jetton_transfer @in_jt
+                  op JettonNotify @notify_raw <- op JettonInternalTransfer @internal_raw <- btype jetton_transfer @in_jt_raw
+              }
 
 matcher stonfi_v2_provide_final {
     produces dex_deposit_liquidity
     entry    @provide
 
     op StonfiV2ProvideLiquidity @provide as StonfiV2ProvideLiquidity {
-        children first {
+        -> {
             op StonfiV2AddLiquidity @add
                 -> op StonfiV2CbAddLiquidity @cb
-                    -> ( op JettonInternalTransfer @lp_transfer as JettonInternalTransfer
-                       | op StonfiV2AddLiquidity @refund )
+                    -> or {
+                           op JettonInternalTransfer @lp_transfer as JettonInternalTransfer
+                           op StonfiV2AddLiquidity @refund
+                       }
         }
-        parent { $in_leg }
+        <- $in_leg
     }
 
     let in_jt_block = in_jt ?? in_jt_raw
@@ -101,8 +103,8 @@ matcher stonfi_v2_provide_partial {
     entry    @provide
 
     op StonfiV2ProvideLiquidity @provide as StonfiV2ProvideLiquidity {
-        children first { op StonfiV2AddLiquidity @add }
-        parent { $in_leg }
+        -> { op StonfiV2AddLiquidity @add }
+        <- $in_leg
     }
 
     let in_jt_block = in_jt ?? in_jt_raw

@@ -50,11 +50,11 @@ opcode DedustRejection                       = 0xe1a36cd4
 
 # The deposit leg feeding the vault: TON straight to the vault, a prebuilt
 # jetton transfer, or the raw notify chain (fallback, see header).
-rule deposit_leg = (
-    op DedustDepositTONToVault @deposit_ton
-  | btype jetton_transfer @deposit_transfer
-  | op JettonNotify @deposit_notify <- op JettonInternalTransfer <- op JettonTransfer
-)
+rule deposit_leg = or {
+                       op DedustDepositTONToVault @deposit_ton
+                       btype jetton_transfer @deposit_transfer
+                       op JettonNotify @deposit_notify <- op JettonInternalTransfer <- op JettonTransfer
+                   }
 
 # One excess-liquidity refund from a vault: optional jetton payout (prebuilt
 # transfer) and/or optional TON payout. Legacy: ContractMatcher(optional,
@@ -80,19 +80,16 @@ matcher dedust_deposit_final {
     entry    @pool
 
     op DedustDepositLiquidityToPool @pool {
-        children first {
-            ( op JettonInternalTransfer @lp_transfer -> maybe op JettonNotify
-            | op DedustRejection @rejection
-                -> { maybe btype ton_transfer ; $vault_excess ; $vault_excess } )
+        -> {
+            or {
+                op JettonInternalTransfer @lp_transfer -> maybe op JettonNotify
+                op DedustRejection @rejection
+                  -> { maybe btype ton_transfer ; $vault_excess ; $vault_excess }
+            }
             ; maybe op DedustDestroyLiquidityDepositContract
                 -> { maybe btype ton_transfer ; $vault_excess ; $vault_excess }
         }
-        parent {
-            op DedustTopUpLiquidityDepositContract
-                <- op DedustAskLiquidityFactory
-                    -> { maybe op DedustDeployDepositContract }
-                    <- $deposit_leg
-        }
+        <- op DedustTopUpLiquidityDepositContract <- op DedustAskLiquidityFactory -> { maybe op DedustDeployDepositContract } <- $deposit_leg
     }
 
     require r = dedust_deposit_final_data(consumed)
@@ -124,8 +121,8 @@ matcher dedust_deposit_partial {
 
     op DedustTopUpLiquidityDepositContract @topup
         <- op DedustAskLiquidityFactory {
-            children first { op DedustDeployDepositContract }
-            parent { $deposit_leg }
+            -> { op DedustDeployDepositContract }
+            <- $deposit_leg
         }
 
     require r = dedust_deposit_partial_data(consumed)

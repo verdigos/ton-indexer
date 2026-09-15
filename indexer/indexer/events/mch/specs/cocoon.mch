@@ -171,11 +171,11 @@ matcher cocoon_client_request_refund {
     entry    @refund
 
     op [CocoonOwnerWalletSendMessage, CocoonOwnerClientRequestRefund] @refund as CocoonOwnerClientRequestRefund {
-        children first {
+        -> {
             op CocoonReturnExcessesBack @excesses
             ; op CocoonClientProxyRequest @client_request
         }
-        parent { maybe op CocoonOwnerWalletSendMessage @wallet }
+        <- maybe op CocoonOwnerWalletSendMessage @wallet
     }
 
     failed when (refund.msg.transaction.aborted ?? false)

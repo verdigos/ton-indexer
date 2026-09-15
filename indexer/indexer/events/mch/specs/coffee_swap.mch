@@ -25,10 +25,14 @@ opcode CoffeeNotification        = 0xc0ffee36
 
 # One pool hop per unrolling: a swap request with its success event; exit =
 # the payout chain to the user.
-rule swap_chain = (
-    op CoffeeSwapInternal @peer -> op CoffeeSwapSuccessfulEvent @peer_event -> maybe $swap_chain
-  ^ op CoffeePayoutInternal -> ( btype jetton_transfer | op CoffeePayout | op CoffeeNotification )
-)
+rule swap_chain = xor {
+                      op CoffeeSwapInternal @peer -> op CoffeeSwapSuccessfulEvent @peer_event -> maybe $swap_chain
+                      op CoffeePayoutInternal -> or {
+                                                     btype jetton_transfer
+                                                     op CoffeePayout
+                                                     op CoffeeNotification
+                                                 }
+                  }
 
 # HYBRID declarative build. The pattern, the reject/failed wiring and the
 # out-field mapping are declarative; the imperative residue stays in one named
@@ -44,13 +48,22 @@ matcher coffee_swap {
     entry    @swap
 
     op CoffeeSwapInternal @swap {
-        children first {
+        -> {
             op CoffeeSwapSuccessfulEvent @event
-            ; ( $swap_chain
-              | op CoffeePayoutInternal @payout
-                -> ( btype jetton_transfer @out ^ op CoffeePayout @out ^ op CoffeeNotification @out ) )
+            ; or {
+                  $swap_chain
+                  op CoffeePayoutInternal @payout
+                  -> xor {
+                         btype jetton_transfer @out
+                         op CoffeePayout @out
+                         op CoffeeNotification @out
+                     }
+              }
         }
-        parent { ( btype jetton_transfer @in_transfer ^ op CoffeeSwapNative @in_transfer ) }
+        <- xor {
+               btype jetton_transfer @in_transfer
+               op CoffeeSwapNative @in_transfer
+           }
     }
 
     require d = coffee_swap_data(consumed)

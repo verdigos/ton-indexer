@@ -651,8 +651,6 @@ def _parse_relations(s: _ParserState) -> ast_.Relations:
     start = s.eat(TokenKind.LBRACE).span
     while s.at(TokenKind.SEMI) or s.at(TokenKind.NEWLINE):
         s.i += 1
-    if s.at(TokenKind.IDENT) and s.peek().text in ("children", "parent"):
-        return _parse_deprecated_relation_clauses(s, start)
     relations = {}
     while True:
         arrow = s.peek()
@@ -685,44 +683,6 @@ def _parse_relations(s: _ParserState) -> ast_.Relations:
         children_all=relations.get("children_all"),
         children_first=relations.get("children_first"),
         parent=relations.get("parent"),
-        span=_join(start, end),
-    )
-
-
-def _parse_deprecated_relation_clauses(s: _ParserState, start: Span) -> ast_.Relations:
-    # deprecated clause spelling, removed with the corpus migration
-    clauses = {}
-    while True:
-        while s.at(TokenKind.SEMI) or s.at(TokenKind.NEWLINE):
-            s.i += 1
-        if clauses and s.at(TokenKind.RBRACE):
-            break
-        clause = s.eat(TokenKind.IDENT)
-        kind = clause.text
-        if kind == "children":
-            selection = s.eat(TokenKind.IDENT)
-            kind += "_" + selection.text
-        if clause.text not in ("children", "parent") or kind not in ("children_all", "children_first", "parent"):
-            s.bag.error("P001_UNEXPECTED_TOKEN", "expected children all, children first, or parent", clause.span)
-            raise CompileError(s.bag)
-        if kind in clauses:
-            s.bag.error("P018_DUPLICATE_RELATION_CLAUSE", f"duplicate {kind.replace('_', ' ')} clause", clause.span)
-            raise CompileError(s.bag)
-        if kind == "children_first":
-            clauses[kind] = _parse_children_block(s).items
-        else:
-            s.eat(TokenKind.LBRACE)
-            while s.at(TokenKind.SEMI) or s.at(TokenKind.NEWLINE):
-                s.i += 1
-            clauses[kind] = _parse_pattern_expr(s)
-            while s.at(TokenKind.SEMI) or s.at(TokenKind.NEWLINE):
-                s.i += 1
-            s.eat(TokenKind.RBRACE)
-    end = s.eat(TokenKind.RBRACE).span
-    return ast_.Relations(
-        children_all=clauses.get("children_all"),
-        children_first=clauses.get("children_first"),
-        parent=clauses.get("parent"),
         span=_join(start, end),
     )
 
