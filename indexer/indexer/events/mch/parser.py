@@ -115,6 +115,7 @@ def parse(tokens: Iterable[Token], path: str) -> ast_.File:
     predicates: list[ast_.PredicateDecl] = []
     rules:      list[ast_.RuleDecl] = []
     matchers:   list[ast_.MatcherDecl] = []
+    fns:        list[ast_.FnDecl] = []
 
     s.skip_newlines()
     while not s.at(TokenKind.EOF):
@@ -127,6 +128,8 @@ def parse(tokens: Iterable[Token], path: str) -> ast_.File:
             rules.append(_parse_rule_decl(s))
         elif t.kind is TokenKind.KW_MATCHER:
             matchers.append(_parse_matcher_decl(s))
+        elif t.kind is TokenKind.IDENT and t.text == "fn":
+            fns.append(_parse_fn_decl(s))
         elif t.kind is TokenKind.KW_STITCH:
             s.bag.error(
                 "P012_STITCH_REMOVED",
@@ -152,6 +155,7 @@ def parse(tokens: Iterable[Token], path: str) -> ast_.File:
         predicates=tuple(predicates),
         rules=tuple(rules),
         matchers=tuple(matchers),
+        fns=tuple(fns),
     )
 
 
@@ -180,6 +184,22 @@ def _parse_predicate_decl(s: _ParserState) -> ast_.PredicateDecl:
     start = s.eat(TokenKind.KW_PREDICATE).span
     name_tok = s.eat(TokenKind.IDENT)
     return ast_.PredicateDecl(name=name_tok.text, span=_join(start, name_tok.span))
+
+
+def _parse_fn_decl(s: _ParserState) -> ast_.FnDecl:
+    start = s.eat(TokenKind.IDENT).span
+    name = s.eat(TokenKind.IDENT)
+    s.eat(TokenKind.LPAREN)
+    params: list[str] = []
+    if not s.at(TokenKind.RPAREN):
+        params.append(s.eat(TokenKind.IDENT).text)
+        while s.try_eat(TokenKind.COMMA):
+            params.append(s.eat(TokenKind.IDENT).text)
+    s.eat(TokenKind.RPAREN)
+    s.eat(TokenKind.EQ)
+    body = _parse_expr(s)
+    return ast_.FnDecl(name=name.text, params=tuple(params), body=body,
+                       span=_join(start, body.span))
 
 
 def _parse_rule_decl(s: _ParserState) -> ast_.RuleDecl:

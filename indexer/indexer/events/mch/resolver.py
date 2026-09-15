@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, is_dataclass, replace
 from enum import Enum
 from typing import Iterable
 
 from indexer.events.mch import ast_, diagnostics
 from indexer.events.mch.btypes import CLASS_TO_BTYPE, is_class_name
+from indexer.events.mch.builtin_signatures import BUILTIN_SIGNATURES
 from indexer.events.mch.diagnostics import CompileError, DiagnosticBag, Span
 from indexer.events.mch.registry import Registries
 
@@ -199,6 +200,7 @@ class ResolvedFile:
 
 def resolve(file: ast_.File, registries: Registries) -> ResolvedFile:
     bag = DiagnosticBag()
+    file = _inline_fns(file, registries, bag)
 
     opcodes: dict[str, int] = _resolve_opcodes(file, registries, bag)
     _check_predicates(file, registries, bag)
@@ -222,6 +224,86 @@ def resolve(file: ast_.File, registries: Registries) -> ResolvedFile:
         matchers=tuple(resolved_matchers),
         diagnostics=bag,
     )
+
+
+def _map_fn_children(node, visit):
+    if isinstance(node, tuple):
+        return tuple(visit(item) for item in node)
+    if is_dataclass(node) and not isinstance(node, Span):
+        return replace(node, **{
+            f.name: visit(getattr(node, f.name)) for f in fields(node) if f.name != "span"
+        })
+    return node
+
+
+def _inline_fns(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> ast_.File:
+    if not file.fns:
+        return file
+    fns: dict[str, ast_.FnDecl] = {}
+
+    def check_body(node, params):
+        if isinstance(node, ast_.NameRef) and node.name not in params:
+            bag.error(diagnostics.R031_FN_BODY_FREE_NAME,
+                      f"fn body reference {node.name!r} is not a parameter", node.span)
+        elif isinstance(node, ast_.LookupExpr):
+            bag.error(diagnostics.R032_FN_BODY_LOOKUP,
+                      "fn bodies cannot contain lookup; bind it with `let`", node.span)
+            return node
+        elif isinstance(node, ast_.Comprehension):
+            bag.error(diagnostics.R033_FN_BODY_COMPREHENSION,
+                      "fn bodies cannot contain comprehensions", node.span)
+            return node
+        elif isinstance(node, ast_.Call) and isinstance(node.callee, ast_.NameRef):
+            check_body(node.args, params)
+            return node
+        return _map_fn_children(node, lambda child: check_body(child, params))
+
+    for fn in file.fns:
+        if fn.name in fns:
+            bag.error(diagnostics.R034_DUP_FN,
+                      f"fn {fn.name!r} declared more than once in this file", fn.span)
+            continue
+        fns[fn.name] = fn
+        if fn.name in BUILTIN_SIGNATURES or fn.name in registries.fns:
+            bag.error(diagnostics.R035_FN_NAME_COLLISION,
+                      f"fn {fn.name!r} collides with a builtin or registered host function", fn.span)
+        check_body(fn.body, fn.params)
+    if bag.has_errors:
+        raise CompileError(bag)
+
+    bodies: dict[str, ast_.Expr] = {}
+    active: set[str] = set()
+
+    def expand_body(name):
+        if name in active:
+            bag.error(diagnostics.R037_FN_CYCLE,
+                      f"fn {name!r} participates in a call cycle", fns[name].span)
+            raise CompileError(bag)
+        if name not in bodies:
+            active.add(name)
+            bodies[name] = inline(fns[name].body, {})
+            active.remove(name)
+        return bodies[name]
+
+    def inline(node, bindings):
+        if isinstance(node, ast_.NameRef):
+            return bindings.get(node.name, node)
+        if isinstance(node, ast_.Call) and isinstance(node.callee, ast_.NameRef):
+            name = node.callee.name
+            if name in fns and len(node.args) != len(fns[name].params):
+                bag.error(diagnostics.R036_FN_ARITY,
+                          f"fn {name!r} expects {len(fns[name].params)} arguments, got {len(node.args)}",
+                          node.span)
+                raise CompileError(bag)
+            args = tuple(inline(arg, bindings) for arg in node.args)
+            if name in fns:
+                return inline(expand_body(name), dict(zip(fns[name].params, args)))
+            return replace(node, args=args)
+        return _map_fn_children(node, lambda child: inline(child, bindings))
+
+    for name in fns:
+        expand_body(name)
+    return replace(file, rules=inline(file.rules, {}), matchers=inline(file.matchers, {}))
 
 
 def _resolve_opcodes(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> dict[str, int]:

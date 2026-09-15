@@ -80,6 +80,16 @@ R029_PARSE_ANNOTATION_AND_STATEMENT = "R029_PARSE_ANNOTATION_AND_STATEMENT"
 # Only op nodes support parse annotations; composed bodies do not round-trip.
 R030_PARSE_ANNOTATION_ON_COMPOSED = "R030_PARSE_ANNOTATION_ON_COMPOSED"
 
+# Function bodies reference only parameters in value positions. Substitution is
+# call-by-name: bind expensive or faulting arguments with `let` before calling.
+R031_FN_BODY_FREE_NAME = "R031_FN_BODY_FREE_NAME"
+R032_FN_BODY_LOOKUP = "R032_FN_BODY_LOOKUP"
+R033_FN_BODY_COMPREHENSION = "R033_FN_BODY_COMPREHENSION"
+R034_DUP_FN = "R034_DUP_FN"
+R035_FN_NAME_COLLISION = "R035_FN_NAME_COLLISION"
+R036_FN_ARITY = "R036_FN_ARITY"
+R037_FN_CYCLE = "R037_FN_CYCLE"
+
 P011_DUPLICATE_DIRECTIVE = "P011_DUPLICATE_DIRECTIVE"
 """A matcher declares the same at-most-once directive more than once
 (currently `shape`)."""

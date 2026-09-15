@@ -263,6 +263,14 @@ class PredicateDecl:
 
 
 @dataclass(frozen=True)
+class FnDecl:
+    name: str
+    params: tuple[str, ...]
+    body: Expr
+    span: Span
+
+
+@dataclass(frozen=True)
 class RuleDecl:
     name: str
     pattern: PatternExpr
@@ -402,3 +410,4 @@ class File:
     predicates: tuple[PredicateDecl, ...]
     rules:      tuple[RuleDecl, ...]
     matchers:   tuple[MatcherDecl, ...]
+    fns:        tuple[FnDecl, ...] = ()
