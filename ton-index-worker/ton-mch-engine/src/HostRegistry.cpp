@@ -12,7 +12,6 @@ const std::map<std::string, HostFnEntry> &host_fns() {
   static const std::map<std::string, HostFnEntry> fns = {
       {"dedust_swap_legs", {dedust_swap_legs, 3}},
       {"dedust_v2_swap_min_out", {dedust_v2_swap_min_out, 1}},
-      {"layerzero_dst_oapp_matches", {layerzero_dst_oapp_matches, 2}},
       {"tonstakers_pool_addr", {tonstakers_pool_addr, 1}},
       {"vesting_message_was_sent", {vesting_message_was_sent, 2}},
       {"nominator_withdraw_payout_amount", {nominator_withdraw_payout_amount, 1}},

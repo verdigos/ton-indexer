@@ -739,6 +739,17 @@ EvalResult rt_builtin_ext_addr_str(const Value &a) {
   return rt_ok(std::move(rendered));
 }
 
+EvalResult rt_builtin_addr_hash_hex(const Value &a) {
+  if (rt_is_null(a)) return rt_ok(Value::null());
+  if (a.t != VType::Account) return rt_fault("addr_hash_hex expects an account");
+  if (a.addr_none) return rt_ok(Value::null());
+  std::string hash = a.str.substr(a.str.find(':') + 1);
+  for (char &c : hash) {
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
+  return rt_ok(Value::make_str(std::move(hash)));
+}
+
 EvalResult rt_builtin_map(const Value &a, const Value &b) {
   if (rt_is_null(a) || rt_is_null(b)) return rt_ok(Value::null());
   const std::vector<Value> *xs = nullptr;
@@ -810,6 +821,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
       {"get", 2}, {"tx_aborted", 1}, {"exit_code", 1},
       {"uint_hex", 1}, {"ext_addr_str", 1},
       {"txid_le_hex", 1},
+      {"addr_hash_hex", 1},
   };
   auto ar = arity.find(name);
   if (ar == arity.end()) {
@@ -842,6 +854,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   if (name == "uint_hex") return rt_builtin_uint_hex(args[0]);
   if (name == "txid_le_hex") return rt_builtin_txid_le_hex(args[0]);
   if (name == "ext_addr_str") return rt_builtin_ext_addr_str(args[0]);
+  if (name == "addr_hash_hex") return rt_builtin_addr_hash_hex(args[0]);
   return rt_fault("unreachable builtin " + name);
 }
 

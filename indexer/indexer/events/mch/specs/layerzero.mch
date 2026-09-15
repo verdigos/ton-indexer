@@ -27,16 +27,10 @@
 # @execute's body (the OApp callback carries the LayerZero packet) and maps every
 # LayerZeroReceiveData field straight off the two envelopes + the parsed packet.
 #
-# The address-form safety check compares the execute
-# destination against the packet's dst_oapp with `dest[2:].lower() ==
-# dst_oapp[2:].lower()`. The two carry the same 256-bit hash in different string
-# forms. The envelope destination is `0:<hex>` (a TON address), while the packet
-# dst_oapp is `0x<hex>` (a bare 256-bit hash). `account()` cannot bridge them:
-# `account("0x<hex>")` raises AddressError (verified), so `account(a) == account(b)`
-# rejects every real trace. String slicing/lowercasing is out of the expression
-# language by design, so this stays a host `fn`.
-# The `same_hash(addr_str, hash_str)` host function
-# strips the two prefixes and compares the hex case-insensitively.
+# The address check uses `contains` to find the destination's 64-digit lowercase
+# `addr_hash_hex` in the packet's minimal `0x` hex string, regardless of workchain.
+# Leading-zero hashes do not match the shorter packet string. `?? false` rejects
+# when either side is null.
 
 # =============================================================================
 # The remaining family matchers are send, send_tokens, receive, commit_packet,
@@ -111,9 +105,7 @@ matcher layerzero_receive {
                          -> { maybe op LayerZeroEventMsgBody
                             ; maybe btype ton_transfer } } }
 
-    # Safety check from build_layerzero_receive_core: the execute destination must
-    # be the same account as the packet's dst_oapp.
-    reject when not layerzero_dst_oapp_matches(execute.msg.destination, execute.body.packet.path.dst_oapp)
+    reject when not (contains(execute.body.packet.path.dst_oapp, addr_hash_hex(execute.msg.destination)) ?? false)
     out {
         sender:  prepare.msg.source
         channel: execute.msg.source

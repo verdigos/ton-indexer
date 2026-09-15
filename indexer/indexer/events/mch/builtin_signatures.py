@@ -24,4 +24,5 @@ BUILTIN_SIGNATURES: dict[str, int] = {
     "uint_hex": 1,
     "txid_le_hex": 1,
     "ext_addr_str": 1,
+    "addr_hash_hex": 1,
 }

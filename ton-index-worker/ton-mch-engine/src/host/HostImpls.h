@@ -77,9 +77,6 @@ EvalResult dedust_v2_swap_min_out(BuildEnv &env, const std::vector<Value> &args)
 EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &args);
 EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &args);
 
-// LayerZero (HostLayerZero.cpp).
-EvalResult layerzero_dst_oapp_matches(BuildEnv &env, const std::vector<Value> &args);
-
 // Tonstakers (HostTonstakers.cpp).
 EvalResult tonstakers_pool_addr(BuildEnv &env, const std::vector<Value> &args);
 

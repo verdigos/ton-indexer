@@ -290,6 +290,15 @@ def _builtin_ext_addr_str(a: Any) -> str | None:
     raise EvalError(f"ext_addr_str expects an address, got {type(a).__name__}")
 
 
+def _builtin_addr_hash_hex(a: Any) -> str | None:
+    if isinstance(a, AccountId):
+        address = a.as_str()
+        return None if address is None else address.split(":", 1)[1].lower()
+    if isinstance(a, Address):
+        return a.hash_part.hex()
+    raise EvalError(f"addr_hash_hex expects an account, got {type(a).__name__}")
+
+
 _BUILTIN_CALLABLES: dict[str, Any] = {
     symbol.removeprefix("_builtin_"): value
     for symbol, value in globals().items()
