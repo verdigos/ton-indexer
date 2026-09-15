@@ -130,13 +130,6 @@ def parse(tokens: Iterable[Token], path: str) -> ast_.File:
             matchers.append(_parse_matcher_decl(s))
         elif t.kind is TokenKind.IDENT and t.text == "fn":
             fns.append(_parse_fn_decl(s))
-        elif t.kind is TokenKind.KW_STITCH:
-            s.bag.error(
-                "P012_STITCH_REMOVED",
-                "stitch was removed in 0.2; paired results are merged by host post-process code",
-                t.span,
-            )
-            raise CompileError(bag)
         else:
             s.bag.error(
                 "P001_UNEXPECTED_TOKEN",
@@ -463,17 +456,19 @@ def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
     """
     t = s.peek()
 
-    if t.kind is TokenKind.KW_MAYBE:
+    if t.kind in (TokenKind.KW_MAYBE, TokenKind.KW_PEEK):
         s.i += 1
         s.skip_newlines()
         inner = _parse_atom(s)
-        return ast_.Maybe(inner=inner, span=_join(t.span, inner.span))
-
-    if t.kind is TokenKind.KW_PEEK:
-        s.i += 1
-        s.skip_newlines()
-        inner = _parse_atom(s)
-        return ast_.Peek(inner=inner, span=_join(t.span, inner.span))
+        if isinstance(inner, ast_.ChildrenBlock):
+            s.bag.error(
+                "P024_MODIFIER_ON_CHILDREN_SET",
+                "put `maybe`/`peek` on each item",
+                _join(t.span, inner.span),
+            )
+            raise CompileError(s.bag)
+        cls = ast_.Maybe if t.kind is TokenKind.KW_MAYBE else ast_.Peek
+        return cls(inner=inner, span=_join(t.span, inner.span))
 
     if (s.peek(1).kind is TokenKind.LBRACE
             and (t.kind is TokenKind.KW_OR or (t.kind is TokenKind.IDENT and t.text == "xor"))):
@@ -971,6 +966,7 @@ def _parse_unary(s: _ParserState) -> ast_.Expr:
 
 
 def _parse_postfix(s: _ParserState) -> ast_.Expr:
+    start = s.peek()
     e = _parse_primary(s)
     while True:
         if s.at(TokenKind.DOT):
@@ -978,6 +974,13 @@ def _parse_postfix(s: _ParserState) -> ast_.Expr:
             name = s.eat_field_name()
             e = ast_.FieldAccess(target=e, field=name.text, span=_join(e.span, name.span))
         elif s.at(TokenKind.LPAREN):
+            if start.kind is not TokenKind.IDENT or not isinstance(e, ast_.NameRef):
+                s.bag.error(
+                    "P025_CALLEE_NOT_NAME",
+                    "only a function name can be called",
+                    _join(start.span, s.peek().span),
+                )
+                raise CompileError(s.bag)
             s.i += 1
             args, end = _parse_arg_list(s)
             e = ast_.Call(callee=e, args=args, span=_join(e.span, end))

@@ -25,8 +25,6 @@ _SINGLE_CHAR: dict[str, TokenKind] = {
     ":": TokenKind.COLON,
 }
 
-_DURATION_UNITS = set("smhd")
-
 
 class LexerError(Exception):
     def __init__(self, code: str, message: str, span: Span):
@@ -110,7 +108,7 @@ def tokenize(text: str, path: str) -> Iterator[Token]:
             yield Token(_SINGLE_CHAR[ch], ch, cur.span_from(start_i, start_line, start_col))
             continue
 
-        # Numeric: hex, decimal, or duration.
+        # Numeric: hex or decimal.
         if ch.isdigit():
             yield _read_number(cur)
             continue
@@ -195,20 +193,9 @@ def _read_number(cur: _Cursor) -> Token:
         text = cur.text[start_i:cur.i]
         return Token(TokenKind.HEX, text, cur.span_from(start_i, start_line, start_col))
 
-    # Decimal (possibly followed by a duration unit).
+    # Decimal.
     while not cur.at_end() and cur.peek().isdigit():
         cur.advance()
-    if not cur.at_end() and cur.peek() in _DURATION_UNITS:
-        # Duration unit must NOT be followed by another ident char (i.e. "6s" vs "6sm").
-        if (
-            cur.i + 1 < len(cur.text)
-            and (cur.text[cur.i + 1].isalnum() or cur.text[cur.i + 1] == "_")
-        ):
-            text = cur.text[start_i:cur.i]
-            return Token(TokenKind.DEC, text, cur.span_from(start_i, start_line, start_col))
-        cur.advance()
-        text = cur.text[start_i:cur.i]
-        return Token(TokenKind.DURATION, text, cur.span_from(start_i, start_line, start_col))
 
     text = cur.text[start_i:cur.i]
     return Token(TokenKind.DEC, text, cur.span_from(start_i, start_line, start_col))

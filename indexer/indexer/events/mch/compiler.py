@@ -333,28 +333,10 @@ def _find_anchor_path(pattern: ast_.PatternExpr, anchor: ast_.PatternExpr) -> li
     return search(pattern, [])
 
 
-def _unwrap_modifiers(
-    p: ast_.PatternExpr,
-) -> tuple[ast_.PatternExpr, bool, bool, Span | None]:
-    optional = False
-    peek = False
-    peek_span: Span | None = None
-    while isinstance(p, (ast_.Maybe, ast_.Peek)):
-        if isinstance(p, ast_.Maybe):
-            optional = True
-        else:
-            peek = True
-            if peek_span is None:
-                peek_span = p.span
-        p = p.inner
-    return p, optional, peek, peek_span
-
-
 def _is_cb_atom(a: ast_.PatternExpr) -> bool:
     """Whether an atom attaches left without advancing the chain cursor.
     """
-    inner, _optional, _peek, _peek_span = _unwrap_modifiers(a)
-    return isinstance(inner, ast_.ChildrenBlock)
+    return isinstance(a, ast_.ChildrenBlock)
 
 
 def _lower_child_chain_from(
@@ -415,8 +397,7 @@ def _lower_child_chain_from(
         if not downstream_atoms:
             return None, None
         first = downstream_atoms[0]
-        first_inner, _optional, _peek, _peek_span = _unwrap_modifiers(first)
-        if isinstance(first_inner, ast_.ChildrenBlock):
+        if isinstance(first, ast_.ChildrenBlock):
             # Consume consecutive anchor-adjacent children blocks so
             # `{B;C} {D;E}`
             # all attach to the anchor's children_matchers in source order.
@@ -424,17 +405,10 @@ def _lower_child_chain_from(
             rest_idx = 0
             while rest_idx < len(downstream_atoms):
                 atom = downstream_atoms[rest_idx]
-                inner, optional_items, peek_items, peek_span = _unwrap_modifiers(atom)
-                if not isinstance(inner, ast_.ChildrenBlock):
+                if not isinstance(atom, ast_.ChildrenBlock):
                     break
-                for it in inner.items:
-                    lowered_it = _lower_atom(it, ctx)
-                    if optional_items:
-                        lowered_it.optional = True
-                    if peek_items:
-                        lowered_it.peek = True
-                        lowered_it.peek_span = peek_span
-                    children_ms.append(lowered_it)
+                for it in atom.items:
+                    children_ms.append(_lower_atom(it, ctx))
                 rest_idx += 1
             rest = downstream_atoms[rest_idx:]
             if rest:
@@ -546,7 +520,7 @@ def _lower_chain_with_children_attach(
     """Walk an ordered list of `(edge, atom)` pairs and build a chained node graph.
 
     ChildrenBlock atoms attach their items to the immediately-preceding node's
-    `children`. Modifier-wrapped blocks apply those flags to each item root.
+    `children`.
     Bare ChildrenBlock at the head (no left sibling) emits C008. Non-CB atoms
     chain via `_attach_as_child` or `_attach_as_parent`.
     """
@@ -554,35 +528,20 @@ def _lower_chain_with_children_attach(
     previous_lowered: LNode | None = None
 
     for edge, atom in pairs:
-        # Detect modifier-wrapped ChildrenBlock attach-to-left.
-        cb_items: list[ast_.PatternExpr] | None = None
-        optional_items = False
-        peek_items = False
-        peek_span: Span | None = None
-        inner, optional_items, peek_items, peek_span = _unwrap_modifiers(atom)
-        if isinstance(inner, ast_.ChildrenBlock):
-            cb_items = list(inner.items)
-
-        if cb_items is not None:
+        if isinstance(atom, ast_.ChildrenBlock):
             if previous_lowered is None:
                 # Bare ChildrenBlock with no left sibling.
                 ctx.bag.error(
                     "C008_CHILDREN_BLOCK_BARE",
                     "children block '{...}' must follow a node in a sequence "
                     "(e.g. 'op A -> {op B; op C}'); bare children blocks are not allowed",
-                    inner.span,
+                    atom.span,
                 )
                 raise CompileError(ctx.bag)
             if previous_lowered.children is None:
                 previous_lowered.children = []
-            for item in cb_items:
-                lowered_item = _lower_atom(item, ctx)
-                if optional_items:
-                    lowered_item.optional = True
-                if peek_items:
-                    lowered_item.peek = True
-                    lowered_item.peek_span = peek_span
-                previous_lowered.children.append(lowered_item)
+            for item in atom.items:
+                previous_lowered.children.append(_lower_atom(item, ctx))
             # Do not update previous_lowered. A children block constrains the
             # preceding matcher, not a chain link.
             continue
@@ -753,29 +712,10 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
     if isinstance(p, ast_.Node):
         return _lower_node(p, ctx)
     if isinstance(p, ast_.Maybe):
-        # Bare `maybe {...}` wrapping a children block with no chain context is
-        # rejected. `_lower_chain_with_children_attach` handles the in-chain
-        # form `op A -> maybe {B; C}` first.
-        if isinstance(p.inner, ast_.ChildrenBlock):
-            ctx.bag.error(
-                "C008_CHILDREN_BLOCK_BARE",
-                "'maybe {...}' must follow a node in a sequence "
-                "(e.g. 'op A -> maybe {op B; op C}'); bare maybe-children blocks are not allowed",
-                p.inner.span,
-            )
-            raise CompileError(ctx.bag)
         inner = _lower_atom(p.inner, ctx)
         inner.optional = True
         return inner
     if isinstance(p, ast_.Peek):
-        if isinstance(p.inner, ast_.ChildrenBlock):
-            ctx.bag.error(
-                "C008_CHILDREN_BLOCK_BARE",
-                "'peek {...}' must follow a node in a sequence "
-                "(e.g. 'op A -> peek {op B; op C}'); bare peek-children blocks are not allowed",
-                p.inner.span,
-            )
-            raise CompileError(ctx.bag)
         inner = _lower_atom(p.inner, ctx)
         inner.peek = True
         inner.peek_span = p.span
@@ -1057,12 +997,6 @@ def _check_no_bare_children_block(
     """Report C008 for a children block without a node on its left.
     """
 
-    def is_modifier_wrapped_cb(p: ast_.PatternExpr) -> tuple[bool, ast_.Span]:
-        inner, _optional, _peek, _peek_span = _unwrap_modifiers(p)
-        if isinstance(inner, ast_.ChildrenBlock):
-            return True, inner.span
-        return False, p.span if hasattr(p, "span") else None  # type: ignore[return-value]
-
     def emit_c008(span: ast_.Span) -> None:
         ctx.bag.error(
             "C008_CHILDREN_BLOCK_BARE",
@@ -1075,20 +1009,17 @@ def _check_no_bare_children_block(
         """`in_chain_left` is True when this atom has a non-CB left sibling in its
         enclosing Sequence tail (i.e. it's a valid attach-to-left position).
         """
-        is_cb, span = is_modifier_wrapped_cb(p)
-        if is_cb and not in_chain_left:
-            emit_c008(span)
+        if isinstance(p, ast_.ChildrenBlock) and not in_chain_left:
+            emit_c008(p.span)
         if isinstance(p, ast_.Sequence):
             walk(p.head, in_chain_left=False)
-            previous_was_atom = not is_modifier_wrapped_cb(p.head)[0]
+            previous_was_atom = not _is_cb_atom(p.head)
             for _edge, atom in p.tail:
                 walk(atom, in_chain_left=previous_was_atom)
-                if not is_modifier_wrapped_cb(atom)[0]:
+                if not _is_cb_atom(atom):
                     previous_was_atom = True
         elif isinstance(p, (ast_.Maybe, ast_.Peek)):
-            inner, _optional, _peek, _peek_span = _unwrap_modifiers(p)
-            if not isinstance(inner, ast_.ChildrenBlock):
-                walk(p.inner, in_chain_left=False)
+            walk(p.inner, in_chain_left=False)
         elif isinstance(p, ast_.Alternative):
             for b in p.branches:
                 walk(b, in_chain_left=False)

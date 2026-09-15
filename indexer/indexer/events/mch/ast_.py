@@ -115,8 +115,8 @@ class ListLit(Expr):
 class ParseExpr(Expr):
     """Parse a Block, Cell, or base64-BOC string against message types.
 
-    Strict parsing faults on an invalid target or total failure; `try parse`
-    sets `nullable` and returns null for those failures instead."""
+    `parse!` faults on an invalid target or total failure; `parse?` sets
+    `nullable` and returns null for those failures instead."""
     target: Expr
     msg_types: tuple[str, ...]
     span: Span

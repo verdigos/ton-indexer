@@ -94,11 +94,6 @@ P011_DUPLICATE_DIRECTIVE = "P011_DUPLICATE_DIRECTIVE"
 """A matcher declares the same at-most-once directive more than once
 (currently `shape`)."""
 
-P012_STITCH_REMOVED = "P012_STITCH_REMOVED"
-"""A `stitch` declaration was encountered. Cross-trace joining is unsupported;
-host post-process code merges paired results. The words `stitch partial final
-key ttl merge` remain reserved so this error is targeted."""
-
 # Membership requires a name or a field path on the left.
 P013_MEMBERSHIP_LEFT_OPERAND = "P013_MEMBERSHIP_LEFT_OPERAND"
 
@@ -123,6 +118,8 @@ P021_CHOICE_NEEDS_TWO_ARMS = "P021_CHOICE_NEEDS_TWO_ARMS"
 
 P022_ALTERNATIVE_OPERATOR_REMOVED = "P022_ALTERNATIVE_OPERATOR_REMOVED"
 P023_BARE_PARSE_EXPRESSION = "P023_BARE_PARSE_EXPRESSION"
+P024_MODIFIER_ON_CHILDREN_SET = "P024_MODIFIER_ON_CHILDREN_SET"
+P025_CALLEE_NOT_NAME = "P025_CALLEE_NOT_NAME"
 
 C011_UNKNOWN_SHAPER = "C011_UNKNOWN_SHAPER"
 """The `shape` directive names a shaper that is not present in the host's

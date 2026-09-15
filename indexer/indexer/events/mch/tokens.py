@@ -11,14 +11,12 @@ class TokenKind(Enum):
     IDENT = "IDENT"
     HEX = "HEX"
     DEC = "DEC"
-    DURATION = "DURATION"
     STRING = "STRING"
     # declaration keywords
     KW_OPCODE = "opcode"
     KW_PREDICATE = "predicate"
     KW_RULE = "rule"
     KW_MATCHER = "matcher"
-    KW_STITCH = "stitch"
     # node-head keywords
     KW_OP = "op"
     KW_BTYPE = "btype"
@@ -55,13 +53,6 @@ class TokenKind(Enum):
     KW_NOT = "not"
     KW_AND = "and"
     KW_OR = "or"
-    # Stitch keywords remain reserved so the parser can emit
-    # P012_STITCH_REMOVED.
-    KW_PARTIAL = "partial"
-    KW_FINAL = "final"
-    KW_KEY = "key"
-    KW_TTL = "ttl"
-    KW_MERGE = "merge"
     # boolean / null literals
     KW_TRUE = "true"
     KW_FALSE = "false"
