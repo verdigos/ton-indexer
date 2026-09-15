@@ -890,7 +890,7 @@ def _parse_cmp(s: _ParserState) -> ast_.Expr:
         root = left
         while isinstance(root, ast_.FieldAccess):
             root = root.target
-        if not isinstance(root, (ast_.NameRef, ast_.FieldRef)):
+        if not isinstance(root, (ast_.NameRef, ast_.FieldRef, ast_.ParseExpr)):
             s.bag.error(
                 "P013_MEMBERSHIP_LEFT_OPERAND",
                 "membership left operand must be a name or field path",
@@ -1111,6 +1111,11 @@ def _parse_primary(s: _ParserState) -> ast_.Expr:
         return _parse_lookup(s)
     if t.kind is TokenKind.DOT:
         s.i += 1
+        kind = s.peek().kind
+        if kind is TokenKind.KW_AS or not (
+            kind is TokenKind.IDENT or kind.name.startswith("KW_")
+        ):
+            return ast_.DotSelf(span=t.span)
         name = s.eat_field_name()
         return ast_.FieldRef(field=name.text, span=_join(t.span, name.span))
     if t.kind is TokenKind.LPAREN:

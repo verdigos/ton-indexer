@@ -99,9 +99,8 @@ EvalResult rt_parse(BuildEnv &env, const Value &target, const std::vector<std::s
   return rt_ok(Value::null());
 }
 
-EvalResult rt_parse_expr(BuildEnv &env, const Value &target,
+EvalResult rt_parse_expr(const Value &target,
                          const std::vector<std::string> &types, bool nullable) {
-  (void)env;  // stateless: no env.bodies store, unlike the statement form
   auto r_cell = parse_expr_cell(target);
   if (r_cell.is_error()) {
     return nullable ? rt_ok(Value::null())

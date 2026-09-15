@@ -109,6 +109,12 @@ class Emitter {
       }
       return bind("rt_name(env, " + cstr(id) + ")");
     }
+    if (k == "dotself") {
+      if (mode_ == EmitMode::Where) {
+        return bind("rt_ok(Value::make_block(w.block))");
+      }
+      return bind("rt_fault(\"`.` is only valid inside an inline `where (expr)`\")");
+    }
     if (k == "dotfield") {
       if (mode_ == EmitMode::Where) {
         return bind("rt_dotfield(w, " + cstr(jstr(e, "name")) + ")");
@@ -180,10 +186,8 @@ class Emitter {
       return emit_comprehension(e, k == "quant");
     }
     if (k == "parse") {
-      // Parse expressions require a build environment and message parsers.
-      // Other modes return a defensive fault, as for lookup and comprehension.
-      if (mode_ != EmitMode::Build) {
-        return bind("rt_fault(\"parse expression is only evaluable in a build program\")");
+      if (mode_ == EmitMode::Vectors) {
+        return bind("rt_fault(\"parse expression requires message parsers\")");
       }
       std::string x = emit(*jfield(e, "x"));
       std::vector<std::string> types;
@@ -191,7 +195,7 @@ class Emitter {
         types.push_back(cstr(t.get_string().str()));
       }
       const bool nullable = jbool(e, "nullable", false);
-      return bind("rt_parse_expr(env, " + x + ", std::vector<std::string>{" +
+      return bind("rt_parse_expr(" + x + ", std::vector<std::string>{" +
                   join(types, ", ") + "}, " + (nullable ? "true" : "false") + ")");
     }
     throw std::runtime_error("unsupported expression kind '" + k + "'");
@@ -725,7 +729,8 @@ std::string generate_wheres_file(const Json &root, const std::string &header,
   }
 
   std::vector<std::string> out = {
-      header, "#include \"GenWheres.h\"", "", "namespace mch {", "namespace {", ""};
+      header, "#include \"GenWheres.h\"", "#include \"BuildRuntime.h\"", "",
+      "namespace mch {", "namespace {", ""};
   for (std::size_t id : where_ids) {
     auto it = where_entries.find(id);
     const std::string entry_name = it != where_entries.end() ? it->second.first : std::string{};

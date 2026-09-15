@@ -491,6 +491,53 @@ def _access(obj: Any, field: str, bodies: dict[int, Any]) -> Any:
         raise EvalError(f"{type(obj).__name__} object has no attribute {field!r}") from None
 
 
+def parse_value(target: Any, types: list[str], nullable: bool,
+                message_types: dict[str, type]) -> Any:
+    """Parse a block, cell, or base64 BOC against types in source order."""
+    if target is None:
+        if nullable:
+            return None
+        raise EvalError("parse: target is null")
+
+    get_body = getattr(target, "get_body", None)
+    if get_body is not None:
+        body_factory = get_body
+    elif isinstance(target, Cell):
+        body_factory = target.begin_parse
+    elif isinstance(target, str):
+        try:
+            raw = base64.b64decode(target, validate=True)
+            cell = Cell.from_boc(raw)[0]
+        except Exception as ex:
+            if nullable:
+                return None
+            raise EvalError(f"parse: target string is not a valid base64 BOC ({ex})") from ex
+        body_factory = cell.begin_parse
+    else:
+        if nullable:
+            return None
+        raise EvalError(
+            f"parse: target is not a block, cell, or string "
+            f"(got {type(target).__name__})"
+        )
+
+    last_exc: Exception | None = None
+    for name in types:
+        cls = message_types.get(name)
+        if cls is None:
+            raise EvalError(f"message type {name!r} is not registered")
+        try:
+            return cls(body_factory())
+        except Exception as ex:  # soft across type alternatives; total failure faults
+            last_exc = ex
+            continue
+    if nullable:
+        return None
+    raise EvalError(
+        f"parse: no message type in {list(types)} parsed the body ({last_exc})"
+    )
+
+
 # Sync evaluator (node-level `where_expr`)
 
 
@@ -499,12 +546,20 @@ def _sync_eval(
     block: Block,
     entry_name: str | None = None,
     entry_block: Block | None = None,
+    message_types: dict[str, type] | None = None,
 ) -> Any:
     k = e.get("k")
     if k in ("int", "str", "bool"):
         return e["v"]
     if k == "null":
         return None
+    if k == "dotself":
+        return block
+    if k == "parse":
+        return parse_value(
+            _sync_eval(e["x"], block, entry_name, entry_block, message_types),
+            e["types"], e.get("nullable", False), message_types or {},
+        )
     if k == "dotfield":
         data = block.data
         if data is None:
@@ -520,7 +575,7 @@ def _sync_eval(
         return entry_block
     if k == "attr":
         return _access(
-            _sync_eval(e["of"], block, entry_name, entry_block), e["name"], {}
+            _sync_eval(e["of"], block, entry_name, entry_block, message_types), e["name"], {}
         )
     if k == "call":
         # Loader guarantees builtin-only calls in where_expr (host fns and
@@ -530,31 +585,31 @@ def _sync_eval(
             raise EvalError(f"host fn {name!r} is not callable in a `where` clause")
         return _call_builtin(
             name,
-            [_sync_eval(a, block, entry_name, entry_block) for a in e["args"]],
+            [_sync_eval(a, block, entry_name, entry_block, message_types) for a in e["args"]],
         )
     if k == "unary":
         if e["op"] == "not":
-            return not _require_bool(_sync_eval(e["x"], block, entry_name, entry_block))
+            return not _require_bool(_sync_eval(e["x"], block, entry_name, entry_block, message_types))
         if e["op"] == "-":
-            return _neg_result(_sync_eval(e["x"], block, entry_name, entry_block))
+            return _neg_result(_sync_eval(e["x"], block, entry_name, entry_block, message_types))
         raise EvalError(f"unknown unary operator {e['op']!r}")
     if k == "bin":
         op = e["op"]
         if op == "and":
             return _require_bool(
-                _sync_eval(e["l"], block, entry_name, entry_block)
-            ) and _require_bool(_sync_eval(e["r"], block, entry_name, entry_block))
+                _sync_eval(e["l"], block, entry_name, entry_block, message_types)
+            ) and _require_bool(_sync_eval(e["r"], block, entry_name, entry_block, message_types))
         if op == "or":
             return _require_bool(
-                _sync_eval(e["l"], block, entry_name, entry_block)
-            ) or _require_bool(_sync_eval(e["r"], block, entry_name, entry_block))
+                _sync_eval(e["l"], block, entry_name, entry_block, message_types)
+            ) or _require_bool(_sync_eval(e["r"], block, entry_name, entry_block, message_types))
         if op == "??":
-            left = _sync_eval(e["l"], block, entry_name, entry_block)
+            left = _sync_eval(e["l"], block, entry_name, entry_block, message_types)
             return left if left is not None else _sync_eval(
-                e["r"], block, entry_name, entry_block
+                e["r"], block, entry_name, entry_block, message_types
             )
-        left = _sync_eval(e["l"], block, entry_name, entry_block)
-        right = _sync_eval(e["r"], block, entry_name, entry_block)
+        left = _sync_eval(e["l"], block, entry_name, entry_block, message_types)
+        right = _sync_eval(e["r"], block, entry_name, entry_block, message_types)
         if op in ("==", "!="):
             return _eq_result(op, left, right)
         if op in ("<", "<=", ">", ">="):
@@ -563,14 +618,14 @@ def _sync_eval(
             return _arith_result(op, left, right)
         raise EvalError(f"unknown binary operator {op!r}")
     if k == "ternary":
-        if _require_bool(_sync_eval(e["cond"], block, entry_name, entry_block)):
-            return _sync_eval(e["then"], block, entry_name, entry_block)
-        return _sync_eval(e["else"], block, entry_name, entry_block)
+        if _require_bool(_sync_eval(e["cond"], block, entry_name, entry_block, message_types)):
+            return _sync_eval(e["then"], block, entry_name, entry_block, message_types)
+        return _sync_eval(e["else"], block, entry_name, entry_block, message_types)
     if k == "list":
-        return [_sync_eval(it, block, entry_name, entry_block) for it in e["items"]]
+        return [_sync_eval(it, block, entry_name, entry_block, message_types) for it in e["items"]]
     if k == "record":
         return {
-            f["name"]: _sync_eval(f["expr"], block, entry_name, entry_block)
+            f["name"]: _sync_eval(f["expr"], block, entry_name, entry_block, message_types)
             for f in e["fields"]
         }
     if k == "lookup":
@@ -583,6 +638,7 @@ def eval_where_expr(
     block: Block,
     entry_name: str | None = None,
     entry_block: Block | None = None,
+    message_types: dict[str, type] | None = None,
 ) -> bool:
     """Evaluate a node's inline `where (expr)` against the candidate block.
 
@@ -590,6 +646,6 @@ def eval_where_expr(
     non-bool result simply fails the test.
     """
     try:
-        return _require_bool(_sync_eval(e, block, entry_name, entry_block))
+        return _require_bool(_sync_eval(e, block, entry_name, entry_block, message_types))
     except EvalError:
         return False

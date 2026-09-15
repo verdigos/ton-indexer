@@ -922,19 +922,15 @@ def _check_build_stmts(
                     f"parse target {stmt.capture!r} is not a pattern capture",
                     stmt.span,
                 )
-            elif isinstance(captures[stmt.capture].head, ast_.BTypeHead):
-                # Parsing a composed block's body never round-trips. Its
-                # get_body() reads event_nodes[0], which after the
-                # prior matcher's merge is not the anchor protocol message, so the
-                # parse silently yields a null body. Read the prior matcher's
-                # fields via `<capture>.data.<field>` instead.
+            elif (isinstance(captures[stmt.capture].head, ast_.BTypeHead)
+                  and captures[stmt.capture].head.name not in
+                  ("ton_transfer", "call_contract", "tick_tock")):
                 bag.error(
                     diagnostics.R023_PARSE_TARGET_COMPOSED_BLOCK,
-                    f"parse target {stmt.capture!r} is a composed block "
+                    f"parse target {stmt.capture!r} is a produced block "
                     f"(captured by `btype {captures[stmt.capture].head.name}`); "
-                    f"re-parsing a produced block's body does not round-trip. "
-                    f"Read its fields via `{stmt.capture}.data.<field>` instead "
-                    f"of `parse … as …`.",
+                    f"only base blocks (ton_transfer, call_contract, tick_tock) can be parsed. "
+                    f"Read its fields via `{stmt.capture}.data.<field>` instead.",
                     stmt.span,
                 )
             for t in stmt.msg_types:

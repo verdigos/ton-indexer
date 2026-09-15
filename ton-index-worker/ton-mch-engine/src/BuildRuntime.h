@@ -134,10 +134,10 @@ struct BuildEnv {
 // unregistered type name faults (rejection).
 EvalResult rt_parse(BuildEnv &env, const Value &target, const std::vector<std::string> &types);
 
-// `[try] parse TARGET as T1|T2` as a build expression. Block, Cell, and
-// base64-BOC Str targets are accepted. The nullable form returns Null for
+// `parse?` / `parse!` expressions accept Block, Cell, and
+// base64-BOC Str targets. The nullable form returns Null for
 // target resolution or total parse failure; the strict form faults.
-EvalResult rt_parse_expr(BuildEnv &env, const Value &target,
+EvalResult rt_parse_expr(const Value &target,
                          const std::vector<std::string> &types, bool nullable);
 
 // Attribute access in build context: `.body` on a Block/List resolves through

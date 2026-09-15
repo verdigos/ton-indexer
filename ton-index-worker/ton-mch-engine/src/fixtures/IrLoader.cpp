@@ -335,15 +335,16 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     scan_program(*bp, m);
   }
 
-  // Match-phase host dependencies: named predicates plus every `pred` /
-  // named-`where` node. Inline where_exprs are not host dependencies
-  // (generated where table). Host presence is match_skip_reason()'s call.
+  // Match-phase dependencies include predicates and inline parse types.
   for (const CompiledNode &n : m.nodes) {
     if (n.kind == NodeKind::Pred && !n.pred_name.empty()) {
       m.ref_preds.insert(n.pred_name);
     }
     if (!n.where_name.empty()) {
       m.ref_preds.insert(n.where_name);
+    }
+    if (const Json *expr = jfield(*pool[n.global_id], "where_expr"); expr != nullptr) {
+      scan_program(*expr, m);
     }
   }
   return td::Status::OK();

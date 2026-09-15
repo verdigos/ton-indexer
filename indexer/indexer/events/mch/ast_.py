@@ -51,6 +51,12 @@ class NameRef(Expr):
 
 
 @dataclass(frozen=True)
+class DotSelf(Expr):
+    """The candidate block inside an inline `where (expr)` clause."""
+    span: Span
+
+
+@dataclass(frozen=True)
 class FieldRef(Expr):
     """Leading-dot field access `.field`, the current block's data field
     (valid only as a primary inside an inline `where (expr)` clause)."""

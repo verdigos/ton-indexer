@@ -87,6 +87,40 @@ def _unsigned32(opcode: int) -> int:
 # Stub registries (CLI self-provisioning)
 
 
+def _collect_expr_message_types(e: ast_.Expr, out: set[str]) -> None:
+    if isinstance(e, ast_.FieldAccess):
+        _collect_expr_message_types(e.target, out)
+    elif isinstance(e, ast_.Call):
+        if not isinstance(e.callee, ast_.NameRef):
+            _collect_expr_message_types(e.callee, out)
+        for arg in e.args:
+            _collect_expr_message_types(arg, out)
+    elif isinstance(e, ast_.LookupExpr):
+        for arg in e.args:
+            _collect_expr_message_types(arg, out)
+    elif isinstance(e, ast_.UnaryOp):
+        _collect_expr_message_types(e.operand, out)
+    elif isinstance(e, ast_.BinaryOp):
+        _collect_expr_message_types(e.left, out)
+        _collect_expr_message_types(e.right, out)
+    elif isinstance(e, ast_.Ternary):
+        _collect_expr_message_types(e.cond, out)
+        _collect_expr_message_types(e.then, out)
+        _collect_expr_message_types(e.orelse, out)
+    elif isinstance(e, ast_.ListLit):
+        for item in e.elements:
+            _collect_expr_message_types(item, out)
+    elif isinstance(e, ast_.RecordLit):
+        for field in e.fields:
+            _collect_expr_message_types(field.value, out)
+    elif isinstance(e, ast_.ParseExpr):
+        _collect_expr_message_types(e.target, out)
+        out.update(e.msg_types)
+    elif isinstance(e, ast_.Comprehension):
+        _collect_expr_message_types(e.xs, out)
+        _collect_expr_message_types(e.body, out)
+
+
 def _collect_pattern_names(p: ast_.PatternExpr, out: set[str], msg_types: set[str]) -> None:
     """Predicate names into `out`, `as T` annotation types into `msg_types`."""
     if isinstance(p, ast_.Node):
@@ -94,6 +128,8 @@ def _collect_pattern_names(p: ast_.PatternExpr, out: set[str], msg_types: set[st
             out.add(p.where_predicate)
         if isinstance(p.head, ast_.PredHead):
             out.add(p.head.name)
+        if p.where_expr is not None:
+            _collect_expr_message_types(p.where_expr, msg_types)
         if p.parse_types is not None:
             msg_types.update(p.parse_types)
         if p.relations is not None:
@@ -130,38 +166,7 @@ def build_stub_registries(files: list[ast_.File]) -> Registries:
     annotated_types: set[str] = set()
 
     def stub_expr(e: ast_.Expr) -> None:
-        if isinstance(e, ast_.FieldAccess):
-            stub_expr(e.target)
-        elif isinstance(e, ast_.Call):
-            if not isinstance(e.callee, ast_.NameRef):
-                stub_expr(e.callee)
-            for arg in e.args:
-                stub_expr(arg)
-        elif isinstance(e, ast_.LookupExpr):
-            for arg in e.args:
-                stub_expr(arg)
-        elif isinstance(e, ast_.UnaryOp):
-            stub_expr(e.operand)
-        elif isinstance(e, ast_.BinaryOp):
-            stub_expr(e.left)
-            stub_expr(e.right)
-        elif isinstance(e, ast_.Ternary):
-            stub_expr(e.cond)
-            stub_expr(e.then)
-            stub_expr(e.orelse)
-        elif isinstance(e, ast_.ListLit):
-            for item in e.elements:
-                stub_expr(item)
-        elif isinstance(e, ast_.RecordLit):
-            for field in e.fields:
-                stub_expr(field.value)
-        elif isinstance(e, ast_.ParseExpr):
-            stub_expr(e.target)
-            for msg_type in e.msg_types:
-                reg.message_types.setdefault(msg_type, _StubMessage)
-        elif isinstance(e, ast_.Comprehension):
-            stub_expr(e.xs)
-            stub_expr(e.body)
+        _collect_expr_message_types(e, annotated_types)
 
     def stub_fields(fields: tuple[ast_.OutField, ...]) -> None:
         for field in fields:

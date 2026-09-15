@@ -801,13 +801,21 @@ def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
         )
         return False
     if isinstance(e, ast_.ParseExpr):
-        ctx.bag.error(
-            "C013_WHERE_EXPR_NOT_SYNC",
-            "`where (expr)` cannot contain a `parse` expression "
-            "(build-expression only)",
-            span,
-        )
-        return False
+        if not e.nullable:
+            ctx.bag.error(
+                "C013_WHERE_EXPR_NOT_SYNC",
+                "`where (expr)` allows only `parse?`",
+                span,
+            )
+            return False
+        for name in e.msg_types:
+            if name not in ctx.registries.message_types:
+                ctx.bag.error(
+                    "R012_UNKNOWN_MESSAGE_TYPE",
+                    f"message type {name!r} is not registered in the host",
+                    e.span,
+                )
+        return _check_where_expr_sync(e.target, span, ctx)
     if isinstance(e, ast_.Call):
         callee = e.callee
         if not isinstance(callee, ast_.NameRef) or callee.name not in BUILTIN_SIGNATURES:

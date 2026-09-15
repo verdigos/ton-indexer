@@ -39,7 +39,11 @@ def emit_expr(e: ast_.Expr) -> dict:
         return {"k": "null"}
     if isinstance(e, ast_.NameRef):
         return {"k": "name", "id": e.name}
+    if isinstance(e, ast_.DotSelf):
+        return {"k": "dotself"}
     if isinstance(e, ast_.FieldRef):
+        if e.field == "msg":
+            return {"k": "attr", "of": {"k": "dotself"}, "name": "msg"}
         return {"k": "dotfield", "name": e.field}
     if isinstance(e, ast_.FieldAccess):
         path = {"k": "attr", "of": emit_expr(e.target), "name": e.field}
