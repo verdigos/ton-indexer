@@ -174,7 +174,6 @@ add_library(mch-classify STATIC
     src/host/DexRecords.cpp
     src/host/BlockViews.cpp
     src/host/HostAdapter.cpp
-    src/host/HostNominator.cpp
     src/host/HostEvaa.cpp
     src/host/HostDedust.cpp
     src/host/HostTonstakers.cpp

@@ -1,5 +1,5 @@
 // Internal registry surface: the registered host predicates and fns, one TU per
-// protocol (HostNominator.cpp, HostEvaa.cpp, ...). Declared here so
+// protocol. Declared here so
 // HostRegistry.cpp's host_predicates()/host_fns() maps can reference them across
 // TU boundaries. NOT part of the public HostRegistry.h surface.
 #pragma once
@@ -47,10 +47,6 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args);
 EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> &args);
 EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args);
 EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args);
-
-// Nominator (HostNominator.cpp).
-EvalResult nominator_withdraw_payout_amount(BuildEnv &env, const std::vector<Value> &args);
-void nominator_withdraw_absorb_payouts(Block *produced, const ShaperMatch &m);
 
 // EVAA (HostEvaa.cpp).
 bool evaa_supply_anchor(const Block *b);

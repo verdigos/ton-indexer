@@ -72,19 +72,23 @@ matcher nominator_pool_deposit {
 
 matcher nominator_pool_withdraw_request {
     produces        nominator_pool_withdraw_request
-    shape           nominator_withdraw_absorb_payouts
     entry           @request
     include_excess  false
     include_bounces false
 
     btype ton_transfer @request where (.comment == "w")
-      -> { maybe op Excess @excess ; maybe op Bounce @bounce }
+      -> {
+          maybe op Excess @excess
+        ; maybe op Bounce @bounce
+        ; maybe many [2] btype ton_transfer @payouts
+      }
 
     require pool_iface = lookup nominator_pool(request.msg.destination)
+    let p = first(payouts)
     failed when request.failed
     out {
         source:        request.msg.source
         pool:          request.msg.destination
-        payout_amount: nominator_withdraw_payout_amount(request)
+        payout_amount: p.data.value if len(payouts) == 2 else (p.data.value if len(payouts) == 1 and p.msg.value > request.msg.value else null)
     }
 }
