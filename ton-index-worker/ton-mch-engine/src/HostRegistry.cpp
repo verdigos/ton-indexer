@@ -71,8 +71,6 @@ const std::map<std::string, HostPredFn> &host_predicates() {
       // inline where expression.
       {"pton_self_transfer", pton_self_transfer},
       {"sale_contract_deploy", sale_contract_deploy},
-      {"nft_trade_cancel_comment", nft_trade_cancel_comment},
-      {"nft_trade_finish_comment", nft_trade_finish_comment},
       {"auction_bid_candidate", auction_bid_candidate},
       {"auction_outbid_leg", auction_outbid_leg},
   };

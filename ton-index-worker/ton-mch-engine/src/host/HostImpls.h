@@ -28,8 +28,6 @@ bool single_contract_deploy(const Block *block);
 
 // GetGems sale/auction family (HostNftSale.cpp).
 bool sale_contract_deploy(const Block *block);
-bool nft_trade_cancel_comment(const Block *block);
-bool nft_trade_finish_comment(const Block *block);
 bool auction_bid_candidate(const Block *block);
 bool auction_outbid_leg(const Block *bid);
 EvalResult getgems_sale_init(BuildEnv &env, const std::vector<Value> &args);

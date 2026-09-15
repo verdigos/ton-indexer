@@ -72,8 +72,6 @@
 #   pred sale_contract_deploy                   btype in {ton_transfer,
 #                                               call_contract} AND
 #                                               len(contract_deployments) > 0
-#   pred nft_trade_cancel_comment               comment in {cancel,finish,stop}
-#   pred nft_trade_finish_comment               comment in {finish,stop}
 #   pred auction_bid_candidate                  cheap pre-lookup gate (no
 #                                               deployments, not a cancel comment)
 #   pred auction_outbid_leg                     requires exactly one qualifying
@@ -114,8 +112,6 @@ opcode NftAuctionStop      = 0xB95616B6
 opcode TeleitemOutbid      = 0x557CEA20
 
 predicate sale_contract_deploy
-predicate nft_trade_cancel_comment
-predicate nft_trade_finish_comment
 predicate auction_bid_candidate
 predicate auction_outbid_leg
 
@@ -313,12 +309,13 @@ matcher nft_finish_auction {
     entry    @cancel
 
     xor {
-        btype ton_transfer @cancel where nft_trade_finish_comment
+        btype ton_transfer @cancel
         op NftAuctionStop @cancel
         op NftAuctionFinish @cancel
     }
       -> peek btype nft_purchase @ret
 
+    reject when cancel.btype == "ton_transfer" and not (cancel.data.comment in ["finish", "stop"])
     require auction = lookup nft_auction(cancel.msg.destination)
     reject when account(ret.data.nft_address) != account(auction.nft_addr)
     out {
@@ -335,13 +332,14 @@ matcher nft_cancel_auction {
     entry    @cancel
 
     xor {
-        btype ton_transfer @cancel where nft_trade_cancel_comment
+        btype ton_transfer @cancel
         op NftAuctionCancel @cancel
         op NftAuctionFinish @cancel
         op NftAuctionStop @cancel
     }
       -> peek btype nft_transfer @ret
 
+    reject when cancel.btype == "ton_transfer" and not (cancel.data.comment in ["cancel", "finish", "stop"])
     require auction = lookup nft_auction(cancel.msg.destination)
     reject when account(ret.data.nft.address) != account(auction.nft_addr)
 

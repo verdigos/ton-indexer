@@ -322,18 +322,6 @@ bool sale_contract_deploy(const Block *b) {
   return has_deployment(b);
 }
 
-bool nft_trade_cancel_comment(const Block *b) {
-  return b != nullptr && b->btype == mch::btype::kTonTransfer && is_cancel_comment(b);
-}
-
-bool nft_trade_finish_comment(const Block *b) {
-  if (b == nullptr || b->btype != mch::btype::kTonTransfer) {
-    return false;
-  }
-  std::string c = block_comment(b);
-  return c == "finish" || c == "stop";
-}
-
 // Cheap guards before the auction-bid path touches the interface repository.
 bool auction_bid_candidate(const Block *b) {
   return b != nullptr && b->btype == mch::btype::kTonTransfer && !has_deployment(b) &&
