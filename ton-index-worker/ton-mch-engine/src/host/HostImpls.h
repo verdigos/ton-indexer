@@ -36,13 +36,8 @@ EvalResult getgems_sale_init(BuildEnv &env, const std::vector<Value> &args);
 EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args);
 EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args);
 
-// tgBTC (HostTgbtc.cpp): mint host fn, the three shared event-log parse fns (one
-// per event opcode, each shared by a full matcher and its `*_log_only` fallback
-// twin), and the deploy-absorb shaper.
+// tgBTC (HostTgbtc.cpp): mint host fn and deploy-absorb shaper.
 EvalResult tgbtc_mint_data(BuildEnv &env, const std::vector<Value> &args);
-EvalResult tgbtc_mint_log(BuildEnv &env, const std::vector<Value> &args);
-EvalResult tgbtc_new_key_log(BuildEnv &env, const std::vector<Value> &args);
-EvalResult tgbtc_dkg_completed_log(BuildEnv &env, const std::vector<Value> &args);
 void tgbtc_deploy_absorb(Block *produced, const ShaperMatch &m);
 
 // Stonfi (HostStonfi.cpp): v1 sender-payment pred + v1 swap fn;

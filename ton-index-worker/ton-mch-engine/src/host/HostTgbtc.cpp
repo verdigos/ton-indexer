@@ -1,7 +1,6 @@
 // tgbtc_mint_data derives head, success log, and jetton_mint from the consumed
-// set. Event-log host fns return Null for unreadable bodies. TgBTCBurnEvent
-// tolerates truncated addresses as addr_none (an ABI address leaf would fail
-// the whole parse). Other events need hex renderings the language cannot express.
+// set. Event parsers reject unreadable bodies; TgBTCBurnEvent tolerates
+// truncated addresses as addr_none.
 #include "host/HostImpls.h"
 
 #include "host/BlockViews.h"
@@ -43,12 +42,6 @@ std::string txid_le_hex(const td::RefInt256 &v) {
   return out;
 }
 
-// Minimal-length lowercase hex, no leading zeros, "0" for zero. Used for
-// both tgBTC pubkeys.
-Value hex_min(const td::RefInt256 &v) {
-  return Value::make_str(td::hex_string(v, /*upcase=*/false));
-}
-
 // Account passes through; addr_none stays none; an external-address Str
 // rejects (ok is cleared).
 Value account_id_of(const Value &v, bool &ok) {
@@ -67,38 +60,8 @@ Value account_id_or_none(const Value &v) {
   return v.t == VType::Account ? v : Value::make_account_none();
 }
 
-// Log Block whose body is opened and positioned past the 32 opcode bits
-// (skipped unchecked). Absent/unreadable -> no context.
-struct LogCursor {
-  BodyCtx ctx;
-  bool ok{false};
-};
-
-LogCursor open_log(const std::vector<Value> &args) {
-  LogCursor lc;
-  const Block *b = as_block(args[0]);
-  if (b == nullptr) {
-    return lc;
-  }
-  auto r_body = block_body(b);
-  if (r_body.is_error()) {
-    return lc;
-  }
-  auto r_ctx = open_body(r_body.ok());
-  if (r_ctx.is_error()) {
-    return lc;
-  }
-  lc.ctx = r_ctx.move_as_ok();
-  if (!lc.ctx.cs.have(32)) {
-    return lc;
-  }
-  lc.ctx.cs.advance(32);
-  lc.ok = true;
-  return lc;
-}
-
 // TgBTCMintEvent tail after the 32-bit opcode: coins, recipient, uint256 txid.
-// Any step failure leaves ok false; callers return Null.
+// Any step failure leaves ok false.
 struct MintLog {
   td::RefInt256 amount;
   Value recipient;
@@ -209,20 +172,21 @@ EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
 
 
 // TgBTCMintEvent 0x77A80EF3: coins amount, MsgAddress recipient, uint256 txid.
-EvalResult tgbtc_mint_log(BuildEnv &, const std::vector<Value> &args) {
-  LogCursor lc = open_log(args);
-  if (!lc.ok) {
-    return rt_ok(Value::null());
+td::Result<Value> parse_tgbtc_mint_event(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("tgbtc mint: opcode underflow");
   }
-  auto parsed = parse_mint_log(lc.ctx.cs);
+  auto parsed = parse_mint_log(cs);
   if (!parsed.ok) {
-    return rt_ok(Value::null());
+    return td::Status::Error("tgbtc mint: invalid log");
   }
   Value::Fields ns;
   ns.emplace_back("amount", Value::make_int(std::move(parsed.amount)));
-  ns.emplace_back("recipient", std::move(parsed.recipient));
-  ns.emplace_back("bitcoin_txid", Value::make_str(txid_le_hex(parsed.txid)));
-  return rt_ok(Value::make_obj(std::move(ns)));
+  ns.emplace_back("recipient_address", std::move(parsed.recipient));
+  ns.emplace_back("bitcoin_txid", Value::make_int(std::move(parsed.txid)));
+  return Value::make_dict(std::move(ns));
 }
 
 // Two addresses parsed tolerantly. On the first address-load error, the
@@ -253,55 +217,49 @@ td::Result<Value> parse_tgbtc_burn_event(const td::Ref<vm::Cell> &body) {
 }
 
 // TgBTCNewKeyEvent 0x27756729: coins amount, uint256 pubkey, MsgAddress pegout.
-EvalResult tgbtc_new_key_log(BuildEnv &, const std::vector<Value> &args) {
-  LogCursor lc = open_log(args);
-  if (!lc.ok) {
-    return rt_ok(Value::null());
+td::Result<Value> parse_tgbtc_new_key_event(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("tgbtc new key: opcode underflow");
   }
-  auto &cs = lc.ctx.cs;
-  auto r_amt = load_coins_py(cs);
-  if (r_amt.is_error()) {
-    return rt_ok(Value::null());
-  }
+  TRY_RESULT(amount, load_coins_py(cs));
   auto pubkey = cs.have(256) ? cs.fetch_int256(256, false) : td::RefInt256{};
   if (pubkey.is_null()) {
-    return rt_ok(Value::null());
+    return td::Status::Error("tgbtc new key: pubkey underflow");
   }
-  auto r_pegout = load_address_py(cs);
-  if (r_pegout.is_error()) {
-    return rt_ok(Value::null());
-  }
+  TRY_RESULT(address, load_address_py(cs));
   bool pegout_ok = true;
-  Value pegout = account_id_of(r_pegout.ok(), pegout_ok);
+  Value pegout = account_id_of(address, pegout_ok);
   if (!pegout_ok) {
-    return rt_ok(Value::null());
+    return td::Status::Error("tgbtc new key: invalid pegout address");
   }
   Value::Fields ns;
-  ns.emplace_back("amount", Value::make_int(r_amt.move_as_ok()));
-  ns.emplace_back("pubkey", hex_min(pubkey));
-  ns.emplace_back("pegout", std::move(pegout));
-  return rt_ok(Value::make_obj(std::move(ns)));
+  ns.emplace_back("amount", Value::make_int(std::move(amount)));
+  ns.emplace_back("new_internal_pubkey", Value::make_int(std::move(pubkey)));
+  ns.emplace_back("pegout_address", std::move(pegout));
+  return Value::make_dict(std::move(ns));
 }
 
 // TgBTCDkgCompletedEvent 0x453443A6: u64 timestamp, uint256 pubkey.
-EvalResult tgbtc_dkg_completed_log(BuildEnv &, const std::vector<Value> &args) {
-  LogCursor lc = open_log(args);
-  if (!lc.ok) {
-    return rt_ok(Value::null());
+td::Result<Value> parse_tgbtc_dkg_completed_event(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("tgbtc dkg: opcode underflow");
   }
-  auto &cs = lc.ctx.cs;
   if (!cs.have(64)) {
-    return rt_ok(Value::null());
+    return td::Status::Error("tgbtc dkg: timestamp underflow");
   }
   td::RefInt256 timestamp = refint_u64(cs.fetch_ulong(64));
   auto pubkey = cs.have(256) ? cs.fetch_int256(256, false) : td::RefInt256{};
   if (pubkey.is_null()) {
-    return rt_ok(Value::null());
+    return td::Status::Error("tgbtc dkg: pubkey underflow");
   }
   Value::Fields ns;
   ns.emplace_back("timestamp", Value::make_int(std::move(timestamp)));
-  ns.emplace_back("pubkey", hex_min(pubkey));
-  return rt_ok(Value::make_obj(std::move(ns)));
+  ns.emplace_back("internal_pubkey", Value::make_int(std::move(pubkey)));
+  return Value::make_dict(std::move(ns));
 }
 
 // Merge every ContractDeploy in the consumed set's children into the

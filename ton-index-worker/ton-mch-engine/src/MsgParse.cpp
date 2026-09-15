@@ -50,6 +50,9 @@ const std::vector<std::pair<std::string, MsgParserFn>> &hand_message_parsers() {
   static const std::vector<std::pair<std::string, MsgParserFn>> rows = {
       {"ChangeDnsRecordMessage", parse_change_dns},
       {"TgBTCBurnEvent", parse_tgbtc_burn_event},
+      {"TgBTCNewKeyEvent", parse_tgbtc_new_key_event},
+      {"TgBTCDkgCompletedEvent", parse_tgbtc_dkg_completed_event},
+      {"TgBTCMintEvent", parse_tgbtc_mint_event},
       {"VestingSendMessage", parse_vesting_send_message},
   };
   return rows;

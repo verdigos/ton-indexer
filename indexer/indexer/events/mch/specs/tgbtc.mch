@@ -203,20 +203,19 @@ matcher tgbtc_new_key {
 
     op TgBTCNewKeyRequest @k {
         -> {
-            op TgBTCNewKeyLog @log
+            op TgBTCNewKeyLog @log as TgBTCNewKeyEvent
             ; maybe op TgBTCPayout
                 -> { maybe op TgBTCPayoutNotify ; maybe btype ton_transfer }
         }
-        <- any @p -> { op TgBTCDkgCompletedLog @dkg }
+        <- any @p -> { op TgBTCDkgCompletedLog @dkg as TgBTCDkgCompletedEvent }
     }
 
-    let n = tgbtc_new_key_log(log)
-    let g = tgbtc_dkg_completed_log(dkg)
-    reject when n == null or g == null
+    require n = log.body
+    require g = dkg.body
     out {
         coordinator_contract: log.msg.source
-        pubkey:               n.pubkey
-        pegout_address:       n.pegout
+        pubkey:               uint_hex(n.new_internal_pubkey)
+        pegout_address:       n.pegout_address
         amount:               n.amount
         teleport_contract:    dkg.msg.source
         timestamp:            g.timestamp
@@ -246,15 +245,15 @@ matcher tgbtc_mint_log_only {
     produces TgBTCMintBlock
     entry    @log
 
-    op TgBTCMintSuccessLog @log
+    op TgBTCMintSuccessLog @log as TgBTCMintEvent
 
-    require m = tgbtc_mint_log(log)
+    require m = log.body
     out {
         sender:            log.msg.source
-        recipient:         m.recipient
+        recipient:         m.recipient_address
         amount:            m.amount
         asset:             null
-        bitcoin_txid:      m.bitcoin_txid
+        bitcoin_txid:      txid_le_hex(m.bitcoin_txid)
         success:           true
         recipient_wallet:  null
         teleport_contract: log.msg.source
@@ -287,13 +286,13 @@ matcher tgbtc_new_key_log_only {
     produces tgbtc_new_key
     entry    @log
 
-    op TgBTCNewKeyLog @log
+    op TgBTCNewKeyLog @log as TgBTCNewKeyEvent
 
-    require n = tgbtc_new_key_log(log)
+    require n = log.body
     out {
         coordinator_contract: log.msg.source
-        pubkey:               n.pubkey
-        pegout_address:       n.pegout
+        pubkey:               uint_hex(n.new_internal_pubkey)
+        pegout_address:       n.pegout_address
         amount:               n.amount
         teleport_contract:    null
         timestamp:            null
@@ -311,12 +310,12 @@ matcher tgbtc_dkg_log_only {
     produces tgbtc_dkg_log
     entry    @log
 
-    op TgBTCDkgCompletedLog @log
+    op TgBTCDkgCompletedLog @log as TgBTCDkgCompletedEvent
 
-    require g = tgbtc_dkg_completed_log(log)
+    require g = log.body
     out {
         coordinator_contract: log.msg.source
         timestamp:            g.timestamp
-        internal_pubkey:      g.pubkey
+        internal_pubkey:      uint_hex(g.internal_pubkey)
     }
 }

@@ -11,6 +11,6 @@ def test_compiler_and_evaluator_builtin_signatures_agree():
     assert {name: BUILTIN_SIGNATURES[name] for name in ("get", "tx_aborted", "exit_code")} == {
         "get": 2, "tx_aborted": 1, "exit_code": 1,
     }
-    assert {name: BUILTIN_SIGNATURES[name] for name in ("uint_hex", "ext_addr_str")} == {
-        "uint_hex": 1, "ext_addr_str": 1,
+    assert {name: BUILTIN_SIGNATURES[name] for name in ("uint_hex", "ext_addr_str", "txid_le_hex")} == {
+        "uint_hex": 1, "ext_addr_str": 1, "txid_le_hex": 1,
     }

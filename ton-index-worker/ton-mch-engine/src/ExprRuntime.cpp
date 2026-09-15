@@ -711,6 +711,22 @@ EvalResult rt_builtin_uint_hex(const Value &x) {
   return rt_ok(Value::make_str(td::hex_string(x.num, false)));
 }
 
+EvalResult rt_builtin_txid_le_hex(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  unsigned char le[32] = {0};
+  if (x.t != VType::Int || x.num.is_null() || x.num->sgn() < 0 ||
+      !x.num->export_bytes_lsb(le, 32, /*sgnd=*/false)) {
+    return rt_fault("txid_le_hex expects an unsigned 256-bit integer");
+  }
+  static const char *hexd = "0123456789abcdef";
+  std::string out(64, '0');
+  for (int i = 0; i < 32; i++) {
+    out[2 * i] = hexd[le[i] >> 4];
+    out[2 * i + 1] = hexd[le[i] & 0xF];
+  }
+  return rt_ok(Value::make_str(std::move(out)));
+}
+
 EvalResult rt_builtin_ext_addr_str(const Value &a) {
   if (rt_is_null(a)) return rt_ok(Value::null());
   if (a.t == VType::Account) {
@@ -793,6 +809,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
       {"concat", 2}, {"contains", 2},
       {"get", 2}, {"tx_aborted", 1}, {"exit_code", 1},
       {"uint_hex", 1}, {"ext_addr_str", 1},
+      {"txid_le_hex", 1},
   };
   auto ar = arity.find(name);
   if (ar == arity.end()) {
@@ -823,6 +840,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   if (name == "tx_aborted") return rt_builtin_tx_aborted(args[0]);
   if (name == "exit_code") return rt_builtin_exit_code(args[0]);
   if (name == "uint_hex") return rt_builtin_uint_hex(args[0]);
+  if (name == "txid_le_hex") return rt_builtin_txid_le_hex(args[0]);
   if (name == "ext_addr_str") return rt_builtin_ext_addr_str(args[0]);
   return rt_fault("unreachable builtin " + name);
 }

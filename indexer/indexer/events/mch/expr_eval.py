@@ -274,6 +274,12 @@ def _builtin_uint_hex(x: Any) -> str:
     return hex(x)[2:]
 
 
+def _builtin_txid_le_hex(x: Any) -> str:
+    if isinstance(x, bool) or not isinstance(x, int) or x < 0:
+        raise EvalError("txid_le_hex expects an unsigned 256-bit integer")
+    return x.to_bytes(32, "little").hex()
+
+
 def _builtin_ext_addr_str(a: Any) -> str | None:
     if isinstance(a, AccountId):
         return a.as_str()
