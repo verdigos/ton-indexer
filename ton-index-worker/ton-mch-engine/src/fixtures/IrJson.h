@@ -45,7 +45,8 @@ inline bool jbool(const td::JsonValue &e, td::Slice name, bool dflt = false) {
 inline const std::unordered_set<std::string> kBuiltins = {
     "account", "amount", "asset", "ton_asset", "addr_none", "b64",
     "asset_of", "tail_unwrap", "bytes_of", "first", "last", "len", "sum",
-    "zip", "map", "concat", "contains", "get", "tx_aborted", "exit_code"};
+    "zip", "map", "concat", "contains", "get", "tx_aborted", "exit_code",
+    "uint_hex", "ext_addr_str"};
 
 inline bool is_builtin_name(const std::string &name) {
   return kBuiltins.count(name) != 0;

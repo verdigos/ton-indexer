@@ -21,4 +21,6 @@ BUILTIN_SIGNATURES: dict[str, int] = {
     "get": 2,
     "tx_aborted": 1,
     "exit_code": 1,
+    "uint_hex": 1,
+    "ext_addr_str": 1,
 }

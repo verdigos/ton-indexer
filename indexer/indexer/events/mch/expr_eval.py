@@ -26,7 +26,7 @@ import inspect
 from types import SimpleNamespace
 from typing import Any
 
-from pytoniq_core import Cell
+from pytoniq_core import Address, Cell, ExternalAddress
 
 from indexer.events.blocks.core import Block
 from indexer.events.blocks.utils import AccountId, Amount, Asset
@@ -266,6 +266,22 @@ def _builtin_tx_aborted(x: Any) -> bool | None:
 def _builtin_exit_code(x: Any) -> int | None:
     tx = getattr(_message_envelope(x), "transaction", None)
     return getattr(tx, "compute_exit_code", None)
+
+
+def _builtin_uint_hex(x: Any) -> str:
+    if isinstance(x, bool) or not isinstance(x, int) or x < 0:
+        raise EvalError("uint_hex expects a nonnegative integer")
+    return hex(x)[2:]
+
+
+def _builtin_ext_addr_str(a: Any) -> str | None:
+    if isinstance(a, AccountId):
+        return a.as_str()
+    if isinstance(a, Address):
+        return a.to_str(False).upper()
+    if isinstance(a, ExternalAddress):
+        return f"{a.len};{hex(a.external_address)[2:]}"
+    raise EvalError(f"ext_addr_str expects an address, got {type(a).__name__}")
 
 
 _BUILTIN_CALLABLES: dict[str, Any] = {

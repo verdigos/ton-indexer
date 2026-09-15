@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from indexer.events.mch import ast_
 
-IR_VERSION = "1.2"
+IR_VERSION = "1.3"
 
 
 def _is_envelope_address(e: ast_.Expr) -> bool:

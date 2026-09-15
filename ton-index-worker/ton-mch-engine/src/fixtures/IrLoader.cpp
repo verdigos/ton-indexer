@@ -430,8 +430,8 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
   if (root.type() != JType::Object) {
     return td::Status::Error("IR artifact root must be an object");
   }
-  if (jstr(root, "mch_ir_version") != "1.2") {
-    return td::Status::Error("unsupported mch_ir_version (expected 1.2)");
+  if (jstr(root, "mch_ir_version") != "1.3") {
+    return td::Status::Error("unsupported mch_ir_version (expected 1.3)");
   }
   const Json *nodes = jfield(root, "nodes");
   const Json *matchers = jfield(root, "matchers");

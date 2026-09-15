@@ -91,5 +91,7 @@ EvalResult rt_builtin_contains(const Value &a, const Value &b);
 EvalResult rt_builtin_get(const Value &record, const Value &key);
 EvalResult rt_builtin_tx_aborted(const Value &x);
 EvalResult rt_builtin_exit_code(const Value &x);
+EvalResult rt_builtin_uint_hex(const Value &x);
+EvalResult rt_builtin_ext_addr_str(const Value &a);
 
 }  // namespace mch

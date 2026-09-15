@@ -14,6 +14,52 @@ namespace mch {
 
 namespace {
 
+// Render MsgParse's "extern:<len>:<hex>" address as "len;hex".
+Value extern_address_string(const std::string &s) {
+  static const std::string kPrefix = "extern:";
+  if (s.compare(0, kPrefix.size(), kPrefix) != 0) {
+    return Value::null();
+  }
+  auto sep = s.find(':', kPrefix.size());
+  if (sep == std::string::npos) {
+    return Value::null();
+  }
+  std::string out = s.substr(kPrefix.size());
+  out[sep - kPrefix.size()] = ';';
+  return Value::make_str(std::move(out));
+}
+
+// Render the ABI addr_extern cell directly, including widths above RefInt256.
+Value extern_address_object(const Value &v) {
+  const Value *bits = v.field("bits");
+  const Value *value = v.field("value");
+  if (v.t != VType::Obj || bits == nullptr || bits->t != VType::Int || bits->num.is_null() ||
+      bits->num->sgn() < 0 || td::cmp(bits->num, td::make_refint(511)) > 0 || value == nullptr ||
+      value->t != VType::Cell || value->cell.is_null()) {
+    return Value::null();
+  }
+
+  int len = static_cast<int>(bits->num->to_long());
+  vm::CellSlice cs = vm::load_cell_slice(value->cell);
+  if (cs.size() != static_cast<unsigned>(len) || cs.size_refs() != 0) {
+    return Value::null();
+  }
+
+  static const char kHexDigits[] = "0123456789abcdef";
+  std::string hex;
+  hex.reserve(static_cast<std::size_t>(len) / 4 + 1);
+  int head = len % 4;
+  if (head != 0) {
+    hex.push_back(kHexDigits[cs.fetch_ulong(head)]);
+  }
+  for (int rem = len - head; rem > 0; rem -= 4) {
+    hex.push_back(kHexDigits[cs.fetch_ulong(4)]);
+  }
+  std::size_t first = hex.find_first_not_of('0');
+  hex = first == std::string::npos ? std::string("0") : hex.substr(first);
+  return Value::make_str(std::to_string(len) + ";" + hex);
+}
+
 // Present Amount with a null value inside. Float-backed Amounts cannot be
 // constructed, so a null `num` is unambiguous.
 bool amount_none(const Value &v) {
@@ -657,6 +703,26 @@ EvalResult rt_builtin_exit_code(const Value &x) {
   return rt_ok(ec != nullptr ? *ec : Value::null());
 }
 
+EvalResult rt_builtin_uint_hex(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  if (x.t != VType::Int || x.num.is_null() || x.num->sgn() < 0) {
+    return rt_fault("uint_hex expects a nonnegative integer");
+  }
+  return rt_ok(Value::make_str(td::hex_string(x.num, false)));
+}
+
+EvalResult rt_builtin_ext_addr_str(const Value &a) {
+  if (rt_is_null(a)) return rt_ok(Value::null());
+  if (a.t == VType::Account) {
+    return rt_ok(a.addr_none ? Value::null() : Value::make_str(a.str));
+  }
+  Value rendered;
+  if (a.t == VType::Str) rendered = extern_address_string(a.str);
+  if (a.t == VType::Obj) rendered = extern_address_object(a);
+  if (rt_is_null(rendered)) return rt_fault("ext_addr_str expects an address");
+  return rt_ok(std::move(rendered));
+}
+
 EvalResult rt_builtin_map(const Value &a, const Value &b) {
   if (rt_is_null(a) || rt_is_null(b)) return rt_ok(Value::null());
   const std::vector<Value> *xs = nullptr;
@@ -726,6 +792,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
       {"len", 1},     {"sum", 1},     {"zip", 2},   {"map", 2},
       {"concat", 2}, {"contains", 2},
       {"get", 2}, {"tx_aborted", 1}, {"exit_code", 1},
+      {"uint_hex", 1}, {"ext_addr_str", 1},
   };
   auto ar = arity.find(name);
   if (ar == arity.end()) {
@@ -755,6 +822,8 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   if (name == "get") return rt_builtin_get(args[0], args[1]);
   if (name == "tx_aborted") return rt_builtin_tx_aborted(args[0]);
   if (name == "exit_code") return rt_builtin_exit_code(args[0]);
+  if (name == "uint_hex") return rt_builtin_uint_hex(args[0]);
+  if (name == "ext_addr_str") return rt_builtin_ext_addr_str(args[0]);
   return rt_fault("unreachable builtin " + name);
 }
 
