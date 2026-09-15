@@ -27,10 +27,9 @@
 # @execute's body (the OApp callback carries the LayerZero packet) and maps every
 # LayerZeroReceiveData field straight off the two envelopes + the parsed packet.
 #
-# The address check uses `contains` to find the destination's 64-digit lowercase
-# `addr_hash_hex` in the packet's minimal `0x` hex string, regardless of workchain.
-# Leading-zero hashes do not match the shorter packet string. `?? false` rejects
-# when either side is null.
+# The address check uses `contains` to compare `dst_oapp` with `addr_hash_hex`,
+# which gives the destination hash in the packet's `0x` minimal-hex form,
+# regardless of workchain. `?? false` rejects when either side is null.
 
 # =============================================================================
 # The remaining family matchers are send, send_tokens, receive, commit_packet,

@@ -743,11 +743,9 @@ EvalResult rt_builtin_addr_hash_hex(const Value &a) {
   if (rt_is_null(a)) return rt_ok(Value::null());
   if (a.t != VType::Account) return rt_fault("addr_hash_hex expects an account");
   if (a.addr_none) return rt_ok(Value::null());
-  std::string hash = a.str.substr(a.str.find(':') + 1);
-  for (char &c : hash) {
-    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-  }
-  return rt_ok(Value::make_str(std::move(hash)));
+  std::string hash = to_lower(a.str.substr(a.str.find(':') + 1));
+  auto first = hash.find_first_not_of('0');
+  return rt_ok(Value::make_str("0x" + (first == std::string::npos ? "0" : hash.substr(first))));
 }
 
 EvalResult rt_builtin_map(const Value &a, const Value &b) {

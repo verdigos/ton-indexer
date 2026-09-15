@@ -293,9 +293,9 @@ def _builtin_ext_addr_str(a: Any) -> str | None:
 def _builtin_addr_hash_hex(a: Any) -> str | None:
     if isinstance(a, AccountId):
         address = a.as_str()
-        return None if address is None else address.split(":", 1)[1].lower()
+        return None if address is None else hex(int(address.split(":", 1)[1], 16))
     if isinstance(a, Address):
-        return a.hash_part.hex()
+        return hex(int.from_bytes(a.hash_part, "big"))
     raise EvalError(f"addr_hash_hex expects an account, got {type(a).__name__}")
 
 
