@@ -8,9 +8,9 @@
 # here the whole shape is expressed declaratively:
 #
 #   the funding payment (a ton_transfer to the marketplace, or the external
-#   message that drove the NFT item directly) is the anchor's PARENT; the two
-#   AuctionFillUp payouts (royalty then payout, by created_lt) are that parent's
-#   children. In the `A <- B -> {C; D}` shape, the parent edge is
+#   message that drove the NFT item directly) is the anchor's PARENT; all
+#   AuctionFillUp payouts are captured as a list of that parent's children.
+#   In the `A <- B -> {many C}` shape, the parent edge is
 #   anchor-headed, and children after a parent edge attach to the parent matcher
 #   rather than to the anchor.
 #
@@ -19,7 +19,7 @@
 # siblings), so no data predicate is needed to gate the parent consumption.
 # The builder reuses the legacy field logic via build_telegram_nft_purchase_core;
 # is_purchase / mint / len(payouts) branching all live there, driven by the
-# captured @assigned / @payment / @payout_* blocks.
+# captured @assigned / @payment / @payouts blocks.
 #
 # Two matchers, split on the legacy CONSUMED SET
 # ----------------------------------------------
@@ -43,7 +43,7 @@
 #
 # Residual gap (documented, not in the corpus): a teleitem-bid assignment with a
 # ton_transfer/external parent and ZERO AuctionFillUp payouts. Legacy absorbs the
-# parent; here the purchase matcher misses (payout_1 is required, which is the
+# parent; here the purchase matcher misses (at least one payout is required, the
 # gate that keeps it off ordinary transfers) and the assigned matcher produces
 # the same row without absorbing the parent. Row fields are identical; only the
 # leftover parent block differs.
@@ -52,8 +52,8 @@
 #   @assigned   the NftOwnershipAssigned anchor
 #   @payment    block.previous_block (the funding ton_transfer, or the external
 #               call that drove the item directly — Fragment signer shape)
-#   @payout_1   payouts[0] after created_lt sort (royalty / sending fee)
-#   @payout_2   payouts[1] after created_lt sort (seller payout), absent for 1-payout traces
+#   @payouts    all payouts, sorted by created_lt in the host: one is the seller
+#               payout; with two or more, [0] is royalty and [1] is seller payout.
 
 opcode NftOwnershipAssigned = 0x05138D91
 opcode AuctionFillUp        = 0x370FEC51
@@ -69,19 +69,14 @@ matcher telegram_nft_purchase {
     op NftOwnershipAssigned @assigned
       <- xor {
              btype ton_transfer @payment
-               -> { op AuctionFillUp @payout_1 ; maybe op AuctionFillUp @payout_2 }
+               -> { many op AuctionFillUp @payouts }
              btype call_contract @payment where (.source == null)
-               -> { op AuctionFillUp @payout_1 ; maybe op AuctionFillUp @payout_2 }
+               -> { many op AuctionFillUp @payouts }
          }
 
-    # HYBRID declarative build (C++-runnable). The core (nft-data lookup, teleitem
-    # payload dispatch, payout ordering) is the one host fn; fields map from its
-    # namespace. Pattern requires a ton_transfer / external-call parent + >=1
-    # AuctionFillUp payout => always the fragment purchase shape (is_purchase true,
-    # real_prev_owner present-null, one/two payouts) — so all but the royalty pair
-    # are plain; the royalty pair (2-payout only) is `?:` to match the legacy
-    # conditional keys.
-    require d = telegram_nft_purchase_data(assigned, payment, payout_1, payout_2)
+    # The host builds fields from the anchor, payment and full payout list.
+    # Royalty fields are present only with two or more payouts.
+    require d = telegram_nft_purchase_data(assigned, payment, payouts)
     out {
         is_purchase:          d.is_purchase
         prev_owner:           d.prev_owner
@@ -110,7 +105,7 @@ matcher telegram_nft_assigned {
     op NftOwnershipAssigned @assigned
       <- maybe peek any @payment
 
-    require d = telegram_nft_purchase_data(assigned, payment, null, null)
+    require d = telegram_nft_purchase_data(assigned, payment, [])
 
     # A `produces switch`, not `?:` keys, because the legacy key set here is
     # BRANCH-shaped, not null-shaped. `payload is TeleitemBidInfo` sets all three

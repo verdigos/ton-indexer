@@ -398,13 +398,11 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
   return rt_ok(Value::make_obj(std::move(ns)));
 }
 
-// Fixed 16-key record, or Null for an unknown NFT item. Royalty pair present
-// only for 2-payout traces.
+// Builds a fixed 16-key record from assigned, payment and the payout list,
+// or Null for an unknown NFT item. Royalty fields need at least two payouts.
 EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &args) {
   const Block *assigned = as_block(args[0]);
   const Block *payment = as_block(args[1]);
-  const Block *payout_1 = as_block(args[2]);
-  const Block *payout_2 = as_block(args[3]);
   if (assigned == nullptr) {
     return rt_fault("telegram: null assigned");
   }
@@ -471,8 +469,11 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
     if (payment != nullptr &&
         (payment->btype == mch::btype::kTonTransfer || payment_is_source_none)) {
       std::vector<const Block *> payouts;
-      if (payout_1 != nullptr) payouts.push_back(payout_1);
-      if (payout_2 != nullptr) payouts.push_back(payout_2);
+      if (args[2].t == VType::List) {
+        for (const auto &item : *args[2].items) {
+          if (const Block *payout = as_block(item)) payouts.push_back(payout);
+        }
+      }
       std::stable_sort(payouts.begin(), payouts.end(),
                        [](const Block *a, const Block *b) {
                          return *first_node(a)->msg->created_lt < *first_node(b)->msg->created_lt;

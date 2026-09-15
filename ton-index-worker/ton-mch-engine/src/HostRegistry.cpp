@@ -15,7 +15,7 @@ const std::map<std::string, HostFnEntry> &host_fns() {
       {"tonstakers_pool_addr", {tonstakers_pool_addr, 1}},
       {"vesting_message_was_sent", {vesting_message_was_sent, 2}},
       {"nft_transfer_data", {nft_transfer_data, 3}},
-      {"telegram_nft_purchase_data", {telegram_nft_purchase_data, 4}},
+      {"telegram_nft_purchase_data", {telegram_nft_purchase_data, 3}},
       {"tgbtc_mint_data", {tgbtc_mint_data, 1}},
       {"stonfi_v1_swap_data", {stonfi_v1_swap_data, 2}},
       {"dedust_deposit_final_data", {dedust_deposit_final_data, 1}},
