@@ -185,6 +185,14 @@ class PatternExpr:
 
 
 @dataclass(frozen=True)
+class Relations:
+    children_all: PatternExpr | None
+    children_first: tuple[PatternExpr, ...] | None
+    parent: PatternExpr | None
+    span: Span
+
+
+@dataclass(frozen=True)
 class Node(PatternExpr):
     head: NodeHead
     capture: str | None
@@ -193,6 +201,7 @@ class Node(PatternExpr):
     # Inline `where (expr)` form. Mutually exclusive with the named
     # `where_predicate` form; the compiler ignores it in v0.
     where_expr: Expr | None = None
+    relations: Relations | None = None
 
 
 @dataclass(frozen=True)

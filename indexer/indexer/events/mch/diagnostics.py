@@ -92,6 +92,9 @@ P015_STRICT_PARSE_STATEMENT = "P015_STRICT_PARSE_STATEMENT"
 P016_EMPTY_OPCODE_SET = "P016_EMPTY_OPCODE_SET"
 P017_WHERE_ON_OPCODE_SET = "P017_WHERE_ON_OPCODE_SET"
 
+P018_DUPLICATE_RELATION_CLAUSE = "P018_DUPLICATE_RELATION_CLAUSE"
+P019_ARROW_AFTER_RELATION_BLOCK = "P019_ARROW_AFTER_RELATION_BLOCK"
+
 C011_UNKNOWN_SHAPER = "C011_UNKNOWN_SHAPER"
 """The `shape` directive names a shaper that is not present in the host's
 shaper registry."""
@@ -108,6 +111,8 @@ the subtree would still consume blocks or absorb auxiliary siblings."""
 
 C015_WHERE_EXPR_CAPTURE_NOT_ENTRY = "C015_WHERE_EXPR_CAPTURE_NOT_ENTRY"
 """A capture name used in `where (expr)` is not the matcher's entry capture."""
+
+C016_ENTRY_RELATIONS_IN_CHAIN = "C016_ENTRY_RELATIONS_IN_CHAIN"
 
 
 @dataclass(frozen=True)

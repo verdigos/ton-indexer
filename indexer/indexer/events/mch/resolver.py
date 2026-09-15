@@ -65,7 +65,7 @@ def _alternative_is_exclusive(
     seen_btypes: set[str] = set()
     for b in alt.branches:
         if not isinstance(b, ast_.Node) or b.where_predicate is not None \
-                or b.where_expr is not None:
+                or b.where_expr is not None or b.relations is not None:
             return False
         head = b.head
         if isinstance(head, ast_.OpHead):
@@ -162,7 +162,7 @@ def _validate_group_anchor(
     by_idx = {o.branch_path[0][1]: o for o in occs}
     for idx, branch in enumerate(alt.branches):
         occ = by_idx[idx]
-        if branch is not occ.node:
+        if branch is not occ.node or (occ.node.relations is not None and not alt.opcode_set):
             return None, (
                 "requires every branch of the exclusive alternative to be a "
                 "bare node carrying the capture (no chains or nesting)"
@@ -290,6 +290,11 @@ def _resolve_opcodes(file: ast_.File, registries: Registries, bag: DiagnosticBag
         elif isinstance(p, ast_.ChildrenBlock):
             for item in p.items:
                 visit(item)
+        elif isinstance(p, ast_.Node) and p.relations is not None:
+            r = p.relations
+            for target in (r.children_all, *(r.children_first or ()), r.parent):
+                if target is not None:
+                    visit(target)
 
     for decl in (*file.rules, *file.matchers):
         visit(decl.pattern)
@@ -393,6 +398,11 @@ def _classify_rules(file: ast_.File, bag: DiagnosticBag) -> dict[str, RecursionC
         elif isinstance(p, ast_.ChildrenBlock):
             for it in p.items:
                 collect_refs(it, refs, under_maybe)
+        elif isinstance(p, ast_.Node) and p.relations is not None:
+            r = p.relations
+            for target in (r.children_all, *(r.children_first or ()), r.parent):
+                if target is not None:
+                    collect_refs(target, refs, under_maybe)
 
     for r in file.rules:
         refs = []
@@ -486,6 +496,11 @@ def _check_rule_patterns(
                     f"predicate {p.where_predicate!r} is not registered in the host",
                     p.span,
                 )
+            if p.relations is not None:
+                r = p.relations
+                for target in (r.children_all, *(r.children_first or ()), r.parent):
+                    if target is not None:
+                        visit(target)
         elif isinstance(p, (ast_.Maybe, ast_.Peek)):
             visit(p.inner)
         elif isinstance(p, ast_.Sequence):
@@ -514,6 +529,7 @@ def _resolve_matcher(
     occurrences: dict[str, list[_CaptureOccurrence]] = {}
     alt_ids: dict[int, int] = {}  # id(Alternative) -> stable sequential id
     alt_nodes: dict[int, ast_.Alternative] = {}  # stable id -> Alternative node
+    relation_depth = 0
 
     def visit(
         p: ast_.PatternExpr,
@@ -524,6 +540,7 @@ def _resolve_matcher(
         alt_path: tuple[tuple[int, int, int], ...],
         under_nonexclusive_alt: bool = False,
     ) -> None:
+        nonlocal relation_depth
         if isinstance(p, ast_.Node):
             head = p.head
             if isinstance(head, ast_.OpHead) and isinstance(head.ref, str):
@@ -540,6 +557,12 @@ def _resolve_matcher(
                     p.span,
                 )
             if p.capture is not None:
+                if p.capture == m.entry and relation_depth:
+                    bag.error(
+                        "R007_ENTRY_VIOLATES_8_3",
+                        f"matcher {m.name!r}: entry @{m.entry} sits inside a relation block; make that node the entry",
+                        p.span,
+                    )
                 occurrences.setdefault(p.capture, []).append(_CaptureOccurrence(
                     node=p,
                     under_maybe=under_maybe,
@@ -549,6 +572,14 @@ def _resolve_matcher(
                     alt_path=alt_path,
                     under_nonexclusive_alt=under_nonexclusive_alt,
                 ))
+            if p.relations is not None:
+                r = p.relations
+                relation_depth += 1
+                for target in (r.children_all, *(r.children_first or ()), r.parent):
+                    if target is not None:
+                        visit(target, under_maybe, under_peek, under_recursive,
+                              branch_path, alt_path, under_nonexclusive_alt)
+                relation_depth -= 1
         elif isinstance(p, ast_.Maybe):
             visit(
                 p.inner, True, under_peek, under_recursive, branch_path, alt_path,
@@ -1002,6 +1033,11 @@ def _is_recursive_set(file: ast_.File) -> set[str]:
         elif isinstance(p, ast_.ChildrenBlock):
             for it in p.items:
                 collect_refs(it, refs)
+        elif isinstance(p, ast_.Node) and p.relations is not None:
+            r = p.relations
+            for target in (r.children_all, *(r.children_first or ()), r.parent):
+                if target is not None:
+                    collect_refs(target, refs)
 
     for r in file.rules:
         refs: set[str] = set()

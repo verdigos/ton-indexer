@@ -161,6 +161,16 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     anchor_atom: ast_.PatternExpr = (
         rm.anchor_group if rm.anchor_group is not None else rm.anchor_node
     )
+    if rm.anchor_node.relations is not None and any(
+        isinstance(p, ast_.Sequence)
+        for p in (_find_anchor_path(decl.pattern, anchor_atom) or ())
+    ):
+        ctx.bag.error(
+            "C016_ENTRY_RELATIONS_IN_CHAIN",
+            "an entry with a relation block must stand alone; move the surrounding chain into its block",
+            rm.anchor_node.span,
+        )
+        raise CompileError(ctx.bag)
     parent_m, child_m, children_ms = _lower_relative_to_anchor(decl.pattern, anchor_atom, ctx)
 
     head = rm.anchor_node.head
@@ -204,6 +214,8 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     # them at construction); apply here if not already set.
     if children_ms is not None and root.children is None:
         root.children = children_ms
+    if rm.anchor_node.relations is not None:
+        _lower_relations(rm.anchor_node.relations, root, ctx)
     # Apply where-predicate on the anchor node, if any. For a set-membership
     # group anchor, the per-branch `where` is already folded into
     # the group's membership record; `anchor_node` is only a representative
@@ -596,7 +608,7 @@ def _branches_eligible_for_exclusive_heuristic(
     seen_opcodes: set[int] = set()
     seen_btypes: set[str] = set()
     for b in branches:
-        if not isinstance(b, ast_.Node):
+        if not isinstance(b, ast_.Node) or b.relations is not None:
             return False
         head = b.head
         if not isinstance(head, (ast_.OpHead, ast_.BTypeHead)):
@@ -624,7 +636,7 @@ def _check_redundant_exclusive_heads(p: ast_.Alternative, ctx: CompileCtx) -> No
     """Emit W202 if two branches share the same concrete head (non-blocking warning)."""
     seen: dict[object, object] = {}
     for b in p.branches:
-        if not isinstance(b, ast_.Node):
+        if not isinstance(b, ast_.Node) or b.relations is not None:
             continue
         head = b.head
         if isinstance(head, ast_.OpHead):
@@ -926,7 +938,18 @@ def _lower_node(n: ast_.Node, ctx: CompileCtx) -> LNode:
         _set_where_expr(m, n.where_expr, n.span, ctx)
     if n.capture is not None:
         m.capture = n.capture
+    if n.relations is not None:
+        _lower_relations(n.relations, m, ctx)
     return m
+
+
+def _lower_relations(r: ast_.Relations, m: LNode, ctx: CompileCtx) -> None:
+    if r.children_all is not None:
+        m.child = _lower_atom(r.children_all, ctx)
+    if r.children_first is not None:
+        m.children = [_lower_atom(item, ctx) for item in r.children_first]
+    if r.parent is not None:
+        m.parent = _lower_atom(r.parent, ctx)
 
 
 def _chain(matchers_iter) -> LNode | None:
@@ -974,7 +997,12 @@ def _check_no_capture_after_recursion(
 
     def contains_capture(p: ast_.PatternExpr) -> bool:
         if isinstance(p, ast_.Node):
-            return p.capture is not None
+            r = p.relations
+            return p.capture is not None or (r is not None and any(
+                contains_capture(target)
+                for target in (r.children_all, *(r.children_first or ()), r.parent)
+                if target is not None
+            ))
         if isinstance(p, (ast_.Maybe, ast_.Peek)):
             return contains_capture(p.inner)
         if isinstance(p, ast_.Sequence):
@@ -991,6 +1019,11 @@ def _check_no_capture_after_recursion(
         return False
 
     def walk(p: ast_.PatternExpr) -> None:
+        if isinstance(p, ast_.Node) and p.relations is not None:
+            r = p.relations
+            for target in (r.children_all, *(r.children_first or ()), r.parent):
+                if target is not None:
+                    walk(target)
         if isinstance(p, ast_.Sequence):
             recursion_seen = False
             atoms = [(None, p.head)] + list(p.tail)
@@ -1062,6 +1095,11 @@ def _check_no_bare_children_block(
         elif isinstance(p, ast_.ChildrenBlock):
             for it in p.items:
                 walk(it, in_chain_left=False)
+        elif isinstance(p, ast_.Node) and p.relations is not None:
+            r = p.relations
+            for target in (r.children_all, *(r.children_first or ()), r.parent):
+                if target is not None:
+                    walk(target, in_chain_left=False)
         elif isinstance(p, ast_.RuleRef):
             # Check the rule body once at its definition site, with no chain
             # context. Its body must be self-contained or referenced from a
@@ -1145,6 +1183,11 @@ def _check_cyclic_rule_body(target: ast_.RuleDecl, ctx: CompileCtx) -> None:
                     f"drive the builder from Match._mch_consumed",
                     p.span,
                 )
+            if p.relations is not None:
+                r = p.relations
+                for target in (r.children_all, *(r.children_first or ()), r.parent):
+                    if target is not None:
+                        walk(target)
         elif isinstance(p, ast_.Sequence):
             atoms = [p.head] + [a for _e, a in p.tail]
             for i, atom in enumerate(atoms):
@@ -1332,6 +1375,13 @@ def _split_recursion_branches(
 
 
 def _contains_rule_ref(p: ast_.PatternExpr, name: str) -> bool:
+    if isinstance(p, ast_.Node) and p.relations is not None:
+        r = p.relations
+        return any(
+            _contains_rule_ref(target, name)
+            for target in (r.children_all, *(r.children_first or ()), r.parent)
+            if target is not None
+        )
     if isinstance(p, ast_.RuleRef):
         return p.name == name
     if isinstance(p, (ast_.Maybe, ast_.Peek)):

@@ -391,6 +391,15 @@ def _parse_sequence(s: _ParserState, entry_position: bool = False) -> ast_.Patte
         save_i = s.i
         s.skip_newlines()
         t = s.peek()
+        if t.kind in (TokenKind.ARROW_R, TokenKind.ARROW_L):
+            left = tail[-1][1] if tail else head
+            if _ends_in_relations(left):
+                s.bag.error(
+                    "P019_ARROW_AFTER_RELATION_BLOCK",
+                    "relations of this node are declared in its block",
+                    t.span,
+                )
+                raise CompileError(s.bag)
         if t.kind is TokenKind.ARROW_R:
             s.i += 1
             s.skip_newlines()
@@ -417,7 +426,7 @@ def _parse_sequence(s: _ParserState, entry_position: bool = False) -> ast_.Patte
         span = _join(node.span, branch_tail[-1][1].span) if branch_tail else node.span
         branches = []
         for member in members:
-            branch = replace(node, head=member)
+            branch = replace(node, head=member, relations=deepcopy(node.relations))
             if branch_tail:
                 branch = ast_.Sequence(head=branch, tail=deepcopy(branch_tail), span=span)
             branches.append(branch)
@@ -435,6 +444,18 @@ def _parse_sequence(s: _ParserState, entry_position: bool = False) -> ast_.Patte
         return head
     last_span = tail[-1][1].span
     return ast_.Sequence(head=head, tail=tuple(tail), span=_join(head.span, last_span))
+
+
+def _ends_in_relations(p: ast_.PatternExpr) -> bool:
+    if isinstance(p, ast_.Node):
+        return p.relations is not None
+    if isinstance(p, (ast_.Maybe, ast_.Peek)):
+        return _ends_in_relations(p.inner)
+    if isinstance(p, ast_.Sequence):
+        return _ends_in_relations(p.tail[-1][1] if p.tail else p.head)
+    if isinstance(p, ast_.Alternative):
+        return any(_ends_in_relations(b) for b in p.branches)
+    return False
 
 
 def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
@@ -489,7 +510,7 @@ def _parse_op_head(s: _ParserState, start: Span) -> ast_.OpHead:
 
 
 def _parse_node(s: _ParserState) -> ast_.Node:
-    """node := node_head capture? predicate_clause?"""
+    """node := node_head capture? predicate_clause? relations?"""
     t = s.peek()
     head: ast_.NodeHead
     head_start_span = t.span
@@ -557,16 +578,62 @@ def _parse_node(s: _ParserState) -> ast_.Node:
             where_predicate = pred_tok.text
             head_start_span = _join(head_start_span, pred_tok.span)
 
+    relations = _parse_relations(s) if s.at(TokenKind.LBRACE) else None
+    if relations is not None:
+        head_start_span = _join(head_start_span, relations.span)
     node = ast_.Node(
         head=head,
         capture=capture,
         where_predicate=where_predicate,
         span=head_start_span,
         where_expr=where_expr,
+        relations=relations,
     )
     if len(members) > 1:
         s.opcode_sets[id(node)] = tuple(members)
     return node
+
+
+def _parse_relations(s: _ParserState) -> ast_.Relations:
+    """relations := '{' sep* clause (sep* clause)* sep* '}'.
+
+    Each clause closes its own block; newlines and semicolons are optional.
+    """
+    start = s.eat(TokenKind.LBRACE).span
+    clauses = {}
+    while True:
+        while s.at(TokenKind.SEMI) or s.at(TokenKind.NEWLINE):
+            s.i += 1
+        if clauses and s.at(TokenKind.RBRACE):
+            break
+        clause = s.eat(TokenKind.IDENT)
+        kind = clause.text
+        if kind == "children":
+            selection = s.eat(TokenKind.IDENT)
+            kind += "_" + selection.text
+        if clause.text not in ("children", "parent") or kind not in ("children_all", "children_first", "parent"):
+            s.bag.error("P001_UNEXPECTED_TOKEN", "expected children all, children first, or parent", clause.span)
+            raise CompileError(s.bag)
+        if kind in clauses:
+            s.bag.error("P018_DUPLICATE_RELATION_CLAUSE", f"duplicate {kind.replace('_', ' ')} clause", clause.span)
+            raise CompileError(s.bag)
+        if kind == "children_first":
+            clauses[kind] = _parse_children_block(s).items
+        else:
+            s.eat(TokenKind.LBRACE)
+            while s.at(TokenKind.SEMI) or s.at(TokenKind.NEWLINE):
+                s.i += 1
+            clauses[kind] = _parse_pattern_expr(s)
+            while s.at(TokenKind.SEMI) or s.at(TokenKind.NEWLINE):
+                s.i += 1
+            s.eat(TokenKind.RBRACE)
+    end = s.eat(TokenKind.RBRACE).span
+    return ast_.Relations(
+        children_all=clauses.get("children_all"),
+        children_first=clauses.get("children_first"),
+        parent=clauses.get("parent"),
+        span=_join(start, end),
+    )
 
 
 def _parse_children_block(s: _ParserState) -> ast_.ChildrenBlock:
