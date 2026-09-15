@@ -1,7 +1,7 @@
 # `msg.opcode` is signed; use the masked `block.data.opcode` for u32 comparisons.
 # Missing addresses are addr_none rather than null. worker_payout and grant_refund
 # take `failed` from the payout transaction; the other matchers use the anchor.
-# cocoon_expected_address preserves external-address formatting. Nested
+# ext_addr_str preserves external-address formatting. Nested
 # nullable parses recover the withdraw amount from the optional refund payload.
 
 import "lib/common.mch"
@@ -43,7 +43,7 @@ matcher cocoon_worker_payout {
         payout_type:      "last" if start.data.opcode == 0xF5F26A36 else "regular"
         query_id:         start.body.query_id
         new_tokens:       start.body.new_tokens
-        expected_address: cocoon_expected_address(start.body.expected_my_address)
+        expected_address: ext_addr_str(start.body.expected_my_address)
         payout_amount:    amount(payout.msg.value)
         worker_state:     wreq.body.state
         worker_tokens:    wreq.body.tokens
@@ -82,7 +82,7 @@ matcher cocoon_proxy_charge {
         client_contract:  client_request.msg.destination ?? addr_none()
         query_id:         charge.body.query_id
         new_tokens_used:  charge.body.new_tokens_used
-        expected_address: cocoon_expected_address(charge.body.expected_my_address)
+        expected_address: ext_addr_str(charge.body.expected_my_address)
     }
 }
 
@@ -205,7 +205,7 @@ matcher cocoon_grant_refund {
         refund_recipient: payout.msg.destination ?? addr_none()
         query_id:         grant.body.query_id
         new_tokens_used:  grant.body.new_tokens_used
-        expected_address: cocoon_expected_address(grant.body.expected_my_address)
+        expected_address: ext_addr_str(grant.body.expected_my_address)
         payout_amount:    amount(payout.msg.value)
     }
 }

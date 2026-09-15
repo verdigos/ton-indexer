@@ -94,7 +94,4 @@ EvalResult tonstakers_pool_addr(BuildEnv &env, const std::vector<Value> &args);
 // Vesting (HostVesting.cpp).
 EvalResult vesting_message_was_sent(BuildEnv &env, const std::vector<Value> &args);
 
-// Cocoon (HostCocoon.cpp): the shared expectedMyAddress renderer.
-EvalResult cocoon_expected_address(BuildEnv &env, const std::vector<Value> &args);
-
 }  // namespace mch

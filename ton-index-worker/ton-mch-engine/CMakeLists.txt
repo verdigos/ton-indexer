@@ -180,7 +180,6 @@ add_library(mch-classify STATIC
     src/host/HostLayerZero.cpp
     src/host/HostTonstakers.cpp
     src/host/HostVesting.cpp
-    src/host/HostCocoon.cpp
     src/host/HostNft.cpp
     src/host/HostNftSale.cpp
     src/host/HostTgbtc.cpp
