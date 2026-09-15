@@ -547,6 +547,8 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"DedustV2DepositPayload", &abi_parse_body<dedust_v2::DedustV2DepositPayload>},
       {"CoffeeCreateVault", &abi_parse_body<coffee::CoffeeCreateVault>},
       {"CoffeeSwapEvent", &abi_parse_body<coffee::CoffeeSwapEvent>},
+      {"CoffeeSwapNative", &abi_parse_body<coffee::CoffeeSwapNative>},
+      {"CoffeePayoutInternal", &abi_parse_body<coffee::CoffeePayoutInternal>},
       {"CoffeeCreateLiquidityDepositoryRequest",
        &abi_parse_body<coffee::CoffeeCreateLiquidityDepositoryRequest>},
       {"CoffeeDepositLiquiditySuccessfulEvent",

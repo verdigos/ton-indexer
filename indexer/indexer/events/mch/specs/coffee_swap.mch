@@ -1,20 +1,8 @@
-# Coffee swap — ported from blocks/swaps.py CoffeeSwapBlockMatcher.
-#
-# New shapes vs earlier ports (jettons/dns/dedust_swap):
-# - recursion step is a two-node CHAIN (`op CoffeeSwapInternal -> op
-#   CoffeeSwapSuccessfulEvent`): each unrolling consumes the swap AND its
-#   success event, mirroring legacy RecursiveMatcher(repeating=ContractMatcher(
-#   SwapInternal, child=ContractMatcher(SuccessEvent)));
-# - same-name capture across exclusive parent branches (@in_transfer);
-# - three-way mixed op/btype alternative under the payout exit.
-#
-# The anchor children set mirrors legacy children_matchers=[event,
-# Or([recursion, payout_chain])]: the payout chain appears BOTH as the rule's
-# exit branch (multi-hop) and as the direct Or branch (zero intermediate
-# hops). Exit-branch and post-recursion captures bind. The builder deliberately
-# works from Match._mch_consumed because the shared legacy core needs the full
-# consumed set for its call-contract scan; this is a builder design choice, not
-# a capture limitation.
+# Coffee swaps require a success event at each pool hop and end in a payout.
+# Captured events supply hop amounts and assets in route order; the incoming
+# transfer and terminal payout supply the transfer legs.
+
+import "lib/leg.mch"
 
 opcode CoffeeSwapNative          = 0xc0ffee00
 opcode CoffeeSwapInternal        = 0xc0ffee20
@@ -26,57 +14,78 @@ opcode CoffeeNotification        = 0xc0ffee36
 # One pool hop per unrolling: a swap request with its success event; exit =
 # the payout chain to the user.
 rule swap_chain = xor {
-                      op CoffeeSwapInternal @peer -> op CoffeeSwapSuccessfulEvent @peer_event -> maybe $swap_chain
-                      op CoffeePayoutInternal -> or {
-                                                     btype jetton_transfer
-                                                     op CoffeePayout
-                                                     op CoffeeNotification
+                      op CoffeeSwapInternal @peer -> op CoffeeSwapSuccessfulEvent @peer_event as CoffeeSwapEvent -> maybe $swap_chain
+                      op CoffeePayoutInternal @exit_payout as CoffeePayoutInternal -> or {
+                                                     btype jetton_transfer @exit_out
+                                                     op CoffeePayout @exit_out
+                                                     op CoffeeNotification @exit_out
                                                  }
                   }
 
-# HYBRID declarative build. The pattern, the reject/failed wiring and the
-# out-field mapping are declarative; the imperative residue stays in one named
-# host fn (a gap, like dedust_swap_legs):
-#   coffee_swap_data — reconstructs the in-transfer / payout / out-transfer
-#     roles from the consumed set, then delegates to the shared
-#     build_coffee_swap_core (per-hop success-event scan, peer-leg list
-#     assembly, in/out leg extraction). Returns null to reject (core returns
-#     None on a missing role or no hops); otherwise a namespace mirroring the
-#     core's data dict, with `.failed` driving the failed flag.
 matcher coffee_swap {
     produces JettonSwapBlock
     entry    @swap
 
     op CoffeeSwapInternal @swap {
         -> {
-            op CoffeeSwapSuccessfulEvent @event
+            op CoffeeSwapSuccessfulEvent @event as CoffeeSwapEvent
             ; or {
                   $swap_chain
-                  op CoffeePayoutInternal @payout
+                  op CoffeePayoutInternal @payout as CoffeePayoutInternal
                   -> xor {
-                         btype jetton_transfer @out
-                         op CoffeePayout @out
-                         op CoffeeNotification @out
+                         btype jetton_transfer @out_transfer
+                         op CoffeePayout @out_transfer
+                         op CoffeeNotification @out_transfer
                      }
               }
         }
         <- xor {
+               op CoffeeSwapNative @in_transfer as CoffeeSwapNative
                btype jetton_transfer @in_transfer
-               op CoffeeSwapNative @in_transfer
            }
     }
 
-    require d = coffee_swap_data(consumed)
-    failed when d.failed
+    require po = first(exit_payout) ?? payout
+    require ol = first(exit_out) ?? out_transfer
+    let li = leg(in_transfer)
+    let ton_payout = ol.btype != "jetton_transfer" and ol.data.opcode == 0xc0ffee32
+    reject when event.body == null or any(peer_event.body as e => e == null)
+    reject when li.is_ton and in_transfer.body == null
+    reject when ton_payout and po.body == null
+
+    let lo = leg(ol) if ol.btype == "jetton_transfer" else (
+        ton_leg(amount(po.body.amount), account(po.msg.source), account(po.body.recipient) ?? addr_none()) if ton_payout else ton_leg(amount(ol.msg.value), account(ol.msg.source), account(ol.msg.destination)))
+    let bodies = concat([event.body], peer_event.body)
+    let peer_assets = map(peer_event.body as e => asset_of(e.asset))
+    let hops = zip(zip(map(bodies, "amount_in"), map(bodies, "amount_out")),
+                   zip(concat([asset_of(event.body.asset)], peer_assets), concat(peer_assets, [lo.asset])))
+
     out {
-        dex:                   d.dex
-        sender:                d.sender
-        source_asset:          d.source_asset
-        destination_asset:     d.destination_asset
-        dex_incoming_transfer: d.dex_incoming_transfer
-        dex_outgoing_transfer: d.dex_outgoing_transfer
-        peer_swaps:            d.peer_swaps
-        referral_amount:       d.referral_amount
-        referral_address:      d.referral_address
+        dex:               "coffee"
+        sender:            li.source
+        source_asset:      li.asset
+        destination_asset: lo.asset
+        dex_incoming_transfer: {
+            asset:                     li.asset
+            amount:                    amount(in_transfer.body.amount) if li.is_ton else li.amount
+            source:                    li.source
+            source_jetton_wallet:      li.source_wallet
+            destination:               li.destination
+            destination_jetton_wallet: li.destination_wallet
+        }
+        dex_outgoing_transfer: {
+            asset:                     lo.asset
+            amount:                    lo.amount
+            source:                    lo.source
+            source_jetton_wallet:      lo.source_wallet
+            destination:               lo.destination
+            destination_jetton_wallet: lo.destination_wallet
+        }
+        peer_swaps: map(hops as h => {
+                        in:  { asset: first(last(h)), amount: amount(first(first(h))) }
+                        out: { asset: last(last(h)),  amount: amount(last(first(h))) }
+                    }) if len(peer_event) > 0 else []
+        referral_amount:  null
+        referral_address: null
     }
 }

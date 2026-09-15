@@ -22,7 +22,6 @@ const std::map<std::string, HostFnEntry> &host_fns() {
       {"tgbtc_mint_log", {tgbtc_mint_log, 1}},
       {"tgbtc_new_key_log", {tgbtc_new_key_log, 1}},
       {"tgbtc_dkg_completed_log", {tgbtc_dkg_completed_log, 1}},
-      {"coffee_swap_data", {coffee_swap_data, 1}},
       {"stonfi_v1_swap_data", {stonfi_v1_swap_data, 2}},
       {"dedust_deposit_final_data", {dedust_deposit_final_data, 1}},
       {"dedust_deposit_partial_data", {dedust_deposit_partial_data, 1}},

@@ -46,7 +46,7 @@ LOGICAL_ROWS_BY_STEM = {
         "DedustV2JoinLiquidity", "DedustV2DepositEvent",
     ),
     "coffee": (
-        "CoffeeCreateVault", "CoffeeSwapEvent",
+        "CoffeeCreateVault", "CoffeeSwapEvent", "CoffeeSwapNative", "CoffeePayoutInternal",
         "CoffeeCreateLiquidityDepositoryRequest",
         "CoffeeDepositLiquiditySuccessfulEvent", "CoffeeLiquidityWithdrawalEvent",
         "CoffeeCreatePoolCreatorRequest", "CoffeeCreatePoolRequest",

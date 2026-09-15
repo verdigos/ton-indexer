@@ -183,7 +183,6 @@ add_library(mch-classify STATIC
     src/host/HostNft.cpp
     src/host/HostNftSale.cpp
     src/host/HostTgbtc.cpp
-    src/host/HostCoffee.cpp
     src/host/HostStonfi.cpp
     src/host/HostDedustDeposit.cpp
     src/host/HostTonco.cpp

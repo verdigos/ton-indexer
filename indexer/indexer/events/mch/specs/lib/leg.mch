@@ -9,3 +9,15 @@ export fn leg(x) = null if x == null else {
     destination_wallet: x.data.receiver_wallet if x.btype == "jetton_transfer" else null
     payload:            x.data.forward_payload if x.btype == "jetton_transfer" else null
 }
+
+# Builds a TON transfer leg from its amount and accounts.
+export fn ton_leg(amt, src, dst) = {
+    is_ton:             true
+    asset:              ton_asset()
+    amount:             amt
+    source:             src
+    source_wallet:      null
+    destination:        dst
+    destination_wallet: null
+    payload:            null
+}
