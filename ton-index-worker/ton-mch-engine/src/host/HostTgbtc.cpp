@@ -1,5 +1,5 @@
 // tgbtc_mint_data derives head, success log, and jetton_mint from the consumed
-// set. Event-log parsers return Null for unreadable bodies. BurnEvent
+// set. Event-log host fns return Null for unreadable bodies. TgBTCBurnEvent
 // tolerates truncated addresses as addr_none (an ABI address leaf would fail
 // the whole parse). Other events need hex renderings the language cannot express.
 #include "host/HostImpls.h"
@@ -14,6 +14,7 @@
 #include "MsgParse.h"
 #include "btypes_gen.h"
 #include "parse/PSlice.h"
+#include "parse/Parsers.h"
 
 #include "common/bigint.hpp"
 #include "common/refint.h"
@@ -227,16 +228,13 @@ EvalResult tgbtc_mint_log(BuildEnv &, const std::vector<Value> &args) {
 // Two addresses parsed tolerantly. On the first address-load error, the
 // already-parsed address stays set and the rest remain addr_none (partial
 // results retained deliberately; no atomic rollback).
-EvalResult tgbtc_burn_log(BuildEnv &, const std::vector<Value> &args) {
-  LogCursor lc = open_log(args);
-  if (!lc.ok) {
-    return rt_ok(Value::null());
+td::Result<Value> parse_tgbtc_burn_event(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32) || !cs.advance(32)) {
+    return td::Status::Error("tgbtc burn: opcode underflow");
   }
-  auto &cs = lc.ctx.cs;
-  auto r_amt = load_coins_py(cs);
-  if (r_amt.is_error()) {
-    return rt_ok(Value::null());  // amount underflow rejects; only address loads are tolerant
-  }
+  TRY_RESULT(amount, load_coins_py(cs));
   Value sender = Value::make_account_none();
   Value pegout = Value::make_account_none();
   auto r_sender = load_address_py(cs);
@@ -248,10 +246,10 @@ EvalResult tgbtc_burn_log(BuildEnv &, const std::vector<Value> &args) {
     }
   }
   Value::Fields ns;
-  ns.emplace_back("amount", Value::make_int(r_amt.move_as_ok()));
-  ns.emplace_back("sender", std::move(sender));
-  ns.emplace_back("pegout", std::move(pegout));
-  return rt_ok(Value::make_obj(std::move(ns)));
+  ns.emplace_back("amount", Value::make_int(std::move(amount)));
+  ns.emplace_back("sender_address", std::move(sender));
+  ns.emplace_back("pegout_address", std::move(pegout));
+  return Value::make_dict(std::move(ns));
 }
 
 // TgBTCNewKeyEvent 0x27756729: coins amount, uint256 pubkey, MsgAddress pegout.

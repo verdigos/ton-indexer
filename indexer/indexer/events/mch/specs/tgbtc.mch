@@ -155,11 +155,11 @@ matcher tgbtc_burn {
 
     btype jetton_burn @burn
       -> op [JettonBurnNotify, TgBTCBurnNotify] @notify
-           -> { op TgBTCBurnLog @log
+           -> { op TgBTCBurnLog @log as TgBTCBurnEvent
               ; maybe op TgBTCPayout
                   -> { maybe op TgBTCPayoutNotify ; maybe btype ton_transfer } }
 
-    require b = tgbtc_burn_log(log)
+    require b = log.body
     let chain_amount = burn.data.amount.value
     let use_log      = (chain_amount ?? 0) == 0
     let min_amount   = chain_amount if chain_amount < b.amount else b.amount
@@ -168,7 +168,7 @@ matcher tgbtc_burn {
         jetton_wallet:  burn.data.jetton_wallet
         asset:          burn.data.asset
         amount:         amount(b.amount if use_log else min_amount)
-        pegout_address: b.pegout
+        pegout_address: b.pegout_address
         crippled:       false
     }
 }
@@ -261,21 +261,20 @@ matcher tgbtc_mint_log_only {
 }
 
 # burn fallback — the 35MtsOa0… fixture, whose log body is truncated mid-address:
-# `tgbtc_burn_log` yields addr_none for both addresses instead of failing, which
-# is the whole reason that parse is a host fn and not an `addr_py` schema row.
+# `TgBTCBurnEvent` yields addr_none for both addresses without failing the parse.
 matcher tgbtc_burn_log_only {
     produces tgbtc_burn
     entry    @log
 
-    op TgBTCBurnLog @log
+    op TgBTCBurnLog @log as TgBTCBurnEvent
 
-    require b = tgbtc_burn_log(log)
+    require b = log.body
     out {
-        sender:         b.sender
+        sender:         b.sender_address
         jetton_wallet:  null
         asset:          null
         amount:         amount(b.amount)
-        pegout_address: b.pegout
+        pegout_address: b.pegout_address
         crippled:       true
     }
 }

@@ -21,7 +21,6 @@ const std::map<std::string, HostFnEntry> &host_fns() {
       {"is_teleitem", {is_teleitem, 1}},
       {"tgbtc_mint_data", {tgbtc_mint_data, 1}},
       {"tgbtc_mint_log", {tgbtc_mint_log, 1}},
-      {"tgbtc_burn_log", {tgbtc_burn_log, 1}},
       {"tgbtc_new_key_log", {tgbtc_new_key_log, 1}},
       {"tgbtc_dkg_completed_log", {tgbtc_dkg_completed_log, 1}},
       {"coffee_swap_data", {coffee_swap_data, 1}},

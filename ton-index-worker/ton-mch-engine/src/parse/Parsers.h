@@ -13,6 +13,8 @@ td::Result<Value> parse_jetton_transfer(const td::Ref<vm::Cell> &body);
 
 td::Result<Value> parse_change_dns(const td::Ref<vm::Cell> &body);
 
+td::Result<Value> parse_tgbtc_burn_event(const td::Ref<vm::Cell> &body);
+
 td::Result<Value> parse_vesting_send_message(const td::Ref<vm::Cell> &body);
 
 }  // namespace mch
