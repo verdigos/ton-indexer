@@ -212,11 +212,11 @@ matcher tgbtc_new_key {
     let g = tgbtc_dkg_completed_log(dkg)
     reject when n == null or g == null
     out {
-        coordinator_contract: account(log.msg.source)
+        coordinator_contract: log.msg.source
         pubkey:               n.pubkey
         pegout_address:       n.pegout
         amount:               n.amount
-        teleport_contract:    account(dkg.msg.source)
+        teleport_contract:    dkg.msg.source
         timestamp:            g.timestamp
         crippled:             false
     }
@@ -248,14 +248,14 @@ matcher tgbtc_mint_log_only {
 
     require m = tgbtc_mint_log(log)
     out {
-        sender:            account(log.msg.source)
+        sender:            log.msg.source
         recipient:         m.recipient
         amount:            m.amount
         asset:             null
         bitcoin_txid:      m.bitcoin_txid
         success:           true
         recipient_wallet:  null
-        teleport_contract: account(log.msg.source)
+        teleport_contract: log.msg.source
         crippled:          true
     }
 }
@@ -289,7 +289,7 @@ matcher tgbtc_new_key_log_only {
 
     require n = tgbtc_new_key_log(log)
     out {
-        coordinator_contract: account(log.msg.source)
+        coordinator_contract: log.msg.source
         pubkey:               n.pubkey
         pegout_address:       n.pegout
         amount:               n.amount
@@ -313,7 +313,7 @@ matcher tgbtc_dkg_log_only {
 
     require g = tgbtc_dkg_completed_log(log)
     out {
-        coordinator_contract: account(log.msg.source)
+        coordinator_contract: log.msg.source
         timestamp:            g.timestamp
         internal_pubkey:      g.pubkey
     }

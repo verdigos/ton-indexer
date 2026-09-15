@@ -93,7 +93,7 @@ matcher stonfi_v2_provide_final {
         amount_2:        null
         asset_2:         null
         sender_wallet_2: null
-        pool:            account(provide.msg.destination)
+        pool:            provide.msg.destination
         lp_tokens_minted: null if lp_transfer == null else amount(lp_transfer.body.amount)
     }
 }
@@ -117,7 +117,7 @@ matcher stonfi_v2_provide_partial {
         amount_2:        null
         asset_2:         null
         sender_wallet_2: null
-        pool:            account(provide.msg.destination)
+        pool:            provide.msg.destination
         lp_tokens_minted: null
     }
 }

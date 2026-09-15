@@ -61,12 +61,12 @@ matcher multisig_create_order {
     require order = lookup multisig_order(init.msg.destination)
     out {
         query_id:               new.body.query_id
-        multisig:               account(new.msg.destination)
+        multisig:               new.msg.destination
         order_seqno:            new.body.order_seqno
-        created_by:             account(new.msg.source)
+        created_by:             new.msg.source
         is_created_by_signer:   new.body.is_signer
         creator_index:          new.body.singer_index
-        order_contract_address: account(init.msg.destination)
+        order_contract_address: init.msg.destination
         creator_approved:       init.body.approve_on_init
         expiration_date:        new.body.expiration_date
         order_boc_str:          b64(init.body.order)
@@ -86,8 +86,8 @@ matcher multisig_approve {
 
     require order = lookup multisig_order(vote.msg.destination)
     out {
-        signer:       account(vote.msg.source)
-        order:        account(vote.msg.destination)
+        signer:       vote.msg.source
+        order:        vote.msg.destination
         success:      accepted != null
         signer_index: vote.body.signer_index
         exit_code:    rejected.body.exit_code ?? 0
@@ -107,8 +107,8 @@ matcher multisig_approve_comment {
 
     require order = lookup multisig_order(vote.msg.destination)
     out {
-        signer:       account(vote.msg.source)
-        order:        account(vote.msg.destination)
+        signer:       vote.msg.source
+        order:        vote.msg.destination
         success:      accepted != null
         # A comment body always underflows MultisigApprove's query_id read; see
         # the proof in this file's header and blocks/multisig.py:193-200.
@@ -127,9 +127,9 @@ matcher multisig_execute {
     require order = lookup multisig_order(exec.msg.source)
     out {
         query_id:               exec.body.query_id
-        multisig:               account(exec.msg.destination)
+        multisig:               exec.msg.destination
         success:                not exec.failed
-        order_contract_address: account(exec.msg.source)
+        order_contract_address: exec.msg.source
         order_seqno:            exec.body.order_seqno
         expiration_date:        exec.body.expiration_date
         approvals_num:          exec.body.approvals_num

@@ -126,9 +126,9 @@ matcher tonco_deploy_pool {
         -> maybe op Excess
 
     out {
-        deployer:              account(create.msg.source)
-        router:                account(create.msg.destination)
-        pool:                  account(init.msg.destination)
+        deployer:              create.msg.source
+        router:                create.msg.destination
+        pool:                  init.msg.destination
         jetton0_router_wallet: account(create.body.jetton_wallet0)
         jetton1_router_wallet: account(create.body.jetton_wallet1)
         jetton0_minter:        account(create.body.minters.ref.jetton0_minter)
@@ -219,9 +219,9 @@ matcher tonco_withdraw_liquidity {
     failed when r.failed
     out {
         sender:              account(position_burn.body.nft_owner)
-        pool:                account(start_burn.msg.destination)
+        pool:                start_burn.msg.destination
         burned_nft_index:    pool_burn.body.burned_index if pool_burn.body.burned_index != 0 else start_burn.body.burned_index
-        burned_nft_address:  account(position_burn.msg.destination)
+        burned_nft_address:  position_burn.msg.destination
         liquidity_burnt:     amount(start_burn.body.liquidity_to_burn)
         tick_lower:          start_burn.body.tick_lower
         tick_upper:          start_burn.body.tick_upper

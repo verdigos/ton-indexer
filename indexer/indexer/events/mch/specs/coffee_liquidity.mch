@@ -101,8 +101,8 @@ matcher coffee_deposit_liquidity {
         # Unconditional `AccountId(...)` in the legacy build, so a body-level
         # addr_none stays present-but-empty rather than becoming null.
         sender:               account(request.body.sender) ?? addr_none()
-        pool_address:         account(success.msg.source) if success != null else null
-        deposit_contract:     account(deploy.msg.destination)
+        pool_address:         success.msg.source if success != null else null
+        deposit_contract:     deploy.msg.destination
         vault_excesses:       excess_jetton ?? excess_ton ?? []
         asset_1:              in_asset if is_first else null
         amount_1:             in_amount if is_first else null
@@ -140,8 +140,8 @@ matcher coffee_create_vault {
       -> maybe op TakeWalletAddress
 
     out {
-        sender: account(create.msg.source)
-        vault:  account(deploy.msg.destination)
+        sender: create.msg.source
+        vault:  deploy.msg.destination
         asset:  asset_of(create.body.asset)
         amount: amount(create.msg.value)
     }

@@ -18,9 +18,9 @@ matcher subscribe {
 
     failed when req != null and req.failed
     out {
-        subscriber:   account(resp.msg.source)
-        subscription: account(resp.msg.destination)
-        beneficiary:  account(pay.msg.destination)
+        subscriber:   resp.msg.source
+        subscription: resp.msg.destination
+        beneficiary:  pay.msg.destination
         amount:       amount(req.body.grams) if req != null else amount(resp.msg.value)
     }
 }
@@ -32,8 +32,8 @@ matcher unsubscribe {
     op WalletPluginDestruct @destruct -> maybe op WalletPluginDestruct @response
 
     out {
-        subscriber:   account(destruct.msg.source)
-        subscription: account(destruct.msg.destination)
-        beneficiary:  account(response.msg.destination) if response != null else null
+        subscriber:   destruct.msg.source
+        subscription: destruct.msg.destination
+        beneficiary:  response.msg.destination if response != null else null
     }
 }

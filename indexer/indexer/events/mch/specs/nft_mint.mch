@@ -63,7 +63,7 @@ matcher nft_mint {
     require nft     = lookup nft_item(address)
     let raw_op  = mint.msg.opcode
     out {
-        source:     account(mint.msg.source)
+        source:     mint.msg.source
         address:    account(address)
         index:      nft.index
         opcode:     (raw_op + 4294967296) if raw_op < 0 else raw_op

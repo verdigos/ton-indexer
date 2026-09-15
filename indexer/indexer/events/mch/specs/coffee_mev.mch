@@ -63,8 +63,8 @@ matcher coffee_mev_protect_hold_funds {
       <- maybe ( any -> { op CoffeeServiceFee } )
 
     out {
-        sender:              account(call.msg.source)
-        mev_contract:        account(call.msg.destination)
+        sender:              call.msg.source
+        mev_contract:        call.msg.destination
         asset:               ton_asset()
         # Unconditional `AccountId(None)` in the legacy build: a present-but-
         # empty address, not a missing one.

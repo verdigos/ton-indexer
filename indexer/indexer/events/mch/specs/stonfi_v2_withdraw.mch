@@ -48,7 +48,7 @@ matcher stonfi_v2_withdraw {
         dex:                 "stonfi_v2"
         sender:              burn.data.owner
         sender_wallet:       burn.data.jetton_wallet
-        pool:                account(payout_1.msg.source)
+        pool:                payout_1.msg.source
         asset:               burn.data.asset
         lp_tokens_burnt:     burn.data.amount
         is_refund:           false
@@ -79,9 +79,9 @@ matcher stonfi_v2_withdraw_refund {
 
     out {
         dex:                 "stonfi_v2"
-        sender:              account(refund_parent.msg.source)
+        sender:              refund_parent.msg.source
         sender_wallet:       null
-        pool:                account(payout_1.msg.source)
+        pool:                payout_1.msg.source
         asset:               null
         lp_tokens_burnt:     null
         is_refund:           true

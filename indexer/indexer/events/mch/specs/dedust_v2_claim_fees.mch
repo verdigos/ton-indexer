@@ -67,13 +67,13 @@ matcher dedust_v2_claim_fees {
     let a_1     = jt_1.data.amount.value ?? ton_1.body.amount
     let asset_1 = jt_1.data.asset if jt_1 != null else (ton_asset() if ton_1 != null else null)
     let uw_1    = jt_1.data.receiver_wallet if jt_1 != null else null
-    let dw_1    = jt_1.data.sender if jt_1 != null else (account(ton_1.msg.source) if ton_1 != null else null)
+    let dw_1    = jt_1.data.sender if jt_1 != null else (ton_1.msg.source if ton_1 != null else null)
     let djw_1   = jt_1.data.sender_wallet if jt_1 != null else null
 
     let a_2     = jt_2.data.amount.value ?? ton_2.body.amount
     let asset_2 = jt_2.data.asset if jt_2 != null else (ton_asset() if ton_2 != null else null)
     let uw_2    = jt_2.data.receiver_wallet if jt_2 != null else null
-    let dw_2    = jt_2.data.sender if jt_2 != null else (account(ton_2.msg.source) if ton_2 != null else null)
+    let dw_2    = jt_2.data.sender if jt_2 != null else (ton_2.msg.source if ton_2 != null else null)
     let djw_2   = jt_2.data.sender_wallet if jt_2 != null else null
 
     let xf     = payout_fees.body.x_fees
@@ -85,9 +85,9 @@ matcher dedust_v2_claim_fees {
 
     out {
         dex:                 "dedust_v2"
-        sender:              account(claim.msg.source)
-        pool:                account(claim.msg.destination)
-        position:            account(payout_fees.msg.source)
+        sender:              claim.msg.source
+        pool:                claim.msg.destination
+        position:            payout_fees.msg.source
         owner:               account(payout_fees.body.owner)
         amount_x:            amount(xf)
         amount_y:            amount(yf)

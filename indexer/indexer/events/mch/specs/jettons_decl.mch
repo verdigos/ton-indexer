@@ -40,10 +40,10 @@ matcher jetton_transfer {
     failed when transfer.failed or internal.failed
     out {
         has_internal_transfer:  true
-        sender:                 account(transfer.msg.source)
-        sender_wallet:          account(transfer.msg.destination)
+        sender:                 transfer.msg.source
+        sender_wallet:          transfer.msg.destination
         receiver:               account(wallet.owner) if mismatch else account(transfer.body.destination)
-        receiver_wallet:        account(internal.msg.destination)
+        receiver_wallet:        internal.msg.destination
         response_address:       account(transfer.body.response) ?? addr_none()
         forward_amount:         amount(fwd)
         desired_forward_amount: amount(transfer.body.forward_amount)
@@ -79,7 +79,7 @@ matcher jetton_burn {
     failed when burn.failed
     out {
         owner:         account(wallet.owner)
-        jetton_wallet: account(burn.msg.destination)
+        jetton_wallet: burn.msg.destination
         amount:        amount(burn_amount)
         asset:         asset(wallet.jetton)
     }

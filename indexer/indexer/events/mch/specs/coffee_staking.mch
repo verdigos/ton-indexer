@@ -73,7 +73,7 @@ matcher coffee_staking_deposit {
         source:              transfer.data.sender
         user_jetton_wallet:  transfer.data.sender_wallet
         pool_jetton_wallet:  transfer.data.receiver_wallet
-        pool:                account(pool_call.msg.destination)
+        pool:                pool_call.msg.destination
         value:               amount(transfer.data.amount)
         minted_item_address: nft.data.address
         minted_item_index:   nft.data.index
@@ -93,12 +93,12 @@ matcher coffee_staking_withdraw {
 
     out {
         source:             account(withdraw_2.body.owner)
-        pool:               account(withdraw_2.msg.source)
+        pool:               withdraw_2.msg.source
         asset:              transfer.data.asset
         amount:             amount(withdraw_3.body.jetton_amount ?? 0)
         user_jetton_wallet: transfer.data.receiver_wallet
         pool_jetton_wallet: account(withdraw_3.body.jetton_wallet)
-        nft_address:        account(withdraw_1.msg.destination)
+        nft_address:        withdraw_1.msg.destination
         nft_index:          withdraw_2.body.nft_id
         points:             withdraw_2.body.points ?? 0
     }
@@ -113,9 +113,9 @@ matcher coffee_staking_claim_rewards {
          ; maybe op CoffeeStakingClaimRewards }
 
     out {
-        admin:                   account(claim.msg.source)
+        admin:                   claim.msg.source
         recipient:               account(claim.body.receiver)
-        pool:                    account(claim.msg.destination)
+        pool:                    claim.msg.destination
         asset:                   transfer.data.asset
         amount:                  amount(claim.body.jetton_amount ?? 0)
         pool_jetton_wallet:      account(claim.body.jetton_wallet)

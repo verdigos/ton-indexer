@@ -147,7 +147,7 @@ matcher dedust_v2_deposit_final {
     # order the reference's get_labeled_sorted("refund_jetton", …) produces.
     reject when refund_jt_1 != null and refund_jt_1.data.receiver != initiator
     reject when refund_jt_2 != null and refund_jt_2.data.receiver != initiator
-    reject when refund_ton != null and account(refund_ton.msg.destination) != initiator
+    reject when refund_ton != null and refund_ton.msg.destination != initiator
 
     let jetton_excesses = concat(
         [[refund_jt_1.data.asset, refund_jt_1.data.amount]] if refund_jt_1 != null else [],
@@ -157,8 +157,8 @@ matcher dedust_v2_deposit_final {
     out {
         dex:              "dedust_v2"
         sender:           initiator
-        pool:             account(join.msg.destination)
-        deposit_contract: account(join.msg.source)
+        pool:             join.msg.destination
+        deposit_contract: join.msg.source
         amount_1:         amount(event.body.amount_x_in)
         asset_1:          leg_asset if is_x else null
         sender_wallet_1:  leg_wallet if is_x else null
@@ -212,7 +212,7 @@ matcher dedust_v2_deposit_rejected {
 
     reject when refund_jt_1 != null and refund_jt_1.data.receiver != initiator
     reject when refund_jt_2 != null and refund_jt_2.data.receiver != initiator
-    reject when refund_ton != null and account(refund_ton.msg.destination) != initiator
+    reject when refund_ton != null and refund_ton.msg.destination != initiator
 
     let jetton_excesses = concat(
         [[refund_jt_1.data.asset, refund_jt_1.data.amount]] if refund_jt_1 != null else [],
@@ -227,8 +227,8 @@ matcher dedust_v2_deposit_rejected {
     out {
         dex:              "dedust_v2"
         sender:           initiator
-        pool:             account(join.msg.destination)
-        deposit_contract: account(join.msg.source)
+        pool:             join.msg.destination
+        deposit_contract: join.msg.source
         amount_1:         amount(join.body.amount_x)
         asset_1:          leg_asset if is_x else null
         sender_wallet_1:  leg_wallet if is_x else null
@@ -269,9 +269,9 @@ matcher dedust_v2_deposit_partial {
 
     out {
         dex:              "dedust_v2"
-        sender:           carrier.data.sender if jetton_in else account(carrier.msg.source)
-        pool:             account(credit.msg.source)
-        deposit_contract: account(credit.msg.destination)
+        sender:           carrier.data.sender if jetton_in else carrier.msg.source
+        pool:             credit.msg.source
+        deposit_contract: credit.msg.destination
         amount_1:         leg_amount if is_x else null
         asset_1:          leg_asset if is_x else null
         sender_wallet_1:  leg_wallet if is_x else null

@@ -55,8 +55,8 @@ matcher teleitem_start_auction {
     reject when not is_fragment_item(nft)
     # `AccountId(...)` is unconditional in the legacy build, so a missing address
     # becomes addr_none (present-but-empty), not null.
-    let item  = account(auction.msg.destination) ?? addr_none()
-    let owner = account(auction.msg.source) ?? addr_none()
+    let item  = auction.msg.destination ?? addr_none()
+    let owner = auction.msg.source ?? addr_none()
     failed when (auction.msg.transaction.aborted ?? false)
     out {
         nft_address:         item
@@ -86,14 +86,14 @@ matcher teleitem_cancel_auction {
 
     require nft = lookup nft_item(cancel.msg.destination)
     reject when not is_fragment_item(nft)
-    let item = account(cancel.msg.destination) ?? addr_none()
+    let item = cancel.msg.destination ?? addr_none()
     failed when (cancel.msg.transaction.aborted ?? false)
     out {
         nft_address:         item
         # Unconditional AccountId in the legacy build (unlike the start
         # matcher's guarded one) — a collection-less item yields addr_none.
         nft_collection:      account(nft.collection_address) ?? addr_none()
-        owner:               account(cancel.msg.source) ?? addr_none()
+        owner:               cancel.msg.source ?? addr_none()
         trade_contract:      item
         marketplace_address: null
     }

@@ -69,7 +69,7 @@ matcher dedust_swap {
     failed when notification == null or any(peer_notification as n => n == null)
     out {
         dex:                   "dedust"
-        sender:                account(swap_request.msg.source) if in_transfer == null else legs.sender
+        sender:                swap_request.msg.source if in_transfer == null else legs.sender
         source_asset:          ton_asset() if in_transfer == null else legs.asset_in
         destination_asset:     legs.destination_asset
         dex_incoming_transfer: legs.dex_incoming_transfer

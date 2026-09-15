@@ -52,19 +52,19 @@ matcher coffee_withdraw_liquidity {
         dex:                 "coffee"
         sender:              burn.data.owner
         sender_wallet:       burn.data.jetton_wallet
-        pool:                account(event.msg.source)
+        pool:                event.msg.source
         asset:               burn.data.asset
         lp_tokens_burnt:     burn.data.amount
         is_refund:           false
         amount1_out:         amount(event.body.amount1)
         asset1_out:          jt_1.data.asset if jt_1 != null else ton_asset()
-        dex_wallet_1:        account(payout_1.msg.source)
+        dex_wallet_1:        payout_1.msg.source
         dex_jetton_wallet_1: jt_1.data.sender_wallet if jt_1 != null else null
-        wallet1:             jt_1.data.receiver_wallet if jt_1 != null else (account(ton_1.msg.destination) if ton_1 != null else null)
+        wallet1:             jt_1.data.receiver_wallet if jt_1 != null else (ton_1.msg.destination if ton_1 != null else null)
         amount2_out:         amount(event.body.amount2)
         asset2_out:          jt_2.data.asset if jt_2 != null else ton_asset()
-        dex_wallet_2:        account(payout_2.msg.source)
+        dex_wallet_2:        payout_2.msg.source
         dex_jetton_wallet_2: jt_2.data.sender_wallet if jt_2 != null else null
-        wallet2:             jt_2.data.receiver_wallet if jt_2 != null else (account(ton_2.msg.destination) if ton_2 != null else null)
+        wallet2:             jt_2.data.receiver_wallet if jt_2 != null else (ton_2.msg.destination if ton_2 != null else null)
     }
 }

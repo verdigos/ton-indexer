@@ -126,8 +126,8 @@ matcher nft_update_sale {
     require sale = lookup nft_sale(upd.msg.destination)
     failed when (upd.msg.transaction.aborted ?? false)
     out {
-        sender:              account(upd.msg.source) ?? addr_none()
-        sale_contract:       account(upd.msg.destination) ?? addr_none()
+        sender:              upd.msg.source ?? addr_none()
+        sale_contract:       upd.msg.destination ?? addr_none()
         nft_address:         account(sale.nft_address) ?? addr_none()
         new_full_price:      amount(upd.body.new_full_price)
         new_marketplace_fee: amount(upd.body.new_mp_fee)
@@ -149,7 +149,7 @@ matcher nft_put_on_sale {
          ; btype nft_transfer @to_sale }
 
     reject when account(to_sale.data.nft.address) != account(listing.data.nft.address)
-    reject when account(to_sale.data.new_owner) != account(sale_init.msg.destination)
+    reject when account(to_sale.data.new_owner) != sale_init.msg.destination
 
     # Both independent lookups run in the same batch; chaining is forbidden.
     # The switch below picks the sale branch first — legacy's
@@ -179,7 +179,7 @@ matcher nft_put_on_sale {
             nft_collection:          account(to_sale.data.nft.collection.address) ?? addr_none()
             owner:                   account(sale.nft_owner_address) ?? addr_none()
             listing_address:         account(listing.data.new_owner) ?? addr_none()
-            sale_address:            account(sale_init.msg.destination) ?? addr_none()
+            sale_address:            sale_init.msg.destination ?? addr_none()
             full_price:              amount(sd.full_price)
             marketplace_address:     account(sd.marketplace_address) ?? addr_none()
             marketplace:             "getgems"
@@ -197,7 +197,7 @@ matcher nft_put_on_sale {
             nft_collection:      account(to_sale.data.nft.collection.address) ?? addr_none()
             owner:               account(auction.nft_owner) ?? addr_none()
             listing_address:     account(listing.data.new_owner) ?? addr_none()
-            auction_address:     account(sale_init.msg.destination) ?? addr_none()
+            auction_address:     sale_init.msg.destination ?? addr_none()
             marketplace_address: account(auction.mp_addr) ?? addr_none()
             marketplace:         "getgems"
             mp_fee_address:      account(ad.mp_fee_addr)
@@ -221,8 +221,8 @@ matcher nft_discovery {
     op NftDiscovery @disc -> op NftReportStaticData @report as NftReportStaticData
 
     out {
-        sender:            account(disc.msg.source) ?? addr_none()
-        nft:               account(disc.msg.destination) ?? addr_none()
+        sender:            disc.msg.source ?? addr_none()
+        nft:               disc.msg.destination ?? addr_none()
         result_collection: account(report.body.collection) ?? addr_none()
         result_index:      report.body.index
         query_id:          report.body.query_id
@@ -274,7 +274,7 @@ matcher auction_outbid {
         auction_address: bid.data.auction
         nft:             bid.data.nft_address
         nft_collection:  bid.data.nft_collection
-        bidder:          account(leg.msg.destination) ?? addr_none()
+        bidder:          leg.msg.destination ?? addr_none()
         new_bidder:      bid.data.bidder
         amount:          amount(leg.msg.value)
         comment:         leg.data.comment if getgems else null
@@ -296,7 +296,7 @@ matcher nft_cancel_sale {
         nft_address:         ret.data.nft.address
         nft_collection:      ret.data.nft.collection.address if ret.data.nft.collection != null else null
         owner:               ret.data.new_owner
-        trade_contract:      account(cancel.msg.destination) ?? addr_none()
+        trade_contract:      cancel.msg.destination ?? addr_none()
         marketplace_address: account(sale.marketplace_address) ?? addr_none()
     }
 }
@@ -323,7 +323,7 @@ matcher nft_finish_auction {
         nft_address:         ret.data.nft_address
         nft_collection:      ret.data.collection_address
         owner:               ret.data.new_owner
-        trade_contract:      account(cancel.msg.destination) ?? addr_none()
+        trade_contract:      cancel.msg.destination ?? addr_none()
         marketplace_address: null
     }
 }
@@ -350,14 +350,14 @@ matcher nft_cancel_auction {
             nft_address:         ret.data.nft.address
             nft_collection:      ret.data.nft.collection.address if ret.data.nft.collection != null else null
             owner:               ret.data.new_owner
-            trade_contract:      account(cancel.msg.destination) ?? addr_none()
+            trade_contract:      cancel.msg.destination ?? addr_none()
             marketplace_address: account(auction.mp_addr) ?? addr_none()
         }
         else => nft_cancel_auction out {
             nft_address:         ret.data.nft.address
             nft_collection:      ret.data.nft.collection.address if ret.data.nft.collection != null else null
             owner:               ret.data.new_owner
-            trade_contract:      account(cancel.msg.destination) ?? addr_none()
+            trade_contract:      cancel.msg.destination ?? addr_none()
             marketplace_address: account(auction.mp_addr) ?? addr_none()
         }
     }

@@ -109,20 +109,20 @@ matcher dedust_v2_withdraw {
 
     out {
         dex:                 "dedust_v2"
-        sender:              account(withdraw.msg.source)
+        sender:              withdraw.msg.source
         sender_wallet:       null
-        pool:                account(withdraw.msg.destination)
+        pool:                withdraw.msg.destination
         asset:               null
         lp_tokens_burnt:     amount(event.body.liquidity) if success else amount(withdraw.body.liquidity)
         is_refund:           not success
         amount1_out:         amount(a_1)
         asset1_out:          jt_1.data.asset if jt_1 != null else (ton_asset() if ton_1 != null else null)
-        dex_wallet_1:        jt_1.data.sender if jt_1 != null else (account(ton_1.msg.source) if ton_1 != null else null)
+        dex_wallet_1:        jt_1.data.sender if jt_1 != null else (ton_1.msg.source if ton_1 != null else null)
         dex_jetton_wallet_1: jt_1.data.sender_wallet if jt_1 != null else null
         wallet1:             jt_1.data.receiver_wallet if jt_1 != null else null
         amount2_out:         amount(a_2)
         asset2_out:          jt_2.data.asset if jt_2 != null else (ton_asset() if ton_2 != null else null)
-        dex_wallet_2:        jt_2.data.sender if jt_2 != null else (account(ton_2.msg.source) if ton_2 != null else null)
+        dex_wallet_2:        jt_2.data.sender if jt_2 != null else (ton_2.msg.source if ton_2 != null else null)
         dex_jetton_wallet_2: jt_2.data.sender_wallet if jt_2 != null else null
         wallet2:             jt_2.data.receiver_wallet if jt_2 != null else null
     }

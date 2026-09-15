@@ -102,7 +102,7 @@ matcher coffee_create_pool_creator {
         sender_jetton_wallet:  in_jt.data.sender_wallet ?? addr_none()
         amount:                amount(request.body.amount)
         provided_asset:        in_jt.data.asset ?? ton_asset()
-        pool_creator_contract: account(deploy.msg.destination)
+        pool_creator_contract: deploy.msg.destination
         deposit_recipient:     account(request.body.creation_params.ref.recipient)
         pool_first:            pool_first
         pool_second:           pool_second
@@ -136,7 +136,7 @@ matcher coffee_create_pool {
         amount:                creator.data.amount
         initiator_1:           initiator if is_second else creator.data.sender
         initiator_2:           creator.data.sender if is_second else initiator
-        pool:                  account(deploy.msg.destination)
+        pool:                  deploy.msg.destination
         asset_1:               provided if (is_first or is_second) else pool_1
         asset_2:               pool_1 if is_second else pool_2
         amount_1:              a_2 if is_second else a_1

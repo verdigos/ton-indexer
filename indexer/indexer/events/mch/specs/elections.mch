@@ -58,7 +58,7 @@ matcher election_deposit {
 
     out {
         amount:       amount(req.msg.value)
-        stake_holder: account(req.msg.source)
+        stake_holder: req.msg.source
     }
 }
 
@@ -74,6 +74,6 @@ matcher election_recover {
 
     out {
         amount?:      amount(conf.msg.value)
-        stake_holder: account(req.msg.source)
+        stake_holder: req.msg.source
     }
 }

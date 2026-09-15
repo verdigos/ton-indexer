@@ -35,8 +35,8 @@ matcher cocoon_worker_payout {
 
     failed when (payout.msg.transaction.aborted ?? false)
     out {
-        proxy_contract:   account(start.msg.source) ?? addr_none()
-        worker_contract:  account(start.msg.destination) ?? addr_none()
+        proxy_contract:   start.msg.source ?? addr_none()
+        worker_contract:  start.msg.destination ?? addr_none()
         worker_owner:     account(wreq.body.owner_address) ?? addr_none()
         payout_type:      "last" if start.data.opcode == 0xF5F26A36 else "regular"
         query_id:         start.body.query_id
@@ -58,8 +58,8 @@ matcher cocoon_proxy_payout {
 
     failed when (payout.msg.transaction.aborted ?? false)
     out {
-        proxy_contract:     account(req.msg.destination) ?? addr_none()
-        proxy_owner:        account(payout.msg.destination) ?? addr_none()
+        proxy_contract:     req.msg.destination ?? addr_none()
+        proxy_owner:        payout.msg.destination ?? addr_none()
         excesses_recipient: account(req.body.send_excesses_to) ?? addr_none()
         query_id:           req.body.query_id
     }
@@ -76,8 +76,8 @@ matcher cocoon_proxy_charge {
 
     failed when (charge.msg.transaction.aborted ?? false)
     out {
-        proxy_contract:   account(charge.msg.destination) ?? addr_none()
-        client_contract:  account(client_request.msg.destination) ?? addr_none()
+        proxy_contract:   charge.msg.destination ?? addr_none()
+        client_contract:  client_request.msg.destination ?? addr_none()
         query_id:         charge.body.query_id
         new_tokens_used:  charge.body.new_tokens_used
         expected_address: cocoon_expected_address(charge.body.expected_my_address)
@@ -94,8 +94,8 @@ matcher cocoon_client_top_up {
 
     failed when (topup.msg.transaction.aborted ?? false)
     out {
-        client_contract: account(topup.msg.destination) ?? addr_none()
-        proxy_contract:  account(preq.msg.destination) ?? addr_none()
+        client_contract: topup.msg.destination ?? addr_none()
+        proxy_contract:  preq.msg.destination ?? addr_none()
         sender:          account(topup.body.send_excesses_to) ?? addr_none()
         query_id:        topup.body.query_id
         top_up_amount:   amount(topup.body.top_up_amount)
@@ -110,7 +110,7 @@ matcher cocoon_register_proxy {
 
     failed when (reg.msg.transaction.aborted ?? false)
     out {
-        root_contract: account(reg.msg.destination) ?? addr_none()
+        root_contract: reg.msg.destination ?? addr_none()
         query_id:      reg.body.query_id
     }
 }
@@ -123,7 +123,7 @@ matcher cocoon_unregister_proxy {
 
     failed when (unreg.msg.transaction.aborted ?? false)
     out {
-        root_contract: account(unreg.msg.destination) ?? addr_none()
+        root_contract: unreg.msg.destination ?? addr_none()
         query_id:      unreg.body.query_id
         seqno:         unreg.body.seqno
     }
@@ -139,7 +139,7 @@ matcher cocoon_client_register {
 
     failed when (reg.msg.transaction.aborted ?? false)
     out {
-        client_contract: account(reg.msg.destination) ?? addr_none()
+        client_contract: reg.msg.destination ?? addr_none()
         owner:           account(reg.body.send_excesses_to) ?? addr_none()
         query_id:        reg.body.query_id
         nonce:           reg.body.nonce
@@ -157,7 +157,7 @@ matcher cocoon_client_change_secret_hash {
 
     failed when (chg.msg.transaction.aborted ?? false)
     out {
-        client_contract: account(chg.msg.destination) ?? addr_none()
+        client_contract: chg.msg.destination ?? addr_none()
         owner:           account(chg.body.send_excesses_to) ?? addr_none()
         query_id:        chg.body.query_id
         new_secret_hash: chg.body.new_secret_hash
@@ -180,7 +180,7 @@ matcher cocoon_client_request_refund {
 
     failed when (refund.msg.transaction.aborted ?? false)
     out {
-        client_contract: account(refund.msg.destination) ?? addr_none()
+        client_contract: refund.msg.destination ?? addr_none()
         owner:           account(refund.body.send_excesses_to) ?? addr_none()
         query_id:        refund.body.query_id
         via_wallet:      wallet != null
@@ -198,9 +198,9 @@ matcher cocoon_grant_refund {
 
     failed when (payout.msg.transaction.aborted ?? false)
     out {
-        proxy_contract:   account(grant.msg.destination) ?? addr_none()
-        client_contract:  account(client_request.msg.destination) ?? addr_none()
-        refund_recipient: account(payout.msg.destination) ?? addr_none()
+        proxy_contract:   grant.msg.destination ?? addr_none()
+        client_contract:  client_request.msg.destination ?? addr_none()
+        refund_recipient: payout.msg.destination ?? addr_none()
         query_id:         grant.body.query_id
         new_tokens_used:  grant.body.new_tokens_used
         expected_address: cocoon_expected_address(grant.body.expected_my_address)
@@ -219,7 +219,7 @@ matcher cocoon_client_increase_stake {
     failed when (inc.msg.transaction.aborted ?? false)
     out {
         owner:           account(inc.body.send_excesses_to) ?? addr_none()
-        client_contract: account(inc.msg.destination) ?? addr_none()
+        client_contract: inc.msg.destination ?? addr_none()
         query_id:        inc.body.query_id
         new_stake:       amount(inc.body.new_stake)
     }
@@ -241,7 +241,7 @@ matcher cocoon_client_withdraw {
     failed when (wd.msg.transaction.aborted ?? false)
     out {
         owner:           account(wd.body.send_excesses_to) ?? addr_none()
-        client_contract: account(wd.msg.destination) ?? addr_none()
+        client_contract: wd.msg.destination ?? addr_none()
         query_id:        wd.body.query_id
         withdraw_amount: amount(granted.coins ?? 0)
     }

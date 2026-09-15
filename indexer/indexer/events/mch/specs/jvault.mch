@@ -64,8 +64,8 @@ matcher jvault_stake {
         sender:        account(transfer.data.sender)
         sender_wallet: account(transfer.data.sender_wallet)
         asset:         transfer.data.asset
-        stake_wallet:  account(receive.msg.destination)
-        staking_pool:  account(receive.msg.source)
+        stake_wallet:  receive.msg.destination
+        staking_pool:  receive.msg.source
         staked_amount: transfer.data.desired_amount.value
         period:        parse! transfer.data.forward_payload as JVaultStakePeriodPayload.stake_period
     }
@@ -93,9 +93,9 @@ matcher jvault_unstake {
     reject when assets.asset == null
     reject when (not early) and (assets.asset != withdraw.data.asset)
     out {
-        sender:            account(unstake.msg.source)
-        stake_wallet:      account(unstake.msg.destination)
-        staking_pool:      account(request.msg.destination) if not early else assets.staking_pool
+        sender:            unstake.msg.source
+        stake_wallet:      unstake.msg.destination
+        staking_pool:      request.msg.destination if not early else assets.staking_pool
         unstaked_amount:   unstake.body.jettons_to_unstake
         unstake_fee_taken: (fee.msg.value ?? 0) if not early else null
         asset:             withdraw.data.asset if not early else assets.asset
@@ -120,9 +120,9 @@ matcher jvault_claim {
     # `.value` — the same scalar legacy reads as
     # withdrawal.jetton_transfer_message.amount — as a one-element list literal.
     out {
-        sender:          account(claim.msg.source)
-        stake_wallet:    account(claim.msg.destination)
-        staking_pool:    account(send.msg.destination)
+        sender:          claim.msg.source
+        stake_wallet:    claim.msg.destination
+        staking_pool:    send.msg.destination
         claimed_jettons: map(claim.body.jettons_to_claim as kv => account(first(kv)))
         claimed_amounts: [ withdraw.data.desired_amount.value ]
     }
@@ -147,9 +147,9 @@ matcher jvault_unstake_request {
     failed when early
     failed when (not early) and (request_anchor.failed or request.failed)
     out {
-        sender:           account(request_anchor.msg.source)
-        stake_wallet:     account(request_anchor.msg.destination)
-        staking_pool:     assets.staking_pool if early else account(request.msg.destination)
+        sender:           request_anchor.msg.source
+        stake_wallet:     request_anchor.msg.destination
+        staking_pool:     assets.staking_pool if early else request.msg.destination
         requested_amount: request_anchor.body.jettons_to_unstake
         asset:            assets.asset
         jvault_asset:     assets.jvault_asset

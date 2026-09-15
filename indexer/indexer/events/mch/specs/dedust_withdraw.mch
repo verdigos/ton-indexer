@@ -40,20 +40,20 @@ matcher dedust_withdraw {
     require lp_wallet = lookup jetton_wallet(burn.msg.destination)
     out {
         dex:                 "dedust"
-        sender:              account(burn.msg.source)
-        sender_wallet:       account(burn.msg.destination)
-        pool:                account(notification.msg.destination)
+        sender:              burn.msg.source
+        sender_wallet:       burn.msg.destination
+        pool:                notification.msg.destination
         asset:               asset(lp_wallet.jetton)
         lp_tokens_burnt:     amount(burn.body.amount)
         is_refund:           false
         amount1_out:         amount(req_1.body.amount)
         asset1_out:          ton_asset() if jt_1 == null else jt_1.data.asset
-        dex_wallet_1:        account(ton_1.msg.source) if jt_1 == null else jt_1.data.sender
+        dex_wallet_1:        ton_1.msg.source if jt_1 == null else jt_1.data.sender
         dex_jetton_wallet_1: null if jt_1 == null else jt_1.data.sender_wallet
         wallet1:             null if jt_1 == null else jt_1.data.receiver_wallet
         amount2_out:         amount(req_2.body.amount)
         asset2_out:          ton_asset() if jt_2 == null else jt_2.data.asset
-        dex_wallet_2:        account(ton_2.msg.source) if jt_2 == null else jt_2.data.sender
+        dex_wallet_2:        ton_2.msg.source if jt_2 == null else jt_2.data.sender
         dex_jetton_wallet_2: null if jt_2 == null else jt_2.data.sender_wallet
         wallet2:             null if jt_2 == null else jt_2.data.receiver_wallet
     }

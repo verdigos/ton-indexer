@@ -40,7 +40,7 @@ matcher pton_transfer {
     failed when transfer.failed
     out {
         has_internal_transfer: false
-        sender:                account(transfer.msg.source)
+        sender:                transfer.msg.source
         sender_wallet:         null
         receiver:              account(transfer.body.destination)
         receiver_wallet:       null

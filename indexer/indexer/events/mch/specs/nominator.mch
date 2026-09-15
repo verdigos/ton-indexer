@@ -46,8 +46,8 @@ matcher nominator_pool_withdraw {
 
     require pool_iface = lookup nominator_pool(payout.msg.source)
     out {
-        source:        account(payout.msg.destination)
-        pool:          account(payout.msg.source)
+        source:        payout.msg.destination
+        pool:          payout.msg.source
         payout_amount: amount(payout.msg.value)
     }
 }
@@ -64,8 +64,8 @@ matcher nominator_pool_deposit {
     require pool_iface = lookup nominator_pool(deposit.msg.destination)
     failed when deposit.failed
     out {
-        source: account(deposit.msg.source)
-        pool:   account(deposit.msg.destination)
+        source: deposit.msg.source
+        pool:   deposit.msg.destination
         value:  amount(deposit.msg.value)
     }
 }
@@ -83,8 +83,8 @@ matcher nominator_pool_withdraw_request {
     require pool_iface = lookup nominator_pool(request.msg.destination)
     failed when request.failed
     out {
-        source:        account(request.msg.source)
-        pool:          account(request.msg.destination)
+        source:        request.msg.source
+        pool:          request.msg.destination
         payout_amount: nominator_withdraw_payout_amount(request)
     }
 }

@@ -157,10 +157,10 @@ matcher evaa_withdraw {
     reject when success and not is_ton and jetton_payout == null
     reject when coll_ok == null and coll_fail == null and fail_excess == null
     out {
-        owner:                   account(master.msg.source)
-        owner_contract:          account(user.msg.destination)
+        owner:                   master.msg.source
+        owner_contract:          user.msg.destination
         recipient:               account(master.body.recipient_address)
-        master:                  account(master.msg.destination)
+        master:                  master.msg.destination
         asset_id:                master.body.asset_id
         is_ton:                  is_ton
         is_success:              success

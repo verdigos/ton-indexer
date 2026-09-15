@@ -40,15 +40,15 @@ matcher dedust_v2_claim_reward {
 
     out {
         dex:               "dedust_v2"
-        sender:            account(claim.msg.source)
-        pool:              account(claim.msg.destination)
-        position:          account(payout_reward.msg.source)
+        sender:            claim.msg.source
+        pool:              claim.msg.destination
+        position:          payout_reward.msg.source
         owner:             payout_reward.body.ownerAddress
         reward_index:      claim.body.rewardIndex
         amount:            amount(payout_reward.body.amount)
         asset:             jt.data.asset if jt != null else (ton_asset() if ton != null else null)
         user_wallet:       jt.data.receiver_wallet if jt != null else null
         dex_jetton_wallet: jt.data.sender_wallet if jt != null else null
-        dex_wallet:        jt.data.sender if jt != null else (account(ton.msg.source) if ton != null else null)
+        dex_wallet:        jt.data.sender if jt != null else (ton.msg.source if ton != null else null)
     }
 }

@@ -109,23 +109,23 @@ matcher dedust_v2_swap {
 
     out {
         dex:               "dedust_v2"
-        sender:            carrier.data.sender if jetton_in else account(carrier.msg.source)
+        sender:            carrier.data.sender if jetton_in else carrier.msg.source
         source_asset:      source_asset
         destination_asset: out_asset
         dex_incoming_transfer: {
             asset:                     source_asset
             amount:                    amount(first(amounts_in))
-            source:                    carrier.data.sender if jetton_in else account(carrier.msg.source)
+            source:                    carrier.data.sender if jetton_in else carrier.msg.source
             source_jetton_wallet:      carrier.data.sender_wallet if jetton_in else null
-            destination:               carrier.data.receiver if jetton_in else account(carrier.msg.destination)
+            destination:               carrier.data.receiver if jetton_in else carrier.msg.destination
             destination_jetton_wallet: carrier.data.receiver_wallet if jetton_in else null
         }
         dex_outgoing_transfer: {
             asset:                     out_asset
             amount:                    amount(last(amounts_out))
-            source:                    out_leg.data.sender if out_jetton else account(out_leg.msg.source)
+            source:                    out_leg.data.sender if out_jetton else out_leg.msg.source
             source_jetton_wallet:      out_leg.data.sender_wallet if out_jetton else null
-            destination:               out_leg.data.receiver if out_jetton else account(out_leg.msg.destination)
+            destination:               out_leg.data.receiver if out_jetton else out_leg.msg.destination
             destination_jetton_wallet: out_leg.data.receiver_wallet if out_jetton else null
         }
         peer_swaps: map(hops as h => {
@@ -182,8 +182,8 @@ matcher dedust_v2_failed_swap {
     reject when jetton_in and refund_jt.data.asset != source_asset
     reject when jetton_in and refund_jt.data.receiver != carrier.data.sender
 
-    let sender = carrier.data.sender if jetton_in else account(carrier.msg.source)
-    let pool   = carrier.data.receiver if jetton_in else account(carrier.msg.destination)
+    let sender = carrier.data.sender if jetton_in else carrier.msg.source
+    let pool   = carrier.data.receiver if jetton_in else carrier.msg.destination
     let assets = lookup dedust_pool(pool).assets
     let a0     = first(assets)
     let a1     = last(assets)

@@ -26,8 +26,8 @@ matcher change_wallet_key {
     failed when (req.msg.transaction.aborted ?? false)
 
     out {
-        source:      account(req.msg.source)
-        destination: account(req.msg.destination)
+        source:      req.msg.source
+        destination: req.msg.destination
         value:       amount(req.msg.value)
     }
 }

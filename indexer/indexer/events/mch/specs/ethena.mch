@@ -104,15 +104,15 @@ matcher ethena_withdrawal_request {
     let dst_wallet_info = lookup jetton_wallet(ts_usde_transfer.msg.destination)
     reject when src_wallet_info == null
     reject when dst_wallet_info == null
-    reject when account(src_wallet_info.owner)  != account(transfer.msg.source)
-    reject when account(dst_wallet_info.owner)  != account(transfer.msg.source)
-    reject when account(src_wallet_info.jetton) != account(internal_transfer.msg.destination)
-    reject when account(dst_wallet_info.jetton) != account(ts_usde_transfer.msg.source)
+    reject when account(src_wallet_info.owner)  != transfer.msg.source
+    reject when account(dst_wallet_info.owner)  != transfer.msg.source
+    reject when account(src_wallet_info.jetton) != internal_transfer.msg.destination
+    reject when account(dst_wallet_info.jetton) != ts_usde_transfer.msg.source
     out {
-        source:          account(transfer.msg.source)
-        source_wallet:   account(transfer.msg.destination)
-        receiver_wallet: account(ts_usde_transfer.msg.destination)
-        pool:            account(mint.msg.source)
+        source:          transfer.msg.source
+        source_wallet:   transfer.msg.destination
+        receiver_wallet: ts_usde_transfer.msg.destination
+        pool:            mint.msg.source
         asset:           account(src_wallet_info.jetton)
         amount:          amount(internal_transfer.body.amount)
         ts_usde_amount:  amount(ts_usde_transfer.body.amount)

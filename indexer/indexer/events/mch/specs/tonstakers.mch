@@ -64,7 +64,7 @@ matcher tonstakers_delayed_withdrawal {
 
     out {
         stake_holder: account(notification.body.owner)
-        burnt_nft:    account(notification.msg.source)
+        burnt_nft:    notification.msg.source
         pool:         tonstakers_pool_addr(notification)
         tokens_burnt: amount(notification.body.amount)
         amount:       amount(distributed.msg.value)
@@ -109,9 +109,9 @@ matcher tonstakers_deposit {
     let ok = not deposit.failed
     failed when deposit.failed
     out {
-        source:             account(deposit.msg.source)
-        user_jetton_wallet: account(transfer.msg.destination) if ok else null
-        pool:               account(deposit.msg.destination)
+        source:             deposit.msg.source
+        user_jetton_wallet: transfer.msg.destination if ok else null
+        pool:               deposit.msg.destination
         # 1 TON deposit fee, subtracted verbatim from the request's value.
         value:              amount(deposit.msg.value - 1000000000)
         tokens_minted:      amount(transfer.body.amount) if ok else null
@@ -148,22 +148,22 @@ matcher tonstakers_withdraw {
                       ; maybe peek op TONStakersInitNFT @minted_call }
              }
 
-    let minted = (account(minted_block.msg.destination) ?? addr_none()) if minted_block != null else ((account(minted_call.msg.destination) ?? addr_none()) if minted_call != null else null)
+    let minted = (minted_block.msg.destination ?? addr_none()) if minted_block != null else ((minted_call.msg.destination ?? addr_none()) if minted_call != null else null)
     failed when burn.failed
     failed when immediate_withdrawal == null and minted == null
     produces switch {
         when immediate_withdrawal != null => tonstakers_withdraw out {
-            stake_holder: account(burn.msg.source)
+            stake_holder: burn.msg.source
             burnt_nft:    null
-            pool:         account(request.msg.destination)
+            pool:         request.msg.destination
             tokens_burnt: amount(burn.body.amount)
             amount:       amount(immediate_withdrawal.msg.value - request.msg.value)
             asset:        asset(request.msg.source)
         }
         else => tonstakers_withdraw_request out {
-            source:       account(burn.msg.source)
-            tsTON_wallet: account(burn.msg.destination)
-            pool:         account(request.msg.destination)
+            source:       burn.msg.source
+            tsTON_wallet: burn.msg.destination
+            pool:         request.msg.destination
             tokens_burnt: amount(burn.body.amount)
             minted_nft:   minted
             asset:        asset(request.msg.source)

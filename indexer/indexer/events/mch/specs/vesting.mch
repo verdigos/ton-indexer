@@ -24,8 +24,8 @@ matcher vesting_send_message {
     op VestingSendMessage @send as VestingSendMessage -> op VestingSendMessageResponse @response
 
     out {
-        sender:              account(send.msg.source)
-        vesting:             account(send.msg.destination)
+        sender:              send.msg.source
+        vesting:             send.msg.destination
         query_id:            send.body.query_id
         message_boc_str:     b64(send.body.message_cell)
         message_destination: account(send.body.message_destination)
@@ -69,8 +69,8 @@ matcher vesting_add_whitelist {
     op VestingAddWhiteList @add as VestingAddWhiteList -> op VestingAddWhiteListResponse @response
 
     out {
-        adder:          account(add.msg.source)
-        vesting:        account(add.msg.destination)
+        adder:          add.msg.source
+        vesting:        add.msg.destination
         query_id:       add.body.query_id
         accounts_added: map(add.body.addresses as a => account(a) ?? addr_none())
     }
