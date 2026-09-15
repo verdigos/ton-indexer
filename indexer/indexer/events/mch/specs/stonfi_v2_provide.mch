@@ -50,6 +50,8 @@
 # mandatory) registers FIRST and consumes completed legs; `partial` picks up
 # the rest.
 
+import "lib/leg.mch"
+
 opcode StonfiV2ProvideLiquidity = 0x37c096df
 opcode StonfiV2AddLiquidity     = 0x50c6a654
 opcode StonfiV2CbAddLiquidity   = 0x06ecd527
@@ -82,14 +84,14 @@ matcher stonfi_v2_provide_final {
         <- $in_leg
     }
 
-    let in_jt_block = in_jt ?? in_jt_raw
+    let l = leg(in_jt ?? in_jt_raw ?? notify_pton)
     failed when refund != null
     out {
         dex:             "stonfi_v2"
         amount_1:        amount(provide.body.amount1) if provide.body.amount1 > 0 else amount(provide.body.amount2)
-        asset_1:         ton_asset() if in_jt_block == null else in_jt_block.data.asset
+        asset_1:         l.asset
         sender:          account(provide.body.from_user)
-        sender_wallet_1: null if in_jt_block == null else in_jt_block.data.sender_wallet
+        sender_wallet_1: l.source_wallet
         amount_2:        null
         asset_2:         null
         sender_wallet_2: null
@@ -107,13 +109,13 @@ matcher stonfi_v2_provide_partial {
         <- $in_leg
     }
 
-    let in_jt_block = in_jt ?? in_jt_raw
+    let l = leg(in_jt ?? in_jt_raw ?? notify_pton)
     out {
         dex:             "stonfi_v2"
         amount_1:        amount(provide.body.amount1) if provide.body.amount1 > 0 else amount(provide.body.amount2)
-        asset_1:         ton_asset() if in_jt_block == null else in_jt_block.data.asset
+        asset_1:         l.asset
         sender:          account(provide.body.from_user)
-        sender_wallet_1: null if in_jt_block == null else in_jt_block.data.sender_wallet
+        sender_wallet_1: l.source_wallet
         amount_2:        null
         asset_2:         null
         sender_wallet_2: null

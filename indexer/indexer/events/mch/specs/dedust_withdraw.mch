@@ -17,6 +17,8 @@
 # so its coin amount is read via a declarative `parse`, replacing the legacy
 # `payout.previous_block` navigation.
 
+import "lib/leg.mch"
+
 opcode JettonBurn             = 0x595f07bc
 opcode JettonBurnNotification = 0x7bdd97de
 opcode DedustPayoutFromPool   = 0xad4eb6f5
@@ -38,6 +40,9 @@ matcher dedust_withdraw {
                                                                      } }
 
     require lp_wallet = lookup jetton_wallet(burn.msg.destination)
+    let l1 = leg(jt_1 ?? ton_1)
+    let l2 = leg(jt_2 ?? ton_2)
+
     out {
         dex:                 "dedust"
         sender:              burn.msg.source
@@ -47,14 +52,14 @@ matcher dedust_withdraw {
         lp_tokens_burnt:     amount(burn.body.amount)
         is_refund:           false
         amount1_out:         amount(req_1.body.amount)
-        asset1_out:          ton_asset() if jt_1 == null else jt_1.data.asset
-        dex_wallet_1:        ton_1.msg.source if jt_1 == null else jt_1.data.sender
-        dex_jetton_wallet_1: null if jt_1 == null else jt_1.data.sender_wallet
-        wallet1:             null if jt_1 == null else jt_1.data.receiver_wallet
+        asset1_out:          l1.asset
+        dex_wallet_1:        l1.source
+        dex_jetton_wallet_1: l1.source_wallet
+        wallet1:             l1.destination_wallet
         amount2_out:         amount(req_2.body.amount)
-        asset2_out:          ton_asset() if jt_2 == null else jt_2.data.asset
-        dex_wallet_2:        ton_2.msg.source if jt_2 == null else jt_2.data.sender
-        dex_jetton_wallet_2: null if jt_2 == null else jt_2.data.sender_wallet
-        wallet2:             null if jt_2 == null else jt_2.data.receiver_wallet
+        asset2_out:          l2.asset
+        dex_wallet_2:        l2.source
+        dex_jetton_wallet_2: l2.source_wallet
+        wallet2:             l2.destination_wallet
     }
 }

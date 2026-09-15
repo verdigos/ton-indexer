@@ -77,6 +77,8 @@
 # family's and neither binds a jetton_transfer the deposit carriers could be, so
 # the inversion is unobservable.
 
+import "lib/leg.mch"
+
 opcode DedustV2PayNative       = 0xa5a7cbf8
 opcode DedustV2CreditAsset     = 0xdc5ddba1
 opcode DedustV2JoinLiquidity   = 0x25251ee0
@@ -135,8 +137,7 @@ matcher dedust_v2_deposit_final {
     # parse_payout_leg's deposit twin (_deposit_leg): a jetton carrier gives the
     # leg's asset and the USER's wallet off the prebuilt block, a TON carrier is
     # plain TON with no wallet.
-    let leg_asset  = carrier.data.asset if jetton_in else ton_asset()
-    let leg_wallet = carrier.data.sender_wallet if jetton_in else null
+    let l = leg(carrier)
 
     let carrier_cell = (parse? carrier.data.forward_payload as DedustV2PayJetton).payment_payload if jetton_in else carrier.body.payment_payload
     let payload      = parse? carrier_cell as DedustV2DepositPayload
@@ -160,11 +161,11 @@ matcher dedust_v2_deposit_final {
         pool:             join.msg.destination
         deposit_contract: join.msg.source
         amount_1:         amount(event.body.amount_x_in)
-        asset_1:          leg_asset if is_x else null
-        sender_wallet_1:  leg_wallet if is_x else null
+        asset_1:          l.asset if is_x else null
+        sender_wallet_1:  l.source_wallet if is_x else null
         amount_2:         amount(event.body.amount_y_in)
-        asset_2:          null if is_x else leg_asset
-        sender_wallet_2:  null if is_x else leg_wallet
+        asset_2:          null if is_x else l.asset
+        sender_wallet_2:  null if is_x else l.source_wallet
         target_amount_1:  amount(payload.amount_x)
         target_amount_2:  amount(payload.amount_y)
         lp_tokens_minted: amount(event.body.liquidity)
@@ -204,8 +205,7 @@ matcher dedust_v2_deposit_rejected {
     let is_x      = credit.body.is_x
     let jetton_in = carrier.btype == "jetton_transfer"
 
-    let leg_asset  = carrier.data.asset if jetton_in else ton_asset()
-    let leg_wallet = carrier.data.sender_wallet if jetton_in else null
+    let l = leg(carrier)
 
     let carrier_cell = (parse? carrier.data.forward_payload as DedustV2PayJetton).payment_payload if jetton_in else carrier.body.payment_payload
     let payload      = parse? carrier_cell as DedustV2DepositPayload
@@ -230,11 +230,11 @@ matcher dedust_v2_deposit_rejected {
         pool:             join.msg.destination
         deposit_contract: join.msg.source
         amount_1:         amount(join.body.amount_x)
-        asset_1:          leg_asset if is_x else null
-        sender_wallet_1:  leg_wallet if is_x else null
+        asset_1:          l.asset if is_x else null
+        sender_wallet_1:  l.source_wallet if is_x else null
         amount_2:         amount(join.body.amount_y)
-        asset_2:          null if is_x else leg_asset
-        sender_wallet_2:  null if is_x else leg_wallet
+        asset_2:          null if is_x else l.asset
+        sender_wallet_2:  null if is_x else l.source_wallet
         target_amount_1:  amount(payload.amount_x)
         target_amount_2:  amount(payload.amount_y)
         lp_tokens_minted: null
@@ -261,23 +261,21 @@ matcher dedust_v2_deposit_partial {
     parse carrier as DedustV2PayNative
 
     let is_x      = credit.body.is_x
-    let jetton_in = carrier.btype == "jetton_transfer"
 
-    let leg_asset  = carrier.data.asset if jetton_in else ton_asset()
-    let leg_wallet = carrier.data.sender_wallet if jetton_in else null
+    let l = leg(carrier)
     let leg_amount = amount(credit.body.amount)
 
     out {
         dex:              "dedust_v2"
-        sender:           carrier.data.sender if jetton_in else carrier.msg.source
+        sender:           l.source
         pool:             credit.msg.source
         deposit_contract: credit.msg.destination
         amount_1:         leg_amount if is_x else null
-        asset_1:          leg_asset if is_x else null
-        sender_wallet_1:  leg_wallet if is_x else null
+        asset_1:          l.asset if is_x else null
+        sender_wallet_1:  l.source_wallet if is_x else null
         amount_2:         null if is_x else leg_amount
-        asset_2:          null if is_x else leg_asset
-        sender_wallet_2:  null if is_x else leg_wallet
+        asset_2:          null if is_x else l.asset
+        sender_wallet_2:  null if is_x else l.source_wallet
         lp_tokens_minted: null
     }
 }

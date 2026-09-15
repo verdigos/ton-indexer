@@ -70,6 +70,8 @@
 # jetton_transfer` blocks those must have built first — the default priority 100
 # gives that for free.
 
+import "lib/leg.mch"
+
 opcode DedustV2Withdraw          = 0x20B5EF89
 opcode DedustV2WithdrawLiquidity = 0xBC1531A9
 opcode DedustV2ExitLiquidity     = 0xF6F6A3AA
@@ -107,6 +109,9 @@ matcher dedust_v2_withdraw {
 
     failed when not success
 
+    let l1 = leg(jt_1 ?? ton_1)
+    let l2 = leg(jt_2 ?? ton_2)
+
     out {
         dex:                 "dedust_v2"
         sender:              withdraw.msg.source
@@ -116,14 +121,14 @@ matcher dedust_v2_withdraw {
         lp_tokens_burnt:     amount(event.body.liquidity) if success else amount(withdraw.body.liquidity)
         is_refund:           not success
         amount1_out:         amount(a_1)
-        asset1_out:          jt_1.data.asset if jt_1 != null else (ton_asset() if ton_1 != null else null)
-        dex_wallet_1:        jt_1.data.sender if jt_1 != null else (ton_1.msg.source if ton_1 != null else null)
-        dex_jetton_wallet_1: jt_1.data.sender_wallet if jt_1 != null else null
-        wallet1:             jt_1.data.receiver_wallet if jt_1 != null else null
+        asset1_out:          l1.asset
+        dex_wallet_1:        l1.source
+        dex_jetton_wallet_1: l1.source_wallet
+        wallet1:             l1.destination_wallet
         amount2_out:         amount(a_2)
-        asset2_out:          jt_2.data.asset if jt_2 != null else (ton_asset() if ton_2 != null else null)
-        dex_wallet_2:        jt_2.data.sender if jt_2 != null else (ton_2.msg.source if ton_2 != null else null)
-        dex_jetton_wallet_2: jt_2.data.sender_wallet if jt_2 != null else null
-        wallet2:             jt_2.data.receiver_wallet if jt_2 != null else null
+        asset2_out:          l2.asset
+        dex_wallet_2:        l2.source
+        dex_jetton_wallet_2: l2.source_wallet
+        wallet2:             l2.destination_wallet
     }
 }

@@ -14,6 +14,8 @@
 # by no other spec, so this file's position in the built-in source list carries no
 # tie-break.
 
+import "lib/leg.mch"
+
 opcode CoffeeDepositLiquidityNative           = 0xc0ffee04
 opcode CoffeeCreateVault                      = 0xc0ffee06
 opcode CoffeePayoutInternal                   = 0xc0ffee21
@@ -85,12 +87,11 @@ matcher coffee_deposit_liquidity {
     }
 
 
-    let in_asset   = ton_asset() if in_jt == null else in_jt.data.asset
-    let in_wallet  = null if in_jt == null else in_jt.data.sender_wallet
+    let l = leg(in_jt ?? in_native)
     let pool_first = asset_of(request.body.pool_params.ref.pool_first)
     let pool_second = asset_of(request.body.pool_params.ref.pool_second)
-    let is_first   = in_asset == pool_first
-    reject when not (is_first or in_asset == pool_second)
+    let is_first   = l.asset == pool_first
+    reject when not (is_first or l.asset == pool_second)
 
     let in_amount = amount(request.body.amount)
     # The vault's excess refund — whichever arm of the payout terminal bound.
@@ -104,12 +105,12 @@ matcher coffee_deposit_liquidity {
         pool_address:         success.msg.source if success != null else null
         deposit_contract:     deploy.msg.destination
         vault_excesses:       excess_jetton ?? excess_ton ?? []
-        asset_1:              in_asset if is_first else null
+        asset_1:              l.asset if is_first else null
         amount_1:             in_amount if is_first else null
-        user_jetton_wallet_1: in_wallet if is_first else null
-        asset_2:              null if is_first else in_asset
+        user_jetton_wallet_1: l.source_wallet if is_first else null
+        asset_2:              null if is_first else l.asset
         amount_2:             null if is_first else in_amount
-        user_jetton_wallet_2: null if is_first else in_wallet
+        user_jetton_wallet_2: null if is_first else l.source_wallet
         target_asset_1:       pool_first if is_first else pool_second
         target_amount_1:      null
         target_asset_2:       pool_second if is_first else pool_first

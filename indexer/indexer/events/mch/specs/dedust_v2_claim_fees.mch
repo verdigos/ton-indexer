@@ -39,6 +39,8 @@
 # serializer fill (_fill_dedust_v2_claim_fees) serves both the legacy block and
 # this one.
 
+import "lib/leg.mch"
+
 opcode ClaimPositionFees            = 0x5652f1df
 opcode ClaimAvailableFees           = 0x25f19752
 opcode DedustV2PayoutPositionFees   = 0x29ff1bcf
@@ -64,17 +66,11 @@ matcher dedust_v2_claim_fees {
     # Per-leg projection (parse_payout_leg, dedust_v2/common.py:28): a jetton leg
     # reads the prebuilt block's data, a TON leg is (amount, TON, no user wallet,
     # the payer, no dex jetton wallet).
+    let l1 = leg(jt_1 ?? ton_1)
     let a_1     = jt_1.data.amount.value ?? ton_1.body.amount
-    let asset_1 = jt_1.data.asset if jt_1 != null else (ton_asset() if ton_1 != null else null)
-    let uw_1    = jt_1.data.receiver_wallet if jt_1 != null else null
-    let dw_1    = jt_1.data.sender if jt_1 != null else (ton_1.msg.source if ton_1 != null else null)
-    let djw_1   = jt_1.data.sender_wallet if jt_1 != null else null
 
+    let l2 = leg(jt_2 ?? ton_2)
     let a_2     = jt_2.data.amount.value ?? ton_2.body.amount
-    let asset_2 = jt_2.data.asset if jt_2 != null else (ton_asset() if ton_2 != null else null)
-    let uw_2    = jt_2.data.receiver_wallet if jt_2 != null else null
-    let dw_2    = jt_2.data.sender if jt_2 != null else (ton_2.msg.source if ton_2 != null else null)
-    let djw_2   = jt_2.data.sender_wallet if jt_2 != null else null
 
     let xf     = payout_fees.body.x_fees
     let yf     = payout_fees.body.y_fees
@@ -91,13 +87,13 @@ matcher dedust_v2_claim_fees {
         owner:               account(payout_fees.body.owner)
         amount_x:            amount(xf)
         amount_y:            amount(yf)
-        asset_x:             asset_1 if x_is_1 else (asset_2 if x_is_2 else null)
-        asset_y:             asset_1 if y_is_1 else (asset_2 if y_is_2 else null)
-        user_wallet_x:       uw_1    if x_is_1 else (uw_2    if x_is_2 else null)
-        user_wallet_y:       uw_1    if y_is_1 else (uw_2    if y_is_2 else null)
-        dex_wallet_x:        dw_1    if x_is_1 else (dw_2    if x_is_2 else null)
-        dex_wallet_y:        dw_1    if y_is_1 else (dw_2    if y_is_2 else null)
-        dex_jetton_wallet_x: djw_1   if x_is_1 else (djw_2   if x_is_2 else null)
-        dex_jetton_wallet_y: djw_1   if y_is_1 else (djw_2   if y_is_2 else null)
+        asset_x:             l1.asset if x_is_1 else (l2.asset if x_is_2 else null)
+        asset_y:             l1.asset if y_is_1 else (l2.asset if y_is_2 else null)
+        user_wallet_x:       l1.destination_wallet if x_is_1 else (l2.destination_wallet if x_is_2 else null)
+        user_wallet_y:       l1.destination_wallet if y_is_1 else (l2.destination_wallet if y_is_2 else null)
+        dex_wallet_x:        l1.source if x_is_1 else (l2.source if x_is_2 else null)
+        dex_wallet_y:        l1.source if y_is_1 else (l2.source if y_is_2 else null)
+        dex_jetton_wallet_x: l1.source_wallet if x_is_1 else (l2.source_wallet if x_is_2 else null)
+        dex_jetton_wallet_y: l1.source_wallet if y_is_1 else (l2.source_wallet if y_is_2 else null)
     }
 }

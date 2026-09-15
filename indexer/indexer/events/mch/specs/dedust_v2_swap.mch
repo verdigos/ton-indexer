@@ -47,6 +47,7 @@
 # serializer fill (_fill_jetton_swap_action) serves both builds.
 
 import "lib/common.mch"
+import "lib/leg.mch"
 
 opcode DedustV2PayNative = 0xa5a7cbf8
 opcode DedustV2SwapEvent = 0x78e79ba4
@@ -86,24 +87,24 @@ matcher dedust_v2_swap {
     # only read under `jetton_in == false`.
     parse ev       as DedustV2SwapEvent
 
+    let l = leg(carrier)
     let jetton_in    = carrier.btype == "jetton_transfer"
-    let source_asset = carrier.data.asset if jetton_in else ton_asset()
     let carrier_cell = (parse? carrier.data.forward_payload as DedustV2PayJetton).payment_payload if jetton_in else carrier.body.payment_payload
     let payload       = parse? carrier_cell as DedustV2SwapPayload
     # PayNative also carries deposits and fund rewards; only a swap payload is ours.
     reject when not jetton_in and payload == null
 
     require out_leg = first(exit_leg) ?? final_leg
+    let lo = leg(out_leg)
     let out_jetton = out_leg.btype == "jetton_transfer"
-    let out_asset  = out_leg.data.asset if out_jetton else ton_asset()
     # An out leg still carrying a SwapPayload means the route failed mid-hop.
     let out_wrapper = (parse? out_leg.data.forward_payload as DedustV2PayJetton) if out_jetton else null
     reject when (parse? out_wrapper.payment_payload as DedustV2SwapPayload) != null
 
     let amounts_in  = concat([ev0.body.amount_in],  map(ev.body, "amount_in"))
     let amounts_out = concat([ev0.body.amount_out], map(ev.body, "amount_out"))
-    let leg_assets  = concat(map(hop as h => h.data.asset if h.btype == "jetton_transfer" else ton_asset()), [out_asset])
-    let in_assets   = concat([source_asset], leg_assets)
+    let leg_assets  = concat(map(hop as h => leg(h).asset), [lo.asset])
+    let in_assets   = concat([l.asset], leg_assets)
     let hops        = zip(zip(amounts_in, amounts_out), zip(in_assets, leg_assets))
 
     failed when tx_failed(ev0) or (ev0.msg.exit_code ?? 0) != 0
@@ -111,24 +112,24 @@ matcher dedust_v2_swap {
 
     out {
         dex:               "dedust_v2"
-        sender:            carrier.data.sender if jetton_in else carrier.msg.source
-        source_asset:      source_asset
-        destination_asset: out_asset
+        sender:            l.source
+        source_asset:      l.asset
+        destination_asset: lo.asset
         dex_incoming_transfer: {
-            asset:                     source_asset
+            asset:                     l.asset
             amount:                    amount(first(amounts_in))
-            source:                    carrier.data.sender if jetton_in else carrier.msg.source
-            source_jetton_wallet:      carrier.data.sender_wallet if jetton_in else null
-            destination:               carrier.data.receiver if jetton_in else carrier.msg.destination
-            destination_jetton_wallet: carrier.data.receiver_wallet if jetton_in else null
+            source:                    l.source
+            source_jetton_wallet:      l.source_wallet
+            destination:               l.destination
+            destination_jetton_wallet: l.destination_wallet
         }
         dex_outgoing_transfer: {
-            asset:                     out_asset
+            asset:                     lo.asset
             amount:                    amount(last(amounts_out))
-            source:                    out_leg.data.sender if out_jetton else out_leg.msg.source
-            source_jetton_wallet:      out_leg.data.sender_wallet if out_jetton else null
-            destination:               out_leg.data.receiver if out_jetton else out_leg.msg.destination
-            destination_jetton_wallet: out_leg.data.receiver_wallet if out_jetton else null
+            source:                    lo.source
+            source_jetton_wallet:      lo.source_wallet
+            destination:               lo.destination
+            destination_jetton_wallet: lo.destination_wallet
         }
         peer_swaps: map(hops as h => {
                         in:  { amount: amount(first(first(h))), asset: first(last(h)) }
@@ -169,8 +170,8 @@ matcher dedust_v2_failed_swap {
     # matcher's case (it runs first, so this only fires when IT bailed).
     reject when swapped != null
 
+    let l = leg(carrier)
     let jetton_in    = carrier.btype == "jetton_transfer"
-    let source_asset = carrier.data.asset if jetton_in else ton_asset()
     let carrier_cell = (parse? carrier.data.forward_payload as DedustV2PayJetton).payment_payload if jetton_in else carrier.body.payment_payload
     require payload       = parse? carrier_cell as DedustV2SwapPayload
 
@@ -181,33 +182,33 @@ matcher dedust_v2_failed_swap {
     reject when not jetton_in and refund_ton == null
     reject when not jetton_in and refund_ton.body.exitCode == 0
     reject when not jetton_in and refund_ton.msg.destination != carrier.msg.source
-    reject when jetton_in and refund_jt.data.asset != source_asset
+    reject when jetton_in and refund_jt.data.asset != l.asset
     reject when jetton_in and refund_jt.data.receiver != carrier.data.sender
 
-    let sender = carrier.data.sender if jetton_in else carrier.msg.source
-    let pool   = carrier.data.receiver if jetton_in else carrier.msg.destination
+    let sender = l.source
+    let pool   = l.destination
     let assets = lookup dedust_pool(pool).assets
     let a0     = first(assets)
     let a1     = last(assets)
     let asset0 = null if a0 == null else (ton_asset() if a0.is_ton else asset(a0.address))
     let asset1 = null if a1 == null else (ton_asset() if a1.is_ton else asset(a1.address))
     # The reference returns the FIRST pool asset that is not the source asset.
-    let other  = asset0 if (asset0 != null and asset0 != source_asset) else (asset1 if (asset1 != null and asset1 != source_asset) else null)
+    let other  = asset0 if (asset0 != null and asset0 != l.asset) else (asset1 if (asset1 != null and asset1 != l.asset) else null)
 
     failed when true
 
     out {
         dex:               "dedust_v2"
         sender:            sender
-        source_asset:      source_asset
+        source_asset:      l.asset
         destination_asset: other
         dex_incoming_transfer: {
-            asset:                     source_asset
+            asset:                     l.asset
             amount:                    carrier.data.amount if jetton_in else amount(carrier.body.amount)
             source:                    sender
-            source_jetton_wallet:      carrier.data.sender_wallet if jetton_in else null
+            source_jetton_wallet:      l.source_wallet
             destination:               pool
-            destination_jetton_wallet: carrier.data.receiver_wallet if jetton_in else null
+            destination_jetton_wallet: l.destination_wallet
         }
         dex_outgoing_transfer: {
             asset:                     other

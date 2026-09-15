@@ -21,6 +21,8 @@
 # DedustV2ClaimRewardBlockMatcher), so the SAME serializer fill
 # (_fill_dedust_v2_claim_reward) serves both the legacy block and this one.
 
+import "lib/leg.mch"
+
 opcode ClaimRewardMessage   = 0x909fdb65
 opcode ClaimPositionReward  = 0x2e0cccba
 opcode PayoutRewardMessage  = 0x9e17fbbe
@@ -38,6 +40,8 @@ matcher dedust_v2_claim_reward {
                    btype jetton_transfer @jt
                }
 
+    let l = leg(jt ?? ton)
+
     out {
         dex:               "dedust_v2"
         sender:            claim.msg.source
@@ -46,9 +50,9 @@ matcher dedust_v2_claim_reward {
         owner:             payout_reward.body.ownerAddress
         reward_index:      claim.body.rewardIndex
         amount:            amount(payout_reward.body.amount)
-        asset:             jt.data.asset if jt != null else (ton_asset() if ton != null else null)
-        user_wallet:       jt.data.receiver_wallet if jt != null else null
-        dex_jetton_wallet: jt.data.sender_wallet if jt != null else null
-        dex_wallet:        jt.data.sender if jt != null else (ton.msg.source if ton != null else null)
+        asset:             l.asset
+        user_wallet:       l.destination_wallet
+        dex_jetton_wallet: l.source_wallet
+        dex_wallet:        l.source
     }
 }
