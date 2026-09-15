@@ -25,7 +25,7 @@ std::string match_skip_reason(const CompiledMatcher &m) {
 
 std::string build_skip_reason(const CompiledMatcher &m) {
   if (!m.has_build_program) {
-    return m.ref_builders.empty() ? "no_build_program" : "builder";
+    return "no_build_program";
   }
   std::vector<std::string> missing_types;
   for (const std::string &t : m.ref_msgtypes) {

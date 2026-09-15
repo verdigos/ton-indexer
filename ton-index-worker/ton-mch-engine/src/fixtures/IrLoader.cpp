@@ -137,6 +137,9 @@ std::vector<int> reachable(const std::vector<CompiledNode> &nodes, int start) {
 td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
                          CompiledMatcher &m) {
   m.name = jstr(rec, "name");
+  if (has(rec, "builder")) {
+    return td::Status::Error("matcher " + m.name + ": unknown matcher field 'builder'");
+  }
   if (const Json *pr = jfield(rec, "produces"); pr != nullptr && pr->type() == JType::Array) {
     for (const auto &p : pr->get_array()) {
       m.produces.push_back(p.get_string().str());
@@ -327,9 +330,6 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     return td::Status::Error("matcher " + m.name + ": 'priority' must be a number");
   }
   m.priority = static_cast<int>(jint(rec, "priority", 100));
-  if (has(rec, "builder")) {
-    m.ref_builders.insert(jstr(rec, "builder"));
-  }
   if (has(rec, "shape")) {
     m.ref_shapers.insert(jstr(rec, "shape"));
   }

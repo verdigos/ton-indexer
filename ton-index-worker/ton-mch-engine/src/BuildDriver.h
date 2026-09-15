@@ -18,8 +18,8 @@ namespace mch {
 std::string match_skip_reason(const CompiledMatcher &m);
 
 // Build-inclusion filter: empty == runnable end-to-end on the current C++
-// surface; else the SKIP reason (builder-directive, missing parsers / lookup
-// kinds / host fns / shapers). Match-phase preds are match_skip_reason's half.
+// surface; else the SKIP reason (missing build program / parsers / lookup kinds /
+// host fns / shapers). Match-phase preds are match_skip_reason's half.
 std::string build_skip_reason(const CompiledMatcher &m);
 
 // MatchResult captures -> slot values in slot-declaration order

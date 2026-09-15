@@ -88,7 +88,7 @@ struct CompiledMatcher {
   // (anchor predicates + every reachable `pred` / named-`where` node) and gates
   // inclusion via match_skip_reason(); the rest are BUILD-phase bindings, gated
   // by build_skip_reason().
-  std::set<std::string> ref_preds, ref_builders, ref_shapers;
+  std::set<std::string> ref_preds, ref_shapers;
   std::set<std::string> ref_msgtypes, ref_lookups, ref_fns;
 };
 

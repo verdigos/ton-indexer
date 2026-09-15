@@ -107,7 +107,7 @@ std::string btype_constant_name(const std::string &btype) {
   return out;
 }
 
-// One builder per matcher. Only fields that differ from the struct default
+// One factory per matcher. Only fields that differ from the struct default
 // are assigned; the defaults are the contract (IrTables.h).
 std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
   std::vector<std::string> out;
@@ -183,7 +183,6 @@ std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
   set_if(!m.include_excess, "include_excess", "false");
   set_if(!m.include_bounces, "include_bounces", "false");
   set_if(!m.ref_preds.empty(), "ref_preds", str_set(m.ref_preds));
-  set_if(!m.ref_builders.empty(), "ref_builders", str_set(m.ref_builders));
   set_if(!m.ref_shapers.empty(), "ref_shapers", str_set(m.ref_shapers));
   set_if(!m.ref_msgtypes.empty(), "ref_msgtypes", str_set(m.ref_msgtypes));
   set_if(!m.ref_lookups.empty(), "ref_lookups", str_set(m.ref_lookups));
