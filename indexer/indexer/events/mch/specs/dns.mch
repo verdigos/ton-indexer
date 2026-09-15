@@ -20,10 +20,9 @@ matcher dns_purchase {
     produces dns_purchase
     entry    @anchor
 
-    op AuctionFillUp @anchor
+    op AuctionFillUp @anchor as AuctionFillUpMessage
       <- peek btype call_contract @purchase_parent
 
-    parse anchor as AuctionFillUpMessage
     let buyer = account(purchase_parent.msg.source) ?? addr_none()
     let nft = lookup nft_item(anchor.msg.source)
     reject when nft == null or (nft.code_hash != "i1/8nr/TkGTY1fVuRlnIJrt1k5I/XKSHKL5NYK9vUfk=" and nft.collection_address != "0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF")
@@ -56,9 +55,8 @@ matcher change_dns {
     produces change_dns | renew_dns | delete_dns
     entry    @dns
 
-    op ChangeDnsRecord @dns -> maybe op Bounce
+    op ChangeDnsRecord @dns as ChangeDnsRecordMessage -> maybe op Bounce
 
-    parse dns as ChangeDnsRecordMessage
     let nft = lookup nft_item(dns.msg.destination)
     failed when dns.failed
     produces switch {
@@ -90,9 +88,8 @@ matcher dns_release {
     produces dns_release
     entry    @anchor
 
-    op DnsReleaseBalance @anchor
+    op DnsReleaseBalance @anchor as DnsReleaseBalanceMessage
 
-    parse anchor as DnsReleaseBalanceMessage
     let nft = lookup nft_item(anchor.msg.destination)
     reject when nft == null or (nft.code_hash != "i1/8nr/TkGTY1fVuRlnIJrt1k5I/XKSHKL5NYK9vUfk=" and nft.collection_address != "0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF")
     failed when anchor.failed

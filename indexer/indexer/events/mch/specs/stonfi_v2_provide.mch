@@ -70,18 +70,16 @@ matcher stonfi_v2_provide_final {
     produces dex_deposit_liquidity
     entry    @provide
 
-    op StonfiV2ProvideLiquidity @provide {
+    op StonfiV2ProvideLiquidity @provide as StonfiV2ProvideLiquidity {
         children first {
             op StonfiV2AddLiquidity @add
                 -> op StonfiV2CbAddLiquidity @cb
-                    -> ( op JettonInternalTransfer @lp_transfer
+                    -> ( op JettonInternalTransfer @lp_transfer as JettonInternalTransfer
                        | op StonfiV2AddLiquidity @refund )
         }
         parent { $in_leg }
     }
 
-    parse provide     as StonfiV2ProvideLiquidity
-    parse lp_transfer as JettonInternalTransfer
     let in_jt_block = in_jt ?? in_jt_raw
     failed when refund != null
     out {
@@ -102,12 +100,11 @@ matcher stonfi_v2_provide_partial {
     produces dex_deposit_liquidity
     entry    @provide
 
-    op StonfiV2ProvideLiquidity @provide {
+    op StonfiV2ProvideLiquidity @provide as StonfiV2ProvideLiquidity {
         children first { op StonfiV2AddLiquidity @add }
         parent { $in_leg }
     }
 
-    parse provide as StonfiV2ProvideLiquidity
     let in_jt_block = in_jt ?? in_jt_raw
     out {
         dex:             "stonfi_v2"

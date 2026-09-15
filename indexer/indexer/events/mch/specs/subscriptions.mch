@@ -13,10 +13,9 @@ matcher subscribe {
 
     op Response @resp {
         children first { op Payment @pay }
-        parent { maybe op Request @req }
+        parent { maybe op Request @req as SubscriptionPaymentRequest }
     }
 
-    parse req as SubscriptionPaymentRequest
     failed when req != null and req.failed
     out {
         subscriber:   account(resp.msg.source)

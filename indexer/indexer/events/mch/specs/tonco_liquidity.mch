@@ -122,12 +122,10 @@ matcher tonco_deploy_pool {
     produces tonco_deploy_pool
     entry    @create
 
-    op ToncoRouterV3CreatePool @create
-      -> op ToncoPoolV3Init @init
+    op ToncoRouterV3CreatePool @create as ToncoRouterV3CreatePool
+      -> op ToncoPoolV3Init @init as ToncoPoolV3Init
         -> maybe op Excess
 
-    parse create as ToncoRouterV3CreatePool
-    parse init   as ToncoPoolV3Init
     out {
         deployer:              account(create.msg.source)
         router:                account(create.msg.destination)
@@ -208,18 +206,15 @@ matcher tonco_withdraw_liquidity {
     produces tonco_withdraw_liquidity
     entry    @start_burn
 
-    op ToncoPoolV3StartBurn @start_burn
-      -> op ToncoPositionNftV3PositionBurn @position_burn
-        -> op ToncoPoolV3Burn @pool_burn
+    op ToncoPoolV3StartBurn @start_burn as ToncoPoolV3StartBurn
+      -> op ToncoPositionNftV3PositionBurn @position_burn as ToncoPositionNftV3PositionBurn
+        -> op ToncoPoolV3Burn @pool_burn as ToncoPoolV3Burn
           -> op ToncoRouterV3PayTo
             -> { maybe btype jetton_transfer @payout_1
                    -> { maybe op PTonTransfer }
                ; maybe btype jetton_transfer @payout_2
                    -> { maybe op PTonTransfer } }
 
-    parse start_burn    as ToncoPoolV3StartBurn
-    parse position_burn as ToncoPositionNftV3PositionBurn
-    parse pool_burn     as ToncoPoolV3Burn
 
     require r = tonco_withdraw_payouts(consumed)
     failed when r.failed

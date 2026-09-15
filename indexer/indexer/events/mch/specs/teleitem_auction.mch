@@ -49,9 +49,8 @@ matcher teleitem_start_auction {
     entry           @auction
     include_excess  false
 
-    op TeleitemStartAuction @auction -> maybe op TeleitemOk @ok
+    op TeleitemStartAuction @auction as TeleitemStartAuction -> maybe op TeleitemOk @ok
 
-    parse auction as TeleitemStartAuction
     require nft = lookup nft_item(auction.msg.destination)
     reject when not is_teleitem(nft)
     # `AccountId(...)` is unconditional in the legacy build, so a missing address

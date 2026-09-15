@@ -66,8 +66,8 @@ matcher dedust_v2_swap {
                                   # INTO the swap block (explicit child below),
                                   # not as a sibling of the result
 
-    ( op DedustV2PayNative @carrier ^ btype jetton_transfer @carrier )
-      -> { op DedustV2SwapEvent @ev0
+    ( op DedustV2PayNative @carrier as DedustV2PayNative ^ btype jetton_transfer @carrier )
+      -> { op DedustV2SwapEvent @ev0 as DedustV2SwapEvent
            ( $dv2_hop
            ^ btype jetton_transfer @final_leg where (.payload_opcode != 0xcbc33949)
            ^ op DedustV2Payout @final_leg )
@@ -77,8 +77,6 @@ matcher dedust_v2_swap {
     # (merge_blocks shuffles the event-node order), so every jetton-arm value
     # comes from `.data`. The PayNative parse is harmless on that arm — it is
     # only read under `jetton_in == false`.
-    parse carrier as DedustV2PayNative
-    parse ev0      as DedustV2SwapEvent
     parse ev       as DedustV2SwapEvent
 
     let jetton_in    = carrier.btype == "jetton_transfer"
@@ -148,13 +146,11 @@ matcher dedust_v2_failed_swap {
     entry    @carrier
     include_excess false
 
-    ( op DedustV2PayNative @carrier ^ btype jetton_transfer @carrier )
-      -> { ( op DedustV2Payout @refund_ton | btype jetton_transfer @refund_jt )
+    ( op DedustV2PayNative @carrier as DedustV2PayNative ^ btype jetton_transfer @carrier )
+      -> { ( op DedustV2Payout @refund_ton as PayoutMessage | btype jetton_transfer @refund_jt )
            maybe op DedustV2SwapEvent @swapped
            maybe op Excess @excess }
 
-    parse carrier    as DedustV2PayNative
-    parse refund_ton as PayoutMessage
 
     # A Swap event under the carrier means the swap executed — the success
     # matcher's case (it runs first, so this only fires when IT bailed).

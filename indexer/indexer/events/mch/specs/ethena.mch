@@ -95,13 +95,11 @@ matcher ethena_withdrawal_request {
     priority 85
 
     op JettonTransfer @transfer
-      -> op JettonInternalTransfer @internal_transfer
+      -> op JettonInternalTransfer @internal_transfer as JettonInternalTransfer
         -> op JettonNotify
           -> op JettonMint @mint
-            -> op EthenaTimelockTransfer @ts_usde_transfer
+            -> op EthenaTimelockTransfer @ts_usde_transfer as JettonInternalTransfer
 
-    parse internal_transfer as JettonInternalTransfer
-    parse ts_usde_transfer  as JettonInternalTransfer
     let src_wallet_info = lookup jetton_wallet(transfer.msg.destination)
     let dst_wallet_info = lookup jetton_wallet(ts_usde_transfer.msg.destination)
     reject when src_wallet_info == null

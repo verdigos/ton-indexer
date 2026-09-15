@@ -105,13 +105,12 @@ matcher layerzero_receive {
       -> { maybe btype ton_transfer
          ; op LayerzeroLzReceivePrepare
              -> op ChannelLzReceiveLock
-             -> op LayerzeroLzReceiveExecute @execute
+             -> op LayerzeroLzReceiveExecute @execute as LayerZeroOappExecuteCallback
                   -> { maybe op LayerZeroEventMsgBody
                      ; op LayerZeroOappExecuteCallback @oapp_callback
                          -> { maybe op LayerZeroEventMsgBody
                             ; maybe btype ton_transfer } } }
 
-    parse execute as LayerZeroOappExecuteCallback
     # Safety check from build_layerzero_receive_core: the execute destination must
     # be the same account as the packet's dst_oapp.
     reject when not layerzero_dst_oapp_matches(execute.msg.destination, execute.body.packet.path.dst_oapp)
@@ -177,11 +176,10 @@ matcher layerzero_send {
                  ; maybe btype ton_transfer
                  ; maybe btype ton_transfer
                  ; maybe btype ton_transfer
-                 ; op LayerzeroChannelSendCallback @oapp_callback
+                 ; op LayerzeroChannelSendCallback @oapp_callback as LayerzeroChannelSendCallback
                      -> { maybe op LayerZeroEventMsgBody
                         ; maybe btype ton_transfer } }
 
-    parse oapp_callback as LayerzeroChannelSendCallback
     out {
         initiator: account(endpoint_send.msg.source)
         packet_data: {
@@ -281,12 +279,11 @@ matcher layerzero_commit_packet {
     op UlnUlnCommitPacket @uln_commit
       -> op UlnConnectionCommitPacket @uln_connection_commit
         -> op EndpointEndpointCommitPacket @endpoint_commit
-          -> op ChannelCommitPacket @channel_commit
+          -> op ChannelCommitPacket @channel_commit as ChannelCommitPacket
             -> { maybe op LayerZeroEventMsgBody
                ; maybe op MsglibConnectionCommitPacketCallback @msglib_callback
                    -> maybe btype ton_transfer }
 
-    parse channel_commit as ChannelCommitPacket
     reject when msglib_callback == null
     out {
         sender:            account(uln_commit.msg.source)
@@ -333,10 +330,9 @@ matcher layerzero_dvn_verify {
         -> op UlnUlnVerify @uln_verify
           -> op UlnConnectionVerify @uln_connection_verify
             -> { maybe op LayerZeroEventMsgBody
-               ; maybe op UlnConnectionVerifyCallback @verify_callback
+               ; maybe op UlnConnectionVerifyCallback @verify_callback as UlnConnectionVerifyCallbackParser
                    -> maybe btype ton_transfer }
 
-    parse verify_callback as UlnConnectionVerifyCallbackParser
     reject when verify_callback == null
     out {
         sender:         account(dvn_verify.msg.source)

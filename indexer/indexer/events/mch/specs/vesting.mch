@@ -21,9 +21,8 @@ matcher vesting_send_message {
     produces VestingSendMessageBlock
     entry    @send
 
-    op VestingSendMessage @send -> op VestingSendMessageResponse @response
+    op VestingSendMessage @send as VestingSendMessage -> op VestingSendMessageResponse @response
 
-    parse send as VestingSendMessage
     out {
         sender:              account(send.msg.source)
         vesting:             account(send.msg.destination)
@@ -67,9 +66,8 @@ matcher vesting_add_whitelist {
     produces vesting_add_whitelist
     entry    @add
 
-    op VestingAddWhiteList @add -> op VestingAddWhiteListResponse @response
+    op VestingAddWhiteList @add as VestingAddWhiteList -> op VestingAddWhiteListResponse @response
 
-    parse add as VestingAddWhiteList
     out {
         adder:          account(add.msg.source)
         vesting:        account(add.msg.destination)

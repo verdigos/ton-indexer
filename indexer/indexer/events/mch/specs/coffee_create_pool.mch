@@ -87,12 +87,11 @@ matcher coffee_create_pool_creator {
 
     # Legacy's single `child_matcher` and a one-item children block differ only
     # when several 0xc0ffee22 children exist, which the factory never emits.
-    op CoffeeCreatePoolCreatorRequest @request {
+    op CoffeeCreatePoolCreatorRequest @request as CoffeeCreatePoolCreatorRequest {
         children first { op CoffeeDeploy @deploy }
         parent { ( btype jetton_transfer @in_jt ^ op CoffeeCreatePoolNative @in_native ) }
     }
 
-    parse request as CoffeeCreatePoolCreatorRequest
     let pool_first  = asset_of(request.body.pool_first)
     let pool_second = asset_of(request.body.pool_second)
     out {
@@ -112,14 +111,12 @@ matcher coffee_create_pool {
     entry    @creator
 
     btype coffee_create_pool_creator @creator
-      -> op CoffeeCreatePoolRequest @request
+      -> op CoffeeCreatePoolRequest @request as CoffeeCreatePoolRequest
         -> op CoffeeDeploy @deploy
           -> { op JettonInternalTransfer -> maybe op Excess
-             ; op CoffeeDepositLiquiditySuccessfulEvent @success
+             ; op CoffeeDepositLiquiditySuccessfulEvent @success as CoffeeDepositLiquiditySuccessfulEvent
              ; maybe op CoffeeNotification -> maybe op CoffeeNotificationCallback }
 
-    parse request as CoffeeCreatePoolRequest
-    parse success as CoffeeDepositLiquiditySuccessfulEvent
 
     let provided  = creator.data.provided_asset
     let pool_1    = creator.data.pool_first

@@ -50,13 +50,10 @@ matcher dedust_v2_claim_fees {
 
     op ClaimPositionFees @claim
       -> op ClaimAvailableFees
-        -> op DedustV2PayoutPositionFees @payout_fees
-          -> { maybe ( op PayoutMessage @ton_1 | btype jetton_transfer @jt_1 )
-             ; maybe ( op PayoutMessage @ton_2 | btype jetton_transfer @jt_2 ) }
+        -> op DedustV2PayoutPositionFees @payout_fees as DedustV2PayoutPositionFees
+          -> { maybe ( op PayoutMessage @ton_1 as PayoutMessage | btype jetton_transfer @jt_1 )
+             ; maybe ( op PayoutMessage @ton_2 as PayoutMessage | btype jetton_transfer @jt_2 ) }
 
-    parse payout_fees as DedustV2PayoutPositionFees
-    parse ton_1       as PayoutMessage
-    parse ton_2       as PayoutMessage
 
     # Per-leg projection (parse_payout_leg, dedust_v2/common.py:28): a jetton leg
     # reads the prebuilt block's data, a TON leg is (amount, TON, no user wallet,

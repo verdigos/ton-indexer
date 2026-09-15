@@ -124,9 +124,9 @@ matcher evaa_withdraw {
     produces EvaaWithdrawBlock
     entry    @master
 
-    op EvaaWithdrawMaster @master
+    op EvaaWithdrawMaster @master as EvaaWithdrawMaster
       -> pred evaa_user_withdraw_user @user
-      -> ( op EvaaWithdrawCollateralized @coll_ok
+      -> ( op EvaaWithdrawCollateralized @coll_ok as EvaaWithdrawCollateralized
              -> { ( btype jetton_transfer @jetton_payout
                   ^ op EvaaWithdrawSuccess @ton_payout
                       -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."]) )
@@ -134,7 +134,7 @@ matcher evaa_withdraw {
          ^ op EvaaWithdrawCollateralized @coll_fail
              -> pred evaa_user_withdraw_fail
              -> op EvaaWithdrawNoFundsExcess
-         ^ op [EvaaWithdrawLockedExcess, EvaaWithdrawNotCollateralizedExcess, EvaaWithdrawMissingPricesExcess, EvaaWithdrawExecutionCrashed] @fail_excess )
+         ^ op [EvaaWithdrawLockedExcess, EvaaWithdrawNotCollateralizedExcess, EvaaWithdrawMissingPricesExcess, EvaaWithdrawExecutionCrashed] @fail_excess as EvaaWithdrawFailExcess )
 
     # Declarative build, field-for-field with build_evaa_withdraw_core.
     # The IR engine binds @coll_ok / @coll_fail / @fail_excess per the winning
@@ -142,9 +142,6 @@ matcher evaa_withdraw {
     # @coll_ok/@coll_fail are not captured), so `coll_ok != null` is the
     # success test.
     # exactly like the core's `if withdraw_collateralized_success:` branch.
-    parse master     as EvaaWithdrawMaster
-    parse coll_ok    as EvaaWithdrawCollateralized     # null on the fail branches
-    parse fail_excess as EvaaWithdrawFailExcess         # null unless a user-contract error fired
     let is_ton  = master.body.asset_id == 0x1A4219FE5E60D63AF2A3CC7DCE6FEC69B45C6B5718497A6148E7C232AC87BD8A
     let success = coll_ok != null
     # Legacy `return None` guards: a collateralized-success outcome must carry the

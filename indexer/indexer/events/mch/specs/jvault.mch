@@ -73,7 +73,7 @@ matcher jvault_unstake {
     produces jvault_unstake
     entry    @unstake
 
-    op JVaultUnstakeJettons @unstake
+    op JVaultUnstakeJettons @unstake as JVaultUnstakeJettons
       -> maybe ( op JVaultRequestUpdateRewards @request
                    -> { maybe $jvault_referrals
                       ; maybe btype ton_transfer @fee
@@ -85,7 +85,6 @@ matcher jvault_unstake {
     # shapes — early (no pool round-trip: pool+asset from the lookup, exit code
     # from the anchor) vs full (pool from the request, asset from the withdraw
     # leg, fee from the optional ton leg).
-    parse unstake as JVaultUnstakeJettons
     let assets = lookup jvault_assets(unstake.msg.destination)
     let early  = request == null or withdraw == null
     reject when assets == null
@@ -107,7 +106,7 @@ matcher jvault_claim {
     produces jvault_claim
     entry    @claim
 
-    op JVaultClaim @claim
+    op JVaultClaim @claim as JVaultClaim
       -> op JVaultSendClaimedRewards @send
            -> { btype jetton_transfer @withdraw ; op JVaultUpdateRewards @update }
 
@@ -118,7 +117,6 @@ matcher jvault_claim {
     # jetton_transfer as `data.desired_amount` (an Amount), unwrapped via
     # `.value` — the same scalar legacy reads as
     # withdrawal.jetton_transfer_message.amount — as a one-element list literal.
-    parse claim as JVaultClaim
     out {
         sender:          account(claim.msg.source)
         stake_wallet:    account(claim.msg.destination)
@@ -132,7 +130,7 @@ matcher jvault_unstake_request {
     produces jvault_unstake_request
     entry    @request_anchor
 
-    op JVaultUnstakeRequest @request_anchor
+    op JVaultUnstakeRequest @request_anchor as JVaultUnstakeRequest
       -> maybe ( op JVaultRequestUpdateRewards @request
                    -> { maybe $jvault_referrals ; op JVaultUpdateRewards @update } )
 
@@ -140,7 +138,6 @@ matcher jvault_unstake_request {
     # reached the pool → failed, exit code from the anchor, pool+assets from the
     # lookup, rejected if unresolvable) vs full (pool from the request, assets
     # still from the lookup but NOT reject-gated, failed OR'd from both calls).
-    parse request_anchor as JVaultUnstakeRequest
     let assets = lookup jvault_assets(request_anchor.msg.destination)
     let early  = request == null
     reject when early and assets == null

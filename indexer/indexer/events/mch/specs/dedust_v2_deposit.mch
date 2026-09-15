@@ -111,9 +111,9 @@ matcher dedust_v2_deposit_final {
     entry           @join
     include_excess  false
 
-    op DedustV2JoinLiquidity @join {
+    op DedustV2JoinLiquidity @join as DedustV2JoinLiquidity {
         children first {
-            maybe op DedustV2DepositEvent @event
+            maybe op DedustV2DepositEvent @event as DedustV2DepositEvent
             ; maybe op DedustV2CreditLiquidity
             ; maybe btype jetton_transfer @refund_jt_1
             ; maybe btype jetton_transfer @refund_jt_2
@@ -122,8 +122,6 @@ matcher dedust_v2_deposit_final {
         parent { $dv2_credit_parent }
     }
 
-    parse join       as DedustV2JoinLiquidity
-    parse event      as DedustV2DepositEvent
     parse credit     as DedustV2CreditAsset
     parse carrier    as DedustV2PayNative
     parse refund_ton as PayoutMessage
@@ -183,7 +181,7 @@ matcher dedust_v2_deposit_rejected {
     entry           @join
     include_excess  false
 
-    op DedustV2JoinLiquidity @join {
+    op DedustV2JoinLiquidity @join as DedustV2JoinLiquidity {
         children first {
             maybe btype jetton_transfer @refund_jt_1
             ; maybe btype jetton_transfer @refund_jt_2
@@ -194,7 +192,6 @@ matcher dedust_v2_deposit_rejected {
         parent { $dv2_credit_parent }
     }
 
-    parse join       as DedustV2JoinLiquidity
     parse credit     as DedustV2CreditAsset
     parse carrier    as DedustV2PayNative
     parse refund_ton as PayoutMessage
@@ -256,12 +253,11 @@ matcher dedust_v2_deposit_partial {
     entry           @credit
     include_excess  false
 
-    op DedustV2CreditAsset @credit {
+    op DedustV2CreditAsset @credit as DedustV2CreditAsset {
         children first { maybe op Excess }
         parent { $dv2_deposit_carrier }
     }
 
-    parse credit  as DedustV2CreditAsset
     parse carrier as DedustV2PayNative
 
     let is_x      = credit.body.is_x

@@ -38,9 +38,8 @@ matcher coffee_withdraw_liquidity {
              -> ( btype jetton_transfer @jt_1 ^ op CoffeePayout @ton_1 ^ op CoffeeNotification )
          ; op CoffeePayoutInternal @payout_2
              -> ( btype jetton_transfer @jt_2 ^ op CoffeePayout @ton_2 ^ op CoffeeNotification )
-         ; op CoffeeLiquidityWithdrawalEvent @event }
+         ; op CoffeeLiquidityWithdrawalEvent @event as CoffeeLiquidityWithdrawalEvent }
 
-    parse event as CoffeeLiquidityWithdrawalEvent
     out {
         dex:                 "coffee"
         sender:              burn.data.owner

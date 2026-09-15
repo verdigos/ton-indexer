@@ -30,19 +30,11 @@ matcher dedust_v2_claim_reward {
     produces dedust_v2_claim_reward
     entry    @claim
 
-    op ClaimRewardMessage @claim
+    op ClaimRewardMessage @claim as ClaimRewardMessage
       -> op ClaimPositionReward @cpr
-      -> op PayoutRewardMessage @payout_reward
-      -> maybe ( op PayoutMessage @ton | btype jetton_transfer @jt )
+      -> op PayoutRewardMessage @payout_reward as PayoutRewardMessage
+      -> maybe ( op PayoutMessage @ton as PayoutMessage | btype jetton_transfer @jt )
 
-    parse claim         as ClaimRewardMessage
-    parse payout_reward as PayoutRewardMessage
-    # Bound only on the TON-payout arm, and none of its fields are read below —
-    # the leg contributes ton_asset() + the message source, not body data. Kept
-    # so the arm is parsed (and the parser exercised) on both sides; its only
-    # gate today is the mch_abi_bridge unit (no TON-payout fixture in the corpus
-# yet).
-    parse ton           as PayoutMessage
     out {
         dex:               "dedust_v2"
         sender:            account(claim.msg.source)

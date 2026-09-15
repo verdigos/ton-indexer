@@ -65,12 +65,12 @@ matcher coffee_deposit_liquidity {
     produces coffee_deposit_liquidity
     entry    @request
 
-    op CoffeeCreateLiquidityDepositoryRequest @request {
+    op CoffeeCreateLiquidityDepositoryRequest @request as CoffeeCreateLiquidityDepositoryRequest {
         children first {
             op CoffeeDeploy @deploy
                 -> maybe op CoffeeDepositLiquidityInternal
                     -> { op JettonInternalTransfer -> maybe op Excess
-                       ; op CoffeeDepositLiquiditySuccessfulEvent @success
+                       ; op CoffeeDepositLiquiditySuccessfulEvent @success as CoffeeDepositLiquiditySuccessfulEvent
                        ; maybe op CoffeePayoutInternal @payout
                             -> ( btype jetton_transfer @out_jt
                                ^ op CoffeePayout @out_call
@@ -79,8 +79,6 @@ matcher coffee_deposit_liquidity {
         parent { ( op CoffeeDepositLiquidityNative @in_native ^ btype jetton_transfer @in_jt ) }
     }
 
-    parse request as CoffeeCreateLiquidityDepositoryRequest
-    parse success as CoffeeDepositLiquiditySuccessfulEvent
 
     let in_asset   = ton_asset() if in_jt == null else in_jt.data.asset
     let in_wallet  = null if in_jt == null else in_jt.data.sender_wallet
@@ -131,12 +129,11 @@ matcher coffee_create_vault {
     produces CoffeeCreateVaultBlock
     entry    @create
 
-    op CoffeeCreateVault @create
+    op CoffeeCreateVault @create as CoffeeCreateVault
       -> op CoffeeDeploy @deploy
       -> maybe op ProvideWalletAddress
       -> maybe op TakeWalletAddress
 
-    parse create as CoffeeCreateVault
     out {
         sender: account(create.msg.source)
         vault:  account(deploy.msg.destination)

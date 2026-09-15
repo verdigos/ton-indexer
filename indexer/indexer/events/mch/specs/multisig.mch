@@ -56,10 +56,8 @@ matcher multisig_create_order {
     produces multisig_create_order
     entry    @new
 
-    op MultisigNewOrder @new -> op MultisigInitOrder @init
+    op MultisigNewOrder @new as MultisigNewOrder -> op MultisigInitOrder @init as MultisigInitOrder
 
-    parse new  as MultisigNewOrder
-    parse init as MultisigInitOrder
     require order = lookup multisig_order(init.msg.destination)
     out {
         query_id:               new.body.query_id
@@ -80,12 +78,10 @@ matcher multisig_approve {
     produces multisig_approve
     entry    @vote
 
-    op MultisigApprove @vote
+    op MultisigApprove @vote as MultisigApprove
       -> ( op MultisigApproveAccepted @accepted
-         ^ op MultisigApproveRejected @rejected )
+         ^ op MultisigApproveRejected @rejected as MultisigApproveRejected )
 
-    parse vote     as MultisigApprove
-    parse rejected as MultisigApproveRejected
     require order = lookup multisig_order(vote.msg.destination)
     out {
         signer:       account(vote.msg.source)
@@ -103,9 +99,8 @@ matcher multisig_approve_comment {
 
     btype ton_transfer @vote where (.comment == "approve")
       -> ( op MultisigApproveAccepted @accepted
-         ^ op MultisigApproveRejected @rejected )
+         ^ op MultisigApproveRejected @rejected as MultisigApproveRejected )
 
-    parse rejected as MultisigApproveRejected
     require order = lookup multisig_order(vote.msg.destination)
     out {
         signer:       account(vote.msg.source)
@@ -123,9 +118,8 @@ matcher multisig_execute {
     produces multisig_execute
     entry    @exec
 
-    op MultisigExecute @exec
+    op MultisigExecute @exec as MultisigExecute
 
-    parse exec as MultisigExecute
     require order = lookup multisig_order(exec.msg.source)
     out {
         query_id:               exec.body.query_id

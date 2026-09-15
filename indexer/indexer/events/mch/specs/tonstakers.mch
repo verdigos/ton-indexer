@@ -59,10 +59,9 @@ matcher tonstakers_delayed_withdrawal {
     entry    @distributed
 
     op TONStakersDistributedAsset @distributed
-      <- op TONStakersNftBurnNotification @notification
+      <- op TONStakersNftBurnNotification @notification as TONStakersNftBurnNotification
       <- op TONStakersNftBurn
 
-    parse notification as TONStakersNftBurnNotification
     out {
         stake_holder: account(notification.body.owner)
         burnt_nft:    account(notification.msg.source)
@@ -104,10 +103,9 @@ matcher tonstakers_deposit {
 
     op TONStakersDepositRequest @deposit
       -> op TONStakersMintJettons
-        -> op JettonInternalTransfer @transfer
+        -> op JettonInternalTransfer @transfer as JettonInternalTransfer
           -> maybe op JettonNotify
 
-    parse transfer as JettonInternalTransfer
     let ok = not deposit.failed
     failed when deposit.failed
     out {
@@ -140,7 +138,7 @@ matcher tonstakers_withdraw {
     priority 85
     entry    @burn
 
-    op JettonBurn @burn
+    op JettonBurn @burn as JettonBurn
       -> op JettonBurnNotification
         -> op TONStakersWithdrawRequest @request
           -> ( op TONStakersPoolWithdrawal @immediate_withdrawal
@@ -148,7 +146,6 @@ matcher tonstakers_withdraw {
                  -> { maybe peek btype nft_mint @minted_block
                     ; maybe peek op TONStakersInitNFT @minted_call } )
 
-    parse burn as JettonBurn
     let minted = (account(minted_block.msg.destination) ?? addr_none()) if minted_block != null else ((account(minted_call.msg.destination) ?? addr_none()) if minted_call != null else null)
     failed when burn.failed
     failed when immediate_withdrawal == null and minted == null

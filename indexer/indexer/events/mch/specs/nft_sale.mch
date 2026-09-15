@@ -121,9 +121,8 @@ matcher nft_update_sale {
     produces nft_update_sale
     entry    @upd
 
-    op SaleUpdate @upd
+    op SaleUpdate @upd as SaleUpdateMessage
 
-    parse upd as SaleUpdateMessage
     require sale = lookup nft_sale(upd.msg.destination)
     failed when (upd.msg.transaction.aborted ?? false)
     out {
@@ -219,9 +218,8 @@ matcher nft_discovery {
     produces nft_discovery
     entry    @disc
 
-    op NftDiscovery @disc -> op NftReportStaticData @report
+    op NftDiscovery @disc -> op NftReportStaticData @report as NftReportStaticData
 
-    parse report as NftReportStaticData
     out {
         sender:            account(disc.msg.source) ?? addr_none()
         nft:               account(disc.msg.destination) ?? addr_none()

@@ -37,12 +37,10 @@ matcher jetton_transfer {
     priority 90
     entry    @transfer
 
-    op JettonTransfer @transfer
-      -> op JettonInternalTransfer @internal
+    op JettonTransfer @transfer as JettonTransfer
+      -> op JettonInternalTransfer @internal as JettonInternalTransfer
       -> maybe op JettonNotify @notify
 
-    parse transfer as JettonTransfer
-    parse internal  as JettonInternalTransfer
     require wallet   = lookup jetton_wallet(internal.msg.destination)
     let mismatch = account(wallet.owner) != account(transfer.body.destination)
     let amt      = internal.body.amount ?? transfer.body.amount
@@ -82,9 +80,8 @@ matcher jetton_burn {
     priority 90
     entry    @burn
 
-    op JettonBurn @burn -> maybe op JettonBurnNotification @notification
+    op JettonBurn @burn as JettonBurn -> maybe op JettonBurnNotification @notification
 
-    parse burn as JettonBurn
     require wallet      = lookup jetton_wallet(burn.msg.destination)
     let burn_amount = burn.body.amount
     failed when burn.failed
@@ -114,12 +111,10 @@ matcher jetton_mint {
     priority 90
     entry    @mint
 
-    op [JettonMint, MinterJettonMint] @mint
+    op [JettonMint, MinterJettonMint] @mint as MinterJettonMint | JettonMint
       -> maybe ( op JettonNotify @notify
-               | op JettonInternalTransfer @internal -> maybe op JettonNotify @internal_notify )
+               | op JettonInternalTransfer @internal as JettonInternalTransfer -> maybe op JettonNotify @internal_notify )
 
-    parse mint     as MinterJettonMint | JettonMint
-    parse internal as JettonInternalTransfer
     let use_internal = not mint.failed and internal != null
     let rjwallet     = lookup jetton_wallet(internal.msg.destination)
     reject when use_internal and rjwallet == null

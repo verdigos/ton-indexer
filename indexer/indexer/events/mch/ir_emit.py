@@ -97,29 +97,32 @@ def _unsigned32(opcode: int) -> int:
 # Stub registries (CLI self-provisioning)
 
 
-def _collect_predicate_names(p: ast_.PatternExpr, out: set[str]) -> None:
+def _collect_pattern_names(p: ast_.PatternExpr, out: set[str], msg_types: set[str]) -> None:
+    """Predicate names into `out`, `as T` annotation types into `msg_types`."""
     if isinstance(p, ast_.Node):
         if p.where_predicate is not None:
             out.add(p.where_predicate)
         if isinstance(p.head, ast_.PredHead):
             out.add(p.head.name)
+        if p.parse_types is not None:
+            msg_types.update(p.parse_types)
         if p.relations is not None:
             r = p.relations
             for target in (r.children_all, *(r.children_first or ()), r.parent):
                 if target is not None:
-                    _collect_predicate_names(target, out)
+                    _collect_pattern_names(target, out, msg_types)
     elif isinstance(p, (ast_.Maybe, ast_.Peek)):
-        _collect_predicate_names(p.inner, out)
+        _collect_pattern_names(p.inner, out, msg_types)
     elif isinstance(p, ast_.Sequence):
-        _collect_predicate_names(p.head, out)
+        _collect_pattern_names(p.head, out, msg_types)
         for _edge, atom in p.tail:
-            _collect_predicate_names(atom, out)
+            _collect_pattern_names(atom, out, msg_types)
     elif isinstance(p, ast_.Alternative):
         for b in p.branches:
-            _collect_predicate_names(b, out)
+            _collect_pattern_names(b, out, msg_types)
     elif isinstance(p, ast_.ChildrenBlock):
         for it in p.items:
-            _collect_predicate_names(it, out)
+            _collect_pattern_names(it, out, msg_types)
     # RuleRef: rule bodies are scanned via File.rules directly.
 
 
@@ -134,6 +137,7 @@ def build_stub_registries(files: list[ast_.File]) -> Registries:
     """Permissive Registries covering every name the given files reference."""
     reg = Registries()
     predicate_names: set[str] = set()
+    annotated_types: set[str] = set()
 
     def stub_expr(e: ast_.Expr) -> None:
         if isinstance(e, ast_.FieldAccess):
@@ -177,9 +181,9 @@ def build_stub_registries(files: list[ast_.File]) -> Registries:
         for pd in f.predicates:
             predicate_names.add(pd.name)
         for r in f.rules:
-            _collect_predicate_names(r.pattern, predicate_names)
+            _collect_pattern_names(r.pattern, predicate_names, annotated_types)
         for m in f.matchers:
-            _collect_predicate_names(m.pattern, predicate_names)
+            _collect_pattern_names(m.pattern, predicate_names, annotated_types)
             for produced in m.produces:
                 reg.block_types.setdefault(produced, object)
             if m.build is not None and m.build not in reg.builders:
@@ -205,6 +209,8 @@ def build_stub_registries(files: list[ast_.File]) -> Registries:
                         stub_fields(branch.out.fields)
     for name in sorted(predicate_names):
         reg.predicates[name] = lambda _block: True
+    for t in annotated_types:
+        reg.message_types.setdefault(t, _StubMessage)
     return reg
 
 

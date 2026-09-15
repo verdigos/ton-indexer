@@ -28,13 +28,11 @@ matcher cocoon_worker_payout {
     produces cocoon_worker_payout
     entry    @start
 
-    op [CocoonPayoutPayload, CocoonLastPayoutPayload] @start
-      -> op CocoonWorkerProxyRequest @wreq
+    op [CocoonPayoutPayload, CocoonLastPayoutPayload] @start as CocoonLastPayoutPayload | CocoonPayoutPayload
+      -> op CocoonWorkerProxyRequest @wreq as CocoonWorkerProxyRequest
          -> { op CocoonPayout @payout
             ; maybe op CocoonReturnExcessesBack @excesses }
 
-    parse start as CocoonLastPayoutPayload | CocoonPayoutPayload
-    parse wreq  as CocoonWorkerProxyRequest
     failed when (payout.msg.transaction.aborted ?? false)
     out {
         proxy_contract:   account(start.msg.source) ?? addr_none()
@@ -54,11 +52,10 @@ matcher cocoon_proxy_payout {
     produces cocoon_proxy_payout
     entry    @req
 
-    op CocoonExtProxyPayoutRequest @req
+    op CocoonExtProxyPayoutRequest @req as CocoonExtProxyPayoutRequest
       -> { op CocoonPayout @payout
          ; op CocoonReturnExcessesBack @excesses }
 
-    parse req as CocoonExtProxyPayoutRequest
     failed when (payout.msg.transaction.aborted ?? false)
     out {
         proxy_contract:     account(req.msg.destination) ?? addr_none()
@@ -73,11 +70,10 @@ matcher cocoon_proxy_charge {
     produces cocoon_proxy_charge
     entry    @charge
 
-    op CocoonChargePayload @charge
+    op CocoonChargePayload @charge as CocoonChargePayload
       -> { op CocoonReturnExcessesBack @excesses
          ; op CocoonClientProxyRequest @client_request }
 
-    parse charge as CocoonChargePayload
     failed when (charge.msg.transaction.aborted ?? false)
     out {
         proxy_contract:   account(charge.msg.destination) ?? addr_none()
@@ -92,11 +88,10 @@ matcher cocoon_client_top_up {
     produces cocoon_client_top_up
     entry    @topup
 
-    op CocoonExtClientTopUp @topup
+    op CocoonExtClientTopUp @topup as CocoonExtClientTopUp
       -> op CocoonClientProxyRequest @preq
          -> { op CocoonReturnExcessesBack @excesses }
 
-    parse topup as CocoonExtClientTopUp
     failed when (topup.msg.transaction.aborted ?? false)
     out {
         client_contract: account(topup.msg.destination) ?? addr_none()
@@ -111,9 +106,8 @@ matcher cocoon_register_proxy {
     produces cocoon_register_proxy
     entry    @reg
 
-    op CocoonRegisterProxy @reg -> op CocoonReturnExcessesBack @excesses
+    op CocoonRegisterProxy @reg as CocoonRegisterProxy -> op CocoonReturnExcessesBack @excesses
 
-    parse reg as CocoonRegisterProxy
     failed when (reg.msg.transaction.aborted ?? false)
     out {
         root_contract: account(reg.msg.destination) ?? addr_none()
@@ -125,9 +119,8 @@ matcher cocoon_unregister_proxy {
     produces cocoon_unregister_proxy
     entry    @unreg
 
-    op CocoonUnregisterProxy @unreg -> op CocoonReturnExcessesBack @excesses
+    op CocoonUnregisterProxy @unreg as CocoonUnregisterProxy -> op CocoonReturnExcessesBack @excesses
 
-    parse unreg as CocoonUnregisterProxy
     failed when (unreg.msg.transaction.aborted ?? false)
     out {
         root_contract: account(unreg.msg.destination) ?? addr_none()
@@ -140,11 +133,10 @@ matcher cocoon_client_register {
     produces cocoon_client_register
     entry    @reg
 
-    op CocoonOwnerClientRegister @reg
+    op CocoonOwnerClientRegister @reg as CocoonOwnerClientRegister
       -> { op CocoonReturnExcessesBack @excesses
          ; op CocoonClientProxyRequest @client_request }
 
-    parse reg as CocoonOwnerClientRegister
     failed when (reg.msg.transaction.aborted ?? false)
     out {
         client_contract: account(reg.msg.destination) ?? addr_none()
@@ -159,11 +151,10 @@ matcher cocoon_client_change_secret_hash {
     produces cocoon_client_change_secret_hash
     entry    @chg
 
-    op CocoonOwnerClientChangeSecretHash @chg
+    op CocoonOwnerClientChangeSecretHash @chg as CocoonOwnerClientChangeSecretHash
       -> { op CocoonReturnExcessesBack @excesses
          ; op CocoonClientProxyRequest @client_request }
 
-    parse chg as CocoonOwnerClientChangeSecretHash
     failed when (chg.msg.transaction.aborted ?? false)
     out {
         client_contract: account(chg.msg.destination) ?? addr_none()
@@ -179,7 +170,7 @@ matcher cocoon_client_request_refund {
     produces cocoon_client_request_refund
     entry    @refund
 
-    op [CocoonOwnerWalletSendMessage, CocoonOwnerClientRequestRefund] @refund {
+    op [CocoonOwnerWalletSendMessage, CocoonOwnerClientRequestRefund] @refund as CocoonOwnerClientRequestRefund {
         children first {
             op CocoonReturnExcessesBack @excesses
             ; op CocoonClientProxyRequest @client_request
@@ -187,7 +178,6 @@ matcher cocoon_client_request_refund {
         parent { maybe op CocoonOwnerWalletSendMessage @wallet }
     }
 
-    parse refund as CocoonOwnerClientRequestRefund
     failed when (refund.msg.transaction.aborted ?? false)
     out {
         client_contract: account(refund.msg.destination) ?? addr_none()
@@ -201,12 +191,11 @@ matcher cocoon_grant_refund {
     produces cocoon_grant_refund
     entry    @grant
 
-    op CocoonGrantRefundPayload @grant
+    op CocoonGrantRefundPayload @grant as CocoonGrantRefundPayload
       -> op CocoonClientProxyRequest @client_request
          -> { op CocoonPayout @payout
             ; op CocoonReturnExcessesBack @excesses }
 
-    parse grant as CocoonGrantRefundPayload
     failed when (payout.msg.transaction.aborted ?? false)
     out {
         proxy_contract:   account(grant.msg.destination) ?? addr_none()
@@ -223,11 +212,10 @@ matcher cocoon_client_increase_stake {
     produces cocoon_client_increase_stake
     entry    @inc
 
-    op CocoonOwnerClientIncreaseStake @inc
+    op CocoonOwnerClientIncreaseStake @inc as CocoonOwnerClientIncreaseStake
       -> { op CocoonReturnExcessesBack @excesses
          ; op CocoonClientProxyRequest @client_request }
 
-    parse inc as CocoonOwnerClientIncreaseStake
     failed when (inc.msg.transaction.aborted ?? false)
     out {
         owner:           account(inc.body.send_excesses_to) ?? addr_none()
@@ -243,13 +231,11 @@ matcher cocoon_client_withdraw {
     produces cocoon_client_withdraw
     entry    @wd
 
-    op CocoonOwnerClientWithdraw @wd
-      -> op CocoonClientProxyRequest @client_request
+    op CocoonOwnerClientWithdraw @wd as CocoonOwnerClientWithdraw
+      -> op CocoonClientProxyRequest @client_request as CocoonClientProxyRequest
          -> { maybe op CocoonReturnExcessesBack @excesses
             ; op CocoonPayout @payout }
 
-    parse wd             as CocoonOwnerClientWithdraw
-    parse client_request as CocoonClientProxyRequest
     # A refund grant rides inside the proxy request; anything else leaves the amount at 0.
     let granted = parse? client_request.body.payload as CocoonClientProxyRefundGranted
     failed when (wd.msg.transaction.aborted ?? false)

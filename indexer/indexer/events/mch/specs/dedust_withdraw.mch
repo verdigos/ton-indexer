@@ -26,14 +26,11 @@ matcher dedust_withdraw {
     produces dex_withdraw_liquidity
     entry    @burn
 
-    op JettonBurn @burn
+    op JettonBurn @burn as JettonBurn
       -> op JettonBurnNotification @notification
-      -> { op DedustPayoutFromPool @req_1 -> ( op DedustPayout @ton_1 | btype jetton_transfer @jt_1 )
-         ; op DedustPayoutFromPool @req_2 -> ( op DedustPayout @ton_2 | btype jetton_transfer @jt_2 ) }
+      -> { op DedustPayoutFromPool @req_1 as DedustPayoutFromPool -> ( op DedustPayout @ton_1 | btype jetton_transfer @jt_1 )
+         ; op DedustPayoutFromPool @req_2 as DedustPayoutFromPool -> ( op DedustPayout @ton_2 | btype jetton_transfer @jt_2 ) }
 
-    parse burn  as JettonBurn
-    parse req_1 as DedustPayoutFromPool
-    parse req_2 as DedustPayoutFromPool
     require lp_wallet = lookup jetton_wallet(burn.msg.destination)
     out {
         dex:                 "dedust"

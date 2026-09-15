@@ -41,11 +41,9 @@ matcher stonfi_v2_withdraw {
 
     btype jetton_burn @burn
       -> op StonfiV2WithdrawFromPool @router
-           -> { op StonfiV2PayTo @payout_1 -> btype jetton_transfer @jt_1 -> maybe op PTonTransfer @pton_1
-              ; op StonfiV2PayTo @payout_2 -> btype jetton_transfer @jt_2 -> maybe op PTonTransfer @pton_2 }
+           -> { op StonfiV2PayTo @payout_1 -> btype jetton_transfer @jt_1 -> maybe op PTonTransfer @pton_1 as PTonTransfer
+              ; op StonfiV2PayTo @payout_2 -> btype jetton_transfer @jt_2 -> maybe op PTonTransfer @pton_2 as PTonTransfer }
 
-    parse pton_1 as PTonTransfer
-    parse pton_2 as PTonTransfer
     out {
         dex:                 "stonfi_v2"
         sender:              burn.data.owner
@@ -73,14 +71,12 @@ matcher stonfi_v2_withdraw_refund {
 
     op StonfiV2WithdrawRefund @refund {
         children first {
-            op StonfiV2PayTo @payout_1 -> btype jetton_transfer @jt_1 -> maybe op PTonTransfer @pton_1
-            ; op StonfiV2PayTo @payout_2 -> btype jetton_transfer @jt_2 -> maybe op PTonTransfer @pton_2
+            op StonfiV2PayTo @payout_1 -> btype jetton_transfer @jt_1 -> maybe op PTonTransfer @pton_1 as PTonTransfer
+            ; op StonfiV2PayTo @payout_2 -> btype jetton_transfer @jt_2 -> maybe op PTonTransfer @pton_2 as PTonTransfer
         }
         parent { op StonfiV2WithdrawRefundParent @refund_parent }
     }
 
-    parse pton_1 as PTonTransfer
-    parse pton_2 as PTonTransfer
     out {
         dex:                 "stonfi_v2"
         sender:              account(refund_parent.msg.source)

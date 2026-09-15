@@ -30,9 +30,8 @@ matcher pton_transfer {
     priority 90
     entry    @transfer
 
-    op JettonTransfer @transfer -> maybe op JettonNotify @notify
+    op JettonTransfer @transfer as JettonTransfer -> maybe op JettonNotify @notify
 
-    parse transfer as JettonTransfer
     require wallet = lookup jetton_wallet(transfer.msg.destination)
     let pton_v1   = wallet.jetton == "0:8CDC1D7640AD5EE326527FC1AD0514F468B30DC84B0173F0E155F451B4E11F7C"
     let pton_v2   = wallet.jetton == "0:671963027F7F85659AB55B821671688601CDCF1EE674FC7FBBB1A776A18D34A3"

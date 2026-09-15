@@ -81,17 +81,13 @@ matcher dedust_v2_withdraw {
     entry           @withdraw
     include_excess  false
 
-    op DedustV2Withdraw @withdraw
+    op DedustV2Withdraw @withdraw as DedustV2Withdraw
       -> op DedustV2WithdrawLiquidity
         -> op DedustV2ExitLiquidity
-          -> { maybe op DedustV2WithdrawalEvent @event
-             ; maybe ( op PayoutMessage @ton_1 | btype jetton_transfer @jt_1 )
-             ; maybe ( op PayoutMessage @ton_2 | btype jetton_transfer @jt_2 ) }
+          -> { maybe op DedustV2WithdrawalEvent @event as DedustV2WithdrawalEvent
+             ; maybe ( op PayoutMessage @ton_1 as PayoutMessage | btype jetton_transfer @jt_1 )
+             ; maybe ( op PayoutMessage @ton_2 as PayoutMessage | btype jetton_transfer @jt_2 ) }
 
-    parse withdraw as DedustV2Withdraw
-    parse event    as DedustV2WithdrawalEvent
-    parse ton_1    as PayoutMessage
-    parse ton_2    as PayoutMessage
 
     reject when withdraw.body.auto_claim_fees
 

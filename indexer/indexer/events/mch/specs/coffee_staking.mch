@@ -86,13 +86,11 @@ matcher coffee_staking_withdraw {
     entry    @withdraw_1
 
     op CoffeeStakingPositionWithdraw @withdraw_1
-      -> op CoffeeStakingPositionWithdraw @withdraw_2
-        -> { op CoffeeStakingPositionWithdraw @withdraw_3
+      -> op CoffeeStakingPositionWithdraw @withdraw_2 as CoffeeStakingPositionWithdraw2
+        -> { op CoffeeStakingPositionWithdraw @withdraw_3 as CoffeeStakingPositionWithdraw3
                -> btype jetton_transfer @transfer
            ; maybe op CoffeeStakingPositionWithdraw }
 
-    parse withdraw_2 as CoffeeStakingPositionWithdraw2
-    parse withdraw_3 as CoffeeStakingPositionWithdraw3
     out {
         source:             account(withdraw_2.body.owner)
         pool:               account(withdraw_2.msg.source)
@@ -110,11 +108,10 @@ matcher coffee_staking_claim_rewards {
     produces coffee_staking_claim_rewards
     entry    @claim
 
-    op CoffeeStakingClaimRewards @claim
+    op CoffeeStakingClaimRewards @claim as CoffeeStakingClaimRewards
       -> { btype jetton_transfer @transfer
          ; maybe op CoffeeStakingClaimRewards }
 
-    parse claim as CoffeeStakingClaimRewards
     out {
         admin:                   account(claim.msg.source)
         recipient:               account(claim.body.receiver)
