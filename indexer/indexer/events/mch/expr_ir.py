@@ -15,6 +15,19 @@ from indexer.events.mch import ast_
 IR_VERSION = "1.2"
 
 
+def _is_envelope_address(e: ast_.Expr) -> bool:
+    fields = []
+    while isinstance(e, ast_.FieldAccess):
+        fields.append(e.field)
+        e = e.target
+    if isinstance(e, ast_.FieldRef):
+        fields.append(e.field)
+    elif not isinstance(e, ast_.NameRef):
+        return False
+    return fields in (["source", "msg"], ["destination", "msg"],
+                      ["account", "transaction", "msg"])
+
+
 def emit_expr(e: ast_.Expr) -> dict:
     if isinstance(e, ast_.IntLit):
         return {"k": "int", "v": e.value}
@@ -29,7 +42,8 @@ def emit_expr(e: ast_.Expr) -> dict:
     if isinstance(e, ast_.FieldRef):
         return {"k": "dotfield", "name": e.field}
     if isinstance(e, ast_.FieldAccess):
-        return {"k": "attr", "of": emit_expr(e.target), "name": e.field}
+        path = {"k": "attr", "of": emit_expr(e.target), "name": e.field}
+        return {"k": "call", "fn": "account", "args": [path]} if _is_envelope_address(e) else path
     if isinstance(e, ast_.Call):
         # eval.py's evaluator only ever calls a bare builtin name ("only
         # builtin names are callable"); a non-name callee can be *parsed*
@@ -42,6 +56,8 @@ def emit_expr(e: ast_.Expr) -> dict:
                 f"(see eval.py Evaluator._eval_call) and are not representable "
                 f"in IR {IR_VERSION}"
             )
+        if e.callee.name == "account" and len(e.args) == 1 and _is_envelope_address(e.args[0]):
+            return emit_expr(e.args[0])
         return {"k": "call", "fn": e.callee.name, "args": [emit_expr(a) for a in e.args]}
     if isinstance(e, ast_.LookupExpr):
         return {"k": "lookup", "name": e.kind, "args": [emit_expr(a) for a in e.args]}

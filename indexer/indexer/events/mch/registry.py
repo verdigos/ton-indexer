@@ -98,25 +98,31 @@ def default_message_types() -> dict[str, type]:
     return {cls.__name__: cls for cls in classes}
 
 
+def account_key(address: Any) -> str | None:
+    """Normalize an AccountId or raw string to an interface-repository key."""
+    from indexer.events.blocks.utils import AccountId
+
+    return address.as_str() if isinstance(address, AccountId) else address.upper()
+
+
 def default_lookups() -> dict[str, Callable[..., Awaitable[Any]]]:
     """Async interface resolvers backed by the interface_repository contextvar.
 
-    Addresses are normalized with .upper() to match interface-repository keys,
-    which are raw-form uppercase (see event_processing / blocks.jettons callers).
+    AccountId and raw string addresses resolve to uppercase raw keys.
     """
     from indexer.events import context
 
-    async def jetton_wallet(address: str) -> Any:
+    async def jetton_wallet(address: Any) -> Any:
         repo = context.interface_repository.get()
         if repo is None:
             return None
-        return await repo.get_jetton_wallet(address.upper())
+        return await repo.get_jetton_wallet(account_key(address))
 
-    async def nft_item(address: str) -> Any:
+    async def nft_item(address: Any) -> Any:
         repo = context.interface_repository.get()
         if repo is None:
             return None
-        return await repo.get_nft_item(address.upper())
+        return await repo.get_nft_item(account_key(address))
 
     return {
         "jetton_wallet": jetton_wallet,
