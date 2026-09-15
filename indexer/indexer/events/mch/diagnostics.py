@@ -141,6 +141,7 @@ C015_WHERE_EXPR_CAPTURE_NOT_ENTRY = "C015_WHERE_EXPR_CAPTURE_NOT_ENTRY"
 """A capture name used in `where (expr)` is not the matcher's entry capture."""
 
 C016_ENTRY_RELATIONS_IN_CHAIN = "C016_ENTRY_RELATIONS_IN_CHAIN"
+C017_RECURSIVE_RULE_XOR = "C017_RECURSIVE_RULE_XOR"
 
 
 @dataclass(frozen=True)

@@ -115,7 +115,7 @@ matcher tgbtc_mint {
 # Descend the trunk: each hop is any block that is not the tail; recursion
 # terminates on the tail node (exclusive exit branch), which carries the success
 # log and the jetton_mint block as a children set.
-rule mint_chain = xor {
+rule mint_chain = or {
                       any @mid -> maybe $mint_chain
                       op TgBTCMintTail @tail
                         -> { op TgBTCMintSuccessLog @log ; btype jetton_mint @mint }

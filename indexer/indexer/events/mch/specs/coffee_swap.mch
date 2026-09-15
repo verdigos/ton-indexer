@@ -13,7 +13,7 @@ opcode CoffeeNotification        = 0xc0ffee36
 
 # One pool hop per unrolling: a swap request with its success event; exit =
 # the payout chain to the user.
-rule swap_chain = xor {
+rule swap_chain = or {
                       op CoffeeSwapInternal @peer -> op CoffeeSwapSuccessfulEvent @peer_event as CoffeeSwapEvent -> maybe $swap_chain
                       op CoffeePayoutInternal @exit_payout as CoffeePayoutInternal -> or {
                                                      btype jetton_transfer @exit_out

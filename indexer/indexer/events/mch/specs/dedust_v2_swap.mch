@@ -53,7 +53,7 @@ opcode DedustV2PayNative = 0xa5a7cbf8
 opcode DedustV2SwapEvent = 0x78e79ba4
 opcode DedustV2Payout    = 0x3216ca09
 # One pool hop per unrolling (step arms), then the terminal out leg (exit arms).
-rule dv2_hop = xor {
+rule dv2_hop = or {
                    op DedustV2PayNative @hop
                      -> { op DedustV2SwapEvent @ev -> maybe $dv2_hop }
                    btype jetton_transfer @hop where (.payload_opcode == 0xcbc33949)
@@ -74,7 +74,7 @@ matcher dedust_v2_swap {
         btype jetton_transfer @carrier
     }
       -> { op DedustV2SwapEvent @ev0 as DedustV2SwapEvent
-           xor {
+           or {
                $dv2_hop
                btype jetton_transfer @final_leg where (.payload_opcode != 0xcbc33949)
                op DedustV2Payout @final_leg

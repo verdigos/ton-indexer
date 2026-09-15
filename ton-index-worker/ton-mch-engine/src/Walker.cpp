@@ -229,6 +229,15 @@ class MatchState {
   }
 
   bool match_or(const CompiledNode &node, Block *block) {
+    if (node.exclusive) {
+      int passing = -1;
+      for (int bid : node.branches) {
+        if (!test_head(bid, block)) continue;
+        if (passing >= 0) return false;
+        passing = bid;
+      }
+      return passing >= 0 && match_node(passing, block);
+    }
     for (int bid : node.branches) {
       Mark mk = mark();
       if (match_node(bid, block)) {

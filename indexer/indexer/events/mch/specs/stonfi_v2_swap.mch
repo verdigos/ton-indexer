@@ -10,10 +10,7 @@
 #   reads the jetton_transfer block's own `has_internal_transfer` data
 #   flag) plus the payload-validating `pton_self_transfer` on a bare `pred` node
 #   (legacy GenericMatcher has no opcode constraint);
-# - `^` is used where legacy has ordered OrMatcher because same-name captures
-#   require declared exclusivity (R005); hop branches actually overlap by
-#   prefix — behavior stays first-match-in-order (recursion destructures the
-#   alternative; ExclusiveOr elsewhere is try_build-inert);
+# - overlapping hop branches use `or` and resolve first-match-in-order;
 # - terminal-pton branch carries `{ maybe op PTonTransfer }` so the pattern
 #   consumes the pton call the legacy build added via
 #   additional_blocks_to_include.
@@ -32,7 +29,7 @@ predicate pton_self_transfer
 
 # One router hop per unrolling: swap request + payment, then continuation via
 # a validated intermediate pton chain, a plain jetton transfer, or directly.
-rule swap_hop = xor {
+rule swap_hop = or {
                     op StonfiV2Swap @peer_swap
                       -> op StonfiV2PayTo @peer_payout
                       -> btype jetton_transfer @peer_out where (not .has_internal_transfer)
@@ -66,7 +63,7 @@ matcher stonfi_v2_swap {
     op StonfiV2Swap @swap {
         -> {
             op StonfiV2PayTo @payout
-                -> xor {
+                -> or {
                        btype jetton_transfer @out_transfer where (not .has_internal_transfer)
                           -> pred pton_self_transfer
                           -> op JettonNotify

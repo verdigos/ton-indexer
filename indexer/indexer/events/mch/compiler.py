@@ -584,7 +584,7 @@ def _branches_eligible_for_exclusive_heuristic(
 
 
 def _check_redundant_exclusive_heads(p: ast_.Alternative, ctx: CompileCtx) -> None:
-    """Emit W202 if two branches share the same concrete head (non-blocking warning)."""
+    """Reject explicit exclusive alternatives with duplicate concrete heads."""
     seen: dict[object, object] = {}
     for b in p.branches:
         if not isinstance(b, ast_.Node) or b.relations is not None:
@@ -601,11 +601,11 @@ def _check_redundant_exclusive_heads(p: ast_.Alternative, ctx: CompileCtx) -> No
         else:
             continue
         if key in seen:
-            ctx.bag.warning(
+            ctx.bag.error(
                 "W202_EXCLUSIVE_OR_REDUNDANT_HEADS",
                 f"two branches of this exclusive alternative share the same head "
                 f"({'opcode' if key[0] == 'op' else 'btype'} {key[1]!r}); "
-                f"ExclusiveOrMatcher's sum-check will never return True for this head",
+                f"use `or` for overlapping heads",
                 b.span,
             )
         else:
@@ -760,6 +760,14 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
             )
             raise CompileError(ctx.bag)
         if rec_class is RecursionClass.DIRECT_RECURSIVE:
+            if isinstance(target.pattern, ast_.Alternative) and target.pattern.exclusive:
+                ctx.bag.error(
+                    "C017_RECURSIVE_RULE_XOR",
+                    f"rule {p.name!r}: a recursive rule body cannot be `xor`",
+                    target.pattern.span,
+                    suggestion="use `or`",
+                )
+                raise CompileError(ctx.bag)
             if target.strategy == "cyclic":
                 return _lower_cyclic_rule(p.name, ctx)
             return _lower_recursive_rule(p.name, ctx)

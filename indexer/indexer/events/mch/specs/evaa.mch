@@ -8,7 +8,7 @@
 #   membership over 4 error opcodes) is an opcode set sharing one capture
 #   (@fail_excess); same block matched,
 #   same consumed set, and only the winning branch binds.
-# - `xor` edge targets use first-match-wins branch order.
+# - `or` edge targets use first-match-wins branch order.
 #
 # Capture -> legacy label map:
 #   @master        (anchor)                      | @user      withdraw_on_user
@@ -97,7 +97,7 @@ matcher evaa_withdraw {
 
     op EvaaWithdrawMaster @master as EvaaWithdrawMaster
       -> btype call_contract @user where ((parse? . as EvaaUserOp).op == 0x21)
-      -> xor {
+      -> or {
              op EvaaWithdrawCollateralized @coll_ok as EvaaWithdrawCollateralized
                -> { xor {
                         btype jetton_transfer @jetton_payout
@@ -148,9 +148,9 @@ matcher evaa_liquidate {
     entry    @master
 
     pred evaa_liquidate_anchor @master
-      -> xor {
+      -> or {
              btype call_contract @user where ((parse? . as EvaaUserOp).op == 0x31)
-               -> xor {
+               -> or {
                       op EvaaLiquidateSatisfied @satisfied_success
                         -> { btype call_contract where ((parse? . as EvaaUserOp).op == 0x311a)
                                -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])

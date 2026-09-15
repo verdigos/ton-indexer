@@ -34,7 +34,7 @@ opcode JVaultSendClaimedRewards    = 0x44BC1FE3
 
 # Pool referrer-update fan-out: a linear chain of request/update referrer
 # messages (each auto-consuming its excess/bounce), terminated by exhaustion.
-rule jvault_referrals = xor {
+rule jvault_referrals = or {
                             op JVaultRequestUpdateReferrer @ref -> maybe $jvault_referrals
                             op JVaultUpdateReferrer @refupd -> maybe $jvault_referrals
                         }
