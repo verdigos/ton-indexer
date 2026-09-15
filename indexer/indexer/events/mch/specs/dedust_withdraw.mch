@@ -34,8 +34,7 @@ matcher dedust_withdraw {
     parse burn  as JettonBurn
     parse req_1 as DedustPayoutFromPool
     parse req_2 as DedustPayoutFromPool
-    let lp_wallet = lookup jetton_wallet(burn.msg.destination)
-    reject when lp_wallet == null
+    require lp_wallet = lookup jetton_wallet(burn.msg.destination)
     out {
         dex:                 "dedust"
         sender:              account(burn.msg.source)

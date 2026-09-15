@@ -79,8 +79,7 @@ matcher telegram_nft_purchase {
     # real_prev_owner present-null, one/two payouts) — so all but the royalty pair
     # are plain; the royalty pair (2-payout only) is `?:` to match the legacy
     # conditional keys.
-    let d = telegram_nft_purchase_data(assigned, payment, payout_1, payout_2)
-    reject when d == null
+    require d = telegram_nft_purchase_data(assigned, payment, payout_1, payout_2)
     out {
         is_purchase:          d.is_purchase
         prev_owner:           d.prev_owner
@@ -109,8 +108,7 @@ matcher telegram_nft_assigned {
     op NftOwnershipAssigned @assigned
       <- maybe peek any @payment
 
-    let d = telegram_nft_purchase_data(assigned, payment, null, null)
-    reject when d == null
+    require d = telegram_nft_purchase_data(assigned, payment, null, null)
 
     # A `produces switch`, not `?:` keys, because the legacy key set here is
     # BRANCH-shaped, not null-shaped. `payload is TeleitemBidInfo` sets all three

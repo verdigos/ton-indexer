@@ -55,7 +55,7 @@
 # one refund leg (`len(...) == 0` reject), mirroring its "no refund legs found"
 # bail.
 #
-# TARGET AMOUNTS. `try parse` unwraps the PayJetton wrapper and then
+# TARGET AMOUNTS. `parse?` unwraps the PayJetton wrapper and then
 # validates the deposit payload. An absent or invalid payload yields null, so
 # both target amounts become null. The PARTIAL matcher does not read it.
 #
@@ -83,8 +83,6 @@ opcode DedustV2JoinLiquidity   = 0x25251ee0
 opcode DedustV2DepositEvent    = 0x35df2e12
 opcode DedustV2CreditLiquidity = 0x855afcbd
 opcode PayoutMessage           = 0x3216ca09
-opcode ExcessMessage           = 0xd53276db
-
 # One deposit leg's carrier: the TON-side PayNative or a prebuilt jetton
 # transfer. Bare concrete nodes with distinct heads, so `^` (the compiler would
 # upgrade `|` to it anyway) and at most one arm can ever bind.
@@ -139,8 +137,8 @@ matcher dedust_v2_deposit_final {
     let leg_asset  = carrier.data.asset if jetton_in else ton_asset()
     let leg_wallet = carrier.data.sender_wallet if jetton_in else null
 
-    let carrier_cell = (try parse carrier.data.forward_payload as DedustV2PayJetton).payment_payload if jetton_in else carrier.body.payment_payload
-    let payload      = try parse carrier_cell as DedustV2DepositPayload
+    let carrier_cell = (parse? carrier.data.forward_payload as DedustV2PayJetton).payment_payload if jetton_in else carrier.body.payment_payload
+    let payload      = parse? carrier_cell as DedustV2DepositPayload
 
     # Every refund leg must be addressed to the initiator, jetton and TON alike.
     # The two jetton slots are separate captures (one name cannot bind twice in
@@ -187,7 +185,7 @@ matcher dedust_v2_deposit_rejected {
          ; maybe btype jetton_transfer @refund_jt_2
          ; maybe op PayoutMessage @refund_ton
          ; maybe op DedustV2DepositEvent @event
-         ; maybe op ExcessMessage }
+         ; maybe op Excess }
       <- $dv2_credit_parent
 
     parse join       as DedustV2JoinLiquidity
@@ -206,8 +204,8 @@ matcher dedust_v2_deposit_rejected {
     let leg_asset  = carrier.data.asset if jetton_in else ton_asset()
     let leg_wallet = carrier.data.sender_wallet if jetton_in else null
 
-    let carrier_cell = (try parse carrier.data.forward_payload as DedustV2PayJetton).payment_payload if jetton_in else carrier.body.payment_payload
-    let payload      = try parse carrier_cell as DedustV2DepositPayload
+    let carrier_cell = (parse? carrier.data.forward_payload as DedustV2PayJetton).payment_payload if jetton_in else carrier.body.payment_payload
+    let payload      = parse? carrier_cell as DedustV2DepositPayload
 
     reject when refund_jt_1 != null and refund_jt_1.data.receiver != initiator
     reject when refund_jt_2 != null and refund_jt_2.data.receiver != initiator
@@ -253,7 +251,7 @@ matcher dedust_v2_deposit_partial {
     include_excess  false
 
     op DedustV2CreditAsset @credit
-      -> { maybe op ExcessMessage }
+      -> { maybe op Excess }
       <- $dv2_deposit_carrier
 
     parse credit  as DedustV2CreditAsset

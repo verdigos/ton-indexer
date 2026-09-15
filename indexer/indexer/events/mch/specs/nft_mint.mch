@@ -60,8 +60,7 @@ matcher nft_mint {
     # and builders/teleitem_auction.py — `transaction.account` is already stored
     # in the raw-uppercase form `AccountId(...).as_str()` produces.
     let address = mint.msg.transaction.account
-    let nft     = lookup nft_item(address)
-    reject when nft == null
+    require nft     = lookup nft_item(address)
     let raw_op  = mint.msg.opcode
     out {
         source:     account(mint.msg.source)

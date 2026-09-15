@@ -43,8 +43,7 @@ matcher jetton_transfer {
 
     parse transfer as JettonTransfer
     parse internal  as JettonInternalTransfer
-    let wallet   = lookup jetton_wallet(internal.msg.destination)
-    reject when wallet == null
+    require wallet   = lookup jetton_wallet(internal.msg.destination)
     let mismatch = account(wallet.owner) != account(transfer.body.destination)
     let amt      = internal.body.amount ?? transfer.body.amount
     let fwd      = internal.body.forward_ton_amount ?? transfer.body.forward_amount
@@ -86,8 +85,7 @@ matcher jetton_burn {
     op JettonBurn @burn -> maybe op JettonBurnNotification @notification
 
     parse burn as JettonBurn
-    let wallet      = lookup jetton_wallet(burn.msg.destination)
-    reject when wallet == null
+    require wallet      = lookup jetton_wallet(burn.msg.destination)
     let burn_amount = burn.body.amount
     failed when burn.failed
     out {

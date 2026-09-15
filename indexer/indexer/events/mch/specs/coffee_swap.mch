@@ -50,8 +50,7 @@ matcher coffee_swap {
                -> ( btype jetton_transfer @out ^ op CoffeePayout @out ^ op CoffeeNotification @out ) ) }
       <- ( btype jetton_transfer @in_transfer ^ op CoffeeSwapNative @in_transfer )
 
-    let d = coffee_swap_data(consumed)
-    reject when d == null
+    require d = coffee_swap_data(consumed)
     failed when d.failed
     out {
         dex:                   d.dex

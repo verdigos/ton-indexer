@@ -78,8 +78,7 @@ matcher tonco_swap {
       <- ( btype jetton_transfer @in_transfer
          ^ op JettonNotify <- op PTonTransfer @in_transfer )
 
-    let r = tonco_swap_data(consumed)
-    reject when r == null
+    require r = tonco_swap_data(consumed)
     failed when r.failed
     out {
         dex:                   r.dex

@@ -24,7 +24,6 @@ opcode CoffeePayout                           = 0xc0ffee32
 opcode CoffeeDepositLiquiditySuccessfulEvent  = 0xc0ffee33
 opcode CoffeeNotification                     = 0xc0ffee36
 opcode JettonInternalTransfer                 = 0x178d4519
-opcode ExcessMessage                          = 0xd53276db
 opcode ProvideWalletAddress                   = 0x2c76b973
 opcode TakeWalletAddress                      = 0xd1735400
 
@@ -73,7 +72,7 @@ matcher coffee_deposit_liquidity {
     op CoffeeCreateLiquidityDepositoryRequest @request
       -> { op CoffeeDeploy @deploy
              -> maybe op CoffeeDepositLiquidityInternal
-                  -> { op JettonInternalTransfer -> maybe op ExcessMessage
+                  -> { op JettonInternalTransfer -> maybe op Excess
                      ; op CoffeeDepositLiquiditySuccessfulEvent @success
                      ; maybe op CoffeePayoutInternal @payout
                          -> ( btype jetton_transfer @out_jt

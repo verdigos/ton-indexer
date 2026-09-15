@@ -33,8 +33,7 @@ matcher pton_transfer {
     op JettonTransfer @transfer -> maybe op JettonNotify @notify
 
     parse transfer as JettonTransfer
-    let wallet = lookup jetton_wallet(transfer.msg.destination)
-    reject when wallet == null
+    require wallet = lookup jetton_wallet(transfer.msg.destination)
     let pton_v1   = wallet.jetton == "0:8CDC1D7640AD5EE326527FC1AD0514F468B30DC84B0173F0E155F451B4E11F7C"
     let pton_v2   = wallet.jetton == "0:671963027F7F85659AB55B821671688601CDCF1EE674FC7FBBB1A776A18D34A3"
     let tonco_wtton = wallet.jetton == "0:949C4C66760C002800E2FA3D8A3CA4E1C90A9373B53AE7472033483BF14CD95E"

@@ -96,8 +96,7 @@ matcher tgbtc_mint {
     # bitcoin_txid, jetton_mint asset/wallet) is the one consumed-set-driven host
     # fn; every produced field maps from its namespace. The ContractDeploy
     # side-effect children ride on the shaper (see the builder module docstring).
-    let d = tgbtc_mint_data(consumed)
-    reject when d == null
+    require d = tgbtc_mint_data(consumed)
     out {
         sender:            d.sender
         recipient:         d.recipient
@@ -164,8 +163,7 @@ matcher tgbtc_burn {
                 ; maybe op TgBTCPayout
                     -> { maybe op TgBTCPayoutNotify ; maybe btype ton_transfer } } )
 
-    let b = tgbtc_burn_log(log)
-    reject when b == null
+    require b = tgbtc_burn_log(log)
     let chain_amount = burn.data.amount.value
     let use_log      = (chain_amount ?? 0) == 0
     let min_amount   = chain_amount if chain_amount < b.amount else b.amount
@@ -254,8 +252,7 @@ matcher tgbtc_mint_log_only {
 
     op TgBTCMintSuccessLog @log
 
-    let m = tgbtc_mint_log(log)
-    reject when m == null
+    require m = tgbtc_mint_log(log)
     out {
         sender:            account(log.msg.source)
         recipient:         m.recipient
@@ -278,8 +275,7 @@ matcher tgbtc_burn_log_only {
 
     op TgBTCBurnLog @log
 
-    let b = tgbtc_burn_log(log)
-    reject when b == null
+    require b = tgbtc_burn_log(log)
     out {
         sender:         b.sender
         jetton_wallet:  null
@@ -298,8 +294,7 @@ matcher tgbtc_new_key_log_only {
 
     op TgBTCNewKeyLog @log
 
-    let n = tgbtc_new_key_log(log)
-    reject when n == null
+    require n = tgbtc_new_key_log(log)
     out {
         coordinator_contract: account(log.msg.source)
         pubkey:               n.pubkey
@@ -323,8 +318,7 @@ matcher tgbtc_dkg_log_only {
 
     op TgBTCDkgCompletedLog @log
 
-    let g = tgbtc_dkg_completed_log(log)
-    reject when g == null
+    require g = tgbtc_dkg_completed_log(log)
     out {
         coordinator_contract: account(log.msg.source)
         timestamp:            g.timestamp

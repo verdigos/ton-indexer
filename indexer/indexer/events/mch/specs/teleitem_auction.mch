@@ -52,8 +52,7 @@ matcher teleitem_start_auction {
     op TeleitemStartAuction @auction -> maybe op TeleitemOk @ok
 
     parse auction as TeleitemStartAuction
-    let nft = lookup nft_item(auction.msg.destination)
-    reject when nft == null
+    require nft = lookup nft_item(auction.msg.destination)
     reject when not is_teleitem(nft)
     # `AccountId(...)` is unconditional in the legacy build, so a missing address
     # becomes addr_none (present-but-empty), not null.
@@ -86,8 +85,7 @@ matcher teleitem_cancel_auction {
 
     op TeleitemCancelAuction @cancel -> maybe op TeleitemOk @ok
 
-    let nft = lookup nft_item(cancel.msg.destination)
-    reject when nft == null
+    require nft = lookup nft_item(cancel.msg.destination)
     reject when not is_teleitem(nft)
     let item = account(cancel.msg.destination) ?? addr_none()
     failed when (cancel.msg.transaction.aborted ?? false)

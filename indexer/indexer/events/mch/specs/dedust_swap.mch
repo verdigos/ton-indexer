@@ -53,8 +53,7 @@ matcher dedust_swap {
          }
       <- ( btype jetton_transfer @in_transfer | op DedustSwap @swap_request )
 
-    let legs = dedust_swap_legs(consumed, in_transfer, swap_request)
-    reject when legs == null
+    require legs = dedust_swap_legs(consumed, in_transfer, swap_request)
     failed when notification == null or any(peer_notification as n => n == null)
     out {
         dex:                   "dedust"

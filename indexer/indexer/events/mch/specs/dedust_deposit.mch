@@ -90,8 +90,7 @@ matcher dedust_deposit_final {
          -> { maybe op DedustDeployDepositContract }
          <- $deposit_leg
 
-    let r = dedust_deposit_final_data(consumed)
-    reject when r == null
+    require r = dedust_deposit_final_data(consumed)
     failed when not r.success
     out {
         dex:                  "dedust"
@@ -123,8 +122,7 @@ matcher dedust_deposit_partial {
          -> { op DedustDeployDepositContract }
          <- $deposit_leg
 
-    let r = dedust_deposit_partial_data(consumed)
-    reject when r == null
+    require r = dedust_deposit_partial_data(consumed)
     out {
         dex:                  "dedust"
         sender:               r.sender

@@ -11,11 +11,10 @@ matcher getgems_nft_purchase {
 
     btype nft_transfer @nft where (.is_purchase and .marketplace == "getgems")
       -> { maybe btype ton_transfer @payout where (.destination == nft.data.real_prev_owner) }
-      <- maybe peek btype ton_transfer where (.comment == "finish" or .comment == "stop")
+      <- maybe peek btype ton_transfer where (.comment in ["finish", "stop"])
            -> { maybe peek btype ton_transfer @sib_payout where (.destination == nft.data.real_prev_owner) }
 
-    let seller_payout = sib_payout ?? payout
-    reject when seller_payout == null
+    require seller_payout = sib_payout ?? payout
     out {
         nft_address:              nft.data.nft.address
         collection_address:       nft.data.nft.collection.address

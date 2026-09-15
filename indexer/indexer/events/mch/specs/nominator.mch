@@ -35,7 +35,6 @@
 # One message chain practically yields one of each, so this is accepted. If an
 # A/B diff surfaces, this documented aux-arity divergence is the reason.
 
-opcode ExcessMessage = 0xD53276DB
 opcode NominatorPoolProcessWithdrawRequests = 0x2
 
 matcher nominator_pool_withdraw {
@@ -45,8 +44,7 @@ matcher nominator_pool_withdraw {
     btype ton_transfer @payout
       <- peek op NominatorPoolProcessWithdrawRequests
 
-    let pool_iface = lookup nominator_pool(payout.msg.source)
-    reject when pool_iface == null
+    require pool_iface = lookup nominator_pool(payout.msg.source)
     out {
         source:        account(payout.msg.destination)
         pool:          account(payout.msg.source)
@@ -61,10 +59,9 @@ matcher nominator_pool_deposit {
     include_bounces false
 
     btype ton_transfer @deposit where (.comment == "d")
-      -> { maybe op ExcessMessage @excess ; maybe op 0xffffffff @bounce }
+      -> { maybe op Excess @excess ; maybe op Bounce @bounce }
 
-    let pool_iface = lookup nominator_pool(deposit.msg.destination)
-    reject when pool_iface == null
+    require pool_iface = lookup nominator_pool(deposit.msg.destination)
     failed when deposit.failed
     out {
         source: account(deposit.msg.source)
@@ -81,10 +78,9 @@ matcher nominator_pool_withdraw_request {
     include_bounces false
 
     btype ton_transfer @request where (.comment == "w")
-      -> { maybe op ExcessMessage @excess ; maybe op 0xffffffff @bounce }
+      -> { maybe op Excess @excess ; maybe op Bounce @bounce }
 
-    let pool_iface = lookup nominator_pool(request.msg.destination)
-    reject when pool_iface == null
+    require pool_iface = lookup nominator_pool(request.msg.destination)
     failed when request.failed
     out {
         source:        account(request.msg.source)

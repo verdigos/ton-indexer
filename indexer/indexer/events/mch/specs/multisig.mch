@@ -60,8 +60,7 @@ matcher multisig_create_order {
 
     parse new  as MultisigNewOrder
     parse init as MultisigInitOrder
-    let order = lookup multisig_order(init.msg.destination)
-    reject when order == null
+    require order = lookup multisig_order(init.msg.destination)
     out {
         query_id:               new.body.query_id
         multisig:               account(new.msg.destination)
@@ -87,8 +86,7 @@ matcher multisig_approve {
 
     parse vote     as MultisigApprove
     parse rejected as MultisigApproveRejected
-    let order = lookup multisig_order(vote.msg.destination)
-    reject when order == null
+    require order = lookup multisig_order(vote.msg.destination)
     out {
         signer:       account(vote.msg.source)
         order:        account(vote.msg.destination)
@@ -108,8 +106,7 @@ matcher multisig_approve_comment {
          ^ op MultisigApproveRejected @rejected )
 
     parse rejected as MultisigApproveRejected
-    let order = lookup multisig_order(vote.msg.destination)
-    reject when order == null
+    require order = lookup multisig_order(vote.msg.destination)
     out {
         signer:       account(vote.msg.source)
         order:        account(vote.msg.destination)
@@ -129,8 +126,7 @@ matcher multisig_execute {
     op MultisigExecute @exec
 
     parse exec as MultisigExecute
-    let order = lookup multisig_order(exec.msg.source)
-    reject when order == null
+    require order = lookup multisig_order(exec.msg.source)
     out {
         query_id:               exec.body.query_id
         multisig:               account(exec.msg.destination)

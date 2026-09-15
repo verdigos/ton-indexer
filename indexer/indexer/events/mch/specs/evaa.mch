@@ -97,14 +97,13 @@ matcher evaa_supply {
     pred evaa_supply_anchor @master
       -> pred evaa_user_supply @user
         -> ( op EvaaSupplySuccess @success
-               -> maybe btype ton_transfer where (.comment == "EVAA liquidation." or .comment == "EVAA supply." or .comment == "EVAA withdraw.")
+               -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
            | op EvaaSupplyFail @fail
            | btype jetton_transfer @refund )
 
-    let supply_fwd = (try parse master.data.forward_payload as EvaaSupplyJettonForward) if master.btype == "jetton_transfer" else null
+    let supply_fwd = (parse? master.data.forward_payload as EvaaSupplyJettonForward) if master.btype == "jetton_transfer" else null
     reject when master.btype == "jetton_transfer" and supply_fwd == null
-    let r = evaa_supply_data(consumed, supply_fwd.recipient_address)
-    reject when r == null
+    require r = evaa_supply_data(consumed, supply_fwd.recipient_address)
     out {
         sender:                  r.sender
         recipient:               r.recipient
@@ -130,7 +129,7 @@ matcher evaa_withdraw {
       -> ( op EvaaWithdrawCollateralized @coll_ok
              -> { ( btype jetton_transfer @jetton_payout
                   ^ op EvaaWithdrawSuccess @ton_payout
-                      -> maybe btype ton_transfer where (.comment == "EVAA liquidation." or .comment == "EVAA supply." or .comment == "EVAA withdraw.") )
+                      -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."]) )
                   pred evaa_user_withdraw_success -> btype ton_transfer }
          ^ op EvaaWithdrawCollateralized @coll_fail
              -> pred evaa_user_withdraw_fail
@@ -184,7 +183,7 @@ matcher evaa_liquidate {
       -> ( pred evaa_user_liquidate @user
              -> ( op EvaaLiquidateSatisfied @satisfied_success
                     -> { pred evaa_liquidate_success_header
-                           -> maybe btype ton_transfer where (.comment == "EVAA liquidation." or .comment == "EVAA supply." or .comment == "EVAA withdraw.")
+                           -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
                          ( op EvaaLiquidateSuccessReport @finish
                          ^ op EvaaLiquidateFail @finish
                          ^ btype jetton_transfer @finish ) }
@@ -200,8 +199,7 @@ matcher evaa_liquidate {
            ^ ( pred evaa_bounced_call @immediate
              ^ btype jetton_transfer @immediate ) )
 
-    let r = evaa_liquidate_data(consumed)
-    reject when r == null
+    require r = evaa_liquidate_data(consumed)
     out {
         liquidator:          r.liquidator
         borrower:            r.borrower

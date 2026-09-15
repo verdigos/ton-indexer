@@ -12,7 +12,7 @@
 #   `-> ... <-` chain is C009 — dedust_swap precedent;
 # - each refund transfer carries `-> { maybe op PTonTransfer }`: legacy
 #   output_ton_or_jetton has an optional PTonTransfer child_matcher;
-# - `maybe op ExcessMessage` mirrors the legacy explicit children item — the
+# - `maybe op Excess` mirrors the legacy explicit children item — the
 #   engine would absorb it as an excess sibling anyway, kept for fidelity;
 # - the input alternative keeps legacy OrMatcher order: pton arm (JettonNotify
 #   fed by a raw PTonTransfer call) first, plain jetton transfer second.
@@ -42,8 +42,6 @@ opcode ToncoRouterV3CreatePool         = 0x2e3034ef
 opcode ToncoPoolV3Init                 = 0x441c39ed
 opcode JettonNotify                    = 0x7362d09c
 opcode PTonTransfer                    = 0x01f3835d
-opcode ExcessMessage                   = 0xd53276db
-
 matcher tonco_deposit_liquidity {
     produces tonco_deposit_liquidity
     entry    @add_liquidity
@@ -56,13 +54,12 @@ matcher tonco_deposit_liquidity {
                        ; maybe btype jetton_transfer @excess_transfer_1
                            -> { maybe op PTonTransfer } }
                 ; btype nft_mint @nft_mint
-                ; maybe op ExcessMessage } }
+                ; maybe op Excess } }
       <- op ToncoPoolV3FundAccount
       <- ( op JettonNotify @ton_input <- op PTonTransfer @ton_input_addition
          | btype jetton_transfer @jetton_input )
 
-    let r = tonco_deposit_liquidity_data(consumed)
-    reject when r == null
+    require r = tonco_deposit_liquidity_data(consumed)
     out {
         sender:            r.sender
         pool:              r.pool
@@ -125,7 +122,7 @@ matcher tonco_deploy_pool {
 
     op ToncoRouterV3CreatePool @create
       -> op ToncoPoolV3Init @init
-        -> maybe op ExcessMessage
+        -> maybe op Excess
 
     parse create as ToncoRouterV3CreatePool
     parse init   as ToncoPoolV3Init
@@ -191,7 +188,7 @@ matcher tonco_deploy_pool {
 # DEVIATION (one, documented not worked around): the legacy build wraps the
 # PoolV3Burn parse in try/except and keeps the anchor's burned_index when it
 # throws, whereas a declarative `parse` REJECTS the whole match on a parse
-# failure. The ABI entry parses the full contract-fixed body, so this can only
+# failure. The ABI enparse?s the full contract-fixed body, so this can only
 # diverge on a malformed 0xd73ac09d body, of which the corpus has none.
 #
 # ANCHOR / ORDERING. 0x530b5f2c, 0x46ca335a and 0xd73ac09d are claimed by no
@@ -222,8 +219,7 @@ matcher tonco_withdraw_liquidity {
     parse position_burn as ToncoPositionNftV3PositionBurn
     parse pool_burn     as ToncoPoolV3Burn
 
-    let r = tonco_withdraw_payouts(consumed)
-    reject when r == null
+    require r = tonco_withdraw_payouts(consumed)
     failed when r.failed
     out {
         sender:              account(position_burn.body.nft_owner)

@@ -81,8 +81,6 @@ opcode CoffeeDepositLiquiditySuccessfulEvent = 0xC0FFEE33
 opcode CoffeeNotification                    = 0xC0FFEE36
 opcode CoffeeNotificationCallback            = 0xB216D31F
 opcode JettonInternalTransfer                = 0x178D4519
-opcode ExcessMessage                         = 0xD53276DB
-
 matcher coffee_create_pool_creator {
     produces coffee_create_pool_creator
     entry    @request
@@ -119,7 +117,7 @@ matcher coffee_create_pool {
     btype coffee_create_pool_creator @creator
       -> op CoffeeCreatePoolRequest @request
         -> op CoffeeDeploy @deploy
-          -> { op JettonInternalTransfer -> maybe op ExcessMessage
+          -> { op JettonInternalTransfer -> maybe op Excess
              ; op CoffeeDepositLiquiditySuccessfulEvent @success
              ; maybe op CoffeeNotification -> maybe op CoffeeNotificationCallback }
 

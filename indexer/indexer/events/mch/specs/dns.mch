@@ -1,7 +1,7 @@
 # DNS record-change matcher corresponding to blocks/dns.py.
 # using `produces switch`. One anchor opcode (ChangeDnsRecord), three
 # content-dispatched outcomes: change_dns / renew_dns / delete_dns. The optional
-# trailing bounce (op 0xffffffff) is consumed as an explicit child;
+# trailing bounce (op Bounce) is consumed as an explicit child;
 # include_excess/include_bounces stay at their defaults (true) to mirror the
 # legacy consumed set.
 #
@@ -56,7 +56,7 @@ matcher change_dns {
     produces change_dns | renew_dns | delete_dns
     entry    @dns
 
-    op ChangeDnsRecord @dns -> maybe op 0xffffffff
+    op ChangeDnsRecord @dns -> maybe op Bounce
 
     parse dns as ChangeDnsRecordMessage
     let nft = lookup nft_item(dns.msg.destination)

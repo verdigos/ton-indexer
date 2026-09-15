@@ -124,8 +124,7 @@ matcher nft_update_sale {
     op SaleUpdate @upd
 
     parse upd as SaleUpdateMessage
-    let sale = lookup nft_sale(upd.msg.destination)
-    reject when sale == null
+    require sale = lookup nft_sale(upd.msg.destination)
     failed when (upd.msg.transaction.aborted ?? false)
     out {
         sender:              account(upd.msg.source) ?? addr_none()
@@ -243,8 +242,7 @@ matcher auction_bid {
 
     btype ton_transfer @bid where auction_bid_candidate
 
-    let d = auction_bid_data(bid)
-    reject when d == null
+    require d = auction_bid_data(bid)
     # Legacy reads the BLOCK's `failed`, not transaction.aborted.
     failed when bid.failed
     out {
@@ -292,8 +290,7 @@ matcher nft_cancel_sale {
     op NftSaleCancel @cancel
       -> peek btype nft_transfer @ret
 
-    let sale = lookup nft_sale(cancel.msg.destination)
-    reject when sale == null
+    require sale = lookup nft_sale(cancel.msg.destination)
     reject when account(ret.data.nft.address) != account(sale.nft_address)
     out {
         nft_address:         ret.data.nft.address
@@ -318,8 +315,7 @@ matcher nft_finish_auction {
     ^ op NftAuctionFinish @cancel )
       -> peek btype nft_purchase @ret
 
-    let auction = lookup nft_auction(cancel.msg.destination)
-    reject when auction == null
+    require auction = lookup nft_auction(cancel.msg.destination)
     reject when account(ret.data.nft_address) != account(auction.nft_addr)
     out {
         nft_address:         ret.data.nft_address
@@ -340,14 +336,13 @@ matcher nft_cancel_auction {
     ^ op NftAuctionStop @cancel )
       -> peek btype nft_transfer @ret
 
-    let auction = lookup nft_auction(cancel.msg.destination)
-    reject when auction == null
+    require auction = lookup nft_auction(cancel.msg.destination)
     reject when account(ret.data.nft.address) != account(auction.nft_addr)
 
     # Same data either way; only the produced btype differs based on the
     # anchor's opcode or comment.
     produces switch {
-        when (cancel.btype == "ton_transfer" and (cancel.data.comment == "finish" or cancel.data.comment == "stop")) or (cancel.btype == "call_contract" and (cancel.data.opcode == 0xB95616B6 or cancel.data.opcode == 0x20C9EB18)) => nft_finish_auction out {
+        when (cancel.btype == "ton_transfer" and (cancel.data.comment in ["finish", "stop"])) or (cancel.btype == "call_contract" and (cancel.data.opcode in [0xB95616B6, 0x20C9EB18])) => nft_finish_auction out {
             nft_address:         ret.data.nft.address
             nft_collection:      ret.data.nft.collection.address if ret.data.nft.collection != null else null
             owner:               ret.data.new_owner
