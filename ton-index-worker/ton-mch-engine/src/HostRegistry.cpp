@@ -18,7 +18,6 @@ const std::map<std::string, HostFnEntry> &host_fns() {
       {"nominator_withdraw_payout_amount", {nominator_withdraw_payout_amount, 1}},
       {"nft_transfer_data", {nft_transfer_data, 3}},
       {"telegram_nft_purchase_data", {telegram_nft_purchase_data, 4}},
-      {"is_teleitem", {is_teleitem, 1}},
       {"tgbtc_mint_data", {tgbtc_mint_data, 1}},
       {"tgbtc_mint_log", {tgbtc_mint_log, 1}},
       {"tgbtc_new_key_log", {tgbtc_new_key_log, 1}},

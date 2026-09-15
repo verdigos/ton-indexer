@@ -1,3 +1,5 @@
+import "lib/common.mch"
+
 # Teleitem (Fragment) auction start / cancel — port of blocks/auction.py
 # TeleitemStartAuctionMatcher (:460) and TeleitemCancelAuctionMatcher (:506).
 #
@@ -12,10 +14,8 @@
 # -----------------
 # Both matchers reject unless the destination resolves to an NftItem whose
 # metadata `uri` contains "https://nft.fragment.com" (blocks/auction.py
-# `_is_teleitem`). That is a SUBSTRING test, and the expression language has no
-# string manipulation by design, so it is the single host `fn`
-# `is_teleitem(nft)` — registered in builders/teleitem_auction.py, where the
-# Python leg calls the legacy `_is_teleitem` verbatim.
+# `_is_teleitem`): `is_fragment_item(nft)` from lib/common.mch, a pure fn over
+# `get` + `contains`.
 #
 # Ordering
 # --------
@@ -52,7 +52,7 @@ matcher teleitem_start_auction {
     op TeleitemStartAuction @auction as TeleitemStartAuction -> maybe op TeleitemOk @ok
 
     require nft = lookup nft_item(auction.msg.destination)
-    reject when not is_teleitem(nft)
+    reject when not is_fragment_item(nft)
     # `AccountId(...)` is unconditional in the legacy build, so a missing address
     # becomes addr_none (present-but-empty), not null.
     let item  = account(auction.msg.destination) ?? addr_none()
@@ -85,7 +85,7 @@ matcher teleitem_cancel_auction {
     op TeleitemCancelAuction @cancel -> maybe op TeleitemOk @ok
 
     require nft = lookup nft_item(cancel.msg.destination)
-    reject when not is_teleitem(nft)
+    reject when not is_fragment_item(nft)
     let item = account(cancel.msg.destination) ?? addr_none()
     failed when (cancel.msg.transaction.aborted ?? false)
     out {

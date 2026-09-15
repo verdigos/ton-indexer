@@ -247,8 +247,6 @@ def _builtin_get(record: Any, key: Any) -> Any:
         raise EvalError(f"get key must be a string, got {type(key).__name__}")
     if not isinstance(record, dict):
         _require_object(record)
-    if key.startswith("_"):
-        return None
     value = record.get(key) if isinstance(record, dict) else getattr(record, key, None)
     return None if callable(value) else value
 

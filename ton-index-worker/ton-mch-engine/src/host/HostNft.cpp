@@ -518,19 +518,6 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
 }
 
 
-// Looked-up nft_item in, Bool out. Null item or missing/absent content is
-// false; otherwise the metadata uri must contain the Fragment NFT host.
-// Never faults: missing content is false.
-EvalResult is_teleitem(BuildEnv &, const std::vector<Value> &args) {
-  const Value *content = args[0].is_null() ? nullptr : args[0].field("content");
-  if (content == nullptr || content->t != VType::Dict) {
-    return rt_ok(Value::make_bool(false));
-  }
-  const Value *uri = content->field("uri");
-  bool fragment = fragment_uri(uri);
-  return rt_ok(Value::make_bool(fragment));
-}
-
 // Purchase branch only: absorb the funding parent (produced.previous_block)
 // unless it is a finish/stop sale-contract ton_transfer.
 void nft_transfer_parent_absorb(Block *produced, const ShaperMatch &) {

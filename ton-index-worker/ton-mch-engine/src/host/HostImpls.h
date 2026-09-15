@@ -23,7 +23,6 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args);
 void nft_transfer_parent_absorb(Block *produced, const ShaperMatch &m);
 EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &args);
 // Substring test the expression language cannot express.
-EvalResult is_teleitem(BuildEnv &env, const std::vector<Value> &args);
 // Exactly one distinct contract deployment across the block's event nodes.
 bool single_contract_deploy(const Block *block);
 
