@@ -88,5 +88,8 @@ EvalResult rt_builtin_zip(const Value &a, const Value &b);
 EvalResult rt_builtin_map(const Value &a, const Value &b);
 EvalResult rt_builtin_concat(const Value &a, const Value &b);
 EvalResult rt_builtin_contains(const Value &a, const Value &b);
+EvalResult rt_builtin_get(const Value &record, const Value &key);
+EvalResult rt_builtin_tx_aborted(const Value &x);
+EvalResult rt_builtin_exit_code(const Value &x);
 
 }  // namespace mch

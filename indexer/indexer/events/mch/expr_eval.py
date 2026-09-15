@@ -235,6 +235,43 @@ def _builtin_contains(hay: Any, needle: Any) -> bool:
     return needle in hay
 
 
+def _require_object(x: Any) -> None:
+    if isinstance(x, (Block, Amount, AccountId, Asset, Cell)) or not (
+        hasattr(x, "__dict__") or hasattr(type(x), "__slots__")
+    ):
+        raise EvalError(f"expected an attribute object, got {type(x).__name__}")
+
+
+def _builtin_get(record: Any, key: Any) -> Any:
+    if not isinstance(key, str):
+        raise EvalError(f"get key must be a string, got {type(key).__name__}")
+    if not isinstance(record, dict):
+        _require_object(record)
+    if key.startswith("_"):
+        return None
+    value = record.get(key) if isinstance(record, dict) else getattr(record, key, None)
+    return None if callable(value) else value
+
+
+def _message_envelope(x: Any) -> Any:
+    if isinstance(x, Block):
+        return _access(x, "msg", {})
+    _require_object(x)
+    return x
+
+
+def _builtin_tx_aborted(x: Any) -> bool | None:
+    tx = getattr(_message_envelope(x), "transaction", None)
+    return None if tx is None else _require_bool(tx.aborted)
+
+
+def _builtin_exit_code(x: Any) -> int | None:
+    msg = _message_envelope(x)
+    if getattr(msg, "transaction", None) is None:
+        return None
+    return _access(msg, "exit_code", {})
+
+
 _BUILTIN_CALLABLES: dict[str, Any] = {
     symbol.removeprefix("_builtin_"): value
     for symbol, value in globals().items()
@@ -426,11 +463,11 @@ def _access(obj: Any, field: str, bodies: dict[int, Any]) -> Any:
         # compute-phase exit code of the message's transaction (null if absent).
         # Scoped to the message envelope: `exit_code` is only valid on an object
         # that carries a transaction, never a generic accessor.
-        tx = getattr(obj, "transaction", None)
-        if tx is None:
+        if not hasattr(obj, "transaction"):
             raise EvalError(
                 "`exit_code` is only valid on a message envelope (CAPTURE.msg.exit_code)"
             )
+        tx = obj.transaction
         return getattr(tx, "compute_exit_code", None)
     try:
         return getattr(obj, field)

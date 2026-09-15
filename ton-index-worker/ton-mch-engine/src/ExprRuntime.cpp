@@ -638,6 +638,39 @@ EvalResult rt_builtin_contains(const Value &a, const Value &b) {
   return rt_ok(Value::make_bool(a.str.find(b.str) != std::string::npos));
 }
 
+EvalResult rt_builtin_get(const Value &record, const Value &key) {
+  if (rt_is_null(record) || rt_is_null(key)) return rt_ok(Value::null());
+  if (key.t != VType::Str) return rt_fault("get key must be a string");
+  if (record.t != VType::Dict && record.t != VType::Obj) {
+    return rt_fault("get expects a dict or object, got " + record.describe());
+  }
+  const Value *value = record.field(key.str);
+  return rt_ok(value != nullptr ? *value : Value::null());
+}
+
+static EvalResult bi_message_envelope(const Value &x) {
+  if (rt_is_null(x) || x.t == VType::Obj) return rt_ok(x);
+  if (x.t == VType::Block) return block_access(x.block, "msg");
+  return rt_fault("expected a block or message envelope, got " + x.describe());
+}
+
+EvalResult rt_builtin_tx_aborted(const Value &x) {
+  EvalResult msg = bi_message_envelope(x);
+  if (msg.faulted) return msg;
+  const Value *tx = msg.value.field("transaction");
+  if (tx == nullptr || rt_is_null(*tx)) return rt_ok(Value::null());
+  EvalResult aborted = rt_access(*tx, "aborted");
+  return aborted.faulted ? aborted : rt_require_bool(aborted.value);
+}
+
+EvalResult rt_builtin_exit_code(const Value &x) {
+  EvalResult msg = bi_message_envelope(x);
+  if (msg.faulted) return msg;
+  const Value *tx = msg.value.field("transaction");
+  if (tx == nullptr || rt_is_null(*tx)) return rt_ok(Value::null());
+  return rt_access(msg.value, "exit_code");
+}
+
 EvalResult rt_builtin_map(const Value &a, const Value &b) {
   if (rt_is_null(a) || rt_is_null(b)) return rt_ok(Value::null());
   const std::vector<Value> *xs = nullptr;
@@ -706,6 +739,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
       {"asset_of", 1}, {"tail_unwrap", 1}, {"bytes_of", 1},
       {"len", 1},     {"sum", 1},     {"zip", 2},   {"map", 2},
       {"concat", 2}, {"contains", 2},
+      {"get", 2}, {"tx_aborted", 1}, {"exit_code", 1},
   };
   auto ar = arity.find(name);
   if (ar == arity.end()) {
@@ -732,6 +766,9 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   if (name == "map") return rt_builtin_map(args[0], args[1]);
   if (name == "concat") return rt_builtin_concat(args[0], args[1]);
   if (name == "contains") return rt_builtin_contains(args[0], args[1]);
+  if (name == "get") return rt_builtin_get(args[0], args[1]);
+  if (name == "tx_aborted") return rt_builtin_tx_aborted(args[0]);
+  if (name == "exit_code") return rt_builtin_exit_code(args[0]);
   return rt_fault("unreachable builtin " + name);
 }
 

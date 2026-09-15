@@ -18,4 +18,7 @@ BUILTIN_SIGNATURES: dict[str, int] = {
     "concat": 2,
     "map": 2,
     "contains": 2,
+    "get": 2,
+    "tx_aborted": 1,
+    "exit_code": 1,
 }

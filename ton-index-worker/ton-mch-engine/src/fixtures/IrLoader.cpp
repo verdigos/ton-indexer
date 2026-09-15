@@ -137,9 +137,6 @@ std::vector<int> reachable(const std::vector<CompiledNode> &nodes, int start) {
 td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
                          CompiledMatcher &m) {
   m.name = jstr(rec, "name");
-  if (has(rec, "builder")) {
-    return td::Status::Error("matcher " + m.name + ": unknown matcher field 'builder'");
-  }
   if (const Json *pr = jfield(rec, "produces"); pr != nullptr && pr->type() == JType::Array) {
     for (const auto &p : pr->get_array()) {
       m.produces.push_back(p.get_string().str());
@@ -433,8 +430,8 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
   if (root.type() != JType::Object) {
     return td::Status::Error("IR artifact root must be an object");
   }
-  if (jstr(root, "mch_ir_version") != "1.1") {
-    return td::Status::Error("unsupported mch_ir_version (expected 1.1)");
+  if (jstr(root, "mch_ir_version") != "1.2") {
+    return td::Status::Error("unsupported mch_ir_version (expected 1.2)");
   }
   const Json *nodes = jfield(root, "nodes");
   const Json *matchers = jfield(root, "matchers");
