@@ -215,8 +215,7 @@ namespace {
 
 // Block `.msg` envelope as an Obj. Field set is the subset the trace loader
 // decodes; a field the loader does not carry (e.g. fwd_fee) faults. Keep
-// where_exprs to the envelope set below. `exit_code` resolves through the
-// nested `transaction` object (rt_access Obj branch).
+// where_exprs to the envelope set below.
 Value msg_envelope(const Message *m) {
   auto opt_str = [](const std::optional<std::string> &s) {
     return s ? Value::make_str(*s) : Value::null();
@@ -297,17 +296,6 @@ EvalResult rt_access(const Value &obj, const std::string &field) {
     return block_access(obj.block, field);
   }
   if (obj.t == VType::Obj) {
-    if (field == "exit_code") {
-      const Value *tx = obj.field("transaction");
-      if (tx == nullptr) {
-        return rt_fault("`exit_code` is only valid on a message envelope carrying a transaction");
-      }
-      if (tx->t == VType::Obj || tx->t == VType::Dict) {
-        const Value *ec = tx->field("compute_exit_code");
-        return rt_ok(ec != nullptr ? *ec : Value::null());
-      }
-      return rt_ok(Value::null());
-    }
     const Value *fv = obj.field(field);
     if (fv == nullptr) {
       return rt_fault("object has no field '" + field + "'");
@@ -330,9 +318,6 @@ EvalResult rt_access(const Value &obj, const std::string &field) {
       return rt_ok(obj.num.is_null() ? Value::null() : Value::make_int(obj.num));
     }
     return rt_fault("unknown Amount accessor '" + field + "' (expected value)");
-  }
-  if (field == "exit_code") {
-    return rt_fault("`exit_code` is only valid on a message envelope");
   }
   return rt_fault(obj.describe() + " has no attribute '" + field + "'");
 }
@@ -668,7 +653,8 @@ EvalResult rt_builtin_exit_code(const Value &x) {
   if (msg.faulted) return msg;
   const Value *tx = msg.value.field("transaction");
   if (tx == nullptr || rt_is_null(*tx)) return rt_ok(Value::null());
-  return rt_access(msg.value, "exit_code");
+  const Value *ec = tx->field("compute_exit_code");
+  return rt_ok(ec != nullptr ? *ec : Value::null());
 }
 
 EvalResult rt_builtin_map(const Value &a, const Value &b) {

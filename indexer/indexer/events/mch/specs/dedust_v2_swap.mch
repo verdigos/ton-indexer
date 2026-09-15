@@ -107,8 +107,8 @@ matcher dedust_v2_swap {
     let in_assets   = concat([l.asset], leg_assets)
     let hops        = zip(zip(amounts_in, amounts_out), zip(in_assets, leg_assets))
 
-    failed when tx_failed(ev0) or (ev0.msg.exit_code ?? 0) != 0
-    failed when any(ev as e => tx_failed(e) or (e.msg.exit_code ?? 0) != 0)
+    failed when tx_failed(ev0) or (exit_code(ev0) ?? 0) != 0
+    failed when any(ev as e => tx_failed(e) or (exit_code(e) ?? 0) != 0)
 
     out {
         dex:               "dedust_v2"

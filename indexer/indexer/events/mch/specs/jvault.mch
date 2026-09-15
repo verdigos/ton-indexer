@@ -9,7 +9,7 @@
 #   uses the record-returning lookup `jvault_assets`: one lookup, one record,
 #   then field reads. See builders/jvault.py.
 # - unstake / unstake_request success/rejection gate on the lookup record and
-#   on `msg.exit_code` (the defined envelope field), with no host build function.
+#   on `exit_code(...)`, with no host build function.
 # - stake/claim read the incoming/withdraw jetton_transfer's amount straight off
 #   the composed block's `data.desired_amount` and unwrap it with `.value`.
 # - claim maps the claim body's jetton-wallet list through AccountId with a
@@ -100,7 +100,7 @@ matcher jvault_unstake {
         unstake_fee_taken: (fee.msg.value ?? 0) if not early else null
         asset:             withdraw.data.asset if not early else assets.asset
         jvault_asset:      assets.jvault_asset
-        exit_code:         null if not early else unstake.msg.exit_code
+        exit_code:         null if not early else exit_code(unstake)
     }
 }
 
@@ -153,6 +153,6 @@ matcher jvault_unstake_request {
         requested_amount: request_anchor.body.jettons_to_unstake
         asset:            assets.asset
         jvault_asset:     assets.jvault_asset
-        exit_code:        request_anchor.msg.exit_code if early else null
+        exit_code:        exit_code(request_anchor) if early else null
     }
 }

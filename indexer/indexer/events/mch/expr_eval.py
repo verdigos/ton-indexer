@@ -264,10 +264,8 @@ def _builtin_tx_aborted(x: Any) -> bool | None:
 
 
 def _builtin_exit_code(x: Any) -> int | None:
-    msg = _message_envelope(x)
-    if getattr(msg, "transaction", None) is None:
-        return None
-    return _access(msg, "exit_code", {})
+    tx = getattr(_message_envelope(x), "transaction", None)
+    return getattr(tx, "compute_exit_code", None)
 
 
 _BUILTIN_CALLABLES: dict[str, Any] = {
@@ -456,17 +454,6 @@ def _access(obj: Any, field: str, bodies: dict[int, Any]) -> Any:
                 raise EvalError("`.value` on a float-backed Amount (the language has no floats)")
             return obj.value
         raise EvalError(f"unknown Amount accessor {field!r} (expected value)")
-    if field == "exit_code":
-        # `CAPTURE.msg.exit_code` is the envelope's
-        # compute-phase exit code of the message's transaction (null if absent).
-        # Scoped to the message envelope: `exit_code` is only valid on an object
-        # that carries a transaction, never a generic accessor.
-        if not hasattr(obj, "transaction"):
-            raise EvalError(
-                "`exit_code` is only valid on a message envelope (CAPTURE.msg.exit_code)"
-            )
-        tx = obj.transaction
-        return getattr(tx, "compute_exit_code", None)
     try:
         return getattr(obj, field)
     except AttributeError:

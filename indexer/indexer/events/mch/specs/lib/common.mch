@@ -6,4 +6,4 @@ export fn is_fragment_item(nft) = contains(get(get(nft, "content"), "uri") ?? ""
 export fn min(a, b) = a if a < b else b
 
 # Whether the transaction aborted, defaulting to false when missing.
-export fn tx_failed(x) = x.msg.transaction.aborted ?? false
+export fn tx_failed(x) = tx_aborted(x) ?? false
