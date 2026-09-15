@@ -855,6 +855,7 @@ def _parse_ternary(s: _ParserState) -> ast_.Expr:
         return then
     s.i += 1
     cond = _parse_or(s)
+    s.skip_newlines()
     s.eat(TokenKind.KW_ELSE)
     orelse = _parse_ternary(s)
     return ast_.Ternary(cond=cond, then=then, orelse=orelse, span=_join(then.span, orelse.span))
@@ -879,6 +880,7 @@ def _parse_and(s: _ParserState) -> ast_.Expr:
 
 
 def _parse_not(s: _ParserState) -> ast_.Expr:
+    s.skip_newlines()
     if s.at(TokenKind.KW_NOT):
         tok = s.peek()
         s.i += 1
@@ -964,6 +966,7 @@ def _parse_coalesce(s: _ParserState) -> ast_.Expr:
 
 
 def _parse_unary(s: _ParserState) -> ast_.Expr:
+    s.skip_newlines()
     if s.at(TokenKind.MINUS):
         tok = s.peek()
         s.i += 1

@@ -54,7 +54,8 @@ matcher coffee_swap {
     reject when ton_payout and po.body == null
 
     let lo = leg(ol) if ol.btype == "jetton_transfer" else (
-        ton_leg(amount(po.body.amount), po.msg.source, account(po.body.recipient) ?? addr_none()) if ton_payout else ton_leg(amount(ol.msg.value), ol.msg.source, ol.msg.destination))
+        ton_leg(amount(po.body.amount), po.msg.source, account(po.body.recipient) ?? addr_none()) if ton_payout
+        else ton_leg(amount(ol.msg.value), ol.msg.source, ol.msg.destination))
     let bodies = concat([event.body], peer_event.body)
     let peer_assets = map(peer_event.body as e => asset_of(e.asset))
     let hops = zip(zip(map(bodies, "amount_in"), map(bodies, "amount_out")),
