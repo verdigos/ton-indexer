@@ -28,8 +28,9 @@ struct MchEnginePrep {
 };
 
 // Prepare the classify setup over the compiled-in table. Fails (Result error) on
-// a registry conflict or table/function mismatch. Both indicate build bugs; the
-// caller decides whether the error is fatal. Performs no I/O.
+// a registry conflict, a table/function mismatch or a skipped matcher. All three
+// indicate build bugs; the caller decides whether the error is fatal. Performs
+// no I/O.
 td::Result<std::shared_ptr<const MchEnginePrep>> make_engine_prep();
 
 }  // namespace mch

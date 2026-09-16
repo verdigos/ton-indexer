@@ -226,6 +226,16 @@ void test_schema_history_precedence() {
   check("schema/history/rows_retained", !result.rows.empty() && result.rows.size() == normal.rows.size());
 }
 
+// Startup is fatal on a skipped matcher, so the compiled-in table must have none:
+// a skip means a host name the engine does not provide.
+void test_engine_prep_has_no_skips() {
+  auto prepared = make_engine_prep();
+  if (prepared.is_error()) {
+    std::printf("prep error: %s\n", prepared.error().message().c_str());
+  }
+  check("prep/no_skips", prepared.is_ok());
+}
+
 }  // namespace
 
 int run_classify_core_test() {
@@ -235,6 +245,7 @@ int run_classify_core_test() {
   test_childless_root_failure_serializes_root();
   test_schema_tick_tock();
   test_schema_history_precedence();
+  test_engine_prep_has_no_skips();
   std::printf("CLASSIFY-CORE-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
 }
