@@ -20,6 +20,7 @@ actions:
     staking_data:
       provider: nominator
     tx_hashes:
+      - 4b5NvcGM3iow6o3Qc9ATpQLp9PlPv1Y62XvPTcbzUkQ=
       - J/0WwXR6RrssZXFnWHyjZd4yLTFCyRQLLmSI26gKbEc=
       - YAZ9XOUmqOYcL6shlRbDS3raNmZotfr2x4h7s4/dUms=
     accounts:
