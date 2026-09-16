@@ -105,6 +105,10 @@ class MatchState {
     return r;
   }
 
+  void absorb_anchor_aux(Block *anchor) {
+    absorb_aux(anchor, m_.include_excess, m_.include_bounces);
+  }
+
  private:
   // Never raises/aborts: a fault or a non-bool result is simply False.
   bool eval_where(const CompiledNode &node, Block *block) const {
@@ -314,10 +318,11 @@ class MatchState {
     }
   }
 
-  void absorb_aux(Block *block) {
+  void absorb_aux(Block *block, bool include_excess = true, bool include_bounces = true) {
     for (Block *nb : canonical(block->next_blocks)) {
       if (nb->btype == mch::btype::kCallContract && nb->opcode &&
-          (*nb->opcode == kExcessOpcode || *nb->opcode == kBounceOpcode)) {
+          ((*nb->opcode == kExcessOpcode && include_excess) ||
+           (*nb->opcode == kBounceOpcode && include_bounces))) {
         consume(nb);
       }
     }
@@ -451,11 +456,12 @@ std::optional<MatchResult> matcher_match(const CompiledMatcher &m, Block *anchor
     return std::nullopt;
   }
   MatchState st(m, gen, anchor);
-  // Root skips nested aux absorption (root-level excess/bounce are a build-
-  // result concern, appended after build, not part of the match consumed set).
+  // Root skips unconditional nested aux absorption; its own flags apply after
+  // the structural match succeeds.
   if (!st.match_node(0, anchor, /*absorb=*/false)) {
     return std::nullopt;
   }
+  st.absorb_anchor_aux(anchor);
   return st.finish();
 }
 

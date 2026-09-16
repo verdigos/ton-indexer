@@ -15,7 +15,7 @@
 
 namespace mch {
 
-// The two service opcodes the walker treats as aux and classify appends under include_excess / include_bounces.
+// The two service opcodes the walker treats as auxiliary blocks.
 inline constexpr std::uint32_t kExcessOpcode = 0xD53276DB;
 inline constexpr std::uint32_t kBounceOpcode = 0xFFFFFFFF;
 

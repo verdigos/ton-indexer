@@ -215,6 +215,9 @@ actions:
     start_utime: 1785513521
     end_utime: 1785513521
     mc_seqno_end: 83154408
+    parent_action_id: eBjeSz+PY7mdTJy5GO/Xgh6C1tE0Pv4QLJW2IQI/7FQ=
+    ancestor_type:
+      - multisig_execute
   - type: call_contract
     anchor: call_contract#d53276db@93746749000006
     id: yYWJBc7Bkd14diDxHJvbYvRfivAT0cMzl/PeleD8PKQ=
@@ -480,6 +483,7 @@ actions:
       signers_hash: sdoMblEhWASMSJunLxPdmT7B8z67R5IsFwMhjXTQpvI=
     tx_hashes:
       - GwHlOuzzbC5TaeoXGqUSfiIqr7bXYe/rJWGFPX1JSL0=
+      - LX12xU2dsbm9LO+xbl7Us+JUz8Apo/ecVMrUcqcCdSI=
       - RANYKW3JgKt3tWTJfvBT5pT839ACAHnRH4m1CbxRFZQ=
     accounts:
       - 0:1E733E535DC78BC7A8F3BAA2D5BBBFEB1D7EC7A81F2E4DDAF6203314FAA3A8A0
@@ -487,7 +491,7 @@ actions:
       - 0:CAF1E084340A46BE6011AED1B153A793351895C17C993BEB413F276259239B50
       - 0:D891CD337BF1A70F380F6102EB04A789561572794CE7E7E070B6539933A9F08C
     start_lt: 93746741000002
-    end_lt: 93746748000001
+    end_lt: 93746749000001
     start_utime: 1785513518
     end_utime: 1785513521
-    mc_seqno_end: 83154405
+    mc_seqno_end: 83154408

@@ -122,15 +122,13 @@ constexpr const char *trace_outcome_name(TraceOutcome o) {
   return "?";
 }
 
-// One produced action with raw block pointers and fire-time auxiliary blocks.
-// The adapter renders block_key(anchor)/data/consumed/aux or builds an Action
-// row from `produced`. Pointers reference the caller's arena (TraceContext),
-// valid for as long as the caller keeps it alive.
+// One produced action with raw block pointers. The adapter renders the final
+// produced block or builds an Action row from it. Pointers reference the
+// caller's arena (TraceContext), valid for as long as the caller keeps it alive.
 struct CoreAction {
   std::string matcher_name;
   Block *anchor;
   Block *produced;
-  std::vector<Block *> aux;    // fire-time excess/bounce auto-append (anchor)
 };
 
 // Buffered atomic per-trace result. On a mid-trace exception the pipeline sets

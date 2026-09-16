@@ -39,9 +39,7 @@ namespace mch {
 
 namespace {
 
-// Render + print a collected CoreAction from its FINAL (post-pass) state. The
-// aux/flows strings (fire-time) are rendered HERE from the core's raw block/
-// flow lists. The core stays rendering-agnostic.
+// Render + print a collected CoreAction from its final post-pass state.
 void emit_action(const CoreAction &a) {
   std::vector<std::string> ck;
   for (Block *cb : a.produced->children_blocks) ck.push_back(block_key(cb));
@@ -53,19 +51,11 @@ void emit_action(const CoreAction &a) {
   }
   consumed_s += "]";
 
-  std::string aux_s = "[";
-  for (std::size_t i = 0; i < a.aux.size(); i++) {
-    if (i) aux_s += ",";
-    aux_s += block_key(a.aux[i]);
-  }
-  aux_s += "]";
-
   std::printf("ACTION %s anchor=%s btype=%s failed=%d broken=%d data=%s "
-              "consumed=%s auto=%s\n",
+              "consumed=%s\n",
               a.matcher_name.c_str(), block_key(a.anchor).c_str(), a.produced->btype.c_str(),
               a.produced->failed ? 1 : 0, a.produced->broken ? 1 : 0,
-              render_value(a.produced->data).c_str(), consumed_s.c_str(),
-              aux_s.c_str());
+              render_value(a.produced->data).c_str(), consumed_s.c_str());
 }
 
 }  // namespace

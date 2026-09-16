@@ -177,25 +177,7 @@ bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *
     }
   }
 
-  // Root-level excess/bounce auto-append: from the ANCHOR's next_blocks
-  // (unchanged by the merge), canonical order.
-  std::vector<Block *> aux;
-  {
-    std::vector<Block *> nb = block->next_blocks;
-    std::stable_sort(nb.begin(), nb.end(),
-                     [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
-    for (Block *n : nb) {
-      if (n->btype != mch::btype::kCallContract || !n->opcode) {
-        continue;
-      }
-      if ((*n->opcode == kExcessOpcode && m.include_excess) ||
-          (*n->opcode == kBounceOpcode && m.include_bounces)) {
-        aux.push_back(n);
-      }
-    }
-  }
-
-  out.push_back(CoreAction{m.name, block, produced, std::move(aux)});
+  out.push_back(CoreAction{m.name, block, produced});
   return true;
 }
 
