@@ -267,7 +267,7 @@ std::string render_parse_value(const Value &v) {
   }
 }
 
-const std::set<std::string> &boc_field_names() {
+static const std::set<std::string> &boc_field_names() {
   // Cell-derived BOC container fields. `comment`, `bitcoin_txid`, and
   // `pubkey` are raw non-BOC bytes and are DELIBERATELY excluded.
   static const std::set<std::string> kBocFields = {
