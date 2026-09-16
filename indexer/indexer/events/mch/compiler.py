@@ -6,13 +6,13 @@ from typing import Any
 from indexer.events.mch import ast_
 from indexer.events.mch.builtin_signatures import BUILTIN_SIGNATURES
 from indexer.events.mch.diagnostics import CompileError, DiagnosticBag, Span
-from indexer.events.mch.recursion import RecursionStrategy, RecursiveMatcherStrategy
 from indexer.events.mch.registry import Registries
 from indexer.events.mch.resolver import (
     CaptureInfo,
     RecursionClass,
     ResolvedFile,
     ResolvedMatcher,
+    _alternative_is_exclusive,
     _resolve_opcode_ref,
 )
 
@@ -68,7 +68,6 @@ class LNode:
 class CompiledMatcher:
     name: str
     root: LNode
-    produces_cls_name: str
     source_span: Span
     produces: tuple[str, ...] = ()
     captures: tuple[tuple[str, str], ...] = ()
@@ -89,7 +88,6 @@ class CompiledMatcher:
 class CompileCtx:
     resolved: ResolvedFile
     registries: Registries
-    recursion: RecursionStrategy
     bag: DiagnosticBag
     where_anchor_capture: str = ""
     # Names of recursive rules currently being lowered; used to break cycles
@@ -104,7 +102,6 @@ class CompileCtx:
 def compile_(
     resolved: ResolvedFile,
     registries: Registries,
-    recursion: RecursionStrategy | None = None,
 ) -> list[CompiledMatcher]:
     """Compile a resolved file to a list of CompiledMatcher.
 
@@ -114,7 +111,6 @@ def compile_(
     ctx = CompileCtx(
         resolved=resolved,
         registries=registries,
-        recursion=recursion or RecursiveMatcherStrategy(),
         bag=bag,
     )
 
@@ -122,7 +118,7 @@ def compile_(
     for rm in resolved.matchers:
         out.append(_compile_matcher(rm, ctx))
 
-    if bag.has_errors:
+    if bag.items:
         raise CompileError(bag)
 
     return out
@@ -134,7 +130,7 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
 
     _check_no_capture_after_recursion(decl.pattern, decl.span, ctx)
     _check_no_bare_children_block(decl.pattern, ctx)
-    if ctx.bag.has_errors:
+    if ctx.bag.items:
         raise CompileError(ctx.bag)
 
     parent_m, child_m, children_ms = _lower_surrounding_sequence(decl.pattern, ctx)
@@ -216,7 +212,6 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     return CompiledMatcher(
         name=decl.name,
         root=root,
-        produces_cls_name=decl.produces_primary,
         source_span=decl.span,
         produces=tuple(decl.produces),
         captures=tuple(
@@ -393,35 +388,6 @@ def _reject_ignored_chain_tail(host: LNode, span: Span, ctx: CompileCtx) -> None
     raise CompileError(ctx.bag)
 
 
-def _branches_eligible_for_exclusive_heuristic(
-    branches: tuple[ast_.PatternExpr, ...],
-    ctx: CompileCtx,
-) -> bool:
-    """Return True iff all branches are bare concrete Nodes with distinct resolved heads and no predicates."""
-    seen_opcodes: set[int] = set()
-    seen_btypes: set[str] = set()
-    for b in branches:
-        if not isinstance(b, ast_.Node) or b.relations is not None:
-            return False
-        head = b.head
-        if not isinstance(head, (ast_.OpHead, ast_.BTypeHead)):
-            return False
-        if b.where_predicate is not None or b.where_expr is not None:
-            return False
-        if isinstance(head, ast_.OpHead):
-            opcode_int = _resolve_opcode_ref(head.ref, ctx.resolved.opcodes, ctx.registries)
-            if opcode_int is None:
-                return False
-            if opcode_int in seen_opcodes:
-                return False
-            seen_opcodes.add(opcode_int)
-        elif isinstance(head, ast_.BTypeHead):
-            if head.name in seen_btypes:
-                return False
-            seen_btypes.add(head.name)
-    return True
-
-
 def _check_redundant_exclusive_heads(p: ast_.Alternative, ctx: CompileCtx) -> None:
     """Reject explicit exclusive alternatives with duplicate concrete heads."""
     seen: dict[object, object] = {}
@@ -557,7 +523,7 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
         if p.exclusive:
             _check_redundant_exclusive_heads(p, ctx)
             return LNode(kind="or", branches=lowered_branches, exclusive=True)
-        if _branches_eligible_for_exclusive_heuristic(p.branches, ctx):
+        if _alternative_is_exclusive(p, ctx.resolved.opcodes, ctx.registries):
             return LNode(kind="or", branches=lowered_branches, exclusive=True)
         return LNode(kind="or", branches=lowered_branches, exclusive=False)
     if isinstance(p, ast_.Sequence):
@@ -643,11 +609,10 @@ def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
         return _check_where_expr_sync(e.target, span, ctx)
     if isinstance(e, ast_.Call):
         callee = e.callee
-        if not isinstance(callee, ast_.NameRef) or callee.name not in BUILTIN_SIGNATURES:
-            shown = callee.name if isinstance(callee, ast_.NameRef) else type(callee).__name__
+        if callee.name not in BUILTIN_SIGNATURES:
             ctx.bag.error(
                 "C013_WHERE_EXPR_NOT_SYNC",
-                f"`where (expr)` can only call builtins, not host fn {shown!r}",
+                f"`where (expr)` can only call builtins, not host fn {callee.name!r}",
                 span,
             )
             return False
@@ -715,25 +680,6 @@ def _lower_relations(r: ast_.Relations, m: LNode, ctx: CompileCtx) -> None:
         m.parent = _lower_atom(r.parent, ctx)
 
 
-def _chain(matchers_iter) -> LNode | None:
-    matchers = [m for m in matchers_iter if m is not None]
-    if not matchers:
-        return None
-    first = matchers[0]
-    current = first
-    for nxt in matchers[1:]:
-        _attach_as_child(current, nxt)
-        current = nxt
-    return first
-
-
-def _attach_as_child(host: LNode, child: LNode) -> None:
-    if host.child is None:
-        host.child = child
-    else:
-        _attach_as_child(host.child, child)
-
-
 def _check_no_capture_after_recursion(
     pattern: ast_.PatternExpr,
     decl_span: Span,
@@ -752,34 +698,14 @@ def _check_no_capture_after_recursion(
         return False
 
     def contains_capture(p: ast_.PatternExpr) -> bool:
-        if isinstance(p, ast_.Node):
-            r = p.relations
-            return p.capture is not None or (r is not None and any(
-                contains_capture(target)
-                for target in (r.children_all, *(r.children_first or ()), r.parent)
-                if target is not None
-            ))
-        if isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
-            return contains_capture(p.inner)
-        if isinstance(p, ast_.Sequence):
-            if contains_capture(p.head):
-                return True
-            return any(contains_capture(a) for _e, a in p.tail)
-        if isinstance(p, ast_.Alternative):
-            return any(contains_capture(b) for b in p.branches)
-        if isinstance(p, ast_.ChildrenBlock):
-            return any(contains_capture(it) for it in p.items)
         if isinstance(p, ast_.RuleRef):
             target = next((r for r in ctx.resolved.raw.rules if r.name == p.name), None)
             return target is not None and contains_capture(target.pattern)
-        return False
+        return (
+            isinstance(p, ast_.Node) and p.capture is not None
+        ) or any(contains_capture(child) for child in ast_.children(p))
 
     def walk(p: ast_.PatternExpr) -> None:
-        if isinstance(p, ast_.Node) and p.relations is not None:
-            r = p.relations
-            for target in (r.children_all, *(r.children_first or ()), r.parent):
-                if target is not None:
-                    walk(target)
         if isinstance(p, ast_.Sequence):
             recursion_seen = False
             atoms = [(None, p.head)] + list(p.tail)
@@ -794,14 +720,9 @@ def _check_no_capture_after_recursion(
                 if is_direct_recursive_ref(atom):
                     recursion_seen = True
                 walk(atom)
-        elif isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
-            walk(p.inner)
-        elif isinstance(p, ast_.Alternative):
-            for b in p.branches:
-                walk(b)
-        elif isinstance(p, ast_.ChildrenBlock):
-            for it in p.items:
-                walk(it)
+        else:
+            for child in ast_.children(p):
+                walk(child)
 
     walk(pattern)
 
@@ -834,19 +755,6 @@ def _check_no_bare_children_block(
                 walk(atom, in_chain_left=previous_was_atom)
                 if not _is_cb_atom(atom):
                     previous_was_atom = True
-        elif isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
-            walk(p.inner, in_chain_left=False)
-        elif isinstance(p, ast_.Alternative):
-            for b in p.branches:
-                walk(b, in_chain_left=False)
-        elif isinstance(p, ast_.ChildrenBlock):
-            for it in p.items:
-                walk(it, in_chain_left=False)
-        elif isinstance(p, ast_.Node) and p.relations is not None:
-            r = p.relations
-            for target in (r.children_all, *(r.children_first or ()), r.parent):
-                if target is not None:
-                    walk(target, in_chain_left=False)
         elif isinstance(p, ast_.RuleRef):
             # Check the rule body once at its definition site, with no chain
             # context. Its body must be self-contained or referenced from a
@@ -855,6 +763,9 @@ def _check_no_bare_children_block(
             if target is not None and not _seen_rule(p.name, ctx):
                 _mark_rule_seen(p.name, ctx)
                 walk(target.pattern, in_chain_left=False)
+        else:
+            for child in ast_.children(p):
+                walk(child, in_chain_left=False)
 
     walk(pattern, in_chain_left=False)
 
@@ -930,11 +841,8 @@ def _check_cyclic_rule_body(target: ast_.RuleDecl, ctx: CompileCtx) -> None:
                     f"use `consumed` in output expressions",
                     p.span,
                 )
-            if p.relations is not None:
-                r = p.relations
-                for target in (r.children_all, *(r.children_first or ()), r.parent):
-                    if target is not None:
-                        walk(target)
+            for child in ast_.children(p):
+                walk(child)
         elif isinstance(p, ast_.Sequence):
             atoms = [p.head] + [a for _e, a in p.tail]
             for i, atom in enumerate(atoms):
@@ -945,12 +853,9 @@ def _check_cyclic_rule_body(target: ast_.RuleDecl, ctx: CompileCtx) -> None:
                         atom.span,
                     )
                 walk(atom)
-        elif isinstance(p, ast_.Alternative):
-            for b in p.branches:
-                walk(b)
-        elif isinstance(p, ast_.ChildrenBlock):
-            for it in p.items:
-                walk(it)
+        elif isinstance(p, (ast_.Alternative, ast_.ChildrenBlock)):
+            for child in ast_.children(p):
+                walk(child)
         elif isinstance(p, ast_.Maybe):
             if is_self_ref(p.inner):
                 err(
@@ -1121,23 +1026,6 @@ def _split_recursion_branches(
 
 
 def _contains_rule_ref(p: ast_.PatternExpr, name: str) -> bool:
-    if isinstance(p, ast_.Node) and p.relations is not None:
-        r = p.relations
-        return any(
-            _contains_rule_ref(target, name)
-            for target in (r.children_all, *(r.children_first or ()), r.parent)
-            if target is not None
-        )
     if isinstance(p, ast_.RuleRef):
         return p.name == name
-    if isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
-        return _contains_rule_ref(p.inner, name)
-    if isinstance(p, ast_.Sequence):
-        if _contains_rule_ref(p.head, name):
-            return True
-        return any(_contains_rule_ref(a, name) for _e, a in p.tail)
-    if isinstance(p, ast_.Alternative):
-        return any(_contains_rule_ref(b, name) for b in p.branches)
-    if isinstance(p, ast_.ChildrenBlock):
-        return any(_contains_rule_ref(it, name) for it in p.items)
-    return False
+    return any(_contains_rule_ref(child, name) for child in ast_.children(p))

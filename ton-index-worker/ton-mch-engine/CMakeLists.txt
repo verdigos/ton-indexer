@@ -66,7 +66,6 @@ set(MCH_FRONTEND_PY_SOURCES
     "${MCH_INDEXER_ROOT}/indexer/events/mch/ir_emit.py"
     "${MCH_INDEXER_ROOT}/indexer/events/mch/lexer.py"
     "${MCH_INDEXER_ROOT}/indexer/events/mch/parser.py"
-    "${MCH_INDEXER_ROOT}/indexer/events/mch/recursion.py"
     "${MCH_INDEXER_ROOT}/indexer/events/mch/registry.py"
     "${MCH_INDEXER_ROOT}/indexer/events/mch/resolver.py"
     "${MCH_INDEXER_ROOT}/indexer/events/mch/tokens.py"
@@ -349,4 +348,3 @@ add_test(NAME mch_actions_golden
 add_test(NAME mch_ir_equivalence
     COMMAND "${CMAKE_COMMAND}" -E compare_files
             "${MCH_GENERATED_IR}" "${MCH_GENERATED_IR_SECOND}")
-

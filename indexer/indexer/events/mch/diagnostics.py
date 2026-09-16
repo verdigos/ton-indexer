@@ -1,32 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
-
-
-class Severity(Enum):
-    ERROR = "error"
-    WARNING = "warning"
-
-
-# Diagnostic codes are plain strings passed at each call site (R0xx resolver,
-# P0xx parser, L0xx lexer, C0xx/B0xx compiler). Build-language codes are named
-# here so there is one discoverable record of them.
-R010_UNRESOLVED_REFERENCE = "R010_UNRESOLVED_REFERENCE"
-"""A bare identifier in a build-statement expression does not resolve to a
-pattern capture or a previously declared `let` name."""
-
-R011_PARSE_TARGET_NOT_CAPTURE = "R011_PARSE_TARGET_NOT_CAPTURE"
-"""The target of a `parse X as T` statement is not a pattern capture."""
-
-R013_DUP_LET = "R013_DUP_LET"
-"""A `let` name collides with a pattern capture or an earlier `let`."""
-
-R014_DUP_OUT_FIELD = "R014_DUP_OUT_FIELD"
-"""The same field name appears more than once in an `out` block."""
-
-R016_BUILD_NO_OUT = "R016_BUILD_NO_OUT"
-"""A matcher has no `out` block or `produces switch`, so there is nothing to produce."""
 
 R023_PARSE_TARGET_NOT_BASE_BLOCK = "R023_PARSE_TARGET_NOT_BASE_BLOCK"
 """A `parse X as T` statement targets a capture bound by a `btype` node: a
@@ -41,9 +15,6 @@ R024_NESTED_COMPREHENSION = "R024_NESTED_COMPREHENSION"
 comprehension (either the outer `xs` or `body`). Nested comprehensions are
 forbidden: exactly one bound element var per comprehension, no
 comprehension in the iterated list or the body."""
-
-# A user declaration gives a built-in opcode a different value.
-R026_BUILTIN_OPCODE_MISMATCH = "R026_BUILTIN_OPCODE_MISMATCH"
 
 # A capture has conflicting parser lists. Rule-body annotations contribute to
 # every matcher referencing the rule; each matcher has one list per capture.
@@ -61,30 +32,7 @@ R036_FN_ARITY = "R036_FN_ARITY"
 R041_IMPORT_NAME_COLLISION = "R041_IMPORT_NAME_COLLISION"
 R042_MANIFEST_ORDER = "R042_MANIFEST_ORDER"
 R043_UNKNOWN_BTYPE = "R043_UNKNOWN_BTYPE"
-
-P018_DUPLICATE_RELATION_CLAUSE = "P018_DUPLICATE_RELATION_CLAUSE"
-P019_ARROW_AFTER_RELATION_BLOCK = "P019_ARROW_AFTER_RELATION_BLOCK"
-
-# An or/xor block needs at least two arms.
-P021_CHOICE_NEEDS_TWO_ARMS = "P021_CHOICE_NEEDS_TWO_ARMS"
-
-P025_CALLEE_NOT_NAME = "P025_CALLEE_NOT_NAME"
-
-C012_CYCLIC_RULE_SHAPE = "C012_CYCLIC_RULE_SHAPE"
-"""A `rule NAME cyclic = …` body violates the cyclic-descent shape rules:
-captures inside the body, a self-reference that is
-not the last atom of its chain, a `maybe`- or `peek`-wrapped self-reference, or a
-reference to another recursive rule."""
-
-C014_PEEK_SUBTREE_CONSUMES = "C014_PEEK_SUBTREE_CONSUMES"
-"""A `peek` node reaches another pattern node that is not itself `peek`, so
-the subtree would still consume blocks or absorb auxiliary siblings."""
-
-C015_WHERE_EXPR_CAPTURE_NOT_ENTRY = "C015_WHERE_EXPR_CAPTURE_NOT_ENTRY"
-"""A capture name used in `where (expr)` is not the matcher's anchor capture."""
-
-C017_RECURSIVE_RULE_XOR = "C017_RECURSIVE_RULE_XOR"
-C017_MANY = "C017_MANY"
+R044_UNDECLARED_PREDICATE = "R044_UNDECLARED_PREDICATE"
 
 
 @dataclass(frozen=True)
@@ -100,7 +48,6 @@ class Span:
 
 @dataclass(frozen=True)
 class Diagnostic:
-    severity: Severity
     code: str
     message: str
     span: Span
@@ -112,14 +59,7 @@ class DiagnosticBag:
     items: list[Diagnostic] = field(default_factory=list)
 
     def error(self, code: str, message: str, span: Span, suggestion: str | None = None) -> None:
-        self.items.append(Diagnostic(Severity.ERROR, code, message, span, suggestion))
-
-    def warning(self, code: str, message: str, span: Span, suggestion: str | None = None) -> None:
-        self.items.append(Diagnostic(Severity.WARNING, code, message, span, suggestion))
-
-    @property
-    def has_errors(self) -> bool:
-        return any(d.severity is Severity.ERROR for d in self.items)
+        self.items.append(Diagnostic(code, message, span, suggestion))
 
 
 class CompileError(Exception):
@@ -137,7 +77,7 @@ def format_diagnostic(d: Diagnostic, source_text: str) -> str:
     caret = caret_indent + "^" * span_len
     header = (
         f"{d.span.path}:{d.span.start_line}:{d.span.start_col}: "
-        f"{d.severity.value}: {d.message} ({d.code})"
+        f"error: {d.message} ({d.code})"
     )
     parts = [header, source_line, caret]
     if d.suggestion:

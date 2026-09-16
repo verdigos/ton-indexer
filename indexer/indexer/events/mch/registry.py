@@ -12,7 +12,6 @@ class Registries:
     # a weakref key in the compiler's subclass cache.
     opcodes:       dict[str, int]                                    = field(default_factory=dict)
     predicates:    dict[str, Callable[[Any], bool]]                  = field(default_factory=dict)
-    block_types:   dict[str, type]                                   = field(default_factory=dict)
     # message_types: message parser class by name; constructed from a pytoniq_core Slice.
     # lookups: async interface resolvers, e.g. await lookups["jetton_wallet"](addr).
     # Both empty by default; populate via default_message_types()/default_lookups().
@@ -35,14 +34,6 @@ class Registries:
             self.predicates[name] = fn  # type: ignore[assignment]
             return fn
         return deco
-
-    def register_message_type(self, name: str, cls: type) -> type:
-        # Message classes live in indexer.events.blocks.messages and pre-exist, so
-        # this is a plain two-arg register (not a decorator like the ones above).
-        if name in self.message_types:
-            raise KeyError(f"message type {name!r} already registered")
-        self.message_types[name] = cls
-        return cls
 
     def register_lookup(self, name: str) -> Callable[[F], F]:
         def deco(fn: F) -> F:

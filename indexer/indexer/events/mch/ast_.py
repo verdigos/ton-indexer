@@ -262,6 +262,31 @@ class Alternative(PatternExpr):
     opcode_set: bool = False
 
 
+def children(p: PatternExpr) -> tuple[PatternExpr, ...]:
+    if isinstance(p, Node):
+        if p.relations is None:
+            return ()
+        relations = p.relations
+        return tuple(
+            child
+            for child in (
+                relations.children_all,
+                *(relations.children_first or ()),
+                relations.parent,
+            )
+            if child is not None
+        )
+    if isinstance(p, (Maybe, Peek, Many)):
+        return (p.inner,)
+    if isinstance(p, Sequence):
+        return (p.head, *(child for _edge, child in p.tail))
+    if isinstance(p, Alternative):
+        return p.branches
+    if isinstance(p, ChildrenBlock):
+        return p.items
+    return ()
+
+
 @dataclass(frozen=True)
 class OpcodeDecl:
     name: str
@@ -318,11 +343,6 @@ class ParseStmt(BuildStmt):
     msg_types: tuple[str, ...]
     span: Span
 
-    @property
-    def msg_type(self) -> str:
-        """First (or only) declared message type. Kept for single-type callers."""
-        return self.msg_types[0]
-
 
 @dataclass(frozen=True)
 class LetStmt(BuildStmt):
@@ -342,13 +362,6 @@ class RejectStmt(BuildStmt):
 @dataclass(frozen=True)
 class FailedStmt(BuildStmt):
     """`failed when expr`."""
-    condition: Expr
-    span: Span
-
-
-@dataclass(frozen=True)
-class BrokenStmt(BuildStmt):
-    """`broken when expr`."""
     condition: Expr
     span: Span
 
@@ -403,13 +416,6 @@ class MatcherDecl:
     # engine after merge, for post-build tree surgery on the produced block's
     # region. None when absent.
     shape: str | None = None
-
-    @property
-    def produces_primary(self) -> str:
-        """First declared `produces` name. Convenience accessor for code that
-        needs a single type (e.g. `CompiledMatcher.produces_cls_name`); the
-        union is validated against the registry and selected by `produces switch`."""
-        return self.produces[0]
 
 
 @dataclass(frozen=True)

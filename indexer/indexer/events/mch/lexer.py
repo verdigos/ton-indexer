@@ -8,7 +8,6 @@ from indexer.events.mch.tokens import KEYWORDS, Token, TokenKind
 
 _SINGLE_CHAR: dict[str, TokenKind] = {
     "|": TokenKind.PIPE,
-    "^": TokenKind.CARET,
     "@": TokenKind.AT,
     "$": TokenKind.DOLLAR,
     "{": TokenKind.LBRACE,

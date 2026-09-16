@@ -155,7 +155,6 @@ class ResolvedMatcher:
     # For an exclusive alternative of bare concrete heads, this is that
     # Alternative; `anchor_node` holds a representative branch node.
     anchor_group: ast_.Alternative | None = None
-    build_stmts: tuple[ast_.BuildStmt, ...] = ()
 
 
 @dataclass
@@ -164,7 +163,6 @@ class ResolvedFile:
     opcodes: dict[str, int]
     rule_recursion: dict[str, RecursionClass]
     matchers: tuple[ResolvedMatcher, ...]
-    diagnostics: DiagnosticBag
 
 
 def resolve(file: ast_.File, registries: Registries) -> ResolvedFile:
@@ -172,20 +170,20 @@ def resolve(file: ast_.File, registries: Registries) -> ResolvedFile:
     file = _inline_fns(file, registries, bag)
 
     opcodes: dict[str, int] = _resolve_opcodes(file, registries, bag)
-    _check_produces_union(file, registries, bag)
     for kind, declarations in (("rule", file.rules), ("matcher", file.matchers)):
         seen: set[str] = set()
         for decl in declarations:
             if decl.name in seen:
                 bag.error("R005_DUP_CAPTURE", f"duplicate {kind} {decl.name!r}", decl.span)
             seen.add(decl.name)
+    _check_named_where_predicates(file, bag)
     _check_rule_patterns(file, opcodes, registries, bag)
     rule_recursion: dict[str, RecursionClass] = _classify_rules(file, bag)
     resolved_matchers: list[ResolvedMatcher] = []
     for m in file.matchers:
         resolved_matchers.append(_resolve_matcher(m, opcodes, file, registries, bag, rule_recursion))
 
-    if bag.has_errors:
+    if bag.items:
         raise CompileError(bag)
 
     return ResolvedFile(
@@ -193,7 +191,6 @@ def resolve(file: ast_.File, registries: Registries) -> ResolvedFile:
         opcodes=opcodes,
         rule_recursion=rule_recursion,
         matchers=tuple(resolved_matchers),
-        diagnostics=bag,
     )
 
 
@@ -231,7 +228,7 @@ def _inline_fns(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> 
             bag.error(diagnostics.R035_FN_NAME_COLLISION,
                       f"fn {fn.name!r} collides with a builtin or registered host function", fn.span)
         check_body(fn.body, fn.params)
-    if bag.has_errors:
+    if bag.items:
         raise CompileError(bag)
 
     bodies: dict[str, ast_.Expr] = {}
@@ -291,17 +288,22 @@ def _resolve_opcodes(file: ast_.File, registries: Registries, bag: DiagnosticBag
     return opcodes
 
 
-def _check_produces_union(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> None:
-    """Validate every name in a matcher's `produces` union against
-    the host's block-type registry. A single-name `produces` is a 1-element union."""
-    for m in file.matchers:
-        for name in m.produces:
-            if name not in registries.block_types:
-                bag.error(
-                    "C003_UNKNOWN_BLOCK_TYPE",
-                    f"matcher {m.name!r}: produces type {name!r} is not registered",
-                    m.span,
-                )
+def _check_named_where_predicates(file: ast_.File, bag: DiagnosticBag) -> None:
+    declared = {predicate.name for predicate in file.predicates}
+
+    def visit(p: ast_.PatternExpr) -> None:
+        if (isinstance(p, ast_.Node) and p.where_predicate is not None
+                and p.where_predicate not in declared):
+            bag.error(
+                diagnostics.R044_UNDECLARED_PREDICATE,
+                f"predicate {p.where_predicate!r} used by `where` is not declared",
+                p.span,
+            )
+        for child in ast_.children(p):
+            visit(child)
+
+    for declaration in (*file.rules, *file.matchers):
+        visit(declaration.pattern)
 
 
 def _classify_rules(file: ast_.File, bag: DiagnosticBag) -> dict[str, RecursionClass]:
@@ -313,24 +315,10 @@ def _classify_rules(file: ast_.File, bag: DiagnosticBag) -> dict[str, RecursionC
         if isinstance(p, ast_.RuleRef):
             refs.append((p.name, under_maybe))
         elif isinstance(p, ast_.Maybe):
-            collect_refs(p.inner, refs, True)
-        elif isinstance(p, (ast_.Peek, ast_.Many)):
-            collect_refs(p.inner, refs, under_maybe)
-        elif isinstance(p, ast_.Alternative):
-            for b in p.branches:
-                collect_refs(b, refs, under_maybe)
-        elif isinstance(p, ast_.Sequence):
-            collect_refs(p.head, refs, under_maybe)
-            for _e, atom in p.tail:
-                collect_refs(atom, refs, under_maybe)
-        elif isinstance(p, ast_.ChildrenBlock):
-            for it in p.items:
-                collect_refs(it, refs, under_maybe)
-        elif isinstance(p, ast_.Node) and p.relations is not None:
-            r = p.relations
-            for target in (r.children_all, *(r.children_first or ()), r.parent):
-                if target is not None:
-                    collect_refs(target, refs, under_maybe)
+            collect_refs(ast_.children(p)[0], refs, True)
+        else:
+            for child in ast_.children(p):
+                collect_refs(child, refs, under_maybe)
 
     for r in (*file.rules, *file.matchers):
         refs = []
@@ -418,23 +406,8 @@ def _check_rule_patterns(
                         f"opcode {head.ref!r} is not declared in this file or in the host registry",
                         head.span,
                     )
-            if p.relations is not None:
-                r = p.relations
-                for target in (r.children_all, *(r.children_first or ()), r.parent):
-                    if target is not None:
-                        visit(target)
-        elif isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
-            visit(p.inner)
-        elif isinstance(p, ast_.Sequence):
-            visit(p.head)
-            for _e, atom in p.tail:
-                visit(atom)
-        elif isinstance(p, ast_.Alternative):
-            for b in p.branches:
-                visit(b)
-        elif isinstance(p, ast_.ChildrenBlock):
-            for it in p.items:
-                visit(it)
+        for child in ast_.children(p):
+            visit(child)
 
     for r in file.rules:
         visit(r.pattern)
@@ -487,10 +460,10 @@ def _check_many(pattern, file, recursion, bag):
                 walk(target, repeated=repeated, peek=peek, recursive=recursive, path=path)
                 previous = target
         elif isinstance(p, ast_.Alternative):
-            for branch in p.branches:
+            for branch in ast_.children(p):
                 walk(branch, repeated=repeated, head=head, peek=peek, recursive=recursive, path=path)
         elif isinstance(p, ast_.ChildrenBlock):
-            for target in p.items:
+            for target in ast_.children(p):
                 walk(target, True, repeated, peek=peek, recursive=recursive, path=path)
         elif isinstance(p, ast_.RuleRef) and p.name in rules:
             rec = recursion.get(p.name, RecursionClass.NONE) is not RecursionClass.NONE
@@ -545,12 +518,9 @@ def _resolve_matcher(
                     alt_path=alt_path,
                     under_nonexclusive_alt=under_nonexclusive_alt,
                 ))
-            if p.relations is not None:
-                r = p.relations
-                for target in (r.children_all, *(r.children_first or ()), r.parent):
-                    if target is not None:
-                        visit(target, under_maybe, under_peek, under_recursive,
-                              branch_path, alt_path, under_nonexclusive_alt)
+            for child in ast_.children(p):
+                visit(child, under_maybe, under_peek, under_recursive,
+                      branch_path, alt_path, under_nonexclusive_alt)
         elif isinstance(p, ast_.Many):
             saved = under_many
             under_many = True
@@ -568,13 +538,9 @@ def _resolve_matcher(
                 under_nonexclusive_alt,
             )
         elif isinstance(p, ast_.Sequence):
-            visit(
-                p.head, under_maybe, under_peek, under_recursive, branch_path, alt_path,
-                under_nonexclusive_alt,
-            )
-            for _e, atom in p.tail:
+            for child in ast_.children(p):
                 visit(
-                    atom, under_maybe, under_peek, under_recursive, branch_path, alt_path,
+                    child, under_maybe, under_peek, under_recursive, branch_path, alt_path,
                     under_nonexclusive_alt,
                 )
         elif isinstance(p, ast_.Alternative):
@@ -587,9 +553,9 @@ def _resolve_matcher(
                       alt_path + branch,
                       under_nonexclusive_alt or not exclusive)
         elif isinstance(p, ast_.ChildrenBlock):
-            for it in p.items:
+            for child in ast_.children(p):
                 visit(
-                    it, under_maybe, under_peek, under_recursive, branch_path, alt_path,
+                    child, under_maybe, under_peek, under_recursive, branch_path, alt_path,
                     under_nonexclusive_alt,
                 )
         elif isinstance(p, ast_.RuleRef):
@@ -746,7 +712,6 @@ def _resolve_matcher(
         anchor_capture=anchor_capture,
         anchor_node=anchor_node,
         anchor_group=anchor_group,
-        build_stmts=m.build_stmts,
     )
 
 
@@ -815,7 +780,7 @@ def _check_build_stmts(
                     stmt.span,
                 )
             available.add(stmt.name)
-        elif isinstance(stmt, (ast_.RejectStmt, ast_.FailedStmt, ast_.BrokenStmt)):
+        elif isinstance(stmt, (ast_.RejectStmt, ast_.FailedStmt)):
             _check_expr_refs(stmt.condition, available, bag, registries)
         elif isinstance(stmt, ast_.OutStmt):
             _check_out_fields(stmt.fields, available, bag, registries)
@@ -879,8 +844,6 @@ def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag,
         elif isinstance(e, ast_.FieldAccess):
             value(e.target, avail, in_comp)
         elif isinstance(e, ast_.Call):
-            if not isinstance(e.callee, ast_.NameRef):
-                value(e.callee, avail, in_comp)
             for a in e.args:
                 value(a, avail, in_comp)
         elif isinstance(e, ast_.LookupExpr):
@@ -917,38 +880,3 @@ def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag,
             value(e.body, avail | {e.var}, True)
 
     value(expr, available, False)
-
-
-def _is_recursive_set(file: ast_.File) -> set[str]:
-    """Helper: names of rules that self-reference (direct or via cycle)."""
-    out: set[str] = set()
-    name_to_rule = {r.name: r for r in file.rules}
-
-    def collect_refs(p: ast_.PatternExpr, refs: set[str]) -> None:
-        if isinstance(p, ast_.RuleRef):
-            refs.add(p.name)
-        elif isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
-            collect_refs(p.inner, refs)
-        elif isinstance(p, ast_.Alternative):
-            for b in p.branches:
-                collect_refs(b, refs)
-        elif isinstance(p, ast_.Sequence):
-            collect_refs(p.head, refs)
-            for _e, atom in p.tail:
-                collect_refs(atom, refs)
-        elif isinstance(p, ast_.ChildrenBlock):
-            for it in p.items:
-                collect_refs(it, refs)
-        elif isinstance(p, ast_.Node) and p.relations is not None:
-            r = p.relations
-            for target in (r.children_all, *(r.children_first or ()), r.parent):
-                if target is not None:
-                    collect_refs(target, refs)
-
-    for r in file.rules:
-        refs: set[str] = set()
-        collect_refs(r.pattern, refs)
-        if r.name in refs:
-            out.add(r.name)
-
-    return out

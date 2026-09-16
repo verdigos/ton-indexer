@@ -11,8 +11,8 @@ CLI::
     python -m indexer.events.mch.ir_emit -o <out.json>
 
 The CLI self-provisions permissive Registries: it pre-parses the spec files and
-registers predicate stubs, host-function stubs, and dummy block types for every
-referenced name, so specs compile without the production host registries.
+registers predicate and message-type stubs, so specs compile without the
+production host registries.
 """
 from __future__ import annotations
 
@@ -35,6 +35,7 @@ from indexer.events.mch.expr_ir import IR_VERSION, emit_expr as _emit_expr
 from indexer.events.mch.lexer import tokenize
 from indexer.events.mch.parser import parse
 from indexer.events.mch.registry import Registries
+from indexer.events.mch.resolver import _map_fn_children
 
 
 def _unsigned32(opcode: int) -> int:
@@ -46,37 +47,12 @@ def _unsigned32(opcode: int) -> int:
 
 
 def _collect_expr_message_types(e: ast_.Expr, out: set[str]) -> None:
-    if isinstance(e, ast_.FieldAccess):
-        _collect_expr_message_types(e.target, out)
-    elif isinstance(e, ast_.Call):
-        if not isinstance(e.callee, ast_.NameRef):
-            _collect_expr_message_types(e.callee, out)
-        for arg in e.args:
-            _collect_expr_message_types(arg, out)
-    elif isinstance(e, ast_.LookupExpr):
-        for arg in e.args:
-            _collect_expr_message_types(arg, out)
-    elif isinstance(e, ast_.UnaryOp):
-        _collect_expr_message_types(e.operand, out)
-    elif isinstance(e, ast_.BinaryOp):
-        _collect_expr_message_types(e.left, out)
-        _collect_expr_message_types(e.right, out)
-    elif isinstance(e, ast_.Ternary):
-        _collect_expr_message_types(e.cond, out)
-        _collect_expr_message_types(e.then, out)
-        _collect_expr_message_types(e.orelse, out)
-    elif isinstance(e, ast_.ListLit):
-        for item in e.elements:
-            _collect_expr_message_types(item, out)
-    elif isinstance(e, ast_.RecordLit):
-        for field in e.fields:
-            _collect_expr_message_types(field.value, out)
-    elif isinstance(e, ast_.ParseExpr):
-        _collect_expr_message_types(e.target, out)
-        out.update(e.msg_types)
-    elif isinstance(e, ast_.Comprehension):
-        _collect_expr_message_types(e.xs, out)
-        _collect_expr_message_types(e.body, out)
+    def visit(node):
+        if isinstance(node, ast_.ParseExpr):
+            out.update(node.msg_types)
+        return _map_fn_children(node, visit)
+
+    visit(e)
 
 
 def _collect_pattern_names(p: ast_.PatternExpr, out: set[str], msg_types: set[str]) -> None:
@@ -90,23 +66,8 @@ def _collect_pattern_names(p: ast_.PatternExpr, out: set[str], msg_types: set[st
             _collect_expr_message_types(p.where_expr, msg_types)
         if p.parse_types is not None:
             msg_types.update(p.parse_types)
-        if p.relations is not None:
-            r = p.relations
-            for target in (r.children_all, *(r.children_first or ()), r.parent):
-                if target is not None:
-                    _collect_pattern_names(target, out, msg_types)
-    elif isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
-        _collect_pattern_names(p.inner, out, msg_types)
-    elif isinstance(p, ast_.Sequence):
-        _collect_pattern_names(p.head, out, msg_types)
-        for _edge, atom in p.tail:
-            _collect_pattern_names(atom, out, msg_types)
-    elif isinstance(p, ast_.Alternative):
-        for b in p.branches:
-            _collect_pattern_names(b, out, msg_types)
-    elif isinstance(p, ast_.ChildrenBlock):
-        for it in p.items:
-            _collect_pattern_names(it, out, msg_types)
+    for child in ast_.children(p):
+        _collect_pattern_names(child, out, msg_types)
     # RuleRef: rule bodies are scanned via File.rules directly.
 
 
@@ -139,8 +100,6 @@ def build_stub_registries(files: list[ast_.File]) -> Registries:
             _collect_pattern_names(r.pattern, predicate_names, annotated_types)
         for m in f.matchers:
             _collect_pattern_names(m.pattern, predicate_names, annotated_types)
-            for produced in m.produces:
-                reg.block_types.setdefault(produced, object)
             if m.shape is not None and m.shape not in reg.shapers:
                 reg.shapers[m.shape] = lambda produced, match: None
             for stmt in m.build_stmts:
@@ -149,7 +108,7 @@ def build_stub_registries(files: list[ast_.File]) -> Registries:
                         reg.message_types.setdefault(t, _StubMessage)
                 elif isinstance(stmt, ast_.LetStmt):
                     stub_expr(stmt.value)
-                elif isinstance(stmt, (ast_.RejectStmt, ast_.FailedStmt, ast_.BrokenStmt)):
+                elif isinstance(stmt, (ast_.RejectStmt, ast_.FailedStmt)):
                     stub_expr(stmt.condition)
                 elif isinstance(stmt, ast_.OutStmt):
                     stub_fields(stmt.fields)
@@ -291,8 +250,6 @@ def _emit_stmt(stmt: ast_.BuildStmt) -> dict:
         return {"s": "reject", "when": _emit_expr(stmt.condition)}
     if isinstance(stmt, ast_.FailedStmt):
         return {"s": "failed", "when": _emit_expr(stmt.condition)}
-    if isinstance(stmt, ast_.BrokenStmt):
-        return {"s": "broken", "when": _emit_expr(stmt.condition)}
     if isinstance(stmt, ast_.OutStmt):
         return {"s": "out", "fields": _emit_out_fields(stmt.fields)}
     if isinstance(stmt, ast_.SwitchStmt):
@@ -320,22 +277,11 @@ def _emit_switch_branch(b: ast_.SwitchBranch) -> dict:
     return rec
 
 
-def emit_ir(
-    compiled: list[CompiledMatcher],
-    source_files: list[str],
-    build_stmts: list[tuple[ast_.BuildStmt, ...]] | None = None,
-) -> dict:
-    """Build the top-level artifact dict, keys in schema order.
-
-    Build statements come from `CompiledMatcher.build_stmts`; the optional
-    `build_stmts` parameter (parallel to `compiled`) overrides them and is kept
-    for callers that pre-extracted statements from parsed `ast_.File`s.
-    """
-    if build_stmts is None:
-        build_stmts = [cm.build_stmts for cm in compiled]
+def emit_ir(compiled: list[CompiledMatcher]) -> dict:
+    """Build the top-level artifact dict, keys in schema order."""
     matchers_out: list[dict] = []
     nodes: list[dict] = []
-    for cm, stmts in zip(compiled, build_stmts):
+    for cm in compiled:
         memo: dict[int, int] = {}
         root_id = _emit_node(cm.root, nodes, memo)
         rec: dict = {
@@ -350,8 +296,8 @@ def emit_ir(
             "include_excess": bool(cm.include_excess),
             "include_bounces": bool(cm.include_bounces),
         }
-        if stmts:
-            rec["build_program"] = [_emit_stmt(s) for s in stmts]
+        if cm.build_stmts:
+            rec["build_program"] = [_emit_stmt(s) for s in cm.build_stmts]
         # `shape` contains a registered shaper name. Omit it when absent;
         # omit when absent, never emit null.
         if cm.shape_fn_name is not None:
@@ -359,17 +305,13 @@ def emit_ir(
         matchers_out.append(rec)
     return {
         "mch_ir_version": IR_VERSION,
-        "frontend": {"generator": "mch-python", "source_files": source_files},
         "matchers": matchers_out,
         "nodes": nodes,
     }
 
 
-def _emit_paths(paths: list[Path], source_files: list[str]) -> dict:
-    """Compile the given .mch files in path and declaration order.
-
-    `source_files` is the label list written to `frontend.source_files`.
-    """
+def _emit_paths(paths: list[Path]) -> dict:
+    """Compile the given .mch files in path and declaration order."""
     files = [
         parse(list(tokenize(p.read_text(encoding="utf-8"), str(p))), str(p))
         for p in paths
@@ -414,9 +356,9 @@ def _emit_paths(paths: list[Path], source_files: list[str]) -> dict:
                     "and is not produced by any matcher",
                     cm.source_span,
                 )
-    if bag.has_errors:
+    if bag.items:
         raise CompileError(bag)
-    return emit_ir(compiled, source_files)
+    return emit_ir(compiled)
 
 
 def emit_dir(specs_dir: Path) -> dict:
@@ -424,7 +366,7 @@ def emit_dir(specs_dir: Path) -> dict:
     paths = sorted(Path(specs_dir).glob("*.mch"), key=lambda p: p.name)
     if not paths:
         raise FileNotFoundError(f"no .mch files found in {specs_dir}")
-    return _emit_paths(paths, [p.name for p in paths])
+    return _emit_paths(paths)
 
 
 def emit_manifest(manifest_path: Path) -> dict:
@@ -448,7 +390,7 @@ def emit_manifest(manifest_path: Path) -> dict:
             bag.error(R042_MANIFEST_ORDER, f"listed name {name!r} has no matcher", span)
     for name in sorted(matchers.keys() - seen):
         bag.error(R042_MANIFEST_ORDER, f"matcher {name!r} is missing from manifest order", span)
-    if bag.has_errors:
+    if bag.items:
         raise CompileError(bag)
     artifact["matchers"] = [matchers[name] for name in order]
     return artifact

@@ -16,7 +16,7 @@ from indexer.events.mch.tokens import Token, TokenKind
 # deliberately NOT softened.
 _SOFT_KEYWORDS: frozenset[TokenKind] = frozenset({
     TokenKind.KW_PARSE, TokenKind.KW_AS, TokenKind.KW_LET, TokenKind.KW_OUT,
-    TokenKind.KW_REJECT, TokenKind.KW_FAILED, TokenKind.KW_BROKEN,
+    TokenKind.KW_REJECT, TokenKind.KW_FAILED,
     TokenKind.KW_WHEN, TokenKind.KW_LOOKUP, TokenKind.KW_NOT,
     TokenKind.KW_AND, TokenKind.KW_OR, TokenKind.KW_NULL,
     TokenKind.KW_IF, TokenKind.KW_ELSE,
@@ -34,7 +34,7 @@ _CMP_OPS: dict[TokenKind, str] = {
 
 _BUILD_STMT_HEADS: frozenset[TokenKind] = frozenset({
     TokenKind.KW_PARSE, TokenKind.KW_LET, TokenKind.KW_REJECT,
-    TokenKind.KW_FAILED, TokenKind.KW_BROKEN, TokenKind.KW_OUT,
+    TokenKind.KW_FAILED, TokenKind.KW_OUT,
     TokenKind.KW_PRODUCES,
     TokenKind.KW_REQUIRE, TokenKind.KW_PARSE_NULLABLE,
 })
@@ -151,7 +151,7 @@ def parse(tokens: Iterable[Token], path: str) -> ast_.File:
             raise CompileError(bag)
         s.skip_newlines()
 
-    if bag.has_errors:
+    if bag.items:
         raise CompileError(bag)
 
     return ast_.File(
@@ -386,11 +386,11 @@ def _ends_in_relations(p: ast_.PatternExpr) -> bool:
     if isinstance(p, ast_.Node):
         return p.relations is not None
     if isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
-        return _ends_in_relations(p.inner)
+        return _ends_in_relations(ast_.children(p)[0])
     if isinstance(p, ast_.Sequence):
-        return _ends_in_relations(p.tail[-1][1] if p.tail else p.head)
+        return _ends_in_relations(ast_.children(p)[-1])
     if isinstance(p, ast_.Alternative):
-        return any(_ends_in_relations(b) for b in p.branches)
+        return any(_ends_in_relations(child) for child in ast_.children(p))
     return False
 
 
@@ -636,8 +636,6 @@ def _parse_build_stmts(s: _ParserState) -> tuple[ast_.BuildStmt, ...]:
             stmts.append(_parse_guard_stmt(s, TokenKind.KW_REJECT, ast_.RejectStmt))
         elif t.kind is TokenKind.KW_FAILED:
             stmts.append(_parse_guard_stmt(s, TokenKind.KW_FAILED, ast_.FailedStmt))
-        elif t.kind is TokenKind.KW_BROKEN:
-            stmts.append(_parse_guard_stmt(s, TokenKind.KW_BROKEN, ast_.BrokenStmt))
         elif t.kind is TokenKind.KW_OUT:
             stmts.append(_parse_out_stmt(s))
         elif t.kind is TokenKind.KW_PRODUCES:
@@ -669,7 +667,7 @@ def _parse_let_stmt(s: _ParserState) -> ast_.LetStmt:
 
 
 def _parse_guard_stmt(s: _ParserState, kw: TokenKind, cls) -> ast_.BuildStmt:
-    """`reject|failed|broken when expr`."""
+    """`reject|failed when expr`."""
     start = s.eat(kw).span
     s.eat(TokenKind.KW_WHEN)
     cond = _parse_expr(s)

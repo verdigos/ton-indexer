@@ -526,9 +526,9 @@ class BuildGen {
                       ".value.boolean) return BuildOutcome::rejected(\"reject when\");");
       return;
     }
-    if (s == "failed" || s == "broken") {
+    if (s == "failed") {
       // Condition is not evaluated once the flag is already true (short-circuit).
-      const std::string flag = s == "failed" ? "o.failed" : "o.broken";
+      const std::string flag = "o.failed";
       auto body = buffered([&] {
         std::string cond = emit_bool(*jfield(stmt, "when"));
         em_.line_public(flag + " = " + cond + ".value.boolean;");

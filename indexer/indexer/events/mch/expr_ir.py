@@ -49,17 +49,6 @@ def emit_expr(e: ast_.Expr) -> dict:
         path = {"k": "attr", "of": emit_expr(e.target), "name": e.field}
         return {"k": "call", "fn": "account", "args": [path]} if _is_envelope_address(e) else path
     if isinstance(e, ast_.Call):
-        # eval.py's evaluator only ever calls a bare builtin name ("only
-        # builtin names are callable"); a non-name callee can be *parsed*
-        # (postfix chaining is generic in the grammar) but can never evaluate,
-        # so it has no faithful IR encoding here.
-        if not isinstance(e.callee, ast_.NameRef):
-            raise ValueError(
-                f"IR emission: Call callee must be a bare name (got "
-                f"{type(e.callee).__name__}); non-name callees never evaluate "
-                f"(see eval.py Evaluator._eval_call) and are not representable "
-                f"in IR {IR_VERSION}"
-            )
         if e.callee.name == "account" and len(e.args) == 1 and _is_envelope_address(e.args[0]):
             return emit_expr(e.args[0])
         return {"k": "call", "fn": e.callee.name, "args": [emit_expr(a) for a in e.args]}

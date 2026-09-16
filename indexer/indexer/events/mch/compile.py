@@ -8,7 +8,6 @@ from indexer.events.mch.compiler import CompiledMatcher, compile_
 from indexer.events.mch.diagnostics import CompileError, DiagnosticBag
 from indexer.events.mch.lexer import tokenize
 from indexer.events.mch.parser import parse
-from indexer.events.mch.recursion import RecursionStrategy
 from indexer.events.mch.registry import Registries
 from indexer.events.mch.resolver import _inline_fns, resolve
 
@@ -55,32 +54,26 @@ def compile_text(
     text: str,
     path: str,
     registries: Registries,
-    *,
-    recursion: RecursionStrategy | None = None,
 ) -> list[CompiledMatcher]:
     tokens = list(tokenize(text, path))
     file_ast = parse(tokens, path)
     resolved = resolve(_load_imports(file_ast, registries), registries)
-    return compile_(resolved, registries, recursion=recursion)
+    return compile_(resolved, registries)
 
 
 def compile_file(
     path: Path,
     registries: Registries,
-    *,
-    recursion: RecursionStrategy | None = None,
 ) -> list[CompiledMatcher]:
     text = Path(path).read_text(encoding="utf-8")
-    return compile_text(text, str(path), registries, recursion=recursion)
+    return compile_text(text, str(path), registries)
 
 
 def compile_dir(
     dir_path: Path,
     registries: Registries,
-    *,
-    recursion: RecursionStrategy | None = None,
 ) -> list[CompiledMatcher]:
     out: list[CompiledMatcher] = []
     for p in sorted(Path(dir_path).glob("*.mch")):
-        out.extend(compile_file(p, registries, recursion=recursion))
+        out.extend(compile_file(p, registries))
     return out
