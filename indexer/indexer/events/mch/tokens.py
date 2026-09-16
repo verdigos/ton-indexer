@@ -28,7 +28,6 @@ class TokenKind(Enum):
     KW_WHERE = "where"
     KW_PRODUCES = "produces"
     KW_SWITCH = "switch"
-    KW_ENTRY = "entry"
     KW_INCLUDE_EXCESS = "include_excess"
     KW_INCLUDE_BOUNCES = "include_bounces"
     KW_SHAPE = "shape"

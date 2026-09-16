@@ -28,7 +28,6 @@ opcode CocoonOwnerClientWithdraw        = 0xDA068E78
 # The two anchor payloads have identical layouts; only payout_type differs.
 matcher cocoon_worker_payout {
     produces cocoon_worker_payout
-    entry    @start
 
     op [CocoonPayoutPayload, CocoonLastPayoutPayload] @start as CocoonLastPayoutPayload | CocoonPayoutPayload
       -> op CocoonWorkerProxyRequest @wreq as CocoonWorkerProxyRequest
@@ -52,7 +51,6 @@ matcher cocoon_worker_payout {
 
 matcher cocoon_proxy_payout {
     produces cocoon_proxy_payout
-    entry    @req
 
     op CocoonExtProxyPayoutRequest @req as CocoonExtProxyPayoutRequest
       -> { op CocoonPayout @payout
@@ -70,7 +68,6 @@ matcher cocoon_proxy_payout {
 # The usually-aborted ClientProxyRequest child does not determine `failed`.
 matcher cocoon_proxy_charge {
     produces cocoon_proxy_charge
-    entry    @charge
 
     op CocoonChargePayload @charge as CocoonChargePayload
       -> { op CocoonReturnExcessesBack @excesses
@@ -88,7 +85,6 @@ matcher cocoon_proxy_charge {
 
 matcher cocoon_client_top_up {
     produces cocoon_client_top_up
-    entry    @topup
 
     op CocoonExtClientTopUp @topup as CocoonExtClientTopUp
       -> op CocoonClientProxyRequest @preq
@@ -106,7 +102,6 @@ matcher cocoon_client_top_up {
 
 matcher cocoon_register_proxy {
     produces cocoon_register_proxy
-    entry    @reg
 
     op CocoonRegisterProxy @reg as CocoonRegisterProxy -> op CocoonReturnExcessesBack @excesses
 
@@ -119,7 +114,6 @@ matcher cocoon_register_proxy {
 
 matcher cocoon_unregister_proxy {
     produces cocoon_unregister_proxy
-    entry    @unreg
 
     op CocoonUnregisterProxy @unreg as CocoonUnregisterProxy -> op CocoonReturnExcessesBack @excesses
 
@@ -133,7 +127,6 @@ matcher cocoon_unregister_proxy {
 
 matcher cocoon_client_register {
     produces cocoon_client_register
-    entry    @reg
 
     op CocoonOwnerClientRegister @reg as CocoonOwnerClientRegister
       -> { op CocoonReturnExcessesBack @excesses
@@ -151,7 +144,6 @@ matcher cocoon_client_register {
 # new_secret_hash stays an integer; the serializer renders it as bare hex.
 matcher cocoon_client_change_secret_hash {
     produces cocoon_client_change_secret_hash
-    entry    @chg
 
     op CocoonOwnerClientChangeSecretHash @chg as CocoonOwnerClientChangeSecretHash
       -> { op CocoonReturnExcessesBack @excesses
@@ -170,7 +162,6 @@ matcher cocoon_client_change_secret_hash {
 # the refund call, so it cannot satisfy the required children set below.
 matcher cocoon_client_request_refund {
     produces cocoon_client_request_refund
-    entry    @refund
 
     op [CocoonOwnerWalletSendMessage, CocoonOwnerClientRequestRefund] @refund as CocoonOwnerClientRequestRefund {
         -> {
@@ -191,7 +182,6 @@ matcher cocoon_client_request_refund {
 
 matcher cocoon_grant_refund {
     produces cocoon_grant_refund
-    entry    @grant
 
     op CocoonGrantRefundPayload @grant as CocoonGrantRefundPayload
       -> op CocoonClientProxyRequest @client_request
@@ -212,7 +202,6 @@ matcher cocoon_grant_refund {
 
 matcher cocoon_client_increase_stake {
     produces cocoon_client_increase_stake
-    entry    @inc
 
     op CocoonOwnerClientIncreaseStake @inc as CocoonOwnerClientIncreaseStake
       -> { op CocoonReturnExcessesBack @excesses
@@ -231,7 +220,6 @@ matcher cocoon_client_increase_stake {
 # keep a malformed or absent refund payload non-fatal.
 matcher cocoon_client_withdraw {
     produces cocoon_client_withdraw
-    entry    @wd
 
     op CocoonOwnerClientWithdraw @wd as CocoonOwnerClientWithdraw
       -> op CocoonClientProxyRequest @client_request as CocoonClientProxyRequest

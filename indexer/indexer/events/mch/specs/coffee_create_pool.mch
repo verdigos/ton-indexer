@@ -80,7 +80,6 @@ opcode CoffeeNotificationCallback            = 0xB216D31F
 opcode JettonInternalTransfer                = 0x178D4519
 matcher coffee_create_pool_creator {
     produces coffee_create_pool_creator
-    entry    @request
 
     # Legacy's single `child_matcher` and a one-item children block differ only
     # when several 0xc0ffee22 children exist, which the factory never emits.
@@ -108,7 +107,6 @@ matcher coffee_create_pool_creator {
 
 matcher coffee_create_pool {
     produces coffee_create_pool
-    entry    @creator
 
     btype coffee_create_pool_creator @creator
       -> op CoffeeCreatePoolRequest @request as CoffeeCreatePoolRequest

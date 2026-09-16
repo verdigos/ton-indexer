@@ -76,7 +76,6 @@ opcode PayoutMessage             = 0x3216CA09
 
 matcher dedust_v2_withdraw {
     produces        dex_withdraw_liquidity
-    entry           @withdraw
     include_excess  false
 
     op DedustV2Withdraw @withdraw as DedustV2Withdraw

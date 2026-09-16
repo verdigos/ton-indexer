@@ -64,7 +64,6 @@ rule dv2_hop = or {
 
 matcher dedust_v2_swap {
     produces jetton_swap
-    entry    @carrier
     include_excess false          # the reference consumes the carrier's excess
                                   # INTO the swap block (explicit child below),
                                   # not as a sibling of the result
@@ -151,7 +150,6 @@ matcher dedust_v2_swap {
 # pool's OTHER asset, read from the pool account's interface data.
 matcher dedust_v2_failed_swap {
     produces jetton_swap
-    entry    @carrier
     include_excess false
 
     xor {

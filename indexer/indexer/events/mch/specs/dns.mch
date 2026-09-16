@@ -18,7 +18,6 @@ opcode AuctionFillUp      = 0x370fec51
 
 matcher dns_purchase {
     produces dns_purchase
-    entry    @anchor
 
     op AuctionFillUp @anchor as AuctionFillUpMessage
       <- peek btype call_contract @purchase_parent
@@ -53,7 +52,6 @@ opcode ChangeDnsRecord = 0x4eb1f0f9
 
 matcher change_dns {
     produces change_dns | renew_dns | delete_dns
-    entry    @dns
 
     op ChangeDnsRecord @dns as ChangeDnsRecordMessage -> maybe op Bounce
 
@@ -86,7 +84,6 @@ opcode DnsReleaseBalance = 0x4ed14b65
 
 matcher dns_release {
     produces dns_release
-    entry    @anchor
 
     op DnsReleaseBalance @anchor as DnsReleaseBalanceMessage
 

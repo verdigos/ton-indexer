@@ -101,7 +101,6 @@ rule dv2_credit_parent =
 # no-match (not a bail) for it.
 matcher dedust_v2_deposit_final {
     produces        dedust_v2_deposit_liquidity
-    entry           @join
     include_excess  false
 
     op DedustV2JoinLiquidity @join as DedustV2JoinLiquidity {
@@ -170,7 +169,6 @@ matcher dedust_v2_deposit_final {
 # up on.
 matcher dedust_v2_deposit_rejected {
     produces        dedust_v2_deposit_liquidity
-    entry           @join
     include_excess  false
 
     op DedustV2JoinLiquidity @join as DedustV2JoinLiquidity {
@@ -241,7 +239,6 @@ matcher dedust_v2_deposit_rejected {
 # it is the Pool that credits the escrow.
 matcher dedust_v2_deposit_partial {
     produces        dedust_v2_deposit_liquidity_partial
-    entry           @credit
     include_excess  false
 
     op DedustV2CreditAsset @credit as DedustV2CreditAsset {

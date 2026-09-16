@@ -17,7 +17,6 @@ opcode TgWalletChangePublicKeyExternal = 0xFBBA99C8
 
 matcher change_wallet_key {
     produces change_wallet_key
-    entry    @req
 
     op [TgWalletChangePublicKeyInternal, TgWalletChangePublicKeyExternal] @req
 

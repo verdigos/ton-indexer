@@ -81,9 +81,8 @@ C014_PEEK_SUBTREE_CONSUMES = "C014_PEEK_SUBTREE_CONSUMES"
 the subtree would still consume blocks or absorb auxiliary siblings."""
 
 C015_WHERE_EXPR_CAPTURE_NOT_ENTRY = "C015_WHERE_EXPR_CAPTURE_NOT_ENTRY"
-"""A capture name used in `where (expr)` is not the matcher's entry capture."""
+"""A capture name used in `where (expr)` is not the matcher's anchor capture."""
 
-C016_ENTRY_RELATIONS_IN_CHAIN = "C016_ENTRY_RELATIONS_IN_CHAIN"
 C017_RECURSIVE_RULE_XOR = "C017_RECURSIVE_RULE_XOR"
 C017_MANY = "C017_MANY"
 

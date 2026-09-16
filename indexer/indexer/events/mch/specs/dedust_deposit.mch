@@ -77,7 +77,6 @@ rule vault_excess =
 
 matcher dedust_deposit_final {
     produces dedust_deposit_liquidity
-    entry    @pool
 
     op DedustDepositLiquidityToPool @pool {
         -> {
@@ -117,7 +116,6 @@ matcher dedust_deposit_final {
 
 matcher dedust_deposit_partial {
     produces dedust_deposit_liquidity_partial
-    entry    @topup
 
     op DedustTopUpLiquidityDepositContract @topup
         <- op DedustAskLiquidityFactory {

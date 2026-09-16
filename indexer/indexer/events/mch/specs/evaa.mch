@@ -32,7 +32,6 @@ predicate evaa_liquidate_anchor
 
 matcher evaa_supply {
     produces evaa_supply
-    entry    @master
 
     pred evaa_supply_anchor @master
       -> btype call_contract @user where ((parse? . as EvaaUserOp).op == 0x11)
@@ -69,7 +68,6 @@ matcher evaa_supply {
 
 matcher evaa_withdraw {
     produces evaa_withdraw
-    entry    @master
 
     op EvaaWithdrawMaster @master as EvaaWithdrawMaster
       -> btype call_contract @user where ((parse? . as EvaaUserOp).op == 0x21)
@@ -121,7 +119,6 @@ matcher evaa_withdraw {
 # header before testing 0x311a; the fail arm tests plain 0x311f.
 matcher evaa_liquidate {
     produces evaa_liquidate
-    entry    @master
 
     pred evaa_liquidate_anchor @master
       -> or {

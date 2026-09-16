@@ -37,7 +37,6 @@ opcode PTonTransfer                  = 0x01f3835d
 
 matcher stonfi_v2_withdraw {
     produces dex_withdraw_liquidity
-    entry    @burn
 
     btype jetton_burn @burn
       -> op StonfiV2WithdrawFromPool @router
@@ -67,7 +66,6 @@ matcher stonfi_v2_withdraw {
 
 matcher stonfi_v2_withdraw_refund {
     produces dex_withdraw_liquidity
-    entry    @refund
 
     op StonfiV2WithdrawRefund @refund {
         -> {

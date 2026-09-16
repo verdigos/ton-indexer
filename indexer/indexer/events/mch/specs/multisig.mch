@@ -54,7 +54,6 @@ opcode MultisigExecute        = 0x75097F5D
 
 matcher multisig_create_order {
     produces multisig_create_order
-    entry    @new
 
     op MultisigNewOrder @new as MultisigNewOrder -> op MultisigInitOrder @init as MultisigInitOrder
 
@@ -76,7 +75,6 @@ matcher multisig_create_order {
 
 matcher multisig_approve {
     produces multisig_approve
-    entry    @vote
 
     op MultisigApprove @vote as MultisigApprove
       -> xor {
@@ -97,7 +95,6 @@ matcher multisig_approve {
 
 matcher multisig_approve_comment {
     produces multisig_approve
-    entry    @vote
 
     btype ton_transfer @vote where (.comment == "approve")
       -> xor {
@@ -120,7 +117,6 @@ matcher multisig_approve_comment {
 
 matcher multisig_execute {
     produces multisig_execute
-    entry    @exec
 
     op MultisigExecute @exec as MultisigExecute
 

@@ -39,7 +39,6 @@ opcode NominatorPoolProcessWithdrawRequests = 0x2
 
 matcher nominator_pool_withdraw {
     produces nominator_pool_withdraw_request
-    entry    @payout
 
     btype ton_transfer @payout
       <- peek op NominatorPoolProcessWithdrawRequests
@@ -54,7 +53,6 @@ matcher nominator_pool_withdraw {
 
 matcher nominator_pool_deposit {
     produces        nominator_pool_deposit
-    entry           @deposit
     include_excess  false
     include_bounces false
 
@@ -72,7 +70,6 @@ matcher nominator_pool_deposit {
 
 matcher nominator_pool_withdraw_request {
     produces        nominator_pool_withdraw_request
-    entry           @request
     include_excess  false
     include_bounces false
 

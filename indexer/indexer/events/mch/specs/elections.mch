@@ -46,7 +46,6 @@ opcode ElectorRecoverStakeConfirmation = 0xF96F7324
 
 matcher election_deposit {
     produces        election_deposit
-    entry           @req
     include_excess  false
 
     op ElectorDepositStakeRequest @req -> maybe op ElectorDepositStakeConfirmation @conf
@@ -62,7 +61,6 @@ matcher election_deposit {
 
 matcher election_recover {
     produces        election_recover
-    entry           @req
     include_excess  false
 
     op ElectorRecoverStakeRequest @req -> maybe op ElectorRecoverStakeConfirmation @conf

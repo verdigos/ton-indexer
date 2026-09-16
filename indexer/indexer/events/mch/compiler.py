@@ -91,7 +91,7 @@ class CompileCtx:
     registries: Registries
     recursion: RecursionStrategy
     bag: DiagnosticBag
-    where_entry_capture: str = ""
+    where_anchor_capture: str = ""
     # Names of recursive rules currently being lowered; used to break cycles
     # by treating self-refs inside step/exit branches as a recursion sentinel.
     lowering_recursive: set[str] = None  # type: ignore[assignment]
@@ -130,30 +130,14 @@ def compile_(
 
 def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     decl = rm.decl
-    ctx.where_entry_capture = rm.anchor_capture
+    ctx.where_anchor_capture = rm.anchor_capture
 
     _check_no_capture_after_recursion(decl.pattern, decl.span, ctx)
     _check_no_bare_children_block(decl.pattern, ctx)
     if ctx.bag.has_errors:
         raise CompileError(ctx.bag)
 
-    # Lower the pattern relative to the anchor atom. For set anchors, the whole
-    # exclusive alternative group is the anchor atom,
-    # so chain edges around it wire exactly as around a single anchor node.
-    anchor_atom: ast_.PatternExpr = (
-        rm.anchor_group if rm.anchor_group is not None else rm.anchor_node
-    )
-    if rm.anchor_node.relations is not None and any(
-        isinstance(p, ast_.Sequence)
-        for p in (_find_anchor_path(decl.pattern, anchor_atom) or ())
-    ):
-        ctx.bag.error(
-            "C016_ENTRY_RELATIONS_IN_CHAIN",
-            "an entry with a relation block must stand alone; move the surrounding chain into its block",
-            rm.anchor_node.span,
-        )
-        raise CompileError(ctx.bag)
-    parent_m, child_m, children_ms = _lower_relative_to_anchor(decl.pattern, anchor_atom, ctx)
+    parent_m, child_m, children_ms = _lower_surrounding_sequence(decl.pattern, ctx)
 
     head = rm.anchor_node.head
     anchor_pred: str | None = None
@@ -250,66 +234,15 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     )
 
 
-def _lower_relative_to_anchor(
+def _lower_surrounding_sequence(
     pattern: ast_.PatternExpr,
-    anchor: ast_.PatternExpr,
     ctx: CompileCtx,
 ) -> tuple[LNode | None, LNode | None, list[LNode] | None]:
-    """Walk the pattern to figure out (parent_matcher, child_matcher, children_matchers).
-
-    `anchor` is compared by identity: a single anchor Node, or the whole
-    exclusive Alternative for opcode-set anchors.
-    """
-    parents = _find_anchor_path(pattern, anchor)
-    if parents is None:
+    if not isinstance(pattern, ast_.Sequence):
         return None, None, None
-    # `parents` ends with the anchor itself; its immediate parent is parents[-2].
-    if len(parents) < 2:
-        return None, None, None
-    immediate_parent = parents[-2]
-    if not isinstance(immediate_parent, ast_.Sequence) and parents[:-1]:
-        ctx.bag.error(
-            "C010_UPSTREAM_ATOMS_UNSUPPORTED",
-            "upstream atoms before the anchor are not lowered; re-anchor the pattern or restructure",
-            anchor.span,
-        )
-        raise CompileError(ctx.bag)
-
-    child_chain, children_ms = _lower_child_chain_from(immediate_parent, pattern, anchor, ctx)
-    parent_chain = _lower_parent_chain_from(immediate_parent, pattern, anchor, ctx)
+    child_chain, children_ms = _lower_child_chain_from(pattern, ctx)
+    parent_chain = _lower_parent_chain_from(pattern, ctx)
     return parent_chain, child_chain, children_ms
-
-
-def _find_anchor_path(pattern: ast_.PatternExpr, anchor: ast_.PatternExpr) -> list[ast_.PatternExpr] | None:
-    if pattern is anchor:
-        return None
-
-    def search(p: ast_.PatternExpr, path: list[ast_.PatternExpr]) -> list[ast_.PatternExpr] | None:
-        if p is anchor:
-            return path + [p]
-        if isinstance(p, ast_.Sequence):
-            r = search(p.head, path + [p])
-            if r:
-                return r
-            for _e, atom in p.tail:
-                r = search(atom, path + [p])
-                if r:
-                    return r
-        elif isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
-            return search(p.inner, path + [p])
-        elif isinstance(p, ast_.Alternative):
-            for b in p.branches:
-                r = search(b, path + [p])
-                if r:
-                    return r
-        elif isinstance(p, ast_.ChildrenBlock):
-            for it in p.items:
-                r = search(it, path + [p])
-                if r:
-                    return r
-        return None
-
-    return search(pattern, [])
 
 
 def _is_cb_atom(a: ast_.PatternExpr) -> bool:
@@ -319,171 +252,78 @@ def _is_cb_atom(a: ast_.PatternExpr) -> bool:
 
 
 def _lower_child_chain_from(
-    parent: ast_.PatternExpr,
-    pattern: ast_.PatternExpr,
-    anchor: ast_.PatternExpr,
+    sequence: ast_.Sequence,
     ctx: CompileCtx,
 ) -> tuple[LNode | None, list[LNode] | None]:
-    if isinstance(parent, ast_.Sequence):
-        # Collect child-edged atoms in the anchor's downstream slice. Stop at
-        # the first parent edge; later atoms belong to the parent chain
-        # (`_lower_parent_chain_from` consumes them).
-        # In `op A <- op B -> {C; D}`, the children belong to B's parent chain,
-        # not to anchor A.
-        downstream_atoms: list[ast_.PatternExpr] = []
-        if parent.head is anchor:
-            tail_slice = parent.tail
-        else:
-            anchor_idx = None
-            for i, (_e, atom) in enumerate(parent.tail):
-                if atom is anchor:
-                    anchor_idx = i
-                    break
-            if anchor_idx is None:
-                return None, None
-            tail_slice = parent.tail[anchor_idx + 1:]
-        for edge, atom in tail_slice:
-            if edge is ast_.Edge.PARENT:
-                if downstream_atoms and not all(_is_cb_atom(a) for a in downstream_atoms):
-                    # `op A -> op B <- op C`: the parent edge's left side is a
-                    # non-anchor node (B) reached through a preceding child edge.
-                    # Its only faithful lowering sets B.parent_matcher = C, which
-                    # at runtime tests B.previous_block (the anchor A) against
-                    # opcode C and can never be satisfied. Reject rather than
-                    # silently drop the `<- C` segment.
-                    # If everything before the parent edge is a children block,
-                    # the cursor never left the anchor. In
-                    # `op A -> {B; C} <- op P`, A has both
-                    # children_matchers and parent_matcher.
-                    ctx.bag.error(
-                        "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
-                        "a parent edge ('<-') following a child edge in the same "
-                        "chain is unsupported: the parent would test the anchor "
-                        "block and can never match; split the pattern or re-anchor",
-                        atom.span,
-                    )
-                    raise CompileError(ctx.bag)
+    downstream_atoms: list[ast_.PatternExpr] = []
+    for edge, atom in sequence.tail:
+        if edge is ast_.Edge.PARENT:
+            if downstream_atoms and not all(_is_cb_atom(a) for a in downstream_atoms):
+                ctx.bag.error(
+                    "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
+                    "a parent edge ('<-') following a child edge in the same "
+                    "chain is unsupported: the parent would test the anchor "
+                    "block and can never match; split the pattern",
+                    atom.span,
+                )
+                raise CompileError(ctx.bag)
+            break
+        downstream_atoms.append(atom)
+    if not downstream_atoms:
+        return None, None
+    first = downstream_atoms[0]
+    if isinstance(first, ast_.ChildrenBlock):
+        children_ms: list[LNode] = []
+        rest_idx = 0
+        while rest_idx < len(downstream_atoms):
+            atom = downstream_atoms[rest_idx]
+            if not isinstance(atom, ast_.ChildrenBlock):
                 break
-            downstream_atoms.append(atom)
-        if not downstream_atoms:
-            return None, None
-        first = downstream_atoms[0]
-        if isinstance(first, ast_.ChildrenBlock):
-            # Consume consecutive anchor-adjacent children blocks so
-            # `{B;C} {D;E}`
-            # all attach to the anchor's children_matchers in source order.
-            children_ms: list[LNode] = []
-            rest_idx = 0
-            while rest_idx < len(downstream_atoms):
-                atom = downstream_atoms[rest_idx]
-                if not isinstance(atom, ast_.ChildrenBlock):
-                    break
-                for it in atom.items:
-                    children_ms.append(_lower_atom(it, ctx))
-                rest_idx += 1
-            rest = downstream_atoms[rest_idx:]
-            if rest:
-                pairs = [(ast_.Edge.CHILD, a) for a in rest]
-                child = _lower_chain_with_children_attach(pairs, ctx)
-                return child, children_ms
-            return None, children_ms
-        pairs = [(ast_.Edge.CHILD, a) for a in downstream_atoms]
-        child = _lower_chain_with_children_attach(pairs, ctx)
-        return child, None
-
-    return None, None
+            for it in atom.items:
+                children_ms.append(_lower_atom(it, ctx))
+            rest_idx += 1
+        rest = downstream_atoms[rest_idx:]
+        if rest:
+            pairs = [(ast_.Edge.CHILD, a) for a in rest]
+            child = _lower_chain_with_children_attach(pairs, ctx)
+            return child, children_ms
+        return None, children_ms
+    pairs = [(ast_.Edge.CHILD, a) for a in downstream_atoms]
+    child = _lower_chain_with_children_attach(pairs, ctx)
+    return child, None
 
 
 def _lower_parent_chain_from(
-    parent: ast_.PatternExpr,
-    pattern: ast_.PatternExpr,
-    anchor: ast_.PatternExpr,
+    sequence: ast_.Sequence,
     ctx: CompileCtx,
 ) -> LNode | None:
-    """Lower consecutive PARENT edges from the anchor outward into a chain of
-    parent_matchers. Handles anchor-is-head and both anchor-in-tail variants.
-    """
-    if not isinstance(parent, ast_.Sequence):
+    idx = 0
+    while (
+        idx < len(sequence.tail)
+        and sequence.tail[idx][0] is ast_.Edge.CHILD
+        and _is_cb_atom(sequence.tail[idx][1])
+    ):
+        idx += 1
+    if idx >= len(sequence.tail) or sequence.tail[idx][0] is not ast_.Edge.PARENT:
         return None
 
-    prepend_previous = False
-    start_idx = 0
-
-    if parent.head is anchor:
-        # Skip anchor-attached children blocks. They do not advance the chain
-        # cursor, so a parent edge after them still belongs to the
-        # anchor: `op A -> {B; C} <- op P`.
-        idx = 0
-        while (
-            idx < len(parent.tail)
-            and parent.tail[idx][0] is ast_.Edge.CHILD
-            and _is_cb_atom(parent.tail[idx][1])
-        ):
-            idx += 1
-        if idx >= len(parent.tail) or parent.tail[idx][0] is not ast_.Edge.PARENT:
-            return None
-        start_idx = idx
-    else:
-        anchor_idx = next(
-            (i for i, (_e, a) in enumerate(parent.tail) if a is anchor),
-            None,
-        )
-        if anchor_idx is None:
-            return None
-        edge_at_anchor, _ = parent.tail[anchor_idx]
-        if edge_at_anchor is ast_.Edge.PARENT:
-            # When the anchor's incoming edge is PARENT, the previous atom
-            # acts as the first parent link.
-            prepend_previous = True
-            start_idx = anchor_idx + 1
-        else:
-            # When the anchor's incoming edge is CHILD, an atom upstream
-            # of the anchor (`… -> op Anchor`) is the anchor's parent. Lowering
-            # only walks downstream from the anchor, so every upstream atom would
-            # be silently dropped. Reject
-            # rather than misbehave; re-anchor or restructure the pattern.
-            upstream_atom = (
-                parent.head if anchor_idx == 0 else parent.tail[anchor_idx - 1][1]
-            )
-            ctx.bag.error(
-                "C010_UPSTREAM_ATOMS_UNSUPPORTED",
-                "upstream atoms before the anchor are not lowered; re-anchor the "
-                "pattern or restructure — see specs/stonfi_v2_swap.mch",
-                upstream_atom.span if hasattr(upstream_atom, "span") else anchor.span,
-            )
-            raise CompileError(ctx.bag)
-
-    # Build the parent chain in one interleaved walk from the anchor's first
-    # parent link outward. PARENT edges extend the chain; CHILD-edged children
-    # blocks attach to the current chain tail without advancing the cursor, so
-    # `<- op X -> {CB} <- Y` gives X both
-    # children_matchers and parent_matcher, matching the grouped form
-    # `<- ( op X -> {CB} <- Y )`. A CHILD edge with a non-CB atom (a child branch
-    # off a parent node) is out of scope in v0 and stops the walk.
+    # Parent edges extend the chain. Children blocks attach to the current tail
+    # without advancing it; other child branches must be grouped with the
+    # parent target.
     chain_pairs: list[tuple[ast_.Edge, ast_.PatternExpr]] = []
-    if prepend_previous:
-        anchor_idx = next(i for i, (_e, a) in enumerate(parent.tail) if a is anchor)
-        idx = anchor_idx - 1
-        while idx >= 0 and _is_cb_atom(parent.tail[idx][1]):
-            idx -= 1
-        previous_atom = parent.head if idx < 0 else parent.tail[idx][1]
-        chain_pairs.append((ast_.Edge.PARENT, previous_atom))
-        chain_pairs.extend((ast_.Edge.CHILD, atom) for _e, atom in parent.tail[idx + 1:anchor_idx])
-
-    saw_parent_link = prepend_previous
-    for edge, atom in parent.tail[start_idx:]:
+    for edge, atom in sequence.tail[idx:]:
         if edge is ast_.Edge.PARENT:
             chain_pairs.append((ast_.Edge.PARENT, atom))
-            saw_parent_link = True
-        elif edge is ast_.Edge.CHILD and saw_parent_link and _is_cb_atom(atom):
+        elif _is_cb_atom(atom):
             chain_pairs.append((ast_.Edge.CHILD, atom))
         else:
-            # A non-PARENT edge before any parent link, or a non-CB child branch
-            # off a parent node: out of scope in v0. Stop consuming.
-            break
-
-    if not saw_parent_link:
-        return None
+            ctx.bag.error(
+                "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
+                "a child branch after a parent link must be grouped with its "
+                "parent target, e.g. `op A @a <- (op P -> op S)`",
+                atom.span,
+            )
+            raise CompileError(ctx.bag)
 
     return _lower_chain_with_children_attach(chain_pairs, ctx)
 
@@ -768,11 +608,11 @@ def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
     compiler instead of silently never matching. Returns True
     when the expression is sync-evaluable."""
     if isinstance(e, ast_.NameRef):
-        if e.name != ctx.where_entry_capture:
+        if e.name != ctx.where_anchor_capture:
             ctx.bag.error(
                 "C015_WHERE_EXPR_CAPTURE_NOT_ENTRY",
-                f"`where (expr)` may reference only entry capture "
-                f"@{ctx.where_entry_capture}; name {e.name!r} is not allowed",
+                f"`where (expr)` may reference only anchor capture "
+                f"@{ctx.where_anchor_capture}; name {e.name!r} is not allowed",
                 e.span,
             )
             return False

@@ -231,7 +231,6 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
     s.skip_newlines()
 
     produces: tuple[str, ...] | None = None
-    entry:    str | None = None
     shape:    str | None = None
     include_excess  = True
     include_bounces = True
@@ -246,10 +245,6 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
                 s.i += 1
                 names.append(s.eat(TokenKind.IDENT).text)
             produces = tuple(names)
-        elif t.kind is TokenKind.KW_ENTRY:
-            s.i += 1
-            s.eat(TokenKind.AT)
-            entry = s.eat_name().text
         elif t.kind is TokenKind.KW_SHAPE:
             s.i += 1
             shape = s.eat(TokenKind.IDENT).text
@@ -279,7 +274,6 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
     return ast_.MatcherDecl(
         name=name_tok.text,
         produces=produces,
-        entry=entry,
         include_excess=include_excess,
         include_bounces=include_bounces,
         pattern=pattern,

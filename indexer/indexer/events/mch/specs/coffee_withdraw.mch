@@ -31,7 +31,6 @@ opcode CoffeeNotification             = 0xc0ffee36
 
 matcher coffee_withdraw_liquidity {
     produces dex_withdraw_liquidity
-    entry    @burn
 
     btype jetton_burn @burn
       -> { op CoffeePayoutInternal @payout_1

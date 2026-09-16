@@ -64,7 +64,6 @@ opcode TakeWalletAddress                      = 0xd1735400
 # ---------------------------------------------------------------------------
 matcher coffee_deposit_liquidity {
     produces coffee_deposit_liquidity
-    entry    @request
 
     op CoffeeCreateLiquidityDepositoryRequest @request as CoffeeCreateLiquidityDepositoryRequest {
         -> {
@@ -132,7 +131,6 @@ matcher coffee_deposit_liquidity {
 # ---------------------------------------------------------------------------
 matcher coffee_create_vault {
     produces coffee_create_vault
-    entry    @create
 
     op CoffeeCreateVault @create as CoffeeCreateVault
       -> op CoffeeDeploy @deploy

@@ -58,7 +58,6 @@ rule swap_hop = or {
 #     failed flag.
 matcher stonfi_v2_swap {
     produces jetton_swap
-    entry    @swap
 
     op StonfiV2Swap @swap {
         -> {

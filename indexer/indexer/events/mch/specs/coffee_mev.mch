@@ -54,7 +54,6 @@ opcode CoffeeServiceFee          = 0xC0FFEEA0
 # --- TON arm: the raw 0x6bc79e7e call to the MEV contract. -------------------
 matcher coffee_mev_protect_hold_funds {
     produces coffee_mev_protect_hold_funds
-    entry    @call
 
     op CoffeeMevProtectHoldFunds @call
       <- maybe ( any -> { op CoffeeServiceFee } )
@@ -74,7 +73,6 @@ matcher coffee_mev_protect_hold_funds {
 # --- jetton arm: a transfer whose forward payload IS the hold-funds op. ------
 matcher coffee_mev_protect_hold_funds_jetton {
     produces coffee_mev_protect_hold_funds
-    entry    @transfer
 
     btype jetton_transfer @transfer where (.payload_opcode == 0x6bc79e7e)
       <- maybe ( any -> { op CoffeeServiceFee } )
@@ -92,7 +90,6 @@ matcher coffee_mev_protect_hold_funds_jetton {
 # --- failed swap, TON arm: a bare call with no service-fee parent. -----------
 matcher coffee_mev_protect_failed_swap {
     produces coffee_mev_protect_failed_swap
-    entry    @call
 
     op CoffeeMevProtectFailedSwap @call
 
@@ -105,7 +102,6 @@ matcher coffee_mev_protect_failed_swap {
 # --- failed swap, jetton arm: parse the transfer's forward payload. ----------
 matcher coffee_mev_protect_failed_swap_jetton {
     produces coffee_mev_protect_failed_swap
-    entry    @transfer
 
     btype jetton_transfer @transfer where (.payload_opcode == 0xee51ce51)
 

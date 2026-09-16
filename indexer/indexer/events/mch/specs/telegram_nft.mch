@@ -60,7 +60,6 @@ opcode AuctionFillUp        = 0x370FEC51
 
 matcher telegram_nft_purchase {
     produces nft_transfer
-    entry    @assigned
 
     # The two legacy parent kinds, XOR because `ton_transfer` and `call_contract`
     # are disjoint btypes. The payout children hang off EACH branch, not off the
@@ -99,7 +98,6 @@ matcher telegram_nft_purchase {
 
 matcher telegram_nft_assigned {
     produces nft_transfer
-    entry    @assigned
 
     # The optional parent is observed without changing the anchor-only consumed set.
     op NftOwnershipAssigned @assigned

@@ -86,7 +86,6 @@ opcode TgBTCDkgCompletedLog = 0x453443A6
 matcher tgbtc_mint {
     produces tgbtc_mint
     shape    tgbtc_deploy_absorb
-    entry    @head
 
     op TgBTCMintHead @head -> $mint_chain
 
@@ -149,7 +148,6 @@ rule mint_chain = or {
 # -----------------------------------------------------------------------------
 matcher tgbtc_burn {
     produces tgbtc_burn
-    entry    @burn
 
     btype jetton_burn @burn
       -> op [JettonBurnNotify, TgBTCBurnNotify] @notify
@@ -195,7 +193,6 @@ matcher tgbtc_burn {
 # -----------------------------------------------------------------------------
 matcher tgbtc_new_key {
     produces tgbtc_new_key
-    entry    @k
 
     op TgBTCNewKeyRequest @k {
         -> {
@@ -239,7 +236,6 @@ matcher tgbtc_new_key {
 # the jetton_mint leg, and the teleport contract collapses onto the log emitter.
 matcher tgbtc_mint_log_only {
     produces tgbtc_mint
-    entry    @log
 
     op TgBTCMintSuccessLog @log as TgBTCMintEvent
 
@@ -261,7 +257,6 @@ matcher tgbtc_mint_log_only {
 # `TgBTCBurnEvent` yields addr_none for both addresses without failing the parse.
 matcher tgbtc_burn_log_only {
     produces tgbtc_burn
-    entry    @log
 
     op TgBTCBurnLog @log as TgBTCBurnEvent
 
@@ -280,7 +275,6 @@ matcher tgbtc_burn_log_only {
 # both null and the coordinator collapses onto the log emitter.
 matcher tgbtc_new_key_log_only {
     produces tgbtc_new_key
-    entry    @log
 
     op TgBTCNewKeyLog @log as TgBTCNewKeyEvent
 
@@ -304,7 +298,6 @@ matcher tgbtc_new_key_log_only {
 # and the dkg log is left over).
 matcher tgbtc_dkg_log_only {
     produces tgbtc_dkg_log
-    entry    @log
 
     op TgBTCDkgCompletedLog @log as TgBTCDkgCompletedEvent
 

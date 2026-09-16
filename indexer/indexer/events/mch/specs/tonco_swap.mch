@@ -67,7 +67,6 @@ rule tonco_hop cyclic = (
 
 matcher tonco_swap {
     produces jetton_swap
-    entry    @swap
 
     op ToncoPoolV3Swap @swap {
         -> {

@@ -25,7 +25,6 @@ opcode MinterJettonMint       = 0x00000015
 # ---------------------------------------------------------------------------
 matcher jetton_transfer {
     produces jetton_transfer
-    entry    @transfer
 
     op JettonTransfer @transfer as JettonTransfer
       -> op JettonInternalTransfer @internal as JettonInternalTransfer
@@ -67,7 +66,6 @@ matcher jetton_transfer {
 # ---------------------------------------------------------------------------
 matcher jetton_burn {
     produces jetton_burn
-    entry    @burn
 
     op JettonBurn @burn as JettonBurn -> maybe op JettonBurnNotification @notification
 
@@ -97,7 +95,6 @@ matcher jetton_burn {
 # ---------------------------------------------------------------------------
 matcher jetton_mint {
     produces jetton_mint
-    entry    @mint
 
     op [JettonMint, MinterJettonMint] @mint as MinterJettonMint | JettonMint
       -> maybe or {

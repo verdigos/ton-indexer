@@ -41,7 +41,6 @@ rule jvault_referrals = or {
 
 matcher jvault_stake {
     produces jvault_stake
-    entry    @transfer
 
     btype jetton_transfer @transfer
       -> { op JVaultReceiveJettons @receive
@@ -73,7 +72,6 @@ matcher jvault_stake {
 
 matcher jvault_unstake {
     produces jvault_unstake
-    entry    @unstake
 
     op JVaultUnstakeJettons @unstake as JVaultUnstakeJettons
       -> maybe ( op JVaultRequestUpdateRewards @request
@@ -106,7 +104,6 @@ matcher jvault_unstake {
 
 matcher jvault_claim {
     produces jvault_claim
-    entry    @claim
 
     op JVaultClaim @claim as JVaultClaim
       -> op JVaultSendClaimedRewards @send
@@ -130,7 +127,6 @@ matcher jvault_claim {
 
 matcher jvault_unstake_request {
     produces jvault_unstake_request
-    entry    @request_anchor
 
     op JVaultUnstakeRequest @request_anchor as JVaultUnstakeRequest
       -> maybe ( op JVaultRequestUpdateRewards @request

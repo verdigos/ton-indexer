@@ -81,7 +81,6 @@ opcode UlnConnectionVerifyCallback  = 0x3cb38090
 
 matcher layerzero_receive {
     produces layerzero_receive
-    entry    @prepare
 
     op ChannelLzReceivePrepare @prepare
       -> { maybe btype ton_transfer
@@ -137,7 +136,6 @@ matcher layerzero_receive {
 # -----------------------------------------------------------------------------
 matcher layerzero_send {
     produces layerzero_send
-    entry    @endpoint_send
 
     op EndpointEndpointSend @endpoint_send
       -> op ChannelChannelSend @channel_send
@@ -194,7 +192,6 @@ matcher layerzero_send {
 # -----------------------------------------------------------------------------
 matcher layerzero_send_tokens {
     produces layerzero_send_tokens
-    entry    @send
 
     btype layerzero_send @send
       <- btype jetton_transfer @jetton
@@ -237,7 +234,6 @@ matcher layerzero_send_tokens {
 # -----------------------------------------------------------------------------
 matcher layerzero_commit_packet {
     produces layerzero_commit_packet
-    entry    @uln_commit
 
     op UlnUlnCommitPacket @uln_commit
       -> op UlnConnectionCommitPacket @uln_connection_commit
@@ -286,7 +282,6 @@ matcher layerzero_commit_packet {
 # -----------------------------------------------------------------------------
 matcher layerzero_dvn_verify {
     produces layerzero_dvn_verify
-    entry    @dvn_verify
 
     op DvnVerify @dvn_verify
       -> op ProxyCallContract @proxy_call

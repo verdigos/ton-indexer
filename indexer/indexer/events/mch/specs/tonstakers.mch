@@ -44,7 +44,6 @@ opcode TONStakersDistributedAsset    = 0xdb3b8abd
 # ---------------------------------------------------------------------------
 matcher tonstakers_delayed_withdrawal {
     produces tonstakers_withdraw
-    entry    @distributed
 
     op TONStakersDistributedAsset @distributed
       <- op TONStakersNftBurnNotification @notification as TONStakersNftBurnNotification
@@ -86,7 +85,6 @@ matcher tonstakers_delayed_withdrawal {
 # ---------------------------------------------------------------------------
 matcher tonstakers_deposit {
     produces tonstakers_deposit
-    entry    @deposit
 
     op TONStakersDepositRequest @deposit
       -> op TONStakersMintJettons
@@ -122,7 +120,6 @@ matcher tonstakers_deposit {
 # ---------------------------------------------------------------------------
 matcher tonstakers_withdraw {
     produces tonstakers_withdraw | tonstakers_withdraw_request
-    entry    @burn
 
     op JettonBurn @burn as JettonBurn
       -> op JettonBurnNotification

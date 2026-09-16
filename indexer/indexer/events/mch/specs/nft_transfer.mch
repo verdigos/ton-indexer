@@ -47,7 +47,6 @@ opcode NftOwnershipAssigned = 0x05138D91
 matcher nft_transfer {
     produces        nft_transfer
     shape           nft_transfer_parent_absorb
-    entry           @transfer
     include_excess  false
 
     op NftTransfer @transfer {

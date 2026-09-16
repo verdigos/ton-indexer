@@ -41,7 +41,6 @@ opcode JettonNotify                    = 0x7362d09c
 opcode PTonTransfer                    = 0x01f3835d
 matcher tonco_deposit_liquidity {
     produces tonco_deposit_liquidity
-    entry    @add_liquidity
 
     op ToncoAccountV3AddLiquidity @add_liquidity {
         -> {
@@ -118,7 +117,6 @@ matcher tonco_deposit_liquidity {
 # -----------------------------------------------------------------------------
 matcher tonco_deploy_pool {
     produces tonco_deploy_pool
-    entry    @create
 
     op ToncoRouterV3CreatePool @create as ToncoRouterV3CreatePool
       -> op ToncoPoolV3Init @init as ToncoPoolV3Init
@@ -201,7 +199,6 @@ matcher tonco_deploy_pool {
 
 matcher tonco_withdraw_liquidity {
     produces tonco_withdraw_liquidity
-    entry    @start_burn
 
     op ToncoPoolV3StartBurn @start_burn as ToncoPoolV3StartBurn
       -> op ToncoPositionNftV3PositionBurn @position_burn as ToncoPositionNftV3PositionBurn

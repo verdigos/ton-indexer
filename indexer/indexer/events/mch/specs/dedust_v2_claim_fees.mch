@@ -48,7 +48,6 @@ opcode PayoutMessage                = 0x3216ca09
 
 matcher dedust_v2_claim_fees {
     produces dedust_v2_claim_fees
-    entry    @claim
 
     op ClaimPositionFees @claim
       -> op ClaimAvailableFees

@@ -12,7 +12,6 @@
 
 matcher ethena_deposit {
     produces ethena_deposit
-    entry    @transfer
 
     btype jetton_transfer @transfer -> btype jetton_mint @mint
 
@@ -85,7 +84,6 @@ opcode EthenaTimelockTransfer  = 0xb2583ed5
 
 matcher ethena_withdrawal_request {
     produces ethena_withdrawal_request
-    entry    @transfer
 
     op JettonTransfer @transfer
       -> op JettonInternalTransfer @internal_transfer as JettonInternalTransfer

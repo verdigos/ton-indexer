@@ -30,7 +30,6 @@ opcode PayoutMessage        = 0x3216ca09
 
 matcher dedust_v2_claim_reward {
     produces dedust_v2_claim_reward
-    entry    @claim
 
     op ClaimRewardMessage @claim as ClaimRewardMessage
       -> op ClaimPositionReward @cpr

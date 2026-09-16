@@ -46,7 +46,6 @@ predicate single_contract_deploy
 
 matcher nft_mint {
     produces  nft_mint
-    entry     @mint
 
     pred single_contract_deploy @mint
 

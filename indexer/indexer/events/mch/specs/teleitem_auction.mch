@@ -44,7 +44,6 @@ opcode TeleitemOk            = 0xA37A0983
 
 matcher teleitem_start_auction {
     produces        teleitem_start_auction
-    entry           @auction
     include_excess  false
 
     op TeleitemStartAuction @auction as TeleitemStartAuction -> maybe op TeleitemOk @ok
@@ -77,7 +76,6 @@ matcher teleitem_start_auction {
 
 matcher teleitem_cancel_auction {
     produces        teleitem_cancel_auction
-    entry           @cancel
     include_excess  false
 
     op TeleitemCancelAuction @cancel -> maybe op TeleitemOk @ok

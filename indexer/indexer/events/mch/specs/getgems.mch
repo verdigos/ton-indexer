@@ -7,7 +7,6 @@
 matcher getgems_nft_purchase {
     produces nft_purchase
     shape    getgems_proxy_insert
-    entry    @nft
 
     btype nft_transfer @nft where (.is_purchase and .marketplace == "getgems") {
         -> { maybe btype ton_transfer @payout where (.destination == nft.data.real_prev_owner) }

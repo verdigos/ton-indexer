@@ -117,7 +117,6 @@ predicate auction_outbid_leg
 
 matcher nft_update_sale {
     produces nft_update_sale
-    entry    @upd
 
     op SaleUpdate @upd as SaleUpdateMessage
 
@@ -139,7 +138,6 @@ matcher nft_update_sale {
 # children are mandatory, exactly like the legacy `children_matchers` pair.
 matcher nft_put_on_sale {
     produces        nft_put_on_sale | nft_put_on_auction
-    entry           @listing
     include_excess  false
 
     btype nft_transfer @listing
@@ -214,7 +212,6 @@ matcher nft_put_on_sale {
 # (it takes the report's), so the anchor is not parsed at all.
 matcher nft_discovery {
     produces nft_discovery
-    entry    @disc
 
     op NftDiscovery @disc -> op NftReportStaticData @report as NftReportStaticData
 
@@ -233,7 +230,6 @@ matcher nft_discovery {
 # interface lookups inside the fn only run on plausible bids.
 matcher auction_bid {
     produces        auction_bid
-    entry           @bid
     include_excess  false
 
     btype ton_transfer @bid where auction_bid_candidate
@@ -256,7 +252,6 @@ matcher auction_bid {
 # The residual predicate preserves the exactly-one qualifying-child requirement.
 matcher auction_outbid {
     produces auction_outbid
-    entry    @leg
 
     xor {
         btype ton_transfer @leg
@@ -283,7 +278,6 @@ matcher auction_outbid {
 # The returned NFT is required but remains unconsumed so its action stays top-level.
 matcher nft_cancel_sale {
     produces nft_cancel_sale
-    entry    @cancel
 
     op NftSaleCancel @cancel
       -> peek btype nft_transfer @ret
@@ -306,7 +300,6 @@ matcher nft_cancel_sale {
 # here (it keeps the dataclass default None), unlike the cancel matcher below.
 matcher nft_finish_auction {
     produces nft_finish_auction
-    entry    @cancel
 
     xor {
         btype ton_transfer @cancel
@@ -329,7 +322,6 @@ matcher nft_finish_auction {
 
 matcher nft_cancel_auction {
     produces nft_cancel_auction | nft_finish_auction
-    entry    @cancel
 
     xor {
         btype ton_transfer @cancel

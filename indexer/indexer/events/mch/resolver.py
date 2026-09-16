@@ -119,61 +119,31 @@ def _merged_optional(occs: list[_CaptureOccurrence]) -> bool:
 
 
 def _validate_group_anchor(
-    occs: list[_CaptureOccurrence],
-    alt_nodes: dict[int, ast_.Alternative],
-) -> tuple[ast_.Alternative | None, str]:
-    """Validate an `entry` capture that touches alternative branches.
-
-    Legal as a set-membership anchor: every occurrence is itself a branch of one
-    exclusive alternative, one per branch, all branches covered, each branch a
-    bare concrete `op`/`btype` node. Heads may mix `op` and `btype` (union
-    membership) and each branch may carry a named `where <pred>` clause.
-    Membership is tested first, then the matching branch's predicate. Returns
-    (group, "") on success or (None, reason) for the R007 message.
-    """
-    if any(o.under_recursive for o in occs):
-        return None, "is inside a recursive rule"
-    if any(o.under_maybe for o in occs):
-        return None, "is inside a `maybe`-wrapped subtree"
-    if any(o.under_peek for o in occs):
-        return None, "is inside a `peek`-wrapped subtree"
-    if any(o.under_nonexclusive_alt for o in occs):
-        return None, (
-            "sits in a non-exclusive alternative branch; an opcode-set anchor "
-            "requires an exclusive alternative (`^`, or `|` of distinct bare "
-            "concrete heads)"
+    group: ast_.Alternative,
+    opcodes: dict[str, int],
+    registries: Registries,
+) -> tuple[ast_.Node | None, str, str]:
+    """Validate an alternative used as a matcher's head."""
+    if not _alternative_is_exclusive(group, opcodes, registries):
+        return None, "", (
+            "is a non-exclusive alternative; a group head requires an "
+            "exclusive alternative (`xor`, or `or` of distinct bare concrete heads)"
         )
-    if any(len(o.branch_path) != 1 for o in occs):
-        return None, (
-            "must sit directly on the branches of a single exclusive "
-            "alternative, not nested in or outside one"
-        )
-    alt_id = occs[0].branch_path[0][0]
-    if any(o.branch_path[0][0] != alt_id for o in occs):
-        return None, (
-            "occurrences span different alternatives; an opcode-set anchor "
-            "requires a single exclusive alternative"
-        )
-    alt = alt_nodes[alt_id]
-    idxs = {o.branch_path[0][1] for o in occs}
-    if len(occs) != len(alt.branches) or idxs != set(range(len(alt.branches))):
-        return None, (
-            "must be bound on every branch of the exclusive alternative"
-        )
-    by_idx = {o.branch_path[0][1]: o for o in occs}
-    for idx, branch in enumerate(alt.branches):
-        occ = by_idx[idx]
-        if branch is not occ.node or (occ.node.relations is not None and not alt.opcode_set):
-            return None, (
-                "requires every branch of the exclusive alternative to be a "
-                "bare node carrying the capture (no chains or nesting)"
+    first = group.branches[0]
+    capture = first.capture if isinstance(first, ast_.Node) else None
+    if capture is None:
+        return None, "", "requires one shared capture on every branch"
+    for branch in group.branches:
+        if not isinstance(branch, ast_.Node) or (branch.relations is not None and not group.opcode_set):
+            return None, "", (
+                "requires every branch to be a bare node carrying the shared "
+                "capture (no chains or nesting)"
             )
-        if not isinstance(occ.node.head, (ast_.OpHead, ast_.BTypeHead)):
-            return None, (
-                "requires concrete `op`/`btype` heads on every branch of the "
-                "exclusive alternative"
-            )
-    return alt, ""
+        if not isinstance(branch.head, (ast_.OpHead, ast_.BTypeHead)):
+            return None, "", "requires concrete `op`/`btype` heads on every branch"
+        if branch.capture != capture:
+            return None, "", "requires the same capture on every branch"
+    return first, capture, ""
 
 
 @dataclass
@@ -182,9 +152,8 @@ class ResolvedMatcher:
     captures: dict[str, CaptureInfo]
     anchor_capture: str
     anchor_node: ast_.Node
-    # When `entry` names a capture bound on
-    # every branch of one exclusive alternative of bare concrete heads, this is
-    # that Alternative; `anchor_node` then holds a representative branch node.
+    # For an exclusive alternative of bare concrete heads, this is that
+    # Alternative; `anchor_node` holds a representative branch node.
     anchor_group: ast_.Alternative | None = None
     build_stmts: tuple[ast_.BuildStmt, ...] = ()
 
@@ -544,8 +513,6 @@ def _resolve_matcher(
     _check_many(m.pattern, file, rule_recursion, bag)
     occurrences: dict[str, list[_CaptureOccurrence]] = {}
     alt_ids: dict[int, int] = {}  # id(Alternative) -> stable sequential id
-    alt_nodes: dict[int, ast_.Alternative] = {}  # stable id -> Alternative node
-    relation_depth = 0
     under_many = False
 
     def visit(
@@ -557,7 +524,7 @@ def _resolve_matcher(
         alt_path: tuple[tuple[int, int, int], ...],
         under_nonexclusive_alt: bool = False,
     ) -> None:
-        nonlocal relation_depth, under_many
+        nonlocal under_many
         if isinstance(p, ast_.Node):
             head = p.head
             if isinstance(head, ast_.OpHead) and isinstance(head.ref, str):
@@ -568,12 +535,6 @@ def _resolve_matcher(
                         head.span,
                     )
             if p.capture is not None:
-                if p.capture == m.entry and relation_depth:
-                    bag.error(
-                        "R007_ENTRY_VIOLATES_8_3",
-                        f"matcher {m.name!r}: entry @{m.entry} sits inside a relation block; make that node the entry",
-                        p.span,
-                    )
                 occurrences.setdefault(p.capture, []).append(_CaptureOccurrence(
                     node=p,
                     under_maybe=under_maybe,
@@ -586,12 +547,10 @@ def _resolve_matcher(
                 ))
             if p.relations is not None:
                 r = p.relations
-                relation_depth += 1
                 for target in (r.children_all, *(r.children_first or ()), r.parent):
                     if target is not None:
                         visit(target, under_maybe, under_peek, under_recursive,
                               branch_path, alt_path, under_nonexclusive_alt)
-                relation_depth -= 1
         elif isinstance(p, ast_.Many):
             saved = under_many
             under_many = True
@@ -621,8 +580,6 @@ def _resolve_matcher(
         elif isinstance(p, ast_.Alternative):
             exclusive = _alternative_is_exclusive(p, opcodes, registries)
             alt_id = alt_ids.setdefault(id(p), len(alt_ids))
-            if exclusive:
-                alt_nodes[alt_id] = p
             for idx, b in enumerate(p.branches):
                 branch = ((alt_id, idx, len(p.branches)),)
                 visit(b, under_maybe, under_peek, under_recursive,
@@ -732,67 +689,52 @@ def _resolve_matcher(
                 source=o.node,
             )
 
+    head = m.pattern.head if isinstance(m.pattern, ast_.Sequence) else m.pattern
     anchor_group: ast_.Alternative | None = None
-    if m.entry is None:
+    if isinstance(head, ast_.Sequence):
         bag.error(
-            "R008_ENTRY_REQUIRED",
-            f"matcher {m.name!r} must declare `entry @<capture>` in v0",
-            m.span,
+            "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
+            "a grouped sequence cannot be the head of another chain; write "
+            "`op A @a -> op B -> op C` without grouping",
+            head.span,
         )
-        anchor_capture = ""
-        anchor_node: ast_.Node = m.pattern  # type: ignore[assignment]
-    else:
-        anchor_capture = m.entry
-        if m.entry not in captures:
+        raise CompileError(bag)
+    if isinstance(head, ast_.Alternative):
+        anchor_node, anchor_capture, reason = _validate_group_anchor(head, opcodes, registries)
+        if anchor_node is None:
             bag.error(
                 "R007_ENTRY_VIOLATES_8_3",
-                f"matcher {m.name!r}: entry @{m.entry} references an undefined capture",
-                m.span,
+                f"matcher {m.name!r}: head group {reason}",
+                head.span,
             )
-            anchor_node = m.pattern  # type: ignore[assignment]
-        else:
-            ci = captures[m.entry]
-            occs = occurrences.get(m.entry, [])
-            if len(occs) > 1 or any(o.branch_path or o.under_nonexclusive_alt for o in occs):
-                # Multi-position or alternative-resident entry: legal only as an
-                # Opcode-set anchor over one exclusive alternative.
-                anchor_group, reason = _validate_group_anchor(occs, alt_nodes)
-                if anchor_group is None:
-                    bag.error(
-                        "R007_ENTRY_VIOLATES_8_3",
-                        f"matcher {m.name!r}: entry @{m.entry} {reason}",
-                        m.span,
-                    )
-            else:
-                if ci.optional:
-                    bag.error(
-                        "R007_ENTRY_VIOLATES_8_3",
-                        f"matcher {m.name!r}: entry @{m.entry} is inside a `maybe`-wrapped subtree",
-                        m.span,
-                    )
-                if ci.peek:
-                    bag.error(
-                        "R007_ENTRY_VIOLATES_8_3",
-                        f"matcher {m.name!r}: entry @{m.entry} is inside a `peek`-wrapped subtree",
-                        m.span,
-                    )
-                if ci.list_binding:
-                    bag.error(
-                        "R007_ENTRY_VIOLATES_8_3",
-                        f"matcher {m.name!r}: entry @{m.entry} is inside a recursive rule",
-                        m.span,
-                    )
-                if not isinstance(ci.head, (ast_.OpHead, ast_.BTypeHead, ast_.PredHead)):
-                    bag.error(
-                        "R007_ENTRY_VIOLATES_8_3",
-                        f"matcher {m.name!r}: entry @{m.entry} must reference an "
-                        f"`op`, `btype`, or `pred` node",
-                        m.span,
-                    )
-                # A `pred`-headed anchor has no opcode/btype
-                # prefilter: the engine full-scans `test_self` (the predicate) on
-                # every candidate block.
-            anchor_node = ci.source
+            raise CompileError(bag)
+        anchor_group = head
+    elif isinstance(head, ast_.Node) and isinstance(
+        head.head, (ast_.OpHead, ast_.BTypeHead, ast_.PredHead)
+    ):
+        anchor_node = head
+        anchor_capture = head.capture or ""
+    elif isinstance(head, ast_.ChildrenBlock):
+        bag.error(
+            "C008_CHILDREN_BLOCK_BARE",
+            "children block '{...}' must follow a node in a sequence "
+            "(e.g. 'op A -> {op B; op C}'); bare children blocks are not allowed",
+            head.span,
+        )
+        raise CompileError(bag)
+    else:
+        reason = {
+            ast_.Maybe: "cannot be `maybe`-wrapped",
+            ast_.Peek: "cannot be `peek`-wrapped",
+            ast_.Many: "cannot be `many`-wrapped",
+            ast_.RuleRef: "cannot be a rule reference",
+        }.get(type(head), "must be an `op`, `btype`, `pred`, or eligible group")
+        bag.error(
+            "R007_ENTRY_VIOLATES_8_3",
+            f"matcher {m.name!r}: head {reason}",
+            head.span,
+        )
+        raise CompileError(bag)
 
     if prelude:
         m = replace(m, build_stmts=tuple(prelude.values()) + m.build_stmts)

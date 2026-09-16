@@ -34,7 +34,6 @@ opcode StonfiPaymentRequest = 0xf93bb43f
 #     data dict; `.success` drives the failed flag.
 matcher stonfi_v1_swap {
     produces jetton_swap
-    entry    @in_transfer
 
     btype jetton_transfer @in_transfer
       -> op StonfiSwap @swap

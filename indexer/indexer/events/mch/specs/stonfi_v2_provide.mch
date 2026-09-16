@@ -70,7 +70,6 @@ rule in_leg = or {
 
 matcher stonfi_v2_provide_final {
     produces dex_deposit_liquidity
-    entry    @provide
 
     op StonfiV2ProvideLiquidity @provide as StonfiV2ProvideLiquidity {
         -> {
@@ -102,7 +101,6 @@ matcher stonfi_v2_provide_final {
 
 matcher stonfi_v2_provide_partial {
     produces dex_deposit_liquidity
-    entry    @provide
 
     op StonfiV2ProvideLiquidity @provide as StonfiV2ProvideLiquidity {
         -> { op StonfiV2AddLiquidity @add }

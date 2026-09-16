@@ -26,7 +26,6 @@ opcode DedustPayout           = 0x474f86cf
 
 matcher dedust_withdraw {
     produces dex_withdraw_liquidity
-    entry    @burn
 
     op JettonBurn @burn as JettonBurn
       -> op JettonBurnNotification @notification

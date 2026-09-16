@@ -60,7 +60,6 @@ opcode CoffeeStakingClaimRewards        = 0xB30C7310
 
 matcher coffee_staking_deposit {
     produces coffee_staking_deposit
-    entry    @transfer
 
     btype jetton_transfer @transfer
       -> op CoffeeStakingDeposit @pool_call
@@ -81,7 +80,6 @@ matcher coffee_staking_deposit {
 
 matcher coffee_staking_withdraw {
     produces coffee_staking_withdraw
-    entry    @withdraw_1
 
     op CoffeeStakingPositionWithdraw @withdraw_1
       -> op CoffeeStakingPositionWithdraw @withdraw_2 as CoffeeStakingPositionWithdraw2
@@ -104,7 +102,6 @@ matcher coffee_staking_withdraw {
 
 matcher coffee_staking_claim_rewards {
     produces coffee_staking_claim_rewards
-    entry    @claim
 
     op CoffeeStakingClaimRewards @claim as CoffeeStakingClaimRewards
       -> { btype jetton_transfer @transfer

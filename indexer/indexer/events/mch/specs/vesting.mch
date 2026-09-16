@@ -19,7 +19,6 @@ opcode VestingSendMessageResponse = 0xF7733ACD
 
 matcher vesting_send_message {
     produces vesting_send_message
-    entry    @send
 
     op VestingSendMessage @send as VestingSendMessage -> op VestingSendMessageResponse @response
 
@@ -64,7 +63,6 @@ opcode VestingAddWhiteListResponse = 0xF258A69B
 
 matcher vesting_add_whitelist {
     produces vesting_add_whitelist
-    entry    @add
 
     op VestingAddWhiteList @add as VestingAddWhiteList -> op VestingAddWhiteListResponse @response
 

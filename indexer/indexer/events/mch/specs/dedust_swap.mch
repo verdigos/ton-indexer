@@ -45,7 +45,6 @@ rule peer_chain = or {
 # shrinking dedust_swap_legs to just peer_swaps + destination_asset.
 matcher dedust_swap {
     produces jetton_swap
-    entry    @ext
 
     op DedustSwapExternal @ext {
         -> {

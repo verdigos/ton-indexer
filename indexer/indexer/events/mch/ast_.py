@@ -393,7 +393,6 @@ class SwitchStmt(BuildStmt):
 class MatcherDecl:
     name: str
     produces: tuple[str, ...]
-    entry: str | None
     include_excess: bool
     include_bounces: bool
     pattern: PatternExpr

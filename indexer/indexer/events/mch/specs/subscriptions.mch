@@ -9,7 +9,6 @@ opcode WalletPluginDestruct = 0x64737472
 
 matcher subscribe {
     produces subscribe
-    entry    @resp
 
     op Response @resp {
         -> { op Payment @pay }
@@ -27,7 +26,6 @@ matcher subscribe {
 
 matcher unsubscribe {
     produces unsubscribe
-    entry    @destruct
 
     op WalletPluginDestruct @destruct -> maybe op WalletPluginDestruct @response
 
