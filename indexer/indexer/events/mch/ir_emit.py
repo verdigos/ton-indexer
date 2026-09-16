@@ -23,10 +23,12 @@ from pathlib import Path
 import yaml
 
 from indexer.events.mch import ast_
-from indexer.events.mch.btypes import produces_btype
+from indexer.events.mch.btypes import LEAF_BTYPES, produces_btype
 from indexer.events.mch.compile import compile_file
 from indexer.events.mch.compiler import CompiledMatcher, LNode
-from indexer.events.mch.diagnostics import CompileError, DiagnosticBag, R042_MANIFEST_ORDER, Span
+from indexer.events.mch.diagnostics import (
+    CompileError, DiagnosticBag, R042_MANIFEST_ORDER, R043_UNKNOWN_BTYPE, Span,
+)
 from indexer.events.mch.expr_ir import IR_VERSION, emit_expr as _emit_expr
 from indexer.events.mch.lexer import tokenize
 from indexer.events.mch.parser import parse
@@ -392,6 +394,31 @@ def _emit_paths(paths: list[Path], source_files: list[str]) -> dict:
             )
         else:
             seen[cm.name] = cm.source_span.path
+    known = LEAF_BTYPES | {produces_btype(p) for cm in compiled for p in cm.produces}
+    for cm in compiled:
+        heads = list(cm.anchor_btypes or ())
+        heads.extend(value for kind, value, _ in cm.anchor_branches or () if kind == "btype")
+        visited: set[int] = set()
+        pending = [cm.root]
+        while pending:
+            node = pending.pop()
+            if id(node) in visited:
+                continue
+            visited.add(id(node))
+            if node.kind == "block_type":
+                heads.append(node.btype)
+            pending.extend(n for n in (
+                node.child, *(node.children or ()), node.parent,
+                *(node.branches or ()), node.step, node.exit_, node.target,
+            ) if n is not None)
+        for btype in heads:
+            if btype not in known:
+                bag.error(
+                    R043_UNKNOWN_BTYPE,
+                    f"matcher '{cm.name}': btype '{btype}' is not a leaf btype "
+                    "and is not produced by any matcher",
+                    cm.source_span,
+                )
     if bag.has_errors:
         raise CompileError(bag)
     return emit_ir(compiled, source_files)

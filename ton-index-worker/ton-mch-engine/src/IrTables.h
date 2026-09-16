@@ -17,6 +17,7 @@ namespace mch {
 
 // Engine-constructed btypes are valid independently of any one IR document.
 // Code generation and IR validation share that vocabulary from this table.
+// Keep in sync with LEAF_BTYPES in indexer/indexer/events/mch/btypes.py.
 inline constexpr std::array<std::string_view, 8> kLeafBtypes{
     "call_contract", "contract_deploy", "empty",     "gasless_request",
     "jetton_transfer", "root",          "tick_tock", "ton_transfer",

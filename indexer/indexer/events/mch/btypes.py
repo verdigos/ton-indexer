@@ -28,6 +28,12 @@ producers and builder-matcher producers bypass the table.
 """
 from __future__ import annotations
 
+# Keep in sync with kLeafBtypes in ton-index-worker/ton-mch-engine/src/IrTables.h.
+LEAF_BTYPES: frozenset[str] = frozenset({
+    "call_contract", "contract_deploy", "empty", "gasless_request",
+    "jetton_transfer", "root", "tick_tock", "ton_transfer",
+})
+
 CLASS_TO_BTYPE: dict[str, str] = {
     "JettonTransferBlock": "jetton_transfer",
     "JettonBurnBlock": "jetton_burn",
