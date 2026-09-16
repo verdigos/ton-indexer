@@ -187,15 +187,8 @@ def _read_number(cur: _Cursor) -> Token:
     # Hex.
     if cur.peek() == "0" and cur.peek(1) in ("x", "X"):
         cur.advance(); cur.advance()
-        digits_start = cur.i
         while not cur.at_end() and cur.peek() in "0123456789abcdefABCDEF":
             cur.advance()
-        if cur.i == digits_start:
-            raise LexerError(
-                "L001_BAD_NUMERIC",
-                "hex literal requires at least one hex digit",
-                cur.span_from(start_i, start_line, start_col),
-            )
         text = cur.text[start_i:cur.i]
         return Token(TokenKind.HEX, text, cur.span_from(start_i, start_line, start_col))
 

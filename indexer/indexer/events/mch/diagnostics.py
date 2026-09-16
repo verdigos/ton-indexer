@@ -19,10 +19,6 @@ pattern capture or a previously declared `let` name."""
 R011_PARSE_TARGET_NOT_CAPTURE = "R011_PARSE_TARGET_NOT_CAPTURE"
 """The target of a `parse X as T` statement is not a pattern capture."""
 
-R012_UNKNOWN_MESSAGE_TYPE = "R012_UNKNOWN_MESSAGE_TYPE"
-"""A message type named in `parse … as T` is not present in the host's
-message-type registry."""
-
 R013_DUP_LET = "R013_DUP_LET"
 """A `let` name collides with a pattern capture or an earlier `let`."""
 
@@ -31,9 +27,6 @@ R014_DUP_OUT_FIELD = "R014_DUP_OUT_FIELD"
 
 R016_BUILD_NO_OUT = "R016_BUILD_NO_OUT"
 """A matcher has no `out` block or `produces switch`, so there is nothing to produce."""
-
-R017_MULTIPLE_OUT = "R017_MULTIPLE_OUT"
-"""More than one `out` block in a matcher body; exactly one is allowed."""
 
 R022_UNNORMALIZED_PRODUCES_CLASS = "R022_UNNORMALIZED_PRODUCES_CLASS"
 """A PascalCase (class-name) `produces` token has no class->btype entry in
@@ -56,21 +49,12 @@ comprehension (either the outer `xs` or `body`). Nested comprehensions are
 forbidden: exactly one bound element var per comprehension, no
 comprehension in the iterated list or the body."""
 
-# A user declaration repeats a built-in opcode with its built-in value.
-R025_BUILTIN_OPCODE_REDECLARED = "R025_BUILTIN_OPCODE_REDECLARED"
-
 # A user declaration gives a built-in opcode a different value.
 R026_BUILTIN_OPCODE_MISMATCH = "R026_BUILTIN_OPCODE_MISMATCH"
-
-# Two opcode-set members resolve to the same unsigned 32-bit value.
-R027_DUPLICATE_OPCODE_SET_MEMBER = "R027_DUPLICATE_OPCODE_SET_MEMBER"
 
 # A capture has conflicting parser lists. Rule-body annotations contribute to
 # every matcher referencing the rule; each matcher has one list per capture.
 R028_PARSE_ANNOTATION_CONFLICT = "R028_PARSE_ANNOTATION_CONFLICT"
-
-# A capture has both a parse annotation and a written parse statement.
-R029_PARSE_ANNOTATION_AND_STATEMENT = "R029_PARSE_ANNOTATION_AND_STATEMENT"
 
 # Only op nodes support parse annotations; composed bodies do not round-trip.
 R030_PARSE_ANNOTATION_ON_COMPOSED = "R030_PARSE_ANNOTATION_ON_COMPOSED"
@@ -78,56 +62,19 @@ R030_PARSE_ANNOTATION_ON_COMPOSED = "R030_PARSE_ANNOTATION_ON_COMPOSED"
 # Function bodies reference only parameters in value positions. Substitution is
 # call-by-name: bind expensive or faulting arguments with `let` before calling.
 R031_FN_BODY_FREE_NAME = "R031_FN_BODY_FREE_NAME"
-R032_FN_BODY_LOOKUP = "R032_FN_BODY_LOOKUP"
 R033_FN_BODY_COMPREHENSION = "R033_FN_BODY_COMPREHENSION"
-R034_DUP_FN = "R034_DUP_FN"
 R035_FN_NAME_COLLISION = "R035_FN_NAME_COLLISION"
 R036_FN_ARITY = "R036_FN_ARITY"
-R037_FN_CYCLE = "R037_FN_CYCLE"
-
-R038_IMPORT_NOT_FOUND = "R038_IMPORT_NOT_FOUND"
-R039_IMPORT_CYCLE = "R039_IMPORT_CYCLE"
-R040_DUPLICATE_IMPORT = "R040_DUPLICATE_IMPORT"
 R041_IMPORT_NAME_COLLISION = "R041_IMPORT_NAME_COLLISION"
 R042_MANIFEST_ORDER = "R042_MANIFEST_ORDER"
-
-P011_DUPLICATE_DIRECTIVE = "P011_DUPLICATE_DIRECTIVE"
-"""A matcher declares the same at-most-once directive more than once
-(currently `shape`)."""
-
-# Membership requires a name or a field path on the left.
-P013_MEMBERSHIP_LEFT_OPERAND = "P013_MEMBERSHIP_LEFT_OPERAND"
-
-# Membership lists contain only literal scalars.
-P014_MEMBERSHIP_MEMBER_NOT_LITERAL = "P014_MEMBERSHIP_MEMBER_NOT_LITERAL"
-
-# Strict parsing is only allowed in expression position.
-P015_STRICT_PARSE_STATEMENT = "P015_STRICT_PARSE_STATEMENT"
-
-# Opcode sets require at least one member and cannot carry a predicate.
-P016_EMPTY_OPCODE_SET = "P016_EMPTY_OPCODE_SET"
-P017_WHERE_ON_OPCODE_SET = "P017_WHERE_ON_OPCODE_SET"
 
 P018_DUPLICATE_RELATION_CLAUSE = "P018_DUPLICATE_RELATION_CLAUSE"
 P019_ARROW_AFTER_RELATION_BLOCK = "P019_ARROW_AFTER_RELATION_BLOCK"
 
-# A node needs a capture before its parse annotation.
-P020_PARSE_ANNOTATION_NEEDS_CAPTURE = "P020_PARSE_ANNOTATION_NEEDS_CAPTURE"
-
 # An or/xor block needs at least two arms.
 P021_CHOICE_NEEDS_TWO_ARMS = "P021_CHOICE_NEEDS_TWO_ARMS"
 
-P022_ALTERNATIVE_OPERATOR_REMOVED = "P022_ALTERNATIVE_OPERATOR_REMOVED"
-P023_BARE_PARSE_EXPRESSION = "P023_BARE_PARSE_EXPRESSION"
-P024_MODIFIER_ON_CHILDREN_SET = "P024_MODIFIER_ON_CHILDREN_SET"
 P025_CALLEE_NOT_NAME = "P025_CALLEE_NOT_NAME"
-P026_IMPORT_AFTER_DECLARATION = "P026_IMPORT_AFTER_DECLARATION"
-P027_EXPORT_NOT_ALLOWED = "P027_EXPORT_NOT_ALLOWED"
-P028_MANY_CAP = "P028_MANY_CAP"
-
-C011_UNKNOWN_SHAPER = "C011_UNKNOWN_SHAPER"
-"""The `shape` directive names a shaper that is not present in the host's
-shaper registry."""
 
 C012_CYCLIC_RULE_SHAPE = "C012_CYCLIC_RULE_SHAPE"
 """A `rule NAME cyclic = …` body violates the cyclic-descent shape rules:

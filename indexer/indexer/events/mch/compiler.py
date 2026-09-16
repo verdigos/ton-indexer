@@ -143,12 +143,6 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
             f"matcher {decl.name!r}: produces type {decl.produces_primary!r} is not registered",
             decl.span,
         )
-    if decl.shape is not None and decl.shape not in ctx.registries.shapers:
-        ctx.bag.error(
-            "C011_UNKNOWN_SHAPER",
-            f"matcher {decl.name!r}: shaper {decl.shape!r} is not registered",
-            decl.span,
-        )
 
     # Lower the pattern relative to the anchor atom. For set anchors, the whole
     # exclusive alternative group is the anchor atom,
@@ -778,14 +772,6 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
         if p.name in ctx.lowering_recursive:
             return LNode(kind="any")
         rec_class = ctx.resolved.rule_recursion.get(p.name)
-        if rec_class is RecursionClass.INDIRECT_RECURSIVE:
-            ctx.bag.error(
-                "C005_INDIRECT_RECURSION_UNSUPPORTED",
-                f"rule {p.name!r}: indirect (mutual) recursion is not supported in v0; "
-                f"flatten the rule cycle or use a single self-referential rule",
-                p.span,
-            )
-            raise CompileError(ctx.bag)
         if rec_class is RecursionClass.DIRECT_RECURSIVE:
             if isinstance(target.pattern, ast_.Alternative) and target.pattern.exclusive:
                 ctx.bag.error(
@@ -843,13 +829,6 @@ def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
                 span,
             )
             return False
-        for name in e.msg_types:
-            if name not in ctx.registries.message_types:
-                ctx.bag.error(
-                    "R012_UNKNOWN_MESSAGE_TYPE",
-                    f"message type {name!r} is not registered in the host",
-                    e.span,
-                )
         return _check_where_expr_sync(e.target, span, ctx)
     if isinstance(e, ast_.Call):
         callee = e.callee

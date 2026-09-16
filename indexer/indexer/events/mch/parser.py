@@ -36,7 +36,7 @@ _BUILD_STMT_HEADS: frozenset[TokenKind] = frozenset({
     TokenKind.KW_PARSE, TokenKind.KW_LET, TokenKind.KW_REJECT,
     TokenKind.KW_FAILED, TokenKind.KW_BROKEN, TokenKind.KW_OUT,
     TokenKind.KW_PRODUCES,
-    TokenKind.KW_REQUIRE, TokenKind.KW_PARSE_NULLABLE, TokenKind.KW_PARSE_STRICT,
+    TokenKind.KW_REQUIRE, TokenKind.KW_PARSE_NULLABLE,
 })
 
 
@@ -122,10 +122,6 @@ def parse(tokens: Iterable[Token], path: str) -> ast_.File:
     while not s.at(TokenKind.EOF):
         t = s.peek()
         if t.kind is TokenKind.IDENT and t.text == "import":
-            if opcodes or predicates or rules or matchers or fns:
-                bag.error("P026_IMPORT_AFTER_DECLARATION",
-                          "imports must precede declarations", t.span)
-                raise CompileError(bag)
             s.i += 1
             path_tok = s.eat(TokenKind.STRING)
             imports.append(ast_.ImportDecl(_decode_string(path_tok.text),
@@ -136,11 +132,6 @@ def parse(tokens: Iterable[Token], path: str) -> ast_.File:
         if exported:
             s.i += 1
             t = s.peek()
-            if not (t.kind in (TokenKind.KW_OPCODE, TokenKind.KW_PREDICATE, TokenKind.KW_RULE)
-                    or (t.kind is TokenKind.IDENT and t.text == "fn")):
-                bag.error("P027_EXPORT_NOT_ALLOWED",
-                          "export requires an opcode, predicate, rule, or fn declaration", t.span)
-                raise CompileError(bag)
         if t.kind is TokenKind.KW_OPCODE:
             opcodes.append(replace(_parse_opcode_decl(s), exported=exported))
         elif t.kind is TokenKind.KW_PREDICATE:
@@ -244,19 +235,11 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
     shape:    str | None = None
     include_excess  = True
     include_bounces = True
-    seen_include_directives: set[str] = set()
 
     while not s.at(TokenKind.EOF):
         s.skip_newlines()
         t = s.peek()
         if t.kind is TokenKind.KW_PRODUCES:
-            if produces is not None:
-                s.bag.error(
-                    "P011_DUPLICATE_DIRECTIVE",
-                    f"matcher {name_tok.text!r} declares more than one `produces` directive",
-                    t.span,
-                )
-                raise CompileError(s.bag)
             s.i += 1
             names = [s.eat(TokenKind.IDENT).text]
             while s.at(TokenKind.PIPE):
@@ -264,46 +247,16 @@ def _parse_matcher_decl(s: _ParserState) -> ast_.MatcherDecl:
                 names.append(s.eat(TokenKind.IDENT).text)
             produces = tuple(names)
         elif t.kind is TokenKind.KW_ENTRY:
-            if entry is not None:
-                s.bag.error(
-                    "P011_DUPLICATE_DIRECTIVE",
-                    f"matcher {name_tok.text!r} declares more than one `entry` directive",
-                    t.span,
-                )
-                raise CompileError(s.bag)
             s.i += 1
             s.eat(TokenKind.AT)
             entry = s.eat_name().text
         elif t.kind is TokenKind.KW_SHAPE:
-            if shape is not None:
-                s.bag.error(
-                    "P011_DUPLICATE_DIRECTIVE",
-                    f"matcher {name_tok.text!r} declares more than one `shape` directive",
-                    t.span,
-                )
-                raise CompileError(s.bag)
             s.i += 1
             shape = s.eat(TokenKind.IDENT).text
         elif t.kind is TokenKind.KW_INCLUDE_EXCESS:
-            if "include_excess" in seen_include_directives:
-                s.bag.error(
-                    "P011_DUPLICATE_DIRECTIVE",
-                    f"matcher {name_tok.text!r} declares more than one `include_excess` directive",
-                    t.span,
-                )
-                raise CompileError(s.bag)
-            seen_include_directives.add("include_excess")
             s.i += 1
             include_excess = _parse_bool_literal(s)
         elif t.kind is TokenKind.KW_INCLUDE_BOUNCES:
-            if "include_bounces" in seen_include_directives:
-                s.bag.error(
-                    "P011_DUPLICATE_DIRECTIVE",
-                    f"matcher {name_tok.text!r} declares more than one `include_bounces` directive",
-                    t.span,
-                )
-                raise CompileError(s.bag)
-            seen_include_directives.add("include_bounces")
             s.i += 1
             include_bounces = _parse_bool_literal(s)
         else:
@@ -353,16 +306,6 @@ def _parse_pattern_expr(s: _ParserState, entry_position: bool = False,
     """pattern_expr := sequence"""
     s.skip_newlines()
     sequence = _parse_sequence(s, entry_position=entry_position, relation_item=relation_item)
-    save_i = s.i
-    s.skip_newlines()
-    if s.at(TokenKind.PIPE) or s.at(TokenKind.CARET):
-        s.bag.error(
-            "P022_ALTERNATIVE_OPERATOR_REMOVED",
-            "write `or { … }` / `xor { … }`",
-            s.peek().span,
-        )
-        raise CompileError(s.bag)
-    s.i = save_i
     return sequence
 
 
@@ -469,16 +412,10 @@ def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
         cap = None
         if s.try_eat(TokenKind.LBRACKET):
             s.skip_newlines()
-            n = s.peek()
-            if n.kind is not TokenKind.DEC or not 1 <= int(n.text) <= 2147483647:
-                s.bag.error("P028_MANY_CAP", "many cap must be a DEC in [1, 2147483647]", n.span)
-                raise CompileError(s.bag)
+            n = s.eat(TokenKind.DEC)
             cap = int(n.text)
-            s.i += 1
             s.skip_newlines()
-            if not s.try_eat(TokenKind.RBRACKET):
-                s.bag.error("P028_MANY_CAP", "many cap must be a single DEC in brackets", s.peek().span)
-                raise CompileError(s.bag)
+            s.eat(TokenKind.RBRACKET)
             s.skip_newlines()
         inner = _parse_atom(s)
         return ast_.Many(inner, cap, _join(t.span, inner.span))
@@ -487,13 +424,6 @@ def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
         s.i += 1
         s.skip_newlines()
         inner = _parse_atom(s)
-        if isinstance(inner, ast_.ChildrenBlock):
-            s.bag.error(
-                "P024_MODIFIER_ON_CHILDREN_SET",
-                "put `maybe`/`peek` on each item",
-                _join(t.span, inner.span),
-            )
-            raise CompileError(s.bag)
         cls = ast_.Maybe if t.kind is TokenKind.KW_MAYBE else ast_.Peek
         return cls(inner=inner, span=_join(t.span, inner.span))
 
@@ -548,10 +478,6 @@ def _parse_node(s: _ParserState) -> ast_.Node:
     if t.kind is TokenKind.KW_OP:
         s.i += 1
         if s.try_eat(TokenKind.LBRACKET):
-            if s.at(TokenKind.RBRACKET):
-                s.bag.error("P016_EMPTY_OPCODE_SET", "opcode set must contain at least one member",
-                            _join(t.span, s.peek().span))
-                raise CompileError(s.bag)
             while True:
                 members.append(_parse_op_head(s, s.peek().span))
                 if not s.try_eat(TokenKind.COMMA):
@@ -586,11 +512,7 @@ def _parse_node(s: _ParserState) -> ast_.Node:
 
     parse_types: tuple[str, ...] | None = None
     if s.at(TokenKind.KW_AS):
-        start = s.eat(TokenKind.KW_AS).span
-        if capture is None:
-            s.bag.error("P020_PARSE_ANNOTATION_NEEDS_CAPTURE",
-                        "parse annotation requires a capture", start)
-            raise CompileError(s.bag)
+        s.eat(TokenKind.KW_AS)
         msg = s.eat(TokenKind.IDENT)
         types = [msg.text]
         while s.at(TokenKind.PIPE) and s.peek(1).kind is TokenKind.IDENT:
@@ -603,10 +525,6 @@ def _parse_node(s: _ParserState) -> ast_.Node:
     where_predicate: str | None = None
     where_expr: ast_.Expr | None = None
     if s.at(TokenKind.KW_WHERE):
-        if members:
-            s.bag.error("P017_WHERE_ON_OPCODE_SET",
-                        "put the predicate on a branch of an explicit alternative", s.peek().span)
-            raise CompileError(s.bag)
         s.i += 1
         if s.at(TokenKind.LPAREN):
             s.i += 1
@@ -678,9 +596,6 @@ def _parse_relations(s: _ParserState) -> ast_.Relations:
 
 def _parse_children_block(s: _ParserState) -> ast_.ChildrenBlock:
     block = _parse_items_block(s)
-    if not block.items:
-        s.bag.error("P002_EMPTY_CHILDREN_ITEM", "children block must contain at least one item", block.span)
-        raise CompileError(s.bag)
     return block
 
 
@@ -692,9 +607,6 @@ def _parse_items_block(s: _ParserState) -> ast_.ChildrenBlock:
             s.i += 1
         if s.at(TokenKind.RBRACE):
             break
-        if s.at(TokenKind.EOF):
-            s.bag.error("P001_UNEXPECTED_TOKEN", "unterminated children block", start)
-            raise CompileError(s.bag)
         item = _parse_pattern_expr(s)
         items.append(item)
     end = s.eat(TokenKind.RBRACE).span
@@ -715,13 +627,6 @@ def _parse_build_stmts(s: _ParserState) -> tuple[ast_.BuildStmt, ...]:
             break
         if t.kind in (TokenKind.KW_PARSE, TokenKind.KW_PARSE_NULLABLE):
             stmts.append(_parse_parse_stmt(s))
-        elif t.kind is TokenKind.KW_PARSE_STRICT:
-            s.bag.error(
-                "P015_STRICT_PARSE_STATEMENT",
-                "strict parse is an expression; use `let v = parse! ...`",
-                t.span,
-            )
-            raise CompileError(s.bag)
         elif t.kind in (TokenKind.KW_LET, TokenKind.KW_REQUIRE):
             stmt = _parse_let_stmt(s)
             stmts.append(stmt)
@@ -786,9 +691,6 @@ def _parse_out_stmt(s: _ParserState) -> ast_.OutStmt:
             s.i += 1
         if s.at(TokenKind.RBRACE):
             break
-        if s.at(TokenKind.EOF):
-            s.bag.error("P001_UNEXPECTED_TOKEN", "unterminated out block", start)
-            raise CompileError(s.bag)
         fname = s.eat_field_name()
         optional = False
         if s.at(TokenKind.QUESTION):
@@ -802,9 +704,6 @@ def _parse_out_stmt(s: _ParserState) -> ast_.OutStmt:
             span=_join(fname.span, value.span),
         ))
     end = s.eat(TokenKind.RBRACE).span
-    if not fields:
-        s.bag.error("P002_EMPTY_CHILDREN_ITEM", "out block must contain at least one field", _join(start, end))
-        raise CompileError(s.bag)
     return ast_.OutStmt(fields=tuple(fields), span=_join(start, end))
 
 
@@ -819,9 +718,6 @@ def _parse_switch_stmt(s: _ParserState) -> ast_.SwitchStmt:
             s.i += 1
         if s.at(TokenKind.RBRACE):
             break
-        if s.at(TokenKind.EOF):
-            s.bag.error("P001_UNEXPECTED_TOKEN", "unterminated produces switch", start)
-            raise CompileError(s.bag)
         b_start = s.peek().span
         if s.at(TokenKind.KW_WHEN):
             s.i += 1
@@ -842,9 +738,6 @@ def _parse_switch_stmt(s: _ParserState) -> ast_.SwitchStmt:
             span=_join(b_start, out.span),
         ))
     end = s.eat(TokenKind.RBRACE).span
-    if not branches:
-        s.bag.error("P002_EMPTY_CHILDREN_ITEM", "produces switch must have at least one branch", _join(start, end))
-        raise CompileError(s.bag)
     return ast_.SwitchStmt(branches=tuple(branches), span=_join(start, end))
 
 
@@ -907,16 +800,6 @@ def _parse_cmp(s: _ParserState) -> ast_.Expr:
     negated = (s.at(TokenKind.KW_NOT)
                and s.peek(1).kind is TokenKind.IDENT and s.peek(1).text == "in")
     if negated or (s.peek().kind is TokenKind.IDENT and s.peek().text == "in"):
-        root = left
-        while isinstance(root, ast_.FieldAccess):
-            root = root.target
-        if not isinstance(root, (ast_.NameRef, ast_.FieldRef, ast_.ParseExpr)):
-            s.bag.error(
-                "P013_MEMBERSHIP_LEFT_OPERAND",
-                "membership left operand must be a name or field path",
-                left.span,
-            )
-            raise CompileError(s.bag)
         s.i += 2 if negated else 1
         members = _parse_list_lit(s)
         span = _join(left.span, members.span)
@@ -925,13 +808,6 @@ def _parse_cmp(s: _ParserState) -> ast_.Expr:
             if (isinstance(member, ast_.UnaryOp) and member.op == "-"
                     and isinstance(member.operand, ast_.IntLit)):
                 member = ast_.IntLit(value=-member.operand.value, span=member.span)
-            if not isinstance(member, (ast_.IntLit, ast_.StrLit, ast_.BoolLit, ast_.NullLit)):
-                s.bag.error(
-                    "P014_MEMBERSHIP_MEMBER_NOT_LITERAL",
-                    "membership members must be literal scalars",
-                    member.span,
-                )
-                raise CompileError(s.bag)
             comparison = ast_.BinaryOp(
                 op="!=" if negated else "==", left=left, right=member, span=span,
             )
@@ -1100,13 +976,6 @@ def _parse_primary(s: _ParserState) -> ast_.Expr:
     if _at_comprehension(s):
         return _parse_comprehension(s)
     t = s.peek()
-    if t.kind is TokenKind.KW_PARSE:
-        s.bag.error(
-            "P023_BARE_PARSE_EXPRESSION",
-            "write `parse! …` (faults) or `parse? …` (null)",
-            t.span,
-        )
-        raise CompileError(s.bag)
     if t.kind in (TokenKind.KW_PARSE_NULLABLE, TokenKind.KW_PARSE_STRICT):
         return _parse_parse_expr(s)
     if t.kind is TokenKind.HEX:
@@ -1189,9 +1058,6 @@ def _parse_record_lit(s: _ParserState) -> ast_.RecordLit:
             s.i += 1
         if s.at(TokenKind.RBRACE):
             break
-        if s.at(TokenKind.EOF):
-            s.bag.error("P001_UNEXPECTED_TOKEN", "unterminated record literal", start)
-            raise CompileError(s.bag)
         fname = s.eat_field_name()
         s.eat(TokenKind.COLON)
         s.skip_newlines()

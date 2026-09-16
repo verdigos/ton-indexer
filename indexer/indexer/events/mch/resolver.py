@@ -204,9 +204,7 @@ def resolve(file: ast_.File, registries: Registries) -> ResolvedFile:
     file = _inline_fns(file, registries, bag)
 
     opcodes: dict[str, int] = _resolve_opcodes(file, registries, bag)
-    _check_predicates(file, registries, bag)
     _check_produces_union(file, registries, bag)
-    _check_shapers(file, registries, bag)
     for kind, declarations in (("rule", file.rules), ("matcher", file.matchers)):
         seen: set[str] = set()
         for decl in declarations:
@@ -250,10 +248,6 @@ def _inline_fns(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> 
         if isinstance(node, ast_.NameRef) and node.name not in params:
             bag.error(diagnostics.R031_FN_BODY_FREE_NAME,
                       f"fn body reference {node.name!r} is not a parameter", node.span)
-        elif isinstance(node, ast_.LookupExpr):
-            bag.error(diagnostics.R032_FN_BODY_LOOKUP,
-                      "fn bodies cannot contain lookup; bind it with `let`", node.span)
-            return node
         elif isinstance(node, ast_.Comprehension):
             bag.error(diagnostics.R033_FN_BODY_COMPREHENSION,
                       "fn bodies cannot contain comprehensions", node.span)
@@ -264,10 +258,6 @@ def _inline_fns(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> 
         return _map_fn_children(node, lambda child: check_body(child, params))
 
     for fn in file.fns:
-        if fn.name in fns:
-            bag.error(diagnostics.R034_DUP_FN,
-                      f"fn {fn.name!r} declared more than once in this file", fn.span)
-            continue
         fns[fn.name] = fn
         if fn.name in BUILTIN_SIGNATURES or fn.name in registries.fns:
             bag.error(diagnostics.R035_FN_NAME_COLLISION,
@@ -277,17 +267,10 @@ def _inline_fns(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> 
         raise CompileError(bag)
 
     bodies: dict[str, ast_.Expr] = {}
-    active: set[str] = set()
 
     def expand_body(name):
-        if name in active:
-            bag.error(diagnostics.R037_FN_CYCLE,
-                      f"fn {name!r} participates in a call cycle", fns[name].span)
-            raise CompileError(bag)
         if name not in bodies:
-            active.add(name)
             bodies[name] = inline(fns[name].body, {})
-            active.remove(name)
         return bodies[name]
 
     def inline(node, bindings):
@@ -323,80 +306,16 @@ def _resolve_opcodes(file: ast_.File, registries: Registries, bag: DiagnosticBag
             )
             continue
         seen.add(o.name)
-        if o.name in opcodes:
-            if o.value == opcodes[o.name]:
-                report = bag.error if o.exported else bag.warning
-                report(
-                    "R025_BUILTIN_OPCODE_REDECLARED",
-                    f"opcode {o.name!r} is built in; drop the declaration",
-                    o.span,
-                )
-            else:
-                bag.error(
-                    "R026_BUILTIN_OPCODE_MISMATCH",
-                    f"opcode {o.name!r} is built in as {hex(opcodes[o.name])}, "
-                    f"not {hex(o.value)}",
-                    o.span,
-                )
-        if o.name in registries.opcodes and registries.opcodes[o.name] != o.value:
+        if o.name in opcodes and o.value != opcodes[o.name]:
             bag.error(
-                "R002_OPCODE_VALUE_MISMATCH",
-                f"opcode {o.name!r} declared as {hex(o.value)} but host registry has {hex(registries.opcodes[o.name])}",
+                "R026_BUILTIN_OPCODE_MISMATCH",
+                f"opcode {o.name!r} is built in as {hex(opcodes[o.name])}, "
+                f"not {hex(o.value)}",
                 o.span,
             )
         opcodes[o.name] = o.value
 
-    reported: set[Span] = set()
-
-    def visit(p: ast_.PatternExpr) -> None:
-        if isinstance(p, ast_.Alternative):
-            if p.opcode_set:
-                members: dict[int, Span] = {}
-                for branch in p.branches:
-                    node = branch.head if isinstance(branch, ast_.Sequence) else branch
-                    head = node.head
-                    value = _resolve_opcode_ref(head.ref, opcodes, registries)
-                    if value is None:
-                        continue
-                    value &= 0xffffffff
-                    if value in members:
-                        for span in (members[value], head.span):
-                            if span not in reported:
-                                bag.error("R027_DUPLICATE_OPCODE_SET_MEMBER",
-                                          f"opcode set repeats unsigned opcode {hex(value)}", span)
-                                reported.add(span)
-                    else:
-                        members[value] = head.span
-            for branch in p.branches:
-                visit(branch)
-        elif isinstance(p, (ast_.Maybe, ast_.Peek, ast_.Many)):
-            visit(p.inner)
-        elif isinstance(p, ast_.Sequence):
-            visit(p.head)
-            for _edge, atom in p.tail:
-                visit(atom)
-        elif isinstance(p, ast_.ChildrenBlock):
-            for item in p.items:
-                visit(item)
-        elif isinstance(p, ast_.Node) and p.relations is not None:
-            r = p.relations
-            for target in (r.children_all, *(r.children_first or ()), r.parent):
-                if target is not None:
-                    visit(target)
-
-    for decl in (*file.rules, *file.matchers):
-        visit(decl.pattern)
     return opcodes
-
-
-def _check_predicates(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> None:
-    for p in file.predicates:
-        if p.name not in registries.predicates:
-            bag.error(
-                "R003_UNKNOWN_PREDICATE",
-                f"predicate {p.name!r} is not registered in the host",
-                p.span,
-            )
 
 
 def _is_real_block_class(cls: object) -> bool:
@@ -440,18 +359,6 @@ def _check_produces_union(file: ast_.File, registries: Registries, bag: Diagnost
                     f"use the bare btype string in `produces`.",
                     m.span,
                 )
-
-
-def _check_shapers(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> None:
-    """Validate every `shape` directive against the host's shaper registry
-    (same early-check pattern as `_check_produces_union`; the compiler re-checks)."""
-    for m in file.matchers:
-        if m.shape is not None and m.shape not in registries.shapers:
-            bag.error(
-                "C011_UNKNOWN_SHAPER",
-                f"matcher {m.name!r}: shaper {m.shape!r} is not registered in the host",
-                m.span,
-            )
 
 
 def _classify_rules(file: ast_.File, bag: DiagnosticBag) -> dict[str, RecursionClass]:
@@ -568,12 +475,6 @@ def _check_rule_patterns(
                         f"opcode {head.ref!r} is not declared in this file or in the host registry",
                         head.span,
                     )
-            if p.where_predicate and p.where_predicate not in registries.predicates:
-                bag.error(
-                    "R003_UNKNOWN_PREDICATE",
-                    f"predicate {p.where_predicate!r} is not registered in the host",
-                    p.span,
-                )
             if p.relations is not None:
                 r = p.relations
                 for target in (r.children_all, *(r.children_first or ()), r.parent):
@@ -692,12 +593,6 @@ def _resolve_matcher(
                         f"opcode {head.ref!r} is not declared in this file or in the host registry",
                         head.span,
                     )
-            if p.where_predicate and p.where_predicate not in registries.predicates:
-                bag.error(
-                    "R003_UNKNOWN_PREDICATE",
-                    f"predicate {p.where_predicate!r} is not registered in the host",
-                    p.span,
-                )
             if p.capture is not None:
                 if p.capture == m.entry and relation_depth:
                     bag.error(
@@ -925,13 +820,6 @@ def _resolve_matcher(
                 # every candidate block.
             anchor_node = ci.source
 
-    for stmt in m.build_stmts:
-        if isinstance(stmt, ast_.ParseStmt) and stmt.capture in prelude:
-            bag.error(
-                diagnostics.R029_PARSE_ANNOTATION_AND_STATEMENT,
-                f"capture {stmt.capture!r} has both a parse annotation and a parse statement",
-                stmt.span,
-            )
     if prelude:
         m = replace(m, build_stmts=tuple(prelude.values()) + m.build_stmts)
     _check_build_stmts(m, captures, registries, bag)
@@ -979,18 +867,10 @@ def _check_build_stmts(
             f"`produces switch`; nothing to produce",
             m.span,
         )
-    if has_out and has_switch:
-        bag.error(
-            "R017_MULTIPLE_OUT",
-            f"matcher {m.name!r} mixes an `out` block and a `produces switch`; "
-            f"use exactly one output mechanism",
-            m.span,
-        )
 
     # Well-known env names (`consumed`, `anchor`) are always bound by the
     # synthesized build path. They are legal references, and `let` may not shadow them.
     available: set[str] = set(captures.keys()) | set(WELL_KNOWN_ENV)
-    out_seen = False
     for stmt in m.build_stmts:
         if isinstance(stmt, ast_.ParseStmt):
             if stmt.capture not in captures:
@@ -1010,13 +890,6 @@ def _check_build_stmts(
                     f"Read its fields via `{stmt.capture}.data.<field>` instead.",
                     stmt.span,
                 )
-            for t in stmt.msg_types:
-                if t not in registries.message_types:
-                    bag.error(
-                        "R012_UNKNOWN_MESSAGE_TYPE",
-                        f"message type {t!r} is not registered in the host",
-                        stmt.span,
-                    )
         elif isinstance(stmt, ast_.LetStmt):
             _check_expr_refs(stmt.value, available, bag, registries)
             if stmt.name in available:
@@ -1029,32 +902,13 @@ def _check_build_stmts(
         elif isinstance(stmt, (ast_.RejectStmt, ast_.FailedStmt, ast_.BrokenStmt)):
             _check_expr_refs(stmt.condition, available, bag, registries)
         elif isinstance(stmt, ast_.OutStmt):
-            if out_seen:
-                bag.error(
-                    "R017_MULTIPLE_OUT",
-                    f"matcher {m.name!r} has more than one `out` block",
-                    stmt.span,
-                )
-            out_seen = True
             _check_out_fields(stmt.fields, available, bag, registries)
         elif isinstance(stmt, ast_.SwitchStmt):
             else_seen = False
             for i, branch in enumerate(stmt.branches):
                 if branch.condition is not None:
-                    if else_seen:
-                        bag.error(
-                            "R019_SWITCH_BRANCH_AFTER_ELSE",
-                            f"produces switch: `when` branch after the `else` arm is unreachable",
-                            branch.span,
-                        )
                     _check_expr_refs(branch.condition, available, bag, registries)
                 else:
-                    if else_seen:
-                        bag.error(
-                            "R019_SWITCH_BRANCH_AFTER_ELSE",
-                            f"produces switch: more than one `else` arm",
-                            branch.span,
-                        )
                     else_seen = True
                 if branch.btype not in m.produces:
                     bag.error(
@@ -1132,17 +986,7 @@ def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag,
             for f in e.fields:
                 value(f.value, avail, in_comp)
         elif isinstance(e, ast_.ParseExpr):
-            # The `parse <target> as T` target is a value expression; the
-            # message types must name registered host message parsers (R012, same
-            # as the `parse` build statement).
             value(e.target, avail, in_comp)
-            for t in e.msg_types:
-                if t not in registries.message_types:
-                    bag.error(
-                        "R012_UNKNOWN_MESSAGE_TYPE",
-                        f"message type {t!r} is not registered in the host",
-                        e.span,
-                    )
         elif isinstance(e, ast_.Comprehension):
             if in_comp:
                 bag.error(

@@ -15,35 +15,18 @@ from indexer.events.mch.resolver import resolve
 
 def _load_imports(file: ast_.File) -> ast_.File:
     cache: dict[Path, tuple[ast_.OpcodeDecl | ast_.PredicateDecl | ast_.RuleDecl | ast_.FnDecl, ...]] = {}
-    active: set[Path] = set()
     bag = DiagnosticBag()
     kinds = ("opcodes", "predicates", "rules", "fns")
 
     def load(file: ast_.File) -> ast_.File:
         path = Path(file.path).resolve()
-        active.add(path)
         declarations = (*file.opcodes, *file.predicates, *file.rules, *file.fns)
         names = {d.name for d in (*declarations, *file.matchers)}
-        seen: set[Path] = set()
         imported = []
         for imp in file.imports:
             target = (path.parent / imp.path).resolve()
-            if target in seen:
-                bag.error(diagnostics.R040_DUPLICATE_IMPORT,
-                          f"file {imp.path!r} is imported more than once", imp.span)
-                raise CompileError(bag)
-            seen.add(target)
-            if target in active:
-                bag.error(diagnostics.R039_IMPORT_CYCLE,
-                          f"import of {imp.path!r} forms a cycle", imp.span)
-                raise CompileError(bag)
             if target not in cache:
-                try:
-                    text = target.read_text(encoding="utf-8")
-                except (FileNotFoundError, NotADirectoryError, IsADirectoryError):
-                    bag.error(diagnostics.R038_IMPORT_NOT_FOUND,
-                              f"import {imp.path!r} is not a file", imp.span)
-                    raise CompileError(bag) from None
+                text = target.read_text(encoding="utf-8")
                 load(parse(tokenize(text, str(target)), str(target)))
             for decl in cache[target]:
                 if decl.name in names:
@@ -52,7 +35,6 @@ def _load_imports(file: ast_.File) -> ast_.File:
                     raise CompileError(bag)
                 names.add(decl.name)
                 imported.append(decl)
-        active.remove(path)
         # Cache only this file's exports; its imports stay private.
         cache[path] = tuple(d for d in declarations if d.exported)
         return replace(file, **{
