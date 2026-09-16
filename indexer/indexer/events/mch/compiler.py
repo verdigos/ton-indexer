@@ -13,6 +13,7 @@ from indexer.events.mch.resolver import (
     RecursionClass,
     ResolvedFile,
     ResolvedMatcher,
+    _resolve_opcode_ref,
 )
 
 
@@ -168,7 +169,7 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         any_where = any(w is not None for _k, _v, w in branch_descs)
         root = LNode(kind="any", child=child_m, parent=parent_m)
     elif isinstance(head, ast_.OpHead):
-        opcode = head.ref if isinstance(head.ref, int) else ctx.resolved.opcodes.get(head.ref) or ctx.registries.opcodes.get(head.ref)
+        opcode = _resolve_opcode_ref(head.ref, ctx.resolved.opcodes, ctx.registries)
         root = LNode(
             kind="contract",
             opcode=opcode,
@@ -496,7 +497,7 @@ def _lower_chain_with_children_attach(
     ChildrenBlock atoms attach their items to the immediately-preceding node's
     `children`.
     Bare ChildrenBlock at the head (no left sibling) emits C008. Non-CB atoms
-    chain via `_attach_as_child` or `_attach_as_parent`.
+    chain via child or parent edges.
     """
     head_matcher: LNode | None = None
     previous_lowered: LNode | None = None
@@ -512,6 +513,7 @@ def _lower_chain_with_children_attach(
                     atom.span,
                 )
                 raise CompileError(ctx.bag)
+            _reject_ignored_chain_tail(previous_lowered, atom.span, ctx)
             if previous_lowered.children is None:
                 previous_lowered.children = []
             for item in atom.items:
@@ -525,12 +527,30 @@ def _lower_chain_with_children_attach(
             head_matcher = lowered
         else:
             if edge is ast_.Edge.PARENT:
-                _attach_as_parent(previous_lowered, lowered)
+                while previous_lowered.parent is not None:
+                    previous_lowered = previous_lowered.parent
+                _reject_ignored_chain_tail(previous_lowered, atom.span, ctx)
+                previous_lowered.parent = lowered
             else:
-                _attach_as_child(previous_lowered, lowered)
+                while previous_lowered.child is not None:
+                    previous_lowered = previous_lowered.child
+                _reject_ignored_chain_tail(previous_lowered, atom.span, ctx)
+                previous_lowered.child = lowered
         previous_lowered = lowered
 
     return head_matcher
+
+
+def _reject_ignored_chain_tail(host: LNode, span: Span, ctx: CompileCtx) -> None:
+    if host.kind not in {"or", "recursive"}:
+        return
+    ctx.bag.error(
+        "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
+        "a choice or recursive rule cannot have a child, children set, or parent chain tail; "
+        "move the relation into each branch",
+        span,
+    )
+    raise CompileError(ctx.bag)
 
 
 def _branches_eligible_for_exclusive_heuristic(
@@ -549,10 +569,7 @@ def _branches_eligible_for_exclusive_heuristic(
         if b.where_predicate is not None or b.where_expr is not None:
             return False
         if isinstance(head, ast_.OpHead):
-            ref = head.ref
-            opcode_int = ref if isinstance(ref, int) else (
-                ctx.resolved.opcodes.get(ref) or ctx.registries.opcodes.get(ref)
-            )
+            opcode_int = _resolve_opcode_ref(head.ref, ctx.resolved.opcodes, ctx.registries)
             if opcode_int is None:
                 return False
             if opcode_int in seen_opcodes:
@@ -573,10 +590,7 @@ def _check_redundant_exclusive_heads(p: ast_.Alternative, ctx: CompileCtx) -> No
             continue
         head = b.head
         if isinstance(head, ast_.OpHead):
-            ref = head.ref
-            opcode_int = ref if isinstance(ref, int) else (
-                ctx.resolved.opcodes.get(ref) or ctx.registries.opcodes.get(ref)
-            )
+            opcode_int = _resolve_opcode_ref(head.ref, ctx.resolved.opcodes, ctx.registries)
             key = ("op", opcode_int)
         elif isinstance(head, ast_.BTypeHead):
             key = ("btype", head.name)
@@ -651,9 +665,7 @@ def _anchor_group_head_sets(
     for b in group.branches:
         head = b.head
         if isinstance(head, ast_.OpHead):
-            opcode = head.ref if isinstance(head.ref, int) else (
-                ctx.resolved.opcodes.get(head.ref) or ctx.registries.opcodes.get(head.ref)
-            )
+            opcode = _resolve_opcode_ref(head.ref, ctx.resolved.opcodes, ctx.registries)
             opcode_set.add(opcode)
         else:
             btype_set.add(head.name)
@@ -673,9 +685,7 @@ def _anchor_group_branch_descs(
     for b in group.branches:
         head = b.head
         if isinstance(head, ast_.OpHead):
-            opcode = head.ref if isinstance(head.ref, int) else (
-                ctx.resolved.opcodes.get(head.ref) or ctx.registries.opcodes.get(head.ref)
-            )
+            opcode = _resolve_opcode_ref(head.ref, ctx.resolved.opcodes, ctx.registries)
             descs.append(("op", opcode, b.where_predicate))
         else:
             descs.append(("btype", head.name, b.where_predicate))
@@ -835,9 +845,7 @@ def _set_where_expr(n: LNode, expr: ast_.Expr, span: Span, ctx: CompileCtx) -> N
 def _lower_node(n: ast_.Node, ctx: CompileCtx) -> LNode:
     head = n.head
     if isinstance(head, ast_.OpHead):
-        opcode = head.ref if isinstance(head.ref, int) else (
-            ctx.resolved.opcodes.get(head.ref) or ctx.registries.opcodes.get(head.ref)
-        )
+        opcode = _resolve_opcode_ref(head.ref, ctx.resolved.opcodes, ctx.registries)
         m = LNode(kind="contract", opcode=opcode)
     elif isinstance(head, ast_.BTypeHead):
         m = LNode(kind="block_type", btype=head.name)
@@ -884,13 +892,6 @@ def _attach_as_child(host: LNode, child: LNode) -> None:
         host.child = child
     else:
         _attach_as_child(host.child, child)
-
-
-def _attach_as_parent(host: LNode, parent: LNode) -> None:
-    if host.parent is None:
-        host.parent = parent
-    else:
-        _attach_as_parent(host.parent, parent)
 
 
 def _check_no_capture_after_recursion(

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import yaml
@@ -28,6 +29,7 @@ from indexer.events.mch.compile import compile_file
 from indexer.events.mch.compiler import CompiledMatcher, LNode
 from indexer.events.mch.diagnostics import (
     CompileError, DiagnosticBag, R042_MANIFEST_ORDER, R043_UNKNOWN_BTYPE, Span,
+    format_diagnostic,
 )
 from indexer.events.mch.expr_ir import IR_VERSION, emit_expr as _emit_expr
 from indexer.events.mch.lexer import tokenize
@@ -464,24 +466,18 @@ def render_json(artifact: dict) -> str:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         prog="python -m indexer.events.mch.ir_emit",
-        description="Emit MCH IR from the production manifest or specified .mch specs.",
-    )
-    ap.add_argument("specs_dir", nargs="?", help="directory containing .mch spec files")
-    ap.add_argument(
-        "--manifest",
-        help="YAML matcher order manifest beside the .mch spec files",
+        description="Emit MCH IR from the production manifest.",
     )
     ap.add_argument("-o", "--output", required=True, help="output JSON path")
     args = ap.parse_args(argv)
 
-    if args.specs_dir and args.manifest:
-        ap.error("provide at most one of specs_dir or --manifest")
-    if args.manifest:
-        artifact = emit_manifest(Path(args.manifest))
-    elif args.specs_dir:
-        artifact = emit_dir(Path(args.specs_dir))
-    else:
+    try:
         artifact = emit_default()
+    except CompileError as exc:
+        for diagnostic in exc.bag.items:
+            source = Path(diagnostic.span.path).read_text(encoding="utf-8")
+            print(format_diagnostic(diagnostic, source), file=sys.stderr)
+        raise SystemExit(1) from None
     with open(args.output, "w", encoding="utf-8", newline="\n") as f:
         f.write(render_json(artifact))
     print(

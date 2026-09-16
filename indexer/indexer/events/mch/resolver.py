@@ -290,7 +290,12 @@ def _inline_fns(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> 
 
     for name in fns:
         expand_body(name)
-    return replace(file, rules=inline(file.rules, {}), matchers=inline(file.matchers, {}))
+    return replace(
+        file,
+        fns=tuple(replace(fn, body=expand_body(fn.name)) for fn in file.fns),
+        rules=inline(file.rules, {}),
+        matchers=inline(file.matchers, {}),
+    )
 
 
 def _resolve_opcodes(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> dict[str, int]:

@@ -10,10 +10,10 @@ from indexer.events.mch.lexer import tokenize
 from indexer.events.mch.parser import parse
 from indexer.events.mch.recursion import RecursionStrategy
 from indexer.events.mch.registry import Registries
-from indexer.events.mch.resolver import resolve
+from indexer.events.mch.resolver import _inline_fns, resolve
 
 
-def _load_imports(file: ast_.File) -> ast_.File:
+def _load_imports(file: ast_.File, registries: Registries) -> ast_.File:
     cache: dict[Path, tuple[ast_.OpcodeDecl | ast_.PredicateDecl | ast_.RuleDecl | ast_.FnDecl, ...]] = {}
     bag = DiagnosticBag()
     kinds = ("opcodes", "predicates", "rules", "fns")
@@ -21,6 +21,7 @@ def _load_imports(file: ast_.File) -> ast_.File:
     def load(file: ast_.File) -> ast_.File:
         path = Path(file.path).resolve()
         declarations = (*file.opcodes, *file.predicates, *file.rules, *file.fns)
+        own_names = {d.name for d in declarations}
         names = {d.name for d in (*declarations, *file.matchers)}
         imported = []
         for imp in file.imports:
@@ -35,12 +36,17 @@ def _load_imports(file: ast_.File) -> ast_.File:
                     raise CompileError(bag)
                 names.add(decl.name)
                 imported.append(decl)
-        # Cache only this file's exports; its imports stay private.
-        cache[path] = tuple(d for d in declarations if d.exported)
-        return replace(file, **{
+        merged = replace(file, **{
             kind: getattr(file, kind) + tuple(d for d in imported if isinstance(d, cls))
             for kind, cls in zip(kinds, (ast_.OpcodeDecl, ast_.PredicateDecl, ast_.RuleDecl, ast_.FnDecl))
         })
+        expanded = _inline_fns(merged, registries, bag)
+        # Cache only this file's exports; its imports stay private.
+        cache[path] = tuple(
+            d for d in (*expanded.opcodes, *expanded.predicates, *expanded.rules, *expanded.fns)
+            if d.name in own_names and d.exported
+        )
+        return expanded
 
     return load(file)
 
@@ -54,7 +60,7 @@ def compile_text(
 ) -> list[CompiledMatcher]:
     tokens = list(tokenize(text, path))
     file_ast = parse(tokens, path)
-    resolved = resolve(_load_imports(file_ast), registries)
+    resolved = resolve(_load_imports(file_ast, registries), registries)
     return compile_(resolved, registries, recursion=recursion)
 
 
