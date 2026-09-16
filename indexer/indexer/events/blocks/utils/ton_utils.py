@@ -36,7 +36,9 @@ class Asset:
         if isinstance(other, Asset):
             return self.is_ton == other.is_ton and self.jetton_address == other.jetton_address
         elif isinstance(other, str):
-            return self.jetton_address.as_str().lower() == other.lower() or (self.is_ton and other.lower() == "ton")
+            if self.jetton_address is None:
+                return False
+            return self.jetton_address.as_str().lower() == other.lower()
         elif other is None:
             return self.is_ton == True and self.jetton_address is None
 

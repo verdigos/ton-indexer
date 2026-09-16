@@ -85,9 +85,7 @@ bool asset_eq(const Value &l, const Value &r) {
 }
 
 // Asset == string: case-insensitive compare of the jetton master's raw string.
-// Comparing a TON asset (no jetton master) against any string faults the
-// evaluation — never returns true/false. Intentional.
-// eq_result faults that pair before reaching here.
+// A TON asset has no jetton master, so it equals no string.
 bool asset_eq_str(const Value &asset, const std::string &s) {
   return asset.has_jetton && to_lower(asset.str) == to_lower(s);
 }
@@ -187,11 +185,6 @@ EvalResult eq_result(const Value &l, const Value &r, bool want_eq) {
   if (rt_is_null(l) || rt_is_null(r)) {
     eq = rt_is_null(l) && rt_is_null(r);
   } else {
-    // TON asset (no jetton master) vs string: fault, never true/false.
-    if ((l.t == VType::Asset && !l.has_jetton && r.t == VType::Str) ||
-        (r.t == VType::Asset && !r.has_jetton && l.t == VType::Str)) {
-      return rt_fault("'==' failed: asset has no jetton master string");
-    }
     eq = raw_eq(l, r);
   }
   return rt_ok(Value::make_bool(want_eq ? eq : !eq));
