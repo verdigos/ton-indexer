@@ -8,7 +8,7 @@
 
 namespace mch {
 
-// Table from ir/mch_ir.json, in manifest order from registration_order.
+// Table from ir/mch_ir.json, in manifest order.
 const std::vector<CompiledMatcher> &gen_matchers_ir();
 
 // SHA-256 (hex) of the document this table was generated from. Read by the

@@ -445,44 +445,15 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
   LoadedIr out;
   out.source_sha256 = source_sha;
 
-  std::vector<CompiledMatcher> compiled;
+  // The matcher array is already in manifest order.
   for (const auto &rec : matchers->get_array()) {
     CompiledMatcher m;
-    m.artifact_index = static_cast<int>(compiled.size());
+    m.artifact_index = static_cast<int>(out.matchers.size());
     TRY_STATUS(build_matcher(rec, pool, m));
-    compiled.push_back(std::move(m));
+    out.matchers.push_back(std::move(m));
   }
-  TRY_STATUS(validate_peek_invariants(compiled));
-  TRY_STATUS(validate_btype_references(compiled));
-
-  // Manifest order from registration_order (default: identity).
-  std::vector<int> reg_order;
-  if (const Json *ro = jfield(root, "registration_order"); ro != nullptr && ro->type() == JType::Array) {
-    // Every matcher appears exactly once.
-    std::vector<bool> seen(compiled.size(), false);
-    for (const auto &mi : ro->get_array()) {
-      TRY_RESULT(idx64, num_i64(mi));
-      int idx = static_cast<int>(idx64);
-      if (idx < 0 || idx >= static_cast<int>(compiled.size())) {
-        return td::Status::Error("registration_order index out of range");
-      }
-      if (seen[idx]) {
-        return td::Status::Error("registration_order has a duplicate index");
-      }
-      seen[idx] = true;
-      reg_order.push_back(idx);
-    }
-    if (reg_order.size() != compiled.size()) {
-      return td::Status::Error("registration_order must list every matcher exactly once");
-    }
-  } else {
-    for (int i = 0; i < static_cast<int>(compiled.size()); i++) {
-      reg_order.push_back(i);
-    }
-  }
-  for (int mi : reg_order) {
-    out.matchers.push_back(std::move(compiled[mi]));
-  }
+  TRY_STATUS(validate_peek_invariants(out.matchers));
+  TRY_STATUS(validate_btype_references(out.matchers));
 
   return out;
 }

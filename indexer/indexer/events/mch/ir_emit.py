@@ -365,7 +365,6 @@ def emit_ir(
         "frontend": {"generator": "mch-python", "source_files": source_files},
         "matchers": matchers_out,
         "nodes": nodes,
-        "registration_order": list(range(len(matchers_out))),
     }
 
 
