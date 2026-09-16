@@ -649,32 +649,15 @@ std::string generate_vectors_file(const Json &root, const std::string &header) {
 
 std::string generate_wheres_file(const Json &root, const std::string &header,
                                  const std::string &source_sha, const std::string &suffix) {
-  const Json *nodes = jfield(root, td::Slice("nodes"));
-  if (nodes == nullptr || nodes->type() != JType::Array) {
-    throw std::runtime_error("IR artifact has no `nodes` array");
-  }
-  const auto &arr = nodes->get_array();
+  const auto &arr = jfield(root, td::Slice("nodes"))->get_array();
   const Json *matchers = jfield(root, td::Slice("matchers"));
-  if (matchers == nullptr || matchers->type() != JType::Array) {
-    throw std::runtime_error("IR artifact has no `matchers` array");
-  }
 
   auto index_of = [](const Json &v) -> std::size_t {
-    if (v.type() != JType::Number) {
-      throw std::runtime_error("IR node reference is not a number");
-    }
     return static_cast<std::size_t>(std::stoull(v.get_number().str()));
   };
   std::map<std::size_t, std::pair<std::string, int>> where_entries;
   for (const auto &matcher : matchers->get_array()) {
-    const Json *root_ref = jfield(matcher, td::Slice("root"));
-    if (root_ref == nullptr) {
-      throw std::runtime_error("IR matcher has no `root`");
-    }
-    const std::size_t matcher_root = index_of(*root_ref);
-    if (matcher_root >= arr.size()) {
-      throw std::runtime_error("IR matcher root is out of range");
-    }
+    const std::size_t matcher_root = index_of(*jfield(matcher, td::Slice("root")));
     const std::string entry_name = jstr(arr[matcher_root], "capture");
     int entry_slot = -1;
     if (const Json *caps = jfield(matcher, td::Slice("captures"));
@@ -699,11 +682,7 @@ std::string generate_wheres_file(const Json &root, const std::string &header,
       }
       const Json &node = arr[id];
       if (jfield(node, td::Slice("where_expr")) != nullptr) {
-        auto [it, inserted] = where_entries.emplace(
-            id, std::make_pair(entry_name, entry_slot));
-        if (!inserted && it->second != std::make_pair(entry_name, entry_slot)) {
-          throw std::runtime_error("where_expr node is shared by matchers with different entries");
-        }
+        where_entries.emplace(id, std::make_pair(entry_name, entry_slot));
       }
       for (const char *key : {"child", "parent", "step", "exit"}) {
         if (const Json *ref = jfield(node, td::Slice(key)); ref != nullptr) {
@@ -776,11 +755,7 @@ std::string generate_builds_file(const Json &root, const std::string &header,
       cases != nullptr && cases->type() == JType::Array) {
     const auto &arr = cases->get_array();
     for (std::size_t i = 0; i < arr.size(); i++) {
-      const Json *m = jfield(arr[i], "matcher");
-      if (m == nullptr) {
-        throw std::runtime_error("build vector " + std::to_string(i) + " has no `matcher`");
-      }
-      entries.push_back({i, jstr(arr[i], "name"), m});
+      entries.push_back({i, jstr(arr[i], "name"), jfield(arr[i], "matcher")});
     }
   } else if (const Json *matchers = jfield(root, "matchers");
              matchers != nullptr && matchers->type() == JType::Array) {

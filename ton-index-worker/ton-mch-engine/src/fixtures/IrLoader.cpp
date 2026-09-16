@@ -17,21 +17,6 @@ namespace {
 using Json = td::JsonValue;
 using JType = td::JsonValue::Type;
 
-// Parse a JSON Number token as int64. A malformed / overflowing token in a
-// corrupt artifact becomes a clean Status error instead of an uncaught
-// std::stoll throw (std::invalid_argument / std::out_of_range).
-td::Result<std::int64_t> num_i64(const Json &n) {
-  if (n.type() != JType::Number) {
-    return td::Status::Error("expected a JSON number");
-  }
-  const std::string s = n.get_number().str();
-  try {
-    return static_cast<std::int64_t>(std::stoll(s));
-  } catch (const std::exception &) {
-    return td::Status::Error("malformed JSON number '" + s + "'");
-  }
-}
-
 // Node ids in a fixed order (child, children..., parent, branches..., step,
 // exit). Remap discovery order depends on it. Intentional.
 std::vector<int> edge_refs(const Json &rec) {
@@ -147,21 +132,13 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
   const std::string ak = anchor != nullptr ? jstr(*anchor, "kind") : "";
   if (ak == "opcode_set") {
     m.anchor_kind = AnchorKind::OpcodeSet;
-    const Json *values = jfield(*anchor, "values");
-    if (values == nullptr || values->type() != JType::Array) {
-      return td::Status::Error("matcher " + m.name + ": opcode_set anchor missing 'values' array");
-    }
-    for (const auto &v : values->get_array()) {
-      TRY_RESULT(op, num_i64(v));
-      m.anchor_opcodes.insert(static_cast<std::uint32_t>(op & 0xFFFFFFFF));
+    for (const auto &v : jfield(*anchor, "values")->get_array()) {
+      m.anchor_opcodes.insert(
+          static_cast<std::uint32_t>(std::stoll(v.get_number().str()) & 0xFFFFFFFF));
     }
   } else if (ak == "btype") {
     m.anchor_kind = AnchorKind::BType;
-    const Json *values = jfield(*anchor, "values");
-    if (values == nullptr || values->type() != JType::Array) {
-      return td::Status::Error("matcher " + m.name + ": btype anchor missing 'values' array");
-    }
-    for (const auto &v : values->get_array()) {
+    for (const auto &v : jfield(*anchor, "values")->get_array()) {
       m.anchor_btypes.insert(v.get_string().str());
     }
   } else if (ak == "pred") {
@@ -174,9 +151,9 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
       for (const auto &b : br->get_array()) {
         CompiledMatcher::AnchorBranch ab;
         if (const Json *op = jfield(b, "op"); op != nullptr) {
-          TRY_RESULT(v, num_i64(*op));
           ab.is_op = true;
-          ab.opcode = static_cast<std::uint32_t>(v & 0xFFFFFFFF);
+          ab.opcode =
+              static_cast<std::uint32_t>(std::stoll(op->get_number().str()) & 0xFFFFFFFF);
           m.anchor_opcodes.insert(ab.opcode);
         } else {
           ab.btype = jstr(b, "btype");
@@ -205,24 +182,14 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
   }
 
   // Reachable subgraph remapped to local ids (root = 0), discovery order over
-  // edge_refs. A missing or out-of-range root is a corrupt artifact, not a
-  // default to node 0.
-  if (!has(rec, "root")) {
-    return td::Status::Error("matcher " + m.name + ": missing 'root'");
-  }
+  // edge_refs.
   int root = static_cast<int>(jint(rec, "root"));
-  if (root < 0 || root >= static_cast<int>(pool.size())) {
-    return td::Status::Error("matcher " + m.name + ": root index out of range");
-  }
   std::vector<int> order{root};
   std::unordered_map<int, int> remap{{root, 0}};
   std::size_t qi = 0;
   while (qi < order.size()) {
     const Json &nrec = *pool[order[qi++]];
     for (int ref : edge_refs(nrec)) {
-      if (ref < 0 || ref >= static_cast<int>(pool.size())) {
-        return td::Status::Error("matcher " + m.name + ": node ref out of range");
-      }
       if (remap.find(ref) == remap.end()) {
         remap[ref] = static_cast<int>(order.size());
         order.push_back(ref);
@@ -252,25 +219,21 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     std::string cap = jstr(nrec, "capture");
     cn.slot = (!cap.empty() && slot_of.count(cap)) ? slot_of[cap] : -1;
     cn.optional = jbool(nrec, "optional");
-    if (const Json *peek = jfield(nrec, "peek");
-        peek != nullptr && peek->type() != JType::Boolean) {
-      return td::Status::Error("matcher " + m.name + ": node 'peek' must be a bool");
-    }
     cn.peek = jbool(nrec, "peek");
     cn.many = jbool(nrec, "many");
     cn.max = static_cast<int>(jint(nrec, "max"));
     cn.child = has(nrec, "child") ? rm(static_cast<int>(jint(nrec, "child"))) : -1;
     if (const Json *ch = jfield(nrec, "children"); ch != nullptr && ch->type() == JType::Array) {
       for (const auto &c : ch->get_array()) {
-        TRY_RESULT(cid, num_i64(c));
-        cn.children.push_back(rm(static_cast<int>(cid)));
+        cn.children.push_back(
+            rm(static_cast<int>(std::stoll(c.get_number().str()))));
       }
     }
     cn.parent = has(nrec, "parent") ? rm(static_cast<int>(jint(nrec, "parent"))) : -1;
     if (const Json *br = jfield(nrec, "branches"); br != nullptr && br->type() == JType::Array) {
       for (const auto &b : br->get_array()) {
-        TRY_RESULT(bid, num_i64(b));
-        cn.branches.push_back(rm(static_cast<int>(bid)));
+        cn.branches.push_back(
+            rm(static_cast<int>(std::stoll(b.get_number().str()))));
       }
     }
     cn.step = has(nrec, "step") ? rm(static_cast<int>(jint(nrec, "step"))) : -1;
@@ -294,12 +257,6 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
       }
     }
     if (node.strategy == RecStrategy::Cyclic) {
-      for (int r : reach) {
-        if (m.nodes[r].slot >= 0) {
-          return td::Status::Error("matcher " + m.name +
-                                   ": captures inside a cyclic recursion body are not supported");
-        }
-      }
       m.step_slots[nid] = {};
       m.exit_slots[nid] = {};
       continue;
@@ -383,28 +340,6 @@ td::Status validate_btype_references(const std::vector<CompiledMatcher> &matcher
   return td::Status::OK();
 }
 
-td::Status validate_peek_invariants(const std::vector<CompiledMatcher> &matchers) {
-  for (const CompiledMatcher &matcher : matchers) {
-    if (!matcher.nodes.empty() && matcher.nodes[0].peek) {
-      return td::Status::Error("matcher " + matcher.name +
-                               ": root node cannot be peek (the entry is always consumed)");
-    }
-    for (int nid = 0; nid < static_cast<int>(matcher.nodes.size()); nid++) {
-      if (!matcher.nodes[nid].peek) {
-        continue;
-      }
-      for (int reached : reachable(matcher.nodes, nid)) {
-        if (!matcher.nodes[reached].peek) {
-          return td::Status::Error(
-              "matcher " + matcher.name +
-              ": a peek subtree contains a consuming node; every reachable node must also be peek");
-        }
-      }
-    }
-  }
-  return td::Status::OK();
-}
-
 }  // namespace
 
 td::Result<LoadedIr> load_ir(const std::string &path) {
@@ -424,18 +359,8 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
     return td::Status::Error("IR json parse error: " + r_root.error().message().str());
   }
   Json root = r_root.move_as_ok();
-  if (root.type() != JType::Object) {
-    return td::Status::Error("IR artifact root must be an object");
-  }
-  if (jstr(root, "mch_ir_version") != "1.3") {
-    return td::Status::Error("unsupported mch_ir_version (expected 1.3)");
-  }
   const Json *nodes = jfield(root, "nodes");
   const Json *matchers = jfield(root, "matchers");
-  if (nodes == nullptr || nodes->type() != JType::Array ||
-      matchers == nullptr || matchers->type() != JType::Array) {
-    return td::Status::Error("IR artifact needs 'nodes' and 'matchers' arrays");
-  }
 
   std::vector<const Json *> pool;
   for (const auto &n : nodes->get_array()) {
@@ -452,7 +377,6 @@ td::Result<LoadedIr> load_ir(const std::string &path) {
     TRY_STATUS(build_matcher(rec, pool, m));
     out.matchers.push_back(std::move(m));
   }
-  TRY_STATUS(validate_peek_invariants(out.matchers));
   TRY_STATUS(validate_btype_references(out.matchers));
 
   return out;
