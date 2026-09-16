@@ -54,7 +54,6 @@ class LNode:
     peek: bool = False
     many: bool = False
     max: int | None = None
-    many_span: Span | None = None
     peek_span: Span | None = None
     capture: str | None = None
     where: str | None = None
@@ -137,13 +136,6 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     if ctx.bag.has_errors:
         raise CompileError(ctx.bag)
 
-    if decl.produces_primary not in ctx.registries.block_types:
-        ctx.bag.error(
-            "C003_UNKNOWN_BLOCK_TYPE",
-            f"matcher {decl.name!r}: produces type {decl.produces_primary!r} is not registered",
-            decl.span,
-        )
-
     # Lower the pattern relative to the anchor atom. For set anchors, the whole
     # exclusive alternative group is the anchor atom,
     # so chain edges around it wire exactly as around a single anchor node.
@@ -186,18 +178,10 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
         )
     elif isinstance(head, ast_.BTypeHead):
         root = LNode(kind="block_type", btype=head.name, child=child_m, parent=parent_m)
-    elif isinstance(head, ast_.PredHead):
+    else:
         # Predicate anchors have no opcode/btype prefilter and are full-scanned.
         anchor_pred = head.name
         root = LNode(kind="any", child=child_m, parent=parent_m)
-    else:
-        # Resolver should have rejected this; defensive guard.
-        ctx.bag.error(
-            "C001_RECURSION_SHAPE_UNSUPPORTED",
-            f"matcher {decl.name!r}: unsupported anchor head {type(head).__name__}",
-            decl.span,
-        )
-        raise CompileError(ctx.bag)
 
     # Some heads carry children_matchers only post-hoc (only `contract` takes
     # them at construction); apply here if not already set.
@@ -349,14 +333,6 @@ def _lower_child_chain_from(
         if parent.head is anchor:
             tail_slice = parent.tail
         else:
-            if isinstance(parent.head, ast_.ChildrenBlock):
-                ctx.bag.error(
-                    "C008_CHILDREN_BLOCK_BARE",
-                    "children block '{...}' cannot appear as the first element of a sequence; "
-                    "it must follow a node (e.g. 'op A -> {op B; op C}')",
-                    parent.head.span,
-                )
-                raise CompileError(ctx.bag)
             anchor_idx = None
             for i, (_e, atom) in enumerate(parent.tail):
                 if atom is anchor:
@@ -639,12 +615,6 @@ def _check_peek_subtree_closure(root: LNode, matcher_name: str, ctx: CompileCtx)
         stack.extend(_lnode_refs(node))
 
     for origin in all_nodes:
-        for node in (root, origin.child, origin.parent, origin.step, origin.exit_,
-                     *(origin.branches or ())):
-            if node is not None and node.many:
-                ctx.bag.error("C017_MANY", "`many` requires only children-item incoming edges",
-                              node.many_span)
-                raise CompileError(ctx.bag)
         if not origin.peek:
             continue
         seen = {id(origin)}
@@ -720,7 +690,6 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
             raise CompileError(ctx.bag)
         inner.many = True
         inner.max = p.max
-        inner.many_span = p.span
         return inner
     if isinstance(p, ast_.Node):
         return _lower_node(p, ctx)
@@ -748,14 +717,6 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
         if result is None:
             raise AssertionError("Sequence lowered to None")
         return result
-    if isinstance(p, ast_.ChildrenBlock):
-        ctx.bag.error(
-            "C008_CHILDREN_BLOCK_BARE",
-            "children block '{...}' cannot appear as a standalone expression; "
-            "it must follow a node in a sequence (e.g. 'op A -> {op B; op C}')",
-            p.span,
-        )
-        raise CompileError(ctx.bag)
     if isinstance(p, ast_.RuleRef):
         target = next((r for r in ctx.resolved.raw.rules if r.name == p.name), None)
         if target is None:
