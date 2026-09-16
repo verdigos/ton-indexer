@@ -33,7 +33,7 @@ opcode StonfiPaymentRequest = 0xf93bb43f
 #     the get_jetton_wallet lookups). Returns a namespace mirroring the core's
 #     data dict; `.success` drives the failed flag.
 matcher stonfi_v1_swap {
-    produces JettonSwapBlock
+    produces jetton_swap
     entry    @in_transfer
 
     btype jetton_transfer @in_transfer

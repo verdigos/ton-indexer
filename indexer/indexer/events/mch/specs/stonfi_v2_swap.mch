@@ -57,7 +57,7 @@ rule swap_hop = or {
 #     Returns a namespace mirroring the core's data dict; `.failed` drives the
 #     failed flag.
 matcher stonfi_v2_swap {
-    produces JettonSwapBlock
+    produces jetton_swap
     entry    @swap
 
     op StonfiV2Swap @swap {

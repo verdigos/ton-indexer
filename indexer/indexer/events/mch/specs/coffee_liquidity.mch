@@ -131,7 +131,7 @@ matcher coffee_deposit_liquidity {
 # The produced block is the canonical generic block (btype + data map).
 # ---------------------------------------------------------------------------
 matcher coffee_create_vault {
-    produces CoffeeCreateVaultBlock
+    produces coffee_create_vault
     entry    @create
 
     op CoffeeCreateVault @create as CoffeeCreateVault

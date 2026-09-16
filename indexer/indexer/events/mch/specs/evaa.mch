@@ -55,7 +55,7 @@ predicate evaa_liquidate_anchor
 # refund identifies the recipient's jetton wallet.
 
 matcher evaa_supply {
-    produces EvaaSupplyBlock
+    produces evaa_supply
     entry    @master
 
     pred evaa_supply_anchor @master
@@ -92,7 +92,7 @@ matcher evaa_supply {
 }
 
 matcher evaa_withdraw {
-    produces EvaaWithdrawBlock
+    produces evaa_withdraw
     entry    @master
 
     op EvaaWithdrawMaster @master as EvaaWithdrawMaster

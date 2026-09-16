@@ -5,7 +5,7 @@
 # selected for output while the matching child remains consumed.
 
 matcher getgems_nft_purchase {
-    produces NftPurchaseBlock
+    produces nft_purchase
     shape    getgems_proxy_insert
     entry    @nft
 

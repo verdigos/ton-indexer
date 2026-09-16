@@ -84,7 +84,7 @@ opcode TgBTCNewKeyLog       = 0x27756729
 opcode TgBTCDkgCompletedLog = 0x453443A6
 
 matcher tgbtc_mint {
-    produces TgBTCMintBlock
+    produces tgbtc_mint
     shape    tgbtc_deploy_absorb
     entry    @head
 
@@ -238,7 +238,7 @@ matcher tgbtc_new_key {
 # off `crippled`) as tgbtc_mint. asset / recipient_wallet are unknowable without
 # the jetton_mint leg, and the teleport contract collapses onto the log emitter.
 matcher tgbtc_mint_log_only {
-    produces TgBTCMintBlock
+    produces tgbtc_mint
     entry    @log
 
     op TgBTCMintSuccessLog @log as TgBTCMintEvent

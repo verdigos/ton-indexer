@@ -80,7 +80,7 @@ opcode UlnConnectionVerify          = 0x4ec8f80a
 opcode UlnConnectionVerifyCallback  = 0x3cb38090
 
 matcher layerzero_receive {
-    produces LayerZeroReceiveBlock
+    produces layerzero_receive
     entry    @prepare
 
     op ChannelLzReceivePrepare @prepare
@@ -136,7 +136,7 @@ matcher layerzero_receive {
 # `LayerZeroMDLzSend` -> `LayerZeroPacket` -> `LayerZeroPath`). No host fn.
 # -----------------------------------------------------------------------------
 matcher layerzero_send {
-    produces LayerZeroSendBlock
+    produces layerzero_send
     entry    @endpoint_send
 
     op EndpointEndpointSend @endpoint_send
@@ -193,7 +193,7 @@ matcher layerzero_send {
 # the OApp, not the user.
 # -----------------------------------------------------------------------------
 matcher layerzero_send_tokens {
-    produces LayerZeroSendTokensBlock
+    produces layerzero_send_tokens
     entry    @send
 
     btype layerzero_send @send
@@ -236,7 +236,7 @@ matcher layerzero_send_tokens {
 # This matches LayerZeroCommitPacketMatcher.
 # -----------------------------------------------------------------------------
 matcher layerzero_commit_packet {
-    produces LayerZeroCommitPacketBlock
+    produces layerzero_commit_packet
     entry    @uln_commit
 
     op UlnUlnCommitPacket @uln_commit
@@ -285,7 +285,7 @@ matcher layerzero_commit_packet {
 # see the file header.
 # -----------------------------------------------------------------------------
 matcher layerzero_dvn_verify {
-    produces LayerZeroDvnVerifyBlock
+    produces layerzero_dvn_verify
     entry    @dvn_verify
 
     op DvnVerify @dvn_verify

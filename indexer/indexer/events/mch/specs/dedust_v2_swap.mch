@@ -63,7 +63,7 @@ rule dv2_hop = or {
                }
 
 matcher dedust_v2_swap {
-    produces JettonSwapBlock
+    produces jetton_swap
     entry    @carrier
     include_excess false          # the reference consumes the carrier's excess
                                   # INTO the swap block (explicit child below),
@@ -150,7 +150,7 @@ matcher dedust_v2_swap {
 # The refunded route's destination asset is not on the wire at all — it is the
 # pool's OTHER asset, read from the pool account's interface data.
 matcher dedust_v2_failed_swap {
-    produces JettonSwapBlock
+    produces jetton_swap
     entry    @carrier
     include_excess false
 

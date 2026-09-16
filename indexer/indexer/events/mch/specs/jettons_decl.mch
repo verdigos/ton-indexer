@@ -24,7 +24,7 @@ opcode MinterJettonMint       = 0x00000015
 # legacy leaves the produced block's broken flag False.
 # ---------------------------------------------------------------------------
 matcher jetton_transfer {
-    produces JettonTransferBlock
+    produces jetton_transfer
     entry    @transfer
 
     op JettonTransfer @transfer as JettonTransfer
@@ -66,7 +66,7 @@ matcher jetton_transfer {
 # (add_jetton with a NEGATIVE amount).
 # ---------------------------------------------------------------------------
 matcher jetton_burn {
-    produces JettonBurnBlock
+    produces jetton_burn
     entry    @burn
 
     op JettonBurn @burn as JettonBurn -> maybe op JettonBurnNotification @notification
@@ -96,7 +96,7 @@ matcher jetton_burn {
 # with failed = true.
 # ---------------------------------------------------------------------------
 matcher jetton_mint {
-    produces JettonMintBlock
+    produces jetton_mint
     entry    @mint
 
     op [JettonMint, MinterJettonMint] @mint as MinterJettonMint | JettonMint

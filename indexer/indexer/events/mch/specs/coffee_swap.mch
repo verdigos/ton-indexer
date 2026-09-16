@@ -23,7 +23,7 @@ rule swap_chain = or {
                   }
 
 matcher coffee_swap {
-    produces JettonSwapBlock
+    produces jetton_swap
     entry    @swap
 
     op CoffeeSwapInternal @swap {

@@ -18,7 +18,7 @@ opcode VestingSendMessage         = 0xA7733ACD
 opcode VestingSendMessageResponse = 0xF7733ACD
 
 matcher vesting_send_message {
-    produces VestingSendMessageBlock
+    produces vesting_send_message
     entry    @send
 
     op VestingSendMessage @send as VestingSendMessage -> op VestingSendMessageResponse @response

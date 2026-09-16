@@ -5,7 +5,6 @@ from enum import Enum
 from typing import Iterable
 
 from indexer.events.mch import ast_, diagnostics
-from indexer.events.mch.btypes import CLASS_TO_BTYPE, is_class_name
 from indexer.events.mch.builtin_signatures import BUILTIN_SIGNATURES
 from indexer.events.mch.diagnostics import CompileError, DiagnosticBag, Span
 from indexer.events.mch.registry import Registries
@@ -318,45 +317,15 @@ def _resolve_opcodes(file: ast_.File, registries: Registries, bag: DiagnosticBag
     return opcodes
 
 
-def _is_real_block_class(cls: object) -> bool:
-    """True for a concrete typed block class (a `Block` subclass other than the
-    base). Stubs (`object`, used by the emit stub registries and the synthetic
-    test matchers) and the generic `Block` itself carry their btype as the
-    produced name, so they keep the identity fallback and are not R022 cases."""
-    from indexer.events.blocks.core import Block  # lazy: keep resolver import-light
-    return isinstance(cls, type) and issubclass(cls, Block) and cls is not Block
-
-
 def _check_produces_union(file: ast_.File, registries: Registries, bag: DiagnosticBag) -> None:
     """Validate every name in a matcher's `produces` union against
-    the host's block-type registry. A single-name `produces` is a 1-element union.
-
-    Also validates that a PascalCase `produces` name normalizes to a real btype
-    via `btypes.CLASS_TO_BTYPE`. Without an entry the name would fall through to
-    the class-name string as the produced btype, causing a
-    silent downstream mismatch (the serializer and legacy blocks key on the real
-    btype). Snake_case names are bare btypes and need no entry."""
+    the host's block-type registry. A single-name `produces` is a 1-element union."""
     for m in file.matchers:
         for name in m.produces:
             if name not in registries.block_types:
                 bag.error(
                     "C003_UNKNOWN_BLOCK_TYPE",
                     f"matcher {m.name!r}: produces type {name!r} is not registered",
-                    m.span,
-                )
-            elif (
-                is_class_name(name)
-                and name not in CLASS_TO_BTYPE
-                and _is_real_block_class(registries.block_types[name])
-            ):
-                # Typed block classes must normalize to the engine's btype.
-                bag.error(
-                    diagnostics.R022_UNNORMALIZED_PRODUCES_CLASS,
-                    f"matcher {m.name!r}: declarative `produces` class {name!r} "
-                    f"has no btype mapping in mch/btypes.py CLASS_TO_BTYPE — it "
-                    f"would silently emit {name!r} as the produced btype instead "
-                    f"of the block's real btype. Add the class->btype entry, or "
-                    f"use the bare btype string in `produces`.",
                     m.span,
                 )
 

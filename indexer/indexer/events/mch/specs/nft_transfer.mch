@@ -45,7 +45,7 @@
 opcode NftTransfer          = 0x5FCC3D14
 opcode NftOwnershipAssigned = 0x05138D91
 matcher nft_transfer {
-    produces        NftTransferBlock
+    produces        nft_transfer
     shape           nft_transfer_parent_absorb
     entry           @transfer
     include_excess  false

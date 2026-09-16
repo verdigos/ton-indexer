@@ -11,7 +11,7 @@
 # jetton_mint blocks' produced `data` through the `.data` accessor.
 
 matcher ethena_deposit {
-    produces EthenaDepositBlock
+    produces ethena_deposit
     entry    @transfer
 
     btype jetton_transfer @transfer -> btype jetton_mint @mint

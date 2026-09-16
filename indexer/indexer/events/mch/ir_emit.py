@@ -23,7 +23,7 @@ from pathlib import Path
 import yaml
 
 from indexer.events.mch import ast_
-from indexer.events.mch.btypes import LEAF_BTYPES, produces_btype
+from indexer.events.mch.btypes import LEAF_BTYPES
 from indexer.events.mch.compile import compile_file
 from indexer.events.mch.compiler import CompiledMatcher, LNode
 from indexer.events.mch.diagnostics import (
@@ -273,11 +273,6 @@ def _anchor_record(cm: CompiledMatcher) -> dict:
     raise ValueError(f"unsupported anchor root kind {root.kind!r}")
 
 
-# The IR schema requires btype strings; class names are normalized via the
-# shared map in btypes.py (also used by the declarative build path).
-_produces_btype = produces_btype
-
-
 # Expressions and build programs.
 
 
@@ -316,9 +311,7 @@ def _emit_out_fields(fields) -> list[dict]:
 
 
 def _emit_switch_branch(b: ast_.SwitchBranch) -> dict:
-    # Normalize the branch btype the same way `produces` names are (class ->
-    # btype string), so a branch may name either form.
-    rec: dict = {"btype": _produces_btype(b.btype), "fields": _emit_out_fields(b.out.fields)}
+    rec: dict = {"btype": b.btype, "fields": _emit_out_fields(b.out.fields)}
     # The `else` arm (condition is None) omits `when`.
     if b.condition is not None:
         rec["when"] = _emit_expr(b.condition)
@@ -347,7 +340,7 @@ def emit_ir(
             "name": cm.name,
             "anchor": _anchor_record(cm),
             "root": root_id,
-            "produces": [_produces_btype(p) for p in cm.produces],
+            "produces": list(cm.produces),
             "captures": [
                 {"name": cap_name, "card": card}
                 for cap_name, card in cm.captures
@@ -394,7 +387,7 @@ def _emit_paths(paths: list[Path], source_files: list[str]) -> dict:
             )
         else:
             seen[cm.name] = cm.source_span.path
-    known = LEAF_BTYPES | {produces_btype(p) for cm in compiled for p in cm.produces}
+    known = LEAF_BTYPES | {p for cm in compiled for p in cm.produces}
     for cm in compiled:
         heads = list(cm.anchor_btypes or ())
         heads.extend(value for kind, value, _ in cm.anchor_branches or () if kind == "btype")

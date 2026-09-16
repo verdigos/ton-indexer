@@ -28,13 +28,6 @@ R014_DUP_OUT_FIELD = "R014_DUP_OUT_FIELD"
 R016_BUILD_NO_OUT = "R016_BUILD_NO_OUT"
 """A matcher has no `out` block or `produces switch`, so there is nothing to produce."""
 
-R022_UNNORMALIZED_PRODUCES_CLASS = "R022_UNNORMALIZED_PRODUCES_CLASS"
-"""A PascalCase (class-name) `produces` token has no class->btype entry in
-mch/btypes.py CLASS_TO_BTYPE, so it cannot be normalized to the block's real
-btype. Left unresolved it would silently emit the class name itself as the
-produced btype, which the serializer and
-legacy blocks never key on. Add the entry, or use the bare btype string."""
-
 R023_PARSE_TARGET_NOT_BASE_BLOCK = "R023_PARSE_TARGET_NOT_BASE_BLOCK"
 """A `parse X as T` statement targets a capture bound by a `btype` node: a
 composed block built by an earlier matcher. A produced block's `get_body()`

@@ -44,7 +44,7 @@ rule peer_chain = or {
 # could pull the in-leg, payout, and single-hop leg records into `out`,
 # shrinking dedust_swap_legs to just peer_swaps + destination_asset.
 matcher dedust_swap {
-    produces JettonSwapBlock
+    produces jetton_swap
     entry    @ext
 
     op DedustSwapExternal @ext {

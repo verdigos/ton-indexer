@@ -59,7 +59,7 @@ opcode NftOwnershipAssigned = 0x05138D91
 opcode AuctionFillUp        = 0x370FEC51
 
 matcher telegram_nft_purchase {
-    produces NftTransferBlock
+    produces nft_transfer
     entry    @assigned
 
     # The two legacy parent kinds, XOR because `ton_transfer` and `call_contract`
@@ -98,7 +98,7 @@ matcher telegram_nft_purchase {
 }
 
 matcher telegram_nft_assigned {
-    produces NftTransferBlock
+    produces nft_transfer
     entry    @assigned
 
     # The optional parent is observed without changing the anchor-only consumed set.
@@ -117,7 +117,7 @@ matcher telegram_nft_assigned {
     # branch: this matcher's shapes never reach the parent-absorbing code path —
     # a ton_transfer / external parent belongs to telegram_nft_purchase.
     produces switch {
-        when d.marketplace != null => NftTransferBlock out {
+        when d.marketplace != null => nft_transfer out {
             is_purchase:          d.is_purchase
             prev_owner:           d.prev_owner
             new_owner:            d.new_owner
@@ -131,7 +131,7 @@ matcher telegram_nft_assigned {
             price:                d.price
             marketplace:          d.marketplace
         }
-        else => NftTransferBlock out {
+        else => nft_transfer out {
             is_purchase:          d.is_purchase
             prev_owner:           d.prev_owner
             new_owner:            d.new_owner

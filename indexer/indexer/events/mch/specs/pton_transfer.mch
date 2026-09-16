@@ -24,7 +24,7 @@ opcode JettonTransfer = 0x0f8a7ea5
 opcode JettonNotify   = 0x7362d09c
 
 matcher pton_transfer {
-    produces JettonTransferBlock
+    produces jetton_transfer
     entry    @transfer
 
     op JettonTransfer @transfer as JettonTransfer -> maybe op JettonNotify @notify
