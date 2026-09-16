@@ -288,6 +288,13 @@ def _lower_relative_to_anchor(
     if len(parents) < 2:
         return None, None, None
     immediate_parent = parents[-2]
+    if not isinstance(immediate_parent, ast_.Sequence) and parents[:-1]:
+        ctx.bag.error(
+            "C010_UPSTREAM_ATOMS_UNSUPPORTED",
+            "upstream atoms before the anchor are not lowered; re-anchor the pattern or restructure",
+            anchor.span,
+        )
+        raise CompileError(ctx.bag)
 
     child_chain, children_ms = _lower_child_chain_from(immediate_parent, pattern, anchor, ctx)
     parent_chain = _lower_parent_chain_from(immediate_parent, pattern, anchor, ctx)
@@ -485,8 +492,12 @@ def _lower_parent_chain_from(
     chain_pairs: list[tuple[ast_.Edge, ast_.PatternExpr]] = []
     if prepend_previous:
         anchor_idx = next(i for i, (_e, a) in enumerate(parent.tail) if a is anchor)
-        previous_atom = parent.head if anchor_idx == 0 else parent.tail[anchor_idx - 1][1]
+        idx = anchor_idx - 1
+        while idx >= 0 and _is_cb_atom(parent.tail[idx][1]):
+            idx -= 1
+        previous_atom = parent.head if idx < 0 else parent.tail[idx][1]
         chain_pairs.append((ast_.Edge.PARENT, previous_atom))
+        chain_pairs.extend((ast_.Edge.CHILD, atom) for _e, atom in parent.tail[idx + 1:anchor_idx])
 
     saw_parent_link = prepend_previous
     for edge, atom in parent.tail[start_idx:]:
@@ -1320,12 +1331,11 @@ def _split_recursion_branches(
             else:
                 exits.append(b)
         return steps, exits
-    # Sequence with an alternative inside its tail: search recursively.
+    # Splitting a tail Alternative would discard the sequence head and other atoms.
     if isinstance(pattern, ast_.Sequence):
-        # Look for an Alternative within the tail; if present, split it.
         for _e, atom in pattern.tail:
             if isinstance(atom, ast_.Alternative):
-                return _split_recursion_branches(atom, rule_name)
+                return [], []
     return [pattern], []
 
 

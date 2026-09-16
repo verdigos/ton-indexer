@@ -207,6 +207,12 @@ def resolve(file: ast_.File, registries: Registries) -> ResolvedFile:
     _check_predicates(file, registries, bag)
     _check_produces_union(file, registries, bag)
     _check_shapers(file, registries, bag)
+    for kind, declarations in (("rule", file.rules), ("matcher", file.matchers)):
+        seen: set[str] = set()
+        for decl in declarations:
+            if decl.name in seen:
+                bag.error("R005_DUP_CAPTURE", f"duplicate {kind} {decl.name!r}", decl.span)
+            seen.add(decl.name)
     _check_rule_patterns(file, opcodes, registries, bag)
     rule_recursion: dict[str, RecursionClass] = _classify_rules(file, bag)
     resolved_matchers: list[ResolvedMatcher] = []
@@ -476,7 +482,7 @@ def _classify_rules(file: ast_.File, bag: DiagnosticBag) -> dict[str, RecursionC
                 if target is not None:
                     collect_refs(target, refs, under_maybe)
 
-    for r in file.rules:
+    for r in (*file.rules, *file.matchers):
         refs = []
         collect_refs(r.pattern, refs, under_maybe=False)
         for ref_name, _ in refs:

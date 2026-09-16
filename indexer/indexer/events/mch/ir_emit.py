@@ -381,6 +381,19 @@ def _emit_paths(paths: list[Path], source_files: list[str]) -> dict:
     compiled: list[CompiledMatcher] = []
     for p in paths:
         compiled.extend(compile_file(p, registries))
+    seen: dict[str, str] = {}
+    bag = DiagnosticBag()
+    for cm in compiled:
+        if cm.name in seen:
+            bag.error(
+                R042_MANIFEST_ORDER,
+                f"duplicate matcher {cm.name!r} in {seen[cm.name]!r} and {cm.source_span.path!r}",
+                cm.source_span,
+            )
+        else:
+            seen[cm.name] = cm.source_span.path
+    if bag.has_errors:
+        raise CompileError(bag)
     return emit_ir(compiled, source_files)
 
 
