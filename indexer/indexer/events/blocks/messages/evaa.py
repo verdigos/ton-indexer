@@ -255,25 +255,25 @@ class EvaaWithdrawNoFundsExcess:
 # ------------------------- Liquidate -------------------------
 
 class EvaaLiquidateMaster:
-    # liquidator -> master
-    # schema.tlb#L236
-    # liquidate_master#00000003 query_id:uint64 borrower_address:MsgAddressInt liquidator_address:MsgAddressInt
+    # Classic pools: schema.tlb:122-135 params, without the v8 requested_ref_tokens bit.
+    # liquidate_master#00000003 query_id:uint64 borrower_address:MsgAddressInt
     #    collateral_asset_id:AssetId min_collateral_amount:Amount include_user_code:BoolExtended
-    #    liquidate_incoming_amount:Amount ^[ forward_ton_amount:Amount custom_response_payload:^Cell ]
+    #    liquidate_incoming_amount:Amount ^[ custom_response_payload:^Cell subaccount_id:int16
+    #    custom_payload_recipient:MsgAddressInt saturation:int2 ]
     #    prices_with_signature_packed:^PricesPacked = InternalMsgBody;
+    # Jetton forward payloads omit query_id. The wrapped pyth layout is unsupported;
+    # its 96 inline bits cannot hold these params, so parsing rejects it.
     opcode = 0x3  # op::liquidate_master
     
-    query_id: int
+    query_id: int | None
     borrower_address: Address
-    liquidator_address: Address
     collateral_asset_id: int
     liquidate_incoming_amount: int
     
-    def __init__(self, slice: Slice):
+    def __init__(self, slice: Slice, *, is_ton: bool = True):
         slice.load_uint(32)  # op
-        self.query_id = slice.load_uint(64)
+        self.query_id = slice.load_uint(64) if is_ton else None
         self.borrower_address = slice.load_address()
-        self.liquidator_address = slice.load_address()
         self.collateral_asset_id = slice.load_uint(256)
         slice.load_uint(64)  # min_collateral_amount
         slice.load_int(2)  # include_user_code
@@ -370,11 +370,11 @@ class EvaaLiquidateSatisfied:
 
 class EvaaLiquidateUnsatisfied:
     # user -> master
-    # schema.tlb#L243
+    # schema.tlb:145-148
     # liquidate_unsatisfied#0000031f query_id:uint64 owner_address:MsgAddressInt
     #    liquidator_address:MsgAddressInt transferred_asset_id:AssetId
     #    ^[ transferred_amount:Amount collateral_asset_id:AssetId min_collateral_amount:Amount
-    #       forward_ton_amount:Amount custom_response_payload:^Cell error:LiquidationError ]= InternalMsgBody;
+    #       custom_response_payload:^Cell subaccount_id:int16 error:LiquidationError ]= InternalMsgBody;
     opcode = 0x31f  # op::liquidate_unsatisfied
 
     query_id: int
@@ -384,7 +384,7 @@ class EvaaLiquidateUnsatisfied:
     transferred_amount: int
     collateral_asset_id: int
     min_collateral_amount: int
-    forward_ton_amount: int
+    subaccount_id: int
     custom_response_payload: Cell
     error_slice: Slice
 
@@ -399,8 +399,8 @@ class EvaaLiquidateUnsatisfied:
         self.transferred_amount = ref_data.load_uint(64)
         self.collateral_asset_id = ref_data.load_uint(256)
         self.min_collateral_amount = ref_data.load_uint(64)
-        self.forward_ton_amount = ref_data.load_uint(64)
         self.custom_response_payload = ref_data.load_ref()
+        self.subaccount_id = ref_data.load_int(16)
         self.error_slice = ref_data  # оставшаяся часть slice содержит данные об ошибке
         
     def get_error(self) -> EvaaLiquidationError:
@@ -487,34 +487,21 @@ class EvaaLiquidateFail:
 
 
 class EvaaLiquidationError:
-    """Класс для обработки ошибок ликвидации из сообщений liquidate_unsatisfied.
-    
-    Все возможные ошибки определены в liquidate-message.fc:
-    - master_liquidating_too_much (0xE001)
-    - user_withdraw_in_progress (0xE002)
-    - not_liquidatable (0xE003)
-    - liqudation_execution_crashed (0xE004)
-    - min_collateral_not_satisfied (0xE005)
-    - user_not_enough_collateral (0xE006)
-    - user_liquidating_too_much (0xE007)
-    - master_not_enough_liquidity (0xE008)
-    - liquidation_prices_missing (0xE009)
-    """
+    """LiquidationError / LiquidationMasterError from schema.tlb:109-119."""
     
     reason: str
     error_opcode: int
     
-    # Карта опкодов ошибок из liquidate-message.fc
     ERROR_CODES = {
-        0xE001: "master_liquidating_too_much",
-        0xE002: "user_withdraw_in_progress",
-        0xE003: "not_liquidatable",
-        0xE004: "execution_crashed",
-        0xE005: "min_collateral_not_satisfied",
-        0xE006: "user_not_enough_collateral",
-        0xE007: "user_liquidating_too_much",
-        0xE008: "master_not_enough_liquidity",
-        0xE009: "liquidation_prices_missing"
+        0x30F1: "master_liquidating_too_much",
+        0x31F0: "user_withdraw_in_progress",
+        0x31F2: "not_liquidatable",
+        0x31FE: "liquidation_execution_crashed",
+        0x31F3: "min_collateral_not_satisfied",
+        0x31F4: "user_not_enough_collateral",
+        0x31F5: "user_liquidating_too_much",
+        0x31F6: "master_not_enough_liquidity",
+        0x31F7: "liquidation_prices_missing"
     }
 
     def __init__(self, slice: Slice):
@@ -525,6 +512,7 @@ class EvaaLiquidationError:
         """
         try:
             self.error_opcode = slice.load_uint(32)
+            self.query_id = slice.load_uint(64)
             self.reason = self.ERROR_CODES.get(self.error_opcode, "unknown")
         except Exception:
             self.error_opcode = 0

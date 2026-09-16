@@ -66,7 +66,7 @@ actions:
     success: false
     source: 0:FED2DAE52C20DFFA3089FEBB3F95DAB0D6CF1D656DB6611A40F8B444FF970A91
     source_secondary: null
-    destination: null
+    destination: 0:0000000000000000000000000000000000000000000000000000000000000000
     destination_secondary: 0:CBB3B4378D1DC4CF7D80D9B33C8F50D80C4D20DBE96F0902DB78627300CE5E11
     asset: null
     asset_secondary: null
@@ -76,9 +76,9 @@ actions:
     value: null
     opcode: null
     evaa_liquidate_data:
-      asset_id: "0x1c1163e125ce481"
-      debt_amount: 12142081103633125532
-      fail_reason: unknown
+      asset_id: "0xe08b1f092e7240fb61bf8249d71aa635102acdd50122138105c35dd2896b5331"
+      debt_amount: 190017
+      fail_reason: not_liquidatable
     tx_hashes:
       - GClR8SmCi46UpHSyOMXlfW5Ca/sfDN0MhizZTQUXLRQ=
       - H2hmS7+ZI61Ojsxoxt3PBoJWDktsK7A4T56DYQlyouM=
@@ -92,6 +92,7 @@ actions:
       - fi+3My8B05BNiobCiGRrCNfMUn7G/LjN/Hp5qV6txJs=
       - jFpffArWdai3aBRt0KiB9TWhqL8oFk+Ypq8l4fUDNp4=
     accounts:
+      - 0:0000000000000000000000000000000000000000000000000000000000000000
       - 0:0D511552DDF8413BD6E2BE2837E22C89422F7B16131BA62BE8D5A504012D8661
       - 0:6EDBBD4A487E2884FCECC6516FF871798F83FA16F0E4FEC403BBAB86CF0057AF
       - 0:BCD3E5DEB9D90B67AE55922B9DACD38AC1F5357D4A6017CCA3F7B69F221BB3A3

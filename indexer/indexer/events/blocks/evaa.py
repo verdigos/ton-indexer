@@ -748,6 +748,7 @@ class EvaaLiquidateBlockMatcher(BlockMatcher):
             msg = block.get_message()
             liquidator = AccountId(msg.source)
             liquidate_master_data = EvaaLiquidateMaster(block.get_body())
+            liquidate_amount = liquidate_master_data.liquidate_incoming_amount
             transferred_asset_id = TON_ASSET_ID
         else:
             liquidator = AccountId(block.data["sender"])
@@ -756,10 +757,9 @@ class EvaaLiquidateBlockMatcher(BlockMatcher):
                 logger.warning("No forward_payload in jetton liquidation")
                 return []
             payload_cell = Cell.from_boc(block.data["forward_payload"])[0]
-            liquidate_master_data = EvaaLiquidateMaster(payload_cell.begin_parse())
+            liquidate_master_data = EvaaLiquidateMaster(payload_cell.begin_parse(), is_ton=False)
             transferred_asset_id = block.data['receiver_wallet'].address
 
-        liquidate_amount = liquidate_master_data.liquidate_incoming_amount
         borrower_address = AccountId(liquidate_master_data.borrower_address)
         collateral_asset_id = liquidate_master_data.collateral_asset_id
 

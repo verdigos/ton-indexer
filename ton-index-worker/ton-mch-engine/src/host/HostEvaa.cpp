@@ -96,15 +96,18 @@ struct LiquidateMasterData {
   td::RefInt256 incoming_amount;
 };
 
-td::Result<LiquidateMasterData> parse_liquidate_master(const td::Ref<vm::Cell> &body) {
+// Classic pools only: op, TON-only query_id, borrower, collateral, min, flag, incoming.
+// Unused refs hold [^custom_payload, subaccount:int16, recipient:addr, saturation:int2]
+// and prices. The wrapped pyth payload has too few inline bits and is rejected.
+td::Result<LiquidateMasterData> parse_liquidate_master(const td::Ref<vm::Cell> &body,
+                                                     bool is_ton) {
   TRY_RESULT(ctx, open_body(body));
   auto &cs = ctx.cs;
-  if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
+  const unsigned header_bits = 32 + (is_ton ? 64 : 0);
+  if (!cs.have(header_bits) || !cs.advance(header_bits)) {
     return td::Status::Error("liquidate_master header");
   }
   TRY_RESULT(borrower, load_address_py(cs));
-  TRY_RESULT(liquidator, load_address_py(cs));
-  (void)liquidator;
   if (!cs.have(256 + 64 + 2 + 64)) {
     return td::Status::Error("liquidate_master fields");
   }
@@ -172,24 +175,23 @@ td::Result<std::string> parse_liquidation_reason(const td::Ref<vm::Cell> &body) 
   }
   cs.advance(256);  // transferred_asset_id
   TRY_RESULT(ref, open_ref_cell(cs.fetch_ref()));
-  if (!ref.have(64 + 256 + 64 + 64) || !ref.advance(64 + 256 + 64 + 64) ||
+  if (!ref.have(64 + 256 + 64 + 16 + 32 + 64) || !ref.advance(64 + 256 + 64 + 16) ||
       ref.size_refs() == 0) {
     return td::Status::Error("liquidate_unsatisfied ref");
   }
   ref.fetch_ref();  // custom_response_payload
-  if (!ref.have(32)) {
-    return td::Status::Error("liquidation error opcode");
-  }
-  switch (static_cast<td::uint32>(ref.fetch_ulong(32))) {
-    case 0xE001: return std::string("master_liquidating_too_much");
-    case 0xE002: return std::string("user_withdraw_in_progress");
-    case 0xE003: return std::string("not_liquidatable");
-    case 0xE004: return std::string("execution_crashed");
-    case 0xE005: return std::string("min_collateral_not_satisfied");
-    case 0xE006: return std::string("user_not_enough_collateral");
-    case 0xE007: return std::string("user_liquidating_too_much");
-    case 0xE008: return std::string("master_not_enough_liquidity");
-    case 0xE009: return std::string("liquidation_prices_missing");
+  const auto error = static_cast<td::uint32>(ref.fetch_ulong(32));
+  ref.advance(64);  // error query_id
+  switch (error) {
+    case 0x30f1: return std::string("master_liquidating_too_much");
+    case 0x31f0: return std::string("user_withdraw_in_progress");
+    case 0x31f2: return std::string("not_liquidatable");
+    case 0x31fe: return std::string("liquidation_execution_crashed");
+    case 0x31f3: return std::string("min_collateral_not_satisfied");
+    case 0x31f4: return std::string("user_not_enough_collateral");
+    case 0x31f5: return std::string("user_liquidating_too_much");
+    case 0x31f6: return std::string("master_not_enough_liquidity");
+    case 0x31f7: return std::string("liquidation_prices_missing");
     default: return std::string("unknown");
   }
 }
@@ -296,11 +298,13 @@ EvalResult evaa_liquidate_data(BuildEnv &env, const std::vector<Value> &args) {
     if (r_cell.is_error()) return host_reject("liquidate_master body");
     master_cell = r_cell.move_as_ok();
   }
-  auto r_master = parse_liquidate_master(master_cell);
+  auto r_master = parse_liquidate_master(master_cell, is_ton);
   if (r_master.is_error()) {
     return host_reject("liquidate_master parse");
   }
   LiquidateMasterData master = r_master.move_as_ok();
+  auto debt_amount = is_ton ? master.incoming_amount : data_field(block, "amount").num;
+  if (debt_amount.is_null()) return host_reject("liquidate_master amount");
   Value anchor_debt_asset_id = is_ton
       ? Value::make_int(kTonAssetId)
       : data_field(block, "receiver_wallet");
@@ -338,7 +342,7 @@ EvalResult evaa_liquidate_data(BuildEnv &env, const std::vector<Value> &args) {
     if (!immediate) return host_reject("no immediate refund");
     return output(master.borrower, Value::null(), master.collateral_asset_id,
                   td::make_refint(0), false, Value::make_str("immediate_rejection"),
-                  master.incoming_amount, anchor_debt_asset_id);
+                  debt_amount, anchor_debt_asset_id);
   }
 
   const Message *um = block_msg(user);
@@ -371,12 +375,12 @@ EvalResult evaa_liquidate_data(BuildEnv &env, const std::vector<Value> &args) {
     }
     return output(master.borrower, std::move(borrower_contract), master.collateral_asset_id,
                   td::make_refint(0), false, Value::make_str(std::move(reason)),
-                  master.incoming_amount, anchor_debt_asset_id);
+                  debt_amount, anchor_debt_asset_id);
   }
   if (satisfied_fail) {
     return output(master.borrower, std::move(borrower_contract), master.collateral_asset_id,
                   td::make_refint(0), false,
-                  Value::make_str("master_not_enough_liquidity"), master.incoming_amount,
+                  Value::make_str("master_not_enough_liquidity"), debt_amount,
                   anchor_debt_asset_id);
   }
   return host_reject("liquidation not completed");
