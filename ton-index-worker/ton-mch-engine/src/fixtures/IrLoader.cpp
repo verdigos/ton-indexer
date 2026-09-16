@@ -74,9 +74,6 @@ void scan_program(const Json &e, CompiledMatcher &m) {
       }
     }
     if (k == "parse" || jstr(e, "s") == "parse") {
-      // Missing `nullable` defaults to strict parse.
-      const bool nullable = k == "parse" && jbool(e, "nullable", false);
-      (void)nullable;
       if (const Json *types = jfield(e, "types"); types != nullptr && types->type() == JType::Array) {
         for (const auto &t : types->get_array()) {
           if (t.type() == JType::String) {
@@ -204,9 +201,8 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
     cn.global_id = old;
     TRY_RESULT(kind, parse_kind(jstr(nrec, "kind")));
     cn.kind = kind;
-    if (has(nrec, "opcode")) {
+    if (cn.kind == NodeKind::Contract) {
       cn.opcode = static_cast<std::uint32_t>(jint(nrec, "opcode") & 0xFFFFFFFF);
-      cn.has_opcode = true;
     }
     cn.btype = jstr(nrec, "btype");
     if (cn.kind == NodeKind::Pred) {
@@ -283,10 +279,7 @@ td::Status build_matcher(const Json &rec, const std::vector<const Json *> &pool,
   if (has(rec, "shape")) {
     m.ref_shapers.insert(jstr(rec, "shape"));
   }
-  if (const Json *bp = jfield(rec, "build_program"); bp != nullptr) {
-    m.has_build_program = true;
-    scan_program(*bp, m);
-  }
+  scan_program(*jfield(rec, "build_program"), m);
 
   // Match-phase dependencies include predicates and inline parse types.
   for (const CompiledNode &n : m.nodes) {

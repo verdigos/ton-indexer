@@ -120,7 +120,6 @@ std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
   line("CompiledMatcher m;");
   line("m.name = " + cstr(m.name) + ";");
   line("m.artifact_index = " + std::to_string(m.artifact_index) + ";");
-  set_if(m.has_build_program, "has_build_program", "true");
   set_if(!m.produces.empty(), "produces", str_list(m.produces));
   line("m.anchor_kind = " + std::string(anchor_name(m.anchor_kind)) + ";");
   set_if(!m.anchor_opcodes.empty(), "anchor_opcodes", opcode_set(m.anchor_opcodes));
@@ -155,8 +154,7 @@ std::string emit_matcher(const CompiledMatcher &m, std::size_t idx) {
     nl.push_back("    CompiledNode &n = m.nodes[" + std::to_string(i) + "];");
     nl.push_back("    n.kind = " + std::string(kind_name(n.kind)) + ";");
     nset(true, "global_id", std::to_string(n.global_id));
-    nset(n.has_opcode, "opcode", hex32(n.opcode));
-    nset(n.has_opcode, "has_opcode", "true");
+    nset(n.kind == NodeKind::Contract, "opcode", hex32(n.opcode));
     nset(!n.btype.empty(), "btype", cstr(n.btype));
     nset(!n.pred_name.empty(), "pred_name", cstr(n.pred_name));
     nset(!n.where_name.empty(), "where_name", cstr(n.where_name));

@@ -606,22 +606,6 @@ EvalResult rt_builtin_len(const Value &x) {
   return rt_ok(Value::make_int64(static_cast<std::int64_t>(xs->size())));
 }
 
-EvalResult rt_builtin_sum(const Value &x) {
-  if (rt_is_null(x)) return rt_ok(Value::null());
-  const std::vector<Value> *xs = nullptr;
-  if (!bi_require_list(x, xs)) return rt_fault("sum expects a list, got " + x.describe());
-  td::RefInt256 acc = td::make_refint(0);
-  for (const auto &el : *xs) {
-    td::RefInt256 v;
-    std::string err;
-    if (!coerce_int(el, v, err)) {
-      return rt_fault("sum: element is not an integer or Amount (" + el.describe() + ")");
-    }
-    acc += v;
-  }
-  return rt_ok(Value::make_int(std::move(acc)));
-}
-
 EvalResult rt_builtin_zip(const Value &a, const Value &b) {
   if (rt_is_null(a) || rt_is_null(b)) return rt_ok(Value::null());
   const std::vector<Value> *xs = nullptr;
@@ -807,7 +791,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
       {"account", 1}, {"amount", 1},  {"asset", 1}, {"ton_asset", 0},
       {"addr_none", 0}, {"b64", 1},   {"first", 1}, {"last", 1},
       {"asset_of", 1}, {"tail_unwrap", 1}, {"bytes_of", 1},
-      {"len", 1},     {"sum", 1},     {"zip", 2},   {"map", 2},
+      {"len", 1},     {"zip", 2},     {"map", 2},
       {"concat", 2}, {"contains", 2},
       {"get", 2}, {"tx_aborted", 1}, {"exit_code", 1},
       {"uint_hex", 1}, {"ext_addr_str", 1},
@@ -834,7 +818,6 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   if (name == "first") return rt_builtin_first(args[0]);
   if (name == "last") return rt_builtin_last(args[0]);
   if (name == "len") return rt_builtin_len(args[0]);
-  if (name == "sum") return rt_builtin_sum(args[0]);
   if (name == "zip") return rt_builtin_zip(args[0], args[1]);
   if (name == "map") return rt_builtin_map(args[0], args[1]);
   if (name == "concat") return rt_builtin_concat(args[0], args[1]);

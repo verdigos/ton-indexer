@@ -13,7 +13,6 @@ BUILTIN_SIGNATURES: dict[str, int] = {
     "first": 1,
     "last": 1,
     "len": 1,
-    "sum": 1,
     "zip": 2,
     "concat": 2,
     "map": 2,

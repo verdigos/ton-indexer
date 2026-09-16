@@ -46,8 +46,7 @@ EvalResult rt_call_hostfn(BuildEnv &env, const std::string &name,
   ctx.fn = &name;
   ctx.anchor = env.anchor;
   RejectScope scope(ctx);
-  if (it->second.arity >= 0 &&
-      args.size() != static_cast<std::size_t>(it->second.arity)) {
+  if (args.size() != static_cast<std::size_t>(it->second.arity)) {
     EvalResult r = rt_fault(name + ": bad arguments");
     reject_log(r.message);
     return r;

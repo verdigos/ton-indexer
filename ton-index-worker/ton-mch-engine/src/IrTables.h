@@ -31,7 +31,6 @@ struct CompiledNode {
   NodeKind kind{NodeKind::Any};
   int global_id{-1};  // artifact-global node index (key of the generated where table)
   std::uint32_t opcode{0};   // contract (unsigned 32)
-  bool has_opcode{false};
   std::string btype;         // block_type
   std::string pred_name;     // pred kind (host predicate)
   std::string where_name;    // named `where` predicate (host predicate)
@@ -54,7 +53,6 @@ struct CompiledNode {
 struct CompiledMatcher {
   std::string name;
   int artifact_index{-1};  // index in the artifact `matchers` array (gen_builds key)
-  bool has_build_program{false};
   std::vector<std::string> produces;
 
   AnchorKind anchor_kind{AnchorKind::OpcodeSet};

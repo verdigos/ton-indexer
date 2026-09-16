@@ -149,8 +149,8 @@ def _builtin_bytes_of(x: Any) -> bytes:
 
 
 # List combinators operate on list captures and literals. Null propagates before
-# these functions run. Empty first/last return null; empty sum/len return zero.
-# Sum accepts integers and Amount values. Zip truncates to the shorter input.
+# these functions run. Empty first/last return null; empty len returns zero.
+# Zip truncates to the shorter input.
 # Map projects a field by dictionary lookup, then attribute lookup; it has no
 # lambda form.
 
@@ -159,16 +159,6 @@ def _require_list(name: str, xs: Any) -> list:
     if not isinstance(xs, list):
         raise EvalError(f"{name} expects a list, got {type(xs).__name__}")
     return xs
-
-
-def _as_amount_int(x: Any) -> int:
-    if isinstance(x, Amount):
-        return x.value
-    if isinstance(x, bool):  # guard: bool is an int subclass, reject it
-        raise EvalError("sum: bool is not summable")
-    if isinstance(x, int):
-        return x
-    raise EvalError(f"sum: element is not an integer or Amount ({type(x).__name__})")
 
 
 def _project(x: Any, field: Any) -> Any:
@@ -198,10 +188,6 @@ def _builtin_last(xs: Any) -> Any:
 
 def _builtin_len(xs: Any) -> int:
     return len(_require_list("len", xs))
-
-
-def _builtin_sum(xs: Any) -> int:
-    return sum(_as_amount_int(x) for x in _require_list("sum", xs))
 
 
 def _builtin_zip(xs: Any, ys: Any) -> list:
@@ -367,9 +353,9 @@ def _neg_result(v: Any) -> Any:
 
 def _arith_int(v: Any) -> int:
     """Coerce an arithmetic operand to int: Amount -> its value, int -> itself
-    (bool is rejected because it is an int subclass); anything else is a fault. Mirrors
-    sum()'s coercion so `a.msg.value - b.msg.value` works whether the envelope
-    value is an int or an Amount."""
+    (bool is rejected because it is an int subclass); anything else is a fault.
+    This lets `a.msg.value - b.msg.value` work whether the envelope value is an
+    int or an Amount."""
     if isinstance(v, Amount):
         if isinstance(v.value, float):
             raise EvalError(

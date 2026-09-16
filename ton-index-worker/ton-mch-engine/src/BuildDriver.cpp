@@ -24,33 +24,17 @@ std::string match_skip_reason(const CompiledMatcher &m) {
 }
 
 std::string build_skip_reason(const CompiledMatcher &m) {
-  if (!m.has_build_program) {
-    return "no_build_program";
-  }
-  std::vector<std::string> missing_types;
-  for (const std::string &t : m.ref_msgtypes) {
-    if (message_parsers().find(t) == message_parsers().end()) {
-      missing_types.push_back(t);
+  auto missing = [](const auto &names, const auto &registry) {
+    std::vector<std::string> result;
+    for (const std::string &name : names) {
+      if (registry.count(name) == 0) result.push_back(name);
     }
-  }
-  std::vector<std::string> missing_lookups;
-  for (const std::string &l : m.ref_lookups) {
-    if (lookup_kinds().count(l) == 0) {
-      missing_lookups.push_back(l);
-    }
-  }
-  std::vector<std::string> missing_fns;
-  for (const std::string &fn : m.ref_fns) {
-    if (host_fns().find(fn) == host_fns().end()) {
-      missing_fns.push_back(fn);
-    }
-  }
-  std::vector<std::string> missing_shapers;
-  for (const std::string &s : m.ref_shapers) {
-    if (host_shapers().find(s) == host_shapers().end()) {
-      missing_shapers.push_back(s);
-    }
-  }
+    return result;
+  };
+  const auto missing_types = missing(m.ref_msgtypes, message_parsers());
+  const auto missing_lookups = missing(m.ref_lookups, lookup_kinds());
+  const auto missing_fns = missing(m.ref_fns, host_fns());
+  const auto missing_shapers = missing(m.ref_shapers, host_shapers());
   std::string reason;
   auto add = [&reason](const std::string &tag, const std::vector<std::string> &names) {
     if (names.empty()) {

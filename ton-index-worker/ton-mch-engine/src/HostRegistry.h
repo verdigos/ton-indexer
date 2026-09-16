@@ -30,7 +30,7 @@ using HostFn = EvalResult (*)(BuildEnv &, const std::vector<Value> &);
 
 struct HostFnEntry {
   HostFn fn;
-  int arity;  // -1 leaves arity validation to the host function
+  int arity;
 };
 
 // Registered host fns, name -> fn. The IR loader / build_skip_reason gate a

@@ -137,19 +137,16 @@ class MatchState {
           for (int b : node.branches) {
             if (test_head(b, block)) c++;
           }
-          ok = c == 1;
-        } else {
-          for (int b : node.branches) {
-            if (test_head(b, block)) {
-              ok = true;
-              break;
-            }
+          return c == 1;
+        }
+        for (int b : node.branches) {
+          if (test_head(b, block)) {
+            return true;
           }
         }
-        break;
+        return false;
       case NodeKind::Recursive:
-        ok = test_head(node.step, block);
-        break;
+        return test_head(node.step, block);
       case NodeKind::Pred: {
         auto it = host_predicates().find(node.pred_name);
         ok = it != host_predicates().end() && it->second(block);
@@ -270,17 +267,6 @@ class MatchState {
   }
 
   bool match_recursive(int nid, const CompiledNode &node, Block *entry) {
-    // Entry gate: the recursive node's own where clauses run against the entry
-    // block before the strategy dispatch.
-    if (!node.where_name.empty()) {
-      auto it = host_predicates().find(node.where_name);
-      if (it == host_predicates().end() || !it->second(entry)) {
-        return false;
-      }
-    }
-    if (node.has_where_expr && !eval_where(node, entry)) {
-      return false;
-    }
     if (node.strategy == RecStrategy::Cyclic) {
       return match_node(node.step, entry);
     }

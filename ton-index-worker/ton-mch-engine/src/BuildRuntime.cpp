@@ -189,14 +189,7 @@ std::string lookup_key(const std::string &kind, const std::vector<Value> &args) 
       case VType::Amount:
         frame(key, 'm', a.num.is_null() ? "nan" : a.num->to_dec_string());
         break;
-      case VType::Null:
-      case VType::Bool:
-      case VType::Asset:
-      case VType::Cell:
-      case VType::List:
-      case VType::Dict:
-      case VType::Obj:
-      case VType::Block:
+      default:
         frame(key, '?', a.describe());
         break;
     }
@@ -216,15 +209,6 @@ Value CollectingLookupTable::get(const std::string &kind, const std::vector<Valu
 
 namespace {
 
-// The lookup kinds the artifact may reference. BuildDriver's
-// runnability gating and the production ParsedBlockLookupSource both key off
-// this exact set, so it stays lib-side while the fixture-backed source that
-// serves them lives in mch-fixtures.
-//
-// dedust_pool is fetched by the dedust_swap_legs host fn via the two-phase
-// table (not a `lookup` build-program node), so it is absent from any
-// matcher's ref_lookups. It is listed here so has() and runnability gating
-// recognise it even though no matcher references it as a lookup node.
 const std::set<std::string> kLookupKinds = {"jetton_wallet", "nft_item", "nominator_pool",
                                             "jvault_assets", "dedust_pool", "nft_sale",
                                             "nft_auction", "multisig_order"};

@@ -49,15 +49,6 @@ class LookupTable {
   virtual Value get(const std::string &kind, const std::vector<Value> &args) const = 0;
 };
 
-// Harness table with every kind registered and every key unknown.
-class NullLookupTable : public LookupTable {
- public:
-  bool has(const std::string &) const override { return true; }
-  Value get(const std::string &, const std::vector<Value> &) const override {
-    return Value::null();
-  }
-};
-
 // Two-phase lookup runtime
 
 std::string lookup_key(const std::string &kind, const std::vector<Value> &args);
