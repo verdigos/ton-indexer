@@ -16,7 +16,7 @@
 #include "dedust_v2_gen.h"
 #include "dns_gen.h"
 #include "evaa_gen.h"
-#include "evaa_supply_forward_gen.h"
+#include "evaa_forward_gen.h"
 #include "jetton_gen.h"
 #include "jvault_gen.h"
 #include "jvault_payload_gen.h"
@@ -305,6 +305,25 @@ td::Result<Value> abi_parse_evaa_withdraw_fail_excess(const td::Ref<vm::Cell> &b
   return td::Status::Error("evaa fail excess: unknown opcode");
 }
 
+td::Result<Value> abi_parse_evaa_liquidate_unsatisfied(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(parsed, decode_abi_body<evaa::EvaaLiquidateUnsatisfied>(body));
+  const auto reason = [&]() {
+    switch (parsed.info.ref->error) {
+      case 0x30f1: return std::string("master_liquidating_too_much");
+      case 0x31f0: return std::string("user_withdraw_in_progress");
+      case 0x31f2: return std::string("not_liquidatable");
+      case 0x31fe: return std::string("liquidation_execution_crashed");
+      case 0x31f3: return std::string("min_collateral_not_satisfied");
+      case 0x31f4: return std::string("user_not_enough_collateral");
+      case 0x31f5: return std::string("user_liquidating_too_much");
+      case 0x31f6: return std::string("master_not_enough_liquidity");
+      case 0x31f7: return std::string("liquidation_prices_missing");
+      default: return std::string("unknown");
+    }
+  }();
+  return Value::make_obj({{"reason", Value::make_str(reason)}});
+}
+
 td::Result<Value> abi_parse_layerzero_oapp_execute_callback(
     const td::Ref<vm::Cell> &body) {
   TRY_RESULT(parsed, decode_abi_body<layerzero::LayerZeroOappExecuteCallbackAbi>(body));
@@ -491,7 +510,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
   namespace dedust_v2 = ton_abi::gen::dedust_v2;
   namespace dns = ton_abi::gen::dns;
   namespace evaa = ton_abi::gen::evaa;
-  namespace evaa_forward = ton_abi::gen::evaa_supply_forward;
+  namespace evaa_forward = ton_abi::gen::evaa_forward;
   namespace jetton = ton_abi::gen::jetton;
   namespace jvault = ton_abi::gen::jvault;
   namespace jvault_payload = ton_abi::gen::jvault_payload;
@@ -568,6 +587,10 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"EvaaWithdrawCollateralized", &abi_parse_body<evaa::EvaaWithdrawCollateralized>},
       {"EvaaWithdrawFailExcess", &abi_parse_evaa_withdraw_fail_excess},
       {"EvaaSupplyJettonForward", &abi_parse_body<evaa_forward::EvaaSupplyJettonForward>},
+      {"EvaaLiquidateMaster", &abi_parse_body<evaa::EvaaLiquidateMaster>},
+      {"EvaaLiquidateSatisfied", &abi_parse_body<evaa::EvaaLiquidateSatisfied>},
+      {"EvaaLiquidateUnsatisfied", &abi_parse_evaa_liquidate_unsatisfied},
+      {"EvaaLiquidateJettonForward", &abi_parse_body<evaa_forward::EvaaLiquidateJettonForward>},
       {"LayerZeroOappExecuteCallback", &abi_parse_layerzero_oapp_execute_callback},
       {"LayerzeroChannelSendCallback", &abi_parse_layerzero_channel_send_callback},
       {"ChannelCommitPacket", &abi_parse_layerzero_channel_commit_packet},

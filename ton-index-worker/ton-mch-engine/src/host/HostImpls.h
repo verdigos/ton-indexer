@@ -51,7 +51,6 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args);
 // EVAA (HostEvaa.cpp).
 bool evaa_supply_anchor(const Block *b);
 bool evaa_liquidate_anchor(const Block *b);
-EvalResult evaa_liquidate_data(BuildEnv &env, const std::vector<Value> &args);
 
 // DeDust (HostDedust.cpp).
 EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args);

@@ -1,30 +1,6 @@
-# EVAA withdrawal matcher corresponding to EvaaWithdrawBlockMatcher.
-#
-# Differences from EvaaWithdrawBlockMatcher:
-# - EvaaUserOp skips the variable-length user header (version coins + maybe
-#   upgrade-info ref + 2 bits) and exposes the opcode for inline where tests.
-# - The EVAA service-comment ton_transfer tests the parsed comment inline.
-# - Legacy's withdraw_fail_on_user_excesses GenericMatcher (opcode-set
-#   membership over 4 error opcodes) is an opcode set sharing one capture
-#   (@fail_excess); same block matched,
-#   same consumed set, and only the winning branch binds.
-# - `or` edge targets use first-match-wins branch order.
-#
-# Capture -> legacy label map:
-#   @master        (anchor)                      | @user      withdraw_on_user
-#   @coll_ok       withdraw_collateralized_success
-#   @jetton_payout jetton_payout                 | @ton_payout ton_payout
-#   @coll_fail     withdraw_collateralized_fail
-#   @fail_excess   withdraw_fail_on_user_excesses
-# (withdraw_success / withdraw_fail_no_funds / withdraw_no_funds_excess are
-# structural-only in the legacy build — no captures needed.)
-#
-# Captures are kept for pattern fidelity but the builder works off the
-# consumed set (Match._mch_consumed): the compiled path's positional capture
-# walker picks an alternative branch by its HEAD test, and @coll_ok/@coll_fail
-# share the head `op EvaaWithdrawCollateralized`, so on fail traces it binds
-# the wrong one (the v2 IR engine binds during the walk and is unaffected).
-# Same situation as stonfi_v2_swap.mch / dedust_swap.mch.
+# EVAA supply, withdrawal, and liquidation build from captures and parsed bodies.
+# EvaaUserOp exposes the opcode after the variable-length user header.
+# Exclusive outcome arms bind the captures used by each build.
 
 import "lib/leg.mch"
 
@@ -151,7 +127,7 @@ matcher evaa_liquidate {
       -> or {
              btype call_contract @user where ((parse? . as EvaaUserOp).op == 0x31)
                -> or {
-                      op EvaaLiquidateSatisfied @satisfied_success
+                      op EvaaLiquidateSatisfied @satisfied_success as EvaaLiquidateSatisfied
                         -> { btype call_contract where ((parse? . as EvaaUserOp).op == 0x311a)
                                -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
                              xor {
@@ -166,7 +142,7 @@ matcher evaa_liquidate {
                                  op EvaaLiquidateFail @finish
                                  btype jetton_transfer @finish
                              } }
-                      op EvaaLiquidateUnsatisfied @unsatisfied
+                      op EvaaLiquidateUnsatisfied @unsatisfied as EvaaLiquidateUnsatisfied
                         -> xor {
                                op EvaaLiquidateSuccessReport @finish
                                op EvaaLiquidateFail @finish
@@ -179,16 +155,20 @@ matcher evaa_liquidate {
              }
          }
 
-    require r = evaa_liquidate_data(consumed)
+    let jetton = master.btype == "jetton_transfer"
+    let m = (parse? master.data.forward_payload as EvaaLiquidateJettonForward) if jetton else (parse? master as EvaaLiquidateMaster)
+    let success = satisfied_success != null
+    let s = satisfied_success.body.info.ref
+    let l = leg(master)
+    reject when m == null or (success and satisfied_success.body == null)
     out {
-        liquidator:          r.liquidator
-        borrower:            r.borrower
-        borrower_contract:   r.borrower_contract
-        collateral_asset_id: r.collateral_asset_id
-        collateral_amount:   r.collateral_amount
-        is_success:           r.is_success
-        fail_reason:          r.fail_reason
-        debt_amount:          r.debt_amount
-        debt_asset_id:        r.debt_asset_id
+        liquidator:          l.source
+        borrower:            account(satisfied_success.body.owner_address if success else m.borrower_address) ?? addr_none()
+        borrower_contract:   user.msg.destination
+        collateral_asset_id: s.collateral_asset_id if success else m.collateral_asset_id
+        collateral_amount:   s.collateral_reward if success else 0
+        is_success:          success
+        fail_reason:         null if success else ("immediate_rejection" if immediate != null else ((unsatisfied.body.reason ?? "liquidation_error") if unsatisfied != null else "master_not_enough_liquidity"))
+        debt_amount:         s.liquidatable_amount if success else (l.amount.value if jetton else m.liquidate_incoming_amount)
     }
 }

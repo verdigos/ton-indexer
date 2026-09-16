@@ -55,9 +55,10 @@ LOGICAL_ROWS_BY_STEM = {
     "coffee_staking_withdraw3": ("CoffeeStakingPositionWithdraw3",),
     "evaa": (
         "EvaaSupplyMaster", "EvaaSupplySuccess", "EvaaWithdrawMaster",
-        "EvaaWithdrawCollateralized",
+        "EvaaWithdrawCollateralized", "EvaaLiquidateMaster",
+        "EvaaLiquidateSatisfied", "EvaaLiquidateUnsatisfied",
     ),
-    "evaa_supply_forward": ("EvaaSupplyJettonForward",),
+    "evaa_forward": ("EvaaSupplyJettonForward", "EvaaLiquidateJettonForward"),
     "jvault": ("JVaultUnstakeJettons", "JVaultUnstakeRequest", "JVaultClaim"),
     "jvault_payload": ("JVaultStakePeriodPayload",),
     "subscriptions": ("SubscriptionPaymentRequest",),
@@ -192,7 +193,7 @@ def test_message_opcodes_are_unique_within_each_protocol_file():
         assert not duplicates, f"{stem}: duplicate opcodes {sorted(duplicates)}"
 
     assert _structs(sources["evaa"])["EvaaSupplyMaster"][0] == "0x00000001"
-    assert _structs(sources["evaa_supply_forward"])["EvaaSupplyJettonForward"][0] == "0x00000001"
+    assert _structs(sources["evaa_forward"])["EvaaSupplyJettonForward"][0] == "0x00000001"
     assert _structs(sources["coffee"])["CoffeeStakingPositionWithdraw2"][0] == "0xcb03bfaf"
     assert _structs(sources["coffee_staking_withdraw3"])["CoffeeStakingPositionWithdraw3"][0] == "0xcb03bfaf"
 

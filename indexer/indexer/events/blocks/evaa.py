@@ -588,7 +588,6 @@ class EvaaLiquidateData:
     borrower_contract: AccountId | None
     collateral_asset_id: int
     collateral_amount: int
-    debt_asset_id: int
     debt_amount: int
     is_success: bool
     fail_reason: str | None = None
@@ -779,7 +778,6 @@ class EvaaLiquidateBlockMatcher(BlockMatcher):
                     borrower_contract=None,
                     collateral_asset_id=collateral_asset_id,
                     collateral_amount=0,
-                    debt_asset_id=transferred_asset_id,
                     debt_amount=liquidate_amount,
                     is_success=False,
                     fail_reason="immediate_rejection",
@@ -806,7 +804,6 @@ class EvaaLiquidateBlockMatcher(BlockMatcher):
                     borrower_contract=borrower_contract,
                     collateral_asset_id=satisfied_data.collateral_asset_id,
                     collateral_amount=satisfied_data.collateral_reward,
-                    debt_asset_id=satisfied_data.transferred_asset_id,
                     debt_amount=satisfied_data.liquidatable_amount,
                     is_success=True,
                 )
@@ -832,7 +829,6 @@ class EvaaLiquidateBlockMatcher(BlockMatcher):
                     borrower_contract=borrower_contract,
                     collateral_asset_id=collateral_asset_id,
                     collateral_amount=0,  # nothing received
-                    debt_asset_id=transferred_asset_id,
                     debt_amount=liquidate_amount,
                     is_success=False,
                     fail_reason=fail_reason,
@@ -850,7 +846,6 @@ class EvaaLiquidateBlockMatcher(BlockMatcher):
                     borrower_contract=borrower_contract,
                     collateral_asset_id=collateral_asset_id,
                     collateral_amount=0,
-                    debt_asset_id=transferred_asset_id,
                     debt_amount=liquidate_amount,
                     is_success=False,
                     fail_reason="master_not_enough_liquidity",
