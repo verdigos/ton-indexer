@@ -20,30 +20,28 @@
 # legacy scan logic needs the full set
 # anyway (same situation as dedust_swap.mch).
 
+import "lib/opcodes.mch"
 opcode StonfiV2Swap  = 0x6664de2a
-opcode StonfiV2PayTo = 0x657b54f5
-opcode JettonNotify  = 0x7362d09c
-opcode PTonTransfer  = 0x01f3835d
 
 predicate pton_self_transfer
 
 # One router hop per unrolling: swap request + payment, then continuation via
 # a validated intermediate pton chain, a plain jetton transfer, or directly.
 rule swap_hop = or {
-                    op StonfiV2Swap @peer_swap
-                      -> op StonfiV2PayTo @peer_payout
-                      -> btype jetton_transfer @peer_out where (not .has_internal_transfer)
+                    op StonfiV2Swap
+                      -> op StonfiV2PayTo
+                      -> btype jetton_transfer where (not .has_internal_transfer)
                       -> pred pton_self_transfer
                       -> op JettonNotify
                       -> maybe $swap_hop
-                    op StonfiV2Swap @peer_swap
-                      -> op StonfiV2PayTo @peer_payout
-                      -> btype jetton_transfer @peer_out {
+                    op StonfiV2Swap
+                      -> op StonfiV2PayTo
+                      -> btype jetton_transfer {
                           -> { maybe op PTonTransfer }
                           -> maybe $swap_hop
                       }
-                    op StonfiV2Swap @peer_swap
-                      -> op StonfiV2PayTo @peer_payout
+                    op StonfiV2Swap
+                      -> op StonfiV2PayTo
                       -> maybe $swap_hop
                 }
 
@@ -62,13 +60,13 @@ matcher stonfi_v2_swap {
 
     op StonfiV2Swap @swap {
         -> {
-            op StonfiV2PayTo @payout
+            op StonfiV2PayTo
                 -> or {
-                       btype jetton_transfer @out_transfer where (not .has_internal_transfer)
+                       btype jetton_transfer where (not .has_internal_transfer)
                           -> pred pton_self_transfer
                           -> op JettonNotify
                           -> maybe $swap_hop
-                       btype jetton_transfer @out_transfer {
+                       btype jetton_transfer {
                           -> { maybe op PTonTransfer }
                           -> maybe $swap_hop
                        }
@@ -76,8 +74,8 @@ matcher stonfi_v2_swap {
                    }
         }
         <- xor {
-               btype jetton_transfer @in_transfer
-               op JettonNotify <- op PTonTransfer @in_transfer
+               btype jetton_transfer
+               op JettonNotify <- op PTonTransfer
            }
     }
 

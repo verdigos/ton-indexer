@@ -286,7 +286,7 @@ matcher nft_cancel_sale {
     reject when account(ret.data.nft.address) != account(sale.nft_address)
     out {
         nft_address:         ret.data.nft.address
-        nft_collection:      ret.data.nft.collection.address if ret.data.nft.collection != null else null
+        nft_collection:      ret.data.nft.collection.address
         owner:               ret.data.new_owner
         trade_contract:      cancel.msg.destination ?? addr_none()
         marketplace_address: account(sale.marketplace_address) ?? addr_none()
@@ -340,14 +340,14 @@ matcher nft_cancel_auction {
     produces switch {
         when (cancel.btype == "ton_transfer" and (cancel.data.comment in ["finish", "stop"])) or (cancel.btype == "call_contract" and (cancel.data.opcode in [0xB95616B6, 0x20C9EB18])) => nft_finish_auction out {
             nft_address:         ret.data.nft.address
-            nft_collection:      ret.data.nft.collection.address if ret.data.nft.collection != null else null
+            nft_collection:      ret.data.nft.collection.address
             owner:               ret.data.new_owner
             trade_contract:      cancel.msg.destination ?? addr_none()
             marketplace_address: account(auction.mp_addr) ?? addr_none()
         }
         else => nft_cancel_auction out {
             nft_address:         ret.data.nft.address
-            nft_collection:      ret.data.nft.collection.address if ret.data.nft.collection != null else null
+            nft_collection:      ret.data.nft.collection.address
             owner:               ret.data.new_owner
             trade_contract:      cancel.msg.destination ?? addr_none()
             marketplace_address: account(auction.mp_addr) ?? addr_none()

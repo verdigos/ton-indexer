@@ -46,7 +46,7 @@ matcher teleitem_start_auction {
     produces        teleitem_start_auction
     include_excess  false
 
-    op TeleitemStartAuction @auction as TeleitemStartAuction -> maybe op TeleitemOk @ok
+    op TeleitemStartAuction @auction as TeleitemStartAuction -> maybe op TeleitemOk
 
     require nft = lookup nft_item(auction.msg.destination)
     reject when not is_fragment_item(nft)
@@ -78,7 +78,7 @@ matcher teleitem_cancel_auction {
     produces        teleitem_cancel_auction
     include_excess  false
 
-    op TeleitemCancelAuction @cancel -> maybe op TeleitemOk @ok
+    op TeleitemCancelAuction @cancel -> maybe op TeleitemOk
 
     require nft = lookup nft_item(cancel.msg.destination)
     reject when not is_fragment_item(nft)

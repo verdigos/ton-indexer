@@ -111,9 +111,9 @@ matcher tgbtc_mint {
 # terminates on the tail node (exclusive exit branch), which carries the success
 # log and the jetton_mint block as a children set.
 rule mint_chain = or {
-                      any @mid -> maybe $mint_chain
-                      op TgBTCMintTail @tail
-                        -> { op TgBTCMintSuccessLog @log ; btype jetton_mint @mint }
+                      any -> maybe $mint_chain
+                      op TgBTCMintTail
+                        -> { op TgBTCMintSuccessLog ; btype jetton_mint }
                   }
 
 # -----------------------------------------------------------------------------
@@ -150,7 +150,7 @@ matcher tgbtc_burn {
     produces tgbtc_burn
 
     btype jetton_burn @burn
-      -> op [JettonBurnNotify, TgBTCBurnNotify] @notify
+      -> op [JettonBurnNotify, TgBTCBurnNotify]
            -> { op TgBTCBurnLog @log as TgBTCBurnEvent
               ; maybe op TgBTCPayout
                   -> { maybe op TgBTCPayoutNotify ; maybe btype ton_transfer } }
@@ -200,7 +200,7 @@ matcher tgbtc_new_key {
             ; maybe op TgBTCPayout
                 -> { maybe op TgBTCPayoutNotify ; maybe btype ton_transfer }
         }
-        <- any @p -> { op TgBTCDkgCompletedLog @dkg as TgBTCDkgCompletedEvent }
+        <- any -> { op TgBTCDkgCompletedLog @dkg as TgBTCDkgCompletedEvent }
     }
 
     require n = log.body

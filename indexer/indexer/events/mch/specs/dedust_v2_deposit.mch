@@ -75,13 +75,12 @@
 # the inversion is unobservable.
 
 import "lib/leg.mch"
+import "lib/opcodes.mch"
 
-opcode DedustV2PayNative       = 0xa5a7cbf8
 opcode DedustV2CreditAsset     = 0xdc5ddba1
 opcode DedustV2JoinLiquidity   = 0x25251ee0
 opcode DedustV2DepositEvent    = 0x35df2e12
 opcode DedustV2CreditLiquidity = 0x855afcbd
-opcode PayoutMessage           = 0x3216ca09
 # One deposit leg's carrier is an `xor` of the TON PayNative node and a jetton
 # transfer. PayNative comes first so `parse carrier as DedustV2PayNative`
 # resolves against a non-`btype` head. The parse is harmless on the jetton arm

@@ -67,12 +67,12 @@
 # family, which builds its jetton_transfer payout legs.
 
 import "lib/leg.mch"
+import "lib/opcodes.mch"
 
 opcode DedustV2Withdraw          = 0x20B5EF89
 opcode DedustV2WithdrawLiquidity = 0xBC1531A9
 opcode DedustV2ExitLiquidity     = 0xF6F6A3AA
 opcode DedustV2WithdrawalEvent   = 0xC0D77B54
-opcode PayoutMessage             = 0x3216CA09
 
 matcher dedust_v2_withdraw {
     produces        dex_withdraw_liquidity

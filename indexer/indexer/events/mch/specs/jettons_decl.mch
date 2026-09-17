@@ -2,12 +2,7 @@
 #
 # The manifest puts these matchers before consumers of their jetton blocks.
 
-opcode JettonTransfer         = 0x0f8a7ea5
-opcode JettonInternalTransfer = 0x178d4519
-opcode JettonNotify           = 0x7362d09c
-opcode JettonBurn             = 0x595f07bc
-opcode JettonBurnNotification = 0x7bdd97de
-opcode JettonMint             = 0x642b7d07
+import "lib/opcodes.mch"
 opcode MinterJettonMint       = 0x00000015
 
 # ---------------------------------------------------------------------------
@@ -28,7 +23,7 @@ matcher jetton_transfer {
 
     op JettonTransfer @transfer as JettonTransfer
       -> op JettonInternalTransfer @internal as JettonInternalTransfer
-      -> maybe op JettonNotify @notify
+      -> maybe op JettonNotify
 
     require wallet   = lookup jetton_wallet(internal.msg.destination)
     let mismatch = account(wallet.owner) != account(transfer.body.destination)
@@ -67,7 +62,7 @@ matcher jetton_transfer {
 matcher jetton_burn {
     produces jetton_burn
 
-    op JettonBurn @burn as JettonBurn -> maybe op JettonBurnNotification @notification
+    op JettonBurn @burn as JettonBurn -> maybe op JettonBurnNotification
 
     require wallet      = lookup jetton_wallet(burn.msg.destination)
     let burn_amount = burn.body.amount
@@ -98,8 +93,8 @@ matcher jetton_mint {
 
     op [JettonMint, MinterJettonMint] @mint as MinterJettonMint | JettonMint
       -> maybe or {
-                   op JettonNotify @notify
-                   op JettonInternalTransfer @internal as JettonInternalTransfer -> maybe op JettonNotify @internal_notify
+                   op JettonNotify
+                   op JettonInternalTransfer @internal as JettonInternalTransfer -> maybe op JettonNotify
                }
 
     let use_internal = not mint.failed and internal != null

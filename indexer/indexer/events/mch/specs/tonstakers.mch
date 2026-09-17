@@ -6,10 +6,7 @@
 # the raw JettonBurn call before jetton_burn wraps it. The other two anchors
 # and their reachable nodes are disjoint, so their relative order is unobservable.
 
-opcode JettonBurn                    = 0x595f07bc
-opcode JettonBurnNotification        = 0x7bdd97de
-opcode JettonInternalTransfer        = 0x178d4519
-opcode JettonNotify                  = 0x7362d09c
+import "lib/opcodes.mch"
 opcode TONStakersDepositRequest      = 0x47d54391
 opcode TONStakersWithdrawRequest     = 0x319b0cdc
 opcode TONStakersPoolWithdrawal      = 0x0a77535c
@@ -126,7 +123,7 @@ matcher tonstakers_withdraw {
         -> op TONStakersWithdrawRequest @request
           -> xor {
                  op TONStakersPoolWithdrawal @immediate_withdrawal
-                 op TONStakersMintNFT @delayed_withdrawal
+                 op TONStakersMintNFT
                    -> { maybe peek btype nft_mint @minted_block
                       ; maybe peek op TONStakersInitNFT @minted_call }
              }

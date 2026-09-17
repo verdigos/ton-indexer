@@ -57,7 +57,7 @@ matcher nominator_pool_deposit {
     include_bounces false
 
     btype ton_transfer @deposit where (.comment == "d")
-      -> { maybe op Excess @excess ; maybe op Bounce @bounce }
+      -> { maybe op Excess ; maybe op Bounce }
 
     require pool_iface = lookup nominator_pool(deposit.msg.destination)
     failed when deposit.failed
@@ -75,8 +75,8 @@ matcher nominator_pool_withdraw_request {
 
     btype ton_transfer @request where (.comment == "w")
       -> {
-          maybe op Excess @excess
-        ; maybe op Bounce @bounce
+          maybe op Excess
+        ; maybe op Bounce
         ; maybe many [2] btype ton_transfer @payouts
       }
 

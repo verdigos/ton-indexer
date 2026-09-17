@@ -29,19 +29,18 @@
 # the optional PTonTransfer body directly; the legacy build core's manual merge
 # of the pTON blocks is subsumed by the engine merging the captured pton_1/pton_2.
 
-opcode StonfiV2PayTo                 = 0x657b54f5
+import "lib/opcodes.mch"
 opcode StonfiV2WithdrawFromPool      = 0x297437cf
 opcode StonfiV2WithdrawRefund        = 0x0f98e2b8
 opcode StonfiV2WithdrawRefundParent  = 0x132b9a2c
-opcode PTonTransfer                  = 0x01f3835d
 
 matcher stonfi_v2_withdraw {
     produces dex_withdraw_liquidity
 
     btype jetton_burn @burn
-      -> op StonfiV2WithdrawFromPool @router
+      -> op StonfiV2WithdrawFromPool
            -> { op StonfiV2PayTo @payout_1 -> btype jetton_transfer @jt_1 -> maybe op PTonTransfer @pton_1 as PTonTransfer
-              ; op StonfiV2PayTo @payout_2 -> btype jetton_transfer @jt_2 -> maybe op PTonTransfer @pton_2 as PTonTransfer }
+              ; op StonfiV2PayTo -> btype jetton_transfer @jt_2 -> maybe op PTonTransfer @pton_2 as PTonTransfer }
 
     out {
         dex:                 "stonfi_v2"
@@ -70,7 +69,7 @@ matcher stonfi_v2_withdraw_refund {
     op StonfiV2WithdrawRefund @refund {
         -> {
             op StonfiV2PayTo @payout_1 -> btype jetton_transfer @jt_1 -> maybe op PTonTransfer @pton_1 as PTonTransfer
-            ; op StonfiV2PayTo @payout_2 -> btype jetton_transfer @jt_2 -> maybe op PTonTransfer @pton_2 as PTonTransfer
+            ; op StonfiV2PayTo -> btype jetton_transfer @jt_2 -> maybe op PTonTransfer @pton_2 as PTonTransfer
         }
         <- op StonfiV2WithdrawRefundParent @refund_parent
     }

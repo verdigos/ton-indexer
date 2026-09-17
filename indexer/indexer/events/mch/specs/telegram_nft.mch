@@ -55,8 +55,7 @@
 #   @payouts    all payouts, sorted by created_lt in the host: one is the seller
 #               payout; with two or more, [0] is royalty and [1] is seller payout.
 
-opcode NftOwnershipAssigned = 0x05138D91
-opcode AuctionFillUp        = 0x370FEC51
+import "lib/opcodes.mch"
 
 matcher telegram_nft_purchase {
     produces nft_transfer

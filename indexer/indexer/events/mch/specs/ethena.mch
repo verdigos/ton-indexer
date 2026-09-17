@@ -76,10 +76,7 @@ matcher ethena_deposit {
 # only this match and let the rest of the trace classify. Same treatment as
 # specs/dedust_withdraw.mch and the tonco withdraw host fn.
 # -----------------------------------------------------------------------------
-opcode JettonTransfer          = 0x0f8a7ea5
-opcode JettonInternalTransfer  = 0x178d4519
-opcode JettonNotify            = 0x7362d09c
-opcode JettonMint              = 0x642b7d07
+import "lib/opcodes.mch"
 opcode EthenaTimelockTransfer  = 0xb2583ed5
 
 matcher ethena_withdrawal_request {

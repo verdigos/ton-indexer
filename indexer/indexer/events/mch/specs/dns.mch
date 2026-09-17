@@ -14,7 +14,7 @@
 # unmatched call_contract when this matcher peeks it (python runs DnsPurchaseMatcher
 # ahead of ChangeDnsRecordMatcher; the first message into a DNS item after its
 # auction ends is usually the winner's ChangeDnsRecord).
-opcode AuctionFillUp      = 0x370fec51
+import "lib/opcodes.mch"
 
 matcher dns_purchase {
     produces dns_purchase

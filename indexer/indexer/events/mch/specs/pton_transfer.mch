@@ -20,13 +20,12 @@
 # is what the stonfi v2 pattern keys its pton arms on), and the legacy build sets
 # no `desired_amount`/`desired_forward_amount` here, so neither does this.
 
-opcode JettonTransfer = 0x0f8a7ea5
-opcode JettonNotify   = 0x7362d09c
+import "lib/opcodes.mch"
 
 matcher pton_transfer {
     produces jetton_transfer
 
-    op JettonTransfer @transfer as JettonTransfer -> maybe op JettonNotify @notify
+    op JettonTransfer @transfer as JettonTransfer -> maybe op JettonNotify
 
     require wallet = lookup jetton_wallet(transfer.msg.destination)
     let pton_v1   = wallet.jetton == "0:8CDC1D7640AD5EE326527FC1AD0514F468B30DC84B0173F0E155F451B4E11F7C"

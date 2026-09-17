@@ -28,34 +28,32 @@
 # map (the legacy block carried a ToncoDepositLiquidityData dataclass); the
 # serializer's _fill reads both via _dget.
 
+import "lib/opcodes.mch"
 opcode ToncoAccountV3AddLiquidity      = 0x3ebe5431
 opcode ToncoPoolV3FundAccount          = 0x4468de77
 opcode ToncoPoolV3MinAndRefund         = 0x81702ef8
-opcode ToncoRouterV3PayTo              = 0xa1daa96d
 opcode ToncoPoolV3StartBurn            = 0x530b5f2c
 opcode ToncoPositionNftV3PositionBurn  = 0x46ca335a
 opcode ToncoPoolV3Burn                 = 0xd73ac09d
 opcode ToncoRouterV3CreatePool         = 0x2e3034ef
 opcode ToncoPoolV3Init                 = 0x441c39ed
-opcode JettonNotify                    = 0x7362d09c
-opcode PTonTransfer                    = 0x01f3835d
 matcher tonco_deposit_liquidity {
     produces tonco_deposit_liquidity
 
     op ToncoAccountV3AddLiquidity @add_liquidity {
         -> {
             maybe op ToncoPoolV3MinAndRefund
-                -> { maybe op ToncoRouterV3PayTo @refund_router_call
-                        -> { maybe btype jetton_transfer @excess_transfer_0
+                -> { maybe op ToncoRouterV3PayTo
+                        -> { maybe btype jetton_transfer
                                 -> { maybe op PTonTransfer }
-                           ; maybe btype jetton_transfer @excess_transfer_1
+                           ; maybe btype jetton_transfer
                                 -> { maybe op PTonTransfer } }
-                   ; btype nft_mint @nft_mint
+                   ; btype nft_mint
                    ; maybe op Excess }
         }
         <- op ToncoPoolV3FundAccount <- or {
-                                            op JettonNotify @ton_input <- op PTonTransfer @ton_input_addition
-                                            btype jetton_transfer @jetton_input
+                                            op JettonNotify <- op PTonTransfer
+                                            btype jetton_transfer
                                         }
     }
 
@@ -204,9 +202,9 @@ matcher tonco_withdraw_liquidity {
       -> op ToncoPositionNftV3PositionBurn @position_burn as ToncoPositionNftV3PositionBurn
         -> op ToncoPoolV3Burn @pool_burn as ToncoPoolV3Burn
           -> op ToncoRouterV3PayTo
-            -> { maybe btype jetton_transfer @payout_1
+            -> { maybe btype jetton_transfer
                    -> { maybe op PTonTransfer }
-               ; maybe btype jetton_transfer @payout_2
+               ; maybe btype jetton_transfer
                    -> { maybe op PTonTransfer } }
 
 

@@ -3,18 +3,16 @@
 # transfer and terminal payout supply the transfer legs.
 
 import "lib/leg.mch"
+import "lib/opcodes.mch"
 
 opcode CoffeeSwapNative          = 0xc0ffee00
 opcode CoffeeSwapInternal        = 0xc0ffee20
 opcode CoffeeSwapSuccessfulEvent = 0xc0ffee30
-opcode CoffeePayoutInternal      = 0xc0ffee21
-opcode CoffeePayout              = 0xc0ffee32
-opcode CoffeeNotification        = 0xc0ffee36
 
 # One pool hop per unrolling: a swap request with its success event; exit =
 # the payout chain to the user.
 rule swap_chain = or {
-                      op CoffeeSwapInternal @peer -> op CoffeeSwapSuccessfulEvent @peer_event as CoffeeSwapEvent -> maybe $swap_chain
+                      op CoffeeSwapInternal -> op CoffeeSwapSuccessfulEvent @peer_event as CoffeeSwapEvent -> maybe $swap_chain
                       op CoffeePayoutInternal @exit_payout as CoffeePayoutInternal -> or {
                                                      btype jetton_transfer @exit_out
                                                      op CoffeePayout @exit_out

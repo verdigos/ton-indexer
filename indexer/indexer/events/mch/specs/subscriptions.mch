@@ -32,6 +32,6 @@ matcher unsubscribe {
     out {
         subscriber:   destruct.msg.source
         subscription: destruct.msg.destination
-        beneficiary:  response.msg.destination if response != null else null
+        beneficiary:  response.msg.destination
     }
 }

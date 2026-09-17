@@ -18,11 +18,8 @@
 # `payout.previous_block` navigation.
 
 import "lib/leg.mch"
+import "lib/opcodes.mch"
 
-opcode JettonBurn             = 0x595f07bc
-opcode JettonBurnNotification = 0x7bdd97de
-opcode DedustPayoutFromPool   = 0xad4eb6f5
-opcode DedustPayout           = 0x474f86cf
 
 matcher dedust_withdraw {
     produces dex_withdraw_liquidity

@@ -88,7 +88,7 @@ matcher layerzero_receive {
              -> op ChannelLzReceiveLock
              -> op LayerzeroLzReceiveExecute @execute as LayerZeroOappExecuteCallback
                   -> { maybe op LayerZeroEventMsgBody
-                     ; op LayerZeroOappExecuteCallback @oapp_callback
+                     ; op LayerZeroOappExecuteCallback
                          -> { maybe op LayerZeroEventMsgBody
                             ; maybe btype ton_transfer } } }
 

@@ -42,8 +42,8 @@
 #   @assigned   the NftOwnershipAssigned notification (prev_owner), when present
 #   @funding_parent  the optional unconsumed block immediately before the anchor
 
+import "lib/opcodes.mch"
 opcode NftTransfer          = 0x5FCC3D14
-opcode NftOwnershipAssigned = 0x05138D91
 matcher nft_transfer {
     produces        nft_transfer
     shape           nft_transfer_parent_absorb
@@ -52,7 +52,7 @@ matcher nft_transfer {
     op NftTransfer @transfer {
         -> {
             maybe op NftOwnershipAssigned @assigned
-            ; maybe op Excess @excess
+            ; maybe op Excess
         }
         <- maybe peek any @funding_parent
     }

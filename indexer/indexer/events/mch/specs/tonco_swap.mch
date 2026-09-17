@@ -43,11 +43,8 @@
 # produced Block(btype jetton_swap) from it and `failed when r.failed` sets the
 # flag. The fn returns null to reject.
 
+import "lib/opcodes.mch"
 opcode ToncoPoolV3Swap    = 0xa7fb58f8
-opcode ToncoRouterV3PayTo = 0xa1daa96d
-opcode JettonNotify       = 0x7362d09c
-opcode JettonTransfer     = 0x0f8a7ea5
-opcode PTonTransfer       = 0x01f3835d
 
 # One router hop per descent level: swap request + payment from the pool, then
 # either a transfer that provably continues to the next swap (back-edge,
@@ -79,8 +76,8 @@ matcher tonco_swap {
                    }
         }
         <- xor {
-               btype jetton_transfer @in_transfer
-               op JettonNotify <- op PTonTransfer @in_transfer
+               btype jetton_transfer
+               op JettonNotify <- op PTonTransfer
            }
     }
 

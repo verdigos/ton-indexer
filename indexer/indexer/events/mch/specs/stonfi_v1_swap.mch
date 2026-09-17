@@ -37,8 +37,8 @@ matcher stonfi_v1_swap {
 
     btype jetton_transfer @in_transfer
       -> op StonfiSwap @swap
-      -> op StonfiPaymentRequest @req where ((parse? . as StonfiPaymentRequest).exit_code in [0xc64370e5, 0x5ffe1295, 0x38976e9b])
-      -> btype jetton_transfer @out
+      -> op StonfiPaymentRequest where ((parse? . as StonfiPaymentRequest).exit_code in [0xc64370e5, 0x5ffe1295, 0x38976e9b])
+      -> btype jetton_transfer
 
     let d = stonfi_v1_swap_data(in_transfer, swap)
     failed when not d.success

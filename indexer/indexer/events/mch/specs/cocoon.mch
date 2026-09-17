@@ -32,7 +32,7 @@ matcher cocoon_worker_payout {
     op [CocoonPayoutPayload, CocoonLastPayoutPayload] @start as CocoonLastPayoutPayload | CocoonPayoutPayload
       -> op CocoonWorkerProxyRequest @wreq as CocoonWorkerProxyRequest
          -> { op CocoonPayout @payout
-            ; maybe op CocoonReturnExcessesBack @excesses }
+            ; maybe op CocoonReturnExcessesBack }
 
     failed when tx_failed(payout)
     out {
@@ -54,7 +54,7 @@ matcher cocoon_proxy_payout {
 
     op CocoonExtProxyPayoutRequest @req as CocoonExtProxyPayoutRequest
       -> { op CocoonPayout @payout
-         ; op CocoonReturnExcessesBack @excesses }
+         ; op CocoonReturnExcessesBack }
 
     failed when tx_failed(payout)
     out {
@@ -70,7 +70,7 @@ matcher cocoon_proxy_charge {
     produces cocoon_proxy_charge
 
     op CocoonChargePayload @charge as CocoonChargePayload
-      -> { op CocoonReturnExcessesBack @excesses
+      -> { op CocoonReturnExcessesBack
          ; op CocoonClientProxyRequest @client_request }
 
     failed when tx_failed(charge)
@@ -88,7 +88,7 @@ matcher cocoon_client_top_up {
 
     op CocoonExtClientTopUp @topup as CocoonExtClientTopUp
       -> op CocoonClientProxyRequest @preq
-         -> { op CocoonReturnExcessesBack @excesses }
+         -> { op CocoonReturnExcessesBack }
 
     failed when tx_failed(topup)
     out {
@@ -103,7 +103,7 @@ matcher cocoon_client_top_up {
 matcher cocoon_register_proxy {
     produces cocoon_register_proxy
 
-    op CocoonRegisterProxy @reg as CocoonRegisterProxy -> op CocoonReturnExcessesBack @excesses
+    op CocoonRegisterProxy @reg as CocoonRegisterProxy -> op CocoonReturnExcessesBack
 
     failed when tx_failed(reg)
     out {
@@ -115,7 +115,7 @@ matcher cocoon_register_proxy {
 matcher cocoon_unregister_proxy {
     produces cocoon_unregister_proxy
 
-    op CocoonUnregisterProxy @unreg as CocoonUnregisterProxy -> op CocoonReturnExcessesBack @excesses
+    op CocoonUnregisterProxy @unreg as CocoonUnregisterProxy -> op CocoonReturnExcessesBack
 
     failed when tx_failed(unreg)
     out {
@@ -129,8 +129,8 @@ matcher cocoon_client_register {
     produces cocoon_client_register
 
     op CocoonOwnerClientRegister @reg as CocoonOwnerClientRegister
-      -> { op CocoonReturnExcessesBack @excesses
-         ; op CocoonClientProxyRequest @client_request }
+      -> { op CocoonReturnExcessesBack
+         ; op CocoonClientProxyRequest }
 
     failed when tx_failed(reg)
     out {
@@ -146,8 +146,8 @@ matcher cocoon_client_change_secret_hash {
     produces cocoon_client_change_secret_hash
 
     op CocoonOwnerClientChangeSecretHash @chg as CocoonOwnerClientChangeSecretHash
-      -> { op CocoonReturnExcessesBack @excesses
-         ; op CocoonClientProxyRequest @client_request }
+      -> { op CocoonReturnExcessesBack
+         ; op CocoonClientProxyRequest }
 
     failed when tx_failed(chg)
     out {
@@ -165,8 +165,8 @@ matcher cocoon_client_request_refund {
 
     op [CocoonOwnerWalletSendMessage, CocoonOwnerClientRequestRefund] @refund as CocoonOwnerClientRequestRefund {
         -> {
-            op CocoonReturnExcessesBack @excesses
-            ; op CocoonClientProxyRequest @client_request
+            op CocoonReturnExcessesBack
+            ; op CocoonClientProxyRequest
         }
         <- maybe op CocoonOwnerWalletSendMessage @wallet
     }
@@ -186,7 +186,7 @@ matcher cocoon_grant_refund {
     op CocoonGrantRefundPayload @grant as CocoonGrantRefundPayload
       -> op CocoonClientProxyRequest @client_request
          -> { op CocoonPayout @payout
-            ; op CocoonReturnExcessesBack @excesses }
+            ; op CocoonReturnExcessesBack }
 
     failed when tx_failed(payout)
     out {
@@ -204,8 +204,8 @@ matcher cocoon_client_increase_stake {
     produces cocoon_client_increase_stake
 
     op CocoonOwnerClientIncreaseStake @inc as CocoonOwnerClientIncreaseStake
-      -> { op CocoonReturnExcessesBack @excesses
-         ; op CocoonClientProxyRequest @client_request }
+      -> { op CocoonReturnExcessesBack
+         ; op CocoonClientProxyRequest }
 
     failed when tx_failed(inc)
     out {
@@ -223,8 +223,8 @@ matcher cocoon_client_withdraw {
 
     op CocoonOwnerClientWithdraw @wd as CocoonOwnerClientWithdraw
       -> op CocoonClientProxyRequest @client_request as CocoonClientProxyRequest
-         -> { maybe op CocoonReturnExcessesBack @excesses
-            ; op CocoonPayout @payout }
+         -> { maybe op CocoonReturnExcessesBack
+            ; op CocoonPayout }
 
     # A refund grant rides inside the proxy request; anything else leaves the amount at 0.
     let granted = parse? client_request.body.payload as CocoonClientProxyRefundGranted

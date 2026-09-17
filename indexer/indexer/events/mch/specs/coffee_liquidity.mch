@@ -14,17 +14,12 @@
 # by no other spec, so their positions in specs/manifest.yaml carry no tie-break.
 
 import "lib/leg.mch"
+import "lib/opcodes.mch"
 
 opcode CoffeeDepositLiquidityNative           = 0xc0ffee04
 opcode CoffeeCreateVault                      = 0xc0ffee06
-opcode CoffeePayoutInternal                   = 0xc0ffee21
-opcode CoffeeDeploy                           = 0xc0ffee22
 opcode CoffeeCreateLiquidityDepositoryRequest = 0xc0ffee27
 opcode CoffeeDepositLiquidityInternal         = 0xc0ffee29
-opcode CoffeePayout                           = 0xc0ffee32
-opcode CoffeeDepositLiquiditySuccessfulEvent  = 0xc0ffee33
-opcode CoffeeNotification                     = 0xc0ffee36
-opcode JettonInternalTransfer                 = 0x178d4519
 opcode ProvideWalletAddress                   = 0x2c76b973
 opcode TakeWalletAddress                      = 0xd1735400
 
@@ -71,7 +66,7 @@ matcher coffee_deposit_liquidity {
                 -> maybe op CoffeeDepositLiquidityInternal
                     -> { op JettonInternalTransfer -> maybe op Excess
                        ; op CoffeeDepositLiquiditySuccessfulEvent @success as CoffeeDepositLiquiditySuccessfulEvent
-                       ; maybe op CoffeePayoutInternal @payout
+                       ; maybe op CoffeePayoutInternal
                             -> xor {
                                    btype jetton_transfer @out_jt
                                    op CoffeePayout @out_call
@@ -100,7 +95,7 @@ matcher coffee_deposit_liquidity {
         # Unconditional `AccountId(...)` in the legacy build, so a body-level
         # addr_none stays present-but-empty rather than becoming null.
         sender:               account(request.body.sender) ?? addr_none()
-        pool_address:         success.msg.source if success != null else null
+        pool_address:         success.msg.source
         deposit_contract:     deploy.msg.destination
         vault_excesses:       excess_jetton ?? excess_ton ?? []
         asset_1:              l.asset if is_first else null
@@ -113,7 +108,7 @@ matcher coffee_deposit_liquidity {
         target_amount_1:      null
         target_asset_2:       pool_second if is_first else pool_first
         target_amount_2:      null
-        lp_tokens_minted:     amount(success.body.lp_amount) if success != null else null
+        lp_tokens_minted:     amount(success.body.lp_amount)
     }
 }
 

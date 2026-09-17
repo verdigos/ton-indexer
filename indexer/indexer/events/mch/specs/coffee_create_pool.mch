@@ -70,14 +70,11 @@
 # coffee_create_pool. Both follow the jetton family, which builds the creator's
 # jetton_transfer parent. No other spec claims the 0xc0ffee23 anchor.
 
+import "lib/opcodes.mch"
 opcode CoffeeCreatePoolNative                = 0xC0FFEE02
-opcode CoffeeDeploy                          = 0xC0FFEE22
 opcode CoffeeCreatePoolCreatorRequest        = 0xC0FFEE23
 opcode CoffeeCreatePoolRequest               = 0xC0FFEE25
-opcode CoffeeDepositLiquiditySuccessfulEvent = 0xC0FFEE33
-opcode CoffeeNotification                    = 0xC0FFEE36
 opcode CoffeeNotificationCallback            = 0xB216D31F
-opcode JettonInternalTransfer                = 0x178D4519
 matcher coffee_create_pool_creator {
     produces coffee_create_pool_creator
 
@@ -87,7 +84,7 @@ matcher coffee_create_pool_creator {
         -> { op CoffeeDeploy @deploy }
         <- xor {
                btype jetton_transfer @in_jt
-               op CoffeeCreatePoolNative @in_native
+               op CoffeeCreatePoolNative
            }
     }
 

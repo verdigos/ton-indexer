@@ -35,8 +35,8 @@ opcode JVaultSendClaimedRewards    = 0x44BC1FE3
 # Pool referrer-update fan-out: a linear chain of request/update referrer
 # messages (each auto-consuming its excess/bounce), terminated by exhaustion.
 rule jvault_referrals = or {
-                            op JVaultRequestUpdateReferrer @ref -> maybe $jvault_referrals
-                            op JVaultUpdateReferrer @refupd -> maybe $jvault_referrals
+                            op JVaultRequestUpdateReferrer -> maybe $jvault_referrals
+                            op JVaultUpdateReferrer -> maybe $jvault_referrals
                         }
 
 matcher jvault_stake {
@@ -46,11 +46,11 @@ matcher jvault_stake {
       -> { op JVaultReceiveJettons @receive
              -> or {
                     op JVaultRequestUpdateRewards @request
-                      -> { maybe $jvault_referrals ; op JVaultUpdateRewards @update }
+                      -> { maybe $jvault_referrals ; op JVaultUpdateRewards }
                     op JVaultStakeCancel @cancel
-                      -> maybe btype jetton_transfer @cancel_transfer
+                      -> maybe btype jetton_transfer
                 }
-         ; maybe op JVaultSetData @setdata }
+         ; maybe op JVaultSetData }
 
     # The composed transfer supplies sender, asset, amount, and the b64 payload.
     # The receive envelope supplies the stake wallet and pool; the payload
@@ -78,7 +78,7 @@ matcher jvault_unstake {
                    -> { maybe $jvault_referrals
                       ; maybe btype ton_transfer @fee
                       ; btype jetton_transfer @withdraw
-                      ; op JVaultUpdateRewards @update } )
+                      ; op JVaultUpdateRewards } )
 
     # Legacy build_jvault_unstake_core: assets resolved from the stake wallet
     # (record lookup); reject if the pool/asset can't be resolved. Two output
@@ -107,7 +107,7 @@ matcher jvault_claim {
 
     op JVaultClaim @claim as JVaultClaim
       -> op JVaultSendClaimedRewards @send
-           -> { btype jetton_transfer @withdraw ; op JVaultUpdateRewards @update }
+           -> { btype jetton_transfer @withdraw ; op JVaultUpdateRewards }
 
     # Legacy build_jvault_claim_core. claimed_jettons maps the claim body's
     # jetton-wallet list through the AccountId constructor using
@@ -130,7 +130,7 @@ matcher jvault_unstake_request {
 
     op JVaultUnstakeRequest @request_anchor as JVaultUnstakeRequest
       -> maybe ( op JVaultRequestUpdateRewards @request
-                   -> { maybe $jvault_referrals ; op JVaultUpdateRewards @update } )
+                   -> { maybe $jvault_referrals ; op JVaultUpdateRewards } )
 
     # Legacy build_jvault_unstake_request_core. Two shapes: early (request never
     # reached the pool → failed, exit code from the anchor, pool+assets from the

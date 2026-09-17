@@ -22,17 +22,17 @@
 # (_fill_dedust_v2_claim_reward) serves both the legacy block and this one.
 
 import "lib/leg.mch"
+import "lib/opcodes.mch"
 
 opcode ClaimRewardMessage   = 0x909fdb65
 opcode ClaimPositionReward  = 0x2e0cccba
 opcode PayoutRewardMessage  = 0x9e17fbbe
-opcode PayoutMessage        = 0x3216ca09
 
 matcher dedust_v2_claim_reward {
     produces dedust_v2_claim_reward
 
     op ClaimRewardMessage @claim as ClaimRewardMessage
-      -> op ClaimPositionReward @cpr
+      -> op ClaimPositionReward
       -> op PayoutRewardMessage @payout_reward as PayoutRewardMessage
       -> maybe or {
                    op PayoutMessage @ton as PayoutMessage

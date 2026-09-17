@@ -32,9 +32,7 @@
 # navigation), same approach as dedust_swap/stonfi_v2; captures are kept for
 # pattern fidelity only.
 
-opcode JettonTransfer         = 0x0f8a7ea5
-opcode JettonInternalTransfer = 0x178d4519
-opcode JettonNotify           = 0x7362d09c
+import "lib/opcodes.mch"
 
 opcode DedustDepositTONToVault               = 0xd55e4686
 opcode DedustAskLiquidityFactory             = 0xf04ec526
@@ -43,15 +41,14 @@ opcode DedustTopUpLiquidityDepositContract   = 0x54240fe5
 opcode DedustDepositLiquidityToPool          = 0xb56b9598
 opcode DedustDestroyLiquidityDepositContract = 0xaae79256
 opcode DedustReturnExcessFromVault           = 0x6b0b787f
-opcode DedustPayout                          = 0x474f86cf
 opcode DedustRejection                       = 0xe1a36cd4
 
 # The deposit leg feeding the vault: TON straight to the vault, a prebuilt
 # jetton transfer, or the raw notify chain (fallback, see header).
 rule deposit_leg = or {
-                       op DedustDepositTONToVault @deposit_ton
-                       btype jetton_transfer @deposit_transfer
-                       op JettonNotify @deposit_notify <- op JettonInternalTransfer <- op JettonTransfer
+                       op DedustDepositTONToVault
+                       btype jetton_transfer
+                       op JettonNotify <- op JettonInternalTransfer <- op JettonTransfer
                    }
 
 # One excess-liquidity refund from a vault: optional jetton payout (prebuilt
@@ -79,8 +76,8 @@ matcher dedust_deposit_final {
     op DedustDepositLiquidityToPool @pool {
         -> {
             or {
-                op JettonInternalTransfer @lp_transfer -> maybe op JettonNotify
-                op DedustRejection @rejection
+                op JettonInternalTransfer -> maybe op JettonNotify
+                op DedustRejection
                   -> { maybe btype ton_transfer ; maybe many $vault_excess }
             }
             ; maybe op DedustDestroyLiquidityDepositContract

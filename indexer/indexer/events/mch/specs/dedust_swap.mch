@@ -12,21 +12,16 @@
 #   the consumed set (Match._mch_consumed), like the legacy build_block works
 #   off other_blocks. This is the simplest faithful input for its scan logic.
 
-opcode DedustSwapExternal     = 0x61ee542d
-opcode DedustSwapPeer         = 0x72aca8aa
-opcode DedustSwap             = 0xea06185d
-opcode DedustSwapNotification = 0x9c610de3
-opcode DedustPayoutFromPool   = 0xad4eb6f5
-opcode DedustPayout           = 0x474f86cf
+import "lib/opcodes.mch"
 
 # One pool hop per unrolling: a peer (or nested external) swap request with an
 # optional notification child; exit = the terminal payout chain.
 rule peer_chain = or {
-                      op DedustSwapPeer @peer {
+                      op DedustSwapPeer {
                             -> { maybe op DedustSwapNotification @peer_notification }
                             -> maybe $peer_chain
                         }
-                      op DedustSwapExternal @peer {
+                      op DedustSwapExternal {
                             -> { maybe op DedustSwapNotification @peer_notification }
                             -> maybe $peer_chain
                         }
@@ -51,10 +46,10 @@ matcher dedust_swap {
     op DedustSwapExternal @ext {
         -> {
             or {
-                op DedustPayoutFromPool @payout
+                op DedustPayoutFromPool
                   -> or {
-                         btype jetton_transfer @out_jetton
-                         op DedustPayout @out_ton
+                         btype jetton_transfer
+                         op DedustPayout
                      }
                 $peer_chain
             }

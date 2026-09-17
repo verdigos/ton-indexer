@@ -51,21 +51,19 @@
 # the rest.
 
 import "lib/leg.mch"
+import "lib/opcodes.mch"
 
 opcode StonfiV2ProvideLiquidity = 0x37c096df
 opcode StonfiV2AddLiquidity     = 0x50c6a654
 opcode StonfiV2CbAddLiquidity   = 0x06ecd527
-opcode JettonNotify             = 0x7362d09c
-opcode JettonInternalTransfer   = 0x178d4519
-opcode PTonTransfer             = 0x01f3835d
 
 # The incoming deposit transfer feeding the router (legacy OrMatcher order):
 # pTON leg (raw notify fronted by the 0x01f3835d call), a prebuilt jetton
 # transfer, or a raw notify chain behind a prebuilt transfer.
 rule in_leg = or {
-                  op JettonNotify @notify_pton <- op PTonTransfer @in_pton
+                  op JettonNotify @notify_pton <- op PTonTransfer
                   btype jetton_transfer @in_jt
-                  op JettonNotify @notify_raw <- op JettonInternalTransfer @internal_raw <- btype jetton_transfer @in_jt_raw
+                  op JettonNotify <- op JettonInternalTransfer <- btype jetton_transfer @in_jt_raw
               }
 
 matcher stonfi_v2_provide_final {
@@ -73,8 +71,8 @@ matcher stonfi_v2_provide_final {
 
     op StonfiV2ProvideLiquidity @provide as StonfiV2ProvideLiquidity {
         -> {
-            op StonfiV2AddLiquidity @add
-                -> op StonfiV2CbAddLiquidity @cb
+            op StonfiV2AddLiquidity
+                -> op StonfiV2CbAddLiquidity
                     -> or {
                            op JettonInternalTransfer @lp_transfer as JettonInternalTransfer
                            op StonfiV2AddLiquidity @refund
@@ -95,7 +93,7 @@ matcher stonfi_v2_provide_final {
         asset_2:         null
         sender_wallet_2: null
         pool:            provide.msg.destination
-        lp_tokens_minted: null if lp_transfer == null else amount(lp_transfer.body.amount)
+        lp_tokens_minted: amount(lp_transfer.body.amount)
     }
 }
 
@@ -103,7 +101,7 @@ matcher stonfi_v2_provide_partial {
     produces dex_deposit_liquidity
 
     op StonfiV2ProvideLiquidity @provide as StonfiV2ProvideLiquidity {
-        -> { op StonfiV2AddLiquidity @add }
+        -> { op StonfiV2AddLiquidity }
         <- $in_leg
     }
 
