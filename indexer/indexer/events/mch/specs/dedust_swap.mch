@@ -22,12 +22,14 @@ opcode DedustPayout           = 0x474f86cf
 # One pool hop per unrolling: a peer (or nested external) swap request with an
 # optional notification child; exit = the terminal payout chain.
 rule peer_chain = or {
-                      op DedustSwapPeer @peer
-                        -> { maybe op DedustSwapNotification @peer_notification }
-                        -> maybe $peer_chain
-                      op DedustSwapExternal @peer
-                        -> { maybe op DedustSwapNotification @peer_notification }
-                        -> maybe $peer_chain
+                      op DedustSwapPeer @peer {
+                            -> { maybe op DedustSwapNotification @peer_notification }
+                            -> maybe $peer_chain
+                        }
+                      op DedustSwapExternal @peer {
+                            -> { maybe op DedustSwapNotification @peer_notification }
+                            -> maybe $peer_chain
+                        }
                       op DedustPayoutFromPool -> or {
                                                      op DedustPayout
                                                      btype jetton_transfer

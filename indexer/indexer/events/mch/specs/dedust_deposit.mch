@@ -26,9 +26,7 @@
 # the topup, a failed-final leftover) lives in the shared build core and
 # surfaces as a builder reject here.
 #
-# Flat parent chain `<- op Ask -> { maybe op Deploy } <- $deposit_leg`: ask gets
-# both children_matchers=[deploy] and parent=Or(deposit legs), matching the
-# source structure. The flat and grouped forms wire identically.
+# The Ask relation block carries the deploy child and deposit-leg parent.
 #
 # Builders are consumed-set/tree-driven (Match._mch_consumed + previous_block
 # navigation), same approach as dedust_swap/stonfi_v2; captures are kept for
@@ -88,7 +86,10 @@ matcher dedust_deposit_final {
             ; maybe op DedustDestroyLiquidityDepositContract
                 -> { maybe btype ton_transfer ; maybe many $vault_excess }
         }
-        <- op DedustTopUpLiquidityDepositContract <- op DedustAskLiquidityFactory -> { maybe op DedustDeployDepositContract } <- $deposit_leg
+        <- op DedustTopUpLiquidityDepositContract <- op DedustAskLiquidityFactory {
+            -> { maybe op DedustDeployDepositContract }
+            <- $deposit_leg
+        }
     }
 
     require r = dedust_deposit_final_data(consumed)

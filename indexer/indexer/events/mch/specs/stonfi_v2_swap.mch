@@ -38,9 +38,10 @@ rule swap_hop = or {
                       -> maybe $swap_hop
                     op StonfiV2Swap @peer_swap
                       -> op StonfiV2PayTo @peer_payout
-                      -> btype jetton_transfer @peer_out
-                      -> { maybe op PTonTransfer }
-                      -> maybe $swap_hop
+                      -> btype jetton_transfer @peer_out {
+                          -> { maybe op PTonTransfer }
+                          -> maybe $swap_hop
+                      }
                     op StonfiV2Swap @peer_swap
                       -> op StonfiV2PayTo @peer_payout
                       -> maybe $swap_hop
@@ -67,9 +68,10 @@ matcher stonfi_v2_swap {
                           -> pred pton_self_transfer
                           -> op JettonNotify
                           -> maybe $swap_hop
-                       btype jetton_transfer @out_transfer
+                       btype jetton_transfer @out_transfer {
                           -> { maybe op PTonTransfer }
                           -> maybe $swap_hop
+                       }
                        $swap_hop
                    }
         }

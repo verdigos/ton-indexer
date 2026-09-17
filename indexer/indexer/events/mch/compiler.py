@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from indexer.events.mch import ast_
@@ -129,7 +129,7 @@ def _compile_matcher(rm: ResolvedMatcher, ctx: CompileCtx) -> CompiledMatcher:
     ctx.where_anchor_capture = rm.anchor_capture
 
     _check_no_capture_after_recursion(decl.pattern, decl.span, ctx)
-    _check_no_bare_children_block(decl.pattern, ctx)
+    _check_children_block_placement(decl.pattern, ctx)
     if ctx.bag.items:
         raise CompileError(ctx.bag)
 
@@ -253,7 +253,7 @@ def _lower_child_chain_from(
     downstream_atoms: list[ast_.PatternExpr] = []
     for edge, atom in sequence.tail:
         if edge is ast_.Edge.PARENT:
-            if downstream_atoms and not all(_is_cb_atom(a) for a in downstream_atoms):
+            if downstream_atoms:
                 ctx.bag.error(
                     "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
                     "a parent edge ('<-') following a child edge in the same "
@@ -727,18 +727,25 @@ def _check_no_capture_after_recursion(
     walk(pattern)
 
 
-def _check_no_bare_children_block(
+def _check_children_block_placement(
     pattern: ast_.PatternExpr,
     ctx: CompileCtx,
 ) -> None:
-    """Report C008 for a children block without a node on its left.
-    """
+    """Reject bare children blocks and edges after a children block."""
 
     def emit_c008(span: ast_.Span) -> None:
         ctx.bag.error(
             "C008_CHILDREN_BLOCK_BARE",
             "children block '{...}' must follow a node in a sequence "
             "(e.g. 'op A -> {op B; op C}'); bare children blocks are not allowed",
+            span,
+        )
+
+    def emit_c009(span: ast_.Span) -> None:
+        ctx.bag.error(
+            "C009_MIXED_CHILD_PARENT_CHAIN_UNSUPPORTED",
+            "an edge after a children block in the same chain is unsupported; "
+            "put the relations on the preceding node in a relation block",
             span,
         )
 
@@ -751,9 +758,13 @@ def _check_no_bare_children_block(
         if isinstance(p, ast_.Sequence):
             walk(p.head, in_chain_left=False)
             previous_was_atom = not _is_cb_atom(p.head)
+            previous_was_children_block = _is_cb_atom(p.head)
             for _edge, atom in p.tail:
+                if previous_was_children_block:
+                    emit_c009(atom.span)
                 walk(atom, in_chain_left=previous_was_atom)
-                if not _is_cb_atom(atom):
+                previous_was_children_block = _is_cb_atom(atom)
+                if not previous_was_children_block:
                     previous_was_atom = True
         elif isinstance(p, ast_.RuleRef):
             # Check the rule body once at its definition site, with no chain
@@ -801,6 +812,19 @@ def _strip_trailing_self_ref(branch: ast_.PatternExpr, rule_name: str) -> ast_.P
     """
     if _is_maybe_self_ref(branch, rule_name):
         return None
+
+    def strip_relation_child(node: ast_.Node) -> ast_.Node:
+        relations = node.relations
+        if (
+            relations is None
+            or relations.children_all is None
+            or not _is_maybe_self_ref(relations.children_all, rule_name)
+        ):
+            return node
+        return replace(node, relations=replace(relations, children_all=None))
+
+    if isinstance(branch, ast_.Node):
+        return strip_relation_child(branch)
     if isinstance(branch, ast_.Sequence):
         if branch.tail:
             last_edge, last_atom = branch.tail[-1]
@@ -808,7 +832,14 @@ def _strip_trailing_self_ref(branch: ast_.PatternExpr, rule_name: str) -> ast_.P
                 new_tail = branch.tail[:-1]
                 if not new_tail:
                     return branch.head
-                return ast_.Sequence(head=branch.head, tail=new_tail, span=branch.span)
+                return replace(branch, tail=new_tail)
+            if isinstance(last_atom, ast_.Node):
+                stripped = strip_relation_child(last_atom)
+                if stripped is not last_atom:
+                    return replace(
+                        branch,
+                        tail=(*branch.tail[:-1], (last_edge, stripped)),
+                    )
     return branch
 
 
