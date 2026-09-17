@@ -14,6 +14,7 @@
 #include "vm/excno.hpp"
 
 #include <exception>
+#include <new>
 
 #include <cstdio>
 #include <filesystem>
@@ -130,6 +131,8 @@ td::Result<Value> parse_message_body(const std::string &type_name, const td::Ref
     return td::Status::Error("parse threw: vm virtualization error");
   } catch (const vm::VmNoGas &) {
     return td::Status::Error("parse threw: out of gas");
+  } catch (const std::bad_alloc &) {
+    throw;
   } catch (const std::exception &e) {
     return td::Status::Error(PSLICE() << "parse threw: " << e.what());
   }

@@ -6,6 +6,11 @@
 #include "BuildRuntime.h"
 #include "host/HostImpls.h"
 
+#include "vm/excno.hpp"
+
+#include <exception>
+#include <new>
+
 namespace mch {
 
 const std::map<std::string, HostFnEntry> &host_fns() {
@@ -51,7 +56,16 @@ EvalResult rt_call_hostfn(BuildEnv &env, const std::string &name,
     reject_log(r.message);
     return r;
   }
-  EvalResult r = it->second.fn(env, args);
+  EvalResult r;
+  try {
+    r = it->second.fn(env, args);
+  } catch (const vm::VmError &e) {
+    r = rt_fault(e.get_msg());
+  } catch (const std::bad_alloc &) {
+    throw;
+  } catch (const std::exception &e) {
+    r = rt_fault(e.what());
+  }
   if (r.faulted) {
     reject_log(r.message);
   }
