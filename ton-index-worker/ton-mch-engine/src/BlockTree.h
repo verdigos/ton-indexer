@@ -136,8 +136,8 @@ struct Block {
   // next_blocks). Grandchild edges from this block's children that reached a
   // target are redirected to new_block; each target's children that pointed
   // back at the target are reparented to new_block. Used by shapers
-  // (host/HostNftSale.cpp getgems_proxy_insert). The parent edge list remains
-  // in canonical order.
+  // (host/HostNftSale.cpp getgems_proxy_insert). No sort: mirrors Python's
+  // append-only connect() exactly so topology parity holds.
   void insert_between(const std::vector<Block *> &targets, Block *new_block);
 
   // Returns false when the merged set has no earliest common block (clean

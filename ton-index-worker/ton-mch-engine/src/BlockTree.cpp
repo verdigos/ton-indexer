@@ -218,7 +218,6 @@ void Block::insert_between(const std::vector<Block *> &targets, Block *new_block
   for (Block *t : targets) {
     new_block->connect(t);
   }
-  sort_next_blocks();
 }
 
 std::vector<Block *> Block::find_frontier(const std::vector<Block *> &in_set) const {

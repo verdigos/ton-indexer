@@ -45,7 +45,10 @@ std::vector<Block *> gather_blocks(Block *root) {
       continue;
     }
     out.push_back(cur);
-    for (Block *block : cur->next_blocks) {
+    std::vector<Block *> next = cur->next_blocks;
+    std::stable_sort(next.begin(), next.end(),
+                     [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
+    for (Block *block : next) {
       queue.push_back(block);
     }
   }

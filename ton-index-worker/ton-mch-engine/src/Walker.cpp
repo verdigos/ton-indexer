@@ -180,7 +180,7 @@ class MatchState {
       return true;
     }
     bool matched_any = false;
-    for (Block *cand : block->next_blocks) {
+    for (Block *cand : canonical(block->next_blocks)) {
       Mark mk = mark();
       if (match_node(node.child, cand)) {
         matched_any = true;
@@ -195,7 +195,7 @@ class MatchState {
     if (node.children.empty()) {
       return true;
     }
-    std::vector<Block *> working = block->next_blocks;
+    std::vector<Block *> working = canonical(block->next_blocks);
     for (int item : node.children) {
       const auto &spec = m_.nodes[item];
       if (spec.many) {
@@ -319,7 +319,7 @@ class MatchState {
   }
 
   void absorb_aux(Block *block, bool include_excess = true, bool include_bounces = true) {
-    for (Block *nb : block->next_blocks) {
+    for (Block *nb : canonical(block->next_blocks)) {
       if (nb->btype == mch::btype::kCallContract && nb->opcode &&
           ((*nb->opcode == kExcessOpcode && include_excess) ||
            (*nb->opcode == kBounceOpcode && include_bounces))) {
