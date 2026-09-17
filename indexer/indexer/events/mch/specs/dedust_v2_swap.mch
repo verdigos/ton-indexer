@@ -48,8 +48,8 @@
 
 import "lib/common.mch"
 import "lib/leg.mch"
+import "lib/opcodes.mch"
 
-opcode DedustV2PayNative = 0xa5a7cbf8
 opcode DedustV2SwapEvent = 0x78e79ba4
 opcode DedustV2Payout    = 0x3216ca09
 # One pool hop per unrolling (step arms), then the terminal out leg (exit arms).
@@ -78,7 +78,7 @@ matcher dedust_v2_swap {
                btype jetton_transfer @final_leg where (.payload_opcode != 0xcbc33949)
                op DedustV2Payout @final_leg
            }
-           maybe op Excess @excess }
+           maybe op Excess }
 
     # A jetton carrier is a composed block: its `.msg`/`.body` are not reliable
     # (merge_blocks shuffles the event-node order), so every jetton-arm value
@@ -95,10 +95,6 @@ matcher dedust_v2_swap {
 
     require out_leg = first(exit_leg) ?? final_leg
     let lo = leg(out_leg)
-    let out_jetton = out_leg.btype == "jetton_transfer"
-    # An out leg still carrying a SwapPayload means the route failed mid-hop.
-    let out_wrapper = (parse? out_leg.data.forward_payload as DedustV2PayJetton) if out_jetton else null
-    reject when (parse? out_wrapper.payment_payload as DedustV2SwapPayload) != null
 
     let amounts_in  = concat([ev0.body.amount_in],  map(ev.body, "amount_in"))
     let amounts_out = concat([ev0.body.amount_out], map(ev.body, "amount_out"))
@@ -106,8 +102,7 @@ matcher dedust_v2_swap {
     let in_assets   = concat([l.asset], leg_assets)
     let hops        = zip(zip(amounts_in, amounts_out), zip(in_assets, leg_assets))
 
-    failed when tx_failed(ev0) or (exit_code(ev0) ?? 0) != 0
-    failed when any(ev as e => tx_failed(e) or (exit_code(e) ?? 0) != 0)
+    failed when any(concat([ev0], ev) as e => tx_failed(e) or (exit_code(e) ?? 0) != 0)
 
     out {
         dex:               "dedust_v2"
@@ -161,7 +156,7 @@ matcher dedust_v2_failed_swap {
                btype jetton_transfer @refund_jt
            }
            maybe op DedustV2SwapEvent @swapped
-           maybe op Excess @excess }
+           maybe op Excess }
 
 
     # A Swap event under the carrier means the swap executed — the success

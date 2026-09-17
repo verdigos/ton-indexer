@@ -22,6 +22,9 @@ opcode EvaaLiquidateFail                   = 0x311f
 
 predicate evaa_supply_anchor
 predicate evaa_liquidate_anchor
+rule evaa_note = btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
+rule liq_finish = xor { op EvaaLiquidateSuccessReport; op EvaaLiquidateFail; btype jetton_transfer }
+fn evaa_op(b) = (parse? b as EvaaUserOp).op
 
 # EVAA supply starts with a TON call or a jetton transfer carrying a supply
 # payload. The user node parses the opcode behind the variable header.
@@ -34,11 +37,11 @@ matcher evaa_supply {
     produces evaa_supply
 
     pred evaa_supply_anchor @master
-      -> btype call_contract @user where ((parse? . as EvaaUserOp).op == 0x11)
+      -> btype call_contract @user where (evaa_op(.) == 0x11)
         -> or {
                op EvaaSupplySuccess @success as EvaaSupplySuccess
-                 -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
-               op EvaaSupplyFail @fail
+                 -> maybe $evaa_note
+               op EvaaSupplyFail
                btype jetton_transfer @refund
            }
 
@@ -70,17 +73,17 @@ matcher evaa_withdraw {
     produces evaa_withdraw
 
     op EvaaWithdrawMaster @master as EvaaWithdrawMaster
-      -> btype call_contract @user where ((parse? . as EvaaUserOp).op == 0x21)
+      -> btype call_contract @user where (evaa_op(.) == 0x21)
       -> or {
              op EvaaWithdrawCollateralized @coll_ok as EvaaWithdrawCollateralized
                -> { xor {
                         btype jetton_transfer @jetton_payout
                         op EvaaWithdrawSuccess @ton_payout
-                          -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
+                          -> maybe $evaa_note
                     }
-                    btype call_contract where ((parse? . as EvaaUserOp).op == 0x211a) -> btype ton_transfer }
+                    btype call_contract where (evaa_op(.) == 0x211a) -> btype ton_transfer }
              op EvaaWithdrawCollateralized @coll_fail
-               -> btype call_contract where ((parse? . as EvaaUserOp).op == 0x211f)
+               -> btype call_contract where (evaa_op(.) == 0x211f)
                -> op EvaaWithdrawNoFundsExcess
              op [EvaaWithdrawLockedExcess, EvaaWithdrawNotCollateralizedExcess, EvaaWithdrawMissingPricesExcess, EvaaWithdrawExecutionCrashed] @fail_excess as EvaaWithdrawFailExcess
          }
@@ -122,29 +125,17 @@ matcher evaa_liquidate {
 
     pred evaa_liquidate_anchor @master
       -> or {
-             btype call_contract @user where ((parse? . as EvaaUserOp).op == 0x31)
+             btype call_contract @user where (evaa_op(.) == 0x31)
                -> or {
                       op EvaaLiquidateSatisfied @satisfied_success as EvaaLiquidateSatisfied
-                        -> { btype call_contract where ((parse? . as EvaaUserOp).op == 0x311a)
-                               -> maybe btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
-                             xor {
-                                 op EvaaLiquidateSuccessReport @finish
-                                 op EvaaLiquidateFail @finish
-                                 btype jetton_transfer @finish
-                             } }
-                      op EvaaLiquidateSatisfied @satisfied_fail
+                        -> { btype call_contract where (evaa_op(.) == 0x311a)
+                               -> maybe $evaa_note
+                             $liq_finish }
+                      op EvaaLiquidateSatisfied
                         -> { op EvaaLiquidateFail
-                             xor {
-                                 op EvaaLiquidateSuccessReport @finish
-                                 op EvaaLiquidateFail @finish
-                                 btype jetton_transfer @finish
-                             } }
+                             $liq_finish }
                       op EvaaLiquidateUnsatisfied @unsatisfied as EvaaLiquidateUnsatisfied
-                        -> xor {
-                               op EvaaLiquidateSuccessReport @finish
-                               op EvaaLiquidateFail @finish
-                               btype jetton_transfer @finish
-                           }
+                        -> $liq_finish
                   }
              xor {
                  btype call_contract @immediate where (.msg.bounced)

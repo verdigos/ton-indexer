@@ -30,7 +30,7 @@
 #     y = leg1 if (a1 != x_fees and a1 == y_fees)
 #         else (leg2 if (not (a2 == x_fees and a1 != x_fees)) and a2 == y_fees
 #               else null)
-# — the `x_is_1 / x_is_2 / y_is_1 / y_is_2` lets below. A leg that never bound has
+# — the `lx` / `ly` lets below. A leg that never bound has
 # a null amount, which compares unequal to both fees, so the zero-leg and one-leg
 # shapes fall out for free (legacy's `legs["x"] or empty`).
 #
@@ -40,11 +40,11 @@
 # this one.
 
 import "lib/leg.mch"
+import "lib/opcodes.mch"
 
 opcode ClaimPositionFees            = 0x5652f1df
 opcode ClaimAvailableFees           = 0x25f19752
 opcode DedustV2PayoutPositionFees   = 0x29ff1bcf
-opcode PayoutMessage                = 0x3216ca09
 
 matcher dedust_v2_claim_fees {
     produces dedust_v2_claim_fees
@@ -73,10 +73,8 @@ matcher dedust_v2_claim_fees {
 
     let xf     = payout_fees.body.x_fees
     let yf     = payout_fees.body.y_fees
-    let x_is_1 = a_1 == xf
-    let x_is_2 = not x_is_1 and a_2 == xf
-    let y_is_1 = not x_is_1 and a_1 == yf
-    let y_is_2 = not y_is_1 and not (a_2 == xf and not x_is_1) and a_2 == yf
+    let lx = l1 if a_1 == xf else (l2 if a_2 == xf else null)
+    let ly = l1 if (a_1 != xf and a_1 == yf) else (l2 if (not (a_2 == xf and a_1 != xf) and a_2 == yf) else null)
 
     out {
         dex:                 "dedust_v2"
@@ -86,13 +84,13 @@ matcher dedust_v2_claim_fees {
         owner:               account(payout_fees.body.owner)
         amount_x:            amount(xf)
         amount_y:            amount(yf)
-        asset_x:             l1.asset if x_is_1 else (l2.asset if x_is_2 else null)
-        asset_y:             l1.asset if y_is_1 else (l2.asset if y_is_2 else null)
-        user_wallet_x:       l1.destination_wallet if x_is_1 else (l2.destination_wallet if x_is_2 else null)
-        user_wallet_y:       l1.destination_wallet if y_is_1 else (l2.destination_wallet if y_is_2 else null)
-        dex_wallet_x:        l1.source if x_is_1 else (l2.source if x_is_2 else null)
-        dex_wallet_y:        l1.source if y_is_1 else (l2.source if y_is_2 else null)
-        dex_jetton_wallet_x: l1.source_wallet if x_is_1 else (l2.source_wallet if x_is_2 else null)
-        dex_jetton_wallet_y: l1.source_wallet if y_is_1 else (l2.source_wallet if y_is_2 else null)
+        asset_x:             lx.asset
+        asset_y:             ly.asset
+        user_wallet_x:       lx.destination_wallet
+        user_wallet_y:       ly.destination_wallet
+        dex_wallet_x:        lx.source
+        dex_wallet_y:        ly.source
+        dex_jetton_wallet_x: lx.source_wallet
+        dex_jetton_wallet_y: ly.source_wallet
     }
 }
