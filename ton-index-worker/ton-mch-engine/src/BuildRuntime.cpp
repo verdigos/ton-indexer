@@ -55,6 +55,27 @@ EvalResult soft_parse(const Block *b, const std::vector<std::string> &types, Val
   return soft_parse(r_body.move_as_ok(), types, out);
 }
 
+EvalResult parse_block(BuildEnv &env, const Block *block,
+                       const std::vector<std::string> &types) {
+  if (env.body_cache != nullptr) {
+    auto it = env.body_cache->find(block);
+    if (it != env.body_cache->end() && it->second.first == types) {
+      env.bodies[block] = it->second.second;
+      return rt_ok(Value::null());
+    }
+  }
+  Value body;
+  EvalResult r = soft_parse(block, types, body);
+  if (r.faulted) {
+    return r;
+  }
+  env.bodies[block] = body;
+  if (env.body_cache != nullptr) {
+    env.body_cache->insert_or_assign(block, BodyCache::mapped_type{types, std::move(body)});
+  }
+  return rt_ok(Value::null());
+}
+
 td::Result<td::Ref<vm::Cell>> parse_expr_cell(const Value &target) {
   if (target.t == VType::Block && target.block != nullptr) {
     return block_body_cell(target.block);
@@ -77,23 +98,15 @@ EvalResult rt_parse(BuildEnv &env, const Value &target, const std::vector<std::s
       if (el.t != VType::Block || el.block == nullptr) {
         continue;  // null (gap) elements stay unparsed; non-blocks unreachable
       }
-      Value body;
-      EvalResult r = soft_parse(el.block, types, body);
+      EvalResult r = parse_block(env, el.block, types);
       if (r.faulted) {
         return r;
       }
-      env.bodies[el.block] = std::move(body);
     }
     return rt_ok(Value::null());
   }
   if (target.t == VType::Block && target.block != nullptr) {
-    Value body;
-    EvalResult r = soft_parse(target.block, types, body);
-    if (r.faulted) {
-      return r;
-    }
-    env.bodies[target.block] = std::move(body);
-    return rt_ok(Value::null());
+    return parse_block(env, target.block, types);
   }
   // Null and other non-block targets leave the body unset.
   return rt_ok(Value::null());

@@ -75,6 +75,7 @@ BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
                            const std::vector<Value> &slots, const Value &consumed,
                            const std::set<std::string> &kinds, const LookupSource &src,
                            bool needs_lookups) {
+  BodyCache bodies;
   auto fresh_env = [&](const LookupTable *table) {
     BuildEnv env;
     env.anchor = anchor;
@@ -82,6 +83,7 @@ BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
     env.n_slots = slots.size();
     env.consumed = consumed;
     env.lookups = table;
+    env.body_cache = &bodies;
     return env;
   };
 

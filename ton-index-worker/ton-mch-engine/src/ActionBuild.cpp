@@ -1633,10 +1633,10 @@ std::string calc_action_id(const Block *b) {
   return td::base64_encode(td::Slice(td::sha256(td::Slice(key))));
 }
 
-bool build_action(Block *b, Action &a) {
+static bool build_action_with_id(Block *b, const std::string &action_id, Action &a) {
   a.type = b->btype;
   a.success = !b->failed;
-  a.action_id = calc_action_id(b);
+  a.action_id = action_id;
   std::set<std::string> ths;
   std::int64_t maxlt = std::numeric_limits<std::int64_t>::min();
   std::int64_t minu = std::numeric_limits<std::int64_t>::max();
@@ -1709,8 +1709,12 @@ bool build_action(Block *b, Action &a) {
   return true;
 }
 
+bool build_action(Block *b, Action &a) {
+  return build_action_with_id(b, calc_action_id(b), a);
+}
+
 bool build_action(const ActionRow &row, Action &a) {
-  if (!build_action(row.block, a)) return false;
+  if (!build_action_with_id(row.block, row.action_id, a)) return false;
   a.parent_action_id = row.parent_action_id;
   a.ancestor_type = row.ancestor_type;
   if (!row.parent_gasless_action.empty()) {

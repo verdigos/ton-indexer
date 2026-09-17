@@ -135,7 +135,12 @@ class Emitter {
       // (null args pass through; rt_call_builtin is null-strict).
       // Vectors/Where modes only ever see builtins.
       if (mode_ == EmitMode::Build && !is_builtin_name(fn)) {
-        return bind("rt_call_hostfn(env, " + cstr(fn) + ", std::vector<Value>{" + argv + "})");
+        int i = fresh();
+        line("static const std::string host_name" + num(i) + " = " + cstr(fn) + ";");
+        line("static const HostFnEntry *const host" + num(i) + " = find_hostfn(host_name" +
+             num(i) + ");");
+        return bind("rt_call_hostfn(env, host_name" + num(i) + ", host" + num(i) +
+                    ", std::vector<Value>{" + argv + "})");
       }
       // Builtin name and arity are known at emit time: call the typed core
       // directly (no name-keyed dispatch, no per-call heap vector).
@@ -195,8 +200,11 @@ class Emitter {
         types.push_back(cstr(t.get_string().str()));
       }
       const bool nullable = jbool(e, "nullable", false);
-      return bind("rt_parse_expr(" + x + ", std::vector<std::string>{" +
-                  join(types, ", ") + "}, " + (nullable ? "true" : "false") + ")");
+      int i = fresh();
+      line("static const std::vector<std::string> types" + num(i) + "{" +
+           join(types, ", ") + "};");
+      return bind("rt_parse_expr(" + x + ", types" + num(i) + ", " +
+                  (nullable ? "true" : "false") + ")");
     }
     throw std::runtime_error("unsupported expression kind '" + k + "'");
   }
@@ -509,9 +517,10 @@ class BuildGen {
       }
       int i = em_.fresh_public();
       em_.line_public("Value pt" + std::to_string(i) + " = " + it->second + ";");
+      em_.line_public("static const std::vector<std::string> types" + std::to_string(i) +
+                      "{" + join(types, ", ") + "};");
       em_.line_public("EvalResult sp" + std::to_string(i) + " = rt_parse(env, pt" +
-                      std::to_string(i) + ", std::vector<std::string>{" + join(types, ", ") +
-                      "});");
+                      std::to_string(i) + ", types" + std::to_string(i) + ");");
       em_.line_public(em_.fault_return("sp" + std::to_string(i)));
       return;
     }
@@ -770,7 +779,8 @@ std::string generate_builds_file(const Json &root, const std::string &header,
   }
 
   std::vector<std::string> out = {
-      header, "#include \"GenBuilds.h\"", "", "namespace mch {", "namespace {", ""};
+      header, "#include \"GenBuilds.h\"", "#include \"HostRegistry.h\"", "",
+      "namespace mch {", "namespace {", ""};
   for (const Entry &e : entries) {
     BuildGen gen(*e.matcher);
     out.push_back(gen.generate("build_" + std::to_string(e.id) + "_" + sanitize_ident(e.name)));

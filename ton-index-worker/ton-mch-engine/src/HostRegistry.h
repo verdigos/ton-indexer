@@ -39,6 +39,10 @@ struct HostFnEntry {
 // matcher's inclusion on this registry.
 const std::map<std::string, HostFnEntry> &host_fns();
 
+// Resolve a generated call site's fixed name once. A missing name returns
+// nullptr and rt_call_hostfn reports the usual runtime fault.
+const HostFnEntry *find_hostfn(const std::string &name);
+
 // Host `shape` implementations: a post-build topology pass. Captured blocks
 // are reached by name; an arena is needed to mint proxy blocks (C++ blocks
 // are arena-owned). Shapers run from ClassifyCore::try_build after merge as

@@ -45,10 +45,7 @@ std::vector<Block *> gather_blocks(Block *root) {
       continue;
     }
     out.push_back(cur);
-    std::vector<Block *> next = cur->next_blocks;
-    std::stable_sort(next.begin(), next.end(),
-                     [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
-    for (Block *block : next) {
+    for (Block *block : cur->next_blocks) {
       queue.push_back(block);
     }
   }
@@ -544,10 +541,12 @@ bool is_v1_op(const std::string &t) {
 // to its gasless_request marker: the request message itself (when a matcher
 // merged it into a composite) and its direct children. Anything deeper is the
 // receiving wallet's own step. Nested relaying chains marker to marker.
-void link_gasless_parents(const std::vector<Block *> &spine, std::vector<ActionRow> &rows) {
+void link_gasless_parents(std::vector<ActionRow> &rows) {
   std::map<const EventNode *, std::string> marker_ids;
-  for (const Block *b : spine) {
-    if (b->btype == mch::btype::kGaslessRequest) marker_ids[root_event_node(b)] = calc_action_id(b);
+  for (const ActionRow &row : rows) {
+    if (row.parent_action_id.empty() && row.block->btype == mch::btype::kGaslessRequest) {
+      marker_ids[root_event_node(row.block)] = row.action_id;
+    }
   }
   if (marker_ids.empty()) return;
   for (ActionRow &row : rows) {
@@ -573,7 +572,7 @@ std::vector<ActionRow> serialize_rows(const std::vector<Block *> &blocks,
     if (!serializes_to_row(b)) continue;
     std::string id = calc_action_id(b);
     if (!parent_id.empty() && id == parent_id) continue;
-    out.push_back(ActionRow{b, parent_id, {}});
+    out.push_back(ActionRow{b, id, parent_id, {}});
     ids.insert(id);
     if (is_v1_op(b->btype)) continue;
     for (ActionRow &c : serialize_rows(b->children_blocks, id)) {
@@ -588,13 +587,13 @@ std::vector<ActionRow> serialize_rows(const std::vector<Block *> &blocks,
                             c.ancestor_type.end());
       // Raise rather than drop: two rows with one action_id collide on the
       // actions PK, so the trace falls back.
-      if (!ids.insert(calc_action_id(c.block)).second) {
+      if (!ids.insert(c.action_id).second) {
         throw std::runtime_error("duplicate action id in child recursion");
       }
       out.push_back(std::move(c));
     }
   }
-  if (parent_id.empty()) link_gasless_parents(blocks, out);  // top-level call only
+  if (parent_id.empty()) link_gasless_parents(out);  // top-level call only
   return out;
 }
 
@@ -653,7 +652,7 @@ std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource
     // Flat: apply the row filter directly, so a ghost row never recurses
     // into children and never carries parent_action_id.
     for (Block *sb : spine) {
-      if (serializes_to_row(sb)) out.push_back(ActionRow{sb, "", {}});
+      if (serializes_to_row(sb)) out.push_back(ActionRow{sb, calc_action_id(sb), "", {}});
     }
   } catch (...) {
     out.clear();
@@ -741,17 +740,16 @@ ClassifyResult classify_trace(TraceContext &ctx, const std::vector<CompiledMatch
     inv_btypes.insert(b->btype);
     if (b->opcode) inv_opcodes.insert(*b->opcode);
   }
-  // Only opcode/btype anchors are prefilterable (the two anchor kinds
-  // matcher_test_self can decide from the block's own op/btype); pred and
-  // never-runnable mixed anchors stay full-scan.
+  // Opcode, btype, and mixed anchors are prefilterable from the block's own
+  // opcode/btype. Predicate anchors stay full-scan.
   auto anchor_can_match = [&](const CompiledMatcher &m) -> bool {
-    if (m.anchor_kind == AnchorKind::OpcodeSet) {
+    if (m.anchor_kind == AnchorKind::OpcodeSet || m.anchor_kind == AnchorKind::Mixed) {
       for (std::uint32_t op : m.anchor_opcodes) {
         if (inv_opcodes.count(op)) return true;
       }
-      return false;
+      if (m.anchor_kind == AnchorKind::OpcodeSet) return false;
     }
-    if (m.anchor_kind == AnchorKind::BType) {
+    if (m.anchor_kind == AnchorKind::BType || m.anchor_kind == AnchorKind::Mixed) {
       for (const std::string &bt : m.anchor_btypes) {
         if (inv_btypes.count(bt)) return true;
       }

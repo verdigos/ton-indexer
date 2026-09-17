@@ -82,10 +82,11 @@ struct Action {
   std::vector<std::string> ancestor_type;
 };
 
-// One serialized row: the block plus the two fields that are not a property
-// of the block alone but of where it sits in the consumption tree.
+// One serialized row: the block, its precomputed id, and the fields determined
+// by where it sits in the consumption tree.
 struct ActionRow {
   Block *block{nullptr};
+  std::string action_id;
   std::string parent_action_id;
   std::vector<std::string> ancestor_type;
   // action_id of the gasless_request marker this row is an immediate result
@@ -96,9 +97,7 @@ struct ActionRow {
 // The block's lowest-lt event node (nullptr for an empty block).
 const EventNode *root_event_node(const Block *b);
 
-// base64(sha256(root_event_node's msg_hash|tx_hash + btype)). A pure function
-// of the block, so the serializer can link a child to its parent before either
-// is built.
+// base64(sha256(root_event_node's msg_hash|tx_hash + btype)).
 std::string calc_action_id(const Block *b);
 
 // Dispatch over a produced block. Returns false for a btype outside the fill
