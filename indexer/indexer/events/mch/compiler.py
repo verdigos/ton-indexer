@@ -268,21 +268,7 @@ def _lower_child_chain_from(
         return None, None
     first = downstream_atoms[0]
     if isinstance(first, ast_.ChildrenBlock):
-        children_ms: list[LNode] = []
-        rest_idx = 0
-        while rest_idx < len(downstream_atoms):
-            atom = downstream_atoms[rest_idx]
-            if not isinstance(atom, ast_.ChildrenBlock):
-                break
-            for it in atom.items:
-                children_ms.append(_lower_atom(it, ctx))
-            rest_idx += 1
-        rest = downstream_atoms[rest_idx:]
-        if rest:
-            pairs = [(ast_.Edge.CHILD, a) for a in rest]
-            child = _lower_chain_with_children_attach(pairs, ctx)
-            return child, children_ms
-        return None, children_ms
+        return None, [_lower_atom(it, ctx) for it in first.items]
     pairs = [(ast_.Edge.CHILD, a) for a in downstream_atoms]
     child = _lower_chain_with_children_attach(pairs, ctx)
     return child, None
@@ -293,12 +279,6 @@ def _lower_parent_chain_from(
     ctx: CompileCtx,
 ) -> LNode | None:
     idx = 0
-    while (
-        idx < len(sequence.tail)
-        and sequence.tail[idx][0] is ast_.Edge.CHILD
-        and _is_cb_atom(sequence.tail[idx][1])
-    ):
-        idx += 1
     if idx >= len(sequence.tail) or sequence.tail[idx][0] is not ast_.Edge.PARENT:
         return None
 
@@ -760,7 +740,7 @@ def _check_children_block_placement(
             previous_was_atom = not _is_cb_atom(p.head)
             previous_was_children_block = _is_cb_atom(p.head)
             for _edge, atom in p.tail:
-                if previous_was_children_block:
+                if previous_was_children_block and previous_was_atom:
                     emit_c009(atom.span)
                 walk(atom, in_chain_left=previous_was_atom)
                 previous_was_children_block = _is_cb_atom(atom)
