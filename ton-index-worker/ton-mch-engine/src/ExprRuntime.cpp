@@ -6,6 +6,7 @@
 #include "td/utils/misc.h"
 #include "vm/boc.h"
 #include "vm/cellslice.h"
+#include "vm/excno.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -40,7 +41,14 @@ Value extern_address_object(const Value &v) {
   }
 
   int len = static_cast<int>(bits->num->to_long());
-  vm::CellSlice cs = vm::load_cell_slice(value->cell);
+  vm::CellSlice cs;
+  try {
+    cs = vm::load_cell_slice(value->cell);
+  } catch (const vm::VmError &) {
+    return Value::null();
+  } catch (const vm::VmVirtError &) {
+    return Value::null();
+  }
   if (cs.size() != static_cast<unsigned>(len) || cs.size_refs() != 0) {
     return Value::null();
   }
@@ -442,7 +450,9 @@ static bool bi_open_cell(const Value &v, vm::CellSlice &out) {
   if (v.t != VType::Cell || v.cell.is_null()) return false;
   try {
     out = vm::load_cell_slice(v.cell);
-  } catch (...) {
+  } catch (const vm::VmError &) {
+    return false;
+  } catch (const vm::VmVirtError &) {
     return false;
   }
   return true;

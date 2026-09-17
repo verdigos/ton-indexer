@@ -3,6 +3,7 @@
 
 #include "BlockTree.h"
 #include "ClassifyCore.h"
+#include "ExprRuntime.h"
 #include "EnginePrep.h"
 #include "HostRegistry.h"
 #include "MsgParse.h"
@@ -221,6 +222,29 @@ void test_host_fn_serious_exception_stays_trace_failure() {
   }
 }
 
+void test_ext_addr_str_pruned_cell_is_clean_rejection() {
+  auto data = vm::CellBuilder().store_long(0xabcd, 16).finalize();
+  auto pruned = vm::CellBuilder::do_create_pruned_branch(data, 1)->virtualize(0);
+  const Value pruned_addr = Value::make_obj({
+      {"bits", Value::make_int64(16)}, {"value", Value::make_cell(std::move(pruned))}});
+  bool threw = false;
+  bool faulted = false;
+  try {
+    faulted = rt_builtin_ext_addr_str(pruned_addr).faulted;
+  } catch (...) {
+    threw = true;
+  }
+  check("builtin/ext_addr_str/pruned/no_throw", !threw);
+  check("builtin/ext_addr_str/pruned/faulted", faulted);
+
+  const Value plain_addr = Value::make_obj({
+      {"bits", Value::make_int64(16)},
+      {"value", Value::make_cell(vm::CellBuilder().store_long(0xabcd, 16).finalize())}});
+  EvalResult rendered = rt_builtin_ext_addr_str(plain_addr);
+  check("builtin/ext_addr_str/plain/rendered",
+        !rendered.faulted && rendered.value.t == VType::Str && rendered.value.str == "16;abcd");
+}
+
 // P -> C (child) -> G (grandchild), with G also reachable as one of P's
 // next_blocks. G's topmost parent is P, so compaction must drop the edge
 // instead of turning it into a self-edge.
@@ -435,6 +459,7 @@ int run_classify_core_test() {
   test_host_fn_exception_is_clean_rejection();
   test_host_fn_error_rejects_attempt_and_next_matcher_runs();
   test_host_fn_serious_exception_stays_trace_failure();
+  test_ext_addr_str_pruned_cell_is_clean_rejection();
   test_compact_connections_drops_self_edge();
   test_find_frontier_terminates_on_self_edge();
   test_childless_root_failure_serializes_root();
