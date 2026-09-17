@@ -1,9 +1,7 @@
 // StateInit readers take listing parameters from the deployment message and
-// select the layout by code hash. Parse failures return Null. The rest are
-// predicates and a chained auction-to-NFT lookup the language cannot express.
+// select the layout by code hash. Parse failures return Null.
 #include "host/HostImpls.h"
 
-#include "host/BlockViews.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -17,17 +15,12 @@
 #include "vm/cellslice.h"
 
 #include <map>
-#include <optional>
 #include <string>
 #include <vector>
 
 namespace mch {
 
 namespace {
-
-constexpr char kDnsCodeHash[] = "i1/8nr/TkGTY1fVuRlnIJrt1k5I/XKSHKL5NYK9vUfk=";
-constexpr char kDnsCollection[] =
-    "0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF";
 
 // Unlisted or missing code hash falls back to "latest", which each reader
 // resolves to its newest layout.
@@ -254,16 +247,6 @@ td::Status parse_auction_v4r1(vm::CellSlice &cs, AuctionInit &d) {
 }
 
 
-std::string block_comment(const Block *b) {
-  const Value *c = b != nullptr ? b->data.field("comment") : nullptr;
-  return (c != nullptr && c->t == VType::Str) ? c->str : std::string{};
-}
-
-bool is_cancel_comment(const Block *b) {
-  std::string c = block_comment(b);
-  return c == "cancel" || c == "finish" || c == "stop";
-}
-
 bool has_deployment(const Block *b) {
   if (b == nullptr) {
     return false;
@@ -275,37 +258,6 @@ bool has_deployment(const Block *b) {
     }
   }
   return false;
-}
-
-// The item's code hash or its collection identifies it as a TON DNS domain.
-bool is_dns_item(const Value &nft) {
-  const Value *ch = nft.field("code_hash");
-  if (ch != nullptr && ch->t == VType::Str && ch->str == kDnsCodeHash) {
-    return true;
-  }
-  const Value *col = nft.field("collection_address");
-  return col != nullptr && col->t == VType::Str && col->str == kDnsCollection;
-}
-
-bool is_fragment_item(const Value &nft) {
-  const Value *content = nft.field("content");
-  if (content == nullptr || (content->t != VType::Dict && content->t != VType::Obj)) {
-    return false;
-  }
-  return fragment_uri(content->field("uri"));
-}
-
-const std::string *msg_dest(const Block *b) {
-  const Message *m = block_msg(b);
-  return (m != nullptr && m->destination) ? &*m->destination : nullptr;
-}
-
-// Interface-field address: a raw-address Str, or Null for a missing optional.
-Value account_of(const Value &v) {
-  if (v.t != VType::Str) {
-    return Value::null();
-  }
-  return account_from_opt(std::optional<std::string>(v.str));
 }
 
 }  // namespace
@@ -321,44 +273,6 @@ bool sale_contract_deploy(const Block *b) {
   }
   return has_deployment(b);
 }
-
-// Cheap guards before the auction-bid path touches the interface repository.
-bool auction_bid_candidate(const Block *b) {
-  return b != nullptr && b->btype == mch::btype::kTonTransfer && !has_deployment(b) &&
-         !is_cancel_comment(b);
-}
-
-// The peeked auction_bid must have exactly one qualifying outbid child.
-bool auction_outbid_leg(const Block *bid) {
-  if (bid == nullptr || bid->btype != mch::btype::kAuctionBid) {
-    return false;
-  }
-  const Value *auction = bid->data.field("auction");
-  const Value *kind = bid->data.field("auction_type");
-  if (auction == nullptr || kind == nullptr || kind->t != VType::Str) {
-    return false;
-  }
-  int n = 0;
-  for (const Block *leg : bid->next_blocks) {
-    if (leg == nullptr || leg->previous_block != bid ||
-        !same_account(data_field(leg, "source"), *auction)) {
-      continue;
-    }
-    bool qualifies = false;
-    if (leg->btype == mch::btype::kTonTransfer) {
-      qualifies = kind->str == "getgems" &&
-                  block_comment(leg).find("Your bid has been outbid by another user") !=
-                      std::string::npos;
-    } else {
-      qualifies = kind->str == "fragment" && is_call_op(leg, 0x557CEA20);
-    }
-    if (qualifies && ++n > 1) {
-      return false;
-    }
-  }
-  return n == 1;
-}
-
 
 EvalResult getgems_sale_init(BuildEnv &env, const std::vector<Value> &args) {
   (void)env;
@@ -409,75 +323,6 @@ EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args) {
   f.emplace_back("royalty_fee_base", opt_amount(d.royalty_fee_base));
   f.emplace_back("max_bid", opt_amount(d.max_bid));
   f.emplace_back("min_bid", opt_amount(d.min_bid));
-  return rt_ok(Value::make_obj(std::move(f)));
-}
-
-// Getgems branch reads the auction interface and looks the item up by the
-// address that interface carries. A lookup keyed on another lookup's result,
-// which the build language cannot express. Any rejected branch returns Null.
-EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args) {
-  const Block *bid = as_block(args[0]);
-  const Message *msg = block_msg(bid);
-  const std::string *dest = msg_dest(bid);
-  if (bid == nullptr || msg == nullptr || dest == nullptr) {
-    return rt_ok(Value::null());
-  }
-  Value amount = msg_value_amount(msg);
-  Value bidder = account_from_opt(msg->source);
-  Value auction_addr = account_from_opt(std::optional<std::string>(*dest));
-
-  Value::Fields f;
-  Value auction = env.lookups->get("nft_auction", std::vector<Value>{Value::make_str(*dest)});
-  if (!auction.is_null()) {
-    // getgems: the auction contract IS the destination; the item is elsewhere.
-    const Value *nft_addr = auction.field("nft_addr");
-    Value index{Value::null()};
-    Value collection{Value::null()};
-    if (nft_addr != nullptr && nft_addr->t == VType::Str) {
-      Value item = env.lookups->get("nft_item", std::vector<Value>{*nft_addr});
-      if (!item.is_null()) {
-        const Value *ix = item.field("index");
-        const Value *col = item.field("collection_address");
-        if (ix != nullptr) index = *ix;
-        if (col != nullptr) collection = account_of(*col);
-      }
-    }
-    f.emplace_back("amount", amount);
-    f.emplace_back("bidder", bidder);
-    f.emplace_back("auction", auction_addr);
-    f.emplace_back("nft_address",
-                   nft_addr != nullptr ? account_of(*nft_addr) : Value::null());
-    f.emplace_back("nft_item_index", index);
-    f.emplace_back("nft_collection", collection);
-    f.emplace_back("auction_type", Value::make_str("getgems"));
-    return rt_ok(Value::make_obj(std::move(f)));
-  }
-
-  // fragment / DNS: the destination is the ITEM, which runs its own auction.
-  Value item = env.lookups->get("nft_item", std::vector<Value>{Value::make_str(*dest)});
-  if (item.is_null()) {
-    return rt_ok(Value::null());
-  }
-  const bool dns = is_dns_item(item);
-  if (!dns && !is_fragment_item(item)) {
-    return rt_ok(Value::null());
-  }
-  if (dns) {
-    // A DNS bid requires the teleitem outbid notification.
-    if (first_call(bid->next_blocks, 0x557CEA20) == nullptr) {
-      return rt_ok(Value::null());
-    }
-  }
-  const Value *col = item.field("collection_address");
-  const Value *ix = item.field("index");
-  f.emplace_back("amount", amount);
-  f.emplace_back("bidder", bidder);
-  f.emplace_back("auction", auction_addr);
-  f.emplace_back("nft_address", auction_addr);
-  f.emplace_back("nft_item_index", ix != nullptr ? *ix : Value::null());
-  f.emplace_back("nft_collection",
-                 col != nullptr && !col->is_null() ? account_of(*col) : Value::null());
-  f.emplace_back("auction_type", Value::make_str("fragment"));
   return rt_ok(Value::make_obj(std::move(f)));
 }
 

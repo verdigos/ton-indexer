@@ -5,6 +5,7 @@
 #include "ClassifyCore.h"
 #include "ExprRuntime.h"
 #include "EnginePrep.h"
+#include "GenMatchers.h"
 #include "HostRegistry.h"
 #include "MsgParse.h"
 #include "ParsedBlockLookupSource.h"
@@ -14,16 +15,20 @@
 #include "fixtures/FixtureLoader.h"
 
 #include "td/utils/base64.h"
+#include "vm/boc.h"
 #include "vm/cells/CellBuilder.h"
 #include "vm/excno.hpp"
 
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <map>
 #include <memory>
 #include <new>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace mch {
@@ -39,28 +44,17 @@ void check(const std::string &name, bool ok) {
 enum class HostThrow { vm_error, std_error, bad_alloc, no_gas, virt_error, unknown };
 HostThrow g_serious_kind = HostThrow::bad_alloc;
 
-class ThrowingLookupTable final : public LookupTable {
- public:
-  explicit ThrowingLookupTable(HostThrow kind) : kind_(kind) {
+EvalResult throwing_test_host(BuildEnv &, const std::vector<Value> &) {
+  switch (g_serious_kind) {
+    case HostThrow::vm_error: throw vm::VmError(vm::Excno::cell_und, "host vm error");
+    case HostThrow::std_error: throw std::runtime_error("host standard error");
+    case HostThrow::bad_alloc: throw std::bad_alloc();
+    case HostThrow::no_gas: throw vm::VmNoGas();
+    case HostThrow::virt_error: throw vm::VmVirtError();
+    case HostThrow::unknown: throw 7;
   }
-
-  bool has(const std::string &) const override { return true; }
-
-  Value get(const std::string &, const std::vector<Value> &) const override {
-    switch (kind_) {
-      case HostThrow::vm_error: throw vm::VmError(vm::Excno::cell_und, "host vm error");
-      case HostThrow::std_error: throw std::runtime_error("host standard error");
-      case HostThrow::bad_alloc: throw std::bad_alloc();
-      case HostThrow::no_gas: throw vm::VmNoGas();
-      case HostThrow::virt_error: throw vm::VmVirtError();
-      case HostThrow::unknown: throw 7;
-    }
-    return Value::null();
-  }
-
- private:
-  HostThrow kind_;
-};
+  return EvalResult{false, Value::null(), {}};
+}
 
 TraceContext make_host_test_context(const std::string &trace_id) {
   TraceContext ctx;
@@ -92,13 +86,12 @@ TraceContext make_host_test_context(const std::string &trace_id) {
 }
 
 EvalResult call_throwing_host(BuildEnv &env, HostThrow kind) {
-  ThrowingLookupTable lookups(kind);
-  BuildEnv host_env = env;
-  host_env.lookups = &lookups;
-  return rt_call_hostfn(host_env, "auction_bid_data", {Value::make_block(env.anchor)});
+  static const HostFnEntry entry{throwing_test_host, 1};
+  g_serious_kind = kind;
+  return rt_call_hostfn(env, "throwing_test_host", &entry, {Value::make_block(env.anchor)});
 }
 
-CompiledMatcher test_matcher(std::string name, int artifact_index, bool calls_host = false) {
+CompiledMatcher test_matcher(std::string name, int artifact_index) {
   CompiledMatcher matcher;
   matcher.name = std::move(name);
   matcher.artifact_index = artifact_index;
@@ -109,7 +102,6 @@ CompiledMatcher test_matcher(std::string name, int artifact_index, bool calls_ho
   node.kind = NodeKind::BlockType;
   node.btype = "call_contract";
   matcher.nodes.push_back(std::move(node));
-  if (calls_host) matcher.ref_fns.insert("auction_bid_data");
   return matcher;
 }
 
@@ -165,7 +157,7 @@ void test_host_fn_exception_is_clean_rejection() {
 void test_host_fn_error_rejects_attempt_and_next_matcher_runs() {
   TraceContext ctx = make_host_test_context("host-rejection-continuation");
   std::vector<CompiledMatcher> matchers{
-      test_matcher("host-error", 0, true),
+      test_matcher("host-error", 0),
       test_matcher("required-parse-error", 1),
       test_matcher("success", 2),
   };
@@ -205,7 +197,7 @@ void test_host_fn_serious_exception_stays_trace_failure() {
                                 {"unknown", HostThrow::unknown}};
   for (const Case &test : cases) {
     TraceContext ctx = make_host_test_context(std::string("host-classify-") + test.name);
-    std::vector<CompiledMatcher> matchers{test_matcher("serious-host-error", 0, true)};
+    std::vector<CompiledMatcher> matchers{test_matcher("serious-host-error", 0)};
     ClassifySetup setup;
     setup.included = {0};
     g_serious_kind = test.kind;
@@ -219,6 +211,247 @@ void test_host_fn_serious_exception_stays_trace_failure() {
           result.actions.empty() && result.action_rows.empty());
     check(std::string("host_fn/serious/") + test.name + "/fallback_preserved",
           !result.fallback_rows.empty());
+  }
+}
+
+const std::string kAuction = "0:" + std::string(64, 'A');
+const std::string kNft = "0:" + std::string(64, 'B');
+const std::string kBidder = "0:" + std::string(64, 'C');
+const std::string kOwner = "0:" + std::string(64, 'D');
+const std::string kMarketplace = "0:" + std::string(64, 'E');
+const std::string kCollection = "0:" + std::string(64, 'F');
+const std::string kV1 = "/ACindAgW83MDT/7nKOMw8jBWexg2KpUMkCpLxBZLUA=";
+const std::string kV2 = "ZmiHL6eXBUQ//UdSPo6eqfdquZ+aC1nSfej4GhwnudQ=";
+const std::string kV3r2 = "G9nFo5v/t6DzQViLXdkrgTqEK/Ze8UEJOCIAzq+Pct8=";
+const std::string kV3r3 = "u29ireD+stefqzuK6/CTCvmFU99gCTsgJ/Covxab/Ow=";
+const std::string kV4r1 = "zlp4U06qps7tja/UhtB262CpsNbb+1Nnb2YmScBomVY=";
+
+std::string boc_base64(const td::Ref<vm::Cell> &cell) {
+  auto serialized = vm::std_boc_serialize(cell);
+  return serialized.is_ok() ? td::base64_encode(td::Slice(serialized.ok())) : std::string{};
+}
+
+td::Ref<vm::Cell> comment_body(const std::string &comment) {
+  return vm::CellBuilder().store_zeroes(32).store_bytes(comment).finalize();
+}
+
+Transaction *add_transaction(TraceContext &ctx, const std::string &name, std::int64_t lt,
+                             const std::string &account, const std::string &source,
+                             const std::string &destination, std::optional<std::uint32_t> opcode,
+                             std::int64_t value, bool failed = false,
+                             const td::Ref<vm::Cell> &body = {}) {
+  auto tx = std::make_unique<Transaction>();
+  tx->hash = name + "-tx";
+  tx->lt = lt;
+  tx->now = 200 + lt;
+  tx->mc_block_seqno = 300;
+  tx->account = account;
+  tx->descr = "ord";
+  tx->orig_status = "active";
+  tx->end_status = "active";
+  tx->aborted = failed;
+  auto in = std::make_unique<Message>();
+  in->msg_hash = name + "-message";
+  in->tx_hash = tx->hash;
+  in->tx_lt = lt;
+  in->direction = "in";
+  in->source = source;
+  in->destination = destination;
+  if (opcode) in->opcode = static_cast<std::int32_t>(*opcode);
+  in->value = value;
+  in->bounce = true;
+  if (body.not_null()) in->content = MsgContent{name + "-body", boc_base64(body)};
+  in->tx = tx.get();
+  tx->messages.push_back(std::move(in));
+  Transaction *out = tx.get();
+  ctx.trace.transactions.push_back(std::move(tx));
+  return out;
+}
+
+void link_child(Transaction *parent, Transaction *child) {
+  auto out = std::make_unique<Message>();
+  out->msg_hash = child->messages.front()->msg_hash;
+  out->tx_hash = parent->hash;
+  out->tx_lt = parent->lt;
+  out->created_lt = child->lt;
+  out->direction = "out";
+  out->source = parent->account;
+  out->destination = child->account;
+  out->tx = parent;
+  parent->messages.push_back(std::move(out));
+}
+
+void add_nft_item(TraceContext &ctx, const std::string &address, bool fragment = false,
+                  bool dns = false) {
+  Value::Fields content{{"uri", Value::make_str(fragment ? "https://nft.fragment.com/item" : "")}};
+  Value::Fields item{{"address", Value::make_str(address)},
+                     {"init", Value::make_bool(true)},
+                     {"index", Value::make_int64(42)},
+                     {"collection_address", Value::make_str(kCollection)},
+                     {"owner_address", Value::make_str(kOwner)},
+                     {"content", Value::make_dict(std::move(content))},
+                     {"code_hash", Value::make_str(dns ? "i1/8nr/TkGTY1fVuRlnIJrt1k5I/XKSHKL5NYK9vUfk=" : "")}};
+  ctx.trace.interfaces[address] =
+      Value::make_dict({{"NftItem", Value::make_dict(std::move(item))}});
+}
+
+void add_nft_auction(TraceContext &ctx, const std::string &code_hash) {
+  Value::Fields auction{{"mp_addr", Value::make_str(kMarketplace)},
+                        {"nft_addr", Value::make_str(kNft)},
+                        {"last_bid", Value::make_int64(0)},
+                        {"nft_owner", Value::make_str(kOwner)},
+                        {"code_hash", Value::make_str(code_hash)}};
+  ctx.trace.interfaces[kAuction] =
+      Value::make_dict({{"NftAuction", Value::make_dict(std::move(auction))}});
+  add_nft_item(ctx, kNft);
+}
+
+void finish_trace(TraceContext &ctx, const std::string &name) {
+  ctx.trace.trace_id = name;
+  fill_trace_aggregates(ctx.trace);
+  ctx.tree = to_tree(ctx.trace);
+  ctx.root = init_block(ctx.arena, ctx.tree.root);
+}
+
+ClassifyResult classify_production(TraceContext &ctx) {
+  const auto &matchers = gen_matchers_ir();
+  const auto setup = prepare_classify(matchers);
+  FixtureLookupSource source(&ctx.trace.interfaces);
+  return classify_trace(ctx, matchers, setup, source);
+}
+
+Block *produced_by(const ClassifyResult &result, const std::string &name) {
+  for (const CoreAction &action : result.actions) {
+    if (action.matcher_name == name) return action.produced;
+  }
+  return nullptr;
+}
+
+std::size_t produced_count(const ClassifyResult &result, const std::string &name) {
+  std::size_t count = 0;
+  for (const CoreAction &action : result.actions) count += action.matcher_name == name;
+  return count;
+}
+
+bool field_str(const Block *block, const char *name, const std::string &want) {
+  const Value *value = block != nullptr ? block->data.field(name) : nullptr;
+  return value != nullptr && (value->t == VType::Str || value->t == VType::Account) &&
+         value->str == want;
+}
+
+bool field_num(const Block *block, const char *name, std::int64_t want) {
+  const Value *value = block != nullptr ? block->data.field(name) : nullptr;
+  return value != nullptr && value->num.not_null() &&
+         value->num->to_dec_string() == std::to_string(want);
+}
+
+void test_auction_bid_raw_attempts() {
+  struct Case {
+    const char *name;
+    const std::string *code_hash;
+    std::optional<std::uint32_t> opcode;
+    std::int64_t value;
+    bool failed;
+  };
+  const std::vector<Case> cases{{"v1_low", &kV1, std::nullopt, 1, false},
+                                {"v2_failed", &kV2, std::nullopt, 2, true},
+                                {"v3r2", &kV3r2, 0x12345678, 3, false},
+                                {"v3r3", &kV3r3, 3, 4, false},
+                                {"v4r1_plain", &kV4r1, std::nullopt, 5, false},
+                                {"v4r1_zero", &kV4r1, 0, 6, false},
+                                {"v4r1_bid", &kV4r1, 0x344EF025, 7, false},
+                                {"v4r1_fund", &kV4r1, 0x9AF07447, 8, false}};
+  for (const Case &test : cases) {
+    TraceContext ctx;
+    add_transaction(ctx, test.name, 100, kAuction, kBidder, kAuction, test.opcode,
+                    test.value, test.failed);
+    add_nft_auction(ctx, *test.code_hash);
+    finish_trace(ctx, test.name);
+    ClassifyResult result = classify_production(ctx);
+    Block *bid = produced_by(result, "auction_bid");
+    const std::string prefix = std::string("auction_bid/raw/") + test.name;
+    check(prefix + "/classified", !result.failure && bid != nullptr);
+    check(prefix + "/fields",
+          field_num(bid, "amount", test.value) && field_str(bid, "bidder", kBidder) &&
+              field_str(bid, "auction", kAuction) && field_str(bid, "nft_address", kNft) &&
+              field_num(bid, "nft_item_index", 42) &&
+              field_str(bid, "nft_collection", kCollection) &&
+              field_str(bid, "auction_type", "getgems"));
+    check(prefix + "/failed", bid != nullptr && bid->failed == test.failed);
+  }
+}
+
+void test_auction_bid_item_families_and_negatives() {
+  for (const auto &[name, fragment, dns, expected] :
+       std::vector<std::tuple<const char *, bool, bool, const char *>>{
+           {"dns", false, true, "dns"}, {"fragment", true, false, "fragment"}}) {
+    TraceContext ctx;
+    add_transaction(ctx, name, 100, kNft, kBidder, kNft, 0, 10);
+    add_nft_item(ctx, kNft, fragment, dns);
+    finish_trace(ctx, name);
+    ClassifyResult result = classify_production(ctx);
+    Block *bid = produced_by(result, "auction_bid");
+    check(std::string("auction_bid/item/") + name,
+          !result.failure && field_str(bid, "auction_type", expected));
+  }
+
+  struct Negative {
+    const char *name;
+    std::string hash;
+    std::string source;
+    std::optional<std::uint32_t> opcode;
+  };
+  const std::vector<Negative> negatives{{"wrong_family", "unknown", kBidder, std::nullopt},
+                                        {"v1_owner", kV1, kOwner, std::nullopt},
+                                        {"v3r3_admin", kV3r3, kBidder, 555},
+                                        {"v4r1_body", kV4r1, kBidder, 0x12345678}};
+  for (const Negative &test : negatives) {
+    TraceContext ctx;
+    add_transaction(ctx, test.name, 100, kAuction, test.source, kAuction, test.opcode, 10);
+    add_nft_auction(ctx, test.hash);
+    finish_trace(ctx, test.name);
+    ClassifyResult result = classify_production(ctx);
+    check(std::string("auction_bid/negative/") + test.name,
+          !result.failure && produced_count(result, "auction_bid") == 0);
+  }
+}
+
+void add_outbid_child(TraceContext &ctx, Transaction *parent, const std::string &name,
+                      std::int64_t lt, bool fragment) {
+  const auto body = fragment ? td::Ref<vm::Cell>{}
+                             : comment_body("Your bid has been outbid by another user");
+  Transaction *child = add_transaction(ctx, name, lt, kOwner, fragment ? kNft : kAuction,
+                                       kOwner, fragment ? std::optional<std::uint32_t>{0x557CEA20}
+                                                        : std::nullopt,
+                                       7, false, body);
+  link_child(parent, child);
+}
+
+void test_auction_outbid_attempts() {
+  for (bool fragment : {false, true}) {
+    const std::string family = fragment ? "fragment" : "getgems";
+    TraceContext ctx;
+    Transaction *root = add_transaction(ctx, family + "_bid", 100,
+                                        fragment ? kNft : kAuction, kBidder,
+                                        fragment ? kNft : kAuction, std::nullopt, 10);
+    add_outbid_child(ctx, root, family + "_refund_1", 110, fragment);
+    add_outbid_child(ctx, root, family + "_refund_2", 120, fragment);
+    if (fragment) add_nft_item(ctx, kNft, true);
+    else add_nft_auction(ctx, kV2);
+    finish_trace(ctx, family + "_outbid");
+    ClassifyResult result = classify_production(ctx);
+    Block *bid = produced_by(result, "auction_bid");
+    Block *outbid = produced_by(result, "auction_outbid");
+    const std::string prefix = "auction_outbid/" + family;
+    check(prefix + "/one", !result.failure && produced_count(result, "auction_outbid") == 1);
+    check(prefix + "/consumes_bid", bid != nullptr && outbid != nullptr && bid->parent == outbid);
+    bool second_unconsumed = false;
+    for (const ActionRow &row : result.action_rows) {
+      second_unconsumed |= row.block != nullptr &&
+                           row.block->anchor_tx_hash() == family + "_refund_2-tx" &&
+                           row.parent_action_id.empty();
+    }
+    check(prefix + "/second_unconsumed", second_unconsumed);
   }
 }
 
@@ -459,6 +692,9 @@ int run_classify_core_test() {
   test_host_fn_exception_is_clean_rejection();
   test_host_fn_error_rejects_attempt_and_next_matcher_runs();
   test_host_fn_serious_exception_stays_trace_failure();
+  test_auction_bid_raw_attempts();
+  test_auction_bid_item_families_and_negatives();
+  test_auction_outbid_attempts();
   test_ext_addr_str_pruned_cell_is_clean_rejection();
   test_compact_connections_drops_self_edge();
   test_find_frontier_terminates_on_self_edge();

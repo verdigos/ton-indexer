@@ -27,11 +27,8 @@ bool single_contract_deploy(const Block *block);
 
 // GetGems sale/auction family (HostNftSale.cpp).
 bool sale_contract_deploy(const Block *block);
-bool auction_bid_candidate(const Block *block);
-bool auction_outbid_leg(const Block *bid);
 EvalResult getgems_sale_init(BuildEnv &env, const std::vector<Value> &args);
 EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args);
-EvalResult auction_bid_data(BuildEnv &env, const std::vector<Value> &args);
 
 // tgBTC (HostTgbtc.cpp): mint host fn and deploy-absorb shaper.
 EvalResult tgbtc_mint_data(BuildEnv &env, const std::vector<Value> &args);

@@ -28,9 +28,8 @@
 #    and on a finish/stop-comment ton_transfer; the two are separated only by
 #    the block they look for (nft_purchase vs nft_transfer), and on a trace
 #    carrying both the earlier registration wins. Do not reorder.
-#  - `auction_outbid` anchors on the outbid LEG but reads the `auction_bid`
-#    through `.previous_block`, so it still must register after `auction_bid` —
-#    two matchers earlier in this same file.
+#  - `auction_outbid` consumes the parent `auction_bid`, so it must register
+#    after `auction_bid`, two matchers earlier in this file.
 #  - `nft_update_sale` and `nft_discovery` own their anchor opcodes outright
 #    (0x6c6c2080 / 0x2fcb26a2), so their position carries no tie-break at all,
 #    even though legacy registers `nft_update_sale` much earlier (ahead of
@@ -45,7 +44,7 @@
 # detector Result carries a code hash, so both emulator legs compute it from the
 # account state the detector ran on. Zero renders
 # as null, so an unknown code hash reads as a MISS, never as a wrong version
-# string. Consumers: the DNS-item test inside `auction_bid_data`, and the GetGems
+# string. Consumers: the DNS-item test inside `auction_bid`, and the GetGems
 # StateInit version dispatch in `getgems_sale_init` / `getgems_auction_init`.
 #
 # `init_state`
@@ -61,21 +60,13 @@
 # all three loader paths (fixture .lz4, schema/prod, emulator); only the readers
 # were missing.
 #
-# Host bindings and why each one exists (the expression language cannot do it):
+# Host bindings and why each one exists:
 #   fn  getgems_sale_init(block, code_hash)     StateInit parse, per-code-hash
 #   fn  getgems_auction_init(block, code_hash)  version dispatch (getgems.py
 #                                               get_sale_data / get_auction_data)
-#   fn  auction_bid_data(block)                 CHAINED lookups — the auction's
-#                                               nft_addr feeds an nft_item lookup,
-#                                               which the DSL forbids
-#                                               (B004_LOOKUP_DEPENDS_ON_LOOKUP)
 #   pred sale_contract_deploy                   btype in {ton_transfer,
 #                                               call_contract} AND
 #                                               len(contract_deployments) > 0
-#   pred auction_bid_candidate                  cheap pre-lookup gate (no
-#                                               deployments, not a cancel comment)
-#   pred auction_outbid_leg                     requires exactly one qualifying
-#                                               child of the peeked auction_bid
 #
 # Differences from the runtime matchers:
 #  - `NftCancelSaleMatcher` / `NftCancelAuctionMatcher` reach the collection via
@@ -96,7 +87,7 @@
 #   @upd        the SaleUpdate call            | @listing   transfer to the listing
 #   @sale_init  the deploying message          | @to_sale   transfer to the sale
 #   @disc/@report  discovery call / its report | @cancel    the cancel/finish anchor
-#   @bid        the bid ton_transfer, or the peeked auction_bid parent
+#   @bid        the bid attempt, or the auction_bid parent
 #   @leg        the outbid leg (getgems ton_transfer OR fragment call)
 #   @ret        the returned nft_transfer / nft_purchase, peeked without consuming
 
@@ -112,8 +103,6 @@ opcode NftAuctionStop      = 0xB95616B6
 opcode TeleitemOutbid      = 0x557CEA20
 
 predicate sale_contract_deploy
-predicate auction_bid_candidate
-predicate auction_outbid_leg
 
 matcher nft_update_sale {
     produces nft_update_sale
@@ -224,32 +213,56 @@ matcher nft_discovery {
     }
 }
 
-# A bare `btype ton_transfer` anchor, like legacy's `isinstance(block,
-# TonTransferBlock)`. `auction_bid_candidate` carries the two cheap legacy
-# guards (no contract deployment, comment not a cancel/finish/stop) so the
-# interface lookups inside the fn only run on plausible bids.
+# Raw messages are bid attempts when their auction family and body match.
 matcher auction_bid {
     produces        auction_bid
     include_excess  false
 
-    btype ton_transfer @bid where auction_bid_candidate
+    xor {
+        btype ton_transfer @bid
+        btype call_contract @bid
+    }
 
-    require d = auction_bid_data(bid)
-    # Legacy reads the BLOCK's `failed`, not transaction.aborted.
+    let source = bid.msg.source
+    let value = amount(bid.msg.value)
+    let raw_op = bid.msg.opcode
+    let body_op = ((raw_op + 4294967296) if raw_op < 0 else raw_op) if raw_op != null else null
+    let comment = bid.data.comment if bid.btype == "ton_transfer" else null
+    let auction_addr = bid.msg.destination
+    let auction = lookup nft_auction(auction_addr)
+    let nft_addr = auction.nft_addr if auction != null else bid.msg.destination
+    let item = lookup nft_item(nft_addr)
+    let dns = item != null and (item.code_hash == "i1/8nr/TkGTY1fVuRlnIJrt1k5I/XKSHKL5NYK9vUfk=" or
+                                item.collection_address == "0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF")
+    let fragment = item != null and is_fragment_item(item)
+    let cancel_text = comment in ["cancel", "finish", "stop"]
+    let h = auction.code_hash if auction != null else null
+    let v1 = h == "/ACindAgW83MDT/7nKOMw8jBWexg2KpUMkCpLxBZLUA="
+    let v2 = h == "ZmiHL6eXBUQ//UdSPo6eqfdquZ+aC1nSfej4GhwnudQ="
+    let v3r2 = h == "G9nFo5v/t6DzQViLXdkrgTqEK/Ze8UEJOCIAzq+Pct8="
+    let v3r3 = h == "u29ireD+stefqzuK6/CTCvmFU99gCTsgJ/Covxab/Ow="
+    let v4r1 = h == "zlp4U06qps7tja/UhtB262CpsNbb+1Nnb2YmScBomVY="
+    let v1_bidder = (source != account(auction.nft_owner) and source != account(auction.mp_addr)) if auction != null else false
+    let gg_input = source != null and auction != null and
+                   source != account(auction.nft_addr) and
+                 ((v1 and v1_bidder) or ((v2 or v3r2) and not cancel_text) or
+                  (v3r3 and not cancel_text and not (body_op in [1, 2, 555])) or
+                  (v4r1 and (body_op == null or body_op == 0 or body_op == 0x344EF025 or body_op == 0x9AF07447)))
+    let item_raw = source != null and auction == null and (dns or fragment) and (body_op == null or body_op == 0)
+    reject when not (gg_input or item_raw)
     failed when bid.failed
     out {
-        amount:         d.amount
-        bidder:         d.bidder
-        auction:        d.auction
-        nft_address:    d.nft_address
-        nft_item_index: d.nft_item_index
-        nft_collection: d.nft_collection
-        auction_type:   d.auction_type
+        amount:         value
+        bidder:         source
+        auction:        account(auction_addr)
+        nft_address:    account(nft_addr)
+        nft_item_index: item.index if item != null else null
+        nft_collection: account(item.collection_address) if item != null else null
+        auction_type:   "getgems" if auction != null else ("dns" if dns else "fragment")
     }
 }
 
-# The outbid leg remains the consumed anchor; its auction_bid parent is peeked.
-# The residual predicate preserves the exactly-one qualifying-child requirement.
+# The first qualifying outbid leg consumes its auction_bid parent.
 matcher auction_outbid {
     produces auction_outbid
 
@@ -257,12 +270,12 @@ matcher auction_outbid {
         btype ton_transfer @leg
         op TeleitemOutbid @leg
     }
-      <- peek btype auction_bid @bid where auction_outbid_leg
+      <- btype auction_bid @bid
 
     let getgems = leg.btype == "ton_transfer"
     reject when account(leg.data.source) != account(bid.data.auction)
     reject when getgems and (bid.data.auction_type != "getgems" or not contains(leg.data.comment ?? "", "Your bid has been outbid by another user"))
-    reject when not getgems and bid.data.auction_type != "fragment"
+    reject when not getgems and not (bid.data.auction_type in ["fragment", "dns"])
     out {
         auction_address: bid.data.auction
         nft:             bid.data.nft_address

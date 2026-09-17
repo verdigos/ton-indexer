@@ -31,10 +31,9 @@ const std::map<std::string, HostFnEntry> &host_fns() {
       // stonfi_v2_swap_data reads the in-leg by block type instead of a
       // hash-seed-dependent first event node, so it is deterministic.
       {"stonfi_v2_swap_data", {stonfi_v2_swap_data, 1}},
-      // GetGems StateInit readers and chained-lookup bid builder.
+      // GetGems StateInit readers.
       {"getgems_sale_init", {getgems_sale_init, 2}},
       {"getgems_auction_init", {getgems_auction_init, 2}},
-      {"auction_bid_data", {auction_bid_data, 1}},
   };
   return fns;
 }
@@ -91,8 +90,6 @@ const std::map<std::string, HostPredFn> &host_predicates() {
       // inline where expression.
       {"pton_self_transfer", pton_self_transfer},
       {"sale_contract_deploy", sale_contract_deploy},
-      {"auction_bid_candidate", auction_bid_candidate},
-      {"auction_outbid_leg", auction_outbid_leg},
   };
   return preds;
 }
