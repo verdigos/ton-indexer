@@ -47,13 +47,33 @@ Value wallet_asset(BuildEnv &env, const std::string &addr) {
   return wallet_jetton_asset(jw, /*pton_conversion=*/true);
 }
 
-// Only source_wallet is used from the v3 swap body.
-td::Result<Value> parse_v3_swap_source_wallet(const td::Ref<vm::Cell> &body) {
+// Source wallet is v2 input_jetton_wallet when the root is fully consumed, else v1 source_wallet.
+struct SwapSource {
+  Value source_wallet;
+  bool v2{false};
+};
+td::Result<SwapSource> parse_v3_swap_source_wallet(const td::Ref<vm::Cell> &body) {
+  auto r_ctx = open_body(body);
+  if (r_ctx.is_ok()) {
+    vm::CellSlice cs = r_ctx.ok().cs;
+    if (cs.have(32 + 64) && cs.advance(32 + 64) && cs.have(4)) {
+      cs.fetch_ulong(4);  // source_type
+      if (load_address_py(cs).is_ok()) {  // from_user
+        if (load_address_py(cs).is_ok() && cs.have(1)) {  // owner
+          cs.fetch_ulong(1);  // zeroForOne
+          auto r_jw = load_address_py(cs);
+          if (r_jw.is_ok() && cs.size() == 0 && cs.size_refs() == 2) {
+            return SwapSource{r_jw.move_as_ok(), true};
+          }
+        }
+      }
+    }
+  }
   TRY_RESULT(v, parse_message_body("ToncoRouterV3SwapSourceWallet", body));
-  return *v.field("source_wallet");
+  return SwapSource{*v.field("source_wallet"), false};
 }
 
-// PayTo: exit_code + the coinsinfo maybe-ref (amount0/jetton0/amount1/jetton1).
+// PayTo: exit_code + coinsinfo (v1 amount0/jetton0/amount1/jetton1; v2 jetton0/jetton1/amount0/amount1).
 // Conditional swap/burn info cells are unused by the core.
 struct RouterPayTo {
   std::uint32_t exit_code{0};
@@ -61,7 +81,7 @@ struct RouterPayTo {
   Value jetton0, jetton1;          // account or Null
   Value receiver0, receiver1;      // account or Null (withdraw fallback legs only)
 };
-td::Result<RouterPayTo> parse_v3_pay_to(const td::Ref<vm::Cell> &body) {
+td::Result<RouterPayTo> parse_v3_pay_to(const td::Ref<vm::Cell> &body, bool v2) {
   TRY_RESULT(ctx, open_body(body));
   auto &cs = ctx.cs;
   if (!cs.have(32 + 64) || !cs.advance(32 + 64)) {
@@ -85,10 +105,17 @@ td::Result<RouterPayTo> parse_v3_pay_to(const td::Ref<vm::Cell> &body) {
       return td::Status::Error("v3 pay_to: coinsinfo ref missing");
     }
     TRY_RESULT(ci, open_ref_cell(cs.fetch_ref()));
-    TRY_RESULT_ASSIGN(pt.amount0, load_coins_py(ci));
-    TRY_RESULT_ASSIGN(pt.jetton0, load_address_py(ci));
-    TRY_RESULT_ASSIGN(pt.amount1, load_coins_py(ci));
-    TRY_RESULT_ASSIGN(pt.jetton1, load_address_py(ci));
+    if (v2) {
+      TRY_RESULT_ASSIGN(pt.jetton0, load_address_py(ci));
+      TRY_RESULT_ASSIGN(pt.jetton1, load_address_py(ci));
+      TRY_RESULT_ASSIGN(pt.amount0, load_coins_py(ci));
+      TRY_RESULT_ASSIGN(pt.amount1, load_coins_py(ci));
+    } else {
+      TRY_RESULT_ASSIGN(pt.amount0, load_coins_py(ci));
+      TRY_RESULT_ASSIGN(pt.jetton0, load_address_py(ci));
+      TRY_RESULT_ASSIGN(pt.amount1, load_coins_py(ci));
+      TRY_RESULT_ASSIGN(pt.jetton1, load_address_py(ci));
+    }
   }
   return pt;
 }
@@ -483,7 +510,7 @@ ToncoParts derive_tonco_parts(const std::vector<const Block *> &consumed) {
 
 // Jetton legs are read by btype/data; the pTON in-leg from a single-leaf call
 // message. Multi-hop peer_swaps and the failed-swap recursive-payload fallback
-// are supported; the corpus covers only single-hop swaps.
+// are supported.
 EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   auto decoded = decode_consumed_or_none(args);
   if (!decoded) {
@@ -524,13 +551,14 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     if (r_sbody.is_error()) { ok = false; continue; }
     auto r_sw = parse_v3_swap_source_wallet(r_sbody.move_as_ok());
     if (r_sw.is_error()) { ok = false; continue; }
+    SwapSource sw = r_sw.move_as_ok();
     auto r_pbody = block_body(all_payouts[i]);
     if (r_pbody.is_error()) { ok = false; continue; }
-    auto r_pt = parse_v3_pay_to(r_pbody.move_as_ok());
+    auto r_pt = parse_v3_pay_to(r_pbody.move_as_ok(), sw.v2);
     if (r_pt.is_error()) { ok = false; continue; }
     RouterPayTo pt = r_pt.move_as_ok();
     if (pt.exit_code != 0 && pt.exit_code != 200) ok = false;
-    Value source_wallet = r_sw.move_as_ok();
+    Value source_wallet = std::move(sw.source_wallet);
     std::string key = acc_str(source_wallet).value_or("");
     swap_steps.push_back({source_wallet, pt, all_swaps[i]->min_lt});
     if (jw_asset_map.find(key) == jw_asset_map.end()) {
@@ -608,7 +636,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   Value out_source = data_field(out_transfer, "sender");
   Value out_dest = data_field(out_transfer, "receiver");
 
-  // peer_swaps (multi-hop only; empty for single-hop corpus)
+  // peer_swaps from PayTo coinsinfo when there is more than one swap step
   auto payout_assets = [](const RouterPayTo &pt) {
     std::vector<std::pair<td::RefInt256, Value>> a;
     if (!pt.amount0.is_null() && pt.jetton0.t == VType::Account) a.emplace_back(pt.amount0, pt.jetton0);
@@ -650,7 +678,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     }
   }
 
-  // min_out_amount is the payload's slippage guard; destination_asset falls back to that hop on a failed swap.
+  // min_out_amount is the payload guard in destination_asset units; failed swaps keep it only when the target asset resolves.
   Value destination_asset = out_asset;
   Value min_out_amount = Value::null();
   if (in_payload.not_null()) {
@@ -661,8 +689,10 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     } catch (...) {
     }
     if (!targets.empty()) {
-      min_out_amount = amount_or_zero(targets.back().second);
-      if (!ok && !swap_steps.empty()) {
+      Value guard = amount_or_zero(targets.back().second);
+      if (ok) {
+        min_out_amount = std::move(guard);
+      } else if (!swap_steps.empty()) {
         const std::string &twallet = targets.back().first;
         Value target_asset;
         auto it = jw_asset_map.find(twallet);
@@ -671,7 +701,10 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
           Value ta = wallet_asset(env, twallet);
           if (!ta.is_null()) target_asset = ta;
         }
-        if (!target_asset.is_null()) destination_asset = target_asset;
+        if (!target_asset.is_null()) {
+          destination_asset = target_asset;
+          min_out_amount = std::move(guard);
+        }
       }
     }
   }
