@@ -27,15 +27,11 @@ namespace mch {
 namespace {
 
 
-constexpr std::uint32_t kDedustSwapExternal = 0x61ee542d;
-constexpr std::uint32_t kDedustSwapPeer = 0x72aca8aa;
 constexpr std::uint32_t kDedustSwapNotification = 0x9c610de3;
 constexpr std::uint32_t kDedustPayoutFromPool = 0xad4eb6f5;
 constexpr std::uint32_t kDedustPayout = 0x474f86cf;
-constexpr std::uint32_t kDedustSwapPayload = 0xe3a0d482;
 
-// Walk the step list to the final (destination) asset. A missing pool
-// lookup faults and rejects.
+// Walk the fallback step list to the requested destination asset.
 EvalResult dedust_seq_destination(BuildEnv &env, const std::vector<std::string> &steps,
                                   const Value &seed) {
   Value prev = seed;
@@ -102,9 +98,8 @@ static td::Result<std::vector<std::string>> parse_dedust_steps(vm::CellSlice cs)
   }
 }
 
-// args = (consumed, in_transfer, swap_request). Returns the swap-legs
-// object, or Null to reject (payload opcode mismatch), or faults to reject
-// (malformed trace / missing pool). include == the consumed set verbatim.
+// args = (consumed, in_transfer, swap_request, failed). Keeps notification
+// ordering, payout selection, and the failed-route fallback in one place.
 EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
   ConsumedBlocks decoded;
   EvalResult decode = decode_consumed({args[0]}, "dedust_swap_legs", decoded);
@@ -118,12 +113,6 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
   const Block *in_transfer = as_block(args[1]);
   const Block *swap_request = as_block(args[2]);
 
-  // Successful hops, one per DedustSwapNotification, in lt order. Collected
-  // from the ORDERED `consumed` vector, not from the `include` set: the
-  // stable_sort below preserves insertion order for EQUAL min_lt, and an
-  // unordered_set iterates in address-dependent order, so two passes over the
-  // same trace could assign different in_leg/out_leg. `include` stays for the
-  // membership tests further down.
   std::vector<const Block *> notif_blocks;
   for (const Block *b : consumed) {
     if (is_call_op(b, kDedustSwapNotification)) {
@@ -132,13 +121,7 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
   }
   std::stable_sort(notif_blocks.begin(), notif_blocks.end(),
                    [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
-  std::vector<Value> peer_swaps;
-  Value first_in;
-  Value last_out;
-  Value first_in_amount;
-  Value first_in_asset;
-  Value last_out_amount;
-  Value last_out_asset;
+  std::vector<Value> notifications;
   for (const Block *b : notif_blocks) {
     auto r_body = block_body(b);
     if (r_body.is_error()) {
@@ -148,60 +131,28 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
     if (r.is_error()) {
       return rt_fault("dedust notify: parse");
     }
-    Value n = r.move_as_ok();
-    const Value *amount_in_f = n.field("amount_in");
-    const Value *asset_in_f = n.field("asset_in");
-    const Value *amount_out_f = n.field("amount_out");
-    const Value *asset_out_f = n.field("asset_out");
-    if (amount_in_f == nullptr || asset_in_f == nullptr || amount_out_f == nullptr ||
-        asset_out_f == nullptr) {
+    Value notification = r.move_as_ok();
+    if (notification.field("amount_in") == nullptr || notification.field("asset_in") == nullptr ||
+        notification.field("amount_out") == nullptr || notification.field("asset_out") == nullptr) {
       return rt_fault("dedust notify: missing leg field");
     }
-    EvalResult asset_in = rt_builtin_asset_of(*asset_in_f);
-    EvalResult asset_out = rt_builtin_asset_of(*asset_out_f);
-    if (asset_in.faulted) return asset_in;
-    if (asset_out.faulted) return asset_out;
-    Value in_amount_value = to_amount(*amount_in_f);
-    Value in_asset_value = std::move(asset_in.value);
-    Value out_amount_value = to_amount(*amount_out_f);
-    Value out_asset_value = std::move(asset_out.value);
-    Value in_leg = Value::make_dict(
-        Value::Fields{{"amount", in_amount_value}, {"asset", in_asset_value}});
-    Value out_leg = Value::make_dict(
-        Value::Fields{{"amount", out_amount_value}, {"asset", out_asset_value}});
-    if (peer_swaps.empty()) {
-      first_in = in_leg;
-      first_in_amount = in_amount_value;
-      first_in_asset = in_asset_value;
-    }
-    last_out = out_leg;
-    last_out_amount = out_amount_value;
-    last_out_asset = out_asset_value;
-    peer_swaps.push_back(Value::make_dict(Value::Fields{
-        {"in", std::move(in_leg)}, {"out", std::move(out_leg)}}));
+    notifications.push_back(std::move(notification));
   }
 
-  Value sender = Value::null();
-  Value sender_wallet = Value::null();
-  Value dex_incoming_jetton_wallet = Value::null();
-  Value dex_incoming_wallet = Value::null();
-  Value amount_in = Value::null();
+  if (args[3].t != VType::Bool) {
+    return rt_fault("dedust legs: failed is not a boolean");
+  }
+  const bool failed = args[3].boolean;
+  Value incoming_amount = Value::null();
   Value asset_in = Value::null();
   std::vector<std::string> steps;
   if (in_transfer != nullptr) {
-    dex_incoming_jetton_wallet = data_field(in_transfer, "receiver_wallet");
-    dex_incoming_wallet = data_field(in_transfer, "receiver");
-    sender_wallet = data_field(in_transfer, "sender_wallet");
-    sender = data_field(in_transfer, "sender");
     asset_in = data_field(in_transfer, "asset");
     Value payload_opcode = data_field(in_transfer, "payload_opcode");
     if (payload_opcode.t != VType::Int || payload_opcode.num.is_null()) {
       return rt_fault("dedust legs: payload_opcode not an integer");
     }
-    if (payload_opcode.num != kDedustSwapPayload) {
-      return rt_ok(Value::null());
-    }
-    amount_in = data_field(in_transfer, "amount");
+    incoming_amount = data_field(in_transfer, "amount");
     Value fp = data_field(in_transfer, "forward_payload");
     if (fp.t != VType::Str) {
       return rt_fault("dedust legs: forward_payload not a string");
@@ -226,9 +177,6 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
     }
     steps = r_steps.move_as_ok();
   } else if (swap_request != nullptr) {
-    const Message *m = block_msg(swap_request);
-    sender = account_from_opt(m != nullptr ? m->source : std::nullopt);
-    dex_incoming_wallet = account_from_opt(m != nullptr ? m->destination : std::nullopt);
     auto r_body = block_body(swap_request);
     if (r_body.is_error()) {
       return rt_fault("dedust legs: swap_request body");
@@ -247,7 +195,7 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
     if (r_amt.is_error()) {
       return rt_fault("dedust legs: swap_request amount");
     }
-    amount_in = Value::make_int(r_amt.move_as_ok());
+    incoming_amount = Value::make_int(r_amt.move_as_ok());
     auto r_steps = parse_dedust_steps(cs);
     if (r_steps.is_error()) {
       return rt_fault("dedust legs: steps");
@@ -265,7 +213,7 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
   if (payout_from_pool.size() != 1) {
     return rt_fault("dedust legs: expected one payout from pool");
   }
-  Value receiver = sender;
+  Value receiver = Value::null();
   Value receiver_wallet = Value::null();
   Value dex_outgoing_jetton_wallet = Value::null();
   Value dex_outgoing_wallet = Value::null();
@@ -303,58 +251,35 @@ EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args) {
     }
   }
 
-  // Desired out asset: BOC steps + pool-hop lookups.
-  Value seed = asset_in.is_null() ? Value::make_asset_ton() : asset_in;
-  EvalResult r_dest = dedust_seq_destination(env, steps, seed);
-  if (r_dest.faulted) {
-    return r_dest;
-  }
-  Value destination_asset = std::move(r_dest.value);
-
-  // No successful hop at all: synthesize the single leg from actual values.
-  if (peer_swaps.empty()) {
-    first_in_amount = to_amount(amount_in);
-    first_in_asset = asset_in;
-    last_out_amount = to_amount(actual_amount_out);
-    last_out_asset = actual_asset_out;
-    first_in = Value::make_dict(
-        Value::Fields{{"amount", first_in_amount}, {"asset", first_in_asset}});
-    last_out = Value::make_dict(
-        Value::Fields{{"amount", last_out_amount}, {"asset", last_out_asset}});
-    peer_swaps.push_back(Value::make_dict(Value::Fields{
-        {"in", first_in}, {"out", last_out}}));
+  Value fallback_destination_asset = Value::null();
+  if (failed) {
+    Value seed = asset_in.is_null() ? Value::make_asset_ton() : asset_in;
+    EvalResult r_dest = dedust_seq_destination(env, steps, seed);
+    if (r_dest.faulted) {
+      return r_dest;
+    }
+    fallback_destination_asset = std::move(r_dest.value);
   }
 
-  Value dex_incoming_transfer = Value::make_dict(Value::Fields{
-      {"asset", first_in_asset},
-      {"amount", first_in_amount},
-      {"source", sender},
-      {"source_jetton_wallet", sender_wallet},
-      {"destination", dex_incoming_wallet},
-      {"destination_jetton_wallet", dex_incoming_jetton_wallet}});
-  Value dex_outgoing_transfer = Value::make_dict(Value::Fields{
-      {"asset", last_out_asset},
-      {"amount", last_out_amount},
-      {"source", dex_outgoing_wallet},
-      {"source_jetton_wallet", dex_outgoing_jetton_wallet},
-      {"destination", receiver},
-      {"destination_jetton_wallet", receiver_wallet}});
-
-  std::vector<Value> peer_swaps_out;
-  if (peer_swaps.size() > 1) {
-    peer_swaps_out = peer_swaps;
+  Value fallback_leg = Value::null();
+  if (notifications.empty()) {
+    fallback_leg = Value::make_dict(Value::Fields{
+        {"in", Value::make_dict(Value::Fields{
+                   {"amount", to_amount(incoming_amount)}, {"asset", asset_in}})},
+        {"out", Value::make_dict(Value::Fields{
+                    {"amount", to_amount(actual_amount_out)}, {"asset", actual_asset_out}})}});
   }
 
-  Value::Fields ns;
-  ns.emplace_back("sender", std::move(sender));
-  ns.emplace_back("asset_in", std::move(asset_in));
-  ns.emplace_back("destination_asset", std::move(destination_asset));
-  ns.emplace_back("dex_incoming_transfer", std::move(dex_incoming_transfer));
-  ns.emplace_back("dex_outgoing_transfer", std::move(dex_outgoing_transfer));
-  ns.emplace_back("in_leg", std::move(first_in));
-  ns.emplace_back("out_leg", std::move(last_out));
-  ns.emplace_back("peer_swaps", Value::make_list(std::move(peer_swaps_out)));
-  return rt_ok(Value::make_obj(std::move(ns)));
+  return rt_ok(Value::make_obj({
+      {"notifications", Value::make_list(std::move(notifications))},
+      {"incoming_amount", std::move(incoming_amount)},
+      {"fallback_leg", std::move(fallback_leg)},
+      {"fallback_destination_asset", std::move(fallback_destination_asset)},
+      {"outgoing_source", std::move(dex_outgoing_wallet)},
+      {"outgoing_source_jetton_wallet", std::move(dex_outgoing_jetton_wallet)},
+      {"outgoing_destination", std::move(receiver)},
+      {"outgoing_destination_jetton_wallet", std::move(receiver_wallet)},
+  }));
 }
 
 namespace {

@@ -4,8 +4,6 @@
 #include "host/HostCommon.h"
 
 #include <algorithm>
-#include <unordered_set>
-#include <utility>
 
 namespace mch {
 
@@ -35,16 +33,6 @@ const Block *first_call(const std::vector<Block *> &blocks, std::uint32_t op) {
   return first_call_impl(blocks, op);
 }
 
-std::vector<const Block *> all_calls(const std::vector<const Block *> &blocks, std::uint32_t op) {
-  std::vector<const Block *> out;
-  for (const Block *b : blocks) {
-    if (is_call_op(b, op)) {
-      out.push_back(b);
-    }
-  }
-  return out;
-}
-
 const Block *first_next_call(const Block *b, std::uint32_t op) {
   if (b == nullptr) {
     return nullptr;
@@ -55,18 +43,6 @@ const Block *first_next_call(const Block *b, std::uint32_t op) {
     }
   }
   return nullptr;
-}
-
-void unique_lt_sorted(std::vector<const Block *> &blocks) {
-  std::unordered_set<const Block *> seen;
-  std::vector<const Block *> out;
-  out.reserve(blocks.size());
-  for (const Block *b : blocks) {
-    if (seen.insert(b).second) out.push_back(b);
-  }
-  std::stable_sort(out.begin(), out.end(),
-                   [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; });
-  blocks = std::move(out);
 }
 
 bool value_truthy(const Value &v) {
