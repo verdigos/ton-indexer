@@ -43,7 +43,6 @@ ABI_PREFIXES = {
     "CoffeeSwapEvent": 0xC0FFEE30,
     "CoffeeSwapNative": 0xC0FFEE00,
     "CoffeePayoutInternal": 0xC0FFEE21,
-    "NftOwnershipAssignedPrevOwner": 0x05138D91,
     "JVaultStakePeriodPayload": None,
 }
 
@@ -80,8 +79,6 @@ HOST_CALLS = (
              "notif_blocks contains only is_call_op(kDedustSwapNotification)"),
     HostCall("HostDedust.cpp", 1, "DedustPayoutFromPool", (0xAD4EB6F5,),
              "payout_from_pool is filtered by the corrected wire opcode"),
-    HostCall("HostNft.cpp", 1, "NftOwnershipAssignedPrevOwner", (0x05138D91,),
-             "the sole helper caller receives the exact assigned contract capture"),
 )
 
 

@@ -30,12 +30,9 @@
 # at the anchor's position (so produced.previous_block is the funding parent).
 # On a plain transfer is_purchase is false and the shaper is a no-op.
 #
-# Hybrid shell (C++-runnable): the data build needs the interface repository
-# (`_get_nft_data`, `get_nft_sale`, `get_nft_auction`) and fragment-URI parsing
-# the DSL expression language cannot express. The wrapper (btype, reject, out
-# mapping) remains declarative. The data
-# + purchase detection stay in build_nft_transfer_core (blocks/nft.py), the same
-# core the legacy thin wrapper calls, wrapped by the `nft_transfer_data` host fn.
+# Hybrid shell: Fragment URI split has no string-slice builtin, so the nft_item
+# metadata projection stays in `nft_transfer_data`. Wire parse, prev_owner, and
+# sale/auction purchase detection are declarative.
 #
 # Capture -> legacy role map:
 #   @transfer   the NftTransfer anchor (test_self target)
@@ -49,34 +46,43 @@ matcher nft_transfer {
     shape           nft_transfer_parent_absorb
     include_excess  false
 
-    op NftTransfer @transfer {
+    op NftTransfer @transfer as NftTransfer {
         -> {
-            maybe op NftOwnershipAssigned @assigned
+            maybe op NftOwnershipAssigned @assigned as NftOwnershipAssignedPrevOwner
             ; maybe op Excess
         }
         <- maybe peek any @funding_parent
     }
 
-    # HYBRID declarative build (C++-runnable). The core (NftTransfer/ownership
-    # parse, nft-item lookup, nft_sale/nft_auction purchase detection) is the one
-    # host fn; fields map from its namespace. The purchase-only marketplace/price/
-    # real_prev_owner keys are `?:` (omit-when-null) to match the legacy variable-
-    # key dict; the nested `nft` dict passes through as a field value.
-    require d = nft_transfer_data(transfer, assigned, funding_parent)
+    reject when transfer.body == null
+    reject when assigned != null and assigned.body == null
+    require nft = nft_transfer_data(account(transfer.msg.transaction.account))
+    let new_owner = account(transfer.body.new_owner)
+    let prev_owner = (account(assigned.body.prev_owner) ?? addr_none()) if assigned != null else (account(transfer.msg.source) ?? addr_none())
+    let rd = account(transfer.body.response_destination)
+    let parent_acct = funding_parent.msg.transaction.account
+    let owner_match = funding_parent.btype == "ton_transfer" and account(funding_parent.msg.source) == new_owner
+    let sale = lookup nft_sale(parent_acct)
+    let auction = lookup nft_auction(parent_acct)
+    let have_sale = owner_match and sale != null
+    let have_auc = not have_sale and auction != null
+    let pd_nft = account(sale.nft_address) if have_sale else account(auction.nft_addr)
+    let real_owner = (account(sale.nft_owner_address) ?? addr_none()) if have_sale else (account(auction.nft_owner) ?? addr_none())
+    let is_purchase = (have_sale or have_auc) and pd_nft == nft.address and real_owner != new_owner
     failed when transfer.failed
     out {
-        is_purchase:          d.is_purchase
-        prev_owner:           d.prev_owner
-        new_owner:            d.new_owner
-        query_id:             d.query_id
-        forward_amount:       d.forward_amount
-        response_destination: d.response_destination
-        custom_payload:       d.custom_payload
-        forward_payload:      d.forward_payload
-        nft:                  d.nft
-        marketplace?:         d.marketplace
-        marketplace_address?: d.marketplace_address
-        price?:               d.price
-        real_prev_owner?:     d.real_prev_owner
+        is_purchase:          is_purchase
+        prev_owner:           prev_owner
+        new_owner:            new_owner
+        query_id:             transfer.body.query_id
+        forward_amount:       amount(transfer.body.forward_amount)
+        response_destination: rd if rd != addr_none() else null
+        custom_payload:       b64(transfer.body.custom_payload)
+        forward_payload:      b64(transfer.body.forward_payload)
+        nft:                  nft
+        marketplace?:         "getgems" if is_purchase else null
+        marketplace_address?: ((account(sale.marketplace_address) ?? addr_none()) if have_sale else (account(auction.mp_addr) ?? addr_none())) if is_purchase else null
+        price?:               (amount(sale.full_price) if have_sale else amount(auction.last_bid)) if is_purchase else null
+        real_prev_owner?:     real_owner if is_purchase else null
     }
 }

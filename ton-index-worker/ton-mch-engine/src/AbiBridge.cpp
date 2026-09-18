@@ -5,6 +5,7 @@
 #include "AbiProjection.h"
 #include "AbiTryFirst.h"
 #include "parse/Parsers.h"
+#include "parse/PSlice.h"
 
 #include "common/refint.h"
 #include "vm/cells/CellBuilder.h"
@@ -500,6 +501,57 @@ td::Result<Value> abi_parse_conditional_query_id(const td::Ref<vm::Cell> &body) 
   return Value::make_obj({{"query_id", Value::null()}});
 }
 
+// Remaining bits after forward_amount are Either Cell ^Cell; absent tail
+// leaves forward_payload null. custom_payload is Maybe ^Cell.
+td::Result<Value> abi_parse_nft_transfer(const td::Ref<vm::Cell> &body) {
+  TRY_RESULT(ctx, open_body(body));
+  auto &cs = ctx.cs;
+  if (!cs.have(32 + 64)) {
+    return td::Status::Error("nft_transfer: header underflow");
+  }
+  cs.advance(32);
+  td::RefInt256 query_id = refint_u64(cs.fetch_ulong(64));
+  TRY_RESULT(new_owner, load_address_py(cs));
+  TRY_RESULT(response_destination, load_address_py(cs));
+  td::Ref<vm::Cell> cp;
+  if (!cs.fetch_maybe_ref(cp)) {
+    return td::Status::Error("nft_transfer: bad custom_payload");
+  }
+  Value custom_payload = Value::null();
+  if (cp.not_null()) {
+    TRY_RESULT(cp_boc, td_boc_serialize_crc(cp));
+    custom_payload = Value::make_bytes(std::move(cp_boc));
+  }
+  TRY_RESULT(forward_amount, load_coins_py(cs));
+  Value forward_payload = Value::null();
+  if (cs.size() > 0) {
+    bool is_right = cs.fetch_ulong(1) != 0;
+    td::Ref<vm::Cell> fp_cell;
+    if (is_right) {
+      if (cs.size_refs() == 0) {
+        return td::Status::Error("nft_transfer: forward_payload ref missing");
+      }
+      fp_cell = cs.fetch_ref();
+    } else {
+      PSlice ps;
+      ps.cs = cs;
+      ps.refs = ctx.all_refs;
+      ps.off = 0;
+      TRY_RESULT_ASSIGN(fp_cell, pslice_to_cell(ps));
+    }
+    TRY_RESULT(fp_boc, td_boc_serialize_crc(fp_cell));
+    forward_payload = Value::make_bytes(std::move(fp_boc));
+  }
+  Value::Fields f;
+  f.emplace_back("query_id", Value::make_int(std::move(query_id)));
+  f.emplace_back("new_owner", std::move(new_owner));
+  f.emplace_back("response_destination", std::move(response_destination));
+  f.emplace_back("custom_payload", std::move(custom_payload));
+  f.emplace_back("forward_amount", Value::make_int(std::move(forward_amount)));
+  f.emplace_back("forward_payload", std::move(forward_payload));
+  return Value::make_obj(std::move(f));
+}
+
 }  // namespace
 
 const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
@@ -619,6 +671,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"TeleitemStartAuction", &abi_parse_body<teleitem::TeleitemStartAuction>},
       {"NftOwnershipAssignedPrevOwner",
        &abi_parse_body<nft_sale::NftOwnershipAssignedPrevOwner>},
+      {"NftTransfer", &abi_parse_nft_transfer},
       {"SaleUpdateMessage", &abi_parse_body<nft_sale::SaleUpdateMessage>},
       {"NftReportStaticData", &abi_parse_body<nft_sale::NftReportStaticData>},
       {"TONStakersNftBurnNotification",

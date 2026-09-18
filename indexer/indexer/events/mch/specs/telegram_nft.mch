@@ -17,9 +17,9 @@
 # The AuctionFillUp children set is what makes the parent edge fire only on
 # real fragment purchases (an ordinary orphan NftOwnershipAssigned has no such
 # siblings), so no data predicate is needed to gate the parent consumption.
-# The builder reuses the legacy field logic via build_telegram_nft_purchase_core;
-# is_purchase / mint / len(payouts) branching all live there, driven by the
-# captured @assigned / @payment / @payouts blocks.
+# The host keeps the soft ownership+payload parse, metadata projection, and
+# payout sort/select. Parent-kind gate, is_mint, purchase assembly, and the
+# 16-key record are declarative.
 #
 # Two matchers, split on the legacy CONSUMED SET
 # ----------------------------------------------
@@ -57,6 +57,8 @@
 
 import "lib/opcodes.mch"
 
+fn is_telemint_mint(p) = p != null and ((p.btype == "call_contract" and p.data.opcode == 0x299a3e15) or p.btype == "nft_mint")
+
 matcher telegram_nft_purchase {
     produces nft_transfer
 
@@ -72,22 +74,22 @@ matcher telegram_nft_purchase {
                -> { many op AuctionFillUp @payouts }
          }
 
-    # The host builds fields from the anchor, payment and full payout list.
-    # Royalty fields are present only with two or more payouts.
-    require d = telegram_nft_purchase_data(assigned, payment, payouts)
+    # Parent-kind gate is the xor above. Royalty fields need two or more payouts.
+    require d = telegram_nft_purchase_data(assigned, payouts)
+    let is_purchase = d.is_bid and not is_telemint_mint(payment)
     out {
-        is_purchase:          d.is_purchase
+        is_purchase:          is_purchase
         prev_owner:           d.prev_owner
         new_owner:            d.new_owner
         query_id:             d.query_id
-        forward_amount:       d.forward_amount
-        response_destination: d.response_destination
-        custom_payload:       d.custom_payload
-        forward_payload:      d.forward_payload
+        forward_amount:       null
+        response_destination: null
+        custom_payload:       null
+        forward_payload:      b64(d.payload)
         nft:                  d.nft
-        real_prev_owner:      d.real_prev_owner
-        price:                d.price
-        marketplace:          d.marketplace
+        real_prev_owner:      null
+        price:                amount(d.bid) if d.is_bid else null
+        marketplace:          "fragment" if d.is_bid else null
         payout_amount:        d.payout_amount
         payout_address:       d.payout_address
         royalty_amount?:      d.royalty_amount
@@ -102,41 +104,42 @@ matcher telegram_nft_assigned {
     op NftOwnershipAssigned @assigned
       <- maybe peek any @payment
 
-    require d = telegram_nft_purchase_data(assigned, payment, [])
+    require d = telegram_nft_purchase_data(assigned, [])
+    let is_purchase = d.is_bid and not is_telemint_mint(payment)
 
     # A `produces switch`, not `?:` keys, because the legacy key set here is
     # BRANCH-shaped, not null-shaped. `payload is TeleitemBidInfo` sets all three
     # of price / marketplace / real_prev_owner — and sets real_prev_owner to None
     # explicitly, a PRESENT key holding null. `?:` is omit-when-null, so it can
     # emit either the present-null key or nothing, never one per branch. The
-    # switch condition is `d.marketplace != null`, which is exactly that branch
-    # (the core sets marketplace nowhere else). No payout/royalty keys in either
-    # branch: this matcher's shapes never reach the parent-absorbing code path —
-    # a ton_transfer / external parent belongs to telegram_nft_purchase.
+    # switch condition is `d.is_bid`, which is exactly that branch. No
+    # payout/royalty keys in either branch: this matcher's shapes never reach
+    # the parent-absorbing code path — a ton_transfer / external parent belongs
+    # to telegram_nft_purchase.
     produces switch {
-        when d.marketplace != null => nft_transfer out {
-            is_purchase:          d.is_purchase
+        when d.is_bid => nft_transfer out {
+            is_purchase:          is_purchase
             prev_owner:           d.prev_owner
             new_owner:            d.new_owner
             query_id:             d.query_id
-            forward_amount:       d.forward_amount
-            response_destination: d.response_destination
-            custom_payload:       d.custom_payload
-            forward_payload:      d.forward_payload
+            forward_amount:       null
+            response_destination: null
+            custom_payload:       null
+            forward_payload:      b64(d.payload)
             nft:                  d.nft
-            real_prev_owner:      d.real_prev_owner
-            price:                d.price
-            marketplace:          d.marketplace
+            real_prev_owner:      null
+            price:                amount(d.bid)
+            marketplace:          "fragment"
         }
         else => nft_transfer out {
-            is_purchase:          d.is_purchase
+            is_purchase:          is_purchase
             prev_owner:           d.prev_owner
             new_owner:            d.new_owner
             query_id:             d.query_id
-            forward_amount:       d.forward_amount
-            response_destination: d.response_destination
-            custom_payload:       d.custom_payload
-            forward_payload:      d.forward_payload
+            forward_amount:       null
+            response_destination: null
+            custom_payload:       null
+            forward_payload:      b64(d.payload)
             nft:                  d.nft
         }
     }

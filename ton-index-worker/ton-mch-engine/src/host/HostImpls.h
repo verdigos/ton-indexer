@@ -18,7 +18,7 @@ struct ShaperMatch;  // HostRegistry.h
 // Getgems (HostNftSale.cpp): finish/stop sibling-payout shaper.
 void getgems_proxy_insert(Block *produced, const ShaperMatch &m);
 
-// NFT (HostNft.cpp): base nft_transfer host fn + parent-absorb shaper + telegram.
+// NFT (HostNft.cpp): metadata projection, telegram soft-parse+payouts, parent-absorb.
 EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args);
 void nft_transfer_parent_absorb(Block *produced, const ShaperMatch &m);
 EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &args);
