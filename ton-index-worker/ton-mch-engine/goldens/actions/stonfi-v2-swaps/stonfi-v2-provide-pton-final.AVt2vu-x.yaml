@@ -1,0 +1,49 @@
+# stonfi-v2-swaps / single pton final
+# note: synthetic: built from test_stonfi_v2_provide.py::test_single_pton_final by pyir-w2 lane P; not a chain trace
+# trace: AVt2vu-xrqHd8LAo88rUXwP6mJYvvLG4zw3VPXAyGhI=
+actions:
+  - type: dex_deposit_liquidity
+    matcher: stonfi_v2_provide_final
+    anchor: dex_deposit_liquidity@200
+    id: O+ZuDLRfNgzOCNJPzOtq3iqwwFqzAsz+ZeBu1fKbtFQ=
+    success: true
+    source: 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    source_secondary: null
+    destination: 0:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    dex_deposit_liquidity_data:
+      amount1: 7000000000
+      amount2: null
+      asset1: null
+      asset2: null
+      dex: stonfi_v2
+      lp_tokens_minted: 123456
+      user_jetton_wallet_1: null
+      user_jetton_wallet_2: null
+    tx_hashes:
+      - Cp/wzktBlN8geUnTlLmTPYp4Q00YJQ+EjQ4t5DVWzeI=
+      - Ib2z1E8lOmcyvssFbaG1Mt7fXdmi3ExrE5DVyoVSwSo=
+      - IysnsBdnxJLYMcsz7DsQK9N4LCMoHbpsOd+/MUB+o8Y=
+      - ahu+OauIJ+RwJB/WcvYRssFGX1ICylKkDqTiX7EKBN4=
+      - jaoW09vTv34stljFA+feHwzvgdyPjGAG9pLeIlVqItY=
+      - kfXgUVHQKWg6jtrFMTIPzC0+rBltsa/UiC7ija/fjIQ=
+      - lG5eV6gFzWJSy99jLzneSdgX2qwin8QY00ZgtQQhR/k=
+    accounts:
+      - 0:6666666666666666666666666666666666666666666666666666666666666666
+      - 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      - 0:BCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBC
+      - 0:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+      - 0:EDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDED
+      - 0:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+    start_lt: 200
+    end_lt: 250
+    start_utime: 1200
+    end_utime: 1250
+    mc_seqno_end: 0

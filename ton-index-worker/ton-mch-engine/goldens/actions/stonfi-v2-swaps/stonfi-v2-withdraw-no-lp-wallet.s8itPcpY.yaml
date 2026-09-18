@@ -1,0 +1,236 @@
+# stonfi-v2-swaps / stonfi v2 withdraw no lp wallet
+# note: synthetic: built from test_stonfi_v2_withdraw.py::test_stonfi_v2_withdraw_both_reject_without_lp_wallet by pyir-w2 lane P; not a chain trace
+# trace: s8itPcpYUOtg1Aq8U_Oyt_99ucaGcK7HPrF4WZWQqRc=
+actions:
+  - type: call_contract
+    anchor: call_contract#01f3835d@630
+    id: q4rZHPUXQY6AtAxgN5dQhrP7ZACU0Epz3YqSG/H/7II=
+    success: true
+    source: 0:6666666666666666666666666666666666666666666666666666666666666666
+    source_secondary: null
+    destination: 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1000000000
+    opcode: 0x01f3835d
+    tx_hashes:
+      - H4zTbGFa3pHGFPYVwLcBBUtohx3MvEZ4jCeKSPmkcg8=
+      - vnqYjmBhMPzJa/0JEaG3F4tuxkgxd+RDROnqhWwYusU=
+    accounts:
+      - 0:6666666666666666666666666666666666666666666666666666666666666666
+      - 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    start_lt: 630
+    end_lt: 630
+    start_utime: 1630
+    end_utime: 1630
+    mc_seqno_end: 0
+  - type: call_contract
+    anchor: call_contract#297437cf@400
+    id: T/7Ut8gjtK33dC6KYj8hsqt7yXDHRE8UBRhOaBmlJdk=
+    success: true
+    source: 0:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+    source_secondary: null
+    destination: 0:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1000000000
+    opcode: 0x297437cf
+    tx_hashes:
+      - J4QHUqe/GxMZDlWxUDpvwHOfUjs9f+J5DJzflQ2rWDg=
+      - tNxVc9qiHLQLkh2+vJGbVpNhpI12QHV3u9eUstSKYKo=
+    accounts:
+      - 0:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+      - 0:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+    start_lt: 400
+    end_lt: 400
+    start_utime: 1400
+    end_utime: 1400
+    mc_seqno_end: 0
+  - type: call_contract
+    anchor: call_contract#595f07bc@200
+    id: 4s49LXO7wjdQayzvGc3ZPF+HMLDCK71+3YEqpYwm3ww=
+    success: true
+    source: 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    source_secondary: null
+    destination: 0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1000000000
+    opcode: 0x595f07bc
+    tx_hashes:
+      - Ib2z1E8lOmcyvssFbaG1Mt7fXdmi3ExrE5DVyoVSwSo=
+      - pb8ElKZn0wQvBAPfVDlAcuqUP+K1YHxbxWMaIi6cT3s=
+    accounts:
+      - 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      - 0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+    start_lt: 200
+    end_lt: 200
+    start_utime: 1200
+    end_utime: 1200
+    mc_seqno_end: 0
+  - type: call_contract
+    anchor: call_contract#657b54f5@500
+    id: x/vgspdHWRd9L+i16RLHEMhC4yiMVzcU5RZM1DDh40o=
+    success: true
+    source: 0:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+    source_secondary: null
+    destination: 0:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1000000000
+    opcode: 0x657b54f5
+    tx_hashes:
+      - Rv3kQjogY/f4Y0wlfYWoFUtA/t4q761bapKrGYCsf/Y=
+      - tNxVc9qiHLQLkh2+vJGbVpNhpI12QHV3u9eUstSKYKo=
+    accounts:
+      - 0:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+      - 0:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+    start_lt: 500
+    end_lt: 500
+    start_utime: 1500
+    end_utime: 1500
+    mc_seqno_end: 0
+  - type: call_contract
+    anchor: call_contract#657b54f5@600
+    id: Sr+2mJJ6//9nodgadM83+4ffWKc+5bd0zrCLQypeiq8=
+    success: true
+    source: 0:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+    source_secondary: null
+    destination: 0:4444444444444444444444444444444444444444444444444444444444444444
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1000000000
+    opcode: 0x657b54f5
+    tx_hashes:
+      - p3emNzdUgaogYqU30za/4cCr3A7NfAVVG/6l2/AYMiY=
+      - tNxVc9qiHLQLkh2+vJGbVpNhpI12QHV3u9eUstSKYKo=
+    accounts:
+      - 0:4444444444444444444444444444444444444444444444444444444444444444
+      - 0:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+    start_lt: 600
+    end_lt: 600
+    start_utime: 1600
+    end_utime: 1600
+    mc_seqno_end: 0
+  - type: call_contract
+    anchor: call_contract#7bdd97de@300
+    id: 6Hzeib9aUy8/v5KmpVS+roOkRGeDm2sDmtFnrMNvaR0=
+    success: true
+    source: 0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+    source_secondary: null
+    destination: 0:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1000000000
+    opcode: 0x7bdd97de
+    tx_hashes:
+      - J4QHUqe/GxMZDlWxUDpvwHOfUjs9f+J5DJzflQ2rWDg=
+      - pb8ElKZn0wQvBAPfVDlAcuqUP+K1YHxbxWMaIi6cT3s=
+    accounts:
+      - 0:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+      - 0:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+    start_lt: 300
+    end_lt: 300
+    start_utime: 1300
+    end_utime: 1300
+    mc_seqno_end: 0
+  - type: jetton_transfer
+    matcher: jetton_transfer
+    anchor: jetton_transfer@510
+    id: SA5xjiq/Xeou9Fi/dAUSdEePK8EF7h4leQQOK9GZNEE=
+    success: true
+    source: 0:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+    source_secondary: 0:1111111111111111111111111111111111111111111111111111111111111111
+    destination: 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    destination_secondary: 0:2222222222222222222222222222222222222222222222222222222222222222
+    asset: 0:3333333333333333333333333333333333333333333333333333333333333333
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: 900000
+    value: null
+    opcode: null
+    jetton_transfer_data:
+      comment: null
+      custom_payload: null
+      forward_amount: 0
+      forward_payload: null
+      is_encrypted_comment: false
+      query_id: 7
+      response_destination: 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    tx_hashes:
+      - Rv3kQjogY/f4Y0wlfYWoFUtA/t4q761bapKrGYCsf/Y=
+      - TMuTL6NauNSLcza59doMbQedh74EhfhmWJ6YCPR27qo=
+      - ne/x5za7ZhD1BZ4/w+CxNJBnFFNYf+MTp5rvCPtaCt8=
+    accounts:
+      - 0:1111111111111111111111111111111111111111111111111111111111111111
+      - 0:2222222222222222222222222222222222222222222222222222222222222222
+      - 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      - 0:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+    start_lt: 510
+    end_lt: 520
+    start_utime: 1510
+    end_utime: 1520
+    mc_seqno_end: 0
+  - type: jetton_transfer
+    matcher: jetton_transfer
+    anchor: jetton_transfer@610
+    id: KV4etUWeB4gceWifRiXD0kOvnn1C6MYbqrgCPpXmzwo=
+    success: true
+    source: 0:4444444444444444444444444444444444444444444444444444444444444444
+    source_secondary: 0:5555555555555555555555555555555555555555555555555555555555555555
+    destination: 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    destination_secondary: 0:6666666666666666666666666666666666666666666666666666666666666666
+    asset: 0:7777777777777777777777777777777777777777777777777777777777777777
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: 7000000000
+    value: null
+    opcode: null
+    jetton_transfer_data:
+      comment: null
+      custom_payload: null
+      forward_amount: 0
+      forward_payload: null
+      is_encrypted_comment: false
+      query_id: 7
+      response_destination: 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    tx_hashes:
+      - WEcJbygMCJ0W6jl8RGA84rCdxJREQbHZ5mOOJJHgd8k=
+      - p3emNzdUgaogYqU30za/4cCr3A7NfAVVG/6l2/AYMiY=
+      - vnqYjmBhMPzJa/0JEaG3F4tuxkgxd+RDROnqhWwYusU=
+    accounts:
+      - 0:4444444444444444444444444444444444444444444444444444444444444444
+      - 0:5555555555555555555555555555555555555555555555555555555555555555
+      - 0:6666666666666666666666666666666666666666666666666666666666666666
+      - 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    start_lt: 610
+    end_lt: 620
+    start_utime: 1610
+    end_utime: 1620
+    mc_seqno_end: 0

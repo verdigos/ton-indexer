@@ -1,0 +1,50 @@
+# stonfi-v2-swaps / single refund failed
+# note: synthetic: built from test_stonfi_v2_provide.py::test_single_refund_failed by pyir-w2 lane P; not a chain trace
+# trace: hwDFd_pUjaqau3YD89reRW5KmvNlOsAgsulQJP3WwxE=
+actions:
+  - type: dex_deposit_liquidity
+    matcher: stonfi_v2_provide_final
+    anchor: dex_deposit_liquidity@200
+    id: h6UesHCHWxHEemzuap6wc/Jmb8ZBSUchdt2ijdoMGt4=
+    success: false
+    source: 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    source_secondary: null
+    destination: 0:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    dex_deposit_liquidity_data:
+      amount1: 5000000
+      amount2: null
+      asset1: 0:3333333333333333333333333333333333333333333333333333333333333333
+      asset2: null
+      dex: stonfi_v2
+      lp_tokens_minted: null
+      user_jetton_wallet_1: 0:2222222222222222222222222222222222222222222222222222222222222222
+      user_jetton_wallet_2: null
+    tx_hashes:
+      - 3QdWEjVI2nDFWRUP/gycByPa5ZH7I/xgB0THW3PZPmc=
+      - 5m6tdOBWomKH2kF1I33fiYMJ9ZDqJX2yedo+JpqPm0M=
+      - Ib2z1E8lOmcyvssFbaG1Mt7fXdmi3ExrE5DVyoVSwSo=
+      - IysnsBdnxJLYMcsz7DsQK9N4LCMoHbpsOd+/MUB+o8Y=
+      - ahu+OauIJ+RwJB/WcvYRssFGX1ICylKkDqTiX7EKBN4=
+      - jaoW09vTv34stljFA+feHwzvgdyPjGAG9pLeIlVqItY=
+      - lG5eV6gFzWJSy99jLzneSdgX2qwin8QY00ZgtQQhR/k=
+      - n86tGTrdLZ2LRHQSEZYO8QlIo157jrBF5o/6fdAZGOI=
+    accounts:
+      - 0:2222222222222222222222222222222222222222222222222222222222222222
+      - 0:2323232323232323232323232323232323232323232323232323232323232323
+      - 0:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      - 0:DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD
+      - 0:EDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDEDED
+      - 0:EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+    start_lt: 200
+    end_lt: 260
+    start_utime: 1200
+    end_utime: 1260
+    mc_seqno_end: 0

@@ -1172,6 +1172,228 @@
    "name": "DNS purchase 5 (change_dns parent)",
    "slug": "dns-purchase-5",
    "note": "same shape, second live trace"
+  },
+  "03OcVXvf6lWKtlTLy5QYtEMQSjt1x6j0bwz3O5C2SN0=": {
+   "group": "dns",
+   "name": "dns auction guard release collection-only",
+   "slug": "dns-auction-guard-release-collection-only",
+   "note": "synthetic: built from test_dns.py::test_dns_auction_guard_is_or[dns_release-collection-only] by pyir-w2 lane P; not a chain trace"
+  },
+  "1WiA9HaREX5QRs_4bN0AARpD-wPid__NEEw73KY_6TQ=": {
+   "group": "dns",
+   "name": "change dns",
+   "slug": "change-dns",
+   "note": "synthetic: built from test_dns.py::test_change_dns_parity by pyir-w2 lane P; not a chain trace"
+  },
+  "1u08FlgmdxuEEATPvQ-JF7g-LVDddXxhfaO_wkWgVrY=": {
+   "group": "nominator",
+   "name": "nominator deposit",
+   "slug": "nominator-deposit",
+   "note": "synthetic: built from test_nominator_withdraw.py::test_deposit_comment_parity by pyir-w2 lane P; not a chain trace"
+  },
+  "2A6gaaOSYPd3T1kNyeZWRIA51Lk36WzWxG8ZKwD-dWo=": {
+   "group": "stonfi-v2-swaps",
+   "name": "stonfi v2 withdraw jetton first",
+   "slug": "stonfi-v2-withdraw-jetton-first",
+   "note": "synthetic: built from test_stonfi_v2_withdraw.py::test_stonfi_v2_withdraw_parity_jetton_first and test_stonfi_v2_withdraw.py::test_stonfi_v2_withdraw_ir_order_invariant by pyir-w2 lane P; not a chain trace"
+  },
+  "7tUfAoNLuIstTBudeatHwPn7mprTH-NQuocqxZKeX78=": {
+   "group": "dns",
+   "name": "dns auction lookup miss release",
+   "slug": "dns-auction-lookup-miss-release",
+   "note": "synthetic: built from test_dns.py::test_dns_auction_lookup_miss_rejects[dns_release] by pyir-w2 lane P; not a chain trace"
+  },
+  "AVt2vu-xrqHd8LAo88rUXwP6mJYvvLG4zw3VPXAyGhI=": {
+   "group": "stonfi-v2-swaps",
+   "name": "single pton final",
+   "slug": "stonfi-v2-provide-pton-final",
+   "note": "synthetic: built from test_stonfi_v2_provide.py::test_single_pton_final by pyir-w2 lane P; not a chain trace"
+  },
+  "EEa1qZeqoJgWvlV7dOLTs_RZJJpXDHHPuXSCTBfhbpk=": {
+   "group": "dedust-liquidities",
+   "name": "dedust withdraw ton first",
+   "slug": "dedust-withdraw-ton-first",
+   "note": "synthetic: built from test_dedust_withdraw.py::test_dedust_withdraw_ton_first_ir_canonicalizes and test_dedust_withdraw.py::test_dedust_withdraw_ir_order_invariant by pyir-w2 lane P; not a chain trace"
+  },
+  "HA1SeG6FGWGXK8I1MqU89Mhy57D6u-2TmElBS5h1KVA=": {
+   "group": "dns",
+   "name": "delete dns",
+   "slug": "delete-dns",
+   "note": "synthetic: built from test_dns.py::test_delete_dns_parity by pyir-w2 lane P; not a chain trace"
+  },
+  "HYIK9zG_INUWBgpUSrtd8HRgN8bvV5_ookFwRc8UsUc=": {
+   "group": "nominator",
+   "name": "nominator withdraw request two",
+   "slug": "nominator-withdraw-request-two",
+   "note": "synthetic: built from test_nominator_withdraw.py::test_withdraw_request_payout_arity_parity[[1300, 1700]-1300-2] by pyir-w2 lane P; not a chain trace"
+  },
+  "LGhBsJgDLw3J7zVKiruow-EAuj2fxAYQFEfudpCcJ6k=": {
+   "group": "tgbtc",
+   "name": "tgbtc new key log only",
+   "slug": "tgbtc-new-key-log-only",
+   "note": "synthetic: built from test_tgbtc_log_only.py::test_log_only_parity[new_key] by pyir-w2 lane P; not a chain trace"
+  },
+  "LOCl2H3qoYXxKRBg1jJEAYMd2BORctX3RxTdvuDJQyM=": {
+   "group": "nominator",
+   "name": "nominator withdraw request none",
+   "slug": "nominator-withdraw-request-none",
+   "note": "synthetic: built from test_nominator_withdraw.py::test_withdraw_request_payout_arity_parity[[]-None-0] by pyir-w2 lane P; not a chain trace"
+  },
+  "Nmv_O6y9aJnZFx_GflgmIe2dNEkAUxwvC8f5w4dDd3g=": {
+   "group": "dns",
+   "name": "change dns failed",
+   "slug": "change-dns-failed",
+   "note": "synthetic: built from test_dns.py::test_change_dns_parity_failed by pyir-w2 lane P; not a chain trace"
+  },
+  "NskYw27t_ci97_r01GsZMNAiHfvxRyD9WRI-1m2GCFo=": {
+   "group": "dns",
+   "name": "dns auction guard purchase code-hash-only",
+   "slug": "dns-auction-guard-purchase-code-hash-only",
+   "note": "synthetic: built from test_dns.py::test_dns_auction_guard_is_or[dns_purchase-code-hash-only] by pyir-w2 lane P; not a chain trace"
+  },
+  "OzGzjLNR3FBEZx3-_xl4V5W1MMea5dnOcyrJCs9iicc=": {
+   "group": "dns",
+   "name": "change dns bounce",
+   "slug": "change-dns-bounce",
+   "note": "synthetic: built from test_dns.py::test_change_dns_parity_with_bounce by pyir-w2 lane P; not a chain trace"
+  },
+  "PWeNudzaWeKe-YXoQLnEC_BqyL4fkyQv1SeI5aPOKsY=": {
+   "group": "stonfi-v2-swaps",
+   "name": "pair jetton pton",
+   "slug": "stonfi-v2-provide-jetton-pton",
+   "note": "synthetic: built from test_stonfi_v2_provide.py::test_pair_jetton_partial_pton_final by pyir-w2 lane P; not a chain trace"
+  },
+  "RO_LxCK96NxuF2WuBdRWKE7_UzA642o8H-kyIUm4isI=": {
+   "group": "dns",
+   "name": "dns auction lookup miss purchase",
+   "slug": "dns-auction-lookup-miss-purchase",
+   "note": "synthetic: built from test_dns.py::test_dns_auction_lookup_miss_rejects[dns_purchase] by pyir-w2 lane P; not a chain trace"
+  },
+  "Tp-H50ZKDOBAIzhfFb0Nsg-e1exaXa-EK4Rw-2KNp68=": {
+   "group": "dns",
+   "name": "dns purchase parent",
+   "slug": "dns-purchase-parent",
+   "note": "synthetic: built from test_dns.py::test_dns_purchase_reads_but_does_not_consume_parent by pyir-w2 lane P; not a chain trace"
+  },
+  "U9fAIxeEbrMh4d41VylrrHSdCQfAiK2EPwaFFNIcQxw=": {
+   "group": "dns",
+   "name": "dns auction guard purchase collection-only",
+   "slug": "dns-auction-guard-purchase-collection-only",
+   "note": "synthetic: built from test_dns.py::test_dns_auction_guard_is_or[dns_purchase-collection-only] by pyir-w2 lane P; not a chain trace"
+  },
+  "Ug2__JyJgoH0xBJBkjfjhjdJAHf6gIY-4PW1kPbqsZo=": {
+   "group": "tgbtc",
+   "name": "tgbtc mint log only",
+   "slug": "tgbtc-mint-log-only",
+   "note": "synthetic: built from test_tgbtc_log_only.py::test_log_only_parity[mint] by pyir-w2 lane P; not a chain trace"
+  },
+  "WtV2kLkWvCQof0ePvUGgvVzObSMAzhZ4C19fYM_lxL8=": {
+   "group": "nominator",
+   "name": "nominator two payouts",
+   "slug": "nominator-two-payouts",
+   "note": "synthetic: built from test_nominator_withdraw.py::test_two_payouts_parity_same_granularity by pyir-w2 lane P; not a chain trace"
+  },
+  "XWUMej1qmb9Q3YEpmoHNDlG5yHsIfJr4l5_6vdBJaSQ=": {
+   "group": "stonfi-v2-swaps",
+   "name": "single jetton partial",
+   "slug": "stonfi-v2-provide-jetton-partial",
+   "note": "synthetic: built from test_stonfi_v2_provide.py::test_single_jetton_partial_survives by pyir-w2 lane P; not a chain trace"
+  },
+  "ZfmQ_t6gnhQDmJUoCRjzCVYB3-52RupetEyV9NczMLc=": {
+   "group": "nominator",
+   "name": "nominator withdraw request 1000",
+   "slug": "nominator-withdraw-request-1000",
+   "note": "synthetic: built from test_nominator_withdraw.py::test_withdraw_request_payout_arity_parity[[1000]-None-1] by pyir-w2 lane P; not a chain trace"
+  },
+  "a95D1i1RGPzPj4YShaKEi8TeiBANeN4CAExMcq5PaYg=": {
+   "group": "stonfi-v2-swaps",
+   "name": "stonfi v2 withdraw refund",
+   "slug": "stonfi-v2-withdraw-refund",
+   "note": "synthetic: built from test_stonfi_v2_withdraw.py::test_stonfi_v2_withdraw_parity_refund by pyir-w2 lane P; not a chain trace"
+  },
+  "ad1uBns5aHx3mmclzuhqLZhvnn8NZl1mQ5gZD_VH4TU=": {
+   "group": "stonfi-v2-swaps",
+   "name": "both partial absorb parent",
+   "slug": "stonfi-v2-provide-both-partial",
+   "note": "synthetic: built from test_stonfi_v2_provide.py::test_both_partial_condition_fail_absorbs_parent by pyir-w2 lane P; not a chain trace"
+  },
+  "d1LUN7zLmbtIoyfnBEFjhC5nA5BkhddtO4eQqU_gcV0=": {
+   "group": "nominator",
+   "name": "nominator withdraw request three",
+   "slug": "nominator-withdraw-request-three",
+   "note": "synthetic: built from test_nominator_withdraw.py::test_withdraw_request_payout_arity_parity[[1300, 1700, 1900]-None-0] by pyir-w2 lane P; not a chain trace"
+  },
+  "hAEvldgk1ghxDfzmVB_8Isoqp2I0zvZ8piAQFkAsYMY=": {
+   "group": "nominator",
+   "name": "nominator non pool",
+   "slug": "nominator-non-pool",
+   "note": "synthetic: built from test_nominator_withdraw.py::test_rejects_non_nominator_pool by pyir-w2 lane P; not a chain trace"
+  },
+  "hwDFd_pUjaqau3YD89reRW5KmvNlOsAgsulQJP3WwxE=": {
+   "group": "stonfi-v2-swaps",
+   "name": "single refund failed",
+   "slug": "stonfi-v2-provide-refund",
+   "note": "synthetic: built from test_stonfi_v2_provide.py::test_single_refund_failed by pyir-w2 lane P; not a chain trace"
+  },
+  "iKIdaDv0_s_z2KdL39WLKHMBDvlbAxIjn6jfeuK4P2U=": {
+   "group": "dns",
+   "name": "renew dns",
+   "slug": "renew-dns",
+   "note": "synthetic: built from test_dns.py::test_renew_dns_parity by pyir-w2 lane P; not a chain trace"
+  },
+  "islrGvLSRNBA_p6ymTyjJJ7lZ2-JJEKSIhsUsjLMiMc=": {
+   "group": "stonfi-v2-swaps",
+   "name": "stonfi v2 withdraw ton first",
+   "slug": "stonfi-v2-withdraw-ton-first",
+   "note": "synthetic: built from test_stonfi_v2_withdraw.py::test_stonfi_v2_withdraw_parity_ton_first and test_stonfi_v2_withdraw.py::test_stonfi_v2_withdraw_ir_order_invariant by pyir-w2 lane P; not a chain trace"
+  },
+  "kx7ZSaKm1tMLQMNaR2aBSgCLirOjaPGPzg5rtC5ZF7M=": {
+   "group": "nominator",
+   "name": "nominator aborted payout",
+   "slug": "nominator-aborted-payout",
+   "note": "synthetic: built from test_nominator_withdraw.py::test_failed_flag_never_set_even_on_aborted_payout_tx by pyir-w2 lane P; not a chain trace"
+  },
+  "l7f3UPMpJtHhSSuCmMkZonKuYHBUu5c_bXqTAbJ31I8=": {
+   "group": "dedust-liquidities",
+   "name": "dedust withdraw no lp wallet",
+   "slug": "dedust-withdraw-no-lp-wallet",
+   "note": "synthetic: built from test_dedust_withdraw.py::test_dedust_withdraw_both_reject_without_lp_wallet by pyir-w2 lane P; not a chain trace"
+  },
+  "lorr0U8CcSkIgfFY89IdhUUjKJKr9H9tTttVr6YoXCM=": {
+   "group": "nominator",
+   "name": "nominator withdraw request 1001",
+   "slug": "nominator-withdraw-request-1001",
+   "note": "synthetic: built from test_nominator_withdraw.py::test_withdraw_request_payout_arity_parity[[1001]-1001-1] by pyir-w2 lane P; not a chain trace"
+  },
+  "nFfypk7mEbl14sNJoN6iB_IND8XI3RCZVuu61M4fPyg=": {
+   "group": "dns",
+   "name": "dns auction guard release code-hash-only",
+   "slug": "dns-auction-guard-release-code-hash-only",
+   "note": "synthetic: built from test_dns.py::test_dns_auction_guard_is_or[dns_release-code-hash-only] by pyir-w2 lane P; not a chain trace"
+  },
+  "qfK9maJDE9nJM-GqEdvubEUOXrmOI8tOWjOXvVk_Ta4=": {
+   "group": "nominator",
+   "name": "nominator single payout",
+   "slug": "nominator-single-payout",
+   "note": "synthetic: built from test_nominator_withdraw.py::test_single_payout_parity by pyir-w2 lane P; not a chain trace"
+  },
+  "s8itPcpYUOtg1Aq8U_Oyt_99ucaGcK7HPrF4WZWQqRc=": {
+   "group": "stonfi-v2-swaps",
+   "name": "stonfi v2 withdraw no lp wallet",
+   "slug": "stonfi-v2-withdraw-no-lp-wallet",
+   "note": "synthetic: built from test_stonfi_v2_withdraw.py::test_stonfi_v2_withdraw_both_reject_without_lp_wallet by pyir-w2 lane P; not a chain trace"
+  },
+  "z0WPI1ImO7fTaUDTVUIPAz7LhtNdQtbyw2bb4d8adD0=": {
+   "group": "stonfi-v2-swaps",
+   "name": "pair jetton jetton",
+   "slug": "stonfi-v2-provide-jetton-jetton",
+   "note": "synthetic: built from test_stonfi_v2_provide.py::test_pair_jetton_jetton_swap_tolerant by pyir-w2 lane P; not a chain trace"
+  },
+  "z4jNjyvSAu_aT7RjH2LJuco1jh5jBEexFJ6IssIpC9E=": {
+   "group": "dedust-liquidities",
+   "name": "dedust withdraw jetton first",
+   "slug": "dedust-withdraw-jetton-first",
+   "note": "synthetic: built from test_dedust_withdraw.py::test_dedust_withdraw_parity_jetton_first and test_dedust_withdraw.py::test_dedust_withdraw_ir_order_invariant by pyir-w2 lane P; not a chain trace"
   }
  }
 }

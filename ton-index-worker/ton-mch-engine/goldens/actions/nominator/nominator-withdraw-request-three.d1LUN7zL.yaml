@@ -1,0 +1,119 @@
+# nominator / nominator withdraw request three
+# note: synthetic: built from test_nominator_withdraw.py::test_withdraw_request_payout_arity_parity[[1300, 1700, 1900]-None-0] by pyir-w2 lane P; not a chain trace
+# trace: d1LUN7zLmbtIoyfnBEFjhC5nA5BkhddtO4eQqU_gcV0=
+actions:
+  - type: stake_withdrawal_request
+    matcher: nominator_pool_withdraw_request
+    anchor: nominator_pool_withdraw_request@100
+    id: 1Pv4xov5nNetqCLCcHYpyIJsaRFpr4KDqm8DoLTsdh8=
+    success: true
+    source: 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    source_secondary: null
+    destination: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    staking_data:
+      provider: nominator
+    tx_hashes:
+      - MQWIGO4V279EUztAFywdcHwr+fj1gyehOv9BhoGwtKw=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    start_lt: 100
+    end_lt: 100
+    start_utime: 1100
+    end_utime: 1100
+    mc_seqno_end: 0
+  - type: ton_transfer
+    anchor: ton_transfer@200
+    id: j/6T+gw+3MwfDe+DPYcXyoQ3UvBZjm3rIZEs32I3fqU=
+    success: true
+    source: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    source_secondary: null
+    destination: 0:D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1300
+    opcode: null
+    ton_transfer_data:
+      content: null
+      encrypted: false
+    tx_hashes:
+      - JiCLbT6eNqw6zvb5VYO75ZqZ6+A1D6Oln3hPjB8oc4k=
+      - MQWIGO4V279EUztAFywdcHwr+fj1gyehOv9BhoGwtKw=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0D0
+    start_lt: 200
+    end_lt: 200
+    start_utime: 1200
+    end_utime: 1200
+    mc_seqno_end: 0
+  - type: ton_transfer
+    anchor: ton_transfer@300
+    id: fDpcJl3ezNE/eoM4pXy/Cqf+XDzEByxm8zWYEZz5Ytc=
+    success: true
+    source: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    source_secondary: null
+    destination: 0:D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1700
+    opcode: null
+    ton_transfer_data:
+      content: null
+      encrypted: false
+    tx_hashes:
+      - MQWIGO4V279EUztAFywdcHwr+fj1gyehOv9BhoGwtKw=
+      - NbRLMN3A9yXgvA0yHVo7oJ1my4gIqqrJw0hzMuGRrsY=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1D1
+    start_lt: 300
+    end_lt: 300
+    start_utime: 1300
+    end_utime: 1300
+    mc_seqno_end: 0
+  - type: ton_transfer
+    anchor: ton_transfer@400
+    id: xNje6ELh2lmJzPItBuNt0gNmhWAZ9Gf/dlv/p+4Yxvc=
+    success: true
+    source: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    source_secondary: null
+    destination: 0:D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 1900
+    opcode: null
+    ton_transfer_data:
+      content: null
+      encrypted: false
+    tx_hashes:
+      - 47rCr+HlC+uvmQW3Eg/4jomo5uHppvjb4x7QohsZNrw=
+      - MQWIGO4V279EUztAFywdcHwr+fj1gyehOv9BhoGwtKw=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2D2
+    start_lt: 400
+    end_lt: 400
+    start_utime: 1400
+    end_utime: 1400
+    mc_seqno_end: 0

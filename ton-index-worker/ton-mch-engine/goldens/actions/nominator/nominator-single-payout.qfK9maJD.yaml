@@ -1,0 +1,33 @@
+# nominator / nominator single payout
+# note: synthetic: built from test_nominator_withdraw.py::test_single_payout_parity by pyir-w2 lane P; not a chain trace
+# trace: qfK9maJDE9nJM-GqEdvubEUOXrmOI8tOWjOXvVk_Ta4=
+actions:
+  - type: stake_withdrawal
+    matcher: nominator_pool_withdraw
+    anchor: nominator_pool_withdraw_request@200
+    id: ME+os9I6REvpXzRVZxSbWtCnqJJmoL+FSy3/zHxiZ0I=
+    success: true
+    source: 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    source_secondary: null
+    destination: 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: 5000000000
+    value: null
+    opcode: null
+    staking_data:
+      provider: nominator
+    tx_hashes:
+      - hIZf2Ow5dr+oQQO1003QWvysZkVW8rJNGMp/PQhf5F0=
+      - l0JL+ZtY0toEqdSfBVevPwO7Ok+RQGV/zXqg9SYWdcU=
+    accounts:
+      - 0:A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1A1
+      - 0:B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2B2
+    start_lt: 200
+    end_lt: 200
+    start_utime: 1200
+    end_utime: 1200
+    mc_seqno_end: 0
