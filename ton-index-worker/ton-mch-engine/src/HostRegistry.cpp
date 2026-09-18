@@ -25,8 +25,8 @@ const std::map<std::string, HostFnEntry> &host_fns() {
       {"stonfi_v1_swap_data", {stonfi_v1_swap_data, 2}},
       {"dedust_deposit_final_data", {dedust_deposit_final_data, 1}},
       {"dedust_deposit_partial_data", {dedust_deposit_partial_data, 1}},
-      {"tonco_deposit_liquidity_data", {tonco_deposit_liquidity_data, 1}},
-      {"tonco_withdraw_payouts", {tonco_withdraw_payouts, 1}},
+      {"tonco_deposit_liquidity_data", {tonco_deposit_liquidity_data, 4}},
+      {"tonco_withdraw_payouts", {tonco_withdraw_payouts, 4}},
       {"tonco_swap_data", {tonco_swap_data, 1}},
       // stonfi_v2_swap_data reads the in-leg by block type instead of a
       // hash-seed-dependent first event node, so it is deterministic.

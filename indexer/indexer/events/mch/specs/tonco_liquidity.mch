@@ -14,15 +14,15 @@
 # - the input alternative keeps legacy OrMatcher order: pton arm (JettonNotify
 #   fed by a raw PTonTransfer call) first, plain jetton transfer second.
 #
-# HYBRID declarative build. The block assembly is declarative; the imperative
-# residue (input-transfer resolution via previous_block, per-side BOC parsing
-# of the AddLiquidity / NftPositionInit / JettonNotify forward payload, the two
-# jetton-wallet interface lookups + pton-master asset classification, the
-# amount1/amount2 ordering by which side was deposited, and the excess-payout
-# pton navigation) stays in one host fn returning the field record — the
-# ToncoDepositLiquidityData the shared core already builds. The `out` block
-# flattens that record into the produced block's data map. The fn returns null
-# to reject.
+# HYBRID declarative build. AddLiquidity body is ABI-parsed; envelope
+# addresses, enough-thresholds, ticks, and nft_mint.data.address are plain
+# `out` reads. POSITION_INIT liquidity and nft_index stay in the host:
+# nft_mint is a produced block, so its body cannot be parsed, and
+# nft_mint.data.index is a JSON float. `is_first` and the amount/asset/wallet
+# role swap are conditionals over those values plus the host record. The host
+# keeps input-transfer resolution via children_blocks, the JettonNotify /
+# FUND_ACCOUNT payload check, the two jetton_wallet lookups + pTON
+# classification, and excess pTON→TON. The fn returns null to reject.
 #
 # Product is a generic Block(btype tonco_deposit_liquidity) with a dict data
 # map (the legacy block carried a ToncoDepositLiquidityData dataclass); the
@@ -40,15 +40,15 @@ opcode ToncoPoolV3Init                 = 0x441c39ed
 matcher tonco_deposit_liquidity {
     produces tonco_deposit_liquidity
 
-    op ToncoAccountV3AddLiquidity @add_liquidity {
+    op ToncoAccountV3AddLiquidity @add_liquidity as ToncoAccountV3AddLiquidity {
         -> {
             maybe op ToncoPoolV3MinAndRefund
                 -> { maybe op ToncoRouterV3PayTo
-                        -> { maybe btype jetton_transfer
+                        -> { maybe btype jetton_transfer @excess_1
                                 -> { maybe op PTonTransfer }
-                           ; maybe btype jetton_transfer
+                           ; maybe btype jetton_transfer @excess_2
                                 -> { maybe op PTonTransfer } }
-                   ; btype nft_mint
+                   ; btype nft_mint @nft_mint
                    ; maybe op Excess }
         }
         <- op ToncoPoolV3FundAccount <- or {
@@ -57,24 +57,26 @@ matcher tonco_deposit_liquidity {
                                         }
     }
 
-    require r = tonco_deposit_liquidity_data(consumed)
+    reject when add_liquidity.body == null
+    require r = tonco_deposit_liquidity_data(add_liquidity, excess_1, excess_2, nft_mint)
+    let is_first = add_liquidity.body.new_amount0 > 0
     out {
         sender:            r.sender
-        pool:              r.pool
-        account_contract:  r.account_contract
-        position_amount_1: r.position_amount_1
-        position_amount_2: r.position_amount_2
+        pool:              add_liquidity.msg.source
+        account_contract:  add_liquidity.msg.destination
+        position_amount_1: amount(add_liquidity.body.new_enough0)
+        position_amount_2: amount(add_liquidity.body.new_enough1)
         lp_tokens_minted:  r.lp_tokens_minted
-        tick_lower:        r.tick_lower
-        tick_upper:        r.tick_upper
+        tick_lower:        add_liquidity.body.tick_lower
+        tick_upper:        add_liquidity.body.tick_upper
         nft_index:         r.nft_index
-        nft_address:       r.nft_address
-        amount_1:          r.amount_1
-        asset_1:           r.asset_1
-        sender_wallet_1:   r.sender_wallet_1
-        amount_2:          r.amount_2
-        asset_2:           r.asset_2
-        sender_wallet_2:   r.sender_wallet_2
+        nft_address:       nft_mint.data.address if nft_mint != null else null
+        amount_1:          r.sent_amount if is_first else null
+        asset_1:           r.first_asset if is_first else r.second_asset
+        sender_wallet_1:   r.sender_wallet if is_first else null
+        amount_2:          null if is_first else r.sent_amount
+        asset_2:           r.second_asset if is_first else r.first_asset
+        sender_wallet_2:   null if is_first else r.sender_wallet
         excesses:          r.excesses
     }
 }
@@ -161,23 +163,11 @@ matcher tonco_deploy_pool {
 # every leaf is a plain int on both sides — no casting twin (contrast the `bool`
 # rule the dedust_v2 withdraw port had to follow).
 #
-# The payout half uses `tonco_withdraw_payouts` around the shared
-# resolve_tonco_withdraw_payouts core (blocks/liquidity.py). Three constraints
-# keep it host-side:
-#   - ToncoRouterV3PayTo cannot be a schema message at all: its coinsinfo is a
-#     Maybe ^Cell (there is no `maybe_ref { }` composite) and its two tail refs
-#     are conditional on exit_code, which the schema grammar has no form for;
-#   - a leg with NO transfer block falls back to the router's declared slot and
-#     needs an async jetton-wallet interface lookup plus the pTON-master
-#     classification to decide whether that slot is TON or a jetton. `lookup
-#     jetton_wallet(...)` plus three address literals could express the lookup in
-#     isolation (specs/pton_transfer.mch does exactly that), but the key it
-#     would need comes out of the unparseable PayTo body;
-#   - the final leg->slot reordering compares a resolved wallet against the
-#     router's asset0 wallet, so it depends on both of the above.
-# The legacy `additional_blocks` bookkeeping (the pTON call under a payout leg)
-# is NOT needed here: `maybe op PTonTransfer` already consumes it, so the
-# synthesized merge covers it — same as the deposit matcher above.
+# PayTo is parsed as `ToncoRouterV3PayTo` (fixed prefix + `Cell<ToncoCoinsInfo>?`;
+# exit-code-conditional tails are unread). `failed when` reads `exit_code`
+# directly. The two optional jetton_transfer legs are captures.
+# `tonco_withdraw_payouts` keeps the slot↔leg pairing with positional fallback,
+# the jetton_wallet classification (pTON masters → TON), and the reorder.
 #
 # DEVIATION (one, documented not worked around): the legacy build wraps the
 # PoolV3Burn parse in try/except and keeps the anchor's burned_index when it
@@ -201,15 +191,15 @@ matcher tonco_withdraw_liquidity {
     op ToncoPoolV3StartBurn @start_burn as ToncoPoolV3StartBurn
       -> op ToncoPositionNftV3PositionBurn @position_burn as ToncoPositionNftV3PositionBurn
         -> op ToncoPoolV3Burn @pool_burn as ToncoPoolV3Burn
-          -> op ToncoRouterV3PayTo
-            -> { maybe btype jetton_transfer
+          -> op ToncoRouterV3PayTo @pay_to as ToncoRouterV3PayTo
+            -> { maybe btype jetton_transfer @payout_1
                    -> { maybe op PTonTransfer }
-               ; maybe btype jetton_transfer
+               ; maybe btype jetton_transfer @payout_2
                    -> { maybe op PTonTransfer } }
 
 
-    require r = tonco_withdraw_payouts(consumed)
-    failed when r.failed
+    require r = tonco_withdraw_payouts(pay_to, pay_to.body, payout_1, payout_2)
+    failed when pay_to.body.exit_code != 0 and pay_to.body.exit_code != 201
     out {
         sender:              account(position_burn.body.nft_owner)
         pool:                start_burn.msg.destination

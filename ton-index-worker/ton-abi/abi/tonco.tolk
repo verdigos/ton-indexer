@@ -21,6 +21,13 @@ struct ToncoPoolMinters {
     _controller_addr: any_address;
 }
 
+struct ToncoCoinsInfo {
+    amount0: coins;
+    jetton0: any_address;
+    amount1: coins;
+    jetton1: any_address;
+}
+
 @overflow1023_policy("suppress")
 struct (0xa7fb58f8) ToncoRouterV3SwapSourceWallet {
     _query_id: bits64;
@@ -91,7 +98,29 @@ struct (0x441c39ed) ToncoPoolV3Init {
     pool_active: bool;
 }
 
-type AllowedMessage = ToncoRouterV3SwapSourceWallet | ToncoPoolV3StartBurn | ToncoPositionNftV3PositionBurn | ToncoPoolV3Burn | ToncoRouterV3CreatePool | ToncoPoolV3Init
+@overflow1023_policy("suppress")
+struct (0xa1daa96d) ToncoRouterV3PayTo {
+    _query_id: bits64;
+    receiver0: any_address;
+    receiver1: any_address;
+    exit_code: uint32;
+    _seqno: bits64;
+    coinsinfo: Cell<ToncoCoinsInfo>?;
+}
+
+@overflow1023_policy("suppress")
+struct (0x3ebe5431) ToncoAccountV3AddLiquidity {
+    _query_id: bits64;
+    new_amount0: coins;
+    _new_amount1: coins;
+    new_enough0: coins;
+    new_enough1: coins;
+    _liquidity: uint128;
+    tick_lower: int24;
+    tick_upper: int24;
+}
+
+type AllowedMessage = ToncoRouterV3SwapSourceWallet | ToncoPoolV3StartBurn | ToncoPositionNftV3PositionBurn | ToncoPoolV3Burn | ToncoRouterV3CreatePool | ToncoPoolV3Init | ToncoRouterV3PayTo | ToncoAccountV3AddLiquidity
 
 contract ToncoMessages {
     incomingMessages: AllowedMessage
