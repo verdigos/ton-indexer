@@ -76,6 +76,10 @@ matcher telegram_nft_purchase {
 
     # Parent-kind gate is the xor above. Royalty fields need two or more payouts.
     require d = telegram_nft_purchase_data(assigned)
+    # The item emits at most two fill-ups (royalty + beneficiary). A third leg
+    # would be captured and consumed yet never surface in the output, so treat
+    # more than two as an unsupported shape instead of dropping money silently.
+    reject when len(payouts) > 2
     let is_purchase = d.is_bid and not is_telemint_mint(payment)
     let sorted = stable_sort_by(payouts as p => p.msg.created_lt)
     let n = len(sorted)
