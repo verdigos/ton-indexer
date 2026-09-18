@@ -12,9 +12,12 @@ const std::vector<std::string> &pton_masters() {
   return m;
 }
 
+// The argument is normalized first, so every spelling the shared address
+// normalizer accepts (raw "wc:HEX" upper or lower) matches a master.
 bool is_pton_master(const std::string &s) {
   const auto &m = pton_masters();
-  return std::find(m.begin(), m.end(), s) != m.end();
+  const std::string canon = canonicalize_or_passthrough(s);
+  return std::find(m.begin(), m.end(), canon) != m.end();
 }
 
 std::optional<std::string> wallet_jetton_master_str(const Value &wallet) {
@@ -33,8 +36,7 @@ Value wallet_jetton_asset(const Value &wallet, bool pton_conversion) {
     // v2/tonco (conversion): missing jetton -> caller-visible Null.
     return pton_conversion ? Value::null() : Value::make_asset_ton();
   }
-  // Preserve the existing exact-spelling pTON check; normalization only
-  // governed the Asset string after this branch.
+  // A TON-proxy master is native TON however the lookup spelled it.
   if (pton_conversion && is_pton_master(jf->str)) {
     return Value::make_asset_ton();
   }

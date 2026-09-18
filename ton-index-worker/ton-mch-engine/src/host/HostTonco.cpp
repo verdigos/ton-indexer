@@ -40,7 +40,7 @@ constexpr std::uint32_t kPTonTransfer = 0x01f3835d;
 constexpr const char *kRouterWttonWallet =
     "0:871DA9215B14902166F0EA2A16DB56278D528108377F8158C5F4CCFDFDD22E17";
 
-// jetton_wallet lookup -> Asset (pTON master -> TON), or Null on a miss
+// jetton_wallet lookup -> Asset (TON-proxy master -> TON), or Null on a miss
 // (caller decides fallback).
 Value wallet_asset(BuildEnv &env, const std::string &addr) {
   Value jw = env.lookups->get("jetton_wallet", std::vector<Value>{Value::make_str(addr)});
@@ -308,7 +308,7 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
 }
 
 // Slot↔leg pairing with positional fallback, jetton_wallet classification
-// (pTON masters → TON), and the leg→slot reorder. Decoded PayTo fields and
+// (TON-proxy masters → TON), and the leg→slot reorder. Decoded PayTo fields and
 // the two optional legs are arguments. Any parse/nav failure is a Null reject.
 EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args) {
   const Block *pay_to = as_block(args[0]);
@@ -528,7 +528,7 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     std::string key = acc_str(source_wallet).value_or("");
     swap_steps.push_back({source_wallet, pt, all_swaps[i]->min_lt});
     if (jw_asset_map.find(key) == jw_asset_map.end()) {
-      Value asset = wallet_asset(env, key);  // pton -> TON, jetton, or Null on miss
+      Value asset = wallet_asset(env, key);  // TON-proxy -> TON, jetton, or Null on miss
       if (!asset.is_null()) jw_asset_map[key] = asset;
     }
   }

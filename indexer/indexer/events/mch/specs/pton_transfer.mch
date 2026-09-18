@@ -10,10 +10,11 @@
 # The manifest puts pton_transfer after jetton_transfer on their shared anchor,
 # and before the swap matchers that consume their blocks.
 #
-# The pTON master allowlist is what makes the match safe on an opcode this
-# common: only a wallet whose master is one of the three canonical pTON masters
-# qualifies. Same three addresses as host/DexPton.cpp `pton_masters()`, which the
-# DEX hosts use to turn such a wallet into a TON asset.
+# The TON-proxy master allowlist (STON.fi pTON v1/v2, Tonco wTTON) is what makes
+# the match safe on an opcode this common: only a wallet whose master is one of
+# the three canonical addresses qualifies. Same three addresses as
+# host/DexPton.cpp `pton_masters()`, which the DEX hosts use to turn such a
+# wallet into a TON asset.
 #
 # Field parity with the legacy build: `has_internal_transfer` is false and both
 # wallet fields are null (there is no internal leg to name them from — the flag

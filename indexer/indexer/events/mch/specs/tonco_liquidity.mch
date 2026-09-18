@@ -167,7 +167,7 @@ matcher tonco_deploy_pool {
 # exit-code-conditional tails are unread). `failed when` reads `exit_code`
 # directly. The two optional jetton_transfer legs are captures.
 # `tonco_withdraw_payouts` keeps the slot↔leg pairing with positional fallback,
-# the jetton_wallet classification (pTON masters → TON), and the reorder.
+# the jetton_wallet classification (TON-proxy masters → TON), and the reorder.
 #
 # DEVIATION (one, documented not worked around): the legacy build wraps the
 # PoolV3Burn parse in try/except and keeps the anchor's burned_index when it
