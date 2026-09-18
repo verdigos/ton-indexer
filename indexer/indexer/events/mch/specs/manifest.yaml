@@ -12,9 +12,12 @@ order:
   # Build jetton blocks before their consumers. The shared transfer anchor
   # gives jetton_transfer the first claim, then pton_transfer handles pTON.
   - jetton_transfer
+  - pton_transfer
+  # dedust_withdraw takes the raw JettonBurn call before jetton_burn, and reads
+  # the transfer blocks above.
+  - dedust_withdraw
   - jetton_burn
   - jetton_mint
-  - pton_transfer
 
   # Coffee liquidity and swaps.
   - coffee_deposit_liquidity
@@ -26,7 +29,6 @@ order:
   - dedust_deposit_final
   - dedust_deposit_partial
   - dedust_swap
-  - dedust_withdraw
 
   # DeDust V2.
   - dedust_v2_claim_fees
