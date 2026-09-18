@@ -50,6 +50,7 @@ order:
   - unsubscribe
   - ethena_deposit
   - evaa_supply
+  - evaa_supply_jetton
   - evaa_withdraw
   - evaa_liquidate
 

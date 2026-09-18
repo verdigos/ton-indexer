@@ -60,7 +60,7 @@ actions:
     ancestor_type:
       - evaa_supply
   - type: evaa_supply
-    matcher: evaa_supply
+    matcher: evaa_supply_jetton
     anchor: evaa_supply@45799309000002
     id: nz3Xei9EuhG1H5A3hCyvcHpVlvBQc4fNOAV8Pu/CvR0=
     success: false

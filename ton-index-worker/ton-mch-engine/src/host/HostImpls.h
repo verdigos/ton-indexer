@@ -43,10 +43,6 @@ EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> 
 EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args);
 EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args);
 
-// EVAA (HostEvaa.cpp).
-bool evaa_supply_anchor(const Block *b);
-bool evaa_liquidate_anchor(const Block *b);
-
 // DeDust (HostDedust.cpp).
 EvalResult dedust_swap_legs(BuildEnv &env, const std::vector<Value> &args);
 EvalResult dedust_v2_swap_min_out(BuildEnv &env, const std::vector<Value> &args);

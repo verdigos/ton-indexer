@@ -82,8 +82,6 @@ EvalResult rt_call_hostfn(BuildEnv &env, const std::string &name,
 
 const std::map<std::string, HostPredFn> &host_predicates() {
   static const std::map<std::string, HostPredFn> preds = {
-      {"evaa_supply_anchor", evaa_supply_anchor},
-      {"evaa_liquidate_anchor", evaa_liquidate_anchor},
       // Predicate anchor has no opcode or btype prefilter.
       {"single_contract_deploy", single_contract_deploy},
       {"sale_contract_deploy", sale_contract_deploy},

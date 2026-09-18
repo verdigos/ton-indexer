@@ -4,6 +4,7 @@
 
 import "lib/leg.mch"
 
+opcode EvaaSupplyMaster                    = 0x1
 opcode EvaaSupplySuccess                   = 0x11a
 opcode EvaaSupplyFail                      = 0x11f
 opcode EvaaWithdrawMaster                  = 0x2
@@ -14,55 +15,73 @@ opcode EvaaWithdrawLockedExcess            = 0x21e6
 opcode EvaaWithdrawNotCollateralizedExcess = 0x21e7
 opcode EvaaWithdrawMissingPricesExcess     = 0x21e8
 opcode EvaaWithdrawExecutionCrashed        = 0x21ec
-opcode EvaaLiquidateMaster                 = 0x3
 opcode EvaaLiquidateSatisfied              = 0x311
 opcode EvaaLiquidateUnsatisfied            = 0x31f
 opcode EvaaLiquidateSuccessReport          = 0x311d
 opcode EvaaLiquidateFail                   = 0x311f
 
-predicate evaa_supply_anchor
-predicate evaa_liquidate_anchor
 rule evaa_note = btype ton_transfer where (.comment in ["EVAA liquidation.", "EVAA supply.", "EVAA withdraw."])
 rule liq_finish = xor { op EvaaLiquidateSuccessReport; op EvaaLiquidateFail; btype jetton_transfer }
 fn evaa_op(b) = (parse? b as EvaaUserOp).op
 
-# EVAA supply starts with a TON call or a jetton transfer carrying a supply
-# payload. The user node parses the opcode behind the variable header.
-# Outcomes are success with an optional service comment, failure, or refund.
-# The build reads the recipient and asset ID from parsed bodies and transfer
-# fields from leg(master). Success supplies the final amount; an on-behalf
-# refund identifies the recipient's jetton wallet.
+# Both supply anchors use the same user and outcome flow.
+rule evaa_supply_flow =
+    btype call_contract @user where (evaa_op(.) == 0x11)
+      -> or {
+             op EvaaSupplySuccess @success as EvaaSupplySuccess
+               -> maybe $evaa_note
+             op EvaaSupplyFail
+             btype jetton_transfer @refund
+         }
 
 matcher evaa_supply {
     produces evaa_supply
 
-    pred evaa_supply_anchor @master
-      -> btype call_contract @user where (evaa_op(.) == 0x11)
-        -> or {
-               op EvaaSupplySuccess @success as EvaaSupplySuccess
-                 -> maybe $evaa_note
-               op EvaaSupplyFail
-               btype jetton_transfer @refund
-           }
+    op EvaaSupplyMaster @master -> $evaa_supply_flow
 
-    let jetton = master.btype == "jetton_transfer"
-    let fwd = (parse? master.data.forward_payload as EvaaSupplyJettonForward) if jetton else null
-    let mb = (parse? master as EvaaSupplyMaster) if not jetton else null
+    let mb = parse? master as EvaaSupplyMaster
     parse user as EvaaSupplyUserHdr
-    reject when (jetton and fwd == null) or (not jetton and mb == null) or user.body == null
+    reject when mb == null or user.body == null
     reject when success != null and success.body == null
     let l = leg(master)
-    let recipient = account(fwd.recipient_address if jetton else mb.recipient_address) ?? addr_none()
+    let recipient = account(mb.recipient_address) ?? addr_none()
     out {
         sender:                  l.source
         recipient:               recipient
         recipient_contract:      user.msg.destination
-        amount:                  success.body.amount_supplied if success != null else (l.amount.value if jetton else mb.supply_amount)
+        amount:                  success.body.amount_supplied if success != null else mb.supply_amount
         is_success:              success != null
-        is_ton:                  not jetton
+        is_ton:                  true
         asset_id:                user.body.asset_id
         sender_jetton_wallet:    l.source_wallet
-        recipient_jetton_wallet: null if not jetton else (l.source_wallet if l.source == recipient else (refund.data.receiver_wallet if refund != null and refund.data.sender_wallet == l.destination_wallet else null))
+        recipient_jetton_wallet: null
+        master_jetton_wallet:    l.destination_wallet
+        master:                  l.destination
+        asset:                   l.asset
+    }
+}
+
+matcher evaa_supply_jetton {
+    produces evaa_supply
+
+    btype jetton_transfer @master where (.payload_opcode == 0x1) -> $evaa_supply_flow
+
+    let fwd = parse? master.data.forward_payload as EvaaSupplyJettonForward
+    parse user as EvaaSupplyUserHdr
+    reject when fwd == null or user.body == null
+    reject when success != null and success.body == null
+    let l = leg(master)
+    let recipient = account(fwd.recipient_address) ?? addr_none()
+    out {
+        sender:                  l.source
+        recipient:               recipient
+        recipient_contract:      user.msg.destination
+        amount:                  success.body.amount_supplied if success != null else l.amount.value
+        is_success:              success != null
+        is_ton:                  false
+        asset_id:                user.body.asset_id
+        sender_jetton_wallet:    l.source_wallet
+        recipient_jetton_wallet: l.source_wallet if l.source == recipient else (refund.data.receiver_wallet if refund != null and refund.data.sender_wallet == l.destination_wallet else null)
         master_jetton_wallet:    l.destination_wallet
         master:                  l.destination
         asset:                   l.asset
@@ -123,7 +142,7 @@ matcher evaa_withdraw {
 matcher evaa_liquidate {
     produces evaa_liquidate
 
-    pred evaa_liquidate_anchor @master
+    btype jetton_transfer @master where (.payload_opcode == 0x3)
       -> or {
              btype call_contract @user where (evaa_op(.) == 0x31)
                -> or {
@@ -143,8 +162,7 @@ matcher evaa_liquidate {
              }
          }
 
-    let jetton = master.btype == "jetton_transfer"
-    let m = (parse? master.data.forward_payload as EvaaLiquidateJettonForward) if jetton else (parse? master as EvaaLiquidateMaster)
+    let m = parse? master.data.forward_payload as EvaaLiquidateJettonForward
     let success = satisfied_success != null
     let s = satisfied_success.body.info.ref
     let l = leg(master)
@@ -157,6 +175,6 @@ matcher evaa_liquidate {
         collateral_amount:   s.collateral_reward if success else 0
         is_success:          success
         fail_reason:         null if success else ("immediate_rejection" if immediate != null else ((unsatisfied.body.reason ?? "liquidation_error") if unsatisfied != null else "master_not_enough_liquidity"))
-        debt_amount:         s.liquidatable_amount if success else (l.amount.value if jetton else m.liquidate_incoming_amount)
+        debt_amount:         s.liquidatable_amount if success else l.amount.value
     }
 }
