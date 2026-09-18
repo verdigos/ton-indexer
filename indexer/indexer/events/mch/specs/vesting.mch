@@ -9,10 +9,9 @@
 # the b64 builtin over the parsed `message_cell` — b64 BOC-encodes a raw Cell
 # before base64 (mirrors the legacy `message_cell.to_boc()`).
 #
-# `success` (the flag is true only when the message was really
-# sent) is the one host fn — it scans the request TRANSACTION's out-messages for
-# a matching destination + body hash, and transaction-level navigation is
-# outside the language. See builders/vesting.py.
+# `success` is true only when the vesting contract actually emitted the
+# requested message: scan the request transaction's outgoing messages for a
+# matching destination and body hash.
 
 opcode VestingSendMessage         = 0xA7733ACD
 opcode VestingSendMessageResponse = 0xF7733ACD
@@ -29,7 +28,10 @@ matcher vesting_send_message {
         message_boc_str:     b64(send.body.message_cell)
         message_destination: account(send.body.message_destination)
         message_value:       amount(send.body.message_value)
-        success:             vesting_message_was_sent(send, send.body)
+        success:             any(out_messages(send) as m =>
+                                 account(m.destination) == account(send.body.message_destination)
+                                 and send.body.message_body_hash != null
+                                 and m.body_hash == send.body.message_body_hash)
     }
 }
 

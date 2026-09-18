@@ -53,8 +53,4 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
 
 // Tonstakers (HostTonstakers.cpp).
 EvalResult tonstakers_pool_addr(BuildEnv &env, const std::vector<Value> &args);
-
-// Vesting (HostVesting.cpp).
-EvalResult vesting_message_was_sent(BuildEnv &env, const std::vector<Value> &args);
-
 }  // namespace mch

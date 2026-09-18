@@ -293,6 +293,62 @@ def _builtin_addr_hash_hex(a: Any) -> str | None:
         return hex(int.from_bytes(a.hash_part, "big"))
     raise EvalError(f"addr_hash_hex expects an account, got {type(a).__name__}")
 
+def _out_body_hash(m: Any) -> bytes | None:
+    content = getattr(m, "message_content", None)
+    body = getattr(content, "body", None) if content is not None else None
+    if not body:
+        return None
+    stored = getattr(m, "body_hash", None)
+    if stored is None:
+        stored = getattr(content, "hash", None)
+    if stored is None:
+        return None
+    if isinstance(stored, bytes):
+        return stored
+    if not isinstance(stored, str):
+        return None
+    try:
+        return base64.b64decode(stored)
+    except Exception:
+        return None
+
+
+def _out_message_record(m: Any) -> SimpleNamespace:
+    return SimpleNamespace(
+        source=getattr(m, "source", None),
+        destination=getattr(m, "destination", None),
+        value=getattr(m, "value", None),
+        opcode=getattr(m, "opcode", None),
+        created_lt=getattr(m, "created_lt", None),
+        created_at=getattr(m, "created_at", None),
+        bounce=getattr(m, "bounce", None),
+        bounced=getattr(m, "bounced", False),
+        msg_hash=getattr(m, "msg_hash", None),
+        direction=getattr(m, "direction", None),
+        body_hash=_out_body_hash(m),
+    )
+
+
+def _builtin_out_messages(x: Any) -> list:
+    if not isinstance(x, Block):
+        raise EvalError(f"out_messages expects a block, got {type(x).__name__}")
+    try:
+        msg = x.get_message()
+    except Exception:
+        return []
+    if msg is None:
+        return []
+    tx = getattr(msg, "transaction", None)
+    if tx is None:
+        return []
+    out = []
+    for m in getattr(tx, "messages", None) or []:
+        if getattr(m, "direction", None) != "out":
+            continue
+        out.append(_out_message_record(m))
+    return out
+
+
 
 _BUILTIN_CALLABLES: dict[str, Any] = {
     symbol.removeprefix("_builtin_"): value

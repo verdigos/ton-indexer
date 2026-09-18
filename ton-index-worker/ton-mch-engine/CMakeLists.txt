@@ -177,7 +177,6 @@ add_library(mch-classify STATIC
     src/host/HostEvaa.cpp
     src/host/HostDedust.cpp
     src/host/HostTonstakers.cpp
-    src/host/HostVesting.cpp
     src/host/HostNft.cpp
     src/host/HostNftSale.cpp
     src/host/HostTgbtc.cpp

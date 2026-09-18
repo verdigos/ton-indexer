@@ -491,6 +491,31 @@ void test_ext_addr_str_pruned_cell_is_clean_rejection() {
         !rendered.faulted && rendered.value.t == VType::Str && rendered.value.str == "16;abcd");
 }
 
+void test_out_messages_no_body_hash() {
+  auto tx = std::make_unique<Transaction>();
+  auto in = std::make_unique<Message>();
+  in->direction = "in";
+  in->tx = tx.get();
+  Message *in_ptr = in.get();
+  tx->messages.push_back(std::move(in));
+  auto out = std::make_unique<Message>();
+  out->direction = "out";
+  out->tx = tx.get();
+  tx->messages.push_back(std::move(out));
+
+  EventNode node;
+  node.msg = in_ptr;
+  node.tx = tx.get();
+  Block block;
+  block.event_nodes.push_back(&node);
+  EvalResult r = rt_builtin_out_messages(Value::make_block(&block));
+  check("builtin/out_messages/no_body/ok",
+        !r.faulted && r.value.t == VType::List && r.value.items && r.value.items->size() == 1);
+  const Value *bh = r.value.items->front().field("body_hash");
+  check("builtin/out_messages/no_body/hash_null", bh != nullptr && rt_is_null(*bh));
+}
+
+
 // P -> C (child) -> G (grandchild), with G also reachable as one of P's
 // next_blocks. G's topmost parent is P, so compaction must drop the edge
 // instead of turning it into a self-edge.
@@ -709,6 +734,7 @@ int run_classify_core_test() {
   test_auction_bid_item_families_and_negatives();
   test_auction_outbid_attempts();
   test_ext_addr_str_pruned_cell_is_clean_rejection();
+  test_out_messages_no_body_hash();
   test_compact_connections_drops_self_edge();
   test_find_frontier_terminates_on_self_edge();
   test_childless_root_failure_serializes_root();

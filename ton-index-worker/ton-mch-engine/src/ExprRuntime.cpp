@@ -301,6 +301,38 @@ Value msg_envelope(const Message *m) {
   return Value::make_obj(std::move(fs));
 }
 
+// Outgoing-message record: envelope scalars plus body_hash, no transaction.
+Value out_message_record(const Message &m) {
+  auto opt_str = [](const std::optional<std::string> &s) {
+    return s ? Value::make_str(*s) : Value::null();
+  };
+  auto opt_int = [](const std::optional<std::int64_t> &n) {
+    return n ? Value::make_int64(*n) : Value::null();
+  };
+  Value body_hash = Value::null();
+  if (m.content && !m.content->body.empty() && !m.content->hash.empty()) {
+    auto r_raw = td::base64_decode(td::Slice(m.content->hash));
+    if (r_raw.is_ok()) {
+      body_hash = Value::make_bytes(r_raw.move_as_ok());
+    }
+  }
+  Value::Fields fs = {
+      {"source", opt_str(m.source)},
+      {"destination", opt_str(m.destination)},
+      {"value", opt_int(m.value)},
+      {"opcode", opt_int(m.opcode)},
+      {"created_lt", opt_int(m.created_lt)},
+      {"created_at", opt_int(m.created_at)},
+      {"bounce", m.bounce ? Value::make_bool(*m.bounce) : Value::null()},
+      {"bounced", Value::make_bool(m.bounced)},
+      {"msg_hash", Value::make_str(m.msg_hash)},
+      {"direction", Value::make_str(m.direction)},
+      {"body_hash", std::move(body_hash)},
+  };
+  return Value::make_obj(std::move(fs));
+}
+
+
 // Only msg/body/data/failed/broken/btype are defined; `body` always faults
 // in a where context (no prior parse).
 EvalResult block_access(const Block *b, const std::string &field) {
@@ -704,6 +736,26 @@ EvalResult rt_builtin_exit_code(const Value &x) {
   return rt_ok(ec != nullptr ? *ec : Value::null());
 }
 
+EvalResult rt_builtin_out_messages(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  if (x.t != VType::Block) {
+    return rt_fault("out_messages expects a block, got " + x.describe());
+  }
+  const Block *b = x.block;
+  if (b == nullptr || b->event_nodes.empty() || b->event_nodes.front()->msg == nullptr ||
+      b->event_nodes.front()->msg->tx == nullptr) {
+    return rt_ok(Value::make_list({}));
+  }
+  const Transaction *tx = b->event_nodes.front()->msg->tx;
+  std::vector<Value> out;
+  for (const auto &m : tx->messages) {
+    if (m->direction != "out") continue;
+    out.push_back(out_message_record(*m));
+  }
+  return rt_ok(Value::make_list(std::move(out)));
+}
+
+
 EvalResult rt_builtin_uint_hex(const Value &x) {
   if (rt_is_null(x)) return rt_ok(Value::null());
   if (x.t != VType::Int || x.num.is_null() || x.num->sgn() < 0) {
@@ -862,7 +914,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
       {"get", 2}, {"tx_aborted", 1}, {"exit_code", 1},
       {"uint_hex", 1}, {"ext_addr_str", 1},
       {"txid_le_hex", 1},
-      {"addr_hash_hex", 1},
+      {"addr_hash_hex", 1}, {"out_messages", 1},
   };
   auto ar = arity.find(name);
   if (ar == arity.end()) {
@@ -896,6 +948,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   if (name == "txid_le_hex") return rt_builtin_txid_le_hex(args[0]);
   if (name == "ext_addr_str") return rt_builtin_ext_addr_str(args[0]);
   if (name == "addr_hash_hex") return rt_builtin_addr_hash_hex(args[0]);
+  if (name == "out_messages") return rt_builtin_out_messages(args[0]);
   return rt_fault("unreachable builtin " + name);
 }
 
