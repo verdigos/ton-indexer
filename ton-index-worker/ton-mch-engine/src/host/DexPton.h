@@ -1,5 +1,5 @@
-// Shared TON-proxy master list (STON.fi pTON v1/v2, Tonco wTTON) and
-// wallet-to-asset conversion for DEX hosts.
+// Shared TON-proxy master list (STON.fi pTON v1/v2, Tonco v1 wTTON, Tonco v2
+// TON wrapper) and wallet-to-asset conversion for DEX hosts.
 #pragma once
 
 #include "Value.h"
@@ -10,7 +10,7 @@
 
 namespace mch {
 
-// The three TON-proxy master addresses (raw "wc:HEX" upper). Both Stonfi v2 and
+// The four TON-proxy master addresses (raw "wc:HEX" upper). Both Stonfi v2 and
 // Tonco treat a jetton wallet on one of these masters as a native TON asset.
 // `is_pton_master` normalizes its argument, so any spelling the shared address
 // normalizer accepts (raw "wc:HEX" upper or lower) matches.

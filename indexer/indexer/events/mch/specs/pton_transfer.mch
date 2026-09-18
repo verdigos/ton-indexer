@@ -10,11 +10,11 @@
 # The manifest puts pton_transfer after jetton_transfer on their shared anchor,
 # and before the swap matchers that consume their blocks.
 #
-# The TON-proxy master allowlist (STON.fi pTON v1/v2, Tonco wTTON) is what makes
-# the match safe on an opcode this common: only a wallet whose master is one of
-# the three canonical addresses qualifies. Same three addresses as
-# host/DexPton.cpp `pton_masters()`, which the DEX hosts use to turn such a
-# wallet into a TON asset.
+# The TON-proxy master allowlist (STON.fi pTON v1/v2, Tonco v1 wTTON, Tonco v2
+# TON wrapper) is what makes the match safe on an opcode this common: only a
+# wallet whose master is one of the four canonical addresses qualifies. Same
+# four addresses as host/DexPton.cpp `pton_masters()`, which the DEX hosts use
+# to turn such a wallet into a TON asset.
 #
 # Field parity with the legacy build: `has_internal_transfer` is false and both
 # wallet fields are null (there is no internal leg to name them from — the flag
@@ -32,7 +32,8 @@ matcher pton_transfer {
     let pton_v1   = wallet.jetton == "0:8CDC1D7640AD5EE326527FC1AD0514F468B30DC84B0173F0E155F451B4E11F7C"
     let pton_v2   = wallet.jetton == "0:671963027F7F85659AB55B821671688601CDCF1EE674FC7FBBB1A776A18D34A3"
     let tonco_wtton = wallet.jetton == "0:949C4C66760C002800E2FA3D8A3CA4E1C90A9373B53AE7472033483BF14CD95E"
-    reject when not (pton_v1 or pton_v2 or tonco_wtton)
+    let tonco_v2_wrapper = wallet.jetton == "0:7019100C8D363F08C3562A1CC178703E54F8E9DAB0FDBC1DEBC1EA46D9CA3979"
+    reject when not (pton_v1 or pton_v2 or tonco_wtton or tonco_v2_wrapper)
     failed when transfer.failed
     out {
         has_internal_transfer: false

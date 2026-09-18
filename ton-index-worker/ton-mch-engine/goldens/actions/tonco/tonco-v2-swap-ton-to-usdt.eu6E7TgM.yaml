@@ -1,0 +1,112 @@
+# tonco / tonco v2 swap TON to USDT (pool exit 200)
+# note: bridge replay, ORACLE PASS; sidecar devtools/emulator-fixture/sidecars/; Tonco v2 pool SWAP body and v2 PayTo coinsinfo
+# trace: eu6E7TgM6HAqJ5Kw1ZUQSbqzught2VHq9h69DSYRTZg=
+actions:
+  - type: call_contract
+    anchor: call_contract#4d238543@104305057000003
+    id: NqW+c4ent6FYAy4NMKN9+xLumLNPQUyyeipEIweNw7Y=
+    success: true
+    source: 0:3AF94BAAF2F34D51DD067FBEAB1F9EDABA9E8CF67FAA776A2A84A531F467E9DB
+    source_secondary: null
+    destination: 0:D49106E94D5220B7BBFAEBE253151FB7F9E5D1173FF857AE85F947E7EAF3A0D0
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 129442433
+    opcode: 0x4d238543
+    tx_hashes:
+      - eu6E7TgM6HAqJ5Kw1ZUQSbqzught2VHq9h69DSYRTZg=
+      - yhC30gu3PhdGyg6qFxSKTofHsk33pJanx4jrViJh3+4=
+    accounts:
+      - 0:3AF94BAAF2F34D51DD067FBEAB1F9EDABA9E8CF67FAA776A2A84A531F467E9DB
+      - 0:D49106E94D5220B7BBFAEBE253151FB7F9E5D1173FF857AE85F947E7EAF3A0D0
+    start_lt: 104305057000003
+    end_lt: 104305057000004
+    start_utime: 1789739880
+    end_utime: 1789739880
+    mc_seqno_end: 93522076
+  - type: contract_deploy
+    anchor: contract_deploy#178d4519@104305057000012
+    id: ar5/1QnO33TZg49poCUVm/SAcUoIHCwNOEpVrHdD/bI=
+    success: true
+    source: 0:E35FCD93A2CC0860829D866F247DAF24E14133693F45D09D10E521BE1BF8C2DA
+    source_secondary: null
+    destination: 0:059D423F35E1EF2A90F1C059FEE21ED173EF4B72FA4C4CC4D5BD9276DFBC04EF
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 203226411
+    opcode: 0x178d4519
+    tx_hashes:
+      - 6DDvrqlSfK0zhwiXV+EHZPnJaRyl1VswduhTqYycjhU=
+      - NbtrAiFX+V9zk0Wo+ExQ6jfC++B6BhTXk1yW4xyYfsU=
+    accounts:
+      - 0:059D423F35E1EF2A90F1C059FEE21ED173EF4B72FA4C4CC4D5BD9276DFBC04EF
+      - 0:E35FCD93A2CC0860829D866F247DAF24E14133693F45D09D10E521BE1BF8C2DA
+    start_lt: 104305057000012
+    end_lt: 104305057000013
+    start_utime: 1789739880
+    end_utime: 1789739880
+    mc_seqno_end: 93522076
+  - type: jetton_swap
+    matcher: tonco_swap
+    anchor: jetton_swap@104305057000002
+    id: nSI3IXQOOatFaizn0d/nIc4Zjca3sxI0dTG8tDmNRWY=
+    success: true
+    source: 0:3AF94BAAF2F34D51DD067FBEAB1F9EDABA9E8CF67FAA776A2A84A531F467E9DB
+    source_secondary: null
+    destination: 0:3AF94BAAF2F34D51DD067FBEAB1F9EDABA9E8CF67FAA776A2A84A531F467E9DB
+    destination_secondary: 0:059D423F35E1EF2A90F1C059FEE21ED173EF4B72FA4C4CC4D5BD9276DFBC04EF
+    asset: null
+    asset_secondary: null
+    asset2: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    jetton_swap_data:
+      dex: tonco
+      dex_incoming_transfer:
+        amount: 14663978541
+        asset: null
+        destination: 0:13D2708EDB4BC2EA0CE9C9425B588EC42E746F0000775472776758D742CC3A28
+        destination_jetton_wallet: 0:BB0FCD168F1319666BDD089C56851F97EBDA7E59EB05B11B67F9FBBE86AFCC41
+        source: 0:3AF94BAAF2F34D51DD067FBEAB1F9EDABA9E8CF67FAA776A2A84A531F467E9DB
+        source_jetton_wallet: null
+      dex_outgoing_transfer:
+        amount: 20100000
+        asset: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
+        destination: 0:3AF94BAAF2F34D51DD067FBEAB1F9EDABA9E8CF67FAA776A2A84A531F467E9DB
+        destination_jetton_wallet: 0:059D423F35E1EF2A90F1C059FEE21ED173EF4B72FA4C4CC4D5BD9276DFBC04EF
+        source: 0:13D2708EDB4BC2EA0CE9C9425B588EC42E746F0000775472776758D742CC3A28
+        source_jetton_wallet: 0:E35FCD93A2CC0860829D866F247DAF24E14133693F45D09D10E521BE1BF8C2DA
+      min_out_amount: 19095000
+      peer_swaps: []
+      sender: 0:3AF94BAAF2F34D51DD067FBEAB1F9EDABA9E8CF67FAA776A2A84A531F467E9DB
+    tx_hashes:
+      - 3JQXxo5GP/kiyX47pSLaCSjSpXN5M2umH3pnjh7Qkx8=
+      - 3OelpBPvqf+9Q6ZZahruBfxD7wcx3lYl5ihh/hFthaI=
+      - 6DDvrqlSfK0zhwiXV+EHZPnJaRyl1VswduhTqYycjhU=
+      - NbtrAiFX+V9zk0Wo+ExQ6jfC++B6BhTXk1yW4xyYfsU=
+      - OrTNPsdwAXuOpGJbDyVrhKJz4TWvjhM3tLFTFXHZCbw=
+      - Q9eySM+28zBlY1BSb+ECgmWgetexow4qPws1nTDMbBA=
+      - eu6E7TgM6HAqJ5Kw1ZUQSbqzught2VHq9h69DSYRTZg=
+      - swTaFXYaSTw8Wt8zPs7SyESQfN7WE80PuPjU8+rQKp0=
+    accounts:
+      - 0:059D423F35E1EF2A90F1C059FEE21ED173EF4B72FA4C4CC4D5BD9276DFBC04EF
+      - 0:13D2708EDB4BC2EA0CE9C9425B588EC42E746F0000775472776758D742CC3A28
+      - 0:3AF94BAAF2F34D51DD067FBEAB1F9EDABA9E8CF67FAA776A2A84A531F467E9DB
+      - 0:4F4D22DA9ACA7300BB2C0A47AF01BA92D89DC6B47EC4E59D2D9BA5C8D0368FC9
+      - 0:BB0FCD168F1319666BDD089C56851F97EBDA7E59EB05B11B67F9FBBE86AFCC41
+      - 0:E35FCD93A2CC0860829D866F247DAF24E14133693F45D09D10E521BE1BF8C2DA
+    start_lt: 104305057000002
+    end_lt: 104305057000015
+    start_utime: 1789739880
+    end_utime: 1789739880
+    mc_seqno_end: 93522076

@@ -1400,6 +1400,18 @@
    "name": "Fragment settle-and-transfer, transfer payload spoofs a bid",
    "slug": "fragment-settle-transfer-spoofed-bid",
    "note": "synthetic: composed J4mgK7n4 (real code+state, mc 93495311) with the transfer's ownership_assigned forward_payload replaced by TeleitemBidInfo(1e15); the item forwards the caller payload as is (Fragment nft-item.fc:250-255); excluded from production comparison"
+  },
+  "o-0qrQ73jIN1uNaZwnYNQS9InHgidaWg00TKeOuo2c4=": {
+   "group": "tonco",
+   "name": "tonco v2 swap USDT to TON (pool exit 200)",
+   "slug": "tonco-v2-swap-usdt-to-ton",
+   "note": "bridge replay, ORACLE PASS; sidecar devtools/emulator-fixture/sidecars/; Tonco v2 pool, TON out through the v2 TON wrapper wallet (pTON allowlist)"
+  },
+  "eu6E7TgM6HAqJ5Kw1ZUQSbqzught2VHq9h69DSYRTZg=": {
+   "group": "tonco",
+   "name": "tonco v2 swap TON to USDT (pool exit 200)",
+   "slug": "tonco-v2-swap-ton-to-usdt",
+   "note": "bridge replay, ORACLE PASS; sidecar devtools/emulator-fixture/sidecars/; Tonco v2 pool SWAP body and v2 PayTo coinsinfo"
   }
  }
 }
