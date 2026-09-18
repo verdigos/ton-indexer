@@ -55,8 +55,6 @@ ABI_PREFIXES = {
 HOST_CALLS = (
     HostCall("HostStonfi.cpp", 1, "StonfiPaymentRequest", (0xF93BB43F,),
              "the helper caller filters payment requests with is_call_op"),
-    HostCall("HostStonfi.cpp", 1, "StonfiSwapMessage", (0x25938561,),
-             "the helper input is the matcher's kStonfiSwap contract capture"),
     HostCall("HostStonfi.cpp", 1, "StonfiV2PayTo", (0x657B54F5,),
              "the helper input is selected from kV2PayTo contract calls"),
     HostCall("HostStonfi.cpp", 1, "PTonTransfer", (0x01F3835D,),
