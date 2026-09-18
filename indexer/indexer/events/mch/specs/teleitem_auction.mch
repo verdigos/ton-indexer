@@ -12,10 +12,10 @@ import "lib/common.mch"
 #
 # The teleitem gate
 # -----------------
-# Both matchers reject unless the destination resolves to an NftItem whose
-# metadata `uri` contains "https://nft.fragment.com" (blocks/auction.py
-# `_is_teleitem`): `is_fragment_item(nft)` from lib/common.mch, a pure fn over
-# `get` + `contains`.
+# Both matchers reject unless the destination resolves to an NftItem in one of
+# the three Fragment collections (Telegram Usernames, Anonymous Telegram
+# Numbers, Eternal Roses): `is_teleitem(nft)` from lib/common.mch tests the
+# item's `collection_address` against that allowlist.
 #
 # Ordering
 # --------
@@ -49,7 +49,7 @@ matcher teleitem_start_auction {
     op TeleitemStartAuction @auction as TeleitemStartAuction -> maybe op TeleitemOk
 
     require nft = lookup nft_item(auction.msg.destination)
-    reject when not is_fragment_item(nft)
+    reject when not is_teleitem(nft)
     # `AccountId(...)` is unconditional in the legacy build, so a missing address
     # becomes addr_none (present-but-empty), not null.
     let item  = auction.msg.destination ?? addr_none()
@@ -81,7 +81,7 @@ matcher teleitem_cancel_auction {
     op TeleitemCancelAuction @cancel -> maybe op TeleitemOk
 
     require nft = lookup nft_item(cancel.msg.destination)
-    reject when not is_fragment_item(nft)
+    reject when not is_teleitem(nft)
     let item = cancel.msg.destination ?? addr_none()
     failed when tx_failed(cancel)
     out {

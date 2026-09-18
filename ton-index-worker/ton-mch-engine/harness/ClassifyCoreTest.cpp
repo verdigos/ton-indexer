@@ -220,6 +220,8 @@ const std::string kBidder = "0:" + std::string(64, 'C');
 const std::string kOwner = "0:" + std::string(64, 'D');
 const std::string kMarketplace = "0:" + std::string(64, 'E');
 const std::string kCollection = "0:" + std::string(64, 'F');
+// Telegram Usernames, the collection a Fragment content URI is metadata for.
+const std::string kFragmentCollection = "0:80D78A35F955A14B679FAA887FF4CD5BFC0F43B4A4EEA2A7E6927F3701B273C2";
 const std::string kV1 = "/ACindAgW83MDT/7nKOMw8jBWexg2KpUMkCpLxBZLUA=";
 const std::string kV2 = "ZmiHL6eXBUQ//UdSPo6eqfdquZ+aC1nSfej4GhwnudQ=";
 const std::string kV3r2 = "G9nFo5v/t6DzQViLXdkrgTqEK/Ze8UEJOCIAzq+Pct8=";
@@ -281,13 +283,15 @@ void link_child(Transaction *parent, Transaction *child) {
   parent->messages.push_back(std::move(out));
 }
 
+// `fragment` only stamps the content URI, which is display metadata: the
+// teleitem gate reads the collection, so Fragment fixtures pass it explicitly.
 void add_nft_item(TraceContext &ctx, const std::string &address, bool fragment = false,
-                  bool dns = false) {
+                  bool dns = false, const std::string &collection = kCollection) {
   Value::Fields content{{"uri", Value::make_str(fragment ? "https://nft.fragment.com/item" : "")}};
   Value::Fields item{{"address", Value::make_str(address)},
                      {"init", Value::make_bool(true)},
                      {"index", Value::make_int64(42)},
-                     {"collection_address", Value::make_str(kCollection)},
+                     {"collection_address", Value::make_str(collection)},
                      {"owner_address", Value::make_str(kOwner)},
                      {"content", Value::make_dict(std::move(content))},
                      {"code_hash", Value::make_str(dns ? "i1/8nr/TkGTY1fVuRlnIJrt1k5I/XKSHKL5NYK9vUfk=" : "")}};
@@ -387,7 +391,7 @@ void test_auction_bid_item_families_and_negatives() {
            {"dns", false, true, "dns"}, {"fragment", true, false, "fragment"}}) {
     TraceContext ctx;
     add_transaction(ctx, name, 100, kNft, kBidder, kNft, 0, 10);
-    add_nft_item(ctx, kNft, fragment, dns);
+    add_nft_item(ctx, kNft, fragment, dns, fragment ? kFragmentCollection : kCollection);
     finish_trace(ctx, name);
     ClassifyResult result = classify_production(ctx);
     Block *bid = produced_by(result, "auction_bid");
@@ -414,6 +418,15 @@ void test_auction_bid_item_families_and_negatives() {
     check(std::string("auction_bid/negative/") + test.name,
           !result.failure && produced_count(result, "auction_bid") == 0);
   }
+
+  // A Fragment content URI alone does not make a teleitem.
+  TraceContext ctx;
+  add_transaction(ctx, "fragment_uri_foreign_collection", 100, kNft, kBidder, kNft, 0, 10);
+  add_nft_item(ctx, kNft, true, false, kCollection);
+  finish_trace(ctx, "fragment_uri_foreign_collection");
+  ClassifyResult result = classify_production(ctx);
+  check("auction_bid/item/fragment_uri_foreign_collection",
+        !result.failure && produced_count(result, "auction_bid") == 0);
 }
 
 void add_outbid_child(TraceContext &ctx, Transaction *parent, const std::string &name,
@@ -436,7 +449,7 @@ void test_auction_outbid_attempts() {
                                         fragment ? kNft : kAuction, std::nullopt, 10);
     add_outbid_child(ctx, root, family + "_refund_1", 110, fragment);
     add_outbid_child(ctx, root, family + "_refund_2", 120, fragment);
-    if (fragment) add_nft_item(ctx, kNft, true);
+    if (fragment) add_nft_item(ctx, kNft, true, false, kFragmentCollection);
     else add_nft_auction(ctx, kV2);
     finish_trace(ctx, family + "_outbid");
     ClassifyResult result = classify_production(ctx);
