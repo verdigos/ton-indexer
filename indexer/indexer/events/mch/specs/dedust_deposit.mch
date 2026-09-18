@@ -22,9 +22,9 @@
 # registered block classes the pass dispatches on
 # (DedustDepositLiquidity / DedustDepositLiquidityPartial).
 #
-# The partial matcher's legacy guard (raise when final-deposit opcodes follow
-# the topup, a failed-final leftover) lives in the shared build core and
-# surfaces as a builder reject here.
+# The partial matcher's topup guard (reject when a pool-deposit or rejection
+# child follows the topup) stays in the host fn. Body fields come from ABI
+# rows on the already-consumed deposit leg.
 #
 # The Ask relation block carries the deploy child and deposit-leg parent.
 #
@@ -59,13 +59,12 @@ rule vault_excess =
       -> { maybe btype jetton_transfer
          ; maybe op DedustPayout }
 
-# HYBRID declarative build. The reject/failed/`dex` wiring and the block
-# assembly are declarative; the imperative residue (deposit-leg resolution via
-# previous_block navigation, per-vault BOC parsing, jetton-wallet interface
-# lookups, and the excess-payout scan over the consumed set) stays in two host
-# fns that return the field record. Each fn returns null to reject,
-# reproducing the builder's `return None` (including the partial matcher's
-# final-deposit-opcodes-after-topup guard). Product is a generic
+# HYBRID declarative build. reject/failed/`dex` wiring and block assembly
+# are declarative. Final's residue (deposit-leg resolution via previous_block,
+# per-vault BOC parsing, jetton-wallet lookups, excess-payout scan) stays in
+# dedust_deposit_final_data. Partial bodies parse as ABI rows in this matcher;
+# dedust_deposit_partial_data is only the topup-child guard. Each fn returns
+# null to reject. Product is a generic
 # Block(btype dedust_deposit_liquidity[_partial]); the distinct btypes let
 # post_process_dedust_liquidity dual-dispatch (isinstance legacy classes OR
 # btype) so both paths pair identically.
@@ -118,23 +117,33 @@ matcher dedust_deposit_partial {
     op DedustTopUpLiquidityDepositContract @topup
         <- op DedustAskLiquidityFactory {
             -> { op DedustDeployDepositContract }
-            <- $deposit_leg
+            <- or {
+                   op DedustDepositTONToVault @vault as DedustDepositLiquidityNative
+                   btype jetton_transfer @jt
+                   op JettonNotify @notify as JettonNotify <- op JettonInternalTransfer @internal <- op JettonTransfer
+               }
         }
 
+    let is_ton = vault != null
+    let payload_cell = jt.data.forward_payload if jt != null else (tail_unwrap(notify.body.forward_payload_cell) if notify != null else null)
+    let payload = parse? payload_cell as DedustDepositLiquidityJetton
+    reject when not is_ton and payload == null
+    let jw = lookup jetton_wallet(notify.msg.source) if notify != null else null
+    reject when notify != null and jw == null
     require r = dedust_deposit_partial_data(consumed)
     out {
         dex:                  "dedust"
-        sender:               r.sender
-        deposit_contract:     r.deposit_contract
-        asset_1:              r.asset_1
-        amount_1:             r.amount_1
-        asset_2:              r.asset_2
-        amount_2:             r.amount_2
-        user_jetton_wallet_1: r.user_jetton_wallet_1
-        user_jetton_wallet_2: r.user_jetton_wallet_2
-        target_asset_1:       r.target_asset_1
-        target_amount_1:      r.target_amount_1
-        target_asset_2:       r.target_asset_2
-        target_amount_2:      r.target_amount_2
+        sender:               (vault.msg.source ?? addr_none()) if is_ton else (jt.data.sender if jt != null else (account(notify.body.from_user) ?? addr_none()))
+        deposit_contract:     topup.msg.destination
+        asset_1:              ton_asset() if is_ton else (jt.data.asset if jt != null else asset(jw.jetton))
+        amount_1:             amount(vault.body.amount) if is_ton else (jt.data.amount if jt != null else amount(notify.body.jetton_amount))
+        asset_2:              null
+        amount_2:             null
+        user_jetton_wallet_1: addr_none() if is_ton else (jt.data.sender_wallet if jt != null else (account(internal.msg.source) ?? addr_none()))
+        user_jetton_wallet_2: addr_none()
+        target_asset_1:       asset_of(vault.body.asset0) if is_ton else asset_of(payload.asset0)
+        target_amount_1:      amount(vault.body.params.ref.amount0) if is_ton else amount(payload.amount0)
+        target_asset_2:       asset_of(vault.body.asset1) if is_ton else asset_of(payload.asset1)
+        target_amount_2:      amount(vault.body.params.ref.amount1) if is_ton else amount(payload.amount1)
     }
 }

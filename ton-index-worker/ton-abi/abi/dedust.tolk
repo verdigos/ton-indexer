@@ -3,7 +3,7 @@ tolk 1.4
 struct (0b0000) AssetTon {}
 
 struct (0b0001) AssetJetton {
-    workchain: uint8;
+    workchain: int8;
     hash: bits256;
 }
 
@@ -49,7 +49,34 @@ struct (0xb56b9598) DedustDepositLiquidityToPool {
     field4: Cell<DedustDepositLiquidityAssets>;
 }
 
-type AllowedMessage = DedustPayoutFromPool | DedustSwapNotification | DedustDepositLiquidityToPool
+@overflow1023_policy("suppress")
+struct DedustDepositLiquidityParams {
+    _min_lp: coins;
+    amount0: coins;
+    amount1: coins;
+}
+
+@overflow1023_policy("suppress")
+struct (0xd55e4686) DedustDepositLiquidityNative {
+    _query_id: bits64;
+    amount: coins;
+    _pool_type: bits1;
+    asset0: Asset;
+    asset1: Asset;
+    params: Cell<DedustDepositLiquidityParams>;
+}
+
+@overflow1023_policy("suppress")
+struct (0x40e108d6) DedustDepositLiquidityJetton {
+    _pool_type: bits1;
+    asset0: Asset;
+    asset1: Asset;
+    _min_lp: coins;
+    amount0: coins;
+    amount1: coins;
+}
+
+type AllowedMessage = DedustPayoutFromPool | DedustSwapNotification | DedustDepositLiquidityToPool | DedustDepositLiquidityNative | DedustDepositLiquidityJetton
 
 contract DedustMessages {
     incomingMessages: AllowedMessage

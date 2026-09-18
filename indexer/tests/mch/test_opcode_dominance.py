@@ -76,8 +76,6 @@ HOST_CALLS = (
              "lp_transfer is assigned only by is_call_op(kJettonInternalTransfer)"),
     HostCall("HostDedustDeposit.cpp", 1, "JettonNotify", (0x7362D09C,),
              "resolve_leg obtains the jetton deposit through find_call(kJettonNotify)"),
-    HostCall("HostDedustDeposit.cpp", 2, "JettonNotify", (0x7362D09C,),
-             "the non-TON matcher leg is the exact deposit_notify contract branch"),
     HostCall("HostDedust.cpp", 1, "DedustSwapNotification", (0x9C610DE3,),
              "notif_blocks contains only is_call_op(kDedustSwapNotification)"),
     HostCall("HostDedust.cpp", 1, "DedustPayoutFromPool", (0xAD4EB6F5,),

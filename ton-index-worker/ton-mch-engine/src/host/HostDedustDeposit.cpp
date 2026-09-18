@@ -1,6 +1,6 @@
-// Both fns reconstruct label roles via previous_block / children_blocks
-// navigation and return Null to reject. Any parse/nav failure is a Null
-// reject (intentional).
+// Final reconstructs label roles via previous_block / children_blocks
+// navigation and returns Null to reject. Partial is the topup-child guard.
+// Any parse/nav failure is a Null reject (intentional).
 #include "host/HostImpls.h"
 
 #include "host/BlockViews.h"
@@ -36,27 +36,6 @@ constexpr std::uint32_t kDepositLiquidityToPool = 0xb56b9598;
 constexpr std::uint32_t kReturnExcessFromVault = 0x6b0b787f;
 constexpr std::uint32_t kDedustPayout = 0x474f86cf;
 constexpr std::uint32_t kRejection = 0xe1a36cd4;
-constexpr std::uint32_t kJettonForwardPayload = 0x40e108d6;
-
-// 4-bit kind (0 -> TON, else wc:int8 + account_id:32 bytes). Advances cs.
-td::Result<Value> load_asset_4(vm::CellSlice &cs) {
-  if (!cs.have(4)) {
-    return td::Status::Error("asset: kind underflow");
-  }
-  auto kind = cs.fetch_ulong(4);
-  if (kind == 0) {
-    return Value::make_asset_ton();
-  }
-  if (!cs.have(8 + 256)) {
-    return td::Status::Error("asset: jetton underflow");
-  }
-  auto wc = cs.fetch_long(8);
-  unsigned char id[32];
-  if (!cs.fetch_bytes(id, 32)) {
-    return td::Status::Error("asset: id fetch");
-  }
-  return Value::make_asset_jetton(std::to_string(wc) + ":" + hex_upper(id, 32));
-}
 
 struct Leg {
   const Block *deposit{nullptr};       // vault-facing call the cores parse
@@ -340,21 +319,12 @@ EvalResult dedust_deposit_final_data(BuildEnv &env, const std::vector<Value> &ar
 }
 
 EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &args) {
+  (void)env;
   auto decoded = decode_consumed_or_none(args);
   if (!decoded) {
     return rt_ok(Value::null());
   }
   std::vector<const Block *> consumed = std::move(decoded->blocks);
-  const Block *block = consumed.front();  // topup anchor
-
-  const Block *p1 = block->previous_block;
-  const Block *leg = p1 != nullptr ? p1->previous_block : nullptr;
-  if (leg == nullptr) {
-    return rt_ok(Value::null());
-  }
-  Leg lg = resolve_leg(leg);
-  const Block *vault_call = lg.deposit;
-
   // Guard: final-deposit opcodes after the topup reject.
   const Block *topup = first_call(consumed, kTopUp);
   if (topup == nullptr) {
@@ -365,152 +335,7 @@ EvalResult dedust_deposit_partial_data(BuildEnv &env, const std::vector<Value> &
       return rt_ok(Value::null());  // Unexpected call contract after deposit top up
     }
   }
-
-  const Message *bm = block_msg(block);
-  Value deposit_contract = account_from_opt(bm != nullptr ? bm->destination : std::nullopt);
-
-  Value sender;
-  Value actual_asset = Value::make_asset_ton();
-  Value actual_amount = Value::make_amount_none();
-  Value asset0, asset1;
-  td::RefInt256 asset0_amount, asset1_amount;
-  Value user_jw_0 = Value::make_account_none();
-  Value user_jw_1 = Value::make_account_none();
-
-  if (vault_call == nullptr) {
-    return rt_ok(Value::null());
-  }
-  auto r_body = block_body(vault_call);
-  if (r_body.is_error()) {
-    return rt_ok(Value::null());
-  }
-
-  // Try TON-to-vault first; on any failure fall to the jetton branch.
-  // Distinguish by opcode (a TON-to-vault call parses cleanly, else JettonNotify).
-  bool ton_branch = is_call_op(vault_call, kDepositTONToVault);
-  if (ton_branch) {
-    const Message *vm_msg = block_msg(vault_call);
-    sender = account_from_opt(vm_msg != nullptr ? vm_msg->source : std::nullopt);
-    // amount, pool_type bit, asset0, asset1, ref{min_lp, a0_target, a1_target}.
-    auto r_ctx2 = open_body(r_body.ok());
-    if (r_ctx2.is_error()) {
-      return rt_ok(Value::null());
-    }
-    auto ctx2 = r_ctx2.move_as_ok();
-    auto &c2 = ctx2.cs;
-    if (!c2.have(32 + 64) || !c2.advance(32 + 64)) {
-      return rt_ok(Value::null());
-    }
-    auto r_amt = load_coins_py(c2);
-    if (r_amt.is_error() || !c2.have(1)) {
-      return rt_ok(Value::null());
-    }
-    actual_amount = Value::make_amount(r_amt.move_as_ok());
-    c2.advance(1);  // pool_type bit
-    auto r_a0 = load_asset_4(c2);
-    auto r_a1 = load_asset_4(c2);
-    if (r_a0.is_error() || r_a1.is_error() || c2.size_refs() < 1) {
-      return rt_ok(Value::null());
-    }
-    asset0 = r_a0.move_as_ok();
-    asset1 = r_a1.move_as_ok();
-    bool special = false;
-    vm::CellSlice pr;
-    try {
-      pr = vm::load_cell_slice_special(c2.fetch_ref(), special);
-    } catch (...) {
-      return rt_ok(Value::null());
-    }
-    auto r_min = load_coins_py(pr);
-    auto r_t0 = load_coins_py(pr);
-    auto r_t1 = load_coins_py(pr);
-    if (r_min.is_error() || r_t0.is_error() || r_t1.is_error()) {
-      return rt_ok(Value::null());
-    }
-    asset0_amount = r_t0.move_as_ok();
-    asset1_amount = r_t1.move_as_ok();
-  } else {
-    // jetton deposit branch: JettonNotify -> forward payload.
-    auto r = parse_message_body("JettonNotify", r_body.ok());
-    if (r.is_error()) {
-      return rt_ok(Value::null());
-    }
-    Value notif = r.move_as_ok();
-    const Value *ja = notif.field("jetton_amount");
-    const Value *fu = notif.field("from_user");
-    const Value *fp = notif.field("forward_payload_cell");
-    sender = fu != nullptr ? *fu : Value::make_account_none();
-    actual_amount = ja != nullptr ? to_amount(*ja) : Value::make_amount_none();
-    if (fp == nullptr) {
-      return rt_ok(Value::null());  // missing forward payload -> Null reject
-    }
-    EvalResult unwrapped = rt_builtin_tail_unwrap(*fp);
-    if (unwrapped.faulted || unwrapped.value.t != VType::Cell) {
-      return rt_ok(Value::null());
-    }
-    bool special = false;
-    vm::CellSlice cs;
-    try {
-      cs = vm::load_cell_slice_special(unwrapped.value.cell, special);
-    } catch (...) {
-      return rt_ok(Value::null());
-    }
-    if (!cs.have(32) || cs.fetch_ulong(32) != kJettonForwardPayload || !cs.have(1)) {
-      return rt_ok(Value::null());
-    }
-    cs.advance(1);  // pool_type bit
-    auto r_a0 = load_asset_4(cs);
-    auto r_a1 = load_asset_4(cs);
-    if (r_a0.is_error() || r_a1.is_error()) {
-      return rt_ok(Value::null());
-    }
-    asset0 = r_a0.move_as_ok();
-    asset1 = r_a1.move_as_ok();
-    auto r_min = load_coins_py(cs);
-    auto r_t0 = load_coins_py(cs);
-    auto r_t1 = load_coins_py(cs);
-    if (r_min.is_error() || r_t0.is_error() || r_t1.is_error()) {
-      return rt_ok(Value::null());
-    }
-    asset0_amount = r_t0.move_as_ok();
-    asset1_amount = r_t1.move_as_ok();
-
-    // user wallet is the vault call's previous-block source
-    const Block *vprev = vault_call->previous_block;
-    if (vprev == nullptr) {
-      return rt_ok(Value::null());
-    }
-    const Message *vpm = block_msg(vprev);
-    user_jw_0 = account_from_opt(vpm != nullptr ? vpm->source : std::nullopt);
-
-    // actual_asset from the dex jetton wallet (vault_call source).
-    const Message *vm_msg = block_msg(vault_call);
-    if (vm_msg == nullptr || !vm_msg->source) {
-      return rt_ok(Value::null());
-    }
-    Value jw = env.lookups->get("jetton_wallet",
-                                std::vector<Value>{Value::make_str(*vm_msg->source)});
-    auto master = wallet_jetton_master_str(jw);
-    if (!master) {
-      return rt_ok(Value::null());  // dex wallet with no jetton master -> Null reject
-    }
-    actual_asset = Value::make_asset_jetton(*master);
-  }
-
-  Value::Fields d;
-  d.emplace_back("sender", (sender.t == VType::Account) ? sender : Value::make_account_none());
-  d.emplace_back("deposit_contract", std::move(deposit_contract));
-  d.emplace_back("asset_1", std::move(actual_asset));
-  d.emplace_back("amount_1", std::move(actual_amount));
-  d.emplace_back("asset_2", Value::null());
-  d.emplace_back("amount_2", Value::null());
-  d.emplace_back("user_jetton_wallet_1", std::move(user_jw_0));
-  d.emplace_back("user_jetton_wallet_2", std::move(user_jw_1));
-  d.emplace_back("target_asset_1", std::move(asset0));
-  d.emplace_back("target_amount_1", amount_or_zero(asset0_amount));
-  d.emplace_back("target_asset_2", std::move(asset1));
-  d.emplace_back("target_amount_2", amount_or_zero(asset1_amount));
-  return rt_ok(Value::make_obj(std::move(d)));
+  return rt_ok(Value::make_obj({}));
 }
 
 }  // namespace mch

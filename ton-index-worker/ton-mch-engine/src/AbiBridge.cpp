@@ -554,6 +554,8 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"DedustPayoutFromPool", &abi_parse_body<dedust::DedustPayoutFromPool>},
       {"DedustSwapNotification", &abi_parse_body<dedust::DedustSwapNotification>},
       {"DedustDepositLiquidityToPool", &abi_parse_body<dedust::DedustDepositLiquidityToPool>},
+      {"DedustDepositLiquidityNative", &abi_parse_body<dedust::DedustDepositLiquidityNative>},
+      {"DedustDepositLiquidityJetton", &abi_parse_body<dedust::DedustDepositLiquidityJetton>},
       {"DedustV2PayNative", &abi_parse_body<dedust_v2::DedustV2PayNative>},
       {"DedustV2PayJetton", &abi_parse_body<dedust_v2::DedustV2PayJetton>},
       {"DedustV2SwapEvent", &abi_parse_body<dedust_v2::DedustV2SwapEvent>},

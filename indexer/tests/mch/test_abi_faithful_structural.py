@@ -38,7 +38,8 @@ LOGICAL_ROWS_BY_STEM = {
     ),
     "dedust": (
         "DedustPayoutFromPool", "DedustSwapNotification",
-        "DedustDepositLiquidityToPool",
+        "DedustDepositLiquidityToPool", "DedustDepositLiquidityNative",
+        "DedustDepositLiquidityJetton",
     ),
     "dedust_v2": (
         "DedustV2PayNative", "DedustV2SwapEvent", "DedustV2PayoutPositionFees",
@@ -159,15 +160,16 @@ def test_b4_union_arm_names_and_shapes_are_exact():
     ))
     assert family_spellings == ARM_NAMES
 
-    for stem, ton_prefix, jetton_prefix in (
-        ("coffee", "0b00", "0b01"), ("dedust", "0b0000", "0b0001"),
+    for stem, ton_prefix, jetton_prefix, wc_ty in (
+        ("coffee", "0b00", "0b01", "uint8"),
+        ("dedust", "0b0000", "0b0001", "int8"),
     ):
         structs = _structs(sources[stem])
         assert structs["AssetTon"][0] == ton_prefix
         assert _fields(structs["AssetTon"][1]) == []
         assert structs["AssetJetton"][0] == jetton_prefix
         assert _fields(structs["AssetJetton"][1]) == [
-            ("workchain", "uint8"), ("hash", "bits256"),
+            ("workchain", wc_ty), ("hash", "bits256"),
         ]
 
     for stem, alias, ref_arm, inline_arm in (
