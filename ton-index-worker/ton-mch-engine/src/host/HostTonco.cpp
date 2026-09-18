@@ -93,8 +93,8 @@ td::Result<RouterPayTo> parse_v3_pay_to(const td::Ref<vm::Cell> &body) {
   return pt;
 }
 
-// Walk nested in-transfer payload cells collecting (target_wallet, min_out)
-// pairs. Depth-guarded against unbounded nesting; a bad inner tail is swallowed.
+// Walk the in-transfer payload collecting (target_wallet, min_out) per hop; the
+// next hop's swap payload is the first ref of the payloads cell.
 constexpr int kMaxPayloadDepth = 64;
 void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string, td::RefInt256>> &out,
                              int depth) {
@@ -128,13 +128,19 @@ void collect_payload_targets(vm::CellSlice cs, std::vector<std::pair<std::string
   if (!cs.have(1)) {
     return;
   }
-  if (cs.fetch_ulong(1) && cs.size_refs() > 0) {  // payload maybe-ref
+  if (cs.fetch_ulong(1) && cs.size_refs() > 0) {  // payloads maybe-ref
     try {
-      auto inner = open_ref_cell(cs.fetch_ref());
-      if (inner.is_ok()) {
-        vm::CellSlice ics = inner.move_as_ok();
-        if (ics.have(32) && ics.prefetch_ulong(32) == kV3Swap) {
-          collect_payload_targets(ics, out, depth + 1);
+      auto payloads = open_ref_cell(cs.fetch_ref());
+      if (payloads.is_ok()) {
+        vm::CellSlice pcs = payloads.move_as_ok();
+        if (pcs.size_refs() > 0) {
+          auto inner = open_ref_cell(pcs.fetch_ref());
+          if (inner.is_ok()) {
+            vm::CellSlice ics = inner.move_as_ok();
+            if (ics.have(32) && ics.prefetch_ulong(32) == kV3Swap) {
+              collect_payload_targets(ics, out, depth + 1);
+            }
+          }
         }
       }
     } catch (...) {
@@ -545,8 +551,13 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     in_source_jw = data_field(in_transfer_block, "sender_wallet");
     in_dest = data_field(in_transfer_block, "receiver");
     in_dest_jw = data_field(in_transfer_block, "receiver_wallet");
+    // forward_payload is a base64 BOC here; one that fails to decode leaves no
+    // in-payload rather than rejecting the swap.
     Value fp = data_field(in_transfer_block, "forward_payload");
-    if (fp.t == VType::Cell && fp.cell.not_null()) in_payload = fp.cell;
+    if (fp.t == VType::Str) {
+      auto r_cell = cell_from_pystr(fp.str);
+      if (r_cell.is_ok()) in_payload = r_cell.move_as_ok();
+    }
   } else {
     const Message *m = block_msg(in_transfer_block);
     if (m == nullptr) return host_reject("in_transfer has no message");
@@ -639,10 +650,10 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     }
   }
 
-  // destination asset / min_out (+ failed-swap recursive-payload fallback)
+  // min_out_amount is the payload's slippage guard; destination_asset falls back to that hop on a failed swap.
   Value destination_asset = out_asset;
-  Value min_out_amount = out_amount;
-  if (!ok && !swap_steps.empty() && in_payload.not_null()) {
+  Value min_out_amount = Value::null();
+  if (in_payload.not_null()) {
     std::vector<std::pair<std::string, td::RefInt256>> targets;
     try {
       vm::CellSlice cs = vm::load_cell_slice(in_payload);
@@ -650,17 +661,17 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
     } catch (...) {
     }
     if (!targets.empty()) {
-      const std::string &twallet = targets.back().first;
-      Value target_asset;
-      auto it = jw_asset_map.find(twallet);
-      if (it != jw_asset_map.end()) target_asset = it->second;
-      if (target_asset.is_null()) {
-        Value ta = wallet_asset(env, twallet);
-        if (!ta.is_null()) target_asset = ta;
-      }
-      if (!target_asset.is_null()) {
-        destination_asset = target_asset;
-        min_out_amount = amount_or_zero(targets.back().second);
+      min_out_amount = amount_or_zero(targets.back().second);
+      if (!ok && !swap_steps.empty()) {
+        const std::string &twallet = targets.back().first;
+        Value target_asset;
+        auto it = jw_asset_map.find(twallet);
+        if (it != jw_asset_map.end()) target_asset = it->second;
+        if (target_asset.is_null()) {
+          Value ta = wallet_asset(env, twallet);
+          if (!ta.is_null()) target_asset = ta;
+        }
+        if (!target_asset.is_null()) destination_asset = target_asset;
       }
     }
   }
