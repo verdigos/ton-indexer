@@ -86,9 +86,6 @@ const std::map<std::string, HostPredFn> &host_predicates() {
       {"evaa_liquidate_anchor", evaa_liquidate_anchor},
       // Predicate anchor has no opcode or btype prefilter.
       {"single_contract_deploy", single_contract_deploy},
-      // pton_self_transfer gates stonfi_v2_swap; no_internal_transfer is an
-      // inline where expression.
-      {"pton_self_transfer", pton_self_transfer},
       {"sale_contract_deploy", sale_contract_deploy},
   };
   return preds;

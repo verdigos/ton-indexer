@@ -57,7 +57,9 @@ struct (0x657b54f5) StonfiV2PayTo {
     info: Cell<StonfiV2PayToInfo>;
 }
 
-type AllowedMessage = StonfiV2ProvideLiquidity | StonfiPaymentRequest | StonfiSwapMessage | StonfiV2PayTo
+struct (0x6664de2a) StonfiV2SwapPayloadTag {}
+
+type AllowedMessage = StonfiV2ProvideLiquidity | StonfiPaymentRequest | StonfiSwapMessage | StonfiV2PayTo | StonfiV2SwapPayloadTag
 
 contract StonfiMessages {
     incomingMessages: AllowedMessage

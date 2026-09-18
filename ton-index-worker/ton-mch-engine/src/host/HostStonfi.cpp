@@ -448,55 +448,6 @@ EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args) {
 // The stonfi_v2 jetton-transfer output arm uses the inline predicate
 // `where (not .has_internal_transfer)`.
 
-// Intermediate pTON call: previous jetton_transfer must be non-internal,
-// address the same receiver, and the pTON forward payload must carry the
-// swap opcode. Any check failure is False.
-bool pton_self_transfer(const Block *block) {
-  const Block *prev = block->previous_block;
-  if (prev == nullptr) {
-    return false;
-  }
-  if (data_truthy(prev, "has_internal_transfer")) {
-    return false;
-  }
-  Value recv = data_field(prev, "receiver");
-  const Message *m = block_msg(block);
-  if (m == nullptr || !m->opcode32() || *m->opcode32() != kPTonTransfer) {
-    return false;
-  }
-  std::optional<std::string> dst = m != nullptr ? m->destination : std::nullopt;
-  Value dst_acc = account_from_opt(dst);
-  // Receiver vs destination is a canonical account compare.
-  if (!same_account(account_from_opt(acc_str(recv)), account_from_opt(acc_str(dst_acc)))) {
-    return false;
-  }
-  auto r_body = block_body(block);
-  if (r_body.is_error()) {
-    return false;
-  }
-  auto r = parse_message_body("PTonTransfer", r_body.ok());
-  if (r.is_error()) {
-    return false;
-  }
-  const Value *fp = r.ok().field("forward_payload");
-  if (fp == nullptr) {
-    return false;
-  }
-  EvalResult unwrapped = rt_builtin_tail_unwrap(*fp);
-  if (unwrapped.faulted || unwrapped.value.t != VType::Cell) {
-    return false;
-  }
-  auto r_cs = open_ref_cell(unwrapped.value.cell);
-  if (r_cs.is_error()) {
-    return false;
-  }
-  auto cs = r_cs.move_as_ok();
-  if (!cs.have(32)) {
-    return false;
-  }
-  return static_cast<std::uint32_t>(cs.fetch_ulong(32)) == kV2Swap;
-}
-
 namespace {
 
 // The bigger-amount (amount, token) of a pay_to's two out-legs (assets.sort by

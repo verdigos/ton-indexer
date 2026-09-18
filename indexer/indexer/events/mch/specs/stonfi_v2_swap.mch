@@ -4,12 +4,8 @@
 # - anchor moved out of the recursive rule (entry cannot be a list binding);
 #   the first hop's swap/payout/out-alternative live in the matcher pattern,
 #   hops 2..n repeat via $swap_hop;
-# - the idealized `op JettonInternalTransfer` out-arm is implemented as
-#   `btype jetton_transfer` + an inline `where (not .has_internal_transfer)`
-#   (the former `no_internal_transfer` host predicate, folded into the language
-#   reads the jetton_transfer block's own `has_internal_transfer` data
-#   flag) plus the payload-validating `pton_self_transfer` on a bare `pred` node
-#   (legacy GenericMatcher has no opcode constraint);
+# - the intermediate pTON arm requires a non-internal jetton transfer, a
+#   PTonTransfer child, and a forward payload carrying the V2 swap tag;
 # - overlapping hop branches use `or` and resolve first-match-in-order;
 # - terminal-pton branch carries `{ maybe op PTonTransfer }` so the pattern
 #   consumes the pton call the legacy build added via
@@ -23,15 +19,13 @@
 import "lib/opcodes.mch"
 opcode StonfiV2Swap  = 0x6664de2a
 
-predicate pton_self_transfer
-
 # One router hop per unrolling: swap request + payment, then continuation via
 # a validated intermediate pton chain, a plain jetton transfer, or directly.
 rule swap_hop = or {
                     op StonfiV2Swap
                       -> op StonfiV2PayTo
                       -> btype jetton_transfer where (not .has_internal_transfer)
-                      -> pred pton_self_transfer
+                      -> op PTonTransfer where ((parse? tail_unwrap((parse? . as PTonTransfer).forward_payload) as StonfiV2SwapPayloadTag) != null)
                       -> op JettonNotify
                       -> maybe $swap_hop
                     op StonfiV2Swap
@@ -63,7 +57,7 @@ matcher stonfi_v2_swap {
             op StonfiV2PayTo
                 -> or {
                        btype jetton_transfer where (not .has_internal_transfer)
-                          -> pred pton_self_transfer
+                          -> op PTonTransfer where ((parse? tail_unwrap((parse? . as PTonTransfer).forward_payload) as StonfiV2SwapPayloadTag) != null)
                           -> op JettonNotify
                           -> maybe $swap_hop
                        btype jetton_transfer {

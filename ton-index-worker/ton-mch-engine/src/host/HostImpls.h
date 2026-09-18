@@ -34,9 +34,8 @@ EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args);
 EvalResult tgbtc_mint_data(BuildEnv &env, const std::vector<Value> &args);
 void tgbtc_deploy_absorb(Block *produced, const ShaperMatch &m);
 
-// Stonfi (HostStonfi.cpp): v1/v2 swap fns and v2 pton_self_transfer pred.
+// Stonfi (HostStonfi.cpp): v1/v2 swap fns.
 EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args);
-bool pton_self_transfer(const Block *block);
 EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args);
 
 // Tonco (HostTonco.cpp): deposit-liquidity, withdraw-payout, and swap fns.

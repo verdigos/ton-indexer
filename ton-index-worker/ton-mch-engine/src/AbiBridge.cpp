@@ -549,6 +549,7 @@ const std::vector<std::pair<std::string, MsgParserFn>> &abi_message_parsers() {
       {"StonfiV2ProvideLiquidity", &abi_parse_body<stonfi::StonfiV2ProvideLiquidity>},
       {"StonfiPaymentRequest", &abi_parse_body<stonfi::StonfiPaymentRequest>},
       {"StonfiSwapMessage", &abi_parse_body<stonfi::StonfiSwapMessage>},
+      {"StonfiV2SwapPayloadTag", &abi_parse_body<stonfi::StonfiV2SwapPayloadTag>},
       {"StonfiV2PayTo", &abi_parse_body<stonfi::StonfiV2PayTo>},
       {"DedustPayoutFromPool", &abi_parse_body<dedust::DedustPayoutFromPool>},
       {"DedustSwapNotification", &abi_parse_body<dedust::DedustSwapNotification>},
