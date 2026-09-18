@@ -1,0 +1,98 @@
+# nft / Fragment self-outbid (standing bidder raises)
+# note: bridge replay, ORACLE PASS; sidecar devtools/emulator-fixture/sidecars/; refund goes back to the same bidder
+# trace: BO8nQf-fbQ8rYgAmUvDtCS7wiPgQArPPyQtuvkrtTiU=
+actions:
+  - type: auction_bid
+    matcher: auction_bid
+    anchor: auction_bid@104272908000009
+    id: fdbphthBp7V+XLbBDgbhGpvWRLLb3+9yBy6a7FA0ASQ=
+    success: true
+    source: 0:A26E2217C58B46546579EDE1C03CDF7121AF5A91BEF8C75A29505ECC0AB85093
+    source_secondary: null
+    destination: 0:DEB2544F1EE530F5C6E1F855597049B3CC7CE6F93441CD64169DC7CA87659FAA
+    destination_secondary: null
+    asset: 0:80D78A35F955A14B679FAA887FF4CD5BFC0F43B4A4EEA2A7E6927F3701B273C2
+    asset_secondary: 0:DEB2544F1EE530F5C6E1F855597049B3CC7CE6F93441CD64169DC7CA87659FAA
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 200000000000
+    opcode: null
+    nft_transfer_data:
+      marketplace: fragment
+      nft_item_index: "103205048864196202534626650489469139563965072634045376376929179833429460361999"
+    tx_hashes:
+      - BO8nQf+fbQ8rYgAmUvDtCS7wiPgQArPPyQtuvkrtTiU=
+      - btrOsckPHJy3MKNZxF2y9NFcPEyPfLIg7VhdDD64fb4=
+    accounts:
+      - 0:A26E2217C58B46546579EDE1C03CDF7121AF5A91BEF8C75A29505ECC0AB85093
+      - 0:DEB2544F1EE530F5C6E1F855597049B3CC7CE6F93441CD64169DC7CA87659FAA
+    start_lt: 104272908000009
+    end_lt: 104272908000010
+    start_utime: 1789727026
+    end_utime: 1789727026
+    mc_seqno_end: 93490406
+    parent_action_id: +gGLxlmEmd89Kc5rlTCPJ6TkfLTDLZWT52p0tSWeOSc=
+    ancestor_type:
+      - auction_outbid
+  - type: auction_outbid
+    matcher: auction_outbid
+    anchor: auction_outbid@104272908000009
+    id: +gGLxlmEmd89Kc5rlTCPJ6TkfLTDLZWT52p0tSWeOSc=
+    success: true
+    source: 0:DEB2544F1EE530F5C6E1F855597049B3CC7CE6F93441CD64169DC7CA87659FAA
+    source_secondary: 0:A26E2217C58B46546579EDE1C03CDF7121AF5A91BEF8C75A29505ECC0AB85093
+    destination: 0:A26E2217C58B46546579EDE1C03CDF7121AF5A91BEF8C75A29505ECC0AB85093
+    destination_secondary: null
+    asset: 0:80D78A35F955A14B679FAA887FF4CD5BFC0F43B4A4EEA2A7E6927F3701B273C2
+    asset_secondary: 0:DEB2544F1EE530F5C6E1F855597049B3CC7CE6F93441CD64169DC7CA87659FAA
+    asset2: null
+    asset2_secondary: null
+    amount: 10000000000
+    value: null
+    opcode: null
+    nft_transfer_data:
+      marketplace: fragment
+    ton_transfer_data:
+      content: null
+    tx_hashes:
+      - BO8nQf+fbQ8rYgAmUvDtCS7wiPgQArPPyQtuvkrtTiU=
+      - btrOsckPHJy3MKNZxF2y9NFcPEyPfLIg7VhdDD64fb4=
+      - wX5K7v+5q+Stw5QeLQj+a+v9J0GFPx9zVivcToXqGQA=
+    accounts:
+      - 0:A26E2217C58B46546579EDE1C03CDF7121AF5A91BEF8C75A29505ECC0AB85093
+      - 0:DEB2544F1EE530F5C6E1F855597049B3CC7CE6F93441CD64169DC7CA87659FAA
+    start_lt: 104272908000009
+    end_lt: 104272908000012
+    start_utime: 1789727026
+    end_utime: 1789727026
+    mc_seqno_end: 93490406
+  - type: call_contract
+    anchor: call_contract#557cea20@104272908000011
+    id: ntCuDw5jdMd0sBUoH4rUiq3BBKB4E4rCJMXqB/NPzwc=
+    success: true
+    source: 0:DEB2544F1EE530F5C6E1F855597049B3CC7CE6F93441CD64169DC7CA87659FAA
+    source_secondary: null
+    destination: 0:A26E2217C58B46546579EDE1C03CDF7121AF5A91BEF8C75A29505ECC0AB85093
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 10000000000
+    opcode: 0x557cea20
+    tx_hashes:
+      - btrOsckPHJy3MKNZxF2y9NFcPEyPfLIg7VhdDD64fb4=
+      - wX5K7v+5q+Stw5QeLQj+a+v9J0GFPx9zVivcToXqGQA=
+    accounts:
+      - 0:A26E2217C58B46546579EDE1C03CDF7121AF5A91BEF8C75A29505ECC0AB85093
+      - 0:DEB2544F1EE530F5C6E1F855597049B3CC7CE6F93441CD64169DC7CA87659FAA
+    start_lt: 104272908000011
+    end_lt: 104272908000012
+    start_utime: 1789727026
+    end_utime: 1789727026
+    mc_seqno_end: 93490406
+    parent_action_id: +gGLxlmEmd89Kc5rlTCPJ6TkfLTDLZWT52p0tSWeOSc=
+    ancestor_type:
+      - auction_outbid

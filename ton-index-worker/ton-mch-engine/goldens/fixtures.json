@@ -470,6 +470,12 @@
    "name": "Immediate withdrawal, two payouts (BGhr)",
    "slug": "immediate-withdrawal-two-payouts-bghr"
   },
+  "BO8nQf-fbQ8rYgAmUvDtCS7wiPgQArPPyQtuvkrtTiU=": {
+   "group": "nft",
+   "name": "Fragment self-outbid (standing bidder raises)",
+   "slug": "fragment-self-outbid",
+   "note": "bridge replay, ORACLE PASS; sidecar devtools/emulator-fixture/sidecars/; refund goes back to the same bidder"
+  },
   "C7bHOfSrBJPLHXMZkVnIQladzgYZHIlKOiJRvbxRRuI=": {
    "group": "coffee",
    "name": "Complicated Swap (Dedust, Coffee + Stonfi)",
@@ -645,6 +651,12 @@
    "group": "multisig",
    "name": "Multisig approve opcode arm accepted",
    "slug": "multisig-approve-opcode-arm-accepted"
+  },
+  "NkBUeoyBHQRqKV1iVuVPFqhAhh3PUJCJB0BJcvYxPko=": {
+   "group": "nft",
+   "name": "Fragment auction close by external message, lone fill-up",
+   "slug": "fragment-close-lone-fillup",
+   "note": "bridge replay, ORACLE PASS; sidecar devtools/emulator-fixture/sidecars/; one fill-up leg (telegram matcher-pass finding 2)"
   },
   "OShVZJVqIFxR94PEc48lwzt71eue2H7RgrzMi5zs7Hc=": {
    "group": "dedust-liquidities",
@@ -1127,6 +1139,12 @@
    "name": "DeDust v2 payout chain with no protocol action, second sample",
    "slug": "dedust-v2-payout-chain-with-no-protocol-action-second-sample",
    "note": "same opcode chain as the first sample, different pool and trace"
+  },
+  "wQzaKAp8fuCzmQ4gKUzUvVjPtkrZIL_xSzDnb3AlByk=": {
+   "group": "dns",
+   "name": "DNS auction close, lone fill-up",
+   "slug": "dns-close-lone-fillup",
+   "note": "bridge replay, ORACLE PASS; sidecar devtools/emulator-fixture/sidecars/"
   },
   "ww5gZmgoXhHJ1a1wukBU5Dp1LxufRT1pzfniQTgUXxE=": {
    "group": "evaa",
