@@ -1,10 +1,8 @@
-// tgbtc_mint_data derives head, success log, and jetton_mint from the consumed
-// set. Event parsers reject unreadable bodies; TgBTCBurnEvent tolerates
-// truncated addresses as addr_none.
+// tgbtc_mint_data parses the success log and assembles the mint record from
+// already-selected head, log, and jetton_mint blocks. Event parsers reject
+// unreadable bodies; TgBTCBurnEvent tolerates truncated addresses as addr_none.
 #include "host/HostImpls.h"
 
-#include "host/BlockViews.h"
-#include "host/HostAdapter.h"
 #include "host/HostCommon.h"
 
 #include "BlockTree.h"
@@ -25,9 +23,6 @@
 namespace mch {
 
 namespace {
-
-constexpr std::uint32_t kTgbtcMintHead = 0x3F781D24;
-constexpr std::uint32_t kTgbtcMintSuccessLog = 0x77A80EF3;
 
 // 32-byte little-endian, lowercase hex.
 std::string txid_le_hex(const td::RefInt256 &v) {
@@ -98,25 +93,11 @@ MintLog parse_mint_log(vm::CellSlice &cs) {
 // 6-field mint record, or Null if head/log/mint is missing or the log is
 // unparseable.
 EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
-  if (args[0].t != VType::List) {
-    return rt_fault("tgbtc_mint_data: bad arguments");
-  }
-  auto decoded = decode_consumed_or_none(args);
-  if (!decoded) {
-    return rt_ok(Value::null());
-  }
-  std::vector<const Block *> consumed = std::move(decoded->blocks);
-  const Block *head = first_call(consumed, kTgbtcMintHead);
-  const Block *success_log = first_call(consumed, kTgbtcMintSuccessLog);
-  const Block *jetton_mint = nullptr;
-  for (const Block *b : consumed) {
-    if (b->btype == mch::btype::kJettonMint) {
-      jetton_mint = b;
-      break;
-    }
-  }
+  const Block *head = as_block(args[0]);
+  const Block *success_log = as_block(args[1]);
+  const Block *jetton_mint = as_block(args[2]);
   if (head == nullptr || success_log == nullptr || jetton_mint == nullptr) {
-    return rt_ok(Value::null());  // core: missing piece -> reject
+    return rt_ok(Value::null());
   }
 
   auto r_body = block_body(success_log);

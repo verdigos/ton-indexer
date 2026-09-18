@@ -10,7 +10,6 @@
 
 #include "vm/cellslice.h"
 
-#include <algorithm>
 #include <optional>
 #include <set>
 #include <string>
@@ -199,8 +198,8 @@ EvalResult nft_transfer_data(BuildEnv &env, const std::vector<Value> &args) {
   return r;
 }
 
-// Soft ownership+payload parse, shared metadata projection, payout sort/select.
-// Null for an unknown NFT item. Royalty fields need at least two payouts.
+// Soft ownership+payload parse and shared metadata projection. Null for an
+// unknown NFT item. Payout sort/select lives in the matcher.
 EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &args) {
   const Block *assigned = as_block(args[0]);
   if (assigned == nullptr) {
@@ -237,41 +236,6 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
     payload = Value::make_bytes(std::move(own.payload_raw_boc));
   }
 
-  Value royalty_amount = Value::null();
-  Value royalty_address = Value::null();
-  Value payout_amount = Value::null();
-  Value payout_address = Value::null();
-
-  if (own.is_bid) {
-    std::vector<const Block *> payouts;
-    if (args[1].t == VType::List) {
-      for (const auto &item : *args[1].items) {
-        if (const Block *payout = as_block(item)) payouts.push_back(payout);
-      }
-    }
-    std::stable_sort(payouts.begin(), payouts.end(),
-                     [](const Block *a, const Block *b) {
-                       return *first_node(a)->msg->created_lt < *first_node(b)->msg->created_lt;
-                     });
-    auto val = [](const Block *b) {
-      const Value *v = b->data.field("value");
-      return v != nullptr ? *v : Value::make_amount_none();
-    };
-    auto dest = [](const Block *b) {
-      const Value *d = b->data.field("destination");
-      return d != nullptr ? *d : Value::make_account_none();
-    };
-    if (payouts.size() > 1) {
-      royalty_amount = val(payouts[0]);
-      payout_amount = val(payouts[1]);
-      royalty_address = dest(payouts[0]);
-      payout_address = dest(payouts[1]);
-    } else if (payouts.size() == 1) {
-      payout_address = dest(payouts[0]);
-      payout_amount = val(payouts[0]);
-    }
-  }
-
   Value::Fields ns;
   ns.emplace_back("query_id", Value::make_int(std::move(own.query_id)));
   ns.emplace_back("prev_owner", std::move(prev_owner));
@@ -280,13 +244,8 @@ EvalResult telegram_nft_purchase_data(BuildEnv &env, const std::vector<Value> &a
   ns.emplace_back("payload", std::move(payload));
   ns.emplace_back("is_bid", Value::make_bool(own.is_bid));
   ns.emplace_back("bid", own.is_bid ? Value::make_int(std::move(own.bid)) : Value::null());
-  ns.emplace_back("royalty_amount", std::move(royalty_amount));
-  ns.emplace_back("royalty_address", std::move(royalty_address));
-  ns.emplace_back("payout_amount", std::move(payout_amount));
-  ns.emplace_back("payout_address", std::move(payout_address));
   return rt_ok(Value::make_obj(std::move(ns)));
 }
-
 
 // Purchase branch only: absorb the funding parent (produced.previous_block)
 // unless it is a finish/stop sale-contract ton_transfer.

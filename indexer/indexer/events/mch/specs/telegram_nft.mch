@@ -17,10 +17,10 @@
 # The AuctionFillUp children set is what makes the parent edge fire only on
 # real fragment purchases (an ordinary orphan NftOwnershipAssigned has no such
 # siblings), so no data predicate is needed to gate the parent consumption.
-# The host keeps the soft ownership+payload parse, metadata projection, and
-# payout sort/select. Parent-kind gate, is_mint, purchase assembly, and the
-# 16-key record are declarative.
-#
+# The host keeps the soft ownership+payload parse and metadata projection.
+# Payout sort/select is `stable_sort_by` then `at`. Parent-kind gate, is_mint,
+# purchase assembly, and the 16-key record are declarative.
+
 # Two matchers, split on the legacy CONSUMED SET
 # ----------------------------------------------
 # Legacy `build_block` always produces a block, but only absorbs the parent and
@@ -52,8 +52,8 @@
 #   @assigned   the NftOwnershipAssigned anchor
 #   @payment    block.previous_block (the funding ton_transfer, or the external
 #               call that drove the item directly — Fragment signer shape)
-#   @payouts    all payouts, sorted by created_lt in the host: one is the seller
-#               payout; with two or more, [0] is royalty and [1] is seller payout.
+#   @payouts    all payouts, sorted by created_lt: one is the seller payout;
+#               with two or more, at(sorted, 0) is royalty and at(sorted, 1) is seller.
 
 import "lib/opcodes.mch"
 
@@ -75,8 +75,12 @@ matcher telegram_nft_purchase {
          }
 
     # Parent-kind gate is the xor above. Royalty fields need two or more payouts.
-    require d = telegram_nft_purchase_data(assigned, payouts)
+    require d = telegram_nft_purchase_data(assigned)
     let is_purchase = d.is_bid and not is_telemint_mint(payment)
+    let sorted = stable_sort_by(payouts as p => p.msg.created_lt)
+    let n = len(sorted)
+    let royalty = at(sorted, 0) if d.is_bid and n > 1 else null
+    let seller = at(sorted, 1) if d.is_bid and n > 1 else (at(sorted, 0) if d.is_bid else null)
     out {
         is_purchase:          is_purchase
         prev_owner:           d.prev_owner
@@ -90,10 +94,10 @@ matcher telegram_nft_purchase {
         real_prev_owner:      null
         price:                amount(d.bid) if d.is_bid else null
         marketplace:          "fragment" if d.is_bid else null
-        payout_amount:        d.payout_amount
-        payout_address:       d.payout_address
-        royalty_amount?:      d.royalty_amount
-        royalty_address?:     d.royalty_address
+        payout_amount:        get(seller.data, "value")
+        payout_address:       get(seller.data, "destination")
+        royalty_amount?:      get(royalty.data, "value")
+        royalty_address?:     get(royalty.data, "destination")
     }
 }
 
@@ -104,7 +108,7 @@ matcher telegram_nft_assigned {
     op NftOwnershipAssigned @assigned
       <- maybe peek any @payment
 
-    require d = telegram_nft_purchase_data(assigned, [])
+    require d = telegram_nft_purchase_data(assigned)
     let is_purchase = d.is_bid and not is_telemint_mint(payment)
 
     # A `produces switch`, not `?:` keys, because the legacy key set here is

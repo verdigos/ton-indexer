@@ -88,12 +88,14 @@ matcher tgbtc_mint {
     shape    tgbtc_deploy_absorb
 
     op TgBTCMintHead @head -> $mint_chain
-
-    # HYBRID declarative build. Host fn: consumed-set role scan, log parse,
-    # jetton_mint asset/wallet, txid hex. sender is the anchor capture;
-    # crippled is the out{} literal. The ContractDeploy side-effect children
-    # ride on the shaper.
-    require d = tgbtc_mint_data(consumed)
+    # HYBRID declarative build. Host fn: log parse, jetton_mint asset/wallet,
+    # txid hex. Roles are selected from consumed with find. sender is the
+    # anchor capture; crippled is the out{} literal. The ContractDeploy
+    # side-effect children ride on the shaper.
+    let mint_head = find(consumed as b => b.btype == "call_contract" and b.data.opcode == 0x3F781D24)
+    let mint_log = find(consumed as b => b.btype == "call_contract" and b.data.opcode == 0x77A80EF3)
+    let mint_jetton = find(consumed as b => b.btype == "jetton_mint")
+    require d = tgbtc_mint_data(mint_head, mint_log, mint_jetton)
     out {
         sender:            head.msg.source
         recipient:         d.recipient
