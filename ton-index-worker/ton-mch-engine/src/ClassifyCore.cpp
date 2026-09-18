@@ -131,7 +131,7 @@ std::size_t scrub_arena_refs(Action &a) {
   return n;
 }
 
-bool try_build(const CompiledMatcher &m, BuildOutcome (*fn)(BuildEnv &), Block *block,
+bool try_build(const CompiledMatcher &m, const BuildFn &fn, Block *block,
                BlockArena &arena, const std::set<std::string> &kinds,
                const LookupSource &src, const WhereTable &wheres,
                std::vector<CoreAction> &out) {

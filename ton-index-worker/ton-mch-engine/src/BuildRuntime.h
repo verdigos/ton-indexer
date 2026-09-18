@@ -5,6 +5,7 @@
 #include "ExprRuntime.h"
 #include "Value.h"
 
+#include <functional>
 #include <map>
 #include <set>
 #include <string>
@@ -125,6 +126,8 @@ struct BuildEnv {
   // its parse statement.
   BodyCache *body_cache{nullptr};
 };
+
+using BuildFn = std::function<BuildOutcome(BuildEnv &)>;
 
 // `parse TARGET as T1|T2`: target null -> no-op; list -> parse each non-null
 // Block element; Block -> parse. Per element: first type whose parser

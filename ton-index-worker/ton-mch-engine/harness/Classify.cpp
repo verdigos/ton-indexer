@@ -170,10 +170,17 @@ std::string fixture_header(const std::string &trace_id, const FixtureMeta *meta)
 int run_dump(const std::vector<std::string> &paths,
              bool actions_mode, const TraceContextLoader &load_ctx,
              const LookupSourceFactory &lookup_factory, const std::string &output_dir,
-             const std::string &fixtures_manifest) {
-  const std::vector<CompiledMatcher> &matchers = gen_matchers_ir();
+             const std::string &fixtures_manifest,
+             const std::vector<CompiledMatcher> *injected_matchers,
+             const ClassifySetup *injected_setup) {
+  const std::vector<CompiledMatcher> &matchers =
+      injected_matchers != nullptr ? *injected_matchers : gen_matchers_ir();
   warn_missing_artifact_parsers(matchers);
-  ClassifySetup setup = prepare_classify(matchers);
+  ClassifySetup generated_setup;
+  if (injected_setup == nullptr) {
+    generated_setup = prepare_classify(matchers);
+  }
+  const ClassifySetup &setup = injected_setup != nullptr ? *injected_setup : generated_setup;
   if (setup.table_missing || setup.fn_missing) {
     std::fprintf(stderr, "%s\n", setup.error.c_str());
     return 2;

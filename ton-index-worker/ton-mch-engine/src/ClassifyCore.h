@@ -175,8 +175,8 @@ struct SchemaClassifyResult {
 struct ClassifySetup {
   std::vector<int> included;  // indices into the matcher table, manifest order
   std::vector<std::pair<std::string, std::string>> skips;
-  std::unordered_map<int, BuildOutcome (*)(BuildEnv &)> build_fns;
-  WhereTable where_fns;  // node global_id -> generated where fn (GenWheres.h)
+  std::unordered_map<int, BuildFn> build_fns;
+  WhereTable where_fns;  // node global_id -> where fn (generated, or injected by the dev IR interpreter)
   std::set<std::string> kinds;
   bool table_missing = false;  // the three generated tables disagree on their source
   bool fn_missing = false;     // an included matcher has no generated fn

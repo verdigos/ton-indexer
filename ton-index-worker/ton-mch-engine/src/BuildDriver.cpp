@@ -71,7 +71,7 @@ std::vector<Value> slots_from_captures(const std::vector<Capture> &captures) {
   return slots;
 }
 
-BuildOutcome run_two_phase(BuildOutcome (*fn)(BuildEnv &), const Block *anchor,
+BuildOutcome run_two_phase(const BuildFn &fn, const Block *anchor,
                            const std::vector<Value> &slots, const Value &consumed,
                            const std::set<std::string> &kinds, const LookupSource &src,
                            bool needs_lookups) {

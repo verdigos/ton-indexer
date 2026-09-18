@@ -7,6 +7,7 @@
 #include "IrTables.h"
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -19,11 +20,8 @@ namespace mch {
 inline constexpr std::uint32_t kExcessOpcode = 0xD53276DB;
 inline constexpr std::uint32_t kBounceOpcode = 0xFFFFFFFF;
 
-// Generated where_expr functions keyed by artifact-global node id. Built once
-// per run by prepare_classify (from gen_wheres_ir) and carried in
-// ClassifySetup; matcher_match takes it by reference, so a walk without a table
-// is not representable.
-using WhereFn = EvalResult (*)(const WhereEnv &);
+// node global_id -> where fn (generated, or injected by the dev IR interpreter)
+using WhereFn = std::function<EvalResult(const WhereEnv &)>;
 using WhereTable = std::unordered_map<int, WhereFn>;
 
 // Stack guard for pathological block-tree recursion beyond kMaxMatchDepth.

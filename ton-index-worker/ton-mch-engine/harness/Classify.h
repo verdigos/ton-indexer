@@ -11,6 +11,8 @@
 
 namespace mch {
 
+struct CompiledMatcher;
+struct ClassifySetup;
 struct CoreAction;  // ClassifyCore.h
 struct Action;  // ActionBuild.h
 class LookupSource;  // BuildRuntime.h
@@ -40,7 +42,9 @@ int run_dump(const std::vector<std::string> &paths,
              bool actions_mode, const TraceContextLoader &load_ctx,
              const LookupSourceFactory &lookup_factory = {},
              const std::string &output_dir = {},
-             const std::string &fixtures_manifest = {});
+             const std::string &fixtures_manifest = {},
+             const std::vector<CompiledMatcher> *matchers = nullptr,
+             const ClassifySetup *setup = nullptr);
 
 // `--actions` serialized-action-row dump. Uses the same collect-to-final-pass
 // pipeline as run_classify; each surviving post-pass produced block is
