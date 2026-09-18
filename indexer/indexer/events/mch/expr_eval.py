@@ -30,7 +30,7 @@ from pytoniq_core import Address, Cell, ExternalAddress
 
 from indexer.events.blocks.core import Block
 from indexer.events.blocks.utils import AccountId, Amount, Asset
-from indexer.events.mch.builtin_signatures import BUILTIN_SIGNATURES
+from indexer.events.mch.builtin_signatures import BUILTIN_SIGNATURES, FRONTEND_ONLY
 
 
 class EvalError(Exception):
@@ -356,15 +356,18 @@ _BUILTIN_CALLABLES: dict[str, Any] = {
     if symbol.startswith("_builtin_") and callable(value)
 }
 
-if _BUILTIN_CALLABLES.keys() != BUILTIN_SIGNATURES.keys():
+if _BUILTIN_CALLABLES.keys() != BUILTIN_SIGNATURES.keys() - FRONTEND_ONLY.keys():
     raise RuntimeError("builtin callable names disagree with builtin signatures")
 for _name, _arity in BUILTIN_SIGNATURES.items():
+    if _name in FRONTEND_ONLY:
+        continue
     if len(inspect.signature(_BUILTIN_CALLABLES[_name]).parameters) != _arity:
         raise RuntimeError(f"builtin callable arity disagrees for {_name!r}")
 
 BUILTINS: dict[str, tuple[Any, int]] = {
     name: (_BUILTIN_CALLABLES[name], arity)
     for name, arity in BUILTIN_SIGNATURES.items()
+    if name not in FRONTEND_ONLY
 }
 
 

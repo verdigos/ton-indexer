@@ -359,9 +359,10 @@ cases:
 
   nft put on auction (ab-gap):
     # THE init_state case. Every nft_listing_data value below is read out of the
-    # deploy message's GetGems StateInit by getgems_auction_init / the legacy
-    # get_auction_data — NOT from the nft_auction interface snapshot. This is the
-    # only fixture in the corpus that exercises that path end to end.
+    # deploy message's GetGems StateInit by the nft_sale.mch spec (`state_init` +
+    # `auction_data`) / the legacy get_auction_data — NOT from the nft_auction
+    # interface snapshot. This is the only fixture in the corpus that exercises
+    # that path end to end.
     trace-id: M2rUrfJXfjW8Xsex9RY8vXo__9MZHdh-emPatSp2Ooc=
     expected-actions:
       - type: nft_put_on_auction

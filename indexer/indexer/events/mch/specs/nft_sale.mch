@@ -45,7 +45,7 @@
 # account state the detector ran on. Zero renders
 # as null, so an unknown code hash reads as a MISS, never as a wrong version
 # string. Consumers: the DNS-item test inside `auction_bid`, and the GetGems
-# StateInit version dispatch in `getgems_sale_init` / `getgems_auction_init`.
+# StateInit version dispatch in `sale_data` / `auction_data`.
 #
 # `init_state`
 # ------------
@@ -55,17 +55,8 @@
 # full_price on the live contract while the StateInit keeps the price the listing
 # was created at, so reading the interface instead would silently produce a
 # different number than Python on exactly the traces that matter. `init_state` is
-# therefore plumbed onto the mch `Message` (TraceLoader.h) and read by two host
-# fns — no DSL surface change. The data was already present on
-# all three loader paths (fixture .lz4, schema/prod, emulator); only the readers
-# were missing.
-#
-# Host bindings and why each one exists:
-#   fn  getgems_sale_init(block, code_hash)     StateInit parse, per-code-hash
-#   fn  getgems_auction_init(block, code_hash)  version dispatch (getgems.py
-#                                               get_sale_data / get_auction_data)
-#   pred sale_contract_deploy                   len(contract_deployments) > 0
-#                                               (btype gate is the xor on the node)
+# therefore plumbed onto the mch `Message` (TraceLoader.h). `state_init` exposes
+# its data cell, and the ABI parsers decode it by code hash.
 #
 # Differences from the runtime matchers:
 #  - `NftCancelSaleMatcher` / `NftCancelAuctionMatcher` reach the collection via
@@ -102,6 +93,53 @@ opcode NftAuctionStop      = 0xB95616B6
 opcode TeleitemOutbid      = 0x557CEA20
 
 predicate sale_contract_deploy
+
+fn optional_address(a) = null if a == addr_none() else a
+
+fn sale_result(d, v4r1) = null if d == null else {
+    full_price:              d.full_price
+    marketplace_address:     optional_address(d.marketplace_address)
+    marketplace_fee_address: optional_address(d.fees.ref.marketplace_fee_address)
+    marketplace_fee:         null if v4r1 else d.fees.ref.marketplace_fee
+    royalty_address:         optional_address(d.fees.ref.royalty_address)
+    royalty_amount:          null if v4r1 else d.fees.ref.royalty_amount
+}
+
+fn sale_data(init, h) = (
+    sale_result(parse? init as SaleV1, false)
+        if h == "2pufziLofEllctIDZSWVebzO+RpyA1fMvowFLvyb4I8=" else
+    sale_result(parse? init as SaleLegacy, false)
+        if h in [
+            "gnj0xSM95vvtyWmvUZNEp6m//FRIVtuphqlcC8+Fcck=",
+            "MgUN+sRPZIZrzIbyzZ4TBf6dyts5WcACI3z7CQLUQyM=",
+            "3rU7bFdlwebNI4v0e8XoO6WWvcwEsLhM1Qqx5HSgjzE=",
+            "JCIfpXHlQuBVx3vt/b9SfHr0YM/cfzRMRQeHtM+h600=",
+        ] else
+    sale_result(parse? init as SaleV4r1, true)
+)
+
+fn auction_result(d, inline_fees) = null if d == null else {
+    mp_fee_addr:      optional_address(d.fees.ref.mp_fee_addr)
+    mp_fee_factor:    d.mp_fee_factor if inline_fees else d.fees.ref.mp_fee_factor
+    mp_fee_base:      d.mp_fee_base if inline_fees else d.fees.ref.mp_fee_base
+    royalty_fee_addr: optional_address(d.fees.ref.royalty_fee_addr)
+    royalty_fee_base: d.royalty_fee_base if inline_fees else d.fees.ref.royalty_fee_base
+    max_bid:          d.constant.ref.max_bid
+    min_bid:          d.constant.ref.min_bid
+}
+
+fn auction_data(init, h) = (
+    auction_result(parse? init as AuctionV4r1, false)
+        if h == "zlp4U06qps7tja/UhtB262CpsNbb+1Nnb2YmScBomVY=" else
+    auction_result(parse? init as AuctionV3r2, false)
+        if h in [
+            "ZmiHL6eXBUQ//UdSPo6eqfdquZ+aC1nSfej4GhwnudQ=",
+            "G9nFo5v/t6DzQViLXdkrgTqEK/Ze8UEJOCIAzq+Pct8=",
+        ] else
+    auction_result(parse? init as AuctionV1, false)
+        if h == "/ACindAgW83MDT/7nKOMw8jBWexg2KpUMkCpLxBZLUA=" else
+    auction_result(parse? init as AuctionV3r3, true)
+)
 
 matcher nft_update_sale {
     produces nft_update_sale
@@ -152,10 +190,9 @@ matcher nft_put_on_sale {
     reject when sale == null and account(to_sale.data.nft.address) != account(auction.nft_addr)
     reject when sale == null and account(listing.data.prev_owner) != account(auction.nft_owner)
 
-    # A null code_hash means "unknown version", which both host fns resolve the
-    # same way Python's `MAPPING.get(code_hash, "latest")` does.
-    let sd = getgems_sale_init(sale_init, sale.code_hash)
-    let ad = getgems_auction_init(sale_init, auction.code_hash)
+    let init = state_init(sale_init)
+    let sd = sale_data(init, sale.code_hash)
+    let ad = auction_data(init, auction.code_hash)
     reject when sale != null and sd == null
     reject when sale == null and ad == null
 

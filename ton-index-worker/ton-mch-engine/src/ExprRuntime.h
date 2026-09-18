@@ -100,6 +100,6 @@ EvalResult rt_builtin_txid_le_hex(const Value &x);
 EvalResult rt_builtin_ext_addr_str(const Value &a);
 EvalResult rt_builtin_addr_hash_hex(const Value &a);
 EvalResult rt_builtin_out_messages(const Value &x);
-
+EvalResult rt_builtin_state_init(const Value &x);
 
 }  // namespace mch

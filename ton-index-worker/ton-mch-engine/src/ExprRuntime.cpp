@@ -1,6 +1,7 @@
 #include "ExprRuntime.h"
 
 #include "BlockTree.h"
+#include "parse/PSlice.h"
 
 #include "td/utils/base64.h"
 #include "td/utils/misc.h"
@@ -755,6 +756,26 @@ EvalResult rt_builtin_out_messages(const Value &x) {
   return rt_ok(Value::make_list(std::move(out)));
 }
 
+EvalResult rt_builtin_state_init(const Value &x) {
+  if (rt_is_null(x)) return rt_ok(Value::null());
+  if (x.t != VType::Block) {
+    return rt_fault("state_init expects a block, got " + x.describe());
+  }
+  const Block *b = x.block;
+  if (b == nullptr || b->event_nodes.empty() || b->event_nodes.front()->msg == nullptr ||
+      !b->event_nodes.front()->msg->init_state) {
+    return rt_ok(Value::null());
+  }
+  auto r_raw = td::base64_decode(td::Slice(b->event_nodes.front()->msg->init_state->body));
+  if (r_raw.is_error()) return rt_ok(Value::null());
+  auto r_root = vm::std_boc_deserialize(r_raw.move_as_ok());
+  if (r_root.is_error()) return rt_ok(Value::null());
+  auto r_slice = open_ref_cell(r_root.move_as_ok());
+  if (r_slice.is_error()) return rt_ok(Value::null());
+  vm::CellSlice slice = r_slice.move_as_ok();
+  auto r_data = state_init_data_cell(slice);
+  return rt_ok(r_data.is_ok() ? Value::make_cell(r_data.move_as_ok()) : Value::null());
+}
 
 EvalResult rt_builtin_uint_hex(const Value &x) {
   if (rt_is_null(x)) return rt_ok(Value::null());
@@ -914,7 +935,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
       {"get", 2}, {"tx_aborted", 1}, {"exit_code", 1},
       {"uint_hex", 1}, {"ext_addr_str", 1},
       {"txid_le_hex", 1},
-      {"addr_hash_hex", 1}, {"out_messages", 1},
+      {"addr_hash_hex", 1}, {"out_messages", 1}, {"state_init", 1},
   };
   auto ar = arity.find(name);
   if (ar == arity.end()) {
@@ -949,6 +970,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   if (name == "ext_addr_str") return rt_builtin_ext_addr_str(args[0]);
   if (name == "addr_hash_hex") return rt_builtin_addr_hash_hex(args[0]);
   if (name == "out_messages") return rt_builtin_out_messages(args[0]);
+  if (name == "state_init") return rt_builtin_state_init(args[0]);
   return rt_fault("unreachable builtin " + name);
 }
 
