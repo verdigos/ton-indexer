@@ -38,7 +38,7 @@ constexpr std::uint32_t kDedustPayout = 0x474f86cf;
 constexpr std::uint32_t kRejection = 0xe1a36cd4;
 constexpr std::uint32_t kJettonForwardPayload = 0x40e108d6;
 
-// 4-bit kind (0 -> TON, else wc:uint8 + account_id:32 bytes). Advances cs.
+// 4-bit kind (0 -> TON, else wc:int8 + account_id:32 bytes). Advances cs.
 td::Result<Value> load_asset_4(vm::CellSlice &cs) {
   if (!cs.have(4)) {
     return td::Status::Error("asset: kind underflow");
@@ -50,7 +50,7 @@ td::Result<Value> load_asset_4(vm::CellSlice &cs) {
   if (!cs.have(8 + 256)) {
     return td::Status::Error("asset: jetton underflow");
   }
-  auto wc = cs.fetch_ulong(8);
+  auto wc = cs.fetch_long(8);
   unsigned char id[32];
   if (!cs.fetch_bytes(id, 32)) {
     return td::Status::Error("asset: id fetch");

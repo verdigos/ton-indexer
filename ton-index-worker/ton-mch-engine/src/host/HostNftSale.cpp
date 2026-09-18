@@ -299,13 +299,13 @@ EvalResult getgems_auction_init(BuildEnv &env, const std::vector<Value> &args) {
     return rt_ok(Value::null());
   }
   vm::CellSlice cs = r_data.move_as_ok();
-  // "v2" is in the version table but has no auction-data branch, so reject it.
   const std::string version = pick_version(auction_versions(), args[1], "v3r3");
   AuctionInit d;
   td::Status st = td::Status::Error("unsupported auction version");
   if (version == "v1") {
     st = parse_auction_v1(cs, d);
-  } else if (version == "v3r2") {
+  } else if (version == "v2" || version == "v3r2") {
+    // v2 and v3r2 have the same storage layout
     st = parse_auction_v3r2(cs, d);
   } else if (version == "v3r3") {
     st = parse_auction_v3r3(cs, d);
