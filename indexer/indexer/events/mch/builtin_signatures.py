@@ -12,6 +12,7 @@ BUILTIN_SIGNATURES: dict[str, int] = {
     "bytes_of": 1,
     "first": 1,
     "last": 1,
+    "at": 2,
     "len": 1,
     "zip": 2,
     "concat": 2,

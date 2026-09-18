@@ -573,7 +573,7 @@ def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
     if isinstance(e, ast_.Comprehension):
         ctx.bag.error(
             "C013_WHERE_EXPR_NOT_SYNC",
-            "`where (expr)` cannot contain map/any/all comprehensions "
+            "`where (expr)` cannot contain map/any/all/find/stable_sort_by comprehensions "
             "(build-expression only)",
             span,
         )

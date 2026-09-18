@@ -131,13 +131,13 @@ class ParseExpr(Expr):
 
 @dataclass(frozen=True)
 class Comprehension(Expr):
-    """`map|any|all(xs as e => body)` lambda comprehension.
+    """`map|any|all|find|stable_sort_by(xs as e => body)` lambda comprehension.
 
-    `kind` is "map" (list comprehension), "any" or "all" (quantifiers). `var` is
+    `kind` is "map", "any", "all", "find", or "stable_sort_by". `var` is
     the element binder, visible ONLY inside `body` (a new scope frame). No nested
-    comprehensions. Distinct from the `map(xs, "field")` builtin call, which the
+    comprehensions. Distinct from the `map(xs,"f")` builtin call, which the
     parser tells apart by the `as` keyword."""
-    kind: str  # "map" | "any" | "all"
+    kind: str  # "map" | "any" | "all" | "find" | "stable_sort_by"
     xs: Expr
     var: str
     body: Expr

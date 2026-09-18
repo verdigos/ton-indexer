@@ -892,16 +892,16 @@ def _parse_arg_list(s: _ParserState) -> tuple[tuple[ast_.Expr, ...], Span]:
     return tuple(args), end
 
 
-# `any` lexes to KW_ANY (the node-head keyword), `map`/`all` stay plain
-# identifiers.
+# `any` lexes to KW_ANY (the node-head keyword), `map`/`all`/`find`/
+# `stable_sort_by` stay plain identifiers.
 def _at_comprehension(s: _ParserState) -> bool:
-    """True at `map|any|all ( … as … => … )`, the lambda comprehension form,
-    told apart from the `map(xs, "f")` builtin call by an `as` keyword at the
-    argument list's top parenthesis depth."""
+    """True at `map|any|all|find|stable_sort_by ( … as … => … )`, the lambda
+    comprehension form, told apart from the `map(xs, "f")` builtin call by an
+    `as` keyword at the argument list's top parenthesis depth."""
     t = s.peek()
     if t.kind is TokenKind.KW_ANY:
         pass
-    elif t.kind is TokenKind.IDENT and t.text in ("map", "all"):
+    elif t.kind is TokenKind.IDENT and t.text in ("map", "all", "find", "stable_sort_by"):
         pass
     else:
         return False
@@ -925,10 +925,10 @@ def _at_comprehension(s: _ParserState) -> bool:
 
 
 def _parse_comprehension(s: _ParserState) -> ast_.Comprehension:
-    """`map|any|all ( xs as VAR => body )`. VAR binds one element,
-    visible only in `body`."""
+    """`map|any|all|find|stable_sort_by ( xs as VAR => body )`. VAR binds one
+    element, visible only in `body`."""
     head = s.peek()
-    kind = "any" if head.kind is TokenKind.KW_ANY else head.text  # map | all
+    kind = "any" if head.kind is TokenKind.KW_ANY else head.text
     s.i += 1
     s.eat(TokenKind.LPAREN)
     xs = _parse_expr(s)

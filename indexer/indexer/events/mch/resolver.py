@@ -870,7 +870,7 @@ def _check_expr_refs(expr: ast_.Expr, available: set[str], bag: DiagnosticBag,
             if in_comp:
                 bag.error(
                     diagnostics.R024_NESTED_COMPREHENSION,
-                    "nested comprehensions are not allowed; a `map|any|all` "
+                    "nested comprehensions are not allowed; a `map|any|all|find|stable_sort_by` "
                     "comprehension may not appear inside another comprehension",
                     e.span,
                 )

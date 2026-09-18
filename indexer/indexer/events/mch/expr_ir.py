@@ -79,10 +79,12 @@ def emit_expr(e: ast_.Expr) -> dict:
             "nullable": e.nullable,
         }
     if isinstance(e, ast_.Comprehension):
-        # map -> `mapc`; any/all -> `quant` carrying the op.
+        payload = {"xs": emit_expr(e.xs), "var": e.var, "body": emit_expr(e.body)}
         if e.kind == "map":
-            return {"k": "mapc", "xs": emit_expr(e.xs), "var": e.var,
-                    "body": emit_expr(e.body)}
-        return {"k": "quant", "op": e.kind, "xs": emit_expr(e.xs), "var": e.var,
-                "body": emit_expr(e.body)}
+            return {"k": "mapc", **payload}
+        if e.kind == "find":
+            return {"k": "find", **payload}
+        if e.kind == "stable_sort_by":
+            return {"k": "sortc", **payload}
+        return {"k": "quant", "op": e.kind, **payload}
     raise ValueError(f"unsupported expression node {type(e).__name__} in IR emission")

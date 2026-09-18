@@ -11,9 +11,9 @@ re-parse does not round-trip and `.body` silently null-propagates. Read the
 prior matcher's fields via `X.data.<field>` instead of re-parsing."""
 
 R024_NESTED_COMPREHENSION = "R024_NESTED_COMPREHENSION"
-"""A `map|any|all(xs as e => body)` comprehension appears inside another
-comprehension (either the outer `xs` or `body`). Nested comprehensions are
-forbidden: exactly one bound element var per comprehension, no
+"""A `map|any|all|find|stable_sort_by(xs as e => body)` comprehension appears
+inside another comprehension (either the outer `xs` or `body`). Nested
+comprehensions are forbidden: exactly one bound element var per comprehension, no
 comprehension in the iterated list or the body."""
 
 # A capture has conflicting parser lists. Rule-body annotations contribute to

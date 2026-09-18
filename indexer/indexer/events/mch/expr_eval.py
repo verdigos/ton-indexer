@@ -186,6 +186,15 @@ def _builtin_last(xs: Any) -> Any:
     return xs[-1] if xs else None
 
 
+def _builtin_at(xs: Any, i: Any) -> Any:
+    xs = _require_list("at", xs)
+    if isinstance(i, bool) or not isinstance(i, int):
+        raise EvalError(f"at index must be an integer, got {type(i).__name__}")
+    if i < 0 or i >= len(xs):
+        return None
+    return xs[i]
+
+
 def _builtin_len(xs: Any) -> int:
     return len(_require_list("len", xs))
 

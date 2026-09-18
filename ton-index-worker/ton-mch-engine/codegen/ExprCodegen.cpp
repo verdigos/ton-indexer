@@ -187,8 +187,8 @@ class Emitter {
       line("Value v" + num(i) + " = Value::make_dict(Value::Fields{" + join(pairs, ", ") + "});");
       return "v" + num(i);
     }
-    if (k == "mapc" || k == "quant") {
-      return emit_comprehension(e, k == "quant");
+    if (k == "mapc" || k == "quant" || k == "find" || k == "sortc") {
+      return emit_comprehension(e, k);
     }
     if (k == "parse") {
       if (mode_ == EmitMode::Vectors) {
@@ -238,10 +238,10 @@ class Emitter {
     return "if (" + res + ".faulted) return " + res + ";";
   }
 
-  // `map|any|all(xs as VAR => body)` emits the list expression, then a
-  // lambda binding VAR per element, dispatched through the shared rt_mapc /
-  // rt_quant cores shared with the interpreter.
-  std::string emit_comprehension(const Json &e, bool is_quant) {
+  // `map|any|all|find|stable_sort_by(xs as VAR => body)` emits the list
+  // expression, then a lambda binding VAR per element, dispatched through the
+  // shared rt_mapc / rt_quant / rt_find / rt_sortc cores.
+  std::string emit_comprehension(const Json &e, const std::string &kind) {
     if (mode_ == EmitMode::Where) {
       // Load/compile-rejected in a where_expr; defensive fault (sync test_self).
       return bind("rt_fault(\"comprehensions are not evaluable in a `where` clause\")");
@@ -268,9 +268,15 @@ class Emitter {
     emit_block_into(blines);
     line("  return rt_ok(" + bval + ");");
     line("};");
-    if (is_quant) {
+    if (kind == "quant") {
       const std::string is_all = jstr(e, "op") == "all" ? "true" : "false";
       return bind("rt_quant(" + is_all + ", " + xs + ", body" + num(i) + ")");
+    }
+    if (kind == "find") {
+      return bind("rt_find(" + xs + ", body" + num(i) + ")");
+    }
+    if (kind == "sortc") {
+      return bind("rt_sortc(" + xs + ", body" + num(i) + ")");
     }
     return bind("rt_mapc(" + xs + ", body" + num(i) + ")");
   }

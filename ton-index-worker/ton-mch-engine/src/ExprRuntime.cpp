@@ -609,6 +609,20 @@ EvalResult rt_builtin_last(const Value &x) {
   return rt_ok(xs->empty() ? Value::null() : xs->back());
 }
 
+EvalResult rt_builtin_at(const Value &xs, const Value &i) {
+  if (rt_is_null(xs) || rt_is_null(i)) return rt_ok(Value::null());
+  const std::vector<Value> *list = nullptr;
+  if (!bi_require_list(xs, list)) return rt_fault("at expects a list, got " + xs.describe());
+  if (i.t != VType::Int || i.num.is_null()) {
+    return rt_fault("at index must be an integer, got " + i.describe());
+  }
+  if (i.num->sgn() < 0) return rt_ok(Value::null());
+  if (td::cmp(i.num, td::make_refint(static_cast<std::int64_t>(list->size()))) >= 0) {
+    return rt_ok(Value::null());
+  }
+  return rt_ok((*list)[static_cast<std::size_t>(i.num->to_long())]);
+}
+
 EvalResult rt_builtin_len(const Value &x) {
   if (rt_is_null(x)) return rt_ok(Value::null());
   const std::vector<Value> *xs = nullptr;
@@ -796,10 +810,52 @@ EvalResult rt_quant(bool is_all, const Value &xs, const ElementFn &body) {
   return rt_ok(Value::make_bool(result));
 }
 
+EvalResult rt_find(const Value &xs, const ElementFn &pred) {
+  if (rt_is_null(xs)) return rt_ok(Value::null());
+  if (xs.t != VType::List) return rt_fault("find comprehension expects a list, got " + xs.describe());
+  for (const auto &el : *xs.items) {
+    EvalResult r = pred(el);
+    if (r.faulted) return r;
+    EvalResult b = rt_require_bool(r.value);
+    if (b.faulted) return b;
+    if (b.value.boolean) return rt_ok(el);
+  }
+  return rt_ok(Value::null());
+}
+
+EvalResult rt_sortc(const Value &xs, const ElementFn &key) {
+  if (rt_is_null(xs)) return rt_ok(Value::null());
+  if (xs.t != VType::List) {
+    return rt_fault("stable_sort_by comprehension expects a list, got " + xs.describe());
+  }
+  struct Item {
+    Value el;
+    td::RefInt256 k;
+  };
+  std::vector<Item> items;
+  items.reserve(xs.items->size());
+  for (const auto &el : *xs.items) {
+    EvalResult r = key(el);
+    if (r.faulted) return r;
+    if (rt_is_null(r.value)) return rt_fault("stable_sort_by key is null");
+    if (r.value.t != VType::Int && r.value.t != VType::Amount) {
+      return rt_fault("stable_sort_by key must be an integer or Amount, got " + r.value.describe());
+    }
+    if (r.value.num.is_null()) return rt_fault("stable_sort_by key is Amount(None)");
+    items.push_back(Item{el, r.value.num});
+  }
+  std::stable_sort(items.begin(), items.end(),
+                   [](const Item &a, const Item &b) { return cmp(a.k, b.k) < 0; });
+  std::vector<Value> out;
+  out.reserve(items.size());
+  for (auto &it : items) out.push_back(std::move(it.el));
+  return rt_ok(Value::make_list(std::move(out)));
+}
+
 EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &args) {
   static const std::map<std::string, int> arity = {
       {"account", 1}, {"amount", 1},  {"asset", 1}, {"ton_asset", 0},
-      {"addr_none", 0}, {"b64", 1},   {"first", 1}, {"last", 1},
+      {"addr_none", 0}, {"b64", 1},   {"first", 1}, {"last", 1}, {"at", 2},
       {"asset_of", 1}, {"tail_unwrap", 1}, {"bytes_of", 1},
       {"len", 1},     {"zip", 2},     {"map", 2},
       {"concat", 2}, {"contains", 2},
@@ -827,6 +883,7 @@ EvalResult rt_call_builtin(const std::string &name, const std::vector<Value> &ar
   if (name == "bytes_of") return rt_builtin_bytes_of(args[0]);
   if (name == "first") return rt_builtin_first(args[0]);
   if (name == "last") return rt_builtin_last(args[0]);
+  if (name == "at") return rt_builtin_at(args[0], args[1]);
   if (name == "len") return rt_builtin_len(args[0]);
   if (name == "zip") return rt_builtin_zip(args[0], args[1]);
   if (name == "map") return rt_builtin_map(args[0], args[1]);
