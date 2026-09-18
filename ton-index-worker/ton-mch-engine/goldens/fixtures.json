@@ -1394,6 +1394,12 @@
    "name": "dedust withdraw jetton first",
    "slug": "dedust-withdraw-jetton-first",
    "note": "synthetic: built from test_dedust_withdraw.py::test_dedust_withdraw_parity_jetton_first and test_dedust_withdraw.py::test_dedust_withdraw_ir_order_invariant by pyir-w2 lane P; not a chain trace"
+  },
+  "CQ8jm8jS9LVPLG48XLd5hQJxH34Fz-6V0vzp1QOlqy4=": {
+   "group": "nft",
+   "name": "Fragment settle-and-transfer, transfer payload spoofs a bid",
+   "slug": "fragment-settle-transfer-spoofed-bid",
+   "note": "synthetic: composed J4mgK7n4 (real code+state, mc 93495311) with the transfer's ownership_assigned forward_payload replaced by TeleitemBidInfo(1e15); the item forwards the caller payload as is (Fragment nft-item.fc:250-255); excluded from production comparison"
   }
  }
 }

@@ -118,7 +118,12 @@ matcher telegram_nft_assigned {
       <- maybe peek any @payment
 
     require d = telegram_nft_purchase_data(assigned)
-    let is_purchase = d.is_bid and not is_telemint_mint(payment)
+    # An owner's NftTransfer command forwards a caller-chosen payload, so it must not decide the price or the venue.
+    let is_bid = d.is_bid and not (
+        payment != null and payment.btype == "call_contract"
+        and payment.data.opcode == 0x5FCC3D14
+        and payment.data.source != null and payment.data.source == d.prev_owner)
+    let is_purchase = is_bid and not is_telemint_mint(payment)
     # Same venue gate as the purchase matcher; the else branch below carries no
     # marketplace key at all.
     let coll = lookup telemint_collection(d.nft.collection.address) if d.nft.collection != null else null
@@ -128,12 +133,12 @@ matcher telegram_nft_assigned {
     # of price / marketplace / real_prev_owner — and sets real_prev_owner to None
     # explicitly, a PRESENT key holding null. `?:` is omit-when-null, so it can
     # emit either the present-null key or nothing, never one per branch. The
-    # switch condition is `d.is_bid`, which is exactly that branch. No
+    # switch condition is `is_bid`, that branch minus an owner-forwarded spoof. No
     # payout/royalty keys in either branch: this matcher's shapes never reach
     # the parent-absorbing code path — a ton_transfer / external parent belongs
     # to telegram_nft_purchase.
     produces switch {
-        when d.is_bid => nft_transfer out {
+        when is_bid => nft_transfer out {
             is_purchase:          is_purchase
             prev_owner:           d.prev_owner
             new_owner:            d.new_owner
