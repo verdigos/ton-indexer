@@ -35,8 +35,10 @@
 #                           the two legacy parent kinds, payouts attached inside
 #                           each branch (a children block hung off the `or` node
 #                           itself is silently dropped by the engines).
-#   telegram_nft_assigned   the non-consuming branch: anchor plus an optional
-#                           peeked parent. Runs after the purchase matcher.
+#   telegram_nft_assigned   the non-consuming branch: anchor alone, with the
+#                           optional parent and its AuctionFillUp children
+#                           peeked; only purchase rows publish the payout and
+#                           royalty fields. Runs after the purchase matcher.
 #
 # The second matcher peeks its optional parent so the shared core can detect a
 # telemint mint without adding that parent to the consumed set.
@@ -52,8 +54,10 @@
 #   @assigned   the NftOwnershipAssigned anchor
 #   @payment    block.previous_block (the funding ton_transfer, or the external
 #               call that drove the item directly — Fragment signer shape)
-#   @payouts    all payouts, sorted by created_lt: one is the seller payout;
-#               with two or more, at(sorted, 0) is royalty and at(sorted, 1) is seller.
+#   @payouts    all payouts, sorted by created_lt. In the purchase matcher (at
+#               most two): one is the seller, two are royalty then seller. In
+#               the assigned matcher: one is the seller, two are royalty then
+#               seller, three or more publish no payout or royalty field.
 
 import "lib/fragment.mch"
 import "lib/opcodes.mch"
