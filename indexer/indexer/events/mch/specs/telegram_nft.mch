@@ -55,6 +55,7 @@
 #   @payouts    all payouts, sorted by created_lt: one is the seller payout;
 #               with two or more, at(sorted, 0) is royalty and at(sorted, 1) is seller.
 
+import "lib/fragment.mch"
 import "lib/opcodes.mch"
 
 fn is_telemint_mint(p) = p != null and ((p.btype == "call_contract" and p.data.opcode == 0x299a3e15) or p.btype == "nft_mint")
@@ -81,6 +82,10 @@ matcher telegram_nft_purchase {
     # more than two as an unsupported shape instead of dropping money silently.
     reject when len(payouts) > 2
     let is_purchase = d.is_bid and not is_telemint_mint(payment)
+    # Venue label: the collection's stored minter key decides it. An unknown key
+    # (no collection address, or a lookup miss) keeps "fragment"; a known
+    # foreign key drops the label.
+    let coll = lookup telemint_collection(d.nft.collection.address) if d.nft.collection != null else null
     let sorted = stable_sort_by(payouts as p => p.msg.created_lt)
     let n = len(sorted)
     let royalty = at(sorted, 0) if d.is_bid and n > 1 else null
@@ -97,7 +102,7 @@ matcher telegram_nft_purchase {
         nft:                  d.nft
         real_prev_owner:      null
         price:                amount(d.bid) if d.is_bid else null
-        marketplace:          "fragment" if d.is_bid else null
+        marketplace:          fragment_marketplace(coll) if d.is_bid else null
         payout_amount:        get(seller.data, "value")
         payout_address:       get(seller.data, "destination")
         royalty_amount?:      get(royalty.data, "value")
@@ -114,6 +119,9 @@ matcher telegram_nft_assigned {
 
     require d = telegram_nft_purchase_data(assigned)
     let is_purchase = d.is_bid and not is_telemint_mint(payment)
+    # Same venue gate as the purchase matcher; the else branch below carries no
+    # marketplace key at all.
+    let coll = lookup telemint_collection(d.nft.collection.address) if d.nft.collection != null else null
 
     # A `produces switch`, not `?:` keys, because the legacy key set here is
     # BRANCH-shaped, not null-shaped. `payload is TeleitemBidInfo` sets all three
@@ -137,7 +145,7 @@ matcher telegram_nft_assigned {
             nft:                  d.nft
             real_prev_owner:      null
             price:                amount(d.bid)
-            marketplace:          "fragment"
+            marketplace:          fragment_marketplace(coll)
         }
         else => nft_transfer out {
             is_purchase:          is_purchase
