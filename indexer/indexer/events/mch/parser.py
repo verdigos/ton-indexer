@@ -397,22 +397,37 @@ def _ends_in_relations(p: ast_.PatternExpr) -> bool:
 def _parse_atom(s: _ParserState) -> ast_.PatternExpr:
     """atom := node | '(' pattern_expr ')' | rule_ref | children_block
                | ('or' | 'xor') children_block | ('maybe' | 'peek') atom
+               | 'many' ['[' DEC '..' [DEC] ']'] atom
     """
     t = s.peek()
 
     if t.kind is TokenKind.IDENT and t.text == "many":
         s.i += 1
         s.skip_newlines()
-        cap = None
+        lo = 1
+        hi = None
         if s.try_eat(TokenKind.LBRACKET):
             s.skip_newlines()
             n = s.eat(TokenKind.DEC)
-            cap = int(n.text)
+            lo = int(n.text)
             s.skip_newlines()
+            if not s.try_eat(TokenKind.DOT):
+                s.bag.error("C017_MANY", "write many[0..] / many[0..N]", n.span)
+                raise CompileError(s.bag)
+            s.skip_newlines()
+            s.eat(TokenKind.DOT)
+            s.skip_newlines()
+            k = s.try_eat(TokenKind.DEC)
+            if k is not None:
+                hi = int(k.text)
+                s.skip_newlines()
             s.eat(TokenKind.RBRACKET)
             s.skip_newlines()
+            if hi is not None and (lo > hi or hi < 1):
+                s.bag.error("C017_MANY", "many range needs n <= k and k >= 1", t.span)
+                raise CompileError(s.bag)
         inner = _parse_atom(s)
-        return ast_.Many(inner, cap, _join(t.span, inner.span))
+        return ast_.Many(inner, lo, hi, _join(t.span, inner.span))
 
     if t.kind in (TokenKind.KW_MAYBE, TokenKind.KW_PEEK):
         s.i += 1

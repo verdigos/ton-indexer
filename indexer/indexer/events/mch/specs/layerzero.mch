@@ -118,9 +118,9 @@ matcher layerzero_receive {
 # back up to the OApp.
 #
 #     0xdd4ea3b4 -> 0x536feb09 -> 0x4002b790 -> 0x5de68393 -> 0x421c1a25
-#         -> { PacketSent event ; maybe many ton_transfer ; oapp callback -> {…} }
+#         -> { PacketSent event ; many[0..] ton_transfer ; oapp callback -> {…} }
 #
-# `maybe many btype ton_transfer` consumes all remaining refund transfers
+# `many[0..] btype ton_transfer` consumes all remaining refund transfers
 # between the required PacketSent event and the required OApp callback.
 #
 # msglib_send / send_callback carry legacy labels but are NOT captured here:
@@ -143,7 +143,7 @@ matcher layerzero_send {
           -> op UlnUlnSend @uln_send
             -> op ChannelMsglibSendCallback
               -> { op LayerZeroEventMsgBody
-                 ; maybe many btype ton_transfer
+                 ; many[0..] btype ton_transfer
                  ; op LayerzeroChannelSendCallback @oapp_callback as LayerzeroChannelSendCallback
                      -> { maybe op LayerZeroEventMsgBody
                         ; maybe btype ton_transfer } }

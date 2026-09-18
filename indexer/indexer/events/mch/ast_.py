@@ -238,6 +238,7 @@ class Peek(PatternExpr):
 @dataclass(frozen=True)
 class Many(PatternExpr):
     inner: PatternExpr
+    min: int
     max: int | None
     span: Span
 

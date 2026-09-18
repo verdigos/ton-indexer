@@ -424,14 +424,22 @@ def _check_many(pattern, file, recursion, bag):
         if isinstance(p, ast_.Many):
             if recursive:
                 error("`many` cannot be under or contain a recursive rule")
+            if p.min >= 2:
+                error("lower bound above 1 is not supported yet; it arrives with its first consumer")
             inner = p.inner.head if isinstance(p.inner, ast_.Sequence) else p.inner
             if isinstance(inner, ast_.Maybe):
-                error("write `maybe many`, not `many maybe`")
+                error("write many[0..] / many[0..N]")
             if not item:
                 error("`many` requires a children-set item; `->` already takes every match; "
                       "write `-> { many X @xs }` for a list")
             walk(p.inner, repeated=True, head=not repeated, path=path)
         elif isinstance(p, (ast_.Maybe, ast_.Peek)):
+            if isinstance(p, ast_.Maybe):
+                wrapped = p.inner
+                while isinstance(wrapped, ast_.Peek):
+                    wrapped = wrapped.inner
+                if isinstance(wrapped, ast_.Many):
+                    error("write many[0..] / many[0..N]")
             if repeated and isinstance(p, ast_.Maybe):
                 head = False
             walk(p.inner, item, repeated, head, peek or isinstance(p, ast_.Peek), recursive, path)

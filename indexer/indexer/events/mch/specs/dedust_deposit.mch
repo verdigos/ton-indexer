@@ -77,10 +77,10 @@ matcher dedust_deposit_final {
             or {
                 op JettonInternalTransfer -> maybe op JettonNotify
                 op DedustRejection
-                  -> { maybe btype ton_transfer ; maybe many $vault_excess }
+                  -> { maybe btype ton_transfer ; many[0..] $vault_excess }
             }
             ; maybe op DedustDestroyLiquidityDepositContract
-                -> { maybe btype ton_transfer ; maybe many $vault_excess }
+                -> { maybe btype ton_transfer ; many[0..] $vault_excess }
         }
         <- op DedustTopUpLiquidityDepositContract <- op DedustAskLiquidityFactory {
             -> { maybe op DedustDeployDepositContract }

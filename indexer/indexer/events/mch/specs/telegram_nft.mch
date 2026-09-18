@@ -71,20 +71,17 @@ matcher telegram_nft_purchase {
     # are disjoint btypes. The payout children hang off EACH branch, not off the
     # alternative: `_match_or` walks branches only, so children recorded on the
     # `or` node itself would never match and never consume.
+    # The item emits at most royalty + beneficiary.
     op NftOwnershipAssigned @assigned
       <- xor {
              btype ton_transfer @payment
-               -> { many op AuctionFillUp @payouts }
+               -> { many[1..2] op AuctionFillUp @payouts }
              btype call_contract @payment where (.source == null)
-               -> { many op AuctionFillUp @payouts }
+               -> { many[1..2] op AuctionFillUp @payouts }
          }
 
     # Parent-kind gate is the xor above. Royalty fields need two or more payouts.
     require d = telegram_nft_purchase_data(assigned)
-    # The item emits at most two fill-ups (royalty + beneficiary). A third leg
-    # would be captured and consumed yet never surface in the output, so treat
-    # more than two as an unsupported shape instead of dropping money silently.
-    reject when len(payouts) > 2
     let is_purchase = d.is_bid and not is_telemint_mint(payment)
     # Venue label: the collection's stored minter key decides it. An unknown key
     # (no collection address, or a lookup miss) keeps "fragment"; a known
@@ -119,7 +116,7 @@ matcher telegram_nft_assigned {
 
     # The optional parent is observed without changing the anchor-only consumed set.
     op NftOwnershipAssigned @assigned
-      <- maybe peek any @payment -> { maybe peek many op AuctionFillUp @payouts }
+      <- maybe peek any @payment -> { peek many[0..] op AuctionFillUp @payouts }
 
     require d = telegram_nft_purchase_data(assigned)
     # An owner's NftTransfer command forwards a caller-chosen payload, so it must not decide the price or the venue.

@@ -482,10 +482,12 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
     if isinstance(p, ast_.Many):
         inner = _lower_atom(p.inner, ctx)
         if inner.optional:
-            ctx.bag.error("C017_MANY", "write `maybe many`, not `many maybe`", p.span)
+            ctx.bag.error("C017_MANY", "write many[0..] / many[0..N]", p.span)
             raise CompileError(ctx.bag)
         inner.many = True
         inner.max = p.max
+        if p.min == 0:
+            inner.optional = True
         return inner
     if isinstance(p, ast_.Node):
         return _lower_node(p, ctx)

@@ -77,7 +77,7 @@ matcher nominator_pool_withdraw_request {
       -> {
           maybe op Excess
         ; maybe op Bounce
-        ; maybe many [2] btype ton_transfer @payouts
+        ; many[0..2] btype ton_transfer @payouts
       }
 
     require pool_iface = lookup nominator_pool(request.msg.destination)
