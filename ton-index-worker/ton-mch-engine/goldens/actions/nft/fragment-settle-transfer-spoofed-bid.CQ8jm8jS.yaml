@@ -96,7 +96,7 @@ actions:
     value: null
     opcode: null
     nft_listing_data:
-      marketplace_fee_address: null
+      marketplace_fee_address: 0:408DA3B28B6C065A593E10391269BAAA9C5F8CAEBC0C69D9F0AABBAB2A99256B
       royalty_address: null
     nft_transfer_data:
       custom_payload: null
@@ -106,7 +106,7 @@ actions:
       marketplace: fragment
       marketplace_address: null
       nft_item_index: "51093014075194260250203658387302333293474207142255884473970990154066736774081"
-      payout_amount: null
+      payout_amount: 118996588673
       payout_comment: null
       payout_comment_encoded: null
       payout_comment_encrypted: null

@@ -422,8 +422,6 @@ def _check_many(pattern, file, recursion, bag):
             raise CompileError(bag)
 
         if isinstance(p, ast_.Many):
-            if peek or isinstance(p.inner, ast_.Peek):
-                error("`peek many` / `many peek` is not supported")
             if recursive:
                 error("`many` cannot be under or contain a recursive rule")
             inner = p.inner.head if isinstance(p.inner, ast_.Sequence) else p.inner
@@ -434,8 +432,6 @@ def _check_many(pattern, file, recursion, bag):
                       "write `-> { many X @xs }` for a list")
             walk(p.inner, repeated=True, head=not repeated, path=path)
         elif isinstance(p, (ast_.Maybe, ast_.Peek)):
-            if repeated and head and isinstance(p, ast_.Peek):
-                error("`peek many` / `many peek` is not supported")
             if repeated and isinstance(p, ast_.Maybe):
                 head = False
             walk(p.inner, item, repeated, head, peek or isinstance(p, ast_.Peek), recursive, path)

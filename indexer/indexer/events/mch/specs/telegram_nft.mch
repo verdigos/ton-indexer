@@ -115,7 +115,7 @@ matcher telegram_nft_assigned {
 
     # The optional parent is observed without changing the anchor-only consumed set.
     op NftOwnershipAssigned @assigned
-      <- maybe peek any @payment
+      <- maybe peek any @payment -> { maybe peek many op AuctionFillUp @payouts }
 
     require d = telegram_nft_purchase_data(assigned)
     # An owner's NftTransfer command forwards a caller-chosen payload, so it must not decide the price or the venue.
@@ -127,16 +127,18 @@ matcher telegram_nft_assigned {
     # Same venue gate as the purchase matcher; the else branch below carries no
     # marketplace key at all.
     let coll = lookup telemint_collection(d.nft.collection.address) if d.nft.collection != null else null
+    let sorted = stable_sort_by(payouts as p => p.msg.created_lt)
+    let n = len(sorted)
+    let royalty = at(sorted, 0) if is_purchase and n == 2 else null
+    let seller = at(sorted, 1) if is_purchase and n == 2 else (at(sorted, 0) if is_purchase and n == 1 else null)
 
     # A `produces switch`, not `?:` keys, because the legacy key set here is
     # BRANCH-shaped, not null-shaped. `payload is TeleitemBidInfo` sets all three
     # of price / marketplace / real_prev_owner — and sets real_prev_owner to None
     # explicitly, a PRESENT key holding null. `?:` is omit-when-null, so it can
     # emit either the present-null key or nothing, never one per branch. The
-    # switch condition is `is_bid`, that branch minus an owner-forwarded spoof. No
-    # payout/royalty keys in either branch: this matcher's shapes never reach
-    # the parent-absorbing code path — a ton_transfer / external parent belongs
-    # to telegram_nft_purchase.
+    # switch condition is `is_bid`, that branch minus an owner-forwarded spoof.
+    # Payouts come from free fill-up siblings and emit only when is_purchase; a peeked fill-up stays a separate call_contract action.
     produces switch {
         when is_bid => nft_transfer out {
             is_purchase:          is_purchase
@@ -151,6 +153,10 @@ matcher telegram_nft_assigned {
             real_prev_owner:      null
             price:                amount(d.bid)
             marketplace:          fragment_marketplace(coll)
+            payout_amount?:       get(seller.data, "value")
+            payout_address?:      get(seller.data, "destination")
+            royalty_amount?:      get(royalty.data, "value")
+            royalty_address?:     get(royalty.data, "destination")
         }
         else => nft_transfer out {
             is_purchase:          is_purchase
