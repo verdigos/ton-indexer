@@ -89,21 +89,20 @@ matcher tgbtc_mint {
 
     op TgBTCMintHead @head -> $mint_chain
 
-    # HYBRID declarative build (C++-runnable). The core (log parse, endian-hex
-    # bitcoin_txid, jetton_mint asset/wallet) is the one consumed-set-driven host
-    # fn; every produced field maps from its namespace. The ContractDeploy
-    # side-effect children ride on the shaper (see the builder module docstring).
+    # HYBRID declarative build. Host fn: consumed-set role scan, log parse,
+    # jetton_mint asset/wallet, txid hex. sender is the anchor capture;
+    # crippled is the out{} literal. The ContractDeploy side-effect children
+    # ride on the shaper.
     require d = tgbtc_mint_data(consumed)
     out {
-        sender:            d.sender
+        sender:            head.msg.source
         recipient:         d.recipient
         amount:            d.amount
         asset:             d.asset
         bitcoin_txid:      d.bitcoin_txid
-        success:           d.success
         recipient_wallet:  d.recipient_wallet
         teleport_contract: d.teleport_contract
-        crippled:          d.crippled
+        crippled:          false
     }
 }
 

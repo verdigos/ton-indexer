@@ -5,7 +5,6 @@
 #include "BlockTree.h"
 #include "TraceLoader.h"
 
-#include "common/refint.h"
 #include "td/utils/base64.h"
 #include "vm/boc.h"
 
@@ -37,8 +36,7 @@ std::string out_body_hash(const Message &m) {
 }  // namespace
 
 // Scan the request transaction's out-messages for one addressed to the
-// requested destination whose body hash matches. When the request body could
-// not be hashed, fall back to the TON value. Args: request block and its
+// requested destination whose body hash matches. Args: request block and its
 // parsed VestingSendMessage body.
 EvalResult vesting_message_was_sent(BuildEnv &, const std::vector<Value> &args) {
   const Block *send = as_block(args[0]);
@@ -51,7 +49,6 @@ EvalResult vesting_message_was_sent(BuildEnv &, const std::vector<Value> &args) 
     return rt_ok(Value::make_bool(false));
   }
   const Value *want_dest = body.field("message_destination");
-  const Value *want_value = body.field("message_value");
   const Value *want_hash = body.field("message_body_hash");
   if (want_dest == nullptr || want_dest->t != VType::Account) {
     return rt_ok(Value::make_bool(false));
@@ -67,11 +64,6 @@ EvalResult vesting_message_was_sent(BuildEnv &, const std::vector<Value> &args) 
       continue;
     }
     if (!have_hash) {
-      // Could not hash the requested body - fall back to value matching.
-      if (m->value && want_value != nullptr && !want_value->num.is_null() &&
-          td::cmp(want_value->num, td::make_refint(*m->value)) == 0) {
-        return rt_ok(Value::make_bool(true));
-      }
       continue;
     }
     std::string got = out_body_hash(*m);

@@ -930,8 +930,6 @@ void fill_tgbtc_mint(const Value &d, Action &a) {
   a.destination = av_addr(dg(d, "recipient"));
   a.amount = av_amount(dg(d, "amount"));
   a.asset = av_addr(dg(d, "asset"));
-  Value succ = dg(d, "success");
-  a.success = succ.t == VType::Bool && succ.boolean;
   Value::Fields ex;
   ex.emplace_back("btc_txid", dg(d, "bitcoin_txid"));
   a.extra = mkdict(std::move(ex));

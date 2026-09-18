@@ -95,7 +95,7 @@ MintLog parse_mint_log(vm::CellSlice &cs) {
 
 }  // namespace
 
-// 9-field mint record, or Null if head/log/mint is missing or the log is
+// 6-field mint record, or Null if head/log/mint is missing or the log is
 // unparseable.
 EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
   if (args[0].t != VType::List) {
@@ -119,11 +119,6 @@ EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
     return rt_ok(Value::null());  // core: missing piece -> reject
   }
 
-  const Message *hmsg = block_msg(head);
-  Value sender = account_from_opt(hmsg != nullptr ? hmsg->source : std::nullopt);
-
-  // Success flag is set after the log parse; treat a parse failure as reject
-  // rather than keeping a half-built record.
   auto r_body = block_body(success_log);
   if (r_body.is_error()) {
     return rt_ok(Value::null());  // unreadable log -> Null reject
@@ -158,15 +153,12 @@ EvalResult tgbtc_mint_data(BuildEnv &, const std::vector<Value> &args) {
                                       : Value::make_account_none();
 
   Value::Fields ns;
-  ns.emplace_back("sender", std::move(sender));
   ns.emplace_back("recipient", std::move(recipient));
   ns.emplace_back("amount", Value::make_int(std::move(amount)));
   ns.emplace_back("asset", std::move(asset));
   ns.emplace_back("bitcoin_txid", Value::make_str(std::move(bitcoin_txid)));
-  ns.emplace_back("success", Value::make_bool(true));
   ns.emplace_back("recipient_wallet", std::move(recipient_wallet));
   ns.emplace_back("teleport_contract", std::move(teleport_contract));
-  ns.emplace_back("crippled", Value::make_bool(false));
   return rt_ok(Value::make_obj(std::move(ns)));
 }
 

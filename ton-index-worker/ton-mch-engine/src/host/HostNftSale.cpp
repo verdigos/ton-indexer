@@ -263,14 +263,9 @@ bool has_deployment(const Block *b) {
 }  // namespace
 
 
-// A plain ton_transfer/call_contract leaf that deployed at least one
-// contract. `> 0`, not `== 1`: deliberately weaker than nft_mint's
-// single_contract_deploy.
+// Existence of a deployment on the candidate. Btype is gated in the pattern.
+// `> 0`, not `== 1`: deliberately weaker than nft_mint's single_contract_deploy.
 bool sale_contract_deploy(const Block *b) {
-  if (b == nullptr || (b->btype != mch::btype::kTonTransfer &&
-                       b->btype != mch::btype::kCallContract)) {
-    return false;
-  }
   return has_deployment(b);
 }
 

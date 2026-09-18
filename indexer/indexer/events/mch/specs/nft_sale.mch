@@ -64,9 +64,8 @@
 #   fn  getgems_sale_init(block, code_hash)     StateInit parse, per-code-hash
 #   fn  getgems_auction_init(block, code_hash)  version dispatch (getgems.py
 #                                               get_sale_data / get_auction_data)
-#   pred sale_contract_deploy                   btype in {ton_transfer,
-#                                               call_contract} AND
-#                                               len(contract_deployments) > 0
+#   pred sale_contract_deploy                   len(contract_deployments) > 0
+#                                               (btype gate is the xor on the node)
 #
 # Differences from the runtime matchers:
 #  - `NftCancelSaleMatcher` / `NftCancelAuctionMatcher` reach the collection via
@@ -130,7 +129,10 @@ matcher nft_put_on_sale {
     include_excess  false
 
     btype nft_transfer @listing
-      -> { pred sale_contract_deploy @sale_init
+      -> { xor {
+               btype ton_transfer @sale_init where sale_contract_deploy
+               btype call_contract @sale_init where sale_contract_deploy
+           }
          ; btype nft_transfer @to_sale }
 
     reject when account(to_sale.data.nft.address) != account(listing.data.nft.address)
