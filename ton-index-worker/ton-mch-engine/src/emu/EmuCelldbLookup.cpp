@@ -10,6 +10,8 @@
 #include "smc-interfaces/Tokens.h"
 
 #include <map>
+#include <mutex>
+#include <unordered_map>
 #include <utility>
 
 namespace mch {
@@ -54,6 +56,7 @@ const schema::AccountState *EmuCelldbTier2::account(const block::StdAddress &add
 Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &addr) {
   enum class Handler {
     JvaultAssets,
+    TelemintCollection,
     JettonWallet,
     DedustPool,
     NominatorPool,
@@ -64,6 +67,7 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
   };
   static const std::map<std::string, Handler> handlers = {
       {"jvault_assets", Handler::JvaultAssets},
+      {"telemint_collection", Handler::TelemintCollection},
       {"jetton_wallet", Handler::JettonWallet},
       {"dedust_pool", Handler::DedustPool},
       {"nominator_pool", Handler::NominatorPool},
@@ -78,6 +82,9 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
   }
   if (handler->second == Handler::JvaultAssets) {
     return jvault_assets(addr);
+  }
+  if (handler->second == Handler::TelemintCollection) {
+    return telemint_collection(addr);
   }
 
   const schema::AccountState *st = account(addr);
@@ -161,6 +168,7 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
       break;
     }
     case Handler::JvaultAssets:
+    case Handler::TelemintCollection:
       break;
   }
   if (!iface) {
@@ -170,6 +178,32 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
   // from the cell-db state the detector just ran on.
   set_nft_code_hash(*iface, *st);
   return ParsedBlockLookupSource::iface_value(kind, *iface);
+}
+
+Value EmuCelldbTier2::telemint_collection(const block::StdAddress &addr) {
+  static std::mutex mu;
+  static std::unordered_map<block::StdAddress, std::string> positive;
+  {
+    std::lock_guard<std::mutex> lock(mu);
+    auto it = positive.find(addr);
+    if (it != positive.end()) {
+      return telemint_collection_record(it->second);
+    }
+  }
+  const schema::AccountState *st = account(addr);
+  if (st == nullptr || st->code.is_null() || st->data.is_null()) {
+    return Value::null();
+  }
+  td::Bits256 code_hash{st->code->get_hash().bits()};
+  auto key = telemint_collection_key(code_hash, st->data);
+  if (!key) {
+    return Value::null();
+  }
+  {
+    std::lock_guard<std::mutex> lock(mu);
+    positive.emplace(addr, *key);
+  }
+  return telemint_collection_record(*key);
 }
 
 Value EmuCelldbTier2::jvault_assets(const block::StdAddress &stake_wallet) {

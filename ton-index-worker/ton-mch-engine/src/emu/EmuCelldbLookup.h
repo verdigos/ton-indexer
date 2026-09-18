@@ -41,6 +41,7 @@ class EmuCelldbTier2 {
 
   Value resolve(const std::string &kind, const block::StdAddress &addr);
   Value jvault_assets(const block::StdAddress &stake_wallet);
+  Value telemint_collection(const block::StdAddress &addr);
 
   const AllShardStates *shard_states_;
   std::shared_ptr<block::ConfigInfo> config_;

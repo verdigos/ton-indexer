@@ -1,6 +1,7 @@
 #include "FixtureLookupSource.h"
 
 #include "parse/PSlice.h"  // load_address_py
+#include "ParsedBlockLookupSource.h"
 
 #include "td/utils/base64.h"
 #include "vm/boc.h"
@@ -52,6 +53,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     NominatorPool,
     DedustPool,
     JvaultAssets,
+    TelemintCollection,
   };
   static const std::map<std::string, Handler> handlers = {
       {"jetton_wallet", Handler::JettonWallet},
@@ -62,6 +64,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
       {"nominator_pool", Handler::NominatorPool},
       {"dedust_pool", Handler::DedustPool},
       {"jvault_assets", Handler::JvaultAssets},
+      {"telemint_collection", Handler::TelemintCollection},
   };
   auto handler = handlers.find(kind);
   if (handler == handlers.end()) {
@@ -227,6 +230,42 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     }
     return make_record(Value::make_asset_jetton(jetton->str));
   }
+    case Handler::TelemintCollection: {
+      auto it = interfaces_->find(addr);
+      if (it == interfaces_->end()) {
+        it = interfaces_->find(upper_ascii(addr));
+      }
+      if (it == interfaces_->end()) {
+        return Value::null();
+      }
+      const Value *hash_str = it->second.field("code_hash");
+      const Value *boc_str = it->second.field("data_boc");
+      if (hash_str == nullptr || hash_str->t != VType::Str || boc_str == nullptr ||
+          boc_str->t != VType::Str) {
+        return Value::null();
+      }
+      td::Bits256 code_hash;
+      if (code_hash.from_hex(hash_str->str) < 0) {
+        return Value::null();
+      }
+      try {
+        auto r_raw = td::base64_decode(td::Slice(boc_str->str));
+        if (r_raw.is_error()) {
+          return Value::null();
+        }
+        auto r_cell = vm::std_boc_deserialize(r_raw.move_as_ok());
+        if (r_cell.is_error() || r_cell.ok().is_null()) {
+          return Value::null();
+        }
+        auto key = telemint_collection_key(code_hash, r_cell.move_as_ok());
+        if (!key) {
+          return Value::null();
+        }
+        return telemint_collection_record(std::move(*key));
+      } catch (...) {
+        return Value::null();
+      }
+    }
   }
   return Value::null();
 }

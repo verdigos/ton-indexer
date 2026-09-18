@@ -13,6 +13,7 @@
 #include "common/refint.h"
 #include "td/utils/base64.h"
 #include "vm/cells/CellBuilder.h"
+#include "vm/boc.h"
 
 #include <cstdio>
 #include <map>
@@ -345,6 +346,51 @@ void test_jvault_parsers() {
   }
 }
 
+void test_telemint_collection_parser() {
+  // Real Usernames and Eternal Roses collection data cells.
+  const char *usernames_boc =
+      "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";
+  const char *roses_boc =
+      "te6ccgEBBQEAsQAESYAAAArfHQ3koaSxignNG3FVwvqf99rxlgTH82d8KEprZvXkTEABAgMEAGoBaHR0cHM6Ly9uZnQuZnJhZ21lbnQuY29tL2NvbGxlY3Rpb24vZXRlcm5hbHJvc2UuanNvbghCApHZ4qwWn8eFzgDeCoGvJ2Irm30XZEFcd15+UMA86YqiAAQBAABLAAUAZIANHnQO2mijQx+oPAuONpgECouo1k6uDJzLBLvaGJN+BZA=";
+
+  auto cell_of = [](const char *b64) -> td::Ref<vm::Cell> {
+    auto r = td::base64_decode(td::Slice(b64));
+    if (r.is_error()) {
+      return {};
+    }
+    auto c = vm::std_boc_deserialize(r.move_as_ok());
+    if (c.is_error()) {
+      return {};
+    }
+    return c.move_as_ok();
+  };
+
+  td::Bits256 dns;
+  dns.from_hex("4d4eb9bfa2b210d890833a712be244081fddadb07f031f361ea5cf7f1a130651");
+  td::Bits256 no_dns;
+  no_dns.from_hex("88410c220f822181668269ce83eb9cc0d3b39c21999c8b55de03360a20e7c282");
+  td::Bits256 foreign;
+  foreign.set_zero();
+
+  auto usernames = cell_of(usernames_boc);
+  auto roses = cell_of(roses_boc);
+  check("telemint/usernames_cell", usernames.not_null());
+  check("telemint/roses_cell", roses.not_null());
+
+  auto uk = telemint_collection_key(dns, usernames);
+  check("telemint/usernames_key",
+        uk && *uk == "71de902f194a53293a0aa982070ca71acdbda490056d0ee8e821cc088451cda9");
+  auto rk = telemint_collection_key(no_dns, roses);
+  check("telemint/roses_key",
+        rk && *rk == "be3a1bc943496314139a36e2ab85f53fefb5e32c098fe6cef85094d6cdebc898");
+  check("telemint/foreign_hash_nullopt", !telemint_collection_key(foreign, usernames).has_value());
+  vm::CellBuilder short_cb;
+  short_cb.store_zeroes(288);
+  check("telemint/short_cell_nullopt",
+        !telemint_collection_key(dns, short_cb.finalize()).has_value());
+}
+
+
 // A tier-2 instance over a fixed account map. config is null on purpose: the
 // jvault chain needs none, and the jetton_wallet leg then degrades exactly as it
 // would when the detector fails.
@@ -571,6 +617,7 @@ int run_celldb_tier2_test() {
   test_nft_code_hash();
   test_nominator_predicate();
   test_jvault_parsers();
+  test_telemint_collection_parser();
   test_jvault_hook();
   test_memo_and_guards();
   test_two_tier_routing();
