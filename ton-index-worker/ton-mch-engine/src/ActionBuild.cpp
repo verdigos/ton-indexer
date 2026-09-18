@@ -1434,7 +1434,7 @@ void fill_auction_outbid(const Value &d, Action &a) {
   a.nft_transfer_data = mkdict(std::move(t));
   a.amount = av_amount(dg(d, "amount"));
   Value::Fields tt;
-  tt.emplace_back("comment", dg(d, "comment"));
+  tt.emplace_back("content", dg(d, "comment"));
   a.ton_transfer_data = mkdict(std::move(tt));
   push_account(a, a.asset_secondary);
 }
