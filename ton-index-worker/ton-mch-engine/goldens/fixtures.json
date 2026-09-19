@@ -1468,6 +1468,18 @@
    "name": "getgems dual payout, owner leg is the payout (api-sourced)",
    "slug": "getgems-dual-payout-owner-leg",
    "note": "api-sourced, not synthetic: interfaces from API get-methods (toncenter v2 runGetMethodStd) at mc 92792879 (the trace's mc seqno), built 2026-09-19 by tests/utils/api_fixture.py; trace 7ea01c01… from the sign-off comparator run; GetGems v3r3 sales with two TON legs to the same owner, payout_amount = the owner leg (price - fee - royalty), not the royalty leg"
+  },
+  "2fRvx_087KHoYhZfp2QzslArb4FdUEsbbRjSIeUDgMY=": {
+   "group": "jetton-mints",
+   "name": "jetton mint 0x642b7d07 chain (api-sourced)",
+   "slug": "jetton-mint-0x642b7d07-chain",
+   "note": "api-sourced, not synthetic: interfaces from API get-methods (toncenter v2 runGetMethodStd) at mc 91215721 (the trace's mc seqno), built 2026-09-19 by tests/utils/api_fixture.py; trace d9f46fc7… from the sign-off comparator run; pins jetton_mint for the 0x642b7d07 mint chain"
+  },
+  "ujWM2IApMQAaYi_oBO5VWgPJj258sUBZRi52gesSB-A=": {
+   "group": "stonfi-v2-swaps",
+   "name": "stonfi v2 deposit slot order (api-sourced)",
+   "slug": "stonfi-v2-deposit-slot-order",
+   "note": "api-sourced, not synthetic: interfaces from API get-methods (toncenter v2 runGetMethodStd) at mc 93104681 (the trace's mc seqno), built 2026-09-19 by tests/utils/api_fixture.py; trace ba358cd8… from the sign-off comparator run; pins post_process_stonfi_v2_liquidity canonical (depth, min_lt) slot order"
   }
  }
 }

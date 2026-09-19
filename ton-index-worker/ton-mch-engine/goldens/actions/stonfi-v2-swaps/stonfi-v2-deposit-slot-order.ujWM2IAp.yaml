@@ -1,0 +1,165 @@
+# stonfi-v2-swaps / stonfi v2 deposit slot order (api-sourced)
+# note: api-sourced, not synthetic: interfaces from API get-methods (toncenter v2 runGetMethodStd) at mc 93104681 (the trace's mc seqno), built 2026-09-19 by tests/utils/api_fixture.py; trace ba358cd8… from the sign-off comparator run; pins post_process_stonfi_v2_liquidity canonical (depth, min_lt) slot order
+# trace: ujWM2IApMQAaYi_oBO5VWgPJj258sUBZRi52gesSB-A=
+actions:
+  - type: contract_deploy
+    anchor: contract_deploy#178d4519@103878379000004
+    id: 1LpqngB7vNdRzMXzJ/+sGDLL3qoIUDdYi7sdJMP3gwQ=
+    success: true
+    source: 0:79C37F57570D5FFB8B690E7E866FB7352EA9A1873AAD49EEE498C34AB6A7AA07
+    source_secondary: null
+    destination: 0:342D2B0B1365C50E3AE957AB9519FE65ADCF32677B2104A4A5A04EE9C909EF11
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 298644331
+    opcode: 0x178d4519
+    tx_hashes:
+      - AG2cwlqCBAuCLDxT0XxbhNzANyaLpWJn5STqzCzg9Bo=
+      - uPMjL+t3XAe+F8nrDmITL4arcvLpze/vpA8cP9MgOl8=
+    accounts:
+      - 0:342D2B0B1365C50E3AE957AB9519FE65ADCF32677B2104A4A5A04EE9C909EF11
+      - 0:79C37F57570D5FFB8B690E7E866FB7352EA9A1873AAD49EEE498C34AB6A7AA07
+    start_lt: 103878379000004
+    end_lt: 103878379000005
+    start_utime: 1789569294
+    end_utime: 1789569294
+    mc_seqno_end: 93104681
+  - type: contract_deploy
+    anchor: contract_deploy#178d4519@103878379000016
+    id: 9B9MzeQtovLE7B/dPaXMx4m5PyAZLYe3w23H+ROqoB0=
+    success: true
+    source: 0:2A8A8ACBB1BB9571AD7ED6FCCEAA6F4B909F3CAD8552238E84806C87132AC32C
+    source_secondary: null
+    destination: 0:785CC2CDE5717674C25A6740C2952A7F999B62DC5AB72A44A74AF52E4BEC721B
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 231069925
+    opcode: 0x178d4519
+    tx_hashes:
+      - 1vXJXLJYvKXY2VlzsNdWX6n5Oc1EiL+vpwidJEsVGS4=
+      - GCTGdA5n0GUrIBoDte/FvTaUZy1NrNMoAwRqkWVJ/Aw=
+    accounts:
+      - 0:2A8A8ACBB1BB9571AD7ED6FCCEAA6F4B909F3CAD8552238E84806C87132AC32C
+      - 0:785CC2CDE5717674C25A6740C2952A7F999B62DC5AB72A44A74AF52E4BEC721B
+    start_lt: 103878379000016
+    end_lt: 103878379000017
+    start_utime: 1789569294
+    end_utime: 1789569294
+    mc_seqno_end: 93104681
+  - type: contract_deploy
+    anchor: contract_deploy#37c096df@103878379000008
+    id: yc0EPtTEjRNGbkePQH4Pyy3AGH0khzEw16AT+e6lU/Q=
+    success: true
+    source: 0:320FB3BC0AF55D47C00425CAFDE9F1C8D627C5AB6D52F1032DD5CCE2E487C93F
+    source_secondary: null
+    destination: 0:2A8A8ACBB1BB9571AD7ED6FCCEAA6F4B909F3CAD8552238E84806C87132AC32C
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 233458583
+    opcode: 0x37c096df
+    tx_hashes:
+      - 237a/WhJgzkkE5ieUao1fZQxuM3rIFrSg0hZNkNlY/M=
+      - Z/149yFb74MFjIj1HMCLz8CR9GptiSyG2QYS5XlfH3E=
+    accounts:
+      - 0:2A8A8ACBB1BB9571AD7ED6FCCEAA6F4B909F3CAD8552238E84806C87132AC32C
+      - 0:320FB3BC0AF55D47C00425CAFDE9F1C8D627C5AB6D52F1032DD5CCE2E487C93F
+    start_lt: 103878379000008
+    end_lt: 103878379000009
+    start_utime: 1789569294
+    end_utime: 1789569294
+    mc_seqno_end: 93104681
+  - type: contract_deploy
+    anchor: contract_deploy#50c6a654@103878379000010
+    id: ldEBB5gi2Lbn9UIXvzkU972UjywXyYy5OGHZCLF1OQs=
+    success: true
+    source: 0:2A8A8ACBB1BB9571AD7ED6FCCEAA6F4B909F3CAD8552238E84806C87132AC32C
+    source_secondary: null
+    destination: 0:31DECFA82F27FDE5960C62950495932DE862CDC57C3FD30452F2205362E7EAAE
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 222303447
+    opcode: 0x50c6a654
+    tx_hashes:
+      - 237a/WhJgzkkE5ieUao1fZQxuM3rIFrSg0hZNkNlY/M=
+      - gs+/XCiGc0fX5QfWFjIDJoGkFeHZ4gbmC09uzgvUGL4=
+    accounts:
+      - 0:2A8A8ACBB1BB9571AD7ED6FCCEAA6F4B909F3CAD8552238E84806C87132AC32C
+      - 0:31DECFA82F27FDE5960C62950495932DE862CDC57C3FD30452F2205362E7EAAE
+    start_lt: 103878379000010
+    end_lt: 103878379000011
+    start_utime: 1789569294
+    end_utime: 1789569294
+    mc_seqno_end: 93104681
+  - type: dex_deposit_liquidity
+    matcher: stonfi_v2_provide_final
+    anchor: dex_deposit_liquidity@103878379000002
+    id: ZDU5nGkeWnTRmXugHPiRLc+hGOphVfOISNAdHAJ8bjk=
+    success: true
+    source: 0:218DE4E5E1CC58F5C3777B730BE3213037F69F6416065BB33CFF112F35754EAA
+    source_secondary: null
+    destination: 0:2A8A8ACBB1BB9571AD7ED6FCCEAA6F4B909F3CAD8552238E84806C87132AC32C
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    dex_deposit_liquidity_data:
+      amount1: 13000000
+      amount2: 13000000000
+      asset1: 0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE
+      asset2: 0:3B713602B11D7B1CC88966553611448183FB12D4B9B808AA43E078F9786BE6DA
+      dex: stonfi_v2
+      lp_tokens_minted: 411095094
+      user_jetton_wallet_1: 0:8314B360302089727E02EABFC6F5F2EECE634BFEDD26B8F22C3FEA2DFA75CD18
+      user_jetton_wallet_2: 0:79C37F57570D5FFB8B690E7E866FB7352EA9A1873AAD49EEE498C34AB6A7AA07
+    tx_hashes:
+      - 1vXJXLJYvKXY2VlzsNdWX6n5Oc1EiL+vpwidJEsVGS4=
+      - 237a/WhJgzkkE5ieUao1fZQxuM3rIFrSg0hZNkNlY/M=
+      - 8oKQxoIi9HmtHw/c8vH7GNqbl8IFI0MxEPC+kA6wMUE=
+      - AG2cwlqCBAuCLDxT0XxbhNzANyaLpWJn5STqzCzg9Bo=
+      - GCTGdA5n0GUrIBoDte/FvTaUZy1NrNMoAwRqkWVJ/Aw=
+      - MuGolYUiV1uuAuA0lfZlQAVW7zf/lalOHCUmlRDzCYM=
+      - PcfoZQOttOMqH+coDjBxZM/X5lGgi2ppfHLgjLXH+Cg=
+      - Sl51IEHQx01u4IrPDFICLTHw7liReJtZd1wJMvh1grQ=
+      - ThLNzYv5L2JfDe1H9I+zyFomRY7LqJHIklWnKutesGU=
+      - Yz9A3rxh6N5Wcmm2DfKb+lhlOzaOPmkRd5Gkb21C5PE=
+      - Z/149yFb74MFjIj1HMCLz8CR9GptiSyG2QYS5XlfH3E=
+      - gs+/XCiGc0fX5QfWFjIDJoGkFeHZ4gbmC09uzgvUGL4=
+      - lpFcX8wKMbgXhQDt+fyyCzruJ5r713tybmLcRSAqavo=
+      - nTLU9eLyfgEnoVc604TBFP1tkEZ+i/q29i/lopRdt+0=
+      - uPMjL+t3XAe+F8nrDmITL4arcvLpze/vpA8cP9MgOl8=
+      - xt8SkTbcNtIIMVUS891LA04/fhFCSCsPjf1GutrocLg=
+    accounts:
+      - 0:218DE4E5E1CC58F5C3777B730BE3213037F69F6416065BB33CFF112F35754EAA
+      - 0:2A8A8ACBB1BB9571AD7ED6FCCEAA6F4B909F3CAD8552238E84806C87132AC32C
+      - 0:30785B49924473F4F57F543207908743D0618788ABCFF35BCE6F18DD1B8FD970
+      - 0:31DECFA82F27FDE5960C62950495932DE862CDC57C3FD30452F2205362E7EAAE
+      - 0:320FB3BC0AF55D47C00425CAFDE9F1C8D627C5AB6D52F1032DD5CCE2E487C93F
+      - 0:342D2B0B1365C50E3AE957AB9519FE65ADCF32677B2104A4A5A04EE9C909EF11
+      - 0:785CC2CDE5717674C25A6740C2952A7F999B62DC5AB72A44A74AF52E4BEC721B
+      - 0:79C37F57570D5FFB8B690E7E866FB7352EA9A1873AAD49EEE498C34AB6A7AA07
+      - 0:8314B360302089727E02EABFC6F5F2EECE634BFEDD26B8F22C3FEA2DFA75CD18
+    start_lt: 103878379000002
+    end_lt: 103878379000019
+    start_utime: 1789569294
+    end_utime: 1789569294
+    mc_seqno_end: 93104681
