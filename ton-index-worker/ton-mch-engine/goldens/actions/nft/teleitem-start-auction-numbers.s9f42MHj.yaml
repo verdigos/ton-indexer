@@ -1,0 +1,75 @@
+# nft / teleitem start auction (Numbers)
+# note: Numbers item 0:9DB0E1DC…, mc 93200064
+# trace: s9f42MHj95A2xmDTz--g2k-Ux08haA11743gA5oA2mM=
+actions:
+  - type: call_contract
+    anchor: call_contract#487a8e81@103975267000002
+    id: /LpqMMqOXuzivTxm6wCNMbqKkVhRPMgY7wy+u617x60=
+    success: true
+    source: 0:903029BAB0C3AD67CA3BE6C16C71D4B21F500B0A946015427A33B63ECD94E4F8
+    source_secondary: null
+    destination: 0:9DB0E1DCAB9869D57C7F4414FC5ACFFB478D2AC3D9F059507584B09043342366
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 516000
+    opcode: 0x487a8e81
+    tx_hashes:
+      - XGO0YgzJdvnOEPaOBknk8XdaSI/8CMgV/qkH5Q6OhGU=
+      - s9f42MHj95A2xmDTz++g2k+Ux08haA11743gA5oA2mM=
+    accounts:
+      - 0:903029BAB0C3AD67CA3BE6C16C71D4B21F500B0A946015427A33B63ECD94E4F8
+      - 0:9DB0E1DCAB9869D57C7F4414FC5ACFFB478D2AC3D9F059507584B09043342366
+    start_lt: 103975267000002
+    end_lt: 103975267000003
+    start_utime: 1789608019
+    end_utime: 1789608019
+    mc_seqno_end: 93200064
+    parent_action_id: ICbWEy+9bnwP3bmJxWybqy482tYCnEilgq6i79Z3Zt0=
+    ancestor_type:
+      - teleitem_start_auction
+  - type: teleitem_start_auction
+    matcher: teleitem_start_auction
+    anchor: teleitem_start_auction@103975267000002
+    id: ICbWEy+9bnwP3bmJxWybqy482tYCnEilgq6i79Z3Zt0=
+    success: true
+    source: 0:903029BAB0C3AD67CA3BE6C16C71D4B21F500B0A946015427A33B63ECD94E4F8
+    source_secondary: null
+    destination: 0:9DB0E1DCAB9869D57C7F4414FC5ACFFB478D2AC3D9F059507584B09043342366
+    destination_secondary: null
+    asset: 0:0E41DC1DC3C9067ED24248580E12B3359818D83DEE0304FABCF80845EAFAFDB2
+    asset_secondary: 0:9DB0E1DCAB9869D57C7F4414FC5ACFFB478D2AC3D9F059507584B09043342366
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    nft_listing_data:
+      full_price: null
+      marketplace: fragment
+      marketplace_fee: null
+      marketplace_fee_address: 0:D0237ACF80EF60527BF0CC6A4EE39B59621A6FEB907E5616153CEF16C924EFFB
+      max_bid: 3399000000000
+      min_bid: 3299000000000
+      mp_fee_base: 0
+      mp_fee_factor: 0
+      nft_item_index: "94033624572866562520644040856138863518795983402233091605220508911761665390946"
+      royalty_address: null
+      royalty_amount: null
+      royalty_fee_base: 0
+    nft_transfer_data:
+      marketplace_address: null
+    tx_hashes:
+      - XGO0YgzJdvnOEPaOBknk8XdaSI/8CMgV/qkH5Q6OhGU=
+      - s9f42MHj95A2xmDTz++g2k+Ux08haA11743gA5oA2mM=
+    accounts:
+      - 0:903029BAB0C3AD67CA3BE6C16C71D4B21F500B0A946015427A33B63ECD94E4F8
+      - 0:9DB0E1DCAB9869D57C7F4414FC5ACFFB478D2AC3D9F059507584B09043342366
+    start_lt: 103975267000002
+    end_lt: 103975267000003
+    start_utime: 1789608019
+    end_utime: 1789608019
+    mc_seqno_end: 93200064

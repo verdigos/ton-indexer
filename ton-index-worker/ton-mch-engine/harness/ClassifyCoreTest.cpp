@@ -283,10 +283,11 @@ void link_child(Transaction *parent, Transaction *child) {
   parent->messages.push_back(std::move(out));
 }
 
-// `fragment` only stamps the content URI, which is display metadata: the
-// teleitem gate reads the collection, so Fragment fixtures pass it explicitly.
+// The content URI is display metadata; the teleitem gate reads the item's
+// Telemint interface, which Fragment fixtures carry unless `telemint` says otherwise.
 void add_nft_item(TraceContext &ctx, const std::string &address, bool fragment = false,
-                  bool dns = false, const std::string &collection = kCollection) {
+                  bool dns = false, const std::string &collection = kCollection,
+                  std::optional<bool> telemint = std::nullopt) {
   Value::Fields content{{"uri", Value::make_str(fragment ? "https://nft.fragment.com/item" : "")}};
   Value::Fields item{{"address", Value::make_str(address)},
                      {"init", Value::make_bool(true)},
@@ -295,8 +296,11 @@ void add_nft_item(TraceContext &ctx, const std::string &address, bool fragment =
                      {"owner_address", Value::make_str(kOwner)},
                      {"content", Value::make_dict(std::move(content))},
                      {"code_hash", Value::make_str(dns ? "i1/8nr/TkGTY1fVuRlnIJrt1k5I/XKSHKL5NYK9vUfk=" : "")}};
-  ctx.trace.interfaces[address] =
-      Value::make_dict({{"NftItem", Value::make_dict(std::move(item))}});
+  Value::Fields ifaces{{"NftItem", Value::make_dict(std::move(item))}};
+  if (telemint.value_or(fragment)) {
+    ifaces.emplace_back("Telemint", Value::make_dict(Value::Fields{}));
+  }
+  ctx.trace.interfaces[address] = Value::make_dict(std::move(ifaces));
 }
 
 void add_nft_auction(TraceContext &ctx, const std::string &code_hash) {
@@ -419,10 +423,10 @@ void test_auction_bid_item_families_and_negatives() {
           !result.failure && produced_count(result, "auction_bid") == 0);
   }
 
-  // A Fragment content URI alone does not make a teleitem.
+  // A Fragment content URI without a Telemint interface is not a teleitem.
   TraceContext ctx;
   add_transaction(ctx, "fragment_uri_foreign_collection", 100, kNft, kBidder, kNft, 0, 10);
-  add_nft_item(ctx, kNft, true, false, kCollection);
+  add_nft_item(ctx, kNft, true, false, kCollection, /*telemint=*/false);
   finish_trace(ctx, "fragment_uri_foreign_collection");
   ClassifyResult result = classify_production(ctx);
   check("auction_bid/item/fragment_uri_foreign_collection",

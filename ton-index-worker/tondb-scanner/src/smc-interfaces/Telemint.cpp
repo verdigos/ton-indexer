@@ -93,9 +93,10 @@ void TelemintContract::start_up()
   }
 
   // 3. Get auction config (returns nulls if no auction, doesn't throw)
-  auto auction_config_r = execute_smc_method<6>(address_, code_cell_, data_cell_, config_, "get_telemint_auction_config", {},
-            {vm::StackEntry::Type::t_slice, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int,
-             vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int, vm::StackEntry::Type::t_int});
+  auto auction_config_r = execute_smc_method_nullable<6>(address_, code_cell_, data_cell_, config_, "get_telemint_auction_config", {},
+            {nullable(vm::StackEntry::Type::t_slice), nullable(vm::StackEntry::Type::t_int),
+             nullable(vm::StackEntry::Type::t_int), nullable(vm::StackEntry::Type::t_int),
+             nullable(vm::StackEntry::Type::t_int), nullable(vm::StackEntry::Type::t_int)});
 
   if (auction_config_r.is_error()) {
     promise_.set_error(auction_config_r.move_as_error_prefix("get_telemint_auction_config failed: "));
@@ -105,25 +106,25 @@ void TelemintContract::start_up()
 
   auto auction_config_stack = auction_config_r.move_as_ok();
 
-  // Parse beneficiary_address (can be null)
-  auto beneficiary_slice = auction_config_stack[0].as_slice();
-  if (beneficiary_slice->size() > 0) {
-    auto beneficiary_address = convert::to_std_address(beneficiary_slice);
-    if (beneficiary_address.is_error()) {
-      promise_.set_error(beneficiary_address.move_as_error_prefix("beneficiary address parsing failed: "));
-      stop();
-      return;
+  if (auction_config_stack[0].type() != vm::StackEntry::Type::t_null) {
+    // Parse beneficiary_address (can be null)
+    auto beneficiary_slice = auction_config_stack[0].as_slice();
+    if (beneficiary_slice->size() > 0) {
+      auto beneficiary_address = convert::to_std_address(beneficiary_slice);
+      if (beneficiary_address.is_error()) {
+        promise_.set_error(beneficiary_address.move_as_error_prefix("beneficiary address parsing failed: "));
+        stop();
+        return;
+      }
+      data.beneficiary_address = beneficiary_address.move_as_ok();
     }
-    data.beneficiary_address = beneficiary_address.move_as_ok();
-  } else {
-    data.beneficiary_address = std::nullopt;
-  }
 
-  data.initial_min_bid = auction_config_stack[1].as_int();
-  data.max_bid = auction_config_stack[2].as_int();
-  data.min_bid_step = auction_config_stack[3].as_int();
-  data.min_extend_time = auction_config_stack[4].as_int()->to_long();
-  data.duration = auction_config_stack[5].as_int()->to_long();
+    data.initial_min_bid = auction_config_stack[1].as_int();
+    data.max_bid = auction_config_stack[2].as_int();
+    data.min_bid_step = auction_config_stack[3].as_int();
+    data.min_extend_time = auction_config_stack[4].as_int()->to_long();
+    data.duration = auction_config_stack[5].as_int()->to_long();
+  }
 
   // 4. Get royalty params
   auto royalty_r = execute_smc_method<3>(address_, code_cell_, data_cell_, config_, "royalty_params", {},

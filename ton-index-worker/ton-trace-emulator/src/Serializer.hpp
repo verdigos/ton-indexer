@@ -763,7 +763,8 @@ inline AddressInterfaces parse_interfaces(std::vector<typename Trace::Detector::
       } else if constexpr (std::is_same_v<T, GetGemsNftFixPriceSaleV4::Result> ||
                            std::is_same_v<T, DedustPoolDetector::Result> ||
                            std::is_same_v<T, NominatorPoolContract::Result> ||
-                           std::is_same_v<T, MultisigOrder::Result>) {
+                           std::is_same_v<T, MultisigOrder::Result> ||
+                           std::is_same_v<T, TelemintContract::Result>) {
         // These variants are available to in-process lookups but are not part of
         // the Redis `interfaces` wire format. See ../README.md#redis-wire-layout.
       } else {

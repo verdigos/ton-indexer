@@ -85,6 +85,7 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
     DedustPool,
     NominatorPool,
     MultisigOrder,
+    TelemintItem,
   };
   static const std::map<std::string, Handler> handlers = {
       {"jetton_wallet", Handler::JettonWallet},
@@ -94,6 +95,7 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
       {"dedust_pool", Handler::DedustPool},
       {"nominator_pool", Handler::NominatorPool},
       {"multisig_order", Handler::MultisigOrder},
+      {"telemint_item", Handler::TelemintItem},
   };
   auto handler = handlers.find(kind);
   if (handler == handlers.end()) {
@@ -197,6 +199,13 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         }
         Value::Fields f;
         f.emplace_back("signers", Value::make_list(std::move(signers)));
+        return Value::make_obj(std::move(f));
+      }
+      break;
+    case Handler::TelemintItem:
+      if (const auto *p = std::get_if<schema::TelemintData>(&iface)) {
+        Value::Fields f;
+        f.emplace_back("address", addr_str(p->address));
         return Value::make_obj(std::move(f));
       }
       break;
