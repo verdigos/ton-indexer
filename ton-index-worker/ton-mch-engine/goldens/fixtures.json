@@ -1421,6 +1421,24 @@
    "slug": "fragment-settle-transfer-spoofed-bid",
    "note": "synthetic: composed J4mgK7n4 (real code+state, mc 93495311) with the transfer's ownership_assigned forward_payload replaced by TeleitemBidInfo(1e15); the item forwards the caller payload as is (Fragment nft-item.fc:250-255); excluded from production comparison"
   },
+  "NOxEMWKlKAr_xUxRG_9kouRZgfXEq5hwV1V2dVH4rCU=": {
+   "group": "nft",
+   "name": "Fragment self-outbid, standing bidder raises against their own bid (composed)",
+   "slug": "fragment-self-outbid-composed-keenetic",
+   "note": "synthetic: composed message against real code+state, snapshot mc 91102300, root message hash NOxEMWKl; empty-body TON transfer from the standing bidder re-raises their own bid; provenance: Fragment I1 nft-item.fc:144-267 (Tonviewer-verified I1 source, mch-docs/_analysis/host-audit-2026-09/synthetic-cases.md); excluded from production comparison"
+  },
+  "BhamKuY5ryJZPt6DOvbigcj8pbB31TrfMT2VMmEV1_4=": {
+   "group": "dns",
+   "name": ".ton DNS auction, bid below the 105% minimum increment is rejected (composed)",
+   "slug": "dns-auction-bid-below-minimum-rejected",
+   "note": "synthetic: composed message against real code+state, snapshot mc 91102300, root message hash BhamKuY5; empty-body TON transfer at 104% of the standing max_bid; item transaction aborted exit 407, no ownership_assigned, bounce back to sender; provenance: ton-blockchain/dns-contract@d081310:func/nft-item.fc:180-263 (op-0 bid below 105% of the standing bid throws 407); excluded from production comparison"
+  },
+  "ik8mCQvh-fd_bSqcpf7qBKH5_rxdFBJNsNe0s3xX3kY=": {
+   "group": "nft",
+   "name": "Fragment auction close, maximum bid closes the auction and pays out the seller (composed)",
+   "slug": "fragment-auction-close-max-bid-payout",
+   "note": "synthetic: composed message against real code+state, snapshot mc 91102300, root message hash ik8mCQvh; empty-body TON transfer at the auction's max_bid closes it: refund to the outbid standing bidder, ownership transferred to the sender, royalty + seller fill_up payouts; provenance: Fragment I1 nft-item.fc:144-267 (Tonviewer-verified I1 source, mch-docs/_analysis/host-audit-2026-09/synthetic-cases.md); excluded from production comparison"
+  },
   "hFYotMnbSPFhY3v2kBCY3D2r73wSBamx_cqeKMViKrA=": {
    "group": "nft",
    "name": "Fragment settle-and-transfer, payout to the seller",
@@ -1492,6 +1510,12 @@
    "name": "Tonco deposit, fund-account wallet interface pruned",
    "slug": "tonco-deposit-fund-account-wallet-interface-pruned",
    "note": "mutation, not replay; baseline 0GW2kNF4nRhw5xA3b5E35-EhF9H25H3Nvm5MJJo2VD0="
+  },
+  "LtfHA5H3AjxeL6cXoPP1Xt6hhsBFllWJR59agrw0GL0=": {
+   "group": "mutations",
+   "name": "Tonco swap, intermediate wallet interface pruned",
+   "slug": "tonco-swap-intermediate-wallet-miss",
+   "note": "mutation, not replay; baseline CjtIXjqazbSFrtPqqMMFBgMG6+huwp5CfNtXpQAf8xY="
   }
  }
 }

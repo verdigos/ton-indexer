@@ -1,0 +1,93 @@
+# nft / Fragment self-outbid, standing bidder raises against their own bid (composed)
+# note: synthetic: composed message against real code+state, snapshot mc 91102300, root message hash NOxEMWKl; empty-body TON transfer from the standing bidder re-raises their own bid; provenance: Fragment I1 nft-item.fc:144-267 (Tonviewer-verified I1 source, mch-docs/_analysis/host-audit-2026-09/synthetic-cases.md); excluded from production comparison
+# trace: NOxEMWKlKAr_xUxRG_9kouRZgfXEq5hwV1V2dVH4rCU=
+actions:
+  - type: auction_bid
+    matcher: auction_bid
+    anchor: auction_bid@0
+    id: qnCfxdRdMxQJhkqCMjpfzR21WhqL+XVy6PXW73Ots2M=
+    success: true
+    source: 0:505E5C5D9823B1B92AF3A99028A38EE99F50706D34D68C18D7DD6E0C0E1498E2
+    source_secondary: null
+    destination: 0:84E2893E74D7A6A6AF6F5F5FD0E84EBCAFE0C0E6AAA4F7BEA13EC6370631108D
+    destination_secondary: null
+    asset: 0:80D78A35F955A14B679FAA887FF4CD5BFC0F43B4A4EEA2A7E6927F3701B273C2
+    asset_secondary: 0:84E2893E74D7A6A6AF6F5F5FD0E84EBCAFE0C0E6AAA4F7BEA13EC6370631108D
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 530000000000
+    opcode: null
+    nft_transfer_data:
+      marketplace: fragment
+      nft_item_index: "28687403395653205539801295742007680409336651603156781454910598050755669364335"
+    tx_hashes:
+      - yT82MHvoPI+ydIqYPhML59//FuQ2wEmlAbDWZiTYazU=
+    accounts:
+      - 0:505E5C5D9823B1B92AF3A99028A38EE99F50706D34D68C18D7DD6E0C0E1498E2
+      - 0:84E2893E74D7A6A6AF6F5F5FD0E84EBCAFE0C0E6AAA4F7BEA13EC6370631108D
+    start_lt: 0
+    end_lt: 101738250000053
+    start_utime: 0
+    end_utime: 1788753040
+    mc_seqno_end: 91102300
+  - type: auction_outbid
+    matcher: auction_outbid
+    anchor: auction_outbid@101738250000054
+    id: 1u3P+jzoVL/ZR4hIERGU9Ar3g6d3MmgSKr+lEfWOScU=
+    success: true
+    source: 0:84E2893E74D7A6A6AF6F5F5FD0E84EBCAFE0C0E6AAA4F7BEA13EC6370631108D
+    source_secondary: 0:505E5C5D9823B1B92AF3A99028A38EE99F50706D34D68C18D7DD6E0C0E1498E2
+    destination: 0:505E5C5D9823B1B92AF3A99028A38EE99F50706D34D68C18D7DD6E0C0E1498E2
+    destination_secondary: null
+    asset: 0:80D78A35F955A14B679FAA887FF4CD5BFC0F43B4A4EEA2A7E6927F3701B273C2
+    asset_secondary: 0:84E2893E74D7A6A6AF6F5F5FD0E84EBCAFE0C0E6AAA4F7BEA13EC6370631108D
+    asset2: null
+    asset2_secondary: null
+    amount: 439000000000
+    value: null
+    opcode: null
+    nft_transfer_data:
+      marketplace: fragment
+    ton_transfer_data:
+      content: null
+    tx_hashes:
+      - vqY52+PdJ2wVNBJ6h3Ou070q+rR99tbXgT5VHTYI5yM=
+      - yT82MHvoPI+ydIqYPhML59//FuQ2wEmlAbDWZiTYazU=
+    accounts:
+      - 0:505E5C5D9823B1B92AF3A99028A38EE99F50706D34D68C18D7DD6E0C0E1498E2
+      - 0:84E2893E74D7A6A6AF6F5F5FD0E84EBCAFE0C0E6AAA4F7BEA13EC6370631108D
+    start_lt: 101738250000054
+    end_lt: 101791630000012
+    start_utime: 1788753040
+    end_utime: 1788753040
+    mc_seqno_end: 91102300
+  - type: call_contract
+    anchor: call_contract#557cea20@101738250000054
+    id: okkLl/T7tN6scjlBlzx3tePE/A6/EEAsHlmiTPufK3k=
+    success: true
+    source: 0:84E2893E74D7A6A6AF6F5F5FD0E84EBCAFE0C0E6AAA4F7BEA13EC6370631108D
+    source_secondary: null
+    destination: 0:505E5C5D9823B1B92AF3A99028A38EE99F50706D34D68C18D7DD6E0C0E1498E2
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 439000000000
+    opcode: 0x557cea20
+    tx_hashes:
+      - vqY52+PdJ2wVNBJ6h3Ou070q+rR99tbXgT5VHTYI5yM=
+      - yT82MHvoPI+ydIqYPhML59//FuQ2wEmlAbDWZiTYazU=
+    accounts:
+      - 0:505E5C5D9823B1B92AF3A99028A38EE99F50706D34D68C18D7DD6E0C0E1498E2
+      - 0:84E2893E74D7A6A6AF6F5F5FD0E84EBCAFE0C0E6AAA4F7BEA13EC6370631108D
+    start_lt: 101738250000054
+    end_lt: 101791630000012
+    start_utime: 1788753040
+    end_utime: 1788753040
+    mc_seqno_end: 91102300
+    parent_action_id: 1u3P+jzoVL/ZR4hIERGU9Ar3g6d3MmgSKr+lEfWOScU=
+    ancestor_type:
+      - auction_outbid

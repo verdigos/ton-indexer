@@ -1,0 +1,34 @@
+# dns / .ton DNS auction, bid below the 105% minimum increment is rejected (composed)
+# note: synthetic: composed message against real code+state, snapshot mc 91102300, root message hash BhamKuY5; empty-body TON transfer at 104% of the standing max_bid; item transaction aborted exit 407, no ownership_assigned, bounce back to sender; provenance: ton-blockchain/dns-contract@d081310:func/nft-item.fc:180-263 (op-0 bid below 105% of the standing bid throws 407); excluded from production comparison
+# trace: BhamKuY5ryJZPt6DOvbigcj8pbB31TrfMT2VMmEV1_4=
+actions:
+  - type: auction_bid
+    matcher: auction_bid
+    anchor: auction_bid@0
+    id: nNtnxZBDEnn+YaZCCLkFEONvu7JETssmpDCiWWos41E=
+    success: false
+    source: 0:3F30D55B545106CAE807CF5E949E08E3ED0FE2DFA1EA57DF1011D94BA5DD81CC
+    source_secondary: null
+    destination: 0:0B2AEF27B9B23C9ED427866B28602517967DBF0D6942D77974D09980461B3E3B
+    destination_secondary: null
+    asset: 0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF
+    asset_secondary: 0:0B2AEF27B9B23C9ED427866B28602517967DBF0D6942D77974D09980461B3E3B
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 97558962636
+    opcode: null
+    nft_transfer_data:
+      marketplace: dns
+      nft_item_index: "100532641036537411337247504849111886140954611252500529322913304934098269421586"
+    tx_hashes:
+      - 3SifZfzN7y71bbUgvwiIxTamyNQESRmfZpfo1hY+wF4=
+      - 77vt3rqI/DZ+Z1wNsTp3h/J9b4b/xHLglLAjVTEQfxU=
+    accounts:
+      - 0:0B2AEF27B9B23C9ED427866B28602517967DBF0D6942D77974D09980461B3E3B
+      - 0:3F30D55B545106CAE807CF5E949E08E3ED0FE2DFA1EA57DF1011D94BA5DD81CC
+    start_lt: 0
+    end_lt: 101836569000009
+    start_utime: 0
+    end_utime: 1788753040
+    mc_seqno_end: 91102300

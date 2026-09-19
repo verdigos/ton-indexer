@@ -409,8 +409,23 @@ EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   if (prev == nullptr) {
     return rt_fault("stonfi_v2: anchor has no previous block");
   }
-  const Block *in_transfer =
-      prev->btype == mch::btype::kJettonTransfer ? prev : prev->previous_block;
+  const Block *in_transfer = prev;
+  if (prev->btype != mch::btype::kJettonTransfer) {
+    const Block *candidate = prev->previous_block;
+    bool may_step_back = false;
+    if (candidate != nullptr) {
+      const Message *msg = block_msg(candidate);
+      auto wallet = msg != nullptr ? acc_str(account_from_opt(msg->destination)) : std::nullopt;
+      may_step_back = wallet &&
+                      !env.lookups
+                           ->get("jetton_wallet", std::vector<Value>{Value::make_str(*wallet)})
+                           .is_null();
+    }
+    if (!may_step_back) {
+      return rt_fault("stonfi_v2: unsupported incoming walkback");
+    }
+    in_transfer = candidate;
+  }
   const Block *out_transfer = nullptr;
   std::int64_t best_lt = 0;
   for (const Block *b : consumed) {

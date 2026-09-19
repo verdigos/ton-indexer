@@ -521,6 +521,14 @@ EvalResult tonco_swap_data(BuildEnv &env, const std::vector<Value> &args) {
   }
   std::vector<const Block *> consumed = std::move(decoded->blocks);
   ToncoParts parts = derive_tonco_parts(consumed);
+  const Block *prev = parts.anchor->previous_block;
+  if (prev != nullptr && prev->btype != mch::btype::kJettonTransfer) {
+    const Message *m = parts.in_transfer != nullptr ? block_msg(parts.in_transfer) : nullptr;
+    auto wallet = m != nullptr ? acc_str(account_from_opt(m->destination)) : std::nullopt;
+    if (!wallet || wallet_asset(env, *wallet).is_null()) {
+      parts.in_transfer = nullptr;
+    }
+  }
 
   auto by_lt = [](const Block *a, const Block *b) { return a->min_lt < b->min_lt; };
   std::vector<const Block *> all_swaps = parts.peer_swaps;
