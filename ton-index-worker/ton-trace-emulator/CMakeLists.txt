@@ -1,5 +1,14 @@
 cmake_minimum_required(VERSION 3.16)
 
+add_library(ton-stats-recorder STATIC src/StatsRecorder.cpp)
+target_include_directories(ton-stats-recorder PUBLIC src)
+target_link_libraries(ton-stats-recorder PUBLIC tdactor tdutils)
+target_compile_features(ton-stats-recorder PUBLIC cxx_std_20)
+
+add_executable(test-ton-stats test/StatsRecorderTest.cpp)
+target_link_libraries(test-ton-stats PRIVATE ton-stats-recorder td-test-main)
+target_compile_features(test-ton-stats PRIVATE cxx_std_20)
+
 add_library(ton-trace-state STATIC
     src/TraceState.cpp
     src/TraceLifecycle.cpp
@@ -35,6 +44,7 @@ target_link_libraries(
 
 add_library(ton-trace-emulator-core STATIC
     src/TraceEmulator.cpp
+    src/TraceUpdate.cpp
     src/ExternalMessageAdmission.cpp
     src/OverlayListener.cpp
     src/BlockEmulator.cpp
@@ -65,6 +75,9 @@ add_executable(ton-trace-emulator
     src/TraceScheduler.cpp
     src/TraceProcessor.cpp
     src/RedisMaterializer.cpp
+    src/RedisConnectionActor.cpp
+    src/RedisTransport.cpp
+    src/ChannelListener.cpp
     src/RedisListener.cpp
     src/Measurement.h
 )
@@ -76,6 +89,7 @@ target_compile_features(ton-trace-emulator PRIVATE cxx_std_20)
 target_compile_definitions(ton-trace-emulator PRIVATE -DMSGPACK_USE_DEFINE_MAP)
 target_link_libraries(
     ton-trace-emulator
+    ton-stats-recorder
     ton-trace-emulator-core
     ton-trace-state
     ton-trace-assembler
@@ -90,6 +104,7 @@ install(TARGETS ton-trace-emulator RUNTIME DESTINATION bin)
 add_executable(test-ton-trace-state
     test/TraceStateTest.cpp
     test/TraceAssemblerTest.cpp
+    test/TraceUpdateTest.cpp
     test/TraceLifecycleTest.cpp
     test/ConfirmedRootTrackerTest.cpp
     test/OrderedResultBufferTest.cpp
@@ -112,7 +127,14 @@ target_compile_features(test-ton-trace-state PRIVATE cxx_std_20)
 # White-box coverage for TraceProcessor's translation-unit-local prepare helpers.
 add_executable(test-ton-trace-processor
     test/TraceProcessorTest.cpp
+    test/ConfirmedPromotionTest.cpp
+    test/RedisTransportTest.cpp
+    src/TraceScheduler.cpp
+    src/RedisListener.cpp
     src/RedisMaterializer.cpp
+    src/RedisConnectionActor.cpp
+    src/RedisTransport.cpp
+    src/ChannelListener.cpp
 )
 target_include_directories(test-ton-trace-processor
     PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/../external/redis-plus-plus/src

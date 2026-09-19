@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 enum class TraceStateFinality : std::uint8_t {
@@ -35,6 +36,12 @@ struct TraceStateNode {
     std::vector<std::string> child_keys;
     std::vector<TraceStateIndexRef> index_refs;
 
+    // The transaction hash is the first component of the serialization fingerprint;
+    // finality and block metadata may change without changing the execution.
+    std::string_view transaction_hash() const {
+        return std::string_view(fingerprint).substr(0, fingerprint.find(':'));
+    }
+
     bool operator==(const TraceStateNode&) const = default;
 };
 
@@ -64,15 +71,22 @@ struct TraceStateChange {
 
 class TraceState {
 public:
-    // Prepares an update without changing the current in-memory state.
-    TraceStateChange prepare(const TraceStateUpdate& update) const;
+    // Applies a fragment to an exclusively owned working copy, without
+    // copying the graph or computing a delta. Compare with the original state
+    // using delta_to() after all fragments have been applied.
+    // previous_root_key is supplied only when replacing the canonical root,
+    // whose raw message hash may differ from update.root_key.
+    void apply_update(const TraceStateUpdate& update, const std::string& previous_root_key = {});
 
-    // Inserts or replaces only the given nodes without touching descendants
-    // or sibling branches.
+    // Inserts/replaces already accepted nodes without pruning. Promotion
+    // validates that only finality changes before calling this method.
     TraceStateChange upsert_nodes(std::vector<TraceStateNode> nodes) const;
 
     // Replaces this object with the resulting state of a prepared change.
     void apply(TraceStateChange&& change) noexcept;
+
+    // Computes the exact Redis-facing delta from this state to resulting.
+    TraceStateDelta delta_to(const TraceState& resulting) const;
 
     const TraceStateNode* find(const std::string& key) const;
     const std::map<std::string, TraceStateNode>& nodes() const;

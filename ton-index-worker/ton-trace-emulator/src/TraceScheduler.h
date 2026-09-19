@@ -9,6 +9,7 @@
 #include <functional>
 #include <cstdint>
 #include <optional>
+#include <variant>
 #include "td/actor/actor.h"
 #include "DbScanner.h"
 #include "OverlayListener.h"
@@ -26,22 +27,21 @@
 
 
 class TraceEmulatorScheduler : public td::actor::Actor {
+    friend struct TraceSchedulerTest;
   private: 
     td::actor::ActorId<DbScanner> db_scanner_;
     std::string global_config_path_;
     std::string inet_addr_;
     std::string redis_dsn_;
+    RedisConnectionOptions redis_options_;
     std::string input_redis_channel_;
-    std::string working_dir_;
     std::string db_event_fifo_path_;
-    std::function<void(Trace, td::Promise<td::Unit>, MeasurementPtr)> process_trace_patch_;
+    std::function<void(Trace, td::Promise<td::Unit>, MeasurementPtr)> process_trace_update_;
     td::actor::ActorOwn<DbEventListener> db_event_listener_;
 
     ton::BlockSeqno last_known_seqno_{0};
     ton::BlockSeqno last_fetched_seqno_{0};
     ton::BlockSeqno last_started_finalized_seqno_{0};
-
-    td::Timestamp next_statistics_flush_;
 
     std::unordered_set<ton::BlockSeqno> seqnos_to_fetch_;
     std::map<ton::BlockSeqno, schema::MasterchainBlockDataState> blocks_to_emulate_;
@@ -82,14 +82,21 @@ class TraceEmulatorScheduler : public td::actor::Actor {
         std::vector<td::Ref<ton::validator::BlockData>> block_data_owners;
     };
 
-    // Blocks resolve inter-block trace ids one by one, then emulate their
-    // tails in parallel. Completed blocks are committed in masterchain order.
+    struct ConfirmedPromotionRequest {
+        std::vector<ConfirmedTraceSnapshot> snapshots;
+        td::Promise<td::Unit> promise;
+    };
+
+    // Blocks resolve ids in order, then compute in parallel. Both ready
+    // results and promotion attempts must acquire the same ordered commit turn.
     std::optional<ton::BlockSeqno> finalized_trace_ids_in_progress_;
-    OrderedResultBuffer<FinalizedBlockResult> finalized_results_;
+    OrderedResultBuffer<std::variant<FinalizedBlockResult, ConfirmedPromotionRequest>> finalized_ready_;
     std::optional<FinalizedCommitState> finalized_commit_;
 
     std::map<ton::BlockIdExt, std::vector<ConfirmedTraceSnapshot>>
         confirmed_block_snapshots_;
+    // nullopt means more than one version was observed for this logical block.
+    std::map<ton::BlockId, std::optional<ton::BlockIdExt>> confirmed_block_versions_;
     std::set<ton::BlockId> closed_confirmed_blocks_;
     std::deque<ton::BlockId> closed_confirmed_block_order_;
 
@@ -107,20 +114,20 @@ class TraceEmulatorScheduler : public td::actor::Actor {
     void fetch_error(std::uint32_t seqno, td::Status error);
     void seqno_fetched(std::uint32_t seqno, schema::MasterchainBlockDataState mc_data_state);
     void start_next_finalized_block();
-    void start_finalized_emulator(
-        ton::BlockSeqno seqno,
-        bool reuse_confirmed_state);
     void finalized_trace_ids_resolved(ton::BlockSeqno seqno);
     void finalized_block_emulated(
         ton::BlockSeqno seqno,
         td::Result<FinalizedBlockResult> result);
     void try_commit_finalized_block();
     void commit_finalized_block(FinalizedBlockResult result);
+    void request_confirmed_promotion(ton::BlockSeqno seqno, std::vector<ConfirmedTraceSnapshot> snapshots,
+                                     td::Promise<td::Unit> promise);
     void finalized_trace_write_finished(ton::BlockSeqno seqno);
     void finish_finalized_commit();
     void finalized_block_done();
     void close_confirmed_block(ton::BlockId block_id);
     bool confirmed_block_is_closed(const ton::BlockIdExt& block_id) const;
+    bool can_reuse_confirmed_block(const ton::BlockIdExt& block_id) const;
     void enqueue_signed_block(ton::BlockIdExt block_id);
     void queue_signed_block_fetch(ton::BlockIdExt block_id);
     void fetch_signed_blocks();
@@ -131,17 +138,11 @@ class TraceEmulatorScheduler : public td::actor::Actor {
     void confirmed_block_finished(
         ton::BlockIdExt block_id,
         td::Result<ConfirmedBlockResult> result);
-    void process_confirmed_trace(
-        ton::BlockIdExt block_id,
-        Trace trace,
-        td::Promise<ConfirmedTraceSnapshot> promise,
-        MeasurementPtr measurement);
+    void process_confirmed_trace(ton::BlockIdExt block_id, TraceUpdate update,
+                                 td::Promise<ConfirmedTraceSnapshot> promise);
     bool remember_seen_signed_block(ton::BlockIdExt block_id);
-    std::function<void(
-        Trace,
-        td::Promise<ConfirmedTraceSnapshot>,
-        MeasurementPtr)> make_signed_trace_processor(
-            const ton::BlockIdExt& block_id_ext);
+    std::function<void(TraceUpdate, td::Promise<ConfirmedTraceSnapshot>)> make_signed_trace_processor(
+        const ton::BlockIdExt& block_id_ext);
     void discard_confirmed_snapshots(
         const std::vector<ton::BlockIdExt>& finalized_blocks);
     void publish_health();
@@ -151,21 +152,16 @@ class TraceEmulatorScheduler : public td::actor::Actor {
   public:
     TraceEmulatorScheduler(td::actor::ActorId<DbScanner> db_scanner, td::actor::ActorId<ITraceProcessor> trace_processor,
                            std::string global_config_path, std::string inet_addr, 
-                           std::string redis_dsn, std::string input_redis_channel, std::string working_dir,
+                           std::string redis_dsn, RedisConnectionOptions redis_options, std::string input_redis_channel,
                            std::string db_event_fifo_path) :
         db_scanner_(db_scanner), trace_processor_(trace_processor), global_config_path_(global_config_path),
-        inet_addr_(inet_addr), redis_dsn_(redis_dsn), input_redis_channel_(input_redis_channel),
-        working_dir_(std::move(working_dir)), db_event_fifo_path_(std::move(db_event_fifo_path)) {
+        inet_addr_(inet_addr), redis_dsn_(redis_dsn), redis_options_(std::move(redis_options)), input_redis_channel_(input_redis_channel),
+        db_event_fifo_path_(std::move(db_event_fifo_path)) {
       health_redis_ = std::make_unique<sw::redis::Redis>(redis_dsn_);
-      process_trace_patch_ = [trace_processor = trace_processor_.get()](
-                                 Trace trace, td::Promise<td::Unit> promise,
-                                 MeasurementPtr measurement) {
-        td::actor::send_closure(
-            trace_processor,
-            &ITraceProcessor::process_trace_patch,
-            std::move(trace),
-            std::move(promise),
-            std::move(measurement));
+      process_trace_update_ = [trace_processor = trace_processor_.get()](Trace trace, td::Promise<td::Unit> promise,
+                                                                         MeasurementPtr measurement) {
+        td::actor::send_closure(trace_processor, &ITraceProcessor::process_trace_update,
+                                make_trace_update(std::move(trace), std::move(measurement)), std::move(promise));
       };
       external_message_admission_ = std::make_shared<ExternalMessageAdmission>();
     };

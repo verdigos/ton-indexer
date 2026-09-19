@@ -12,6 +12,7 @@
 
 #include "TraceEmulator.h"
 #include "TraceState.h"
+#include "TraceUpdate.h"
 
 using TraceMetadata = std::map<std::string, std::string>;
 
@@ -40,6 +41,11 @@ struct ActiveTrace {
   std::optional<std::string> root_account;
   FinalityState finality{FinalityState::Emulated};
   bool tx_limit_exceeded{false};
+
+  const TraceStateNode* root() const {
+    auto it = metadata.find("root_node");
+    return it == metadata.end() ? nullptr : nodes.find(it->second);
+  }
 };
 
 struct AcceptedNode {
@@ -60,7 +66,10 @@ struct TraceTransition {
 
 class TraceAssembler {
  public:
-  td::Result<TraceTransition> apply(const ActiveTrace& current, const Trace& patch, const std::string& trace_key) const;
+  // Applies all disconnected fragments in order to one private working copy.
+  // Computes one final delta/version; current stays unchanged, including on error.
+  td::Result<TraceTransition> apply_update(const ActiveTrace& current, TraceUpdate& update,
+                                           const std::string& trace_key) const;
 
   td::Result<mch::EmuTraceView> build_full_trace(const ActiveTrace& trace, const std::string& trace_key,
                                                  const Trace& lookup_context) const;

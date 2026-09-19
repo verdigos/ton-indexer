@@ -1,10 +1,8 @@
 #include "TraceScheduler.h"
 #include "BlockEmulator.h"
-#include "Statistics.h"
 #include "TraceProcessor.h"
 #include "common/delay.h"
 #include "td/utils/Status.h"
-#include "td/utils/filesystem.h"
 #include "td/utils/overloaded.h"
 #include "tl-utils/common-utils.hpp"
 #include "ton/ton-tl.hpp"
@@ -43,12 +41,17 @@ void TraceEmulatorScheduler::handle_db_event(ton::tl_object_ptr<ton::ton_api::db
 }
 
 void TraceEmulatorScheduler::handle_block_signed(ton::BlockIdExt block_id) {
-    if (block_id.is_masterchain()) {
+    if (block_id.is_masterchain() || confirmed_block_is_closed(block_id)) {
         return;
     }
     if (!remember_seen_signed_block(block_id)) {
         LOG(INFO) << "Skipping duplicate signed shard block " << block_id.to_str();
         return;
+    }
+    // Count observed versions, including ones still in flight or later failed.
+    auto [version, first] = confirmed_block_versions_.try_emplace(block_id.id, block_id);
+    if (!first && version->second != block_id) {
+        version->second.reset();
     }
     pending_signed_blocks_.push_back(block_id);
     request_db_catch_up();
@@ -140,15 +143,15 @@ void TraceEmulatorScheduler::start_up() {
     if (global_config_path_.empty() || inet_addr_.empty()) {
         LOG(WARNING) << "Global config path or inet addr is empty. OverlayListener was not started.";
     } else {
-        overlay_listener_ = td::actor::create_actor<OverlayListener>("OverlayListener", global_config_path_, inet_addr_,
-                                                                     process_trace_patch_, external_message_admission_);
+      overlay_listener_ = td::actor::create_actor<OverlayListener>("OverlayListener", global_config_path_, inet_addr_,
+                                                                   process_trace_update_, external_message_admission_);
     }
 
     if (input_redis_channel_.empty()) {
         LOG(WARNING) << "Input redis queue name is empty. RedisListener was not started.";
     } else {
-        redis_listener_ = td::actor::create_actor<RedisListener>("RedisListener", redis_dsn_, input_redis_channel_,
-                                                                 process_trace_patch_, external_message_admission_);
+      redis_listener_ = td::actor::create_actor<RedisListener>("RedisListener", redis_options_, input_redis_channel_,
+                                                               process_trace_update_, external_message_admission_);
     }
 
     if (db_event_fifo_path_.empty()) {
@@ -257,7 +260,7 @@ void TraceEmulatorScheduler::seqno_fetched(std::uint32_t seqno, schema::Masterch
 void TraceEmulatorScheduler::start_next_finalized_block() {
     if (last_started_finalized_seqno_ == 0) {
         last_started_finalized_seqno_ = last_fetched_seqno_;
-        finalized_results_.reset(last_fetched_seqno_ + 1);
+        finalized_ready_.reset(last_fetched_seqno_ + 1);
     }
 
     if (finalized_trace_ids_in_progress_ ||
@@ -274,35 +277,47 @@ void TraceEmulatorScheduler::start_next_finalized_block() {
     finalized_trace_ids_in_progress_ = seqno;
     bool reuse_confirmed_state = false;
     bool has_shard_blocks = false;
+    const char* promotion_skip_reason = "no_shard_blocks";
+    std::vector<ConfirmedTraceSnapshot> snapshots;
+    std::vector<ton::BlockId> closed_shard_blocks;
     for (const auto& block : it->second.shard_blocks_diff_) {
         const auto block_id = block.block_data->block_id();
         close_confirmed_block(block_id.id);
         if (block_id.is_masterchain()) {
             continue;
         }
+        closed_shard_blocks.push_back(block_id.id);
         if (!has_shard_blocks) {
             reuse_confirmed_state = true;
             has_shard_blocks = true;
         }
-        if (confirmed_block_snapshots_.count(block_id) == 0) {
+        if (!can_reuse_confirmed_block(block_id)) {
             reuse_confirmed_state = false;
+            auto version = confirmed_block_versions_.find(block_id.id);
+            promotion_skip_reason = version != confirmed_block_versions_.end() && !version->second
+                                        ? "multiple_confirmed_versions" : "confirmed_snapshot_unavailable";
+        } else {
+            const auto& block_snapshots = confirmed_block_snapshots_.at(block_id);
+            snapshots.insert(snapshots.end(), block_snapshots.begin(), block_snapshots.end());
         }
     }
 
-    start_finalized_emulator(seqno, reuse_confirmed_state);
-}
-
-void TraceEmulatorScheduler::start_finalized_emulator(
-    ton::BlockSeqno seqno,
-    bool reuse_confirmed_state) {
-    auto it = blocks_to_emulate_.find(seqno);
-    if (it == blocks_to_emulate_.end()) {
-        LOG(FATAL) << "Missing mc block selected for emulation " << seqno;
+    // All confirmed updates forwarded earlier precede this notification in
+    // the processor's mailbox. Later arrivals are rejected by the closed set.
+    if (!closed_shard_blocks.empty()) {
+        td::actor::send_closure(trace_processor_, &ITraceProcessor::discard_confirmed_updates,
+                               std::move(closed_shard_blocks));
     }
-    LOG(INFO) << "Emulating mc block " << seqno
-              << (reuse_confirmed_state
-                      ? " with reusable confirmed shard state"
-                      : "");
+
+    std::function<void(td::Promise<td::Unit>)> promote;
+    if (reuse_confirmed_state) {
+        promote = [self = actor_id(this), seqno, snapshots = std::move(snapshots)](td::Promise<td::Unit> promise) mutable {
+            td::actor::send_closure(self, &TraceEmulatorScheduler::request_confirmed_promotion,
+                                   seqno, std::move(snapshots), std::move(promise));
+        };
+    }
+    LOG(INFO) << "Starting mc block " << seqno
+              << " promotion=" << (promote ? "candidate" : promotion_skip_reason);
 
     auto trace_ids_resolved = [
         SelfId = actor_id(this)
@@ -326,12 +341,7 @@ void TraceEmulatorScheduler::start_finalized_emulator(
     auto actor_name = PSLICE() << "McBlockEmulator" << seqno;
     auto block = std::move(it->second);
     td::actor::create_actor<McBlockEmulator>(
-        actor_name,
-        std::move(block),
-        std::move(trace_ids_resolved),
-        reuse_confirmed_state,
-        std::move(P))
-        .release();
+        actor_name, std::move(block), std::move(trace_ids_resolved), std::move(promote), std::move(P)).release();
 
     blocks_to_emulate_.erase(it);
     last_started_finalized_seqno_++;
@@ -358,27 +368,15 @@ void TraceEmulatorScheduler::finalized_block_emulated(
     }
 
     auto block = result.move_as_ok();
-    if (block.reused_confirmed_state) {
-        for (const auto& block_id : block.finalized_blocks) {
-            if (block_id.is_masterchain()) {
-                continue;
-            }
-            auto snapshots =
-                confirmed_block_snapshots_.find(block_id);
-            if (snapshots == confirmed_block_snapshots_.end()) {
-                LOG(FATAL) << "Reusable confirmed block snapshot disappeared: "
-                           << block_id.to_str();
-            }
-            block.confirmed_snapshots.insert(
-                block.confirmed_snapshots.end(),
-                snapshots->second.begin(),
-                snapshots->second.end());
-        }
+    LOG(DEBUG) << "Mc block " << seqno << " finished computation with " << block.trace_fragments_count
+              << " trace fragments (" << block.trace_updates.size() << " updates)";
+    if (finalized_commit_ && finalized_commit_->seqno == seqno) {
+        // A promotion attempt already acquired this block's commit turn.
+        CHECK(finalized_commit_->pending_writes == 0);
+        commit_finalized_block(std::move(block));
+        return;
     }
-    LOG(INFO) << "Mc block " << seqno
-              << " finished computation with " << block.traces.size()
-              << " trace patches";
-    if (!finalized_results_.insert(seqno, std::move(block))) {
+    if (!finalized_ready_.insert(seqno, std::move(block))) {
         LOG(FATAL) << "Duplicate finalized result for mc block "
                    << seqno;
     }
@@ -390,12 +388,20 @@ void TraceEmulatorScheduler::try_commit_finalized_block() {
         return;
     }
 
-    auto outcome = finalized_results_.take_next();
+    auto outcome = finalized_ready_.take_next();
     if (!outcome) {
         return;
     }
 
-    commit_finalized_block(std::move(outcome->value));
+    if (auto* request = std::get_if<ConfirmedPromotionRequest>(&outcome->value)) {
+        // Hold the barrier through the attempt and, if declined, its ordinary
+        // emulation. The actor still owes us its single FinalizedBlockResult.
+        finalized_commit_.emplace(FinalizedCommitState{.seqno = outcome->seqno, .pending_writes = 0});
+        td::actor::send_closure(trace_processor_, &ITraceProcessor::promote_confirmed,
+                               std::move(request->snapshots), outcome->seqno, std::move(request->promise));
+    } else {
+        commit_finalized_block(std::move(std::get<FinalizedBlockResult>(outcome->value)));
+    }
 }
 
 void TraceEmulatorScheduler::commit_finalized_block(
@@ -404,10 +410,7 @@ void TraceEmulatorScheduler::commit_finalized_block(
     finalized_commit_.emplace(FinalizedCommitState{
         .seqno = seqno,
         .finalized_blocks = result.finalized_blocks,
-        .pending_writes =
-            result.reused_confirmed_state
-                ? 1
-                : result.traces.size(),
+        .pending_writes = result.trace_updates.size(),
         .block_data_owners = std::move(result.block_data_owners),
     });
 
@@ -416,77 +419,61 @@ void TraceEmulatorScheduler::commit_finalized_block(
         finalized_block_ids.emplace(block.id, block);
     }
 
-    for (auto& patch : result.traces) {
-        auto& trace = patch.trace;
+    for (auto& update : result.trace_updates) {
+      for (const auto& trace : update.fragments) {
         if (trace.contains_root_transaction()) {
-            auto block = finalized_block_ids.find(trace.root->block_id);
-            if (block == finalized_block_ids.end()) {
-                LOG(WARNING) << "Finalized trace root belongs to unknown block "
-                             << trace.root->block_id.to_str();
-            } else {
-                confirmed_roots_.add_finalized_root(
-                    block->second, trace.ext_in_msg_hash_norm);
-            }
+          auto block = finalized_block_ids.find(trace.root->block_id);
+          if (block == finalized_block_ids.end()) {
+            LOG(WARNING) << "Finalized trace root belongs to unknown block " << trace.root->block_id.to_str();
+          } else {
+            confirmed_roots_.add_finalized_root(block->second, trace.ext_in_msg_hash_norm);
+          }
         }
+      }
 
-        auto trace_root_tx_hash = trace.root_tx_hash;
-        auto measurement = std::move(patch.measurement);
+      auto trace_root_tx_hash = update.fragments.front().root_tx_hash;
+      auto measurement = update.measurement;
+      if (measurement) {
+        measurement->set_otel_attribute("ton.trace_state.update_fragments_count",
+                                        static_cast<std::int64_t>(update.size()));
         measurement->start_otel_child_span("insert_trace");
-        auto P = td::PromiseCreator::lambda([
-            SelfId = actor_id(this),
-            seqno,
-            trace_root_tx_hash,
-            measurement
-        ](td::Result<td::Unit> result) mutable {
+      }
+      auto P = td::PromiseCreator::lambda(
+          [SelfId = actor_id(this), seqno, trace_root_tx_hash, measurement](td::Result<td::Unit> result) mutable {
             if (result.is_error()) {
-                auto error = result.move_as_error();
-                LOG(ERROR) << "Failed to insert finalized trace "
-                           << td::base64_encode(
-                                  trace_root_tx_hash.as_slice())
-                           << ": " << error;
-                measurement->mark_otel_error(
-                    "trace_emulator.insert_error", error.to_string());
+              auto error = result.move_as_error();
+              LOG(ERROR) << "Failed to insert finalized trace " << td::base64_encode(trace_root_tx_hash.as_slice())
+                         << ": " << error;
+              if (measurement) {
+                measurement->mark_otel_error("trace_emulator.insert_error", error.to_string());
+              }
             } else {
-                LOG(DEBUG) << "Inserted finalized trace "
-                           << td::base64_encode(
-                                  trace_root_tx_hash.as_slice());
+              LOG(DEBUG) << "Inserted finalized trace " << td::base64_encode(trace_root_tx_hash.as_slice());
             }
-            measurement->end_otel_child_span("insert_trace");
-            measurement->emit_otel_span();
-            td::actor::send_closure(
-                SelfId,
-                &TraceEmulatorScheduler::finalized_trace_write_finished,
-                seqno);
-        });
-        process_trace_patch_(
-            std::move(patch.trace), std::move(P), std::move(measurement));
-    }
-
-    if (result.reused_confirmed_state) {
-        auto P = td::PromiseCreator::lambda([
-            SelfId = actor_id(this),
-            seqno
-        ](td::Result<td::Unit> result) mutable {
-            if (result.is_error()) {
-                LOG(ERROR) << "Failed to materialize reused confirmed state for mc block "
-                           << seqno << ": " << result.move_as_error();
+            if (measurement) {
+              measurement->end_otel_child_span("insert_trace");
+              measurement->emit_otel_span();
             }
             td::actor::send_closure(
                 SelfId,
                 &TraceEmulatorScheduler::finalized_trace_write_finished,
                 seqno);
-        });
-        td::actor::send_closure(
-            trace_processor_,
-            &ITraceProcessor::promote_confirmed,
-            std::move(result.confirmed_snapshots),
-            seqno,
-            std::move(P));
+          });
+      td::actor::send_closure(trace_processor_, &ITraceProcessor::process_trace_update, std::move(update),
+                              std::move(P));
     }
 
     if (finalized_commit_->pending_writes == 0) {
         finish_finalized_commit();
     }
+}
+
+void TraceEmulatorScheduler::request_confirmed_promotion(
+    ton::BlockSeqno seqno, std::vector<ConfirmedTraceSnapshot> snapshots, td::Promise<td::Unit> promise) {
+    if (!finalized_ready_.insert(seqno, ConfirmedPromotionRequest{std::move(snapshots), std::move(promise)})) {
+        LOG(FATAL) << "Duplicate finalized promotion request for mc block " << seqno;
+    }
+    try_commit_finalized_block();
 }
 
 void TraceEmulatorScheduler::finalized_trace_write_finished(
@@ -556,12 +543,19 @@ bool TraceEmulatorScheduler::confirmed_block_is_closed(
     return closed_confirmed_blocks_.count(block_id.id) != 0;
 }
 
+bool TraceEmulatorScheduler::can_reuse_confirmed_block(const ton::BlockIdExt& block_id) const {
+    auto version = confirmed_block_versions_.find(block_id.id);
+    return version != confirmed_block_versions_.end() && version->second == block_id &&
+           confirmed_block_snapshots_.count(block_id) != 0;
+}
+
 void TraceEmulatorScheduler::discard_confirmed_snapshots(
     const std::vector<ton::BlockIdExt>& finalized_blocks) {
     std::set<ton::BlockId> logical_blocks;
     for (const auto& block : finalized_blocks) {
         if (!block.is_masterchain()) {
             logical_blocks.insert(block.id);
+            confirmed_block_versions_.erase(block.id);
         }
     }
     for (auto it = confirmed_block_snapshots_.begin();
@@ -652,7 +646,7 @@ void TraceEmulatorScheduler::signed_block_error(ton::BlockIdExt block_id, td::St
 }
 
 void TraceEmulatorScheduler::process_signed_blocks() {
-    // Do not start more speculative work while finalized work is available.
+    // Do not start more nonfinalized work while finalized work is available.
     // Confirmed emulators that are already running are allowed to finish.
     if (finalized_blocks_in_pipeline_ > 0 || has_ready_finalized_block()) {
         start_next_finalized_block();
@@ -760,27 +754,21 @@ void TraceEmulatorScheduler::confirmed_block_finished(
     process_signed_blocks();
 }
 
-void TraceEmulatorScheduler::process_confirmed_trace(
-    ton::BlockIdExt block_id,
-    Trace trace,
-    td::Promise<ConfirmedTraceSnapshot> promise,
-    MeasurementPtr measurement) {
-    if (confirmed_block_is_closed(block_id)) {
-        promise.set_value(ConfirmedTraceSnapshot{});
-        return;
-    }
+void TraceEmulatorScheduler::process_confirmed_trace(ton::BlockIdExt block_id, TraceUpdate update,
+                                                     td::Promise<ConfirmedTraceSnapshot> promise) {
+  if (confirmed_block_is_closed(block_id)) {
+    promise.set_value(ConfirmedTraceSnapshot{});
+    return;
+  }
 
+  for (const auto& trace : update.fragments) {
     if (trace.contains_root_transaction()) {
-        confirmed_roots_.add_confirmed_root(
-            block_id, trace.ext_in_msg_hash_norm);
+      confirmed_roots_.add_confirmed_root(block_id, trace.ext_in_msg_hash_norm);
     }
+  }
 
-    td::actor::send_closure(
-        trace_processor_,
-        &ITraceProcessor::process_confirmed_trace_patch,
-        std::move(trace),
-        std::move(promise),
-        std::move(measurement));
+  td::actor::send_closure(trace_processor_, &ITraceProcessor::process_confirmed_trace_update, std::move(update),
+                          std::move(promise));
 }
 
 bool TraceEmulatorScheduler::remember_seen_signed_block(ton::BlockIdExt block_id) {
@@ -795,26 +783,13 @@ bool TraceEmulatorScheduler::remember_seen_signed_block(ton::BlockIdExt block_id
     return true;
 }
 
-std::function<void(
-    Trace,
-    td::Promise<ConfirmedTraceSnapshot>,
-    MeasurementPtr)>
-TraceEmulatorScheduler::make_signed_trace_processor(
-    const ton::BlockIdExt& block_id_ext) {
-    return [
-        SelfId = actor_id(this),
-        block_id_ext
-    ](Trace trace,
-      td::Promise<ConfirmedTraceSnapshot> promise,
-      MeasurementPtr measurement) mutable {
-        td::actor::send_closure(
-            SelfId,
-            &TraceEmulatorScheduler::process_confirmed_trace,
-            block_id_ext,
-            std::move(trace),
-            std::move(promise),
-            std::move(measurement));
-    };
+std::function<void(TraceUpdate, td::Promise<ConfirmedTraceSnapshot>)>
+TraceEmulatorScheduler::make_signed_trace_processor(const ton::BlockIdExt& block_id_ext) {
+  return
+      [SelfId = actor_id(this), block_id_ext](TraceUpdate update, td::Promise<ConfirmedTraceSnapshot> promise) mutable {
+        td::actor::send_closure(SelfId, &TraceEmulatorScheduler::process_confirmed_trace, block_id_ext,
+                                std::move(update), std::move(promise));
+      };
 }
 
 void TraceEmulatorScheduler::publish_health() {
@@ -859,19 +834,6 @@ void TraceEmulatorScheduler::alarm() {
         request_db_catch_up();
         fetch_signed_blocks();
         process_signed_blocks();
-    }
-
-    if (next_statistics_flush_.is_in_past()) {
-        ton::delay_action([working_dir = this->working_dir_]() {
-            auto stats = g_statistics.generate_report_and_reset();
-            auto path = working_dir + "/" + "stats.txt";
-            auto status = td::atomic_write_file(path, std::move(stats));
-            if (status.is_error()) {
-                LOG(ERROR) << "Failed to write statistics to " << path << ": " << status.error();
-            }
-        }, td::Timestamp::now());
-        
-        next_statistics_flush_ = td::Timestamp::in(60.0);
     }
 
     if (health_redis_ && next_health_update_.is_in_past()) {
