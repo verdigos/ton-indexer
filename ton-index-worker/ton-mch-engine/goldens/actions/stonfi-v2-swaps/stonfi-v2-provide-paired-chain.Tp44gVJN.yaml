@@ -1,0 +1,162 @@
+# stonfi-v2-swaps / pair jetton ton paired provide (chain)
+# note: chain trace mc 92929247 from the 2026-09-19 comparator medium run; prod tx_hashes = 14, trace root excluded
+# trace: Tp44gVJNH2FKZCQG92DmXsGArGzfEWXVaPIppL4adkE=
+actions:
+  - type: contract_deploy
+    anchor: contract_deploy#178d4519@103698323000009
+    id: IobCTxY5mR1tKDpE8XcXAsetK1mMat2vN1crvNsVB84=
+    success: true
+    source: 0:F4F0EAE079B0997EC9735074423C3093F3C439B82191EC7925D1262CA0D40B07
+    source_secondary: null
+    destination: 0:10E5C7C4C4621598ADEC4D6AC3B841DD1B3925EFEFAA1D4C272A7F2C2903C2F2
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 298895798
+    opcode: 0x178d4519
+    tx_hashes:
+      - MKIWVHp9ztG/+rDZl9aQ2HQrGyuSNQa8AC9tTm/0g5A=
+      - ZNBbBDe6o54D503DYkqQ6oauB+aBPQzZP8cLUQ4t/dQ=
+    accounts:
+      - 0:10E5C7C4C4621598ADEC4D6AC3B841DD1B3925EFEFAA1D4C272A7F2C2903C2F2
+      - 0:F4F0EAE079B0997EC9735074423C3093F3C439B82191EC7925D1262CA0D40B07
+    start_lt: 103698323000009
+    end_lt: 103698323000010
+    start_utime: 1789497301
+    end_utime: 1789497301
+    mc_seqno_end: 92929247
+  - type: contract_deploy
+    anchor: contract_deploy#178d4519@103698323000019
+    id: 96WmJ4rwVivqtRHaAhPj9tCfPvJNEY/ocpdvr9yzR3g=
+    success: true
+    source: 0:12977246B38D7FC7E46D0E177DB7F53835FCC4F17E99D3CAB39F9E81678E7FB0
+    source_secondary: null
+    destination: 0:432BB45CFA522012F2AFD3013157759F7D6772D6C0F6BE0C82CE501EC6781D59
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 231059325
+    opcode: 0x178d4519
+    tx_hashes:
+      - 0kG3VXymrKd9eqVklq9M8jAMxNAvBzekf1WBhRfDnAA=
+      - soD98zbs8sT78oBPCqTGTCfM2AojlgaXFZ9bhCdg/bg=
+    accounts:
+      - 0:12977246B38D7FC7E46D0E177DB7F53835FCC4F17E99D3CAB39F9E81678E7FB0
+      - 0:432BB45CFA522012F2AFD3013157759F7D6772D6C0F6BE0C82CE501EC6781D59
+    start_lt: 103698323000019
+    end_lt: 103698323000020
+    start_utime: 1789497301
+    end_utime: 1789497301
+    mc_seqno_end: 92929247
+  - type: contract_deploy
+    anchor: contract_deploy#37c096df@103698323000010
+    id: QVUPPx7dnrBBcegn/Ia7BeNRxo2T9D5qPNfOKeSMkM0=
+    success: true
+    source: 0:1061B9DBD4418AD166FC9A4DEF116E2F6C74F2BFB70E71F2653D643CEFFEBFA9
+    source_secondary: null
+    destination: 0:12977246B38D7FC7E46D0E177DB7F53835FCC4F17E99D3CAB39F9E81678E7FB0
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 307751394
+    opcode: 0x37c096df
+    tx_hashes:
+      - p6XlD0PI1T78tRJ4Fjpma7wvkLFZe/wr+OeQlxV4W3w=
+      - pOGRakdSJHY3vyPuGKwEgevXnip1PPCd1Sifo9TRw5A=
+    accounts:
+      - 0:1061B9DBD4418AD166FC9A4DEF116E2F6C74F2BFB70E71F2653D643CEFFEBFA9
+      - 0:12977246B38D7FC7E46D0E177DB7F53835FCC4F17E99D3CAB39F9E81678E7FB0
+    start_lt: 103698323000010
+    end_lt: 103698323000011
+    start_utime: 1789497301
+    end_utime: 1789497301
+    mc_seqno_end: 92929247
+  - type: contract_deploy
+    anchor: contract_deploy#50c6a654@103698323000012
+    id: yizGDwJY7wAOI23V8B0ljyjoqF3pFynnWDq2qnQKXzY=
+    success: true
+    source: 0:12977246B38D7FC7E46D0E177DB7F53835FCC4F17E99D3CAB39F9E81678E7FB0
+    source_secondary: null
+    destination: 0:0D43BABE98C081CD3C951BFAD9F57CF96B54048C59BB127001C387D7AC019BA1
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 296594125
+    opcode: 0x50c6a654
+    tx_hashes:
+      - 0lRILbpzdLrHgd8zJi2yKgAJcunVJeMq4SAkYnKYdlQ=
+      - pOGRakdSJHY3vyPuGKwEgevXnip1PPCd1Sifo9TRw5A=
+    accounts:
+      - 0:0D43BABE98C081CD3C951BFAD9F57CF96B54048C59BB127001C387D7AC019BA1
+      - 0:12977246B38D7FC7E46D0E177DB7F53835FCC4F17E99D3CAB39F9E81678E7FB0
+    start_lt: 103698323000012
+    end_lt: 103698323000013
+    start_utime: 1789497301
+    end_utime: 1789497301
+    mc_seqno_end: 92929247
+  - type: dex_deposit_liquidity
+    matcher: stonfi_v2_provide_partial
+    anchor: dex_deposit_liquidity@103698323000006
+    id: 24MLpN2Qv49UOmGFWJFN6oMGG1kx9lK7UfguPQkrH9w=
+    success: true
+    source: 0:F482DCE0989131A3E7023C1D28E2ADD3BE167495A2EF119FA0DB58CA490EA564
+    source_secondary: null
+    destination: 0:12977246B38D7FC7E46D0E177DB7F53835FCC4F17E99D3CAB39F9E81678E7FB0
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    dex_deposit_liquidity_data:
+      amount1: 1500000000000
+      amount2: 75000000000000000
+      asset1: null
+      asset2: 0:BBE4DC3E84EBEE9DBA0D931E974FC3785B8594BE00D223A68B4AB223E96406F1
+      dex: stonfi_v2
+      lp_tokens_minted: 335410196623967
+      user_jetton_wallet_1: null
+      user_jetton_wallet_2: 0:F4F0EAE079B0997EC9735074423C3093F3C439B82191EC7925D1262CA0D40B07
+    tx_hashes:
+      - 0kG3VXymrKd9eqVklq9M8jAMxNAvBzekf1WBhRfDnAA=
+      - 0lRILbpzdLrHgd8zJi2yKgAJcunVJeMq4SAkYnKYdlQ=
+      - 3U2gc5J+BT0Jm55EG1eLYzp5RRwOtJuJim6ryTVtPoo=
+      - MIJTdwGaHUQ2OsZOdTGKJaW/bIe1Kd3b8bXZ8nD3wb8=
+      - MKIWVHp9ztG/+rDZl9aQ2HQrGyuSNQa8AC9tTm/0g5A=
+      - ZNBbBDe6o54D503DYkqQ6oauB+aBPQzZP8cLUQ4t/dQ=
+      - ekSXIz8BrOzmofVdrIZGf4AZZJBXmP7CoWGYYv4poJM=
+      - eyMhwGQNGosdmcE6wIGQKcnogGci0HK9XyWoLbAFIjI=
+      - hGFIEJM+c+c2HXXg9g41oRWS7z4wr4wM1RbkVcGM01A=
+      - p6XlD0PI1T78tRJ4Fjpma7wvkLFZe/wr+OeQlxV4W3w=
+      - pOGRakdSJHY3vyPuGKwEgevXnip1PPCd1Sifo9TRw5A=
+      - sC3PufjBn25pNUPgIEUimqxNJtr6PGKzovVIWWnmGmI=
+      - soD98zbs8sT78oBPCqTGTCfM2AojlgaXFZ9bhCdg/bg=
+      - wSGY6J5o8zPnigREuQ8nTxkcfT7mwCBi9OxuKcmunUs=
+    accounts:
+      - 0:0D43BABE98C081CD3C951BFAD9F57CF96B54048C59BB127001C387D7AC019BA1
+      - 0:1061B9DBD4418AD166FC9A4DEF116E2F6C74F2BFB70E71F2653D643CEFFEBFA9
+      - 0:10E5C7C4C4621598ADEC4D6AC3B841DD1B3925EFEFAA1D4C272A7F2C2903C2F2
+      - 0:11675845E2FF7910BB07EE908F30DEFDFD47AA28E3A03A3B7CC6B916F4784833
+      - 0:12977246B38D7FC7E46D0E177DB7F53835FCC4F17E99D3CAB39F9E81678E7FB0
+      - 0:432BB45CFA522012F2AFD3013157759F7D6772D6C0F6BE0C82CE501EC6781D59
+      - 0:F482DCE0989131A3E7023C1D28E2ADD3BE167495A2EF119FA0DB58CA490EA564
+      - 0:F4F0EAE079B0997EC9735074423C3093F3C439B82191EC7925D1262CA0D40B07
+    start_lt: 103698323000006
+    end_lt: 103698323000022
+    start_utime: 1789497301
+    end_utime: 1789497301
+    mc_seqno_end: 92929247

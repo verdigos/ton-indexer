@@ -432,6 +432,7 @@ void post_process_stonfi_v2_liquidity(std::vector<Block *> &blocks, BlockArena &
         b->children_blocks.push_back(proxy);
         a->parent = b;
         proxy->parent = b;
+        b->initiating_event_node = proxy->initiating_event_node;
         for (const EventNode *n : a->event_nodes) b->event_nodes.push_back(n);
         b->calculate_min_max_lt();
         stonfi_v2_data_merge(b, a);

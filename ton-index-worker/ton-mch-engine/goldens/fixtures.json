@@ -1444,6 +1444,12 @@
    "name": "tonco v2 swap TON to USDT (pool exit 200)",
    "slug": "tonco-v2-swap-ton-to-usdt",
    "note": "bridge replay, ORACLE PASS; sidecar devtools/emulator-fixture/sidecars/; Tonco v2 pool SWAP body and v2 PayTo coinsinfo"
+  },
+  "Tp44gVJNH2FKZCQG92DmXsGArGzfEWXVaPIppL4adkE=": {
+   "group": "stonfi-v2-swaps",
+   "name": "pair jetton ton paired provide (chain)",
+   "slug": "stonfi-v2-provide-paired-chain",
+   "note": "chain trace mc 92929247 from the 2026-09-19 comparator medium run; prod tx_hashes = 14, trace root excluded"
   }
  }
 }
