@@ -73,11 +73,65 @@ endforeach()
 # ton-mch-engine compiles one generated pair per production stem.
 set(TON_ABI_PROD_STEMS ${TON_ABI_PROD_STEMS} PARENT_SCOPE)
 
+# Test declarations use the same Tolk-to-JSON path as production declarations.
+file(GLOB TON_ABI_FIXTURE_DECLS CONFIGURE_DEPENDS
+     ${CMAKE_CURRENT_SOURCE_DIR}/testdata/fixtures/*.tolk)
+list(FILTER TON_ABI_FIXTURE_DECLS EXCLUDE REGEX "/(err-|lots-of-(annotations|storage)\\.tolk$)")
+file(GLOB_RECURSE TON_ABI_FIXTURE_IMPORTS CONFIGURE_DEPENDS
+     ${CMAKE_CURRENT_SOURCE_DIR}/testdata/fixtures/imports/*.tolk)
+set(TON_ABI_FIXTURE_JSON_DIR "${CMAKE_CURRENT_BINARY_DIR}/testdata/fixtures")
+file(MAKE_DIRECTORY "${TON_ABI_FIXTURE_JSON_DIR}")
+set(TON_ABI_FIXTURE_ABIS)
+foreach(TON_ABI_DECL IN LISTS TON_ABI_FIXTURE_DECLS)
+    get_filename_component(TON_ABI_STEM "${TON_ABI_DECL}" NAME_WE)
+    set(TON_ABI_JSON "${TON_ABI_FIXTURE_JSON_DIR}/${TON_ABI_STEM}.abi.json")
+    add_custom_command(
+        OUTPUT "${TON_ABI_JSON}"
+        BYPRODUCTS "${TON_ABI_FIXTURE_JSON_DIR}/${TON_ABI_STEM}.fif"
+        COMMAND ${CMAKE_COMMAND} -E env "TOLK_STDLIB=${TON_ABI_TOLK_STDLIB}"
+                $<TARGET_FILE:tolk> --allow-no-entrypoint --no-symbol-types
+                -o "${TON_ABI_FIXTURE_JSON_DIR}/${TON_ABI_STEM}.fif" "${TON_ABI_DECL}"
+        DEPENDS tolk "${TON_ABI_DECL}" ${TON_ABI_FIXTURE_IMPORTS}
+        COMMENT "Compile fixture ${TON_ABI_STEM}.tolk -> ${TON_ABI_STEM}.abi.json"
+        VERBATIM
+    )
+    list(APPEND TON_ABI_FIXTURE_ABIS "${TON_ABI_JSON}")
+endforeach()
+
+# These fixtures retain committed JSON until their Tolk generation is settled.
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/testdata/fixtures/lots-of-annotations.abi.json"
+    "${TON_ABI_FIXTURE_JSON_DIR}/lots-of-annotations.abi.json"
+    COPYONLY
+)
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/testdata/fixtures/lots-of-storage.abi.json"
+    "${TON_ABI_FIXTURE_JSON_DIR}/lots-of-storage.abi.json"
+    COPYONLY
+)
+foreach(TON_ABI_FIXTURE IN ITEMS
+        err-cont-on-stack-1
+        err-cont-on-stack-2
+        err-invalid-map-key-1
+        err-invalid-map-key-2)
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/testdata/fixtures/${TON_ABI_FIXTURE}.abi.json"
+        "${TON_ABI_FIXTURE_JSON_DIR}/${TON_ABI_FIXTURE}.abi.json"
+        COPYONLY
+    )
+    list(APPEND TON_ABI_FIXTURE_ABIS "${TON_ABI_FIXTURE_JSON_DIR}/${TON_ABI_FIXTURE}.abi.json")
+endforeach()
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/testdata/fixtures/w8-hand-union.abi.json"
+    "${TON_ABI_FIXTURE_JSON_DIR}/w8-hand-union.abi.json"
+    COPYONLY
+)
+list(APPEND TON_ABI_FIXTURE_ABIS "${TON_ABI_FIXTURE_JSON_DIR}/lots-of-annotations.abi.json")
+list(APPEND TON_ABI_FIXTURE_ABIS "${TON_ABI_FIXTURE_JSON_DIR}/lots-of-storage.abi.json")
+list(APPEND TON_ABI_FIXTURE_ABIS "${TON_ABI_FIXTURE_JSON_DIR}/w8-hand-union.abi.json")
+
 # Generate every loadable fixture and production declaration in one batch.
-# The two err-invalid-map-key fixtures are intentional hard-fail cases and are
-# exercised directly by AbiEmitTest instead of through the CLI.
-file(GLOB TON_ABI_CHECK_ABIS CONFIGURE_DEPENDS
-     ${CMAKE_CURRENT_SOURCE_DIR}/testdata/fixtures/*.abi.json)
+set(TON_ABI_CHECK_ABIS ${TON_ABI_FIXTURE_ABIS})
 list(FILTER TON_ABI_CHECK_ABIS EXCLUDE REGEX "err-invalid-map-key")
 list(APPEND TON_ABI_CHECK_ABIS ${TON_ABI_PROD_ABIS})
 
@@ -128,7 +182,7 @@ target_sources(ton-abi-test PRIVATE ${TON_ABI_GENERATED_SOURCES})
 target_compile_features(ton-abi-test PRIVATE cxx_std_20)
 target_compile_definitions(ton-abi-test PRIVATE
     TON_ABI_VECTORS_FILE="${CMAKE_CURRENT_SOURCE_DIR}/testdata/abi_vectors.json"
-    TON_ABI_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/testdata/fixtures"
+    TON_ABI_FIXTURES_DIR="${TON_ABI_FIXTURE_JSON_DIR}"
     TON_ABI_GEN_EXE="$<TARGET_FILE:ton-abi-gen>"
     TON_ABI_TEST_TMP="${CMAKE_CURRENT_BINARY_DIR}/gen_cli_tmp"
 )

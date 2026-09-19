@@ -6,8 +6,7 @@ from pathlib import Path
 import msgpack
 import pytest
 
-from decode import decode_payload
-from verify_contract import convert
+from decode import convert, decode_payload
 
 
 CODECS = [1]
