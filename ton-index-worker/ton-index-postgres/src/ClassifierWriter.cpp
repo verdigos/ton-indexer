@@ -44,11 +44,11 @@ std::pair<std::uint64_t, std::uint64_t> insert_capped(
   const auto rows = txn.exec(
       "INSERT INTO actions (trace_id, action_id, type, start_lt, end_lt, start_utime, end_utime, "
       "mc_seqno_end, trace_end_lt, trace_end_utime, trace_mc_seqno_end, trace_external_hash, "
-      "trace_external_hash_norm, tx_hashes, ancestor_type, success) "
+      "trace_external_hash_norm, tx_hashes, ancestor_type, success, payload) "
       "VALUES ($1::tonhash, $1::tonhash, 'unknown', $2::bigint, $3::bigint, $4::integer, $5::integer, "
       "$6::integer, $3::bigint, $5::integer, $6::integer, $7::tonhash, $8::tonhash, '{}', '{}', "
       "(SELECT bool_and(NOT coalesce(aborted, false)) FROM transactions WHERE trace_id = $1::tonhash "
-      "AND mc_block_seqno BETWEEN $9::integer AND $10::integer)) "
+      "AND mc_block_seqno BETWEEN $9::integer AND $10::integer), decode('0180', 'hex')) "
       "ON CONFLICT DO NOTHING",
       pqxx::params{ctx.trace_id, trace.start_lt, ctx.trace_end_lt, trace.start_utime,
                    ctx.trace_end_utime, ctx.trace_mc_seqno_end, ctx.trace_external_hash,

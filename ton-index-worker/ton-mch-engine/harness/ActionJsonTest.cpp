@@ -67,12 +67,6 @@ Ddl read_ddl() {
   return ddl;
 }
 
-// Keys the python serializer also emits although the composite never had the
-// member; PostgreSQL drops them on both paths.
-const std::set<std::string> kGhostKeys = {
-    "dex_withdraw_liquidity_details.is_refund",
-    "evaa_withdraw_details.is_ton",
-};
 std::set<std::string> unknown_fields;
 
 void validate(const td::JsonValue &value, const std::string &type, const Ddl &ddl,
@@ -106,7 +100,12 @@ void validate(const td::JsonValue &value, const std::string &type, const Ddl &dd
   }
   require(value.type() == JsonType::String, where, "expected string for " + type);
   const auto text = value.get_string().str();
-  if (type == "numeric" || type == "bigint" || type == "integer") {
+  if (type == "bytea") {
+    require(text.size() >= 4 && text.starts_with("\\x") && text.substr(2, 2) == "01" &&
+                text.size() % 2 == 0 &&
+                std::all_of(text.begin() + 2, text.end(), [](unsigned char c) { return std::isxdigit(c); }),
+            where, "expected codec-1 hex bytea");
+  } else if (type == "numeric" || type == "bigint" || type == "integer") {
     static const std::regex digits("^-?[0-9]+$");
     require(std::regex_match(text, digits), where, "expected decimal integer string");
   } else if (type == "tonaddr") {
@@ -131,7 +130,6 @@ void check_action(const Action &action, const ActionRowContext &ctx, const Ddl &
   auto json = action_row_json(action, ctx);
   auto row = parse(json, action.action_id);
   require(row.type() == JsonType::Object, action.action_id, "expected actions row");
-  validate(row, "actions", ddl, action.action_id);
   for (const auto *name : {"trace_id", "action_id", "start_lt", "end_lt", "start_utime", "end_utime",
                            "mc_seqno_end", "trace_end_lt", "trace_external_hash", "trace_external_hash_norm",
                            "trace_end_utime", "trace_mc_seqno_end", "type", "success", "tx_hashes",
@@ -202,15 +200,22 @@ int run_actions_json_test() {
       auto batch_json = action_rows_json(actions, context);
       auto batch = parse(batch_json, id.str());
       require(batch.type() == JsonType::Array && batch.get_array().size() == actions.size(), id.str(), "wrong row array");
-      for (std::size_t i = 0; i < actions.size(); ++i) validate(batch.get_array()[i], "actions", ddl, actions[i].action_id);
+      for (std::size_t i = 0; i < actions.size(); ++i) {
+        const auto &row = batch.get_array()[i];
+        require(jfield(row, "payload") != nullptr, actions[i].action_id, "missing payload");
+        for (const auto &field : row.get_object().field_values_) {
+          const auto name = field.first.str();
+          require(name != "extra" && !name.ends_with("_data"), actions[i].action_id,
+                  "legacy payload column " + name);
+        }
+        validate(row, "actions", ddl, actions[i].action_id);
+      }
       row_count += actions.size();
     }
     require(row_count != 0, "fixtures", "no actions checked");
-    std::string ghosts;
-    for (const auto &field : unknown_fields) {
-      if (!kGhostKeys.count(field)) ghosts += " " + field;
-    }
-    require(ghosts.empty(), "ddl", "fields absent from the DDL:" + ghosts);
+    std::string unknown;
+    for (const auto &field : unknown_fields) unknown += " " + field;
+    require(unknown.empty(), "ddl", "fields absent from the DDL:" + unknown);
 
     schema::Trace trace{};
     trace.trace_id.set_zero();

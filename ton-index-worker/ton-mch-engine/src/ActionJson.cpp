@@ -1,17 +1,15 @@
 #include "ActionJson.h"
 
+#include "ActionPayload.h"
 #include "IndexData.h"
 #include "td/utils/JsonBuilder.h"
 #include "td/utils/base64.h"
+#include "td/utils/misc.h"
 
 #include <set>
 
 namespace mch {
 namespace {
-
-bool omitted(const Value &v) {
-  return v.t == VType::Null || (v.t == VType::Amount && v.num.is_null());
-}
 
 std::string value_json(const Value &v) {
   td::JsonBuilder jb;
@@ -71,19 +69,49 @@ std::string value_json(const Value &v) {
   return jb.string_builder().as_cslice().str();
 }
 
-}  // namespace
+#define MCH_PAYLOAD_FIELDS(X) \
+  X(ton_transfer_data) \
+  X(jetton_transfer_data) \
+  X(jetton_swap_data) \
+  X(nft_transfer_data) \
+  X(nft_listing_data) \
+  X(nft_mint_data) \
+  X(dex_deposit_liquidity_data) \
+  X(dex_withdraw_liquidity_data) \
+  X(staking_data) \
+  X(evaa_supply_data) \
+  X(evaa_withdraw_data) \
+  X(evaa_liquidate_data) \
+  X(vesting_send_message_data) \
+  X(vesting_add_whitelist_data) \
+  X(tonco_deploy_pool_data) \
+  X(multisig_create_order_data) \
+  X(multisig_approve_data) \
+  X(multisig_execute_data) \
+  X(cocoon_worker_payout_data) \
+  X(cocoon_proxy_payout_data) \
+  X(cocoon_proxy_charge_data) \
+  X(cocoon_client_top_up_data) \
+  X(cocoon_register_proxy_data) \
+  X(cocoon_unregister_proxy_data) \
+  X(cocoon_client_register_data) \
+  X(cocoon_client_change_secret_hash_data) \
+  X(cocoon_client_request_refund_data) \
+  X(cocoon_grant_refund_data) \
+  X(cocoon_client_increase_stake_data) \
+  X(cocoon_client_withdraw_data) \
+  X(layerzero_packet_data) \
+  X(layerzero_send_data) \
+  X(layerzero_dvn_verify_data) \
+  X(jvault_stake_data) \
+  X(jvault_claim_data) \
+  X(change_dns_record_data) \
+  X(coffee_create_pool_data) \
+  X(coffee_staking_deposit_data) \
+  X(coffee_staking_withdraw_data) \
+  X(extra)
 
-ActionRowContext row_context(const schema::Trace &trace) {
-  return {td::base64_encode(trace.trace_id.as_slice()),
-          trace.external_hash ? std::make_optional(td::base64_encode(trace.external_hash->as_slice()))
-                              : std::nullopt,
-          trace.external_hash_norm ? std::make_optional(td::base64_encode(trace.external_hash_norm->as_slice()))
-                                   : std::nullopt,
-          static_cast<std::int64_t>(trace.end_lt), static_cast<std::int32_t>(trace.end_utime),
-          trace.mc_seqno_end};
-}
-
-std::string action_row_json(const Action &a, const ActionRowContext &ctx) {
+std::string action_row_json_impl(const Action &a, const ActionRowContext &ctx, bool legacy) {
   td::JsonBuilder jb;
   {
     auto row = jb.enter_object();
@@ -110,8 +138,57 @@ std::string action_row_json(const Action &a, const ActionRowContext &ctx) {
     row("value_extra_currencies", td::json_object([&](auto &object) {
       for (const auto &[id, amount] : a.value_extra_currencies) object(std::to_string(id), amount);
     }));
+#define MCH_JSON_ENVELOPE(name) if (!omitted(a.name)) row(#name, td::JsonRaw(value_json(a.name)));
+    MCH_JSON_ENVELOPE(source)
+    MCH_JSON_ENVELOPE(source_secondary)
+    MCH_JSON_ENVELOPE(destination)
+    MCH_JSON_ENVELOPE(destination_secondary)
+    MCH_JSON_ENVELOPE(asset)
+    MCH_JSON_ENVELOPE(asset_secondary)
+    MCH_JSON_ENVELOPE(asset2)
+    MCH_JSON_ENVELOPE(asset2_secondary)
+    MCH_JSON_ENVELOPE(amount)
+    MCH_JSON_ENVELOPE(value)
+    MCH_JSON_ENVELOPE(opcode)
+#undef MCH_JSON_ENVELOPE
+    if (legacy) {
 #define MCH_JSON_FIELD(name) if (!omitted(a.name)) row(#name, td::JsonRaw(value_json(a.name)));
-    MCH_ACTION_VALUE_FIELDS(MCH_JSON_FIELD)
+      MCH_PAYLOAD_FIELDS(MCH_JSON_FIELD)
+#undef MCH_JSON_FIELD
+      if (omitted(a.extra)) row("extra", td::JsonRaw("{}"));
+    } else {
+      row("payload", "\\x" + td::hex_encode(encode_action_payload(a)));
+    }
+  }
+  return jb.string_builder().as_cslice().str();
+}
+
+}  // namespace
+
+bool omitted(const Value &value) {
+  return value.t == VType::Null || (value.t == VType::Amount && value.num.is_null());
+}
+
+ActionRowContext row_context(const schema::Trace &trace) {
+  return {td::base64_encode(trace.trace_id.as_slice()),
+          trace.external_hash ? std::make_optional(td::base64_encode(trace.external_hash->as_slice()))
+                              : std::nullopt,
+          trace.external_hash_norm ? std::make_optional(td::base64_encode(trace.external_hash_norm->as_slice()))
+                                   : std::nullopt,
+          static_cast<std::int64_t>(trace.end_lt), static_cast<std::int32_t>(trace.end_utime),
+          trace.mc_seqno_end};
+}
+
+std::string action_row_json(const Action &a, const ActionRowContext &ctx) {
+  return action_row_json_impl(a, ctx, true);
+}
+
+std::string action_legacy_details_json(const Action &a) {
+  td::JsonBuilder jb;
+  {
+    auto row = jb.enter_object();
+#define MCH_JSON_FIELD(name) if (!omitted(a.name)) row(#name, td::JsonRaw(value_json(a.name)));
+    MCH_PAYLOAD_FIELDS(MCH_JSON_FIELD)
 #undef MCH_JSON_FIELD
     if (omitted(a.extra)) row("extra", td::JsonRaw("{}"));
   }
@@ -142,9 +219,11 @@ std::string action_rows_json(const std::vector<Action> &rows, const ActionRowCon
   td::JsonBuilder jb;
   {
     auto array = jb.enter_array();
-    for (const auto &row : rows) array << td::JsonRaw(action_row_json(row, ctx));
+    for (const auto &row : rows) array << td::JsonRaw(action_row_json_impl(row, ctx, false));
   }
   return jb.string_builder().as_cslice().str();
 }
+
+#undef MCH_PAYLOAD_FIELDS
 
 }  // namespace mch

@@ -186,6 +186,7 @@ add_library(mch-classify STATIC
     src/BuildRuntime.cpp
     src/BuildDriver.cpp
     src/ActionBuild.cpp
+    src/ActionPayload.cpp
     src/ActionJson.cpp
     src/GhostExternal.cpp
     src/ClassifyCore.cpp
@@ -212,7 +213,7 @@ target_include_directories(mch-classify
 target_compile_features(mch-classify PUBLIC cxx_std_20)
 
 # ton-abi bridge: mch-classify -> ton-abi ONLY (ton-abi stays mch-free).
-target_link_libraries(mch-classify PUBLIC tondb-scanner tdactor ton-abi)
+target_link_libraries(mch-classify PUBLIC tondb-scanner tdactor ton-abi msgpack-cxx)
 add_dependencies(mch-classify ton_abi_generate_sources)
 add_dependencies(mch-classify mch_generate_sources)
 
@@ -225,8 +226,8 @@ add_dependencies(mch-classify mch_generate_sources)
 # fixture sources named in one variable, referenced by exactly one target,
 # with the reason stated here.
 #
-# lz4 and msgpack are used by FixtureLoader.cpp and by nothing else in the
-# tree, so the lz4 link edge lives here rather than on the product lib.
+# FixtureLoader.cpp uses lz4 and msgpack; lz4 remains confined to this test
+# library while the product classifier also uses msgpack for action payloads.
 set(MCH_FIXTURE_SOURCES
     src/fixtures/FixtureLoader.cpp
     src/fixtures/FixtureLookupSource.cpp

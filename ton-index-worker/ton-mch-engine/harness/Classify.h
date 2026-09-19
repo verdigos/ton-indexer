@@ -54,4 +54,6 @@ int run_dump(const std::vector<std::string> &paths,
 int run_actions(const std::vector<std::string> &paths, const std::string &output_dir = {},
                 const std::string &fixtures_manifest = {});
 
+int run_action_payload_dump(const std::vector<std::string> &paths, const std::string &output_path);
+
 }  // namespace mch

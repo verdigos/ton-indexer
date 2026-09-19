@@ -4,7 +4,8 @@
 // Loaders are elsewhere and are NOT interchangeable in kind: SchemaTraceLoader
 // is the production one (schema::Transaction -> Trace); the .lz4 fixture reader
 // is test-only and lives in fixtures/FixtureLoader.h, in the mch-fixtures
-// target, so that lz4/msgpack never reach a product binary.
+// target, so lz4 never reaches a product binary. The action payload writer also
+// uses msgpack in the product classifier.
 #pragma once
 
 #include "Value.h"

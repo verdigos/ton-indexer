@@ -1,6 +1,8 @@
 #include "Classify.h"
 
 #include "ActionBuild.h"
+#include "ActionJson.h"
+#include "ActionPayload.h"
 #include "BlockTree.h"
 #include "BuildDriver.h"
 #include "ClassifyCore.h"
@@ -12,10 +14,13 @@
 #include "fixtures/Render.h"
 #include "GenMatchers.h"
 #include "MsgParse.h"
+#include "emu/EmuActionSerialize.h"
+#include "emu/EmuTypes.h"
 
 #include "td/utils/base64.h"
 #include "td/utils/JsonBuilder.h"
 #include "td/utils/crypto.h"
+#include "td/utils/misc.h"
 
 #include "common/refint.h"
 
@@ -323,6 +328,80 @@ int run_actions(const std::vector<std::string> &paths, const std::string &output
                 const std::string &fixtures_manifest) {
   return run_dump(paths, /*actions_mode=*/true, load_trace_context, {}, output_dir,
                   fixtures_manifest);
+}
+
+int run_action_payload_dump(const std::vector<std::string> &paths, const std::string &output_path) {
+  namespace fs = std::filesystem;
+  std::error_code output_error;
+  const auto parent = fs::path(output_path).parent_path();
+  if (!parent.empty()) fs::create_directories(parent, output_error);
+  if (output_error) {
+    std::fprintf(stderr, "cannot create payload fixture directory %s: %s\n",
+                 parent.string().c_str(), output_error.message().c_str());
+    return 2;
+  }
+  std::ofstream output(output_path, std::ios::binary);
+  if (!output) {
+    std::fprintf(stderr, "cannot open payload fixture output %s\n", output_path.c_str());
+    return 2;
+  }
+  const auto &matchers = gen_matchers_ir();
+  const auto setup = prepare_classify(matchers);
+  if (setup.table_missing || setup.fn_missing) {
+    std::fprintf(stderr, "%s\n", setup.error.c_str());
+    return 2;
+  }
+  std::vector<std::string> fixtures;
+  for (const auto &path : paths) {
+    std::error_code error;
+    if (fs::is_directory(path, error)) {
+      std::vector<std::string> names;
+      for (const auto &entry : fs::directory_iterator(path)) {
+        if (entry.path().extension() == ".lz4") names.push_back(entry.path().string());
+      }
+      std::sort(names.begin(), names.end());
+      fixtures.insert(fixtures.end(), names.begin(), names.end());
+    } else {
+      fixtures.push_back(path);
+    }
+  }
+  for (const auto &fixture : fixtures) {
+    auto loaded = load_trace_context(fixture);
+    if (loaded.is_error()) {
+      std::fprintf(stderr, "cannot load %s: %s\n", fixture.c_str(), loaded.error().message().c_str());
+      return 2;
+    }
+    auto ctx = loaded.move_as_ok();
+    FixtureLookupSource source(&ctx.trace.interfaces);
+    auto result = classify_trace(ctx, matchers, setup, source);
+    std::vector<Action> actions;
+    const auto &rows = result.failure ? result.fallback_rows : result.action_rows;
+    for (const auto &row : rows) {
+      Action action;
+      if (build_action(row, action)) actions.push_back(std::move(action));
+    }
+    if (!result.failure && result.unknown_trace) actions.push_back(create_unknown_action(ctx.trace));
+
+    EmuTraceView view;
+    view.trace_id = ctx.trace.trace_id;
+    view.nodes.resize(1);
+    view.nodes.front().finality = EmuFinality::finalized;
+    for (const auto &action : actions) {
+      const auto payload = encode_action_payload(action);
+      const auto wire = serialize_actions({action}, view);
+      td::JsonBuilder builder;
+      {
+        auto line = builder.enter_object();
+        line("fixture_id", fs::path(fixture).stem().string());
+        line("action_id", action.action_id)("type", action.type);
+        line("legacy", td::JsonRaw(action_legacy_details_json(action)));
+        line("payload_hex", td::hex_encode(payload));
+        line("wire_hex", td::hex_encode(wire));
+      }
+      output << builder.string_builder().as_cslice().str() << '\n';
+    }
+  }
+  return 0;
 }
 
 }  // namespace mch
