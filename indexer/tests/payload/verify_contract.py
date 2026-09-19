@@ -103,10 +103,10 @@ def main():
     for pg_type in C['legacy_detail_columns'].values():
         assert pg_type in INV['composite_types']
 
-    # Independent Luna inventory confirms all persisted types after fill-time renames.
-    luna=json.loads((HERE/'action-inventory-luna.json').read_text())
-    assert set(C['actions'])==set(luna['by_emitted_type'])|{'unknown','tgbtc_mint_fallback','tgbtc_burn_fallback','tgbtc_new_key_fallback'}
-    for action,item in luna['by_emitted_type'].items():
+    # Independent inventory confirms all persisted types after fill-time renames.
+    inventory=json.loads((HERE/'action-inventory.json').read_text())
+    assert set(C['actions'])==set(inventory['by_emitted_type'])|{'unknown','tgbtc_mint_fallback','tgbtc_burn_fallback','tgbtc_new_key_fallback'}
+    for action,item in inventory['by_emitted_type'].items():
         declared={g['legacy_column'] for g in C['actions'][action]['groups'].values()}
         actual={k for k in item['detail_columns'] if '.' not in k}
         assert actual <= declared, (action,actual-declared)
