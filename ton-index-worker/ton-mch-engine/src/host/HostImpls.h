@@ -36,6 +36,9 @@ void tgbtc_deploy_absorb(Block *produced, const ShaperMatch &m);
 EvalResult stonfi_v1_swap_data(BuildEnv &env, const std::vector<Value> &args);
 EvalResult stonfi_v2_swap_data(BuildEnv &env, const std::vector<Value> &args);
 
+// pTON (DexPton.cpp): TON-wrapper master predicate.
+EvalResult is_pton_master(BuildEnv &env, const std::vector<Value> &args);
+
 // Tonco (HostTonco.cpp): deposit-liquidity, withdraw-payout, and swap fns.
 EvalResult tonco_deposit_liquidity_data(BuildEnv &env, const std::vector<Value> &args);
 EvalResult tonco_withdraw_payouts(BuildEnv &env, const std::vector<Value> &args);

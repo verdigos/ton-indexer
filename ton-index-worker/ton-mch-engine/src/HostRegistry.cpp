@@ -17,6 +17,7 @@ const std::map<std::string, HostFnEntry> &host_fns() {
   static const std::map<std::string, HostFnEntry> fns = {
       {"dedust_swap_legs", {dedust_swap_legs, 4}},
       {"dedust_v2_swap_min_out", {dedust_v2_swap_min_out, 1}},
+      {"is_pton_master", {is_pton_master, 1}},
       {"tonstakers_pool_addr", {tonstakers_pool_addr, 1}},
       {"nft_transfer_data", {nft_transfer_data, 1}},
       {"telegram_nft_purchase_data", {telegram_nft_purchase_data, 1}},
