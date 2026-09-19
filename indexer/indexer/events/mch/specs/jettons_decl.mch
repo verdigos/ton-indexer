@@ -59,8 +59,10 @@ matcher jetton_transfer {
 # every real trace). value_flow debits the owner by the burned amount
 # (add_jetton with a NEGATIVE amount).
 # ---------------------------------------------------------------------------
+# `include_bounces` is off: an aborted burn's bounce of its own inbound message stays a standalone call_contract row.
 matcher jetton_burn {
     produces jetton_burn
+    include_bounces false
 
     op JettonBurn @burn as JettonBurn -> maybe op JettonBurnNotification
 

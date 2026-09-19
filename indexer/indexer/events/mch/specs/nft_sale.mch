@@ -143,6 +143,7 @@ fn auction_data(init, h) = (
 
 matcher nft_update_sale {
     produces nft_update_sale
+    include_bounces false
 
     op SaleUpdate @upd as SaleUpdateMessage
 
