@@ -1401,6 +1401,18 @@
    "slug": "fragment-settle-transfer-spoofed-bid",
    "note": "synthetic: composed J4mgK7n4 (real code+state, mc 93495311) with the transfer's ownership_assigned forward_payload replaced by TeleitemBidInfo(1e15); the item forwards the caller payload as is (Fragment nft-item.fc:250-255); excluded from production comparison"
   },
+  "hFYotMnbSPFhY3v2kBCY3D2r73wSBamx_cqeKMViKrA=": {
+   "group": "nft",
+   "name": "Fragment settle-and-transfer, payout to the seller",
+   "slug": "fragment-settle-transfer-payout-seller",
+   "note": "real chain trace (mc 93328583, prod sample 2026-09-19): bid settle pays two fill_up legs (royalty + beneficiary = the seller), relay bot re-transfers the item in the same trace; saved by ton-fixture-save, which stores no code_hash / collection state, so the telemint_collection lookup returns unknown here (tool limitation, not a detector defect)"
+  },
+  "1R7f1gMvE3QXICasO27zO4ag0Zb2tYs42XZMI6fLFa8=": {
+   "group": "nft",
+   "name": "Fragment settle-and-transfer, payout to a third party",
+   "slug": "fragment-settle-transfer-payout-other",
+   "note": "real chain trace (mc 93466105, prod sample 2026-09-19): bid settle pays two fill_up legs (royalty + beneficiary != the seller), relay bot re-transfers the item in the same trace; saved by ton-fixture-save, which stores no code_hash / collection state, so the telemint_collection lookup returns unknown here (tool limitation, not a detector defect)"
+  },
   "o-0qrQ73jIN1uNaZwnYNQS9InHgidaWg00TKeOuo2c4=": {
    "group": "tonco",
    "name": "tonco v2 swap USDT to TON (pool exit 200)",
