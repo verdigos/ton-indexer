@@ -1480,6 +1480,18 @@
    "name": "stonfi v2 deposit slot order (api-sourced)",
    "slug": "stonfi-v2-deposit-slot-order",
    "note": "api-sourced, not synthetic: interfaces from API get-methods (toncenter v2 runGetMethodStd) at mc 93104681 (the trace's mc seqno), built 2026-09-19 by tests/utils/api_fixture.py; trace ba358cd8… from the sign-off comparator run; pins post_process_stonfi_v2_liquidity canonical (depth, min_lt) slot order"
+  },
+  "nEdMBNWGvDUfAjr8AeLBhgB-EIMygWUZmbtWc72LFUM=": {
+   "group": "mutations",
+   "name": "Tonco deposit, router wallet interface pruned",
+   "slug": "tonco-deposit-router-wallet-interface-pruned",
+   "note": "mutation, not replay; baseline 0GW2kNF4nRhw5xA3b5E35-EhF9H25H3Nvm5MJJo2VD0="
+  },
+  "yiHIyt0a6wWpCZ2HyjSYcN-J-bt-fekirz-ZJARQ0lc=": {
+   "group": "mutations",
+   "name": "Tonco deposit, fund-account wallet interface pruned",
+   "slug": "tonco-deposit-fund-account-wallet-interface-pruned",
+   "note": "mutation, not replay; baseline 0GW2kNF4nRhw5xA3b5E35-EhF9H25H3Nvm5MJJo2VD0="
   }
  }
 }
