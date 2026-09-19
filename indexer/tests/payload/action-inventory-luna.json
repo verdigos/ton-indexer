@@ -1,0 +1,4493 @@
+{
+  "metadata": {
+    "date": "2026-09-08",
+    "code_baseline": "mch-in-indexer a9c4c893",
+    "payload_wrapper_policy": "preserve existing *_data names; ordinary scalar fields remain outside payload",
+    "source_scope": "C++ ActionBuild dispatch/fillers plus Python block_to_action switch; read-only, no benchmarks",
+    "composite_columns_from_header": [
+      "ton_transfer_data",
+      "jetton_transfer_data",
+      "jetton_swap_data",
+      "nft_transfer_data",
+      "nft_listing_data",
+      "nft_mint_data",
+      "dex_deposit_liquidity_data",
+      "dex_withdraw_liquidity_data",
+      "staking_data",
+      "evaa_supply_data",
+      "evaa_withdraw_data",
+      "evaa_liquidate_data",
+      "vesting_send_message_data",
+      "vesting_add_whitelist_data",
+      "tonco_deploy_pool_data",
+      "multisig_create_order_data",
+      "multisig_approve_data",
+      "multisig_execute_data",
+      "cocoon_worker_payout_data",
+      "cocoon_proxy_payout_data",
+      "cocoon_proxy_charge_data",
+      "cocoon_client_top_up_data",
+      "cocoon_register_proxy_data",
+      "cocoon_unregister_proxy_data",
+      "cocoon_client_register_data",
+      "cocoon_client_change_secret_hash_data",
+      "cocoon_client_request_refund_data",
+      "cocoon_grant_refund_data",
+      "cocoon_client_increase_stake_data",
+      "cocoon_client_withdraw_data",
+      "layerzero_packet_data",
+      "layerzero_send_data",
+      "layerzero_dvn_verify_data",
+      "jvault_stake_data",
+      "jvault_claim_data",
+      "change_dns_record_data",
+      "coffee_create_pool_data",
+      "coffee_staking_deposit_data",
+      "coffee_staking_withdraw_data"
+    ],
+    "python_switch_source": "indexer/events/blocks/utils/block_tree_serializer.py:1396-1572",
+    "cpp_dispatch_source": "ton-index-worker/ton-mch-engine/src/ActionBuild.cpp:1517-1613"
+  },
+  "entries": [
+    {
+      "type": "varies_by_block_type",
+      "emitted_type_by_block": {
+        "call_contract": "call_contract",
+        "contract_deploy": "contract_deploy",
+        "gasless_request": "gasless_request",
+        "change_wallet_key": "change_wallet_key"
+      },
+      "block_types": [
+        "call_contract",
+        "contract_deploy",
+        "gasless_request",
+        "change_wallet_key"
+      ],
+      "fill_functions": [
+        "fill_call_contract"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1484-1495",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    {
+      "type": "ton_transfer",
+      "emitted_type_by_block": {
+        "ton_transfer": "ton_transfer"
+      },
+      "block_types": [
+        "ton_transfer"
+      ],
+      "fill_functions": [
+        "fill_ton_transfer"
+      ],
+      "detail_columns": {
+        "ton_transfer_data": [
+          "content",
+          "encrypted"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1497-1511",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "tick_tock",
+      "emitted_type_by_block": {
+        "tick_tock": "tick_tock"
+      },
+      "block_types": [
+        "tick_tock"
+      ],
+      "fill_functions": [
+        "fill_tick_tock"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1513-1515",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "jetton_transfer",
+      "emitted_type_by_block": {
+        "jetton_transfer": "jetton_transfer"
+      },
+      "block_types": [
+        "jetton_transfer"
+      ],
+      "fill_functions": [
+        "fill_jetton_transfer"
+      ],
+      "detail_columns": {
+        "jetton_transfer_data": [
+          "query_id",
+          "response_destination",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "comment",
+          "is_encrypted_comment"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:92-109",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "jetton_burn",
+      "emitted_type_by_block": {
+        "jetton_burn": "jetton_burn"
+      },
+      "block_types": [
+        "jetton_burn"
+      ],
+      "fill_functions": [
+        "fill_jetton_burn"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:111-116",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "jetton_mint",
+      "emitted_type_by_block": {
+        "jetton_mint": "jetton_mint"
+      },
+      "block_types": [
+        "jetton_mint"
+      ],
+      "fill_functions": [
+        "fill_jetton_mint"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:118-124",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "jetton_swap",
+      "emitted_type_by_block": {
+        "jetton_swap": "jetton_swap"
+      },
+      "block_types": [
+        "jetton_swap"
+      ],
+      "fill_functions": [
+        "fill_jetton_swap"
+      ],
+      "detail_columns": {
+        "jetton_swap_data": [
+          "dex",
+          "sender",
+          "dex_incoming_transfer",
+          "dex_outgoing_transfer",
+          "min_out_amount",
+          "peer_swaps"
+        ],
+        "jetton_swap_data.nested": {
+          "dex_incoming_transfer": [
+            "amount",
+            "source",
+            "source_jetton_wallet",
+            "destination",
+            "destination_jetton_wallet",
+            "asset"
+          ],
+          "dex_outgoing_transfer": [
+            "amount",
+            "source",
+            "source_jetton_wallet",
+            "destination",
+            "destination_jetton_wallet",
+            "asset"
+          ],
+          "peer_swaps[]": [
+            "amount_in",
+            "asset_in",
+            "amount_out",
+            "asset_out"
+          ]
+        }
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:147-186",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "nft_transfer",
+      "emitted_type_by_block": {
+        "nft_transfer": "nft_transfer"
+      },
+      "block_types": [
+        "nft_transfer"
+      ],
+      "fill_functions": [
+        "fill_nft_transfer"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ],
+        "nft_listing_data": [
+          "marketplace_fee_address",
+          "royalty_address"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:188-222",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "dex_deposit_liquidity",
+      "emitted_type_by_block": {
+        "dedust_deposit_liquidity": "dex_deposit_liquidity"
+      },
+      "block_types": [
+        "dedust_deposit_liquidity"
+      ],
+      "fill_functions": [
+        "fill_dedust_deposit"
+      ],
+      "detail_columns": {
+        "dex_deposit_liquidity_data": [
+          "dex",
+          "asset1",
+          "amount1",
+          "asset2",
+          "amount2",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "lp_tokens_minted",
+          "target_asset_1",
+          "target_amount_1",
+          "target_asset_2",
+          "target_amount_2",
+          "vault_excesses"
+        ],
+        "dex_deposit_liquidity_data.nested": {
+          "vault_excesses[]": [
+            "asset",
+            "amount"
+          ]
+        }
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:224-259",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "dex_deposit_liquidity",
+      "emitted_type_by_block": {
+        "coffee_deposit_liquidity": "dex_deposit_liquidity"
+      },
+      "block_types": [
+        "coffee_deposit_liquidity"
+      ],
+      "fill_functions": [
+        "fill_dedust_deposit"
+      ],
+      "detail_columns": {
+        "dex_deposit_liquidity_data": [
+          "dex",
+          "asset1",
+          "amount1",
+          "asset2",
+          "amount2",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "lp_tokens_minted",
+          "target_asset_1",
+          "target_amount_1",
+          "target_asset_2",
+          "target_amount_2",
+          "vault_excesses"
+        ],
+        "dex_deposit_liquidity_data.nested": {
+          "vault_excesses[]": [
+            "asset",
+            "amount"
+          ]
+        }
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:224-259",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "dex_deposit_liquidity",
+      "emitted_type_by_block": {
+        "dedust_deposit_liquidity_partial": "dex_deposit_liquidity"
+      },
+      "block_types": [
+        "dedust_deposit_liquidity_partial"
+      ],
+      "fill_functions": [
+        "fill_dedust_deposit_partial"
+      ],
+      "detail_columns": {
+        "dex_deposit_liquidity_data": [
+          "dex",
+          "asset1",
+          "amount1",
+          "asset2",
+          "amount2",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "lp_tokens_minted",
+          "target_asset_1",
+          "target_amount_1",
+          "target_asset_2",
+          "target_amount_2"
+        ],
+        "dex_deposit_liquidity_data.nested": {
+          "vault_excesses[]": [
+            "asset",
+            "amount"
+          ]
+        }
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:261-279",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "dex_deposit_liquidity",
+      "emitted_type_by_block": {
+        "dedust_v2_deposit_liquidity": "dex_deposit_liquidity"
+      },
+      "block_types": [
+        "dedust_v2_deposit_liquidity"
+      ],
+      "fill_functions": [
+        "fill_dedust_v2_deposit"
+      ],
+      "detail_columns": {
+        "dex_deposit_liquidity_data": [
+          "dex",
+          "asset1",
+          "amount1",
+          "asset2",
+          "amount2",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "lp_tokens_minted",
+          "target_asset_1",
+          "target_amount_1",
+          "target_asset_2",
+          "target_amount_2",
+          "vault_excesses"
+        ],
+        "dex_deposit_liquidity_data.nested": {
+          "vault_excesses[]": [
+            "asset",
+            "amount"
+          ]
+        }
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1162-1200",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "dex_deposit_liquidity",
+      "emitted_type_by_block": {
+        "dedust_v2_deposit_liquidity_partial": "dex_deposit_liquidity"
+      },
+      "block_types": [
+        "dedust_v2_deposit_liquidity_partial"
+      ],
+      "fill_functions": [
+        "fill_dedust_v2_deposit_partial",
+        "fill_dex_deposit_liquidity"
+      ],
+      "detail_columns": {
+        "dex_deposit_liquidity_data": [
+          "dex",
+          "amount1",
+          "amount2",
+          "asset1",
+          "asset2",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "lp_tokens_minted"
+        ],
+        "dex_deposit_liquidity_data.nested": {
+          "vault_excesses[]": [
+            "asset",
+            "amount"
+          ]
+        }
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1205-1212",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "dex_deposit_liquidity",
+      "emitted_type_by_block": {
+        "tonco_deposit_liquidity": "dex_deposit_liquidity"
+      },
+      "block_types": [
+        "tonco_deposit_liquidity"
+      ],
+      "fill_functions": [
+        "fill_tonco_deposit"
+      ],
+      "detail_columns": {
+        "dex_deposit_liquidity_data": [
+          "dex",
+          "amount1",
+          "amount2",
+          "asset1",
+          "asset2",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "lp_tokens_minted",
+          "tick_lower",
+          "tick_upper",
+          "nft_index",
+          "nft_address",
+          "target_amount_1",
+          "target_amount_2",
+          "target_asset_1",
+          "target_asset_2",
+          "vault_excesses"
+        ],
+        "dex_deposit_liquidity_data.nested": {
+          "vault_excesses[]": [
+            "asset",
+            "amount"
+          ]
+        }
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:356-413",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "dex_withdraw_liquidity",
+      "emitted_type_by_block": {
+        "tonco_withdraw_liquidity": "dex_withdraw_liquidity"
+      },
+      "block_types": [
+        "tonco_withdraw_liquidity"
+      ],
+      "fill_functions": [
+        "fill_tonco_withdraw"
+      ],
+      "detail_columns": {
+        "dex_withdraw_liquidity_data": [
+          "dex",
+          "amount1",
+          "amount2",
+          "asset1_out",
+          "asset2_out",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "dex_jetton_wallet_1",
+          "dex_wallet_1",
+          "dex_wallet_2",
+          "dex_jetton_wallet_2",
+          "is_refund",
+          "lp_tokens_burnt",
+          "burned_nft_index",
+          "burned_nft_address",
+          "tick_lower",
+          "tick_upper"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:329-354",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": [
+        "C++ emits is_refund here, but it is absent from the declared PostgreSQL composite schema."
+      ]
+    },
+    {
+      "type": "dedust_v2_claim_fees",
+      "emitted_type_by_block": {
+        "dedust_v2_claim_fees": "dedust_v2_claim_fees"
+      },
+      "block_types": [
+        "dedust_v2_claim_fees"
+      ],
+      "fill_functions": [
+        "fill_dedust_v2_claim_fees"
+      ],
+      "detail_columns": {
+        "dex_withdraw_liquidity_data": [
+          "dex",
+          "amount1",
+          "amount2",
+          "asset1_out",
+          "asset2_out",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "dex_wallet_1",
+          "dex_wallet_2",
+          "dex_jetton_wallet_1",
+          "dex_jetton_wallet_2",
+          "is_refund",
+          "lp_tokens_burnt"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:283-302",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": [
+        "C++ emits is_refund here, but it is absent from the declared PostgreSQL composite schema."
+      ]
+    },
+    {
+      "type": "dedust_v2_claim_reward",
+      "emitted_type_by_block": {
+        "dedust_v2_claim_reward": "dedust_v2_claim_reward"
+      },
+      "block_types": [
+        "dedust_v2_claim_reward"
+      ],
+      "fill_functions": [
+        "fill_dedust_v2_claim_reward"
+      ],
+      "detail_columns": {
+        "dex_withdraw_liquidity_data": [
+          "dex",
+          "amount1",
+          "amount2",
+          "asset1_out",
+          "asset2_out",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "dex_wallet_1",
+          "dex_wallet_2",
+          "dex_jetton_wallet_1",
+          "dex_jetton_wallet_2",
+          "is_refund",
+          "lp_tokens_burnt"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:306-325",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": [
+        "C++ emits is_refund here, but it is absent from the declared PostgreSQL composite schema."
+      ]
+    },
+    {
+      "type": "evaa_supply",
+      "emitted_type_by_block": {
+        "evaa_supply": "evaa_supply"
+      },
+      "block_types": [
+        "evaa_supply"
+      ],
+      "fill_functions": [
+        "fill_evaa_supply"
+      ],
+      "detail_columns": {
+        "evaa_supply_data": [
+          "is_ton",
+          "asset_id",
+          "master",
+          "recipient_jetton_wallet",
+          "master_jetton_wallet"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:416-435",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "evaa_withdraw",
+      "emitted_type_by_block": {
+        "evaa_withdraw": "evaa_withdraw"
+      },
+      "block_types": [
+        "evaa_withdraw"
+      ],
+      "fill_functions": [
+        "fill_evaa_withdraw"
+      ],
+      "detail_columns": {
+        "evaa_withdraw_data": [
+          "is_ton",
+          "recipient_jetton_wallet",
+          "master_jetton_wallet",
+          "fail_reason",
+          "master",
+          "asset_id"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:437-456",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "evaa_liquidate",
+      "emitted_type_by_block": {
+        "evaa_liquidate": "evaa_liquidate"
+      },
+      "block_types": [
+        "evaa_liquidate"
+      ],
+      "fill_functions": [
+        "fill_evaa_liquidate"
+      ],
+      "detail_columns": {
+        "evaa_liquidate_data": [
+          "fail_reason",
+          "debt_amount",
+          "asset_id"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:460-472",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "jvault_stake",
+      "emitted_type_by_block": {
+        "jvault_stake": "jvault_stake"
+      },
+      "block_types": [
+        "jvault_stake"
+      ],
+      "fill_functions": [
+        "fill_jvault_stake"
+      ],
+      "detail_columns": {
+        "jvault_stake_data": [
+          "period",
+          "stake_wallet"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:476-486",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "jvault_unstake",
+      "emitted_type_by_block": {
+        "jvault_unstake": "jvault_unstake"
+      },
+      "block_types": [
+        "jvault_unstake"
+      ],
+      "fill_functions": [
+        "fill_jvault_unstake"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:488-496",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "jvault_unstake_request",
+      "emitted_type_by_block": {
+        "jvault_unstake_request": "jvault_unstake_request"
+      },
+      "block_types": [
+        "jvault_unstake_request"
+      ],
+      "fill_functions": [
+        "fill_jvault_unstake_request"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:498-506",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "jvault_claim",
+      "emitted_type_by_block": {
+        "jvault_claim": "jvault_claim"
+      },
+      "block_types": [
+        "jvault_claim"
+      ],
+      "fill_functions": [
+        "fill_jvault_claim"
+      ],
+      "detail_columns": {
+        "jvault_claim_data": [
+          "claimed_jettons",
+          "claimed_amounts"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:508-521",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "stake_deposit",
+      "emitted_type_by_block": {
+        "ethena_deposit": "stake_deposit"
+      },
+      "block_types": [
+        "ethena_deposit"
+      ],
+      "fill_functions": [
+        "fill_ethena_deposit"
+      ],
+      "detail_columns": {
+        "staking_data": [
+          "provider",
+          "tokens_minted"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:523-535",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "layerzero_receive",
+      "emitted_type_by_block": {
+        "layerzero_receive": "layerzero_receive"
+      },
+      "block_types": [
+        "layerzero_receive"
+      ],
+      "fill_functions": [
+        "fill_layerzero_receive"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:537-542",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "layerzero_send",
+      "emitted_type_by_block": {
+        "layerzero_send": "layerzero_send"
+      },
+      "block_types": [
+        "layerzero_send"
+      ],
+      "fill_functions": [
+        "fill_layerzero_send",
+        "fill_layerzero_send_fields"
+      ],
+      "detail_columns": {
+        "layerzero_send_data": [
+          "send_request_id",
+          "msglib_manager",
+          "msglib",
+          "uln",
+          "native_fee",
+          "zro_fee",
+          "endpoint",
+          "channel"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:560-563",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "layerzero_send_tokens",
+      "emitted_type_by_block": {
+        "layerzero_send_tokens": "layerzero_send_tokens"
+      },
+      "block_types": [
+        "layerzero_send_tokens"
+      ],
+      "fill_functions": [
+        "fill_layerzero_send_tokens",
+        "fill_layerzero_send_fields"
+      ],
+      "detail_columns": {
+        "layerzero_send_data": [
+          "send_request_id",
+          "msglib_manager",
+          "msglib",
+          "uln",
+          "native_fee",
+          "zro_fee",
+          "endpoint",
+          "channel"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:565-573",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "layerzero_commit_packet",
+      "emitted_type_by_block": {
+        "layerzero_commit_packet": "layerzero_commit_packet"
+      },
+      "block_types": [
+        "layerzero_commit_packet"
+      ],
+      "fill_functions": [
+        "fill_layerzero_commit_packet"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:577-585",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "layerzero_dvn_verify",
+      "emitted_type_by_block": {
+        "layerzero_dvn_verify": "layerzero_dvn_verify"
+      },
+      "block_types": [
+        "layerzero_dvn_verify"
+      ],
+      "fill_functions": [
+        "fill_layerzero_dvn_verify"
+      ],
+      "detail_columns": {
+        "layerzero_dvn_verify_data": [
+          "nonce",
+          "status",
+          "dvn",
+          "proxy",
+          "uln",
+          "uln_connection"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:587-597",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "coffee_create_vault",
+      "emitted_type_by_block": {
+        "coffee_create_vault": "coffee_create_vault"
+      },
+      "block_types": [
+        "coffee_create_vault"
+      ],
+      "fill_functions": [
+        "fill_coffee_create_vault"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:599-604",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "coffee_create_pool_creator",
+      "emitted_type_by_block": {
+        "coffee_create_pool_creator": "coffee_create_pool_creator"
+      },
+      "block_types": [
+        "coffee_create_pool_creator"
+      ],
+      "fill_functions": [
+        "fill_coffee_create_pool_creator"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:609-618",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "coffee_create_pool",
+      "emitted_type_by_block": {
+        "coffee_create_pool": "coffee_create_pool"
+      },
+      "block_types": [
+        "coffee_create_pool"
+      ],
+      "fill_functions": [
+        "fill_coffee_create_pool"
+      ],
+      "detail_columns": {
+        "coffee_create_pool_data": [
+          "amount_1",
+          "amount_2",
+          "initiator_1",
+          "initiator_2",
+          "provided_asset",
+          "lp_tokens_minted"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:620-636",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "coffee_mev_protect_hold_funds",
+      "emitted_type_by_block": {
+        "coffee_mev_protect_hold_funds": "coffee_mev_protect_hold_funds"
+      },
+      "block_types": [
+        "coffee_mev_protect_hold_funds"
+      ],
+      "fill_functions": [
+        "fill_coffee_mev_protect_hold_funds"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:638-645",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "coffee_staking_deposit",
+      "emitted_type_by_block": {
+        "coffee_staking_deposit": "coffee_staking_deposit"
+      },
+      "block_types": [
+        "coffee_staking_deposit"
+      ],
+      "fill_functions": [
+        "fill_coffee_staking_deposit"
+      ],
+      "detail_columns": {
+        "coffee_staking_deposit_data": [
+          "minted_item_address",
+          "minted_item_index"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:647-660",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "coffee_staking_withdraw",
+      "emitted_type_by_block": {
+        "coffee_staking_withdraw": "coffee_staking_withdraw"
+      },
+      "block_types": [
+        "coffee_staking_withdraw"
+      ],
+      "fill_functions": [
+        "fill_coffee_staking_withdraw"
+      ],
+      "detail_columns": {
+        "coffee_staking_withdraw_data": [
+          "nft_address",
+          "nft_index",
+          "points"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:662-674",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "coffee_staking_claim_rewards",
+      "emitted_type_by_block": {
+        "coffee_staking_claim_rewards": "coffee_staking_claim_rewards"
+      },
+      "block_types": [
+        "coffee_staking_claim_rewards"
+      ],
+      "fill_functions": [
+        "fill_coffee_staking_claim_rewards"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:676-685",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "vesting_send_message",
+      "emitted_type_by_block": {
+        "vesting_send_message": "vesting_send_message"
+      },
+      "block_types": [
+        "vesting_send_message"
+      ],
+      "fill_functions": [
+        "fill_vesting_send_message"
+      ],
+      "detail_columns": {
+        "vesting_send_message_data": [
+          "query_id",
+          "message_boc"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:687-698",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "vesting_add_whitelist",
+      "emitted_type_by_block": {
+        "vesting_add_whitelist": "vesting_add_whitelist"
+      },
+      "block_types": [
+        "vesting_add_whitelist"
+      ],
+      "fill_functions": [
+        "fill_vesting_add_whitelist"
+      ],
+      "detail_columns": {
+        "vesting_add_whitelist_data": [
+          "query_id",
+          "accounts_added"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:702-714",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "multisig_create_order",
+      "emitted_type_by_block": {
+        "multisig_create_order": "multisig_create_order"
+      },
+      "block_types": [
+        "multisig_create_order"
+      ],
+      "fill_functions": [
+        "fill_multisig_create_order"
+      ],
+      "detail_columns": {
+        "multisig_create_order_data": [
+          "query_id",
+          "order_seqno",
+          "is_created_by_signer",
+          "is_signed_by_creator",
+          "creator_index",
+          "expiration_date",
+          "order_boc"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:716-731",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "multisig_approve",
+      "emitted_type_by_block": {
+        "multisig_approve": "multisig_approve"
+      },
+      "block_types": [
+        "multisig_approve"
+      ],
+      "fill_functions": [
+        "fill_multisig_approve"
+      ],
+      "detail_columns": {
+        "multisig_approve_data": [
+          "signer_index",
+          "exit_code"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:733-744",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "multisig_execute",
+      "emitted_type_by_block": {
+        "multisig_execute": "multisig_execute"
+      },
+      "block_types": [
+        "multisig_execute"
+      ],
+      "fill_functions": [
+        "fill_multisig_execute"
+      ],
+      "detail_columns": {
+        "multisig_execute_data": [
+          "query_id",
+          "order_seqno",
+          "expiration_date",
+          "approvals_num",
+          "signers_hash",
+          "order_boc"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:746-761",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "tonco_deploy_pool",
+      "emitted_type_by_block": {
+        "tonco_deploy_pool": "tonco_deploy_pool"
+      },
+      "block_types": [
+        "tonco_deploy_pool"
+      ],
+      "fill_functions": [
+        "fill_tonco_deploy_pool"
+      ],
+      "detail_columns": {
+        "tonco_deploy_pool_data": [
+          "jetton0_router_wallet",
+          "jetton1_router_wallet",
+          "jetton0_minter",
+          "jetton1_minter",
+          "tick_spacing",
+          "initial_price_x96",
+          "protocol_fee",
+          "lp_fee_base",
+          "lp_fee_current",
+          "pool_active"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:765-783",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "stake_withdrawal_request",
+      "emitted_type_by_block": {
+        "ethena_withdrawal_request": "stake_withdrawal_request"
+      },
+      "block_types": [
+        "ethena_withdrawal_request"
+      ],
+      "fill_functions": [
+        "fill_ethena_withdrawal_request"
+      ],
+      "detail_columns": {
+        "staking_data": [
+          "provider",
+          "tokens_minted"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:788-799",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "cocoon_worker_payout",
+      "emitted_type_by_block": {
+        "cocoon_worker_payout": "cocoon_worker_payout"
+      },
+      "block_types": [
+        "cocoon_worker_payout"
+      ],
+      "fill_functions": [
+        "fill_cocoon_worker_payout"
+      ],
+      "detail_columns": {
+        "cocoon_worker_payout_data": [
+          "payout_type",
+          "query_id",
+          "new_tokens",
+          "worker_state",
+          "worker_tokens"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:801-813",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "cocoon_proxy_payout",
+      "emitted_type_by_block": {
+        "cocoon_proxy_payout": "cocoon_proxy_payout"
+      },
+      "block_types": [
+        "cocoon_proxy_payout"
+      ],
+      "fill_functions": [
+        "fill_cocoon_proxy_payout"
+      ],
+      "detail_columns": {
+        "cocoon_proxy_payout_data": [
+          "query_id"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:815-822",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "cocoon_proxy_charge",
+      "emitted_type_by_block": {
+        "cocoon_proxy_charge": "cocoon_proxy_charge"
+      },
+      "block_types": [
+        "cocoon_proxy_charge"
+      ],
+      "fill_functions": [
+        "fill_cocoon_proxy_charge"
+      ],
+      "detail_columns": {
+        "cocoon_proxy_charge_data": [
+          "query_id",
+          "new_tokens_used",
+          "expected_address"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:826-835",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "cocoon_client_top_up",
+      "emitted_type_by_block": {
+        "cocoon_client_top_up": "cocoon_client_top_up"
+      },
+      "block_types": [
+        "cocoon_client_top_up"
+      ],
+      "fill_functions": [
+        "fill_cocoon_client_top_up"
+      ],
+      "detail_columns": {
+        "cocoon_client_top_up_data": [
+          "query_id"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:837-845",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "cocoon_register_proxy",
+      "emitted_type_by_block": {
+        "cocoon_register_proxy": "cocoon_register_proxy"
+      },
+      "block_types": [
+        "cocoon_register_proxy"
+      ],
+      "fill_functions": [
+        "fill_cocoon_register_proxy"
+      ],
+      "detail_columns": {
+        "cocoon_register_proxy_data": [
+          "query_id"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:847-852",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "cocoon_unregister_proxy",
+      "emitted_type_by_block": {
+        "cocoon_unregister_proxy": "cocoon_unregister_proxy"
+      },
+      "block_types": [
+        "cocoon_unregister_proxy"
+      ],
+      "fill_functions": [
+        "fill_cocoon_unregister_proxy"
+      ],
+      "detail_columns": {
+        "cocoon_unregister_proxy_data": [
+          "query_id",
+          "seqno"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:854-860",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "cocoon_client_register",
+      "emitted_type_by_block": {
+        "cocoon_client_register": "cocoon_client_register"
+      },
+      "block_types": [
+        "cocoon_client_register"
+      ],
+      "fill_functions": [
+        "fill_cocoon_client_register"
+      ],
+      "detail_columns": {
+        "cocoon_client_register_data": [
+          "query_id",
+          "nonce"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:862-869",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "cocoon_client_change_secret_hash",
+      "emitted_type_by_block": {
+        "cocoon_client_change_secret_hash": "cocoon_client_change_secret_hash"
+      },
+      "block_types": [
+        "cocoon_client_change_secret_hash"
+      ],
+      "fill_functions": [
+        "fill_cocoon_client_change_secret_hash"
+      ],
+      "detail_columns": {
+        "cocoon_client_change_secret_hash_data": [
+          "query_id",
+          "new_secret_hash"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:873-880",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "cocoon_client_request_refund",
+      "emitted_type_by_block": {
+        "cocoon_client_request_refund": "cocoon_client_request_refund"
+      },
+      "block_types": [
+        "cocoon_client_request_refund"
+      ],
+      "fill_functions": [
+        "fill_cocoon_client_request_refund"
+      ],
+      "detail_columns": {
+        "cocoon_client_request_refund_data": [
+          "query_id",
+          "via_wallet"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:882-889",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "cocoon_grant_refund",
+      "emitted_type_by_block": {
+        "cocoon_grant_refund": "cocoon_grant_refund"
+      },
+      "block_types": [
+        "cocoon_grant_refund"
+      ],
+      "fill_functions": [
+        "fill_cocoon_grant_refund"
+      ],
+      "detail_columns": {
+        "cocoon_grant_refund_data": [
+          "query_id",
+          "new_tokens_used",
+          "expected_address"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:891-901",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "cocoon_client_increase_stake",
+      "emitted_type_by_block": {
+        "cocoon_client_increase_stake": "cocoon_client_increase_stake"
+      },
+      "block_types": [
+        "cocoon_client_increase_stake"
+      ],
+      "fill_functions": [
+        "fill_cocoon_client_increase_stake"
+      ],
+      "detail_columns": {
+        "cocoon_client_increase_stake_data": [
+          "query_id",
+          "new_stake"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:905-913",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "cocoon_client_withdraw",
+      "emitted_type_by_block": {
+        "cocoon_client_withdraw": "cocoon_client_withdraw"
+      },
+      "block_types": [
+        "cocoon_client_withdraw"
+      ],
+      "fill_functions": [
+        "fill_cocoon_client_withdraw"
+      ],
+      "detail_columns": {
+        "cocoon_client_withdraw_data": [
+          "query_id",
+          "withdraw_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:915-923",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "tgbtc_mint",
+      "emitted_type_by_block": {
+        "tgbtc_mint": "tgbtc_mint"
+      },
+      "block_types": [
+        "tgbtc_mint"
+      ],
+      "fill_functions": [
+        "fill_tgbtc_mint"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "btc_txid",
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:925-940",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "tgbtc_burn",
+      "emitted_type_by_block": {
+        "tgbtc_burn": "tgbtc_burn"
+      },
+      "block_types": [
+        "tgbtc_burn"
+      ],
+      "fill_functions": [
+        "fill_tgbtc_burn"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:944-953",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "tgbtc_new_key",
+      "emitted_type_by_block": {
+        "tgbtc_new_key": "tgbtc_new_key"
+      },
+      "block_types": [
+        "tgbtc_new_key"
+      ],
+      "fill_functions": [
+        "fill_tgbtc_new_key"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "pubkey",
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:957-969",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "tgbtc_dkg_log_fallback",
+      "emitted_type_by_block": {
+        "tgbtc_dkg_log": "tgbtc_dkg_log_fallback"
+      },
+      "block_types": [
+        "tgbtc_dkg_log"
+      ],
+      "fill_functions": [
+        "fill_tgbtc_dkg_log"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "pubkey",
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:973-980",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "renew_dns",
+      "emitted_type_by_block": {
+        "renew_dns": "renew_dns"
+      },
+      "block_types": [
+        "renew_dns"
+      ],
+      "fill_functions": [
+        "fill_dns_renew"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:982-986",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "stake_deposit",
+      "emitted_type_by_block": {
+        "nominator_pool_deposit": "stake_deposit"
+      },
+      "block_types": [
+        "nominator_pool_deposit"
+      ],
+      "fill_functions": [
+        "fill_nominator_pool_deposit"
+      ],
+      "detail_columns": {
+        "staking_data": [
+          "provider"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1055-1063",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "stake_withdrawal_request",
+      "emitted_type_by_block": {
+        "nominator_pool_withdraw_request": "stake_withdrawal_request"
+      },
+      "block_types": [
+        "nominator_pool_withdraw_request"
+      ],
+      "fill_functions": [
+        "fill_nominator_pool_withdraw_request"
+      ],
+      "detail_columns": {
+        "staking_data": [
+          "provider"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1065-1080",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "varies_by_block_type",
+      "emitted_type_by_block": {
+        "election_deposit": "election_deposit",
+        "election_recover": "election_recover"
+      },
+      "block_types": [
+        "election_deposit",
+        "election_recover"
+      ],
+      "fill_functions": [
+        "fill_election"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1084-1087",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    {
+      "type": "subscribe",
+      "emitted_type_by_block": {
+        "subscribe": "subscribe"
+      },
+      "block_types": [
+        "subscribe"
+      ],
+      "fill_functions": [
+        "fill_subscribe"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1089-1094",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "unsubscribe",
+      "emitted_type_by_block": {
+        "unsubscribe": "unsubscribe"
+      },
+      "block_types": [
+        "unsubscribe"
+      ],
+      "fill_functions": [
+        "fill_unsubscribe"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1096-1100",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "stake_deposit",
+      "emitted_type_by_block": {
+        "tonstakers_deposit": "stake_deposit"
+      },
+      "block_types": [
+        "tonstakers_deposit"
+      ],
+      "fill_functions": [
+        "fill_tonstakers_deposit"
+      ],
+      "detail_columns": {
+        "staking_data": [
+          "provider",
+          "tokens_minted"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1102-1112",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "stake_withdrawal",
+      "emitted_type_by_block": {
+        "tonstakers_withdraw": "stake_withdrawal"
+      },
+      "block_types": [
+        "tonstakers_withdraw"
+      ],
+      "fill_functions": [
+        "fill_tonstakers_withdraw"
+      ],
+      "detail_columns": {
+        "staking_data": [
+          "provider",
+          "ts_nft",
+          "tokens_burnt"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1114-1125",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "stake_withdrawal_request",
+      "emitted_type_by_block": {
+        "tonstakers_withdraw_request": "stake_withdrawal_request"
+      },
+      "block_types": [
+        "tonstakers_withdraw_request"
+      ],
+      "fill_functions": [
+        "fill_tonstakers_withdraw_request"
+      ],
+      "detail_columns": {
+        "staking_data": [
+          "provider",
+          "ts_nft"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1127-1138",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "dex_deposit_liquidity",
+      "emitted_type_by_block": {
+        "dex_deposit_liquidity": "dex_deposit_liquidity"
+      },
+      "block_types": [
+        "dex_deposit_liquidity"
+      ],
+      "fill_functions": [
+        "fill_dex_deposit_liquidity"
+      ],
+      "detail_columns": {
+        "dex_deposit_liquidity_data": [
+          "dex",
+          "amount1",
+          "amount2",
+          "asset1",
+          "asset2",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "lp_tokens_minted"
+        ],
+        "dex_deposit_liquidity_data.nested": {
+          "vault_excesses[]": [
+            "asset",
+            "amount"
+          ]
+        }
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1142-1155",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "dex_withdraw_liquidity",
+      "emitted_type_by_block": {
+        "dex_withdraw_liquidity": "dex_withdraw_liquidity"
+      },
+      "block_types": [
+        "dex_withdraw_liquidity"
+      ],
+      "fill_functions": [
+        "fill_dex_withdraw_liquidity"
+      ],
+      "detail_columns": {
+        "dex_withdraw_liquidity_data": [
+          "dex",
+          "amount1",
+          "amount2",
+          "asset1_out",
+          "asset2_out",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "dex_jetton_wallet_1",
+          "dex_wallet_1",
+          "dex_wallet_2",
+          "dex_jetton_wallet_2",
+          "is_refund",
+          "lp_tokens_burnt"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1214-1234",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": [
+        "C++ emits is_refund here, but it is absent from the declared PostgreSQL composite schema."
+      ]
+    },
+    {
+      "type": "nft_purchase",
+      "emitted_type_by_block": {
+        "nft_purchase": "nft_purchase"
+      },
+      "block_types": [
+        "nft_purchase"
+      ],
+      "fill_functions": [
+        "fill_nft_purchase"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1238-1261",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "dns_purchase",
+      "emitted_type_by_block": {
+        "dns_purchase": "dns_purchase"
+      },
+      "block_types": [
+        "dns_purchase"
+      ],
+      "fill_functions": [
+        "fill_nft_purchase"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1238-1261",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "dns_release",
+      "emitted_type_by_block": {
+        "dns_release": "dns_release"
+      },
+      "block_types": [
+        "dns_release"
+      ],
+      "fill_functions": [
+        "fill_dns_release"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1263-1286",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "change_dns",
+      "emitted_type_by_block": {
+        "change_dns": "change_dns"
+      },
+      "block_types": [
+        "change_dns"
+      ],
+      "fill_functions": [
+        "fill_change_dns"
+      ],
+      "detail_columns": {
+        "change_dns_record_data": [
+          "value_schema",
+          "flags",
+          "key",
+          "value"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1007-1040",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "delete_dns",
+      "emitted_type_by_block": {
+        "delete_dns": "delete_dns"
+      },
+      "block_types": [
+        "delete_dns"
+      ],
+      "fill_functions": [
+        "fill_delete_dns"
+      ],
+      "detail_columns": {
+        "change_dns_record_data": [
+          "value_schema",
+          "flags",
+          "key"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1044-1053",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "varies_by_block_type",
+      "emitted_type_by_block": {
+        "teleitem_start_auction": "teleitem_start_auction",
+        "nft_put_on_auction": "nft_put_on_auction"
+      },
+      "block_types": [
+        "teleitem_start_auction",
+        "nft_put_on_auction"
+      ],
+      "fill_functions": [
+        "fill_nft_put_on_auction"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "marketplace_address"
+        ],
+        "nft_listing_data": [
+          "nft_item_index",
+          "mp_fee_factor",
+          "mp_fee_base",
+          "royalty_fee_base",
+          "max_bid",
+          "min_bid",
+          "marketplace_fee_address",
+          "marketplace",
+          "royalty_address",
+          "full_price",
+          "marketplace_fee",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1288-1312",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    {
+      "type": "varies_by_block_type",
+      "emitted_type_by_block": {
+        "teleitem_cancel_auction": "teleitem_cancel_auction",
+        "nft_cancel_sale": "nft_cancel_sale",
+        "nft_cancel_auction": "nft_cancel_auction",
+        "nft_finish_auction": "nft_finish_auction"
+      },
+      "block_types": [
+        "teleitem_cancel_auction",
+        "nft_cancel_sale",
+        "nft_cancel_auction",
+        "nft_finish_auction"
+      ],
+      "fill_functions": [
+        "fill_cancel_nft_trade"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1319-1343",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    {
+      "type": "nft_put_on_sale",
+      "emitted_type_by_block": {
+        "nft_put_on_sale": "nft_put_on_sale"
+      },
+      "block_types": [
+        "nft_put_on_sale"
+      ],
+      "fill_functions": [
+        "fill_nft_put_on_sale"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "marketplace_address"
+        ],
+        "nft_listing_data": [
+          "nft_item_index",
+          "full_price",
+          "marketplace_fee",
+          "royalty_amount",
+          "marketplace_fee_address",
+          "marketplace",
+          "royalty_address",
+          "mp_fee_factor",
+          "mp_fee_base",
+          "royalty_fee_base",
+          "max_bid",
+          "min_bid"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1348-1372",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "nft_update_sale",
+      "emitted_type_by_block": {
+        "nft_update_sale": "nft_update_sale"
+      },
+      "block_types": [
+        "nft_update_sale"
+      ],
+      "fill_functions": [
+        "fill_sale_update"
+      ],
+      "detail_columns": {
+        "nft_listing_data": [
+          "nft_item_index",
+          "full_price",
+          "marketplace_fee",
+          "royalty_amount",
+          "marketplace_fee_address",
+          "marketplace",
+          "royalty_address",
+          "mp_fee_factor",
+          "mp_fee_base",
+          "royalty_fee_base",
+          "max_bid",
+          "min_bid"
+        ],
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1376-1413",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "auction_bid",
+      "emitted_type_by_block": {
+        "auction_bid": "auction_bid"
+      },
+      "block_types": [
+        "auction_bid"
+      ],
+      "fill_functions": [
+        "fill_auction_bid"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "nft_item_index",
+          "marketplace"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1415-1426",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "auction_outbid",
+      "emitted_type_by_block": {
+        "auction_outbid": "auction_outbid"
+      },
+      "block_types": [
+        "auction_outbid"
+      ],
+      "fill_functions": [
+        "fill_auction_outbid"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "marketplace"
+        ],
+        "ton_transfer_data": [
+          "comment"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1428-1442",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "nft_discovery",
+      "emitted_type_by_block": {
+        "nft_discovery": "nft_discovery"
+      },
+      "block_types": [
+        "nft_discovery"
+      ],
+      "fill_functions": [
+        "fill_nft_discovery"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1445-1467",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    },
+    {
+      "type": "nft_mint",
+      "emitted_type_by_block": {
+        "nft_mint": "nft_mint"
+      },
+      "block_types": [
+        "nft_mint"
+      ],
+      "fill_functions": [
+        "fill_nft_mint"
+      ],
+      "detail_columns": {
+        "nft_mint_data": [
+          "nft_item_index"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "source_refs": [
+        "ActionBuild.cpp:1471-1480",
+        "ActionBuild.cpp:1518-1614"
+      ],
+      "uncertainties": []
+    }
+  ],
+  "by_emitted_type": {
+    "call_contract": {
+      "source_block_types": [
+        "call_contract"
+      ],
+      "fill_functions": [
+        "fill_call_contract"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    "contract_deploy": {
+      "source_block_types": [
+        "contract_deploy"
+      ],
+      "fill_functions": [
+        "fill_call_contract"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    "gasless_request": {
+      "source_block_types": [
+        "gasless_request"
+      ],
+      "fill_functions": [
+        "fill_call_contract"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    "change_wallet_key": {
+      "source_block_types": [
+        "change_wallet_key"
+      ],
+      "fill_functions": [
+        "fill_call_contract"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    "ton_transfer": {
+      "source_block_types": [
+        "ton_transfer"
+      ],
+      "fill_functions": [
+        "fill_ton_transfer"
+      ],
+      "detail_columns": {
+        "ton_transfer_data": [
+          "content",
+          "encrypted"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "tick_tock": {
+      "source_block_types": [
+        "tick_tock"
+      ],
+      "fill_functions": [
+        "fill_tick_tock"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "jetton_transfer": {
+      "source_block_types": [
+        "jetton_transfer"
+      ],
+      "fill_functions": [
+        "fill_jetton_transfer"
+      ],
+      "detail_columns": {
+        "jetton_transfer_data": [
+          "query_id",
+          "response_destination",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "comment",
+          "is_encrypted_comment"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "jetton_burn": {
+      "source_block_types": [
+        "jetton_burn"
+      ],
+      "fill_functions": [
+        "fill_jetton_burn"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "jetton_mint": {
+      "source_block_types": [
+        "jetton_mint"
+      ],
+      "fill_functions": [
+        "fill_jetton_mint"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "jetton_swap": {
+      "source_block_types": [
+        "jetton_swap"
+      ],
+      "fill_functions": [
+        "fill_jetton_swap"
+      ],
+      "detail_columns": {
+        "jetton_swap_data": [
+          "dex",
+          "sender",
+          "dex_incoming_transfer",
+          "dex_outgoing_transfer",
+          "min_out_amount",
+          "peer_swaps"
+        ],
+        "jetton_swap_data.nested": {
+          "dex_incoming_transfer": [
+            "amount",
+            "source",
+            "source_jetton_wallet",
+            "destination",
+            "destination_jetton_wallet",
+            "asset"
+          ],
+          "dex_outgoing_transfer": [
+            "amount",
+            "source",
+            "source_jetton_wallet",
+            "destination",
+            "destination_jetton_wallet",
+            "asset"
+          ],
+          "peer_swaps[]": [
+            "amount_in",
+            "asset_in",
+            "amount_out",
+            "asset_out"
+          ]
+        }
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "nft_transfer": {
+      "source_block_types": [
+        "nft_transfer"
+      ],
+      "fill_functions": [
+        "fill_nft_transfer"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ],
+        "nft_listing_data": [
+          "marketplace_fee_address",
+          "royalty_address"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "dex_deposit_liquidity": {
+      "source_block_types": [
+        "dedust_deposit_liquidity",
+        "coffee_deposit_liquidity",
+        "dedust_deposit_liquidity_partial",
+        "dedust_v2_deposit_liquidity",
+        "dedust_v2_deposit_liquidity_partial",
+        "tonco_deposit_liquidity",
+        "dex_deposit_liquidity"
+      ],
+      "fill_functions": [
+        "fill_dedust_deposit",
+        "fill_dedust_deposit_partial",
+        "fill_dedust_v2_deposit",
+        "fill_dedust_v2_deposit_partial",
+        "fill_dex_deposit_liquidity",
+        "fill_tonco_deposit"
+      ],
+      "detail_columns": {
+        "dex_deposit_liquidity_data": [
+          "dex",
+          "asset1",
+          "amount1",
+          "asset2",
+          "amount2",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "lp_tokens_minted",
+          "target_asset_1",
+          "target_amount_1",
+          "target_asset_2",
+          "target_amount_2",
+          "vault_excesses",
+          "tick_lower",
+          "tick_upper",
+          "nft_index",
+          "nft_address"
+        ],
+        "dex_deposit_liquidity_data.nested": {
+          "vault_excesses[]": [
+            "asset",
+            "amount"
+          ]
+        }
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "dex_withdraw_liquidity": {
+      "source_block_types": [
+        "tonco_withdraw_liquidity",
+        "dex_withdraw_liquidity"
+      ],
+      "fill_functions": [
+        "fill_tonco_withdraw",
+        "fill_dex_withdraw_liquidity"
+      ],
+      "detail_columns": {
+        "dex_withdraw_liquidity_data": [
+          "dex",
+          "amount1",
+          "amount2",
+          "asset1_out",
+          "asset2_out",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "dex_jetton_wallet_1",
+          "dex_wallet_1",
+          "dex_wallet_2",
+          "dex_jetton_wallet_2",
+          "is_refund",
+          "lp_tokens_burnt",
+          "burned_nft_index",
+          "burned_nft_address",
+          "tick_lower",
+          "tick_upper"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "C++ emits is_refund here, but it is absent from the declared PostgreSQL composite schema."
+      ]
+    },
+    "dedust_v2_claim_fees": {
+      "source_block_types": [
+        "dedust_v2_claim_fees"
+      ],
+      "fill_functions": [
+        "fill_dedust_v2_claim_fees"
+      ],
+      "detail_columns": {
+        "dex_withdraw_liquidity_data": [
+          "dex",
+          "amount1",
+          "amount2",
+          "asset1_out",
+          "asset2_out",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "dex_wallet_1",
+          "dex_wallet_2",
+          "dex_jetton_wallet_1",
+          "dex_jetton_wallet_2",
+          "is_refund",
+          "lp_tokens_burnt"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "C++ emits is_refund here, but it is absent from the declared PostgreSQL composite schema."
+      ]
+    },
+    "dedust_v2_claim_reward": {
+      "source_block_types": [
+        "dedust_v2_claim_reward"
+      ],
+      "fill_functions": [
+        "fill_dedust_v2_claim_reward"
+      ],
+      "detail_columns": {
+        "dex_withdraw_liquidity_data": [
+          "dex",
+          "amount1",
+          "amount2",
+          "asset1_out",
+          "asset2_out",
+          "user_jetton_wallet_1",
+          "user_jetton_wallet_2",
+          "dex_wallet_1",
+          "dex_wallet_2",
+          "dex_jetton_wallet_1",
+          "dex_jetton_wallet_2",
+          "is_refund",
+          "lp_tokens_burnt"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "C++ emits is_refund here, but it is absent from the declared PostgreSQL composite schema."
+      ]
+    },
+    "evaa_supply": {
+      "source_block_types": [
+        "evaa_supply"
+      ],
+      "fill_functions": [
+        "fill_evaa_supply"
+      ],
+      "detail_columns": {
+        "evaa_supply_data": [
+          "is_ton",
+          "asset_id",
+          "master",
+          "recipient_jetton_wallet",
+          "master_jetton_wallet"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "evaa_withdraw": {
+      "source_block_types": [
+        "evaa_withdraw"
+      ],
+      "fill_functions": [
+        "fill_evaa_withdraw"
+      ],
+      "detail_columns": {
+        "evaa_withdraw_data": [
+          "is_ton",
+          "recipient_jetton_wallet",
+          "master_jetton_wallet",
+          "fail_reason",
+          "master",
+          "asset_id"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "evaa_liquidate": {
+      "source_block_types": [
+        "evaa_liquidate"
+      ],
+      "fill_functions": [
+        "fill_evaa_liquidate"
+      ],
+      "detail_columns": {
+        "evaa_liquidate_data": [
+          "fail_reason",
+          "debt_amount",
+          "asset_id"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "jvault_stake": {
+      "source_block_types": [
+        "jvault_stake"
+      ],
+      "fill_functions": [
+        "fill_jvault_stake"
+      ],
+      "detail_columns": {
+        "jvault_stake_data": [
+          "period",
+          "stake_wallet"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "jvault_unstake": {
+      "source_block_types": [
+        "jvault_unstake"
+      ],
+      "fill_functions": [
+        "fill_jvault_unstake"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "jvault_unstake_request": {
+      "source_block_types": [
+        "jvault_unstake_request"
+      ],
+      "fill_functions": [
+        "fill_jvault_unstake_request"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "jvault_claim": {
+      "source_block_types": [
+        "jvault_claim"
+      ],
+      "fill_functions": [
+        "fill_jvault_claim"
+      ],
+      "detail_columns": {
+        "jvault_claim_data": [
+          "claimed_jettons",
+          "claimed_amounts"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "stake_deposit": {
+      "source_block_types": [
+        "ethena_deposit",
+        "nominator_pool_deposit",
+        "tonstakers_deposit"
+      ],
+      "fill_functions": [
+        "fill_ethena_deposit",
+        "fill_nominator_pool_deposit",
+        "fill_tonstakers_deposit"
+      ],
+      "detail_columns": {
+        "staking_data": [
+          "provider",
+          "tokens_minted"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "layerzero_receive": {
+      "source_block_types": [
+        "layerzero_receive"
+      ],
+      "fill_functions": [
+        "fill_layerzero_receive"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "layerzero_send": {
+      "source_block_types": [
+        "layerzero_send"
+      ],
+      "fill_functions": [
+        "fill_layerzero_send",
+        "fill_layerzero_send_fields"
+      ],
+      "detail_columns": {
+        "layerzero_send_data": [
+          "send_request_id",
+          "msglib_manager",
+          "msglib",
+          "uln",
+          "native_fee",
+          "zro_fee",
+          "endpoint",
+          "channel"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "layerzero_send_tokens": {
+      "source_block_types": [
+        "layerzero_send_tokens"
+      ],
+      "fill_functions": [
+        "fill_layerzero_send_tokens",
+        "fill_layerzero_send_fields"
+      ],
+      "detail_columns": {
+        "layerzero_send_data": [
+          "send_request_id",
+          "msglib_manager",
+          "msglib",
+          "uln",
+          "native_fee",
+          "zro_fee",
+          "endpoint",
+          "channel"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "layerzero_commit_packet": {
+      "source_block_types": [
+        "layerzero_commit_packet"
+      ],
+      "fill_functions": [
+        "fill_layerzero_commit_packet"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "layerzero_dvn_verify": {
+      "source_block_types": [
+        "layerzero_dvn_verify"
+      ],
+      "fill_functions": [
+        "fill_layerzero_dvn_verify"
+      ],
+      "detail_columns": {
+        "layerzero_dvn_verify_data": [
+          "nonce",
+          "status",
+          "dvn",
+          "proxy",
+          "uln",
+          "uln_connection"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "coffee_create_vault": {
+      "source_block_types": [
+        "coffee_create_vault"
+      ],
+      "fill_functions": [
+        "fill_coffee_create_vault"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "coffee_create_pool_creator": {
+      "source_block_types": [
+        "coffee_create_pool_creator"
+      ],
+      "fill_functions": [
+        "fill_coffee_create_pool_creator"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "coffee_create_pool": {
+      "source_block_types": [
+        "coffee_create_pool"
+      ],
+      "fill_functions": [
+        "fill_coffee_create_pool"
+      ],
+      "detail_columns": {
+        "coffee_create_pool_data": [
+          "amount_1",
+          "amount_2",
+          "initiator_1",
+          "initiator_2",
+          "provided_asset",
+          "lp_tokens_minted"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "coffee_mev_protect_hold_funds": {
+      "source_block_types": [
+        "coffee_mev_protect_hold_funds"
+      ],
+      "fill_functions": [
+        "fill_coffee_mev_protect_hold_funds"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "coffee_staking_deposit": {
+      "source_block_types": [
+        "coffee_staking_deposit"
+      ],
+      "fill_functions": [
+        "fill_coffee_staking_deposit"
+      ],
+      "detail_columns": {
+        "coffee_staking_deposit_data": [
+          "minted_item_address",
+          "minted_item_index"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "coffee_staking_withdraw": {
+      "source_block_types": [
+        "coffee_staking_withdraw"
+      ],
+      "fill_functions": [
+        "fill_coffee_staking_withdraw"
+      ],
+      "detail_columns": {
+        "coffee_staking_withdraw_data": [
+          "nft_address",
+          "nft_index",
+          "points"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "coffee_staking_claim_rewards": {
+      "source_block_types": [
+        "coffee_staking_claim_rewards"
+      ],
+      "fill_functions": [
+        "fill_coffee_staking_claim_rewards"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "vesting_send_message": {
+      "source_block_types": [
+        "vesting_send_message"
+      ],
+      "fill_functions": [
+        "fill_vesting_send_message"
+      ],
+      "detail_columns": {
+        "vesting_send_message_data": [
+          "query_id",
+          "message_boc"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "vesting_add_whitelist": {
+      "source_block_types": [
+        "vesting_add_whitelist"
+      ],
+      "fill_functions": [
+        "fill_vesting_add_whitelist"
+      ],
+      "detail_columns": {
+        "vesting_add_whitelist_data": [
+          "query_id",
+          "accounts_added"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "multisig_create_order": {
+      "source_block_types": [
+        "multisig_create_order"
+      ],
+      "fill_functions": [
+        "fill_multisig_create_order"
+      ],
+      "detail_columns": {
+        "multisig_create_order_data": [
+          "query_id",
+          "order_seqno",
+          "is_created_by_signer",
+          "is_signed_by_creator",
+          "creator_index",
+          "expiration_date",
+          "order_boc"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "multisig_approve": {
+      "source_block_types": [
+        "multisig_approve"
+      ],
+      "fill_functions": [
+        "fill_multisig_approve"
+      ],
+      "detail_columns": {
+        "multisig_approve_data": [
+          "signer_index",
+          "exit_code"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "multisig_execute": {
+      "source_block_types": [
+        "multisig_execute"
+      ],
+      "fill_functions": [
+        "fill_multisig_execute"
+      ],
+      "detail_columns": {
+        "multisig_execute_data": [
+          "query_id",
+          "order_seqno",
+          "expiration_date",
+          "approvals_num",
+          "signers_hash",
+          "order_boc"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "tonco_deploy_pool": {
+      "source_block_types": [
+        "tonco_deploy_pool"
+      ],
+      "fill_functions": [
+        "fill_tonco_deploy_pool"
+      ],
+      "detail_columns": {
+        "tonco_deploy_pool_data": [
+          "jetton0_router_wallet",
+          "jetton1_router_wallet",
+          "jetton0_minter",
+          "jetton1_minter",
+          "tick_spacing",
+          "initial_price_x96",
+          "protocol_fee",
+          "lp_fee_base",
+          "lp_fee_current",
+          "pool_active"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "stake_withdrawal_request": {
+      "source_block_types": [
+        "ethena_withdrawal_request",
+        "nominator_pool_withdraw_request",
+        "tonstakers_withdraw_request"
+      ],
+      "fill_functions": [
+        "fill_ethena_withdrawal_request",
+        "fill_nominator_pool_withdraw_request",
+        "fill_tonstakers_withdraw_request"
+      ],
+      "detail_columns": {
+        "staking_data": [
+          "provider",
+          "tokens_minted",
+          "ts_nft"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "cocoon_worker_payout": {
+      "source_block_types": [
+        "cocoon_worker_payout"
+      ],
+      "fill_functions": [
+        "fill_cocoon_worker_payout"
+      ],
+      "detail_columns": {
+        "cocoon_worker_payout_data": [
+          "payout_type",
+          "query_id",
+          "new_tokens",
+          "worker_state",
+          "worker_tokens"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "cocoon_proxy_payout": {
+      "source_block_types": [
+        "cocoon_proxy_payout"
+      ],
+      "fill_functions": [
+        "fill_cocoon_proxy_payout"
+      ],
+      "detail_columns": {
+        "cocoon_proxy_payout_data": [
+          "query_id"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "cocoon_proxy_charge": {
+      "source_block_types": [
+        "cocoon_proxy_charge"
+      ],
+      "fill_functions": [
+        "fill_cocoon_proxy_charge"
+      ],
+      "detail_columns": {
+        "cocoon_proxy_charge_data": [
+          "query_id",
+          "new_tokens_used",
+          "expected_address"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "cocoon_client_top_up": {
+      "source_block_types": [
+        "cocoon_client_top_up"
+      ],
+      "fill_functions": [
+        "fill_cocoon_client_top_up"
+      ],
+      "detail_columns": {
+        "cocoon_client_top_up_data": [
+          "query_id"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "cocoon_register_proxy": {
+      "source_block_types": [
+        "cocoon_register_proxy"
+      ],
+      "fill_functions": [
+        "fill_cocoon_register_proxy"
+      ],
+      "detail_columns": {
+        "cocoon_register_proxy_data": [
+          "query_id"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "cocoon_unregister_proxy": {
+      "source_block_types": [
+        "cocoon_unregister_proxy"
+      ],
+      "fill_functions": [
+        "fill_cocoon_unregister_proxy"
+      ],
+      "detail_columns": {
+        "cocoon_unregister_proxy_data": [
+          "query_id",
+          "seqno"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "cocoon_client_register": {
+      "source_block_types": [
+        "cocoon_client_register"
+      ],
+      "fill_functions": [
+        "fill_cocoon_client_register"
+      ],
+      "detail_columns": {
+        "cocoon_client_register_data": [
+          "query_id",
+          "nonce"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "cocoon_client_change_secret_hash": {
+      "source_block_types": [
+        "cocoon_client_change_secret_hash"
+      ],
+      "fill_functions": [
+        "fill_cocoon_client_change_secret_hash"
+      ],
+      "detail_columns": {
+        "cocoon_client_change_secret_hash_data": [
+          "query_id",
+          "new_secret_hash"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "cocoon_client_request_refund": {
+      "source_block_types": [
+        "cocoon_client_request_refund"
+      ],
+      "fill_functions": [
+        "fill_cocoon_client_request_refund"
+      ],
+      "detail_columns": {
+        "cocoon_client_request_refund_data": [
+          "query_id",
+          "via_wallet"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "cocoon_grant_refund": {
+      "source_block_types": [
+        "cocoon_grant_refund"
+      ],
+      "fill_functions": [
+        "fill_cocoon_grant_refund"
+      ],
+      "detail_columns": {
+        "cocoon_grant_refund_data": [
+          "query_id",
+          "new_tokens_used",
+          "expected_address"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "cocoon_client_increase_stake": {
+      "source_block_types": [
+        "cocoon_client_increase_stake"
+      ],
+      "fill_functions": [
+        "fill_cocoon_client_increase_stake"
+      ],
+      "detail_columns": {
+        "cocoon_client_increase_stake_data": [
+          "query_id",
+          "new_stake"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "cocoon_client_withdraw": {
+      "source_block_types": [
+        "cocoon_client_withdraw"
+      ],
+      "fill_functions": [
+        "fill_cocoon_client_withdraw"
+      ],
+      "detail_columns": {
+        "cocoon_client_withdraw_data": [
+          "query_id",
+          "withdraw_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "tgbtc_mint": {
+      "source_block_types": [
+        "tgbtc_mint"
+      ],
+      "fill_functions": [
+        "fill_tgbtc_mint"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "btc_txid",
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "tgbtc_burn": {
+      "source_block_types": [
+        "tgbtc_burn"
+      ],
+      "fill_functions": [
+        "fill_tgbtc_burn"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "tgbtc_new_key": {
+      "source_block_types": [
+        "tgbtc_new_key"
+      ],
+      "fill_functions": [
+        "fill_tgbtc_new_key"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "pubkey",
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "tgbtc_dkg_log_fallback": {
+      "source_block_types": [
+        "tgbtc_dkg_log"
+      ],
+      "fill_functions": [
+        "fill_tgbtc_dkg_log"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "pubkey",
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "renew_dns": {
+      "source_block_types": [
+        "renew_dns"
+      ],
+      "fill_functions": [
+        "fill_dns_renew"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "election_deposit": {
+      "source_block_types": [
+        "election_deposit"
+      ],
+      "fill_functions": [
+        "fill_election"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    "election_recover": {
+      "source_block_types": [
+        "election_recover"
+      ],
+      "fill_functions": [
+        "fill_election"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    "subscribe": {
+      "source_block_types": [
+        "subscribe"
+      ],
+      "fill_functions": [
+        "fill_subscribe"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "unsubscribe": {
+      "source_block_types": [
+        "unsubscribe"
+      ],
+      "fill_functions": [
+        "fill_unsubscribe"
+      ],
+      "detail_columns": {},
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "stake_withdrawal": {
+      "source_block_types": [
+        "tonstakers_withdraw"
+      ],
+      "fill_functions": [
+        "fill_tonstakers_withdraw"
+      ],
+      "detail_columns": {
+        "staking_data": [
+          "provider",
+          "ts_nft",
+          "tokens_burnt"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "nft_purchase": {
+      "source_block_types": [
+        "nft_purchase"
+      ],
+      "fill_functions": [
+        "fill_nft_purchase"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "dns_purchase": {
+      "source_block_types": [
+        "dns_purchase"
+      ],
+      "fill_functions": [
+        "fill_nft_purchase"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "dns_release": {
+      "source_block_types": [
+        "dns_release"
+      ],
+      "fill_functions": [
+        "fill_dns_release"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "change_dns": {
+      "source_block_types": [
+        "change_dns"
+      ],
+      "fill_functions": [
+        "fill_change_dns"
+      ],
+      "detail_columns": {
+        "change_dns_record_data": [
+          "value_schema",
+          "flags",
+          "key",
+          "value"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "delete_dns": {
+      "source_block_types": [
+        "delete_dns"
+      ],
+      "fill_functions": [
+        "fill_delete_dns"
+      ],
+      "detail_columns": {
+        "change_dns_record_data": [
+          "value_schema",
+          "flags",
+          "key"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "teleitem_start_auction": {
+      "source_block_types": [
+        "teleitem_start_auction"
+      ],
+      "fill_functions": [
+        "fill_nft_put_on_auction"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "marketplace_address"
+        ],
+        "nft_listing_data": [
+          "nft_item_index",
+          "mp_fee_factor",
+          "mp_fee_base",
+          "royalty_fee_base",
+          "max_bid",
+          "min_bid",
+          "marketplace_fee_address",
+          "marketplace",
+          "royalty_address",
+          "full_price",
+          "marketplace_fee",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    "nft_put_on_auction": {
+      "source_block_types": [
+        "nft_put_on_auction"
+      ],
+      "fill_functions": [
+        "fill_nft_put_on_auction"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "marketplace_address"
+        ],
+        "nft_listing_data": [
+          "nft_item_index",
+          "mp_fee_factor",
+          "mp_fee_base",
+          "royalty_fee_base",
+          "max_bid",
+          "min_bid",
+          "marketplace_fee_address",
+          "marketplace",
+          "royalty_address",
+          "full_price",
+          "marketplace_fee",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    "teleitem_cancel_auction": {
+      "source_block_types": [
+        "teleitem_cancel_auction"
+      ],
+      "fill_functions": [
+        "fill_cancel_nft_trade"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    "nft_cancel_sale": {
+      "source_block_types": [
+        "nft_cancel_sale"
+      ],
+      "fill_functions": [
+        "fill_cancel_nft_trade"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    "nft_cancel_auction": {
+      "source_block_types": [
+        "nft_cancel_auction"
+      ],
+      "fill_functions": [
+        "fill_cancel_nft_trade"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    "nft_finish_auction": {
+      "source_block_types": [
+        "nft_finish_auction"
+      ],
+      "fill_functions": [
+        "fill_cancel_nft_trade"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": [
+        "Multiple source block types retain distinct action.type values."
+      ]
+    },
+    "nft_put_on_sale": {
+      "source_block_types": [
+        "nft_put_on_sale"
+      ],
+      "fill_functions": [
+        "fill_nft_put_on_sale"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "marketplace_address"
+        ],
+        "nft_listing_data": [
+          "nft_item_index",
+          "full_price",
+          "marketplace_fee",
+          "royalty_amount",
+          "marketplace_fee_address",
+          "marketplace",
+          "royalty_address",
+          "mp_fee_factor",
+          "mp_fee_base",
+          "royalty_fee_base",
+          "max_bid",
+          "min_bid"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "nft_update_sale": {
+      "source_block_types": [
+        "nft_update_sale"
+      ],
+      "fill_functions": [
+        "fill_sale_update"
+      ],
+      "detail_columns": {
+        "nft_listing_data": [
+          "nft_item_index",
+          "full_price",
+          "marketplace_fee",
+          "royalty_amount",
+          "marketplace_fee_address",
+          "marketplace",
+          "royalty_address",
+          "mp_fee_factor",
+          "mp_fee_base",
+          "royalty_fee_base",
+          "max_bid",
+          "min_bid"
+        ],
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "auction_bid": {
+      "source_block_types": [
+        "auction_bid"
+      ],
+      "fill_functions": [
+        "fill_auction_bid"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "nft_item_index",
+          "marketplace"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "auction_outbid": {
+      "source_block_types": [
+        "auction_outbid"
+      ],
+      "fill_functions": [
+        "fill_auction_outbid"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "marketplace"
+        ],
+        "ton_transfer_data": [
+          "comment"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "nft_discovery": {
+      "source_block_types": [
+        "nft_discovery"
+      ],
+      "fill_functions": [
+        "fill_nft_discovery"
+      ],
+      "detail_columns": {
+        "nft_transfer_data": [
+          "query_id",
+          "is_purchase",
+          "price",
+          "nft_item_index",
+          "forward_amount",
+          "custom_payload",
+          "forward_payload",
+          "response_destination",
+          "marketplace",
+          "marketplace_address",
+          "real_prev_owner",
+          "payout_amount",
+          "payout_comment_encrypted",
+          "payout_comment_encoded",
+          "payout_comment",
+          "royalty_amount"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    },
+    "nft_mint": {
+      "source_block_types": [
+        "nft_mint"
+      ],
+      "fill_functions": [
+        "fill_nft_mint"
+      ],
+      "detail_columns": {
+        "nft_mint_data": [
+          "nft_item_index"
+        ]
+      },
+      "extra_keys": [
+        "parent_gasless_action (conditional ActionRow metadata)"
+      ],
+      "uncertainties": []
+    }
+  },
+  "cross_check": {
+    "cpp_block_types": [
+      "auction_bid",
+      "auction_outbid",
+      "call_contract",
+      "change_dns",
+      "change_wallet_key",
+      "cocoon_client_change_secret_hash",
+      "cocoon_client_increase_stake",
+      "cocoon_client_register",
+      "cocoon_client_request_refund",
+      "cocoon_client_top_up",
+      "cocoon_client_withdraw",
+      "cocoon_grant_refund",
+      "cocoon_proxy_charge",
+      "cocoon_proxy_payout",
+      "cocoon_register_proxy",
+      "cocoon_unregister_proxy",
+      "cocoon_worker_payout",
+      "coffee_create_pool",
+      "coffee_create_pool_creator",
+      "coffee_create_vault",
+      "coffee_deposit_liquidity",
+      "coffee_mev_protect_hold_funds",
+      "coffee_staking_claim_rewards",
+      "coffee_staking_deposit",
+      "coffee_staking_withdraw",
+      "contract_deploy",
+      "dedust_deposit_liquidity",
+      "dedust_deposit_liquidity_partial",
+      "dedust_v2_claim_fees",
+      "dedust_v2_claim_reward",
+      "dedust_v2_deposit_liquidity",
+      "dedust_v2_deposit_liquidity_partial",
+      "delete_dns",
+      "dex_deposit_liquidity",
+      "dex_withdraw_liquidity",
+      "dns_purchase",
+      "dns_release",
+      "election_deposit",
+      "election_recover",
+      "ethena_deposit",
+      "ethena_withdrawal_request",
+      "evaa_liquidate",
+      "evaa_supply",
+      "evaa_withdraw",
+      "gasless_request",
+      "jetton_burn",
+      "jetton_mint",
+      "jetton_swap",
+      "jetton_transfer",
+      "jvault_claim",
+      "jvault_stake",
+      "jvault_unstake",
+      "jvault_unstake_request",
+      "layerzero_commit_packet",
+      "layerzero_dvn_verify",
+      "layerzero_receive",
+      "layerzero_send",
+      "layerzero_send_tokens",
+      "multisig_approve",
+      "multisig_create_order",
+      "multisig_execute",
+      "nft_cancel_auction",
+      "nft_cancel_sale",
+      "nft_discovery",
+      "nft_finish_auction",
+      "nft_mint",
+      "nft_purchase",
+      "nft_put_on_auction",
+      "nft_put_on_sale",
+      "nft_transfer",
+      "nft_update_sale",
+      "nominator_pool_deposit",
+      "nominator_pool_withdraw_request",
+      "renew_dns",
+      "subscribe",
+      "teleitem_cancel_auction",
+      "teleitem_start_auction",
+      "tgbtc_burn",
+      "tgbtc_dkg_log",
+      "tgbtc_mint",
+      "tgbtc_new_key",
+      "tick_tock",
+      "ton_transfer",
+      "tonco_deploy_pool",
+      "tonco_deposit_liquidity",
+      "tonco_withdraw_liquidity",
+      "tonstakers_deposit",
+      "tonstakers_withdraw",
+      "tonstakers_withdraw_request",
+      "unsubscribe",
+      "vesting_add_whitelist",
+      "vesting_send_message"
+    ],
+    "python_block_types": [
+      "auction_bid",
+      "auction_outbid",
+      "call_contract",
+      "change_dns",
+      "cocoon_client_change_secret_hash",
+      "cocoon_client_increase_stake",
+      "cocoon_client_register",
+      "cocoon_client_request_refund",
+      "cocoon_client_top_up",
+      "cocoon_client_withdraw",
+      "cocoon_grant_refund",
+      "cocoon_proxy_charge",
+      "cocoon_proxy_payout",
+      "cocoon_register_proxy",
+      "cocoon_unregister_proxy",
+      "cocoon_worker_payout",
+      "coffee_create_pool",
+      "coffee_create_pool_creator",
+      "coffee_create_vault",
+      "coffee_deposit_liquidity",
+      "coffee_mev_protect_hold_funds",
+      "coffee_staking_claim_rewards",
+      "coffee_staking_deposit",
+      "coffee_staking_withdraw",
+      "contract_deploy",
+      "dedust_deposit_liquidity",
+      "dedust_deposit_liquidity_partial",
+      "dedust_v2_claim_fees",
+      "dedust_v2_claim_reward",
+      "dedust_v2_deposit_liquidity",
+      "dedust_v2_deposit_liquidity_partial",
+      "delete_dns",
+      "dex_deposit_liquidity",
+      "dex_withdraw_liquidity",
+      "dns_purchase",
+      "dns_release",
+      "election_deposit",
+      "election_recover",
+      "ethena_deposit",
+      "ethena_withdrawal_request",
+      "evaa_liquidate",
+      "evaa_supply",
+      "evaa_withdraw",
+      "jetton_burn",
+      "jetton_mint",
+      "jetton_swap",
+      "jetton_transfer",
+      "jvault_claim",
+      "jvault_stake",
+      "jvault_unstake",
+      "jvault_unstake_request",
+      "layerzero_commit_packet",
+      "layerzero_dvn_verify",
+      "layerzero_receive",
+      "layerzero_send",
+      "layerzero_send_tokens",
+      "multisig_approve",
+      "multisig_create_order",
+      "multisig_execute",
+      "nft_cancel_auction",
+      "nft_cancel_sale",
+      "nft_discovery",
+      "nft_finish_auction",
+      "nft_mint",
+      "nft_purchase",
+      "nft_put_on_auction",
+      "nft_put_on_sale",
+      "nft_transfer",
+      "nft_update_sale",
+      "nominator_pool_deposit",
+      "nominator_pool_withdraw_request",
+      "renew_dns",
+      "subscribe",
+      "teleitem_cancel_auction",
+      "teleitem_start_auction",
+      "tgbtc_burn",
+      "tgbtc_dkg_log",
+      "tgbtc_mint",
+      "tgbtc_new_key",
+      "tick_tock",
+      "ton_transfer",
+      "tonco_deploy_pool",
+      "tonco_deposit_liquidity",
+      "tonco_withdraw_liquidity",
+      "tonstakers_deposit",
+      "tonstakers_withdraw",
+      "tonstakers_withdraw_request",
+      "unsubscribe",
+      "vesting_add_whitelist",
+      "vesting_send_message"
+    ],
+    "cpp_only_block_types": [
+      "change_wallet_key",
+      "gasless_request"
+    ],
+    "python_only_block_types": [],
+    "interpretation": "Set difference is a source-level cross-check only; C++ and Python may intentionally have different fallback coverage or naming."
+  }
+}

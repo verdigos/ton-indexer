@@ -1,0 +1,18 @@
+{
+  "status": "passed",
+  "action_types": 85,
+  "detail_columns_covered": 39,
+  "synthetic_roundtrips": 577,
+  "golden_files": 268,
+  "golden_actions": 1059,
+  "golden_action_types": 81,
+  "types_without_goldens": [
+    "election_deposit",
+    "nft_discovery",
+    "nft_finish_auction",
+    "tick_tock"
+  ],
+  "distinct_json_keys": 146,
+  "mapping_entries": 653,
+  "golden_scope": "Existing golden field shapes and reversible mapping after documented integer/alias normalization; cellhash placeholders are not real BOCs and were not validated as base64. No PostgreSQL or production-row roundtrip was performed."
+}
