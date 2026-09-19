@@ -63,9 +63,13 @@ std::uint64_t ClassificationTaskRunner::enqueue_range(const std::string &connect
 
 void ClassificationTaskRunner::start_up() {
   try {
-    const auto version = get_current_db_version(connection_string_);
-    if (!version || !(*version == latest_version)) {
+    const auto db_version = get_current_db_version(connection_string_);
+    if (!db_version) {
       throw std::runtime_error("Task mode requires database version " + latest_version.str());
+    }
+    if (*db_version != latest_version) {
+      throw std::runtime_error("database version " + db_version->str() + ", writer requires " +
+                               latest_version.str() + " (payload v2 actions)");
     }
     alarm_timestamp() = td::Timestamp::now();
   } catch (const std::exception &e) {

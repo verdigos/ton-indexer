@@ -4533,8 +4533,8 @@ void InsertManagerPostgres::start_up() {
     std::_Exit(2);
   }
   if (*db_version != latest_version) {
-    LOG(ERROR) << "Database version mismatch: expected " << latest_version.str() << ", got " << db_version->str();
-    LOG(ERROR) << "Run `ton-index-postgres-migrate` to update the database schema";
+    LOG(ERROR) << "database version " << db_version->str() << ", writer requires "
+               << latest_version.str() << " (payload v2 actions)";
     std::_Exit(2);
   }
 

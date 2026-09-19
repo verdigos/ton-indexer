@@ -1465,13 +1465,15 @@ int main(int argc, char *argv[]) {
     std::_Exit(2);
   }
 
-  if (current_version.has_value()) {
-    if (current_version->major != latest_version.major || current_version->minor != latest_version.minor) {
-      LOG(ERROR) << "Migration to a different major.minor version is not supported. Existing DB version: "
-                 << current_version->str() << ", latest version: " << latest_version.str();
-      LOG(ERROR) << "Please create an new empty database to start indexing with the this version of indexer.";
-      std::exit(1);
+  if (current_version.has_value() && *current_version != latest_version) {
+    if (*current_version < latest_version) {
+      LOG(ERROR) << "Database version " << current_version->str() << " cannot be migrated to "
+                 << latest_version.str() << "; a fresh database is required.";
+    } else {
+      LOG(ERROR) << "Database version " << current_version->str() << " is newer than supported version "
+                 << latest_version.str() << ".";
     }
+    std::exit(1);
   }
 
   if (current_version.has_value() && *current_version == latest_version && !rerun_last_migration) {
