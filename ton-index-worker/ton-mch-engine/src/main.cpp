@@ -8,14 +8,14 @@
 
 #include "AbiBridgeTest.h"
 #include "ActionJsonTest.h"
-#include "BuildVectorRunner.h"
+#include "BuildVectorsTest.h"
 #include "Classify.h"
 #include "EmuActionSerializeTest.h"
 #include "EmuCelldbLookupTest.h"
 #include "ClassifyCoreTest.h"
 #include "GhostExternalTest.h"
 #include "MsgParse.h"
-#include "VectorRunner.h"
+#include "ExprVectorsTest.h"
 #include "WalkerCasesTest.h"
 
 #include <cstdlib>

@@ -319,8 +319,8 @@ add_executable(ton-mch-engine
     harness/ClassifyCoreTest.cpp
     harness/ActionJsonTest.cpp
     harness/GhostExternalTest.cpp
-    harness/VectorRunner.cpp
-    harness/BuildVectorRunner.cpp
+    harness/ExprVectorsTest.cpp
+    harness/BuildVectorsTest.cpp
     harness/WalkerCasesTest.cpp
     ${MCH_GEN_DIR}/expr_vectors_test_generated.cpp
     ${MCH_GEN_DIR}/build_vectors_test_generated.cpp
