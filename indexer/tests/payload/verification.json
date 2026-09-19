@@ -3,8 +3,8 @@
   "action_types": 85,
   "detail_columns_covered": 39,
   "synthetic_roundtrips": 577,
-  "golden_files": 268,
-  "golden_actions": 1059,
+  "golden_files": 279,
+  "golden_actions": 1117,
   "golden_action_types": 81,
   "types_without_goldens": [
     "election_deposit",
