@@ -1456,6 +1456,12 @@
    "name": "failed transfer, bounce stays standalone (chain)",
    "slug": "nft-transfer-failed-bounce-chain",
    "note": "chain trace mc 92833487 from the 2026-09-19 comparator medium run; prod keeps the bounce as a separate call_contract"
+  },
+  "bD4GUDXcQ2yzmbRZ2YXEpiNlg11zY9JU1gYVFhxBh4s=": {
+   "group": "nft",
+   "name": "teleitem cancel aborted, bounce stays standalone (chain)",
+   "slug": "teleitem-cancel-auction-bounce-chain",
+   "note": "chain trace mc 91587749 from the 2026-09-19 comparator medium run; cancel anchor aborted, cancel row success=false, bounce of the anchor inbound message stays a standalone call_contract as in prod"
   }
  }
 }

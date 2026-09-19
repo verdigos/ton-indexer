@@ -253,6 +253,9 @@ matcher nft_discovery {
 }
 
 # Raw messages are bid attempts when their auction family and body match.
+# Exception to the corpus rule: a failed auction_bid absorbs the bounce of its
+# aborted anchor call (`include_bounces` stays at its default, on). For every
+# other anchor an aborted call's bounce stays a standalone call_contract row.
 matcher auction_bid {
     produces        auction_bid
     include_excess  false

@@ -15,9 +15,10 @@
 # so it would not reproduce the legacy topology where the excess is a child of
 # the nft_transfer. The excess is therefore matched explicitly in a children set
 # (consumed => merged) and `include_excess` is turned off to avoid a duplicate
-# standalone append. `include_bounces` is off: the anchor's bounce is not
-# absorbed into the nft_transfer, so it stays a standalone call_contract row
-# as in legacy.
+# standalone append. `include_bounces` is off: when the anchor call aborts, the
+# bounce of its own inbound message is not absorbed into the nft_transfer and
+# stays a standalone call_contract row. The only exception in the corpus is a
+# failed auction_bid, which absorbs that bounce.
 #
 # Purchase-parent consumption (getgems)
 # -------------------------------------

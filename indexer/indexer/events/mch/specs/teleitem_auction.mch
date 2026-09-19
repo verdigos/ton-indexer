@@ -37,6 +37,11 @@ import "lib/common.mch"
 #   @auction / @cancel   the anchor call (`test_self` target, `block` in build_block)
 #   @ok                  the optional 0xa37a0983 reply (legacy `other_blocks`)
 
+# Aux absorption: both matchers have `include_bounces` off — when the anchor call
+# aborts, the bounce of its own inbound message stays a standalone call_contract
+# row. The only exception in the corpus is a failed auction_bid, which absorbs
+# that bounce.
+
 opcode TeleitemStartAuction  = 0x487A8E81
 opcode TeleitemCancelAuction = 0x371638AE
 opcode TeleitemOk            = 0xA37A0983
@@ -44,6 +49,7 @@ opcode TeleitemOk            = 0xA37A0983
 matcher teleitem_start_auction {
     produces        teleitem_start_auction
     include_excess  false
+    include_bounces false
 
     op TeleitemStartAuction @auction as TeleitemStartAuction -> maybe op TeleitemOk
 
@@ -76,6 +82,7 @@ matcher teleitem_start_auction {
 matcher teleitem_cancel_auction {
     produces        teleitem_cancel_auction
     include_excess  false
+    include_bounces false
 
     op TeleitemCancelAuction @cancel -> maybe op TeleitemOk
 
