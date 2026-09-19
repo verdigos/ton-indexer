@@ -1462,6 +1462,12 @@
    "name": "teleitem cancel aborted, bounce stays standalone (chain)",
    "slug": "teleitem-cancel-auction-bounce-chain",
    "note": "chain trace mc 91587749 from the 2026-09-19 comparator medium run; cancel anchor aborted, cancel row success=false, bounce of the anchor inbound message stays a standalone call_contract as in prod"
+  },
+  "fqAcATrl5jO8Ott89ZvpRe3UNwb11z-eHaP6VwHDfAs=": {
+   "group": "nft",
+   "name": "getgems dual payout, owner leg is the payout (api-sourced)",
+   "slug": "getgems-dual-payout-owner-leg",
+   "note": "api-sourced, not synthetic: interfaces from API get-methods (toncenter v2 runGetMethodStd) at mc 92792879 (the trace's mc seqno), built 2026-09-19 by tests/utils/api_fixture.py; trace 7ea01c01… from the sign-off comparator run; GetGems v3r3 sales with two TON legs to the same owner, payout_amount = the owner leg (price - fee - royalty), not the royalty leg"
   }
  }
 }
