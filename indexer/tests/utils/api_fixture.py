@@ -47,7 +47,7 @@ def _api_key() -> str:
 
 class ApiClient:
     def __init__(self, api_key: str | None = None, base_v2: str = V2_URL,
-                 base_v3: str = V3_URL, retries: int = 5, backoff: float = 0.5,
+                 base_v3: str = V3_URL, retries: int = 10, backoff: float = 0.5,
                  opener=None, sleep=None):
         self.api_key = api_key or _api_key()
         self.base_v2 = base_v2.rstrip("/") + "/"
@@ -105,7 +105,7 @@ class ApiClient:
                 raise ApiError("TON API transport failed") from None
 
             if attempt < self.retries:
-                self.sleep(self.backoff * (2 ** attempt))
+                self.sleep(min(self.backoff * (2 ** attempt), 8.0))
 
         if gc_miss and last_gc:
             return None
