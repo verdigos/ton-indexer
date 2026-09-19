@@ -28,8 +28,8 @@
 #    and on a finish/stop-comment ton_transfer; the two are separated only by
 #    the block they look for (nft_purchase vs nft_transfer), and on a trace
 #    carrying both the earlier registration wins. Do not reorder.
-#  - `auction_outbid` consumes the parent `auction_bid`, so it must register
-#    after `auction_bid`, two matchers earlier in this file.
+#  - `auction_outbid` peeks its parent `auction_bid`, which stays a top-level action.
+#    It must register after `auction_bid` in this file.
 #  - `nft_update_sale` and `nft_discovery` own their anchor opcodes outright
 #    (0x6c6c2080 / 0x2fcb26a2), so their position carries no tie-break at all,
 #    even though legacy registers `nft_update_sale` much earlier (ahead of
@@ -301,7 +301,7 @@ matcher auction_bid {
     }
 }
 
-# The first qualifying outbid leg consumes its auction_bid parent.
+# The outbid leg reads its auction_bid parent without consuming it; the bid stays a top-level action.
 matcher auction_outbid {
     produces auction_outbid
 
@@ -309,7 +309,7 @@ matcher auction_outbid {
         btype ton_transfer @leg
         op TeleitemOutbid @leg
     }
-      <- btype auction_bid @bid
+      <- peek btype auction_bid @bid
 
     let getgems = leg.btype == "ton_transfer"
     reject when account(leg.data.source) != account(bid.data.auction)

@@ -32,13 +32,10 @@ actions:
     start_utime: 1789727026
     end_utime: 1789727026
     mc_seqno_end: 93490406
-    parent_action_id: +gGLxlmEmd89Kc5rlTCPJ6TkfLTDLZWT52p0tSWeOSc=
-    ancestor_type:
-      - auction_outbid
   - type: auction_outbid
     matcher: auction_outbid
-    anchor: auction_outbid@104272908000009
-    id: +gGLxlmEmd89Kc5rlTCPJ6TkfLTDLZWT52p0tSWeOSc=
+    anchor: auction_outbid@104272908000011
+    id: V+k1Bw7sFwHqFf/yfvFulwNnllaAh5kWk+5ZGeQVkaw=
     success: true
     source: 0:DEB2544F1EE530F5C6E1F855597049B3CC7CE6F93441CD64169DC7CA87659FAA
     source_secondary: 0:A26E2217C58B46546579EDE1C03CDF7121AF5A91BEF8C75A29505ECC0AB85093
@@ -56,13 +53,12 @@ actions:
     ton_transfer_data:
       content: null
     tx_hashes:
-      - BO8nQf+fbQ8rYgAmUvDtCS7wiPgQArPPyQtuvkrtTiU=
       - btrOsckPHJy3MKNZxF2y9NFcPEyPfLIg7VhdDD64fb4=
       - wX5K7v+5q+Stw5QeLQj+a+v9J0GFPx9zVivcToXqGQA=
     accounts:
       - 0:A26E2217C58B46546579EDE1C03CDF7121AF5A91BEF8C75A29505ECC0AB85093
       - 0:DEB2544F1EE530F5C6E1F855597049B3CC7CE6F93441CD64169DC7CA87659FAA
-    start_lt: 104272908000009
+    start_lt: 104272908000011
     end_lt: 104272908000012
     start_utime: 1789727026
     end_utime: 1789727026
@@ -93,6 +89,6 @@ actions:
     start_utime: 1789727026
     end_utime: 1789727026
     mc_seqno_end: 93490406
-    parent_action_id: +gGLxlmEmd89Kc5rlTCPJ6TkfLTDLZWT52p0tSWeOSc=
+    parent_action_id: V+k1Bw7sFwHqFf/yfvFulwNnllaAh5kWk+5ZGeQVkaw=
     ancestor_type:
       - auction_outbid

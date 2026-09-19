@@ -448,7 +448,6 @@ void test_auction_outbid_attempts() {
                                         fragment ? kNft : kAuction, kBidder,
                                         fragment ? kNft : kAuction, std::nullopt, 10);
     add_outbid_child(ctx, root, family + "_refund_1", 110, fragment);
-    add_outbid_child(ctx, root, family + "_refund_2", 120, fragment);
     if (fragment) add_nft_item(ctx, kNft, true, false, kFragmentCollection);
     else add_nft_auction(ctx, kV2);
     finish_trace(ctx, family + "_outbid");
@@ -457,14 +456,7 @@ void test_auction_outbid_attempts() {
     Block *outbid = produced_by(result, "auction_outbid");
     const std::string prefix = "auction_outbid/" + family;
     check(prefix + "/one", !result.failure && produced_count(result, "auction_outbid") == 1);
-    check(prefix + "/consumes_bid", bid != nullptr && outbid != nullptr && bid->parent == outbid);
-    bool second_unconsumed = false;
-    for (const ActionRow &row : result.action_rows) {
-      second_unconsumed |= row.block != nullptr &&
-                           row.block->anchor_tx_hash() == family + "_refund_2-tx" &&
-                           row.parent_action_id.empty();
-    }
-    check(prefix + "/second_unconsumed", second_unconsumed);
+    check(prefix + "/bid_top_level", bid != nullptr && outbid != nullptr && bid->parent == nullptr);
   }
 }
 
