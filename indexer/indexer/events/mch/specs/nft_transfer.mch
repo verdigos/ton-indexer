@@ -15,8 +15,9 @@
 # so it would not reproduce the legacy topology where the excess is a child of
 # the nft_transfer. The excess is therefore matched explicitly in a children set
 # (consumed => merged) and `include_excess` is turned off to avoid a duplicate
-# standalone append. include_bounces stays default true (legacy appends bounces
-# standalone too; a bounce is never merged into the nft_transfer on either path).
+# standalone append. `include_bounces` is off: the anchor's bounce is not
+# absorbed into the nft_transfer, so it stays a standalone call_contract row
+# as in legacy.
 #
 # Purchase-parent consumption (getgems)
 # -------------------------------------
@@ -45,6 +46,7 @@ matcher nft_transfer {
     produces        nft_transfer
     shape           nft_transfer_parent_absorb
     include_excess  false
+    include_bounces false
 
     op NftTransfer @transfer as NftTransfer {
         -> {

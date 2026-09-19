@@ -1450,6 +1450,12 @@
    "name": "pair jetton ton paired provide (chain)",
    "slug": "stonfi-v2-provide-paired-chain",
    "note": "chain trace mc 92929247 from the 2026-09-19 comparator medium run; prod tx_hashes = 14, trace root excluded"
+  },
+  "qhJge66-v1EJPRT6xac4cL5htWXcqlxRMhBf6sO-_Wg=": {
+   "group": "nft",
+   "name": "failed transfer, bounce stays standalone (chain)",
+   "slug": "nft-transfer-failed-bounce-chain",
+   "note": "chain trace mc 92833487 from the 2026-09-19 comparator medium run; prod keeps the bounce as a separate call_contract"
   }
  }
 }
