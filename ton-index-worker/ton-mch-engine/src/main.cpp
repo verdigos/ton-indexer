@@ -8,12 +8,15 @@
 
 #include "AbiBridgeTest.h"
 #include "ActionJsonTest.h"
+#include "BuildVectorRunner.h"
 #include "Classify.h"
 #include "EmuActionSerializeTest.h"
 #include "EmuCelldbLookupTest.h"
 #include "ClassifyCoreTest.h"
 #include "GhostExternalTest.h"
 #include "MsgParse.h"
+#include "VectorRunner.h"
+#include "WalkerCasesTest.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -33,6 +36,9 @@ int main(int argc, char *argv[]) {
   bool celldb_tier2_test_mode = false;
   bool ghost_external_test_mode = false;
   bool classify_core_test_mode = false;
+  bool walker_cases_test_mode = false;
+  std::string expr_vectors_test_path;
+  std::string build_vectors_test_path;
   std::vector<std::string> trace_paths;
   std::string actions_output_dir;
   std::string fixtures_manifest;
@@ -59,6 +65,12 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "classify-core-test",
                "Classify core self-test (block-tree topology guards, failure fallback)",
                [&]() { classify_core_test_mode = true; });
+  p.add_option('\0', "expr-vectors-test", "Generated expression vectors: <json>",
+               [&](td::Slice value) { expr_vectors_test_path = value.str(); });
+  p.add_option('\0', "build-vectors-test", "Generated build vectors: <json>",
+               [&](td::Slice value) { build_vectors_test_path = value.str(); });
+  p.add_option('\0', "walker-cases-test", "Walker and rejection cases",
+               [&]() { walker_cases_test_mode = true; });
   p.add_option('\0', "help", "prints help", [&]() {
     char b[10240];
     td::StringBuilder sb(td::MutableSlice{b, 10000});
@@ -109,6 +121,15 @@ int main(int argc, char *argv[]) {
   }
   if (ghost_external_test_mode) {
     return mch::run_ghost_external_test();
+  }
+  if (!expr_vectors_test_path.empty()) {
+    return mch::run_vectors_gen(expr_vectors_test_path);
+  }
+  if (!build_vectors_test_path.empty()) {
+    return mch::run_build_vectors(build_vectors_test_path);
+  }
+  if (walker_cases_test_mode) {
+    return mch::run_walker_cases_test();
   }
   return 0;
 }

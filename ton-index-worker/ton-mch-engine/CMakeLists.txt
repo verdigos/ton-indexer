@@ -293,6 +293,23 @@ set(ABI_BRIDGE_TEST_FIXTURES
 
 set_source_files_properties(${ABI_BRIDGE_TEST_FIXTURES} PROPERTIES GENERATED TRUE)
 
+add_custom_command(
+    OUTPUT ${MCH_GEN_DIR}/expr_vectors_test_generated.cpp
+    COMMAND mch-codegen --vectors ${CMAKE_CURRENT_SOURCE_DIR}/ir/expr_vectors.json
+            -o ${MCH_GEN_DIR}/expr_vectors_test_generated.cpp
+    DEPENDS mch-codegen ${CMAKE_CURRENT_SOURCE_DIR}/ir/expr_vectors.json
+    COMMENT "Generate MCH expression conformance functions"
+    VERBATIM
+)
+add_custom_command(
+    OUTPUT ${MCH_GEN_DIR}/build_vectors_test_generated.cpp
+    COMMAND mch-codegen --builds ${CMAKE_CURRENT_SOURCE_DIR}/ir/build_vectors.json
+            --suffix vectors -o ${MCH_GEN_DIR}/build_vectors_test_generated.cpp
+    DEPENDS mch-codegen ${CMAKE_CURRENT_SOURCE_DIR}/ir/build_vectors.json
+    COMMENT "Generate MCH build conformance functions"
+    VERBATIM
+)
+
 add_executable(ton-mch-engine
     src/main.cpp
     harness/Classify.cpp
@@ -302,6 +319,11 @@ add_executable(ton-mch-engine
     harness/ClassifyCoreTest.cpp
     harness/ActionJsonTest.cpp
     harness/GhostExternalTest.cpp
+    harness/VectorRunner.cpp
+    harness/BuildVectorRunner.cpp
+    harness/WalkerCasesTest.cpp
+    ${MCH_GEN_DIR}/expr_vectors_test_generated.cpp
+    ${MCH_GEN_DIR}/build_vectors_test_generated.cpp
     ${ABI_BRIDGE_TEST_FIXTURES}
 )
 target_include_directories(ton-mch-engine PRIVATE src harness ${CMAKE_CURRENT_BINARY_DIR} ${TON_ABI_GENERATED_DIR})
@@ -316,6 +338,11 @@ target_compile_definitions(ton-mch-engine PRIVATE
 # the only target that knows ::Trace. mch-fixtures is linked HERE and only here.
 target_link_libraries(ton-mch-engine mch-fixtures mch-classify mch-emu)
 add_dependencies(ton-mch-engine mch_generate_sources)
+
+add_executable(mch-smc-pruned-cells-test harness/SmcPrunedCellsTest.cpp)
+target_link_libraries(mch-smc-pruned-cells-test PRIVATE smc-envelope)
+target_compile_features(mch-smc-pruned-cells-test PRIVATE cxx_std_20)
+add_dependencies(ton-mch-engine mch-smc-pruned-cells-test)
 
 # Deliberately NOT install()ed: this is the gate/dev harness, not a product
 # binary, and it has no place in the production bin dir
@@ -336,6 +363,14 @@ add_test(NAME mch_ghost_external
     COMMAND ton-mch-engine --ghost-external-test)
 add_test(NAME mch_classify_core
     COMMAND ton-mch-engine --classify-core-test)
+add_test(NAME mch_expr_vectors
+    COMMAND ton-mch-engine --expr-vectors-test ${CMAKE_CURRENT_SOURCE_DIR}/ir/expr_vectors.json)
+add_test(NAME mch_build_vectors
+    COMMAND ton-mch-engine --build-vectors-test ${CMAKE_CURRENT_SOURCE_DIR}/ir/build_vectors.json)
+add_test(NAME mch_smc_pruned_cells
+    COMMAND mch-smc-pruned-cells-test)
+add_test(NAME mch_walker_cases
+    COMMAND ton-mch-engine --walker-cases-test)
 add_test(NAME mch_actions_golden
     COMMAND "${CMAKE_COMMAND}"
             -DENGINE=$<TARGET_FILE:ton-mch-engine>

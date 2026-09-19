@@ -10546,6 +10546,213 @@
     "failed": false,
     "broken": false
    }
+  },
+  {
+   "name": "migr_test_where_parse_candidate_query_id_42",
+   "matcher": {
+    "name": "migr_test_where_parse_candidate_query_id_42",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "r",
+        "expr": {
+         "k": "bin",
+         "op": "==",
+         "l": {
+          "k": "attr",
+          "of": {
+           "k": "parse",
+           "x": {
+            "k": "name",
+            "id": "t"
+           },
+           "types": [
+            "JettonTransfer"
+           ],
+           "nullable": true
+          },
+          "name": "query_id"
+         },
+         "r": {
+          "k": "int",
+          "v": 42
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "body_b64": "te6ccgEBAQEAWQAArQ+KfqUAAAAAAAAAKjTEtAgBd3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3cAMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMIHc1lAQ=="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "r": true
+    },
+    "failed": false,
+    "broken": false
+   }
+  },
+  {
+   "name": "migr_test_where_parse_candidate_query_id_7",
+   "matcher": {
+    "name": "migr_test_where_parse_candidate_query_id_7",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "r",
+        "expr": {
+         "k": "bin",
+         "op": "==",
+         "l": {
+          "k": "attr",
+          "of": {
+           "k": "parse",
+           "x": {
+            "k": "name",
+            "id": "t"
+           },
+           "types": [
+            "JettonTransfer"
+           ],
+           "nullable": true
+          },
+          "name": "query_id"
+         },
+         "r": {
+          "k": "int",
+          "v": 42
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "body_b64": "te6ccgEBAQEAWQAArQ+KfqUAAAAAAAAABzTEtAgBd3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3cAMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMIHc1lAQ=="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "r": false
+    },
+    "failed": false,
+    "broken": false
+   }
+  },
+  {
+   "name": "migr_test_where_parse_candidate_query_id_fail",
+   "matcher": {
+    "name": "migr_test_where_parse_candidate_query_id_fail",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "r",
+        "expr": {
+         "k": "bin",
+         "op": "==",
+         "l": {
+          "k": "attr",
+          "of": {
+           "k": "parse",
+           "x": {
+            "k": "name",
+            "id": "t"
+           },
+           "types": [
+            "JettonTransfer"
+           ],
+           "nullable": true
+          },
+          "name": "query_id"
+         },
+         "r": {
+          "k": "int",
+          "v": 42
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "body_b64": "te6ccgEBAQEABgAACBERERE="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "r": false
+    },
+    "failed": false,
+    "broken": false
+   }
   }
  ]
 }
