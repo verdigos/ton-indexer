@@ -1,0 +1,107 @@
+# nft / teleitem cancel auction (gift 2)
+# note: second Telegram gift item 0:46F92EC8…, mc 93200017
+# trace: xpZydCNXEgDfO9yr628mcnB1Z1k3nqlFRtx-l4_gtLs=
+actions:
+  - type: call_contract
+    anchor: call_contract#371638ae@103975219000002
+    id: Kuyt2I/pH31G9eXxQZ1YhkokD7H6jckP2bKakMxvjMI=
+    success: true
+    source: 0:507DD3B9412CFA43CB5F0CF1A381B84D6D5A1D997B441B6678029F4432E7CBEB
+    source_secondary: null
+    destination: 0:46F92EC8B7A1C4B979B8416FF7A67E7E2AC53DEDE4282F61136B55B104769154
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 100000000
+    opcode: 0x371638ae
+    tx_hashes:
+      - 3A7GhHqichU0h8G6sYAecSIruKHhYY2GkPLXIut4KW4=
+      - xpZydCNXEgDfO9yr628mcnB1Z1k3nqlFRtx+l4/gtLs=
+    accounts:
+      - 0:46F92EC8B7A1C4B979B8416FF7A67E7E2AC53DEDE4282F61136B55B104769154
+      - 0:507DD3B9412CFA43CB5F0CF1A381B84D6D5A1D997B441B6678029F4432E7CBEB
+    start_lt: 103975219000002
+    end_lt: 103975219000003
+    start_utime: 1789608000
+    end_utime: 1789608000
+    mc_seqno_end: 93200017
+    parent_action_id: Lj7jeRIPwFJnr2FantQFxs+kI4ChRCl6Qa6w8TrLMMc=
+    ancestor_type:
+      - teleitem_cancel_auction
+  - type: call_contract
+    anchor: call_contract#a37a0983@103975219000004
+    id: j4CfHzuCaB6G67JlsQpKixsLuDEyfERFcS4YoDl1ZqY=
+    success: true
+    source: 0:46F92EC8B7A1C4B979B8416FF7A67E7E2AC53DEDE4282F61136B55B104769154
+    source_secondary: null
+    destination: 0:507DD3B9412CFA43CB5F0CF1A381B84D6D5A1D997B441B6678029F4432E7CBEB
+    destination_secondary: null
+    asset: null
+    asset_secondary: null
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: 99391465
+    opcode: 0xa37a0983
+    tx_hashes:
+      - 3A7GhHqichU0h8G6sYAecSIruKHhYY2GkPLXIut4KW4=
+      - oCwI5oVq+51G9JGcUEbWRP5zcLFqyQAY+bZUd9HPKi0=
+    accounts:
+      - 0:46F92EC8B7A1C4B979B8416FF7A67E7E2AC53DEDE4282F61136B55B104769154
+      - 0:507DD3B9412CFA43CB5F0CF1A381B84D6D5A1D997B441B6678029F4432E7CBEB
+    start_lt: 103975219000004
+    end_lt: 103975219000005
+    start_utime: 1789608000
+    end_utime: 1789608000
+    mc_seqno_end: 93200017
+    parent_action_id: Lj7jeRIPwFJnr2FantQFxs+kI4ChRCl6Qa6w8TrLMMc=
+    ancestor_type:
+      - teleitem_cancel_auction
+  - type: teleitem_cancel_auction
+    matcher: teleitem_cancel_auction
+    anchor: teleitem_cancel_auction@103975219000002
+    id: Lj7jeRIPwFJnr2FantQFxs+kI4ChRCl6Qa6w8TrLMMc=
+    success: true
+    source: 0:507DD3B9412CFA43CB5F0CF1A381B84D6D5A1D997B441B6678029F4432E7CBEB
+    source_secondary: null
+    destination: 0:46F92EC8B7A1C4B979B8416FF7A67E7E2AC53DEDE4282F61136B55B104769154
+    destination_secondary: null
+    asset: 0:812BF241012000E57573D43D7B3E7FBE91068C5A6D1BF7045E56DB047513B84E
+    asset_secondary: 0:46F92EC8B7A1C4B979B8416FF7A67E7E2AC53DEDE4282F61136B55B104769154
+    asset2: null
+    asset2_secondary: null
+    amount: null
+    value: null
+    opcode: null
+    nft_transfer_data:
+      custom_payload: null
+      forward_amount: null
+      forward_payload: null
+      is_purchase: null
+      marketplace: null
+      marketplace_address: null
+      nft_item_index: null
+      payout_amount: null
+      payout_comment: null
+      payout_comment_encoded: null
+      payout_comment_encrypted: null
+      price: null
+      query_id: null
+      real_prev_owner: null
+      response_destination: null
+      royalty_amount: null
+    tx_hashes:
+      - 3A7GhHqichU0h8G6sYAecSIruKHhYY2GkPLXIut4KW4=
+      - oCwI5oVq+51G9JGcUEbWRP5zcLFqyQAY+bZUd9HPKi0=
+      - xpZydCNXEgDfO9yr628mcnB1Z1k3nqlFRtx+l4/gtLs=
+    accounts:
+      - 0:46F92EC8B7A1C4B979B8416FF7A67E7E2AC53DEDE4282F61136B55B104769154
+      - 0:507DD3B9412CFA43CB5F0CF1A381B84D6D5A1D997B441B6678029F4432E7CBEB
+    start_lt: 103975219000002
+    end_lt: 103975219000005
+    start_utime: 1789608000
+    end_utime: 1789608000
+    mc_seqno_end: 93200017

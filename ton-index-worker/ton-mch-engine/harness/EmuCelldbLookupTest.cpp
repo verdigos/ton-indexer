@@ -201,6 +201,15 @@ void test_tier_shapes() {
           ad != nullptr && ad->t == VType::Str && v.fields != nullptr && v.fields->size() == 1);
   }
   {
+    schema::TelemintData p{};
+    p.address = a;
+    same("telemint_item", p);
+    Value v = ParsedBlockLookupSource::iface_value("telemint_item", p);
+    const Value *ad = v.field("address");
+    check("tier_shape/telemint_item/address_only",
+          ad != nullptr && ad->t == VType::Str && v.fields != nullptr && v.fields->size() == 1);
+  }
+  {
     // A variant that answers no kind must render null, not an empty Obj, so
     // `reject when lookup == null` continues to fire.
     schema::JettonWalletDataV2 jw{};

@@ -1161,11 +1161,11 @@ std::string build_payload(const PreparedTelemintRow& row) {
     json_put_int256(obj, "min_bid", row.min_bid);
     json_put_i64(obj, "end_time", row.end_time);
     json_put_optional_address(obj, "beneficiary_address", row.beneficiary_address);
-    json_put_int256(obj, "initial_min_bid", row.initial_min_bid);
-    json_put_int256(obj, "max_bid", row.max_bid);
-    json_put_int256(obj, "min_bid_step", row.min_bid_step);
-    json_put_i64(obj, "min_extend_time", row.min_extend_time);
-    json_put_i64(obj, "duration", row.duration);
+    json_put_optional_int256(obj, "initial_min_bid", row.initial_min_bid.value_or(td::RefInt256{}));
+    json_put_optional_int256(obj, "max_bid", row.max_bid.value_or(td::RefInt256{}));
+    json_put_optional_int256(obj, "min_bid_step", row.min_bid_step.value_or(td::RefInt256{}));
+    json_put_optional_u32(obj, "min_extend_time", row.min_extend_time);
+    json_put_optional_u32(obj, "duration", row.duration);
     json_put_i64(obj, "royalty_numerator", row.royalty_numerator);
     json_put_i64(obj, "royalty_denominator", row.royalty_denominator);
     json_put_address(obj, "royalty_destination", row.royalty_destination);
@@ -2187,11 +2187,11 @@ PreparedTelemintRow make_destroyed_telemint_row(const DestroyedAccountState& sta
     .min_bid = zero_refint(),
     .end_time = 0,
     .beneficiary_address = std::nullopt,
-    .initial_min_bid = zero_refint(),
-    .max_bid = zero_refint(),
-    .min_bid_step = zero_refint(),
-    .min_extend_time = 0,
-    .duration = 0,
+    .initial_min_bid = std::nullopt,
+    .max_bid = std::nullopt,
+    .min_bid_step = std::nullopt,
+    .min_extend_time = std::nullopt,
+    .duration = std::nullopt,
     .royalty_numerator = 0,
     .royalty_denominator = 0,
     .royalty_destination = state.address,

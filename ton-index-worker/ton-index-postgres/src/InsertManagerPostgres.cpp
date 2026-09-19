@@ -679,11 +679,11 @@ struct PreparedTelemintRow {
   td::RefInt256 min_bid;
   uint32_t end_time;
   std::optional<block::StdAddress> beneficiary_address;
-  td::RefInt256 initial_min_bid;
-  td::RefInt256 max_bid;
-  td::RefInt256 min_bid_step;
-  uint32_t min_extend_time;
-  uint32_t duration;
+  std::optional<td::RefInt256> initial_min_bid;
+  std::optional<td::RefInt256> max_bid;
+  std::optional<td::RefInt256> min_bid_step;
+  std::optional<uint32_t> min_extend_time;
+  std::optional<uint32_t> duration;
   int royalty_numerator;
   int royalty_denominator;
   block::StdAddress royalty_destination;
@@ -1472,11 +1472,11 @@ PreparedTelemintRow make_destroyed_telemint_row(const DestroyedAccountState& sta
     .min_bid = zero_refint(),
     .end_time = 0,
     .beneficiary_address = std::nullopt,
-    .initial_min_bid = zero_refint(),
-    .max_bid = zero_refint(),
-    .min_bid_step = zero_refint(),
-    .min_extend_time = 0,
-    .duration = 0,
+    .initial_min_bid = std::nullopt,
+    .max_bid = std::nullopt,
+    .min_bid_step = std::nullopt,
+    .min_extend_time = std::nullopt,
+    .duration = std::nullopt,
     .royalty_numerator = 0,
     .royalty_denominator = 0,
     .royalty_destination = state.address,

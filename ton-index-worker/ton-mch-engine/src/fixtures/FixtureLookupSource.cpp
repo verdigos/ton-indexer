@@ -54,6 +54,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     DedustPool,
     JvaultAssets,
     TelemintCollection,
+    TelemintItem,
   };
   static const std::map<std::string, Handler> handlers = {
       {"jetton_wallet", Handler::JettonWallet},
@@ -65,6 +66,7 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
       {"dedust_pool", Handler::DedustPool},
       {"jvault_assets", Handler::JvaultAssets},
       {"telemint_collection", Handler::TelemintCollection},
+      {"telemint_item", Handler::TelemintItem},
   };
   auto handler = handlers.find(kind);
   if (handler == handlers.end()) {
@@ -265,6 +267,13 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
       } catch (...) {
         return Value::null();
       }
+    }
+    case Handler::TelemintItem: {
+      auto it = interfaces_->find(addr);
+      if (it == interfaces_->end() || it->second.field("Telemint") == nullptr) {
+        return Value::null();
+      }
+      return it->second;
     }
   }
   return Value::null();

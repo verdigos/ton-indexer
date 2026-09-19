@@ -311,11 +311,6 @@
    "name": "Coffee create pool (full + notification at the end)",
    "slug": "coffee-create-pool-full-plus-notification-at-the-end"
   },
-  "4AAiT_8jTvxhujXOywe0zZv1sylSlAwnZV9stEG3gnM=": {
-   "group": "nft",
-   "name": "teleitem start auction (ab-gap)",
-   "slug": "teleitem-start-auction-ab-gap"
-  },
   "4PNVGQkZJUWAiiPq3rIekA9O5-HLaXmYmP30iixAefA=": {
    "group": "stonfi-swaps",
    "name": "Stonfi Jetton -> Ton (receiver == sender)",
@@ -622,6 +617,12 @@
    "name": "nft put on auction (ab-gap)",
    "slug": "nft-put-on-auction-ab-gap"
   },
+  "M7jZ4RsZzzwtKgEWo6H_UEVu35iQARusm99XESHx6l0=": {
+   "group": "nft",
+   "name": "teleitem cancel auction (gift)",
+   "slug": "teleitem-cancel-auction-gift",
+   "note": "same gift item as teleitem-start-auction-gift, cancelled at mc 93200063; the item has no auction config after the cancel and is still detected as Telemint"
+  },
   "MZQz_qHLV8OiohUw3-mjpA7TihnbDKFGE0i7LUUsuVk=": {
    "group": "dedust-liquidities",
    "name": "DeDust V2 multi-hop swap (3 hops, SwapStep chain)",
@@ -888,6 +889,12 @@
    "name": "Less complicated Swap (Dedust + Coffee)",
    "slug": "less-complicated-swap-dedust-plus-coffee"
   },
+  "cXLjN0iPaW5tGQ2BnWpheqSCTZCpT9CWIpE2-HhCdno=": {
+   "group": "nft",
+   "name": "teleitem start auction (gift)",
+   "slug": "teleitem-start-auction-gift",
+   "note": "Telegram gift item 0:B310745C…, mc 93200147; the teleitem gate reads the item's Telemint interface, not a collection list"
+  },
   "cq7UujFWNfSnpHdRKseD41yHqj4Yx3SCWsnkw8IRPoU=": {
    "group": "coffee",
    "name": "Terrifying Swap (Stonfi, Coffee + Stonfi V2, Dedust, Stonfi V2)",
@@ -1005,6 +1012,12 @@
    "name": "Failed unstake request",
    "slug": "failed-unstake-request"
   },
+  "kw8jYr7-6nfkQPi6v-UceOvmHFvbIX7ZR8c_NYDC2BQ=": {
+   "group": "nft",
+   "name": "teleitem cancel auction (Numbers)",
+   "slug": "teleitem-cancel-auction-numbers",
+   "note": "Numbers item 0:C68749E1…, mc 93631678"
+  },
   "kzOC0KQqVHHaNaiKPttuaR92uMct8n4kCDLTfq-CPuw=": {
    "group": "dedust-liquidities",
    "name": "DeDust V2 deposit TON/jetton",
@@ -1078,15 +1091,16 @@
    "slug": "telegram-nft-mint-with-auction-fill-up-assignment",
    "note": "telegram_nft_assigned fires under a call_contract parent, next to the nft_mint"
   },
-  "rV1gzQRFXipz6XEByCTq_3Q2LZpa4i61aLsvHf1CR1A=": {
-   "group": "nft",
-   "name": "teleitem cancel auction (ab-gap)",
-   "slug": "teleitem-cancel-auction-ab-gap"
-  },
   "rbzKlyNgAhDnQ15r4tremaPVl_xURNgmSJQSyhGLSX4=": {
    "group": "tonstakers",
    "name": "TS Stake deposit",
    "slug": "ts-stake-deposit"
+  },
+  "s9f42MHj95A2xmDTz--g2k-Ux08haA11743gA5oA2mM=": {
+   "group": "nft",
+   "name": "teleitem start auction (Numbers)",
+   "slug": "teleitem-start-auction-numbers",
+   "note": "Numbers item 0:9DB0E1DC…, mc 93200064"
   },
   "sS0j8bD7JQj7389dsGXLdNUisE6I1ApyvdPM1gkODVc=": {
    "group": "ton-transfers",
@@ -1155,6 +1169,12 @@
    "group": "tgbtc",
    "name": "tgBTC burn",
    "slug": "tgbtc-burn"
+  },
+  "xpZydCNXEgDfO9yr628mcnB1Z1k3nqlFRtx-l4_gtLs=": {
+   "group": "nft",
+   "name": "teleitem cancel auction (gift 2)",
+   "slug": "teleitem-cancel-auction-gift-2",
+   "note": "second Telegram gift item 0:46F92EC8…, mc 93200017"
   },
   "xu061_cOVdxLMa4sn1JJXEK5XkBiPdCzEDRNI_wWKPs=": {
    "group": "dedust-liquidities",

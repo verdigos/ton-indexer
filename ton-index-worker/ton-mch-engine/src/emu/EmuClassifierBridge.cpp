@@ -68,6 +68,9 @@ ParsedBlockLookupSource::InterfaceMap make_interface_map(const ::Trace &trace) {
               [&](const DedustPoolDetector::Result &r) { adapted.push_back(to_v2(r)); },
               [&](const MultisigOrder::Result &r) { adapted.push_back(to_v2(r)); },
               [&](const NominatorPoolContract::Result &r) { adapted.push_back(to_v2(r)); },
+              [&](const TelemintContract::Result &r) {
+                adapted.push_back(schema::TelemintData{.address = r.address});
+              },
               [](const JettonMasterDetectorR::Result &) {},
               [](const NftCollectionDetectorR::Result &) {}),
           iface);

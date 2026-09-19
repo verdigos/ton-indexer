@@ -7,15 +7,14 @@ import "lib/common.mch"
 # plus one optional child (`labeled('teleitem_ok', ContractMatcher(0xa37a0983,
 # optional=True))`, include_excess=False) — so the pattern is a literal
 # transcription. The build bodies are field mapping over one interface lookup,
-# one body parse and one content predicate, which is what `lookup` / `parse` /
+# one body parse and one account predicate, which is what `lookup` / `parse` /
 # `reject when` cover; nothing here needs a build core.
 #
 # The teleitem gate
 # -----------------
-# Both matchers reject unless the destination resolves to an NftItem in one of
-# the three Fragment collections (Telegram Usernames, Anonymous Telegram
-# Numbers, Eternal Roses): `is_teleitem(nft)` from lib/common.mch tests the
-# item's `collection_address` against that allowlist.
+# Both matchers reject unless the destination carries a detected
+# TelemintContract interface: `is_teleitem` from lib/common.mch tests the item
+# address directly.
 #
 # Ordering
 # --------
@@ -49,7 +48,7 @@ matcher teleitem_start_auction {
     op TeleitemStartAuction @auction as TeleitemStartAuction -> maybe op TeleitemOk
 
     require nft = lookup nft_item(auction.msg.destination)
-    reject when not is_teleitem(nft)
+    reject when not is_teleitem(auction.msg.destination)
     # `AccountId(...)` is unconditional in the legacy build, so a missing address
     # becomes addr_none (present-but-empty), not null.
     let item  = auction.msg.destination ?? addr_none()
@@ -81,7 +80,7 @@ matcher teleitem_cancel_auction {
     op TeleitemCancelAuction @cancel -> maybe op TeleitemOk
 
     require nft = lookup nft_item(cancel.msg.destination)
-    reject when not is_teleitem(nft)
+    reject when not is_teleitem(cancel.msg.destination)
     let item = cancel.msg.destination ?? addr_none()
     failed when tx_failed(cancel)
     out {

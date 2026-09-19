@@ -1,4 +1,5 @@
 #include "host/DexPton.h"
+#include "host/HostImpls.h"
 
 #include <algorithm>
 
@@ -19,6 +20,11 @@ bool is_pton_master(const std::string &s) {
   const auto &m = pton_masters();
   const std::string canon = canonicalize_or_passthrough(s);
   return std::find(m.begin(), m.end(), canon) != m.end();
+}
+
+EvalResult is_pton_master(BuildEnv &, const std::vector<Value> &args) {
+  const Value &master = args[0];
+  return rt_ok(Value::make_bool(master.t == VType::Str && is_pton_master(master.str)));
 }
 
 std::optional<std::string> wallet_jetton_master_str(const Value &wallet) {

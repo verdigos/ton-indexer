@@ -273,7 +273,7 @@ matcher auction_bid {
     let item = lookup nft_item(nft_addr)
     let dns = item != null and (item.code_hash == "i1/8nr/TkGTY1fVuRlnIJrt1k5I/XKSHKL5NYK9vUfk=" or
                                 item.collection_address == "0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF")
-    let fragment = is_teleitem(item)
+    let fragment = is_teleitem(nft_addr)
     let cancel_text = comment in ["cancel", "finish", "stop"]
     let h = auction.code_hash if auction != null else null
     let v1 = h == "/ACindAgW83MDT/7nKOMw8jBWexg2KpUMkCpLxBZLUA="

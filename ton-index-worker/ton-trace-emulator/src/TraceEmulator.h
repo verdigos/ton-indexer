@@ -150,7 +150,8 @@ struct Trace {
                                         NftItemDetectorR, NftCollectionDetectorR,
                                         GetGemsNftFixPriceSale, GetGemsNftAuction,
                                         GetGemsNftFixPriceSaleV4, DedustPoolDetector,
-                                        NominatorPoolContract, MultisigOrder>;
+                                        NominatorPoolContract, MultisigOrder,
+                                        TelemintContract>;
 
     std::multimap<block::StdAddress, block::Account, AddrCmp> emulated_accounts;
     
