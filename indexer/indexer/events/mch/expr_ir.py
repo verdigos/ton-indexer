@@ -3,10 +3,7 @@
 This module is separate from ir_emit.py so the compiler can use it too: ir_emit
 imports the compiler, so the compiler cannot import ir_emit back. The compiled
 path converts a node's inline `where (expr)` to this encoding at compile time
-and evaluates it with the shared sync evaluator (mch/expr_eval.py). These are the exact
-artifact bytes the IR engine evaluates, so the two paths cannot drift.
-
-Frontend-only module (it walks ast_ nodes); mch_ir must not import it.
+for inclusion in the emitted artifact.
 """
 from __future__ import annotations
 

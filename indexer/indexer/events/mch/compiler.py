@@ -23,8 +23,8 @@ class LNode:
 
     The frontend lowers `.mch` patterns straight into a graph of these plain
     records. No engine primitives are constructed. `ir_emit` walks the graph in
-    DFS pre-order to assign node ids and produce the JSON artifact; the v2 IR
-    engine (`mch_ir/`) is the only runtime that consumes it.
+    DFS pre-order to assign node ids and produce the JSON artifact consumed by
+    engine code generation.
 
     `kind` ∈ {"contract", "block_type", "pred", "any", "or", "recursive",
     "cyclic_ref"}. Field usage by kind:
@@ -548,13 +548,10 @@ def _lower_atom(p: ast_.PatternExpr, ctx: CompileCtx) -> LNode:
 
 
 def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
-    """Compile-time mirror of the IR loader's _check_where_expr_sync.
+    """Check that an inline `where (expr)` can run synchronously.
 
-    An inline `where (expr)` composes onto the engine's synchronous test_self,
-    so async constructs (lookups, host fns) are compile errors here. The IR
-    loader rejects the same artifacts, keeping both paths failing at the same
-    compiler instead of silently never matching. Returns True
-    when the expression is sync-evaluable."""
+    Lookups, host functions, and build-only comprehensions are compile errors.
+    Returns True when the frontend can emit the expression."""
     if isinstance(e, ast_.NameRef):
         if e.name != ctx.where_anchor_capture:
             ctx.bag.error(
@@ -620,10 +617,8 @@ def _check_where_expr_sync(e: ast_.Expr, span: Span, ctx: CompileCtx) -> bool:
 def _set_where_expr(n: LNode, expr: ast_.Expr, span: Span, ctx: CompileCtx) -> None:
     """Store inline `where (expr)` on a node for IR emission.
 
-    The C013 sync check still runs. An async construct
-    (lookup/host fn) is a compile error, keeping the frontend and the IR loader
-    failing at the same stage. The IR engine evaluates the expression at match
-    time via the shared sync evaluator (expr_eval.py)."""
+    The C013 sync check rejects lookup and host-function calls before the
+    frontend emits the artifact."""
     if not _check_where_expr_sync(expr, span, ctx):
         return
     n.where_expr = expr

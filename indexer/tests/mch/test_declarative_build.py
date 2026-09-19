@@ -1,10 +1,8 @@
-"""Declarative build path (M4 §9) — frontend resolver diagnostics (R011-R018).
+"""Declarative build frontend validation (R011-R018).
 
-T29 stage 1 retired the compiled runtime, so the end-to-end run of declarative
-matchers (parse/let/lookup/reject/failed/out, runtime-error
-rejection) is now exercised against the v2 IR engine in
-tests/mch_ir/test_engine.py and tests/mch_ir/test_compiled_ports.py. What
-remains here is the resolver's compile-time validation of build statements.
+These tests verify resolver validation of build statements and compile-time
+diagnostics. Runtime behavior is covered by engine CTest vector corpora, walker
+cases, and action goldens.
 """
 from __future__ import annotations
 

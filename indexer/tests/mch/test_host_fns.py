@@ -1,12 +1,8 @@
-"""Host-function escape hatch (Registries.fns) + well-known build env names —
-frontend resolver behavior.
+"""Host-function resolver behavior and injected build-environment names.
 
-T29 stage 1 retired the compiled runtime, so the runtime side of host functions
-(fn call with evaluated/null args, fn-returns-null => reject, fn-raises =>
-reject, unknown-callee => reject) now runs against the v2 IR engine in
-tests/mch_ir/test_compiled_ports.py. What remains here is the resolver exemption
-for the injected `consumed`/`anchor` env names and register_fn duplicate
-protection.
+These tests verify resolver exemptions for `consumed` and `anchor`, along with
+duplicate registration diagnostics. Runtime behavior is covered by engine CTest
+vector corpora, walker cases, and action goldens.
 """
 from __future__ import annotations
 

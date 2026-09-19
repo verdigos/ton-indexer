@@ -1,11 +1,4 @@
-"""R06 `shape` directive — frontend: grammar, registry, diagnostics, IR emission
-(spec §8.7, docs/mch-ir-poc.md matcher record).
-
-T29 stage 1 retired the compiled runtime, so the shaper's runtime behavior
-(post-merge invocation, proxy insertion, topology, declarative-path capture env)
-now runs against the v2 IR engine in tests/mch_ir/test_shape.py and
-tests/mch_ir/test_compiled_ports.py.
-"""
+"""`shape` directive grammar, registry, diagnostics, and IR emission."""
 from __future__ import annotations
 
 import pytest
@@ -41,7 +34,7 @@ def _registries() -> Registries:
     reg.opcodes.update({"A": OP_A, "B": OP_B})
 
     @reg.register_shaper("insert_proxy")
-    def insert_proxy(produced, match):  # pragma: no cover - invoked only at runtime
+    def insert_proxy(produced, match):  # pragma: no cover - registration fixture
         proxy = EmptyBlock()
         match.a.insert_between([match.b], proxy)
         produced.children_blocks.append(proxy)

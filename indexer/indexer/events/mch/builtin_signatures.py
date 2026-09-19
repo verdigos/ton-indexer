@@ -1,9 +1,4 @@
-"""Builtin expression names and arities shared by the compiler and evaluator."""
-
-# Frontend-only builtins have no python evaluator callable.
-FRONTEND_ONLY: dict[str, str] = {
-    "state_init": "python IR engine removal: builtin state_init has no python twin",
-}
+"""Builtin expression names and arities used by the compiler."""
 
 BUILTIN_SIGNATURES: dict[str, int] = {
     "account": 1,

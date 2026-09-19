@@ -1,13 +1,15 @@
 """Tests for the MCH IR emitter (docs/mch-ir-poc.md)."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
-from indexer.events.mch import ir_emit
-from indexer.events.mch.compile import compile_text
+from indexer.events.mch import ast_, ir_emit
+from indexer.events.mch.compile import compile_file, compile_text
 from indexer.events.mch.diagnostics import CompileError
+from indexer.events.mch.expr_ir import emit_expr
 from indexer.events.mch.ir_emit import (
     build_stub_registries,
     emit_default,
@@ -21,6 +23,7 @@ from indexer.events.mch.parser import parse
 SPECS_DIR = (
     Path(__file__).resolve().parents[2] / "indexer" / "events" / "mch" / "specs"
 )
+SPEC_PATHS = tuple(sorted(SPECS_DIR.glob("*.mch")))
 
 
 def _emit() -> dict:
@@ -93,6 +96,7 @@ def test_emit_specs_dir_deterministic():
     assert first.encode("utf-8") == second.encode("utf-8")
 
     artifact = _emit()
+    assert json.loads(first) == artifact
     assert artifact["mch_ir_version"] == "1.3"
     assert "frontend" not in artifact
     # Every node reference must be a valid index into the flat nodes array.
@@ -103,6 +107,20 @@ def test_emit_specs_dir_deterministic():
         for r in refs:
             if r is not None:
                 assert 0 <= r < n
+
+
+def test_no_broken_specs():
+    broken = []
+    for path in SPEC_PATHS:
+        try:
+            source = path.read_text(encoding="utf-8")
+            file = parse(tokenize(source, str(path)), str(path))
+            emit_ir(compile_file(path, build_stub_registries([file])))
+        except Exception as exc:  # pragma: no cover - defensive aggregation
+            broken.append((path, f"{type(exc).__name__}: {exc}"))
+    assert not broken, "specs failed to compile/emit offline:\n" + "\n".join(
+        f"  {path}: {reason}" for path, reason in broken
+    )
 
 
 def test_jetton_transfer_graph_shape():
@@ -245,6 +263,78 @@ def test_recursive_relation_child_preserves_frontier_step_ir():
         {"name": "tail_note", "card": "many"},
         {"name": "exit", "card": "many"},
     ]
+
+
+def test_per_branch_where_emits_mixed_anchor():
+    source = """
+    opcode A = 0x1
+    opcode B = 0x2
+    predicate is_marked
+    matcher m { produces test_out
+        xor { op A @x ; op B @x where is_marked }
+        out { value: 1 }
+    }
+    """
+    path = "mixed_anchor.mch"
+    file = parse(tokenize(source, path), path)
+    artifact = emit_ir(compile_text(source, path, build_stub_registries([file])))
+    assert artifact["matchers"][0]["anchor"] == {
+        "kind": "mixed",
+        "branches": [{"op": 0x1}, {"op": 0x2, "where": "is_marked"}],
+    }
+
+
+def test_mixed_opcode_and_btype_with_where_emits_anchor():
+    source = """
+    opcode A = 0x1
+    predicate is_marked
+    matcher m { produces test_out
+        xor { op A @x where is_marked ; btype jetton_transfer @x }
+        out { value: 1 }
+    }
+    """
+    path = "mixed_anchor.mch"
+    file = parse(tokenize(source, path), path)
+    artifact = emit_ir(compile_text(source, path, build_stub_registries([file])))
+    assert artifact["matchers"][0]["anchor"] == {
+        "kind": "mixed",
+        "branches": [{"op": 0x1, "where": "is_marked"}, {"btype": "jetton_transfer"}],
+    }
+
+
+def test_pure_single_kind_group_emits_opcode_set_anchor():
+    source = """
+    opcode A = 0x1
+    opcode B = 0x2
+    matcher m { produces test_out
+        xor { op A @x ; op B @x }
+        out { value: 1 }
+    }
+    """
+    path = "opcode_set_anchor.mch"
+    file = parse(tokenize(source, path), path)
+    artifact = emit_ir(compile_text(source, path, build_stub_registries([file])))
+    assert artifact["matchers"][0]["anchor"] == {
+        "kind": "opcode_set",
+        "values": [0x1, 0x2],
+    }
+
+
+def test_predicate_anchor_emits_pred_record():
+    source = """
+    predicate is_marked
+    matcher m { produces test_out
+        pred is_marked @x
+        out { value: 1 }
+    }
+    """
+    path = "predicate_anchor.mch"
+    file = parse(tokenize(source, path), path)
+    artifact = emit_ir(compile_text(source, path, build_stub_registries([file])))
+    assert artifact["matchers"][0]["anchor"] == {
+        "kind": "pred",
+        "pred": "is_marked",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -397,21 +487,32 @@ def test_build_spelling_emits_same_program(old, new):
     assert programs[0] == programs[1]
 
 
-@pytest.mark.parametrize("spelling, nullable", [("parse!", False), ("parse?", True)])
-def test_parse_expression_nullability_emitted(spelling, nullable):
+@pytest.mark.parametrize("spelling, nullable, types", [
+    ("parse!", False, ("TestMsg",)),
+    ("parse?", True, ("TestMsg", "OtherMsg")),
+])
+def test_parse_expression_nullability_emitted(spelling, nullable, types):
+    type_names = " | ".join(types)
     src = (
         "matcher m { produces test_build_out\n op 0x1001 @a\n"
-        f"let v = {spelling} a as TestMsg\nout {{ value: 1 }} }}"
+        f"let v = {spelling} a as {type_names}\nout {{ value: 1 }} }}"
     )
     path = "test_build_program.mch"
     file_ast = parse(tokenize(src, path), path)
+    let = file_ast.matchers[0].build_stmts[0]
+    assert isinstance(let, ast_.LetStmt)
+    assert isinstance(let.value, ast_.ParseExpr)
+    assert let.value.nullable is nullable
+    assert let.value.msg_types == types
     registries = build_stub_registries([file_ast])
     compiled = compile_text(src, path, registries)
     artifact = emit_ir(compiled)
-    assert artifact["matchers"][0]["build_program"][0]["expr"] == {
+    expected = {
         "k": "parse", "x": {"k": "name", "id": "a"},
-        "types": ["TestMsg"], "nullable": nullable,
+        "types": list(types), "nullable": nullable,
     }
+    assert emit_expr(let.value) == expected
+    assert artifact["matchers"][0]["build_program"][0]["expr"] == expected
 
 
 @pytest.mark.parametrize("name, literal", [("Excess", "0xd53276db"), ("Bounce", "0xffffffff")])
@@ -644,6 +745,20 @@ def test_stub_registry_collects_parse_types_from_fn_body():
     assert set(build_stub_registries([file]).message_types) == {"T"}
 
 
+def test_stub_registry_collects_parse_types_from_where_expression():
+    source = (
+        "matcher m { produces test_out\n"
+        " btype call_contract @a where ((parse? . as UnknownMsg).value == 42)\n"
+        " out { value: 1 } }"
+    )
+    path = "where_parse.mch"
+    file = parse(tokenize(source, path), path)
+    registries = build_stub_registries([file])
+    assert "UnknownMsg" in registries.message_types
+    artifact = emit_ir(compile_text(source, path, registries))
+    assert artifact["nodes"][0]["where_expr"]["l"]["of"]["types"] == ["UnknownMsg"]
+
+
 def _fn_artifact(declarations, statements, pattern="op 1 @a", rules=""):
     src = (
         declarations + "\n" + rules + "\n"
@@ -687,6 +802,59 @@ def test_where_envelope_address_emits_account_once(root, field):
     expr = artifacts[0]["nodes"][0]["where_expr"]["l"]
     assert expr["k"] == "call" and expr["fn"] == "account"
     assert expr["args"][0]["k"] == "attr"
+
+
+def test_where_dot_fields_emit_expected_ir():
+    expected = {
+        ".": {"k": "dotself"},
+        ".msg": {"k": "attr", "of": {"k": "dotself"}, "name": "msg"},
+        ".other": {"k": "dotfield", "name": "other"},
+        ".failed": {"k": "dotfield", "name": "failed"},
+    }
+    for expression, expression_ir in expected.items():
+        artifact = _fn_artifact("", "out { v: 1 }", f"op 1 @a where ({expression})")
+        assert artifact["nodes"][0]["where_expr"] == expression_ir
+
+
+def test_parse_root_membership_emits_expanded_expression():
+    left = "(parse? . as T).value"
+    membership = _fn_artifact("", "out { v: 1 }", f"op 1 @a where ({left} in [1, 42])")
+    expanded = _fn_artifact(
+        "", "out { v: 1 }", f"op 1 @a where ({left} == 1 or {left} == 42)",
+    )
+    assert membership == expanded
+
+
+def test_strict_parse_is_rejected_in_where_expression():
+    with pytest.raises(CompileError) as exc:
+        _fn_artifact(
+            "", "out { v: 1 }", "op 1 @a where ((parse! . as T).value == 42)",
+        )
+    assert any(
+        diagnostic.code == "C013_WHERE_EXPR_NOT_SYNC"
+        and diagnostic.message == "`where (expr)` allows only `parse?`"
+        for diagnostic in exc.value.bag.items
+    )
+
+
+@pytest.mark.parametrize(
+    "btype", ["ton_transfer", "call_contract", "tick_tock", "jetton_transfer"],
+)
+def test_parse_statement_accepts_only_base_block_targets(btype):
+    if btype != "jetton_transfer":
+        assert _fn_artifact("", "parse a as T\nout { v: 1 }", f"btype {btype} @a")
+        return
+    with pytest.raises(CompileError) as exc:
+        _fn_artifact("", "parse a as T\nout { v: 1 }", "btype jetton_transfer @a")
+    diagnostic = next(
+        diagnostic
+        for diagnostic in exc.value.bag.items
+        if diagnostic.code == "R023_PARSE_TARGET_NOT_BASE_BLOCK"
+    )
+    assert "produced block" in diagnostic.message
+    assert "only base blocks (ton_transfer, call_contract, tick_tock) can be parsed" in (
+        diagnostic.message
+    )
 
 
 @pytest.mark.parametrize("path", [

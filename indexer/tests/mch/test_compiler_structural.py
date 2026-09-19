@@ -1,13 +1,8 @@
-"""Structural lowering conformance, asserted on the emitted IR JSON.
+"""Structural lowering conformance for emitted IR JSON and compile diagnostics.
 
-T29 stage 1 retired the compiled runtime, so these tests no longer inspect
-BlockMatcher wiring (child_matcher/parent_matcher/children_matchers/test_self).
-Instead each spec is compiled and emitted (emit_ir) and the resulting node graph
-+ anchor record is asserted directly — the same lowering contract, expressed on
-the artifact the frontend produces. Compile-time rejections (C005/C009/C013)
-stay as-is: they never reach a runtime. Anchor membership/where behavior (R09/R10
-mixed + pred anchors) is asserted in tests/mch_ir/test_anchor_r09.py and
-test_anchor_r10.py; runtime binding of these shapes lives in tests/mch_ir/.
+These tests compile matcher specs, inspect emitted node and anchor records, and
+check frontend rejections. Runtime behavior is covered by engine CTest vector
+corpora, walker cases, and action goldens.
 """
 from __future__ import annotations
 

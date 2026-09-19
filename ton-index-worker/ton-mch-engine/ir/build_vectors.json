@@ -10753,6 +10753,603 @@
     "failed": false,
     "broken": false
    }
+  },
+  {
+   "name": "migr_evaa_liquidate_master_fields",
+   "matcher": {
+    "name": "migr_evaa_liquidate_master_fields",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "EvaaLiquidateMaster"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "borrower_address",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "borrower_address"
+        }
+       },
+       {
+        "name": "collateral_asset_id",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "collateral_asset_id"
+        }
+       },
+       {
+        "name": "liquidate_incoming_amount",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "liquidate_incoming_amount"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "body_b64": "te6ccgEBAgEAZAACuwAAAAMAAAAAAAAAB4ACIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVQAAAAAAAAAC4AAAAAAAAHCQBAQAA"
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "borrower_address": {
+      "$account": "0:1111111111111111111111111111111111111111111111111111111111111111"
+     },
+     "collateral_asset_id": 170,
+     "liquidate_incoming_amount": 900
+    },
+    "failed": false,
+    "broken": false
+   }
+  },
+  {
+   "name": "migr_evaa_liquidate_jetton_forward_fields",
+   "matcher": {
+    "name": "migr_evaa_liquidate_jetton_forward_fields",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "EvaaLiquidateJettonForward"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "borrower_address",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "borrower_address"
+        }
+       },
+       {
+        "name": "collateral_asset_id",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "collateral_asset_id"
+        }
+       },
+       {
+        "name": "liquidate_incoming_amount",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "liquidate_incoming_amount"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "body_b64": "te6ccgEBAgEAXAACqwAAAAOAAiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFUAAAAAAAAAAuAAAAAAAAAAEAQEAAA=="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "borrower_address": {
+      "$account": "0:1111111111111111111111111111111111111111111111111111111111111111"
+     },
+     "collateral_asset_id": 170,
+     "liquidate_incoming_amount": 0
+    },
+    "failed": false,
+    "broken": false
+   }
+  },
+  {
+   "name": "migr_evaa_liquidate_satisfied_fields",
+   "matcher": {
+    "name": "migr_evaa_liquidate_satisfied_fields",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "EvaaLiquidateSatisfied"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "owner_address",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "owner_address"
+        }
+       },
+       {
+        "name": "liquidatable_amount",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "attr",
+           "of": {
+            "k": "attr",
+            "of": {
+             "k": "name",
+             "id": "t"
+            },
+            "name": "body"
+           },
+           "name": "info"
+          },
+          "name": "ref"
+         },
+         "name": "liquidatable_amount"
+        }
+       },
+       {
+        "name": "collateral_asset_id",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "attr",
+           "of": {
+            "k": "attr",
+            "of": {
+             "k": "name",
+             "id": "t"
+            },
+            "name": "body"
+           },
+           "name": "info"
+          },
+          "name": "ref"
+         },
+         "name": "collateral_asset_id"
+        }
+       },
+       {
+        "name": "collateral_reward",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "attr",
+           "of": {
+            "k": "attr",
+            "of": {
+             "k": "name",
+             "id": "t"
+            },
+            "name": "body"
+           },
+           "name": "info"
+          },
+          "name": "ref"
+         },
+         "name": "collateral_reward"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "body_b64": "te6ccgEBAgEAxAAB3QAAAxEAAAAAAAAAB4ACIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIjAAiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADMgEAoP/////////9AAAAAAAAAFgAAAAAAAAAAQAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALv/////////+gAAAAAAAABN"
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "owner_address": {
+      "$account": "0:1111111111111111111111111111111111111111111111111111111111111111"
+     },
+     "liquidatable_amount": 88,
+     "collateral_asset_id": 187,
+     "collateral_reward": 77
+    },
+    "failed": false,
+    "broken": false
+   }
+  },
+  {
+   "name": "migr_dns_auction_fill_up_no_query",
+   "matcher": {
+    "name": "migr_dns_auction_fill_up_no_query",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "AuctionFillUpMessage"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "query_id",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "query_id"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "body_b64": "te6ccgEBAQEABgAACDcP7FE="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "query_id": null
+    },
+    "failed": false,
+    "broken": false
+   }
+  },
+  {
+   "name": "migr_dns_auction_fill_up_query_full",
+   "matcher": {
+    "name": "migr_dns_auction_fill_up_query_full",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "AuctionFillUpMessage"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "query_id",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "query_id"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "body_b64": "te6ccgEBAQEADgAAGDcP7FESNFZ4mrze8A=="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "query_id": 1311768467463790320
+    },
+    "failed": false,
+    "broken": false
+   }
+  },
+  {
+   "name": "migr_dns_release_balance_no_query",
+   "matcher": {
+    "name": "migr_dns_release_balance_no_query",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "DnsReleaseBalanceMessage"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "query_id",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "query_id"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "body_b64": "te6ccgEBAQEABgAACE7RS2U="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "query_id": null
+    },
+    "failed": false,
+    "broken": false
+   }
+  },
+  {
+   "name": "migr_dns_release_balance_query_full",
+   "matcher": {
+    "name": "migr_dns_release_balance_query_full",
+    "captures": [
+     {
+      "name": "t",
+      "card": "one"
+     }
+    ],
+    "build_program": [
+     {
+      "s": "parse",
+      "target": "t",
+      "types": [
+       "DnsReleaseBalanceMessage"
+      ]
+     },
+     {
+      "s": "out",
+      "fields": [
+       {
+        "name": "query_id",
+        "expr": {
+         "k": "attr",
+         "of": {
+          "k": "attr",
+          "of": {
+           "k": "name",
+           "id": "t"
+          },
+          "name": "body"
+         },
+         "name": "query_id"
+        }
+       }
+      ]
+     }
+    ],
+    "produces": [
+     "BvBlock"
+    ]
+   },
+   "env": {
+    "slots": {
+     "t": {
+      "btype": "call_contract",
+      "body_b64": "te6ccgEBAQEADgAAGE7RS2USNFZ4mrze8A=="
+     }
+    },
+    "anchor": "t",
+    "consumed": [
+     "t"
+    ]
+   },
+   "expect": {
+    "rejected": false,
+    "btype": null,
+    "data": {
+     "query_id": 1311768467463790320
+    },
+    "failed": false,
+    "broken": false
+   }
   }
  ]
 }

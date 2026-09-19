@@ -1533,10 +1533,8 @@ async def resolve_tonco_withdraw_payouts(
     Returns `(processed_payouts, additional_blocks, failed)`; `processed_payouts`
     is None to reject the match.
 
-    This is the imperative residue specs/tonco_liquidity.mch cannot express — the
-    async interface lookup, the pTON-master classification and the slot pairing —
-    so both ToncoWithdrawLiquidityMatcher.build_block and the mch host fn
-    (mch/builders/tonco.py) call it.
+    The declarative spec cannot express the async interface lookup, pTON-master
+    classification, and slot pairing handled here.
     """
     additional_blocks: list[Block] = []
     router_payout_msg = ToncoRouterV3PayTo(router_payout_call.get_body())

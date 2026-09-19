@@ -1,12 +1,8 @@
 """Frontend compile-time diagnostics for pattern lowering (C005-C013).
 
-T29 stage 1 retired the compiled runtime, so the behavioral match tests that
-used to live here (running compiled BlockMatcher instances over synthetic block
-trees) now run against the v2 IR engine in tests/mch_ir/ — capture binding,
-chain/parent/children/XOR semantics, recursion, declarative build, and host
-functions in tests/mch_ir/test_engine.py, test_walker.py, and
-test_compiled_ports.py. What remains here is purely frontend: patterns the
-compiler must reject at compile time (no runtime), plus one lowering smoke test.
+These tests verify compiler rejections and a lowering smoke test. Runtime
+behavior is covered by engine CTest vector corpora, walker cases, and action
+goldens.
 """
 from __future__ import annotations
 
