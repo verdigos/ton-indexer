@@ -24,16 +24,12 @@ target_link_libraries(mch-codegen tdutils mch-ir-load)
 # --- generated sources ---------------------------------------------------------
 # EVERY generated mch-codegen table is a build step whose output lives in the
 # build tree (${CMAKE_CURRENT_BINARY_DIR}/generated/), never in the source tree
-# or git. The manifest/specs and conformance JSON are version-controlled inputs;
-# the production IR and .cpp tables are derived artifacts.
-#
-# Per-document tables: mch-codegen emits gen_*_<suffix>() symbols, so the tables
-# generated from the CLASSIFY artifact and the one from ir/build_vectors.json
-# (--build-vectors) both link into the binary, each permanently paired with its
-# input document.
+# or git. The production IR, expression vectors and .cpp tables are derived
+# artifacts.
 set(MCH_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(MCH_GENERATED_IR "${MCH_GEN_DIR}/mch_ir.json")
 set(MCH_GENERATED_IR_SECOND "${MCH_GEN_DIR}/mch_ir.second.json")
+set(MCH_EXPR_VECTORS "${MCH_GEN_DIR}/expr_vectors.json")
 set(MCH_INDEXER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../indexer" CACHE PATH
     "Path to the repository indexer/ directory used for MCH IR generation")
 file(MAKE_DIRECTORY "${MCH_GEN_DIR}")
@@ -81,6 +77,19 @@ add_custom_command(
     DEPENDS ${MCH_SPEC_SOURCES} ${MCH_FRONTEND_PY_SOURCES}
             "${MCH_INDEXER_ROOT}/indexer/events/mch/specs/manifest.yaml"
     COMMENT "Generate deterministic MCH IR from .mch specs"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT "${MCH_EXPR_VECTORS}"
+    COMMAND "${CMAKE_COMMAND}" -E env "PYTHONPATH=${MCH_INDEXER_ROOT}"
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ir/generate_expr_vectors.py"
+            "${MCH_EXPR_VECTORS}"
+    WORKING_DIRECTORY "${MCH_INDEXER_ROOT}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ir/generate_expr_vectors.py"
+            ${MCH_FRONTEND_PY_SOURCES}
+    COMMENT "Generate MCH expression conformance vectors"
     VERBATIM
 )
 
@@ -136,7 +145,7 @@ set(MCH_GENERATED_SOURCES
 )
 add_custom_target(mch_generate_sources
     DEPENDS ${MCH_GENERATED_IR} ${MCH_GENERATED_IR_SECOND}
-            ${MCH_GENERATED_SOURCES})
+            ${MCH_EXPR_VECTORS} ${MCH_GENERATED_SOURCES})
 
 # --- mch-classify: the classification CORE static library (Phase G step 3,
 # The pure pipeline TUs (no CLI/dump/harness) - ton-index-
@@ -295,18 +304,10 @@ set_source_files_properties(${ABI_BRIDGE_TEST_FIXTURES} PROPERTIES GENERATED TRU
 
 add_custom_command(
     OUTPUT ${MCH_GEN_DIR}/expr_vectors_test_generated.cpp
-    COMMAND mch-codegen --vectors ${CMAKE_CURRENT_SOURCE_DIR}/ir/expr_vectors.json
+    COMMAND mch-codegen --vectors ${MCH_EXPR_VECTORS}
             -o ${MCH_GEN_DIR}/expr_vectors_test_generated.cpp
-    DEPENDS mch-codegen ${CMAKE_CURRENT_SOURCE_DIR}/ir/expr_vectors.json
+    DEPENDS mch-codegen ${MCH_EXPR_VECTORS}
     COMMENT "Generate MCH expression conformance functions"
-    VERBATIM
-)
-add_custom_command(
-    OUTPUT ${MCH_GEN_DIR}/build_vectors_test_generated.cpp
-    COMMAND mch-codegen --builds ${CMAKE_CURRENT_SOURCE_DIR}/ir/build_vectors.json
-            --suffix vectors -o ${MCH_GEN_DIR}/build_vectors_test_generated.cpp
-    DEPENDS mch-codegen ${CMAKE_CURRENT_SOURCE_DIR}/ir/build_vectors.json
-    COMMENT "Generate MCH build conformance functions"
     VERBATIM
 )
 
@@ -320,10 +321,8 @@ add_executable(ton-mch-engine
     harness/ActionJsonTest.cpp
     harness/GhostExternalTest.cpp
     harness/ExprVectorsTest.cpp
-    harness/BuildVectorsTest.cpp
     harness/WalkerCasesTest.cpp
     ${MCH_GEN_DIR}/expr_vectors_test_generated.cpp
-    ${MCH_GEN_DIR}/build_vectors_test_generated.cpp
     ${ABI_BRIDGE_TEST_FIXTURES}
 )
 target_include_directories(ton-mch-engine PRIVATE src harness ${CMAKE_CURRENT_BINARY_DIR} ${TON_ABI_GENERATED_DIR})
@@ -364,9 +363,7 @@ add_test(NAME mch_ghost_external
 add_test(NAME mch_classify_core
     COMMAND ton-mch-engine --classify-core-test)
 add_test(NAME mch_expr_vectors
-    COMMAND ton-mch-engine --expr-vectors-test ${CMAKE_CURRENT_SOURCE_DIR}/ir/expr_vectors.json)
-add_test(NAME mch_build_vectors
-    COMMAND ton-mch-engine --build-vectors-test ${CMAKE_CURRENT_SOURCE_DIR}/ir/build_vectors.json)
+    COMMAND ton-mch-engine --expr-vectors-test ${MCH_EXPR_VECTORS})
 add_test(NAME mch_smc_pruned_cells
     COMMAND mch-smc-pruned-cells-test)
 add_test(NAME mch_walker_cases

@@ -1,16 +1,17 @@
-# ir/ — version-controlled MCH policy and conformance inputs
+# ir/: MCH policy and conformance generators
 
 The production matcher IR is generated into the CMake build tree from the
 built-in ordered source list in `ir_emit.py`, the `.mch` specs, and the compiler
-frontend. This directory keeps the separately maintained conformance vectors.
+frontend.
 
-- `expr_vectors.json` is the canonical copy of 229 expression conformance vectors.
-  `generate_expr_vectors.py` emits their IR through the compiler frontend.
-  CMake compiles them into `ton-mch-engine`; ctest `mch_expr_vectors` runs them
-  with `--expr-vectors-test`.
-- `build_vectors.json` contains 81 build-program conformance cases. CMake compiles
-  them into `ton-mch-engine`; ctest `mch_build_vectors` runs them with
-  `--build-vectors-test`.
+- `generate_expr_vectors.py` emits 229 expression conformance vectors through
+  the compiler frontend into `generated/expr_vectors.json` in the CMake build
+  tree. CMake compiles them into `ton-mch-engine`; ctest `mch_expr_vectors`
+  runs them with `--expr-vectors-test`.
+- `devtools/ir/build_vectors.json` contains 81 build-program conformance cases.
+  It is maintained by hand because it has no generator. Devtools CMake compiles
+  it into `ton-mch-dev-engine`; ctests `mch_local_build_vectors` and
+  `mch_local_build_vectors_interp` run the generated and interpreted paths.
 
 ## Build-time mch_ir.json generation
 
@@ -18,6 +19,10 @@ On a normal build, CMake runs the emitter twice and writes:
 
     <binary-dir>/ton-index-worker/ton-mch-engine/generated/mch_ir.json
     <binary-dir>/ton-index-worker/ton-mch-engine/generated/mch_ir.second.json
+
+CMake also runs `generate_expr_vectors.py` and writes:
+
+    <binary-dir>/ton-index-worker/ton-mch-engine/generated/expr_vectors.json
 
 `ir_emit.py`'s built-in source list places `specs/jettons_decl.mch` at its
 existing registration position among the other `specs/*.mch` files (minus the
@@ -37,11 +42,11 @@ tree (`<binary-dir>/ton-mch-engine/generated/`) and is NOT in git:
 
 | input                  | generator                              | output (build tree)           | table symbols                                             |
 |------------------------|----------------------------------------|-------------------------------|-----------------------------------------------------------|
-| ir/expr_vectors.json   | mch-codegen --vectors                  | vectors_generated.cpp         | `gen_vectors()`                                           |
+| generated/expr_vectors.json | mch-codegen --vectors             | expr_vectors_test_generated.cpp / vectors_generated.cpp | `gen_vectors()`                        |
 | generated/mch_ir.json† | mch-codegen --matchers --suffix ir     | matchers_ir_generated.cpp     | `gen_matchers_ir()`, `gen_matchers_ir_source_sha()`       |
 | generated/mch_ir.json† | mch-codegen --wheres --suffix ir       | wheres_ir_generated.cpp       | `gen_wheres_ir()`, `gen_wheres_ir_source_sha()`           |
 | generated/mch_ir.json† | mch-codegen --builds --suffix ir       | builds_ir_generated.cpp       | `gen_builds_ir()`, `gen_builds_ir_source_sha()`           |
-| ir/build_vectors.json  | mch-codegen --builds --suffix vectors  | builds_vectors_generated.cpp  | `gen_builds_vectors()`, `gen_builds_vectors_source_sha()` |
+| devtools/ir/build_vectors.json | mch-codegen --builds --suffix vectors | builds_vectors_generated.cpp | `gen_builds_vectors()`, `gen_builds_vectors_source_sha()` |
 | tlb/mch-msgs.tlb       | tlbc                                   | mch-msgs-tlb.{cpp,h}          | `mchmsg::gen::*`                                          |
 
 † the three CLASSIFY tables come from `MCH_CLASSIFY_ARTIFACT`, which is
@@ -76,21 +81,20 @@ with its mtime preserved, so ninja may not even rerun the generator).
 cross-table sha check catches the resulting mismatch at startup, but the fix is
 isolation: one binary dir per agent.
 
-## Syncing from the frontend
+## Vector sources
 
 Source of truth for the production matcher IR lives in the indexer frontend and
 is consumed directly by CMake:
 
 - `generated/mch_ir.json` <- `ir_emit.py` built-in source list + `.mch` specs
   + frontend
-- `expr_vectors.json` <- `generate_expr_vectors.py` in this directory, run from
-  the repository root as
-  `PYTHONPATH=indexer python ton-index-worker/ton-mch-engine/ir/generate_expr_vectors.py <out.json>`.
-  Every vector's `expr` comes from the compiler frontend; `env` and `expect`
-  are authored in the generator.
-- `build_vectors.json` is the committed build-program corpus. It has no
-  frontend source or separate copy in the indexer tree.
+- `generated/expr_vectors.json` comes from `generate_expr_vectors.py` in this
+  directory. Every vector's `expr` comes from the compiler frontend; `env` and
+  `expect` are authored in the generator.
+- `devtools/ir/build_vectors.json` is the build-program corpus. It is the input
+  to both devtools build-vector runners and has no generator.
 
-The `mch_expr_vectors` and `mch_build_vectors` ctests run the committed corpora
-through the C++ engine. The production `mch_ir.json`, generated table pairing,
-and determinism copy are handled by the build.
+The `mch_expr_vectors` ctest runs the build-tree expression corpus through the
+C++ engine. The devtools build-vector ctests run the overlay corpus. The build
+also handles production `mch_ir.json`, generated table pairing, and the
+determinism copy.
