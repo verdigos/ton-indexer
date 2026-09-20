@@ -40,6 +40,9 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
         }, &status_stable_accounts);
     const auto key = td::base64_encode(job.input.trace.trace_id.as_slice());
     auto r = classify_schema_trace(*prep_, key, job.input.txs, src);
+    LOG(INFO) << "mch.tier2.jetton_wallet trace=" << key
+              << " fetched=" << tier2.stats().fetched
+              << " memo_hits=" << tier2.stats().memo_hits;
     TraceClassificationResult result{std::move(job.input.trace), r.outcome, std::move(r.rows), std::move(r.failure_reason), false, std::move(r.rescue)};
     const double seconds = timer.elapsed();
     result.slow = seconds > policy_.slow_job_threshold_s;

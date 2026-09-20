@@ -2,6 +2,12 @@
 #include <block/block.h>
 #include <td/actor/actor.h>
 #include <mc-config.h>
+#include <functional>
+#include <optional>
+
+namespace schema {
+struct AccountState;
+}
 
 using AllShardStates = std::vector<td::Ref<vm::Cell>>;
 
@@ -13,6 +19,14 @@ public:
     block::StdAddress owner;
     block::StdAddress jetton;
     std::optional<bool> mintless_is_claimed;
+  };
+
+  struct DetectOptions {
+    // Empty uses lookup_account(shard_states, master_address).
+    std::function<td::Result<std::optional<schema::AccountState>>(const block::StdAddress&)>
+        master_account_source;
+    // False skips is_claimed and leaves mintless_is_claimed unset.
+    bool run_is_claimed = true;
   };
 
   JettonWalletDetectorR(block::StdAddress address, 
@@ -28,7 +42,8 @@ public:
                                    const td::Ref<vm::Cell>& code_cell,
                                    const td::Ref<vm::Cell>& data_cell,
                                    const AllShardStates& shard_states,
-                                   const std::shared_ptr<block::ConfigInfo>& config);
+                                   const std::shared_ptr<block::ConfigInfo>& config,
+                                   const DetectOptions& options = {{}, true});
 
 private:
   block::StdAddress address_;
