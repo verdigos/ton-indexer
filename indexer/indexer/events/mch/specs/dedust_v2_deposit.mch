@@ -1,78 +1,4 @@
-# DeDust CPMM V2 deposit-liquidity matchers corresponding to the completed,
-# rejected, and partial deposit matchers. One host function parses the deposit
-# payload; everything else is declarative.
-#
-# Chain (two carriers, one Deposit escrow, one Pool):
-#
-#   carrier_X (jetton_transfer | PayNative 0xa5a7cbf8)
-#     Pool -> Deposit  CreditAsset 0xdc5ddba1 (is_x)     # leg X credited
-#   carrier_Y (same two shapes)
-#     Pool -> Deposit  CreditAsset 0xdc5ddba1 (is_y)     # leg Y credited
-#       Deposit -> Pool  JoinLiquidity 0x25251ee0        <- completion anchor
-#         Pool -> ext     Deposit event 0x35df2e12       # optional = SUCCESS
-#         Pool -> Position CreditLiquidity 0x855afcbd    # optional, op only
-#         Pool -> user    jetton_transfer / Payout 0x3216ca09   # dust refunds
-#
-# Only one of the two legs reaches JoinLiquidity through the parent
-# chain — the last one credited, since the join hangs off its CreditAsset. That
-# leg is folded into the completing block; the other leg is matched on its own
-# by the partial matcher and merged in afterwards by the host pass
-# post_process_dedust_v2_liquidity (blocks/dedust_v2/liquidity.py:465), keyed on
-# the Deposit escrow address. Like the v1 post_process_dedust_liquidity pass, it
-# dispatches on the btypes this file
-# produces, so the legacy classes and these generic blocks pair identically.
-# Matcher order inside this file matters for the same reason it does in
-# the reference's matchers() list: final and rejected must claim their
-# CreditAsset parent before the partial matcher, which would otherwise eat it.
-#
-# The reference writes `data[f"asset_{slot}"]` with slot =
-# 1 if is_x else 2 — a dynamic key the DSL has no form for, so each of the six
-# slot-bearing keys is spelled as the `is_x` conditional instead. Same values,
-# and the unwritten slot stays the hard null the reference leaves it as (it is
-# the OTHER leg's, filled by the post-process pass).
-#
-# SUCCESS = the Deposit event exists. The two matchers split on it rather than
-# branching one build, exactly as the reference does, because their children
-# sets genuinely differ (the completing one binds the event and the
-# CreditLiquidity, the rejected one binds an excess). `dedust_v2_deposit_final`
-# is listed first and returns no match when the event is absent; the rejected
-# matcher rejects when it is present, so the pair is total and disjoint on any
-# JoinLiquidity anchor.
-#
-# AMOUNTS. Success reads the realized amount_x_in/amount_y_in off the event;
-# rejection has no event and falls back to the ATTEMPTED amount_x/amount_y off
-# the JoinLiquidity body. Both write BOTH slots, so the post-process pass's
-# "fill amount_N when null" arm never fires for this family. Its guard keeps a
-# partial deposit safe.
-#
-# REFUNDS -> vault_excesses. A deposit that consumes less than it was given
-# refunds dust to the initiator. A refund addressed elsewhere rejects the match,
-# implemented by one `reject when … != initiator` per leg
-# here, which is the same total check. Elements are 2-element LISTS where the
-# reference builds tuples; the expression language has no tuple literal, the
-# serializer indexes them identically, and both engines treat the two
-# as one value. The rejected matcher additionally requires at least
-# one refund leg (`len(...) == 0` reject), mirroring its "no refund legs found"
-# bail.
-#
-# TARGET AMOUNTS. `parse?` unwraps the PayJetton wrapper and then
-# validates the deposit payload. An absent or invalid payload yields null, so
-# both target amounts become null. The PARTIAL matcher does not read it.
-#
-# Nested auxiliary absorption does not widen this match's consumed set. The only
-# excess is the escrow gas return, which is captured explicitly. Adding another
-# nested matcher can change this invariant if its auxiliary siblings are
-# absorbed.
-#
-# ORDERING. Both anchors (0x25251ee0, 0xdc5ddba1) are claimed by no other spec,
-# and no other spec binds a block this one produces, so their positions in
-# specs/manifest.yaml carry no tie-break of their own. The manifest keeps
-# these matchers after the jetton family, which builds their
-# jetton_transfer carriers and refund legs. The
-# two claim specs sit BEFORE this one in the manifest while the reference lists
-# them after; their anchors (0x5652f1df / 0x909fdb65) are disjoint from this
-# family's and neither binds a jetton_transfer the deposit carriers could be, so
-# the inversion is unobservable.
+# DeDust V2 deposit flow has final, rejected, and partial matches; a rejected join with no refund leg belongs outside this matcher.
 
 import "lib/leg.mch"
 import "lib/opcodes.mch"
@@ -81,23 +7,14 @@ opcode DedustV2CreditAsset     = 0xdc5ddba1
 opcode DedustV2JoinLiquidity   = 0x25251ee0
 opcode DedustV2DepositEvent    = 0x35df2e12
 opcode DedustV2CreditLiquidity = 0x855afcbd
-# One deposit leg's carrier is an `xor` of the TON PayNative node and a jetton
-# transfer. PayNative comes first so `parse carrier as DedustV2PayNative`
-# resolves against a non-`btype` head. The parse is harmless on the jetton arm
-# because the matchers read the PayNative body only on the TON arm.
 rule dv2_deposit_carrier = xor {
                                op DedustV2PayNative @carrier
                                btype jetton_transfer @carrier
                            }
 
-# The CreditAsset hop plus its carrier, i.e. the parent chain both JoinLiquidity
-# matchers hang off (the reference's _deposit_credit_parent).
 rule dv2_credit_parent =
     op DedustV2CreditAsset @credit <- $dv2_deposit_carrier
 
-# The completing leg. The Deposit event is bound `maybe` and then REQUIRED: an
-# absent event is the rejected matcher's case, and the reference returns a bare
-# no-match (not a bail) for it.
 matcher dedust_v2_deposit_final {
     produces        dedust_v2_deposit_liquidity
     include_excess  false
@@ -123,18 +40,11 @@ matcher dedust_v2_deposit_final {
     let is_x      = credit.body.is_x
     let jetton_in = carrier.btype == "jetton_transfer"
 
-    # parse_payout_leg's deposit twin (_deposit_leg): a jetton carrier gives the
-    # leg's asset and the USER's wallet off the prebuilt block, a TON carrier is
-    # plain TON with no wallet.
     let l = leg(carrier)
 
     let carrier_cell = (parse? carrier.data.forward_payload as DedustV2PayJetton).payment_payload if jetton_in else carrier.body.payment_payload
     let payload      = parse? carrier_cell as DedustV2DepositPayload
 
-    # Every refund leg must be addressed to the initiator, jetton and TON alike.
-    # The two jetton slots are separate captures (one name cannot bind twice in
-    # one children set, R005) and fill in canonical min_lt order — the same
-    # order the reference's get_labeled_sorted("refund_jetton", …) produces.
     reject when refund_jt_1 != null and refund_jt_1.data.receiver != initiator
     reject when refund_jt_2 != null and refund_jt_2.data.receiver != initiator
     reject when refund_ton != null and refund_ton.msg.destination != initiator
@@ -162,10 +72,6 @@ matcher dedust_v2_deposit_final {
     }
 }
 
-# The join REJECTED at the pool (no Deposit event): every credited leg is
-# refunded to the initiator. Same anchor and same parent chain as the completing
-# matcher, which runs first, so this one only ever sees anchors that one gave
-# up on.
 matcher dedust_v2_deposit_rejected {
     produces        dedust_v2_deposit_liquidity
     include_excess  false
@@ -185,8 +91,6 @@ matcher dedust_v2_deposit_rejected {
     parse carrier    as DedustV2PayNative
     parse refund_ton as PayoutMessage
 
-    # A Deposit event means the join succeeded — the completing matcher's case
-    # (the reference scans the anchor's next_blocks for the same opcode).
     reject when event != null
 
     let initiator = account(join.body.initiator)
@@ -207,7 +111,6 @@ matcher dedust_v2_deposit_rejected {
         [[refund_jt_2.data.asset, refund_jt_2.data.amount]] if refund_jt_2 != null else [])
     let ton_excesses    = [[ton_asset(), amount(refund_ton.body.amount)]] if refund_ton != null else []
     let excesses        = concat(jetton_excesses, ton_excesses)
-    # A rejected join with nothing refunded is not this shape.
     reject when len(excesses) == 0
 
     failed when true
@@ -230,12 +133,6 @@ matcher dedust_v2_deposit_rejected {
     }
 }
 
-# One credited leg on its own — whatever the two matchers above did not claim.
-# The escrow's gas-return excess is bound explicitly because the matcher-level
-# `include_excess false` suppresses exactly that absorption on the anchor
-# (the reference spells the same thing as child_matcher=excess_matcher()).
-# `pool` and `deposit_contract` are the CreditAsset's own source/destination:
-# it is the Pool that credits the escrow.
 matcher dedust_v2_deposit_partial {
     produces        dedust_v2_deposit_liquidity_partial
     include_excess  false

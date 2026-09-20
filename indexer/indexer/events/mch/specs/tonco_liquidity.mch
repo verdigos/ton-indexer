@@ -1,32 +1,4 @@
-# Tonco deposit liquidity — ported from blocks/liquidity.py
-# ToncoDepositLiquidityMatcher.
-#
-# Like the legacy matcher (which runs after the jetton/nft matchers in
-# event_processing), the pattern relies on prebuilt `btype jetton_transfer`
-# and `btype nft_mint` blocks (prerequisites: NftMintBlockMatcher,
-# JettonTransferBlockMatcher, PTonTransferMatcher).
-#
-# Shape notes:
-# - each refund transfer carries `-> { maybe op PTonTransfer }`: legacy
-#   output_ton_or_jetton has an optional PTonTransfer child_matcher;
-# - `maybe op Excess` mirrors the legacy explicit children item — the
-#   engine would absorb it as an excess sibling anyway, kept for fidelity;
-# - the input alternative keeps legacy OrMatcher order: pton arm (JettonNotify
-#   fed by a raw PTonTransfer call) first, plain jetton transfer second.
-#
-# HYBRID declarative build. AddLiquidity body is ABI-parsed; envelope
-# addresses, enough-thresholds, ticks, and nft_mint.data.address are plain
-# `out` reads. POSITION_INIT liquidity and nft_index stay in the host:
-# nft_mint is a produced block, so its body cannot be parsed, and
-# nft_mint.data.index is a JSON float. `is_first` and the amount/asset/wallet
-# role swap are conditionals over those values plus the host record. The host
-# keeps input-transfer resolution via children_blocks, the JettonNotify /
-# FUND_ACCOUNT payload check, the two jetton_wallet lookups + pTON
-# classification, and excess pTON→TON. The fn returns null to reject.
-#
-# Product is a generic Block(btype tonco_deposit_liquidity) with a dict data
-# map (the legacy block carried a ToncoDepositLiquidityData dataclass); the
-# serializer's _fill reads both via _dget.
+# Tonco liquidity covers deposits, pool deployment, and withdrawals; withdrawal exit code 201 counts as a successful payout.
 
 import "lib/opcodes.mch"
 opcode ToncoAccountV3AddLiquidity      = 0x3ebe5431
@@ -82,39 +54,6 @@ matcher tonco_deposit_liquidity {
 }
 
 
-# -----------------------------------------------------------------------------
-# Tonco deploy pool — blocks/liquidity.py:1871 ToncoDeployPoolBlockMatcher.
-#
-# A deployer asks the router to create a concentrated-liquidity pool; the router
-# deploys it and initializes it, and the pool answers with excesses:
-#
-#   0x2e3034ef (deployer -> router)
-#     -> 0x441c39ed (router -> pool)
-#          -> maybe 0xd53276db
-#
-# FULLY DECLARATIVE: every field is an envelope address or a body scalar, so
-# there is no host fn and no build core. `success` is the literal `true` the
-# legacy build hardcodes — reaching the build at all means the init was found.
-#
-# TWO ABI LEAF TYPES, and this matcher is what needed them: `u16` for the
-# three fee basis-point fields and `uint160` for the Q64.96 initial price. Both
-# are native ABI scalar widths; both are plain
-# `load_uint` on the Python side, so — like int24, unlike `bool` — they need no
-# casting twin.
-#
-# ToncoPoolV3Init DOES need one (builders/tonco.py ToncoPoolV3InitTwin): its only
-# read field, `pool_active`, is the schema's `bool` leaf, and pytoniq's
-# load_bit() returns an INT. The legacy class is therefore not usable as the
-# twin here, unlike the three withdraw-chain messages above. The twin stops
-# right after `pool_active`, mirroring the ABI entry, which also drops the
-# legacy class's unread tail (two content refs and a Maybe ^[minters] cell that
-# has no schema form).
-#
-# ORDERING. 0x2e3034ef and 0x441c39ed are claimed by no other spec. Within this
-# file the matcher sits between deposit and withdraw, exactly where
-# event_processing.matchers puts it (deposit 64, deploy 65, withdraw 66). It
-# binds no prebuilt block, so its manifest position has no jetton dependency.
-# -----------------------------------------------------------------------------
 matcher tonco_deploy_pool {
     produces tonco_deploy_pool
 
@@ -141,49 +80,6 @@ matcher tonco_deploy_pool {
 }
 
 
-# Tonco withdraw liquidity — ported from blocks/liquidity.py
-# ToncoWithdrawLiquidityMatcher, the third tonco liquidity matcher.
-#
-# Chain, straight off the legacy nested ContractMatchers:
-#   StartBurn 0x530b5f2c (user -> Pool)                       <- anchor
-#     PositionBurn 0x46ca335a (Pool -> position NFT)          # names the owner
-#       PoolV3Burn 0xd73ac09d (NFT -> Pool)                   # authoritative index
-#         RouterV3PayTo 0xa1daa96d (Pool -> Router)           # declares both slots
-#           payout leg 1 (optional jetton_transfer -> optional PTonTransfer)
-#           payout leg 2 (same)
-#
-# Hybrid declarative build, split along what the DSL can express.
-#
-# The declarative scalar half supplies sender, pool, burned-NFT index/address,
-# liquidity_burnt, and tick range from the three parsed bodies. These values use
-# the ABI declaration's uint128 and int24 leaves. Tick indices are
-# signed and go negative, while share amounts overflow 64 bits. All three
-# messages reuse their source class as the Python twin. The ABI entries cover the whole
-# body (dropping what is unread), so accept/reject matches the twin exactly, and
-# every leaf is a plain int on both sides — no casting twin (contrast the `bool`
-# rule the dedust_v2 withdraw port had to follow).
-#
-# PayTo is parsed as `ToncoRouterV3PayTo` (fixed prefix + `Cell<ToncoCoinsInfo>?`;
-# exit-code-conditional tails are unread). `failed when` reads `exit_code`
-# directly. The two optional jetton_transfer legs are captures.
-# `tonco_withdraw_payouts` keeps the slot↔leg pairing with positional fallback,
-# the jetton_wallet classification (TON-proxy masters → TON), and the reorder.
-#
-# DEVIATION (one, documented not worked around): the legacy build wraps the
-# PoolV3Burn parse in try/except and keeps the anchor's burned_index when it
-# throws, whereas a declarative `parse` REJECTS the whole match on a parse
-# failure. The ABI enparse?s the full contract-fixed body, so this can only
-# diverge on a malformed 0xd73ac09d body, of which the corpus has none.
-#
-# ANCHOR / ORDERING. 0x530b5f2c, 0x46ca335a and 0xd73ac09d are claimed by no
-# other spec, so this matcher steals nothing and nothing steals from it.
-# 0xa1daa96d IS shared — the deposit matcher above binds it as its refund router
-# call, and specs/tonco_swap.mch binds it under a 0xa7fb58f8 swap — but in all
-# three it is a non-anchor child of a different parent, and one message has one
-# parent, so the three uses are disjoint. Within this file the withdraw matcher
-# is listed after the deposit one, mirroring event_processing.matchers (deposit
-# 64, deploy-pool 65, withdraw 66). The manifest keeps withdraw after the jetton
-# family, which builds its jetton_transfer payout legs.
 
 matcher tonco_withdraw_liquidity {
     produces tonco_withdraw_liquidity
