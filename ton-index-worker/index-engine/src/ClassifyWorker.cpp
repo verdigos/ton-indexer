@@ -23,6 +23,17 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
     for (const auto &shard : job.block->mc_block_.shard_blocks_) {
       states.push_back(shard.block_state);
     }
+    ParsedBlockLookupSource::StableAddressSet status_stable_accounts;
+    ParsedBlockLookupSource::StableAddressSet status_unstable_accounts;
+    for (const auto &tx : job.input.txs) {
+      if (tx.orig_status == schema::active && tx.end_status == schema::active &&
+          status_unstable_accounts.find(tx.account) == status_unstable_accounts.end()) {
+        status_stable_accounts.insert(tx.account);
+      } else {
+        status_stable_accounts.erase(tx.account);
+        status_unstable_accounts.insert(tx.account);
+      }
+    }
     EmuCelldbTier2 tier2(&states, job.block->mc_block_.config_);
     double lookup_seconds = 0;
     ParsedBlockLookupSource src(&job.input.interfaces,
@@ -36,7 +47,7 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
                              static_cast<std::uint64_t>(elapsed_seconds * 1e6),
                              result.value.is_null());
           return result;
-        });
+        }, &status_stable_accounts);
     const auto key = td::base64_encode(job.input.trace.trace_id.as_slice());
     auto r = classify_schema_trace(*prep_, key, job.input.txs, src);
     TraceClassificationResult result{std::move(job.input.trace), r.outcome, std::move(r.rows), std::move(r.failure_reason), false, std::move(r.rescue)};
