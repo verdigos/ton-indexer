@@ -53,7 +53,8 @@ td::Status verify_jetton_wallet_with_master(td::Ref<vm::Cell> master_code, td::R
 
 td::Result<JettonWalletDetectorR::Result> JettonWalletDetectorR::detect(
     const block::StdAddress& address, const td::Ref<vm::Cell>& code_cell, const td::Ref<vm::Cell>& data_cell,
-    const AllShardStates& shard_states, const std::shared_ptr<block::ConfigInfo>& config) {
+    const AllShardStates& shard_states, const std::shared_ptr<block::ConfigInfo>& config,
+    const DetectOptions& options) {
   if (code_cell.is_null() || data_cell.is_null()) {
     return td::Status::Error("Code or data null");
   }
@@ -66,16 +67,23 @@ td::Result<JettonWalletDetectorR::Result> JettonWalletDetectorR::detect(
   TRY_RESULT_ASSIGN(data.owner, convert::to_std_address(stack[1].as_slice()));
   TRY_RESULT_ASSIGN(data.jetton, convert::to_std_address(stack[2].as_slice()));
 
-  auto is_claimed_stack_r = execute_smc_method<1>(address, code_cell, data_cell, config, "is_claimed", {},
-    {vm::StackEntry::Type::t_int});
-  if (is_claimed_stack_r.is_ok()) {
-    auto is_claimed_stack = is_claimed_stack_r.move_as_ok();
-    data.mintless_is_claimed = is_claimed_stack[0].as_int()->to_long() != 0;
+  if (options.run_is_claimed) {
+    auto is_claimed_stack_r = execute_smc_method<1>(address, code_cell, data_cell, config, "is_claimed", {},
+      {vm::StackEntry::Type::t_int});
+    if (is_claimed_stack_r.is_ok()) {
+      auto is_claimed_stack = is_claimed_stack_r.move_as_ok();
+      data.mintless_is_claimed = is_claimed_stack[0].as_int()->to_long() != 0;
+    } else {
+      data.mintless_is_claimed = std::nullopt;
+    }
   } else {
     data.mintless_is_claimed = std::nullopt;
   }
 
-  TRY_RESULT(master, lookup_account(shard_states, data.jetton));
+  td::Result<std::optional<schema::AccountState>> master_r = options.master_account_source
+      ? options.master_account_source(data.jetton)
+      : lookup_account(shard_states, data.jetton);
+  TRY_RESULT(master, std::move(master_r));
   if (!master) {
     return td::Status::Error("Account not found in accounts_dict");
   }
