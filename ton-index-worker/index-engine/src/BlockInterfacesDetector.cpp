@@ -8,6 +8,7 @@ void BlockInterfaceProcessor::start_up() {
   std::unordered_map<block::StdAddress, schema::AccountState>
       account_states_to_detect;
   for (const auto &account_state : block_->account_states_) {
+    interfaces_.try_emplace(account_state.account);
     if (!account_state.code_hash || !account_state.data_hash) {
       continue;
     }
@@ -15,7 +16,6 @@ void BlockInterfaceProcessor::start_up() {
     if (existing == account_states_to_detect.end() ||
         account_state.last_trans_lt > existing->second.last_trans_lt) {
       account_states_to_detect[account_state.account] = account_state;
-      interfaces_[account_state.account] = {};
 
       // check if need to parse contract methods
       if (account_state.code.not_null()) {
