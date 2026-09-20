@@ -17,6 +17,9 @@ namespace mch {
 struct Tier2Stats {
   std::size_t fetched{0};    // celldb account reads issued
   std::size_t memo_hits{0};  // repeat (kind, address) served from the memo
+  double account_load_seconds{0};
+  double data_load_seconds{0};
+  double detect_seconds{0};
 };
 
 class EmuCelldbTier2 {
@@ -50,6 +53,7 @@ class EmuCelldbTier2 {
   std::unordered_map<block::StdAddress, std::optional<schema::AccountState>> account_memo_;
   std::unordered_map<std::string, Value> value_memo_;
   Tier2Stats stats_;
+  std::size_t fetch_depth_{0};
   bool history_unavailable_{false};
 };
 

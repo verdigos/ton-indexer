@@ -33,7 +33,8 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
           lookup_seconds += elapsed_seconds;
           const auto *matcher = reject_ctx().matcher;
           record_lookup_stat(matcher ? *matcher : "<none>", kind,
-                             static_cast<std::uint64_t>(elapsed_seconds * 1e6));
+                             static_cast<std::uint64_t>(elapsed_seconds * 1e6),
+                             result.value.is_null());
           return result;
         });
     const auto key = td::base64_encode(job.input.trace.trace_id.as_slice());
@@ -48,6 +49,12 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
       g_statistics.record_time(MCH_CLASSIFY_BUILD, r.build_micros);
       g_statistics.record_time(MCH_CLASSIFY_LOOKUP, lookup_seconds * 1e6);
     }
+    g_statistics.record_time(MCH_LOOKUP_ACCOUNT_LOAD,
+                             tier2.stats().account_load_seconds * 1e6);
+    g_statistics.record_time(MCH_LOOKUP_DATA_LOAD,
+                             tier2.stats().data_load_seconds * 1e6);
+    g_statistics.record_time(MCH_LOOKUP_DETECT,
+                             tier2.stats().detect_seconds * 1e6);
     result.slow = seconds > policy_.slow_job_threshold_s;
     if (result.slow) {
       LOG(WARNING) << "Slow classification trace=" << key << " seconds=" << seconds;

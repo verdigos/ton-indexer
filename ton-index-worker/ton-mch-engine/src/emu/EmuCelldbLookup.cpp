@@ -9,6 +9,8 @@
 #include "smc-interfaces/NftSaleV4.h"
 #include "smc-interfaces/Tokens.h"
 
+#include "td/utils/Timer.h"
+
 #include <map>
 #include <mutex>
 #include <unordered_map>
@@ -41,6 +43,7 @@ const schema::AccountState *EmuCelldbTier2::account(const block::StdAddress &add
     return it->second ? &*it->second : nullptr;
   }
   stats_.fetched++;
+  td::Timer timer;
   std::optional<schema::AccountState> state;
   try {
     auto r = account_source_(addr);
@@ -49,6 +52,7 @@ const schema::AccountState *EmuCelldbTier2::account(const block::StdAddress &add
   } catch (...) {
     history_unavailable_ = true;
   }
+  stats_.account_load_seconds += timer.elapsed();
   auto [pos, _] = account_memo_.emplace(addr, std::move(state));
   return pos->second ? &*pos->second : nullptr;
 }
@@ -266,11 +270,22 @@ ParsedBlockLookupSource::Tier2Result EmuCelldbTier2::fetch(
     return {it->second, history_unavailable_};
   }
   // Detector parse failures remain misses.
+  const bool outermost = fetch_depth_++ == 0;
+  const double account_load_before = stats_.account_load_seconds;
+  td::Timer detect_timer;
   Value v;
   try {
     v = resolve(kind, addr);
   } catch (...) {
     v = Value::null();
+  }
+  fetch_depth_--;
+  if (outermost) {
+    const double detect_seconds =
+        detect_timer.elapsed() - (stats_.account_load_seconds - account_load_before);
+    if (detect_seconds > 0) {
+      stats_.detect_seconds += detect_seconds;
+    }
   }
   value_memo_.emplace(key, v);
   return {std::move(v), history_unavailable_};

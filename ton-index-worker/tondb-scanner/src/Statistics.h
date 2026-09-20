@@ -138,6 +138,9 @@ enum Histogram : uint32_t {
   MCH_CLASSIFY_MATCH,
   MCH_CLASSIFY_BUILD,
   MCH_CLASSIFY_LOOKUP,
+  MCH_LOOKUP_ACCOUNT_LOAD,
+  MCH_LOOKUP_DATA_LOAD,
+  MCH_LOOKUP_DETECT,
   
   HISTOGRAMS_COUNT
 };
@@ -183,6 +186,9 @@ const std::unordered_map<uint32_t, std::string_view> histogram_names = {
     {MCH_CLASSIFY_MATCH, "mch.classify.match.micros"},
     {MCH_CLASSIFY_BUILD, "mch.classify.build.micros"},
     {MCH_CLASSIFY_LOOKUP, "mch.classify.lookup.micros"},
+    {MCH_LOOKUP_ACCOUNT_LOAD, "mch.lookup.account_load.micros"},
+    {MCH_LOOKUP_DATA_LOAD, "mch.lookup.data_load.micros"},
+    {MCH_LOOKUP_DETECT, "mch.lookup.detect.micros"},
 };
 
 class Statistics {

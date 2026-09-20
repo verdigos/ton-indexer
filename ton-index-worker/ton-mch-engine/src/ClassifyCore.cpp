@@ -60,7 +60,11 @@ std::vector<Block *> gather_blocks(Block *root) {
 namespace {
 
 using LookupStatKey = std::pair<std::string, std::string>;
-using LookupStatValue = std::pair<std::uint64_t, std::uint64_t>;
+struct LookupStatValue {
+  std::uint64_t count{0};
+  std::uint64_t total_micros{0};
+  std::uint64_t nulls{0};
+};
 
 std::mutex lookup_stats_mutex;
 std::map<LookupStatKey, LookupStatValue> lookup_stats;
@@ -676,11 +680,12 @@ std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource
 }  // namespace
 
 void record_lookup_stat(const std::string &matcher, const std::string &kind,
-                        std::uint64_t micros) {
+                        std::uint64_t micros, bool is_null) {
   std::lock_guard<std::mutex> lock(lookup_stats_mutex);
-  auto &[count, total_micros] = lookup_stats[{matcher, kind}];
-  count++;
-  total_micros += micros;
+  auto &stat = lookup_stats[{matcher, kind}];
+  stat.count++;
+  stat.total_micros += micros;
+  stat.nulls += is_null;
 }
 
 void record_lookup_cache_hit(const std::string &kind) {
@@ -700,10 +705,11 @@ LookupStatsSnapshot take_lookup_stats() {
   std::map<std::string, LookupKindStatRow> by_kind;
   snapshot.by_matcher.reserve(lookup_snapshot.size());
   for (const auto &[key, value] : lookup_snapshot) {
-    snapshot.by_matcher.push_back({key.first, key.second, value.first, value.second});
+    snapshot.by_matcher.push_back(
+        {key.first, key.second, value.count, value.total_micros, value.nulls});
     auto &kind_row = by_kind[key.second];
     kind_row.kind = key.second;
-    kind_row.misses += value.first;
+    kind_row.misses += value.count;
   }
   for (const auto &[kind, hits] : hit_snapshot) {
     auto &kind_row = by_kind[kind];

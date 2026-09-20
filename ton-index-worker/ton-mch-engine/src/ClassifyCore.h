@@ -107,6 +107,7 @@ struct LookupStatRow {
   std::string kind;
   std::uint64_t count{0};
   std::uint64_t total_micros{0};
+  std::uint64_t nulls{0};
 };
 
 struct LookupKindStatRow {
@@ -121,7 +122,7 @@ struct LookupStatsSnapshot {
 };
 
 void record_lookup_stat(const std::string &matcher, const std::string &kind,
-                        std::uint64_t micros);
+                        std::uint64_t micros, bool is_null);
 LookupStatsSnapshot take_lookup_stats();
 
 bool outcomes_allow_replacement(const BlockClassification &bc);

@@ -46,9 +46,11 @@ std::string format_lookup_stats(mch::LookupStatsSnapshot snapshot) {
 
     std::uint64_t total_count = 0;
     std::uint64_t total_micros = 0;
+    std::uint64_t total_nulls = 0;
     for (const auto& row : snapshot.by_matcher) {
         total_count += row.count;
         total_micros += row.total_micros;
+        total_nulls += row.nulls;
     }
 
     std::ostringstream out;
@@ -57,11 +59,14 @@ std::string format_lookup_stats(mch::LookupStatsSnapshot snapshot) {
         const auto& row = snapshot.by_matcher[i];
         out << "matcher=" << row.matcher << " kind=" << row.kind
             << " count=" << row.count
+            << " nulls=" << row.nulls
             << " total_millis=" << row.total_micros / 1000.0
             << " mean_micros=" << (row.count ? static_cast<double>(row.total_micros) / row.count : 0.0)
             << '\n';
     }
     out << "total count=" << total_count
+        << " nulls=" << total_nulls
+        << " null_share=" << (total_count ? static_cast<double>(total_nulls) / total_count : 0.0)
         << " total_millis=" << total_micros / 1000.0
         << " mean_micros=" << (total_count ? static_cast<double>(total_micros) / total_count : 0.0)
         << " cache_by_kind=";
