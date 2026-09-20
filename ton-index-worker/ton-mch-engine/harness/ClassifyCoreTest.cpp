@@ -376,7 +376,7 @@ void test_auction_bid_raw_attempts() {
     add_nft_auction(ctx, *test.code_hash);
     finish_trace(ctx, test.name);
     ClassifyResult result = classify_production(ctx);
-    Block *bid = produced_by(result, "auction_bid");
+    Block *bid = produced_by(result, "getgems_auction_bid");
     const std::string prefix = std::string("auction_bid/raw/") + test.name;
     check(prefix + "/classified", !result.failure && bid != nullptr);
     check(prefix + "/fields",
@@ -420,7 +420,8 @@ void test_auction_bid_item_families_and_negatives() {
     finish_trace(ctx, test.name);
     ClassifyResult result = classify_production(ctx);
     check(std::string("auction_bid/negative/") + test.name,
-          !result.failure && produced_count(result, "auction_bid") == 0);
+          !result.failure && produced_count(result, "auction_bid") +
+                                 produced_count(result, "getgems_auction_bid") == 0);
   }
 
   // A Fragment content URI without a Telemint interface is not a teleitem.
@@ -430,7 +431,8 @@ void test_auction_bid_item_families_and_negatives() {
   finish_trace(ctx, "fragment_uri_foreign_collection");
   ClassifyResult result = classify_production(ctx);
   check("auction_bid/item/fragment_uri_foreign_collection",
-        !result.failure && produced_count(result, "auction_bid") == 0);
+        !result.failure && produced_count(result, "auction_bid") +
+                               produced_count(result, "getgems_auction_bid") == 0);
 }
 
 void add_outbid_child(TraceContext &ctx, Transaction *parent, const std::string &name,
@@ -456,7 +458,7 @@ void test_auction_outbid_attempts() {
     else add_nft_auction(ctx, kV2);
     finish_trace(ctx, family + "_outbid");
     ClassifyResult result = classify_production(ctx);
-    Block *bid = produced_by(result, "auction_bid");
+    Block *bid = produced_by(result, fragment ? "auction_bid" : "getgems_auction_bid");
     Block *outbid = produced_by(result, "auction_outbid");
     const std::string prefix = "auction_outbid/" + family;
     check(prefix + "/one", !result.failure && produced_count(result, "auction_outbid") == 1);

@@ -4,7 +4,7 @@
 # AuctionBidMatcher (:53), AuctionOutbidMatcher (:133), plus blocks/nft.py
 # NftDiscoveryBlockMatcher (:298).
 #
-# One file because the eight matchers share a lookup surface (nft_sale /
+# One file because the nine matchers share a lookup surface (nft_sale /
 # nft_auction / nft_item), two serializer fills, and, for three of them, an
 # anchor. Matcher order in this file IS registration order, and it reproduces the
 # legacy relative order verbatim; see "Ordering" below for what actually depends
@@ -29,7 +29,7 @@
 #    the block they look for (nft_purchase vs nft_transfer), and on a trace
 #    carrying both the earlier registration wins. Do not reorder.
 #  - `auction_outbid` peeks its parent `auction_bid`, which stays a top-level action.
-#    It must register after `auction_bid` in this file.
+#    It must register after `getgems_auction_bid` and `auction_bid` in this file.
 #  - `nft_update_sale` and `nft_discovery` own their anchor opcodes outright
 #    (0x6c6c2080 / 0x2fcb26a2), so their position carries no tie-break at all,
 #    even though legacy registers `nft_update_sale` much earlier (ahead of
@@ -253,10 +253,60 @@ matcher nft_discovery {
     }
 }
 
-# Raw messages are bid attempts when their auction family and body match.
-# Exception to the corpus rule: a failed auction_bid absorbs the bounce of its
-# aborted anchor call (`include_bounces` stays at its default, on). For every
+# Bid messages sent to a GetGems auction contract.
+# Exception to the corpus rule: both getgems_auction_bid and auction_bid produce
+# auction_bid and leave include_bounces at its default, on. A failed auction_bid
+# from either matcher absorbs the bounce of its aborted anchor call. For every
 # other anchor an aborted call's bounce stays a standalone call_contract row.
+matcher getgems_auction_bid {
+    produces        auction_bid
+    include_excess  false
+
+    xor {
+        btype ton_transfer @bid
+        btype call_contract @bid
+    }
+
+    let source = bid.msg.source
+    reject when source == null
+
+    let auction_addr = bid.msg.destination
+    require auction = lookup nft_auction(auction_addr)
+
+    let raw_op = bid.msg.opcode
+    let body_op = ((raw_op + 4294967296) if raw_op < 0 else raw_op) if raw_op != null else null
+    let comment = bid.data.comment if bid.btype == "ton_transfer" else null
+    let cancel_text = comment in ["cancel", "finish", "stop"]
+    let h = auction.code_hash
+    let v1 = h == "/ACindAgW83MDT/7nKOMw8jBWexg2KpUMkCpLxBZLUA="
+    let v2 = h == "ZmiHL6eXBUQ//UdSPo6eqfdquZ+aC1nSfej4GhwnudQ="
+    let v3r2 = h == "G9nFo5v/t6DzQViLXdkrgTqEK/Ze8UEJOCIAzq+Pct8="
+    let v3r3 = h == "u29ireD+stefqzuK6/CTCvmFU99gCTsgJ/Covxab/Ow="
+    let v4r1 = h == "zlp4U06qps7tja/UhtB262CpsNbb+1Nnb2YmScBomVY="
+    let v1_bidder = source != account(auction.nft_owner) and source != account(auction.mp_addr)
+    reject when not (
+        source != account(auction.nft_addr) and
+        ((v1 and v1_bidder) or ((v2 or v3r2) and not cancel_text) or
+         (v3r3 and not cancel_text and not (body_op in [1, 2, 555])) or
+         (v4r1 and (body_op == null or body_op == 0 or body_op == 0x344EF025 or body_op == 0x9AF07447)))
+    )
+
+    let nft_addr = auction.nft_addr
+    let item = lookup nft_item(nft_addr)
+
+    failed when bid.failed
+    out {
+        amount:         amount(bid.msg.value)
+        bidder:         source
+        auction:        account(auction_addr)
+        nft_address:    account(nft_addr)
+        nft_item_index: item.index if item != null else null
+        nft_collection: account(item.collection_address) if item != null else null
+        auction_type:   "getgems"
+    }
+}
+
+# Bid messages sent directly to a DNS or Fragment NFT item.
 matcher auction_bid {
     produces        auction_bid
     include_excess  false
@@ -267,41 +317,27 @@ matcher auction_bid {
     }
 
     let source = bid.msg.source
-    let value = amount(bid.msg.value)
     let raw_op = bid.msg.opcode
     let body_op = ((raw_op + 4294967296) if raw_op < 0 else raw_op) if raw_op != null else null
-    let comment = bid.data.comment if bid.btype == "ton_transfer" else null
-    let auction_addr = bid.msg.destination
-    let auction = lookup nft_auction(auction_addr)
-    let nft_addr = auction.nft_addr if auction != null else bid.msg.destination
+    reject when source == null or not (body_op == null or body_op == 0)
+
+    let nft_addr = bid.msg.destination
     let item = lookup nft_item(nft_addr)
     let dns = item != null and (item.code_hash == "i1/8nr/TkGTY1fVuRlnIJrt1k5I/XKSHKL5NYK9vUfk=" or
                                 item.collection_address == "0:B774D95EB20543F186C06B371AB88AD704F7E256130CAF96189368A7D0CB6CCF")
     let fragment = is_teleitem(nft_addr)
-    let cancel_text = comment in ["cancel", "finish", "stop"]
-    let h = auction.code_hash if auction != null else null
-    let v1 = h == "/ACindAgW83MDT/7nKOMw8jBWexg2KpUMkCpLxBZLUA="
-    let v2 = h == "ZmiHL6eXBUQ//UdSPo6eqfdquZ+aC1nSfej4GhwnudQ="
-    let v3r2 = h == "G9nFo5v/t6DzQViLXdkrgTqEK/Ze8UEJOCIAzq+Pct8="
-    let v3r3 = h == "u29ireD+stefqzuK6/CTCvmFU99gCTsgJ/Covxab/Ow="
-    let v4r1 = h == "zlp4U06qps7tja/UhtB262CpsNbb+1Nnb2YmScBomVY="
-    let v1_bidder = (source != account(auction.nft_owner) and source != account(auction.mp_addr)) if auction != null else false
-    let gg_input = source != null and auction != null and
-                   source != account(auction.nft_addr) and
-                 ((v1 and v1_bidder) or ((v2 or v3r2) and not cancel_text) or
-                  (v3r3 and not cancel_text and not (body_op in [1, 2, 555])) or
-                  (v4r1 and (body_op == null or body_op == 0 or body_op == 0x344EF025 or body_op == 0x9AF07447)))
-    let item_raw = source != null and auction == null and (dns or fragment) and (body_op == null or body_op == 0)
-    reject when not (gg_input or item_raw)
+    reject when not (dns or fragment)
+    reject when lookup nft_auction(nft_addr) != null
+
     failed when bid.failed
     out {
-        amount:         value
+        amount:         amount(bid.msg.value)
         bidder:         source
-        auction:        account(auction_addr)
+        auction:        account(nft_addr)
         nft_address:    account(nft_addr)
         nft_item_index: item.index if item != null else null
         nft_collection: account(item.collection_address) if item != null else null
-        auction_type:   "getgems" if auction != null else ("dns" if dns else "fragment")
+        auction_type:   "dns" if dns else "fragment"
     }
 }
 
