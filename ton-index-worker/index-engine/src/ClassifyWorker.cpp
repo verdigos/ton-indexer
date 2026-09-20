@@ -25,7 +25,7 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
     ParsedBlockLookupSource::StableAddressSet status_stable_accounts;
     ParsedBlockLookupSource::StableAddressSet status_unstable_accounts;
     for (const auto &tx : job.input.txs) {
-      if (tx.orig_status == schema::active && tx.end_status == schema::active &&
+      if ((tx.orig_status != schema::active || tx.end_status == schema::active) &&
           status_unstable_accounts.find(tx.account) == status_unstable_accounts.end()) {
         status_stable_accounts.insert(tx.account);
       } else {
