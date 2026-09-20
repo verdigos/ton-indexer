@@ -101,7 +101,9 @@ public:
                       bool no_leader = false,
                       bool disable_progress_advance = false,
                       bool kvrocks_skip_current_tables = false,
-                      bool pg_no_copy = false) :
+                      bool pg_no_copy = false,
+                      bool no_insert_data = false,
+                      bool no_insert_states = false) :
     credential_(std::move(credential)), kvrocks_(std::move(kvrocks)), leader_heartbeat_(leader_heartbeat), worker_id_(std::move(worker_id)),
     insert_tasks_(std::move(insert_tasks)), promise_(std::move(promise)), max_data_depth_(max_data_depth),
     latest_states_prepare_parallelism_(latest_states_prepare_parallelism),
@@ -110,6 +112,8 @@ public:
     no_leader_(no_leader),
     disable_progress_advance_(disable_progress_advance),
     kvrocks_skip_current_tables_(kvrocks_skip_current_tables),
+    no_insert_data_(no_insert_data),
+    no_insert_states_(no_insert_states),
     with_copy_(!pg_no_copy) {
       // sorting in descending seqno order for easier processing of interfaces
       std::sort(insert_tasks_.begin(), insert_tasks_.end(), [](const auto& a, const auto& b) {
@@ -134,6 +138,8 @@ private:
   bool no_leader_;
   bool disable_progress_advance_;
   bool kvrocks_skip_current_tables_;
+  bool no_insert_data_;
+  bool no_insert_states_;
   bool with_copy_{true};
   bool is_leader_{false};
   std::optional<LeaderHeartbeatGuard> leader_heartbeat_guard_;
@@ -3087,44 +3093,49 @@ void InsertBatchPostgres::commit_prepared_batch() {
     txn.exec0("SET LOCAL ton_indexer.advance_progress = 'off'");
   }
 
+  // Masterchain block rows remain as durable per-seqno progress markers.
   insert_blocks(txn, with_copy_);
-  insert_shard_state(txn, with_copy_);
-  insert_transactions(txn, with_copy_);
-  insert_messages(txn, with_copy_);
-  if (write_postgres_state_tables) {
-    insert_account_states(txn, with_copy_);
-    insert_message_contents(txn);
-  }
-  insert_jetton_transfers(txn, with_copy_);
-  insert_jetton_burns(txn, with_copy_);
-  insert_nft_transfers(txn, with_copy_);
-  insert_nominator_pool_events(txn, with_copy_);
-  insert_nominator_pool_validator_events(txn, with_copy_);
-  insert_validator_events(txn, with_copy_);
-  insert_traces(txn, with_copy_);
-  if (write_postgres_state_tables) {
-    insert_contract_methods(txn);
+  if (!no_insert_data_) {
+    insert_shard_state(txn, with_copy_);
+    insert_transactions(txn, with_copy_);
+    insert_messages(txn, with_copy_);
+    if (write_postgres_state_tables) {
+      insert_account_states(txn, with_copy_);
+      insert_message_contents(txn);
+    }
+    insert_jetton_transfers(txn, with_copy_);
+    insert_jetton_burns(txn, with_copy_);
+    insert_nft_transfers(txn, with_copy_);
+    insert_nominator_pool_events(txn, with_copy_);
+    insert_nominator_pool_validator_events(txn, with_copy_);
+    insert_validator_events(txn, with_copy_);
+    insert_traces(txn, with_copy_);
+    if (write_postgres_state_tables) {
+      insert_contract_methods(txn);
+    }
   }
   data_timer.pause();
 
   td::Timer states_timer;
   std::string upsert_query;
-  if (write_postgres_state_tables) {
-    upsert_query += insert_jetton_masters(txn);
-    upsert_query += insert_jetton_wallets(txn);
-    upsert_query += insert_nft_collections(txn);
-    upsert_query += insert_getgems_nft_auctions(txn);
-    upsert_query += insert_getgems_nft_sales(txn);
-    upsert_query += insert_nft_items(txn);
-    upsert_query += insert_multisig_contracts(txn);
-    upsert_query += insert_multisig_orders(txn);
-    upsert_query += insert_dedust_pools(txn);
-    upsert_query += insert_latest_account_states(txn);
-    upsert_query += insert_vesting(txn);
-    upsert_query += insert_nominator_pools(txn);
-    upsert_query += insert_telemint(txn);
+  if (!no_insert_states_) {
+    if (write_postgres_state_tables) {
+      upsert_query += insert_jetton_masters(txn);
+      upsert_query += insert_jetton_wallets(txn);
+      upsert_query += insert_nft_collections(txn);
+      upsert_query += insert_getgems_nft_auctions(txn);
+      upsert_query += insert_getgems_nft_sales(txn);
+      upsert_query += insert_nft_items(txn);
+      upsert_query += insert_multisig_contracts(txn);
+      upsert_query += insert_multisig_orders(txn);
+      upsert_query += insert_dedust_pools(txn);
+      upsert_query += insert_latest_account_states(txn);
+      upsert_query += insert_vesting(txn);
+      upsert_query += insert_nominator_pools(txn);
+      upsert_query += insert_telemint(txn);
+    }
+    insert_validator_snapshots(txn);
   }
-  insert_validator_snapshots(txn);
 
   td::Timer commit_timer{true};
   if (!upsert_query.empty()) {
@@ -3151,8 +3162,12 @@ void InsertBatchPostgres::commit_prepared_batch() {
   write_classifications(c, classifications);
 
   g_statistics.record_time(INSERT_BATCH_CONNECT, connect_timer.elapsed() * 1e3);
-  g_statistics.record_time(INSERT_BATCH_EXEC_DATA, data_timer.elapsed() * 1e3);
-  g_statistics.record_time(INSERT_BATCH_EXEC_STATES, states_timer.elapsed() * 1e3);
+  if (!no_insert_data_) {
+    g_statistics.record_time(INSERT_BATCH_EXEC_DATA, data_timer.elapsed() * 1e3);
+  }
+  if (!no_insert_states_) {
+    g_statistics.record_time(INSERT_BATCH_EXEC_STATES, states_timer.elapsed() * 1e3);
+  }
   g_statistics.record_time(INSERT_BATCH_COMMIT, commit_timer.elapsed() * 1e3);
 
   stop();
@@ -3381,6 +3396,9 @@ void InsertBatchPostgres::insert_blocks(pqxx::work &txn, bool with_copy) {
   // Prepare data
   for (const auto& task : insert_tasks_) {
     for (const auto& block : task.parsed_block_->blocks_) {
+      if (no_insert_data_ && block.workchain != -1) {
+        continue;
+      }
       auto tuple = std::make_tuple(
         block.workchain,
         block.shard,
@@ -4572,6 +4590,11 @@ void InsertManagerPostgres::start_up() {
   if (pg_no_copy_) {
     LOG(INFO) << "Postgres COPY is disabled; historical tables will use INSERT ... ON CONFLICT";
   }
+  if (no_insert_data_ || no_insert_states_) {
+    LOG(INFO) << "Development insert flags enabled:"
+              << (no_insert_data_ ? " --no-insert-data (masterchain progress rows remain)" : "")
+              << (no_insert_states_ ? " --no-insert-states" : "");
+  }
   
   worker_id_ = get_worker_id();
   if (no_leader_) {
@@ -4623,7 +4646,9 @@ void InsertManagerPostgres::create_insert_actor(std::vector<InsertTaskStruct> in
       no_leader_,
       disable_progress_advance_,
       kvrocks_skip_current_tables_,
-      pg_no_copy_).release();
+      pg_no_copy_,
+      no_insert_data_,
+      no_insert_states_).release();
 }
 
 void InsertManagerPostgres::get_existing_seqnos(td::Promise<std::vector<std::uint32_t>> promise, std::int32_t from_seqno, std::int32_t to_seqno) {

@@ -102,6 +102,28 @@ struct RunReport {
   std::map<std::uint32_t, BlockClassification> blocks;
 };
 
+struct LookupStatRow {
+  std::string matcher;
+  std::string kind;
+  std::uint64_t count{0};
+  std::uint64_t total_micros{0};
+};
+
+struct LookupKindStatRow {
+  std::string kind;
+  std::uint64_t hits{0};
+  std::uint64_t misses{0};
+};
+
+struct LookupStatsSnapshot {
+  std::vector<LookupStatRow> by_matcher;
+  std::vector<LookupKindStatRow> by_kind;
+};
+
+void record_lookup_stat(const std::string &matcher, const std::string &kind,
+                        std::uint64_t micros);
+LookupStatsSnapshot take_lookup_stats();
+
 bool outcomes_allow_replacement(const BlockClassification &bc);
 
 constexpr const char *trace_outcome_name(TraceOutcome o) {
@@ -162,6 +184,9 @@ struct SchemaClassifyResult {
   std::vector<std::string> matcher_names;
   std::size_t scrubbed{0};
   std::size_t unported_btypes{0};
+  std::uint64_t prepare_micros{0};
+  std::uint64_t match_micros{0};
+  std::uint64_t build_micros{0};
   bool unknown_row{false};
   std::string failure_reason;
   FailureCategory failure_category{FailureCategory::none};

@@ -54,6 +54,7 @@ class LookupTable {
 // Two-phase lookup runtime
 
 std::string lookup_key(const std::string &kind, const std::vector<Value> &args);
+void record_lookup_cache_hit(const std::string &kind);
 
 // Collect-pass table: `has` covers every kind the artifact references.
 // Registration is checked first; an uncovered kind faults the collect pass
@@ -88,7 +89,11 @@ class FilledLookupTable : public LookupTable {
   bool has(const std::string &kind) const override { return kinds_.count(kind) != 0; }
   Value get(const std::string &kind, const std::vector<Value> &args) const override {
     auto it = values_.find(lookup_key(kind, args));
-    return it != values_.end() ? it->second : Value::null();
+    if (it == values_.end()) {
+      return Value::null();
+    }
+    record_lookup_cache_hit(kind);
+    return it->second;
   }
 
  private:

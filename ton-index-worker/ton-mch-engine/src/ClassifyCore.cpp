@@ -13,6 +13,7 @@
 #include "Walker.h"
 #include "btypes_gen.h"
 
+#include "td/utils/Timer.h"
 #include "vm/excno.hpp"
 
 #include <algorithm>
@@ -21,6 +22,7 @@
 #include <exception>
 #include <limits>
 #include <map>
+#include <mutex>
 #include <stdexcept>
 #include <unordered_set>
 #include <variant>
@@ -56,6 +58,13 @@ std::vector<Block *> gather_blocks(Block *root) {
 }
 
 namespace {
+
+using LookupStatKey = std::pair<std::string, std::string>;
+using LookupStatValue = std::pair<std::uint64_t, std::uint64_t>;
+
+std::mutex lookup_stats_mutex;
+std::map<LookupStatKey, LookupStatValue> lookup_stats;
+std::map<std::string, std::uint64_t> lookup_cache_hits;
 
 Block *wrap_root(BlockArena &arena, Block *root) {
   Block *wrapper = arena.make(mch::btype::kRoot);
@@ -666,6 +675,48 @@ std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource
 
 }  // namespace
 
+void record_lookup_stat(const std::string &matcher, const std::string &kind,
+                        std::uint64_t micros) {
+  std::lock_guard<std::mutex> lock(lookup_stats_mutex);
+  auto &[count, total_micros] = lookup_stats[{matcher, kind}];
+  count++;
+  total_micros += micros;
+}
+
+void record_lookup_cache_hit(const std::string &kind) {
+  std::lock_guard<std::mutex> lock(lookup_stats_mutex);
+  lookup_cache_hits[kind]++;
+}
+
+LookupStatsSnapshot take_lookup_stats() {
+  std::map<LookupStatKey, LookupStatValue> lookup_snapshot;
+  std::map<std::string, std::uint64_t> hit_snapshot;
+  {
+    std::lock_guard<std::mutex> lock(lookup_stats_mutex);
+    lookup_snapshot.swap(lookup_stats);
+    hit_snapshot.swap(lookup_cache_hits);
+  }
+  LookupStatsSnapshot snapshot;
+  std::map<std::string, LookupKindStatRow> by_kind;
+  snapshot.by_matcher.reserve(lookup_snapshot.size());
+  for (const auto &[key, value] : lookup_snapshot) {
+    snapshot.by_matcher.push_back({key.first, key.second, value.first, value.second});
+    auto &kind_row = by_kind[key.second];
+    kind_row.kind = key.second;
+    kind_row.misses += value.first;
+  }
+  for (const auto &[kind, hits] : hit_snapshot) {
+    auto &kind_row = by_kind[kind];
+    kind_row.kind = kind;
+    kind_row.hits = hits;
+  }
+  snapshot.by_kind.reserve(by_kind.size());
+  for (const auto &entry : by_kind) {
+    snapshot.by_kind.push_back(entry.second);
+  }
+  return snapshot;
+}
+
 ClassifySetup prepare_classify(const std::vector<CompiledMatcher> &matchers) {
   ClassifySetup s;
   // Matcher / build / where tables are three views of one document. Disagreeing
@@ -851,8 +902,12 @@ SchemaClassifyResult classify_schema_trace(
     return result;
   }
   bool completed = false;
+  std::uint64_t prepare_micros = 0;
+  std::uint64_t match_micros = 0;
+  std::uint64_t build_micros = 0;
   try {
     TraceContext ctx;
+    td::Timer prepare_timer;
     ctx.trace = schema_to_trace(trace_id, txs).move_as_ok();
     ctx.tree = to_tree(ctx.trace);
     if (ctx.tree.root == nullptr) {
@@ -862,14 +917,18 @@ SchemaClassifyResult classify_schema_trace(
       return result;
     }
     ctx.root = init_block(ctx.arena, ctx.tree.root);
+    prepare_micros = static_cast<std::uint64_t>(prepare_timer.elapsed() * 1e6);
 
+    td::Timer match_timer;
     ClassifyResult classified = classify_trace(ctx, *prep.matchers, prep.setup, src);
+    match_micros = static_cast<std::uint64_t>(match_timer.elapsed() * 1e6);
     result.outcome = classified.failure ? TraceOutcome::fallback : TraceOutcome::classified;
     result.failure_reason = classified.failure_reason;
     result.failure_category = classified.failure_category;
 
     const std::vector<ActionRow> &core =
         classified.failure ? classified.fallback_rows : classified.action_rows;
+    td::Timer build_timer;
     for (const ActionRow &row : core) {
       Action action;
       if (!build_action(row, action)) {
@@ -879,6 +938,7 @@ SchemaClassifyResult classify_schema_trace(
       result.scrubbed += scrub_arena_refs(action);
       result.rows.push_back(std::move(action));
     }
+    build_micros = static_cast<std::uint64_t>(build_timer.elapsed() * 1e6);
 
     // Collect all fired matchers, including absorbed matches.
     std::set<std::string> names;
@@ -922,6 +982,11 @@ SchemaClassifyResult classify_schema_trace(
   }
   if (src.history_unavailable()) {
     result.outcome = TraceOutcome::history_unavailable;
+  }
+  if (completed) {
+    result.prepare_micros = prepare_micros;
+    result.match_micros = match_micros;
+    result.build_micros = build_micros;
   }
   return result;
 }

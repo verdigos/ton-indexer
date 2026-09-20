@@ -9,8 +9,11 @@
 #include "td/utils/filesystem.h"
 #include "td/utils/port/Stat.h"
 #include "ton/ton-tl.hpp"
+#include <algorithm>
 #include <chrono>
 #include <exception>
+#include <iomanip>
+#include <sstream>
 
 namespace {
 
@@ -29,6 +32,51 @@ std::int64_t processing_lag_ms(std::int32_t gen_utime) {
                             .count();
     const auto block_time_ms = static_cast<std::int64_t>(gen_utime) * 1000;
     return std::max<std::int64_t>(0, now_ms - block_time_ms);
+}
+
+std::string format_lookup_stats(mch::LookupStatsSnapshot snapshot) {
+    std::sort(snapshot.by_matcher.begin(), snapshot.by_matcher.end(),
+              [](const auto& a, const auto& b) {
+                  if (a.total_micros != b.total_micros) return a.total_micros > b.total_micros;
+                  if (a.matcher != b.matcher) return a.matcher < b.matcher;
+                  return a.kind < b.kind;
+              });
+    std::sort(snapshot.by_kind.begin(), snapshot.by_kind.end(),
+              [](const auto& a, const auto& b) { return a.kind < b.kind; });
+
+    std::uint64_t total_count = 0;
+    std::uint64_t total_micros = 0;
+    for (const auto& row : snapshot.by_matcher) {
+        total_count += row.count;
+        total_micros += row.total_micros;
+    }
+
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(3) << "mch.lookup.by_matcher\n";
+    for (std::size_t i = 0; i < std::min<std::size_t>(30, snapshot.by_matcher.size()); ++i) {
+        const auto& row = snapshot.by_matcher[i];
+        out << "matcher=" << row.matcher << " kind=" << row.kind
+            << " count=" << row.count
+            << " total_millis=" << row.total_micros / 1000.0
+            << " mean_micros=" << (row.count ? static_cast<double>(row.total_micros) / row.count : 0.0)
+            << '\n';
+    }
+    out << "total count=" << total_count
+        << " total_millis=" << total_micros / 1000.0
+        << " mean_micros=" << (total_count ? static_cast<double>(total_micros) / total_count : 0.0)
+        << " cache_by_kind=";
+    if (snapshot.by_kind.empty()) {
+        out << "none";
+    }
+    for (std::size_t i = 0; i < snapshot.by_kind.size(); ++i) {
+        const auto& row = snapshot.by_kind[i];
+        const auto requests = row.hits + row.misses;
+        if (i != 0) out << ';';
+        out << row.kind << ":values_hits=" << row.hits << ",fetches=" << row.misses
+            << ",hit_ratio=" << (requests ? static_cast<double>(row.hits) / requests : 0.0);
+    }
+    out << '\n';
+    return out.str();
 }
 
 }  // namespace
@@ -104,6 +152,7 @@ void IndexScheduler::alarm() {
     if ((!run_ || run_->mode != mch::RunMode::task) && next_statistics_flush_.is_in_past()) {
         ton::delay_action([working_dir = this->working_dir_]() {
             auto stats = g_statistics.generate_report_and_reset();
+            stats += format_lookup_stats(mch::take_lookup_stats());
             auto path = working_dir + "/" + "stats.txt";
             auto status = td::atomic_write_file(path, std::move(stats));
             if (status.is_error()) {

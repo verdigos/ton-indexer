@@ -1,5 +1,6 @@
 #include "ClassifyWorker.h"
 
+#include "Statistics.h"
 #include "emu/EmuCelldbLookup.h"
 #include "td/utils/Timer.h"
 #include "td/utils/base64.h"
@@ -23,14 +24,30 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
       states.push_back(shard.block_state);
     }
     EmuCelldbTier2 tier2(&states, job.block->mc_block_.config_);
+    double lookup_seconds = 0;
     ParsedBlockLookupSource src(&job.input.interfaces,
-        [&tier2](const std::string &kind, const std::vector<Value> &args) {
-          return tier2.fetch(kind, args);
+        [&tier2, &lookup_seconds](const std::string &kind, const std::vector<Value> &args) {
+          td::Timer lookup_timer;
+          auto result = tier2.fetch(kind, args);
+          const double elapsed_seconds = lookup_timer.elapsed();
+          lookup_seconds += elapsed_seconds;
+          const auto *matcher = reject_ctx().matcher;
+          record_lookup_stat(matcher ? *matcher : "<none>", kind,
+                             static_cast<std::uint64_t>(elapsed_seconds * 1e6));
+          return result;
         });
     const auto key = td::base64_encode(job.input.trace.trace_id.as_slice());
     auto r = classify_schema_trace(*prep_, key, job.input.txs, src);
     TraceClassificationResult result{std::move(job.input.trace), r.outcome, std::move(r.rows), std::move(r.failure_reason), false, std::move(r.rescue)};
     const double seconds = timer.elapsed();
+    g_statistics.record_time(MCH_CLASSIFY_TRACE, seconds * 1e6);
+    if (r.prepare_micros || r.match_micros || r.build_micros) {
+      g_statistics.record_time(MCH_CLASSIFY_PREPARE, r.prepare_micros);
+      // Match includes celldb lookup time by design.
+      g_statistics.record_time(MCH_CLASSIFY_MATCH, r.match_micros);
+      g_statistics.record_time(MCH_CLASSIFY_BUILD, r.build_micros);
+      g_statistics.record_time(MCH_CLASSIFY_LOOKUP, lookup_seconds * 1e6);
+    }
     result.slow = seconds > policy_.slow_job_threshold_s;
     if (result.slow) {
       LOG(WARNING) << "Slow classification trace=" << key << " seconds=" << seconds;

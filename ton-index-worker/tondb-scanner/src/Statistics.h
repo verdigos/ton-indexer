@@ -132,6 +132,12 @@ enum Histogram : uint32_t {
   EMULATE_TRACE,
   CLASSIFY_TRACE,
   INSERT_TRACE,
+
+  MCH_CLASSIFY_TRACE,
+  MCH_CLASSIFY_PREPARE,
+  MCH_CLASSIFY_MATCH,
+  MCH_CLASSIFY_BUILD,
+  MCH_CLASSIFY_LOOKUP,
   
   HISTOGRAMS_COUNT
 };
@@ -172,6 +178,11 @@ const std::unordered_map<uint32_t, std::string_view> histogram_names = {
     {EMULATE_TRACE, "emulator.emulate.trace.millis"},
     {CLASSIFY_TRACE, "emulator.classify.trace.micros"},
     {INSERT_TRACE, "emulator.insert.trace.millis"},
+    {MCH_CLASSIFY_TRACE, "mch.classify.trace.micros"},
+    {MCH_CLASSIFY_PREPARE, "mch.classify.prepare.micros"},
+    {MCH_CLASSIFY_MATCH, "mch.classify.match.micros"},
+    {MCH_CLASSIFY_BUILD, "mch.classify.build.micros"},
+    {MCH_CLASSIFY_LOOKUP, "mch.classify.lookup.micros"},
 };
 
 class Statistics {

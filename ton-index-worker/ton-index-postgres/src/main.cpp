@@ -46,6 +46,8 @@ int main(int argc, char *argv[]) {
   td::uint32 to_seqno = 0;
   td::uint32 prewarm_count = 50;
   bool mch_classify = false;
+  bool no_insert_data = false;
+  bool no_insert_states = false;
   bool mch_task_mode = false, mch_task_once = false;
   double mch_task_poll = 5;
   std::optional<std::uint32_t> enqueue_from;
@@ -492,6 +494,12 @@ int main(int argc, char *argv[]) {
   p.add_option('\0', "mch-classify", "Classify completed traces in-process and write actions in the block transaction", [&]() {
     mch_classify = true;
   });
+  p.add_option('\0', "no-insert-data", "Skip PostgreSQL data statements except masterchain progress rows", [&]() {
+    no_insert_data = true;
+  });
+  p.add_option('\0', "no-insert-states", "Skip PostgreSQL account-state statements", [&]() {
+    no_insert_states = true;
+  });
   auto mch_uint_option = [&](td::Slice name, td::Slice help, auto setter) {
     p.add_checked_option('\0', name, help, [&, name, setter](td::Slice value) {
       std::uint64_t v;
@@ -690,7 +698,7 @@ int main(int argc, char *argv[]) {
   if (!mch_task_mode) scheduler.run_in_context([&] {
     insert_manager_ = td::actor::create_actor<InsertManagerPostgres>(
         "insertmanager", credential, kvrocks_config, partition_config, no_leader, bounded_archive_range,
-        kvrocks_skip_current_tables, pg_no_copy, failover_baseline);
+        kvrocks_skip_current_tables, pg_no_copy, failover_baseline, no_insert_data, no_insert_states);
   });
   scheduler.run_in_context([&] { parse_manager_ = td::actor::create_actor<ParseManager>("parsemanager"); });
   scheduler.run_in_context([&] {
