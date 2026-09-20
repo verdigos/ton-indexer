@@ -103,6 +103,7 @@ order:
   - nft_put_on_sale
   - nft_discovery
   # Outbid reads the preceding auction_bid block.
+  - getgems_auction_bid
   - auction_bid
   - auction_outbid
   - nft_cancel_sale
