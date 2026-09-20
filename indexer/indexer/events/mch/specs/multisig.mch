@@ -1,49 +1,4 @@
-# Multisig v2 create-order, approve, and execute matchers. Fully declarative:
-# zero host fns, predicates, shapers, or imperative builders.
-#
-# TWO APPROVE MATCHERS, one per anchor arm
-# ----------------------------------------
-# Legacy accepts either the 0xA762230F call or a ton_transfer whose comment is
-# "approve". A mixed `(op X ^ btype ton_transfer where ...)` anchor cannot carry
-# the inline expression: C013_WHERE_EXPR_NOT_SYNC requires a named predicate on
-# a group branch, creating duplicate Python/C++ host code for one string test.
-# Splitting keeps the expression on a plain anchor. This is the same reasoning
-# and construct documented in specs/coffee_mev.mch:11-27. The arms are disjoint
-# by btype, produce the same data, and their relative order is unobservable.
-#
-# WHY THE COMMENT ARM WRITES signer_index = -1
-# ------------------------------------------------
-# Its body is exactly op32(0) + "approve": only 56 bits remain after the opcode.
-# MultisigApprove then tries load_uint(64), which underflows every time, so the
-# bare except at blocks/multisig.py:199 always preserves the initial -1. This is
-# legacy behavior, not an approximation. The opcode arm parses normally.
-#
-# The response is an XOR child. On the accepted branch the `rejected` scalar
-# capture is null; statement-parse on null is a no-op and field access
-# null-propagates, so `rejected.body.exit_code ?? 0` is safely zero without a
-# tolerant host fn. Neither branch present means no structural match, matching
-# the legacy required OrMatcher child.
-#
-# EMULATED EXECUTE YIELD
-# ----------------------
-# MultisigOrder detection sees only trace-final state. An order destroyed by
-# execute has no tier-1 interface, so the lookup rejects and this matcher emits
-# no emulated row. It still ports for committed and fixture paths, where the
-# historical/bundled interface exists; building a historical emulated store is
-# explicitly out of scope.
-#
-# KNOWN DEVIATIONS FROM LEGACY
-# ----------------------------
-# 1. A malformed 0xA762230F approve body is swallowed by legacy and emitted with
-#    signer_index=-1; `parse vote as MultisigApprove` rejects it here. Such a
-#    truncated opcode message is unreachable in practice and the deviation is
-#    accepted.
-# 2. `b64()` serializes Cell BOCs with td, whose container bytes can differ from
-#    pytoniq on multi-ref trees. Both decode to the same root hash and every gate
-#    neutralizes order_boc through the existing boc_fields cellhash rendering.
-# 3. Legacy's `order.signers or []` and this spec's `?? []` differ only for a
-#    fixture carrying signers:null. Production MultisigOrderData always renders
-#    its vector as a list, possibly empty, and no fixture carries null.
+# Matches multisig v2 order creation, approval by opcode or comment, and execution.
 
 opcode MultisigNewOrder       = 0xF718510F
 opcode MultisigInitOrder      = 0x9C73FBA2
@@ -107,8 +62,7 @@ matcher multisig_approve_comment {
         signer:       vote.msg.source
         order:        vote.msg.destination
         success:      accepted != null
-        # A comment body always underflows MultisigApprove's query_id read; see
-        # the proof in this file's header and blocks/multisig.py:193-200.
+        # Comment approvals lack a 64 bit query id, so the signer index stays minus one.
         signer_index: -1
         exit_code:    rejected.body.exit_code ?? 0
         signers:      order.signers ?? []

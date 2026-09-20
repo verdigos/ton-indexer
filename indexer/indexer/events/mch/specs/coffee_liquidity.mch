@@ -1,17 +1,4 @@
-# Coffee liquidity/vault matchers — ported from blocks/liquidity.py.
-# CoffeeDepositLiquidityMatcher and CoffeeCreateVaultMatcher, declared in the
-# legacy matchers-list order (deposit < create_vault). The third coffee
-# liquidity matcher, CoffeeWithdrawLiquidityMatcher, lives in
-# specs/coffee_withdraw.mch — split off for the same reason dedust and stonfi_v2
-# keep their deposit and withdraw specs apart, plus a documented legacy
-# divergence recorded in that file's header.
-#
-# Both builds here are FULLY DECLARATIVE: zero host fns, zero lookups. Coffee is
-# the one family in the backlog with no parser gaps: its 2-bit asset stays an
-# honest ABI union and the real ref groups remain visible to consumers.
-#
-# Anchor claims: 0xc0ffee27 (deposit) and 0xc0ffee06 (create vault) are claimed
-# by no other spec, so their positions in specs/manifest.yaml carry no tie-break.
+# Coffee matchers cover liquidity deposits and vault creation.
 
 import "lib/leg.mch"
 import "lib/opcodes.mch"
@@ -23,40 +10,6 @@ opcode CoffeeDepositLiquidityInternal         = 0xc0ffee29
 opcode ProvideWalletAddress                   = 0x2c76b973
 opcode TakeWalletAddress                      = 0xd1735400
 
-# ---------------------------------------------------------------------------
-# coffee_deposit_liquidity — legacy CoffeeDepositLiquidityMatcher.
-#
-# A depository-creation request (the anchor) fed by the user's leg (TON straight
-# to the vault, or a prebuilt `jetton_transfer`), deploying the depository. Once
-# BOTH legs have landed the depository fires 0xc0ffee29, which mints the LP
-# jettons (JettonInternalTransfer), logs 0xc0ffee33 and optionally pays a vault
-# excess back. So a two-asset deposit produces TWO of these blocks: the first
-# leg's has no 0xc0ffee29 subtree at all (pool/lp null), the second leg's has it.
-#
-# Legacy `child_matcher=deploy` is written here as a one-item children block.
-# With a single item the two lowerings differ only when several 0xc0ffee22
-# children exist (legacy would consume them all; its build reads only the
-# first via get_labeled) — never observed.
-#
-# Slot assignment: the legacy build compares `str(in_asset)` against
-# `str(pool_params.first/second)` and rejects when the incoming asset is in
-# neither. `==` on two Asset values is the same test on both hosts (is_ton +
-# has_jetton + normalized master string), so the comparison is declarative.
-# `target_asset_1` is always the DEPOSITED side and `target_asset_2` the other —
-# note the legacy swap in the `second` branch.
-#
-# Deviations from legacy, all documented rather than fixed:
-#  - the `lp_transfer` fallback for lp_tokens_minted/pool_address is DEAD in the
-#    legacy matcher (0xc0ffee33 and the internal transfer are both REQUIRED items
-#    of the same children set, so the success event is present whenever the
-#    transfer is) and is not reproduced;
-#  - `vault_excesses` elements are 2-element LISTS here and tuples in the legacy
-#    build; both index identically in the serializer (`excess[0]`/`excess[1]`)
-#    and render identically, and the language has no tuple literal;
-#  - the legacy `Asset(False, x.jetton_address)` coercion of a non-`Asset`
-#    excess asset is dead under the declarative jetton family (data['asset'] is
-#    always an `Asset`) and is not reproduced.
-# ---------------------------------------------------------------------------
 matcher coffee_deposit_liquidity {
     produces coffee_deposit_liquidity
 
@@ -87,13 +40,10 @@ matcher coffee_deposit_liquidity {
     reject when not (is_first or l.asset == pool_second)
 
     let in_amount = amount(request.body.amount)
-    # The vault's excess refund — whichever arm of the payout terminal bound.
     let excess_jetton = [[out_jt.data.asset, out_jt.data.amount]] if out_jt != null else null
     let excess_ton    = [[ton_asset(), amount(out_call.msg.value ?? 0)]] if out_call != null else null
     out {
         dex:                  "coffee"
-        # Unconditional `AccountId(...)` in the legacy build, so a body-level
-        # addr_none stays present-but-empty rather than becoming null.
         sender:               account(request.body.sender) ?? addr_none()
         pool_address:         success.msg.source
         deposit_contract:     deploy.msg.destination
@@ -112,18 +62,6 @@ matcher coffee_deposit_liquidity {
     }
 }
 
-# ---------------------------------------------------------------------------
-# coffee_create_vault — legacy CoffeeCreateVaultMatcher.
-#
-# A vault creation request deploys the vault, which then discovers its jetton
-# wallet via the TEP-89 pair (provide_wallet_address / take_wallet_address —
-# the raw 0x2c76b973 / 0xd1735400 literals in the legacy matcher). Both
-# discovery hops are optional (TON/extra-currency vaults skip them).
-#
-# The declarative build reads sender/amount from the anchor envelope and asset
-# from its parsed body, vault from the captured CoffeeDeploy call's envelope.
-# The produced block is the canonical generic block (btype + data map).
-# ---------------------------------------------------------------------------
 matcher coffee_create_vault {
     produces coffee_create_vault
 

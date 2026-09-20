@@ -1,14 +1,4 @@
-# Ethena deposit matcher — ported from blocks/ethena_staking.py
-# EthenaDepositBlockMatcher. Anchors on an already-built `jetton_transfer`
-# block (first btype-anchored matcher in the spec set — the engine anchor test
-# is btype-set membership) whose child is the pool's `jetton_mint`.
-# The withdrawal request is the second matcher in this file, below.
-#
-# In the declarative build, the hardcoded USDe/tsUSDe asset gate is two
-# `reject when` clauses (Asset compares case-insensitively against the master
-# address literal — a TON/absent asset raises, i.e. rejects, exactly like the
-# legacy None guards). Every field is read off the composed jetton_transfer /
-# jetton_mint blocks' produced `data` through the `.data` accessor.
+# Ethena matchers cover deposits and withdrawal requests.
 
 matcher ethena_deposit {
     produces ethena_deposit
@@ -28,54 +18,6 @@ matcher ethena_deposit {
     }
 }
 
-# -----------------------------------------------------------------------------
-# ethena_withdrawal_request — blocks/ethena_staking.py:58
-# EthenaWithdrawalRequestBlockMatcher. Serializes to `stake_withdrawal_request`
-# with `staking_data{provider: ethena}` (an existing composite; no new column).
-#
-# The user sends USDe to the pool and gets back a TIMELOCKED tsUSDe position:
-#
-#   0x0f8a7ea5 -> 0x178d4519 -> 0x7362d09c -> 0x642b7d07 -> 0xb2583ed5
-#   transfer     internal      notify        mint(tsUSDe)  timelocked transfer
-#
-# a `child_sequence_matcher` in the reference, i.e. a plain required chain here.
-#
-# The manifest puts this wide anchor before the jetton family so it claims raw
-# JettonTransfer and JettonMint calls before they become composed blocks.
-#
-# The relative order with jetton_transfer is unobservable. Guard
-# 3 below requires the source wallet's jetton MASTER to equal the internal
-# transfer's DESTINATION — i.e. the tsUSDe leg lands on the master, not on a
-# jetton wallet. build_jetton_transfer_core rejects exactly that shape: it looks
-# the destination up with get_jetton_wallet() and returns None when the address
-# is not a wallet. So no trace can satisfy this matcher's guards AND be a
-# transfer the jetton family would have taken; whichever runs first, the other
-# declines. The corpus confirms it — this spec runs on every fixture
-# carrying 0x0f8a7ea5.
-#
-# Within the file it is listed AFTER the deposit, the reverse of the legacy list
-# (withdrawal 48, deposit 50). Unobservable too, and for the mirror-image reason:
-# the deposit anchors on a `btype jetton_transfer` BLOCK, which exists only where
-# the jetton family matched — exactly where this matcher's guards do not hold.
-#
-# 0xb2583ed5 is a timelocked-transfer opcode whose BODY is an ordinary
-# JettonInternalTransfer. `parse` is registry-keyed by NAME, and the single
-# logical ABI row dispatches honestly across 0x178d4519 and 0xb2583ed5
-# (verified against the corpus body: amount/from/response all read correctly).
-#
-# THE FOUR GUARDS are the legacy build's identity checks, one `reject when` each:
-# both wallets must be owned by the sender, the source wallet must be a wallet of
-# the USDe master the internal transfer landed on, and the receiver wallet must be
-# a wallet of the tsUSDe master that emitted the timelocked transfer. They are
-# written `account(a) != account(b)` (the nft_sale idiom) rather than as raw
-# string compares so the two sides normalize identically.
-#
-# DEVIATION (documented, not worked around): an unresolvable jetton-wallet
-# interface makes the legacy build raise AttributeError out of build_block, which
-# drops the WHOLE trace to basic actions; the two `== null` rejects here decline
-# only this match and let the rest of the trace classify. Same treatment as
-# specs/dedust_withdraw.mch and the tonco withdraw host fn.
-# -----------------------------------------------------------------------------
 import "lib/opcodes.mch"
 opcode EthenaTimelockTransfer  = 0xb2583ed5
 
@@ -90,6 +32,7 @@ matcher ethena_withdrawal_request {
 
     let src_wallet_info = lookup jetton_wallet(transfer.msg.destination)
     let dst_wallet_info = lookup jetton_wallet(ts_usde_transfer.msg.destination)
+    # Jetton wallet lookup miss declines this request and leaves the trace for other matchers.
     reject when src_wallet_info == null
     reject when dst_wallet_info == null
     reject when account(src_wallet_info.owner)  != transfer.msg.source

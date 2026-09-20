@@ -1,70 +1,4 @@
-# DeDust CPMM V2 withdraw liquidity — port of DedustV2WithdrawBlockMatcher
-# (blocks/dedust_v2/liquidity.py:43). Fully declarative; no host builder.
-#
-# Chain:
-#   Withdraw 0x20b5ef89 (user -> Pool)                          <- anchor
-#     WithdrawLiquidity 0xbc1531a9 (Pool -> Position)   # burns the LP share
-#       ExitLiquidity 0xf6f6a3aa (Position -> Pool)     # realized amounts
-#         Withdrawal event 0xc0d77b54 (Pool ext-out)    # optional
-#         payout leg 1 (PayoutMessage 0x3216ca09 | jetton_transfer)  # optional
-#         payout leg 2 (same)                                        # optional
-#
-# WithdrawLiquidity and ExitLiquidity are matched by `op` only — the reference
-# never parses either body, so neither gets a registered ABI row.
-#
-# LP IS NOT A JETTON. The share lives in the Position contract and there is no
-# LP-jetton burn, so `asset` and `sender_wallet` are hard nulls (the reference
-# writes None into both) and the burnt amount comes off the message bodies
-# rather than off a jetton_burn block.
-#
-# SUCCESS = the Withdrawal event exists. No event means the withdraw aborted
-# (slippage), which drives `failed`, `is_refund`, and which of the two
-# `liquidity` fields is the burnt amount: the event carries the EXACT burned
-# share, the entry message only the requested one.
-#
-# autoClaimFees is REJECTED, exactly as the reference bails: with the flag set
-# the pool mixes fee payouts into the same transaction and the two payout slots
-# can no longer be told apart from the withdrawn amounts. The flag uses the ABI
-# declaration's `bool` leaf; `bits 1` would only skip it.
-#
-# PARSER PATHS, mixed in one spec (legal; the sibling dedust_v2_claim_fees.mch
-# does the same): DedustV2Withdraw, DedustV2WithdrawalEvent, and PayoutMessage
-# all ride protocol ABI bridge rows, with their authored field spellings. All
-# sit behind an `op`
-# guard, which the ABI path requires and the legacy-class twins want anyway
-# (they `assert op == opcode`).
-#
-# Per-leg OR order (`op PayoutMessage | btype jetton_transfer`) is the reverse
-# of the reference's payout_leg_matcher, and inert: the branches are bare
-# concrete nodes with distinct heads, so the compiler upgrades the `|` to an
-# exclusive-or and at most one can ever bind. Spelled this way to match
-# the claim_fees/claim_reward siblings.
-#
-# Leg -> slot assignment is POSITIONAL, unlike claim_fees (which matches legs to
-# slots by exact amount). The reference reads `get_labeled_sorted("payout", ...)`
-# = ascending min_lt, and the children-set algorithm consumes candidates in
-# exactly that canonical order, so item 1 binds the earlier leg.
-#
-# DEVIATION FROM THE REFERENCE (one, engine-level, documented not fixed). The
-# reference passes include_excess=False on every NESTED matcher of the chain,
-# so the pool's 0xd53276db excess stays a standalone call_contract action. Both
-# MCH engines instead absorb it: nested absorption is UNCONDITIONAL for a
-# matched non-root node (mch_ir/engine.py `_absorb_aux`, mirrored in C++), and
-# the matcher-level `include_excess false` above only suppresses the ANCHOR's
-# own aux siblings. On all nine corpus withdraw fixtures,
-# every semantic field of the produced row is
-# byte-identical, and the whole delta is that the excess transaction moves into
-# this row's `tx_hashes` (and, on one fixture, extends `end_lt`) instead of
-# standing as its own row. Five of the nine show it — the successful ones; the
-# three aborted withdraws have no payout tx and so no excess, and the fourth is
-# a truncated chain that neither engine classifies. Making absorption honour
-# the flag is an engine change that would move the consumed set of every other
-# include_excess=false spec, so it stays out of this port.
-#
-# ORDERING. The 0x20b5ef89 anchor is claimed by no other spec and neither are
-# the three inner opcodes, so its position in specs/manifest.yaml carries no
-# tie-break of its own. The manifest keeps this matcher after the jetton
-# family, which builds its jetton_transfer payout legs.
+# DeDust V2 liquidity withdrawal covers position share burning, two optional payout legs, and slippage refunds.
 
 import "lib/leg.mch"
 import "lib/opcodes.mch"
@@ -91,14 +25,11 @@ matcher dedust_v2_withdraw {
                          btype jetton_transfer @jt_2
                      } }
 
-
+    # Withdrawals with autoClaimFees mix fee payouts with withdrawn amounts and are rejected here.
     reject when withdraw.body.auto_claim_fees
 
     let success = event != null
 
-    # Per-leg projection (parse_payout_leg, dedust_v2/common.py:28): a jetton leg
-    # reads the prebuilt block's data, a TON leg is (amount, TON, no user wallet,
-    # the payer, no dex jetton wallet). An unbound leg is all-null (_EMPTY_LEG).
     let a_1   = jt_1.data.amount ?? ton_1.body.amount
     let a_2   = jt_2.data.amount ?? ton_2.body.amount
 

@@ -1,36 +1,4 @@
-# Dedust two-branch liquidity deposit — ported from blocks/liquidity.py
-# DedustDepositBlockMatcher (final) + DedustDepositFirstAssetBlockMatcher
-# (partial). Registration order inside this file mirrors event_processing:
-# final first, partial second.
-#
-# Key deviation from the hand-written pair, forced by registration order: the
-# legacy matchers run BEFORE JettonTransferBlockMatcher, so they match the
-# user's deposit leg as a RAW JettonTransfer -> JettonInternalTransfer ->
-# JettonNotify chain and build the vault's jetton-excess payouts themselves
-# (labeled(..., JettonTransferBlockMatcher, call_build_block=True)). Here
-# jetton_transfer has already run, so the deposit leg and the excess payouts
-# arrive as prebuilt `btype jetton_transfer` blocks; the raw notify chain is
-# kept as a fallback arm for legs the jetton matcher rejected. Consumed
-# event-node sets are identical either way (the composite carries the same
-# nodes, including per-node excess absorption).
-#
-# The implementation's opcode values and rejection/destroy shapes are
-# authoritative; this file follows the code rather than the idealized example.
-#
-# Paired partial+final blocks are merged by host-side
-# post_process_dedust_liquidity: both builders return the exact
-# registered block classes the pass dispatches on
-# (DedustDepositLiquidity / DedustDepositLiquidityPartial).
-#
-# The partial matcher's topup guard (reject when a pool-deposit or rejection
-# child follows the topup) stays in the host fn. Body fields come from ABI
-# rows on the already-consumed deposit leg.
-#
-# The Ask relation block carries the deploy child and deposit-leg parent.
-#
-# Builders are consumed-set/tree-driven (Match._mch_consumed + previous_block
-# navigation), same approach as dedust_swap/stonfi_v2; captures are kept for
-# pattern fidelity only.
+# Matches partial and completed DeDust liquidity deposits from native or jetton vault legs.
 
 import "lib/opcodes.mch"
 
@@ -43,31 +11,16 @@ opcode DedustDestroyLiquidityDepositContract = 0xaae79256
 opcode DedustReturnExcessFromVault           = 0x6b0b787f
 opcode DedustRejection                       = 0xe1a36cd4
 
-# The deposit leg feeding the vault: TON straight to the vault, a prebuilt
-# jetton transfer, or the raw notify chain (fallback, see header).
 rule deposit_leg = or {
                        op DedustDepositTONToVault
                        btype jetton_transfer
                        op JettonNotify <- op JettonInternalTransfer <- op JettonTransfer
                    }
 
-# One excess-liquidity refund from a vault: optional jetton payout (prebuilt
-# transfer) and/or optional TON payout. Legacy: ContractMatcher(optional,
-# ReturnExcessFromVault, children=[jetton_excess(optional), ton_excess(optional)]).
 rule vault_excess =
     op DedustReturnExcessFromVault
       -> { maybe btype jetton_transfer
          ; maybe op DedustPayout }
-
-# HYBRID declarative build. reject/failed/`dex` wiring and block assembly
-# are declarative. Final's residue (deposit-leg resolution via previous_block,
-# per-vault BOC parsing, jetton-wallet lookups, excess-payout scan) stays in
-# dedust_deposit_final_data. Partial bodies parse as ABI rows in this matcher;
-# dedust_deposit_partial_data is only the topup-child guard. Each fn returns
-# null to reject. Product is a generic
-# Block(btype dedust_deposit_liquidity[_partial]); the distinct btypes let
-# post_process_dedust_liquidity dual-dispatch (isinstance legacy classes OR
-# btype) so both paths pair identically.
 
 matcher dedust_deposit_final {
     produces dedust_deposit_liquidity
