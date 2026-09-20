@@ -1,6 +1,4 @@
-# Stonfi V1 leaves ok_ref payment requests unconsumed so their transfers can
-# classify independently. The host reads that sibling and reduces payment
-# requests in tree order; the spec parses and maps the remaining data.
+# Stonfi V1 swaps cover incoming jettons, payment requests, and outgoing transfers.
 
 opcode StonfiSwap           = 0x25938561
 opcode StonfiPaymentRequest = 0xf93bb43f
@@ -19,7 +17,8 @@ matcher stonfi_v1_swap {
     let payload            = in_transfer.data.stonfi_swap_body
     let out_wallet_address = payload.jetton_wallet if payload != null else d.out_address
 
-    # Collect all wallet keys before rejecting a missing required interface.
+    # Output wallet lookup miss leaves the destination asset unknown.
+    # Outgoing wallet lookup miss treats the outgoing asset as TON.
     let out_wallet        = lookup jetton_wallet(out_wallet_address)
     let actual_out_wallet = lookup jetton_wallet(d.out_address)
     let dex_in_wallet     = lookup jetton_wallet(swap.body.token_wallet)

@@ -1,8 +1,5 @@
-# `msg.opcode` is signed; use the masked `block.data.opcode` for u32 comparisons.
-# Missing addresses are addr_none rather than null. worker_payout and grant_refund
-# take `failed` from the payout transaction; the other matchers use the anchor.
-# ext_addr_str preserves external-address formatting. Nested
-# nullable parses recover the withdraw amount from the optional refund payload.
+# Matches Cocoon worker, proxy, client, and owner wallet payout, charge, registration, refund, stake, and withdrawal flows.
+# Message opcodes are signed, so payout type compares the masked block data opcode.
 
 import "lib/common.mch"
 
@@ -25,7 +22,6 @@ opcode CocoonGrantRefundPayload         = 0xEFD711E1
 opcode CocoonOwnerClientIncreaseStake   = 0x6A1F6A60
 opcode CocoonOwnerClientWithdraw        = 0xDA068E78
 
-# The two anchor payloads have identical layouts; only payout_type differs.
 matcher cocoon_worker_payout {
     produces cocoon_worker_payout
 
@@ -65,7 +61,6 @@ matcher cocoon_proxy_payout {
     }
 }
 
-# The usually-aborted ClientProxyRequest child does not determine `failed`.
 matcher cocoon_proxy_charge {
     produces cocoon_proxy_charge
 
@@ -141,7 +136,6 @@ matcher cocoon_client_register {
     }
 }
 
-# new_secret_hash stays an integer; the serializer renders it as bare hex.
 matcher cocoon_client_change_secret_hash {
     produces cocoon_client_change_secret_hash
 
@@ -158,8 +152,6 @@ matcher cocoon_client_change_secret_hash {
     }
 }
 
-# The OwnerWalletSendMessage anchor arm is structurally dead: its only child is
-# the refund call, so it cannot satisfy the required children set below.
 matcher cocoon_client_request_refund {
     produces cocoon_client_request_refund
 
@@ -216,8 +208,6 @@ matcher cocoon_client_increase_stake {
     }
 }
 
-# Only excesses is optional; payout remains required. Nullable nested parses
-# keep a malformed or absent refund payload non-fatal.
 matcher cocoon_client_withdraw {
     produces cocoon_client_withdraw
 
@@ -226,7 +216,6 @@ matcher cocoon_client_withdraw {
          -> { maybe op CocoonReturnExcessesBack
             ; op CocoonPayout }
 
-    # A refund grant rides inside the proxy request; anything else leaves the amount at 0.
     let granted = parse? client_request.body.payload as CocoonClientProxyRefundGranted
     failed when tx_failed(wd)
     out {

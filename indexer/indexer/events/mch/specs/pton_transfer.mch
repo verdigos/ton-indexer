@@ -1,23 +1,4 @@
-# pTON transfer matcher — port of blocks/jettons.py PTonTransferMatcher.
-#
-# A pTON ("proxy TON") wallet wraps native TON behind the jetton transfer
-# interface: it accepts the ordinary 0x0f8a7ea5 body but never emits an internal
-# transfer, so `jetton_transfer` (specs/jettons_decl.mch, whose pattern requires
-# the internal leg) can never match one. Without this matcher the pTON leg of a
-# DEX swap stays an unconsumed call_contract and every consumer that binds
-# `btype jetton_transfer` — stonfi v1/v2, dedust, tonco — loses its TON-side leg.
-#
-# The manifest puts pton_transfer after jetton_transfer on their shared anchor,
-# and before the swap matchers that consume their blocks.
-#
-# The host's TON-proxy master allowlist (STON.fi pTON v1/v2, Tonco v1 wTTON,
-# Tonco v2 TON wrapper) makes the match safe on an opcode this common: only a
-# wallet whose master is one of the canonical addresses qualifies.
-#
-# Field parity with the legacy build: `has_internal_transfer` is false and both
-# wallet fields are null (there is no internal leg to name them from — the flag
-# is what the stonfi v2 pattern keys its pton arms on), and the legacy build sets
-# no `desired_amount`/`desired_forward_amount` here, so neither does this.
+# Matches pTON transfers that use the jetton transfer body without an internal transfer.
 
 import "lib/opcodes.mch"
 

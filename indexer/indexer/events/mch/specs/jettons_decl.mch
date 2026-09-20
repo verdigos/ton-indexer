@@ -1,23 +1,8 @@
-# Jetton family matchers with declarative builds.
-#
-# The manifest puts these matchers before consumers of their jetton blocks.
+# Matches jetton transfers, burns, and mints.
 
 import "lib/opcodes.mch"
 opcode MinterJettonMint       = 0x00000015
 
-# ---------------------------------------------------------------------------
-# jetton_transfer — legacy build_jetton_transfer_core.
-#
-# amount/forward fall back from the internal-transfer body to the transfer body
-# when the internal body cannot be parsed (soft parse + `??`). The receiver
-# lookup rejects the match when absent; when the wallet owner disagrees with the
-# transfer's declared destination the receiver is replaced with the wallet owner
-# (ternary). `has_internal_transfer` is a literal true — the pattern requires the
-# internal leg. Legacy marks the consumed anchor block `broken` on
-# owner/receiver mismatch, which the build language cannot express (it can only
-# flag the PRODUCED block); this does not affect produced-block parity because
-# legacy leaves the produced block's broken flag False.
-# ---------------------------------------------------------------------------
 matcher jetton_transfer {
     produces jetton_transfer
 
@@ -52,14 +37,6 @@ matcher jetton_transfer {
     }
 }
 
-# ---------------------------------------------------------------------------
-# jetton_burn — legacy _get_jetton_burn_data.
-#
-# Wallet lookup (legacy asserts non-null; here `reject when` null — identical on
-# every real trace). value_flow debits the owner by the burned amount
-# (add_jetton with a NEGATIVE amount).
-# ---------------------------------------------------------------------------
-# `include_bounces` is off: an aborted burn's bounce of its own inbound message stays a standalone call_contract row.
 matcher jetton_burn {
     produces jetton_burn
     include_bounces false
@@ -77,19 +54,6 @@ matcher jetton_burn {
     }
 }
 
-# ---------------------------------------------------------------------------
-# jetton_mint — legacy _get_jetton_mint_data.
-#
-# Dual-opcode anchor. `parse mint as MinterJettonMint | JettonMint`: the minter
-# body carries a trailing master_msg ref, so it parses only for the 0x15 anchor
-# and falls back to JettonMint for 0x642b7d07 — matching legacy's opcode dispatch
-# (to_address/ton_amount are read identically from either type).
-#
-# When the mint did not fail AND an internal-transfer leg is present, the mint
-# resolved into a real credit: full data + failed from the internal leg.
-# Otherwise it's the fallback shape (amount only for the 0x15 minter opcode)
-# with failed = true.
-# ---------------------------------------------------------------------------
 matcher jetton_mint {
     produces jetton_mint
 

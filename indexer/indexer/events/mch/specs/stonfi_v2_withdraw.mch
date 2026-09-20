@@ -1,33 +1,4 @@
-# Stonfi v2 withdraw liquidity, remade from blocks/liquidity.py
-# StonfiV2WithdrawLiquidityMatcher. FULLY DECLARATIVE build (no host builder).
-#
-# The legacy matcher anchors on ONE pool pay-to (op 0x657b54f5) and then does an
-# imperative sibling scan (block.previous_block.next_blocks) to pick up the
-# second pay-to — a workaround because a single op appears twice under the
-# router. The remake drops the scan: the two pay-tos are a children set under
-# their common parent, bound positionally (@payout_1/@payout_2), exactly like
-# dedust_withdraw. First-match-wins over candidates in canonical order
-# reproduces the legacy [anchor]+siblings order.
-#
-# Legacy's OrMatcher parent (normal burn vs refund) remains split into two
-# matchers because they have different structural heads and consumed shapes:
-# normal is fronted by a JettonBurn, while refund is fronted by op 0x132b9a2c.
-# The anchors are mutually exclusive, so on any one trace at most one fires, and
-# each produces the same single dex_withdraw_liquidity block as legacy.
-#
-# Normal: burn-anchored (btype jetton_burn, the JettonBurnBlockMatcher-produced
-# block; stonfi_v2 runs after it in event_processing) -> op 0x297437cf router ->
-# {two pay-tos}. Same shape family as dedust_withdraw.
-# Refund: anchored on op 0x0f98e2b8, its parent (op 0x132b9a2c) carried on a
-# `<-` edge, following the wrapped-children-set Tonco precedent, so the
-# core can read the sender off refund.previous_block, and the parent is consumed.
-#
-# Each pay-to has a jetton_transfer child; a TON payout carries a PTonTransfer
-# grandchild under that transfer (`maybe op PTonTransfer`) — the leg's ton_amount
-# is read off it and the leg is marked is_ton. All captures bind positionally
-# (no recursion), so the build reads each pay-to's jetton_transfer `.data` and
-# the optional PTonTransfer body directly; the legacy build core's manual merge
-# of the pTON blocks is subsumed by the engine merging the captured pton_1/pton_2.
+# Matches Stonfi V2 liquidity withdrawals and refund payouts.
 
 import "lib/opcodes.mch"
 opcode StonfiV2WithdrawFromPool      = 0x297437cf

@@ -1,28 +1,5 @@
-# Coffee withdraw liquidity matcher with a declarative build.
-#
-# The LP burn (the `jetton_burn` block built earlier in manifest order)
-# whose pool answers with two 0xc0ffee21 payouts and the 0xc0ffee35
-# withdrawal log. Same `jetton_burn`-anchored, positionally-bound shape as
-# specs/stonfi_v2_withdraw.mch, which this file follows field for field.
-#
-# Each payout terminates in a jetton payout (a prebuilt `btype jetton_transfer`),
-# a TON payout (0xc0ffee32) or a notification (0xc0ffee36). Splitting the
-# alternative into per-arm capture names lets the build branch on which arm
-# bound, reproducing the legacy `for next_block in payout.next_blocks` scan whose
-# two arms are jetton_transfer and 0xc0ffee32 and whose fall-through (a
-# notification, or no child at all) leaves the leg at its TON/null defaults.
-#
-# Anchor claim: `btype jetton_burn` is also claimed by specs/stonfi_v2_withdraw.mch
-# and specs/tonstakers.mch reads the same burn opcode. The three are structurally
-# disjoint (coffee needs 2x 0xc0ffee21 + 0xc0ffee35 children), so this matcher's
-# position in specs/manifest.yaml carries no observable tie-break.
-#
-# Leg ordering differs from CoffeeWithdrawLiquidityMatcher.
-# `amount1_out`/`amount2_out` come from the withdrawal event, while
-# `asset*_out` / `dex_*wallet_*` / `wallet*` come from payout_1 / payout_2. The
-# CoffeeWithdrawLiquidityMatcher walks raw `next_blocks` order. This engine uses
-# ascending `min_lt`, which pairs each event amount with the payout that carries
-# it. Changing either ordering changes classified output.
+# Matches Coffee liquidity withdrawals with two pool payouts and a withdrawal log.
+# Payout order follows ascending min_lt, which determines which event amount labels each leg.
 
 import "lib/opcodes.mch"
 opcode CoffeeLiquidityWithdrawalEvent = 0xc0ffee35

@@ -23,6 +23,7 @@ order:
   - coffee_deposit_liquidity
   - coffee_create_vault
   - coffee_swap
+  # Coffee withdrawals are structurally disjoint from STON.fi withdrawals and Tonstakers on the shared burn anchor.
   - coffee_withdraw_liquidity
 
   # DeDust finals claim completed deposits before partials take the remainder.
@@ -46,8 +47,10 @@ order:
   - dns_purchase
   - change_dns
   - dns_release
+  # Elections have no ordering dependency because their opcodes are disjoint and neither matcher binds a produced block.
   - election_deposit
   - election_recover
+  # Subscriptions have no ordering dependency because their opcodes are disjoint and neither matcher binds a produced block.
   - subscribe
   - unsubscribe
   - ethena_deposit
@@ -86,6 +89,7 @@ order:
   - stonfi_v2_provide_final
   - stonfi_v2_provide_partial
   - stonfi_v2_swap
+  # Withdrawals consume the block built by jetton_burn.
   - stonfi_v2_withdraw
   - stonfi_v2_withdraw_refund
 
@@ -95,6 +99,7 @@ order:
   # GetGems consumes NFT transfers, including those built by Telegram.
   # It gets the first claim on the anchor shared with nft_put_on_sale.
   - getgems_nft_purchase
+  # Teleitem auctions follow Telegram and GetGems purchases but have no competing matcher for either anchor.
   - teleitem_start_auction
   - teleitem_cancel_auction
 

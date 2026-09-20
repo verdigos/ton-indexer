@@ -1,6 +1,4 @@
-# Wallet-plugin subscriptions, between elections and auction bids in the legacy list.
-# The four opcodes are disjoint from every other production spec, and neither
-# matcher binds a produced block, so the manifest slot carries no tie-break.
+# Wallet plugin subscriptions cover recurring payments and plugin destruction.
 
 opcode Request              = 0x706C7567
 opcode Response             = 0xF06C7567

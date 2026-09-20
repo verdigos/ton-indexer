@@ -1,4 +1,4 @@
-# The transfer fields carried by a jetton or native leg.
+# Transfer leg helpers normalize jetton and native transfers for swap matchers.
 export fn leg(x) = null if x == null else {
     is_ton:             x.btype != "jetton_transfer"
     asset:              x.data.asset           if x.btype == "jetton_transfer" else ton_asset()
@@ -10,7 +10,6 @@ export fn leg(x) = null if x == null else {
     payload:            x.data.forward_payload if x.btype == "jetton_transfer" else null
 }
 
-# Builds a TON transfer leg from its amount and accounts.
 export fn ton_leg(amt, src, dst) = {
     is_ton:             true
     asset:              ton_asset()

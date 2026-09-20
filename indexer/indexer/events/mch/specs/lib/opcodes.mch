@@ -1,3 +1,4 @@
+# Shared opcodes cover auction, NFT, Coffee, DeDust, jetton, PTon, Stonfi, and TONCO matcher flows.
 export opcode AuctionFillUp = 0x370fec51
 export opcode NftOwnershipAssigned = 0x05138d91
 export opcode CoffeeDeploy = 0xc0ffee22

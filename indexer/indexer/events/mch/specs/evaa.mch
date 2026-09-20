@@ -1,6 +1,4 @@
-# EVAA supply, withdrawal, and liquidation build from captures and parsed bodies.
-# EvaaUserOp exposes the opcode after the variable-length user header.
-# Exclusive outcome arms bind the captures used by each build.
+# Matches EVAA native and jetton supplies, collateral withdrawals, and liquidations.
 
 import "lib/leg.mch"
 
@@ -24,7 +22,6 @@ rule evaa_note = btype ton_transfer where (.comment in ["EVAA liquidation.", "EV
 rule liq_finish = xor { op EvaaLiquidateSuccessReport; op EvaaLiquidateFail; btype jetton_transfer }
 fn evaa_op(b) = (parse? b as EvaaUserOp).op
 
-# Both supply anchors use the same user and outcome flow.
 rule evaa_supply_flow =
     btype call_contract @user where (evaa_op(.) == 0x11)
       -> or {
@@ -107,17 +104,8 @@ matcher evaa_withdraw {
              op [EvaaWithdrawLockedExcess, EvaaWithdrawNotCollateralizedExcess, EvaaWithdrawMissingPricesExcess, EvaaWithdrawExecutionCrashed] @fail_excess as EvaaWithdrawFailExcess
          }
 
-    # Declarative build, field-for-field with build_evaa_withdraw_core.
-    # The IR engine binds @coll_ok / @coll_fail / @fail_excess per the winning
-    # exclusive branch (only the compiled path mis-bound the shared-head
-    # @coll_ok/@coll_fail are not captured), so `coll_ok != null` is the
-    # success test.
-    # exactly like the core's `if withdraw_collateralized_success:` branch.
     let is_ton  = master.body.asset_id == 0x1A4219FE5E60D63AF2A3CC7DCE6FEC69B45C6B5718497A6148E7C232AC87BD8A
     let success = coll_ok != null
-    # Legacy `return None` guards: a collateralized-success outcome must carry the
-    # matching payout leg; a match with no outcome group is impossible structurally
-    # but the last guard mirrors the core's trailing `return None`.
     reject when success and is_ton and ton_payout == null
     reject when success and not is_ton and jetton_payout == null
     reject when coll_ok == null and coll_fail == null and fail_excess == null
@@ -137,8 +125,6 @@ matcher evaa_withdraw {
     }
 }
 
-# The liquidation satisfied arms share 0x311. The success arm parses the user
-# header before testing 0x311a; the fail arm tests plain 0x311f.
 matcher evaa_liquidate {
     produces evaa_liquidate
 

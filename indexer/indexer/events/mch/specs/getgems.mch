@@ -1,8 +1,4 @@
-# GetGems purchases consume the NFT and its direct seller payout. Finish/stop
-# purchases peek the sale parent and sibling payout, which the shaper absorbs.
-
-# The two arms are independent; a mixed tree can bind both, with the sibling
-# selected for output while the matching child remains consumed.
+# GetGems purchases cover direct seller payouts and finish or stop payout siblings.
 
 matcher getgems_nft_purchase {
     produces nft_purchase
@@ -13,6 +9,7 @@ matcher getgems_nft_purchase {
         <- maybe peek btype ton_transfer where (.comment in ["finish", "stop"]) -> { maybe peek btype ton_transfer @sib_payout where (.destination == nft.data.real_prev_owner) }
     }
 
+    # The sibling payout takes precedence when both payout forms match.
     require seller_payout = sib_payout ?? payout
     out {
         nft_address:              nft.data.nft.address

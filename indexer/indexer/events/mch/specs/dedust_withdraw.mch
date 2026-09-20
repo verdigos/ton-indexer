@@ -1,21 +1,4 @@
-# Dedust withdraw liquidity matcher with a declarative build and no host builder.
-#
-# Shape of interest: a children set with two IDENTICAL-head items (both
-# `op DedustPayoutFromPool`). The engine's children-set algorithm
-# is first-match-wins over candidates in canonical order, so item 1 consumes
-# the first matching payout chain and item 2 the next. This is deterministic and
-# matches the legacy labeled('payout_1')/labeled('payout_2') assignment
-# exactly. The @req_*/@ton_*/@jt_* captures bind positionally (no recursion),
-# so the build reads them directly.
-#
-# Each payout terminal is either a TON payout (`op DedustPayout`) or a jetton
-# payout (`btype jetton_transfer`, produced by the prerequisite
-# JettonTransferBlockMatcher/PTonTransferMatcher, with the same registration-order
-# dependency as legacy). Splitting the OR into distinct capture names per arm
-# (@ton_N | @jt_N) lets the build branch on which arm bound (exactly one is
-# non-null); the payout-request call above each terminal is captured (@req_N)
-# so its coin amount is read via a declarative `parse`, replacing the legacy
-# `payout.previous_block` navigation.
+# Matches DeDust liquidity withdrawals with two pool payout legs.
 
 import "lib/leg.mch"
 import "lib/opcodes.mch"

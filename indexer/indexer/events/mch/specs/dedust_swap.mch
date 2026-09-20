@@ -1,14 +1,7 @@
-# Dedust swap matcher corresponding to DedustSwapBlockMatcher.
-#
-# DedustPeerBlockMatcher is not registered, so recursion sees raw peer and
-# external swap calls. The host keeps notification sorting because one hop may
-# consume several logs while its capture retains only the first. It also keeps
-# the payout cardinality/child scan and the failed-route SwapStep pool walk.
+# DeDust swaps cover routed pool hops and terminal jetton or native payouts.
 
 import "lib/opcodes.mch"
 
-# One pool hop per unrolling: a peer (or nested external) swap request with an
-# optional notification child; exit = the terminal payout chain.
 rule peer_chain = or {
                       op DedustSwapPeer {
                             -> { maybe op DedustSwapNotification @peer_notification }

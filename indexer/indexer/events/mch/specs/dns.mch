@@ -1,19 +1,4 @@
-# DNS record-change matcher corresponding to blocks/dns.py.
-# using `produces switch`. One anchor opcode (ChangeDnsRecord), three
-# content-dispatched outcomes: change_dns / renew_dns / delete_dns. The optional
-# trailing bounce (op Bounce) is consumed as an explicit child;
-# include_excess/include_bounces stay at their defaults (true) to mirror the
-# legacy consumed set.
-#
-# The switch dispatches exactly like build_change_dns_core: a present value ->
-# change_dns; else a zero key -> renew_dns; else -> delete_dns. `collection_address`
-# is an OPTIONAL key (`name?: expr`) — emitted only when the destination resolves
-# to an NftItem, mirroring the legacy conditional `data['collection_address'] = …`.
-
-# Declared before change_dns on purpose: the anchor's parent must still be an
-# unmatched call_contract when this matcher peeks it (python runs DnsPurchaseMatcher
-# ahead of ChangeDnsRecordMatcher; the first message into a DNS item after its
-# auction ends is usually the winner's ChangeDnsRecord).
+# Matches TON DNS purchases, record changes, renewals, deletions, and balance releases.
 import "lib/opcodes.mch"
 
 matcher dns_purchase {
@@ -55,6 +40,7 @@ matcher change_dns {
 
     op ChangeDnsRecord @dns as ChangeDnsRecordMessage -> maybe op Bounce
 
+    # NFT lookup miss: the DNS event remains and omits collection_address.
     let nft = lookup nft_item(dns.msg.destination)
     failed when dns.failed
     produces switch {
@@ -65,7 +51,7 @@ matcher change_dns {
             value:                dns.body.value
             collection_address?:  account(nft.collection_address)
         }
-        # zero key (b64 of 32 zero bytes) with no value -> renew.
+        # A missing value with a key of 256 zero bits renews the DNS record.
         when b64(dns.body.key) == "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" => renew_dns out {
             source:               dns.msg.source
             destination:          dns.msg.destination

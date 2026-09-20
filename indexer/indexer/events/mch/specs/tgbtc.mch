@@ -1,3 +1,4 @@
+# tgBTC matchers cover mint, burn, new key, and standalone log flows.
 import "lib/common.mch"
 
 opcode TgBTCMintHead       = 0x3F781D24

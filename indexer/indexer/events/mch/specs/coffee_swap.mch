@@ -1,6 +1,4 @@
-# Coffee swaps require a success event at each pool hop and end in a payout.
-# Captured events supply hop amounts and assets in route order; the incoming
-# transfer and terminal payout supply the transfer legs.
+# Coffee swaps cover successful pool hops and terminal jetton or native payouts.
 
 import "lib/leg.mch"
 import "lib/opcodes.mch"
@@ -9,8 +7,6 @@ opcode CoffeeSwapNative          = 0xc0ffee00
 opcode CoffeeSwapInternal        = 0xc0ffee20
 opcode CoffeeSwapSuccessfulEvent = 0xc0ffee30
 
-# One pool hop per unrolling: a swap request with its success event; exit =
-# the payout chain to the user.
 rule swap_chain = or {
                       op CoffeeSwapInternal -> op CoffeeSwapSuccessfulEvent @peer_event as CoffeeSwapEvent -> maybe $swap_chain
                       op CoffeePayoutInternal @exit_payout as CoffeePayoutInternal -> or {
