@@ -17,6 +17,8 @@
 
 namespace mch {
 
+enum class LookupReason;
+
 class ParsedBlockLookupSource : public LookupSource {
  public:
   struct Tier2Result {
@@ -24,7 +26,9 @@ class ParsedBlockLookupSource : public LookupSource {
     bool unavailable{false};
   };
   // Empty hook means no fallback.
-  using Tier2Hook = std::function<Tier2Result(const std::string &kind, const std::vector<Value> &args)>;
+  using Tier2Hook = std::function<Tier2Result(const std::string &kind,
+                                               const std::vector<Value> &args,
+                                               LookupReason reason)>;
 
   using InterfaceMap =
       std::unordered_map<block::StdAddress, std::vector<schema::BlockchainInterfaceV2>>;

@@ -56,7 +56,7 @@ SchemaClassifyResult classify_txs(const EmuClassifierConfig &cfg, const EmuTrace
   EmuCelldbTier2 tier2(&view.shard_states, view.config);
   ParsedBlockLookupSource::Tier2Hook hook;
   if (cfg.tier2) {
-    hook = [&tier2](const std::string &kind, const std::vector<Value> &args) {
+    hook = [&tier2](const std::string &kind, const std::vector<Value> &args, LookupReason) {
       return tier2.fetch(kind, args);
     };
   }

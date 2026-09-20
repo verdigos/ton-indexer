@@ -227,7 +227,8 @@ void BatchRunner::classify_trace(const std::string &trace_key, std::vector<schem
   mch::EmuCelldbTier2 tier2(&shard_states, parsed_block->mc_block_.config_);
   mch::ParsedBlockLookupSource::Tier2Hook hook;
   if (tier2_enabled_) {
-    hook = [&tier2](const std::string &kind, const std::vector<mch::Value> &args) {
+    hook = [&tier2](const std::string &kind, const std::vector<mch::Value> &args,
+                    mch::LookupReason) {
       return tier2.fetch(kind, args);
     };
   }

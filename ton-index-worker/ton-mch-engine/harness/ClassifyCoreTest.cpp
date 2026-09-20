@@ -700,7 +700,7 @@ void test_schema_history_precedence() {
   check("schema/history/classified", normal.outcome == TraceOutcome::classified);
   check("schema/history/normal_rows", !normal.rows.empty());
   ParsedBlockLookupSource unavailable(nullptr,
-      [](const std::string &, const std::vector<Value> &) {
+      [](const std::string &, const std::vector<Value> &, LookupReason) {
         return ParsedBlockLookupSource::Tier2Result{Value::null(), true};
       });
   unavailable.fetch("nominator_pool", {Value::make_str(trace.transactions.front()->account)});

@@ -26,7 +26,7 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
     ParsedBlockLookupSource::StableAddressSet status_stable_accounts;
     ParsedBlockLookupSource::StableAddressSet status_unstable_accounts;
     for (const auto &tx : job.input.txs) {
-      if (tx.orig_status == schema::active && tx.end_status == schema::active &&
+      if (tx.end_status == schema::active &&
           status_unstable_accounts.find(tx.account) == status_unstable_accounts.end()) {
         status_stable_accounts.insert(tx.account);
       } else {
@@ -37,7 +37,8 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
     EmuCelldbTier2 tier2(&states, job.block->mc_block_.config_);
     double lookup_seconds = 0;
     ParsedBlockLookupSource src(&job.input.interfaces,
-        [&tier2, &lookup_seconds](const std::string &kind, const std::vector<Value> &args) {
+        [&tier2, &lookup_seconds](const std::string &kind, const std::vector<Value> &args,
+                                 LookupReason reason) {
           td::Timer lookup_timer;
           auto result = tier2.fetch(kind, args);
           const double elapsed_seconds = lookup_timer.elapsed();
@@ -45,7 +46,7 @@ void ClassifyWorker::classify(ClassifyJob job, td::Promise<TraceClassificationRe
           const auto *matcher = reject_ctx().matcher;
           record_lookup_stat(matcher ? *matcher : "<none>", kind,
                              static_cast<std::uint64_t>(elapsed_seconds * 1e6),
-                             result.value.is_null());
+                             result.value.is_null(), reason);
           return result;
         }, &status_stable_accounts);
     const auto key = td::base64_encode(job.input.trace.trace_id.as_slice());

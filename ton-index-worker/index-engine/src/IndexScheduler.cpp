@@ -47,10 +47,16 @@ std::string format_lookup_stats(mch::LookupStatsSnapshot snapshot) {
     std::uint64_t total_count = 0;
     std::uint64_t total_micros = 0;
     std::uint64_t total_nulls = 0;
+    std::uint64_t total_absent = 0;
+    std::uint64_t total_status = 0;
+    std::uint64_t total_uncovered = 0;
     for (const auto& row : snapshot.by_matcher) {
         total_count += row.count;
         total_micros += row.total_micros;
         total_nulls += row.nulls;
+        total_absent += row.absent;
+        total_status += row.status;
+        total_uncovered += row.uncovered;
     }
 
     std::ostringstream out;
@@ -60,12 +66,18 @@ std::string format_lookup_stats(mch::LookupStatsSnapshot snapshot) {
         out << "matcher=" << row.matcher << " kind=" << row.kind
             << " count=" << row.count
             << " nulls=" << row.nulls
+            << " absent=" << row.absent
+            << " status=" << row.status
+            << " uncovered=" << row.uncovered
             << " total_millis=" << row.total_micros / 1000.0
             << " mean_micros=" << (row.count ? static_cast<double>(row.total_micros) / row.count : 0.0)
             << '\n';
     }
     out << "total count=" << total_count
         << " nulls=" << total_nulls
+        << " absent=" << total_absent
+        << " status=" << total_status
+        << " uncovered=" << total_uncovered
         << " null_share=" << (total_count ? static_cast<double>(total_nulls) / total_count : 0.0)
         << " total_millis=" << total_micros / 1000.0
         << " mean_micros=" << (total_count ? static_cast<double>(total_micros) / total_count : 0.0)

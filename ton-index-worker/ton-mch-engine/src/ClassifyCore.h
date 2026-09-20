@@ -38,6 +38,8 @@ enum class FailureCategory {
   malformed_trace,
 };
 
+enum class LookupReason { Absent, Status, Uncovered };
+
 // Terminal per-trace outcome of the in-indexer classification stage. Exactly
 // one per admitted or rejected trace input; precedence when several apply:
 // history unavailable > classification state > rows. The first three carry
@@ -108,6 +110,9 @@ struct LookupStatRow {
   std::uint64_t count{0};
   std::uint64_t total_micros{0};
   std::uint64_t nulls{0};
+  std::uint64_t absent{0};
+  std::uint64_t status{0};
+  std::uint64_t uncovered{0};
 };
 
 struct LookupKindStatRow {
@@ -122,7 +127,7 @@ struct LookupStatsSnapshot {
 };
 
 void record_lookup_stat(const std::string &matcher, const std::string &kind,
-                        std::uint64_t micros, bool is_null);
+                        std::uint64_t micros, bool is_null, LookupReason reason);
 LookupStatsSnapshot take_lookup_stats();
 
 bool outcomes_allow_replacement(const BlockClassification &bc);

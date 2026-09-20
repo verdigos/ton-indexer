@@ -64,6 +64,9 @@ struct LookupStatValue {
   std::uint64_t count{0};
   std::uint64_t total_micros{0};
   std::uint64_t nulls{0};
+  std::uint64_t absent{0};
+  std::uint64_t status{0};
+  std::uint64_t uncovered{0};
 };
 
 std::mutex lookup_stats_mutex;
@@ -680,12 +683,17 @@ std::vector<ActionRow> ghost_external_rows(TraceContext &ctx, const LookupSource
 }  // namespace
 
 void record_lookup_stat(const std::string &matcher, const std::string &kind,
-                        std::uint64_t micros, bool is_null) {
+                        std::uint64_t micros, bool is_null, LookupReason reason) {
   std::lock_guard<std::mutex> lock(lookup_stats_mutex);
   auto &stat = lookup_stats[{matcher, kind}];
   stat.count++;
   stat.total_micros += micros;
   stat.nulls += is_null;
+  switch (reason) {
+    case LookupReason::Absent: stat.absent++; break;
+    case LookupReason::Status: stat.status++; break;
+    case LookupReason::Uncovered: stat.uncovered++; break;
+  }
 }
 
 void record_lookup_cache_hit(const std::string &kind) {
@@ -706,7 +714,8 @@ LookupStatsSnapshot take_lookup_stats() {
   snapshot.by_matcher.reserve(lookup_snapshot.size());
   for (const auto &[key, value] : lookup_snapshot) {
     snapshot.by_matcher.push_back(
-        {key.first, key.second, value.count, value.total_micros, value.nulls});
+        {key.first, key.second, value.count, value.total_micros, value.nulls, value.absent,
+         value.status, value.uncovered});
     auto &kind_row = by_kind[key.second];
     kind_row.kind = key.second;
     kind_row.misses += value.count;

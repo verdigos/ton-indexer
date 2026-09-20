@@ -1,5 +1,6 @@
 #include "ParsedBlockLookupSource.h"
 
+#include "ClassifyCore.h"
 #include "Value.h"
 
 #include "convert-utils.h"  // convert::to_raw_address(block::StdAddress)
@@ -252,8 +253,9 @@ Value ParsedBlockLookupSource::fetch(const std::string &kind, const std::vector<
     stats_.tier1_hits++;
     return std::move(*v);
   }
+  const bool detector_covered = kInterfaceHandlers.find(kind) != kInterfaceHandlers.end();
   if (v && status_stable_accounts_ != nullptr &&
-      kInterfaceHandlers.find(kind) != kInterfaceHandlers.end()) {
+      detector_covered) {
     auto r_addr = block::StdAddress::parse(td::Slice(args[0].str));
     if (r_addr.is_ok() && status_stable_accounts_->count(r_addr.ok()) != 0) {
       stats_.misses++;
@@ -262,7 +264,10 @@ Value ParsedBlockLookupSource::fetch(const std::string &kind, const std::vector<
     }
   }
   // Tier-2-only kinds and every non-authoritative tier-1 miss fall through.
-  auto result = tier2_ ? tier2_(kind, args) : Tier2Result{Value::null(), false};
+  const LookupReason reason = !detector_covered ? LookupReason::Uncovered
+                              : !v             ? LookupReason::Absent
+                                               : LookupReason::Status;
+  auto result = tier2_ ? tier2_(kind, args, reason) : Tier2Result{Value::null(), false};
   history_unavailable_ |= result.unavailable;
   Value r = std::move(result.value);
   if (!r.is_null()) {

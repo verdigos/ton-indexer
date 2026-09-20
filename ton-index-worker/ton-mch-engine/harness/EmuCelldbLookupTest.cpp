@@ -556,9 +556,10 @@ void test_account_lookup_states() {
       if (unavailable) return td::Status::Error("read failed");
       return std::optional<schema::AccountState>{};
     });
-    ParsedBlockLookupSource src(nullptr, [&](const std::string &kind, const std::vector<Value> &args) {
-      return t.fetch(kind, args);
-    });
+    ParsedBlockLookupSource src(
+        nullptr, [&](const std::string &kind, const std::vector<Value> &args, LookupReason) {
+          return t.fetch(kind, args);
+        });
     const std::string name = unavailable ? "account/unavailable/" : "account/absent/";
     check(name + "null", src.fetch("nominator_pool", arg).is_null());
     check(name + "tier2_flag", t.history_unavailable() == unavailable);
@@ -586,7 +587,8 @@ void test_two_tier_routing() {
 
   int hook_calls = 0;
   ParsedBlockLookupSource::Tier2Hook hook = [&](const std::string &kind,
-                                                const std::vector<Value> &) -> ParsedBlockLookupSource::Tier2Result {
+                                                const std::vector<Value> &,
+                                                LookupReason) -> ParsedBlockLookupSource::Tier2Result {
     hook_calls++;
     if (kind != "nominator_pool") {
       return {Value::null(), false};
