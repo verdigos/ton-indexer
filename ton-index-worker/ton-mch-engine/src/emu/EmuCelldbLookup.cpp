@@ -119,14 +119,7 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
       if (config_ == nullptr) {
         return Value::null();
       }
-      JettonWalletDetectorR::DetectOptions options;
-      options.master_account_source = [this](const block::StdAddress &a)
-          -> td::Result<std::optional<schema::AccountState>> {
-        const schema::AccountState *st = account(a);
-        return st ? std::optional<schema::AccountState>(*st) : std::optional<schema::AccountState>{};
-      };
-      options.run_is_claimed = false;
-      auto r = JettonWalletDetectorR::detect(addr, st->code, st->data, *shard_states_, config_, options);
+      auto r = JettonWalletDetectorR::detect(addr, st->code, st->data, *shard_states_, config_);
       if (r.is_ok()) {
         iface = to_v2(r.move_as_ok());
       }
