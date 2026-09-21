@@ -19,7 +19,7 @@ actions:
     value: 530000000000
     opcode: null
     nft_transfer_data:
-      marketplace: fragment
+      marketplace: null
       nft_item_index: "28687403395653205539801295742007680409336651603156781454910598050755669364335"
     tx_hashes:
       - yT82MHvoPI+ydIqYPhML59//FuQ2wEmlAbDWZiTYazU=
@@ -48,7 +48,7 @@ actions:
     value: null
     opcode: null
     nft_transfer_data:
-      marketplace: fragment
+      marketplace: null
     ton_transfer_data:
       content: null
     tx_hashes:

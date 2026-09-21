@@ -4,7 +4,6 @@
 
 #include "convert-utils.h"  // convert::to_raw_address(block::StdAddress)
 #include "td/utils/misc.h"
-#include "vm/cells/CellSlice.h"
 
 #include <map>
 #include <variant>
@@ -34,18 +33,6 @@ const std::map<std::string, InterfaceHandler> kInterfaceHandlers = {
     {"multisig_order", InterfaceHandler::MultisigOrder},
     {"telemint_item", InterfaceHandler::TelemintItem},
 };
-
-td::Bits256 hash_from_hex(const char *hex) {
-  td::Bits256 h;
-  h.from_hex(td::Slice(hex));
-  return h;
-}
-
-const td::Bits256 kTelemintDns =
-    hash_from_hex("4d4eb9bfa2b210d890833a712be244081fddadb07f031f361ea5cf7f1a130651");
-const td::Bits256 kTelemintNoDns =
-    hash_from_hex("88410c220f822181668269ce83eb9cc0d3b39c21999c8b55de03360a20e7c282");
-
 
 // StdAddress -> the canonical uppercase raw "wc:HEX" string the fixtures store
 // and normalize_raw_address produces (SchemaTraceLoader normalises tx accounts
@@ -273,36 +260,6 @@ Value ParsedBlockLookupSource::fetch(const std::string &kind, const std::vector<
     stats_.misses_by_kind[kind]++;
   }
   return r;
-}
-
-std::optional<std::string> telemint_collection_key(const td::Bits256 &code_hash,
-                                                   const td::Ref<vm::Cell> &data) {
-  if (code_hash != kTelemintDns && code_hash != kTelemintNoDns) {
-    return std::nullopt;
-  }
-  if (data.is_null()) {
-    return std::nullopt;
-  }
-  bool special = false;
-  try {
-    auto cs = vm::load_cell_slice_special(data, special);
-    if (!cs.have(33 + 256) || !cs.advance(33)) {
-      return std::nullopt;
-    }
-    td::Bits256 pk;
-    if (!cs.fetch_bits_to(pk)) {
-      return std::nullopt;
-    }
-    return td::hex_encode(pk.as_slice());
-  } catch (...) {
-    return std::nullopt;
-  }
-}
-
-Value telemint_collection_record(std::string public_key) {
-  Value::Fields f;
-  f.emplace_back("public_key", Value::make_str(std::move(public_key)));
-  return Value::make_obj(std::move(f));
 }
 
 }  // namespace mch

@@ -4,7 +4,7 @@ matcher getgems_nft_purchase {
     produces nft_purchase
     shape    getgems_proxy_insert
 
-    btype nft_transfer @nft where (.is_purchase and .marketplace == "getgems") {
+    btype nft_transfer @nft where (.is_purchase) {
         -> { maybe btype ton_transfer @payout where (.destination == nft.data.real_prev_owner) }
         <- maybe peek btype ton_transfer where (.comment in ["finish", "stop"]) -> { maybe peek btype ton_transfer @sib_payout where (.destination == nft.data.real_prev_owner) }
     }
@@ -28,7 +28,7 @@ matcher getgems_nft_purchase {
         payout_comment:           seller_payout.data.comment
         price:                    nft.data.price
         real_prev_owner:          nft.data.real_prev_owner
-        marketplace:              nft.data.marketplace
+        marketplace:              null
         marketplace_address:      nft.data.marketplace_address
     }
 }

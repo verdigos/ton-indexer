@@ -1,6 +1,5 @@
-# Fragment NFT purchase and ownership assignment flows keep the Fragment marketplace label when the Telemint collection lookup misses.
+# Telegram NFT purchase and ownership assignment flows classify teleitem transfers and payouts.
 
-import "lib/fragment.mch"
 import "lib/opcodes.mch"
 
 fn is_telemint_mint(p) = p != null and ((p.btype == "call_contract" and p.data.opcode == 0x299a3e15) or p.btype == "nft_mint")
@@ -18,7 +17,6 @@ matcher telegram_nft_purchase {
 
     require d = telegram_nft_purchase_data(assigned)
     let is_purchase = d.is_bid and not is_telemint_mint(payment)
-    let coll = lookup telemint_collection(d.nft.collection.address) if d.nft.collection != null else null
     let sorted = stable_sort_by(payouts as p => p.msg.created_lt)
     let n = len(sorted)
     let royalty = at(sorted, 0) if d.is_bid and n > 1 else null
@@ -35,7 +33,7 @@ matcher telegram_nft_purchase {
         nft:                  d.nft
         real_prev_owner:      null
         price:                amount(d.bid) if d.is_bid else null
-        marketplace:          fragment_marketplace(coll) if d.is_bid else null
+        marketplace:          null
         payout_amount:        get(seller.data, "value")
         payout_address:       get(seller.data, "destination")
         royalty_amount?:      get(royalty.data, "value")
@@ -55,7 +53,6 @@ matcher telegram_nft_assigned {
         and payment.data.opcode == 0x5FCC3D14
         and payment.data.source != null and payment.data.source == d.prev_owner)
     let is_purchase = is_bid and not is_telemint_mint(payment)
-    let coll = lookup telemint_collection(d.nft.collection.address) if d.nft.collection != null else null
     let sorted = stable_sort_by(payouts as p => p.msg.created_lt)
     let n = len(sorted)
     let royalty = at(sorted, 0) if is_purchase and n == 2 else null
@@ -74,7 +71,7 @@ matcher telegram_nft_assigned {
             nft:                  d.nft
             real_prev_owner:      null
             price:                amount(d.bid)
-            marketplace:          fragment_marketplace(coll)
+            marketplace:          null
             payout_amount?:       get(seller.data, "value")
             payout_address?:      get(seller.data, "destination")
             royalty_amount?:      get(royalty.data, "value")

@@ -148,7 +148,7 @@ actions:
     opcode: null
     nft_listing_data:
       full_price: 500000000000
-      marketplace: getgems
+      marketplace: null
       marketplace_fee: null
       marketplace_fee_address: 0:BEE7A3D7B8C06F9552032C3880A56A74B702AD8B224F42BFB1AC1C33BD719080
       max_bid: null

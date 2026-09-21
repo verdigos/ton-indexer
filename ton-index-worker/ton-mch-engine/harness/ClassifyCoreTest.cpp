@@ -383,24 +383,22 @@ void test_auction_bid_raw_attempts() {
           field_num(bid, "amount", test.value) && field_str(bid, "bidder", kBidder) &&
               field_str(bid, "auction", kAuction) && field_str(bid, "nft_address", kNft) &&
               field_num(bid, "nft_item_index", 42) &&
-              field_str(bid, "nft_collection", kCollection) &&
-              field_str(bid, "auction_type", "getgems"));
+              field_str(bid, "nft_collection", kCollection));
     check(prefix + "/failed", bid != nullptr && bid->failed == test.failed);
   }
 }
 
 void test_auction_bid_item_families_and_negatives() {
-  for (const auto &[name, fragment, dns, expected] :
-       std::vector<std::tuple<const char *, bool, bool, const char *>>{
-           {"dns", false, true, "dns"}, {"fragment", true, false, "fragment"}}) {
+  for (const auto &[name, fragment, dns] :
+       std::vector<std::tuple<const char *, bool, bool>>{
+           {"dns", false, true}, {"fragment", true, false}}) {
     TraceContext ctx;
     add_transaction(ctx, name, 100, kNft, kBidder, kNft, 0, 10);
     add_nft_item(ctx, kNft, fragment, dns, fragment ? kFragmentCollection : kCollection);
     finish_trace(ctx, name);
     ClassifyResult result = classify_production(ctx);
     Block *bid = produced_by(result, "auction_bid");
-    check(std::string("auction_bid/item/") + name,
-          !result.failure && field_str(bid, "auction_type", expected));
+    check(std::string("auction_bid/item/") + name, !result.failure && bid != nullptr);
   }
 
   struct Negative {

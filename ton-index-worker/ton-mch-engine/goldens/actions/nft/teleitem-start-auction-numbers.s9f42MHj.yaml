@@ -49,7 +49,7 @@ actions:
     opcode: null
     nft_listing_data:
       full_price: null
-      marketplace: fragment
+      marketplace: null
       marketplace_fee: null
       marketplace_fee_address: 0:D0237ACF80EF60527BF0CC6A4EE39B59621A6FEB907E5616153CEF16C924EFFB
       max_bid: 3399000000000

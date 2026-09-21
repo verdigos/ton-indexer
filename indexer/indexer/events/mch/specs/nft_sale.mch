@@ -119,7 +119,7 @@ matcher nft_put_on_sale {
             sale_address:            sale_init.msg.destination ?? addr_none()
             full_price:              amount(sd.full_price)
             marketplace_address:     account(sd.marketplace_address) ?? addr_none()
-            marketplace:             "getgems"
+            marketplace:             null
             marketplace_fee_address: account(sd.marketplace_fee_address) ?? addr_none()
             marketplace_fee:         amount(sd.marketplace_fee)
             royalty_address:         account(sd.royalty_address) ?? addr_none()
@@ -133,7 +133,7 @@ matcher nft_put_on_sale {
             listing_address:     account(listing.data.new_owner) ?? addr_none()
             auction_address:     sale_init.msg.destination ?? addr_none()
             marketplace_address: account(auction.mp_addr) ?? addr_none()
-            marketplace:         "getgems"
+            marketplace:         null
             mp_fee_address:      account(ad.mp_fee_addr)
             mp_fee_factor:       amount(ad.mp_fee_factor)
             mp_fee_base:         amount(ad.mp_fee_base)
@@ -204,7 +204,6 @@ matcher getgems_auction_bid {
         nft_address:    account(nft_addr)
         nft_item_index: item.index if item != null else null
         nft_collection: account(item.collection_address) if item != null else null
-        auction_type:   "getgems"
     }
 }
 
@@ -239,7 +238,6 @@ matcher auction_bid {
         nft_address:    account(nft_addr)
         nft_item_index: item.index if item != null else null
         nft_collection: account(item.collection_address) if item != null else null
-        auction_type:   "dns" if dns else "fragment"
     }
 }
 
@@ -254,8 +252,7 @@ matcher auction_outbid {
 
     let getgems = leg.btype == "ton_transfer"
     reject when account(leg.data.source) != account(bid.data.auction)
-    reject when getgems and (bid.data.auction_type != "getgems" or not contains(leg.data.comment ?? "", "Your bid has been outbid by another user"))
-    reject when not getgems and not (bid.data.auction_type in ["fragment", "dns"])
+    reject when getgems and not contains(leg.data.comment ?? "", "Your bid has been outbid by another user")
     out {
         auction_address: bid.data.auction
         nft:             bid.data.nft_address
@@ -264,7 +261,6 @@ matcher auction_outbid {
         new_bidder:      bid.data.bidder
         amount:          amount(leg.msg.value)
         comment:         leg.data.comment if getgems else null
-        auction_type:    bid.data.auction_type
     }
 }
 
@@ -303,7 +299,7 @@ matcher nft_finish_auction {
         nft_collection:      ret.data.collection_address
         owner:               ret.data.new_owner
         trade_contract:      cancel.msg.destination ?? addr_none()
-        marketplace_address: null
+        marketplace_address: account(auction.mp_addr) ?? addr_none()
     }
 }
 

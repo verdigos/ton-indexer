@@ -225,7 +225,7 @@ namespace {
 const std::set<std::string> kLookupKinds = {"jetton_wallet", "nft_item", "nominator_pool",
                                             "jvault_assets", "dedust_pool", "nft_sale",
                                             "nft_auction", "multisig_order",
-                                            "telemint_collection", "telemint_item"};
+                                            "telemint_item"};
 
 }  // namespace
 

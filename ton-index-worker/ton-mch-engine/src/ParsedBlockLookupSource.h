@@ -77,9 +77,4 @@ class ParsedBlockLookupSource : public LookupSource {
   mutable LookupStats stats_;  // fetch() is const; counters are telemetry
 };
 
-// Code-hash gate plus bits 33..289 of the data root. Misses are nullopt.
-std::optional<std::string> telemint_collection_key(const td::Bits256 &code_hash,
-                                                   const td::Ref<vm::Cell> &data);
-Value telemint_collection_record(std::string public_key);
-
 }  // namespace mch

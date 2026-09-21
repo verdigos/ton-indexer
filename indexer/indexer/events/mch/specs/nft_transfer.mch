@@ -42,7 +42,6 @@ matcher nft_transfer {
         custom_payload:       b64(transfer.body.custom_payload)
         forward_payload:      b64(transfer.body.forward_payload)
         nft:                  nft
-        marketplace?:         "getgems" if is_purchase else null
         marketplace_address?: ((account(sale.marketplace_address) ?? addr_none()) if have_sale else (account(auction.mp_addr) ?? addr_none())) if is_purchase else null
         price?:               (amount(sale.full_price) if have_sale else amount(auction.last_bid)) if is_purchase else null
         real_prev_owner?:     real_owner if is_purchase else null

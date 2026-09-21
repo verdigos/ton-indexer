@@ -1417,7 +1417,7 @@ void fill_auction_bid(const Value &d, Action &a) {
   a.asset = av_addr(dg(d, "nft_collection"));
   Value::Fields t;
   t.emplace_back("nft_item_index", dg(d, "nft_item_index"));
-  t.emplace_back("marketplace", dg(d, "auction_type"));
+  t.emplace_back("marketplace", Value::null());
   a.nft_transfer_data = mkdict(std::move(t));
   push_account(a, a.asset_secondary);
   a.value = dg(d, "amount");  // raw int, not av_amount
@@ -1430,7 +1430,7 @@ void fill_auction_outbid(const Value &d, Action &a) {
   a.asset_secondary = av_addr(dg(d, "nft"));
   a.asset = av_addr(dg(d, "nft_collection"));
   Value::Fields t;
-  t.emplace_back("marketplace", dg(d, "auction_type"));
+  t.emplace_back("marketplace", Value::null());
   a.nft_transfer_data = mkdict(std::move(t));
   a.amount = av_amount(dg(d, "amount"));
   Value::Fields tt;

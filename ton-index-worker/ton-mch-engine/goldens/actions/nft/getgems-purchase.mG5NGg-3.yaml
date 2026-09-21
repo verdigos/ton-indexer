@@ -22,7 +22,7 @@ actions:
       forward_amount: 30000000
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
-      marketplace: getgems
+      marketplace: null
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
       nft_item_index: 54813218239866193352888578548178888850000084822145173604758197814985523986432
       payout_amount: 1372369010
@@ -75,7 +75,7 @@ actions:
       forward_amount: 30000000
       forward_payload: cellhash:96A296D224F285C67BEE93C30F8A309157F0DAA35DC5B87E410B78630A09CFC7
       is_purchase: true
-      marketplace: getgems
+      marketplace: null
       marketplace_address: 0:584EE61B2DFF0837116D0FCB5078D93964BCBE9C05FD6A141B1BFCA5D6A43E18
       nft_item_index: 54813218239866193352888578548178888850000084822145173604758197814985523986432
       payout_amount: null

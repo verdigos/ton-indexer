@@ -52,7 +52,7 @@ actions:
       forward_amount: null
       forward_payload: cellhash:DBF0C0E2CB2FEED30FDC206C0F0217F88FCDDCD5F53563C3F792BEAF7DAAB9B4
       is_purchase: true
-      marketplace: fragment
+      marketplace: null
       marketplace_address: null
       nft_item_index: "9824106364531410919823695778980965809496756910010020756228949261811666816417"
       payout_amount: 448299774108
