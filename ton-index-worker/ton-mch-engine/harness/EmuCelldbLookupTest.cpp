@@ -618,6 +618,89 @@ void test_two_tier_routing() {
             src.stats().misses_by_kind.at("dedust_pool") == 1);
 }
 
+void test_tier1_authoritative_miss() {
+  const block::StdAddress a = addr_of('A');
+  schema::JettonWalletDataV2 jw{};
+  jw.balance = td::make_refint(1);
+  jw.address = a;
+  jw.owner = addr_of('B');
+  jw.jetton = addr_of('C');
+
+  ParsedBlockLookupSource::InterfaceMap map;
+  map.emplace(a, std::vector<schema::BlockchainInterfaceV2>{jw});
+  ParsedBlockLookupSource::StableAddressSet stable{a, addr_of('F')};
+  ParsedBlockLookupSource::StableAddressSet unstable{addr_of('F')};
+
+  int hook_calls = 0;
+  ParsedBlockLookupSource::Tier2Hook hook =
+      [&](const std::string &, const std::vector<Value> &)
+      -> ParsedBlockLookupSource::Tier2Result {
+    hook_calls++;
+    return {Value::null(), false};
+  };
+  ParsedBlockLookupSource src(&map, hook, &stable);
+  ParsedBlockLookupSource src_unstable(&map, hook, &unstable);
+  auto misses_for = [](const ParsedBlockLookupSource::LookupStats &stats,
+                       const std::string &kind) {
+    auto it = stats.misses_by_kind.find(kind);
+    return it == stats.misses_by_kind.end() ? 0 : it->second;
+  };
+  auto is_miss_delta = [&](const ParsedBlockLookupSource &source,
+                           const ParsedBlockLookupSource::LookupStats &before,
+                           const std::string &kind) {
+    const auto &after = source.stats();
+    return after.misses == before.misses + 1 &&
+           misses_for(after, kind) == misses_for(before, kind) + 1 &&
+           after.tier1_hits == before.tier1_hits && after.tier2_hits == before.tier2_hits;
+  };
+
+  const auto before_authoritative = src.stats();
+  const int calls_before_authoritative = hook_calls;
+  Value authoritative = src.fetch("nft_item", {Value::make_str(raw_of('A'))});
+  check("tier1_auth/authoritative_null",
+        authoritative.is_null() && hook_calls == calls_before_authoritative &&
+            is_miss_delta(src, before_authoritative, "nft_item"));
+
+  const auto before_unstable = src_unstable.stats();
+  const int calls_before_unstable = hook_calls;
+  Value unstable_miss = src_unstable.fetch("nft_item", {Value::make_str(raw_of('A'))});
+  check("tier1_auth/unstable_falls_through",
+        unstable_miss.is_null() && hook_calls == calls_before_unstable + 1 &&
+            is_miss_delta(src_unstable, before_unstable, "nft_item"));
+
+  const auto before_non_interface = src.stats();
+  const int calls_before_non_interface = hook_calls;
+  Value non_interface = src.fetch("jetton_master", {Value::make_str(raw_of('A'))});
+  check("tier1_auth/non_interface_kind_falls_through",
+        non_interface.is_null() && hook_calls == calls_before_non_interface + 1 &&
+            is_miss_delta(src, before_non_interface, "jetton_master"));
+
+  const auto before_f = src.stats();
+  const int calls_before_f = hook_calls;
+  Value absent_stable = src.fetch("nft_item", {Value::make_str(raw_of('F'))});
+  const auto after_f = src.stats();
+  const bool stable_absent_falls_through =
+      absent_stable.is_null() && hook_calls == calls_before_f + 1 &&
+      is_miss_delta(src, before_f, "nft_item");
+  const auto before_e = after_f;
+  const int calls_before_e = hook_calls;
+  Value absent_unstable = src.fetch("nft_item", {Value::make_str(raw_of('E'))});
+  check("tier1_auth/absent_account_falls_through",
+        stable_absent_falls_through && absent_unstable.is_null() &&
+            hook_calls == calls_before_e + 1 && is_miss_delta(src, before_e, "nft_item"));
+
+  const auto before_hit = src.stats();
+  const int calls_before_hit = hook_calls;
+  Value hit = src.fetch("jetton_wallet", {Value::make_str(raw_of('A'))});
+  check("tier1_auth/tier1_hit_unaffected",
+        !hit.is_null() && hook_calls == calls_before_hit &&
+            src.stats().misses == before_hit.misses &&
+            misses_for(src.stats(), "jetton_wallet") ==
+                misses_for(before_hit, "jetton_wallet") &&
+            src.stats().tier1_hits == before_hit.tier1_hits + 1 &&
+            src.stats().tier2_hits == before_hit.tier2_hits);
+}
+
 }  // namespace
 
 int run_celldb_tier2_test() {
@@ -630,6 +713,7 @@ int run_celldb_tier2_test() {
   test_jvault_hook();
   test_memo_and_guards();
   test_two_tier_routing();
+  test_tier1_authoritative_miss();
   test_account_lookup_states();
   std::printf("CELLDB-TIER2-TEST %s\n", g_fail == 0 ? "ALL PASS" : "FAILURES");
   return g_fail == 0 ? 0 : 1;
