@@ -184,18 +184,6 @@ COPY ton-metadata-fetcher/metadata_overrides.json /app/metadata_overrides.json
 ENTRYPOINT [ "/app/entrypoint.sh" ]
 
 
-## classifier service image
-FROM python:3.12-trixie AS classifier
-ADD indexer/requirements.txt /tmp/requirements.txt
-RUN python3 -m pip install --no-cache-dir -r /tmp/requirements.txt
-COPY indexer/ /app/
-COPY indexer/files/* /app
-
-WORKDIR /app
-ENV C_FORCE_ROOT=1
-ENTRYPOINT [ "/app/entrypoint.sh" ]
-
-
 ## pgton extension builder
 FROM postgres:18-bookworm AS pgton-builder
 RUN apt-get update \
