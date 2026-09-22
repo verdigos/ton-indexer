@@ -89,18 +89,9 @@ func ProcessTransactionHint(ctx context.Context, rdb *redis.Client, hint transac
 			accounts = append(accounts, tx.Account)
 		}
 		targets := manager.subscribersForAddresses(EventTransactions, accounts, notification.Finality)
-		if len(targets) == 0 {
-			stage.Span.AddAttr("ton.streaming.skipped", true)
-			stage.Span.AddAttr("ton.streaming.skip_reason", "subscription_disappeared")
-			stage.Emit()
-			return
-		}
 		book, metadata := manager.enrichmentNeeds(targets)
 		enrichTraceNotification(ctx, notification, addresses, book, metadata)
 		manager.sendNotification(notification, targets)
-	} else {
-		stage.Span.AddAttr("ton.streaming.skipped", true)
-		stage.Span.AddAttr("ton.streaming.skip_reason", "no_matching_transactions")
 	}
 	stage.Emit()
 }

@@ -146,8 +146,7 @@ func buildTraceNotification(traceContext *crud.EmulatedTracesContext, actions *A
 	if root == nil {
 		return nil, nil, fmt.Errorf("trace root is nil")
 	}
-	// A non-nil empty slice deliberately serializes as `actions: []`. This is
-	// how a trace subscriber learns that classification failed or found nothing.
+	// Keep an explicit empty actions array when classification failed or found nothing.
 	return &TraceNotification{version: actions.version, Type: EventTrace, Finality: actions.Finality,
 		TraceExternalHashNorm: actions.TraceExternalHashNorm, Trace: *root, Transactions: txMap, Actions: &actions.Actions,
 	}, traceNotificationAddresses(txs, actions.ActionAddresses), nil

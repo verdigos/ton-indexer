@@ -503,24 +503,6 @@ func NewClientManager(clients ...*redis.Client) *ClientManager {
 	}
 }
 
-// shouldFetchAddressBookAndMetadata figures out if at least one client
-// - is interested in any of the given event types for given addresses
-// - AND has IncludeAddressBook / IncludeMetadata true
-// AND will actually receive this event with given finality.
-func (manager *ClientManager) shouldFetchAddressBookAndMetadata(eventTypes []EventType, eventFinality indexModels.FinalityState, addressesToNotify []indexModels.AccountAddress) (bool, bool) {
-	targets := make(clientSet)
-	for _, eventType := range eventTypes {
-		mergeClientSets(targets, manager.subscribersForAddresses(eventType, addressesToNotify, eventFinality))
-	}
-	return manager.enrichmentNeeds(targets)
-}
-
-// shouldFetchAddressBookAndMetadataForTrace checks if any connected client
-// subscribed to the trace will receive this event and needs address book or metadata.
-func (manager *ClientManager) shouldFetchAddressBookAndMetadataForTrace(eventFinality indexModels.FinalityState, traceExternalHashNorm indexModels.HashType) (bool, bool) {
-	return manager.enrichmentNeeds(manager.subscribersForTrace(traceExternalHashNorm, eventFinality))
-}
-
 func (manager *ClientManager) sendNotification(notification Notification, targets clientSet) {
 	if targets != nil && len(targets) == 0 {
 		return
@@ -541,7 +523,6 @@ func (manager *ClientManager) Run() {
 			if !client.Connected {
 				manager.removeSubscriptionFromIndexesLocked(client.ID, &client.Subscription)
 				client.mu.Unlock()
-				manager.rateLimiter.UnregisterConnection(client.LimitingKey, client.ID)
 				manager.mu.Unlock()
 				continue
 			}
@@ -608,6 +589,7 @@ func (manager *ClientManager) Run() {
 					go disconnectClient(manager, client, err)
 				}
 			}
+
 		}
 	}
 }
@@ -1646,6 +1628,7 @@ func WebSocketHandler(manager *ClientManager) func(*websocket.Conn) {
 				}
 				var replay *replaySession
 				err = manager.updateSubscription(client, func(subscription *Subscription) error {
+
 					if err := checkAddressLimit(client, len(cnvAddrs), manager.rateLimiter, true); err != nil {
 						return err
 					}
