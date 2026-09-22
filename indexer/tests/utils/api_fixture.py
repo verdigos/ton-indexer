@@ -57,6 +57,7 @@ class ApiClient:
         self.backoff = backoff
         self.opener = opener or (lambda request: urllib.request.urlopen(request, timeout=30))
         self.sleep = sleep or time.sleep
+        self._last_request: float | None = None
 
     def request(self, version: int, endpoint: str, *, params: dict | None = None,
                 body: dict | None = None, gc_miss: bool = False) -> Any:
@@ -74,6 +75,9 @@ class ApiClient:
         last_gc = False
         for attempt in range(self.retries + 1):
             try:
+                if self._last_request is not None:
+                    self.sleep(max(0.0, 1.0 - (time.monotonic() - self._last_request)))
+                self._last_request = time.monotonic()
                 with self.opener(urllib.request.Request(url, payload, headers)) as response:
                     try:
                         result = json.loads(response.read())
@@ -212,6 +216,8 @@ def resolve_trace(client: ApiClient, input_hash: str) -> dict:
             "block_seqno": int(item.get("block_seqno", block.get("seqno", 0))),
             "mc_block_seqno": int(item["mc_block_seqno"]),
         })
+        if "account_state_after" in item:
+            records[-1]["account_state_after"] = item["account_state_after"]
     records.sort(key=lambda tx: tx["lt"])
     header = {key: source.get(key) for key in (
         "trace_id", "external_hash", "mc_seqno_start", "mc_seqno_end",
@@ -618,6 +624,28 @@ def collect_interfaces(client: ApiClient, addresses: Iterable[str], seqno: int,
     return result
 
 
+def collect_code_hashes(client: ApiClient, transactions: Iterable[dict]) -> dict[str, str | None]:
+    latest: dict[str, dict] = {}
+    for tx in transactions:
+        address = normalize_address(tx["account"])
+        if address not in latest or int(tx["lt"]) > int(latest[address]["lt"]):
+            latest[address] = tx
+    result: dict[str, str | None] = {}
+    for address, tx in latest.items():
+        state = tx.get("account_state_after")
+        if "account_state_after" not in tx or (isinstance(state, dict) and "code_hash" not in state):
+            rows = client.get_v3("transactions", hash=tx["hash"], limit=1).get("transactions", [])
+            if len(rows) != 1 or normalize_hash(rows[0]["hash"]) != tx["hash"]:
+                raise ApiError("v3 did not return the requested transaction state")
+            state = rows[0].get("account_state_after")
+            if "account_state_after" not in rows[0] or (isinstance(state, dict) and "code_hash" not in state):
+                raise ApiError("v3 transaction is missing its post-transaction code hash")
+        # A missing post-state code hash must not reuse the pre-state code of a destroyed account.
+        code_hash = state.get("code_hash") if isinstance(state, dict) else None
+        result[address] = normalize_hash(code_hash) if code_hash else None
+    return result
+
+
 def build_fixture(input_hash: str, client: ApiClient | None = None) -> dict:
     client = client or ApiClient()
     resolved = resolve_trace(client, input_hash)
@@ -640,6 +668,7 @@ def build_fixture(input_hash: str, client: ApiClient | None = None) -> dict:
                     }:
                 jvault_addresses.add(message["destination"])
     return {"trace": header, "transactions": transactions,
+            "code_hashes": collect_code_hashes(client, resolved["transactions"]),
             "interfaces": collect_interfaces(client, addresses, header["mc_seqno_end"],
                                              jvault_addresses)}
 

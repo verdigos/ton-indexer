@@ -18,7 +18,6 @@ enum class InterfaceHandler {
   NftAuction,
   DedustPool,
   NominatorPool,
-  Vesting,
   MultisigOrder,
   TelemintItem,
 };
@@ -31,7 +30,6 @@ const std::map<std::string, InterfaceHandler> kInterfaceHandlers = {
     {"nft_auction", InterfaceHandler::NftAuction},
     {"dedust_pool", InterfaceHandler::DedustPool},
     {"nominator_pool", InterfaceHandler::NominatorPool},
-    {"vesting", InterfaceHandler::Vesting},
     {"multisig_order", InterfaceHandler::MultisigOrder},
     {"telemint_item", InterfaceHandler::TelemintItem},
 };
@@ -183,13 +181,6 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         return Value::make_obj(std::move(f));
       }
       break;
-    case InterfaceHandler::Vesting:
-      if (const auto *p = std::get_if<schema::VestingData>(&iface)) {
-        Value::Fields f;
-        f.emplace_back("address", addr_str(p->address));
-        return Value::make_obj(std::move(f));
-      }
-      break;
     case InterfaceHandler::MultisigOrder:
       if (const auto *p = std::get_if<schema::MultisigOrderData>(&iface)) {
         std::vector<Value> signers;
@@ -214,6 +205,8 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
 
 std::optional<Value> ParsedBlockLookupSource::tier1(const std::string &kind,
                                                     const std::string &addr) const {
+  // Tier-1 does not serve code_hash; tier-2 reads the code at the completing block.
+  if (kind == "code_hash") return std::nullopt;
   if (account_interfaces_ == nullptr) {
     return std::nullopt;
   }

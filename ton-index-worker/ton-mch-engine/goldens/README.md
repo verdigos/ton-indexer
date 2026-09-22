@@ -64,6 +64,8 @@ BOC-valued fields render as the cell hash.
 
 ## Editing a synthetic fixture
 
+All fixture code-hash gates use `code_hashes`; four vesting entries added by hand from `VESTING_CONTRACT_CODE_HASH`.
+
 A `synthetic:` note in `fixtures.json` marks a fixture that no chain trace
 produced, so its `.lz4` is edited in place through a JSON round trip. From
 `indexer/`:

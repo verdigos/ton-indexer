@@ -263,7 +263,7 @@ int run_dump(const std::vector<std::string> &paths,
     }
     std::shared_ptr<LookupSource> src =
         lookup_factory ? lookup_factory(ctx)
-                       : std::make_shared<FixtureLookupSource>(&ctx.trace.interfaces);
+                       : std::make_shared<FixtureLookupSource>(&ctx.trace.interfaces, &ctx.trace.code_hashes);
     ClassifyResult res = classify_trace(ctx, matchers, setup, *src);
     if (res.failure) {
       // Per-trace exception boundary: regular actions discarded, the failure
@@ -372,7 +372,7 @@ int run_action_payload_dump(const std::vector<std::string> &paths, const std::st
       return 2;
     }
     auto ctx = loaded.move_as_ok();
-    FixtureLookupSource source(&ctx.trace.interfaces);
+    FixtureLookupSource source(&ctx.trace.interfaces, &ctx.trace.code_hashes);
     auto result = classify_trace(ctx, matchers, setup, source);
     std::vector<Action> actions;
     const auto &rows = result.failure ? result.fallback_rows : result.action_rows;

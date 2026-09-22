@@ -185,7 +185,7 @@ int run_actions_json_test() {
       auto loaded = load_trace_context(path);
       require(loaded.is_ok(), path, "cannot load fixture");
       auto ctx = loaded.move_as_ok();
-      FixtureLookupSource source(&ctx.trace.interfaces);
+      FixtureLookupSource source(&ctx.trace.interfaces, &ctx.trace.code_hashes);
       auto result = classify_trace(ctx, matchers, setup, source);
       const ActionRowContext context{ctx.trace.trace_id, std::nullopt, std::nullopt, ctx.trace.end_lt,
                                     static_cast<std::int32_t>(ctx.trace.end_utime),

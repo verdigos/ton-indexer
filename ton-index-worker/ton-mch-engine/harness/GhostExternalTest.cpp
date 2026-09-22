@@ -274,7 +274,7 @@ void test_failed_external_change_key() {
 
   const std::vector<CompiledMatcher> &matchers = gen_matchers_ir();
   ClassifySetup setup = prepare_classify(matchers);
-  FixtureLookupSource source(&ctx.trace.interfaces);
+  FixtureLookupSource source(&ctx.trace.interfaces, &ctx.trace.code_hashes);
   ClassifyResult result = classify_trace(ctx, matchers, setup, source);
   bool found = false;
   bool success = true;

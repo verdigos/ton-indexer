@@ -40,8 +40,14 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
   const bool addr_arg = args.size() == 1 &&
                         (args[0].t == VType::Str ||
                          (args[0].t == VType::Account && !args[0].addr_none));
-  if (interfaces_ == nullptr || !addr_arg) {
-    return Value::null();  // non-address keys miss
+  if (!addr_arg) return Value::null();
+  if (kind == "code_hash") {
+    if (code_hashes_ == nullptr) return Value::null();
+    auto it = code_hashes_->find(canonicalize_or_passthrough(args[0].str));
+    return it == code_hashes_->end() ? Value::null() : it->second;
+  }
+  if (interfaces_ == nullptr) {
+    return Value::null();
   }
   enum class Handler {
     JettonWallet,
@@ -50,7 +56,6 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
     MultisigOrder,
     NftAuction,
     NominatorPool,
-    Vesting,
     DedustPool,
     JvaultAssets,
     TelemintItem,
@@ -62,7 +67,6 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
       {"multisig_order", Handler::MultisigOrder},
       {"nft_auction", Handler::NftAuction},
       {"nominator_pool", Handler::NominatorPool},
-      {"vesting", Handler::Vesting},
       {"dedust_pool", Handler::DedustPool},
       {"jvault_assets", Handler::JvaultAssets},
       {"telemint_item", Handler::TelemintItem},
@@ -139,17 +143,6 @@ Value FixtureLookupSource::fetch(const std::string &kind, const std::vector<Valu
       return Value::null();
     }
     return it->second;  // the account's whole interfaces Dict
-  }
-    case Handler::Vesting: {
-    auto it = interfaces_->find(addr);
-    if (it == interfaces_->end()) {
-      return Value::null();
-    }
-    const Value *vesting = it->second.field("Vesting");
-    if (vesting == nullptr) {
-      return Value::null();
-    }
-    return iface_obj(*vesting, {"address"});
   }
     case Handler::DedustPool: {
     // DedustPool: lookup by the address as given. Absent is null; the host

@@ -8,7 +8,8 @@
 #include "smc-interfaces/NftSale.h"
 #include "smc-interfaces/NftSaleV4.h"
 #include "smc-interfaces/Tokens.h"
-#include "smc-interfaces/Vesting.h"
+
+#include "td/utils/base64.h"
 
 #include <map>
 #include <utility>
@@ -58,7 +59,7 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
     JettonWallet,
     DedustPool,
     NominatorPool,
-    Vesting,
+    CodeHash,
     NftItem,
     NftAuction,
     NftSale,
@@ -69,7 +70,7 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
       {"jetton_wallet", Handler::JettonWallet},
       {"dedust_pool", Handler::DedustPool},
       {"nominator_pool", Handler::NominatorPool},
-      {"vesting", Handler::Vesting},
+      {"code_hash", Handler::CodeHash},
       {"nft_item", Handler::NftItem},
       {"nft_auction", Handler::NftAuction},
       {"nft_sale", Handler::NftSale},
@@ -138,14 +139,9 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
       }
       break;
     }
-    case Handler::Vesting: {
-      if (!st->code.is_null() && st->code->get_hash().to_hex() == VESTING_CONTRACT_CODE_HASH) {
-        schema::VestingData vesting{};
-        vesting.address = addr;
-        iface = std::move(vesting);
-      }
-      break;
-    }
+    case Handler::CodeHash:
+      return st->code.is_null() ? Value::null()
+                                : Value::make_str(td::base64_encode(st->code->get_hash().as_slice()));
     case Handler::NftSale: {
       if (config_ == nullptr) {
         return Value::null();

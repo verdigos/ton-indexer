@@ -166,7 +166,7 @@ void test_host_fn_error_rejects_attempt_and_next_matcher_runs() {
   setup.build_fns.emplace(0, host_reject_build);
   setup.build_fns.emplace(1, required_parse_reject_build);
   setup.build_fns.emplace(2, successful_build);
-  FixtureLookupSource src(&ctx.trace.interfaces);
+  FixtureLookupSource src(&ctx.trace.interfaces, &ctx.trace.code_hashes);
   g_host_reject_calls = 0;
   g_parse_reject_calls = 0;
   g_success_calls = 0;
@@ -202,7 +202,7 @@ void test_host_fn_serious_exception_stays_trace_failure() {
     setup.included = {0};
     g_serious_kind = test.kind;
     setup.build_fns.emplace(0, serious_host_build);
-    FixtureLookupSource src(&ctx.trace.interfaces);
+    FixtureLookupSource src(&ctx.trace.interfaces, &ctx.trace.code_hashes);
     ClassifyResult result = classify_trace(ctx, matchers, setup, src);
     check(std::string("host_fn/serious/") + test.name + "/trace_failed", result.failure);
     check(std::string("host_fn/serious/") + test.name + "/engine_fault",
@@ -324,7 +324,7 @@ void finish_trace(TraceContext &ctx, const std::string &name) {
 ClassifyResult classify_production(TraceContext &ctx) {
   const auto &matchers = gen_matchers_ir();
   const auto setup = prepare_classify(matchers);
-  FixtureLookupSource source(&ctx.trace.interfaces);
+  FixtureLookupSource source(&ctx.trace.interfaces, &ctx.trace.code_hashes);
   return classify_trace(ctx, matchers, setup, source);
 }
 
@@ -564,7 +564,7 @@ ClassifyResult classify_with_forced_failure(TraceContext &ctx) {
   matchers[0].anchor_kind = AnchorKind::Pred;
   ClassifySetup setup;
   setup.included = {0};
-  FixtureLookupSource src(&ctx.trace.interfaces);
+  FixtureLookupSource src(&ctx.trace.interfaces, &ctx.trace.code_hashes);
   return classify_trace(ctx, matchers, setup, src);
 }
 

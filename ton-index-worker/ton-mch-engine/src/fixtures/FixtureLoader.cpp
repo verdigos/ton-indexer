@@ -303,6 +303,16 @@ td::Result<Trace> load_trace(const std::string &path) {
                                msgpack_to_value(kv.val));
     }
   }
+  if (const auto *hashes = map_get(root, "code_hashes");
+      !is_nil(hashes) && hashes->type == msgpack::type::MAP) {
+    for (std::uint32_t i = 0; i < hashes->via.map.size; i++) {
+      const auto &kv = hashes->via.map.ptr[i];
+      if (kv.key.type == msgpack::type::STR && kv.val.type == msgpack::type::STR) {
+        trace.code_hashes.emplace(std::string(kv.key.via.str.ptr, kv.key.via.str.size),
+                                 msgpack_to_value(kv.val));
+      }
+    }
+  }
   return trace;
 }
 

@@ -89,6 +89,7 @@ struct Trace {
   // (B2). Msgpack scalars map: str->Str, int->Int, bool->Bool, nil->Null,
   // bin->Bytes, map->Dict, array->List; floats have no Value kind -> Null.
   std::map<std::string, Value> interfaces;
+  std::map<std::string, Value> code_hashes;
 };
 
 // Derives Trace's five aggregates from `trace.transactions`: min/max lt, min/max

@@ -15,13 +15,15 @@ namespace mch {
 
 class FixtureLookupSource : public LookupSource {
  public:
-  explicit FixtureLookupSource(const std::map<std::string, Value> *interfaces)
-      : interfaces_(interfaces) {
+  explicit FixtureLookupSource(const std::map<std::string, Value> *interfaces,
+                               const std::map<std::string, Value> *code_hashes = nullptr)
+      : interfaces_(interfaces), code_hashes_(code_hashes) {
   }
   Value fetch(const std::string &kind, const std::vector<Value> &args) const override;
 
  private:
   const std::map<std::string, Value> *interfaces_;
+  const std::map<std::string, Value> *code_hashes_;
 };
 
 }  // namespace mch
