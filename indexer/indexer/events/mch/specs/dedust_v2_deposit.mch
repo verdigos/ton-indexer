@@ -34,6 +34,7 @@ matcher dedust_v2_deposit_final {
     parse carrier    as DedustV2PayNative
     parse refund_ton as PayoutMessage
 
+    require pool = lookup dedust_pool(join.msg.destination)
     reject when event == null
 
     let initiator = account(join.body.initiator)
@@ -91,6 +92,7 @@ matcher dedust_v2_deposit_rejected {
     parse carrier    as DedustV2PayNative
     parse refund_ton as PayoutMessage
 
+    require pool = lookup dedust_pool(join.msg.destination)
     reject when event != null
 
     let initiator = account(join.body.initiator)

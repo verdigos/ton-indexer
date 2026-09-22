@@ -42,6 +42,7 @@ matcher dedust_deposit_final {
     }
 
     require r = dedust_deposit_final_data(consumed)
+    require pool_state = lookup dedust_pool(r.pool_address)
     failed when not r.success
     out {
         dex:                  "dedust"

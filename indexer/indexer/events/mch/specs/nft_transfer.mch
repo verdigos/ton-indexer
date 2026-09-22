@@ -1,5 +1,6 @@
 # Matches NFT ownership transfers, including GetGems sale and auction purchases.
 
+import "lib/common.mch"
 import "lib/opcodes.mch"
 opcode NftTransfer          = 0x5FCC3D14
 matcher nft_transfer {
@@ -31,7 +32,7 @@ matcher nft_transfer {
     let pd_nft = account(sale.nft_address) if have_sale else account(auction.nft_addr)
     let real_owner = (account(sale.nft_owner_address) ?? addr_none()) if have_sale else (account(auction.nft_owner) ?? addr_none())
     let is_purchase = (have_sale or have_auc) and pd_nft == nft.address and real_owner != new_owner
-    failed when transfer.failed
+    failed when transfer.failed or tx_failed(transfer)
     out {
         is_purchase:          is_purchase
         prev_owner:           prev_owner

@@ -8,6 +8,7 @@
 #include "smc-interfaces/NftSale.h"
 #include "smc-interfaces/NftSaleV4.h"
 #include "smc-interfaces/Tokens.h"
+#include "smc-interfaces/Vesting.h"
 
 #include <map>
 #include <utility>
@@ -57,6 +58,7 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
     JettonWallet,
     DedustPool,
     NominatorPool,
+    Vesting,
     NftItem,
     NftAuction,
     NftSale,
@@ -67,6 +69,7 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
       {"jetton_wallet", Handler::JettonWallet},
       {"dedust_pool", Handler::DedustPool},
       {"nominator_pool", Handler::NominatorPool},
+      {"vesting", Handler::Vesting},
       {"nft_item", Handler::NftItem},
       {"nft_auction", Handler::NftAuction},
       {"nft_sale", Handler::NftSale},
@@ -132,6 +135,14 @@ Value EmuCelldbTier2::resolve(const std::string &kind, const block::StdAddress &
       auto r = NominatorPoolContract::detect(addr, st->code, st->data);
       if (r.is_ok()) {
         iface = to_v2(r.move_as_ok());
+      }
+      break;
+    }
+    case Handler::Vesting: {
+      if (!st->code.is_null() && st->code->get_hash().to_hex() == VESTING_CONTRACT_CODE_HASH) {
+        schema::VestingData vesting{};
+        vesting.address = addr;
+        iface = std::move(vesting);
       }
       break;
     }

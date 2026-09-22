@@ -18,6 +18,7 @@ enum class InterfaceHandler {
   NftAuction,
   DedustPool,
   NominatorPool,
+  Vesting,
   MultisigOrder,
   TelemintItem,
 };
@@ -30,6 +31,7 @@ const std::map<std::string, InterfaceHandler> kInterfaceHandlers = {
     {"nft_auction", InterfaceHandler::NftAuction},
     {"dedust_pool", InterfaceHandler::DedustPool},
     {"nominator_pool", InterfaceHandler::NominatorPool},
+    {"vesting", InterfaceHandler::Vesting},
     {"multisig_order", InterfaceHandler::MultisigOrder},
     {"telemint_item", InterfaceHandler::TelemintItem},
 };
@@ -176,6 +178,13 @@ Value ParsedBlockLookupSource::iface_value(const std::string &kind,
         // that reads this lookup rejects on null and never touches a field
         // (ir/mch_ir.json nominator_pool_withdraw), which is also why Python's
         // registered fn just hands back the account's interfaces dict.
+        Value::Fields f;
+        f.emplace_back("address", addr_str(p->address));
+        return Value::make_obj(std::move(f));
+      }
+      break;
+    case InterfaceHandler::Vesting:
+      if (const auto *p = std::get_if<schema::VestingData>(&iface)) {
         Value::Fields f;
         f.emplace_back("address", addr_str(p->address));
         return Value::make_obj(std::move(f));

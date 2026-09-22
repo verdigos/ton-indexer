@@ -1,5 +1,6 @@
 # Tonco liquidity covers deposits, pool deployment, and withdrawals; withdrawal exit code 201 counts as a successful payout.
 
+import "lib/common.mch"
 import "lib/opcodes.mch"
 opcode ToncoAccountV3AddLiquidity      = 0x3ebe5431
 opcode ToncoPoolV3FundAccount          = 0x4468de77
@@ -61,6 +62,7 @@ matcher tonco_deploy_pool {
       -> op ToncoPoolV3Init @init as ToncoPoolV3Init
         -> maybe op Excess
 
+    failed when tx_failed(init)
     out {
         deployer:              create.msg.source
         router:                create.msg.destination
@@ -75,7 +77,6 @@ matcher tonco_deploy_pool {
         lp_fee_base:           create.body.lp_fee_base
         lp_fee_current:        create.body.lp_fee_current
         pool_active:           init.body.pool_active
-        success:               true
     }
 }
 
@@ -94,6 +95,8 @@ matcher tonco_withdraw_liquidity {
                    -> { maybe op PTonTransfer } }
 
 
+    require pos = lookup nft_item(position_burn.msg.destination)
+    reject when account(pos.owner_address) != account(position_burn.body.nft_owner)
     require r = tonco_withdraw_payouts(pay_to, pay_to.body, payout_1, payout_2)
     failed when pay_to.body.exit_code != 0 and pay_to.body.exit_code != 201
     out {

@@ -505,7 +505,11 @@ func queryRawActionsImplV2(query string, args []any, conn *pgxpool.Conn, setting
 		if loc, err := parse.ScanRawAction(rows); err == nil {
 			res = append(res, *loc)
 		} else {
-			return nil, models.IndexError{Code: 500, Message: err.Error()}
+			values, valuesErr := rows.Values()
+			if valuesErr != nil || len(values) < 2 {
+				return nil, models.IndexError{Code: 500, Message: err.Error()}
+			}
+			log.Printf("failed to scan raw action trace_id=%v action_id=%v: %v", values[0], values[1], err)
 		}
 	}
 	if rows.Err() != nil {

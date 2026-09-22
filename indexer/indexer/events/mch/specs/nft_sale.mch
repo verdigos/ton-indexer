@@ -272,6 +272,7 @@ matcher nft_cancel_sale {
 
     require sale = lookup nft_sale(cancel.msg.destination)
     reject when account(ret.data.nft.address) != account(sale.nft_address)
+    failed when tx_failed(cancel)
     out {
         nft_address:         ret.data.nft.address
         nft_collection:      ret.data.nft.collection.address
@@ -294,6 +295,7 @@ matcher nft_finish_auction {
     reject when cancel.btype == "ton_transfer" and not (cancel.data.comment in ["finish", "stop"])
     require auction = lookup nft_auction(cancel.msg.destination)
     reject when account(ret.data.nft_address) != account(auction.nft_addr)
+    failed when tx_failed(cancel)
     out {
         nft_address:         ret.data.nft_address
         nft_collection:      ret.data.collection_address
@@ -317,6 +319,7 @@ matcher nft_cancel_auction {
     reject when cancel.btype == "ton_transfer" and not (cancel.data.comment in ["cancel", "finish", "stop"])
     require auction = lookup nft_auction(cancel.msg.destination)
     reject when account(ret.data.nft.address) != account(auction.nft_addr)
+    failed when tx_failed(cancel)
 
     produces switch {
         when (cancel.btype == "ton_transfer" and (cancel.data.comment in ["finish", "stop"])) or (cancel.btype == "call_contract" and (cancel.data.opcode in [0xB95616B6, 0x20C9EB18])) => nft_finish_auction out {

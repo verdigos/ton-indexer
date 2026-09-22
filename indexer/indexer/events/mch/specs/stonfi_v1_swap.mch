@@ -38,12 +38,12 @@ matcher stonfi_v1_swap {
     failed when not d.success
     out {
         dex:      "stonfi"
-        sender:   account(swap.body.info.ref.from_real_user)
+        sender:   in_transfer.data.sender
         receiver: account(swap.body.from_user_address)
         dex_incoming_transfer: {
             asset:                     incoming_asset
             amount:                    amount(swap.body.amount)
-            source:                    account(swap.body.info.ref.from_real_user)
+            source:                    in_transfer.data.sender
             source_jetton_wallet:      in_transfer.data.sender_wallet if in_transfer.data.has_internal_transfer else null
             destination:               account(dex_in_wallet.owner)
             destination_jetton_wallet: account(swap.body.token_wallet)

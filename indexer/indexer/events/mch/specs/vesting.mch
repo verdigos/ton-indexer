@@ -8,6 +8,7 @@ matcher vesting_send_message {
 
     op VestingSendMessage @send as VestingSendMessage -> op VestingSendMessageResponse
 
+    require vesting = lookup vesting(send.msg.destination)
     out {
         sender:              send.msg.source
         vesting:             send.msg.destination
@@ -30,6 +31,7 @@ matcher vesting_add_whitelist {
 
     op VestingAddWhiteList @add as VestingAddWhiteList -> op VestingAddWhiteListResponse
 
+    require vesting = lookup vesting(add.msg.destination)
     out {
         adder:          add.msg.source
         vesting:        add.msg.destination

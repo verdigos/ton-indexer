@@ -644,6 +644,11 @@ void fill_coffee_mev_protect_hold_funds(const Value &d, Action &a) {
   a.amount = av_amount(dg(d, "amount"));
 }
 
+void fill_coffee_mev_protect_failed_swap(const Value &d, Action &a) {
+  a.destination = av_addr(dg(d, "recipient"));
+  a.asset = av_addr(dg(d, "asset"));
+}
+
 void fill_coffee_staking_deposit(const Value &d, Action &a) {
   a.source = av_addr(dg(d, "source"));
   a.source_secondary = av_addr(dg(d, "user_jetton_wallet"));
@@ -760,11 +765,7 @@ void fill_multisig_execute(const Value &d, Action &a) {
   if (sg.items) { for (const Value &x : *sg.items) push_account(a, x); }
 }
 
-// `success` is the literal true written by the matcher: reaching this fill
-// means POOLV3_INIT was found.
 void fill_tonco_deploy_pool(const Value &d, Action &a) {
-  Value succ = dg(d, "success");
-  a.success = succ.t == VType::Bool && succ.boolean;
   a.source = av_addr(dg(d, "deployer"));
   a.destination = av_addr(dg(d, "router"));
   a.destination_secondary = av_addr(dg(d, "pool"));
@@ -1555,6 +1556,7 @@ bool fill_action(Block *b, Action &a) {
   else if (t == "coffee_create_pool_creator") fill_coffee_create_pool_creator(d, a);
   else if (t == "coffee_create_pool") fill_coffee_create_pool(d, a);
   else if (t == "coffee_mev_protect_hold_funds") fill_coffee_mev_protect_hold_funds(d, a);
+  else if (t == "coffee_mev_protect_failed_swap") fill_coffee_mev_protect_failed_swap(d, a);
   else if (t == "coffee_staking_deposit") fill_coffee_staking_deposit(d, a);
   else if (t == "coffee_staking_withdraw") fill_coffee_staking_withdraw(d, a);
   else if (t == "coffee_staking_claim_rewards") fill_coffee_staking_claim_rewards(d, a);

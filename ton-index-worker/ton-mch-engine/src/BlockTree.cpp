@@ -421,7 +421,10 @@ Block *make_leaf_block(BlockArena &arena, const EventNode *node) {
   } else {
     // A tg-wallet request keeps its opcode behind the signature; the stored
     // one is meaningless for externals and relayed internals alike.
-    if (auto tg = get_tg_wallet_request_opcode(msg)) op = tg;
+    // JettonNotify and JettonInternalTransfer relay attacker bytes verbatim.
+    if (!(op && (*op == 0x7362d09c || *op == 0x178d4519))) {
+      if (auto tg = get_tg_wallet_request_opcode(msg)) op = tg;
+    }
     b = arena.make(mch::btype::kCallContract);
     b->opcode = op;
     b->failed = node_failed(node);
@@ -430,7 +433,7 @@ Block *make_leaf_block(BlockArena &arena, const EventNode *node) {
     bool has_value = msg != nullptr && msg->value && *msg->value != 0;
     bool opcode_truthy = op && *op != 0;
     bool has_extra = msg != nullptr && msg->has_extra_currencies;
-    if (b->failed && !has_value && opcode_truthy && !has_extra) {
+    if (b->failed && !node->forced_failed && !has_value && opcode_truthy && !has_extra) {
       b->failed = false;
     }
     // Marker on the relayed request; the wallet's own sends stay separate.

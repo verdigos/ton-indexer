@@ -39,7 +39,7 @@ matcher layerzero_receive {
                          -> { maybe op LayerZeroEventMsgBody
                             ; maybe btype ton_transfer } } }
 
-    reject when not (contains(execute.body.packet.path.dst_oapp, addr_hash_hex(execute.msg.destination)) ?? false)
+    reject when not ((execute.body.packet.path.dst_oapp == addr_hash_hex(execute.msg.destination)) ?? false)
     out {
         sender:  prepare.msg.source
         channel: execute.msg.source
@@ -70,6 +70,7 @@ matcher layerzero_send {
                      -> { maybe op LayerZeroEventMsgBody
                         ; maybe btype ton_transfer } }
 
+    reject when not ((oapp_callback.body.lz_send.packet.path.src_oapp == addr_hash_hex(endpoint_send.msg.source)) ?? false)
     out {
         initiator: endpoint_send.msg.source
         packet_data: {

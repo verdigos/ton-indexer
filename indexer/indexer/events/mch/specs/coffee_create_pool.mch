@@ -12,14 +12,14 @@ matcher coffee_create_pool_creator {
         -> { op CoffeeDeploy @deploy }
         <- xor {
                btype jetton_transfer @in_jt
-               op CoffeeCreatePoolNative
+               op CoffeeCreatePoolNative @native
            }
     }
 
     let pool_first  = asset_of(request.body.pool_first)
     let pool_second = asset_of(request.body.pool_second)
     out {
-        sender:                account(request.body.sender)
+        sender:                in_jt.data.sender ?? account(native.msg.source)
         sender_jetton_wallet:  in_jt.data.sender_wallet ?? addr_none()
         amount:                amount(request.body.amount)
         provided_asset:        in_jt.data.asset ?? ton_asset()

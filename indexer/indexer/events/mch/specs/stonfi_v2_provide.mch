@@ -8,7 +8,7 @@ opcode StonfiV2AddLiquidity     = 0x50c6a654
 opcode StonfiV2CbAddLiquidity   = 0x06ecd527
 
 rule in_leg = or {
-                  op JettonNotify @notify_pton <- op PTonTransfer
+                  op JettonNotify @notify_pton <- op PTonTransfer @pton_in
                   btype jetton_transfer @in_jt
                   op JettonNotify <- op JettonInternalTransfer <- btype jetton_transfer @in_jt_raw
               }
@@ -34,7 +34,7 @@ matcher stonfi_v2_provide_final {
         dex:             "stonfi_v2"
         amount_1:        amount(provide.body.amount1) if provide.body.amount1 > 0 else amount(provide.body.amount2)
         asset_1:         l.asset
-        sender:          account(provide.body.from_user)
+        sender:          (in_jt ?? in_jt_raw).data.sender if (in_jt ?? in_jt_raw) != null else account(pton_in.msg.source)
         sender_wallet_1: l.source_wallet
         amount_2:        null
         asset_2:         null
@@ -57,7 +57,7 @@ matcher stonfi_v2_provide_partial {
         dex:             "stonfi_v2"
         amount_1:        amount(provide.body.amount1) if provide.body.amount1 > 0 else amount(provide.body.amount2)
         asset_1:         l.asset
-        sender:          account(provide.body.from_user)
+        sender:          (in_jt ?? in_jt_raw).data.sender if (in_jt ?? in_jt_raw) != null else account(pton_in.msg.source)
         sender_wallet_1: l.source_wallet
         amount_2:        null
         asset_2:         null

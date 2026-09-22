@@ -21,6 +21,7 @@ V2_URL = "https://toncenter.com/api/v2/"
 V3_URL = "https://toncenter.com/api/v3/"
 USER_AGENT = "ton-indexer-fixture-builder/1.0"
 NOMINATOR_POOL_CODE_HASH = "mj7BS8CY9rRAZMMFIiyuooAPF92oXuaoGYpwle3hDc8="
+VESTING_CONTRACT_CODE_HASH = "tItTGr7DtxRjgpH3137W3J9qJynvyiBHcTc3TUrotZA="
 DEDUST_FACTORY = "EQBfBWT7X2BHg9tXAxzhz2aKiNTU1tpt5NsiK0uSDW_YAJ67"
 
 # Methods are ordered from the cheapest, most common probes to narrower contracts.
@@ -585,6 +586,8 @@ def collect_interfaces(client: ApiClient, addresses: Iterable[str], seqno: int,
         record["code_hash"] = code_hash_bytes.hex().upper()
         if code_hash_b64 == NOMINATOR_POOL_CODE_HASH:
             record["NominatorPool"] = {"address": address}
+        if code_hash_b64 == VESTING_CONTRACT_CODE_HASH:
+            record["Vesting"] = {"address": address}
         record.update(_interface_methods(client, address, seqno, code_hash_b64))
 
     for address in sorted(filter(None, {normalize_address(item) for item in addresses})):
